@@ -1,13 +1,17 @@
+import { spatial } from "@atlas/domain";
 import { lakeMembership } from "../../canonry/lakeMembership";
+import { noWaterSurface } from "../../canonry/math";
+import { generatedFeature } from "../../mapFeatures";
 import type { GenerationState } from "../../process";
-import { carryWhereItLands, counterpartOf, costNear, goes, movesTo } from "../poiCarry";
+import { components, neighborsOf } from "../../regional/lattice";
+import type { Evidence, RegionalState } from "../../regional/state";
 import {
-  notApplicable,
-  type PoiCarried,
-  type PoiEntry,
-  type PoiFieldChange,
-  type PoiPlace,
-} from "../poiContract";
+  worldExceptionalLakeArea,
+  worldLakeDepth,
+  worldOutletDischarge,
+} from "../../worldSignificance";
+import { carryWhereItLands, counterpartOf, costNear, goes, movesTo } from "../poiCarry";
+import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, within } from "../poiPlaces";
 import {
   adjacent,
@@ -22,14 +26,11 @@ import {
   metres,
   rainfallAt,
 } from "../poiReads";
-import type { RegionalState } from "../../regional/state";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import { areaOf, spans } from "./waterReads";
 
-/** Sizes at which a lake is half as great as lakes get; the world's exceptional-lake measures. */
-const typicalArea = 300_000_000,
-  typicalDepth = 200,
-  typicalThroughflow = 1_500;
+/** Interpolated captured depth (m) above which ground beside a captured lake is lake. */
+const lakeShoreDepth = 0.5;
 /** Metres of depth under which a lake has gone: filled, or drained to a film. */
 const shallowest = 1;
 /** Rain below this, in metres a year, leaves a dead lake's salts on the ground. */
@@ -46,30 +47,41 @@ const deepest = (state: GenerationState, cells: readonly number[]) => {
   const depths = fieldOf(state).WaterDepths;
   return cells.reduce((a, b) => (depths.get(b) > depths.get(a) ? b : a), cells[0]);
 };
-/** Every body the generator's own membership holds, with its published record when it has one. */
+/** Every body the generator's own membership holds. */
 const places = (state: GenerationState): readonly PoiPlace[] =>
   heldFor(state, "places:lake", () => {
     const map = fieldOf(state),
       membership = lakeMembership(map),
-      published = new Map(
-        [...featuresOf(state, "lake", "lakes")].map((f) => [f.attributes.waterBody, f])
-      ),
       found: PoiPlace[] = [];
     for (const body of membership.bodies()) {
       const cells = [...membership.members(body)].filter((i) => map.mesh.membership(i) === 1);
-      if (!cells.length) continue;
-      const anchor = deepest(state, cells),
-        feature = published.get(body);
-      found.push({
-        id: `lake:${body}`,
-        kind: "lake",
-        cells,
-        anchor,
-        ...(feature ? { feature } : {}),
-      });
+      if (cells.length)
+        found.push({ id: `lake:${body}`, kind: "lake", cells, anchor: deepest(state, cells) });
     }
     return found;
   });
+/**
+ * A lake's record is its shoreline, as the geography traced it into `lakeOutlines`. A river's
+ * mouth is clipped by the record's water body, so `waterBody` is part of what a lake publishes.
+ */
+function lakeRecord(state: GenerationState, place: PoiPlace) {
+  const work = state.physical!,
+    map = work.map,
+    body = bodyOf(state, place.anchor),
+    shape = work.lakeOutlines?.get(body);
+  if (!shape) return null;
+  const key = spatial
+    .bounds(shape)
+    .map((value) => value.toFixed(3))
+    .join(":");
+  return generatedFeature(state, `lake:${key}`, `Lake ${body}`, "lake", "lakes", shape, {
+    sourceAlgorithm: "canonry-0f62584c",
+    waterBody: body,
+    waterLevel: (map.WaterSurfaceElevations.get(place.anchor) - map.BaseSeaLevel) / 1024,
+    area: spatial.area(shape),
+    depth: depthOf(state, place),
+  });
+}
 
 /** What made a lake, a property of one kind: a dam, the Fire stock of a fallen crater, or the ground. */
 export function lakeOrigin(state: GenerationState, place: PoiPlace) {
@@ -89,9 +101,9 @@ const throughflowOf = (state: GenerationState, place: PoiPlace) =>
 /** Size, depth or throughflow each make a lake great, as they do on the world map. */
 const greatness = (state: GenerationState, place: PoiPlace) =>
   Math.max(
-    sized(areaOf, typicalArea)(state, place),
-    sized(depthOf, typicalDepth)(state, place),
-    sized(throughflowOf, typicalThroughflow)(state, place)
+    sized(areaOf, worldExceptionalLakeArea)(state, place),
+    sized(depthOf, worldLakeDepth)(state, place),
+    sized(throughflowOf, worldOutletDischarge)(state, place)
   );
 const around = spans(8);
 const factors = {
@@ -109,36 +121,9 @@ function shoreCells(state: GenerationState, place: PoiPlace) {
     for (const next of adjacent(state, cell)) if (isLand(state, next)) shore.add(next);
   return [...shore];
 }
-const beside = (state: GenerationState, place: PoiPlace, cell: number) => {
-  const body = bodyOf(state, place.anchor);
-  if (isLake(state, cell)) return false;
-  for (const next of adjacent(state, cell))
-    if (isLake(state, next) && bodyOf(state, next) === body) return true;
-  return false;
-};
-/** The bed lies under the surface while the lake stands, so nothing erodes or fills it away. */
-const heldBed = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => {
-  const map = fieldOf(state);
-  return place.cells.map((cell) => ({
-    change: "atMost",
-    band: "Elevation",
-    cell,
-    value: map.WaterSurfaceElevations.get(cell),
-  }));
-};
-/** It stores water at its own level, and its outlet spills what it cannot hold. */
-const heldWater = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => {
-  const map = fieldOf(state);
-  return place.cells.map((cell) => ({
-    change: "atLeast",
-    band: "WaterSurfaceElevations",
-    cell,
-    value: map.WaterSurfaceElevations.get(cell),
-  }));
-};
 /** Water evaporating from a broad lake keeps its shore damp, in proportion to its size. */
 const dampShore = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => {
-  const value = Math.round(shoreMoisture * sized(areaOf, typicalArea)(state, place));
+  const value = Math.round(shoreMoisture * sized(areaOf, worldExceptionalLakeArea)(state, place));
   return shoreCells(state, place).map((cell) => ({
     change: "atLeast",
     band: "Moisture",
@@ -146,30 +131,42 @@ const dampShore = (state: GenerationState, place: PoiPlace): readonly PoiFieldCh
     value,
   }));
 };
-/** Every lake leaves its depth in the memory Salt's dead-lake origin reads when it dries. */
-const remembered = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => {
-  const map = fieldOf(state);
-  return place.cells.map((cell) => ({
-    change: "atLeast",
-    band: "LakeMemory",
-    cell,
-    value: metres(map.WaterDepths.get(cell)),
-  }));
-};
 const counterpart = counterpartOf(isA, 1);
-/** Captured standing water is a fact of the parent: the refined body stands at its level. */
-function capturedLevel(state: RegionalState, carried: PoiCarried): readonly PoiFieldChange[] {
-  const cell = counterpart(state, carried),
-    lake = state.regional.evidence?.lakes.find((held) => held.cells.includes(cell));
-  if (!lake) return [];
+/**
+ * Captured standing water is a fact of the parent: its cells are roots of the network at its
+ * level, the relief lies under it, and the routing keeps it standing. Its extent is read from
+ * the interpolated depth rather than the category raster, so the shore follows the parent's
+ * depth taper instead of its cell edges; the category decides that the water is a lake and
+ * not the sea.
+ */
+function capturedLakes(state: RegionalState): Evidence["lakes"] {
   const map = state.physical.map,
-    value = map.EffectiveSeaLevel + lake.level * 1024;
-  return [...lake.cells].map((cell) => ({
-    change: "atLeast",
-    band: "WaterSurfaceElevations",
-    cell,
-    value,
-  }));
+    mesh = map.mesh,
+    datum = map.EffectiveSeaLevel,
+    lakes: Evidence["lakes"] = [],
+    around = new Int32Array(mesh.stride),
+    depth = (i: number) => map.WaterDepths.get(i) / 1024,
+    lakeWater = (i: number) => {
+      const kind = map.WaterKindCodes.get(i);
+      if (kind === 1) return false;
+      if (kind === 2) return depth(i) > lakeShoreDepth;
+      if (depth(i) <= lakeShoreDepth) return false;
+      const m = neighborsOf(mesh, i, around);
+      for (let k = 0; k < m; k++) if (map.WaterKindCodes.get(around[k]) === 2) return true;
+      return false;
+    };
+  components(mesh, lakeWater, (members) => {
+    let level = 0,
+      weight = 0;
+    for (const i of members) {
+      const surface = map.WaterSurfaceElevations.get(i),
+        known = surface !== noWaterSurface;
+      level += (known ? surface : state.regional.inheritedHeight.get(i) + depth(i) * 1024) - datum;
+      weight++;
+    }
+    lakes.push({ cells: members, level: level / weight / 1024 });
+  });
+  return lakes;
 }
 
 export const lake: PoiEntry = {
@@ -189,38 +186,55 @@ export const lake: PoiEntry = {
     suitability: notApplicable("Water finds the basin; no process chooses it."),
     places,
   },
+  publication: {
+    statement:
+      "Every body publishes as its traced shoreline, with its water body and level; a river's mouth is clipped by that record.",
+    moment: "geography",
+    record: lakeRecord,
+  },
   fields: {
     statement:
-      "A lake is a store and a root of the drainage: it holds its bed under a level surface, spills at one outlet, keeps its shores damp, and writes its depth into the memory that Salt's dead-lake origin reads once it is gone.",
-    terrain: heldBed,
-    water: heldWater,
+      "A lake is a store and a root of the drainage: the routing's fill holds its level over its bed and spills it at one outlet, and what the lake itself adds is damp on its shores.",
+    terrain: notApplicable("Erosion and sediment write its bed; the routing's fill stands on it."),
+    water: notApplicable("The routing's lake fill writes its surface and depth, and its outlet."),
     climate: dampShore,
     cover: notApplicable(
       "Ecology already reads shallow water as wetness, so shore reeds come from the depth itself."
     ),
-    magic: remembered,
+    magic: notApplicable(
+      "Salt's `rememberLakes` writes every lake's depth into LakeMemory, and its dead-lake origin reads that."
+    ),
   },
   acrossMaps: {
     statement:
       "A captured lake is a fact of the parent: its cells are roots of the finer network and it stands at the parent's level, while the relief develops under it. Its record moves to the refined body; if the ground holds none near, it goes.",
     carry: carryWhereItLands,
-    realize: capturedLevel,
+    realize: notApplicable(
+      "Its schedule reads the captured water, and the network and routing stand it at that level."
+    ),
     counterpart,
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable(
       "Routing keeps a captured lake at its captured level, so a round's water does not change it."
     ),
+    schedule: {
+      kind: "lake",
+      read(state, evidence) {
+        evidence.lakes.push(...capturedLakes(state));
+      },
+    },
   },
   movement: {
     statement:
       "Boats cross a lake cheaply where a road has to go round it; the level ground beside it draws a shore road. The network grows from it as from any root.",
-    roads: (state, place, cell) => (beside(state, place, cell) ? 0.85 : 1),
+    roads: (state, place) => shoreCells(state, place).map((cell) => ({ cell, factor: 0.85 })),
     boats: costNear(0.5),
     drainage: costNear(0.7),
     magic: notApplicable(
       "Greenwood's roots already stop at open water in their own propagation, and a river's carried stock passes through with the flow."
     ),
+    links: notApplicable("A lake joins no two cells for walkers; boats pay their own cost across."),
     crosses: notApplicable(
       "A lake is the barrier itself; only boats, on their own cost, cross it."
     ),
@@ -273,7 +287,7 @@ export const lake: PoiEntry = {
     statement:
       "A lake shows by its area, depth or throughflow, whichever is greatest, and sooner where it is the only water in its country; a capital on its shore carries a small one.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.25, isolation: 0.15 }),
+    importance: weighed(factors, { magnitude: 0.6, localConditions: 0.25, isolation: 0.15 }),
   },
   naming: {
     statement:

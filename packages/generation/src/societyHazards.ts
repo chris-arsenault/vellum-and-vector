@@ -27,27 +27,40 @@ function exposures(state: GenerationState, c: SocietyCommunity): Exposure[] {
     v = (name: string) => societyValue(state, name, i);
   return [...physicalExposures(v), ...magicalExposures(state, i)];
 }
+/** Steep iced ground sheds an avalanche, at this yearly chance. */
+export const avalancheSlope = 0.15,
+  avalancheIce = 1,
+  avalancheRate = 0.002;
+/** A flood's yearly chance at full flood frequency. */
+export const floodRate = 0.02;
+/** A coast low and near the sea takes a tsunami, at this yearly chance at full strain. */
+export const waveHeight = 20,
+  waveShore = 10_000,
+  tsunamiRate = 0.00001;
+export const tsunamiHazard = { severity: 0.4, radius: 10_000 };
 function physicalExposures(v: (name: string) => number): Exposure[] {
   return [
     {
       kind: "avalanche",
-      rate: v("slope") > 0.15 && v("iceThickness") > 1 ? 0.002 : 0,
+      rate: v("slope") > avalancheSlope && v("iceThickness") > avalancheIce ? avalancheRate : 0,
       severity: 0.5,
       radius: 1500,
       cause: "Snow-bearing steep terrain released downslope.",
     },
     {
       kind: "flood",
-      rate: v("floodFrequency") * 0.02,
+      rate: v("floodFrequency") * floodRate,
       severity: 0.12,
       radius: 5000,
       cause: "River flood frequency and exposed settlement terrain.",
     },
     {
       kind: "tsunami",
-      rate: v("elevation") < 20 && v("oceanDistance") < 10000 ? v("tectonicStrain") * 0.00001 : 0,
-      severity: 0.4,
-      radius: 10000,
+      rate:
+        v("elevation") < waveHeight && v("oceanDistance") < waveShore
+          ? v("tectonicStrain") * tsunamiRate
+          : 0,
+      ...tsunamiHazard,
       cause: "An active coastal strain zone triggered marine inundation.",
     },
   ];

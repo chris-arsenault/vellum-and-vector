@@ -30,6 +30,13 @@ export interface HumanRound {
     siteKind: string;
     siteReason: string;
     peak: number;
+    /** A camp that met the World's own ruin rule: what its record says of it. */
+    major?: {
+      communityId: string;
+      population: number;
+      founded: import("@atlas/domain").SocietyCommunity["founded"];
+      causes: string[];
+    };
   }[];
 }
 export interface GenerationState {

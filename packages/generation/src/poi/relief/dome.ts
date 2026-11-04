@@ -1,12 +1,13 @@
 import type { GenerationState } from "../../process";
+import { rimCost } from "../../regional/causes/landmark";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { areaRecord } from "../poiRecords";
 import { heightAt, isLand } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
   areaOf,
-  holdAt,
   landmarkGround,
   lastsWhile,
   meanOf,
@@ -22,8 +23,6 @@ import {
 /** Area and relief at which a dome is half as great as domes get: its default record's diameter. */
 const typicalArea = 1_600_000_000,
   typicalRelief = 150;
-/** The rim's dear ground to the network, as the regional landmark cause has it. */
-const ringCost = 4;
 
 /** Metres a buried salt bed under strain has lifted the ground, as Salt's own dome step books it. */
 const saltLifted = (state: GenerationState, cell: number) =>
@@ -34,6 +33,7 @@ const isA = (state: GenerationState, cell: number) =>
   isLand(state, cell) && (inRecord(state, cell) || saltLifted(state, cell) > 0);
 const places = regionPlaces("dome", isA, heightAt);
 const isSalt = (state: GenerationState, place: PoiPlace) => saltLifted(state, place.anchor) > 0;
+const outline = areaRecord({ kind: "dome", layer: "geology", name: "Dome" });
 const counterpart = nearestOrTop(isA);
 const factors = {
   magnitude: meanOf(sized(areaOf, typicalArea), sized(reliefOf, typicalRelief)),
@@ -59,25 +59,24 @@ export const dome: PoiEntry = {
     suitability: sitingSuits("dome-ring"),
     places,
   },
+  publication: {
+    statement:
+      "A salt dome publishes as its outline. A dome on a dome-ring record publishes as that record, once.",
+    moment: "magic",
+    record: (state, place) => (inRecord(state, place.anchor) ? null : outline(state, place)),
+  },
   fields: {
     statement:
       "A dome lifts the ground and holds the lift: a ring dome's alternating hard and soft rock stands up as concentric ridges, and a salt dome leaks brine to the ring of ground around it, which Salt carries from there.",
-    terrain: (state, place) => [
-      ...holdAt(state, "atLeast", "Elevation", place.cells),
-      ...holdAt(state, "atLeast", "RockResistance", place.cells),
-    ],
+    terrain: notApplicable(
+      "Salt's dome step lifts the bedrock; a record's landmark cause maintains its rings and rock."
+    ),
     water: notApplicable(
       "Its rings turn drainage, which the cost below states; the brine it leaks is Salt's stock, not water."
     ),
     climate: notApplicable("A broad low rise is below what the air columns turn."),
     cover: notApplicable("Cover follows the rings' soil and any salting through ecology."),
-    magic: (state, place) =>
-      holdAt(
-        state,
-        "atLeast",
-        "Salting",
-        place.cells.filter((cell) => saltLifted(state, cell) > 0)
-      ),
+    magic: notApplicable("Salt's dome step seeps its brine and its feedback writes the salting."),
   },
   acrossMaps: {
     statement:
@@ -87,14 +86,18 @@ export const dome: PoiEntry = {
     counterpart,
     unrealized: stays,
     settle: notApplicable("Its lift is bounded per epoch; a round's water does not change it."),
+    schedule: notApplicable(
+      "A dome-ring record has its landmark cause; a salt dome needs no step."
+    ),
   },
   movement: {
     statement:
       "Rings turn roads and rivers around them, so tracks and streams on a dome run in arcs; on a salt dome, brine moves with the crust and comes up at the ring.",
-    roads: costNear(1.5),
+    roads: notApplicable("The ruling-grade cost already reads its rings."),
     boats: notApplicable("A dome has no water to carry boats."),
-    drainage: costNear(ringCost),
-    magic: costNear(0.8),
+    drainage: (state, place) => costNear(rimCost)(state, place),
+    magic: { crust: costNear(0.8) },
+    links: notApplicable("A dome joins nothing."),
     crosses: notApplicable("A dome turns routes; it takes none across a barrier."),
   },
   others: {
@@ -136,7 +139,7 @@ export const dome: PoiEntry = {
     statement:
       "A dome shows by its width and its relief over flat country, which is the only place it is seen at all; it earns little among hills, where it is one more rise.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.45, localConditions: 0.45, isolation: 0.1 }),
+    importance: weighed(factors, { magnitude: 0.45, localConditions: 0.45, isolation: 0.1 }),
   },
   naming: {
     statement:

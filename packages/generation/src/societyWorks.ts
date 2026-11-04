@@ -60,8 +60,10 @@ export function makeWork(
 function proposedWorks(state: GenerationState, c: SocietyCommunity): SocietyWorkKind[] {
   return state.society!.round ? coldAgeWorks(state, c) : settledWorks(state, c);
 }
+/** The people a settled community needs before it digs and keeps a work. */
+export const settledHands = 500;
 function settledWorks(state: GenerationState, c: SocietyCommunity): SocietyWorkKind[] {
-  if (population(c) < 500) return [];
+  if (population(c) < settledHands) return [];
   const i = nearestSample(state, c.position),
     v = (name: string) => societyValue(state, name, i);
   const kinds: SocietyWorkKind[] = [];
@@ -102,6 +104,10 @@ export function planSocietyWorks(state: GenerationState) {
   if (!work.round) addHarbors(state, existing);
   addAuthoredWorks(state, existing);
 }
+/** Water a harbour stands in (m), the seat it may lie from (m), and the people who build one. */
+export const harbourDepth = 30,
+  harbourReach = 10_000,
+  harbourHands = 1000;
 /**
  * A unit demands a harbour of the shore it holds: its coast medium, the same cells the demand
  * is later realized on. A located harbour (a finer profile) snaps to shallow water near the
@@ -110,7 +116,7 @@ export function planSocietyWorks(state: GenerationState) {
 function addHarbors(state: GenerationState, existing: Set<string>) {
   const grid = state.surface;
   for (const c of state.society!.region.communities) {
-    if (population(c) < 1000) continue;
+    if (population(c) < harbourHands) continue;
     const work = makeWork(state, c, "harbor");
     if (existing.has(work.id)) continue;
     if (work.demand) {
@@ -125,12 +131,16 @@ function addHarbors(state: GenerationState, existing: Set<string>) {
   }
 }
 function harborSample(state: GenerationState, position: SocietyCommunity["position"]) {
-  const { x, y } = position;
-  for (const i of samplesInBox(state.surface, [x - 10000, y - 10000, x + 10000, y + 10000])) {
-    if (societyValue(state, "water", i) !== 1 || societyValue(state, "waterDepth", i) >= 30)
+  const { x, y } = position,
+    reach = harbourReach;
+  for (const i of samplesInBox(state.surface, [x - reach, y - reach, x + reach, y + reach])) {
+    if (
+      societyValue(state, "water", i) !== 1 ||
+      societyValue(state, "waterDepth", i) >= harbourDepth
+    )
       continue;
     const p = gridPosition(state.surface, i);
-    if (Math.hypot(p.x - x, p.y - y) < 10000) return i;
+    if (Math.hypot(p.x - x, p.y - y) < reach) return i;
   }
   return undefined;
 }
@@ -294,7 +304,7 @@ function applyWork(state: GenerationState, work: SocietyWork, years: number) {
 interface WorkDose {
   /** Work applied at this sample, for effects that scale with elapsed years. */
   amount: number;
-  /** Change in applied work at this sample, for one-off terrain and conductance changes. */
+  /** Change in applied work at this sample, for one-off terrain changes. */
   rise: number;
   years: number;
 }
@@ -309,13 +319,9 @@ function applyWorkSample(
   const v = (name: string) => societyValue(state, name, i);
   const terrain: Partial<Record<SocietyWorkKind, number>> = {
     pass: -8,
-    harbor: 5,
-    dam: 6,
     weir: 4,
   };
   if (terrain[work.kind]) edit("elevation", v("elevation") + terrain[work.kind]! * rise);
-  // Tapping cracks the sinter and opens the fracture: conductance rises, Fire reaches further.
-  if (work.kind === "tapping") edit("fracture", Math.min(1, v("fracture") + 0.25 * rise));
   if (work.kind === "weir" || work.kind === "quarrying")
     applyNativeColdAgeWork(state, work, i, amount, years);
   applyLivingWork(state, work, i, amount, years, edit);
@@ -332,7 +338,8 @@ function applyLivingWork(
   const v = (name: string) => societyValue(state, name, i);
   switch (work.kind) {
     case "irrigation":
-      return irrigate(state, i, amount, edit);
+      // A located work is the irrigation entry's place, which declares its own water.
+      return work.demand ? irrigate(state, i, amount, edit) : undefined;
     case "clearance":
       return clearLand(state, i, amount, years, edit);
     case "burning":
@@ -347,6 +354,8 @@ function applyLivingWork(
       return;
   }
 }
+/** The share of what a water work diverts that reaches the soil. */
+export const soilShare = 0.02;
 function irrigate(
   state: GenerationState,
   i: number,
@@ -356,7 +365,7 @@ function irrigate(
   const available = societyValue(state, "flow", i),
     diverted = Math.min(available * 0.2, amount);
   edit("flow", available - diverted);
-  edit("soilWater", societyValue(state, "soilWater", i) + diverted * 0.02);
+  edit("soilWater", societyValue(state, "soilWater", i) + diverted * soilShare);
 }
 /**
  * Clearing and burning take the trees and what lives in them: the Greenwood's sap under the

@@ -1,9 +1,12 @@
 import { canyonCells } from "../../canonry/landmarkCanyon";
+import { incisedReach } from "../../canonry/landforms";
 import type { GenerationState } from "../../process";
+import { corridorCost } from "../../regional/causes/landmark";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiCarried, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { courseRecord } from "../poiRecords";
 import {
   dischargeAt,
   fieldOf,
@@ -13,12 +16,9 @@ import {
   landformAt,
   Landform,
   metres,
-  slopeAt,
-  toNative,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
-  holdAt,
   landmarksOf,
   lengthOf,
   loweredAsCaptured,
@@ -35,8 +35,6 @@ const typicalLength = 100_000,
   typicalRelief = 300;
 /** Discharge at which a gorge's river is half as great as they get. */
 const typicalDischarge = 250;
-/** The drainage network's draw into a captured canyon, as the regional landmark cause has it. */
-const corridorCost = 0.15;
 
 /** The floor cells of every canyon record, by the generator's own canyon geometry. */
 const canyonFloors = (state: GenerationState) =>
@@ -50,14 +48,8 @@ const canyonFloors = (state: GenerationState) =>
     return floors;
   });
 /** The classifier's gorge test, read where a waterfall's code has taken precedence over it. */
-const incised = (state: GenerationState, cell: number) => {
-  const profile = state.physical!.profile;
-  return (
-    isRiver(state, cell) &&
-    slopeAt(state, cell) >= profile.GorgeMinimumSlope &&
-    fieldOf(state).CumulativeFluvialErosion.get(cell) >= toNative(profile.GorgeMinimumIncision)
-  );
-};
+const incised = (state: GenerationState, cell: number) =>
+  incisedReach(fieldOf(state), state.physical!.profile, cell);
 const isA = (state: GenerationState, cell: number) => {
   if (!isLand(state, cell)) return false;
   const code = landformAt(state, cell);
@@ -80,6 +72,7 @@ const factors = {
   isolation: aloneAmong(places, spans(12)),
   cultural: attachment(spans(8)),
 };
+const course = courseRecord({ kind: "gorge", layer: "geology", name: "Gorge" });
 
 export const gorge: PoiEntry = {
   id: "gorge",
@@ -98,20 +91,17 @@ export const gorge: PoiEntry = {
     suitability: sitingSuits("canyon"),
     places,
   },
+  publication: {
+    statement:
+      "A gorge publishes as the course its river runs through it. A canyon record publishes as that record, once.",
+    moment: "geography",
+    record: (state, place) => (canyonFloors(state).has(place.anchor) ? null : course(state, place)),
+  },
   fields: {
     statement:
-      "A gorge confines a river: its floor is held down, its walls keep their rock, and the river has no floodplain to spread into while the walls stand.",
-    terrain: (state, place) => [
-      ...holdAt(state, "atMost", "Elevation", place.cells),
-      ...holdAt(state, "atLeast", "RockResistance", place.cells),
-    ],
-    water: (state, place) =>
-      place.cells.map((cell) => ({
-        change: "atMost" as const,
-        band: "FloodplainIntensity" as const,
-        cell,
-        value: 0,
-      })),
+      "A gorge confines a river: its floor is cut down, its walls keep their rock, and the river has no floodplain to spread into while the walls stand.",
+    terrain: notApplicable("Fluvial incision cuts the floor; a canyon record maintains its own."),
+    water: notApplicable("The floodplain process spreads only below its maximum slope."),
     climate: notApplicable("Its shade and damp are below what the climate field resolves."),
     cover: notApplicable("Cover on its walls follows the slope and soil ecology already reads."),
     magic: notApplicable(
@@ -130,14 +120,16 @@ export const gorge: PoiEntry = {
       return isCanyonRecord(carried) ? { outcome: "keep" } : { outcome: "drop" };
     },
     settle: notApplicable("Its incision is booked over epochs, not with a round's water."),
+    schedule: notApplicable("A canyon record's steps belong to its landmark cause."),
   },
   movement: {
     statement:
       "A gorge is a barrier to roads across it and along it, a rough passage for boats, and a corridor the drainage network is drawn into; a river's carried magic passes through quicker for the confinement.",
     roads: costNear(3),
     boats: costNear(2),
-    drainage: costNear(corridorCost),
-    magic: costNear(0.8),
+    drainage: (state, place) => costNear(corridorCost)(state, place),
+    magic: { river: costNear(0.8) },
+    links: notApplicable("A gorge joins nothing."),
     crosses: notApplicable("It is the barrier; a bridge is what crosses it."),
   },
   others: {
@@ -182,7 +174,7 @@ export const gorge: PoiEntry = {
     statement:
       "A gorge shows by length and depth together, and by how deeply its river has cut against the country round it; a modest gorge at a border town shows sooner than a greater empty one.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.25, isolation: 0.15 }),
+    importance: weighed(factors, { magnitude: 0.6, localConditions: 0.25, isolation: 0.15 }),
   },
   naming: {
     statement: "Named by the nearest people, or after its river; a canyon record keeps its name.",

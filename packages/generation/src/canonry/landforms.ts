@@ -1,12 +1,11 @@
-import { meshDeltaX } from "./mesh";
 // LandformClassificationLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { units, truncate } from "./math";
+import { noWaterSurface, units, truncate } from "./math";
 import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
-import { physicalSampler } from "./physicalMetric";
+import { physicalDistance, physicalSampler } from "./physicalMetric";
 import { releaseWorking } from "./physicalNumerics";
 import { topographicProminence } from "../topographicProminence";
 
@@ -99,27 +98,49 @@ function historical(
     ? L.OutwashPlain
     : 0;
 }
-function hasDrop(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
-  const target = map.FlowTargets.get(i);
-  if (target < 0) return false;
-  const distance = Math.hypot(
-    meshDeltaX(map.mesh, map.mesh.x(i) - map.mesh.x(target)),
-    map.mesh.y(i) - map.mesh.y(target)
-  );
-  return (
-    ((map.Elevation.get(i) - map.Elevation.get(target)) / distance) * p.WaterfallEvaluationLength >=
-    units(p.WaterfallMinimumDrop)
-  );
+/** The least drop, in metres, that falls rather than runs; a real height, whatever the cell. */
+export const waterfallLeastDrop = 10;
+/** A river's gradient over this many times the reach above and below it is a step, not a slope. */
+const waterfallStepRatio = 5;
+/** The height water runs at: the ground, or the surface of the water standing on it. */
+function riverLevel(map: PhysicalField, i: number) {
+  const ground = map.Elevation.get(i),
+    kind = map.WaterKindCodes.get(i);
+  if (kind === 0) return ground;
+  if (kind === 1) return Math.max(ground, map.EffectiveSeaLevel);
+  const surface = map.WaterSurfaceElevations.get(i);
+  return surface === noWaterSurface ? ground : Math.max(ground, surface);
 }
-function waterfall(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
-  const order = map.RiverOrders.get(i);
-  if (order <= 0) return false;
-  if (hasDrop(map, p, i)) return true;
+/** Metres a river falls from a cell to the next: to its surface where that cell holds water. */
+export function riverDrop(map: PhysicalField, i: number) {
+  const target = map.FlowTargets.get(i);
+  return target < 0 ? 0 : (riverLevel(map, i) - riverLevel(map, target)) / 1024;
+}
+/** A river's gradient from a cell to the next, rise over run. */
+export function riverGradient(map: PhysicalField, i: number) {
+  const target = map.FlowTargets.get(i);
+  return target < 0 ? 0 : riverDrop(map, i) / physicalDistance(map.mesh, i, target);
+}
+/** The steepest reach of river running into a cell. */
+function gradientAbove(map: PhysicalField, i: number) {
+  let above = 0;
   for (let edge = 0; edge < map.mesh.degree(i); edge++) {
     const j = map.mesh.neighbor(i, edge);
-    if (j >= 0 && map.RiverOrders.get(j) >= order && hasDrop(map, p, j)) return true;
+    if (j >= 0 && map.RiverOrders.get(j) > 0 && map.FlowTargets.get(j) === i)
+      above = Math.max(above, riverGradient(map, j));
   }
-  return false;
+  return above;
+}
+/**
+ * The one definition of a waterfall: a land cell of a river that drops at least the least drop
+ * to the next cell, at five times the river's gradient above and below it: a step in the long
+ * profile. The landform code, the natural surface and the catalogue's entry all read this.
+ */
+export function isWaterfall(map: PhysicalField, i: number): boolean {
+  if (map.WaterKindCodes.get(i) !== 0 || map.RiverOrders.get(i) <= 0) return false;
+  if (riverDrop(map, i) < waterfallLeastDrop) return false;
+  const below = Math.max(0, riverGradient(map, map.FlowTargets.get(i)));
+  return riverGradient(map, i) >= waterfallStepRatio * Math.max(gradientAbove(map, i), below);
 }
 function ridge(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
   return (
@@ -144,32 +165,23 @@ function valley(
       map.FlowAccumulation.get(i) >= truncate(p.RiverAccumulationThreshold / 3))
   );
 }
-function pass(
-  map: PhysicalField,
-  p: PhysicalProfile,
-  i: number,
-  s: ReturnType<typeof shape>
-): number {
-  if (
-    map.Elevation.get(i) >= units(p.RidgeElevationThreshold) &&
-    map.RidgeInfluence.get(i) >= Math.fround(0.34) &&
-    s.higher >= 2 &&
-    s.lower >= 1
-  )
-    return L.Pass;
-  return 0;
-}
 function relief(
   map: PhysicalField,
   p: PhysicalProfile,
   i: number,
   s: ReturnType<typeof shape>
 ): number {
-  const col = pass(map, p, i, s);
-  if (col) return col;
   if (ridge(map, p, i)) return L.Ridge;
   if (valley(map, p, i, s)) return L.Valley;
   return map.Slope.get(i) <= p.PlainSlopeThreshold ? L.Plain : L.Slope;
+}
+/** A river cell both steep and deeply incised: what makes a reach a gorge. */
+export function incisedReach(map: PhysicalField, p: PhysicalProfile, i: number) {
+  return (
+    map.RiverOrders.get(i) > 0 &&
+    map.Slope.get(i) >= p.GorgeMinimumSlope &&
+    map.CumulativeFluvialErosion.get(i) >= units(p.GorgeMinimumIncision)
+  );
 }
 function classify(
   map: PhysicalField,
@@ -177,18 +189,14 @@ function classify(
   i: number,
   valueAt: ReturnType<typeof physicalSampler>
 ): number {
+  // First: a step is a waterfall whatever ice or impact left the ground around it.
+  if (isWaterfall(map, i)) return L.Waterfall;
   const preserved = retained(map, p, i, valueAt);
   if (preserved !== 0) return preserved;
   const s = shape(map, i, p.LandformNeighborhoodRadius, valueAt);
   const history = historical(map, p, i, s);
   if (history !== 0) return history;
-  if (waterfall(map, p, i)) return L.Waterfall;
-  if (
-    map.RiverOrders.get(i) > 0 &&
-    map.Slope.get(i) >= p.GorgeMinimumSlope &&
-    map.CumulativeFluvialErosion.get(i) >= units(p.GorgeMinimumIncision)
-  )
-    return L.Gorge;
+  if (incisedReach(map, p, i)) return L.Gorge;
   return relief(map, p, i, s);
 }
 export function landformClassification(map: PhysicalField, c: PhysicalContext) {
@@ -198,11 +206,62 @@ export function landformClassification(map: PhysicalField, c: PhysicalContext) {
     map.LandformCodes.set(i, classify(map, c.Profile, i, valueAt));
   // Summits by topographic prominence, which no fixed sampling radius can measure.
   // A summit outranks glacial classes that persist from earlier ice ages.
-  const rise = prominence(map);
+  const { rise, cols } = summitsAndCols(map);
   for (let i = 0; i < map.mesh.count; i++)
-    if (rise.get(i) >= units(c.Profile.PeakMinimumProminence) && map.WaterKindCodes.get(i) === 0)
+    if (
+      rise.get(i) >= units(c.Profile.PeakMinimumProminence) &&
+      map.WaterKindCodes.get(i) === 0 &&
+      map.LandformCodes.get(i) !== L.Waterfall
+    )
       map.LandformCodes.set(i, L.Peak);
   releaseWorking(map, rise);
+  // A pass is a key col; it takes the place of an ordinary relief class, off the rivers.
+  for (const col of cols.keys())
+    if (reliefClasses.has(map.LandformCodes.get(col)) && dryCol(map, col))
+      map.LandformCodes.set(col, L.Pass);
+}
+const reliefClasses = new Set([L.Plain, L.Slope, L.Valley, L.Ridge]);
+const dryCol = (map: PhysicalField, cell: number) =>
+  map.WaterKindCodes.get(cell) === 0 && map.RiverOrders.get(cell) <= 0;
+function adjacentCells(map: PhysicalField) {
+  return function* (cell: number) {
+    for (let edge = 0; edge < map.mesh.degree(cell); edge++) {
+      const j = map.mesh.neighbor(cell, edge);
+      if (j >= 0) yield j;
+    }
+  };
+}
+/**
+ * Elevation units a top must rise above its col to be a summit, and so to make that col a pass:
+ * fifty metres. A lesser rise is a bump in the ground, whatever the map's cell size.
+ */
+export const leastRise = 50 * 1024;
+/** Each summit's prominence, and every key col with the rise of the greatest summit it serves. */
+function summitsAndCols(map: PhysicalField) {
+  const { rise, saddle } = topographicProminence(
+      map.coverage,
+      map.Elevation,
+      adjacentCells(map),
+      map.EffectiveSeaLevel
+    ),
+    // hpc-exempt: one entry per col, read by cell; cols are few among the map's cells.
+    cols = new Map<number, number>();
+  for (let cell = 0; cell < map.mesh.count; cell++) {
+    const col = saddle.get(cell);
+    if (col >= 0 && rise.get(cell) >= leastRise)
+      cols.set(col, Math.max(cols.get(col) ?? 0, rise.get(cell)));
+  }
+  map.coverage.release(saddle);
+  return { rise, cols };
+}
+/**
+ * Every key col on this map: the cell where a summit's area joins higher ground, with the rise
+ * in elevation units of the greatest summit measured down to it.
+ */
+export function keyCols(map: PhysicalField) {
+  const { rise, cols } = summitsAndCols(map);
+  map.coverage.release(rise);
+  return cols;
 }
 /**
  * Each summit's prominence in elevation units: its height above the highest col on the way to
@@ -210,16 +269,10 @@ export function landformClassification(map: PhysicalField, c: PhysicalContext) {
  * highest down; when two summits' areas meet, the lower summit's col is the joining cell.
  */
 export function prominence(map: PhysicalField) {
-  const adjacent = function* (cell: number) {
-    for (let edge = 0; edge < map.mesh.degree(cell); edge++) {
-      const j = map.mesh.neighbor(cell, edge);
-      if (j >= 0) yield j;
-    }
-  };
   const { rise, saddle } = topographicProminence(
     map.coverage,
     map.Elevation,
-    adjacent,
+    adjacentCells(map),
     map.EffectiveSeaLevel
   );
   map.coverage.release(saddle);

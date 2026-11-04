@@ -83,7 +83,7 @@ export function growNetwork(state: RegionalState): NetworkWork {
  * reaches it, so the basin stays closed: a terminal lake, a salt flat or a dry pan. A wetter
  * basin fills to its spill and overflows; its river continues.
  */
-const closedBasinAridity = 0.5;
+export const closedBasinAridity = 0.5;
 function closedBasin(state: RegionalState, i: number) {
   return (
     regionalPrecipitation(state, i) < closedBasinAridity * potentialEvaporation(celsius(state, i))
@@ -268,14 +268,17 @@ function within(state: RegionalState, center: number, reach: number) {
   return { cells, distances };
 }
 
+/** The factor on each cell's cost around a summit or cone, dearest on the cell itself. */
+export function repulsion(state: RegionalState, center: number, reach: number) {
+  const { cells, distances } = within(state, center, reach * 2.5);
+  return cells.map((cell, k) => {
+    const d = distances[k] / reach;
+    return { cell, factor: (1 + summitRepulsion * Math.exp(-d * d)) * (cell === center ? 50 : 1) };
+  });
+}
 /** Dear ground around a summit or cone, dearest on the cell itself. */
 export function repel(state: RegionalState, cost: Float64Array, center: number, reach: number) {
-  const { cells, distances } = within(state, center, reach * 2.5);
-  for (const [k, i] of cells.entries()) {
-    const d = distances[k] / reach;
-    cost[i] *= 1 + summitRepulsion * Math.exp(-d * d);
-  }
-  cost[center] *= 50;
+  for (const { cell, factor } of repulsion(state, center, reach)) cost[cell] *= factor;
 }
 
 /** Scale the cost of every cell within `reach` of a centre. */

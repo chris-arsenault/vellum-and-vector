@@ -12,14 +12,15 @@ import type { GenerationState, MapProcessContext } from "../process";
 import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
 import { nativePosition } from "./atlasWorkspace";
 import { coordinateKey } from "./worldSources";
-import { extractGeologicalEvents } from "./geologicalFeatures";
-import { extractLakes, extractNamedLandforms } from "./geographicRegions";
+import { extractFaults } from "./geologicalFeatures";
+import { extractLakes } from "./geographicRegions";
+import { publishKinds } from "../poi/poiPublish";
+import type { PoiEntry } from "../poi/poiContract";
 import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
 import { meanderReach } from "./riverMeanders";
 import type { PhysicalField } from "./field";
 import { oceanFootprint } from "./geographicContours";
-import { extractEcologicalFeatures } from "./ecologyFeatures";
-import { extractReliefFeatures, extractValleys } from "./reliefFeatures";
+import { extractRanges } from "./reliefFeatures";
 import { extractOceans } from "./oceanFeatures";
 import { dropClaimedFeatures, extractLandmarks, landmarkClaims } from "./landmarkFeatures";
 import { workingArray, releaseWorking } from "./physicalNumerics";
@@ -221,6 +222,13 @@ const allDeliveries: GeographicDeliveries = {
   rivers: true,
   landmarks: true,
 };
+/** Whether the run's selected features deliver what a kind's places are read from. */
+function delivered(entry: PoiEntry, deliveries: GeographicDeliveries) {
+  if (entry.group === "cover" || entry.id === "wetland") return deliveries.ecology;
+  if (entry.id === "lake") return deliveries.lakes;
+  if (entry.id === "volcano" || entry.id === "caldera") return deliveries.volcanism;
+  return deliveries.landforms;
+}
 export function extractNativeGeography(
   state: GenerationState,
   context: MapProcessContext,
@@ -231,17 +239,14 @@ export function extractNativeGeography(
   context.progress(0.1, "Extracting ocean regions");
   if (deliveries.oceans) extractOceans(state);
   context.progress(0.2, "Extracting geological events and lakes");
-  extractGeologicalEvents(state, deliveries);
+  if (deliveries.fractures) extractFaults(state);
   if (deliveries.lakes) extractLakes(state);
   context.progress(0.35, "Extracting landforms");
-  if (deliveries.landforms) {
-    extractNamedLandforms(state);
-    extractReliefFeatures(state);
-  }
-  context.progress(0.65, "Extracting ecological regions");
-  if (deliveries.ecology) extractEcologicalFeatures(state);
+  if (deliveries.landforms) extractRanges(state);
+  context.progress(0.5, "Publishing the map's places");
+  publishKinds(state, "geography", (entry) => delivered(entry, deliveries));
   context.progress(0.8, "Extracting river geography");
-  if (deliveries.rivers) extractRiverGeography(state, context, deliveries.landforms);
+  if (deliveries.rivers) extractRiverGeography(state, context);
   else delete state.domain.world.drainage?.[state.domain.scope.areaId];
   // Last: a detected landform on a landmark is the landmark, published once under its identity.
   if (deliveries.landmarks) {
@@ -271,11 +276,7 @@ function riverWater(state: GenerationState) {
     },
   };
 }
-function extractRiverGeography(
-  state: GenerationState,
-  context: MapProcessContext,
-  valleys: boolean
-) {
+function extractRiverGeography(state: GenerationState, context: MapProcessContext) {
   const work = state.physical!,
     map = work.map,
     paths = createRiverPaths(map),
@@ -315,8 +316,7 @@ function extractRiverGeography(
     }
   }
   try {
-    if (valleys) extractValleys(state, publish());
-    else for (const reach of publish()) void reach;
+    for (const reach of publish()) void reach;
   } finally {
     releaseWorking(map, incoming, basinDischarge);
     releaseWorking(map, paths.x, paths.y, paths.upstream);

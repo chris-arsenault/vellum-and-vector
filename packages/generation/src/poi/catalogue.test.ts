@@ -1,24 +1,34 @@
+import { canonryMagicPresets } from "@atlas/domain";
 import { expect, it } from "vitest";
 import { poiCatalogue, poiPages, unwrittenFields } from "./catalogue";
+import { magicRuleKinds } from "./magicRuleKinds";
 import { unwritten } from "./poiContract";
 import { poiGroupIds, poiKindIds } from "./poiKinds";
 
-/**
- * The agreed contract, pinned. Changing this list means changing the contract, which happens
- * only when the owner asks.
- */
+/** The contract's shape: every entry answers exactly these. */
 const contract = {
   recognition: ["distinct", "isA"],
   existence: ["statement", "way", "requires", "suitability", "places"],
+  publication: ["statement", "moment", "record"],
   fields: ["statement", "terrain", "water", "climate", "cover", "magic"],
-  acrossMaps: ["statement", "carry", "realize", "counterpart", "unrealized", "settle"],
-  movement: ["statement", "roads", "boats", "drainage", "magic", "crosses"],
+  acrossMaps: ["statement", "carry", "realize", "counterpart", "unrealized", "settle", "schedule"],
+  movement: ["statement", "roads", "boats", "drainage", "magic", "links", "crosses"],
   others: ["statement", "needs", "excludes", "contains", "pairsWith"],
   people: ["statement", "offers", "threatens"],
   time: ["statement", "fate"],
-  visibility: ["statement", "magnitude", "localConditions", "isolation", "cultural", "visibleAt"],
+  visibility: ["statement", "magnitude", "localConditions", "isolation", "cultural", "importance"],
   naming: ["statement", "namedBy", "takesNameFrom", "lendsNameTo"],
 };
+
+it("gives every place rule of every magic system a kind in the catalogue", () => {
+  const presets = canonryMagicPresets();
+  expect(presets.map((system) => system.id).sort()).toEqual(Object.keys(magicRuleKinds).sort());
+  for (const system of presets)
+    for (const rule of system.features)
+      expect(poiCatalogue[magicRuleKinds[system.id][rule.id]]?.id, `${system.id}:${rule.id}`).toBe(
+        magicRuleKinds[system.id][rule.id]
+      );
+});
 
 it("has one page per group and one entry per kind, on its own group", () => {
   expect(Object.keys(poiPages)).toEqual([...poiGroupIds]);

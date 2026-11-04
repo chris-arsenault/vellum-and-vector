@@ -5,7 +5,7 @@ import {
   type SocietyMagicPractice,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
-import { changeSample, editableSamples, makeWork, workSamples } from "./societyWorks";
+import { makeWork } from "./societyWorks";
 import { nearestSample } from "./societySpatial";
 import { societyValue } from "./societySupport";
 import { peopleTrait } from "./societyTraits";
@@ -21,6 +21,12 @@ import {
 } from "./societyMagicAccess";
 
 export { magicAt } from "./societyMagicAccess";
+/** Degrees a forge at full use gives its seat, and the share of its heat that takes ice in a year. */
+export const fullForgeHeat = 8,
+  thawShare = 0.02;
+/** Ice and cold that hold a memory in full, in metres and degrees of frost. */
+export const memoryIce = 10,
+  memoryCold = 10;
 /** Stock amount (intensity·m²) one core-equivalent of the practice ledger stands for. */
 const stockPerCore = 1e7;
 /**
@@ -117,29 +123,8 @@ function fireUse(
   crackCores(state, nearestSample(state, c.position), used);
   if (used <= 0 && practice.heatApplied <= 0) return;
   const work = workFor(state, c, "fire-forge"),
-    heat = (8 * used) / Math.max(1, demand);
-  const editableHeat = editableSamples(state, "temperature"),
-    editableIce = editableSamples(state, "iceThickness");
-  // The forge warms its seat cell: synchronized to the mesh, but below the scale that
-  // re-propagates a magic field.
-  for (const { i, fraction } of workSamples(state, work)) {
-    if (editableHeat(i))
-      changeSample(
-        state,
-        "temperature",
-        i,
-        societyValue(state, "temperature", i, 15) + (heat - practice.heatApplied) * fraction,
-        "practice"
-      );
-    if (editableIce(i))
-      changeSample(
-        state,
-        "iceThickness",
-        i,
-        Math.max(0, societyValue(state, "iceThickness", i) - heat * fraction * years * 0.02),
-        "practice"
-      );
-  }
+    heat = (fullForgeHeat * used) / Math.max(1, demand);
+  // The heat on the ground is the forge entry's: its place reads this ledger.
   practice.injuries += used * 0.002;
   practice.heatApplied = heat;
   work.causes = [
@@ -156,8 +141,8 @@ function auroraUse(
   if (p.crystals <= 0) return;
   const i = nearestSample(state, c.position),
     intensity = magicAt(state, "stills", i);
-  const cold = Math.max(0, Math.min(1, -societyValue(state, "temperature", i) / 10));
-  const retained = Math.min(1, societyValue(state, "iceThickness", i) / 10) * cold;
+  const cold = Math.max(0, Math.min(1, -societyValue(state, "temperature", i) / memoryCold));
+  const retained = Math.min(1, societyValue(state, "iceThickness", i) / memoryIce) * cold;
   p.crystals *= Math.exp((-years * (1 - retained)) / 200);
   p.charge = Math.min(p.crystals, p.charge + (intensity * p.crystals * years) / 50);
   p.readers = (population(c) * 0.005 * skill("aurora-archive")) / (1 + p.strain);

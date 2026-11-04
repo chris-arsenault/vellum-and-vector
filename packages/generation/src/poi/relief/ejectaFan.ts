@@ -1,39 +1,20 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFate, type PoiPlace } from "../poiContract";
-import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import {
-  fieldOf,
-  isLand,
-  landformAt,
-  Landform,
-  magicRule,
-  magicValue,
-  metres,
-  toNative,
-} from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { areaOf, holdAt, meanOf, spans, standsIn } from "./reliefShape";
+import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { fieldOf, magicRule, magicValue, metres } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { areaOf, meanOf, spans, standsIn } from "./reliefShape";
 
-/** A blanket under a metre is a thin wash, no longer a body of ejecta. */
-const leastBlanket = toNative(1);
 /** Thickness and area at which a fan is half as great as fans get. */
 const typicalThickness = 10,
   typicalArea = 2_000_000_000;
 
-const fanRule = magicRule("fire", "fan");
-const rimOrPit = (state: GenerationState, cell: number) => {
-  const code = landformAt(state, cell);
-  return code === Landform.ImpactBasin || code === Landform.ImpactRim;
-};
-const blanket = (state: GenerationState, cell: number) =>
-  fieldOf(state).ImpactEjectaThickness.get(cell);
-const isA = (state: GenerationState, cell: number) =>
-  isLand(state, cell) &&
-  !rimOrPit(state, cell) &&
-  (fanRule(state, cell) || blanket(state, cell) >= leastBlanket);
-const thicknessAt = (state: GenerationState, cell: number) => metres(blanket(state, cell));
-const places = regionPlaces("ejectaFan", isA, thicknessAt);
+const isA = magicRule("fire", "fan");
+const thicknessAt = (state: GenerationState, cell: number) =>
+  metres(fieldOf(state).ImpactEjectaThickness.get(cell));
+const places = rulePlaces("ejectaFan", "fire", "fan");
 const thicknessOf = (state: GenerationState, place: PoiPlace) => thicknessAt(state, place.anchor);
 const counterpart = counterpartOf(isA, 1);
 const burning = (state: GenerationState, place: PoiPlace) =>
@@ -51,7 +32,7 @@ export const ejectaFan: PoiEntry = {
   name: "Ejecta fan",
   recognition: {
     distinct:
-      "A land cell outside a crater's own pit and rim classes with at least a metre of impact ejecta or in Fire's fan rule, where fallen stock is releasing. The ejecta band is written only beyond a crater's radius, so it cannot be the crater; ordinary sediment does not count however thick it is, and a placer is the river's gravel below it, not the blanket. The rule marks the near fan and any fan under ice or fresh from its fall; the rest of the blanket is the same material gone quiet.",
+      "A cell in Fire's fan rule: land where fallen stock is releasing. The rule is the definition. Ordinary sediment does not count however thick it is, and a placer is the river's gravel below it, not the blanket. Ejecta that has gone quiet stays in the band as material, no longer a fan.",
     isA,
   },
   existence: {
@@ -62,32 +43,25 @@ export const ejectaFan: PoiEntry = {
     suitability: notApplicable("It lies where the fall threw it."),
     places,
   },
+  publication: {
+    statement: "Each connected group of the rule's cells publishes as Fire's fan class.",
+    moment: "magic",
+    record: ruleRecord("fire", "fan"),
+  },
   fields: {
     statement:
       "A fan is a loose apron of broken rock and fallen metal that buries what was there and leaves a barren skin while it burns. Fire reads the metal in it as a finite source, which cracking agents release and rivers wash down.",
-    terrain: (state, place) => holdAt(state, "atLeast", "SedimentThickness", place.cells),
+    terrain: notApplicable("The impact deposits the blanket when it falls."),
     water: notApplicable(
       "Broken rock drains through without holding or sourcing water the field would show."
     ),
     climate: notApplicable("A blanket metres thick is below anything the climate field reads."),
-    cover: (state, place) =>
-      place.cells
-        .filter((cell) => fanRule(state, cell))
-        .flatMap((cell) => [
-          { change: "atMost" as const, band: "TreeCover" as const, cell, value: 0 },
-          { change: "atMost" as const, band: "GrassCover" as const, cell, value: 0 },
-        ]),
-    magic: (state, place) =>
-      holdAt(
-        state,
-        "atLeast",
-        "ImpactHeat",
-        place.cells.filter((cell) => fanRule(state, cell))
-      ),
+    cover: notApplicable("Fire's barren-fan step poisons the ground while the fall is fresh."),
+    magic: notApplicable("The impact's shock writes the heat; Fire's stocks hold the metal."),
   },
   acrossMaps: {
     statement:
-      "A captured fan lands where Fire's rule still reads it on the refined map, since magic classes are captured. Maps below the world carry no ejecta band, so where the rule no longer reads, the quiet fan has nothing to stand on and goes.",
+      "A captured fan lands where Fire's rule still reads it on the refined map, since magic classes are captured. Where the rule no longer reads, the quiet fan has nothing to stand on and goes.",
     carry: carryWhereItLands,
     realize: notApplicable("A blanket has no form for finer relief to develop."),
     counterpart,
@@ -96,6 +70,7 @@ export const ejectaFan: PoiEntry = {
     settle: notApplicable(
       "It is carried with the crust over epochs, not moved by a round's water."
     ),
+    schedule: notApplicable("A blanket has no step of its own in a refinement."),
   },
   movement: {
     statement:
@@ -106,6 +81,7 @@ export const ejectaFan: PoiEntry = {
     magic: notApplicable(
       "Its metal moves by Fire's own crust and river carriers; the blanket changes neither."
     ),
+    links: notApplicable("A fan joins nothing."),
     crosses: notApplicable("It is rough ground to cross, not a way over a barrier."),
   },
   others: {
@@ -142,7 +118,7 @@ export const ejectaFan: PoiEntry = {
     statement:
       "A fan shows by its thickness and spread, and stands out by how much more it holds than the country round; a fan is usually seen with its crater, and a mining town can carry it alone.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.55, localConditions: 0.35, isolation: 0.1 }),
+    importance: weighed(factors, { magnitude: 0.55, localConditions: 0.35, isolation: 0.1 }),
   },
   naming: {
     statement: "Goes under its crater's name, and takes a name of its own only where metal is dug.",

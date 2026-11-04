@@ -1,13 +1,12 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { namingCultureNear, regionPlaces, settlementWithin, within } from "../poiPlaces";
+import { namingCultureNear, rulePlaces, settlementWithin, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
 import { fieldOf, geothermalAt, magicRule, magicValue, metres, toNative } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, standsOut, weighed } from "../poiVisibilityRules";
 import { areaOf, spans } from "./waterReads";
 
-/** Native geothermal heat at which the sea floor vents, the rule's own seed. */
-const ventHeat = 720;
 /** The depth a plume loses a third of its reach over, in metres. */
 const plumeDepth = 300;
 /** Below this depth, in metres, boats feel a vent's warmed water and gas. */
@@ -24,7 +23,7 @@ const ventLife = 1;
 const isA = magicRule("fire", "vent");
 const heatAt = (state: GenerationState, cell: number) =>
   Math.max(geothermalAt(state, cell), magicValue(state, "fire", "intensity", cell) / 1000);
-const places = regionPlaces("vent", isA, heatAt);
+const places = rulePlaces("vent", "fire", "vent");
 const depthOf = (state: GenerationState, place: PoiPlace) =>
   metres(fieldOf(state).WaterDepths.get(place.anchor));
 /** How much of a vent's heat reaches the surface; nothing of a deep one does. */
@@ -49,12 +48,18 @@ const flushedMound = (_state: GenerationState, place: PoiPlace): readonly PoiFie
     cell,
     value: toNative(flushedSediment),
   }));
-/** A shallow vent's plume rises through the water, warming it and drawing up what lies below. */
+/**
+ * A shallow vent's plume rises through the water, warming it and drawing up what lies below.
+ * Nothing of a deep one arrives, so the surface keeps whatever the currents gave it.
+ */
 const plume = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => {
-  const reach = reachesSurface(state, place);
+  const reach = reachesSurface(state, place),
+    warmth = Math.round(warmedWater * reach),
+    lift = Math.round(plumeLift * reach);
+  if (warmth <= 0) return [];
   return place.cells.flatMap((cell): PoiFieldChange[] => [
-    { change: "atLeast", band: "SeaSurfaceAnomaly", cell, value: Math.round(warmedWater * reach) },
-    { change: "atLeast", band: "Upwelling", cell, value: Math.round(plumeLift * reach) },
+    { change: "atLeast", band: "SeaSurfaceAnomaly", cell, value: warmth },
+    { change: "atLeast", band: "Upwelling", cell, value: lift },
   ]);
 };
 /** Life on the vent feeds on its chemistry, in the dark, where nothing else grows. */
@@ -85,6 +90,11 @@ export const vent: PoiEntry = {
     suitability: notApplicable("Heat comes up where the crust lets it; nothing chooses."),
     places,
   },
+  publication: {
+    statement: "Every vent publishes as Fire's vent rule, the class the map's magic reads.",
+    moment: "magic",
+    record: ruleRecord("fire", "vent"),
+  },
   fields: {
     statement:
       "A vent is a source of heat and minerals at the sea floor: it keeps its mound clear of sediment, warms and lifts the water when shallow, and feeds life by chemistry. Fire's heat there is already the magic's effect.",
@@ -100,23 +110,25 @@ export const vent: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured vent lands on the finer sea floor, which must keep the heat the rule reads. Nobody can see one to dispute it, so with no counterpart it stays where it landed.",
+      "A captured vent lands on the finer sea floor, where the parent's heat comes down with the shared media and the rule reads it again. Nobody can see one to dispute it, so with no counterpart it stays where it landed.",
     carry: carryWhereItLands,
-    realize: (_state, carried) => [
-      { change: "atLeast", band: "Geothermal", cell: carried.cell, value: ventHeat },
-    ],
+    realize: notApplicable(
+      "The regional shared media carry the parent's Geothermal across the map."
+    ),
     counterpart,
     unrealized: stays,
     settle: notApplicable("A sea-floor vent has no relation to a round's water."),
+    schedule: notApplicable("A vent has no step in refinement's schedule; Fire's rule reads it."),
   },
   movement: {
     statement:
       "Boats give a shallow vent's warm gassy water a wide berth and deep ones never notice it. Fire runs easily through its fractured conduit. Nothing on land or in the drainage reaches it.",
     roads: notApplicable("A vent is under the sea; ways do not enter it."),
-    boats: (state, place, cell) =>
-      depthOf(state, place) < shoalVent ? costNear(2, spans(1)(state))(state, place, cell) : 1,
+    boats: (state, place) =>
+      depthOf(state, place) < shoalVent ? costNear(2, spans(1))(state, place) : [],
     drainage: notApplicable("Rivers end at the shore; the sea floor is no part of the network."),
-    magic: costNear(0.7),
+    magic: { crust: costNear(0.7) },
+    links: notApplicable("A vent joins no two cells."),
     crosses: notApplicable("A vent is a point on the sea floor that no route crosses."),
   },
   others: {
@@ -165,7 +177,7 @@ export const vent: PoiEntry = {
     statement:
       "A vent shows by its heat and its extent, and how sharply it stands from the cold sea floor; being out of sight it is rarely attached to people, so a capital's sailors are the only tie.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.3, isolation: 0.2 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.3, isolation: 0.2 }),
   },
   naming: {
     statement:

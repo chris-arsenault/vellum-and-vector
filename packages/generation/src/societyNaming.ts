@@ -12,6 +12,7 @@ import {
   type World,
 } from "@atlas/domain";
 import { createRNG, pickWeighted } from "@atlas/name-forge";
+import { stampImportance } from "./poi/poiPublish";
 import type { Geometry } from "geojson";
 import type { GenerationState, MapProcess } from "./process";
 import {
@@ -224,7 +225,13 @@ export function finalizeNamesProcess(original: DomainSnapshot): MapProcess {
       produces: ["atlasNames"],
       invalidates: [],
     },
-    behavior: { kind: "extract", extract: (state) => finalizeGeography(state, original) },
+    behavior: {
+      kind: "extract",
+      extract(state) {
+        finalizeGeography(state, original);
+        stampImportance(state);
+      },
+    },
     validate: () => [],
   };
 }

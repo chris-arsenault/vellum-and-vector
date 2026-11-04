@@ -1,31 +1,35 @@
 import type { GenerationState } from "../../process";
+import { uninhabitableIce } from "../../societySites";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
-import {
-  holdsRecord,
-  namingCultureNear,
-  recordPlaces,
-  settlementWithin,
-  within,
-} from "../poiPlaces";
+import { holdsRecord, namingCultureNear, within } from "../poiPlaces";
 import {
   cellSpan,
+  celsiusAt,
   iceAt,
   isLand,
   Landform,
   landformAt,
   magicRule,
   magicValue,
-  treeCoverAt,
+  moistureAt,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, standsOut } from "../poiVisibilityRules";
-import { keptLine, seatOf, isGone, isWork } from "./settlementRecords";
+import { aloneAmong, attachment, standsOut } from "../poiVisibilityRules";
+import { isGone, keptLine, nearTown, seatOf, weighedPlace } from "./settlementRecords";
+import { workPlaces, workRecord } from "./workRecords";
 
-/** Ice beyond which no one keeps anything, as societySites' uninhabitable holds it. */
-const tooMuchIce = 1;
-/** The worn way pilgrims make, and what they carry along it. */
+/** The worn way pilgrims make over this many metres, and what they carry along it. */
 const pilgrimRoad = 0.8,
-  pilgrimCarriage = 0.85;
+  pilgrimCarriage = 0.85,
+  pilgrimReach = 2000;
+/** How far, in metres, people walk to keep a shrine. */
+const keepersReach = 15_000;
+/** The least distance between two shrines, a shrine's own ground, in metres. */
+const shrineSpacing = 60_000,
+  shrineRadius = 200;
+/** The share of its ground in trees a shrine's uncut grove keeps, where trees can stand at all. */
+const groveCover = 0.3,
+  groveMoisture = 0.3;
 
 /** What makes ground holy, most surely first: magic is physical, and people answer it. */
 const sacredRules: readonly [string, string, number][] = [
@@ -53,10 +57,22 @@ function holiness(state: GenerationState, cell: number) {
   return best;
 }
 
-const places = recordPlaces("shrine", isWork("shrine"));
+const requires = (state: GenerationState, cell: number) =>
+  isLand(state, cell) &&
+  iceAt(state, cell) <= uninhabitableIce &&
+  nearTown(state, cell, keepersReach);
+const places = workPlaces("shrine", null, {
+  record: "shrine",
+  layer: "magicPractices",
+  label: "Shrine",
+  radius: shrineRadius,
+  spacing: shrineSpacing,
+  requires,
+  suitability: holiness,
+});
 const isA = holdsRecord("shrine", places);
 const around = (state: GenerationState) => 6 * cellSpan(state);
-const keepersFrom = (state: GenerationState) => 3 * around(state);
+const keepersFrom = () => keepersReach;
 const wardAt = (state: GenerationState, cell: number) =>
   Math.min(1, magicValue(state, "hallowed", "intensity", cell) / 1000);
 const holinessOf = (state: GenerationState, place: PoiPlace) => holiness(state, place.anchor);
@@ -68,7 +84,7 @@ const factors = {
 };
 const kept = (state: GenerationState, place: PoiPlace) => {
   const town = seatOf(state, place);
-  return town ? !isGone(town) : settlementWithin(state, place.anchor, keepersFrom(state));
+  return town ? !isGone(town) : nearTown(state, place.anchor, keepersReach);
 };
 
 export const shrine: PoiEntry = {
@@ -77,19 +93,21 @@ export const shrine: PoiEntry = {
   name: "Shrine",
   recognition: {
     distinct:
-      "A published record of `kind` shrine: a place kept as holy by people, whatever made it so. A Hallowed ring or a Greenwood wellspring is holy ground with no record, and a settlement with `siteKind` sanctuary is a town inside a ring. No generator publishes this record today, so no place of this kind exists yet.",
+      "A place kept as holy by people, whatever made it so. A Hallowed ring or a Greenwood wellspring is holy ground with no record, and a settlement with `siteKind` sanctuary is a town inside a ring.",
     isA,
   },
   existence: {
     statement:
-      "No generator sites a shrine today, on any map; this entry says what one needs. It would be sited by people within reach of their settlement, on the ground that answers to them: a ring, a spring, a door, a light well, the graves of the killed, a height. The site reads what the society's own site classes read, and the record is what is missing.",
+      "Sited by this entry, on every map: within a walk of a settlement, on the ground that answers to people, a ring, a spring, a door, a light well, the graves of the killed, a height; the holiest first, at least 25 km apart. The society simulation has no shrine of its own.",
     way: "sited",
-    requires: (state, cell) =>
-      isLand(state, cell) &&
-      iceAt(state, cell) <= tooMuchIce &&
-      settlementWithin(state, cell, keepersFrom(state)),
+    requires,
     suitability: holiness,
     places,
+  },
+  publication: {
+    statement: "A shrine publishes as a located practice at its holy ground.",
+    moment: "society",
+    record: workRecord,
   },
   fields: {
     statement:
@@ -99,14 +117,10 @@ export const shrine: PoiEntry = {
       "A spring is holy for what it gives; the shrine does not take or hold it."
     ),
     climate: notApplicable("A shrine and its grove are far below what the climate field resolves."),
-    cover: (state, place) => [
-      {
-        change: "atLeast",
-        band: "TreeCover",
-        cell: place.anchor,
-        value: treeCoverAt(state, place.anchor),
-      },
-    ],
+    cover: (state, place) =>
+      moistureAt(state, place.anchor) >= groveMoisture && celsiusAt(state, place.anchor) > 0
+        ? [{ change: "atLeast", band: "TreeCover", cell: place.anchor, value: groveCover }]
+        : [],
     magic: (_state, place) => keptLine(place),
   },
   acrossMaps: {
@@ -117,16 +131,18 @@ export const shrine: PoiEntry = {
     counterpart: (_state, carried) => carried.cell,
     unrealized: stays,
     settle: notApplicable("A shrine does not move with water; people move to it."),
+    schedule: notApplicable("A shrine takes no part in refinement's steps."),
   },
   movement: {
     statement:
       "Pilgrims wear a way to a shrine, easing the roads near it, and carry what they gather from it: seed, salt and cores travel with those who walk. It bars no route and lets none across.",
-    roads: (state, place, cell) => costNear(pilgrimRoad, around(state))(state, place, cell),
+    roads: costNear(pilgrimRoad, pilgrimReach),
     boats: notApplicable("A shrine is reached on foot; any boat that serves it is the harbour's."),
     drainage: notApplicable(
       "Too slight to turn the network; it stands by water and does not hold it."
     ),
-    magic: (state, place, cell) => costNear(pilgrimCarriage, around(state))(state, place, cell),
+    magic: { people: costNear(pilgrimCarriage, pilgrimReach) },
+    links: notApplicable("A shrine joins nothing."),
     crosses: notApplicable("A shrine at a pass marks the crossing; the pass makes it."),
   },
   others: {
@@ -166,7 +182,7 @@ export const shrine: PoiEntry = {
     statement:
       "A shrine earns its place mostly by attachment, not size: the people who walk to it. With little physical magnitude, a major one at a capital outranks a greater one in empty country.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.3, localConditions: 0.3, isolation: 0.4 }),
+    importance: weighedPlace(factors, { magnitude: 0.3, localConditions: 0.3, isolation: 0.4 }),
   },
   naming: {
     statement:

@@ -8,6 +8,8 @@ import { Feature } from "./codes";
 import { rebuild } from "./surface";
 import { subductionArcs } from "./volcanicArcs";
 
+/** A caldera's radius as a share of its cone's. */
+export const calderaShare = 0.28;
 /**
  * The plume head after `sequence` epochs. The crust moves over a fixed plume,
  * so in the map frame the head tracks steadily along one heading per plume,
@@ -43,7 +45,7 @@ function physicalFeatures(
   let flags =
     map.FeatureFlags.get(i) |
     (distance <= p.VolcanicConeRadius ? Feature.VolcanicCone : Feature.LavaPlain);
-  if (caldera && distance <= p.VolcanicConeRadius * 0.28) flags |= Feature.VolcanicCaldera;
+  if (caldera && distance <= p.VolcanicConeRadius * calderaShare) flags |= Feature.VolcanicCaldera;
   if (activity >= Math.min(600, Math.trunc((strength * 3) / 4))) flags |= Feature.MantlePlume;
   map.FeatureFlags.set(i, flags);
 }
@@ -67,7 +69,7 @@ function constructTriangle(
         crust
     )
   );
-  const radius = p.VolcanicConeRadius * 0.28;
+  const radius = p.VolcanicConeRadius * calderaShare;
   const cut =
     caldera && distance < radius
       ? units(p.VolcanicCalderaDepth * (1 - (distance / radius) ** 2))

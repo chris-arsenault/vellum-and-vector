@@ -48,29 +48,6 @@ function clippedLines(state: GenerationState, lines: number[][][]) {
 function lineGeometry(geometry: Geometry | null) {
   return geometry ? combineGeometry(geometryParts(geometry), 1) : null;
 }
-export function naturalPlaceGeometry(
-  state: GenerationState,
-  kind: string,
-  members: RegionMembers,
-  extent?: Geometry
-): PlaceGeometry | null {
-  const work = state.physical!,
-    map = work.map;
-  if (kind === "gorge") {
-    const path = linkedCourse(state, members, map.FlowTargets, true);
-    const geometry = path && extent ? lineGeometry(spatial.intersection(path, extent)) : path;
-    return geometry ? { geometry, anchor: members[0], meaning: "incised drainage course" } : null;
-  }
-  if (kind !== "waterfall") return null;
-  const anchor = bestMember(members, (i) => {
-    const target = map.FlowTargets.get(i);
-    return target >= 0 ? map.Elevation.get(i) - map.Elevation.get(target) : -Infinity;
-  });
-  const geometry = point(nativePosition(work, anchor));
-  return !extent || spatial.intersects(geometry, extent)
-    ? { geometry, anchor, meaning: "channel drop" }
-    : null;
-}
 export function magicPlaceGeometry(
   state: GenerationState,
   field: MagicField,

@@ -14,7 +14,11 @@ import {
 import { atlasName, nameGeographicFeature, nameMetadata } from "../../atlasNaming";
 import type { RegionalState } from "../state";
 
-export function putRegionalFeature(
+/** The identity a record of this key has on this refined map. */
+export const regionalId = (state: RegionalState, key: string) =>
+  semanticId(state.domain.world.id, `regional:${state.regional.input.areaId}`, key);
+/** A refined map's own record, not yet written. */
+export function regionalFeature(
   state: RegionalState,
   key: string,
   kind: string,
@@ -24,7 +28,7 @@ export function putRegionalFeature(
   label = kind
 ): AtlasFeature {
   const areaId = state.regional.input.areaId,
-    id = semanticId(state.domain.world.id, `regional:${areaId}`, key),
+    id = regionalId(state, key),
     named =
       kind === "settlement"
         ? atlasName(state.domain.world, {
@@ -57,6 +61,18 @@ export function putRegionalFeature(
       generationId: null,
       generationDomain: state.domain.world.layers[layerId]?.generator ?? null,
     };
+  return feature;
+}
+export function putRegionalFeature(
+  state: RegionalState,
+  key: string,
+  kind: string,
+  layerId: string,
+  geometry: Geometry,
+  attributes: Record<string, unknown> = {},
+  label = kind
+): AtlasFeature {
+  const feature = regionalFeature(state, key, kind, layerId, geometry, attributes, label);
   writeGenerationFeature(state, feature);
   return feature;
 }

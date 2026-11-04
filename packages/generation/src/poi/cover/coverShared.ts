@@ -1,132 +1,46 @@
-import { biomes } from "@atlas/domain";
-import type { PhysicalBufferName } from "../../canonry/field";
+import { desertMoisture, environment } from "../../canonry/ecologyEnvironment";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
-import { counterpartOf, goes, stays } from "../poiCarry";
-import type {
-  PoiCarried,
-  PoiFieldChange,
-  PoiPlace,
-  PoiRelation,
-  PoiUnrealized,
+import { carryWhereItLands, counterpartOf, goes, stays } from "../poiCarry";
+import {
+  notApplicable,
+  type PoiAcrossMaps,
+  type PoiCarried,
+  type PoiCost,
+  type PoiPlace,
+  type PoiRelation,
+  type PoiUnrealized,
 } from "../poiContract";
 import type { PoiKindId } from "../poiKinds";
-import { holds, recordPlaces } from "../poiPlaces";
-import {
-  adjacent,
-  cellSpan,
-  cellsWithin,
-  fieldOf,
-  gap,
-  heldFor,
-  isLand,
-  magicRule,
-} from "../poiReads";
+import { holds } from "../poiPlaces";
+import { adjacent, cellSpan, fieldOf, gap, heldFor, magicRule } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
 
-/**
- * What the Living cover entries share: which of them a land cell belongs to, and the plain
- * reads their rules are written in. The cover classes are the ecology's own `BiomeCodes`,
- * written by `classifyBiome` on world and refined maps alike, grouped as the published
- * landscapes group them; the biome's name at a cell is the place's property.
- */
-
-/** Below this share of living cover the ground counts as bare, as `classifyBiome` holds it. */
-export const bareBelow = 0.12;
-/** The tree share `classifyBiome` calls forest. */
-const forestFrom = 0.4;
-
-const forestClasses = new Set([
-  "Woodland",
-  "Temperate forest",
-  "Boreal forest",
-  "Rainforest",
-  "Deepwood",
-  "Rime forest",
-  "Moss forest",
-  "Ember grove",
-]);
-const grassClasses = new Set(["Grassland", "Savanna", "Well meadow", "Fog heath", "Thaw meadow"]);
-const bareClasses = new Set(["Barren", "Desert", "Glow-lichen barrens"]);
-
-export type CoverKind = "clearance" | "wildZone" | "thawedHalo" | "forest" | "grassland" | "barren";
-type Living = "forest" | "grassland" | "barren";
+/** What the Living cover entries share: the plain reads and rules they are written in. */
 
 export const canopyAt = (state: GenerationState, cell: number) => {
   const map = fieldOf(state);
   return map.BroadleafCover.get(cell) + map.ConiferCover.get(cell);
 };
-/** Every living share of the ground, the sum `classifyBiome` calls cover. */
+/** Every living share of the ground, the sum the ecology's classes call cover. */
 export const livingCoverAt = (state: GenerationState, cell: number) => {
   const map = fieldOf(state);
   return map.TreeCover.get(cell) + map.GrassCover.get(cell) + map.WetlandCover.get(cell);
 };
-/** The ecology's name for a cell's cover: a place's property. */
-export const biomeNameAt = (state: GenerationState, cell: number) =>
-  biomes[fieldOf(state).BiomeCodes.get(cell)]?.name ?? "";
-
-/** `classifyBiome` calls all ground under 2 degrees Tundra; its cover says what it is. */
-function coldGround(state: GenerationState, cell: number): Living {
-  if (fieldOf(state).TreeCover.get(cell) >= forestFrom) return "forest";
-  return livingCoverAt(state, cell) < bareBelow ? "barren" : "grassland";
-}
-/** What the biome class makes a cell; null for ice, water and wetland classes. */
-function livingClass(state: GenerationState, cell: number): Living | null {
-  const name = biomeNameAt(state, cell);
-  if (name === "Tundra") return coldGround(state, cell);
-  if (forestClasses.has(name)) return "forest";
-  if (grassClasses.has(name)) return "grassland";
-  return bareClasses.has(name) ? "barren" : null;
-}
-const oldStand = magicRule("greenwood", "stand"),
-  verdantCountry = magicRule("greenwood", "verdant"),
-  saltPanGround = magicRule("salt", "pan"),
-  glassFlatGround = magicRule("salt", "flat"),
-  killingGround = magicRule("salt", "ground"),
-  wildGround = magicRule("veil", "wild"),
-  thawedGround = magicRule("fire", "halo");
-
-/** Greenwood's merged names, then Salt's ground that belongs to other entries. */
-function livingKind(state: GenerationState, cell: number): Living | null {
-  const living = livingClass(state, cell);
-  if (living === null) return null;
-  if (living === "forest" || oldStand(state, cell)) return "forest";
-  if (saltPanGround(state, cell) || glassFlatGround(state, cell)) return null;
-  if (verdantCountry(state, cell)) return "grassland";
-  return living === "grassland" && killingGround(state, cell) ? null : living;
-}
-/** Which Living cover kind a cell belongs to, or null. At most one holds. */
-export function coverKindAt(state: GenerationState, cell: number): CoverKind | null {
-  if (!isLand(state, cell)) return null;
-  if (clearedCells(state).has(cell)) return "clearance";
-  if (wildGround(state, cell)) return "wildZone";
-  if (thawedGround(state, cell)) return "thawedHalo";
-  return livingKind(state, cell);
-}
-export const isKind = (kind: CoverKind) => (state: GenerationState, cell: number) =>
-  coverKindAt(state, cell) === kind;
-
-const clearanceRecords = recordPlaces("clearance", (f) => f.kind === "clearance");
-export const clearanceRadius = (feature: PoiPlace["feature"]) =>
-  Number(feature?.attributes.radius) || 0;
-/** Published clearance works, each covering the ground its radius reaches. */
-export const clearancePlaces = (state: GenerationState): readonly PoiPlace[] =>
-  heldFor(state, "footprints:clearance", () =>
-    clearanceRecords(state).map((place) => ({
-      ...place,
-      cells: cellsWithin(state, place.anchor, clearanceRadius(place.feature)),
-    }))
-  );
-const clearedCells = (state: GenerationState) =>
-  heldFor(state, "cells:clearance", () => new Set(clearancePlaces(state).flatMap((p) => p.cells)));
+/** Plant water at a cell: precipitation over evaporative demand. */
+export const plantWaterAt = (state: GenerationState, cell: number) =>
+  environment(fieldOf(state), cell).moisture;
+export const oldStand = magicRule("greenwood", "stand");
+export const quickeningAt = (state: GenerationState, cell: number) =>
+  fieldOf(state).Quickening.get(cell);
+export const stillnessAt = (state: GenerationState, cell: number) =>
+  fieldOf(state).Stillness.get(cell);
+export const verdureAt = (state: GenerationState, cell: number) => fieldOf(state).Verdure.get(cell);
+export const fireAt = (state: GenerationState, cell: number) =>
+  fieldOf(state).FireActivity.get(cell);
 
 const membersOf = (state: GenerationState, place: PoiPlace) =>
   heldFor(state, `members:${place.id}`, () => new Set(place.cells));
-/** A network's cost from a reading of the cell, on a place's cells; one elsewhere. */
-export const onPlace =
-  (factor: (state: GenerationState, cell: number) => number) =>
-  (state: GenerationState, place: PoiPlace, cell: number) =>
-    membersOf(state, place).has(cell) ? factor(state, cell) : 1;
 export const areaOf = (state: GenerationState, place: PoiPlace) =>
   heldFor(state, `area:${place.id}`, () => {
     const mesh = fieldOf(state).mesh;
@@ -158,61 +72,65 @@ export const countryFactors = (
   cultural: attachment(spanOf),
 });
 
-/** Holds each band on every cell of a place at no less than it stands now. */
-export const floorsHeld =
-  (...bands: PhysicalBufferName[]) =>
-  (state: GenerationState, place: PoiPlace) =>
-    heldBands(state, place, bands, "atLeast");
-/** Holds each band on every cell of a place at no more than it stands now. */
-export const ceilingsHeld =
-  (...bands: PhysicalBufferName[]) =>
-  (state: GenerationState, place: PoiPlace) =>
-    heldBands(state, place, bands, "atMost");
-function heldBands(
-  state: GenerationState,
-  place: PoiPlace,
-  bands: PhysicalBufferName[],
-  change: "atLeast" | "atMost"
-) {
-  const map = fieldOf(state),
-    changes: PoiFieldChange[] = [];
-  for (const cell of place.cells)
-    for (const band of bands) changes.push({ change, band, cell, value: map[band].get(cell) });
-  return changes;
-}
-/** Greenwood's place rule on a place's cells keeps the verdure it has while it stands. */
-export const verdureHeld =
-  (rule: (state: GenerationState, cell: number) => boolean) =>
-  (state: GenerationState, place: PoiPlace) =>
-    floorsHeld("Verdure")(state, {
-      ...place,
-      cells: place.cells.filter((cell) => rule(state, cell)),
-    });
-export { oldStand, verdantCountry };
-
 /**
- * Greenwood's root carriage as a multiplier: its edge cost falls as 1 / (0.1 + cover), written
- * against ground at its own cover floor, and it cannot enter its own barrier cells. The
- * contract's magic cost names no carrier: this is the living carrier only.
+ * What a stretch of living country does to the fields: nothing of its own. Each of these is
+ * written across the whole field by the process named, whatever places stand on it.
  */
-export function rootCarriage(state: GenerationState, cell: number) {
-  const greenwood = state.physical?.magic?.fields.find((f) => f.definition.id === "greenwood");
-  if (!greenwood?.definition.enabled) return 1;
-  const floor = greenwood.definition.parameters.rootFloor,
-    cover = livingCoverAt(state, cell),
-    map = fieldOf(state),
-    barred =
-      map.WaterKindCodes.get(cell) !== 0 ||
-      map.IceThickness.get(cell) > 0 ||
-      (cover < floor && map.SoilDepth.get(cell) < 0.3);
-  return barred ? Infinity : (0.1 + floor) / (0.1 + cover);
-}
+export const coverWrites = {
+  terrain: notApplicable("The soil process writes soil depth over the whole field from its cover."),
+  water: notApplicable(
+    "The soil process writes infiltration and the climate process writes runoff over the whole field from its cover."
+  ),
+  climate: notApplicable("The soil process writes evapotranspiration over the whole field."),
+  cover: notApplicable(
+    "The ecology's cohorts, grazers and fire write cover over the whole field; a landscape is a reading of them."
+  ),
+  magic: notApplicable(
+    "Magic's feedback writes the living forcings over the whole field by intensity."
+  ),
+};
+/** How a stretch of living country moves things: through generator costs that read the field. */
+export const coverCosts = {
+  roads: notApplicable("The map router's ground factor already charges every cell for its trees."),
+  boats: notApplicable("A river through it carries boats as any other reach."),
+  drainage: notApplicable(
+    "Surface resistance and relief's cover softening already read every cell's cover as a channel cuts it."
+  ),
+  magic: notApplicable(
+    "Greenwood's root propagation reads every cell's living cover itself, and no other carrier reads cover."
+  ),
+  links: notApplicable("Country joins no two cells."),
+  crosses: notApplicable("Country lets no route across a barrier by being there."),
+};
+
+/** What a road pays for ground with no water or fodder on it. */
+const waterlessRoad = 1.5;
+/** Roads pay on a place's cells under the desert's moisture line. No router reads that. */
+export const waterlessRoads = (state: GenerationState, place: PoiPlace): readonly PoiCost[] =>
+  place.cells
+    .filter((cell) => plantWaterAt(state, cell) < desertMoisture)
+    .map((cell) => ({ cell, factor: waterlessRoad }));
 
 /** The same ground is never two of these: the relation that names it. */
 export const sharesNoGround = (...kinds: PoiKindId[]): PoiRelation[] =>
   kinds.map((kind) => ({ kind, holds }));
 /** A place's cells hold the other's anchor: the same test, read as containing it. */
 export const standsIn = sharesNoGround;
+const landscapes: PoiKindId[] = [
+  "forest",
+  "grassland",
+  "barren",
+  "emberGrove",
+  "thawMeadow",
+  "rimeForest",
+  "glowBarrens",
+  "fogHeath",
+  "wetland",
+  "lake",
+];
+/** Biome families partition the land: a landscape shares ground with no other, nor with water. */
+export const otherLandscapes = (kind: PoiKindId) =>
+  sharesNoGround(...landscapes.filter((other) => other !== kind));
 /** Whether the other's anchor lies within a reach this place sets by its own size. */
 export const withinOwn =
   (reach: (state: GenerationState, place: PoiPlace) => number) =>
@@ -239,3 +157,20 @@ export const movesOrGoes =
     if (cell === carried.cell) return stays();
     return cell >= 0 ? { outcome: "move", cell } : goes();
   };
+/** Country the child's own processes develop: its name moves to the nearest of its kind, or goes. */
+export function developedCountry(
+  statement: string,
+  isA: (state: GenerationState, cell: number) => boolean
+): PoiAcrossMaps {
+  const counterpart = countryCounterpart(isA),
+    unrealized = movesOrGoes(counterpart);
+  return {
+    statement,
+    carry: carryWhereItLands,
+    realize: notApplicable("The child's own ecology and magic develop it from the capture."),
+    counterpart,
+    unrealized,
+    settle: unrealized,
+    schedule: notApplicable("A stretch of country does nothing at refinement's other points."),
+  };
+}

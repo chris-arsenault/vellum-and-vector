@@ -1,5 +1,4 @@
 import { defaultLandmarkParameters, landmarkKind } from "@atlas/domain";
-import type { PhysicalBufferName } from "../../canonry/field";
 import {
   nearestOnPath,
   pathMetrics,
@@ -17,7 +16,9 @@ import {
   cellSpan,
   cellsWithin,
   fieldOf,
+  gap,
   heldFor,
+  isLand,
   magicValue,
   metres,
   nearestWhere,
@@ -141,16 +142,32 @@ export const meanOf =
   (state: GenerationState, place: PoiPlace) =>
     factors.reduce((sum, factor) => sum + factor(state, place), 0) / factors.length;
 
-/** Holds a band at what it reads now on these cells: a shape or a store kept, never stacked. */
-export const holdAt = (
-  state: GenerationState,
-  change: "atLeast" | "atMost",
-  band: PhysicalBufferName,
-  cells: readonly number[]
-): readonly PoiFieldChange[] => {
-  const map = fieldOf(state);
-  return cells.map((cell) => ({ change, band, cell, value: map[band].get(cell) }));
-};
+/** How alone a cell is among others of its kind: half when the nearest lies at `reach` metres. */
+export const aloneWithin =
+  (isA: IsA, reach: (state: GenerationState) => number) =>
+  (state: GenerationState, place: PoiPlace) => {
+    const radius = reach(state),
+      nearest = nearestWhere(
+        state,
+        place.anchor,
+        radius,
+        (cell) => cell !== place.anchor && isA(state, cell)
+      ),
+      d = nearest < 0 ? radius : gap(state, place.anchor, nearest);
+    return d / (d + radius);
+  };
+
+const bareBands = ["BroadleafCover", "ConiferCover", "TreeCover", "GrassCover"] as const;
+/** Nothing grows on these cells. */
+export const bareOf = (cells: readonly number[]): readonly PoiFieldChange[] =>
+  cells.flatMap((cell) =>
+    bareBands.map((band): PoiFieldChange => ({ change: "atMost", band, cell, value: 0 }))
+  );
+/** Metres of soil a sheet of hard rock holds on its joints. */
+const thinSoil = 0.5;
+/** A hard sheet's soil stays thin. */
+export const thinSoilOf = (cells: readonly number[]): readonly PoiFieldChange[] =>
+  cells.map((cell) => ({ change: "atMost", band: "SoilDepth", cell, value: thinSoil }));
 /** Holds the gradient these cells read now, so finer relief cannot steepen them. */
 export const holdGradient = (
   state: GenerationState,
@@ -173,7 +190,7 @@ export const raisedAsCaptured = (
   carried: PoiCarried,
   cell: number
 ): readonly PoiFieldChange[] =>
-  cell < 0
+  cell < 0 || !isLand(state, cell)
     ? []
     : [{ change: "atLeast", band: "Elevation", cell, value: capturedAt(state, carried) }];
 /** The finer ground at a cell lies no higher than the parent's place lay. */
@@ -182,7 +199,7 @@ export const loweredAsCaptured = (
   carried: PoiCarried,
   cell: number
 ): readonly PoiFieldChange[] =>
-  cell < 0
+  cell < 0 || !isLand(state, cell)
     ? []
     : [{ change: "atMost", band: "Elevation", cell, value: capturedAt(state, carried) }];
 

@@ -1,46 +1,41 @@
-import { environment, windStrength } from "../../canonry/ecologyEnvironment";
+import { desertMoisture, windStrength } from "../../canonry/ecologyEnvironment";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiHazard, type PoiPlace } from "../poiContract";
-import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { namingCultureNear, within } from "../poiPlaces";
 import { cellSpan, fieldOf, rockAt } from "../poiReads";
-import { drawnWhen } from "../poiVisibilityRules";
+import { weighed } from "../poiVisibilityRules";
+import { isFamily, landscapePlaces, landscapeRecord } from "./coverLandscape";
 import {
   borders,
-  ceilingsHeld,
   countryCounterpart,
   countryFactors,
-  floorsHeld,
+  coverCosts,
+  coverWrites,
   hazardReach,
-  isKind,
   livingCoverAt,
   meanOver,
-  onPlace,
-  rootCarriage,
+  otherLandscapes,
+  plantWaterAt,
   sharesNoGround,
   standsIn,
+  waterlessRoads,
 } from "./coverShared";
 
 /** Area at which barren ground is half as great as it gets: 100,000 square kilometres. */
 const typicalArea = 1e11;
-/** The water supply `classifyBiome` draws under the desert classes. */
-const desertBelow = 0.25;
-/** What a road pays for ground with no water or fodder on it. */
-const waterlessRoad = 1.5;
-/** The soil depth, in metres, from which returning rain can start cover: Greenwood's own line for it. */
+/** The soil depth, in metres, from which returning rain can start cover. */
 const startingSoil = 0.3;
-const isA = isKind("barren");
+const isA = isFamily("barren");
 const bareness = (state: GenerationState, cell: number) => 1 - livingCoverAt(state, cell);
-const places = regionPlaces("barren", isA, bareness);
+const places = landscapePlaces("barren", "barren", bareness);
 const factors = countryFactors(places, typicalArea, bareness);
 const counterpart = countryCounterpart(isA);
 const nearby = (state: GenerationState) => 4 * cellSpan(state);
-const waterAt = (state: GenerationState, cell: number) =>
-  environment(fieldOf(state), cell).moisture;
 
 function dangers(state: GenerationState, place: PoiPlace): PoiHazard[] {
   const reach = hazardReach(state, place),
-    dry = meanOver(state, place, (s, cell) => 1 - waterAt(s, cell)),
+    dry = meanOver(state, place, (s, cell) => 1 - plantWaterAt(s, cell)),
     wind = meanOver(state, place, (s, cell) => windStrength(fieldOf(s), cell));
   return [
     { hazard: "thirst", reach, severity: dry },
@@ -54,31 +49,29 @@ export const barren: PoiEntry = {
   name: "Barren",
   recognition: {
     distinct:
-      "Land the ecology classes as Barren, Desert or Glow-lichen barrens, or cold ground, with TreeCover, GrassCover and WetlandCover summing under 0.12. It is an absence of cover, so grassland starts where the sum reaches 0.12 and any ice-covered cell is excluded. Salt's pan and glass-flat rule cells are bare too but read Salt's rules and belong to those entries; ground with a Greenwood rule goes to forest or grassland.",
+      "Land whose biome class is in the barren family, as the biome layer shows it: Barren or Desert. It is an absence of cover, so grassland starts where living cover reaches the class line, and ice is no class of it. Aurora's glow-lichen ground and Salt's pans and glass flats are bare too, but belong to families of their own.",
     isA,
   },
   existence: {
     statement:
-      "Emerges where nothing grows: too dry, too cold, too steep, too new or too harmed. Hot and cold desert, polar desert, rock barrens and Aurora's glow-lichen ground are its properties, read from the biome name and the region's temperature, slope and height. Lichen under stillness adds no cover, so it stays here.",
+      "Emerges where nothing grows: too dry, too steep, too new or too harmed. Hot and cold desert, polar desert and rock barrens are its properties, read from its temperature, slope and height and published as its biome.",
     way: "emerges",
     requires: notApplicable(
-      "It requires only that cover be absent, which is its own test; no place has to precede it."
+      "It requires only that cover be absent, which is its own class; no place has to precede it."
     ),
     suitability: notApplicable("No process picks barren ground; it is what is left."),
     places,
   },
+  publication: {
+    statement:
+      "Each region publishes as barren land on the ecology layer, outlined by the biome class margin and named for its biome; a region of under three cells publishes nothing.",
+    moment: "geography",
+    record: landscapeRecord("barren", "barren", places),
+  },
   fields: {
     statement:
-      "Bare ground sheds its water and its soil: no roots to take rain in or keep wind and creep off, so runoff comes fast and no moisture is returned to the air. Bare sediment moves as dunes through the wind's own process, the unbound slope gives way, and salt dust lifts.",
-    terrain: ceilingsHeld("SoilDepth"),
-    water(state, place) {
-      return [...ceilingsHeld("Infiltration")(state, place), ...floorsHeld("Runoff")(state, place)];
-    },
-    climate: ceilingsHeld("Evapotranspiration"),
-    cover: notApplicable("It is the absence of cover; there is nothing here for it to change."),
-    magic: notApplicable(
-      "Bareness adds no magic field of its own: the wind's lift of Salt's dust reads bare ground in Salt's own stock process, and Greenwood's limit is the carrier cost below."
-    ),
+      "Bare ground sheds its water and its soil: no roots to take rain in or keep wind and creep off, so runoff comes fast and no moisture is returned to the air. The soil and climate processes read that absence over the whole field; bare sediment moves as dunes through the wind's own process.",
+    ...coverWrites,
   },
   acrossMaps: {
     statement:
@@ -90,32 +83,19 @@ export const barren: PoiEntry = {
     counterpart,
     unrealized: stays,
     settle: stays,
+    schedule: notApplicable("Barren ground does nothing at refinement's other points."),
   },
   movement: {
     statement:
-      "Roads pay for waterless ground under the desert's own moisture line; rock barrens already pay for their grade. Greenwood's roots cannot enter bare ground on thin soil.",
-    roads: onPlace((state, cell) => (waterAt(state, cell) < desertBelow ? waterlessRoad : 1)),
-    boats: notApplicable("A river through a desert carries boats as any other reach."),
-    drainage: notApplicable(
-      "Bare ground is the baseline: only roots add to a channel's cost, and it has none."
-    ),
-    magic: onPlace(rootCarriage),
-    crosses: notApplicable("Bare ground bridges nothing."),
+      "Roads pay for waterless ground under the desert's own moisture line, which no router reads; rock barrens already pay for their grade. Greenwood's roots cannot enter bare ground on thin soil, by their own propagation's read of every cell.",
+    ...coverCosts,
+    roads: waterlessRoads,
   },
   others: {
     statement:
-      "It shares no ground with other cover, a lake or Salt's pans and flats, though these often border it. Oases, mines and well-kept ruins stand in it and ejecta fans lie across it.",
+      "It shares no ground with another landscape or with water, though a salt pan or flat often borders it. Oases, mines and well-kept ruins stand in it and ejecta fans lie across it.",
     needs: notApplicable("Barren ground needs no other place."),
-    excludes: sharesNoGround(
-      "forest",
-      "grassland",
-      "thawedHalo",
-      "wildZone",
-      "clearance",
-      "saltPan",
-      "glassFlat",
-      "lake"
-    ),
+    excludes: [...otherLandscapes("barren"), ...sharesNoGround("saltPan", "glassFlat")],
     contains: standsIn("oasis", "mine", "ruin", "ejectaFan"),
     pairsWith: [
       ...borders("grassland", "saltPan", "saltDust", "glassFlat"),
@@ -132,7 +112,7 @@ export const barren: PoiEntry = {
     statement:
       "Bare ground lasts as long as what bares it. Rain on enough soil lets grass in and it becomes grassland; ground left by ice or lava starts its cover this way.",
     fate(state, place) {
-      const watered = meanOver(state, place, waterAt) >= desertBelow,
+      const watered = meanOver(state, place, plantWaterAt) >= desertMoisture,
         soil = meanOver(state, place, (_s, cell) => fieldOf(state).SoilDepth.get(cell));
       return watered && soil >= startingSoil
         ? { fate: "becomes", kind: "grassland" }
@@ -141,9 +121,9 @@ export const barren: PoiEntry = {
   },
   visibility: {
     statement:
-      "Barren country shows by its breadth and how sharply it breaks from green land; a bare patch among forest draws the eye before the same patch inside a desert. A small one has little else to earn it a place unless people are tied to it.",
+      "Barren country weighs by its breadth and how sharply it breaks from green land; a bare patch among forest draws the eye before the same patch inside a desert. A small one has little else to earn it weight unless people are tied to it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.55, localConditions: 0.3, isolation: 0.15 }),
+    importance: weighed(factors, { magnitude: 0.55, localConditions: 0.3, isolation: 0.15 }),
   },
   naming: {
     statement: "Named by the people on its edges, if any; it may go unnamed.",

@@ -1,5 +1,35 @@
 import type { PhysicalBufferName, PhysicalField } from "../canonry/field";
 
+/** The bands a ledger writes keep the world's bounds: nothing below zero, the per-mille and resistance scales capped. */
+export const ledgerFloors: Partial<Record<PhysicalBufferName, number>> = {
+  RockResistance: 0,
+  FractureConductance: 0,
+  SoilDepth: 0,
+  Moisture: 0,
+  IceThickness: 0,
+  ExternalCoastalForcing: 0,
+  Temperature: 0,
+  BroadleafCover: 0,
+  ConiferCover: 0,
+  GrassCover: 0,
+  WetlandCover: 0,
+  TreeCover: 0,
+  BroadleafSaplings: 0,
+  SoilWater: 0,
+  AquaticProductivity: 0,
+  SedimentThickness: 0,
+  WaterDepths: 0,
+};
+export const ledgerCeilings: Partial<Record<PhysicalBufferName, number>> = {
+  RockResistance: 4000,
+  FractureConductance: 1000,
+  ExternalCoastalForcing: 1000,
+  Moisture: 1000,
+  BroadleafCover: 1,
+  ConiferCover: 1,
+  GrassCover: 1,
+};
+
 /**
  * Tracked physical contributions to the field's bands, in their native units. A process that
  * changes a shared medium (magic lowering a coast, opening fractures, deepening soil) declares
@@ -25,6 +55,10 @@ export class Contributions {
   /** Begin declaring this evaluation's totals; every band starts from zero. */
   begin() {
     for (const values of this.desired.values()) values.fill(0);
+  }
+  /** Another process rewrote `band`: nothing this ledger applied remains in it. */
+  forget(band: PhysicalBufferName) {
+    this.applied.delete(band);
   }
   /** Declare part of the total change this evaluation wants on `band` at `i`. */
   add(band: PhysicalBufferName, i: number, amount: number) {

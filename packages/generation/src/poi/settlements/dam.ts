@@ -1,29 +1,82 @@
+import { generationFeatures } from "../../generationFeatures";
 import type { GenerationState } from "../../process";
-import { channelNear, crestAt } from "../../regional/causes/dam";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, goes, movesTo } from "../poiCarry";
-import { notApplicable, type PoiCarried, type PoiEntry, type PoiPlace } from "../poiContract";
 import {
-  holdsRecord,
-  namingCultureNear,
-  recordPlaces,
-  settlementWithin,
-  within,
-} from "../poiPlaces";
-import { cellSpan, dischargeAt, fieldOf, isRiver, shareAround, slopeAt } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+  notApplicable,
+  type PoiCarried,
+  type PoiEntry,
+  type PoiFieldChange,
+  type PoiPlace,
+} from "../poiContract";
+import { holdsRecord, namingCultureNear, within } from "../poiPlaces";
+import {
+  cellSpan,
+  dischargeAt,
+  fieldOf,
+  isRiver,
+  releaseHeld,
+  shareAround,
+  slopeAt,
+  toNative,
+} from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
+import {
+  channelAt,
+  channelNear,
+  crestAt,
+  holdReservoir,
+  nextBody,
+  upstreamIndex,
+} from "./damReservoir";
+import { keptLine, nearTown, strengthOf, weighedPlace, workReach } from "./settlementRecords";
+import { workPlaces, workRecord } from "./workRecords";
 
 /** A bank gentler than this does not hold a reservoir in. */
 const gentleBank = 0.02;
 /** Discharge at which a dam's river is half as great as dammed rivers get. */
 const typicalDischarge = 250;
+/** People build a dam only within this many metres of where they live. */
+const wantedReach = 30_000;
+/** The least distance between two dams people site, and a sited dam's reach, in metres. */
+const damSpacing = 40_000,
+  damRadius = 300;
+/** Height a dam's crest adds at full strength, in metres. */
+const crestHeight = 6;
 
-const places = recordPlaces("dam", (f) => f.kind === "dam");
+const requires = (state: GenerationState, cell: number) =>
+  isRiver(state, cell) && nearTown(state, cell, wantedReach);
+/** A narrow valley on a large river: steep banks either side, plenty of water to hold. */
+function suitability(state: GenerationState, cell: number) {
+  const banks = shareAround(state, cell, (next) => slopeAt(state, next) >= gentleBank),
+    flow = dischargeAt(state, cell);
+  return (banks + flow / (flow + typicalDischarge)) / 2;
+}
+const places = workPlaces("dam", "dam", {
+  record: "dam",
+  layer: "waterworks",
+  label: "Dam",
+  radius: damRadius,
+  spacing: damSpacing,
+  requires,
+  suitability,
+});
 const isA = holdsRecord("dam", places);
 const dischargeOf = (state: GenerationState, place: PoiPlace) => dischargeAt(state, place.anchor);
 const around = (state: GenerationState) => 6 * cellSpan(state);
-/** People build a dam only within reach of where they live. */
-const wantedFrom = (state: GenerationState) => 3 * around(state);
+const wantedFrom = () => wantedReach;
+/** The cells each dam on this map holds a reservoir behind: captured records, and its own places. */
+function damCells(state: RegionalState) {
+  const cells = new Set<number>();
+  for (const f of generationFeatures(state, { areaId: state.regional.input.areaId }))
+    if (f.kind === "dam" && f.geometry.type === "Point") {
+      const [x, y] = f.geometry.coordinates;
+      cells.add(channelAt(state, x, y));
+    }
+  for (const place of places(state)) cells.add(channelNear(state, place.anchor));
+  cells.delete(-1);
+  return cells;
+}
 const factors = {
   magnitude: sized(dischargeOf, typicalDischarge),
   localConditions: standsOut((state, cell) => (isRiver(state, cell) ? 1 : 0), around),
@@ -38,29 +91,33 @@ export const dam: PoiEntry = {
   name: "Dam",
   recognition: {
     distinct:
-      "A published work standing on a river cell that holds back a reservoir: a built barrier across a channel. A weir is the same kind at a lower crest; a lake it makes is the lake entry.",
+      "A work standing on a river cell that holds back a reservoir: a built barrier across a channel. A weir is the same kind at a lower crest; a lake it makes is the lake entry.",
     isA,
   },
   existence: {
     statement:
-      "Sited by a community of at least 500 people short of water, on a river carrying enough flow; the society simulation plans it, and refinement realizes the crest and basin the record only names.",
+      "Sited two ways: the society simulation's located dams, and on every map the narrow valleys on sizeable rivers within reach of a settlement, at least 40 km apart. Refinement realizes the crest and basin a record only names.",
     way: "sited",
-    requires: (state, cell) =>
-      isRiver(state, cell) && settlementWithin(state, cell, wantedFrom(state)),
-    /** A narrow valley on a large river: steep banks either side, plenty of water to hold. */
-    suitability(state, cell) {
-      const banks = shareAround(state, cell, (next) => slopeAt(state, next) >= gentleBank),
-        flow = dischargeAt(state, cell);
-      return (banks + flow / (flow + typicalDischarge)) / 2;
-    },
+    requires,
+    suitability,
     places,
+  },
+  publication: {
+    statement:
+      "A dam publishes as a located work; the World shows those people sited by the ground but none of the simulation's own, which stay demands.",
+    moment: "society",
+    record: workRecord,
   },
   fields: {
     statement:
-      "A dam blocks flow and stores it behind a crest, so the ground above it floods and the river below it runs regulated.",
-    terrain: notApplicable(
-      "The crest is an earthwork below the field's resolution at world scale; on a refined map it is realized below."
-    ),
+      "A dam raises a crest, blocks flow and stores it behind that crest, so the ground above it floods and the river below it runs regulated. A kept dam keeps the bank it stands on as a line Hallowed reads.",
+    terrain: (state, place): readonly PoiFieldChange[] =>
+      workReach(state, place).map(({ cell, share }) => ({
+        change: "add",
+        band: "Elevation",
+        cell,
+        amount: toNative(crestHeight * strengthOf(place) * share),
+      })),
     water(state, place) {
       const map = fieldOf(state),
         value = map.Elevation.get(place.anchor);
@@ -70,9 +127,7 @@ export const dam: PoiEntry = {
       "A reservoir's effect on climate is below what the climate field resolves."
     ),
     cover: notApplicable("Flooded ground loses cover through the ecology process reading water."),
-    magic: notApplicable(
-      "A dam holds no magic of its own; Greenwood and Salt read the lake it makes."
-    ),
+    magic: (_state, place) => keptLine(place),
   },
   acrossMaps: {
     statement:
@@ -94,9 +149,23 @@ export const dam: PoiEntry = {
     counterpart,
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
-    settle: notApplicable(
-      "Its reservoir is written after each round's water by the cause it keeps."
-    ),
+    settle: notApplicable("Its reservoir is written after each round's water by its schedule."),
+    /**
+     * A dam holds a reservoir (plan F3): the crest is the lower of the valley's two banks at its
+     * cell, and the water stage behind it fills the ground below the crest that drains to it.
+     * Written after each round's water as a lake body, so ecology, Salt and society read a lake.
+     */
+    schedule: {
+      kind: "dam",
+      respond(state) {
+        if (!state.regional.input.domains.includes("physical")) return;
+        releaseHeld(state);
+        const children = upstreamIndex(state);
+        let body = nextBody(state);
+        for (const dam of damCells(state)) if (holdReservoir(state, dam, children, body)) body++;
+        releaseHeld(state);
+      },
+    },
   },
   movement: {
     statement:
@@ -105,12 +174,13 @@ export const dam: PoiEntry = {
     boats: costNear(Infinity),
     drainage: notApplicable("Water still reaches the cell; only its level changes."),
     magic: notApplicable("Magic carried by a river passes with the water let through."),
+    links: notApplicable("A dam joins nothing; its crest is a road over the river it holds."),
     crosses: () => ["river"],
   },
   others: {
     statement:
       "A dam needs a settlement to want it and a narrowing river to hold it; it makes a lake behind it and starves any fall below it.",
-    needs: [{ kind: "settlement", holds: within((state) => 3 * around(state)) }],
+    needs: [{ kind: "settlement", holds: within(wantedFrom) }],
     excludes: [{ kind: "waterfall", holds: (_state, a, b) => a.anchor === b.anchor }],
     contains: notApplicable("A dam is one point on a river."),
     pairsWith: [
@@ -145,7 +215,7 @@ export const dam: PoiEntry = {
     statement:
       "A dam shows by the size of the river it holds and the lake behind it; one that feeds a capital carries more than its size.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.2, isolation: 0.2 }),
+    importance: weighedPlace(factors, { magnitude: 0.6, localConditions: 0.2, isolation: 0.2 }),
   },
   naming: {
     statement: "Named by those who built it, and often after the settlement that built it.",

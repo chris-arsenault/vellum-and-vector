@@ -114,8 +114,9 @@ function riverCost(grid: Grid, from: number, to: number, distance: number) {
  * open water up to twice that. A land cell costs four times, so a lane reaches its harbour
  * over the shore cell and no further.
  */
+export const landCellSeaCost = 4;
 function seaFactor(grid: Grid, to: number) {
-  if (!oceanCell(grid, to)) return 4;
+  if (!oceanCell(grid, to)) return landCellSeaCost;
   const depth = Math.max(0, -grid.channels.elevation.get(to));
   return 1 + Math.min(1, depth / 1000);
 }

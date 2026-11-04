@@ -2,21 +2,26 @@ import { Landform } from "../../canonry/codes";
 import { worldFjordLength } from "../../canonry/worldSiteEvidence";
 import { regionEvidence } from "../../canonry/worldRegionEvidence";
 import type { GenerationState } from "../../process";
+import { regionalFjordErosion } from "../../regional/profile";
+import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
-import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
+import {
+  notApplicable,
+  type PoiCarried,
+  type PoiEntry,
+  type PoiFieldChange,
+  type PoiPlace,
+} from "../poiContract";
 import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import { fieldOf, heldFor, isSea, landformAt, metres, toNative, waveExposureAt } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { areaRecord } from "../poiRecords";
+import { fieldOf, heldFor, isSea, landformAt, metres, toNative } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import { spans } from "./waterReads";
 
 /** Metres of water under which a trough has filled to an ordinary bay. */
 const filled = 5;
 /** Metres a trough stands drowned, at least, to read as one. */
 const troughDepth = 30;
-/** Glacial erosion a refined map reads as a fjord, in metres: the regional profile's measure. */
-const troughErosion = 30;
-/** Per-mille wave exposure the flanks allow inside. */
-const sheltered = 150;
 
 const isA = (state: GenerationState, cell: number) => landformAt(state, cell) === Landform.Fjord;
 const depthAt = (state: GenerationState, cell: number) =>
@@ -45,11 +50,29 @@ const heldTrough = (state: GenerationState, place: PoiPlace): readonly PoiFieldC
     value: map.EffectiveSeaLevel - toNative(Math.min(depthAt(state, cell), troughDepth)),
   }));
 };
-/** Its flanks keep the swell out, wherever the open sea around it stands. */
-const shelteredWater = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells
-    .filter((cell) => waveExposureAt(state, cell) * 1000 > sheltered)
-    .map((cell) => ({ change: "atMost", band: "WaveExposure", cell, value: sheltered }));
+/**
+ * The finer ground must hold the trough: its landing cell stands drowned, and the sea the
+ * record covers keeps the glacial erosion the refined landform test reads.
+ */
+function realizedTrough(state: RegionalState, carried: PoiCarried): readonly PoiFieldChange[] {
+  const value = toNative(regionalFjordErosion);
+  return [
+    {
+      change: "atMost",
+      band: "Elevation",
+      cell: carried.cell,
+      value: fieldOf(state).EffectiveSeaLevel - toNative(troughDepth),
+    },
+    ...carried.cells
+      .filter((cell) => cell === carried.cell || isSea(state, cell))
+      .map((cell): PoiFieldChange => ({
+        change: "atLeast",
+        band: "CumulativeGlacialErosion",
+        cell,
+        value,
+      })),
+  ];
+}
 
 export const fjord: PoiEntry = {
   id: "fjord",
@@ -70,11 +93,26 @@ export const fjord: PoiEntry = {
     suitability: notApplicable("No process chooses where ice cut; the landform reports it."),
     places,
   },
+  publication: {
+    statement: "Every fjord publishes as its outline, sea and all, with its length and depth.",
+    moment: "geography",
+    record: areaRecord({
+      kind: "fjord",
+      layer: "geology",
+      name: "Fjord",
+      attributes: (state, place) => ({
+        length: lengthOf(state, place),
+        depth: depthAt(state, place.anchor),
+      }),
+    }),
+  },
   fields: {
     statement:
-      "A fjord holds a deep sheltered arm of the sea into the land: its bed stays below the trough's depth, the flanks keep out the swell, and the short steep streams of its walls drop straight into it.",
+      "A fjord holds a deep arm of the sea into the land: its bed stays below the trough's depth, and the short steep streams of its walls drop straight into it. Its shelter is the wave process reading its short fetch.",
     terrain: heldTrough,
-    water: shelteredWater,
+    water: notApplicable(
+      "The currents and shore processes write WaveExposure from fetch across the whole sea; the flanks already limit it there."
+    ),
     climate: notApplicable(
       "A narrow arm is a thin strip under the coast's own air; it moves no field the climate resolves."
     ),
@@ -89,26 +127,14 @@ export const fjord: PoiEntry = {
     statement:
       "A captured fjord requires a trough on the finer map: the ground under it stays drowned and keeps the glacial erosion the refined landform test reads. Its record then takes the nearest fjord there; with none it goes, since a shore without flanks is only a coast.",
     carry: carryWhereItLands,
-    realize: (state, carried): readonly PoiFieldChange[] => [
-      {
-        change: "atMost",
-        band: "Elevation",
-        cell: carried.cell,
-        value: fieldOf(state).EffectiveSeaLevel - toNative(troughDepth),
-      },
-      {
-        change: "atLeast",
-        band: "CumulativeGlacialErosion",
-        cell: carried.cell,
-        value: toNative(troughErosion),
-      },
-    ],
+    realize: realizedTrough,
     counterpart,
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable(
       "A trough does not change with a round's water; only ice and sea do that."
     ),
+    schedule: notApplicable("A fjord has no step in refinement's schedule; the landform reads it."),
   },
   movement: {
     statement:
@@ -118,7 +144,8 @@ export const fjord: PoiEntry = {
     ),
     boats: costNear(0.7),
     drainage: costNear(0.85),
-    magic: costNear(1.5),
+    magic: { current: costNear(1.5) },
+    links: notApplicable("A fjord joins no two cells; it parts its shores."),
     crosses: notApplicable(
       "A fjord cuts routes on land; a strait is what a route crosses by boat."
     ),
@@ -166,7 +193,7 @@ export const fjord: PoiEntry = {
     statement:
       "A fjord shows by its length and how deep it runs against its shelf; a lone one on a plain coast is striking, and one among many on a fjord coast counts less. Its harbour town carries a short one.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.15, isolation: 0.25 }),
+    importance: weighed(factors, { magnitude: 0.6, localConditions: 0.15, isolation: 0.25 }),
   },
   naming: {
     statement: "Named by the people on its shores, and the town at its head takes its name.",

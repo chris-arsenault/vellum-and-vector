@@ -1,6 +1,9 @@
 import { resolutionCells } from "@atlas/domain";
 import type { PhysicalProfile } from "../canonry/profile";
 
+/** Metres of glacial erosion a refined map reads as a fjord's trough. */
+export const regionalFjordErosion = 30;
+
 /**
  * The regional reading of the world's extraction thresholds. The mechanisms (prominence,
  * relief rings, range area, landform radius) are the generator's; a region reads them at its
@@ -22,7 +25,7 @@ export function regionalProfile(profile: PhysicalProfile, parentSpan: number, ce
   // has inlets at every cell: gorges and fjords are the steep, deep and ice-worn exceptions.
   profile.GorgeMinimumSlope = 0.03;
   profile.GorgeMinimumIncision = 60;
-  profile.FjordMinimumGlacialErosion = 30;
+  profile.FjordMinimumGlacialErosion = regionalFjordErosion;
   profile.RangeMinimumArea = (resolutionCells * cellSpan) ** 2;
   profile.PlainSlopeThreshold = 0.012;
   // The wind's terrain smoothing reads the relief at the parent's scale, and a regional range

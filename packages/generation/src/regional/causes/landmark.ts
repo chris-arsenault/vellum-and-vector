@@ -7,7 +7,7 @@ import type { Evidence, RegionalState } from "../state";
 import { registerCause } from "./registry";
 
 /** Cost of ground a canyon or falls draws the network into, and of a ring's rim. */
-const corridorCost = 0.15,
+export const corridorCost = 0.15,
   rimCost = 4;
 
 /** The landmark records' maintenance ledger, one per refinement state. */

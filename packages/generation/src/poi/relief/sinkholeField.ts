@@ -1,10 +1,11 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFate, type PoiPlace } from "../poiContract";
-import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
 import { isLake, magicRule, moistureAt } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { areaOf, holdAt, loweredAsCaptured, meanOf, sameSpot, spans } from "./reliefShape";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { areaOf, loweredAsCaptured, meanOf, sameSpot, spans } from "./reliefShape";
 
 /** Area at which a field is half as great as fields get. */
 const typicalArea = 400_000_000;
@@ -15,7 +16,7 @@ const isA = magicRule("greenwood", "sinkhole");
 const subsidedAt = (state: GenerationState, cell: number) =>
   state.physical?.magic?.fields.find((f) => f.definition.id === "greenwood")?.subsided?.get(cell) ??
   0;
-const places = regionPlaces("sinkholeField", isA, subsidedAt);
+const places = rulePlaces("sinkholeField", "greenwood", "sinkhole");
 const subsidedOf = (state: GenerationState, place: PoiPlace) => subsidedAt(state, place.anchor);
 const counterpart = counterpartOf(isA, 1);
 const factors = {
@@ -44,11 +45,16 @@ export const sinkholeField: PoiEntry = {
     suitability: notApplicable("A collapse is an outcome of use, not a choice of site."),
     places,
   },
+  publication: {
+    statement: "Each connected group of the rule's cells publishes as Greenwood's sinkhole class.",
+    moment: "magic",
+    record: ruleRecord("greenwood", "sinkhole"),
+  },
   fields: {
     statement:
       "A field is broken ground over drained rock: holes keep their depth, surface water runs down them and is lost to the runoff, the verdure the spring fed withers, and the aquifer stops rising here.",
-    terrain: (state, place) => holdAt(state, "atMost", "Elevation", place.cells),
-    water: (state, place) =>
+    terrain: notApplicable("Greenwood's collapse step lowers the bedrock when the spring fails."),
+    water: (_state, place) =>
       place.cells.map((cell) => ({
         change: "atMost" as const,
         band: "Runoff" as const,
@@ -56,8 +62,8 @@ export const sinkholeField: PoiEntry = {
         value: 0,
       })),
     climate: notApplicable("Pits and failed springs are below what the climate field resolves."),
-    cover: (state, place) => holdAt(state, "atMost", "SoilWater", place.cells),
-    magic: (state, place) => holdAt(state, "atMost", "Verdure", place.cells),
+    cover: notApplicable("Soil water follows the lost runoff through ecology."),
+    magic: notApplicable("A sealed spring stops feeding Greenwood, whose feedback writes verdure."),
   },
   acrossMaps: {
     statement:
@@ -68,6 +74,7 @@ export const sinkholeField: PoiEntry = {
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable("The seal is written by people's draw over an epoch, not by a round."),
+    schedule: notApplicable("Its floor is all a field asks of a refinement."),
   },
   movement: {
     statement:
@@ -75,7 +82,8 @@ export const sinkholeField: PoiEntry = {
     roads: costNear(1.8),
     boats: notApplicable("A field of pits has no navigable water."),
     drainage: costNear(0.6),
-    magic: costNear(3),
+    magic: { crust: costNear(3) },
+    links: notApplicable("A field of pits joins nothing."),
     crosses: notApplicable("It breaks routes; it takes none across anything."),
   },
   others: {
@@ -115,7 +123,7 @@ export const sinkholeField: PoiEntry = {
     statement:
       "A field shows by how far the ground has sunk more than by its area, since it is usually small; it matters to people who lost a spring to it, and a town beside it carries it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
   },
   naming: {
     statement: "Named by those who remember the spring, often after the place that drew it dry.",

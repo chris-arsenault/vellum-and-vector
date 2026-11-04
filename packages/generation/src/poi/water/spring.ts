@@ -1,14 +1,16 @@
+import { components } from "../../canonry/geographicRegions";
 import type { GenerationState } from "../../process";
 import { frameEdge } from "../../regional/lattice";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { namingCultureNear, within } from "../poiPlaces";
+import { ruleRecord, siteRecord } from "../poiRecords";
 import {
   celsiusAt,
   dischargeAt,
   fieldOf,
   fractureAt,
-  gap,
+  heldFor,
   iceAt,
   isLand,
   isRiver,
@@ -19,7 +21,7 @@ import {
   slopeAt,
   toNative,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, weighed } from "../poiVisibilityRules";
 import { drynessAround, inflows, spans, standsIn } from "./waterReads";
 
 /** Rock softer than this share of the hardest, or fractured past this share, lets water rise. */
@@ -31,13 +33,9 @@ const slopeBreak = 0.5;
 const typicalDischarge = 5;
 /** Metres a rising spring saps its head hollow below the ground above it. */
 const sappedHollow = 2;
-/** Native rock resistance of the sinter a hot spring lays down. */
-const sinter = 2400;
 /** Metres of soil water a spring's flush holds; cover a flush holds, under a wetland's own. */
 const flushWater = 0.3,
   flushCover = 0.15;
-/** River warmth, in the band's native tenths of a degree, of a reach that stays thawed. */
-const warmReach = 50;
 
 const hotRule = magicRule("fire", "spring"),
   greenwoodRule = magicRule("greenwood", "wellspring"),
@@ -66,16 +64,20 @@ const atSlopeBreak = (state: GenerationState, cell: number) => {
   const above = steepestAbove(state, cell);
   return above > 0 && slopeAt(state, cell) <= slopeBreak * above;
 };
+/** The natural form: groundwater at a channel head, where no magic system's water already rises. */
 const naturalSpring = (state: GenerationState, cell: number) =>
   isLand(state, cell) &&
+  !oasisRule(state, cell) &&
+  !hotRule(state, cell) &&
+  !greenwoodRule(state, cell) &&
   isChannelHead(state, cell) &&
   unfrozen(state, cell) &&
   permeable(state, cell) &&
   atSlopeBreak(state, cell);
 
+/** Each form's rule is its definition: Fire's, Greenwood's, or the natural head above. */
 const isA = (state: GenerationState, cell: number) =>
-  !oasisRule(state, cell) &&
-  (hotRule(state, cell) || greenwoodRule(state, cell) || naturalSpring(state, cell));
+  hotRule(state, cell) || greenwoodRule(state, cell) || naturalSpring(state, cell);
 
 /** What the spring is fed by, a property of one kind: hot and Greenwood water are read from magic. */
 export const springWater = (state: GenerationState, cell: number) => {
@@ -84,7 +86,41 @@ export const springWater = (state: GenerationState, cell: number) => {
 };
 const strengthAt = (state: GenerationState, cell: number) =>
   magicValue(state, "fire", "intensity", cell) + magicValue(state, "greenwood", "source", cell);
-const places = regionPlaces("spring", isA, strengthAt);
+type SpringForm = "hot" | "greenwood" | "natural";
+/** Each connected group of one form's cells, anchored where it is strongest. */
+function formPlaces(
+  state: GenerationState,
+  form: SpringForm,
+  test: (state: GenerationState, cell: number) => boolean
+) {
+  const found: PoiPlace[] = [];
+  components(
+    state,
+    (i) => test(state, i),
+    (members) => {
+      const cells = [...members],
+        anchor = cells.reduce((a, b) => (strengthAt(state, b) > strengthAt(state, a) ? b : a));
+      found.push({ id: `spring:${form}:${anchor}`, kind: "spring", cells, anchor });
+    }
+  );
+  return found;
+}
+/** A spring of any form: each publishes with its own record kind. */
+const places = (state: GenerationState): readonly PoiPlace[] =>
+  heldFor(state, "places:spring", () => [
+    ...formPlaces(state, "hot", hotRule),
+    ...formPlaces(state, "greenwood", greenwoodRule),
+    ...formPlaces(state, "natural", naturalSpring),
+  ]);
+const hotRecord = ruleRecord("fire", "spring"),
+  greenwoodRecord = ruleRecord("greenwood", "wellspring"),
+  naturalRecord = siteRecord({ kind: "spring", layer: "geology", name: "Spring" });
+/** The record of a place by the form that found it. */
+function springRecord(state: GenerationState, place: PoiPlace) {
+  const form = place.id.split(":")[1];
+  if (form === "hot") return hotRecord(state, place);
+  return form === "greenwood" ? greenwoodRecord(state, place) : naturalRecord(state, place);
+}
 const watersOf = (state: GenerationState, place: PoiPlace) => springWater(state, place.anchor);
 const flowOf = (state: GenerationState, place: PoiPlace) => dischargeAt(state, place.anchor);
 const around = spans(6);
@@ -102,11 +138,10 @@ const factors = {
   cultural: attachment(around),
 };
 
-/** A cold spring saps a hollow under the ground above it; a hot one hardens its ground with sinter. */
+/** A cold spring on land saps a hollow under the ground above it. */
 function headShape(state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] {
   const anchor = place.anchor;
-  if (watersOf(state, place) === "hot")
-    return [{ change: "atLeast", band: "RockResistance", cell: anchor, value: sinter }];
+  if (watersOf(state, place) === "hot" || !isLand(state, anchor)) return [];
   const map = fieldOf(state);
   let ground = -Infinity;
   for (const next of inflows(state, anchor)) ground = Math.max(ground, map.Elevation.get(next));
@@ -121,40 +156,29 @@ function headShape(state: GenerationState, place: PoiPlace): readonly PoiFieldCh
         },
       ];
 }
-/** The spring holds its channel open and its ground wet, whatever the climate takes above it. */
-const headWater = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => [
-  ...(isLand(state, place.anchor)
-    ? [{ change: "atLeast", band: "RiverOrders", cell: place.anchor, value: 1 } as const]
-    : []),
-  ...place.cells.map(
-    (cell) => ({ change: "atLeast", band: "SoilWater", cell, value: flushWater }) as const
-  ),
-];
+const landOf = (state: GenerationState, cells: readonly number[]) =>
+  cells.filter((cell) => isLand(state, cell));
+/** The spring holds its ground wet, whatever the climate takes above it. */
+const headWater = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
+  landOf(state, place.cells).map((cell) => ({
+    change: "atLeast",
+    band: "SoilWater",
+    cell,
+    value: flushWater,
+  }));
 /** A cold flush holds wet sedge; water near boiling holds bare ground. */
 const flush = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells.map((cell) =>
+  landOf(state, place.cells).map((cell) =>
     watersOf(state, place) === "hot"
       ? { change: "atMost", band: "TreeCover", cell, value: flushCover }
       : { change: "atLeast", band: "WetlandCover", cell, value: flushCover }
   );
-/** Hot water carries Fire's heat down its channel; Greenwood's carries verdure into the ground. */
-function chargeCarried(state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] {
-  const waters = watersOf(state, place);
-  if (waters === "hot")
-    return [{ change: "atLeast", band: "RiverWarmth", cell: place.anchor, value: warmReach }];
-  if (waters === "natural") return [];
-  return place.cells.map((cell) => ({
-    change: "atLeast",
-    band: "Verdure",
-    cell,
-    value: magicValue(state, "greenwood", "source", cell) / 1000,
-  }));
-}
 /** A spring saves most where water is scarce: a track bends to it in dry country, hardly in wet. */
-function drawsTracks(state: GenerationState, place: PoiPlace, cell: number) {
-  if (gap(state, place.anchor, cell) > spans(2)(state)) return 1;
-  return 1 - 0.3 * Math.max(0, 1 - rainfallAt(state, place.anchor));
-}
+const drawsTracks = (state: GenerationState, place: PoiPlace) =>
+  costNear(1 - 0.3 * Math.max(0, 1 - rainfallAt(state, place.anchor)), spans(2))(state, place);
+/** Magic's carrier runs easily through the rock of the form it rises by; other waters change nothing. */
+const easedFor = (form: SpringForm) => (state: GenerationState, place: PoiPlace) =>
+  watersOf(state, place) === form ? costNear(0.7)(state, place) : [];
 
 export const spring: PoiEntry = {
   id: "spring",
@@ -177,28 +201,42 @@ export const spring: PoiEntry = {
     ),
     places,
   },
+  publication: {
+    statement:
+      "A hot spring publishes as Fire's spring, a Greenwood spring as Greenwood's wellspring, and a natural spring as a spring on the ground: one kind, each with its own record.",
+    moment: "magic",
+    record: springRecord,
+  },
   fields: {
     statement:
-      "A spring is a source: it holds its channel open against the dry season, wets the ground at its head and shapes that head, sapping a hollow in soft ground or laying hard sinter when hot. Hot water carries Fire's warmth downstream and Greenwood's feeds verdure.",
+      "A spring is a source: it wets the ground at its head and a cold one saps a hollow there. The routing keeps its channel; Fire's rock effect hardens a hot spring's ground, Fire's heat runs down the river warmth, and Greenwood's intensity is its verdure.",
     terrain: headShape,
     water: headWater,
     climate: notApplicable(
       "Its water is too little to move the air, and a hot spring's heat is Fire's own heat effect, already in Temperature."
     ),
     cover: flush,
-    magic: chargeCarried,
+    magic: notApplicable(
+      "`riverWarmth` carries Fire's heat forcing down the flow, and `magicLivingFeedback` writes Greenwood's verdure by intensity."
+    ),
   },
   acrossMaps: {
     statement:
       "A spring lands on the finer ground, which must hold a wet channel head there; each round it moves to the nearest head the developed water shows, and with none it keeps its realized head, because the parent's water still has to come out somewhere.",
     carry: carryWhereItLands,
-    realize: (state, carried) => [
-      { change: "atLeast", band: "RiverOrders", cell: carried.cell, value: 1 },
-      { change: "atLeast", band: "SoilWater", cell: carried.cell, value: flushWater },
-    ],
+    realize: (state, carried) =>
+      landOf(state, [carried.cell]).map((cell) => ({
+        change: "atLeast",
+        band: "SoilWater",
+        cell,
+        value: flushWater,
+      })),
     counterpart,
     unrealized: movesTo(counterpart),
     settle: movesTo(counterpart),
+    schedule: notApplicable(
+      "Its drainage cost draws the network to it; it has no other step in the schedule."
+    ),
   },
   movement: {
     statement:
@@ -206,9 +244,8 @@ export const spring: PoiEntry = {
     roads: drawsTracks,
     boats: notApplicable("A spring is the top of a channel, above anything a boat can reach."),
     drainage: costNear(0.7),
-    magic(state, place, cell) {
-      return watersOf(state, place) === "natural" ? 1 : costNear(0.7)(state, place, cell);
-    },
+    magic: { crust: easedFor("hot"), roots: easedFor("greenwood") },
+    links: notApplicable("A spring joins no two cells."),
     crosses: notApplicable("A route rounds a river's head at a spring; nothing there is crossed."),
   },
   others: {
@@ -262,7 +299,7 @@ export const spring: PoiEntry = {
     statement:
       "A spring earns its mark mostly by the dryness of its country and how far the next water lies; its flow or charge counts less, and a town that drinks from one carries it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.25, localConditions: 0.45, isolation: 0.3 }),
+    importance: weighed(factors, { magnitude: 0.25, localConditions: 0.45, isolation: 0.3 }),
   },
   naming: {
     statement:

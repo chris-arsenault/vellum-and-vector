@@ -2,18 +2,10 @@ import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import {
-  cellSpan,
-  cellsWithin,
-  celsiusAt,
-  gap,
-  heightAt,
-  isLand,
-  isSea,
-  slopeAt,
-} from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { areaOf, depthAt, extentOf, faunaAt, heldUnder, shoreOf, stormAt } from "./seaShared";
+import { areaRecord } from "../poiRecords";
+import { cellSpan, cellsWithin, celsiusAt, heightAt, isLand, isSea, slopeAt } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { areaOf, depthAt, extentOf, faunaAt, heldUnder, near, shoreOf, stormAt } from "./seaShared";
 import { showsForm, wrapOf } from "./shoreForm";
 
 /** Area at which a bay is half as great as bays get: 1,000 square kilometres. */
@@ -36,7 +28,8 @@ const drawnDrainage = 0.85,
 
 const isA = showsForm("bay");
 const places = regionPlaces("bay", isA, wrapOf);
-const around = (state: GenerationState) => 8 * cellSpan(state);
+/** The country around a bay that bears on it: 40 km. */
+const around = near(40_000);
 const reachOf = (state: GenerationState, place: PoiPlace) =>
   Math.max(2 * cellSpan(state), extentOf(state, place));
 const counterpart = counterpartOf(isA, 2);
@@ -50,17 +43,6 @@ const factors = {
   cultural: attachment(around),
 };
 
-/**
- * The land around a bay breaks the fetch: exposure in it is held to the share of the circle the
- * shore leaves open. Sea ice, delta building and sheltered deposition all read this band.
- */
-const sheltered = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells.map((cell) => ({
-    change: "atMost",
-    band: "WaveExposure",
-    cell,
-    value: Math.round((1 - wrapOf(state, cell)) * 1000),
-  }));
 /** Salt marsh on the low, flat ground of its shore. */
 const marsh = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
   shoreOf(state, place)
@@ -73,7 +55,7 @@ export const bay: PoiEntry = {
   name: "Bay",
   recognition: {
     distinct:
-      "A sea cell that, on the smallest circle of radius 3, 6, 12, 24 or 48 cells showing any coastal form, has one unbroken arc of shore of at least 210 degrees and sea in what remains: water with a single opening. A strait shows two shores facing each other with water at both ends; a headland is the same reading on ground; a fjord is excluded by its landform, because ice cut it.",
+      "A sea cell that, on the smallest circle, of radius 1.5 to 800 km, that the map resolves and that shows any coastal form, has one unbroken arc of shore of at least 210 degrees and sea in what remains: water with a single opening. A strait shows two shores facing each other with water at both ends; a headland is the same reading on ground; a fjord is excluded by its landform, because ice cut it.",
     isA,
   },
   existence: {
@@ -84,11 +66,26 @@ export const bay: PoiEntry = {
     suitability: notApplicable("No process chooses where the coast curves."),
     places,
   },
+  publication: {
+    statement: "Every bay publishes as its outline, drawn by how closely its shore wraps it.",
+    moment: "geography",
+    record: areaRecord(
+      {
+        kind: "bay",
+        layer: "geology",
+        name: "Bay",
+        attributes: (state, place) => ({ wrap: wrapOf(state, place.anchor) }),
+      },
+      wrapOf
+    ),
+  },
   fields: {
     statement:
-      "A bay shelters its water, and the generator's ice, deltas and sediment answer to that shelter. It is a sink for what its rivers carry, kept open until it has silted to its last two metres, and its flat low shore grows salt marsh.",
+      "A bay is a sink for what its rivers carry, kept open until it has silted to its last two metres, and its flat low shore grows salt marsh. The shelter on its water is the short fetch the wave process already reads there.",
     terrain: (state, place) => heldUnder(state, place.cells, heldDepth),
-    water: sheltered,
+    water: notApplicable(
+      "The ocean current process writes wave exposure from fetch, and refinement's shore development from the present coast; a bay's enclosure already shortens both."
+    ),
     climate: notApplicable(
       "Sea ice reads wave exposure, so a sheltered bay freezes first through its water rule; its air is the ordinary coastal air."
     ),
@@ -104,26 +101,26 @@ export const bay: PoiEntry = {
     realize: (state, carried) =>
       heldUnder(
         state,
-        cellsWithin(state, carried.cell, state.regional.parentSpan / 2).filter((cell) =>
-          isSea(state, cell)
-        ),
+        carried.cells.filter((cell) => isSea(state, cell)),
         heldDepth
       ),
     counterpart,
     unrealized: movesTo(counterpart),
     settle: (state, carried) =>
       isSea(state, carried.cell) ? stays() : movesTo(counterpart)(state, carried),
+    schedule: notApplicable("Holding its bed under the sea is all a bay does to a refinement."),
   },
   movement: {
     statement:
       "Boats pay less on a bay's calm water, and rivers gather towards its head. Roads pay nothing different on its shore. Current-borne magic slackens in it; Pressure's rays are traced by geometry and do not read this cost.",
     roads: notApplicable("A shore road follows the ordinary grade; the bay only lengthens it."),
     boats: costNear(shelteredWater),
-    drainage: (state, place, cell) =>
-      isLand(state, cell) && gap(state, place.anchor, cell) <= reachOf(state, place)
-        ? drawnDrainage
-        : 1,
-    magic: costNear(slackCurrent),
+    drainage: (state, place) =>
+      cellsWithin(state, place.anchor, reachOf(state, place))
+        .filter((cell) => isLand(state, cell))
+        .map((cell) => ({ cell, factor: drawnDrainage })),
+    magic: { current: costNear(slackCurrent) },
+    links: notApplicable("A bay joins no two cells."),
     crosses: notApplicable("A bay is open water with one mouth; it joins nothing it divides."),
   },
   others: {
@@ -176,7 +173,7 @@ export const bay: PoiEntry = {
     statement:
       "A bay shows by the water it encloses and by how sharply it breaks its coast; size weighs most because it is what a chart is read for. A harbour town on a small bay carries it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.3, isolation: 0.2 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.3, isolation: 0.2 }),
   },
   naming: {
     statement: "Named by those who live around it, and often after the town at its head.",

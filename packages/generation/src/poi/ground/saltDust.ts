@@ -1,8 +1,9 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
-import { namingCultureNear, regionPlaces, settlementWithin, within } from "../poiPlaces";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { namingCultureNear, rulePlaces, settlementWithin, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
   areaOf,
   aroundOf,
@@ -11,9 +12,6 @@ import {
   parameterOf,
   reservoirPerArea,
   ruleFloor,
-  saltHeld,
-  saltThinned,
-  saltedAir,
   saltingAt,
   standsOn,
 } from "./groundReads";
@@ -31,7 +29,7 @@ const lostFloor = 10;
 
 const dustOf = (state: GenerationState, cell: number) =>
   reservoirPerArea(state, "salt", "dust", cell);
-const places = regionPlaces("saltDust", dustAt, dustOf);
+const places = rulePlaces("saltDust", "salt", "dust");
 const counterpart = counterpartOf(dustAt, 1);
 const factors = {
   magnitude: sized(areaOf, typicalArea),
@@ -50,7 +48,7 @@ export const saltDust: PoiEntry = {
   name: "Salt dust",
   recognition: {
     distinct:
-      "A land cell in Salt's dust rule: Salt's dust stock, from either origin, per square metre at the rule's floor. It is the only one of Salt's places read from the dust reservoir: a salt pan reads Salt's intensity or a closed floor, a glass flat the bed reservoir, a killing ground the brine, so a plume over a pan is two things with two tests. There is no natural dust: nothing in the data records salt blown from a pan Salt did not make.",
+      "A cell in Salt's dust rule: Salt's dust stock, from either origin, per square metre at the rule's floor. It is the only one of Salt's places read from the dust reservoir: a salt pan reads Salt's intensity or a closed floor, a glass flat the bed reservoir, a killing ground the brine, so a plume over a pan is two things with two tests. There is no natural dust: nothing in the data records salt blown from a pan Salt did not make.",
     isA: dustAt,
   },
   existence: {
@@ -61,18 +59,29 @@ export const saltDust: PoiEntry = {
     suitability: notApplicable("The wind chooses where it falls; nothing sites it."),
     places,
   },
+  publication: {
+    statement: "Every plume Salt holds publishes as its rule's class.",
+    moment: "magic",
+    record: ruleRecord("salt", "dust"),
+  },
   fields: {
     statement:
-      "A plume salts the ground it falls on: the air over it dries, growth thins, and the salting stays where the dust lies however the field shifts. It builds no land: what settles is a thin bed that Salt keeps in its own stock.",
+      "A plume salts the ground it falls on through Salt's own writes by intensity: the air over it dries and growth thins. It builds no land: what settles is a thin bed that Salt keeps in its own stock.",
     terrain: notApplicable(
       "Settled dust is a stock, not height; even a bed deep enough to fuse changes rock, not elevation."
     ),
     water: notApplicable(
       "Salt in water is not a field band; dust that lands on wet ground dissolves in Salt's stock, not in the water bands."
     ),
-    climate: saltedAir,
-    cover: saltThinned,
-    magic: saltHeld,
+    climate: notApplicable(
+      "Salt's writes dry the air by its intensity (saltWrites on the world, declareSaltWrites in refinement)."
+    ),
+    cover: notApplicable(
+      "Ecology's growth reads the Salting band that magicLivingFeedback writes by Salt's intensity."
+    ),
+    magic: notApplicable(
+      "magicLivingFeedback writes Salting by Salt's intensity, and settleDust moves the stock."
+    ),
   },
   acrossMaps: {
     statement:
@@ -84,6 +93,7 @@ export const saltDust: PoiEntry = {
     counterpart,
     unrealized: movesOrGoes(counterpart),
     settle: movesOrGoes(counterpart),
+    schedule: notApplicable("A plume does nothing at refinement's other points."),
   },
   movement: {
     statement:
@@ -93,7 +103,8 @@ export const saltDust: PoiEntry = {
     drainage: notApplicable(
       "A thin fall of dust changes neither the ground nor the slope that water reads."
     ),
-    magic: costNear(openToWind),
+    magic: { wind: costNear(openToWind) },
+    links: notApplicable("A plume joins no two cells for walkers."),
     crosses: notApplicable("Dust covers ground; it opens no way over anything."),
   },
   others: {
@@ -141,7 +152,7 @@ export const saltDust: PoiEntry = {
     statement:
       "A plume shows by its area and by how much saltier it lies than the country around it; a town fouled by it makes it known. It is a condition more than a landmark, so its isolation counts for little.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.3, isolation: 0.1 }),
+    importance: weighed(factors, { magnitude: 0.6, localConditions: 0.3, isolation: 0.1 }),
   },
   naming: {
     statement:

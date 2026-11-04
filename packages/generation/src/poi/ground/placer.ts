@@ -1,23 +1,25 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import { dischargeAt, isRiver, sedimentAt, toNative } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { namingCultureNear, within } from "../poiPlaces";
+import { dischargeAt, isRiver, sedimentAt } from "../poiReads";
+import { siteRecord } from "../poiRecords";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
   aroundOf,
-  barDepth,
-  floorOf,
   flowGradient,
+  grownAndNaturalPlaces,
+  grownOrNaturalRecord,
   lengthOf,
   movesOrGoes,
+  naturalBarAt,
   parameterOf,
   placerAt,
   stockPerArea,
   standsOn,
 } from "./groundReads";
 
-/** Fallen metal per square metre at which a band is rich: the deepest the placer rule reads. */
+/** Fallen metal per square metre at which a band is rich. */
 const richStock = 1000;
 /** Spent vein ore per square metre at which a band is rich. */
 const richOre = 1000;
@@ -43,7 +45,7 @@ const metalAt = (state: GenerationState, cell: number) =>
   );
 const rankAt = (state: GenerationState, cell: number) =>
   metalAt(state, cell) + sedimentAt(state, cell) / (sedimentAt(state, cell) + 1);
-const places = regionPlaces("placer", placerAt, rankAt);
+const places = grownAndNaturalPlaces("placer", ["fire", "placer"], naturalBarAt, rankAt);
 const counterpart = counterpartOf(placerAt, 1);
 const richnessOf = (state: GenerationState, place: PoiPlace) =>
   place.cells.reduce((most, cell) => Math.max(most, metalAt(state, cell)), 0);
@@ -58,15 +60,11 @@ const factors = {
   isolation: aloneAmong(places, (state) => 2 * aroundOf(state)),
   cultural: attachment(aroundOf),
 };
-/** The slack reach and its gravel, held: the shape that keeps sorting grains out of the river. */
-const slackReach = (state: GenerationState, cell: number): readonly PoiFieldChange[] => [
-  { change: "gradientAtMost", cell, gradient: flowGradient(state, cell) },
-  floorOf(
-    "SedimentThickness",
-    cell,
-    Math.max(toNative(barDepth), toNative(sedimentAt(state, cell)))
-  ),
-];
+/** The slack reach, held: the gentle bed that keeps sorting grains out of the river. */
+const slackReach = (state: GenerationState, cell: number): readonly PoiFieldChange[] => {
+  const gradient = flowGradient(state, cell);
+  return gradient > 0 ? [{ change: "gradientAtMost", cell, gradient }] : [];
+};
 
 export const placer: PoiEntry = {
   id: "placer",
@@ -74,12 +72,12 @@ export const placer: PoiEntry = {
   name: "Placer band",
   recognition: {
     distinct:
-      "A land river cell that is either in Fire's placer rule (river plus fallen metal in the gravel) or a bar of river sediment at least a metre deep where the river's gradient falls to half or less of the reach above it, that reach being steep enough to carry heavy grains. The slackening is what separates it: a waterfall is where the gradient jumps up, a delta has delta intensity and fine silt, a floodplain has sediment with no break in the profile, and a moraine's material came by ice. Fire's rule and the plain bar are the same kind; metal is a property of the band, not a second kind.",
+      "A river cell in Fire's placer rule (river plus fallen metal in the gravel), or, with no metal, a bar of river sediment at least a metre deep where the river's gradient falls to half or less of the reach above it, that reach being steep enough to carry heavy grains. The slackening is what separates the bar: a waterfall is where the gradient jumps up, a delta has delta intensity and fine silt, a floodplain has sediment with no break in the profile, and a moraine's material came by ice. Fire's rule and the plain bar are the same kind; metal is a property of the band, not a second kind.",
     isA: placerAt,
   },
   existence: {
     statement:
-      "Emerges where a river drops what it can no longer carry. Fallen metal washes down from a crater's fan, spent ore from an old vein is exhumed and washed the same way, and a river with neither still sorts its heaviest gravel into the same bars. Nothing but the river places one.",
+      "Emerges where a river drops what it can no longer carry. Fallen metal washes down from a crater's fan, spent ore from an old vein is exhumed and washed the same way, and Fire's rule grows the band from what lies in the gravel; a river with neither still sorts its heaviest gravel into the same bars. Nothing but the river places one.",
     way: "emerges",
     requires: notApplicable(
       "Its test reads the river and its sediment; nothing has to be there first."
@@ -89,9 +87,24 @@ export const placer: PoiEntry = {
     ),
     places,
   },
+  publication: {
+    statement:
+      "A band with metal publishes as Fire's placer class; a plain bar publishes as a site on the river, with the gravel it holds.",
+    moment: "magic",
+    record: grownOrNaturalRecord(
+      "fire",
+      "placer",
+      siteRecord({
+        kind: "placer",
+        layer: "geology",
+        name: "Placer band",
+        attributes: (state, place) => ({ sediment: sedimentAt(state, place.anchor) }),
+      })
+    ),
+  },
   fields: {
     statement:
-      "A band holds the slack reach that makes it: a gentle bed with gravel on it, which traps what the river is carrying. Fire's metal in it stays in Fire's own stock.",
+      "A band holds the slack reach that makes it, a gentle bed that traps what the river carries. The gravel on it is the river's own deposition, and Fire's metal in it stays in Fire's own stock.",
     terrain: (state, place) => place.cells.flatMap((cell) => slackReach(state, cell)),
     water: notApplicable(
       "A bar stores no water and passes the river's whole discharge; the bed's gradient, held under terrain, is all it changes."
@@ -101,12 +114,12 @@ export const placer: PoiEntry = {
       "Scour keeps bare gravel bare, and the bank's cover follows the channel's own moisture."
     ),
     magic: notApplicable(
-      "Its metal is a Fire stock, moved by the system's own river carrier; stocks are not field bands, so a band can declare nothing on them, and the Fire it releases is already in the field."
+      "Fire's stock advance moves its metal by the river carrier (carryDownstream), and the Fire it releases is already in the field."
     ),
   },
   acrossMaps: {
     statement:
-      "A captured band lands on the refined river, whose finer profile must hold its slack and its gravel, so the refined reach keeps sorting; Fire's inherited stock comes with the child's field. After a round's water a band follows the channel to the nearest slack reach, and goes if the river no longer has one within a parent span. Plain bars are not published, so they appear on the child by the same test rather than being carried.",
+      "A captured band lands on the refined river, whose finer profile must hold its slack, so the refined reach keeps sorting; Fire's inherited stock comes with the child's field. After a round's water a band follows the channel to the nearest slack reach, and goes if the river no longer has one within a parent span.",
     carry: carryWhereItLands,
     realize(state, carried) {
       const cell = counterpart(state, carried);
@@ -118,6 +131,7 @@ export const placer: PoiEntry = {
       placerAt(state, carried.cell)
         ? { outcome: "keep" }
         : movesOrGoes(counterpart)(state, carried),
+    schedule: notApplicable("A band does nothing at refinement's other points."),
   },
   movement: {
     statement:
@@ -127,7 +141,8 @@ export const placer: PoiEntry = {
     ),
     boats: costNear(shoaling),
     drainage: costNear(deflection),
-    magic: costNear(slackHold),
+    magic: { river: costNear(slackHold) },
+    links: notApplicable("A band joins no two cells for walkers."),
     crosses: (state, place) => (dischargeAt(state, place.anchor) <= wadeable ? ["river"] : []),
   },
   others: {
@@ -178,7 +193,7 @@ export const placer: PoiEntry = {
     statement:
       "A band shows by its length, its river and the metal in it, and by the gravel standing deep against the country around it. A rush town or capital beside it carries a thin one.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
   },
   naming: {
     statement:

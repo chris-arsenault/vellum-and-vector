@@ -1,17 +1,23 @@
+import { coastDistances } from "../../canonry/magicOcean";
+import { releaseWorking } from "../../canonry/physicalNumerics";
 import type { GenerationState } from "../../process";
 import { cellSpan, fieldOf, heldFor, isSea, Landform, landformAt } from "../poiReads";
 
 /**
  * The coast's form, read from the water mask alone: a circle of samples around a cell, as arcs
  * of sea and not-sea. Which arcs the circle shows decides the form, so headland, bay and strait
- * are one reading with three mutually exclusive answers. The circle is drawn in the map's own
- * cells and doubled, so the same test finds a form of any size the map resolves; no size gates
- * it. The smallest circle that shows a form decides. Lakes count as not-sea: they are ground to
- * the coast.
+ * are one reading with three mutually exclusive answers. The circles are physical lengths, so
+ * the same test finds the same form whatever the cell size; a circle narrower than two cells
+ * cannot show a shape on this map and is not drawn. The smallest circle that shows a form
+ * decides. Lakes count as not-sea: they are ground to the coast.
  */
 const samples = 24;
-/** Circle radii, in the map's cells. */
-const radii = [3, 6, 12, 24, 48];
+/** Circle radii, in metres: from a cove to a gulf. */
+const radii = [1_500, 3_000, 6_000, 12_000, 25_000, 50_000, 100_000, 200_000, 400_000, 800_000];
+/** How far short of a circle the nearest other medium may read, along the lattice's paths. */
+const pathSlack = 1.25;
+/** A line of sight is sampled this many times, so its cost does not grow with its length. */
+const sightSamples = 16;
 /** The arc that makes a wrap: 14 of 24 samples, 210 degrees. A straight coast shows 180. */
 const wrappingArc = 14;
 /** A strait's two shores stand at least this many samples apart, 120 degrees, middle to middle. */
@@ -84,8 +90,8 @@ function runsAlong(
 ) {
   const mesh = fieldOf(state).mesh,
     angle = (sample * 2 * Math.PI) / samples,
-    span = cellSpan(state);
-  for (let d = span; d < reach; d += span) {
+    step = Math.max(cellSpan(state), reach / sightSamples);
+  for (let d = step; d < reach; d += step) {
     const next = mesh.cellAt(
       mesh.x(cell) + d * Math.cos(angle),
       mesh.y(cell) + d * Math.sin(angle)
@@ -146,6 +152,16 @@ function formOnCircle(state: GenerationState, cell: number, radius: number): Rea
     ? seaForm(state, cell, arcs, radius)
     : landForm(state, cell, arcs, radius);
 }
+/** Each sea cell's distance to the shore, through the generator's own search, kept once. */
+const seaDistances = (state: GenerationState) =>
+  heldFor(state, "shoreForm:seaDistance", () => {
+    const map = fieldOf(state),
+      band = coastDistances(map, radii[radii.length - 1] * pathSlack),
+      kept = new Float32Array(map.mesh.count);
+    for (let i = 0; i < kept.length; i++) kept[i] = band.get(i);
+    releaseWorking(map, band);
+    return kept;
+  });
 /** A form's test cannot apply here: an inlet the ice cut is a fjord, inland ground sees no sea. */
 function outOfReach(state: GenerationState, cell: number) {
   return isSea(state, cell)
@@ -154,12 +170,14 @@ function outOfReach(state: GenerationState, cell: number) {
 }
 function readForm(state: GenerationState, cell: number): Reading {
   if (outOfReach(state, cell)) return noForm;
-  const span = cellSpan(state),
-    distance = isSea(state, cell) ? 0 : fieldOf(state).OceanDistance.get(cell);
-  for (const cells of radii) {
-    // A circle short of the nearest sea shows only ground.
-    if (cells * span < distance) continue;
-    const reading = formOnCircle(state, cell, cells * span);
+  const least = 2 * cellSpan(state),
+    distance = isSea(state, cell)
+      ? seaDistances(state)[cell]
+      : fieldOf(state).OceanDistance.get(cell);
+  for (const radius of radii) {
+    // A circle short of the nearest other medium shows only the one the cell stands in.
+    if (radius < least || radius * pathSlack < distance) continue;
+    const reading = formOnCircle(state, cell, radius);
     if (reading.code !== none) return reading;
   }
   return noForm;

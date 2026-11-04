@@ -1,67 +1,42 @@
+import { keyCols } from "../../canonry/landforms";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
-import { topographicProminence } from "../../topographicProminence";
+import { rulingGrade } from "../../regional/ways";
 import { carryWhereItLands, costNear, movesTo, parentSpanOf } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { cellPlaces, namingCultureNear, within } from "../poiPlaces";
+import { siteRecord } from "../poiRecords";
 import {
-  adjacent,
   cellSpan,
   cellsWithin,
   celsiusAt,
   fieldOf,
-  gap,
   heightAt,
   heldFor,
   isLand,
   isRiver,
   metres,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { sameSpot, spans, standsIn } from "./reliefShape";
+import { attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { aloneWithin, sameSpot, spans, standsIn } from "./reliefShape";
 
-/** The grade society reads as needing a made way over a height; a pass's approach holds to it. */
-const roadGrade = 0.08;
 /** Height of the lesser summit over its col at which a pass is half as great as passes get. */
 const typicalRise = 300;
 /** At the greatest passes a road crossing costs this share less than the slopes either side. */
 const greatestSaving = 0.5;
 
-/**
- * Every key col on this map, with the prominence of the greatest summit it is the key col of:
- * the generator's own prominence pass, whose saddle band says where each summit's area joins
- * higher ground.
- */
-const keyCols = (state: GenerationState) =>
-  heldFor(state, "relief:keyCols", () => {
-    const map = fieldOf(state),
-      { rise, saddle } = topographicProminence(
-        map.coverage,
-        map.Elevation,
-        (cell) => adjacent(state, cell),
-        map.EffectiveSeaLevel
-      ),
-      cols = new Map<number, number>();
-    for (let cell = 0; cell < map.mesh.count; cell++) {
-      const col = saddle.get(cell);
-      if (col >= 0 && rise.get(cell) > 0)
-        cols.set(col, Math.max(cols.get(col) ?? 0, rise.get(cell)));
-    }
-    map.coverage.release(rise);
-    map.coverage.release(saddle);
-    return cols;
-  });
-const isA = (state: GenerationState, cell: number) =>
-  isLand(state, cell) && keyCols(state).has(cell);
+/** The generator's key cols on this map, kept while the map is read. */
+const cols = (state: GenerationState) =>
+  heldFor(state, "relief:keyCols", () => keyCols(fieldOf(state)));
+const isA = (state: GenerationState, cell: number) => isLand(state, cell) && cols(state).has(cell);
 const places = cellPlaces("pass", isA);
 const riseOf = (state: GenerationState, place: PoiPlace) =>
-  metres(keyCols(state).get(place.anchor) ?? 0);
-const around = spans(6);
+  metres(cols(state).get(place.anchor) ?? 0);
 const factors = {
   magnitude: sized(riseOf, typicalRise),
   /** How deep a notch it is in the ground around it: lowness read as summit reads height. */
   localConditions: standsOut((state, cell) => -heightAt(state, cell), spans(3)),
-  isolation: aloneAmong(places, around),
+  isolation: aloneWithin(isA, spans(6)),
   cultural: attachment(spans(8)),
 };
 /** The col held no higher than `ceiling`, and its approaches held to a road's grade. */
@@ -70,7 +45,7 @@ const crossing = (state: GenerationState, cell: number, ceiling: number): PoiFie
   ...cellsWithin(state, cell, cellSpan(state)).map((near): PoiFieldChange => ({
     change: "gradientAtMost",
     cell: near,
-    gradient: roadGrade,
+    gradient: rulingGrade,
   })),
 ];
 /** The lowest key col within a parent's cell span: the crossing the finer ground actually has. */
@@ -89,7 +64,7 @@ export const pass: PoiEntry = {
   name: "Pass",
   recognition: {
     distinct:
-      "A land cell that is the key col of a summit: the generator's prominence pass names it as the cell where that summit's area joins higher ground, and the summit's prominence is measured down to it. It is the highest point on the lowest way between the two tops. A summit is a maximum, a ridge the whole crest line a col lies on, a valley the low ground leading up to it. Landform.Pass is not the test: it also asks for 1000 m of height and tectonic ridge influence, and a key col needs neither.",
+      "A land cell that is the key col of a summit: the generator's prominence pass names it as the cell where that summit's area joins higher ground, and the summit's prominence is measured down to it. It is the highest point on the lowest way between the two tops. A summit is a maximum, a ridge the whole crest line a col lies on, a valley the low ground leading up to it. The classifier marks Landform.Pass from the same key cols.",
     isA,
   },
   existence: {
@@ -99,6 +74,16 @@ export const pass: PoiEntry = {
     requires: notApplicable("A key col is read from the terrain; nothing has to be there first."),
     suitability: notApplicable("Nothing chooses where a col lies; it is where the summits join."),
     places,
+  },
+  publication: {
+    statement: "Every key col publishes as a mountain pass, with how far its summit rises over it.",
+    moment: "geography",
+    record: siteRecord({
+      kind: "pass",
+      layer: "geology",
+      name: "Pass",
+      attributes: (state, place) => ({ rise: riseOf(state, place) }),
+    }),
   },
   fields: {
     statement:
@@ -131,18 +116,19 @@ export const pass: PoiEntry = {
     counterpart: (state, carried) => lowestColNear(state, carried.cell),
     unrealized: movesTo((state, carried) => lowestColNear(state, carried.cell)),
     settle: movesTo((state, carried) => lowestColNear(state, carried.cell)),
+    schedule: notApplicable("Its held crossing is all a pass asks of a refinement."),
   },
   movement: {
     statement:
       "A pass is what lets a road cross a ridge: road cost falls near it, the more so the higher the ground either side. Water must not break through it, and people and wind funnel over it, carrying what they carry.",
-    roads(state, place, cell) {
-      return gap(state, place.anchor, cell) <= 2 * cellSpan(state)
-        ? 1 - greatestSaving * factors.magnitude(state, place)
-        : 1;
+    roads(state, place) {
+      const factor = 1 - greatestSaving * factors.magnitude(state, place);
+      return costNear(factor, 2 * cellSpan(state))(state, place);
     },
     boats: notApplicable("A col is the top of its slopes; no water carries a boat there."),
     drainage: costNear(1.5),
-    magic: costNear(0.8),
+    magic: { wind: costNear(0.8), people: costNear(0.8) },
+    links: notApplicable("A pass eases a crossing; it does not join two cells directly."),
     crosses: () => ["ridge"],
   },
   others: {
@@ -183,7 +169,7 @@ export const pass: PoiEntry = {
     statement:
       "A pass shows by how high its summits stand over it and how few other crossings there are; a low saddle among many earns little, and the one road over a long range or a town at its foot carries it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.4, localConditions: 0.2, isolation: 0.4 }),
+    importance: weighed(factors, { magnitude: 0.4, localConditions: 0.2, isolation: 0.4 }),
   },
   naming: {
     statement:

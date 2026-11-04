@@ -1,10 +1,9 @@
 import { spatial, type AtlasFeature } from "@atlas/domain";
 import { generationFeatures, writeGenerationFeature } from "../generationFeatures";
 import { celsius, regionalMoisture } from "./climate";
-import { putRegionalFeature } from "./extraction/features";
-import { cellAt, distance, isContent, positionOf, regionalSpan } from "./lattice";
+import { cellAt, isContent } from "./lattice";
 import { hinterlandOwners, placesEnabled } from "./places";
-import { publishCrossings, traceWays, type Place } from "./societyWays";
+import { traceWays, type Place } from "./societyWays";
 import { clamp, naturalBand, type RegionalState } from "./state";
 
 /** Field area a resident needs (m²), and the pasture beyond the fields as a share of it. */
@@ -13,13 +12,14 @@ const fieldPerResident = 10_000,
 /** Shares of the tree cohorts cleared on fields and on pasture, and the grass that takes their place. */
 const fieldClearance = 0.8,
   pastureClearance = 0.3,
-  fieldGrass = 0.2,
   pastureGrass = 0.3;
+/** The grass that takes a field's place. */
+export const fieldGrass = 0.2;
+/** The steepest ground fields are laid on, and the deepest ice. */
+export const steepestField = 0.12,
+  iceOnField = 1;
 /** Travel cost (m) over which a place's pull on its land fades. */
 const fieldDecay = 3000;
-/** A channel's fall that turns a mill, and the mill's reach (cells). */
-const millGradient = 0.01,
-  millReach = 3;
 
 type Fields = { place: Int32Array; kind: Uint8Array };
 
@@ -111,19 +111,24 @@ function toTarget(
 const farmable = (state: RegionalState, i: number) =>
   isContent(state.physical.map.mesh, i) &&
   state.physical.map.WaterKindCodes.get(i) === 0 &&
-  state.physical.map.Slope.get(i) <= 0.12 &&
-  state.physical.map.IceThickness.get(i) < 1;
+  state.physical.map.Slope.get(i) <= steepestField &&
+  state.physical.map.IceThickness.get(i) < iceOnField;
 /** Farming suitability 0..1 on the present ground: soil, water, warmth, gentle slope. */
 function farming(state: RegionalState, i: number) {
-  const map = state.physical.map,
-    temperature = celsius(state, i);
-  return (
-    clamp(map.SoilDepth.get(i) / 0.5) *
-    clamp(regionalMoisture(state, i) / 0.5) *
-    clamp((temperature + 2) / 16) *
-    clamp(1 - map.Slope.get(i) / 0.12)
+  const map = state.physical.map;
+  return farmingValue(
+    map.SoilDepth.get(i),
+    regionalMoisture(state, i),
+    celsius(state, i),
+    map.Slope.get(i)
   );
 }
+/** Farming suitability from soil depth (m), plant water, degrees and slope. */
+export const farmingValue = (soil: number, moisture: number, degrees: number, slope: number) =>
+  clamp(soil / 0.5) *
+  clamp(moisture / 0.5) *
+  clamp((degrees + 2) / 16) *
+  clamp(1 - slope / steepestField);
 
 /** The settled places: captured seats (inhabited or not) and the round's accepted villages. */
 function settledPlaces(state: RegionalState): Place[] {
@@ -157,8 +162,9 @@ const placeOf = (f: AtlasFeature, cell: number): Place => ({
 });
 
 /**
- * At extraction (plan S1, S4, F4, politics): ways by use between the published places, the
- * crossings and mills they make, and the control each settlement sits in.
+ * At extraction (plan S1, S4, F4, politics): ways by use between the published places and the
+ * control each settlement sits in. What the ways cross and the places they join is kept for the
+ * ford, bridge and mill entries, which turn it into places.
  */
 export function developSociety(
   state: RegionalState,
@@ -166,45 +172,9 @@ export function developSociety(
 ) {
   const places = seats.map((s) => placeOf(s.feature, s.cell));
   inheritControl(state, places);
-  const { traffic, crossed } = traceWays(state, places),
-    seatCells = new Set(places.map((p) => p.cell));
-  publishCrossings(state, traffic, crossed, seatCells);
-  publishMills(state, places);
-}
-
-/** A settled place with a falling channel within reach turns a mill at its steepest reach. */
-function publishMills(state: RegionalState, places: Place[]) {
-  for (const place of places) {
-    if (!place.settled || place.residents <= 0) continue;
-    const best = millSite(state, place.cell);
-    if (best < 0) continue;
-    const map = state.physical.map,
-      p = positionOf(map.mesh, best);
-    putRegionalFeature(
-      state,
-      `mill:${place.cell}`,
-      "mill",
-      "waterworks",
-      { type: "Point", coordinates: [p.x, p.y] },
-      { workKind: "mill", flow: map.FlowAccumulation.get(best), seat: place.feature?.id },
-      "Mill"
-    );
-  }
-}
-/** The channel cell within reach with the most falling water, or -1. */
-function millSite(state: RegionalState, cell: number) {
-  const map = state.physical.map,
-    mesh = map.mesh,
-    reach = millReach * regionalSpan(state);
-  let best = -1,
-    fall = 0;
-  for (let i = 0; i < mesh.count; i++) {
-    if (map.RiverOrders.get(i) <= 0 || map.Slope.get(i) < millGradient) continue;
-    if (distance(mesh, cell, i) > reach) continue;
-    const power = map.Slope.get(i) * map.FlowAccumulation.get(i);
-    if (power > fall) [best, fall] = [i, power];
-  }
-  return best;
+  const { traffic, crossed } = traceWays(state, places);
+  state.regional.crossings = { traffic, crossed, seatCells: new Set(places.map((p) => p.cell)) };
+  state.regional.settled = places;
 }
 
 /** Every settlement inside a captured control polygon carries that control; nothing changes it. */

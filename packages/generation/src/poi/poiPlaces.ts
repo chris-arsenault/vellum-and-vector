@@ -30,6 +30,66 @@ export const regionPlaces =
       return places;
     });
 
+/**
+ * Places of a kind a magic system grows: each connected group of its rule's members, as the
+ * system itself grew them, anchored where the system is strongest. The rule is the definition;
+ * the entry adds no second test.
+ */
+export const rulePlaces =
+  (kind: PoiKindId, system: string, rule: string) =>
+  (state: GenerationState): readonly PoiPlace[] =>
+    heldFor(state, `rule:${kind}:${system}:${rule}`, () => {
+      const field = state.physical?.magic?.fields.find((f) => f.definition.id === system),
+        members = field?.features[rule],
+        coverage = field?.coverage[rule];
+      if (!field || !members) return [];
+      const places: PoiPlace[] = [];
+      components(
+        state,
+        (i) => Boolean(members.get(i)) && (coverage?.get(i) ?? 1) > 0,
+        (found) => {
+          const cells = [...found],
+            anchor = cells.reduce((a, b) =>
+              field.intensity.get(b) > field.intensity.get(a) ? b : a
+            );
+          places.push({ id: `${kind}:${anchor}`, kind, cells, anchor });
+        }
+      );
+      return places;
+    });
+
+/** Suitability a cell needs before anyone would site a work of a kind there. */
+const worthSiting = 0.5;
+/**
+ * Places of a kind people site where nothing else has sited them: the best cells that meet its
+ * requirement and suit it, best first, each at least `spacing` metres from those already taken.
+ */
+export const sitedPlaces =
+  (
+    kind: PoiKindId,
+    requires: IsA,
+    suitability: (state: GenerationState, cell: number) => number,
+    spacing: (state: GenerationState) => number
+  ) =>
+  (state: GenerationState): readonly PoiPlace[] =>
+    heldFor(state, `sited:${kind}`, () => {
+      // A map with no field, like a floor plan, has no ground to site anything on.
+      if (!state.physical) return [];
+      const mesh = fieldOf(state).mesh,
+        scored: { cell: number; score: number }[] = [];
+      for (let cell = 0; cell < mesh.count; cell++) {
+        if (mesh.membership(cell) !== 1 || !requires(state, cell)) continue;
+        const score = suitability(state, cell);
+        if (score >= worthSiting) scored.push({ cell, score });
+      }
+      scored.sort((a, b) => b.score - a.score || a.cell - b.cell);
+      const apart = spacing(state),
+        taken: number[] = [];
+      for (const { cell } of scored)
+        if (taken.every((other) => gap(state, cell, other) >= apart)) taken.push(cell);
+      return taken.map((cell) => ({ id: `${kind}:${cell}`, kind, cells: [cell], anchor: cell }));
+    });
+
 /** Places of a point kind: each cell that passes its test is one place. */
 export const cellPlaces =
   (kind: PoiKindId, isA: IsA) =>
@@ -49,6 +109,7 @@ export const recordPlaces =
   (state: GenerationState): readonly PoiPlace[] =>
     heldFor(state, `places:${kind}`, () => {
       const places: PoiPlace[] = [];
+      if (!state.physical) return places;
       for (const feature of generationFeatures(state))
         if (matches(feature)) {
           const anchor = featureCell(state, feature);

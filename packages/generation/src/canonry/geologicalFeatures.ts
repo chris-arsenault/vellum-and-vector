@@ -1,24 +1,14 @@
-import {
-  canonicalGeometry,
-  canonicalPosition,
-  unwrapCoordinates,
-  point,
-  spatial,
-} from "@atlas/domain";
+import { canonicalGeometry, unwrapCoordinates, point, spatial } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
 import { physicalSampler } from "./physicalMetric";
 import { mapScale } from "../worldSignificance";
 
 type Event = NonNullable<GenerationState["physical"]>["map"]["events"][number];
-/** Surviving relief distinguishes a major volcanic mountain from an old event location. */
-const worldVolcanicRelief = 1_000;
-const worldCraterRelief = 150;
-const worldCraterRadius = 15_000;
 /** Fault systems need a long retained trace; individual local fractures remain physical. */
 const worldFaultLength = 150_000;
 
-function volcanicRelief(state: GenerationState, event: Event) {
+export function volcanicRelief(state: GenerationState, event: Event) {
   const map = state.physical!.map,
     height = physicalSampler(map.mesh, map.Elevation);
   let surrounding = 0;
@@ -32,7 +22,7 @@ function volcanicRelief(state: GenerationState, event: Event) {
   return (height(event.x, event.y) - surrounding / 16) / 1024;
 }
 
-function eventDisk(
+export function eventDisk(
   state: GenerationState,
   center: import("@atlas/domain").Position,
   radius: number
@@ -51,7 +41,7 @@ function eventDisk(
  * Metres the rim stands above both the floor and the surrounding plain, from the current
  * surface: later erosion, deposition and uplift can erase a crater's form.
  */
-function craterRelief(state: GenerationState, event: Event) {
+export function craterRelief(state: GenerationState, event: Event) {
   const { map } = state.physical!,
     height = physicalSampler(map.mesh, map.Elevation),
     ring = (distance: number) => {
@@ -75,85 +65,8 @@ function craterRelief(state: GenerationState, event: Event) {
   const relief = Math.min(rim - floor, rim - plain) / 1024;
   return Number.isFinite(relief) ? relief : 0;
 }
-/** Craters are mapped while their form survives; volcanic cones keep their event geometry. */
-function extractEvents(state: GenerationState, selected: { impacts: boolean; volcanism: boolean }) {
-  const { map } = state.physical!,
-    [x0, y0] = map.mesh.origin;
-  for (const event of map.events) {
-    const relief = selectedEvent(state, event, selected);
-    if (relief === false) continue;
-    const center = canonicalPosition(state.domain.world.reference, {
-      x: x0 + event.x,
-      y: y0 + event.y,
-      z: 0,
-    });
-    const shape = eventDisk(state, center, event.radius);
-    if (!shape) continue;
-    const kind = event.kind === "impact" ? "crater" : "volcano";
-    const attributes = {
-      sourceAlgorithm: "canonry-0f62584c",
-      causeId: event.id,
-      radius: event.radius,
-      center,
-      epoch: event.epoch,
-      strength: event.strength,
-      ...relief,
-    };
-    const feature = generatedFeature(
-      state,
-      event.id,
-      `${kind === "crater" ? "Impact crater" : "Volcano"} ${event.id.split(":").at(-1)}`,
-      kind,
-      "geology",
-      shape,
-      attributes
-    );
-    locateVolcano(state, feature, center);
-    putGenerated(state, feature);
-    if (!event.caldera) continue;
-    const caldera = eventDisk(state, center, event.radius * 0.28);
-    if (caldera)
-      putGenerated(
-        state,
-        generatedFeature(state, `${event.id}:caldera`, "Caldera", "caldera", "geology", caldera, {
-          ...attributes,
-          radius: event.radius * 0.28,
-        })
-      );
-  }
-}
-function locateVolcano(
-  state: GenerationState,
-  feature: import("@atlas/domain").AtlasFeature,
-  center: import("@atlas/domain").Position
-) {
-  if (
-    feature.kind !== "volcano" ||
-    !spatial.intersects(point(center), state.domain.scope.footprint)
-  )
-    return;
-  feature.footprint = feature.geometry;
-  feature.geometry = point(center);
-}
-/** False for an unmapped event; otherwise its extra attributes, a crater's surviving relief. */
-function selectedEvent(
-  state: GenerationState,
-  event: Event,
-  selected: { impacts: boolean; volcanism: boolean }
-): false | { relief?: number } {
-  // Plume roots have no surface form; landmark events publish through their own record.
-  if (event.kind === "plume" || event.kind === "landmark") return false;
-  if (event.kind !== "impact") return selected.volcanism && selectedVolcano(state, event);
-  const relief = craterRelief(state, event);
-  const scale = mapScale(state);
-  if (event.radius < worldCraterRadius * scale.length || relief < worldCraterRelief * scale.height)
-    return false;
-  return selected.impacts && relief >= state.physical!.profile.ImpactVisibleRelief && { relief };
-}
-function selectedVolcano(state: GenerationState, event: Event) {
-  return volcanicRelief(state, event) >= worldVolcanicRelief * mapScale(state).height && {};
-}
-function extractFaults(state: GenerationState) {
+/** Long fault traces. Volcanoes, calderas and craters are the catalogue's, read from these events. */
+export function extractFaults(state: GenerationState) {
   const { map } = state.physical!,
     [x0, y0] = map.mesh.origin;
   for (const fault of map.faults) {
@@ -192,11 +105,4 @@ function extractFaults(state: GenerationState) {
         )
       );
   }
-}
-export function extractGeologicalEvents(
-  state: GenerationState,
-  selected = { impacts: true, volcanism: true, fractures: true }
-) {
-  extractEvents(state, selected);
-  if (selected.fractures) extractFaults(state);
 }

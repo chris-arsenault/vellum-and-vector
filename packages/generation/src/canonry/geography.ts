@@ -43,6 +43,8 @@ export function measureSlopes(map: PhysicalField) {
     map.Slope.set(i, Math.hypot(gradient.x.get(i), gradient.y.get(i)) / 1024);
   releaseWorking(map, gradient.x, gradient.y);
 }
+/** The bathymetric zone below the shelf break. */
+export const deepOceanZone = 4;
 export function bathymetry(map: PhysicalField, c: PhysicalContext) {
   measureSlopes(map);
   for (let i = 0; i < map.mesh.count; i++) {
@@ -50,7 +52,11 @@ export function bathymetry(map: PhysicalField, c: PhysicalContext) {
       const depth = map.WaterDepths.get(i);
       map.BathymetricZoneCodes.set(
         i,
-        depth <= units(c.Profile.ShelfDepth) ? 2 : depth <= units(c.Profile.ShelfBreakDepth) ? 3 : 4
+        depth <= units(c.Profile.ShelfDepth)
+          ? 2
+          : depth <= units(c.Profile.ShelfBreakDepth)
+            ? 3
+            : deepOceanZone
       );
     } else {
       const distance = map.OceanDistance.get(i);

@@ -54,6 +54,8 @@ export interface MagicField extends Record<MagicChannel, Band> {
 }
 /** Applied contributions are remembered so a re-evaluation replaces them instead of adding. */
 export interface MagicWorkspace {
+  /** What places did last to each carrier's cost, per cell; absent until they have acted. */
+  carrierCost?: { crust: Float64Array; roots: Float64Array; ice: Float64Array };
   fields: MagicField[];
   heat: Band;
   /** Ice removed in the current epoch, so a second evaluation melts only what is owed. */

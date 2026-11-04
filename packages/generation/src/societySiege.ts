@@ -4,7 +4,7 @@ import { applySocietyEvent, unitRadius } from "./societyHazards";
 import { isWorldSociety } from "./societyMapScope";
 
 /** A town this large is worth a siege; a camp or a village changes hands without one. */
-const besiegedTown = 100;
+export const besiegedTown = 100;
 /** Magnitude of a siege when the polity fragmented, and when it collapsed outright. */
 const siegeMagnitude = { fragmented: 0.6, collapsed: 0.9 } as const;
 /** Radius of a located siege at a profile fine enough to hold one, metres. */

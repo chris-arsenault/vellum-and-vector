@@ -15,7 +15,8 @@ import { generatedFeature } from "./mapFeatures";
 import { executeProcessBehavior } from "./processTraits";
 import { emptySupport } from "./societySupport";
 import { makeWork } from "./societyWorks";
-import { publishSocietyWorks } from "./societyWorkPublication";
+import { publishKinds } from "./poi/poiPublish";
+import { publishUnkindedRecords } from "./societyWorkPublication";
 import { workTerms } from "./namingCultures";
 
 function abandonedCommunities(): SocietyCommunity[] {
@@ -205,7 +206,8 @@ it("names works at construction with varied functional terms and preserves their
     makeWork(state, community, kind as keyof typeof workTerms)
   );
   state.society!.region.works = works;
-  publishSocietyWorks(state);
+  publishKinds(state, "society");
+  publishUnkindedRecords(state);
   const before = works.map((work) => work.name);
   for (const work of works) {
     const feature = Object.values(world.features).find((f) => f.attributes.workId === work.id)!;
@@ -224,25 +226,27 @@ it("names works at construction with varied functional terms and preserves their
   }
   community.groups = structuredClone(communities[1].groups);
   community.name = "A different settlement name";
-  publishSocietyWorks(state);
+  publishKinds(state, "society");
+  publishUnkindedRecords(state);
   expect(works.map((work) => work.name)).toEqual(before);
   expect(
     Object.values(world.features)
       .filter(isSocietyWork)
       .map((f) => f.name)
-  ).toEqual(before);
+      .sort()
+  ).toEqual([...before].sort());
 });
 it("retains existing work names and naming provenance when republishing", () => {
   const { state, world, communities } = fixture();
   world.areas.area.profile = "region";
   const work = makeWork(state, communities[0], "fire-forge");
   state.society!.region.works = [work];
-  publishSocietyWorks(state);
-  const feature = Object.values(world.features)[0];
+  publishKinds(state, "society");
+  const feature = Object.values(world.features).find((f) => f.attributes.workId === work.id)!;
   feature.name = "Old Ember Smithy";
   feature.attributes.namingLanguage = "older-language";
   work.name = "Another candidate name";
-  publishSocietyWorks(state);
+  publishKinds(state, "society");
   expect(world.features[feature.id].name).toBe("Old Ember Smithy");
   expect(world.features[feature.id].attributes.namingLanguage).toBe("older-language");
 });

@@ -1,3 +1,5 @@
+import { wetlandName } from "../../canonry/ecologyBiomes";
+import { isWetland, standingWaterSlope } from "../../canonry/ecologyEnvironment";
 import type { GenerationState } from "../../process";
 import { landscapeMinimumArea } from "../../worldSignificance";
 import {
@@ -10,6 +12,7 @@ import {
 } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { namingCultureNear, regionPlaces, settlementWithin, within } from "../poiPlaces";
+import { areaRecord } from "../poiRecords";
 import {
   cellsWithin,
   celsiusAt,
@@ -19,20 +22,13 @@ import {
   sedimentAt,
   wetlandCoverAt,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import { areaOf, spans } from "./waterReads";
 
-/** The cover the biome rules and the environment both read as a wetland. */
-const wetCover = 0.3;
-/** Above this gradient water runs off rather than stands, as the ecology's flatness reads it. */
-const standingGradient = 0.015;
-/** Metres of soil water a wetland stores. */
-const storedWater = 0.5;
 /** Warmth over which standing water breeds fever, in degrees. */
 const feverWarmth = 18;
 
-const isA = (state: GenerationState, cell: number) =>
-  isLand(state, cell) && wetlandCoverAt(state, cell) >= wetCover;
+const isA = (state: GenerationState, cell: number) => isWetland(fieldOf(state), cell);
 const places = regionPlaces("wetland", isA, wetlandCoverAt);
 const around = spans(6);
 const counterpart = counterpartOf(isA, 1);
@@ -48,21 +44,40 @@ const factors = {
 
 /** Standing water holds its ground flat: what does not run off does not cut. */
 const heldFlat = (_state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells.map((cell) => ({ change: "gradientAtMost", cell, gradient: standingGradient }));
-/** A store in the soil that lets water out slowly. */
-const storedInSoil = (_state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells.map((cell) => ({
-    change: "atLeast",
-    band: "SoilWater",
-    cell,
-    value: storedWater,
-  }));
-/** Its water drowns the trees' roots, and only what tolerates that holds the ground. */
-const drownedRoots = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells.flatMap((cell): PoiFieldChange[] => [
-    { change: "atLeast", band: "WetlandCover", cell, value: wetlandCoverAt(state, cell) },
-    { change: "atMost", band: "TreeCover", cell, value: 1 - wetlandCoverAt(state, cell) },
-  ]);
+  place.cells.map((cell) => ({ change: "gradientAtMost", cell, gradient: standingWaterSlope }));
+/** A band's area-weighted mean over a wetland. */
+function meanOver(state: GenerationState, place: PoiPlace, read: (cell: number) => number) {
+  const mesh = fieldOf(state).mesh,
+    total = place.cells.reduce((sum, cell) => sum + mesh.area(cell), 0);
+  return place.cells.reduce((sum, cell) => sum + read(cell) * mesh.area(cell), 0) / total;
+}
+/** A bog, a marsh and a swamp are one kind, told apart by their peat, flood and canopy. */
+const biomeOf = (state: GenerationState, place: PoiPlace) => {
+  const map = fieldOf(state);
+  return wetlandName({
+    peat: meanOver(state, place, (i) => map.PeatCarbon.get(i)),
+    flood: meanOver(state, place, (i) => map.FloodFrequency.get(i)),
+    broadleaf: meanOver(state, place, (i) => map.BroadleafCover.get(i)),
+    conifer: meanOver(state, place, (i) => map.ConiferCover.get(i)),
+  });
+};
+/** A wetland's record is its outline at half its peak cover, named by its biome. */
+function wetlandRecord(state: GenerationState, place: PoiPlace) {
+  const biome = biomeOf(state, place),
+    map = fieldOf(state);
+  return areaRecord(
+    {
+      kind: "wetland",
+      layer: "ecology",
+      name: biome,
+      attributes: () => ({
+        biome,
+        wetlandCover: meanOver(state, place, (i) => map.WetlandCover.get(i)),
+      }),
+    },
+    wetlandCoverAt
+  )(state, place);
+}
 
 export const wetland: PoiEntry = {
   id: "wetland",
@@ -83,15 +98,20 @@ export const wetland: PoiEntry = {
     ),
     places,
   },
+  publication: {
+    statement: "Every wetland publishes as its outline, named as a bog, marsh or swamp.",
+    moment: "geography",
+    record: wetlandRecord,
+  },
   fields: {
     statement:
-      "A wetland is a store and a brake on floods: it holds its ground flat and its soil full, and what it grows keeps trees' roots out. The climate process already holds back its runoff in proportion to its cover.",
+      "A wetland is a store and a brake on floods: it holds its ground flat. The ecology keeps its soil full and trees' roots out, and the climate process holds back its runoff in proportion to its cover.",
     terrain: heldFlat,
-    water: storedInSoil,
+    water: notApplicable("The ecology's soil balance writes SoilWater from its wetness."),
     climate: notApplicable(
       "Its evaporation reaches the air through the Evapotranspiration the climate already reads."
     ),
-    cover: drownedRoots,
+    cover: notApplicable("The ecology's establishment and waterlogging write its cover and trees."),
     magic: notApplicable(
       "Greenwood's peat sources and Salt's anoxic preservation already read WetlandCover and PeatCarbon; the place declares nothing further."
     ),
@@ -103,11 +123,14 @@ export const wetland: PoiEntry = {
     realize: (state, carried) =>
       cellsWithin(state, carried.cell, parentSpanOf(state) / 2)
         .filter((cell) => isLand(state, cell))
-        .map((cell) => ({ change: "gradientAtMost", cell, gradient: standingGradient })),
+        .map((cell) => ({ change: "gradientAtMost", cell, gradient: standingWaterSlope })),
     counterpart,
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: movesTo(counterpart),
+    schedule: notApplicable(
+      "A wetland has no step in refinement's schedule; the ecology grows it."
+    ),
   },
   movement: {
     statement:
@@ -115,7 +138,8 @@ export const wetland: PoiEntry = {
     roads: costNear(3),
     boats: costNear(2),
     drainage: costNear(1.5),
-    magic: costNear(0.8),
+    magic: { roots: costNear(0.8) },
+    links: notApplicable("A wetland joins no two cells; a causeway is a road's own."),
     crosses: notApplicable("A wetland is the barrier; a bridge or a ford crosses it, not itself."),
   },
   others: {
@@ -160,7 +184,7 @@ export const wetland: PoiEntry = {
     statement:
       "A wetland shows by its area and by how sharply it breaks the drier cover around it; a small fen matters mainly to the town that lives on it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.55, localConditions: 0.35, isolation: 0.1 }),
+    importance: weighed(factors, { magnitude: 0.55, localConditions: 0.35, isolation: 0.1 }),
   },
   naming: {
     statement:

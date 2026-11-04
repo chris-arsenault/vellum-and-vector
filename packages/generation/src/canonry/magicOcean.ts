@@ -40,7 +40,7 @@ function seedCoast(map: PhysicalField, distances: Band, queue: KeyedHeap) {
     queue.push(i, start);
   }
 }
-function coastDistances(map: PhysicalField, reach: number) {
+export function coastDistances(map: PhysicalField, reach: number) {
   const { mesh } = map;
   const distances = workingArray(map, "float64", "magic:coast-distance").fill(Infinity);
   const queue = new KeyedHeap("min");

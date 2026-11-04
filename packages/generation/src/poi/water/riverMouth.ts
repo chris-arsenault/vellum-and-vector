@@ -10,27 +10,23 @@ import {
   type PoiUnrealized,
 } from "../poiContract";
 import { cellPlaces, namingCultureNear, within } from "../poiPlaces";
+import { siteRecord } from "../poiRecords";
 import {
   adjacent,
   cellSpan,
   cellsWithin,
   dischargeAt,
   fieldOf,
-  gap,
   isLand,
   isRiver,
   isSea,
   nearestWhere,
-  toNative,
   waveExposureAt,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { worldRiverDischarge } from "../../worldSignificance";
 import { flowTarget, spans } from "./waterReads";
 
-/** Discharge at which a mouth is half as great as mouths get: the world's mapped-river measure. */
-const typicalDischarge = 350;
-/** A river's last cell lies no higher than this above the sea, in metres. */
-const mouthRelief = 1;
 /** Gradient a delta's fan holds, rise over run. */
 const fanGradient = 0.001;
 /** How many of the parent's cells a river may run to reach the sea it was captured reaching. */
@@ -58,7 +54,7 @@ export const riverMouthForm = (state: GenerationState, cell: number) =>
 const deltaAt = (state: GenerationState, cell: number) =>
   fieldOf(state).DeltaIntensity.get(cell) / 1000;
 const flowOf = (state: GenerationState, place: PoiPlace) => dischargeAt(state, place.anchor);
-const greatness = sized(flowOf, typicalDischarge);
+const greatness = sized(flowOf, worldRiverDischarge);
 const around = spans(8);
 const counterpart = counterpartOf(isA, 1);
 const factors = {
@@ -93,9 +89,9 @@ function landToSea(state: RegionalState, start: number) {
   return cell >= 0 && isSea(state, cell) ? path : [];
 }
 /**
- * What the finer ground must provide: an unbroken channel to the shore. Each cell from where
- * the river now stops to the sea falls evenly to the sea's level, is a channel, and carries
- * the river's discharge, so neither the threshold, seepage nor a rise of the shore ends it.
+ * What the finer ground must provide: an unbroken fall to the shore. Each cell from where the
+ * river now stops to the sea falls evenly to the sea's level; the routing then runs the river's
+ * water down it, and the channel process makes that a channel.
  */
 function channelToSea(state: RegionalState, carried: PoiCarried): readonly PoiFieldChange[] {
   const start = nearestWhere(state, carried.cell, parentSpanOf(state), (c) => isRiver(state, c)),
@@ -103,18 +99,13 @@ function channelToSea(state: RegionalState, carried: PoiCarried): readonly PoiFi
     map = state.physical.map,
     sea = map.EffectiveSeaLevel;
   if (!path.length) return [];
-  const head = Math.max(sea, map.Elevation.get(path[0])),
-    flow = map.FlowAccumulation.get(path[0]);
-  return path.flatMap((cell, k): PoiFieldChange[] => [
-    {
-      change: "atMost",
-      band: "Elevation",
-      cell,
-      value: sea + ((head - sea) * (path.length - k)) / path.length,
-    },
-    { change: "atLeast", band: "RiverOrders", cell, value: 1 },
-    { change: "atLeast", band: "FlowAccumulation", cell, value: flow },
-  ]);
+  const head = Math.max(sea, map.Elevation.get(path[0]));
+  return path.map((cell, k) => ({
+    change: "atMost",
+    band: "Elevation",
+    cell,
+    value: sea + ((head - sea) * (path.length - k)) / path.length,
+  }));
 }
 /** A mouth the ground does not yet show moves to one that does; it goes only with no sea near. */
 function whereItStands(state: RegionalState, carried: PoiCarried): PoiUnrealized {
@@ -129,34 +120,20 @@ const fanOf = (state: GenerationState, place: PoiPlace) =>
   cellsWithin(state, place.anchor, around(state)).filter(
     (cell) => deltaAt(state, cell) > 0 && isLand(state, cell)
   );
-/** The mouth holds the river's base level at the sea; a delta holds its fan nearly flat. */
-const baseLevel = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => [
-  {
-    change: "atMost",
-    band: "Elevation",
-    cell: place.anchor,
-    value: fieldOf(state).EffectiveSeaLevel + toNative(mouthRelief),
-  },
-  ...fanOf(state, place).map(
-    (cell) => ({ change: "gradientAtMost", cell, gradient: fanGradient }) as const
-  ),
-];
-/** The river stays a channel all the way out, and across a delta its distributaries do. */
-const openChannels = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  [place.anchor, ...fanOf(state, place)].map((cell) => ({
-    change: "atLeast",
-    band: "RiverOrders",
-    cell,
-    value: 1,
-  }));
+/** A delta holds its fan nearly flat. */
+const heldFan = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
+  fanOf(state, place).map((cell) => ({ change: "gradientAtMost", cell, gradient: fanGradient }));
 /** Exposure of the sea the mouth opens on. */
 const openSea = (state: GenerationState, place: PoiPlace) => {
   const sea = seaBeside(state, place.anchor);
   return sea < 0 ? 0 : waveExposureAt(state, sea);
 };
 /** A delta's ground is soft and its floodplain band is zeroed, so ways pay for its softness here. */
-const softGround = (state: GenerationState, _place: PoiPlace, cell: number) =>
-  1 + 3 * deltaAt(state, cell);
+const softGround = (state: GenerationState, place: PoiPlace) =>
+  fanOf(state, place).map((cell) => ({ cell, factor: 1 + 3 * deltaAt(state, cell) }));
+/** Boats pass an estuary cheaply and pick through a delta's shifting channels. */
+const passage = (state: GenerationState, place: PoiPlace) =>
+  costNear(riverMouthForm(state, place.anchor) === "delta" ? 1.5 : 0.7, spans(2))(state, place);
 
 export const riverMouth: PoiEntry = {
   id: "riverMouth",
@@ -177,11 +154,24 @@ export const riverMouth: PoiEntry = {
     suitability: notApplicable("A river meets the sea where the ground takes it; nothing chooses."),
     places,
   },
+  publication: {
+    statement: "Every mouth publishes where the river meets the sea, as a delta or an estuary.",
+    moment: "geography",
+    record: siteRecord({
+      kind: "riverMouth",
+      layer: "geology",
+      name: "River mouth",
+      attributes: (state, place) => ({
+        form: riverMouthForm(state, place.anchor),
+        discharge: flowOf(state, place),
+      }),
+    }),
+  },
   fields: {
     statement:
-      "A mouth is the river's base level and a sink of its water and sediment: it holds the river's last cell at the sea, and a delta holds its fan nearly flat with its channels open.",
-    terrain: baseLevel,
-    water: openChannels,
+      "A mouth is a sink of the river's water and sediment. The sea's level is the base level erosion works to, and the routing and delta processes keep its channels; a delta's own part is to hold its fan nearly flat.",
+    terrain: heldFan,
+    water: notApplicable("The routing and the delta process write the channels and their orders."),
     climate: notApplicable(
       "Sea air is the coast's and reaches inland whether a river enters there or not."
     ),
@@ -194,26 +184,26 @@ export const riverMouth: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured mouth requires the finer map's river to run into the sea. The ground must provide an unbroken channel to the shore: each cell from where the river stops falls evenly to the sea's level, stays a channel and carries the river's discharge. The place then moves to the mouth the developed water shows, and each round's shore change can move it again. It goes only when no sea lies near.",
+      "A captured mouth requires the finer map's river to run into the sea. The ground must provide an unbroken fall to the shore: each cell from where the river stops falls evenly to the sea's level, and the routing runs the water down it. The place then moves to the mouth the developed water shows, and each round's shore change can move it again. It goes only when no sea lies near.",
     carry: carryWhereItLands,
     realize: channelToSea,
     counterpart,
     unrealized: whereItStands,
     settle: whereItStands,
+    schedule: notApplicable(
+      "A mouth has no step in refinement's schedule beyond its realized fall."
+    ),
   },
   movement: {
     statement:
       "A mouth is where boats pass from river to sea, cheap through an estuary and slower through a delta's shifting channels; roads pay for a delta's soft ground; the network is drawn towards the mouth, its base level.",
-    roads: (state, place, cell) =>
-      gap(state, place.anchor, cell) <= around(state) ? softGround(state, place, cell) : 1,
-    boats: (state, place, cell) => {
-      const form = riverMouthForm(state, place.anchor) === "delta" ? 1.5 : 0.7;
-      return gap(state, place.anchor, cell) <= spans(2)(state) ? form : 1;
-    },
+    roads: softGround,
+    boats: passage,
     drainage: costNear(0.7),
     magic: notApplicable(
       "River carriage has no cost to change: it ends here because the flow target is sea, and the current does not take it up."
     ),
+    links: notApplicable("A mouth joins no two cells; a ferry across it is a road's own."),
     crosses: notApplicable("The widest and softest stretch of a river is where no route crosses."),
   },
   others: {
@@ -260,7 +250,7 @@ export const riverMouth: PoiEntry = {
     statement:
       "A mouth shows by the size of the river it ends and how it stands out from the streams beside it; a port town carries a small one. Mouths are common along a coast, so isolation counts for little.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.3, isolation: 0.1 }),
+    importance: weighed(factors, { magnitude: 0.6, localConditions: 0.3, isolation: 0.1 }),
   },
   naming: {
     statement:

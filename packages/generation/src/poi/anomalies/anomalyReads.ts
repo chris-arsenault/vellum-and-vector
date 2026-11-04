@@ -1,8 +1,15 @@
 import { heldCharge } from "../../canonry/magicFeedback";
 import type { MagicField } from "../../canonry/magicState";
 import type { GenerationState } from "../../process";
-import type { PoiFieldChange, PoiPlace } from "../poiContract";
-import { fieldOf, magicValue } from "../poiReads";
+import type { PoiPlace } from "../poiContract";
+import { cellSpan, fieldOf, magicValue } from "../poiReads";
+
+/**
+ * A place's country, `metres` around it. A place is read against its country, which takes at
+ * least the cells beside it to see, whatever the map's cell size.
+ */
+export const countryOf = (metres: number) => (state: GenerationState) =>
+  Math.max(2 * cellSpan(state), metres);
 
 /** One system's whole field, for the channels and parameters `magicValue` does not name. */
 export const magicFieldOf = (state: GenerationState, system: string): MagicField | undefined =>
@@ -44,52 +51,3 @@ export const chargeHeldAt = (state: GenerationState, cell: number) => {
   const field = auroraOf(state);
   return field ? heldCharge(fieldOf(state), field, cell) : 0;
 };
-
-/** Charged ground weakens the rock under it, in proportion to the field. */
-export const softening = (state: GenerationState, place: PoiPlace): PoiFieldChange[] => {
-  const effect = auroraOf(state)?.definition.effects.rockResistance ?? 0;
-  return place.cells.map((cell) => ({
-    change: "add",
-    band: "RockResistance",
-    cell,
-    amount: (auroraAt(state, cell) / 1000) * effect,
-  }));
-};
-/** Charge held in the ground exhales cold, in the Temperature band's native units. */
-export const cooling = (state: GenerationState, place: PoiPlace): PoiFieldChange[] => {
-  const effect = auroraOf(state)?.definition.effects.heat ?? 0;
-  return place.cells.map((cell) => ({
-    change: "add",
-    band: "Temperature",
-    cell,
-    amount: Math.round(auroraAt(state, cell) * effect * chargeHeldAt(state, cell)),
-  }));
-};
-/** Charge held in ice takes a share of its ablation away, so the ice outlasts its climate. */
-export const holdingIce = (state: GenerationState, place: PoiPlace): PoiFieldChange[] => {
-  const effect = auroraOf(state)?.definition.effects.icePersistence ?? 0;
-  return place.cells.map((cell) => ({
-    change: "atLeast",
-    band: "IcePersistence",
-    cell,
-    value: effect * chargeHeldAt(state, cell),
-  }));
-};
-/** Charge held in the ground slows growth and decay; ecology's rime and glow classes read it. */
-export const stilling = (state: GenerationState, place: PoiPlace): PoiFieldChange[] => {
-  const effect = auroraOf(state)?.definition.effects.stillness ?? 0;
-  return place.cells.map((cell) => ({
-    change: "atLeast",
-    band: "Stillness",
-    cell,
-    value: Math.min(1, (auroraAt(state, cell) / 1000) * effect * chargeHeldAt(state, cell)),
-  }));
-};
-/** The concentration of charge in a place's ice, held at what it has gathered. */
-export const storingCharge = (state: GenerationState, place: PoiPlace): PoiFieldChange[] =>
-  place.cells.map((cell) => ({
-    change: "atLeast",
-    band: "IceCharge",
-    cell,
-    value: fieldOf(state).IceCharge.get(cell),
-  }));

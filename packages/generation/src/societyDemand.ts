@@ -22,6 +22,8 @@ import { isWorldSociety } from "./societyMapScope";
  * does nothing; a finer profile realizes it at a site on its own medium.
  */
 
+/** Fire intensity from which a vein can be tapped. */
+export const tappableFire = 100;
 /**
  * The cells of a unit's country a demand acts on: a dam or irrigation on its rivers, a
  * harbour or weir on its shore, tapping on its veins, quarrying on its prisms, a pass on
@@ -37,7 +39,7 @@ export function workMedium(state: GenerationState, kind: SocietyWorkKind) {
     case "weir":
       return (i: number) => state.society!.coast.get(i) > 0;
     case "tapping":
-      return (i: number) => v("magic:fire:intensity", i) >= 100;
+      return (i: number) => v("magic:fire:intensity", i) >= tappableFire;
     case "quarrying":
       return (i: number) => v("magic:aurora:feature:prism", i) > 0;
     case "pass":

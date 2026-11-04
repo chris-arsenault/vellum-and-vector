@@ -1,13 +1,14 @@
-import { Feature } from "../../canonry/codes";
+import { volcanicRelief } from "../../canonry/geologicalFeatures";
+import { calderaShare } from "../../canonry/volcanism";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFate, type PoiPlace } from "../poiContract";
-import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { holds, namingCultureNear, within } from "../poiPlaces";
 import { fieldOf, geothermalAt, isLake } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { eventPlaces, eventRecord, onPlaces } from "./reliefEvents";
 import {
   areaOf,
-  holdAt,
   loweredAsCaptured,
   nearestOrFloor,
   sameSpot,
@@ -18,11 +19,15 @@ import {
 /** Area at which a caldera is half as great as calderas get: the generator's cut at full radius. */
 const typicalArea = 16_000_000;
 
-const flags = (state: GenerationState, cell: number) => fieldOf(state).FeatureFlags.get(cell);
-const isA = (state: GenerationState, cell: number) =>
-  (flags(state, cell) & Feature.VolcanicCaldera) !== 0;
+const places = eventPlaces(
+  "caldera",
+  (state, event) =>
+    event.kind === "volcano" && event.caldera === true && volcanicRelief(state, event) > 0,
+  (event) => event.radius * calderaShare,
+  ":caldera"
+);
+const isA = onPlaces("caldera", places);
 const lowness = (state: GenerationState, cell: number) => -fieldOf(state).Elevation.get(cell);
-const places = regionPlaces("caldera", isA, lowness);
 const liveAt = (state: GenerationState, place: PoiPlace) =>
   fieldOf(state).VolcanicActivity.get(place.anchor) / 1000;
 const counterpart = nearestOrFloor(isA);
@@ -39,7 +44,7 @@ export const caldera: PoiEntry = {
   name: "Caldera",
   recognition: {
     distinct:
-      "A cell the generator flagged Feature.VolcanicCaldera: inside the cut made at the top of a collapsing cone. Every caldera cell is a volcano cell, and the flag is what separates it from the cone around it. An impact crater is excavated by a falling body and flagged differently; a cirque is cut by ice. Holding a lake is a property of a caldera, not a different kind.",
+      "A cell inside the cut of a volcano the generator recorded as collapsing, while its cone stands. Every caldera cell is a volcano cell, and the recorded collapse is what separates it from the cone around it. An impact crater is excavated by a falling body and recorded differently; a cirque is cut by ice. Holding a lake is a property of a caldera, not a different kind.",
     isA,
   },
   existence: {
@@ -47,44 +52,45 @@ export const caldera: PoiEntry = {
       "Emerges when a plume-fed cone collapses in the epoch it forms, by the generator's own chance per cone; it is never sited. Volcanic-mountain records do not make one.",
     way: "emerges",
     requires: notApplicable(
-      "The flag exists only where a cone collapsed; there is nothing else to require."
+      "The event records only a cone that collapsed; there is nothing else to require."
     ),
     suitability: notApplicable("A cone's collapse is chance per epoch, not a choice of ground."),
     places,
   },
+  publication: {
+    statement: "Every recorded collapse on a standing cone publishes as the disk of its cut.",
+    moment: "geography",
+    record: eventRecord({ kind: "caldera", name: () => "Caldera", share: calderaShare }),
+  },
   fields: {
     statement:
       "A caldera is a closed hollow over live or fossil heat: the floor stays down, water gathers in it and cannot leave except over the rim, and heat keeps coming through the fractured floor.",
-    terrain: (state, place) => holdAt(state, "atMost", "Elevation", place.cells),
-    water: (state, place) =>
-      holdAt(
-        state,
-        "atLeast",
-        "WaterSurfaceElevations",
-        place.cells.filter((cell) => isLake(state, cell))
-      ),
+    terrain: notApplicable("Volcanic construction cuts the hollow as the cone collapses."),
+    water: notApplicable("Lake filling reads the closed hollow like any other depression."),
     climate: notApplicable(
       "A hollow a few kilometres wide is below what the climate field resolves."
     ),
     cover: notApplicable("Cover on its floor follows the heat and water ecology already reads."),
-    magic: (state, place) => holdAt(state, "atLeast", "Geothermal", place.cells),
+    magic: notApplicable("The geothermal process writes its heat with the plume's."),
   },
   acrossMaps: {
     statement:
-      "A captured caldera is realized as a floor no higher than the parent's. Maps below the world do not carry the flag, so its counterpart is the lowest ground near the record when no flagged cell reads, and the record stays.",
+      "A captured caldera is realized as a floor no higher than the parent's. Maps below the world record no events, so its counterpart is the lowest ground near the record, and the record stays.",
     carry: carryWhereItLands,
     realize: (state, carried) => loweredAsCaptured(state, carried, counterpart(state, carried)),
     counterpart,
     unrealized: stays,
     settle: notApplicable("A round's water fills its lake without moving the hollow."),
+    schedule: notApplicable("Its floor is all a caldera asks of a refinement."),
   },
   movement: {
     statement:
       "The rim is the climb, the floor a dead end for a road; water drains inward and heat and crust-borne magic rise through the fractures.",
-    roads: costNear(2),
+    roads: notApplicable("The ruling-grade cost already reads its rim."),
     boats: notApplicable("A caldera lake has no way out to any network boats travel."),
     drainage: costNear(0.5),
-    magic: costNear(0.6),
+    magic: notApplicable("Crust-borne magic spreads by the fracture conductance the cone opened."),
+    links: notApplicable("A caldera joins nothing."),
     crosses: notApplicable("A closed hollow leads nowhere across anything."),
   },
   others: {
@@ -118,7 +124,7 @@ export const caldera: PoiEntry = {
   },
   time: {
     statement:
-      "A caldera fills with lake and sediment, and a dead one's rim wears away. It lasts while it reads as flagged ground; a lake that outlives the rim is just a lake.",
+      "A caldera fills with lake and sediment, and a dead one's rim wears away. It lasts while its cone stands; a lake that outlives the rim is just a lake.",
     fate(state, place): PoiFate {
       if (isA(state, place.anchor)) return { fate: "persists" };
       return isLake(state, place.anchor) ? { fate: "becomes", kind: "lake" } : { fate: "ends" };
@@ -128,7 +134,7 @@ export const caldera: PoiEntry = {
     statement:
       "A caldera shows by its width and depth inside its own cone; it is drawn within its volcano, and a sacred lake in one earns more from people than its size does.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.3, isolation: 0.1 }),
+    importance: weighed(factors, { magnitude: 0.6, localConditions: 0.3, isolation: 0.1 }),
   },
   naming: {
     statement: "Takes the name of its volcano, or of the lake in it where the lake is known first.",

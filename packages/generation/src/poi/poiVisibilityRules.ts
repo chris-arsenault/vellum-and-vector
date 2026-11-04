@@ -1,6 +1,6 @@
 import type { GenerationState } from "../process";
 import type { PoiPlace, PoiVisibility } from "./poiContract";
-import { cellsWithin, fieldOf, gap, settlementsOf, featureCell } from "./poiReads";
+import { cellsWithin, gap, settlementsOf, featureCell } from "./poiReads";
 import { nearestPlace } from "./poiPlaces";
 
 type Factor = (state: GenerationState, place: PoiPlace) => number;
@@ -17,6 +17,8 @@ export const sized =
     return s > 0 ? s / (s + typical) : 0;
   };
 
+/** Cells of a place's country read to judge how far it stands out. */
+const countrySamples = 64;
 /**
  * How far a place stands out of its local conditions: the anchor's reading over the mean of
  * the country within `radius` metres, against that country's whole range. Near one for a
@@ -26,7 +28,9 @@ export const standsOut =
   (read: (state: GenerationState, cell: number) => number, radius: Factor): Factor =>
   (state, place) => {
     const around = cellsWithin(state, place.anchor, radius(state, place)),
-      values = around.map((cell) => read(state, cell)),
+      // A mean and a range need a fair spread of the country, not every cell of it.
+      stride = Math.ceil(around.length / countrySamples),
+      values = around.filter((_, k) => k % stride === 0).map((cell) => read(state, cell)),
       value = read(state, place.anchor),
       mean = values.reduce((sum, v) => sum + v, 0) / values.length,
       range = Math.max(...values) - Math.min(...values);
@@ -43,12 +47,6 @@ export const aloneAmong =
     const d = nearestPlace(state, place, others(state));
     return d === Infinity ? 1 : d / (d + reach(state, place));
   };
-
-/** A screen's width in pixels, and how many times closer than the whole map the bar reaches nothing. */
-const screenPixels = 1600,
-  closestShare = 32;
-/** The width of a thumbnail of the whole map, where the bar reaches one. */
-const thumbnailPixels = 512;
 
 /** How strongly a settlement's role ties it to a place beside it. */
 const roleTies: Record<string, number> = { capital: 1, regionalCapital: 0.7, marketTown: 0.45 };
@@ -78,52 +76,28 @@ export const attachment =
     return tie;
   };
 
-/**
- * The bar a view sets, from how much of its map the view holds: nothing when a screen holds a
- * thirty-second of the map's width, one at a thumbnail of the whole map, on a logarithmic scale
- * between. It reads the map's width, never its cell size, so a coarse map and a fine one set
- * the same bar over the same share of themselves. The view only sets the bar; what clears it
- * is the place's importance.
- */
-export function viewBar(state: GenerationState, metresPerPixel: number) {
-  const mesh = fieldOf(state).mesh,
-    width = mesh.bounds[2] - mesh.bounds[0],
-    close = width / (screenPixels * closestShare),
-    thumbnail = width / thumbnailPixels;
-  return unit(Math.log(metresPerPixel / close) / Math.log(thumbnail / close));
-}
-
 export interface Weights {
   magnitude: number;
   localConditions: number;
   isolation: number;
 }
+const applied = (factor: unknown, state: GenerationState, place: PoiPlace) =>
+  typeof factor === "function" ? (factor as Factor)(state, place) : 0;
 /**
- * The rule of visibility every kind shares: its importance clears the bar the view sets.
- * Importance is the weighted mean of what the place physically is among its country, or its
+ * What a place weighs: the weighted mean of what it physically is among its country, or its
  * cultural attachment where that is greater, so a tie to people can carry a place alone.
  */
-export const drawnWhen =
+export const weighed =
   (
     factors: Pick<PoiVisibility, "magnitude" | "localConditions" | "isolation" | "cultural">,
     weights: Weights
   ) =>
-  (state: GenerationState, place: PoiPlace, metresPerPixel: number) =>
-    importance(factors, weights, state, place) >= viewBar(state, metresPerPixel);
-
-const applied = (factor: unknown, state: GenerationState, place: PoiPlace) =>
-  typeof factor === "function" ? (factor as Factor)(state, place) : 0;
-function importance(
-  factors: Pick<PoiVisibility, "magnitude" | "localConditions" | "isolation" | "cultural">,
-  weights: Weights,
-  state: GenerationState,
-  place: PoiPlace
-) {
-  const total = weights.magnitude + weights.localConditions + weights.isolation,
-    physical =
-      (weights.magnitude * applied(factors.magnitude, state, place) +
-        weights.localConditions * applied(factors.localConditions, state, place) +
-        weights.isolation * applied(factors.isolation, state, place)) /
-      (total || 1);
-  return Math.max(physical, applied(factors.cultural, state, place));
-}
+  (state: GenerationState, place: PoiPlace) => {
+    const total = weights.magnitude + weights.localConditions + weights.isolation,
+      physical =
+        (weights.magnitude * applied(factors.magnitude, state, place) +
+          weights.localConditions * applied(factors.localConditions, state, place) +
+          weights.isolation * applied(factors.isolation, state, place)) /
+        (total || 1);
+    return Math.max(physical, applied(factors.cultural, state, place));
+  };

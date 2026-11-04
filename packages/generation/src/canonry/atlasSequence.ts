@@ -150,6 +150,14 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     ...nativeGroup("epoch.coasts", "epoch", context),
     ...contributions("epoch.ecology-burial", context),
     ...contributions("epoch.storage", context),
+    // What each place does to the field, once the epoch's processes have made its places.
+    {
+      kind: "process",
+      id: "poi.effects",
+      process: "poi.effects",
+      version: "0f62584c",
+      parameters: {},
+    },
     // Landmarks hold their signatures at the World mesh before the epoch's history is kept.
     ...(!inherited ? contributions("epoch.landmark-maintenance", context) : []),
     ...nativeGroup("epoch.history", "epoch", context),

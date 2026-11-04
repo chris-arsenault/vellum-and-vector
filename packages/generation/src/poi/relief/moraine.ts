@@ -2,6 +2,7 @@ import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { areaRecord } from "../poiRecords";
 import {
   adjacent,
   fieldOf,
@@ -11,10 +12,9 @@ import {
   metres,
   wetlandCoverAt,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
   areaOf,
-  holdAt,
   lastsWhile,
   meanOf,
   raisedAsCaptured,
@@ -64,18 +64,18 @@ export const moraine: PoiEntry = {
     suitability: notApplicable("Nothing chooses it; the ice's termini do."),
     places,
   },
+  publication: {
+    statement: "Each connected group of the class's cells publishes as its outline.",
+    moment: "geography",
+    record: areaRecord({ kind: "moraine", layer: "geology", name: "Moraine" }),
+  },
   fields: {
     statement:
       "A moraine is a loose ridge that dams water behind it, a porous store under it, and the deep soil of the ground the ice left. Aurora's stock the ice dropped lies in it.",
-    terrain: (state, place) => holdAt(state, "atLeast", "Elevation", place.cells),
-    water(state, place) {
-      const behind = place.cells.flatMap((cell) =>
-        [...adjacent(state, cell)].filter((next) => isLake(state, next))
-      );
-      return holdAt(state, "atLeast", "WaterSurfaceElevations", behind);
-    },
+    terrain: notApplicable("Glacial deposition lays the till and raises the ground."),
+    water: notApplicable("Lake filling reads the dam its rise makes."),
     climate: notApplicable("Its rise is far below what the air columns turn."),
-    cover: (state, place) => holdAt(state, "atLeast", "SedimentThickness", place.cells),
+    cover: notApplicable("Glacial deposition writes the sediment that soil forms on."),
     magic: notApplicable(
       "The charge the ice dropped sits in Aurora's own moraine stock and rides the crust by that system's rules."
     ),
@@ -88,6 +88,9 @@ export const moraine: PoiEntry = {
     counterpart,
     unrealized: movesTo(counterpart),
     settle: notApplicable("A round's water can back up a lake without moving the till."),
+    schedule: notApplicable(
+      "Refinement's glacial step lays its till; it needs no step of its own."
+    ),
   },
   movement: {
     statement:
@@ -98,6 +101,7 @@ export const moraine: PoiEntry = {
     magic: notApplicable(
       "Aurora's dropped stock rides the crust; a till ridge does not change that."
     ),
+    links: notApplicable("A moraine joins nothing."),
     crosses: (state, place) => (wetBeside(state, place) ? ["wetland"] : []),
   },
   others: {
@@ -140,7 +144,7 @@ export const moraine: PoiEntry = {
     statement:
       "A moraine shows only at the scale of a whole complex, by its extent and relief; most are local. One holding a known lake or carrying a road through wet country is carried by people.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.7, localConditions: 0.15, isolation: 0.15 }),
+    importance: weighed(factors, { magnitude: 0.7, localConditions: 0.15, isolation: 0.15 }),
   },
   naming: {
     statement: "Named by farmers and road-builders nearby, usually for the lake or town beside it.",

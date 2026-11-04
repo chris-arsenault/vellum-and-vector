@@ -1,18 +1,9 @@
-import {
-  CellList,
-  SmallIntSet,
-  spatial,
-  point,
-  placeMinimumCells,
-  type Band,
-  type MagicFeatureRule,
-} from "@atlas/domain";
+import { CellList, SmallIntSet, spatial, point, placeMinimumCells, type Band } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
 import { nativePosition } from "./atlasWorkspace";
 import { coordinateKey } from "./worldSources";
-import { Landform } from "./codes";
 import {
   combinedContour,
   fillSmallHoles,
@@ -20,13 +11,11 @@ import {
   areaGeometry,
 } from "./geographicContours";
 import { landArea } from "./regionPartition";
-import { naturalPlaceGeometry, magicPlaceGeometry, type PlaceGeometry } from "./placeGeometry";
-import type { MagicField } from "./magicState";
+import type { PlaceGeometry } from "./placeGeometry";
 import type { RegionMembers } from "./regionMembers";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 import { partitionWorldRegion } from "./worldRegionPartition";
-import { significantLandform } from "./worldSiteEvidence";
-import { significantMagicArea, significantMagicPlace } from "./worldMagicSignificance";
+import { significantMagicArea } from "./worldMagicSignificance";
 export { extractLakes } from "./lakeFeatures";
 
 /** Largest enclosed gap, in square metres, that a landform or magic region absorbs. */
@@ -140,7 +129,23 @@ function regionShape(
     ) ?? undefined
   );
 }
-export function publishPlace(
+/** The outline of a group of cells, at half membership or half its peak weight. */
+export function regionOutline(
+  state: GenerationState,
+  cells: RegionMembers,
+  weight?: (i: number) => number
+) {
+  const map = state.physical!.map,
+    labels = workingValues(map, "int32", "region:outline", () => -1);
+  for (const cell of cells) labels.set(cell, 0);
+  try {
+    return regionShape(state, labels, 0, cells, weight);
+  } finally {
+    releaseWorking(map, labels);
+  }
+}
+/** A place's record, or null when none of its cells lies on this map's footprint. */
+export function placeFeature(
   state: GenerationState,
   kind: string,
   name: string,
@@ -153,7 +158,7 @@ export function publishPlace(
 ) {
   const work = state.physical!;
   const representative = placeRepresentative(state, members);
-  if (representative < 0) return;
+  if (representative < 0) return null;
   const identityPosition = nativePosition(work, representative);
   const geometry = placement?.geometry ?? extent ?? point(identityPosition);
   const identity = coordinateKey(identityPosition.x, identityPosition.y);
@@ -163,7 +168,11 @@ export function publishPlace(
   });
   if (extent && !geometry.type.includes("Polygon")) feature.footprint = extent;
   feature.relations = relations;
-  putGenerated(state, feature);
+  return feature;
+}
+export function publishPlace(...args: Parameters<typeof placeFeature>) {
+  const feature = placeFeature(...args);
+  if (feature) putGenerated(args[0], feature);
 }
 function placeRepresentative(state: GenerationState, members: RegionMembers) {
   const covers = spatial.pointCoverage(state.domain.scope.footprint),
@@ -197,49 +206,8 @@ function placeAttributes(
     elevation: (work.map.Elevation.get(anchor) - work.map.BaseSeaLevel) / 1024,
   };
 }
-export function extractNamedLandforms(state: GenerationState) {
-  const map = state.physical!.map;
-  const dry = state.surface.ocean
-    ? spatial.differenceFrom(state.surface.ocean)
-    : (shape: Geometry) => shape;
-  const classes: [string, string, (i: number) => boolean][] = [
-    ["cirque", "Cirque", (i) => map.LandformCodes.get(i) === Landform.Cirque],
-    ["fjord", "Fjord", (i) => map.LandformCodes.get(i) === Landform.Fjord],
-    ["moraine", "Moraine", (i) => map.LandformCodes.get(i) === Landform.Moraine],
-    ["waterfall", "Waterfall", (i) => map.LandformCodes.get(i) === Landform.Waterfall],
-    ["gorge", "Gorge", (i) => map.LandformCodes.get(i) === Landform.Gorge],
-  ];
-  for (const [kind, name, includes] of classes)
-    components(
-      state,
-      includes,
-      (members, extent) => {
-        if (!significantLandform(state, kind, members)) return;
-        const surface = extent && kind !== "fjord" ? dry(extent) : extent;
-        if (extent && !surface) return;
-        publishPlace(
-          state,
-          kind,
-          name,
-          members,
-          "geology",
-          {},
-          surface ?? undefined,
-          naturalPlaceGeometry(state, kind, members, surface ?? undefined)
-        );
-      },
-      kind !== "waterfall",
-      kind !== "fjord"
-    );
-}
-/**
- * The fewest cells a class component needs to be a published place. A site is one located
- * source, so one cell is a place. An area a cell or two wide, or a course of one cell, is a
- * mark on the field and not a place: the class stays on the map as coverage whatever its
- * size, and only the named, outlined place needs the extent (ADR 0005: outlines generalize
- * a realized field at the minima declared with the rules).
- */
-export function extractMagicPlaces(state: GenerationState) {
+/** Where systems meet: a meeting is a process between them, not a kind of place of one. */
+export function extractConfluencePlaces(state: GenerationState) {
   const magic = state.physical!.magic;
   for (const held of Object.values(magic?.confluences.states ?? {}))
     components(
@@ -272,47 +240,4 @@ export function extractMagicPlaces(state: GenerationState) {
       false,
       (i) => held.coverage.get(i)
     );
-  for (const field of magic?.fields ?? [])
-    for (const rule of field.definition.features) publishRulePlaces(state, field, rule);
-}
-/**
- * A class component is a named place where it spans the declared minimum of cells and is
- * significant at the map's scale; every class remains field coverage whatever its size.
- */
-function publishRulePlaces(state: GenerationState, field: MagicField, rule: MagicFeatureRule) {
-  const cartography = rule.cartography ?? "area",
-    members = field.features[rule.id],
-    coverage = field.coverage[rule.id],
-    minimum = placeMinimumCells[cartography],
-    mesh = state.physical!.map.mesh;
-  if (!members) return;
-  components(
-    state,
-    (i) => Boolean(members.get(i)) && (coverage?.get(i) ?? 1) > 0,
-    (region, extent) => {
-      if (region.length < minimum || !significantMagicPlace(state, field, rule, region)) return;
-      const placement = extent ? magicPlaceGeometry(state, field, rule.id, region, extent) : null;
-      if (cartography === "course" && !placement) return;
-      publishPlace(
-        state,
-        `${field.definition.id}:${rule.id}`,
-        rule.name,
-        region,
-        "magic",
-        {
-          system: field.definition.id,
-          rule: rule.id,
-          maximumIntensity: region.reduce((peak, i) => Math.max(peak, field.intensity.get(i)), 0),
-          accumulatedActivity:
-            region.reduce((sum, i) => sum + field.history.get(i) * mesh.area(i), 0) /
-            region.reduce((sum, i) => sum + mesh.area(i), 0),
-        },
-        extent,
-        placement
-      );
-    },
-    true,
-    cartography !== "course",
-    coverage ? (i) => coverage.get(i) : undefined
-  );
 }

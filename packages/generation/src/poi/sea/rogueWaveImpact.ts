@@ -1,47 +1,55 @@
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, counterpartOf, stays } from "../poiCarry";
-import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { cellPlaces, namingCultureNear, settlementWithin, within } from "../poiPlaces";
+import {
+  notApplicable,
+  type PoiCarried,
+  type PoiEntry,
+  type PoiFieldChange,
+  type PoiPlace,
+} from "../poiContract";
+import { namingCultureNear, rulePlaces, settlementWithin, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
 import {
   adjacent,
-  cellSpan,
   cellsWithin,
   fieldOf,
   gap,
   isLand,
   isSea,
   magicRule,
+  heldFor,
   nearestWhere,
-  treeCoverAt,
   waveExposureAt,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { placeAt, pressureAt, pressureLength, seaFacing } from "./seaShared";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { near, pressureAt, pressureLength, seaFacing } from "./seaShared";
 
 /** What the preset declares where the system's parameters are absent: its origin's distance from shore and its spokes' reach. */
 const presetShoreDistance = 100_000,
   presetSpokes = 300_000;
 /** Cut history at which an impact's shore is half as harmed as they get (native 0..1000). */
 const typicalCut = 400;
-/** Water thrown onto a shore strips this share of its canopy. */
-const stripped = 0.5;
-/** Cells around the impact that the water itself stands up on. */
-const risingCells = 5;
+/** The most canopy a shore keeps where the water is thrown onto it. */
+const strippedCanopy = 0.5;
+/** How far around the impact the water itself stands up: 50 km. */
+const risenReach = near(50_000);
 /** Extra boat cost at the impact; a road on the shore it strikes costs this many times more. */
 const seasRisen = 2,
   brokenRoad = 1.2;
 
 const isA = magicRule("pressure", "rogue");
-const places = cellPlaces("rogueWaveImpact", isA);
+const places = rulePlaces("rogueWaveImpact", "pressure", "rogue");
 const shoreDistance = (state: GenerationState) =>
   pressureLength(state, "coastalSourceDistance", presetShoreDistance);
 const spokes = (state: GenerationState) =>
   pressureLength(state, "coastalRayDistance", presetSpokes);
 const struckFrom = (state: GenerationState, cell: number) =>
-  seaFacing(
-    state,
-    cellsWithin(state, cell, shoreDistance(state)).filter((c) => isLand(state, c))
+  heldFor(state, `rogue:struck:${cell}`, () =>
+    seaFacing(
+      state,
+      cellsWithin(state, cell, shoreDistance(state)).filter((c) => isLand(state, c))
+    )
   );
 const counterpart = counterpartOf(isA, 2);
 
@@ -67,26 +75,21 @@ function forcingOn(state: GenerationState, cell: number) {
     if (isSea(state, next)) most = Math.max(most, pressureAt(state, next));
   return Math.round(most * 1000);
 }
-/** The impact's force on the shore it strikes; coastal erosion cuts by this band. */
-const struck = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  struckFrom(state, place.anchor).map((cell) => ({
+/** On a refined map, where rays are not retraced: the force on the finer shore it strikes. */
+const struck = (state: RegionalState, carried: PoiCarried): readonly PoiFieldChange[] =>
+  struckFrom(state, carried.cell).map((cell) => ({
     change: "atLeast",
     band: "ExternalCoastalForcing",
     cell,
     value: forcingOn(state, cell),
   }));
-/** The water stands up around the impact. */
-const risen = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  cellsWithin(state, place.anchor, risingCells * cellSpan(state))
-    .filter((cell) => isSea(state, cell))
-    .map((cell) => ({ change: "atLeast", band: "WaveExposure", cell, value: 1000 }));
 /** Thrown water strips the canopy of the shore it strikes. */
 const flooded = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
   struckFrom(state, place.anchor).map((cell) => ({
     change: "atMost",
     band: "TreeCover",
     cell,
-    value: treeCoverAt(state, cell) * (1 - stripped),
+    value: strippedCanopy,
   }));
 
 export const rogueWaveImpact: PoiEntry = {
@@ -110,47 +113,57 @@ export const rogueWaveImpact: PoiEntry = {
     ),
     places,
   },
+  publication: {
+    statement: "Every impact publishes as the system's class, a site where it fired.",
+    moment: "magic",
+    record: ruleRecord("pressure", "rogue"),
+  },
   fields: {
     statement:
-      "An impact is what the sea does to the shore at once: it raises the water around it, puts force on the coast within reach so that erosion cuts it, and strips the canopy where the water lands.",
-    terrain: struck,
-    water: risen,
+      "An impact is what the sea does to the shore at once: its rays put force on the coast within reach so that erosion cuts it, and the water strips the canopy where it lands.",
+    terrain: notApplicable(
+      "The coastal feedback writes forcing on every shore beside Pressure's intensity, the impact's rays included."
+    ),
+    water: notApplicable(
+      "The ocean current process writes wave exposure; the impulse's own force on the water is the intensity its rays leave."
+    ),
     climate: notApplicable(
       "An impulse is too brief for the climate fields; any standing front it feeds is that front's entry."
     ),
     cover: flooded,
-    magic: notApplicable(
-      "The system fires its rays and sets its channel directly, and PoiFieldChange has no band for a magic channel."
-    ),
+    magic: notApplicable("The system fires its rays and sets its channel directly."),
   },
   acrossMaps: {
     statement:
       "A refined map inherits the rogue channel and never replays the impulse, which would strike twice. The finer coast within reach takes the same force and is cut by it. If the channel holds nothing near, the impact stays where it lands, because the coast's damage still has to be told.",
     carry: carryWhereItLands,
-    realize: (state: RegionalState, carried) =>
-      struck(state, placeAt("rogueWaveImpact", carried.feature.id, carried.cell)),
+    realize: struck,
     counterpart,
     unrealized: stays,
     settle: notApplicable(
       "An impact's force is declared once; a round's water does not change it."
     ),
+    schedule: notApplicable("Its force on the finer shore is all an impact does to a refinement."),
   },
   movement: {
     statement:
       "Boats pay to pass the risen water, fading with distance; roads on the coast it strikes run on broken ground. Rivers and magic carriers do not read it.",
-    roads: (state, place, cell) =>
-      isLand(state, cell) && gap(state, place.anchor, cell) <= shoreDistance(state)
-        ? brokenRoad
-        : 1,
-    boats(state, place, cell) {
-      const reach = risingCells * cellSpan(state),
-        d = gap(state, place.anchor, cell);
-      return isSea(state, cell) && d < reach ? 1 + seasRisen * (1 - d / reach) : 1;
+    roads: (state, place) =>
+      struckFrom(state, place.anchor).map((cell) => ({ cell, factor: brokenRoad })),
+    boats(state, place) {
+      const reach = risenReach(state);
+      return cellsWithin(state, place.anchor, reach)
+        .filter((cell) => isSea(state, cell))
+        .map((cell) => ({
+          cell,
+          factor: 1 + seasRisen * Math.max(0, 1 - gap(state, place.anchor, cell) / reach),
+        }));
     },
     drainage: notApplicable(
       "A river finds the cut shore through the ordinary network once erosion has lowered it."
     ),
     magic: notApplicable("The impulse's spokes are traced by geometry and read no carrier's cost."),
+    links: notApplicable("An impact joins no two cells."),
     crosses: notApplicable("An impact opens no way; it closes the shore it strikes."),
   },
   others: {
@@ -194,7 +207,7 @@ export const rogueWaveImpact: PoiEntry = {
     statement:
       "An impact shows by the cut it left on its coast, not by anything on the water, and alone along a coast it is remembered longer. Weight is shared because the wave is gone and the record is what remains. A town it struck carries it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.4, localConditions: 0.3, isolation: 0.3 }),
+    importance: weighed(factors, { magnitude: 0.4, localConditions: 0.3, isolation: 0.3 }),
   },
   naming: {
     statement: "Named by the survivors on the nearest shore, and often after the town it struck.",

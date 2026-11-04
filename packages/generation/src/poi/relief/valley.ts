@@ -2,6 +2,7 @@ import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { areaRecord } from "../poiRecords";
 import {
   dischargeAt,
   heightAt,
@@ -11,9 +12,8 @@ import {
   Landform,
   moistureAt,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
-  holdAt,
   holdGradient,
   lastsWhile,
   lengthOf,
@@ -64,24 +64,25 @@ export const valley: PoiEntry = {
     suitability: notApplicable("Nothing chooses a valley's line; the drainage does."),
     places,
   },
+  publication: {
+    statement: "Each connected corridor publishes as its outline, with its depth.",
+    moment: "geography",
+    record: areaRecord({
+      kind: "valley",
+      layer: "geology",
+      name: "Valley",
+      attributes: (state, place) => ({ depth: depthOf(state, place) }),
+    }),
+  },
   fields: {
     statement:
-      "A valley is a corridor and a store: its floor stays low and grows no steeper, and it holds the floodplain, the soil and the running water of the ground around it.",
-    terrain: (state, place) => [
-      ...holdAt(state, "atMost", "Elevation", place.cells),
-      ...holdGradient(state, place.cells),
-    ],
-    water: (state, place) =>
-      holdAt(
-        state,
-        "atLeast",
-        "FloodplainIntensity",
-        place.cells.filter((cell) => isRiver(state, cell))
-      ),
+      "A valley is a corridor and a store: its floor grows no steeper, and it holds the floodplain, the soil and the running water of the ground around it.",
+    terrain: (state, place) => holdGradient(state, place.cells),
+    water: notApplicable("The floodplain process spreads along its rivers."),
     climate: notApplicable(
       "Cold pooling on its floor is a regional shared medium; the field has no band for it to hold."
     ),
-    cover: (state, place) => holdAt(state, "atLeast", "SoilDepth", place.cells),
+    cover: notApplicable("Ecology's soils deepen on its floor from what the rivers lay."),
     magic: notApplicable(
       "It sources nothing itself: rivers carry what they carry through it, and Aurora's light wells admit its floor by their own rule."
     ),
@@ -94,14 +95,16 @@ export const valley: PoiEntry = {
     counterpart,
     unrealized: movesTo(counterpart),
     settle: notApplicable("Valley floors are re-derived from the network each round, not settled."),
+    schedule: notApplicable("Its floor and drainage cost are all a valley asks of a refinement."),
   },
   movement: {
     statement:
-      "A valley draws everything along it: roads follow its floor, the network runs down it, and river-borne and walked magic moves faster through it.",
-    roads: costNear(0.7),
+      "A valley draws everything along it: roads follow its floor through the grade, the network runs down it, and river-borne and walked magic moves faster through it.",
+    roads: notApplicable("The ruling-grade cost already favours its gentle floor."),
     boats: notApplicable("Boats read the river down its floor; the valley around it adds nothing."),
     drainage: costNear(0.5),
-    magic: costNear(0.8),
+    magic: { river: costNear(0.8), people: costNear(0.8) },
+    links: notApplicable("A valley joins nothing."),
     crosses: notApplicable(
       "It leads to a crossing; only a pass or a ford takes a route over the barrier."
     ),
@@ -154,7 +157,7 @@ export const valley: PoiEntry = {
     statement:
       "A valley shows by depth and length and by the people along it; the one that holds a country's towns shows long before a deeper empty one.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.25, isolation: 0.15 }),
+    importance: weighed(factors, { magnitude: 0.6, localConditions: 0.25, isolation: 0.15 }),
   },
   naming: {
     statement:

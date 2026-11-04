@@ -1,31 +1,48 @@
 import type { AtlasFeature } from "@atlas/domain";
 import type { GenerationState } from "../../process";
+import {
+  avalancheIce,
+  avalancheRate,
+  avalancheSlope,
+  floodRate,
+  tsunamiRate,
+  waveHeight,
+  waveShore,
+} from "../../societyHazards";
 import { carryWhereItLands, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { holdsRecord, namingCultureNear } from "../poiPlaces";
-import { cellSpan, fieldOf, gap, heightAt, iceAt, slopeAt, toNative } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
 import {
-  areaPlaces,
+  cellSpan,
+  cellsWithin,
+  fieldOf,
+  gap,
+  heightAt,
+  iceAt,
+  slopeAt,
+  toNative,
+} from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
+import { onceWritten } from "./communityRecords";
+import {
   attribute,
   avoidedGround,
   damagedGround,
-  deadGround,
+  deadAreRecorded,
   deadOf,
   eventFate,
   eventKindOf,
   eventMagnitude,
   eventReach,
-  isEvent,
   restlessDead,
   saltedHazard,
+  touching,
+  weighedPlace,
 } from "./settlementRecords";
+import { eventPlaces } from "./workRecords";
 
-/** The exposures of `physicalExposures`: steep iced ground, a coast low and near, as societyHazards holds them. */
-const avalancheSlope = 0.15,
-  avalancheIce = 1,
-  waveHeight = 20,
-  waveShore = 10_000;
+/** How far, in metres, wreck costs a road around where it struck. */
+const wreckReach = 3000;
 /** How a place's yearly chance counts toward suitability: the chance of one in about a thousand years. */
 const remembered = 1000;
 /** The dead and displaced at which a disaster is half as great as disasters get. */
@@ -38,9 +55,7 @@ const cracked: Record<string, number> = { "thermal-fracture": 900, "steam-fractu
 const scoured = 0.8;
 
 const eventsNotDisasters = ["siege", "collapse"];
-const isDisaster = (f: AtlasFeature) =>
-  isEvent(f) && !eventsNotDisasters.includes(String(f.attributes.eventKind));
-const places = areaPlaces("disasterSite", isDisaster);
+const places = eventPlaces("disasterSite", (event) => !eventsNotDisasters.includes(event.kind));
 const isA = holdsRecord("disasterSite", places);
 const around = (state: GenerationState) => 6 * cellSpan(state);
 const reachOf = (state: GenerationState, place: PoiPlace) =>
@@ -56,9 +71,9 @@ function exposure(state: GenerationState, cell: number) {
     avalanche = slopeAt(state, cell) > avalancheSlope && iceAt(state, cell) > avalancheIce,
     coastal = heightAt(state, cell) < waveHeight && map.OceanDistance.get(cell) < waveShore;
   return (
-    (avalanche ? 0.002 : 0) +
-    map.FloodFrequency.get(cell) * 0.02 +
-    (coastal ? (map.TectonicStrain.get(cell) / 1000) * 0.00001 : 0)
+    (avalanche ? avalancheRate : 0) +
+    map.FloodFrequency.get(cell) * floodRate +
+    (coastal ? (map.TectonicStrain.get(cell) / 1000) * tsunamiRate : 0)
   );
 }
 /** Whether two systems meet at a cell: magic's own hazards fall on any such ground. */
@@ -101,11 +116,14 @@ function scar(place: PoiPlace): readonly PoiFieldChange[] {
   ];
 }
 /** Wreck on the road: worst at the anchor, gone at the edge of what it struck, or where salted. */
-function roadCost(state: GenerationState, place: PoiPlace, cell: number) {
-  const reach = 3 * cellSpan(state),
-    d = gap(state, place.anchor, cell),
-    wreck = d < reach ? 1 + eventMagnitude(place) * (1 - d / reach) : 1;
-  return Math.max(wreck, avoidedGround(state, place, cell));
+function roadCost(state: GenerationState, place: PoiPlace) {
+  const reach = touching(state, wreckReach),
+    shunned = new Map(avoidedGround(state, place).map(({ cell, factor }) => [cell, factor]));
+  for (const cell of cellsWithin(state, place.anchor, reach)) {
+    const wreck = 1 + eventMagnitude(place) * (1 - gap(state, place.anchor, cell) / reach);
+    shunned.set(cell, Math.max(wreck, shunned.get(cell) ?? 1));
+  }
+  return [...shunned].map(([cell, factor]) => ({ cell, factor }));
 }
 
 export const disasterSite: PoiEntry = {
@@ -114,7 +132,7 @@ export const disasterSite: PoiEntry = {
   name: "Disaster site",
   recognition: {
     distinct:
-      "A published `societyEvent` whose `attributes.eventKind` is neither siege nor collapse: avalanche, flood, tsunami, or a magical meeting's hazard such as thermal-fracture, steam-fracture, pressure-ice-breach, rot-fever or undead. A battlefield is the same record at siege; collapse is a polity's end with no ground in it. A rogue wave's impact or a crater are the field's own marks with no event record.",
+      "A society event that is neither siege nor collapse: avalanche, flood, tsunami, or a magical meeting's hazard such as thermal-fracture, steam-fracture, pressure-ice-breach, rot-fever or undead. A battlefield is the same record at siege; collapse is a polity's end with no ground in it. A rogue wave's impact or a crater are the field's own marks with no event record.",
     isA,
   },
   existence: {
@@ -129,6 +147,12 @@ export const disasterSite: PoiEntry = {
     },
     places,
   },
+  publication: {
+    statement:
+      "An event publishes as a historical event, located with its affected communities on a map that ran its society, and as its affected area on a refined map.",
+    moment: "society",
+    record: onceWritten,
+  },
   fields: {
     statement:
       "A disaster leaves a one-time mark: debris, silt or a sand sheet in the ground, rock cracked by a fracture, ice opened by a breach, cover scoured, and its dead in the band Salt reads. The mark is held at what the event left, never added to again.",
@@ -141,19 +165,17 @@ export const disasterSite: PoiEntry = {
       "Each is over within a season, and the climate field carries no such short forcing."
     ),
     cover: (_state, place) => damagedGround(place, scoured),
-    magic: (_state, place) => deadGround(place),
+    magic: notApplicable(deadAreRecorded),
   },
   acrossMaps: {
     statement:
       "A captured disaster keeps its place on the refined map, its mark and dead landing on the finer cell it reaches, whatever the ground has become there. Its affected area is not re-derived from the finer terrain.",
     carry: carryWhereItLands,
-    realize: (_state, carried) => {
-      const place = asPlace(carried.feature, carried.cell);
-      return [...scar(place), ...deadGround(place)];
-    },
+    realize: (_state, carried) => scar(asPlace(carried.feature, carried.cell)),
     counterpart: (_state, carried) => carried.cell,
     unrealized: stays,
     settle: notApplicable("What has happened does not move with a round's water."),
+    schedule: notApplicable("A disaster takes no part in refinement's steps."),
   },
   movement: {
     statement:
@@ -162,11 +184,12 @@ export const disasterSite: PoiEntry = {
     boats: notApplicable(
       "Wreckage in a channel is below what boat costs resolve; a breach's open water is the sea's."
     ),
-    drainage: (_state, place, cell) =>
-      eventKindOf(place) === "avalanche" && cell === place.anchor ? 2 : 1,
+    drainage: (_state, place) =>
+      eventKindOf(place) === "avalanche" ? [{ cell: place.anchor, factor: 2 }] : [],
     magic: notApplicable(
       "It lays down dead for Salt and takes nothing from any carrier; the brine rides the crust by Salt's own rule."
     ),
+    links: notApplicable("A disaster joins nothing."),
     crosses: (_state, place) => (eventKindOf(place) === "pressure-ice-breach" ? ["ice"] : []),
   },
   others: {
@@ -209,7 +232,7 @@ export const disasterSite: PoiEntry = {
     statement:
       "A disaster shows by the people it took and drove off, and by standing alone in its country's history; one that ruined a capital shows however small, and the tenth flood on the same plain shows late.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.15, isolation: 0.25 }),
+    importance: weighedPlace(factors, { magnitude: 0.6, localConditions: 0.15, isolation: 0.25 }),
   },
   naming: {
     statement:

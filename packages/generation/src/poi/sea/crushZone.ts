@@ -1,21 +1,23 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { holds, regionPlaces, within } from "../poiPlaces";
-import { cellSpan, fieldOf, magicRule } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { areaOf, extentOf, namedFromShore, pressureAt, pressureLength } from "./seaShared";
+import { holds, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { isSea, magicRule, toNative } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { areaOf, extentOf, namedFromShore, near, pressureAt, pressureLength } from "./seaShared";
 
 /** Area at which a crush zone is half as great as they get: 10,000 square kilometres. */
 const typicalArea = 1e10;
-/** The intensity the crush rule seeds at, in [0, 1]. */
-const crushSeed = 0.36;
+/** The sediment, in metres, a bed under no pressure at all could keep beneath a crush. */
+const unpressedBed = 200;
 /** Extra boat cost at full intensity: a surface crossing is possible but ruinous. */
 const crushDrag = 6;
 
 const isA = magicRule("pressure", "crush");
-const places = regionPlaces("crushZone", isA, pressureAt);
-const around = (state: GenerationState) => 10 * cellSpan(state);
+const places = rulePlaces("crushZone", "pressure", "crush");
+/** The sea around a zone that bears on it: 100 km. */
+const around = near(100_000);
 const counterpart = counterpartOf(isA, 2);
 
 const factors = {
@@ -26,24 +28,16 @@ const factors = {
   cultural: attachment((state) => 3 * around(state)),
 };
 
-/** Pressure strips the bed of what settles on it, in proportion to its strength. */
-const scoured = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => {
-  const map = fieldOf(state);
-  return place.cells.map((cell) => ({
-    change: "atMost",
-    band: "SedimentThickness",
-    cell,
-    value: map.SedimentThickness.get(cell) * (1 - pressureAt(state, cell)),
-  }));
-};
-/** The surge it raises is what shuts a harbour; it stands at least at its intensity. */
-const surging = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells.map((cell) => ({
-    change: "atLeast",
-    band: "WaveExposure",
-    cell,
-    value: Math.round(pressureAt(state, cell) * 1000),
-  }));
+/** Pressure limits what can lie on the bed, the less the stronger it is. */
+const scoured = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
+  place.cells
+    .filter((cell) => isSea(state, cell))
+    .map((cell) => ({
+      change: "atMost",
+      band: "SedimentThickness",
+      cell,
+      value: toNative(unpressedBed * (1 - pressureAt(state, cell))),
+    }));
 
 export const crushZone: PoiEntry = {
   id: "crushZone",
@@ -62,20 +56,25 @@ export const crushZone: PoiEntry = {
     suitability: notApplicable("No process chooses it; rays that reflect in a basin make it."),
     places,
   },
+  publication: {
+    statement: "Every zone publishes as the system's class, its outline by coverage.",
+    moment: "magic",
+    record: ruleRecord("pressure", "crush"),
+  },
   fields: {
     statement:
-      "A crush zone strips sediment from the bed and raises a surge on the water that shuts harbours. Its poison to sea life and its cut on the shore come from the system's own effects.",
+      "A crush zone strips sediment from the bed. The surge that shuts harbours, its poison to sea life and its cut on the shore all come from the system's own intensity, read where each applies.",
     terrain: scoured,
-    water: surging,
+    water: notApplicable(
+      "The ocean current process writes wave exposure, and the society closes harbours and cuts catch by reading Pressure's intensity directly."
+    ),
     climate: notApplicable(
       "Water moves only where a ray shoals, which is the front's work; over deep water the crush leaves the air alone."
     ),
     cover: notApplicable(
       "Open water has no cover; Pressure's animal toxicity reaches its fauna through ecology, and the fishery rule cuts a shore's catch beside it."
     ),
-    magic: notApplicable(
-      "The rays make it, and PoiFieldChange has no band for a magic channel; the intensity stands in the system's own field."
-    ),
+    magic: notApplicable("The rays make it; the intensity stands in the system's own field."),
   },
   acrossMaps: {
     statement:
@@ -88,17 +87,19 @@ export const crushZone: PoiEntry = {
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable("A round's water does not change a captured ray field."),
+    schedule: notApplicable("A captured crush zone does nothing to a refinement's schedule."),
   },
   movement: {
     statement:
       "Boats pay heavily in proportion to intensity, so routes bend around it; the society's harbours close beside it. Magic of other systems meets it through confluences, by share, and not by a carrier's cost.",
     roads: notApplicable("Rays paint only ocean cells; no crush lies on land for a road to pay."),
-    boats: (state, place, cell) =>
-      place.cells.includes(cell) ? 1 + crushDrag * pressureAt(state, cell) : 1,
+    boats: (state, place) =>
+      place.cells.map((cell) => ({ cell, factor: 1 + crushDrag * pressureAt(state, cell) })),
     drainage: notApplicable("It lies in the sea, beyond where the drainage network ends."),
     magic: notApplicable(
       "Pressure's own rays are traced by geometry, and other systems meet it as confluences by share."
     ),
+    links: notApplicable("A crush zone joins no two cells."),
     crosses: notApplicable(
       "It bars rather than opens; a boat crosses at a cost, not by its leave."
     ),
@@ -109,7 +110,7 @@ export const crushZone: PoiEntry = {
     needs: notApplicable(
       "A locus's rays or a rogue impact's can raise it, so neither is required; its rule reads only intensity."
     ),
-    excludes: [{ kind: "harbour", holds: within((state) => cellSpan(state)) }],
+    excludes: [{ kind: "harbour", holds }],
     contains: [
       { kind: "pressureLocus", holds },
       { kind: "rogueWaveImpact", holds },
@@ -133,22 +134,21 @@ export const crushZone: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "crushing sea",
-        reach: Math.max(cellSpan(state), extentOf(state, place)),
+        reach: Math.max(around(state), extentOf(state, place)),
         severity: pressureAt(state, place.anchor),
       },
     ],
   },
   time: {
     statement:
-      "A crush zone is renewed each evaluation from its locus and shifts as coasts change the rays' paths. If no cell of it still reaches the seeding intensity it dissolves and leaves nothing lasting in the water.",
-    fate: (state, place) =>
-      pressureAt(state, place.anchor) >= crushSeed ? { fate: "persists" } : { fate: "ends" },
+      "A crush zone is renewed each evaluation from its locus and shifts as coasts change the rays' paths. When the system's rule no longer holds there it dissolves and leaves nothing lasting in the water.",
+    fate: (state, place) => (isA(state, place.anchor) ? { fate: "persists" } : { fate: "ends" }),
   },
   visibility: {
     statement:
       "A crush zone shows by its extent and by how far it stands above the sea around it. The one a diving town works carries a small one, and an isolated zone counts less than these because it is seen by its danger, not its rarity.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.35, isolation: 0.15 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.35, isolation: 0.15 }),
   },
   naming: {
     statement: "Named only by people who sail or dive near it; the far ocean's zones go unnamed.",

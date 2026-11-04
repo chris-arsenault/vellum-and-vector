@@ -1,15 +1,16 @@
 import type { GenerationState } from "../../process";
-import { carryWhereItLands, counterpartOf, goes, movesTo } from "../poiCarry";
+import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { regionPlaces, within } from "../poiPlaces";
-import { cellSpan, fieldOf, isSea, magicRule, waveExposureAt } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { extentOf, namedFromShore, pressureAt, pressureLength, stormAt } from "./seaShared";
+import { rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { fieldOf, isSea, magicRule } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { extentOf, namedFromShore, near, pressureAt, pressureLength, stormAt } from "./seaShared";
 
 /** Length at which a wake is half as great as wakes get: half a preset wake's reach. */
 const typicalLength = 350_000;
-/** The still layer holds down waves to this share of what the open water would raise. */
-const stillShare = 0.5;
+/** The most wave exposure the still layer lets stand on it (per-mille). */
+const stillExposure = 500;
 /** Boats' cost on the calm water of a wake. */
 const calmWater = 0.85;
 /** The still layer holds back what the current carries. */
@@ -18,8 +19,9 @@ const stillCurrent = 1.5;
 const isA = magicRule("pressure", "wake");
 const anomalyAt = (state: GenerationState, cell: number) =>
   fieldOf(state).SeaSurfaceAnomaly.get(cell);
-const places = regionPlaces("ancientWake", isA, pressureAt);
-const around = (state: GenerationState) => 10 * cellSpan(state);
+const places = rulePlaces("ancientWake", "pressure", "wake");
+/** The sea around a wake that bears on it: 100 km. */
+const around = near(100_000);
 const wakeReach = (state: GenerationState) => pressureLength(state, "wakeDistance", typicalLength);
 const counterpart = counterpartOf(isA, 2);
 
@@ -36,7 +38,7 @@ const stilled = (state: GenerationState, place: PoiPlace): readonly PoiFieldChan
     change: "atMost",
     band: "WaveExposure",
     cell,
-    value: Math.round(waveExposureAt(state, cell) * stillShare * 1000),
+    value: stillExposure,
   }));
 
 export const ancientWake: PoiEntry = {
@@ -58,6 +60,11 @@ export const ancientWake: PoiEntry = {
     ),
     places,
   },
+  publication: {
+    statement: "Every wake publishes as the system's class, along the water it crossed.",
+    moment: "magic",
+    record: ruleRecord("pressure", "wake"),
+  },
   fields: {
     statement:
       "A wake leaves a warm, still layer along its track. It holds waves down on the water and warms the surface, and storms are born on the sharp edge it makes against cooler sea.",
@@ -71,9 +78,7 @@ export const ancientWake: PoiEntry = {
     cover: notApplicable(
       "Open water has no cover; aquatic productivity already reads the warmth the layer brings."
     ),
-    magic: notApplicable(
-      "The wake's own ray writes its channel, and PoiFieldChange has no band for a magic channel."
-    ),
+    magic: notApplicable("The wake's own ray writes its channel."),
   },
   acrossMaps: {
     statement:
@@ -86,6 +91,7 @@ export const ancientWake: PoiEntry = {
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable("A round's water does not move a captured track."),
+    schedule: notApplicable("A captured wake does nothing to a refinement's schedule."),
   },
   movement: {
     statement:
@@ -93,9 +99,10 @@ export const ancientWake: PoiEntry = {
     roads: notApplicable(
       "A wake ends at the first land, so it has no ground for a road to pay on."
     ),
-    boats: (_state, place, cell) => (place.cells.includes(cell) ? calmWater : 1),
+    boats: costNear(calmWater),
     drainage: notApplicable("It lies in the sea, beyond where the drainage network ends."),
-    magic: (_state, place, cell) => (place.cells.includes(cell) ? stillCurrent : 1),
+    magic: { current: costNear(stillCurrent) },
+    links: notApplicable("A wake joins no two cells."),
     crosses: notApplicable("It crosses no barrier; it is water like the rest, only calmer."),
   },
   others: {
@@ -128,7 +135,7 @@ export const ancientWake: PoiEntry = {
     statement:
       "A wake shows by its length and by how far it stands apart from others, because it is read as a line across a chart; its warmth is hard to see against the sea. Sailors who use one carry it from far along its track.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.1, isolation: 0.3 }),
+    importance: weighed(factors, { magnitude: 0.6, localConditions: 0.1, isolation: 0.3 }),
   },
   naming: {
     statement: "Named only by peoples whose ships reach it; the wakes of empty oceans go unnamed.",

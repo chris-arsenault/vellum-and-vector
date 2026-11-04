@@ -1,19 +1,19 @@
 import {
   canonicalPosition,
   fieldInterpolator,
-  point,
   population,
   spatial,
   settlementSiteKinds,
   KeyedHeap,
 } from "@atlas/domain";
 import { projectNative } from "../canonry/atlasProjection";
-import { generationFeatures } from "../generationFeatures";
+import { generationFeature, generationFeatures } from "../generationFeatures";
+import { publishKinds } from "../poi/poiPublish";
 import { regionalCommunitySpacing } from "../regionalSociety";
 import { localTownShare } from "../societySettlements";
 import { rankSites, type SiteOpportunity } from "../societySites";
 import { celsius, regionalMoisture } from "./climate";
-import { putRegionalFeature } from "./extraction/features";
+import { regionalId } from "./extraction/features";
 import {
   cellAt,
   distance,
@@ -24,8 +24,9 @@ import {
   positionOf,
 } from "./lattice";
 import { proposedSeat, usableSite } from "./seats";
-import { clamp, type ProposedPlace, type RegionalState } from "./state";
+import { clamp, type RegionalState } from "./state";
 import { developSociety } from "./society";
+import { fordCost } from "./societyWays";
 import { slopeCost } from "./ways";
 
 const societyDomains = ["built", "cultural", "political"];
@@ -43,8 +44,6 @@ const villageResidents = 80,
 const drylandShare = 0.25;
 /** How far, in travel cost, a village's hinterland reaches, as a share of the community spacing. */
 const hinterlandReach = 1.5;
-/** Travel cost of fording a channel. */
-const fordCost = 3;
 /** Most elimination rounds of the hinterland competition; it ends sooner once every place is supported. */
 const competitionRounds = 24;
 /** Cells within which two candidate sites are the same place. */
@@ -53,7 +52,7 @@ const samePlace = 2;
 /** Society's own seats and occupation enter before the evidence is read. */
 export function preparePlaces(state: RegionalState) {
   if (!placesEnabled(state.regional.input.domains)) return;
-  retainSocietySeats(state);
+  publishKinds(state, "society");
   regionalOccupation(state);
 }
 
@@ -265,13 +264,21 @@ function flattestUsableNeighbour(state: RegionalState, cell: number) {
   return moved;
 }
 
-/** Publish the accepted villages and the local ways; society events keep their footprint. */
+/**
+ * Publish the map's places, trace the local ways between its seats, then publish the crossings
+ * and mills those ways make. Each entry writes a record once; a later pass adds what is new.
+ */
 export function extractPlaces(state: RegionalState) {
   if (!placesEnabled(state.regional.input.domains)) return;
-  retainSocietyEvents(state);
+  publishKinds(state, "society");
   const mesh = state.physical.map.mesh,
+    villageIds = new Set(
+      state.regional.proposed.map((proposal) => regionalId(state, `village:${proposal.cell}`))
+    ),
     seats = [...generationFeatures(state, { areaId: state.regional.input.areaId })]
-      .filter((f) => f.kind === "settlement" && f.geometry.type === "Point")
+      .filter(
+        (f) => f.kind === "settlement" && f.geometry.type === "Point" && !villageIds.has(f.id)
+      )
       .sort((a, b) => (a.id < b.id ? -1 : 1))
       .map((f) => ({
         feature: f,
@@ -280,78 +287,15 @@ export function extractPlaces(state: RegionalState) {
           cellAt(mesh, ...((f.geometry as GeoJSON.Point).coordinates as [number, number])),
       }))
       .filter((seat) => seat.cell >= 0);
-  for (const proposal of state.regional.proposed)
-    if (proposal.accepted) seats.push({ feature: village(state, proposal), cell: proposal.cell });
+  for (const proposal of state.regional.proposed) {
+    const feature =
+      proposal.accepted && generationFeature(state, regionalId(state, `village:${proposal.cell}`));
+    if (feature) seats.push({ feature, cell: proposal.cell });
+  }
   developSociety(state, seats);
+  publishKinds(state, "society");
 }
 
-function village(state: RegionalState, proposal: ProposedPlace) {
-  return putRegionalFeature(
-    state,
-    `village:${proposal.cell}`,
-    "settlement",
-    "settlements",
-    point(positionOf(state.physical.map.mesh, proposal.cell)),
-    {
-      population: proposal.population,
-      settlementPopulation: proposal.population,
-      status: "inhabited",
-      founded: "Revealed in regional detail",
-      scale: "village",
-      siteKind: proposal.siteKind,
-      siteReason: proposal.siteReason,
-    },
-    "Village"
-  );
-}
-function retainSocietyEvents(state: RegionalState) {
-  const society = state.domain.world.societies?.[state.regional.input.areaId];
-  if (!society) return;
-  const intersects = spatial.intersectionPredicate(state.surface.scope.footprint);
-  for (const event of society.events) {
-    const geometry = spatial.buffer(point(event.position), event.radius);
-    if (!geometry || !intersects(geometry)) continue;
-    putRegionalFeature(
-      state,
-      `event:${event.id}`,
-      "societyEvent",
-      "historicalEvents",
-      geometry,
-      {
-        era: event.era,
-        eventKind: event.kind,
-        casualties: event.casualties,
-        displaced: event.displaced,
-      },
-      event.kind
-    );
-  }
-}
-function retainSocietySeats(state: RegionalState) {
-  const society = state.domain.world.societies?.[state.regional.input.areaId];
-  if (!society) return;
-  const covered = spatial.pointCoverage(state.surface.scope.footprint),
-    known = [...generationFeatures(state, { areaId: state.regional.input.areaId })].filter(
-      (f) => f.kind === "settlement"
-    );
-  for (const c of society.communities) {
-    if (!c.founded || !covered(c.position)) continue;
-    if (known.some((f) => f.attributes.communityId === c.id || f.name === c.name)) continue;
-    const f = putRegionalFeature(
-      state,
-      `known-seat:${c.id}`,
-      "settlement",
-      "settlements",
-      point(c.position),
-      { communityId: c.id, population: c.settlement?.population ?? 0, status: c.status },
-      c.name
-    );
-    f.name = c.name;
-    f.placeId = c.id;
-    if (state.features) state.features.put(f);
-    else state.domain.world.features[f.id] = f;
-  }
-}
 /**
  * The captured occupation per mesh cell: the parent's published density where there is one,
  * else the present located residents over their footprints.

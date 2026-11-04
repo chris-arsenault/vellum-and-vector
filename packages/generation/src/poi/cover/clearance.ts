@@ -1,69 +1,97 @@
 import { environment } from "../../canonry/ecologyEnvironment";
 import type { GenerationState } from "../../process";
-import { carryWhereItLands, stays } from "../poiCarry";
+import { farmingValue, fieldGrass, iceOnField, steepestField } from "../../regional/society";
+import { carryWhereItLands, costNear, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { namingCultureNear, settlementWithin, within } from "../poiPlaces";
+import { namingCultureNear, recordPlaces, sitedPlaces, within } from "../poiPlaces";
+import { siteRecord } from "../poiRecords";
 import {
   cellSpan,
   cellsWithin,
   celsiusAt,
+  featureCell,
   fieldOf,
+  gap,
+  heldFor,
   iceAt,
   isLand,
+  settlementsOf,
   slopeAt,
   treeCoverAt,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import {
-  borders,
-  ceilingsHeld,
-  clearancePlaces,
-  clearanceRadius,
-  floorsHeld,
-  isKind,
-  meanOver,
-  onPlace,
-  rootCarriage,
-  sharesNoGround,
-  standsIn,
-  withinOwn,
-} from "./coverShared";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { borders, coverCosts, meanOver, sharesNoGround, standsIn, withinOwn } from "./coverShared";
 
-/** The tree cover the works planner asks for before proposing a clearance. */
-const treesWorthClearing = 0.25;
-/** The steepest ground regional fields are laid on, and the deepest ice. */
-const steepestField = 0.12,
-  iceOnField = 1;
-/** Soil depth in metres at which farming reads full, and warmth over which it does. */
-const fullSoil = 0.5,
-  coldField = -2,
-  warmSpan = 16,
-  fullWater = 0.5;
-/** Tree cohorts left standing on a field, and the grass that replaces them, as regional fields hold them. */
-const standingShare = 0.2,
-  fieldGrass = 0.2;
-/** A worked clearance runs lanes that cut a road's cost; opened ground cuts channels sooner. */
-const fieldLanes = 0.8,
-  openChannel = 0.8;
-/** Radius in metres at which a clearance is half as great as clearances get, and the works' cap on it. */
-const typicalRadius = 2500,
-  farthestWork = 5000;
+/** Plant water and warmth at which ground would carry trees, so people have trees to take. */
+const woodedWater = 0.4,
+  woodedWarmth = 2;
+/** How far from a community people work ground, in metres. */
+const farthestWork = 5000;
+/** A sited clearance's radius, and how far apart two stand, in metres. */
+const sitedRadius = 2500,
+  siteSpacing = 30_000;
+/** The share of a cleared cell's ground each tree cohort keeps. */
+const standing = 0.05;
+/** A worked clearance runs lanes that cut a road's cost. */
+const fieldLanes = 0.8;
+/** Radius in metres at which a clearance is half as great as clearances get. */
+const typicalRadius = 2500;
 
 const clamped = (value: number) => Math.max(0, Math.min(1, value));
-const isA = isKind("clearance");
-const places = clearancePlaces;
-const farmable = (state: GenerationState, cell: number) =>
-  isLand(state, cell) && slopeAt(state, cell) <= steepestField && iceAt(state, cell) < iceOnField;
-/** Soil, water, warmth and gentle slope, as the regional fields' ranking reads them. */
-function farming(state: GenerationState, cell: number) {
-  return (
-    clamped(fieldOf(state).SoilDepth.get(cell) / fullSoil) *
-    clamped(environment(fieldOf(state), cell).moisture / fullWater) *
-    clamped((celsiusAt(state, cell) - coldField) / warmSpan) *
-    clamped(1 - slopeAt(state, cell) / steepestField)
+const radiusIn = (feature: PoiPlace["feature"]) =>
+  Number(feature?.attributes.radius) || sitedRadius;
+const footprint = (state: GenerationState, cell: number, radius: number) =>
+  cellsWithin(state, cell, radius).filter((other) => isLand(state, other));
+
+/** The cells within a working walk of a community. */
+const workedGround = (state: GenerationState) =>
+  heldFor(state, "clearance:worked", () => {
+    const cells = new Set<number>();
+    for (const town of settlementsOf(state)) {
+      const at = featureCell(state, town);
+      if (at >= 0) for (const cell of cellsWithin(state, at, farthestWork)) cells.add(cell);
+    }
+    return cells;
+  });
+/**
+ * It reads the climate that would carry trees, not the trees standing: its own clearing takes
+ * those, and the place must not vanish for having done its work.
+ */
+const requires = (state: GenerationState, cell: number) =>
+  isLand(state, cell) &&
+  slopeAt(state, cell) <= steepestField &&
+  iceAt(state, cell) < iceOnField &&
+  environment(fieldOf(state), cell).moisture >= woodedWater &&
+  celsiusAt(state, cell) >= woodedWarmth &&
+  workedGround(state).has(cell);
+const suitability = (state: GenerationState, cell: number) => {
+  const map = fieldOf(state);
+  return farmingValue(
+    map.SoilDepth.get(cell),
+    environment(map, cell).moisture,
+    celsiusAt(state, cell),
+    map.Slope.get(cell)
   );
-}
-const radiusOf = (_state: GenerationState, place: PoiPlace) => clearanceRadius(place.feature);
+};
+const recorded = recordPlaces("clearance", (feature) => feature.kind === "clearance");
+const sited = sitedPlaces("clearance", requires, suitability, () => siteSpacing);
+/** Recorded works first, then new sites that stand clear of them, each on the ground it covers. */
+const places = (state: GenerationState): readonly PoiPlace[] =>
+  heldFor(state, "footprints:clearance", () => {
+    const works = recorded(state),
+      fresh = sited(state).filter((site) =>
+        works.every((work) => gap(state, work.anchor, site.anchor) >= siteSpacing)
+      );
+    return [...works, ...fresh].map((place) => ({
+      ...place,
+      cells: footprint(state, place.anchor, radiusIn(place.feature)),
+    }));
+  });
+const clearedCells = (state: GenerationState) =>
+  heldFor(state, "cells:clearance", () => new Set(places(state).flatMap((p) => p.cells)));
+const isA = (state: GenerationState, cell: number) => clearedCells(state).has(cell);
+
+const radiusOf = (_state: GenerationState, place: PoiPlace) => radiusIn(place.feature);
 const around = (state: GenerationState, place: PoiPlace) =>
   Math.max(2 * cellSpan(state), 2 * radiusOf(state, place));
 const openness = (state: GenerationState, cell: number) => 1 - treeCoverAt(state, cell);
@@ -79,21 +107,29 @@ const treeBands = [
   "BroadleafSaplings",
   "ConiferSaplings",
 ] as const;
-/** The trees it took and keeps down, against what `stood` says grew there, and the grass in their place. */
-function opened(
-  cells: readonly number[],
-  stood: (band: (typeof treeBands)[number], cell: number) => number
-): PoiFieldChange[] {
+/**
+ * The trees it takes and keeps down, and the grass in their place, as absolute bounds so a
+ * repeated evaluation changes nothing further. Where a cell is wider than the clearing, the
+ * bounds ease by the share of the cell it opens.
+ */
+function opened(state: GenerationState, cells: readonly number[], radius: number) {
+  const mesh = fieldOf(state).mesh,
+    ground = cells.reduce((sum, cell) => sum + mesh.area(cell), 0),
+    share = ground > 0 ? Math.min(1, (Math.PI * radius * radius) / ground) : 0,
+    ceiling = 1 - share * (1 - standing);
   return cells.flatMap((cell): PoiFieldChange[] => [
-    ...treeBands.map((band): PoiFieldChange => ({
-      change: "atMost",
-      band,
-      cell,
-      value: stood(band, cell) * standingShare,
-    })),
-    { change: "atLeast", band: "GrassCover", cell, value: fieldGrass },
+    ...treeBands.map((band): PoiFieldChange => ({ change: "atMost", band, cell, value: ceiling })),
+    { change: "atMost", band: "TreeCover", cell, value: Math.min(1, 2 * ceiling) },
+    { change: "atLeast", band: "GrassCover", cell, value: share * fieldGrass },
   ]);
 }
+
+const record = siteRecord({
+  kind: "clearance",
+  layer: "landUse",
+  name: "Clearance",
+  attributes: (_state, place) => ({ radius: radiusIn(place.feature) }),
+});
 
 export const clearance: PoiEntry = {
   id: "clearance",
@@ -101,60 +137,62 @@ export const clearance: PoiEntry = {
   name: "Clearance",
   recognition: {
     distinct:
-      "A published work of kind clearance and the ground its recorded radius covers: it is decided by the record, never by low tree cover, since grassland is low tree cover nobody cut. A burning is a different work on the same channels, and a village's regional fields are not records. On its ground the record comes before every reading of cover.",
+      "A clearance work and the ground its radius covers: it is decided by the work, never by low tree cover, since grassland is low tree cover nobody cut. A burning is a different work on the same channels.",
     isA,
   },
   existence: {
     statement:
-      "Sited by people: the society's works planner proposes one where a community of at least 500 finds tree cover over 0.25 and farming would support it better than gathering does. Today it does not reach a map: world works are demands and are never published, and refined maps make fields without a clearance record, so this kind has no places on either.",
+      "Sited by people: recorded works stand where they were made, and beyond those people open the best farming ground within a working walk of a community, on land whose climate carries trees, gentle and free of deep ice. Sites stand at least 10 km apart.",
     way: "sited",
-    requires: (state, cell) =>
-      farmable(state, cell) &&
-      treeCoverAt(state, cell) > treesWorthClearing &&
-      settlementWithin(state, cell, Math.max(farthestWork, 2 * cellSpan(state))),
-    suitability: farming,
+    requires,
+    suitability,
     places,
+  },
+  publication: {
+    statement:
+      "A clearance publishes as a site on the land-use layer with its radius; a recorded work keeps its own record.",
+    moment: "society",
+    record: (state, place) => place.feature ?? record(state, place),
   },
   fields: {
     statement:
-      "People take the trees and keep them down, and grass stands in their place. The soil, no longer bound, wastes away on slopes; rain runs off faster; less goes back into the air; and any Greenwood sap in the wood burns with it. The cover stays cleared only while people work it.",
-    terrain: ceilingsHeld("SoilDepth"),
-    water: floorsHeld("Runoff"),
-    climate: ceilingsHeld("Evapotranspiration"),
-    cover: (state, place) => opened(place.cells, (band, cell) => fieldOf(state)[band].get(cell)),
-    magic: ceilingsHeld("Verdure"),
+      "People take the trees and keep them down, and grass stands in their place. The soil wastes, rain runs off faster and less goes back into the air because the soil and climate processes read the opened cover; only the opening itself is this place's own. The cover stays cleared only while people work it.",
+    terrain: notApplicable(
+      "The soil process writes soil depth over the whole field from its cover."
+    ),
+    water: notApplicable(
+      "The soil process writes infiltration and the climate process writes runoff over the whole field from its cover."
+    ),
+    climate: notApplicable("The soil process writes evapotranspiration over the whole field."),
+    cover: (state, place) => opened(state, place.cells, radiusIn(place.feature)),
+    magic: notApplicable("Magic's feedback writes verdure over the whole field by intensity."),
   },
   acrossMaps: {
     statement:
-      "A captured clearance keeps where it landed, and the child's cover is held open over the ground its radius reaches, each round, because refinement's own ecology would regrow it. It stays where it landed: no fine ground undoes a record. There is nothing to carry today, because the world publishes none.",
+      "A captured clearance keeps where it landed, and the child's cover is held open over the ground its radius reaches, each round, because refinement's own ecology would regrow it. It stays where it landed: no fine ground undoes a record.",
     carry: carryWhereItLands,
-    /** Against the captured cohorts where the round holds them, so clearing each round does not ratchet. */
-    realize: (state, carried) =>
-      opened(cellsWithin(state, carried.cell, clearanceRadius(carried.feature)), (band, cell) =>
-        (state.regional.natural[band] ?? fieldOf(state)[band]).get(cell)
-      ),
+    realize: (state, carried) => {
+      const radius = radiusIn(carried.feature);
+      return opened(state, footprint(state, carried.cell, radius), radius);
+    },
     counterpart: (_state, carried) => carried.cell,
     unrealized: stays,
     settle: notApplicable(
       "A field does not move with a round's water; a flooded one stays recorded, and its people leave."
     ),
+    schedule: notApplicable("A clearance does nothing at refinement's other points."),
   },
   movement: {
     statement:
-      "Lanes run across worked land, so roads pay less; opened ground takes channels sooner than wooded ground; and Greenwood's roots find less cover to travel through.",
-    roads: onPlace(() => fieldLanes),
-    boats: notApplicable("A clearing has no water of its own to carry a boat."),
-    drainage: onPlace(() => openChannel),
-    magic: onPlace(rootCarriage),
-    crosses: notApplicable("Open fields cross no barrier a road would otherwise meet."),
+      "Lanes run across worked land, so roads pay less. Opened ground takes channels sooner than wooded ground, and Greenwood's roots find less cover to travel through, because their costs read the opened cover.",
+    ...coverCosts,
+    roads: costNear(fieldLanes),
   },
   others: {
     statement:
-      "It needs the people who keep it and is cut out of forest, with whose edge it runs. It shares no other cover's ground. Irrigation and mills belong to the same people's land.",
-    needs: [
-      { kind: "settlement", holds: within((state) => Math.max(farthestWork, 2 * cellSpan(state))) },
-    ],
-    excludes: sharesNoGround("forest", "grassland", "barren", "thawedHalo", "wildZone", "wetland"),
+      "It needs the people who keep it and is cut out of forest, with whose edge it runs. It shares no ground with standing water. Irrigation and mills belong to the same people's land.",
+    needs: [{ kind: "settlement", holds: within(() => farthestWork) }],
+    excludes: sharesNoGround("wetland", "lake"),
     contains: standsIn("irrigation"),
     pairsWith: [...borders("forest"), { kind: "mill", holds: withinOwn(around) }],
   },
@@ -162,7 +200,7 @@ export const clearance: PoiEntry = {
     statement:
       "It gives food from the ground's own farming value, and timber while the trees are coming down. On slopes, wasting soil silts the valley below it.",
     offers: (state, place) => ({
-      food: meanOver(state, place, farming),
+      food: meanOver(state, place, suitability),
       materials: 0.3 * meanOver(state, place, treeCoverAt),
     }),
     threatens(state, place) {
@@ -182,9 +220,9 @@ export const clearance: PoiEntry = {
   },
   visibility: {
     statement:
-      "A clearance is small, so it earns its place by contrast and by people: a cut-out in deep forest beside a city shows before a far larger one on half-open ground. Its people outweigh its size.",
+      "A clearance is small, so it earns its weight by contrast and by people: a cut-out in deep forest beside a city weighs more than a far larger one on half-open ground. Its people outweigh its size.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.25, localConditions: 0.55, isolation: 0.2 }),
+    importance: weighed(factors, { magnitude: 0.25, localConditions: 0.55, isolation: 0.2 }),
   },
   naming: {
     statement:

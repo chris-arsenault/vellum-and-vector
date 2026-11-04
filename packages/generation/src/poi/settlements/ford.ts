@@ -1,27 +1,14 @@
 import type { GenerationState } from "../../process";
-import { roadTravellers, trackTravellers } from "../../regional/societyWays";
+import { bridgeFlow, fordCost, roadTravellers, trackTravellers } from "../../regional/societyWays";
 import { rulingGrade } from "../../regional/ways";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { holdsRecord, namingCultureNear, settlementWithin, within } from "../poiPlaces";
-import {
-  cellSpan,
-  dischargeAt,
-  fieldOf,
-  isLand,
-  isRiver,
-  sedimentAt,
-  slopeAt,
-  treeCoverAt,
-} from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import {
-  bridgeFlow,
-  crossingPlaces,
-  fordCost,
-  fordPlaces,
-  travellersOf,
-} from "./settlementRecords";
+import { cellSpan, dischargeAt, fieldOf, isLand, isRiver, sedimentAt, slopeAt } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
+import { onceWritten } from "./communityRecords";
+import { travellersOf, weighedPlace } from "./settlementRecords";
+import { crossingPlaces, fordPlaces } from "./workRecords";
 
 /** The depth a person and a loaded beast can wade, in metres. */
 const wadeableDepth = 1;
@@ -42,14 +29,20 @@ const fullness = (state: GenerationState, cell: number) => {
  * The crossing tax the road search applies to a channel, as a known ford lowers it: the worn
  * way down each bank and the sure footing leave a brook free and half the tax at bridge flow.
  */
-const taxAt = (state: GenerationState, place: PoiPlace, cell: number) =>
-  cell === place.anchor ? (1 + (fordCost - 1) * fullness(state, cell)) / fordCost : 1;
+const taxAt = (state: GenerationState, place: PoiPlace) => [
+  {
+    cell: place.anchor,
+    factor: (1 + (fordCost - 1) * fullness(state, place.anchor)) / fordCost,
+  },
+];
 /** The bed held shallow enough to wade. */
 const wadeable = (cell: number): readonly PoiFieldChange[] => [
   { change: "atMost", band: "RiverDepth", cell, value: wadeableDepth },
 ];
 const factors = {
-  magnitude: sized(travellersOf, roadTravellers),
+  /** Read when called: the ways' module may still be loading as this one does. */
+  magnitude: (state: GenerationState, place: PoiPlace) =>
+    sized(travellersOf, roadTravellers)(state, place),
   /** A crossing on the big water of its country matters more than one on a brook beside it. */
   localConditions: standsOut(dischargeAt, around),
   isolation: aloneAmong(crossingPlaces, around),
@@ -63,7 +56,7 @@ export const ford: PoiEntry = {
   name: "Ford",
   recognition: {
     distinct:
-      "A published crossing of `kind` ford (`workKind` ford, with its `travellers` and `flow`) on a channel cell with `WaterKindCodes` none: a way across a river on the river's own bed. `publishCrossings` splits it from a bridge on one test, a bridge having both `travellers` at least 100 and `FlowAccumulation` at least 20; a ford misses either. A dam also crosses a river, but on a crest that holds water.",
+      "A crossing, with its `travellers` and `flow`, on a channel cell with `WaterKindCodes` none: a way across a river on the river's own bed. One test splits it from a bridge, a bridge having both `travellers` at least 100 and `FlowAccumulation` at least 20; a ford misses either. A dam also crosses a river, but on a crest that holds water.",
     isA,
   },
   existence: {
@@ -80,6 +73,11 @@ export const ford: PoiEntry = {
     },
     places,
   },
+  publication: {
+    statement: "A refined map publishes each ford once its ways are traced.",
+    moment: "society",
+    record: onceWritten,
+  },
   fields: {
     statement:
       "A ford is a shallow in a river that use keeps open: the depth at its cell stays wadeable, and traffic down both banks keeps the trees off the crossing.",
@@ -91,12 +89,7 @@ export const ford: PoiEntry = {
     cover(state, place) {
       const traffic = Math.log2(1 + travellersOf(state, place) / trackTravellers);
       return [
-        {
-          change: "atMost",
-          band: "TreeCover",
-          cell: place.anchor,
-          value: treeCoverAt(state, place.anchor) / (1 + traffic),
-        },
+        { change: "atMost", band: "TreeCover", cell: place.anchor, value: 1 / (1 + traffic) },
       ];
     },
     magic: notApplicable("A ford holds no stock; river-borne magic runs over it as anywhere else."),
@@ -113,6 +106,7 @@ export const ford: PoiEntry = {
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable("Crossings are published after the last round's water, so none settles."),
+    schedule: notApplicable("A ford takes no part in refinement's steps."),
   },
   movement: {
     statement:
@@ -125,6 +119,7 @@ export const ford: PoiEntry = {
     magic: notApplicable(
       "River-borne stock runs past it, and people carrying stock pay the road's own crossing cost."
     ),
+    links: notApplicable("A ford is a step on the ground, not a join between distant cells."),
     crosses: () => ["river"],
   },
   others: {
@@ -172,7 +167,7 @@ export const ford: PoiEntry = {
     statement:
       "A ford shows by the traffic across it and by being the only crossing on its stretch of river; one that gives a town its reason shows regardless.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.4, localConditions: 0.2, isolation: 0.4 }),
+    importance: weighedPlace(factors, { magnitude: 0.4, localConditions: 0.2, isolation: 0.4 }),
   },
   naming: {
     statement:

@@ -1,10 +1,11 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry } from "../poiContract";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
 import { magicRule, magicValue } from "../poiReads";
-import { areaOf, holdAt, lastsWhile, meanOf, spans, standsIn, strengthOf } from "./reliefShape";
+import { areaOf, lastsWhile, meanOf, spans, standsIn, strengthOf } from "./reliefShape";
 
 /** Area at which a prism's ground is half as great as prisms get. */
 const typicalArea = 400_000_000;
@@ -12,7 +13,7 @@ const typicalArea = 400_000_000;
 const isA = magicRule("aurora", "prism");
 const chargeAt = (state: GenerationState, cell: number) =>
   magicValue(state, "aurora", "intensity", cell);
-const places = regionPlaces("frostPrism", isA, chargeAt);
+const places = rulePlaces("frostPrism", "aurora", "prism");
 const counterpart = counterpartOf(isA, 1);
 const chargeOf = strengthOf("aurora");
 const factors = {
@@ -41,17 +42,19 @@ export const frostPrism: PoiEntry = {
     ),
     places,
   },
+  publication: {
+    statement: "Each connected group of the rule's cells publishes as Aurora's prism class.",
+    moment: "magic",
+    record: ruleRecord("aurora", "prism"),
+  },
   fields: {
     statement:
-      "A prism is a store of charged cold on high rock: the rock is weakened, ice is kept against thaw, the air stays cold and still, nothing grows, and charge is held for the ice to carry away down its glaciers.",
-    terrain: (state, place) => holdAt(state, "atMost", "RockResistance", place.cells),
-    water: (state, place) => [
-      ...holdAt(state, "atLeast", "IceThickness", place.cells),
-      ...holdAt(state, "atLeast", "IcePersistence", place.cells),
-    ],
-    climate: (state, place) => holdAt(state, "atMost", "Temperature", place.cells),
-    cover: (state, place) => holdAt(state, "atLeast", "Stillness", place.cells),
-    magic: (state, place) => holdAt(state, "atLeast", "IceCharge", place.cells),
+      "A prism is a store of charged cold on high rock: the rock is weakened, ice is kept against thaw, the air stays cold and still, nothing grows, and charge is held for the ice to carry away down its glaciers. Aurora writes all of this by its own intensity and charge wherever they stand, so the prism adds no write of its own.",
+    terrain: notApplicable("Aurora's rock feedback weakens the rock by its intensity."),
+    water: notApplicable("Aurora's stored charge holds the ice against thaw, field-wide."),
+    climate: notApplicable("Aurora's cold drainage and the height write its air."),
+    cover: notApplicable("Aurora's feedback writes the stillness from its intensity."),
+    magic: notApplicable("Aurora's ice stock writes the charge the ice holds."),
   },
   acrossMaps: {
     statement:
@@ -64,6 +67,7 @@ export const frostPrism: PoiEntry = {
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable("Charge gathers over epochs; a round's water does not move it."),
+    schedule: notApplicable("The rule re-reads the crest; a prism has no step of its own."),
   },
   movement: {
     statement:
@@ -71,7 +75,8 @@ export const frostPrism: PoiEntry = {
     roads: costNear(2.5),
     boats: notApplicable("A prism stands on a height no boat reaches."),
     drainage: notApplicable("Water up there is ice; drainage begins below where it melts."),
-    magic: costNear(0.7),
+    magic: { ice: costNear(0.7) },
+    links: notApplicable("A prism joins nothing."),
     crosses: notApplicable("A height of charged ice is a barrier itself."),
   },
   others: {
@@ -109,7 +114,7 @@ export const frostPrism: PoiEntry = {
     statement:
       "A prism shows by its charge more than by its size and by how far it stands over the field around it; a pilgrim town carries a faint one.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.3, isolation: 0.2 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.3, isolation: 0.2 }),
   },
   naming: {
     statement:

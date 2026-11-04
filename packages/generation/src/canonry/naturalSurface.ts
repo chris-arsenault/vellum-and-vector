@@ -82,9 +82,7 @@ function landRelief(map: PhysicalField, i: number): Surface {
   if (bare && map.Slope.get(i) >= 0.0235) return "Scree field";
   if (
     bare &&
-    [Landform.Ridge, Landform.Peak, Landform.Pass, Landform.ImpactRim].includes(
-      map.LandformCodes.get(i)
-    )
+    [Landform.Ridge, Landform.Peak, Landform.ImpactRim].includes(map.LandformCodes.get(i))
   )
     return "Ridge";
   if (!map.EcologyInitialized && map.RiverOrders.get(i) >= 1) return "River valley";

@@ -1,10 +1,12 @@
+import { biomes } from "@atlas/domain";
 import type { GenerationState } from "../process";
-import { biomeRules, type BiomeSummary } from "./ecologyBiomes";
+import type { BiomeSummary } from "./ecologyBiomes";
+import { environment } from "./ecologyEnvironment";
 import type { RegionMembers } from "./regionMembers";
-import { extractWorldEcologicalFeatures } from "./worldEcologyFeatures";
 
 type Term = (i: number) => number;
-const families: Record<string, string> = {
+/** The biome family each ecology class belongs to: what a published landscape is a region of. */
+export const families: Record<string, string> = {
   Barren: "barren",
   Desert: "barren",
   Tundra: "grassland",
@@ -29,11 +31,10 @@ const families: Record<string, string> = {
   "Wending fen": "wending",
   "Well meadow": "well",
 };
-function summarize(
-  state: GenerationState,
-  members: RegionMembers,
-  biome: ReturnType<typeof biomeRules>
-) {
+/** The family of a `BiomeCodes` value, or undefined for ice, water and the unclassified. */
+export const biomeFamily = (code: number): string | undefined => families[biomes[code]?.name ?? ""];
+/** A landscape's area-weighted means, which name it and fill its record. */
+export function summarize(state: GenerationState, members: RegionMembers) {
   const map = state.physical!.map,
     area = (i: number) => map.mesh.area(i),
     total = members.reduce((sum, i) => sum + area(i), 0),
@@ -53,19 +54,11 @@ function summarize(
     fire: mean((i) => map.FireActivity.get(i)),
     flood: mean((i) => map.FloodFrequency.get(i)),
     peat: mean((i) => map.PeatCarbon.get(i)),
-    temperature: mean((i) => biome.temperature.get(i)),
-    moisture: mean((i) => biome.moisture.get(i)),
-    wetness: mean((i) => biome.wetness.get(i)),
+    temperature: mean((i) => environment(map, i).temperature),
+    moisture: mean((i) => environment(map, i).moisture),
+    wetness: mean((i) => environment(map, i).wetness),
     slope: mean((i) => map.Slope.get(i)),
     elevation: mean((i) => (map.Elevation.get(i) - map.BaseSeaLevel) / 1024),
     systems,
   } satisfies BiomeSummary;
-}
-/**
- * Named landscapes are coherent regions of one biome family, significant at the map's scale
- * (ADR 0005): the same rule on every map, its thresholds scaled to the map's cell span.
- * Continuous cover and the biome classes remain the ecological representation everywhere.
- */
-export function extractEcologicalFeatures(state: GenerationState) {
-  extractWorldEcologicalFeatures(state, families, summarize);
 }

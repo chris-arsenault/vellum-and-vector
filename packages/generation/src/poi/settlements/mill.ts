@@ -1,18 +1,26 @@
 import type { GenerationState } from "../../process";
+import { regionalFeature, regionalId } from "../../regional/extraction/features";
+import { positionOf } from "../../regional/lattice";
+import type { Place } from "../../regional/societyWays";
+import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
+import { holdsRecord, namingCultureNear, settlementWithin, within } from "../poiPlaces";
 import {
-  holdsRecord,
-  namingCultureNear,
-  recordPlaces,
-  settlementWithin,
-  within,
-} from "../poiPlaces";
-import { cellSpan, dischargeAt, fieldOf, isRiver, slopeAt, toNative } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { isGone, isWork, seatOf } from "./settlementRecords";
+  cellSpan,
+  cellsWithin,
+  dischargeAt,
+  fieldOf,
+  heldFor,
+  isRiver,
+  slopeAt,
+  toNative,
+} from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
+import { isRefined, lazyPlace, onceWritten } from "./communityRecords";
+import { isGone, seatOf, weighedPlace } from "./settlementRecords";
 
-/** A channel's fall that turns a mill and the mill's reach from its seat in cells, as regional/society holds them. */
+/** A channel's fall that turns a mill and the mill's reach from its seat in cells. */
 const millGradient = 0.01,
   millReach = 3;
 /** Slope by discharge at which a mill is half as strong as mills get. */
@@ -24,11 +32,49 @@ const weirCost = 3;
 /** The lane everyone with grain walks to it. */
 const millLane = 0.85;
 
-const places = recordPlaces("mill", isWork("mill"));
-const isA = holdsRecord("mill", places);
 /** The generator's own power term: the fall of the water over the flow of it. */
 const powerAt = (state: GenerationState, cell: number) =>
   slopeAt(state, cell) * dischargeAt(state, cell);
+/** The channel cell within reach of a seat with the most falling water, or -1. */
+function millSite(state: RegionalState, cell: number) {
+  let best = -1,
+    fall = 0;
+  for (const i of cellsWithin(state, cell, reach(state))) {
+    if (!fallingChannel(state, i)) continue;
+    const power = powerAt(state, i);
+    if (power > fall) [best, fall] = [i, power];
+  }
+  return best;
+}
+function millRecord(state: RegionalState, seat: Place, cell: number) {
+  const p = positionOf(fieldOf(state).mesh, cell);
+  return regionalFeature(
+    state,
+    `mill:${seat.cell}`,
+    "mill",
+    "waterworks",
+    { type: "Point", coordinates: [p.x, p.y] },
+    { workKind: "mill", flow: dischargeAt(state, cell), seat: seat.feature?.id },
+    "Mill"
+  );
+}
+/** Each settled place with a falling channel within reach turns a mill at its steepest reach. */
+const places = (state: GenerationState): readonly PoiPlace[] =>
+  heldFor(state, "places:mill", () => {
+    if (!isRefined(state)) return [];
+    return (state.regional.settled ?? []).flatMap((seat) => {
+      if (!seat.settled || seat.residents <= 0) return [];
+      const cell = millSite(state, seat.cell);
+      return cell < 0
+        ? []
+        : [
+            lazyPlace("mill", regionalId(state, `mill:${seat.cell}`), cell, () =>
+              millRecord(state, seat, cell)
+            ),
+          ];
+    });
+  });
+const isA = holdsRecord("mill", places);
 const powerOf = (state: GenerationState, place: PoiPlace) => powerAt(state, place.anchor);
 const fallingChannel = (state: GenerationState, cell: number) =>
   isRiver(state, cell) && slopeAt(state, cell) >= millGradient;
@@ -56,7 +102,7 @@ export const mill: PoiEntry = {
   name: "Mill",
   recognition: {
     distinct:
-      "A published work of `kind` mill (`workKind` mill, with its `flow` and `seat`), on a channel cell whose `Slope` is at least 0.01: a work that takes the river's fall and gives all of its water back. A dam (`kind` dam) stores the water and an irrigation work (`kind` irrigation) keeps a share of it; a waterfall is the same fall with no record.",
+      "A work with its `flow` and `seat`, on a channel cell whose `Slope` is at least 0.01: a work that takes the river's fall and gives all of its water back. A dam (`kind` dam) stores the water and an irrigation work (`kind` irrigation) keeps a share of it; a waterfall is the same fall with no record.",
     isA,
   },
   existence: {
@@ -70,6 +116,12 @@ export const mill: PoiEntry = {
       return power / (power + typicalPower);
     },
     places,
+  },
+  publication: {
+    statement:
+      "A refined map publishes each mill once its ways are traced, at the channel reach its seat turns it on.",
+    moment: "society",
+    record: onceWritten,
   },
   fields: {
     statement:
@@ -100,6 +152,7 @@ export const mill: PoiEntry = {
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable("Mills are published after the last round's water, so none settles."),
+    schedule: notApplicable("A mill takes no part in refinement's steps."),
   },
   movement: {
     statement:
@@ -110,6 +163,7 @@ export const mill: PoiEntry = {
       "Its leat rejoins the river below; the network keeps the channel it found."
     ),
     magic: notApplicable("Neither its stones nor its wheel bear on any carrier."),
+    links: notApplicable("A mill joins nothing."),
     crosses: notApplicable("Its weir carries no road; bridges and fords do that."),
   },
   others: {
@@ -150,7 +204,7 @@ export const mill: PoiEntry = {
     statement:
       "A mill is a small work: it shows by its power and by being the only one in its country, and a town it serves does more for it than its own size.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.3, localConditions: 0.2, isolation: 0.5 }),
+    importance: weighedPlace(factors, { magnitude: 0.3, localConditions: 0.2, isolation: 0.5 }),
   },
   naming: {
     statement:

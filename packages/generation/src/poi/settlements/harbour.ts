@@ -2,14 +2,18 @@ import type { GenerationState } from "../../process";
 import { carryWhereItLands, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiCarried, type PoiEntry, type PoiFieldChange } from "../poiContract";
 import type { PoiPlace } from "../poiContract";
-import { holdsRecord, recordPlaces, within } from "../poiPlaces";
+import { holdsRecord, within } from "../poiPlaces";
+import { landCellSeaCost } from "../../mapRouting";
 import { regionalSpan } from "../../regional/lattice";
 import type { RegionalState } from "../../regional/state";
+import { harbourDepth, harbourHands, harbourReach } from "../../societyWorks";
+import { waveHeight, waveShore, tsunamiHazard } from "../../societyHazards";
+import { harbourGoodDepth, harbourSurge } from "../../societySites";
 import {
   adjacent,
+  cellsWithin,
   cellSpan,
   fieldOf,
-  gap,
   heightAt,
   isLand,
   isSea,
@@ -20,55 +24,49 @@ import {
   toNative,
   waveExposureAt,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
 import {
   attribute,
   cultureOfWork,
   isKept,
-  isWork,
   keptLine,
-  peopleWithin,
+  nearTown,
   seatPeople,
   strengthOf,
+  touching,
+  weighedPlace,
   workReach,
 } from "./settlementRecords";
+import { workPlaces, workRecord } from "./workRecords";
 
-/** Water a harbour stands in, the seat it may lie from, and the people who build one, as societyWorks holds them. */
-const greatestDepth = 30,
-  seatReach = 10_000,
-  builders = 1000;
-/** Depth that lets a laden ship lie near the shore and the Pressure that wrecks a mole, as societySites holds them. */
-const goodDepth = 10,
-  surgeIntensity = 400;
-/** Height a built quay adds at full strength, as societyWorks holds it. */
+/** Height a built quay adds at full strength, in metres. */
 const quayHeight = 5;
 /** Wave exposure behind a mole, per mille. */
 const shelteredWaves = 300;
-/** A sea lane pays four times to land on a shore cell, as mapRouting holds it; a harbour removes that. */
-const landingCost = 4;
-/** Sailing inside the mole, and the road along the quay. */
+/** Sailing inside the mole, the road along the quay, and how far in metres the quay runs. */
 const inTheHarbour = 0.9,
-  quayRoad = 0.7;
+  quayRoad = 0.7,
+  quayReach = 1000;
+/** The least distance between two harbours people site, and a sited harbour's reach, in metres. */
+const harbourSpacing = 30_000,
+  harbourRadius = 500;
 /** People a harbour at half as great as harbours get serves. */
 const typicalPeople = 5000;
 /** A mole across the water is raised seabed: what it costs a current or a Pressure ray. */
 const moleCost = 2;
 /** The grade a quay's own ground is held to on a refined map. */
 const quayGradient = 0.03;
-/** Elevation and shore distance within which the sea reaches a settlement, as societyHazards holds them. */
-const waveHeight = 20,
-  waveShore = 10_000;
-const waveHazard = { severity: 0.4, reach: 10_000 };
 
-const places = recordPlaces("harbour", isWork("harbor"));
-const isA = holdsRecord("harbour", places);
 const depthAt = (state: GenerationState, cell: number) =>
   metres(fieldOf(state).WaterDepths.get(cell));
+/** Sea a mole can stand in: shallow, or the sea beside a shore, whatever depth a map's cell averages. */
 const shallows = (state: GenerationState, cell: number) =>
-  isSea(state, cell) && depthAt(state, cell) < greatestDepth;
+  isSea(state, cell) &&
+  (depthAt(state, cell) < harbourDepth ||
+    shareAround(state, cell, (next) => isLand(state, next)) > 0);
 const servedOf = (state: GenerationState, place: PoiPlace) => seatPeople(state, place);
 const around = (state: GenerationState) => 6 * cellSpan(state);
-const quay = (state: GenerationState) => 2 * cellSpan(state);
+const quay = (state: GenerationState) => touching(state, quayReach);
 const shore = (state: GenerationState, cell: number) =>
   nearestWhere(state, cell, quay(state), (next) => isLand(state, next));
 /** The sea beside a cell, the cell itself when it is sea. */
@@ -80,10 +78,22 @@ function waters(state: GenerationState, cell: number) {
   if (!sea.length) return 0;
   const hemmed = shareAround(state, cell, (next) => isLand(state, next)),
     lee = 1 - sea.reduce((sum, next) => sum + waveExposureAt(state, next), 0) / sea.length,
-    depth = Math.max(...sea.map((next) => depthAt(state, next))) >= goodDepth ? 1 : 0.4,
-    surged = magicValue(state, "pressure", "intensity", cell) >= surgeIntensity;
-  return hemmed * lee * depth * (surged ? 0.3 : 1);
+    depth = Math.max(...sea.map((next) => depthAt(state, next))) >= harbourGoodDepth ? 1 : 0.4,
+    surged = magicValue(state, "pressure", "intensity", cell) >= harbourSurge;
+  return ((hemmed + lee + depth) / 3) * (surged ? 0.3 : 1);
 }
+const requires = (state: GenerationState, cell: number) =>
+  shallows(state, cell) && nearTown(state, cell, harbourReach, harbourHands);
+const places = workPlaces("harbour", "harbor", {
+  record: "harbor",
+  layer: "transportSites",
+  label: "Harbour",
+  radius: harbourRadius,
+  spacing: harbourSpacing,
+  requires,
+  suitability: (state, cell) => Math.min(1, waters(state, cell)),
+});
+const isA = holdsRecord("harbour", places);
 const factors = {
   magnitude: sized(servedOf, typicalPeople),
   /** A shelter on a coast with no other: its own waters over the country's. */
@@ -91,15 +101,18 @@ const factors = {
   isolation: aloneAmong(places, (state) => 2 * around(state)),
   cultural: attachment(around),
 };
-function roadCost(state: GenerationState, place: PoiPlace, cell: number) {
-  return isLand(state, cell) && gap(state, place.anchor, cell) <= quay(state) ? quayRoad : 1;
-}
-function boatCost(state: GenerationState, place: PoiPlace, cell: number) {
-  if (gap(state, place.anchor, cell) > quay(state)) return 1;
-  return isLand(state, cell) ? 1 / landingCost : inTheHarbour;
-}
-const moleAt = (_state: GenerationState, place: PoiPlace, cell: number) =>
-  cell === place.anchor ? moleCost : 1;
+const roadCost = (state: GenerationState, place: PoiPlace) =>
+  cellsWithin(state, place.anchor, quay(state))
+    .filter((cell) => isLand(state, cell))
+    .map((cell) => ({ cell, factor: quayRoad }));
+const boatCost = (state: GenerationState, place: PoiPlace) =>
+  cellsWithin(state, place.anchor, quay(state)).map((cell) => ({
+    cell,
+    factor: isLand(state, cell) ? 1 / landCellSeaCost : inTheHarbour,
+  }));
+const moleAt = (_state: GenerationState, place: PoiPlace) => [
+  { cell: place.anchor, factor: moleCost },
+];
 const counterpart = counterpartOf(shallows, 1);
 const moved = (state: RegionalState, carried: PoiCarried) =>
   counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes();
@@ -123,17 +136,22 @@ export const harbour: PoiEntry = {
   name: "Harbour",
   recognition: {
     distinct:
-      "A published work of `kind` harbor (`workKind` harbor) sited on `WaterKindCodes` ocean with `WaterDepths` under 30 m: a built place standing in the sea, where a land route meets a sea lane. A bay is the shelter with no record, a river mouth the water with no record, and a settlement with `siteKind` harbour is the town beside it.",
+      "A work standing in the sea, in shallows or beside a shore, where a land route meets a sea lane. A bay is the shelter with no record, a river mouth the water with no record, and a settlement with `siteKind` harbour is the town beside it.",
     isA,
   },
   existence: {
     statement:
-      "Sited by a community of at least 1000 people, in shallow water within 10 km of its seat. The world map holds harbours as latent demands on a unit's shore, and refined maps do not yet make them; the kind publishes today only as an authored work.",
+      "Sited two ways: the simulation's located harbours of a community of at least 1000 people; and on every map the best sheltered shore within 10 km of such a community, at least 30 km apart. The simulation's World units hold harbours only as latent demands.",
     way: "sited",
-    requires: (state, cell) =>
-      shallows(state, cell) && peopleWithin(state, cell, seatReach, builders),
+    requires,
     suitability: (state, cell) => Math.min(1, waters(state, cell)),
     places,
+  },
+  publication: {
+    statement:
+      "A harbour publishes as a located work; the World shows those the ground sited, and the simulation's own stay demands.",
+    moment: "society",
+    record: workRecord,
   },
   fields: {
     statement:
@@ -164,6 +182,9 @@ export const harbour: PoiEntry = {
     unrealized: moved,
     settle: (state, carried) =>
       shallows(state, carried.cell) ? { outcome: "keep" } : moved(state, carried),
+    schedule: notApplicable(
+      "A harbour takes no part in refinement's steps beyond following the shallows."
+    ),
   },
   movement: {
     statement:
@@ -171,13 +192,14 @@ export const harbour: PoiEntry = {
     roads: roadCost,
     boats: boatCost,
     drainage: notApplicable("It stands in the sea, below where the network ends."),
-    magic: moleAt,
+    magic: { current: moleAt },
+    links: notApplicable("A harbour joins nothing directly; a sea lane does that through it."),
     crosses: () => ["strait"],
   },
   others: {
     statement:
       "A harbour needs a settlement to serve and lies best in a bay, a fjord or a river mouth, in the lee of a headland; where Pressure crushes the water a mole does not stand.",
-    needs: [{ kind: "settlement", holds: within(() => seatReach) }],
+    needs: [{ kind: "settlement", holds: within(() => harbourReach) }],
     excludes: [{ kind: "crushZone", holds: (_state, a, b) => b.cells.includes(a.anchor) }],
     contains: notApplicable("A harbour is one work; its mole and quay are parts of it."),
     pairsWith: [
@@ -200,9 +222,11 @@ export const harbour: PoiEntry = {
         exposed =
           heightAt(state, place.anchor) < waveHeight &&
           map.OceanDistance.get(place.anchor) < waveShore,
-        surged = magicValue(state, "pressure", "intensity", place.anchor) >= surgeIntensity;
+        surged = magicValue(state, "pressure", "intensity", place.anchor) >= harbourSurge;
       return [
-        ...(strained && exposed ? [{ hazard: "tsunami", ...waveHazard }] : []),
+        ...(strained && exposed
+          ? [{ hazard: "tsunami", severity: tsunamiHazard.severity, reach: tsunamiHazard.radius }]
+          : []),
         ...(surged
           ? [
               {
@@ -227,16 +251,16 @@ export const harbour: PoiEntry = {
     statement:
       "A harbour shows by the people it serves and by being the shelter on its coast; a capital's port shows however small, and one on an open beach among others shows late.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
+    importance: weighedPlace(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
   },
   naming: {
     statement:
       "Named by the community that built it, in its record, usually after that settlement or the bay it lies in.",
     namedBy: cultureOfWork,
     takesNameFrom: [
-      { kind: "settlement", holds: within(() => seatReach) },
+      { kind: "settlement", holds: within(() => harbourReach) },
       { kind: "bay", holds: within(around) },
     ],
-    lendsNameTo: [{ kind: "settlement", holds: within(() => seatReach) }],
+    lendsNameTo: [{ kind: "settlement", holds: within(() => harbourReach) }],
   },
 };

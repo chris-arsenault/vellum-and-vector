@@ -7,7 +7,7 @@ import {
 } from "../../packages/generation/src/canonry/atlasWorkspace";
 import { createField } from "../../packages/generation/src/canonry/field";
 import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
-import { extractEcologicalFeatures } from "../../packages/generation/src/canonry/ecologyFeatures";
+import { publishKinds } from "../../packages/generation/src/poi/poiPublish";
 
 /** Real ecological polygon extraction on small, controlled communities for the GIS journey. */
 export function ecologicalPolygons() {
@@ -51,6 +51,6 @@ export function ecologicalPolygons() {
     map.GrassCover.set(i, band === 1 ? 0.8 : 0.1);
     map.WetlandCover.set(i, band === 2 ? 0.7 : 0);
   }
-  extractEcologicalFeatures(state);
+  publishKinds(state, "geography", (entry) => entry.group === "cover" || entry.id === "wetland");
   return Object.values(state.domain.world.features);
 }

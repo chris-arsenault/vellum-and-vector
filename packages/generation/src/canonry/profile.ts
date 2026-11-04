@@ -366,8 +366,6 @@ export const physicalProfile = {
   RidgeElevationThreshold: 1000,
   RidgeSlopeThreshold: 0.0038,
   PeakElevationThreshold: 1250,
-  WaterfallMinimumDrop: 45,
-  WaterfallEvaluationLength: 1000,
   LandformNeighborhoodRadius: 10_000,
   GorgeMinimumSlope: 0.009,
   GorgeMinimumIncision: 12,

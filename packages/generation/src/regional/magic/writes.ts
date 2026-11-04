@@ -1,4 +1,4 @@
-import type { Band } from "@atlas/domain";
+import type { AtlasFeature, Band } from "@atlas/domain";
 import { heldCharge } from "../../canonry/magicFeedback";
 import { units } from "../../canonry/math";
 import { reservoirAmount, type MagicField } from "../../canonry/magicState";
@@ -9,9 +9,6 @@ import { clamp, naturalBand, type RegionalState } from "../state";
 
 /** Intensity (0..1000) from which a conduit system opens the fractures it runs, as the world's conduits do. */
 const conduitIntensity = 230;
-/** Grass and saplings a door's ring holds at least. */
-const doorRingGrass = 0.3,
-  doorRingSaplings = 0.05;
 
 /**
  * What the systems do to the ground, as declared ledger totals (plan M5): rock hardening and
@@ -96,16 +93,11 @@ export function declareHallowedWrites(state: RegionalState) {
 
 /**
  * Veil: wild ground's relief as a declared total with a fixed per-cell hash (so wild zones
- * move with the field instead of ratcheting), the door's chill and pool as declared totals,
- * and the door's ring of rank grass and saplings as a floor.
+ * move with the field instead of ratcheting). A door's own marks are the door entry's.
  */
 export function declareVeilWrites(state: RegionalState) {
-  for (const field of enabledFields(state)) {
-    if (!field.doors.length && !field.definition.parameters.wildRelief) continue;
-    declareWildRelief(state, field);
-    for (const door of field.doors)
-      for (const cell of new Set([door.a, door.b])) houseDoor(state, field, cell);
-  }
+  for (const field of enabledFields(state))
+    if (field.definition.parameters.wildRelief) declareWildRelief(state, field);
 }
 function declareWildRelief(state: RegionalState, field: MagicField) {
   const map = state.physical.map,
@@ -116,23 +108,6 @@ function declareWildRelief(state: RegionalState, field: MagicField) {
     const w = field.wild.get(i);
     if (w <= 0 || !isContent(mesh, i) || map.WaterKindCodes.get(i) !== 0) continue;
     applied.add("Elevation", i, units(relief * w * 2 * (hashUnit(0x7e11, i, 0) - 0.5)));
-  }
-}
-/** A door's end: chilled and pooled as declared totals, its ring of rank growth as a floor. */
-function houseDoor(state: RegionalState, field: MagicField, cell: number) {
-  const map = state.physical.map,
-    mesh = map.mesh,
-    applied = state.regional.contributions,
-    p = field.definition.parameters,
-    around = new Int32Array(mesh.stride);
-  applied.add("Temperature", cell, -p.doorChill);
-  applied.add("Elevation", cell, -units(p.doorPool));
-  const m = neighborsOf(mesh, cell, around);
-  for (let k = 0; k < m; k++) {
-    const j = around[k];
-    if (map.WaterKindCodes.get(j) !== 0) continue;
-    map.GrassCover.set(j, Math.max(map.GrassCover.get(j), doorRingGrass));
-    map.BroadleafSaplings.set(j, Math.max(map.BroadleafSaplings.get(j), doorRingSaplings));
   }
 }
 
@@ -198,38 +173,51 @@ export function holdIce(state: RegionalState) {
   }
 }
 
-/**
- * Doors from the captured door features: a line's two ends, or one end when the far end lies
- * outside the frame (a one-ended access). The engine's pairing keeps them while both ends
- * qualify.
- */
-export function seedDoors(state: RegionalState, field: MagicField) {
+/** The cell of a position on this frame, or -1 outside it. */
+export const frameCell = (state: RegionalState) => (x: number, y: number) => {
   const mesh = state.physical.map.mesh,
-    seeded: { a: number; b: number }[] = [],
-    inside = (x: number, y: number) => {
-      const cell = cellAt(mesh, x, y);
-      return cell >= 0 && isContent(mesh, cell) ? cell : -1;
-    };
-  for (const f of generationFeatures(state, { areaId: state.regional.input.areaId })) {
-    // The parent's doors only: this map's own earlier products are regenerated, not read.
-    if (f.kind !== "door" || f.attributes.developedBy === "regional") continue;
-    const ends = doorEnds(f.geometry);
-    if (!ends) continue;
-    const a = inside(ends[0][0], ends[0][1]),
-      b = inside(ends[1][0], ends[1][1]);
-    if (a < 0 && b < 0) continue;
-    const door = { a: a >= 0 ? a : b, b: b >= 0 ? b : a };
+    cell = cellAt(mesh, x, y);
+  return cell >= 0 && isContent(mesh, cell) ? cell : -1;
+};
+/**
+ * A captured door of one system as cells of this frame: the record's two stored ends, or one
+ * end when the far end lies outside the frame (a one-ended access), or null when neither end
+ * lands here or the record is no such door. A building's door has no system or rule behind it.
+ */
+export function capturedDoor(
+  feature: AtlasFeature,
+  system: string,
+  cellOf: (x: number, y: number) => number
+): { a: number; b: number } | null {
+  const ends = capturedDoorEnds(feature, system).map(([x, y]) => cellOf(x, y)),
+    [a = -1, b = a] = ends;
+  if (a < 0 && b < 0) return null;
+  return { a: a >= 0 ? a : b, b: b >= 0 ? b : a };
+}
+/**
+ * The ends a captured door's record stores, none when it is no door of this system. A record an
+ * earlier refinement moved keeps the parent's in its captured record; this map's own products
+ * are regenerated, not read.
+ */
+function capturedDoorEnds(feature: AtlasFeature, system: string) {
+  if (feature.attributes.developedBy === "regional") return [];
+  const parent = feature.attributes.capturedRecord as AtlasFeature | undefined,
+    record = parent?.attributes ?? feature.attributes;
+  return record.system === system && record.rule === "door"
+    ? ((record.ends ?? []) as number[][])
+    : [];
+}
+/** Doors from the captured records. The engine's pairing keeps them while both ends qualify. */
+export function seedDoors(state: RegionalState, field: MagicField) {
+  const seeded: { a: number; b: number }[] = [],
+    cellOf = frameCell(state);
+  for (const feature of generationFeatures(state, { areaId: state.regional.input.areaId })) {
+    const door = capturedDoor(feature, field.definition.id, cellOf);
+    if (!door) continue;
     field.doors.push(door);
     seeded.push(door);
   }
   return seeded;
-}
-/** A door's two ends: a line's ends, or a point twice. */
-function doorEnds(geometry: GeoJSON.Geometry): [number[], number[]] | null {
-  if (geometry.type === "LineString")
-    return [geometry.coordinates[0], geometry.coordinates.at(-1)!];
-  if (geometry.type === "Point") return [geometry.coordinates, geometry.coordinates];
-  return null;
 }
 
 /**

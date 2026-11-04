@@ -1,14 +1,17 @@
 import type { AtlasFeature } from "@atlas/domain";
 import type { PhysicalBufferName } from "../canonry/field";
 import type { GenerationState } from "../process";
+import type { FeatureCause } from "../regional/causes/registry";
 import type { RegionalState } from "../regional/state";
 import type { PoiGroupId, PoiKindId } from "./poiKinds";
 
 /**
- * The POI contract, agreed with the owner: a POI is a participant in generation, not a label
- * on a finished map. Every kind answers every field below, in this shape. This file changes
- * only when the owner asks; a field that seems wrong is raised with the owner, not worked
- * around. Rules are pure functions over the generator's own state and reuse its calculations.
+ * The POI contract: a POI is a participant in generation, not a label on a finished map. An
+ * entry is the generator's one definition of its kind: generation finds, publishes and applies
+ * places through it, and no second test or publisher of the kind exists elsewhere. Every kind
+ * answers every field below. Rules are pure functions over the generator's own state and reuse
+ * its calculations. A field-wide process keeps its own writes; an entry declares only what the
+ * place itself does, so each effect has one writer.
  */
 
 /** A field not yet specified. Open work stays visible and can be listed. */
@@ -59,11 +62,35 @@ export interface PoiExistence {
   readonly places: Must<(state: GenerationState) => readonly PoiPlace[]>;
 }
 
-/** A declared change to the physical field, applied through the regional `Contributions`. */
+/** When in a run a kind's places are published: what they read must exist by then. */
+export type PoiMoment = "geography" | "magic" | "society";
+
+/** Publication: the record a place writes on its map; generation writes nothing else for it. */
+export interface PoiPublication {
+  readonly statement: Must<string>;
+  readonly moment: Must<PoiMoment>;
+  /** The feature a place publishes as, or null when it has no record at this size. */
+  readonly record: Must<OnPlace<AtlasFeature | null>>;
+}
+
+/** A magic system's own channel or stock, which the field's named bands do not hold. */
+export type PoiMagicBand =
+  | {
+      readonly system: string;
+      readonly channel: "intensity" | "source" | "history" | "wild" | "stored";
+    }
+  | { readonly system: string; readonly stock: string };
+/**
+ * A declared change, applied as a total each evaluation so that it never compounds. Changes
+ * to one cell of one band combine: additions sum, then the bounds hold.
+ */
 export type PoiFieldChange =
   | { readonly change: "add"; readonly band: PhysicalBufferName; cell: number; amount: number }
   | { readonly change: "atMost"; readonly band: PhysicalBufferName; cell: number; value: number }
   | { readonly change: "atLeast"; readonly band: PhysicalBufferName; cell: number; value: number }
+  | { readonly change: "add"; readonly magic: PoiMagicBand; cell: number; amount: number }
+  | { readonly change: "atMost"; readonly magic: PoiMagicBand; cell: number; value: number }
+  | { readonly change: "atLeast"; readonly magic: PoiMagicBand; cell: number; value: number }
   | { readonly change: "gradientAtMost"; cell: number; gradient: number };
 type FieldEffect = Slot<OnPlace<readonly PoiFieldChange[]>>;
 
@@ -80,7 +107,10 @@ export interface PoiFieldEffects {
 /** A place carried onto a refined map: where it lands on the child's lattice. */
 export interface PoiCarried {
   readonly feature: AtlasFeature;
+  /** The cell that locates it. */
   readonly cell: number;
+  /** Every cell its parent's record covers on this map; one for a point. */
+  readonly cells: readonly number[];
 }
 /** What a carried place does when the finer ground cannot provide it. */
 export type PoiUnrealized =
@@ -101,11 +131,25 @@ export interface PoiAcrossMaps {
   readonly unrealized: Slot<(state: RegionalState, carried: PoiCarried) => PoiUnrealized>;
   /** Its own change on the developed ground after a round's water: a seat settling. */
   readonly settle: Slot<(state: RegionalState, carried: PoiCarried) => PoiUnrealized>;
+  /** What it does at the points of refinement's schedule that are not field changes. */
+  readonly schedule: Slot<FeatureCause>;
 }
 
-/** A multiplier on a network's cost at a cell near a place: 1 changes nothing; Infinity bars it. */
-type CostEffect = Slot<(state: GenerationState, place: PoiPlace, cell: number) => number>;
-export type PoiBarrier = "river" | "ridge" | "strait" | "wetland" | "ice";
+/** A network's cost at a cell, multiplied: 1 changes nothing; Infinity bars it. */
+export interface PoiCost {
+  readonly cell: number;
+  readonly factor: number;
+}
+/** The cells a place changes a network's cost on, and by how much; others are untouched. */
+export type PoiCostList = OnPlace<readonly PoiCost[]>;
+type CostEffect = Slot<PoiCostList>;
+export type PoiMagicCarrier = "crust" | "roots" | "river" | "wind" | "current" | "ice" | "people";
+/** Two cells a route passes between directly, whatever lies between. */
+export interface PoiLink {
+  readonly a: number;
+  readonly b: number;
+}
+export type PoiBarrier = "river" | "ridge" | "strait" | "wetland" | "ice" | "ward";
 
 /** Movement: how it changes the cost or possibility of what moves across the map. */
 export interface PoiMovement {
@@ -116,8 +160,10 @@ export interface PoiMovement {
   readonly boats: CostEffect;
   /** The drainage network as it grows. */
   readonly drainage: CostEffect;
-  /** Magic's carriers: crust, river, wind, current, ice, people. */
-  readonly magic: CostEffect;
+  /** Each of magic's carriers it changes: the crust, a river and the wind differ. */
+  readonly magic: Slot<Readonly<Partial<Record<PoiMagicCarrier, PoiCostList>>>>;
+  /** Cells it joins for walkers: a door's two ends. */
+  readonly links: Slot<OnPlace<readonly PoiLink[]>>;
   /** Barriers it lets a route across. */
   readonly crosses: Slot<OnPlace<readonly PoiBarrier[]>>;
 }
@@ -182,10 +228,11 @@ export interface PoiVisibility {
   readonly isolation: VisibilityFactor;
   /** People's attachment: a capital at its foot, a town named after it, a route over it. */
   readonly cultural: VisibilityFactor;
-  /** Whether it is drawn on a view of this ground resolution. Deterministic. */
-  readonly visibleAt: Must<
-    (state: GenerationState, place: PoiPlace, metresPerPixel: number) => boolean
-  >;
+  /**
+   * What the place weighs, in [0, 1], stored on its record. Whether it is drawn at a view is
+   * `placeDrawn` over this and the view, the one rule the map applies to every kind.
+   */
+  readonly importance: Must<OnPlace<number>>;
 }
 
 /** Naming: who names it and what takes its name. */
@@ -206,6 +253,7 @@ export interface PoiEntry {
   readonly name: string;
   readonly recognition: PoiRecognition;
   readonly existence: PoiExistence;
+  readonly publication: PoiPublication;
   readonly fields: PoiFieldEffects;
   readonly acrossMaps: PoiAcrossMaps;
   readonly movement: PoiMovement;

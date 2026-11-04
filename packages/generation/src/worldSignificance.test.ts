@@ -1,13 +1,10 @@
 import { expect, it } from "vitest";
 import {
-  fallsSignificance,
   independenceSignificance,
-  lakeSignificance,
   landscapeSignificance,
   largeWorldDomain,
   rangeSignificance,
   riverSignificance,
-  summitSignificance,
 } from "./worldSignificance";
 
 const world = { area: 12e12, span: 5_000_000 };
@@ -39,17 +36,9 @@ it("requires river contribution rather than membership in someone else's major b
   expect(riverSignificance({ ...trunk, length: 60_000, outlet: false }).publish).toBe(false);
 });
 
-it("recognizes exceptional small sites without promoting ordinary peaks or dry drops", () => {
-  expect(summitSignificance(1_600, 120_000).publish).toBe(true);
-  expect(summitSignificance(1_600, 2_000).publish).toBe(false);
-  expect(summitSignificance(100, 120_000).publish).toBe(false);
-  expect(fallsSignificance(60, 2_000).publish).toBe(true);
-  expect(fallsSignificance(60, 2).publish).toBe(false);
-  expect(fallsSignificance(2, 2_000).publish).toBe(false);
+it("recognizes a mountain system by its relief as well as its footprint", () => {
   expect(rangeSignificance(forest, 1_200, 600_000).publish).toBe(true);
   expect(rangeSignificance(forest, 30, 600_000).publish).toBe(false);
-  expect(lakeSignificance(500e6, 300, 0).publish).toBe(true);
-  expect(lakeSignificance(500e6, 5, 0).publish).toBe(false);
 });
 
 it("allows a supported small independent state but not an unsupported isolated community", () => {

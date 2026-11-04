@@ -43,7 +43,6 @@ export function readEvidence(state: RegionalState): Evidence {
   const evidence: Evidence = {
     courses: [],
     lakes: [],
-    summits: [],
     seats: [],
     entries: [],
     landmarks: [],
@@ -52,7 +51,6 @@ export function readEvidence(state: RegionalState): Evidence {
   const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   evidence.courses.sort((a, b) => byId(a.feature.id, b.feature.id));
   evidence.landmarks.sort((a, b) => byId(a.landmark.id, b.landmark.id));
-  evidence.summits.sort((a, b) => byId(a.featureId, b.featureId));
   evidence.seats.sort((a, b) => byId(a.featureId, b.featureId));
   evidence.entries.sort((a, b) => a.cell - b.cell);
   evidence.lakes.sort((a, b) => a.cells[0] - b.cells[0]);

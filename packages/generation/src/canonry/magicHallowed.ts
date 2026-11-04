@@ -12,6 +12,8 @@ const wards = (field: MagicField) =>
   field.definition.enabled && field.definition.effects.warding > 0;
 /** The least strength a kept line or a pilgrimage road has; a fainter way is only a track. */
 const lineFloor = 100;
+/** Warding from which a ward seals a cell: a conduit does not enter, a door does not hold. */
+export const wardSeals = 0.5;
 
 /**
  * Hallowed's seats: an inhabited seat kept past the source floor of the full tenure is a

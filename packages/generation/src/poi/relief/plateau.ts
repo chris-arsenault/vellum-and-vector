@@ -2,11 +2,11 @@ import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, parentSpanOf, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { areaRecord } from "../poiRecords";
 import { cellsWithin, grassCoverAt, heightAt, isLand, slopeAt } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
   areaOf,
-  holdAt,
   holdGradient,
   lastsWhile,
   meanOf,
@@ -57,6 +57,11 @@ export const plateau: PoiEntry = {
     suitability: notApplicable("Nothing chooses a plateau's ground."),
     places,
   },
+  publication: {
+    statement: "Each connected tableland publishes as its outline.",
+    moment: "geography",
+    record: areaRecord({ kind: "plateau", layer: "geology", name: "Plateau" }),
+  },
   fields: {
     statement:
       "A plateau holds a shape: its top stays level, its gradient low, and rivers rise on it and leave off its edge. Height alone cools it, through the lapse the climate already applies.",
@@ -67,7 +72,7 @@ export const plateau: PoiEntry = {
     climate: notApplicable(
       "Its cold and dry come from the height the climate field already reads."
     ),
-    cover: (state, place) => holdAt(state, "atLeast", "GrassCover", place.cells),
+    cover: notApplicable("Ecology grows its grass from the cold and moisture at its height."),
     magic: notApplicable(
       "It neither sources nor bars magic; a level height is plain ground to every carrier."
     ),
@@ -89,14 +94,16 @@ export const plateau: PoiEntry = {
     counterpart,
     unrealized: stays,
     settle: notApplicable("A tableland does not change with a round's water."),
+    schedule: notApplicable("A level top is all a plateau asks of a refinement."),
   },
   movement: {
     statement:
       "Once a road is up, a plateau is easy going; the climb is its edge, an escarpment with a cost of its own. Water rises on it and runs for its edge.",
-    roads: costNear(0.85),
+    roads: notApplicable("The ruling-grade cost already reads its level top."),
     boats: notApplicable("Rivers on its top are headwaters too small to carry boats."),
     drainage: costNear(1.3),
     magic: notApplicable("No carrier reads a level height differently from level lowland."),
+    links: notApplicable("A plateau joins nothing."),
     crosses: notApplicable("It is ground to cross, not a crossing."),
   },
   others: {
@@ -137,7 +144,7 @@ export const plateau: PoiEntry = {
     statement:
       "A plateau shows by its area and height and by the lower country round it; area counts because a plateau is a region, and a small tableland over plains can show before a broad high shelf in a range.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.4, isolation: 0.1 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.4, isolation: 0.1 }),
   },
   naming: {
     statement: "Named by those who live on it or look up at it; its towns may share its name.",

@@ -63,6 +63,8 @@ export function weatherBed(map: PhysicalField, field: MagicField, bed: Band, ori
   if (dust) for (let i = 0; i < bed.length; i++) dust.add(i, moved.get(i));
   releaseWorking(map, moved);
 }
+/** Moisture past which an exposed bed dissolves. */
+export const bedDissolvesAbove = 500;
 /** An exposed bed dissolves where the ground is wet and blows where it is bare and dry. */
 function weatherExposed(
   map: PhysicalField,
@@ -73,7 +75,7 @@ function weatherExposed(
   exposed: number,
   moved: Band
 ) {
-  if (map.Moisture.get(i) > 500 && map.WaterKindCodes.get(i) === 0 && brine)
+  if (map.Moisture.get(i) > bedDissolvesAbove && map.WaterKindCodes.get(i) === 0 && brine)
     dissolve(map, field, i, bed, brine, exposed);
   const lifted = liftedDust(map, field.definition.parameters, bed.get(i), exposed, i);
   if (lifted <= 0) return;

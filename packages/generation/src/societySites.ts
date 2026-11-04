@@ -126,14 +126,17 @@ function riverNode(r: SiteReader, i: number): SiteOpportunity | null {
     reason: junction ? "a river junction" : "where the river leaves the hills for the plain",
   };
 }
+/** Depth that lets a laden ship lie near the shore, and the Pressure that wrecks a mole. */
+export const harbourGoodDepth = 10,
+  harbourSurge = 400;
 /** How a stretch of sea serves a harbour: shelter, lee, depth, surge, and the storm season. */
 function harbourWaters(r: SiteReader, sea: number[]) {
   const peak = (channel: string) => Math.max(...sea.map((j) => r.value(channel, j)));
   const shelter = sea.length <= 3 ? 1 : sea.length <= 4 ? 0.6 : 0.2,
     // Wave exposure is published as a 0..1 ratio of the native 0..1000.
     lee = 1 - sea.reduce((s, j) => s + r.value("waveExposure", j), 0) / sea.length,
-    depth = peak("waterDepth") >= 10 ? 1 : 0.4,
-    surge = peak("magic:pressure:intensity") >= 400 ? 0.3 : 1,
+    depth = peak("waterDepth") >= harbourGoodDepth ? 1 : 0.4,
+    surge = peak("magic:pressure:intensity") >= harbourSurge ? 0.3 : 1,
     // A harbour on a storm track is closed for the season the storms run.
     seasonal = peak("stormTrack") >= 0.3;
   return { score: shelter * lee * depth * surge * (seasonal ? 0.6 : 1), seasonal };
@@ -189,10 +192,12 @@ function plainNode(r: SiteReader, i: number): SiteOpportunity | null {
   const [score, reason] = options.sort((a, b) => b[0] - a[0])[0];
   return { kind: "plain-node", score, reason };
 }
+/** Ice thicker than this, in metres, is ground nobody settles. */
+export const uninhabitableIce = 1;
 /** Ground nobody settles: ice, the heart of a core, the inside of an Aurora field. */
 function uninhabitable(r: SiteReader, i: number) {
   return (
-    r.ice(i) > 1 ||
+    r.ice(i) > uninhabitableIce ||
     r.value("quickening", i) >= 0.6 ||
     r.value("stillness", i) >= 0.6 ||
     r.feature("fire", "core", i)

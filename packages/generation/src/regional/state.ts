@@ -51,12 +51,6 @@ export interface Evidence {
   courses: CapturedCourse[];
   /** Captured standing water: its cells and surface level (metres above the datum). */
   lakes: { cells: Int32Array; level: number }[];
-  /**
-   * Inherited significant summits, read from their captured positions (`captured`, map
-   * coordinates) with their captured prominence; the identity step writes both back onto the
-   * feature, whatever the world's extraction left on it.
-   */
-  summits: { featureId: string; cell: number; prominence: number; captured: [number, number] }[];
   seats: Seat[];
   /** Captured rivers entering across the frame edge, with the discharge they bring (m³/s). */
   entries: { cell: number; discharge: number }[];
@@ -151,6 +145,10 @@ export interface RegionalWork {
   removedProducts?: Set<string>;
   /** Captured occupation per mesh cell (people per km²), where the parent published any. */
   populationDensity?: Float64Array;
+  /** What the traced ways left per cell, and the seats' own cells, which are no crossings. */
+  crossings?: { traffic: Float64Array; crossed: Float64Array; seatCells: Set<number> };
+  /** The places the traced ways joined. */
+  settled?: import("./societyWays").Place[];
 }
 
 /** A generation state in the regional schedule: the physical workspace and the regional work. */

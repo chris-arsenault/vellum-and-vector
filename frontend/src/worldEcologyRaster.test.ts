@@ -4,7 +4,7 @@ import { worldGeographyFixture } from "../../packages/generation/src/canonry/wor
 import { classifyBiome } from "../../packages/generation/src/canonry/ecologyEnvironment";
 import { classifyNaturalSurface } from "../../packages/generation/src/canonry/naturalSurface";
 import { initializeMagic } from "../../packages/generation/src/canonry/magicState";
-import { extractEcologicalFeatures } from "../../packages/generation/src/canonry/ecologyFeatures";
+import { publishKinds } from "../../packages/generation/src/poi/poiPublish";
 import { projectedValues } from "../../packages/generation/src/canonry/atlasSampling";
 import { numericTileSampler, terrainSampleBands } from "./numericTiles";
 
@@ -46,7 +46,7 @@ it("keeps a declared forest at the actual natural-surface tile edge as physical 
       bounds: state.surface.bounds,
     });
     const before = sample([250_000, 150_000, 400_000, 250_000], 32);
-    extractEcologicalFeatures(state);
+    publishKinds(state, "geography", (entry) => entry.group === "cover");
     const forest = Object.values(state.domain.world.features).find((f) => f.kind === "forest")!;
     expect(forest).toBeDefined();
     // Adjacent tiles and two pixel resolutions sample the same geographic transition.

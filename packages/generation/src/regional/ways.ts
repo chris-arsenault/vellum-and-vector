@@ -19,7 +19,7 @@ export function gradeCost(grade: number) {
  * under water in the wet season, so ways keep to the terrace edge beside a river and cross
  * its floor where it is shortest.
  */
-const wetGroundCost = 3;
+export const wetGroundCost = 3;
 
 /** What a path search reads beside the ground: a cost factor per step (worn ways, fords on or under the step) and free links (door ends). */
 export interface PathOptions {

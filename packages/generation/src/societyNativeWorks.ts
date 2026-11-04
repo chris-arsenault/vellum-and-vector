@@ -29,11 +29,9 @@ function markWeir(state: GenerationState, work: SocietyWork, cell: number) {
     flags = map.FeatureFlags.get(cell);
   map.FeatureFlags.set(cell, standing ? flags | Feature.Shoal : flags & ~Feature.Shoal);
 }
-/** Quarrying takes the stored charge of every charge-holding system, and the ice it held. */
+/** Quarrying takes the stored charge of every charge-holding system; the mine entry holds the ice. */
 function quarryPrism(state: GenerationState, cell: number, kept: number) {
-  const physical = state.physical!;
-  for (const field of physical.magic?.fields ?? [])
+  for (const field of state.physical!.magic?.fields ?? [])
     if (field.definition.effects.icePersistence > 0)
       field.stored.set(cell, field.stored.get(cell) * kept);
-  physical.map.IcePersistence.set(cell, physical.map.IcePersistence.get(cell) * kept);
 }

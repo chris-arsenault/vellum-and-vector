@@ -8,7 +8,6 @@ import { createSocietyGeography } from "./societyGeography";
 import { startingPopulations } from "./societySettlements";
 import { societyCycle } from "./societyEvolution";
 import { roundCycle, societyStep } from "./societyTempo";
-import { generatedFeature, putGenerated } from "./mapFeatures";
 import { isMajorRuin } from "./societyMapScope";
 import { profileOf } from "./societyProfile";
 
@@ -134,18 +133,15 @@ async function runEra(
 const lasting = (c: SocietyCommunity) => Boolean(c.founded) && (c.settlement?.peak ?? 0) >= 20;
 /**
  * The era ends inside the epoch. Every camp that lasted is remembered as a latent site the
- * present prefers; only a camp that met the World's own ruin rule is published as a feature
- * (ADR 0005). The present realizes the others as ruin fields where a sealed vein or a
- * drowned weir line marks the ground they stood on.
+ * present prefers; the ruin entry publishes a camp that met the World's own ruin rule as a
+ * feature (ADR 0005), and the others as ruin fields where a sealed vein or a drowned weir line
+ * marks the ground they stood on.
  */
 export function endRound(state: GenerationState, era: string, epoch: string): HumanRound {
   const region = state.society!.region,
-    camps = region.communities.filter(lasting);
-  for (const c of camps) {
-    c.status = "ruined";
-    if (isMajorRuin(c, profileOf(state).townThreshold))
-      putGenerated(state, ruinFeature(state, c, era, epoch));
-  }
+    camps = region.communities.filter(lasting),
+    threshold = profileOf(state).townThreshold;
+  for (const c of camps) c.status = "ruined";
   return {
     era,
     epoch,
@@ -157,33 +153,18 @@ export function endRound(state: GenerationState, era: string, epoch: string): Hu
       siteKind: c.site?.kind ?? "plain",
       siteReason: c.site?.reason ?? "open country",
       peak: c.settlement?.peak ?? 0,
+      ...(isMajorRuin(c, threshold)
+        ? {
+            major: {
+              communityId: c.id,
+              population: population(c),
+              founded: c.founded,
+              causes: [...c.causes, `${era} ended with the ${epoch}; the camp was not kept.`],
+            },
+          }
+        : {}),
     })),
   };
-}
-function ruinFeature(state: GenerationState, c: SocietyCommunity, era: string, epoch: string) {
-  const feature = generatedFeature(
-    state,
-    `round:${era}:${c.id}`,
-    c.name,
-    "settlement",
-    "ruins",
-    { type: "Point", coordinates: [c.position.x, c.position.y] },
-    {
-      communityId: c.id,
-      era,
-      epoch,
-      round: true,
-      status: "ruined",
-      population: 0,
-      peakPopulation: c.settlement?.peak ?? 0,
-      communityPopulation: population(c),
-      siteKind: c.site?.kind ?? "plain",
-      siteReason: c.site?.reason ?? "open country",
-      founded: c.founded,
-    }
-  );
-  feature.causes = [...c.causes, `${era} ended with the ${epoch}; the camp was not kept.`];
-  return feature;
 }
 
 export const humanRoundProcess: MapProcess = {

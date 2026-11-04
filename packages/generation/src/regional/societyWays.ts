@@ -1,5 +1,6 @@
 import type { AtlasFeature } from "@atlas/domain";
 import { generationFeatures } from "../generationFeatures";
+import { networkFactors, placeLinks } from "../poi/poiCosts";
 import { putRegionalFeature, putRegionalNetwork } from "./extraction/features";
 import { cellAt, distance, isContent, positionOf, stepVector } from "./lattice";
 import type { RegionalState } from "./state";
@@ -10,10 +11,10 @@ import { wayLine } from "./wayLines";
 export const trackTravellers = 10,
   roadTravellers = 100;
 /** How much worn ground discounts travel, and the cost of fording a channel. */
-const wearDiscount = 1.2,
-  fordCost = 3;
+const wearDiscount = 1.2;
+export const fordCost = 3;
 /** River flow (m³/s) above which a road crosses by a bridge. */
-const bridgeFlow = 20;
+export const bridgeFlow = 20;
 
 export interface Place {
   feature: AtlasFeature | null;
@@ -36,7 +37,8 @@ export function traceWays(state: RegionalState, places: Place[]) {
   const mesh = state.physical.map.mesh,
     inherited = inheritedWear(state),
     settled = places.filter((p) => p.settled && p.residents > 0),
-    links = doorLinks(state),
+    links = placeLinks(state),
+    placed = networkFactors(state, "roads"),
     channels = channelLinks(state),
     flows = commutingFlows(mesh, settled);
   // The busiest journeys make their ways first; each wears the ground for the journeys after
@@ -54,7 +56,8 @@ export function traceWays(state: RegionalState, places: Place[]) {
     crossed = new Float64Array(mesh.count);
     const options: PathOptions = {
       links,
-      factor: (i, j) => wornFactor(Math.max(made[j], traffic[j]), fordAt(state, channels, i, j)),
+      factor: (i, j) =>
+        wornFactor(Math.max(made[j], traffic[j]), fordAt(state, channels, i, j)) * placed[j],
     };
     paths = ordered.map((flow) => {
       const path = { ...flow, cells: regionalPath(state, flow.from.cell, flow.to.cell, options) };
@@ -224,16 +227,6 @@ function cutCorners(line: number[][]) {
   }
   return out;
 }
-/** A door's ends join the travel graph for nothing (plan X4). */
-function doorLinks(state: RegionalState) {
-  const links = new Map<number, number>();
-  for (const field of state.physical.magic?.fields ?? [])
-    for (const door of field.doors) {
-      links.set(door.a, door.b);
-      links.set(door.b, door.a);
-    }
-  return links;
-}
 /**
  * A way is a land road at the class its own flow earns: a road above the road count, a track
  * below (the smallest flows are tracks the map draws thin; `routeType` keeps the plan's lane
@@ -264,29 +257,4 @@ function publishWay(state: RegionalState, path: Path, shared: (cell: number) => 
       routeType === "lane" ? "Lane" : routeType === "track" ? "Track" : "Road"
     );
   putRegionalNetwork(state, f, 0, coordinates);
-}
-
-/** Where ways ford channels (plan S4): a ford, or a bridge where a road meets a sizeable river. A seat's own channel cell is no crossing. */
-export function publishCrossings(
-  state: RegionalState,
-  traffic: Float64Array,
-  crossed: Float64Array,
-  seatCells: Set<number>
-) {
-  const map = state.physical.map;
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (crossed[i] <= 0 || seatCells.has(i) || map.WaterKindCodes.get(i) !== 0) continue;
-    const travellers = Math.max(traffic[i], crossed[i]),
-      bridge = travellers >= roadTravellers && map.FlowAccumulation.get(i) >= bridgeFlow,
-      p = positionOf(map.mesh, i);
-    putRegionalFeature(
-      state,
-      `crossing:${i}`,
-      bridge ? "bridge" : "ford",
-      "transportSites",
-      { type: "Point", coordinates: [p.x, p.y] },
-      { workKind: bridge ? "bridge" : "ford", flow: map.FlowAccumulation.get(i), travellers },
-      bridge ? "Bridge" : "Ford"
-    );
-  }
 }

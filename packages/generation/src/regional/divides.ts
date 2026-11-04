@@ -1,4 +1,3 @@
-import { Landform } from "../canonry/codes";
 import { neighborsOf, regionalSpan } from "./lattice";
 import { channelCells } from "./network";
 import type { RegionalState } from "./state";
@@ -66,31 +65,6 @@ export function divides(state: RegionalState) {
     if (!channel(i)) divide[i] = Number(betweenSegments(mesh, i, label, channel, around));
   }
   return divide;
-}
-
-/**
- * Passes on the classified field: a ridge cell that is a low point along the divide it stands
- * on (its divide neighbours are higher, none lower) is the col between two summits. The
- * world's own pass rule reads its wide sampling ring, which at a region's scale sees the
- * flanks either side of a col more than the crest, so the col is read along the divide.
- */
-export function markPasses(state: RegionalState, divide: Uint8Array) {
-  const map = state.physical.map,
-    mesh = map.mesh,
-    around = new Int32Array(mesh.stride);
-  for (let i = 0; i < mesh.count; i++) {
-    if (!divide[i] || map.LandformCodes.get(i) !== Landform.Ridge) continue;
-    const m = neighborsOf(mesh, i, around);
-    let higher = 0,
-      lower = 0;
-    for (let k = 0; k < m; k++) {
-      const j = around[k];
-      if (!divide[j]) continue;
-      if (map.Elevation.get(j) > map.Elevation.get(i)) higher++;
-      else if (map.Elevation.get(j) < map.Elevation.get(i)) lower++;
-    }
-    if (higher >= 2 && lower === 0) map.LandformCodes.set(i, Landform.Pass);
-  }
 }
 
 /** The channel segment each cell's water first reaches, as the id of that segment's lowest cell. */

@@ -1,4 +1,3 @@
-import { generationFeatures } from "../../generationFeatures";
 import {
   cellAt,
   isContent,
@@ -6,34 +5,12 @@ import {
   neighborhoodCapacity,
   neighborsOf,
   regionalSpan,
-} from "../lattice";
-import type { RegionalState } from "../state";
-import { registerCause } from "./registry";
+} from "../../regional/lattice";
+import type { RegionalState } from "../../regional/state";
 
 /** How far (in cells) a dam record snaps to the channel it holds, and the most a crest rises above the bed (m). */
 const damSnap = 2,
   crestLimit = 60;
-
-/**
- * A captured dam holds a reservoir (plan F3): the crest is the lower of the valley's two
- * banks at the dam cell, and the water stage behind it fills the ground below the crest that
- * drains to the dam. Written after each round's water as a lake body, so ecology, Salt and
- * society read a lake where the parent recorded only a point.
- */
-registerCause({
-  kind: "dam",
-  respond(state) {
-    if (!state.regional.input.domains.includes("physical")) return;
-    const children = upstreamIndex(state);
-    let body = nextBody(state);
-    for (const f of generationFeatures(state, { areaId: state.regional.input.areaId })) {
-      if (f.kind !== "dam" || f.geometry.type !== "Point") continue;
-      const [x, y] = f.geometry.coordinates,
-        dam = channelNear(state, cellAt(state.physical.map.mesh, x, y));
-      if (dam >= 0 && holdReservoir(state, dam, children, body)) body++;
-    }
-  },
-});
 
 /** The river cell nearest a position within the snap distance, or -1. */
 export function channelNear(state: RegionalState, cell: number) {
@@ -58,9 +35,12 @@ export function channelNear(state: RegionalState, cell: number) {
   }
   return -1;
 }
+/** The channel a position on this map's lattice snaps to, or -1. */
+export const channelAt = (state: RegionalState, x: number, y: number) =>
+  channelNear(state, cellAt(state.physical.map.mesh, x, y));
 
 /** Children lists of the drainage tree as packed links. */
-function upstreamIndex(state: RegionalState) {
+export function upstreamIndex(state: RegionalState) {
   const { receiver } = state.regional.drainage!,
     n = receiver.length,
     head = new Int32Array(n).fill(-1),
@@ -73,7 +53,7 @@ function upstreamIndex(state: RegionalState) {
   }
   return { head, next };
 }
-function nextBody(state: RegionalState) {
+export function nextBody(state: RegionalState) {
   const map = state.physical.map;
   let body = 1;
   for (let i = 0; i < map.mesh.count; i++) body = Math.max(body, map.WaterBodyIds.get(i) + 1);
@@ -81,7 +61,7 @@ function nextBody(state: RegionalState) {
 }
 
 /** Fill the ground draining to the dam that lies below its crest; returns whether any did. */
-function holdReservoir(
+export function holdReservoir(
   state: RegionalState,
   dam: number,
   children: { head: Int32Array; next: Int32Array },

@@ -1,34 +1,59 @@
 import type { GenerationState } from "../../process";
+import { memoryCold, memoryIce } from "../../societyMagic";
 import { carryWhereItLands, costNear, goes } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
-import { holdsRecord, recordPlaces, settlementWithin, within } from "../poiPlaces";
+import { holdsRecord, within } from "../poiPlaces";
 import { cellSpan, celsiusAt, iceAt, isLand, magicValue } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { cultureOfWork, isWork, seatPeople, strengthOf } from "./settlementRecords";
+import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
+import {
+  cultureOfWork,
+  nearTown,
+  seatPeople,
+  strengthOf,
+  touching,
+  weighedPlace,
+} from "./settlementRecords";
+import { workPlaces, workRecord } from "./workRecords";
 
-/** Ice and cold that hold a memory in full, in metres and degrees of frost, as societyMagic holds them. */
-const fullIce = 10,
-  fullCold = 10;
-/** Readers' traffic, and what crystals do to carried Pressure, which dissipates near them. */
+/** Readers' traffic over this many metres, and what crystals do to carried Pressure, which dissipates near them. */
 const readersRoad = 0.9,
-  dissipated = 3;
+  dissipated = 3,
+  readersReach = 2000;
 /** People at whose seat an archive is half as great as archives get. */
 const typicalPeople = 5000;
 /** How far reading strains the mind, against what else endangers people. */
 const strainSeverity = 0.2;
+/** An archive stands at a seat: within this many metres of one. */
+const seatReach = 5000;
+/** The least distance between two archives people site, and a sited archive's reach, in metres. */
+const archiveSpacing = 100_000,
+  archiveRadius = 200;
 
-const places = recordPlaces("archive", isWork("aurora-archive"));
-const isA = holdsRecord("archive", places);
-const seat = (state: GenerationState) => cellSpan(state);
-const around = (state: GenerationState) => 6 * cellSpan(state);
 const auroraAt = (state: GenerationState, cell: number) =>
   Math.min(1, magicValue(state, "aurora", "intensity", cell) / 1000);
 /** How much of a memory the ground retains, as `auroraUse` reckons it. */
 const retentionAt = (state: GenerationState, cell: number) =>
-  Math.min(1, iceAt(state, cell) / fullIce) *
-  Math.max(0, Math.min(1, -celsiusAt(state, cell) / fullCold));
+  Math.min(1, iceAt(state, cell) / memoryIce) *
+  Math.max(0, Math.min(1, -celsiusAt(state, cell) / memoryCold));
 const held = (state: GenerationState, cell: number) =>
   iceAt(state, cell) > 0 && auroraAt(state, cell) > 0;
+const requires = (state: GenerationState, cell: number) =>
+  isLand(state, cell) && held(state, cell) && nearTown(state, cell, seatReach);
+/** Strong Aurora over thick ice in hard frost: what charges the crystals and what keeps them. */
+const suitability = (state: GenerationState, cell: number) =>
+  Math.sqrt(auroraAt(state, cell) * retentionAt(state, cell));
+const places = workPlaces("archive", "aurora-archive", {
+  record: "aurora-archive",
+  layer: "magicPractices",
+  label: "Archive",
+  radius: archiveRadius,
+  spacing: archiveSpacing,
+  requires,
+  suitability,
+});
+const isA = holdsRecord("archive", places);
+const seat = (state: GenerationState) => touching(state, seatReach);
+const around = (state: GenerationState) => 6 * cellSpan(state);
 const factors = {
   magnitude: sized(seatPeople, typicalPeople),
   localConditions: standsOut(auroraAt, around),
@@ -44,18 +69,22 @@ export const archive: PoiEntry = {
   name: "Archive",
   recognition: {
     distinct:
-      "A published practice of `kind` aurora-archive (`workKind` aurora-archive), at its community's seat: people reading memory out of crystals in cold ice. A frost prism and a light well are Aurora's own rule cells with no record, and an aurora field the intensity they stand in; a forge is the same kind of practice on Fire.",
+      "A practice at a community's seat: people reading memory out of crystals in cold ice. A frost prism and a light well are Aurora's own rule cells with no record, and an aurora field the intensity they stand in; a forge is the same kind of practice on Fire.",
     isA,
   },
   existence: {
     statement:
-      "Sited at a community's seat once Aurora and ice under it give it crystals. The simulation runs this as a practice today, but the world map publishes no generated works and refined maps do not make archives: an archive reaches the map only as an authored record.",
+      "Sited two ways: the simulation's practice at a community's seat once Aurora and ice under it give it crystals; and on every map beside a seat where Aurora stands over thick ice in hard frost, at least 100 km apart.",
     way: "sited",
-    requires: (state, cell) =>
-      isLand(state, cell) && held(state, cell) && settlementWithin(state, cell, seat(state)),
-    /** Strong Aurora over thick ice in hard frost: what charges the crystals and what keeps them. */
-    suitability: (state, cell) => auroraAt(state, cell) * retentionAt(state, cell),
+    requires,
+    suitability,
     places,
+  },
+  publication: {
+    statement:
+      "An archive publishes as a located practice; the World shows those the ground sited, and the simulation's own stay without a record.",
+    moment: "society",
+    record: workRecord,
   },
   fields: {
     statement:
@@ -70,20 +99,22 @@ export const archive: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A refined map does not yet realize archives. An authored archive captured from a coarser map stands at its seat only if ice and Aurora reach the finer ground there, and otherwise goes.",
+      "An archive captured from a coarser map stands at its seat only if ice and Aurora reach the finer ground there, and otherwise goes.",
     carry: carryWhereItLands,
     realize: notApplicable("It requires ground of a kind; it does not shape any."),
     counterpart: (state, carried) => (held(state, carried.cell) ? carried.cell : -1),
     unrealized: goes,
     settle: notApplicable("It moves only if its seat does, which is the settlement's rule."),
+    schedule: notApplicable("An archive takes no part in refinement's steps."),
   },
   movement: {
     statement:
       "Readers wear a modest road to an archive. Its crystals dissipate any Pressure people carry near them, so it is costly ground for that carrier though it stops nothing else.",
-    roads: (state, place, cell) => costNear(readersRoad, around(state))(state, place, cell),
+    roads: costNear(readersRoad, readersReach),
     boats: notApplicable("It stands on land in hard frost, away from open water."),
     drainage: notApplicable("It holds no ground water can feel; ice decides the flow here."),
-    magic: (state, place, cell) => costNear(dissipated, around(state))(state, place, cell),
+    magic: { people: costNear(dissipated, readersReach) },
+    links: notApplicable("An archive joins nothing."),
     crosses: notApplicable("Reading a crystal takes no route over anything."),
   },
   others: {
@@ -123,7 +154,7 @@ export const archive: PoiEntry = {
     statement:
       "An archive shows by the people who keep it and by how strongly Aurora stands over its country; its fame reaches further than its size, carried by the town that holds it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
+    importance: weighedPlace(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
   },
   naming: {
     statement: "Named by the community that keeps it, in its record, after its settlement.",

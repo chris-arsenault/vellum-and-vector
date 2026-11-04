@@ -19,6 +19,7 @@ import { basaltFlat } from "./relief/basaltFlat";
 import { sinkholeField } from "./relief/sinkholeField";
 import { glassFlat } from "./relief/glassFlat";
 import { frostPrism } from "./relief/frostPrism";
+import { basaltScar } from "./relief/basaltScar";
 import { waterPage } from "./water/page";
 import { spring } from "./water/spring";
 import { waterfall } from "./water/waterfall";
@@ -52,6 +53,17 @@ import { barren } from "./cover/barren";
 import { thawedHalo } from "./cover/thawedHalo";
 import { wildZone } from "./cover/wildZone";
 import { clearance } from "./cover/clearance";
+import { emberGrove } from "./cover/emberGrove";
+import { thawMeadow } from "./cover/thawMeadow";
+import { rimeForest } from "./cover/rimeForest";
+import { glowBarrens } from "./cover/glowBarrens";
+import { fogHeath } from "./cover/fogHeath";
+import { greenwoodStand } from "./cover/greenwoodStand";
+import { verdantGround } from "./cover/verdantGround";
+import { deepwood } from "./cover/deepwood";
+import { wendingFen } from "./cover/wendingFen";
+import { wellMeadow } from "./cover/wellMeadow";
+import { barrowHeath } from "./cover/barrowHeath";
 import { anomaliesPage } from "./anomalies/page";
 import { auroraField } from "./anomalies/auroraField";
 import { lightWell } from "./anomalies/lightWell";
@@ -59,6 +71,9 @@ import { compassDeviation } from "./anomalies/compassDeviation";
 import { interferenceLattice } from "./anomalies/interferenceLattice";
 import { tear } from "./anomalies/tear";
 import { door } from "./anomalies/door";
+import { fireCore } from "./anomalies/fireCore";
+import { wardRing } from "./anomalies/wardRing";
+import { wardLine } from "./anomalies/wardLine";
 import { settlementsPage } from "./settlements/page";
 import { settlement } from "./settlements/settlement";
 import { ruin } from "./settlements/ruin";
@@ -105,6 +120,7 @@ export const poiCatalogue: Readonly<Record<PoiKindId, PoiEntry>> = {
   sinkholeField,
   glassFlat,
   frostPrism,
+  basaltScar,
   spring,
   waterfall,
   lake,
@@ -134,12 +150,26 @@ export const poiCatalogue: Readonly<Record<PoiKindId, PoiEntry>> = {
   thawedHalo,
   wildZone,
   clearance,
+  emberGrove,
+  thawMeadow,
+  rimeForest,
+  glowBarrens,
+  fogHeath,
+  greenwoodStand,
+  verdantGround,
+  deepwood,
+  wendingFen,
+  wellMeadow,
+  barrowHeath,
   auroraField,
   lightWell,
   compassDeviation,
   interferenceLattice,
   tear,
   door,
+  fireCore,
+  wardRing,
+  wardLine,
   settlement,
   ruin,
   dam,

@@ -1,29 +1,24 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiBarrier, type PoiEntry, type PoiPlace } from "../poiContract";
-import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import { cellSpan, iceAt, isRiver, isSea, magicRule } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import {
-  auroraAt,
-  chargeHeldAt,
-  cooling,
-  holdingIce,
-  softening,
-  stilling,
-  storingCharge,
-  weightedArea,
-} from "./anomalyReads";
+import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { iceAt, isRiver, isSea, magicRule } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { auroraAt, chargeHeldAt, countryOf, weightedArea } from "./anomalyReads";
 
 /** Fully charged ground at which a field is half as great as fields get, in square metres. */
 const typicalArea = 1e10;
 /** The share of a field under the melt rule at which its ice is going faster than it holds. */
 const wastingShare = 0.5;
+/** A field's country, and how far its cold shadow lies past it, in metres. */
+const countryMetres = 30_000,
+  shadowMetres = 10_000;
 
 const isA = magicRule("aurora", "field");
 const isMelting = magicRule("aurora", "melt");
-const places = regionPlaces("auroraField", isA, auroraAt);
-const around = (state: GenerationState) => 6 * cellSpan(state);
+const places = rulePlaces("auroraField", "aurora", "field");
+const around = countryOf(countryMetres);
 const chargedArea = (state: GenerationState, place: PoiPlace) =>
   weightedArea(state, place, (cell) => auroraAt(state, cell) / 1000);
 const counterpart = counterpartOf(isA, 2);
@@ -36,8 +31,9 @@ const factors = {
 /** Share of a place's cells a test holds on. */
 const shareOf = (place: PoiPlace, test: (cell: number) => boolean) =>
   place.cells.filter(test).length / place.cells.length;
-const heldHere = (state: GenerationState, place: PoiPlace, cell: number) =>
-  place.cells.includes(cell) ? chargeHeldAt(state, cell) : 0;
+/** A network's cost across a field: dearer the more charge each cell's ice holds. */
+const heldBack = (weight: number) => (state: GenerationState, place: PoiPlace) =>
+  place.cells.map((cell) => ({ cell, factor: 1 + weight * chargeHeldAt(state, cell) }));
 
 export const auroraField: PoiEntry = {
   id: "auroraField",
@@ -58,42 +54,45 @@ export const auroraField: PoiEntry = {
     ),
     places,
   },
+  publication: {
+    statement: "Every connected field publishes as Aurora's field class, outlined by its coverage.",
+    moment: "magic",
+    record: ruleRecord("aurora", "field"),
+  },
   fields: {
     statement:
-      "A store of charge in ice. It softens the rock beneath, so its charged glaciers cut faster, keeps ice past its climate, cools the ground by a few degrees, and stills growth and decay until only rime forest and glow-lichen hold on. Its still air pins storm fronts at its edge.",
-    terrain: softening,
-    water: holdingIce,
-    climate: cooling,
-    cover: stilling,
-    magic: storingCharge,
+      "A store of charge in ice. Aurora's field softens the rock beneath, keeps ice past its climate, cools the ground by a few degrees, and stills growth and decay until only rime forest and glow-lichen hold on; it does all this by intensity, whether the rule calls the ground a field or not.",
+    terrain: notApplicable(
+      "Aurora's rock writes by intensity (`declareRockWrites` on a refined map) soften the ground."
+    ),
+    water: notApplicable("`holdIce` writes IcePersistence from Aurora's held charge."),
+    climate: notApplicable("`magicThermalFeedback` applies Aurora's cold by held charge."),
+    cover: notApplicable("`magicLivingFeedback` writes Stillness from Aurora's held charge."),
+    magic: notApplicable("Aurora's stocks in `magicStocks` write the IceCharge its ice holds."),
   },
   acrossMaps: {
     statement:
-      "A field carries onto the refined map as captured intensity, and the regional magic re-derives it each round from the finer ice. The finer ground must keep the cold and the ice; a field whose ice does not develop there moves to the nearest charged ice or goes, and a round's melt can shift it.",
+      "A field carries onto the refined map as captured intensity, and the regional magic re-derives it each round from the finer ice. A field whose ice does not develop there moves to the nearest charged ice or goes, and a round's melt can shift it.",
     carry: carryWhereItLands,
-    realize(state, carried) {
-      const cell = counterpart(state, carried);
-      if (cell < 0) return [];
-      const place: PoiPlace = {
-        id: carried.feature.id,
-        kind: "auroraField",
-        cells: [cell],
-        anchor: cell,
-      };
-      return [...holdingIce(state, place), ...cooling(state, place)];
-    },
+    realize: notApplicable(
+      "`holdIce` and `magicThermalFeedback` keep the ice and the cold from the refined field each round."
+    ),
     counterpart,
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: movesTo(counterpart),
+    schedule: notApplicable(
+      "Aurora's field is re-derived each round; the place has no step of its own."
+    ),
   },
   movement: {
     statement:
       "Charged ice does not soften or open, so boats are barred from it and walkers are slowed by its cold, but a frozen river or sea held by charge is a dependable crossing. Water runs poorly while the ice holds it. Ice carries Aurora's own charge along the field more easily than ground would.",
-    roads: (state, place, cell) => 1 + 0.5 * heldHere(state, place, cell),
+    roads: heldBack(0.5),
     boats: costNear(Infinity),
-    drainage: (state, place, cell) => 1 + heldHere(state, place, cell),
-    magic: (state, place, cell) => (place.cells.includes(cell) ? 0.7 : 1),
+    drainage: heldBack(1),
+    magic: { ice: costNear(0.7) },
+    links: notApplicable("A field joins nothing at a distance."),
     crosses(state, place) {
       const held = place.cells.filter((cell) => chargeHeldAt(state, cell) > 0),
         barriers: PoiBarrier[] = [];
@@ -126,7 +125,7 @@ export const auroraField: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "stilled growth and cold shadow",
-        reach: 2 * cellSpan(state),
+        reach: shadowMetres,
         severity: chargeHeldAt(state, place.anchor),
       },
     ],
@@ -143,7 +142,7 @@ export const auroraField: PoiEntry = {
     statement:
       "A field shows by how much charged ground it covers and how far it outshines its own cold country; one edging into settled land shows sooner than a greater one on an empty cap.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.55, localConditions: 0.3, isolation: 0.15 }),
+    importance: weighed(factors, { magnitude: 0.55, localConditions: 0.3, isolation: 0.15 }),
   },
   naming: {
     statement:

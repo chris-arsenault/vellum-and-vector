@@ -6,6 +6,7 @@ import { strainAt } from "./magicConfluences";
 import { hashUnit } from "./noise";
 import { clamp, round, units } from "./math";
 import { rebuild } from "./surface";
+import { wardSeals } from "./magicHallowed";
 import { CellList, FloatList, radixOrder, SmallIntSet, type Band } from "@atlas/domain";
 
 const tears = (field: MagicField) =>
@@ -121,22 +122,41 @@ export function pairingSources(
     }
   });
 }
-function doorEligibility(state: GenerationState, field: MagicField, strength: Band) {
+/** Wildness from which a tear no longer holds still; stored charge from which a door closes. */
+const doorTooWild = 0.1,
+  doorClosingCharge = 300;
+/** What can end a door at a cell: a rupture, wild ground, or a ward or charge that shuts it. */
+export function doorConditions(state: GenerationState, field: MagicField) {
   const map = state.physical!.map,
-    magic = state.physical!.magic!,
-    p = field.definition.parameters,
-    others = magic.fields.filter((other) => other.definition.enabled && other !== field),
+    others = state.physical!.magic!.fields.filter(
+      (other) => other.definition.enabled && other !== field
+    ),
     stills = others.find((other) => other.definition.effects.stillness > 0),
     fire = others.find((other) => other.definition.effects.conduitOpening > 0);
-  return (i: number) => {
-    if (strength.get(i) < p.doorStrain) return false;
+  return {
     // A Fire release at the cell (an open vein, a cracked core, a forge) ruptures the door.
-    if (fire && fire.source.get(i) > 0) {
-      field.wild.set(i, 1);
-      return false;
-    }
-    if (field.wild.get(i) >= 0.1 || map.Warding.get(i) >= 0.5) return false;
-    return !(stills && stills.stored.get(i) >= 300);
+    ruptured: (i: number) => Boolean(fire && fire.source.get(i) > 0),
+    unsettled: (i: number) => field.wild.get(i) >= doorTooWild,
+    shut: (i: number) =>
+      map.Warding.get(i) >= wardSeals ||
+      Boolean(stills && stills.stored.get(i) >= doorClosingCharge),
+  };
+}
+/** Whether a cell can hold a door: strong enough, and nothing there ends one. Writes nothing. */
+export function doorHoldsOpen(state: GenerationState, field: MagicField, strength: Band) {
+  const { ruptured, unsettled, shut } = doorConditions(state, field),
+    p = field.definition.parameters;
+  return (i: number) =>
+    strength.get(i) >= p.doorStrain && !ruptured(i) && !unsettled(i) && !shut(i);
+}
+/** The pairing's test: a door's eligibility, and a Fire release on strong strain makes it wild. */
+function doorEligibility(state: GenerationState, field: MagicField, strength: Band) {
+  const { ruptured } = doorConditions(state, field),
+    holdsOpen = doorHoldsOpen(state, field, strength),
+    p = field.definition.parameters;
+  return (i: number) => {
+    if (strength.get(i) >= p.doorStrain && ruptured(i)) field.wild.set(i, 1);
+    return holdsOpen(i);
   };
 }
 function partner(
@@ -163,8 +183,8 @@ function partner(
 /**
  * What Veil does to the ground once per epoch: a wild zone moves its bedrock by a hashed
  * amount within the bound and exchanges a share of its tree and grass cover, so streams
- * change course and a forest edge moves without flood or fire; a door chills its cell,
- * sinks a pool once, and rings itself with forced grass and saplings.
+ * change course and a forest edge moves without flood or fire. A door's own marks on the
+ * ground are the door entry's.
  */
 export function veilWrites(state: GenerationState, epoch: number) {
   const map = state.physical!.map,
@@ -172,8 +192,6 @@ export function veilWrites(state: GenerationState, epoch: number) {
   for (const field of fields) {
     for (let i = 0; i < map.mesh.count; i++)
       if (field.wild.get(i) > 0 && map.WaterKindCodes.get(i) === 0) unsettle(map, field, i, epoch);
-    for (const door of field.doors)
-      for (const cell of [door.a, door.b]) houseDoor(map, field, cell);
   }
 }
 function unsettle(map: PhysicalField, field: MagicField, i: number, epoch: number) {
@@ -199,20 +217,4 @@ function unsettle(map: PhysicalField, field: MagicField, i: number, epoch: numbe
     map.GrassCover.add(i, moved);
   }
   map.TreeCover.set(i, map.BroadleafCover.get(i) + map.ConiferCover.get(i));
-}
-function houseDoor(map: PhysicalField, field: MagicField, cell: number) {
-  const p = field.definition.parameters;
-  map.Temperature.set(cell, Math.max(0, map.Temperature.get(cell) - round(p.doorChill)));
-  if (field.subsided.get(cell) < p.doorPool) {
-    const drop = p.doorPool - field.subsided.get(cell);
-    field.subsided.set(cell, p.doorPool);
-    map.BedrockElevation.add(cell, -units(drop));
-    rebuild(map, cell);
-  }
-  for (let edge = 0; edge < map.mesh.degree(cell); edge++) {
-    const j = map.mesh.neighbor(cell, edge);
-    if (j < 0 || map.WaterKindCodes.get(j) !== 0) continue;
-    map.GrassCover.set(j, Math.max(map.GrassCover.get(j), 0.3));
-    map.BroadleafSaplings.set(j, Math.max(map.BroadleafSaplings.get(j), 0.05));
-  }
 }

@@ -1,73 +1,20 @@
 import { canonryConfluencePresets, spatial, type AtlasFeature } from "@atlas/domain";
-import { generationFeature, generationFeatures } from "../../generationFeatures";
 import type { GenerationState } from "../../process";
-import { cellAt } from "../../regional/lattice";
-import type { PoiFieldChange, PoiHazard, PoiPlace } from "../poiContract";
-import type { PoiKindId } from "../poiKinds";
-import { namingCultureNear, recordPlaces } from "../poiPlaces";
-import {
-  cellSpan,
-  cellsWithin,
-  featureCell,
-  featuresOf,
-  fieldOf,
-  gap,
-  heldFor,
-  magicRule,
-  magicValue,
-  settlementsOf,
-} from "../poiReads";
+import { keptCondition, lineMemory } from "../../societyRecord";
+import type { PoiCost, PoiFieldChange, PoiHazard, PoiPlace, PoiVisibility } from "../poiContract";
+import { namingCultureNear } from "../poiPlaces";
+import { cellSpan, cellsWithin, fieldOf, gap, heldFor, magicRule, magicValue } from "../poiReads";
+import { weighed, type Weights } from "../poiVisibilityRules";
+import { ruinPlaces, settlementPlaces } from "./communityRecords";
+
+/** What the settlement group's entries share: reads of a place's record and the towns around it. */
 
 /**
- * What the settlement group's entries share: reads of the published work and event records.
- * Constants marked "as X holds it" are private to that generator file; they are repeated here
- * because this group may not edit it, and should become exports when the catalogue is wired.
+ * A distance in metres on this map: a physical reach never shrinks below the cells touching a
+ * cell, the nearest thing a map of any size can tell apart.
  */
-
-/** Discharge above which a road crosses by a bridge and the factor a ford charges, as regional/societyWays holds them. */
-export const bridgeFlow = 20,
-  fordCost = 3;
-/** Years over which a line is forgotten, as societyRecord holds it: the most a kept work's line reaches. */
-const lineMemory = 150;
-/** The condition above which a work keeps its line, as societyRecord holds it. */
-const keptCondition = 0.5;
-
-/** A published work of a record kind, including a legacy authored work that names it. */
-export const isWork = (record: string) => (feature: AtlasFeature) =>
-  feature.kind === record ||
-  (feature.kind === "societyWork" && feature.attributes.workKind === record);
-
-/**
- * Places of a sited kind whose record may be an area: a work's own `site`, else the area's
- * interior. `recordPlaces` takes the first coordinate, which for a retained event's buffer or an
- * irrigated area lies on its rim, or off the map.
- */
-export const areaPlaces =
-  (kind: PoiKindId, matches: (feature: AtlasFeature) => boolean) =>
-  (state: GenerationState): readonly PoiPlace[] =>
-    heldFor(state, `places:${kind}`, () => {
-      const places: PoiPlace[] = [];
-      for (const feature of generationFeatures(state))
-        if (matches(feature)) {
-          const anchor = recordCell(state, feature);
-          if (anchor >= 0) places.push({ id: feature.id, kind, cells: [anchor], anchor, feature });
-        }
-      return places;
-    });
-function recordCell(state: GenerationState, feature: AtlasFeature) {
-  if (feature.geometry.type === "Point") return featureCell(state, feature);
-  const site = feature.attributes.site as { x: number; y: number } | undefined,
-    { x, y } = site ?? spatial.interiorPosition(feature.geometry);
-  return cellAt(fieldOf(state).mesh, x, y);
-}
-
-export const fordPlaces = recordPlaces("ford", isWork("ford"));
-export const bridgePlaces = recordPlaces("bridge", isWork("bridge"));
-/** Every crossing on the map, of either kind: what a crossing stands alone among. */
-export const crossingPlaces = (state: GenerationState) => [
-  ...fordPlaces(state),
-  ...bridgePlaces(state),
-];
+export const touching = (state: GenerationState, metres: number) =>
+  Math.max(metres, 1.5 * cellSpan(state));
 
 export const attribute = (place: PoiPlace, name: string, otherwise = 0) => {
   const value = Number(place.feature?.attributes[name]);
@@ -86,9 +33,20 @@ export const isKept = (place: PoiPlace) =>
 /** A kept work keeps the line it stands on, the source Hallowed's lines read. */
 export const keptLine = (place: PoiPlace, cell = place.anchor): readonly PoiFieldChange[] =>
   isKept(place) ? [{ change: "atLeast", band: "KeptLine", cell, value: lineMemory }] : [];
-/** The cells a located work acts on and its share at each, as `workSamples` falls it off. */
+/**
+ * The cells a located work acts on and its share at each, as `workSamples` falls it off. A work
+ * smaller than a cell acts on that cell alone, by the share of it the work covers.
+ */
 export function workReach(state: GenerationState, place: PoiPlace) {
-  const radius = Math.max(attribute(place, "radius"), cellSpan(state));
+  const radius = attribute(place, "radius"),
+    span = cellSpan(state);
+  if (radius < span)
+    return [
+      {
+        cell: place.anchor,
+        share: Math.min(1, (Math.PI * radius ** 2) / fieldOf(state).mesh.area(place.anchor)),
+      },
+    ];
   return cellsWithin(state, place.anchor, radius).map((cell) => ({
     cell,
     share: Math.exp(-gap(state, place.anchor, cell) / radius),
@@ -98,21 +56,34 @@ export function workReach(state: GenerationState, place: PoiPlace) {
 /** People a settlement record stands for, its country's where it has one. */
 export const peopleOfRecord = (town: AtlasFeature) =>
   Number(town.attributes.communityPopulation ?? town.attributes.population) || 0;
+/** Cells within `reach` metres of a settlement of at least `least` people, one pass per town. */
+const townsReach = (state: GenerationState, reach: number, least: number) =>
+  heldFor(state, `townsReach:${reach}:${least}`, () => {
+    const marked = new Uint8Array(fieldOf(state).mesh.count);
+    for (const town of settlementPlaces(state))
+      if (!least || (town.feature && peopleOfRecord(town.feature) >= least))
+        for (const cell of cellsWithin(state, town.anchor, touching(state, reach)))
+          marked[cell] = 1;
+    return marked;
+  });
 /** Whether a settlement of at least `least` people stands within `reach` metres of a cell. */
-export function peopleWithin(state: GenerationState, cell: number, reach: number, least: number) {
-  for (const town of settlementsOf(state))
-    if (peopleOfRecord(town) >= least && gap(state, featureCell(state, town), cell) <= reach)
-      return true;
-  return false;
-}
-/** The settlement a work's record names: a mill's `seat`, or a work's `communityId`. */
+export const nearTown = (state: GenerationState, cell: number, reach: number, least = 0) =>
+  townsReach(state, reach, least)[cell] === 1;
+/** The settlement a work's record names: a seat by its record, or by its community. */
+const townsById = (state: GenerationState) =>
+  heldFor(state, "townsById", () => {
+    const towns = new Map<string, () => AtlasFeature | undefined>();
+    for (const town of [...settlementPlaces(state), ...ruinPlaces(state)]) {
+      towns.set(town.id, () => town.feature);
+      const id = town.feature?.attributes.communityId;
+      if (typeof id === "string") towns.set(id, () => town.feature);
+    }
+    return towns;
+  });
 export function seatOf(state: GenerationState, place: PoiPlace) {
   const { seat, communityId } = place.feature?.attributes ?? {};
-  if (typeof seat === "string") return generationFeature(state, seat);
-  if (communityId === undefined) return undefined;
-  for (const town of featuresOf(state, "settlement"))
-    if (town.attributes.communityId === communityId) return town;
-  return undefined;
+  const key = typeof seat === "string" ? seat : communityId;
+  return typeof key === "string" ? townsById(state).get(key)?.() : undefined;
 }
 export const isGone = (town: AtlasFeature | undefined) =>
   !town || ["abandoned", "ruined"].includes(String(town.attributes.status));
@@ -126,7 +97,6 @@ export function cultureOfWork(state: GenerationState, place: PoiPlace) {
   return typeof culture === "string" ? culture : namingCultureNear(state, place);
 }
 
-export const isEvent = (feature: AtlasFeature) => feature.kind === "societyEvent";
 export const eventKindOf = (place: PoiPlace) => String(place.feature?.attributes.eventKind ?? "");
 export const deadOf = (_state: GenerationState, place: PoiPlace) => attribute(place, "casualties");
 const typicalLoss = 1000;
@@ -143,11 +113,6 @@ export function eventReach(state: GenerationState, place: PoiPlace) {
   const [west, , east] = spatial.bounds(place.feature.geometry);
   return Math.max((east - west) / 2, cellSpan(state));
 }
-/** The dead lie where they fell: the amount Salt's death origin reads, held and never added twice. */
-export const deadGround = (place: PoiPlace, cell = place.anchor): readonly PoiFieldChange[] => {
-  const value = attribute(place, "casualties");
-  return value > 0 ? [{ change: "atLeast", band: "MassDeath", cell, value }] : [];
-};
 /** The share of the ground's living cover an event of its strength leaves damaged. */
 export const damagedGround = (place: PoiPlace, share: number): readonly PoiFieldChange[] => [
   {
@@ -157,14 +122,20 @@ export const damagedGround = (place: PoiPlace, share: number): readonly PoiField
     value: share * eventMagnitude(place),
   },
 ];
+/** Who writes an event's dead: a declared total here would re-feed Salt every evaluation. */
+export const deadAreRecorded =
+  "societyRecord's recordEvents writes each event's dead to the mass-death band once, and Salt's source empties that band as it makes brine, so a declared total would raise the dead again at every evaluation.";
 
 const salted = magicRule("salt", "ground");
 /** People avoid salted ground: a road pays for it within an event's reach, as Salt's avoidance. */
-export const avoidedGround = (state: GenerationState, place: PoiPlace, cell: number) =>
-  salted(state, cell) && gap(state, place.anchor, cell) <= eventReach(state, place)
-    ? 1 + Math.min(1, magicValue(state, "salt", "intensity", cell) / 1000)
-    : 1;
-/** Aurora and Salt strengths at which the two seed a preserved barrow, as its confluence holds them. */
+export const avoidedGround = (state: GenerationState, place: PoiPlace): readonly PoiCost[] =>
+  cellsWithin(state, place.anchor, eventReach(state, place))
+    .filter((cell) => salted(state, cell))
+    .map((cell) => ({
+      cell,
+      factor: 1 + Math.min(1, magicValue(state, "salt", "intensity", cell) / 1000),
+    }));
+/** Aurora and Salt strengths at which the two seed a preserved barrow, as its confluence presets them. */
 const barrowAurora = 300,
   barrowSalt = 200;
 /** The dead who do not rest: the preserved barrow's own hazard, where Aurora holds Salt still. */
@@ -201,3 +172,16 @@ export const eventFate = (state: GenerationState, place: PoiPlace) =>
   salted(state, place.anchor)
     ? ({ fate: "ends", leaves: "killingGround" } as const)
     : ({ fate: "persists" } as const);
+
+/**
+ * `weighed`, for a place with no cell to weigh it on: settlements and works also publish on maps
+ * with no physical field, which store no importance for them.
+ */
+export function weighedPlace(
+  factors: Pick<PoiVisibility, "magnitude" | "localConditions" | "isolation" | "cultural">,
+  weights: Weights
+) {
+  const weigh = weighed(factors, weights);
+  return (state: GenerationState, place: PoiPlace) =>
+    state.physical && place.anchor >= 0 ? weigh(state, place) : 0;
+}

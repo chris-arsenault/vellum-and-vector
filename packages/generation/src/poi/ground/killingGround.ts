@@ -1,25 +1,25 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
-import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { holds, namingCultureNear, within } from "../poiPlaces";
 import { featureCell, featuresOf, gap, moistureAt } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { siteRecord } from "../poiRecords";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
   aroundOf,
+  fullSaltOf,
+  grownAndNaturalPlaces,
+  grownOrNaturalRecord,
   killingAt,
   killingFloor,
+  naturalKillingAt,
   recordedBrineAt,
   reservoirPerArea,
-  saltHeld,
-  saltThinned,
-  saltedAir,
   saltingAt,
   standsOn,
   stockPerArea,
 } from "./groundReads";
 
-/** Brine per square metre at which a killing ground is half as great as they get: Salt's full level. */
-const typicalBrine = 400;
 /** People go the long way round salted dead ground, and carry nothing from it. */
 const shunned = 1.5;
 /** A recorded killing on the ground attaches people to it this strongly, whatever lives near it now. */
@@ -32,10 +32,12 @@ const flushing = 0.6;
 /** The salt the dead became and the salt those still on record will become, as one reading. */
 const deadAt = (state: GenerationState, cell: number) =>
   stockPerArea(state, "salt", "death/brine", cell) + recordedBrineAt(state, cell);
-const places = regionPlaces("killingGround", killingAt, deadAt);
+const places = grownAndNaturalPlaces("killingGround", ["salt", "ground"], naturalKillingAt, deadAt);
 const counterpart = counterpartOf(killingAt, 1);
 const brineOf = (state: GenerationState, place: PoiPlace) => deadAt(state, place.anchor);
-const greatness = sized(brineOf, typicalBrine);
+/** Half as great as they get at Salt's full level. */
+const greatness = (state: GenerationState, place: PoiPlace) =>
+  sized(brineOf, fullSaltOf(state))(state, place);
 /** The strongest of what lives near it now and of what was recorded on the ground. */
 const cultural = (state: GenerationState, place: PoiPlace) => {
   const living = attachment(aroundOf)(state, place);
@@ -57,7 +59,7 @@ export const killingGround: PoiEntry = {
   name: "Killing ground",
   recognition: {
     distinct:
-      "A land cell in Salt's killing-ground rule, whose death-origin brine stands at the rule's floor per square metre, or one whose recorded dead, the MassDeath band not yet read by Salt, would make that much brine. Only the dead's own material decides: a battlefield or disaster site is a published event that may have left none, and may stand where a killing ground does not; a salt pan reads Salt's intensity or a closed floor, not the brine of the dead. A town's ordinary die-offs under the floor make no such ground. With Salt enabled the rule decides it; the band covers the epoch before Salt reads it and worlds with no Salt.",
+      "A cell in Salt's killing-ground rule, whose death-origin brine stands at the rule's floor per square metre, or, outside the rule, a land cell whose recorded dead, the MassDeath band not yet read by Salt, would make that much brine. Only the dead's own material decides: a battlefield or disaster site is a published event that may have left none, and may stand where a killing ground does not; a salt pan reads Salt's intensity or a closed floor, not the brine of the dead. A town's ordinary die-offs under the floor make no such ground. With Salt enabled the rule decides it; the band covers the epoch before Salt reads it and worlds with no Salt.",
     isA: killingAt,
   },
   existence: {
@@ -70,18 +72,39 @@ export const killingGround: PoiEntry = {
     ),
     places,
   },
+  publication: {
+    statement:
+      "A ground Salt holds publishes as its rule's class; dead on record that Salt has not read publish as a site where they lie.",
+    moment: "magic",
+    record: grownOrNaturalRecord(
+      "salt",
+      "ground",
+      siteRecord({
+        kind: "killingGround",
+        layer: "geology",
+        name: "Killing ground",
+        attributes: (state, place) => ({ recordedBrine: recordedBrineAt(state, place.anchor) }),
+      })
+    ),
+  },
   fields: {
     statement:
-      "The ground holds its dead as salt. It keeps its salting while Salt is at work, the air over it dries, and growth on it thins to heath. Brine seeps down the drainage by Salt's own carrier and crusts at a pit.",
+      "The ground holds its dead as salt, and Salt's own writes by intensity do the rest wherever it stands: the air dries, growth thins to heath, and brine seeps down the drainage by Salt's own carrier and crusts at a pit. The place adds nothing of its own.",
     terrain: notApplicable(
       "The dead change no height; any ground that falls in is Salt's bounded dissolving of the bed, written by its stock advance."
     ),
     water: notApplicable(
       "The brine in seepage is a Salt stock, not a water band; rivers keep their discharge and no band records water's salt."
     ),
-    climate: saltedAir,
-    cover: saltThinned,
-    magic: saltHeld,
+    climate: notApplicable(
+      "Salt's writes dry the air by its intensity (saltWrites on the world, declareSaltWrites in refinement)."
+    ),
+    cover: notApplicable(
+      "Ecology's growth reads the Salting band that magicLivingFeedback writes by Salt's intensity."
+    ),
+    magic: notApplicable(
+      "magicLivingFeedback writes Salting by Salt's intensity, and Salt's stocks do not decay on their own."
+    ),
   },
   acrossMaps: {
     statement:
@@ -93,6 +116,7 @@ export const killingGround: PoiEntry = {
     counterpart,
     unrealized: stays,
     settle: notApplicable("A round's water moves brine only by the stock's own per-epoch seepage."),
+    schedule: notApplicable("A killing ground does nothing at refinement's other points."),
   },
   movement: {
     statement:
@@ -104,7 +128,8 @@ export const killingGround: PoiEntry = {
     drainage: notApplicable(
       "Brine follows the network without shaping it, and the ground's height is unchanged."
     ),
-    magic: costNear(shunned),
+    magic: { people: costNear(shunned) },
+    links: notApplicable("A killing ground joins no two cells for walkers."),
     crosses: notApplicable("Ground that people avoid opens no way across anything."),
   },
   others: {
@@ -156,7 +181,7 @@ export const killingGround: PoiEntry = {
     statement:
       "It shows by how many lie there, by standing out from the country round it, and by being alone in it; a great battle's ground stays on the map when no one lives within a day of it, since the event carries it, and ordinary ground with a few dead does not.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
   },
   naming: {
     statement:

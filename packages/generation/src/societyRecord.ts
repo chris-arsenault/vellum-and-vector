@@ -71,8 +71,11 @@ function walkRoutes(state: GenerationState, years: number) {
   }
 }
 /** Years over which an unkept line is forgotten. */
-const lineMemory = 150;
-const keptWorkKinds = new Set(["dam", "irrigation", "harbor", "pass", "weir"]);
+export const lineMemory = 150;
+/** The condition above which a work keeps its line. */
+export const keptCondition = 0.5;
+/** Works with no catalogue entry of their own; a dam, irrigation or harbour declares its line. */
+const keptWorkKinds = new Set(["pass", "weir"]);
 /**
  * The lines people keep: a frontier, where a way's two ends are held by different polities,
  * is kept at both seats; a work kept in condition keeps the bank or the pass it stands on.
@@ -88,7 +91,8 @@ function keepLines(state: GenerationState, years: number) {
   };
   for (const seat of frontierSeats(state)) keptAt(seat);
   for (const work of state.society!.region.works)
-    if (keptWorkKinds.has(work.kind) && work.condition > 0.5 && !work.demand) keptAt(work.position);
+    if (keptWorkKinds.has(work.kind) && work.condition > keptCondition && !work.demand)
+      keptAt(work.position);
 }
 /** The seats at both ends of every way whose ends different polities control. */
 function frontierSeats(state: GenerationState) {

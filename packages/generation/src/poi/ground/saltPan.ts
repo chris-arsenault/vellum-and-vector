@@ -1,40 +1,36 @@
+import { saltedGround } from "../../canonry/ecologyBiomes";
+import { bedDissolvesAbove } from "../../canonry/magicSaltStocks";
 import type { GenerationState } from "../../process";
 import { parentSpanOf, carryWhereItLands, costNear, counterpartOf } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import { cellsWithin, cellSpan, fieldOf, isLake, moistureAt } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { holds, namingCultureNear, within } from "../poiPlaces";
+import { cellsWithin, fieldOf, isLake, moistureAt } from "../poiReads";
+import { areaRecord } from "../poiRecords";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
   areaOf,
   aroundOf,
-  bareCover,
-  capOf,
   floorOf,
+  grownAndNaturalPlaces,
+  grownOrNaturalRecord,
   movesOrGoes,
   naturalPanAt,
   panAt,
   parameterOf,
   reservoirPerArea,
-  saltThinned,
-  saltedAir,
   saltingAt,
   spillDepthAt,
   standsOn,
 } from "./groundReads";
 
-/** An area at which a pan is half as great as pans get: the world's least landscape, in square metres. */
+/** An area at which a pan is half as great as pans get, in square metres. */
 const typicalArea = 2_000_000_000;
 /** The level a pan's floor is graded to on finer ground, rise over run. */
 const panGrade = 0.001;
-/** Salting ecology reads as a pan: what a natural pan's salt does to the living, without Salt. */
-const ecologyPan = 0.3;
-/** Moisture past which an exposed bed dissolves, as Salt's weathering holds it. */
-const dissolving = 0.5;
 /** A crust is the flattest going there is, and water is the only thing it lacks. */
 const crustGoing = 0.8;
-/** The network grows toward a closed floor; brine pools there and crusts rather than passing. */
-const drawsDrainage = 0.5,
-  holdsBrine = 2;
+/** The network grows toward a closed floor. */
+const drawsDrainage = 0.5;
 /** Distance a dry-basin crossing threatens over, in metres, and the salt storm off a bare pan. */
 const stormReach = 30_000;
 
@@ -44,7 +40,7 @@ const bareness = (state: GenerationState, cell: number) => {
 };
 const rankAt = (state: GenerationState, cell: number) =>
   spillDepthAt(state, cell) + saltingAt(state, cell);
-const places = regionPlaces("saltPan", panAt, rankAt);
+const places = grownAndNaturalPlaces("saltPan", ["salt", "pan"], naturalPanAt, rankAt);
 const counterpart = counterpartOf(panAt, 1);
 const factors = {
   magnitude: sized(areaOf, typicalArea),
@@ -53,11 +49,11 @@ const factors = {
   cultural: attachment((state) => 2 * aroundOf(state)),
 };
 const greatness = (state: GenerationState, place: PoiPlace) => factors.magnitude(state, place);
-/** A floor kept level and below the spill of its basin: a pan that fills up is no longer closed. */
-const heldFloor = (state: GenerationState, cell: number): readonly PoiFieldChange[] => [
-  { change: "gradientAtMost", cell, gradient: panGrade },
-  capOf("Elevation", cell, fieldOf(state).DrainageElevations.get(cell)),
-];
+const levelled = (cell: number): PoiFieldChange => ({
+  change: "gradientAtMost",
+  cell,
+  gradient: panGrade,
+});
 
 export const saltPan: PoiEntry = {
   id: "saltPan",
@@ -65,7 +61,7 @@ export const saltPan: PoiEntry = {
   name: "Salt pan",
   recognition: {
     distinct:
-      "A dry land cell that is either in Salt's pan rule, or a natural pan: below the spill its drainage fills to, nearly level, bare, free of ice, and where rain and snow are under half of what the air can take up. Glass flats are excluded, since a bed deep enough to fuse is no longer a crust. The closed floor and aridity separate it from any other barren ground; standing water makes it a lake; a salt dust is stock settling, not crust; a killing ground is the brine of the dead by the same system, and a cell may hold both. Salt's rule and the natural pan are one thing, and whether salt or the climate made it is a property.",
+      "A cell in Salt's pan rule, or a natural pan: dry land below the spill its drainage fills to, nearly level, bare, free of ice, and where rain and snow are under half of what the air can take up, outside any glass flat, since a bed deep enough to fuse is no longer a crust. The closed floor and aridity separate it from any other barren ground; standing water makes it a lake; a salt dust is stock settling, not crust; a killing ground is the brine of the dead by the same system, and a cell may hold both. Salt's rule and the natural pan are one thing, and whether salt or the climate made it is a property.",
     isA: panAt,
   },
   existence: {
@@ -80,32 +76,32 @@ export const saltPan: PoiEntry = {
     ),
     places,
   },
+  publication: {
+    statement:
+      "A pan Salt holds publishes as its rule's class; a natural pan publishes as its own outline, how the climate made it being a property.",
+    moment: "magic",
+    record: grownOrNaturalRecord(
+      "salt",
+      "pan",
+      areaRecord({ kind: "saltPan", layer: "geology", name: "Salt pan" })
+    ),
+  },
   fields: {
     statement:
-      "A pan is a terminal sink. Its floor is held level and below the spill so the basin stays closed; what reaches it evaporates and runs nowhere; the air over it dries; almost nothing grows on it. A natural pan carries the salting ecology reads as a pan, so it acts on the living like Salt's own.",
-    terrain: (state, place) => place.cells.flatMap((cell) => heldFloor(state, cell)),
-    water: (_state, place) => place.cells.map((cell) => capOf("Runoff", cell, 0)),
-    climate: saltedAir,
-    /** Salt's pan may carry barrow heath, so only a natural pan is held bare. */
-    cover: (state, place) => [
-      ...saltThinned(state, place),
-      ...place.cells
-        .filter((cell) => naturalPanAt(state, cell))
-        .flatMap((cell) => [
-          capOf("TreeCover", cell, bareCover),
-          capOf("GrassCover", cell, bareCover),
-        ]),
-    ],
+      "A pan's floor is held level. What reaches it evaporates by the climate's own water balance, and over Salt's pan Salt's own writes dry the air and thin what grows. A natural pan carries the salting ecology reads as a pan, so it acts on the living like Salt's own.",
+    terrain: (_state, place) => place.cells.map(levelled),
+    water: notApplicable("The climate's water balance writes Runoff everywhere (canonry/climate)."),
+    climate: notApplicable(
+      "Salt's writes dry the air by intensity (saltWrites, declareSaltWrites); a natural pan is dry because the climate is."
+    ),
+    cover: notApplicable(
+      "Ecology's growth reads the Salting band, and a natural pan is bare by its test."
+    ),
+    /** Over Salt's pan magicLivingFeedback writes Salting by intensity; only a natural pan has no other writer. */
     magic: (state, place) =>
-      place.cells.map((cell) =>
-        floorOf(
-          "Salting",
-          cell,
-          naturalPanAt(state, cell)
-            ? Math.max(ecologyPan, saltingAt(state, cell))
-            : saltingAt(state, cell)
-        )
-      ),
+      place.cells
+        .filter((cell) => naturalPanAt(state, cell))
+        .map((cell) => floorOf("Salting", cell, saltedGround)),
   },
   acrossMaps: {
     statement:
@@ -116,20 +112,24 @@ export const saltPan: PoiEntry = {
       if (!bowl) return [];
       return cellsWithin(state, carried.cell, parentSpanOf(state))
         .filter((cell) => bowl[cell] > 0)
-        .map((cell): PoiFieldChange => ({ change: "gradientAtMost", cell, gradient: panGrade }));
+        .map(levelled);
     },
     counterpart,
     unrealized: movesOrGoes(counterpart),
     settle: (state, carried) =>
       isLake(state, carried.cell) ? movesOrGoes(counterpart)(state, carried) : { outcome: "keep" },
+    schedule: notApplicable("A pan does nothing at refinement's other points."),
   },
   movement: {
     statement:
-      "A crust is the easiest going in dry country, the drainage network grows toward its floor, and brine pools on it and stays. Wind takes bed from it as dust, by the stock's own carrier.",
+      "A crust is the easiest going in dry country and the drainage network grows toward its floor. Brine pools there by Salt's seepage, and wind takes bed from it as dust, by the stock's own carrier.",
     roads: costNear(crustGoing),
     boats: notApplicable("Its test requires dry ground; a filled basin is the lake entry."),
     drainage: costNear(drawsDrainage),
-    magic: costNear(holdsBrine),
+    magic: notApplicable(
+      "Salt's stock advance pools brine at any pit and lifts bare bed on the wind (seepBrine, weatherBed), wherever a pan is or is not."
+    ),
+    links: notApplicable("A pan joins no two cells for walkers."),
     crosses: notApplicable(
       "It is open flat ground and bars nothing, so there is no barrier it opens."
     ),
@@ -172,7 +172,7 @@ export const saltPan: PoiEntry = {
       const fused = reservoirPerArea(state, "salt", "bed", place.anchor);
       if (fused >= (parameterOf(state, "salt", "glassBed") ?? Infinity))
         return { fate: "becomes", kind: "glassFlat" };
-      if (moistureAt(state, place.anchor) <= dissolving) return { fate: "persists" };
+      if (moistureAt(state, place.anchor) <= bedDissolvesAbove / 1000) return { fate: "persists" };
       return spillDepthAt(state, place.anchor) > 0
         ? { fate: "becomes", kind: "lake" }
         : { fate: "ends" };
@@ -182,7 +182,7 @@ export const saltPan: PoiEntry = {
     statement:
       "A pan shows by its area and by how bare it lies against the country around it: a small white floor in green hills stands out where the same floor in a desert of them does not. A town that lives on its salt carries it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.35, isolation: 0.15 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.35, isolation: 0.15 }),
   },
   naming: {
     statement:
@@ -191,7 +191,7 @@ export const saltPan: PoiEntry = {
     takesNameFrom: [{ kind: "lake", holds: within(aroundOf) }],
     lendsNameTo: [
       { kind: "mine", holds },
-      { kind: "settlement", holds: within((state) => 4 * cellSpan(state)) },
+      { kind: "settlement", holds: within(aroundOf) },
     ],
   },
 };

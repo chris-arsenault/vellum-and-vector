@@ -10,7 +10,7 @@ export const poiGroupIds = [
 ] as const;
 export type PoiGroupId = (typeof poiGroupIds)[number];
 
-/** Every kind of place, by group; each has one entry. Changes only when the owner asks. */
+/** Every kind of place, by group; each has one entry. */
 export const poiKindIds = {
   relief: [
     "summit",
@@ -31,6 +31,7 @@ export const poiKindIds = {
     "sinkholeField",
     "glassFlat",
     "frostPrism",
+    "basaltScar",
   ],
   water: [
     "spring",
@@ -54,7 +55,25 @@ export const poiKindIds = {
     "pressureLocus",
   ],
   ground: ["thermalVein", "placer", "saltPan", "saltDust", "killingGround", "mine"],
-  cover: ["forest", "grassland", "barren", "thawedHalo", "wildZone", "clearance"],
+  cover: [
+    "forest",
+    "grassland",
+    "barren",
+    "thawedHalo",
+    "wildZone",
+    "clearance",
+    "emberGrove",
+    "thawMeadow",
+    "rimeForest",
+    "glowBarrens",
+    "fogHeath",
+    "greenwoodStand",
+    "verdantGround",
+    "deepwood",
+    "wendingFen",
+    "wellMeadow",
+    "barrowHeath",
+  ],
   anomalies: [
     "auroraField",
     "lightWell",
@@ -62,6 +81,9 @@ export const poiKindIds = {
     "interferenceLattice",
     "tear",
     "door",
+    "fireCore",
+    "wardRing",
+    "wardLine",
   ],
   settlements: [
     "settlement",

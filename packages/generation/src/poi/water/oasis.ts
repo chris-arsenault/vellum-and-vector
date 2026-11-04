@@ -1,17 +1,14 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import { magicRule, magicValue, treeCoverAt } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen } from "../poiVisibilityRules";
+import { namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { isLand, magicRule, magicValue } from "../poiReads";
+import { aloneAmong, attachment, weighed } from "../poiVisibilityRules";
 import { areaOf, drynessAround, spans } from "./waterReads";
 
 /** Metres of soil water it holds out to its edge. */
 const heldWater = 0.4;
-/** Share of the ground its green keeps growing, the point the ecology's verdure term establishes. */
-const greenFloor = 0.3;
-/** Tree cover the rule stops at, the point at which it is no longer bare-ground water. */
-const bareGround = 0.12;
 /** How far a caravan bends to it, in cell spans, and how much cheaper the going gets there. */
 const caravanReach = 4,
   caravanSaving = 0.6;
@@ -19,7 +16,7 @@ const caravanReach = 4,
 const isA = magicRule("greenwood", "oasis");
 const sourceAt = (state: GenerationState, cell: number) =>
   magicValue(state, "greenwood", "source", cell);
-const places = regionPlaces("oasis", isA, sourceAt);
+const places = rulePlaces("oasis", "greenwood", "oasis");
 const around = spans(8);
 const counterpart = counterpartOf(isA, 1);
 const strengthOf = (state: GenerationState, place: PoiPlace) =>
@@ -33,18 +30,16 @@ const factors = {
   cultural: attachment(around),
 };
 
-const wateredGround = (_state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells.map((cell) => ({ change: "atLeast", band: "SoilWater", cell, value: heldWater }));
-/** Its verdure is the seed next epoch's roots carry on from, on ground with no seed bank. */
-const planted = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells.map((cell) => ({
-    change: "atLeast",
-    band: "Verdure",
-    cell,
-    value: Math.max(greenFloor, sourceAt(state, cell) / 1000),
-  }));
-const groveWithin = (state: GenerationState, place: PoiPlace) =>
-  place.cells.some((cell) => treeCoverAt(state, cell) > bareGround);
+const wateredCells = (
+  state: GenerationState,
+  cells: readonly number[]
+): readonly PoiFieldChange[] =>
+  cells
+    .filter((cell) => isLand(state, cell))
+    .map((cell) => ({ change: "atLeast", band: "SoilWater", cell, value: heldWater }));
+const wateredGround = (state: GenerationState, place: PoiPlace) => wateredCells(state, place.cells);
+/** Trees over it end the rule that made it: the system no longer holds it as bare-ground water. */
+const groveWithin = (state: GenerationState, place: PoiPlace) => !isA(state, place.anchor);
 
 export const oasis: PoiEntry = {
   id: "oasis",
@@ -63,9 +58,14 @@ export const oasis: PoiEntry = {
     suitability: notApplicable("The aquifer rises where the rock allows; no process chooses."),
     places,
   },
+  publication: {
+    statement: "Every oasis publishes as Greenwood's oasis rule, the class the map's magic reads.",
+    moment: "magic",
+    record: ruleRecord("greenwood", "oasis"),
+  },
   fields: {
     statement:
-      "An oasis is water in dry country and the seed of cover: it keeps its soil wet on ground that would otherwise be bare, and its verdure establishes plants where no seed bank has formed. Greenwood's source there is a magic source in its own right.",
+      "An oasis is water in dry country and the seed of cover: it keeps its soil wet on ground that would otherwise be bare. Greenwood's intensity writes the verdure that establishes plants there, and its source is a magic source in its own right.",
     terrain: notApplicable(
       "Its water comes up without cutting; the karst only changes when the spring fails, which is the sinkhole rule."
     ),
@@ -73,36 +73,29 @@ export const oasis: PoiEntry = {
     climate: notApplicable(
       "A grove's shade is below what the climate resolves over a desert's air."
     ),
-    cover: planted,
-    magic: notApplicable(
-      "Its verdure is already written by the cover rule above and its source by Greenwood's own origin."
-    ),
+    cover: notApplicable("`magicLivingFeedback` writes Greenwood's verdure by intensity."),
+    magic: notApplicable("Greenwood's own spring origin writes its source."),
   },
   acrossMaps: {
     statement:
-      "A captured oasis lands on finer ground that must keep the water and the verdure there. On the developed ground it stands at the nearest oasis cell; when it finds none it keeps its place, since water that rose on the parent still rises.",
+      "A captured oasis lands on finer ground that must keep the water there. On the developed ground it stands at the nearest oasis cell; when it finds none it keeps its place, since water that rose on the parent still rises.",
     carry: carryWhereItLands,
-    realize: (state, carried): readonly PoiFieldChange[] => [
-      { change: "atLeast", band: "SoilWater", cell: carried.cell, value: heldWater },
-      {
-        change: "atLeast",
-        band: "Verdure",
-        cell: carried.cell,
-        value: Math.max(greenFloor, sourceAt(state, carried.cell) / 1000),
-      },
-    ],
+    realize: (state, carried) => wateredCells(state, carried.cells),
     counterpart,
     unrealized: movesTo(counterpart),
     settle: movesTo(counterpart),
+    schedule: notApplicable(
+      "An oasis has no step in refinement's schedule; Greenwood's rule reads it."
+    ),
   },
   movement: {
     statement:
       "Caravans bend across a desert to an oasis, which is the only cheap going in its country; Greenwood's groundwater and roots run out from it across otherwise impassable bare ground. It has no channel worth a boat.",
-    roads: (state, place, cell) =>
-      costNear(caravanSaving, spans(caravanReach)(state))(state, place, cell),
+    roads: costNear(caravanSaving, spans(caravanReach)),
     boats: notApplicable("Its water seeps into the ground around it and floats nothing."),
     drainage: costNear(0.8),
-    magic: (state, place, cell) => costNear(0.7, around(state) / 2)(state, place, cell),
+    magic: { roots: costNear(0.7, (state) => around(state) / 2) },
+    links: notApplicable("An oasis joins no two cells; a caravan's way to it is a road."),
     crosses: notApplicable(
       "Its effect on a dry crossing is its road cost; no listed barrier is what it opens."
     ),
@@ -153,7 +146,7 @@ export const oasis: PoiEntry = {
     statement:
       "An oasis earns its mark from the emptiness around it: the drier its country and the further the next water the more it matters, whatever its size. Those who depend on it carry it further still.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.15, localConditions: 0.5, isolation: 0.35 }),
+    importance: weighed(factors, { magnitude: 0.15, localConditions: 0.5, isolation: 0.35 }),
   },
   naming: {
     statement: "Named by those who cross to it; a caravan town at its water takes its name.",

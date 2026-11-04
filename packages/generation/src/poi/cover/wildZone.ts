@@ -1,20 +1,16 @@
-import { units } from "../../canonry/math";
-import { hashUnit } from "../../canonry/noise";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands } from "../poiCarry";
-import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import { cellSpan, fieldOf, isRiver } from "../poiReads";
-import { drawnWhen } from "../poiVisibilityRules";
+import { notApplicable, type PoiEntry } from "../poiContract";
+import { namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { cellSpan, fieldOf, isRiver, magicRule } from "../poiReads";
+import { weighed } from "../poiVisibilityRules";
 import {
   countryCounterpart,
   countryFactors,
-  floorsHeld,
   hazardReach,
-  isKind,
   meanOver,
   movesOrGoes,
-  onPlace,
   sharesNoGround,
   spanOf,
   standsIn,
@@ -23,52 +19,16 @@ import {
 
 /** Area at which a wild zone is half as great as they get: 1,000 square kilometres. */
 const typicalArea = 1e9;
-/** The per-cell hash the regional Veil writes use, so relief does not ratchet between rounds. */
-const shiftHash = 0x7e11;
 /** Verdure past which Greenwood has knit the ground and the strain has nothing to tear. */
 const knitFrom = 0.5;
-const isA = isKind("wildZone");
+const isA = magicRule("veil", "wild");
 const veil = (state: GenerationState) =>
   state.physical?.magic?.fields.find((f) => f.definition.id === "veil");
 const wildAt = (state: GenerationState, cell: number) => veil(state)?.wild.get(cell) ?? 0;
-const places = regionPlaces("wildZone", isA, wildAt);
+const places = rulePlaces("wildZone", "veil", "wild");
 const factors = countryFactors(places, typicalArea, wildAt);
 const counterpart = countryCounterpart(isA);
 const unrealized = movesOrGoes(counterpart);
-const shift = (cell: number) => hashUnit(shiftHash, cell, 0) - 0.5;
-
-/** The bedrock it moves, by Veil's own bound and hash. */
-function moved(state: GenerationState, place: PoiPlace): PoiFieldChange[] {
-  const relief = veil(state)?.definition.parameters.wildRelief ?? 0;
-  return place.cells.map((cell) => ({
-    change: "add",
-    band: "Elevation",
-    cell,
-    amount: units(relief * wildAt(state, cell) * 2 * shift(cell)),
-  }));
-}
-/** The cover it exchanges: grass to broadleaf on one hash, trees to grass on the other. */
-function exchanged(state: GenerationState, place: PoiPlace): PoiFieldChange[] {
-  const map = fieldOf(state),
-    shuffle = veil(state)?.definition.parameters.wildShuffle ?? 0;
-  return place.cells.flatMap((cell): PoiFieldChange[] => {
-    const share = shuffle * wildAt(state, cell);
-    if (shift(cell) > 0) {
-      const taken = map.GrassCover.get(cell) * share;
-      return [
-        { change: "add", band: "GrassCover", cell, amount: -taken },
-        { change: "add", band: "BroadleafCover", cell, amount: taken },
-      ];
-    }
-    const broadleaf = map.BroadleafCover.get(cell) * share,
-      conifer = map.ConiferCover.get(cell) * share;
-    return [
-      { change: "add", band: "BroadleafCover", cell, amount: -broadleaf },
-      { change: "add", band: "ConiferCover", cell, amount: -conifer },
-      { change: "add", band: "GrassCover", cell, amount: broadleaf + conifer },
-    ];
-  });
-}
 const doorReach = (state: GenerationState) => 2 * cellSpan(state);
 /** Ground that moved has no road on it worth trusting, in proportion to how far it moved. */
 const unsteady = (state: GenerationState, cell: number) => 1 + wildAt(state, cell);
@@ -79,7 +39,7 @@ export const wildZone: PoiEntry = {
   name: "Wild zone",
   recognition: {
     distinct:
-      "Land marked by Veil's wild rule: the wild share of a tear at least 0.3, at Veil intensity of at least 100. It is how much the tear has moved since the last epoch, not how strong it is: a tear is strength (intensity of 300) and may be perfectly still, and a door needs wild under 0.1, so a door can never stand here. Its cover is whatever it has shuffled to and does not decide it.",
+      "Land marked by Veil's wild rule, and nothing else: the rule is the definition. It reads how much a tear has moved since the last epoch, not how strong it is: a tear is strength and may be perfectly still, and a door needs ground that hardly moved, so a door can never stand here. Its cover is whatever it has shuffled to and does not decide it.",
     isA,
   },
   existence: {
@@ -92,18 +52,28 @@ export const wildZone: PoiEntry = {
     suitability: notApplicable("The strain between systems sets it, and nothing chooses a site."),
     places,
   },
+  publication: {
+    statement:
+      "Published as Veil's wild ground on the magic layer, outlined by the rule's coverage.",
+    moment: "magic",
+    record: ruleRecord("veil", "wild"),
+  },
   fields: {
     statement:
-      "Wild ground moves: its bedrock rises and falls by a hashed share of Veil's relief, so streams change course, and it swaps trees and grass so a forest edge shifts with no fire or flood behind it. It keeps the tear open through its own Tearing. Water and air only answer the moved ground. These restate Veil's writes: wiring them replaces those writes and never adds to them.",
-    terrain: moved,
+      "Wild ground moves: its bedrock rises and falls by a hashed share of Veil's relief, so streams change course, and it swaps trees and grass so a forest edge shifts with no fire or flood behind it. Veil writes all of that on every land cell with any wild share, a wider ground than the rule marks, so the place writes none of it.",
+    terrain: notApplicable(
+      "Veil's writes move the bedrock on every land cell with a wild share, on world and refined maps alike."
+    ),
     water: notApplicable(
       "It stores and takes no water: streams change course because the bedrock moved, and the drainage reads that."
     ),
     climate: notApplicable(
       "Veil's only heat change is the chill at a door's cell, which is the door's own; shifting ground carries none."
     ),
-    cover: exchanged,
-    magic: floorsHeld("Tearing"),
+    cover: notApplicable(
+      "Veil's writes exchange trees and grass on every land cell with a wild share."
+    ),
+    magic: notApplicable("Magic's feedback writes Tearing over the whole field by intensity."),
   },
   acrossMaps: {
     statement:
@@ -115,31 +85,32 @@ export const wildZone: PoiEntry = {
     counterpart,
     unrealized,
     settle: unrealized,
+    schedule: notApplicable("A wild zone does nothing at refinement's other points."),
   },
   movement: {
     statement:
       "Roads and boats pay in proportion to how far the ground has moved, since a way laid across it may not be there next time. Streams find their own way across it, and other systems' carriers do not read wildness.",
-    roads: onPlace(unsteady),
-    boats: (state, place, cell) =>
-      isRiver(state, cell) ? onPlace(unsteady)(state, place, cell) : 1,
+    roads: (state, place) => place.cells.map((cell) => ({ cell, factor: unsteady(state, cell) })),
+    boats: (state, place) =>
+      place.cells
+        .filter((cell) => isRiver(state, cell))
+        .map((cell) => ({ cell, factor: unsteady(state, cell) })),
     drainage: notApplicable(
       "The hashed relief sends streams new ways; the network finds them with no cost term of its own."
     ),
     magic: notApplicable(
       "Veil's tears propagate only locally and no other system's carrier reads wildness, so no carrier's cost changes here."
     ),
+    links: notApplicable("Moving ground joins no two cells; a door does that."),
     crosses: notApplicable("Moving ground offers no reliable crossing of anything."),
   },
   others: {
     statement:
-      "It shares no ground with ordinary cover or a halo, and a door cannot stand on or beside it. Most wild zones lie on tears, which are its source.",
+      "It shares no ground with a lake or a halo, and a door cannot stand on or beside it. Most wild zones lie on tears, which are its source.",
     needs: notApplicable(
       "Its rule reads Veil's field itself: a named tear is the same strain, stronger, and need not be there."
     ),
-    excludes: [
-      ...sharesNoGround("forest", "grassland", "barren", "thawedHalo", "clearance", "lake"),
-      { kind: "door", holds: within(doorReach) },
-    ],
+    excludes: [...sharesNoGround("thawedHalo", "lake"), { kind: "door", holds: within(doorReach) }],
     contains: standsIn("tear"),
     pairsWith: [{ kind: "tear", holds: withinOwn(spanOf) }],
   },
@@ -168,9 +139,9 @@ export const wildZone: PoiEntry = {
   },
   visibility: {
     statement:
-      "A wild zone shows by how much it moved against the ground around, then by its size: a small, violently shifting patch matters more than a broad, faint one. A town that lives beside one carries it.",
+      "A wild zone weighs by how much it moved against the ground around, then by its size: a small, violently shifting patch matters more than a broad, faint one. A town that lives beside one carries it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.3, localConditions: 0.5, isolation: 0.2 }),
+    importance: weighed(factors, { magnitude: 0.3, localConditions: 0.5, isolation: 0.2 }),
   },
   naming: {
     statement: "Named by the people nearest, who usually name it as a warning.",

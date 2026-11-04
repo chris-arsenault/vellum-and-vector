@@ -27,6 +27,9 @@ import {
   removeGenerationReach,
 } from "./generationNetworks";
 
+/** The identity a generated record of this key has on this map. */
+export const generatedId = (state: GenerationState, key: string) =>
+  semanticId(state.domain.world.id, `generated:${state.domain.scope.areaId}`, key);
 export function generatedFeature(
   state: GenerationState,
   key: string,
@@ -36,7 +39,7 @@ export function generatedFeature(
   geometry: AtlasFeature["geometry"],
   attributes: Record<string, unknown> = {}
 ): AtlasFeature {
-  const id = semanticId(state.domain.world.id, `generated:${state.domain.scope.areaId}`, key);
+  const id = generatedId(state, key);
   const naming = featureNaming(state, id, key, name, kind, geometry, attributes);
   return {
     id,

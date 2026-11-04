@@ -58,6 +58,12 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
 const write = (directory: string, name: string, value: unknown) =>
   writeFileSync(join(directory, `${name}.json`), JSON.stringify(value, null, 2));
 
+/** A failed step does not stop a run, it skips what depends on it: say so where it will be seen. */
+function sayFailures(map: string, diagnostics: { severity: string; message: string }[]) {
+  for (const { severity, message } of diagnostics)
+    if (severity === "error") process.stdout.write(`\n${map} step failed: ${message}\n`);
+}
+
 /** A real generated world from the app's default draft, at the chosen quality. */
 async function ensureWorld(options: HarnessOptions, out: string): Promise<CheckpointRecord> {
   const reused = !options.fresh.has("world") && readCheckpoint(options.world);
@@ -85,6 +91,7 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
     };
     await ws.save(record);
     write(out, "world-run", { ...recorder, seconds: (performance.now() - started) / 1000 });
+    sayFailures("world", recorder.diagnostics);
     return record;
   } finally {
     await ws.close();
@@ -122,6 +129,7 @@ async function ensureRegion(options: HarnessOptions, world: CheckpointRecord, ou
     };
     await ws.save(record);
     write(out, "region-run", { ...recorder, seconds: (performance.now() - started) / 1000 });
+    sayFailures("region", recorder.diagnostics);
     return record;
   } finally {
     await ws.close();

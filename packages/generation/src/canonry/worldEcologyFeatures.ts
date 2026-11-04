@@ -1,21 +1,10 @@
-import { biomes, classMarginInterpolator, spatial, type Band } from "@atlas/domain";
+import { classMarginInterpolator, spatial } from "@atlas/domain";
 import type { GenerationState } from "../process";
-import {
-  landscapeMinimumArea,
-  landscapeSignificance,
-  mapScale,
-  worldExtent,
-} from "../worldSignificance";
-import { biomeRules, type BiomeSummary } from "./ecologyBiomes";
-import { components, publishPlace } from "./geographicRegions";
+import { landscapeMinimumArea, mapScale } from "../worldSignificance";
+import type { BiomeRule, BiomeSummary } from "./ecologyBiomes";
 import { geographicContour, fillSmallHoles, membershipSampler } from "./geographicContours";
-import { partitionWorldRegion } from "./worldRegionPartition";
-import { regionEvidence } from "./worldRegionEvidence";
-import { landArea } from "./regionPartition";
 import { projectedValues } from "./atlasSampling";
-import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { RegionMembers } from "./regionMembers";
-import type { PhysicalField } from "./field";
 import type { Geometry } from "geojson";
 
 /**
@@ -35,108 +24,51 @@ function dryExtents(state: GenerationState) {
   };
 }
 
-type Summarize = (
-  state: GenerationState,
-  members: RegionMembers,
-  biome: ReturnType<typeof biomeRules>
-) => BiomeSummary;
-/** Local strength is evidence for an established class, not another color classifier. */
-function landscapeStrength(map: PhysicalField, kind: string, i: number) {
-  const canopy = map.TreeCover.get(i),
-    grass = map.GrassCover.get(i),
-    wetland = map.WetlandCover.get(i);
-  if (kind === "forest") return Math.min(1, canopy / 0.7);
-  if (kind === "wetland") return Math.min(1, wetland / 0.6);
-  if (kind === "grassland") return Math.min(1, grass / 0.6);
-  if (kind === "barren") return Math.max(0, 1 - canopy - grass - wetland);
-  const forcing: Record<string, Band> = {
-    ember: map.Quickening,
-    thaw: map.Quickening,
-    rime: map.Stillness,
-    glow: map.Stillness,
-    fog: map.FogForcing,
-    deepwood: map.Verdure,
-    wending: map.Verdure,
-    well: map.Verdure,
-    barrow: map.Salting,
-    pan: map.Salting,
-    flat: map.Salting,
-  };
-  return forcing[kind]?.get(i) ?? 0;
-}
-
-/** Broad named landscapes consume the existing local classes and retain their raster edge. */
-export function extractWorldEcologicalFeatures(
-  state: GenerationState,
-  families: Record<string, string>,
-  summarize: Summarize
-) {
+/** What every landscape's outline reads, prepared once: the biome raster and the dry extent. */
+export function landscapeSurface(state: GenerationState) {
   const work = state.physical!,
     map = work.map,
-    biome = biomeRules(state),
-    world = worldExtent(state),
-    scale = mapScale(state),
-    land = landArea(state),
-    codes = projectedValues(work, map.BiomeCodes, true),
-    field = { ...state.surface, channels: { biome: codes }, overlays: [] },
-    labels = workingArray(map, "int32", "world-biome:pieces").fill(-1),
-    dry = dryExtents(state),
-    family = (code: number) => families[biomes[code]?.name ?? ""],
-    wet = (i: number) => map.WaterKindCodes.get(i) !== 0;
-  try {
-    for (const rule of biome.rules) {
-      const includes = (i: number) =>
-        map.WaterKindCodes.get(i) === 0 && family(map.BiomeCodes.get(i)) === rule.kind;
-      const strength = (i: number) => landscapeStrength(map, rule.kind, i);
-      const margin = classMarginInterpolator(field, "biome", (code) => family(code) === rule.kind);
-      components(state, includes, (members) => {
-        const evidence = regionEvidence(map, members, strength, includes),
-          judgment = landscapeSignificance(world, rule.kind, evidence, scale);
-        if (!judgment.publish) return;
-        const pieces = partitionWorldRegion(state, members, land);
-        pieces.forEach((piece, index) => piece.forEach((i) => labels.set(i, index)));
-        pieces.forEach((piece, index) => {
-          // A piece meets its neighbours where its share passes theirs, read together.
-          const own = membershipSampler(state, (i) => Number(labels.get(i) === index)),
-            others = membershipSampler(state, (i) => {
-              const label = labels.get(i);
-              return Number(label >= 0 && label !== index);
-            }),
-            at = (x: number, y: number) =>
-              Math.min(margin({ x, y, z: 0 }), own(x, y) - Math.max(0.1, others(x, y)));
-          const shape = geographicContour(state, piece, at, 0);
-          if (!shape) return;
-          // A hole smaller than the least landscape at this scale could never be named alone.
-          const extent = dry(fillSmallHoles(state, shape, landscapeMinimumArea * scale.area, wet));
-          if (!extent) return;
-          const summary = summarize(state, piece, biome);
-          publishPlace(
-            state,
-            rule.kind,
-            rule.name(summary),
-            piece,
-            "ecology",
-            {
-              sourceAlgorithm: "atlas-world-geography-1",
-              biome: rule.name(summary),
-              system: rule.system?.(summary) ?? null,
-              worldSignificance: judgment.reason,
-              breadth: evidence.breadth,
-              coherence: evidence.coherence,
-              treeCover: summary.broadleaf + summary.conifer,
-              grassCover: summary.grass,
-              wetlandCover: summary.wetland,
-              temperature: summary.temperature,
-              moisture: summary.moisture,
-            },
-            extent
-          );
-        });
-        for (const i of members) labels.set(i, -1);
-      });
-    }
-  } finally {
-    work.grid.release(codes);
-    releaseWorking(map, labels, biome.temperature, biome.moisture, biome.wetness);
-  }
+    codes = projectedValues(work, map.BiomeCodes, true);
+  return {
+    codes,
+    field: { ...state.surface, channels: { biome: codes }, overlays: [] },
+    dry: dryExtents(state),
+    /** A hole smaller than the least landscape at this map's scale closes unless water fills it. */
+    smallHole: landscapeMinimumArea * mapScale(state).area,
+    wet: (i: number) => map.WaterKindCodes.get(i) !== 0,
+  };
 }
+export type LandscapeSurface = ReturnType<typeof landscapeSurface>;
+/** A family's signed margin against the other classes, from the biome raster's class weights. */
+export const familyMargin = (surface: LandscapeSurface, family: (code: number) => boolean) =>
+  classMarginInterpolator(surface.field, "biome", family);
+/**
+ * A landscape piece's outline: the class margin, where it meets the neighbouring pieces at the
+ * line its share passes theirs, read together, then cut by the sea and lakes.
+ */
+export function landscapeExtent(
+  state: GenerationState,
+  surface: LandscapeSurface,
+  margin: ReturnType<typeof familyMargin>,
+  piece: RegionMembers,
+  own: (i: number) => number,
+  others: (i: number) => number
+) {
+  const ownShare = membershipSampler(state, own),
+    otherShare = membershipSampler(state, others),
+    at = (x: number, y: number) =>
+      Math.min(margin({ x, y, z: 0 }), ownShare(x, y) - Math.max(0.1, otherShare(x, y))),
+    shape = geographicContour(state, piece, at, 0);
+  return shape ? surface.dry(fillSmallHoles(state, shape, surface.smallHole, surface.wet)) : null;
+}
+/** A landscape's published attributes, from its biome rule and its means. */
+export const landscapeAttributes = (rule: BiomeRule, summary: BiomeSummary) => ({
+  sourceAlgorithm: "atlas-world-geography-1",
+  biome: rule.name(summary),
+  system: rule.system?.(summary) ?? null,
+  treeCover: summary.broadleaf + summary.conifer,
+  grassCover: summary.grass,
+  wetlandCover: summary.wetland,
+  temperature: summary.temperature,
+  moisture: summary.moisture,
+});

@@ -1,25 +1,24 @@
+import { deepOceanZone } from "../../canonry/geography";
+import { deepSiteScore } from "../../canonry/magicSources";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, counterpartOf, movesTo, stays } from "../poiCarry";
-import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { cellPlaces, within } from "../poiPlaces";
-import { adjacent, cellSpan, fieldOf, gap, isSea, magicRule } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { depthAt, namedFromShore, pressureAt, pressureLength } from "./seaShared";
+import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
+import { rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { cellsWithin, fieldOf, gap, isSea, magicRule, metres } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { depthAt, namedFromShore, near, pressureAt, pressureLength } from "./seaShared";
 
-/** The deep ocean's bathymetric zone, below the shelf break. */
-const deepZone = 4;
 /** Depth at which a locus is half as great as they get, and the depth that half-suits a site. */
 const typicalDepth = 4000;
-/** How the system's siting weighs a steep drop around a cell: metres of depth per unit gradient. */
-const dropWeight = 10_000;
 /** A preset ray's reach, where the system's parameters are absent. */
 const presetRays = 2_000_000;
-/** Cells around a locus whose surface water is broken, and the extra cost of crossing it. */
-const brokenCells = 3,
+/** The surface water around a locus that is broken, 30 km, and the extra cost of crossing it. */
+const brokenReach = near(30_000),
   brokenWater = 3;
 
 const isA = magicRule("pressure", "locus");
-const places = cellPlaces("pressureLocus", isA);
+const places = rulePlaces("pressureLocus", "pressure", "locus");
 const rays = (state: GenerationState) => pressureLength(state, "rayDistance", presetRays);
 const raysThin = (state: GenerationState) => rays(state) / 2;
 const depthOf = (state: GenerationState, place: PoiPlace) => depthAt(state, place.anchor);
@@ -33,27 +32,11 @@ const factors = {
   cultural: attachment(rays),
 };
 
-/** The site's worth as the system reads it: depth, more for a steep drop around it. */
+/** The site's worth, through the score the system itself ranks its picks by. */
 function deepAndSteep(state: GenerationState, cell: number) {
-  const here = depthAt(state, cell);
-  let drop = 0,
-    neighbours = 0;
-  for (const next of adjacent(state, cell)) {
-    drop += Math.max(0, here - depthAt(state, next)) / gap(state, cell, next);
-    neighbours++;
-  }
-  const score = here + (neighbours ? (drop * dropWeight) / neighbours : 0);
+  const score = metres(deepSiteScore(fieldOf(state), cell));
   return score / (score + typicalDepth);
 }
-/** The bed under a locus keeps its depth: no sediment fills a site that fires continuously. */
-const heldDeep = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => [
-  {
-    change: "atMost",
-    band: "Elevation",
-    cell: place.anchor,
-    value: fieldOf(state).Elevation.get(place.anchor),
-  },
-];
 
 export const pressureLocus: PoiEntry = {
   id: "pressureLocus",
@@ -69,14 +52,21 @@ export const pressureLocus: PoiEntry = {
       "Sited by the Pressure system: it ranks ocean cells by depth and by the drop around them, then spaces its picks half a ray's reach apart. It fires its rays from there for as long as it stands.",
     way: "sited",
     requires: (state, cell) =>
-      isSea(state, cell) && fieldOf(state).BathymetricZoneCodes.get(cell) === deepZone,
+      isSea(state, cell) && fieldOf(state).BathymetricZoneCodes.get(cell) === deepOceanZone,
     suitability: deepAndSteep,
     places,
   },
+  publication: {
+    statement: "Every locus publishes as the system's class, a site at its source.",
+    moment: "magic",
+    record: ruleRecord("pressure", "locus"),
+  },
   fields: {
     statement:
-      "A locus is the source of the system's force. It holds the deep bed under it open, and everything else it does arrives by ray, in the places those rays reach.",
-    terrain: heldDeep,
+      "A locus is the source of the system's force. Everything it does arrives by ray, in the places those rays reach.",
+    terrain: notApplicable(
+      "Sediment does not reach the abyssal bed it stands on, so there is nothing to hold; if the bed rises onto the shelf, the locus ends."
+    ),
     water: notApplicable(
       "A ray lifts water only where it shoals; over the deep cell it starts from, nothing reaches the surface."
     ),
@@ -87,7 +77,7 @@ export const pressureLocus: PoiEntry = {
       "No light reaches its depth, so aquatic productivity is already nothing here; Pressure's toxicity reaches life through ecology."
     ),
     magic: notApplicable(
-      "It is the source: the system writes its source channel and traces its rays from it. PoiFieldChange has no band for a magic channel, so this cannot be declared here."
+      "It is the source: the system writes its source channel and traces its rays from it."
     ),
   },
   acrossMaps: {
@@ -101,18 +91,24 @@ export const pressureLocus: PoiEntry = {
     unrealized: stays,
     settle: (state, carried) =>
       isSea(state, carried.cell) ? stays() : movesTo(counterpart)(state, carried),
+    schedule: notApplicable("A refined map does not fire a captured locus."),
   },
   movement: {
     statement:
       "Boats pay to cross the broken water above it, fading with distance. Magic does not pay at a locus: it is where the system's force begins, and rays read geometry alone.",
     roads: notApplicable("It stands on the deep ocean bed; no road comes near."),
-    boats(state, place, cell) {
-      const reach = brokenCells * cellSpan(state),
-        d = gap(state, place.anchor, cell);
-      return isSea(state, cell) && d < reach ? 1 + brokenWater * (1 - d / reach) : 1;
+    boats(state, place) {
+      const reach = brokenReach(state);
+      return cellsWithin(state, place.anchor, reach)
+        .filter((cell) => isSea(state, cell))
+        .map((cell) => ({
+          cell,
+          factor: 1 + brokenWater * Math.max(0, 1 - gap(state, place.anchor, cell) / reach),
+        }));
     },
     drainage: notApplicable("It lies in deep water, beyond where the drainage network ends."),
     magic: notApplicable("Rays leave it along straight paths and read no carrier's cost."),
+    links: notApplicable("A locus joins no two cells."),
     crosses: notApplicable("It bars nothing and opens nothing; it is a point in open ocean."),
   },
   others: {
@@ -141,7 +137,7 @@ export const pressureLocus: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "broken water",
-        reach: brokenCells * cellSpan(state),
+        reach: brokenReach(state),
         severity: pressureAt(state, place.anchor),
       },
     ],
@@ -150,7 +146,7 @@ export const pressureLocus: PoiEntry = {
     statement:
       "A locus is renewed continuously and holds while its water stays deep. If uplift or a closing ocean carries its cell onto the shelf it ends, and the system sites another next epoch.",
     fate: (state, place) =>
-      fieldOf(state).BathymetricZoneCodes.get(place.anchor) === deepZone
+      fieldOf(state).BathymetricZoneCodes.get(place.anchor) === deepOceanZone
         ? { fate: "persists" }
         : { fate: "ends" },
   },
@@ -158,7 +154,7 @@ export const pressureLocus: PoiEntry = {
     statement:
       "A locus shows chiefly by standing alone: it is the rare centre of an ocean's force, and how much ocean it rules matters more than its own depth. The system already spaces them, and a Pressure culture's devotion carries one from far off.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.2, localConditions: 0.3, isolation: 0.5 }),
+    importance: weighed(factors, { magnitude: 0.2, localConditions: 0.3, isolation: 0.5 }),
   },
   naming: {
     statement: "Named by peoples whose divers or ships can reach it; the rest go unnamed.",

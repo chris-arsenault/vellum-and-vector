@@ -1,12 +1,13 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
-import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
 import { magicRule, magicValue, shareAround } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
   areaOf,
-  holdAt,
+  bareOf,
   holdGradient,
   lastsWhile,
   meanOf,
@@ -21,7 +22,7 @@ const typicalArea = 2_000_000_000;
 const isA = magicRule("salt", "flat");
 const saltAt = (state: GenerationState, cell: number) =>
   magicValue(state, "salt", "intensity", cell);
-const places = regionPlaces("glassFlat", isA, saltAt);
+const places = rulePlaces("glassFlat", "salt", "flat");
 const counterpart = counterpartOf(isA, 1);
 const saltOf = strengthOf("salt");
 const rimmed = (state: GenerationState, place: PoiPlace) =>
@@ -50,24 +51,19 @@ export const glassFlat: PoiEntry = {
     suitability: notApplicable("A bed grows where a lake died or the dead lay; nothing chooses."),
     places,
   },
+  publication: {
+    statement: "Each connected group of the rule's cells publishes as Salt's flat class.",
+    moment: "magic",
+    record: ruleRecord("salt", "flat"),
+  },
   fields: {
     statement:
-      "Fused ground is a hard mirror with no soil: rock is hardened and soil is gone by Salt's own fuse step, the ground stays level and shed of moisture, nothing roots, and bed dust keeps blowing from its edges.",
-    terrain: (state, place) => [
-      ...holdGradient(state, place.cells),
-      ...holdAt(state, "atLeast", "RockResistance", place.cells),
-    ],
-    water: (state, place) => holdAt(state, "atMost", "Moisture", place.cells),
-    climate: notApplicable(
-      "Mirages and glare have no band; the field holds its dryness as moisture under water."
-    ),
-    cover: (state, place) =>
-      place.cells.flatMap((cell) => [
-        { change: "atMost" as const, band: "SoilDepth" as const, cell, value: 0 },
-        { change: "atMost" as const, band: "TreeCover" as const, cell, value: 0 },
-        { change: "atMost" as const, band: "GrassCover" as const, cell, value: 0 },
-      ]),
-    magic: (state, place) => holdAt(state, "atLeast", "Salting", place.cells),
+      "Fused ground is a hard mirror with no soil: Salt's own steps harden the rock, strip the soil where it burns and dry the ground, the ground stays level, nothing roots, and bed dust keeps blowing from its edges.",
+    terrain: (state, place) => holdGradient(state, place.cells),
+    water: notApplicable("Salt's desiccation dries the ground by its salting, field-wide."),
+    climate: notApplicable("Mirages and glare have no band for the climate field to read."),
+    cover: (_state, place) => bareOf(place.cells),
+    magic: notApplicable("Salt's feedback writes the salting from its own intensity."),
   },
   acrossMaps: {
     statement:
@@ -83,6 +79,7 @@ export const glassFlat: PoiEntry = {
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable("Its bed builds over epochs; a round's water does not move it."),
+    schedule: notApplicable("A level top is all a flat asks of a refinement."),
   },
   movement: {
     statement:
@@ -90,7 +87,8 @@ export const glassFlat: PoiEntry = {
     roads: costNear(0.8),
     boats: notApplicable("A dry bed carries no boats, even where a shallow sheet stands on it."),
     drainage: costNear(2),
-    magic: costNear(0.7),
+    magic: { wind: costNear(0.7), people: costNear(0.7) },
+    links: notApplicable("A flat joins nothing."),
     crosses: notApplicable("It is a dry expanse; it is ground to cross, not a crossing."),
   },
   others: {
@@ -134,7 +132,7 @@ export const glassFlat: PoiEntry = {
     statement:
       "A flat shows by its area and strength, and by being unlike all country around it; people travel a long way for its salt, and any town on its shore carries it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.4, isolation: 0.1 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.4, isolation: 0.1 }),
   },
   naming: {
     statement: "Named by salt-carriers and those who fear it, often for the dead lake it replaced.",

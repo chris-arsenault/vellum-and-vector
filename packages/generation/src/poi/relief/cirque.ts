@@ -2,11 +2,11 @@ import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { areaRecord } from "../poiRecords";
 import { fieldOf, iceAt, landformAt, Landform, slopeAt } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
   areaOf,
-  holdAt,
   lastsWhile,
   loweredAsCaptured,
   meanOf,
@@ -53,11 +53,16 @@ export const cirque: PoiEntry = {
     suitability: notApplicable("Nothing chooses a cirque's ground; the ice flux does."),
     places,
   },
+  publication: {
+    statement: "Each connected group of the class's cells publishes as its outline.",
+    moment: "geography",
+    record: areaRecord({ kind: "cirque", layer: "geology", name: "Cirque" }),
+  },
   fields: {
     statement:
-      "A cirque is a held hollow and, while iced, a source of glacier and melt: it stores what falls on it, gives it down the valley over the year, and pools cold air.",
-    terrain: (state, place) => holdAt(state, "atMost", "Elevation", place.cells),
-    water: (state, place) => holdAt(state, "atLeast", "IceThickness", place.cells),
+      "A cirque is a hollow and, while iced, a source of glacier and melt: it stores what falls on it, gives it down the valley over the year, and pools cold air.",
+    terrain: notApplicable("Glacial erosion quarries the hollow."),
+    water: notApplicable("The land-ice process writes its ice and melt."),
     climate: notApplicable(
       "Its cold pool is a regional shared medium; the field holds no band for it."
     ),
@@ -74,14 +79,16 @@ export const cirque: PoiEntry = {
     counterpart,
     unrealized: movesTo(counterpart),
     settle: notApplicable("A bowl is cut over epochs; a round's water does not shift it."),
+    schedule: notApplicable("Its floor and drainage cost are all a cirque asks of a refinement."),
   },
   movement: {
     statement:
       "A head wall ends a valley road; water and ice both start here, so the network is drawn from it, and the ice carries what charge it holds down from here.",
-    roads: costNear(2),
+    roads: notApplicable("The ruling-grade cost already reads its head wall."),
     boats: notApplicable("A tarn in a bowl is too high and closed for boats to matter."),
     drainage: costNear(0.6),
-    magic: costNear(0.8),
+    magic: { ice: costNear(0.8) },
+    links: notApplicable("A cirque joins nothing."),
     crosses: notApplicable("A bowl ends a route; it takes none across the ice or anything else."),
   },
   others: {
@@ -120,7 +127,7 @@ export const cirque: PoiEntry = {
     statement:
       "A cirque shows by its width and depth and by how its deepest ice stood over the country around; ordinary cirques are local and only a complex of them, or one above a town, reaches a broad view.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.2, isolation: 0.2 }),
+    importance: weighed(factors, { magnitude: 0.6, localConditions: 0.2, isolation: 0.2 }),
   },
   naming: {
     statement: "Named by the valley below, if anyone climbs high enough to name it.",

@@ -1,7 +1,7 @@
 import type { GenerationState } from "../../process";
-import { roadTravellers } from "../../regional/societyWays";
+import { bridgeFlow, fordCost, roadTravellers } from "../../regional/societyWays";
 import type { RegionalState } from "../../regional/state";
-import { rulingGrade } from "../../regional/ways";
+import { rulingGrade, wetGroundCost } from "../../regional/ways";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import {
   notApplicable,
@@ -16,23 +16,16 @@ import {
   cellSpan,
   dischargeAt,
   fieldOf,
-  gap,
   isLand,
   isRiver,
   rockAt,
   wetlandCoverAt,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import {
-  bridgeFlow,
-  bridgePlaces,
-  crossingPlaces,
-  fordCost,
-  travellersOf,
-} from "./settlementRecords";
+import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
+import { onceWritten } from "./communityRecords";
+import { travellersOf, weighedPlace } from "./settlementRecords";
+import { bridgePlaces, crossingPlaces } from "./workRecords";
 
-/** Extra cost of ground floods soak, at full floodplain, as regional/ways holds it. */
-const wetGroundCost = 3;
 /** A span at which a river becomes hard to bridge, in metres of its width. */
 const hardSpan = 50;
 /** Threading a laden boat between the piers. */
@@ -70,11 +63,13 @@ const graded = (state: GenerationState, cell: number): readonly PoiFieldChange[]
  * The crossing tax gone at the span; over the approach, a causeway above the wet ground the
  * road search otherwise charges for.
  */
-function roadCost(state: GenerationState, place: PoiPlace, cell: number) {
-  if (cell === place.anchor) return 1 / fordCost;
-  if (gap(state, place.anchor, cell) > cellSpan(state)) return 1;
-  return 1 / (1 + (wetGroundCost * fieldOf(state).FloodplainIntensity.get(cell)) / 1000);
-}
+const roadCost = (state: GenerationState, place: PoiPlace) => [
+  { cell: place.anchor, factor: 1 / fordCost },
+  ...[...adjacent(state, place.anchor)].map((cell) => ({
+    cell,
+    factor: 1 / (1 + (wetGroundCost * fieldOf(state).FloodplainIntensity.get(cell)) / 1000),
+  })),
+];
 /** Marsh beside the span means its causeway carries the route over that too. */
 function barriers(state: GenerationState, place: PoiPlace): readonly PoiBarrier[] {
   const onMarsh = [...adjacent(state, place.anchor)].some(
@@ -91,7 +86,7 @@ export const bridge: PoiEntry = {
   name: "Bridge",
   recognition: {
     distinct:
-      "A published crossing of `kind` bridge (`workKind` bridge, with its `travellers` and `flow`) on a channel cell with `WaterKindCodes` none: a built way over a river. `publishCrossings` splits it from a ford on one test, needing both `travellers` at least 100 and `FlowAccumulation` at least 20; a ford misses either. A dam also carries a road over a river, but holds water back; a bridge lets it all pass.",
+      "A crossing, with its `travellers` and `flow`, on a channel cell with `WaterKindCodes` none: a built way over a river. One test splits it from a ford, needing both `travellers` at least 100 and `FlowAccumulation` at least 20; a ford misses either. A dam also carries a road over a river, but holds water back; a bridge lets it all pass.",
     isA,
   },
   existence: {
@@ -107,6 +102,11 @@ export const bridge: PoiEntry = {
       return (rockAt(state, cell) + narrow + dry) / 3;
     },
     places,
+  },
+  publication: {
+    statement: "A refined map publishes each bridge once its ways are traced.",
+    moment: "society",
+    record: onceWritten,
   },
   fields: {
     statement:
@@ -126,6 +126,7 @@ export const bridge: PoiEntry = {
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable("Crossings are published after the last round's water, so none settles."),
+    schedule: notApplicable("A bridge's hold on the channel is its drainage cost below."),
   },
   movement: {
     statement:
@@ -136,6 +137,7 @@ export const bridge: PoiEntry = {
     magic: notApplicable(
       "River-borne stock runs under it, and people carrying stock pay only the road's cost above."
     ),
+    links: notApplicable("A span is a step on the ground, not a join between distant cells."),
     crosses: barriers,
   },
   others: {
@@ -180,7 +182,7 @@ export const bridge: PoiEntry = {
     statement:
       "A bridge shows by the road on it and the river under it together, and by being the only way over its stretch; it outranks a ford of the same traffic because it took far more to build.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
+    importance: weighedPlace(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
   },
   naming: {
     statement:

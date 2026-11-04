@@ -124,34 +124,11 @@ export function riverSignificance(e: RiverEvidence, scale = worldScale) {
   );
 }
 
-/** Prominence measures separation from surrounding relief, not elevation alone. */
-export const worldPeakProminence = 1_000;
-/** Isolation allows a smaller but distinctive solitary mountain to matter globally. */
+/** How far a summit's isolation is searched, at the World's scale. */
 export const worldPeakIsolation = 60_000;
-/** Extreme prominence stands out even within an extensive mountain system. */
-export const worldPeakExtremeProminence = 1_800;
-export function summitSignificance(prominence: number, isolation: number, scale = worldScale) {
-  return decision(
-    prominence >= worldPeakExtremeProminence * scale.height ||
-      (prominence >= worldPeakProminence * scale.height &&
-        isolation >= worldPeakIsolation * scale.length),
-    "exceptional prominence or isolated mountain"
-  );
-}
 /** Falls require both a real drop and water; a dry cliff is not a waterfall. */
 export const worldFallsDrop = 40;
 export const worldFallsDischarge = 250;
-/** A very high cascade can qualify at a lower, still substantial, discharge. */
-export const worldFallsExtremeDrop = 200;
-export const worldFallsCascadeDischarge = 40;
-export function fallsSignificance(drop: number, discharge: number, scale = worldScale) {
-  return decision(
-    (drop >= worldFallsDrop * scale.height && discharge >= worldFallsDischarge * scale.area) ||
-      (drop >= worldFallsExtremeDrop * scale.height &&
-        discharge >= worldFallsCascadeDischarge * scale.area),
-    "exceptional channel drop with sustained flow"
-  );
-}
 /** Mountain systems have relief as well as a broad, connected physical footprint. */
 export const worldRangeArea = 8_000_000_000;
 export const worldRangeBreadth = 15_000;
@@ -173,23 +150,8 @@ export function rangeSignificance(
   );
 }
 /** Lakes remain physical water whether or not their identity belongs on the World map. */
-export const worldLakeArea = 2_000_000_000;
 export const worldExceptionalLakeArea = 300_000_000;
 export const worldLakeDepth = 200;
-export function lakeSignificance(
-  area: number,
-  depth: number,
-  throughflow: number,
-  scale = worldScale
-) {
-  return decision(
-    area >= worldLakeArea * scale.area ||
-      (area >= worldExceptionalLakeArea * scale.area &&
-        (depth >= worldLakeDepth * scale.height ||
-          throughflow >= worldOutletDischarge * scale.area)),
-    "major waterbody or exceptional deep or through-flowing lake"
-  );
-}
 
 /** Candidate seas already carry coastal-constriction and sill evidence from marineRegions. */
 export const worldSeaArea = 8e9;

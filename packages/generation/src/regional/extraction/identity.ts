@@ -1,4 +1,4 @@
-import { point, spatial, type AtlasFeature, type DrainageReach } from "@atlas/domain";
+import type { DrainageReach } from "@atlas/domain";
 import {
   generationFeature,
   generationFeatures,
@@ -18,14 +18,12 @@ const identityShare = 0.3;
 
 /**
  * After the world has published the field's geography, carry what only a refinement knows:
- * which developed river is a captured course, which realized summit is a captured peak, and
- * which features are this map's own products (so a later run regenerates them and keeps the
- * captured geography).
+ * which developed river is a captured course, and which features are this map's own products
+ * (so a later run regenerates them and keeps the captured geography).
  */
 export function carryIdentities(state: RegionalState) {
   tagProducts(state);
   carryCourses(state);
-  reanchorSummits(state);
 }
 
 /** A feature neither captured nor authored is this run's product. */
@@ -185,77 +183,4 @@ function takeIdentity(state: RegionalState, featureId: string, course: CapturedC
   writeGenerationFeature(state, feature);
   if (!course.carried && generationFeature(state, course.feature.id))
     removeGenerationFeature(state, course.feature.id);
-}
-
-/**
- * An inherited peak keeps its identity and moves to the most prominent realized summit of its
- * massif; the summit the world published there is the same place and leaves. The captured
- * position and prominence are written from the evidence read at context, not from the
- * feature: when the world's extraction finds a summit where the feature already stands it
- * rewrites the feature's attributes, and a later refinement must still read the summit from
- * where the parent had it.
- */
-function reanchorSummits(state: RegionalState) {
-  const reach = state.regional.parentSpan,
-    areaId = state.regional.input.areaId,
-    peaks = [...generationFeatures(state, { areaId })]
-      .filter(
-        (f) =>
-          f.kind === "peak" &&
-          f.geometry.type === "Point" &&
-          f.attributes.developedBy === "regional"
-      )
-      .sort((a, b) => (a.id < b.id ? -1 : 1)),
-    taken = new Set<string>();
-  for (const summit of state.regional.evidence?.summits ?? []) {
-    const feature = generationFeature(state, summit.featureId);
-    if (!feature || feature.geometry.type !== "Point") continue;
-    const carried = { anchoredFrom: summit.captured, capturedProminence: summit.prominence },
-      best = nearestProminent(peaks, summit.captured, reach, taken);
-    if (best) {
-      taken.add(best.id);
-      moveSummit(state, feature, best, carried);
-    } else
-      writeGenerationFeature(state, {
-        ...feature,
-        attributes: { ...feature.attributes, ...carried },
-      });
-  }
-}
-function nearestProminent(
-  peaks: AtlasFeature[],
-  captured: number[],
-  reach: number,
-  taken: Set<string>
-) {
-  let best: AtlasFeature | undefined,
-    bestRise = 0;
-  for (const peak of peaks) {
-    if (taken.has(peak.id)) continue;
-    const rise = Number(peak.attributes.prominence ?? 0);
-    if (
-      rise > bestRise &&
-      spatial.distance(peak.geometry, point({ x: captured[0], y: captured[1], z: 0 })) <= reach
-    ) {
-      best = peak;
-      bestRise = rise;
-    }
-  }
-  return best;
-}
-function moveSummit(
-  state: RegionalState,
-  feature: AtlasFeature,
-  realized: AtlasFeature,
-  carried: { anchoredFrom: [number, number]; capturedProminence: number }
-) {
-  feature.geometry = realized.geometry;
-  feature.attributes = {
-    ...feature.attributes,
-    ...carried,
-    prominence: realized.attributes.prominence,
-    elevation: realized.attributes.elevation,
-  };
-  writeGenerationFeature(state, feature);
-  removeGenerationFeature(state, realized.id);
 }

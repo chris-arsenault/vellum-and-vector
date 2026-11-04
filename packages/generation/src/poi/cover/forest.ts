@@ -1,40 +1,35 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
-import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { namingCultureNear, within } from "../poiPlaces";
 import { cellSpan, fieldOf, treeCoverAt } from "../poiReads";
-import { drawnWhen } from "../poiVisibilityRules";
+import { weighed } from "../poiVisibilityRules";
+import { isFamily, landscapePlaces, landscapeRecord } from "./coverLandscape";
 import {
   borders,
   canopyAt,
-  ceilingsHeld,
   countryCounterpart,
   countryFactors,
-  floorsHeld,
+  coverCosts,
+  coverWrites,
+  fireAt,
   hazardReach,
-  isKind,
   meanOver,
   movesOrGoes,
   oldStand,
-  onPlace,
-  rootCarriage,
-  sharesNoGround,
+  otherLandscapes,
   spanOf,
   standsIn,
-  verdureHeld,
+  verdureAt,
   withinOwn,
 } from "./coverShared";
 
 /** Area at which a forest is half as great as forests get: 50,000 square kilometres. */
 const typicalArea = 5e10;
-/** The road's charge for trees, as the map router's ground factor holds it. */
-const roadPerTree = 0.8;
-/** The binding roots add to the resistance a channel cuts through, as `surfaceResistance` holds it. */
-const channelPerTree = 1.2;
 /** The mean ecological damage past which a canopy does not come back within the epoch. */
 const lostCanopy = 0.5;
-const isA = isKind("forest");
-const places = regionPlaces("forest", isA, treeCoverAt);
+const isA = isFamily("forest");
+const places = landscapePlaces("forest", "forest", treeCoverAt);
 const factors = countryFactors(places, typicalArea, treeCoverAt);
 const counterpart = countryCounterpart(isA);
 const unrealized = movesOrGoes(counterpart);
@@ -62,31 +57,29 @@ export const forest: PoiEntry = {
   name: "Forest",
   recognition: {
     distinct:
-      "Land the ecology classes as Woodland, Temperate, Boreal or Rainforest, Deepwood, Rime forest, Moss forest or Ember grove (BiomeCodes: TreeCover at least 0.15, or at least 0.4 under 2 degrees), or a Greenwood stand rule cell, on ground not classed wetland, ice or water. Grassland is the same test failing on tree share, or a warm Savanna at the same share (over 18 degrees); wetland is ground with wetness over 0.5, whatever stands on it; a halo or wild zone over the trees takes the cell.",
+      "Land whose biome class is in the forest family, as the biome layer shows it: Woodland, Temperate forest, Boreal forest or Rainforest. Grassland is the family below the tree line of those classes; ember groves, rime forests and moss forests are trees too, but a system's forcing puts them in families of their own. A halo or an old stand may lie over it, since those are rules, not classes.",
     isA,
   },
   existence: {
     statement:
-      "Emerges where the plant cohorts close canopy under the climate and soil. Greenwood's old stands are this kind: Greenwood adds a stand where canopy of 0.6 reaches 800 years, and the forest's other classes (conifer or broadleaf share, stillness, fog, verdure) are its properties, read from the biome name, not kinds of their own.",
+      "Emerges where the plant cohorts close canopy under the climate and soil. Boreal, temperate, dry and montane are its properties, read from its means and published as its biome.",
     way: "emerges",
     requires: notApplicable(
-      "Nothing is required beyond the canopy its test reads; seeds reach any ground the cohorts can grow on."
+      "Nothing is required beyond the canopy its class reads; seeds reach any ground the cohorts can grow on."
     ),
     suitability: notApplicable("No process picks a forest's site: dispersal and growth make it."),
     places,
   },
+  publication: {
+    statement:
+      "Each region publishes as a forest on the ecology layer, outlined by the biome class margin and named for its biome; a region of under three cells publishes nothing.",
+    moment: "geography",
+    record: landscapeRecord("forest", "forest", places),
+  },
   fields: {
     statement:
-      "A forest binds its soil, takes rain in and returns it to the air: roots hold the soil and the stable slope, the canopy keeps rain out of quick runoff, and transpiration feeds the air columns passing over it. Cut it and all three go. An old stand also holds Greenwood's verdure.",
-    terrain: floorsHeld("SoilDepth"),
-    water(state, place) {
-      return [...floorsHeld("Infiltration")(state, place), ...ceilingsHeld("Runoff")(state, place)];
-    },
-    climate: floorsHeld("Evapotranspiration"),
-    cover: notApplicable(
-      "Canopy is what it is: shade and seed fall are already inside the ecology's cohorts, and a declared change would count them twice."
-    ),
-    magic: verdureHeld(oldStand),
+      "A forest binds its soil, takes rain in and returns it to the air. Those are the soil and climate processes reading its cover over the whole field, so cutting it changes all three with no effect of its own.",
+    ...coverWrites,
   },
   acrossMaps: {
     statement:
@@ -98,30 +91,19 @@ export const forest: PoiEntry = {
     counterpart,
     unrealized,
     settle: unrealized,
+    schedule: notApplicable("A forest does nothing at refinement's other points."),
   },
   movement: {
     statement:
-      "Roads pay for trees in proportion to their density, as the map router charges them; regional ways do not read cover yet, and world routes must not pay twice. Roots slow channels cutting in, and Greenwood's roots travel fastest through closed canopy.",
-    roads: onPlace((state, cell) => 1 + roadPerTree * treeCoverAt(state, cell)),
-    boats: notApplicable("A river through a forest carries boats as any other reach."),
-    drainage: onPlace((state, cell) => 1 + channelPerTree * treeCoverAt(state, cell)),
-    magic: onPlace(rootCarriage),
-    crosses: notApplicable("Trees are something to cross, not a way over a barrier."),
+      "Roads pay for trees in proportion to their density, roots slow channels cutting in, and Greenwood's roots travel fastest through closed canopy. Each of those is a generator cost that reads the cover of every cell, so the forest adds none of its own.",
+    ...coverCosts,
   },
   others: {
     statement:
-      "It shares no ground with other cover or with wetland. It shelters shrines, ruins and springs, runs into grassland, wetland and clearings at its edges, and stands near the towns it supplies.",
+      "It shares no ground with another landscape or with water. It shelters shrines, ruins and springs, runs into grassland, wetland and clearings at its edges, and stands near the towns it supplies.",
     needs: notApplicable("A forest needs no other place, only ground and climate."),
-    excludes: sharesNoGround(
-      "grassland",
-      "barren",
-      "thawedHalo",
-      "wildZone",
-      "clearance",
-      "wetland",
-      "lake"
-    ),
-    contains: standsIn("shrine", "ruin", "spring"),
+    excludes: otherLandscapes("forest"),
+    contains: standsIn("shrine", "ruin", "spring", "greenwoodStand"),
     pairsWith: [
       ...borders("grassland", "wetland", "clearance"),
       { kind: "settlement", holds: within(nearby) },
@@ -130,17 +112,14 @@ export const forest: PoiEntry = {
   people: {
     statement:
       "Timber and fuel first, then game and gathered food, thin in stilled woods; cover for those who know it; old stands are sacred and hold sap people tap. Dry-season canopy burns.",
-    offers(state, place) {
-      const verdure = meanOver(state, place, (_s, cell) => fieldOf(state).Verdure.get(cell));
-      return {
-        materials: meanOver(state, place, canopyAt),
-        food: foodOf(state, place),
-        defence: 0.3 * meanOver(state, place, treeCoverAt),
-        sanctity: Math.max(standShare(state, place), verdure),
-      };
-    },
+    offers: (state, place) => ({
+      materials: meanOver(state, place, canopyAt),
+      food: foodOf(state, place),
+      defence: 0.3 * meanOver(state, place, treeCoverAt),
+      sanctity: Math.max(standShare(state, place), meanOver(state, place, verdureAt)),
+    }),
     threatens(state, place) {
-      const fire = meanOver(state, place, (_s, cell) => fieldOf(state).FireActivity.get(cell));
+      const fire = meanOver(state, place, fireAt);
       return fire > 0
         ? [{ hazard: "wildfire", reach: hazardReach(state, place), severity: Math.min(1, fire) }]
         : [];
@@ -148,7 +127,7 @@ export const forest: PoiEntry = {
   },
   time: {
     statement:
-      "Forest persists while cohorts renew; ageing canopy may become a Greenwood stand, a stilled one stands past its span, and buried stands become coal. Fire, flood or clearing past what the epoch regrows leaves open grass.",
+      "Forest persists while cohorts renew; ageing canopy may hold a Greenwood stand, a stilled one stands past its span, and buried stands become coal. Fire, flood or clearing past what the epoch regrows leaves open grass.",
     fate(state, place) {
       const damage = meanOver(state, place, (_s, cell) =>
         fieldOf(state).EcologicalDamage.get(cell)
@@ -158,9 +137,9 @@ export const forest: PoiEntry = {
   },
   visibility: {
     statement:
-      "A forest shows mainly by how much country it covers, then by how abruptly it stands out of open land; a small wood on a plain outranks the same wood in forested hills, and a town named after it carries it.",
+      "A forest weighs mainly by how much country it covers, then by how abruptly it stands out of open land; a small wood on a plain outranks the same wood in forested hills, and a town named after it carries it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.25, isolation: 0.15 }),
+    importance: weighed(factors, { magnitude: 0.6, localConditions: 0.25, isolation: 0.15 }),
   },
   naming: {
     statement:

@@ -10,18 +10,18 @@ import {
   type PoiPlace,
 } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { siteRecord } from "../poiRecords";
 import {
   cellSpan,
   cellsWithin,
   fieldOf,
-  gap,
   isLand,
   isSea,
   toNative,
   waveExposureAt,
 } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { areaOf, exposureBeside, extentOf, seaFacing } from "./seaShared";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { areaOf, exposureBeside, extentOf, near, seaFacing } from "./seaShared";
 import { showsForm, wrapOf } from "./shoreForm";
 
 /** Area at which a headland is half as great as headlands get: 500 square kilometres. */
@@ -39,7 +39,8 @@ const shedding = 1.5;
 
 const isA = showsForm("headland");
 const places = regionPlaces("headland", isA, wrapOf);
-const around = (state: GenerationState) => 8 * cellSpan(state);
+/** The country around a headland that bears on it: 40 km. */
+const around = near(40_000);
 /** The worst waves on its shore; the world map writes exposure on the water beside it. */
 const tipExposure = (state: GenerationState, place: PoiPlace) =>
   seaFacing(state, place.cells).reduce(
@@ -62,23 +63,16 @@ const factors = {
   cultural: attachment(around),
 };
 
-/** The shore of a headland stays out of the water and keeps its rock against the cut. */
+/** The shore of a headland stays out of the water. */
 function standing(state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] {
-  const map = fieldOf(state),
-    floor = map.EffectiveSeaLevel + toNative(emergence);
-  return seaFacing(state, place.cells).flatMap((cell): PoiFieldChange[] => [
-    { change: "atLeast", band: "Elevation", cell, value: floor },
-    { change: "atLeast", band: "RockResistance", cell, value: map.RockResistance.get(cell) },
-  ]);
-}
-/** Waves bend onto a point: each cell of its shore takes the worst of the sea beside it. */
-const refracted = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  seaFacing(state, place.cells).map((cell) => ({
+  const value = fieldOf(state).EffectiveSeaLevel + toNative(emergence);
+  return seaFacing(state, place.cells).map((cell) => ({
     change: "atLeast",
-    band: "WaveExposure",
+    band: "Elevation",
     cell,
-    value: Math.round(exposureBeside(state, cell) * 1000),
+    value,
   }));
+}
 /** Wind and salt spray keep the sea-facing ground from carrying a full canopy. */
 const pruned = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
   seaFacing(state, place.cells).map((cell) => ({
@@ -89,25 +83,22 @@ const pruned = (state: GenerationState, place: PoiPlace): readonly PoiFieldChang
   }));
 /** On the finer ground: the sea's cut leaves resistant rock standing where the point must be. */
 function holdRock(state: RegionalState, carried: PoiCarried): readonly PoiFieldChange[] {
-  const map = fieldOf(state),
-    value = heldRock * baselineRock,
-    cells = cellsWithin(state, carried.cell, state.regional.parentSpan / 2).filter((cell) =>
-      isLand(state, cell)
-    );
-  return [
-    ...cells.map((cell): PoiFieldChange => ({
-      change: "atLeast",
-      band: "RockResistance",
-      cell,
-      value: Math.max(value, map.RockResistance.get(cell)),
-    })),
-    {
-      change: "atLeast",
-      band: "Elevation",
-      cell: carried.cell,
-      value: map.EffectiveSeaLevel + toNative(emergence),
-    },
-  ];
+  const value = heldRock * baselineRock,
+    rock = cellsWithin(state, carried.cell, state.regional.parentSpan / 2)
+      .filter((cell) => isLand(state, cell))
+      .map((cell): PoiFieldChange => ({ change: "atLeast", band: "RockResistance", cell, value }));
+  // Only ground already standing is held up: the sea is never raised into a point.
+  return isLand(state, carried.cell)
+    ? [
+        ...rock,
+        {
+          change: "atLeast",
+          band: "Elevation",
+          cell: carried.cell,
+          value: fieldOf(state).EffectiveSeaLevel + toNative(emergence),
+        },
+      ]
+    : rock;
 }
 
 export const headland: PoiEntry = {
@@ -116,7 +107,7 @@ export const headland: PoiEntry = {
   name: "Headland",
   recognition: {
     distinct:
-      "A cell of ground that, on the smallest circle of radius 3, 6, 12, 24 or 48 cells showing any coastal form, has one unbroken arc of sea of at least 210 degrees, with ground running unbroken from the cell for five times that radius along the largest other arc. A straight shore shows about 180 degrees. A bay and a strait are the same reading on a sea cell, one arc of shore or two facing shores. The rim of a round island also shows the wrap, but its ground runs out across the island, so it is not a headland; the end of a long island is one.",
+      "A cell of ground that, on the smallest circle, of radius 1.5 to 800 km, that the map resolves and that shows any coastal form, has one unbroken arc of sea of at least 210 degrees, with ground running unbroken from the cell for five times that radius along the largest other arc. A straight shore shows about 180 degrees. A bay and a strait are the same reading on a sea cell, one arc of shore or two facing shores. The rim of a round island also shows the wrap, but its ground runs out across the island, so it is not a headland; the end of a long island is one.",
     isA,
   },
   existence: {
@@ -127,11 +118,23 @@ export const headland: PoiEntry = {
     suitability: notApplicable("No process chooses where the sea leaves a point."),
     places,
   },
+  publication: {
+    statement: "Every headland publishes as a site at the cell the sea wraps most.",
+    moment: "geography",
+    record: siteRecord({
+      kind: "headland",
+      layer: "geology",
+      name: "Headland",
+      attributes: (state, place) => ({ wrap: wrapOf(state, place.anchor) }),
+    }),
+  },
   fields: {
     statement:
-      "A headland holds out: its shore stays above water with the rock it has, takes the worst of the waves on its tip, and carries a pruned canopy on its seaward cells. Lee water is sheltered through the bay beside it.",
+      "A headland holds out: its shore stays above water and carries a pruned canopy on its seaward cells. The waves on its tip are the sea's own, read beside it.",
     terrain: standing,
-    water: refracted,
+    water: notApplicable(
+      "The ocean current process writes wave exposure on the sea, and the coastal feedback reads that water beside the point; refinement's shore development writes its own."
+    ),
     climate: notApplicable(
       "Its mild air comes from warmth reading OceanDistance, which its cells already carry as small values; fog from a facing front is settled on it by the ocean feedback."
     ),
@@ -149,22 +152,21 @@ export const headland: PoiEntry = {
     unrealized: movesTo(counterpart),
     settle: (state, carried) =>
       isSea(state, carried.cell) ? movesTo(counterpart)(state, carried) : stays(),
+    schedule: notApplicable("Holding its rock is all a headland does to a refinement."),
   },
   movement: {
     statement:
       "Boats pay to round it, in proportion to the waves on its water, and roads pay to go out on a neck that ends at the sea. Rivers avoid running along it, because it sheds water to both shores.",
     roads: costNear(neckRoad),
-    boats(state, place, cell) {
-      if (!isSea(state, cell)) return 1;
-      const reach = Math.max(2 * cellSpan(state), extentOf(state, place));
-      return gap(state, place.anchor, cell) <= reach
-        ? 1 + rounding * waveExposureAt(state, cell)
-        : 1;
-    },
+    boats: (state, place) =>
+      cellsWithin(state, place.anchor, Math.max(2 * cellSpan(state), extentOf(state, place)))
+        .filter((cell) => isSea(state, cell))
+        .map((cell) => ({ cell, factor: 1 + rounding * waveExposureAt(state, cell) })),
     drainage: costNear(shedding),
     magic: notApplicable(
       "Land stops a ray or a current whatever its outline; a point changes neither beyond the land itself."
     ),
+    links: notApplicable("A headland joins no two cells."),
     crosses: notApplicable("A headland is a thing to go around; it opens no way across anything."),
   },
   others: {
@@ -212,7 +214,7 @@ export const headland: PoiEntry = {
     statement:
       "A headland shows by its size and by how far it breaks the outline of its own coast. A sharp cape on a smooth shore outranks the same cape in an indented one, and a town named after it carries a small one.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.4, localConditions: 0.4, isolation: 0.2 }),
+    importance: weighed(factors, { magnitude: 0.4, localConditions: 0.4, isolation: 0.2 }),
   },
   naming: {
     statement:

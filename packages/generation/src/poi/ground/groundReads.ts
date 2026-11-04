@@ -1,16 +1,22 @@
-import type { MagicSystem } from "@atlas/domain";
+import type { AtlasFeature, MagicSystem } from "@atlas/domain";
+import { bareGround } from "../../canonry/ecologyBiomes";
 import { potentialEvaporation } from "../../canonry/ecologyEnvironment";
 import type { PhysicalBufferName } from "../../canonry/field";
+import { components } from "../../canonry/geographicRegions";
 import { reservoirAmount } from "../../canonry/magicState";
 import type { GenerationState } from "../../process";
+import { closedBasinAridity } from "../../regional/network";
 import type { RegionalState } from "../../regional/state";
 import type { PoiCarried, PoiFieldChange, PoiPlace, PoiUnrealized } from "../poiContract";
+import type { PoiKindId } from "../poiKinds";
+import { rulePlaces } from "../poiPlaces";
 import {
   adjacent,
   cellSpan,
   celsiusAt,
   fieldOf,
   gap,
+  heldFor,
   isLand,
   isRiver,
   magicRule,
@@ -18,6 +24,7 @@ import {
   sedimentAt,
   slopeAt,
 } from "../poiReads";
+import { ruleRecord } from "../poiRecords";
 
 /**
  * What the ground group's entries share: its material tests, which the mine reads as deposits,
@@ -109,15 +116,14 @@ const riverBar = (state: GenerationState, cell: number) => {
   return above >= carryingGradient && flowGradient(state, cell) <= slackening * above;
 };
 const firePlacer = magicRule("fire", "placer");
+/** A bar with no metal in it: the plain form of a band, which Fire's rule does not hold. */
+export const naturalBarAt = (state: GenerationState, cell: number) =>
+  isLand(state, cell) && !firePlacer(state, cell) && riverBar(state, cell);
 export const placerAt = (state: GenerationState, cell: number) =>
-  isLand(state, cell) && (firePlacer(state, cell) || riverBar(state, cell));
+  firePlacer(state, cell) || naturalBarAt(state, cell);
 
-/** Precipitation over evaporation below which a basin stays closed, as the regional network holds it. */
-const closedAridity = 0.5;
 /** A floor this gentle has been levelled by standing water; steeper ground is the basin's side. */
 const panFloor = 0.006;
-/** Living cover below which the ground is bare, the cut ecology makes between pan and heath. */
-export const bareCover = 0.12;
 const coverAt = (state: GenerationState, cell: number) => {
   const map = fieldOf(state);
   return map.TreeCover.get(cell) + map.GrassCover.get(cell) + map.WetlandCover.get(cell);
@@ -130,31 +136,33 @@ export const spillDepthAt = (state: GenerationState, cell: number) => {
 export const closedByAridity = (state: GenerationState, cell: number) => {
   const map = fieldOf(state),
     falling = (map.Rainfall.get(cell) + map.Snowfall.get(cell)) / 1000;
-  return falling < closedAridity * potentialEvaporation(celsiusAt(state, cell));
+  return falling < closedBasinAridity * potentialEvaporation(celsiusAt(state, cell));
 };
+const saltPanRule = magicRule("salt", "pan"),
+  glassRule = magicRule("salt", "flat");
 /** A dry, bare, level floor below the spill of its basin: a pan with no magic in it. */
 export const naturalPanAt = (state: GenerationState, cell: number) =>
   isLand(state, cell) &&
+  !saltPanRule(state, cell) &&
+  !glassRule(state, cell) &&
   spillDepthAt(state, cell) > 0 &&
   slopeAt(state, cell) <= panFloor &&
   fieldOf(state).IceThickness.get(cell) <= 0 &&
-  coverAt(state, cell) < bareCover &&
+  coverAt(state, cell) < bareGround &&
   closedByAridity(state, cell);
-const saltPanRule = magicRule("salt", "pan"),
-  glassRule = magicRule("salt", "flat");
 export const panAt = (state: GenerationState, cell: number) =>
-  isLand(state, cell) &&
-  !glassRule(state, cell) &&
-  (saltPanRule(state, cell) || naturalPanAt(state, cell));
+  saltPanRule(state, cell) || naturalPanAt(state, cell);
 
 export const veinAt = magicRule("fire", "vein");
-const dustRule = magicRule("salt", "dust");
-export const dustAt = (state: GenerationState, cell: number) =>
-  isLand(state, cell) && dustRule(state, cell);
+export const dustAt = magicRule("salt", "dust");
 
-/** Salt's yield per death and its killing-ground floor, used where no Salt system defines them. */
+/** Salt's yield per death, its killing-ground floor and its full level, where no Salt system defines them. */
 const defaultDeathYield = 5_000_000,
-  defaultKillingFloor = 20;
+  defaultKillingFloor = 20,
+  defaultFullSalt = 400;
+/** Salt's full level, per square metre. */
+export const fullSaltOf = (state: GenerationState) =>
+  parameterOf(state, "salt", "saltFull") ?? defaultFullSalt;
 const killingRule = magicRule("salt", "ground");
 /** The least brine per square metre that makes a killing ground. */
 export const killingFloor = (state: GenerationState) =>
@@ -165,39 +173,57 @@ export function recordedBrineAt(state: GenerationState, cell: number) {
     made = parameterOf(state, "salt", "saltPerDeath") ?? defaultDeathYield;
   return (map.MassDeath.get(cell) * made) / map.mesh.area(cell);
 }
-/** The brine of the dead, or the dead the ground records before Salt has read them or without Salt. */
-export const killingAt = (state: GenerationState, cell: number) =>
+/** Dead the ground records past Salt's floor and outside its rule: before Salt has read them, or with no Salt. */
+export const naturalKillingAt = (state: GenerationState, cell: number) =>
   isLand(state, cell) &&
-  (killingRule(state, cell) || recordedBrineAt(state, cell) >= killingFloor(state));
+  !killingRule(state, cell) &&
+  recordedBrineAt(state, cell) >= killingFloor(state);
+export const killingAt = (state: GenerationState, cell: number) =>
+  killingRule(state, cell) || naturalKillingAt(state, cell);
 
 /** Salting as the living feedback wrote it. */
 export const saltingAt = (state: GenerationState, cell: number) => fieldOf(state).Salting.get(cell);
-/**
- * Salted ground draws the air's moisture down: declared as the ceiling that holds whatever the
- * moisture was, so declaring it twice takes nothing twice.
- */
-export function saltedAir(state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] {
-  const drying = parameterOf(state, "salt", "desiccation") ?? 0;
-  return place.cells
-    .filter((cell) => saltingAt(state, cell) > 0)
-    .map((cell) =>
-      capOf("Moisture", cell, Math.round(1000 * (1 - drying * saltingAt(state, cell))))
-    );
-}
-/** Growth on salted ground falls by this share of the salting, as ecology's growth terms hold it. */
-const saltThinning = 0.8;
-/** The tree and grass cover salted ground can carry. */
-export function saltThinned(state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] {
-  return place.cells.flatMap((cell) => {
-    const share = 1 - saltThinning * saltingAt(state, cell);
-    return share >= 1 ? [] : [capOf("TreeCover", cell, share), capOf("GrassCover", cell, share)];
-  });
-}
-/** Holds the salting a place has: Salt does not decay, whatever the field does around it. */
-export const saltHeld = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells
-    .filter((cell) => saltingAt(state, cell) > 0)
-    .map((cell) => floorOf("Salting", cell, saltingAt(state, cell)));
+
+type CellTest = (state: GenerationState, cell: number) => boolean;
+/** Each connected group of cells of a kind's natural form, anchored where `rank` is highest. */
+const naturalPlaces =
+  (kind: PoiKindId, natural: CellTest, rank: (state: GenerationState, cell: number) => number) =>
+  (state: GenerationState): readonly PoiPlace[] =>
+    heldFor(state, `natural:${kind}`, () => {
+      const found: PoiPlace[] = [];
+      components(
+        state,
+        (i) => natural(state, i),
+        (members) => {
+          const cells = [...members],
+            anchor = cells.reduce((a, b) => (rank(state, b) > rank(state, a) ? b : a), cells[0]);
+          found.push({ id: `${kind}:${anchor}`, kind, cells, anchor });
+        }
+      );
+      return found;
+    });
+/** A kind a magic rule grows that also forms without it: the rule's places, then the natural ones. */
+export const grownAndNaturalPlaces = (
+  kind: PoiKindId,
+  [system, rule]: readonly [string, string],
+  natural: CellTest,
+  rank: (state: GenerationState, cell: number) => number
+) => {
+  const grown = rulePlaces(kind, system, rule),
+    formed = naturalPlaces(kind, natural, rank);
+  return (state: GenerationState): readonly PoiPlace[] => [...grown(state), ...formed(state)];
+};
+/** A rule's place publishes as the system's class; a natural one by the kind's own record. */
+export const grownOrNaturalRecord = (
+  system: string,
+  rule: string,
+  natural: (state: GenerationState, place: PoiPlace) => AtlasFeature | null
+) => {
+  const grown = ruleRecord(system, rule),
+    isGrown = magicRule(system, rule);
+  return (state: GenerationState, place: PoiPlace) =>
+    isGrown(state, place.anchor) ? grown(state, place) : natural(state, place);
+};
 
 /** A place's ground area in square metres. */
 export const areaOf = (state: GenerationState, place: PoiPlace) =>
@@ -205,8 +231,10 @@ export const areaOf = (state: GenerationState, place: PoiPlace) =>
 /** A course's length in metres, as many cell spans as it has cells. */
 export const lengthOf = (state: GenerationState, place: PoiPlace) =>
   place.cells.length * cellSpan(state);
-/** The country a place is judged against. */
-export const aroundOf = (state: GenerationState) => 6 * cellSpan(state);
+/** The country a place is judged against, in metres. */
+const countryReach = 30_000;
+/** That country, and always some of it: a map whose cells are wider still reads its neighbours. */
+export const aroundOf = (state: GenerationState) => Math.max(countryReach, 2 * cellSpan(state));
 /** A place stands on another when the other's cells include its anchor. */
 export const standsOn = (_state: GenerationState, a: PoiPlace, b: PoiPlace) =>
   b.cells.includes(a.anchor);

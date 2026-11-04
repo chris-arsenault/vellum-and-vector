@@ -1,8 +1,10 @@
+import { placeDrawn } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { RegionalState } from "../regional/state";
 import { poiCatalogue } from "./catalogue";
 import type { PoiEntry, PoiPlace, PoiRelation } from "./poiContract";
 import { fieldOf, releaseHeld } from "./poiReads";
+import { placesOf } from "./poiPublish";
 
 /** Places of a kind each function is called on; enough to exercise it, not to measure it. */
 const sampled = 50;
@@ -29,27 +31,33 @@ const relationCalls = (name: string, relations: unknown, state: GenerationState,
       ])
     : [];
 
+function movementCalls(entry: PoiEntry, state: GenerationState, p: PoiPlace): Call[] {
+  const onPlace = (fn: never) => (fn as (s: GenerationState, q: PoiPlace) => unknown)(state, p),
+    { roads, boats, magic, links, crosses } = entry.movement,
+    carriers = "slot" in magic ? [] : Object.entries(magic);
+  return [
+    ["movement.roads", roads, onPlace],
+    ["movement.boats", boats, onPlace],
+    ["movement.links", links, onPlace],
+    ["movement.crosses", crosses, onPlace],
+    ...carriers.map(([carrier, list]): Call => [`movement.magic.${carrier}`, list, onPlace]),
+  ];
+}
 function placeCalls(entry: PoiEntry, state: GenerationState, p: PoiPlace): Call[] {
   const onPlace = (fn: never) => (fn as (s: GenerationState, q: PoiPlace) => unknown)(state, p),
-    onCell = (fn: never) => (fn as (s: GenerationState, c: number) => unknown)(state, p.anchor),
-    onCost = (fn: never) =>
-      (fn as (s: GenerationState, q: PoiPlace, c: number) => unknown)(state, p, p.anchor);
-  const { fields, movement, people, time, visibility, naming, others, existence, recognition } =
-    entry;
+    onCell = (fn: never) => (fn as (s: GenerationState, c: number) => unknown)(state, p.anchor);
+  const { fields, people, time, visibility, naming, others, existence, recognition } = entry;
   return [
     ["recognition.isA", recognition.isA, onCell],
     ["existence.requires", existence.requires, onCell],
     ["existence.suitability", existence.suitability, onCell],
+    ["publication.record", entry.publication.record, onPlace],
     ["fields.terrain", fields.terrain, onPlace],
     ["fields.water", fields.water, onPlace],
     ["fields.climate", fields.climate, onPlace],
     ["fields.cover", fields.cover, onPlace],
     ["fields.magic", fields.magic, onPlace],
-    ["movement.roads", movement.roads, onCost],
-    ["movement.boats", movement.boats, onCost],
-    ["movement.drainage", movement.drainage, onCost],
-    ["movement.magic", movement.magic, onCost],
-    ["movement.crosses", movement.crosses, onPlace],
+    ...movementCalls(entry, state, p),
     ["people.offers", people.offers, onPlace],
     ["people.threatens", people.threatens, onPlace],
     ["time.fate", time.fate, onPlace],
@@ -57,6 +65,7 @@ function placeCalls(entry: PoiEntry, state: GenerationState, p: PoiPlace): Call[
     ["visibility.localConditions", visibility.localConditions, onPlace],
     ["visibility.isolation", visibility.isolation, onPlace],
     ["visibility.cultural", visibility.cultural, onPlace],
+    ["visibility.importance", visibility.importance, onPlace],
     ["naming.namedBy", naming.namedBy, onPlace],
     ...relationCalls("others.needs", others.needs, state, p),
     ...relationCalls("others.excludes", others.excludes, state, p),
@@ -70,7 +79,7 @@ function placeCalls(entry: PoiEntry, state: GenerationState, p: PoiPlace): Call[
 function refinedCalls(entry: PoiEntry, state: GenerationState, p: PoiPlace): Call[] {
   if (!("regional" in state) || !p.feature) return [];
   const region = state as RegionalState,
-    carried = { feature: p.feature, cell: p.anchor },
+    carried = { feature: p.feature, cell: p.anchor, cells: p.cells },
     { carry, realize, counterpart, unrealized, settle } = entry.acrossMaps,
     withCarried = (fn: never) =>
       (fn as (s: RegionalState, c: typeof carried) => unknown)(region, carried);
@@ -84,6 +93,11 @@ function refinedCalls(entry: PoiEntry, state: GenerationState, p: PoiPlace): Cal
     ["acrossMaps.counterpart", counterpart, withCarried],
     ["acrossMaps.unrealized", unrealized, withCarried],
     ["acrossMaps.settle", settle, withCarried],
+    [
+      "movement.drainage",
+      entry.movement.drainage,
+      (fn: never) => (fn as (s: GenerationState, q: PoiPlace) => unknown)(state, p),
+    ],
   ];
 }
 function run(calls: Call[], failures: Set<string>) {
@@ -99,13 +113,17 @@ function run(calls: Call[], failures: Set<string>) {
   }
 }
 function drawnAt(entry: PoiEntry, state: GenerationState, places: readonly PoiPlace[]) {
-  const visibleAt = entry.visibility.visibleAt,
+  const weigh = entry.visibility.importance,
     mesh = fieldOf(state).mesh,
     width = mesh.bounds[2] - mesh.bounds[0],
+    weights =
+      typeof weigh === "function"
+        ? places.map((place) =>
+            (weigh as (s: GenerationState, q: PoiPlace) => number)(state, place)
+          )
+        : [],
     count = (metresPerPixel: number) =>
-      typeof visibleAt === "function"
-        ? places.filter((place) => visibleAt(state, place, metresPerPixel)).length
-        : 0;
+      weights.filter((weight) => placeDrawn(weight, width, metresPerPixel)).length;
   return {
     sampled: places.length,
     whole: count(width / 1600),
@@ -120,7 +138,7 @@ function exerciseKind(entry: PoiEntry, state: GenerationState): KindExercise {
   let places: readonly PoiPlace[] = [],
     drawn = empty;
   try {
-    if (typeof entry.existence.places === "function") places = entry.existence.places(state);
+    places = placesOf(state, entry);
     // Spaced through the list, so a sample is not just one corner of the map.
     const step = Math.max(1, Math.floor(places.length / sampled)),
       sample = places.filter((_, k) => k % step === 0).slice(0, sampled);

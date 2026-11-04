@@ -4,7 +4,7 @@ import { landformClassification } from "../canonry/landforms";
 import { conjoinFeatures, readEvidence, respondFeatures, supportFeatures } from "./causes/index";
 import { deriveCharacter, measureGrain } from "./character";
 import { respondClimate } from "./climate";
-import { divides, markPasses } from "./divides";
+import { divides } from "./divides";
 import { routeWater } from "./drainage";
 import { erodeRegion } from "./erosion";
 import { clearRegionalProducts } from "./extraction/features";
@@ -22,31 +22,11 @@ import {
 import { deriveRelief, updateSlopes } from "./relief";
 import { deriveMedia, openFractures } from "./sharedMedia";
 import { declareFields } from "./society";
-import type { PhysicalBufferName } from "../canonry/field";
+import { ledgerCeilings, ledgerFloors } from "./media";
+import { registerCatalogueCauses } from "../poi/poiCauses";
+import { declarePlaceEffects } from "../poi/poiEffects";
+import { carryPlaces } from "../poi/poiPublish";
 import type { RegionalState } from "./state";
-
-/** The bands the ledger writes keep the world's bounds: nothing below zero, the per-mille and resistance scales capped. */
-const ledgerFloors: Partial<Record<PhysicalBufferName, number>> = {
-  RockResistance: 0,
-  FractureConductance: 0,
-  SoilDepth: 0,
-  Moisture: 0,
-  IceThickness: 0,
-  ExternalCoastalForcing: 0,
-  Temperature: 0,
-  BroadleafCover: 0,
-  ConiferCover: 0,
-  GrassCover: 0,
-};
-const ledgerCeilings: Partial<Record<PhysicalBufferName, number>> = {
-  RockResistance: 4000,
-  FractureConductance: 1000,
-  ExternalCoastalForcing: 1000,
-  Moisture: 1000,
-  BroadleafCover: 1,
-  ConiferCover: 1,
-  GrassCover: 1,
-};
 
 export interface ScheduledStep {
   id: string;
@@ -135,7 +115,10 @@ export function regionalExtraction(domains: string[]): ScheduledStep[] {
         id: "identity",
         message: "Carrying captured identities onto the developed geography",
         publishes: true,
-        run: carryIdentities,
+        run(state) {
+          carryIdentities(state);
+          carryPlaces(state);
+        },
       },
     ];
   if (d.society)
@@ -153,6 +136,7 @@ function contextStep(d: Domains): ScheduledStep {
     id: "context",
     message: "Reading the captured country's character and established geography",
     run(state) {
+      registerCatalogueCauses();
       state.regional.character = deriveCharacter(state);
       if (d.geography) prepareEcology(state);
       preparePlaces(state);
@@ -203,6 +187,7 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
           respondClimate(state);
           if (d.magic) respondMagic(state);
           if (d.society) declareFields(state);
+          declarePlaceEffects(state, applied);
           const changed = applied.commit(state.physical.map, ledgerFloors, ledgerCeilings);
           // The one declared follow-up: relief magic changed by a resolvable amount reroutes
           // water before the living landscape and places read it.
@@ -242,7 +227,6 @@ function classifyLandforms(state: RegionalState) {
     divide = divides(state);
   for (let i = 0; i < divide.length; i++) work.map.RidgeInfluence.set(i, divide[i]);
   landformClassification(work.map, physicalContext(state.regional.input.seed, 0, work.profile));
-  markPasses(state, divide);
 }
 
 /**

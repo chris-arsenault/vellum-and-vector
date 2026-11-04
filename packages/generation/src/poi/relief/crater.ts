@@ -1,14 +1,15 @@
-import { Feature } from "../../canonry/codes";
+import { craterRelief } from "../../canonry/geologicalFeatures";
 import type { GenerationState } from "../../process";
+import { rimCost } from "../../regional/causes/landmark";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFate, type PoiPlace } from "../poiContract";
-import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import { fieldOf, isLake, landformAt, Landform, magicRule, magicValue, metres } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { fieldOf, magicRule, magicValue, metres } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { eventOf, eventPlaces, eventRecord, onPlaces } from "./reliefEvents";
 import {
   areaOf,
-  holdAt,
-  landmarkGround,
   loweredAsCaptured,
   meanOf,
   nearestOrFloor,
@@ -22,25 +23,26 @@ import {
 /** Relief and area at which a crater is half as great as craters get: a world crater's. */
 const typicalRelief = 150,
   typicalArea = 700_000_000;
-/** The rim's dear ground to the network, as the regional landmark cause has it. */
-const rimCost = 4;
-
 const craterLake = magicRule("fire", "crater");
-const inRing = (state: GenerationState, cell: number) =>
-  landmarkGround(state, "impact-ring", (placed) => (placed.parameters.diameter * 1000) / 2).has(
-    cell
-  );
-const classed = (state: GenerationState, cell: number) => {
-  const code = landformAt(state, cell);
-  return code === Landform.ImpactBasin || code === Landform.ImpactRim;
-};
-const isCentre = (state: GenerationState, cell: number) =>
-  (fieldOf(state).FeatureFlags.get(cell) & Feature.ImpactCenter) !== 0;
-const isA = (state: GenerationState, cell: number) =>
-  classed(state, cell) || isCentre(state, cell) || craterLake(state, cell) || inRing(state, cell);
+const lakePlaces = rulePlaces("crater", "fire", "crater");
+const pits = eventPlaces(
+  "crater",
+  (state, event) =>
+    event.kind === "impact" &&
+    craterRelief(state, event) >= state.physical!.profile.ImpactVisibleRelief,
+  (event) => event.radius
+);
+const onPit = onPlaces("crater", pits);
+const isA = (state: GenerationState, cell: number) => onPit(state, cell) || craterLake(state, cell);
+const places = (state: GenerationState) => [...pits(state), ...lakePlaces(state)];
 const excavationAt = (state: GenerationState, cell: number) =>
   metres(fieldOf(state).ImpactExcavation.get(cell));
-const places = regionPlaces("crater", isA, excavationAt);
+const pitRecord = eventRecord({
+  kind: "crater",
+  name: (event) => `Impact crater ${event.id.split(":").at(-1)}`,
+  attributes: (state, event) => ({ relief: craterRelief(state, event) }),
+});
+const lakeRecord = ruleRecord("fire", "crater");
 const counterpart = nearestOrFloor(isA);
 const fallenSource = (state: GenerationState, place: PoiPlace) =>
   magicValue(state, "fire", "source", place.anchor) / 1000;
@@ -57,64 +59,55 @@ export const crater: PoiEntry = {
   name: "Crater",
   recognition: {
     distinct:
-      "A cell the classifier marks ImpactBasin or ImpactRim from the excavation and rim uplift bands, the cell flagged ImpactCenter, a cell of Fire's crater-lake rule, or one inside an impact-ring record's radius. Only a falling body writes those bands, so a caldera (a flagged collapse) and a basin (no excavation) cannot pass. Ejecta lies outside the rim and is its own kind. Fire's crater lake is the same pit with water and metal in it, kept as a property.",
+      "A cell within the radius of an impact the generator recorded, while the rim still stands the generator's visible relief above its floor and plain, or a cell of Fire's crater-lake rule. Only a falling body is recorded so, and a caldera is a recorded collapse. Ejecta lies outside the rim and is its own kind. Fire's crater lake is the same pit with water and metal in it, a place of its own on the magic layer.",
     isA,
   },
   existence: {
     statement:
-      "Both: falling bodies strike at epochs the generator chooses for any ground, and an impact-ring record emplaces one of a chosen size and maintains its rim and floor. Water, sediment and uplift then work on what was left.",
+      "Both: falling bodies strike at epochs the generator chooses for any ground, and an impact-ring record emplaces one of a chosen size and maintains its rim and floor, publishing as that record. Water, sediment and uplift then work on what was left.",
     way: "both",
     requires: sitingAdmits("impact-ring"),
     suitability: sitingSuits("impact-ring"),
     places,
   },
+  publication: {
+    statement:
+      "A recorded impact publishes as the disk of its pit, with the relief that survives; Fire's crater lake publishes as that rule's class.",
+    moment: "magic",
+    record: (state, place) =>
+      eventOf(state, place) ? pitRecord(state, place) : lakeRecord(state, place),
+  },
   fields: {
     statement:
       "A crater is a pit with a raised rim in shocked, fractured rock, a closed basin that holds water, and a store of fallen metal Fire reads as a finite source. Its heat fades after the fall, with a burning epoch at first.",
-    terrain(state, place) {
-      const map = fieldOf(state),
-        rim = place.cells.filter((cell) => map.ImpactRimUplift.get(cell) > 0),
-        floor = place.cells.filter((cell) => map.ImpactExcavation.get(cell) > 0);
-      return [
-        ...holdAt(state, "atLeast", "Elevation", rim),
-        ...holdAt(state, "atMost", "Elevation", floor),
-        ...holdAt(state, "atLeast", "RockResistance", place.cells),
-      ];
-    },
-    water: (state, place) =>
-      holdAt(
-        state,
-        "atLeast",
-        "WaterSurfaceElevations",
-        place.cells.filter((cell) => isLake(state, cell))
-      ),
+    terrain: notApplicable("The impact itself excavates, raises the rim and hardens the rock."),
+    water: notApplicable("Lake filling reads the closed pit like any other depression."),
     climate: notApplicable(
       "A fall's darkened years have no band; the map sees the pit, not the winter after it."
     ),
     cover: notApplicable(
       "The fan around it is barren by its own entry; life returns to the pit through ecology."
     ),
-    magic: (state, place) => [
-      ...holdAt(state, "atLeast", "FractureConductance", place.cells),
-      ...holdAt(state, "atLeast", "ImpactHeat", place.cells),
-    ],
+    magic: notApplicable("The impact's shock writes its fractures and its heat."),
   },
   acrossMaps: {
     statement:
-      "A captured crater is realized as a floor no higher than the parent's, with a dear rim the network runs around. An impact-ring record is re-placed and maintained by its own cause; maps below the world carry no impact bands, so an emergent crater's counterpart is the lowest ground near it, and the record stays.",
+      "A captured crater is realized as a floor no higher than the parent's, with dear ground the network runs around. An impact-ring record is re-placed and maintained by its own cause; maps below the world record no impacts, so an emergent crater's counterpart is the lowest ground near it, and the record stays.",
     carry: carryWhereItLands,
     realize: (state, carried) => loweredAsCaptured(state, carried, counterpart(state, carried)),
     counterpart,
     unrealized: stays,
     settle: notApplicable("A round's water may fill its lake without moving the pit."),
+    schedule: notApplicable("An impact-ring record has its landmark cause; a pit needs no step."),
   },
   movement: {
     statement:
       "A rim is a ring of dear ground that turns water and roads around it; the fractured rock beneath conducts Fire and anything else the crust carries.",
-    roads: costNear(1.5),
+    roads: notApplicable("The ruling-grade cost already reads its rim."),
     boats: notApplicable("A crater lake is closed; it joins no network boats travel."),
-    drainage: costNear(rimCost),
-    magic: costNear(0.7),
+    drainage: (state, place) => costNear(rimCost)(state, place),
+    magic: notApplicable("Crust-borne magic spreads by the fracture conductance the shock opened."),
+    links: notApplicable("A crater joins nothing."),
     crosses: notApplicable("A ring bars routes; it takes none across anything."),
   },
   others: {
@@ -166,7 +159,7 @@ export const crater: PoiEntry = {
     statement:
       "A crater shows while its form survives, by surviving relief and width; a young sharp pit in plains shows long before a worn one in hills, and a town on its rim carries it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.3, isolation: 0.1 }),
+    importance: weighed(factors, { magnitude: 0.6, localConditions: 0.3, isolation: 0.1 }),
   },
   naming: {
     statement: "Named by those who live near it, often for the fall itself where it is remembered.",

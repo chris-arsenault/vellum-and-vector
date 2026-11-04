@@ -21,7 +21,7 @@ const seatGradient = 0.03;
 const proposedGradient = 0.04;
 
 /**
- * The seat operations (spec 6.3); `causes/seat.ts` registers them as the settlement cause.
+ * The seat operations (spec 6.3); the settlement entry's schedule calls them.
  * Known seats are read from their captured position every run, so a seat an earlier
  * refinement moved is re-sited from the same evidence.
  */

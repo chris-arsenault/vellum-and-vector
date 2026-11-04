@@ -2,10 +2,10 @@ import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { areaRecord } from "../poiRecords";
 import { heightAt, isLand, isRiver } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
-  holdAt,
   lastsWhile,
   lengthOf,
   meanOf,
@@ -56,10 +56,15 @@ export const ridge: PoiEntry = {
     suitability: notApplicable("Nothing chooses a crest's line; rivers and uplift leave it."),
     places,
   },
+  publication: {
+    statement: "Each connected crest publishes as its outline.",
+    moment: "geography",
+    record: areaRecord({ kind: "ridge", layer: "geology", name: "Ridge" }),
+  },
   fields: {
     statement:
-      "A ridge is a held crest and a drainage divide: its cells do not smooth down while it stands, and the water on each side belongs to a different river.",
-    terrain: (state, place) => holdAt(state, "atLeast", "Elevation", place.cells),
+      "A ridge is a crest and a drainage divide: the water on each side belongs to a different river.",
+    terrain: notApplicable("Uplift and erosion leave the crest; regional relief writes its spurs."),
     water: notApplicable(
       "It parts water without storing or sourcing any; the divide is its drainage cost below."
     ),
@@ -79,14 +84,16 @@ export const ridge: PoiEntry = {
     counterpart,
     unrealized: movesTo(counterpart),
     settle: notApplicable("The regional relief re-derives crests from the network each round."),
+    schedule: notApplicable("Its top and drainage cost are all a ridge asks of a refinement."),
   },
   movement: {
     statement:
-      "A ridge is the barrier other routes must cross: a road over its crest pays beyond the slope except at a pass, water cannot run over it, and wind-borne dust and moisture lose reach against it.",
-    roads: costNear(1.6),
+      "A ridge is the barrier other routes must cross: a road pays for its slopes except at a pass, water cannot run over it, and wind-borne dust and moisture lose reach against it.",
+    roads: notApplicable("The ruling-grade cost already reads its slopes."),
     boats: notApplicable("No water runs along a crest to carry a boat."),
     drainage: costNear(3),
-    magic: costNear(1.5),
+    magic: { wind: costNear(1.5) },
+    links: notApplicable("A ridge joins nothing."),
     crosses: notApplicable("It is the barrier; a pass is what crosses it."),
   },
   others: {
@@ -123,7 +130,7 @@ export const ridge: PoiEntry = {
     statement:
       "A ridge shows by its length and relief, and by standing over plain country rather than among more of the same; the wall behind a capital shows sooner than a greater one in empty ranges.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.35, isolation: 0.15 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.35, isolation: 0.15 }),
   },
   naming: {
     statement:

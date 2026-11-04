@@ -1,6 +1,5 @@
 import type { Band, SocietyWork } from "@atlas/domain";
 import type { GenerationState } from "./process";
-import { nativeIndexAtSurface } from "./canonry/atlasWorkspace";
 import { workSamples } from "./societyWorks";
 import { flowRouting } from "./canonry/routing";
 import { physicalContext } from "./canonry/context";
@@ -21,14 +20,16 @@ export function anchorRiverWork(state: GenerationState, work: SocietyWork) {
     }
 }
 
+/** The share of a channel's flow a water work may take. */
+export const diversionShare = 0.2;
 /**
- * Annual diversion is a flux: rebuild natural discharge, then deduct use downstream. A
- * located work diverts at its own cell; a World demand diverts its share from every channel
- * cell of its unit, as the intensive forcing it is.
+ * Annual diversion is a flux: rebuild natural discharge, then deduct use downstream. A World
+ * demand diverts its share from every channel cell of its unit, as the intensive forcing it is.
+ * A located work is the irrigation entry's place, which declares its own diversion.
  */
 export function irrigateChannels(state: GenerationState) {
   const physical = state.physical!;
-  const works = state.society!.region.works.filter((w) => w.kind === "irrigation");
+  const works = state.society!.region.works.filter((w) => w.kind === "irrigation" && w.demand);
   if (!works.length) return;
   const map = physical.map;
   flowRouting(map, physicalContext(state.domain.world.seed, 0, physical.profile));
@@ -37,10 +38,11 @@ export function irrigateChannels(state: GenerationState) {
   try {
     for (const work of works) {
       let total = 0;
-      for (const { cell, share } of irrigationIntakes(state, work)) {
+      for (const { i, fraction: share } of workSamples(state, work)) {
+        const cell = physical.samples.get(i);
         if (cell === undefined || cell < 0) continue;
         const diverted = Math.min(
-          map.FlowAccumulation.get(cell) * 0.2,
+          map.FlowAccumulation.get(cell) * diversionShare,
           work.magnitude * work.condition * share
         );
         total += diverted;
@@ -64,13 +66,5 @@ function divertDownstream(
   for (let at = cell; at >= 0 && visited.get(at) !== visit; at = map.FlowTargets.get(at)) {
     visited.set(at, visit);
     map.FlowAccumulation.set(at, Math.max(0, map.FlowAccumulation.get(at) - amount));
-  }
-}
-function* irrigationIntakes(state: GenerationState, work: SocietyWork) {
-  if (work.demand) {
-    for (const { i, fraction } of workSamples(state, work))
-      yield { cell: state.physical!.samples.get(i), share: fraction };
-  } else {
-    yield { cell: nativeIndexAtSurface(state, work.position.x, work.position.y), share: 1 };
   }
 }

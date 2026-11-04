@@ -7,11 +7,17 @@ import { oceanPropagation } from "./magicOcean";
 import { KeyedHeap, type Band, type MagicPropagation, type MagicSystem } from "@atlas/domain";
 import { retainedArray, workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 import { reservoirAmount, reservoirStock, withOrigin } from "./magicState";
-import { applyWarding, wardPropagation } from "./magicHallowed";
+import { applyWarding, wardPropagation, wardSeals } from "./magicHallowed";
 
+/** What places do to a carrier's cost at a cell: nothing until they have acted. */
+function placedCost(state: GenerationState, carrier: "crust" | "roots" | "ice") {
+  const cost = state.physical!.magic?.carrierCost?.[carrier];
+  return cost ? (cell: number) => cost[cell] : () => 1;
+}
 function fracturePropagation(state: GenerationState, field: MagicField, activity: number) {
   const map = state.physical!.map,
-    p = field.definition.parameters;
+    p = field.definition.parameters,
+    placed = placedCost(state, "crust");
   field.parents = retainedArray(map, "int32", "magic:fracture-parents").fill(-1);
   const queue = new KeyedHeap("max");
   for (let i = 0; i < map.mesh.count; i++)
@@ -27,12 +33,13 @@ function fracturePropagation(state: GenerationState, field: MagicField, activity
     for (let edge = 0; edge < map.mesh.degree(i); edge++) {
       const j = map.mesh.neighbor(i, edge);
       // A ward seals the conduit: Fire does not enter, and its budget waits unspent.
-      if (j < 0 || map.Warding.get(j) >= 0.5) continue;
+      if (j < 0 || map.Warding.get(j) >= wardSeals) continue;
       const conductance = (conductanceHere + map.FractureConductance.get(j)) / 2;
       const next =
         value -
         ((p.baseCost + (1000 - conductance) / p.conductanceDivisor) *
-          map.mesh.edgeLength(i, edge)) /
+          map.mesh.edgeLength(i, edge) *
+          placed(j)) /
           1000;
       if (next <= field.intensity.get(j)) continue;
       field.intensity.set(j, next);
@@ -48,7 +55,8 @@ function fracturePropagation(state: GenerationState, field: MagicField, activity
  */
 function rootPropagation(state: GenerationState, field: MagicField, activity: number) {
   const map = state.physical!.map,
-    p = field.definition.parameters;
+    p = field.definition.parameters,
+    placed = placedCost(state, "roots");
   const cover = (i: number) =>
     map.TreeCover.get(i) + map.GrassCover.get(i) + map.WetlandCover.get(i);
   const barrier = (i: number) =>
@@ -69,7 +77,8 @@ function rootPropagation(state: GenerationState, field: MagicField, activity: nu
     for (let edge = 0; edge < map.mesh.degree(i); edge++) {
       const j = map.mesh.neighbor(i, edge);
       if (j < 0 || barrier(j)) continue;
-      const next = value - (p.rootCost * map.mesh.edgeLength(i, edge)) / 1000 / (0.1 + cover(j));
+      const next =
+        value - (p.rootCost * map.mesh.edgeLength(i, edge) * placed(j)) / 1000 / (0.1 + cover(j));
       if (next <= field.intensity.get(j)) continue;
       field.intensity.set(j, next);
       field.parents.set(j, i);
@@ -104,7 +113,8 @@ function coldTarget(state: GenerationState, i: number, seed: number) {
 }
 function coldPropagation(state: GenerationState, field: MagicField, seed: number) {
   const map = state.physical!.map,
-    p = field.definition.parameters;
+    p = field.definition.parameters,
+    placed = placedCost(state, "ice");
   // Fresh fallout drains coldward. Existing charge stays in its ice carrier;
   // it contributes local concentration without being captured a second time.
   const iceStock = reservoirStock(field, "ice");
@@ -138,7 +148,8 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
       clamp(round(Math.log2(concentration + 1) * p.logScale) + Math.trunc(capacity / 4), 0, 1000)
     );
     field.retained.set(i, retained);
-    if (target >= 0) accumulation.add(target, Math.max(0, accumulated - retained));
+    // A place that hinders the ice's carriage lets less of the charge reach the next cell.
+    if (target >= 0) accumulation.add(target, Math.max(0, accumulated - retained) / placed(target));
   }
   releaseWorking(map, accumulation);
 }

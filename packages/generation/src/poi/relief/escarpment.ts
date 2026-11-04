@@ -1,20 +1,11 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
-import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
+import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { areaRecord } from "../poiRecords";
+import { cellSpan, isLand, landformAt, Landform, metres, slopeAt } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
-  adjacent,
-  cellSpan,
-  fieldOf,
-  isLand,
-  landformAt,
-  Landform,
-  metres,
-  slopeAt,
-} from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import {
-  holdAt,
   landmarkGround,
   lastsWhile,
   lengthOf,
@@ -86,20 +77,12 @@ const factors = {
   isolation: aloneAmong(places, spans(12)),
   cultural: attachment(spans(8)),
 };
-/** Each face cell keeps its top up and its foot down: the offset the fault or the caprock holds. */
-function offset(state: GenerationState, cell: number): PoiFieldChange[] {
-  const map = fieldOf(state);
-  let top = cell,
-    foot = cell;
-  for (const next of adjacent(state, cell)) {
-    if (map.Elevation.get(next) > map.Elevation.get(top)) top = next;
-    if (map.Elevation.get(next) < map.Elevation.get(foot)) foot = next;
-  }
-  return [
-    { change: "atLeast", band: "Elevation", cell: top, value: map.Elevation.get(top) },
-    { change: "atMost", band: "Elevation", cell: foot, value: map.Elevation.get(foot) },
-  ];
-}
+const outline = areaRecord({
+  kind: "escarpment",
+  layer: "geology",
+  name: "Escarpment",
+  attributes: (state, place) => ({ throw: throwOf(state, place) }),
+});
 
 export const escarpment: PoiEntry = {
   id: "escarpment",
@@ -118,10 +101,18 @@ export const escarpment: PoiEntry = {
     suitability: sitingSuits("escarpment"),
     places,
   },
+  publication: {
+    statement:
+      "A face publishes as its outline with its throw. A fault on an escarpment record publishes as that record, once.",
+    moment: "geography",
+    record: (state, place) => (faulted(state, place.anchor) ? null : outline(state, place)),
+  },
   fields: {
     statement:
-      "An escarpment holds a step in the ground and, where it is a fault, an open trunk of the fracture set along it, which rising heat and magic follow.",
-    terrain: (state, place) => place.cells.flatMap((cell) => offset(state, cell)),
+      "An escarpment is a step in the ground and, where it is a fault, an open trunk of the fracture set along it, which rising heat and magic follow.",
+    terrain: notApplicable(
+      "Tectonics and erosion leave a face; a record's landmark cause maintains its throw."
+    ),
     water: notApplicable(
       "Rivers fall over it through their own gradient; a fall on it is the waterfall entry."
     ),
@@ -129,27 +120,28 @@ export const escarpment: PoiEntry = {
       "Its rain on the high side comes from the air columns reading the step along the wind."
     ),
     cover: notApplicable("Cover thins on the face through the slope limits ecology already reads."),
-    magic: (state, place) => holdAt(state, "atLeast", "FractureConductance", place.cells),
+    magic: notApplicable("The fault's emplacement and refinement's fault opening write the trunk."),
   },
   acrossMaps: {
     statement:
-      "A captured scarp lands on the refined map: a fault record is re-placed and its throw maintained by its own landmark cause, which also opens the fracture trunk; an emergent face takes the nearest face and keeps the offset across it.",
+      "A captured scarp lands on the refined map: a fault record is re-placed and its throw maintained by its own landmark cause, which also opens the fracture trunk; an emergent face takes the nearest face the finer relief develops.",
     carry: carryWhereItLands,
-    realize(state, carried) {
-      const cell = counterpart(state, carried);
-      return cell < 0 ? [] : offset(state, cell);
-    },
+    realize: notApplicable(
+      "A record's landmark cause writes its throw; an emergent face is read from the developed relief."
+    ),
     counterpart,
     unrealized: movesTo(counterpart),
     settle: notApplicable("A face retreats over epochs, not with a round's water."),
+    schedule: notApplicable("A fault record's steps belong to its landmark cause."),
   },
   movement: {
     statement:
       "A scarp is dear to climb and impassable to carts away from its gaps; a river meeting it falls over it, and the fault along it conducts what crust carries.",
-    roads: costNear(2.5),
+    roads: notApplicable("The ruling-grade cost already reads its face."),
     boats: notApplicable("A boat meets only the fall a river makes on it, which is its own entry."),
     drainage: costNear(0.8),
-    magic: costNear(0.7),
+    magic: notApplicable("Crust-borne magic spreads by the conductance along the fault."),
+    links: notApplicable("A scarp joins nothing."),
     crosses: notApplicable("It is a barrier; a pass or a gorge cut through it is the way across."),
   },
   others: {
@@ -189,7 +181,7 @@ export const escarpment: PoiEntry = {
     statement:
       "A scarp shows by its throw and length together and by how sharply it breaks gentle land; a long low step over plains outranks a higher one among mountains.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.35, isolation: 0.15 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.35, isolation: 0.15 }),
   },
   naming: {
     statement:

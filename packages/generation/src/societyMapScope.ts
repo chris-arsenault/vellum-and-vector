@@ -1,7 +1,7 @@
-import { population, type SocietyCommunity } from "@atlas/domain";
+import { population, type SocietyCommunity, type SocietyRegion } from "@atlas/domain";
 import type { GenerationState } from "./process";
-import type { SettlementHierarchy } from "./societyHierarchy";
-import { defaultSocietyProfile } from "./societyProfile";
+import { settlementHierarchy, type SettlementHierarchy } from "./societyHierarchy";
+import { defaultSocietyProfile, profileOf } from "./societyProfile";
 
 export function isWorldSociety(state: GenerationState) {
   return state.domain.world.areas[state.domain.scope.areaId].profile === "world";
@@ -29,4 +29,17 @@ export function isMajorSettlement(
     hierarchy.settlementRole === "regionalCapital" ||
     Math.min(population(c), c.settlement?.population ?? 0) >= threshold
   );
+}
+/** The communities this map shows, and the hierarchy that chose them. */
+export function mappedSociety(state: GenerationState, region: SocietyRegion) {
+  const hierarchy = settlementHierarchy(region),
+    threshold = profileOf(state).townThreshold;
+  const mapped = new Set(
+    region.communities
+      .filter(
+        (c) => !isWorldSociety(state) || isMajorSettlement(c, hierarchy.get(c.id)!, threshold)
+      )
+      .map((c) => c.id)
+  );
+  return { hierarchy, mapped };
 }

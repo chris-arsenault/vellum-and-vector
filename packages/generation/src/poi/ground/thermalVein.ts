@@ -1,37 +1,17 @@
 import type { GenerationState } from "../../process";
+import { tappingReach } from "../../societyColdAge";
 import { carryWhereItLands, costNear, counterpartOf } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
-import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import {
-  adjacent,
-  cellSpan,
-  celsiusAt,
-  fieldOf,
-  iceAt,
-  isRiver,
-  magicValue,
-  shareAround,
-} from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import {
-  aroundOf,
-  effectOf,
-  floorOf,
-  lengthOf,
-  movesOrGoes,
-  ruleFloor,
-  sealedAt,
-  veinAt,
-} from "./groundReads";
+import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { cellSpan, celsiusAt, iceAt, magicValue, shareAround } from "../poiReads";
+import { ruleRecord } from "../poiRecords";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { aroundOf, lengthOf, movesOrGoes, sealedAt, veinAt } from "./groundReads";
 
-/** A course length at which a vein is half as great as veins get, the world's mark of a regional conduit. */
+/** A course length at which a vein is half as great as veins get, a regional conduit, in metres. */
 const typicalLength = 100_000;
-/** How far a band walks to work a vein, as the cold-age works hold it. */
-const dayReach = 25_000;
 /** How far a burst of steam and gas reaches from the fracture, in metres. */
 const burstReach = 2000;
-/** Fire runs this much more cheaply along an open conduit than through the rock around it. */
-const conduitCost = 0.5;
 /** Water finds fractured rock an easier way down than sound rock. */
 const fracturedDrainage = 0.8;
 /** Going over ground kept thawed in frost country is easier than over the frost around it. */
@@ -39,12 +19,10 @@ const thawedGoing = 0.85;
 
 const fireAt = (state: GenerationState, cell: number) =>
   magicValue(state, "fire", "intensity", cell);
-const heatAt = (state: GenerationState, cell: number) =>
-  Math.round(fireAt(state, cell) * effectOf(state, "fire", "heat"));
 const strengthOf = (state: GenerationState, place: PoiPlace) =>
   Math.min(1, fireAt(state, place.anchor) / 1000);
-const reachOf = (state: GenerationState) => Math.max(aroundOf(state), dayReach);
-const places = regionPlaces("thermalVein", veinAt, fireAt);
+const reachOf = (state: GenerationState) => Math.max(aroundOf(state), tappingReach);
+const places = rulePlaces("thermalVein", "fire", "vein");
 const counterpart = counterpartOf(veinAt, 1);
 const factors = {
   magnitude: (state: GenerationState, place: PoiPlace) =>
@@ -63,7 +41,7 @@ export const thermalVein: PoiEntry = {
   name: "Thermal vein",
   recognition: {
     distinct:
-      "A cell of Fire's vein rule: strong Fire intensity held in rock whose fracture conductance is high, grown as a course along the conduit. Fracture is what separates it: a thawed halo has the warmth with little fracture, a hot spring has the heat with wet ground or standing water and needs no fracture, a Fire core is a located source and not its course, and a mine is a published work on a vein, not the ore. Only the system's rule decides; no size enters.",
+      "A cell of Fire's vein rule: strong Fire intensity held in rock whose fracture conductance is high, grown as a course along the conduit. Fracture is what separates it: a thawed halo has the warmth with little fracture, a hot spring has the heat with wet ground or standing water and needs no fracture, a Fire core is a located source and not its course, and a mine is a work on a vein, not the ore. Only the system's rule decides; no size enters.",
     isA: veinAt,
   },
   existence: {
@@ -78,58 +56,53 @@ export const thermalVein: PoiEntry = {
     ),
     places,
   },
+  publication: {
+    statement: "Every vein Fire grows publishes as its rule's class, along Fire's own course.",
+    moment: "magic",
+    record: ruleRecord("fire", "vein"),
+  },
   fields: {
     statement:
-      "A vein is a source and a conduit. It holds the hardened rock and opened fractures Fire gave it so erosion cannot undo them while it stands, warms the ground and any river crossing it, thaws the ice over it, and quickens what grows on it. Each is a floor on what Fire's own terms give, so it never adds a second dose.",
-    terrain: (state, place) =>
-      place.cells.map((cell) =>
-        floorOf("RockResistance", cell, fieldOf(state).RockResistance.get(cell))
-      ),
-    water: (state, place) =>
-      place.cells
-        .filter((cell) => isRiver(state, cell))
-        .map((cell) => floorOf("RiverWarmth", cell, heatAt(state, cell))),
-    climate: (state, place) =>
-      place.cells.map((cell) => floorOf("ExternalHeatForcing", cell, heatAt(state, cell))),
-    cover: (state, place) =>
-      place.cells.map((cell) =>
-        floorOf(
-          "Quickening",
-          cell,
-          Math.min(1, (fireAt(state, cell) / 1000) * effectOf(state, "fire", "quickening"))
-        )
-      ),
-    magic: (state, place) =>
-      place.cells.map((cell) =>
-        floorOf("FractureConductance", cell, fieldOf(state).FractureConductance.get(cell))
-      ),
+      "A vein changes the fields through Fire's writes by intensity, which act wherever Fire stands whether or not a vein is there, so the place adds nothing of its own.",
+    terrain: notApplicable(
+      "Magic's rock writes harden the rock by Fire's intensity (magicFeedback on the world, declareRockWrites in refinement)."
+    ),
+    water: notApplicable(
+      "The river warmth process carries Fire's heat forcing down every river (riverWarmth)."
+    ),
+    climate: notApplicable(
+      "magicThermalFeedback writes every system's heat and melt to ExternalHeatForcing and Temperature."
+    ),
+    cover: notApplicable("magicLivingFeedback writes Quickening by Fire's intensity."),
+    magic: notApplicable(
+      "Conduit opening writes FractureConductance by Fire's intensity (magicFeedback, declareRockWrites), and the conduit's stock is Fire's own."
+    ),
   },
   acrossMaps: {
     statement:
-      "A captured vein lands on the refined map as a course of open fracture. The child must hold fracture at the level the rule retains or Fire will not stay in it; if no vein develops within a parent span of where it lands, the vein goes, because the ore's reach on finer ground is Fire's to decide. Only the course's first coordinate is carried.",
+      "A captured vein lands on the refined map, and the child's Fire regrows it along the fracture it inherits; if no vein develops within a parent span of where it lands, the vein goes, because the ore's reach on finer ground is Fire's to decide.",
     carry: carryWhereItLands,
-    realize(state, carried) {
-      const opened = ruleFloor(state, "fire", "vein", "fracture");
-      return opened === undefined
-        ? []
-        : [carried.cell, ...adjacent(state, carried.cell)].map((cell) =>
-            floorOf("FractureConductance", cell, opened)
-          );
-    },
+    realize: notApplicable(
+      "Conduit opening (declareRockWrites) keeps the child's fractures open where Fire stands."
+    ),
     counterpart,
     unrealized: movesOrGoes(counterpart),
     settle: notApplicable("Rock does not move with a round's water; Fire re-grows the course."),
+    schedule: notApplicable("A vein does nothing at refinement's other points."),
   },
   movement: {
     statement:
-      "Fire runs far along the open conduit and water follows the same fractures down. In frost country the thawed strip is easier going than the ice beside it, and gives a route across a glacier's edge.",
-    roads: (state, place, cell) =>
-      place.cells.includes(cell) && celsiusAt(state, cell) <= 0 && iceAt(state, cell) <= 0
-        ? thawedGoing
-        : 1,
+      "Water follows open fractures down. In frost country the thawed strip is easier going than the ice beside it, and gives a route across a glacier's edge.",
+    roads: (state, place) =>
+      place.cells
+        .filter((cell) => celsiusAt(state, cell) <= 0 && iceAt(state, cell) <= 0)
+        .map((cell) => ({ cell, factor: thawedGoing })),
     boats: notApplicable("A vein is in rock; a river crossing it carries boats as before."),
     drainage: costNear(fracturedDrainage),
-    magic: costNear(conduitCost),
+    magic: notApplicable(
+      "Fire's fracture propagation already runs along FractureConductance wherever it is open (magicPropagation)."
+    ),
+    links: notApplicable("A vein joins no two cells for walkers."),
     crosses: (state, place) => (place.cells.some((c) => thawedThrough(state, c)) ? ["ice"] : []),
   },
   others: {
@@ -173,7 +146,7 @@ export const thermalVein: PoiEntry = {
     statement:
       "A vein shows by its course's length and strength together, and by standing hotter than the country around it. A short vein a town depends on shows for that town.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.3, isolation: 0.2 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.3, isolation: 0.2 }),
   },
   naming: {
     statement:

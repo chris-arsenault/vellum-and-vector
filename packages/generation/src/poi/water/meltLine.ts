@@ -1,34 +1,17 @@
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import {
-  adjacent,
-  iceAt,
-  isLand,
-  landformAt,
-  Landform,
-  magicRule,
-  magicValue,
-  toNative,
-} from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, standsOut } from "../poiVisibilityRules";
-import { areaOf, flowTarget, spans } from "./waterReads";
-
-/** Native millimetres a year of meltwater the band reads along a line; its most is 1000. */
-const lineMelt = 600;
-/** Metres of outwash its water lays on the ground below it. */
-const outwash = 1;
-/** Cover its fen holds beside the ice, the cover a wetland is read at. */
-const fenCover = 0.3;
-/** Temperature band of the rule's seeds and ice band of its retention, for the realized line. */
-const lineWarmth = 330,
-  lineIce = 200;
+import { namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { adjacent, iceAt, isLand, landformAt, Landform, magicRule, magicValue } from "../poiReads";
+import { aloneAmong, attachment, standsOut, weighed } from "../poiVisibilityRules";
+import { areaOf, spans } from "./waterReads";
+import { wetlandCoverShare } from "../../canonry/ecologyEnvironment";
 
 const isA = magicRule("aurora", "melt");
 const chargeAt = (state: GenerationState, cell: number) =>
   magicValue(state, "aurora", "intensity", cell);
-const places = regionPlaces("meltLine", isA, chargeAt);
+const places = rulePlaces("meltLine", "aurora", "melt");
 const around = spans(6);
 const counterpart = counterpartOf(isA, 1);
 /** Half its weight is the charge it runs at; the rest grows with its length of ice edge. */
@@ -50,32 +33,13 @@ function iceEdge(state: GenerationState, place: PoiPlace) {
       if (isLand(state, next) && iceAt(state, next) <= 0) edge.add(next);
   return [...edge];
 }
-/** Its water lays outwash on the ground the ice drains to. */
-const outwashBelow = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells
-    .map((cell) => flowTarget(state, cell))
-    .filter((target) => target >= 0 && isLand(state, target))
-    .map((cell) => ({
-      change: "atLeast",
-      band: "SedimentThickness",
-      cell,
-      value: toNative(outwash),
-    }));
-/** A line of steady melt: more than the ice's ablation alone gives in that cold. */
-const meltOut = (_state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells.map((cell) => ({
-    change: "atLeast",
-    band: "GlacialMeltwater",
-    cell,
-    value: lineMelt,
-  }));
-/** The melt-line fen: wet, newly fed ground along the thaw. */
+/** The melt-line fen: wet, newly fed ground along the thaw, at the cover a wetland is read at. */
 const fen = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
   iceEdge(state, place).map((cell) => ({
     change: "atLeast",
     band: "WetlandCover",
     cell,
-    value: fenCover,
+    value: wetlandCoverShare,
   }));
 
 export const meltLine: PoiEntry = {
@@ -95,11 +59,18 @@ export const meltLine: PoiEntry = {
     suitability: notApplicable("The thaw and the charge decide it; no process chooses a site."),
     places,
   },
+  publication: {
+    statement: "Every line publishes as Aurora's melt rule, the class the map's magic reads.",
+    moment: "magic",
+    record: ruleRecord("aurora", "melt"),
+  },
   fields: {
     statement:
-      "A melt line is a source that feeds the rivers below it through a steady thaw: it lays outwash, gives meltwater well above ablation alone, and leaves a fen of nutrient-rich ground. Stored charge leaves in the same water, so the thaw itself carries Aurora away.",
-    terrain: outwashBelow,
-    water: meltOut,
+      "A melt line feeds the rivers below it through a steady thaw, and what it adds to that is a fen of nutrient-rich ground beside the ice. Stored charge leaves in the same water, so the thaw itself carries Aurora away.",
+    terrain: notApplicable("The glacial process's deposition lays outwash wherever ice ends."),
+    water: notApplicable(
+      "`glacialMeltwater` and Aurora's melt effect in the magic's feedback write GlacialMeltwater by the ice and the charge."
+    ),
     climate: notApplicable(
       "The cold it exhales is Aurora's own heat effect, already applied in Temperature wherever the charge stands."
     ),
@@ -110,17 +81,16 @@ export const meltLine: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured line lands on finer ice that must carry its thaw: enough ice and warmth at the cell for the rule to read there, and meltwater running from it. Each round it shifts to the nearest line the settled ice shows; with none near it goes, having thawed or frozen on closer ground.",
+      "A captured line lands on the finer ice, whose thaw Aurora's rule reads again. Each round it shifts to the nearest line the settled ice shows; with none near it goes, having thawed or frozen on closer ground.",
     carry: carryWhereItLands,
-    realize: (_state, carried): readonly PoiFieldChange[] => [
-      { change: "atLeast", band: "GlacialMeltwater", cell: carried.cell, value: lineMelt },
-      { change: "atLeast", band: "IceThickness", cell: carried.cell, value: lineIce },
-      { change: "atLeast", band: "Temperature", cell: carried.cell, value: lineWarmth },
-    ],
+    realize: notApplicable(
+      "The regional ice and climate write the ice, warmth and meltwater the rule reads, across the whole map."
+    ),
     counterpart,
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: movesTo(counterpart),
+    schedule: notApplicable("A line has no step in refinement's schedule; Aurora's rule reads it."),
   },
   movement: {
     statement:
@@ -128,7 +98,8 @@ export const meltLine: PoiEntry = {
     roads: costNear(2),
     boats: notApplicable("Meltwater here is under and over ice, with no reach a boat could use."),
     drainage: costNear(0.8),
-    magic: costNear(1.5),
+    magic: { ice: costNear(1.5) },
+    links: notApplicable("A line joins no two cells."),
     crosses: notApplicable("Rotten ice is where a route across ice is lost, not where it is won."),
   },
   others: {
@@ -174,7 +145,7 @@ export const meltLine: PoiEntry = {
     statement:
       "A line shows by the charge it runs at and the length it holds along the ice; lines are extended and cluster along one ice front, so isolation counts little.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.4, isolation: 0.1 }),
+    importance: weighed(factors, { magnitude: 0.5, localConditions: 0.4, isolation: 0.1 }),
   },
   naming: {
     statement:

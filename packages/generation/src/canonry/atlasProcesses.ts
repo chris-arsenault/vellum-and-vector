@@ -12,7 +12,8 @@ import {
 } from "./atlasWorkspace";
 import { projectNative } from "./atlasProjection";
 import { extractNativeGeography } from "./atlasFeatures";
-import { extractMagicPlaces } from "./geographicRegions";
+import { extractConfluencePlaces } from "./geographicRegions";
+import { publishKinds } from "../poi/poiPublish";
 import { contributeForcing } from "./atlasForcing";
 import { featureRevisions } from "../generationFeatures";
 import { physicalSchedule } from "./schedule";
@@ -23,6 +24,7 @@ import { advectMagic } from "./magicState";
 import { retainGeographicIdentities } from "./geographicIdentity";
 import { refreshGrounding } from "./glacierSurface";
 import { adaptiveReliefProcess } from "./adaptiveRelief";
+import { applyPlaceEffects } from "../poi/poiEffects";
 import { nativeFeatureContract } from "../physicalFeatureSequence";
 import type { ResolvedFeatures } from "../features";
 import { generationBindings } from "../generationBindings";
@@ -168,6 +170,7 @@ export function atlasNativeProcesses(
     projectProcess(input),
     projectProcess(input, true),
     forcingProcess(),
+    placeEffectsProcess(),
     epochStartProcess(),
     finishProcess(original),
     magicPlacesProcess(original),
@@ -266,6 +269,14 @@ function forcingProcess(): MapProcess {
     validate: validateWorkspace,
   };
 }
+/** Each place's own effects on the field, declared afresh as the epoch closes. */
+function placeEffectsProcess(): MapProcess {
+  return {
+    contract: contract("poi.effects", ["canonry:workspace"]),
+    behavior: { kind: "forcing-contributor", contribute: applyPlaceEffects },
+    validate: validateWorkspace,
+  };
+}
 function epochStartProcess(): MapProcess {
   return {
     contract: contract("canonry.begin-epoch", ["canonry:workspace"]),
@@ -334,10 +345,11 @@ export function magicPlacesProcess(original: DomainSnapshot): MapProcess {
     behavior: {
       kind: "extract",
       extract(state, context) {
-        if (!state.physical?.magic) return;
+        if (!state.physical) return;
         context.progress(0, "Extracting magical places");
         const before = new Map(featureRevisions(state));
-        extractMagicPlaces(state);
+        extractConfluencePlaces(state);
+        publishKinds(state, "magic");
         const generated = new Set(
           [...featureRevisions(state)]
             .filter(([id, revision]) => before.get(id) !== revision)

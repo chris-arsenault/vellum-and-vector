@@ -2,20 +2,19 @@ import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import { cellSpan, cellsWithin, fieldOf, gap, isSea } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { areaOf, depthAt, extentOf, faunaAt, heldUnder } from "./seaShared";
+import { siteRecord } from "../poiRecords";
+import { cellSpan, cellsWithin, fieldOf, isSea } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { areaOf, depthAt, extentOf, faunaAt, heldUnder, near } from "./seaShared";
 import { showsForm, wrapOf } from "./shoreForm";
 
 /** Area at which a strait is half as great as straits get: 500 square kilometres. */
 const typicalArea = 5e8;
 /** A current this strong (per-mille) scours the bed instead of leaving it to silt. */
 const scouringCurrent = 300;
-/** Water squeezed through a narrows runs up to this many times faster. */
-const narrowsFunnel = 1.5;
 /** A sill shallower than this, in metres, has closed the passage to the sea. */
 const closedDepth = 2;
-/** The least water a refined strait keeps over its sill, in metres. */
+/** The least water a strait with a running current, or a refined one, keeps over its sill, in metres. */
 const heldDepth = 2;
 /** Extra boat cost at the full race of the narrows. */
 const race = 1.5;
@@ -25,7 +24,8 @@ const landingRoad = 0.85,
 
 const isA = showsForm("strait");
 const places = regionPlaces("strait", isA, wrapOf);
-const around = (state: GenerationState) => 8 * cellSpan(state);
+/** The country around a strait that bears on it: 40 km. */
+const around = near(40_000);
 const currentAt = (state: GenerationState, cell: number) =>
   fieldOf(state).OceanCurrentStrength.get(cell);
 const reachOf = (state: GenerationState, place: PoiPlace) =>
@@ -44,25 +44,12 @@ const factors = {
 };
 
 /** A strong current scours the bed, so the passage holds its depth; a weak one can silt shut. */
-const scoured = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => {
-  const map = fieldOf(state);
-  return place.cells
-    .filter((cell) => currentAt(state, cell) >= scouringCurrent)
-    .map((cell) => ({
-      change: "atMost",
-      band: "Elevation",
-      cell,
-      value: map.Elevation.get(cell),
-    }));
-};
-/** What enters a narrows must run faster through it. */
-const funnelled = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells.map((cell) => ({
-    change: "atLeast",
-    band: "OceanCurrentStrength",
-    cell,
-    value: Math.min(1000, Math.round(currentAt(state, cell) * narrowsFunnel)),
-  }));
+const scoured = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
+  heldUnder(
+    state,
+    place.cells.filter((cell) => currentAt(state, cell) >= scouringCurrent),
+    heldDepth
+  );
 const shallowest = (state: GenerationState, place: PoiPlace) =>
   place.cells.reduce((least, cell) => Math.min(least, depthAt(state, cell)), Infinity);
 
@@ -72,7 +59,7 @@ export const strait: PoiEntry = {
   name: "Strait",
   recognition: {
     distinct:
-      "A sea cell that, on the smallest circle of radius 3, 6, 12, 24 or 48 cells showing any coastal form, has two shores of at least two samples whose middles stand at least 120 degrees apart, at least two gaps of water open straight from the cell, and ground over at least half the circle: water passing between two lands. A bay shows one arc of shore and one opening; water seen beyond a thin cape is not a gap, because the cape stands in the way; a fjord is excluded by its landform, because ice cut it.",
+      "A sea cell that, on the smallest circle, of radius 1.5 to 800 km, that the map resolves and that shows any coastal form, has two shores of at least two samples whose middles stand at least 120 degrees apart, at least two gaps of water open straight from the cell, and ground over at least half the circle: water passing between two lands. A bay shows one arc of shore and one opening; water seen beyond a thin cape is not a gap, because the cape stands in the way; a fjord is excluded by its landform, because ice cut it.",
     isA,
   },
   existence: {
@@ -83,11 +70,21 @@ export const strait: PoiEntry = {
     suitability: notApplicable("No process chooses where two coasts come together."),
     places,
   },
+  publication: {
+    statement: "Every strait publishes as a site at its narrowest cell.",
+    moment: "geography",
+    record: siteRecord({
+      kind: "strait",
+      layer: "geology",
+      name: "Strait",
+      attributes: (state, place) => ({ wrap: wrapOf(state, place.anchor) }),
+    }),
+  },
   fields: {
     statement:
-      "A strait gathers the current and holds its own channel open with it: where the water runs hard the bed cannot silt, and the sea's heat and salt move between the waters on either side.",
+      "A strait holds its own channel open: where the water runs hard the bed cannot silt. The current itself, and the sea's heat and salt moving through, are the current process's.",
     terrain: scoured,
-    water: funnelled,
+    water: notApplicable("The ocean current process writes current strength over the whole sea."),
     climate: notApplicable(
       "Its heat exchange is the current's own: the current process carries OceanCurrentHeat through it, and no air effect is resolved at this width."
     ),
@@ -113,18 +110,20 @@ export const strait: PoiEntry = {
     counterpart,
     unrealized: movesTo(counterpart),
     settle: notApplicable("Its bed is held under water, so a round's water does not move it."),
+    schedule: notApplicable("Holding its bed under water is all a strait does to a refinement."),
   },
   movement: {
     statement:
       "A strait is the short way between two seas at the cost of its race, and the place where a road may cross by ferry; roads run towards it from both shores. A cost cannot open water to a road, so the crossing itself is declared in what it crosses.",
-    roads: (state, place, cell) =>
-      !isSea(state, cell) && gap(state, place.anchor, cell) <= reachOf(state, place)
-        ? landingRoad
-        : 1,
-    boats: (state, place, cell) =>
-      place.cells.includes(cell) ? 1 + (race * currentAt(state, cell)) / 1000 : 1,
+    roads: (state, place) =>
+      cellsWithin(state, place.anchor, reachOf(state, place))
+        .filter((cell) => !isSea(state, cell))
+        .map((cell) => ({ cell, factor: landingRoad })),
+    boats: (state, place) =>
+      place.cells.map((cell) => ({ cell, factor: 1 + (race * currentAt(state, cell)) / 1000 })),
     drainage: notApplicable("Rivers end at the sea; each shore drains on its own side of it."),
-    magic: costNear(funnelledCurrent),
+    magic: { current: costNear(funnelledCurrent) },
+    links: notApplicable("A crossing is declared in what it crosses; it joins no two fixed cells."),
     crosses: () => ["strait"],
   },
   others: {
@@ -167,7 +166,7 @@ export const strait: PoiEntry = {
     statement:
       "A strait shows by how alone it stands as the way through and how narrow it is against its waters, rather than by its size. A small lone passage between large seas outranks a wide channel among islands, and a town at its narrows carries it.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.3, localConditions: 0.3, isolation: 0.4 }),
+    importance: weighed(factors, { magnitude: 0.3, localConditions: 0.3, isolation: 0.4 }),
   },
   naming: {
     statement: "Named by whichever people hold or use it, often after the town at its narrows.",

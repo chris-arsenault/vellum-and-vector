@@ -2,15 +2,17 @@ import { conditionReader } from "../../canonry/magicRegions";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
-import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import { cellSpan, isSea, magicRule, magicValue } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { magicFieldOf, peakOf } from "./anomalyReads";
+import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { isSea, magicRule, magicValue } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { countryOf, magicFieldOf, peakOf } from "./anomalyReads";
 
 /** Fallen stock, as the rule reads it, at which a deviation is half as strong as they get. */
 const typicalStock = 1000;
-/** A needle swings this many cell spans beyond its deposit. */
-const swingCells = 2;
+/** How far beyond its deposit a needle swings, and a deviation's country, in metres. */
+const swingMetres = 10_000,
+  countryMetres = 30_000;
 /** The most a full deviation adds to the cost of an open-sea passage and of an unmarked land way. */
 const seaLoss = 2,
   landLoss = 0.25;
@@ -21,13 +23,14 @@ const stockAt = (state: GenerationState, cell: number) => {
   const fire = magicFieldOf(state, "fire");
   return fire ? conditionReader(state, fire, { field: "stock:fallen/held" }, 0)(cell) : 0;
 };
-const places = regionPlaces("compassDeviation", isA, stockAt);
-const around = (state: GenerationState) => 6 * cellSpan(state);
+const places = rulePlaces("compassDeviation", "fire", "deviation");
+const around = countryOf(countryMetres);
 const peakStock = (state: GenerationState, place: PoiPlace) => peakOf(state, place, stockAt);
 const swing = sized(peakStock, typicalStock);
 const counterpart = counterpartOf(isA, 1);
-const swingNear = (state: GenerationState, place: PoiPlace, cell: number) =>
-  costNear(1 + seaLoss * swing(state, place), swingCells * cellSpan(state))(state, place, cell);
+/** A way's cost within the needle's swing, dearer by `loss` at full strength. */
+const swingCost = (state: GenerationState, place: PoiPlace, loss: number) =>
+  costNear(1 + loss * swing(state, place), swingMetres)(state, place);
 const factors = {
   magnitude: swing,
   /** It matters where a needle is all there is: out of sight of land, it counts in full. */
@@ -64,6 +67,11 @@ export const compassDeviation: PoiEntry = {
     ),
     places,
   },
+  publication: {
+    statement: "Every connected deposit publishes as Fire's deviation class, outlined by coverage.",
+    moment: "magic",
+    record: ruleRecord("fire", "deviation"),
+  },
   fields: {
     statement:
       "The deposit acts on instruments, not on media: the metal changes no height, water, air or growth by being there. The crater and fan that carry it do those things in their own entries.",
@@ -74,7 +82,7 @@ export const compassDeviation: PoiEntry = {
       "The fan's barrenness is the ejecta fan's; a deviation alone bares nothing."
     ),
     magic: notApplicable(
-      "It marks Fire's fallen stock, which holds and releases through Fire's own stocks; a declared band change cannot reach a stock."
+      "It marks Fire's fallen stock, which holds and releases through Fire's own stocks."
     ),
   },
   acrossMaps: {
@@ -88,23 +96,21 @@ export const compassDeviation: PoiEntry = {
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable("A round's water moves no fallen stock in the regional rounds."),
+    schedule: notApplicable("The inherited stock is all a deviation brings to a refinement."),
   },
   movement: {
     statement:
       "A needle lies here. Open-sea passages, steered by compass out of sight of land, pay the most and swing wide of it; river and coast boats pilot by sight and pay nothing; a land way pays a little until it is worn and marked. Metal in the ground does not change how water runs or what carries magic.",
-    roads: (state, place, cell) =>
-      costNear(1 + landLoss * swing(state, place), swingCells * cellSpan(state))(
-        state,
-        place,
-        cell
-      ),
-    boats: (state, place, cell) => (isSea(state, cell) ? swingNear(state, place, cell) : 1),
+    roads: (state, place) => swingCost(state, place, landLoss),
+    boats: (state, place) =>
+      swingCost(state, place, seaLoss).filter(({ cell }) => isSea(state, cell)),
     drainage: notApplicable(
       "Water does not steer by a needle, and metal in gravel bars no channel."
     ),
     magic: notApplicable(
       "The deposit rides the crust and rivers and changes neither carrier's cost."
     ),
+    links: notApplicable("A false bearing joins nothing."),
     crosses: notApplicable("A false bearing opens no way across anything."),
   },
   others: {
@@ -139,7 +145,7 @@ export const compassDeviation: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "false bearing",
-        reach: swingCells * cellSpan(state),
+        reach: swingMetres,
         severity: swing(state, place),
       },
     ],
@@ -157,7 +163,7 @@ export const compassDeviation: PoiEntry = {
     statement:
       "A deviation shows by how hard it pulls and whether anything else can give a bearing: one out at sea outranks a stronger one in hill country full of landmarks, and a mining town beside it carries a small one.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.4, localConditions: 0.4, isolation: 0.2 }),
+    importance: weighed(factors, { magnitude: 0.4, localConditions: 0.4, isolation: 0.2 }),
   },
   naming: {
     statement:

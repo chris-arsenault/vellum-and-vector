@@ -1,35 +1,23 @@
-import type { AtlasFeature } from "@atlas/domain";
 import type { GenerationState } from "../../process";
-import { seatCaps } from "../../regional/seats";
+import { usableSlope } from "../../regional/seats";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
-import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { holdsRecord, namingCultureNear, recordPlaces, within } from "../poiPlaces";
-import {
-  cellSpan,
-  cellsWithin,
-  gap,
-  heldFor,
-  isLand,
-  magicRule,
-  shareAround,
-  slopeAt,
-} from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized } from "../poiVisibilityRules";
-import { attribute, peopleOfRecord, restlessDead } from "./settlementRecords";
+import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
+import { holdsRecord, namingCultureNear, within } from "../poiPlaces";
+import { cellSpan, gap, isLand, magicRule, shareAround, slopeAt } from "../poiReads";
+import { aloneAmong, attachment, sized } from "../poiVisibilityRules";
+import { communityRecord, ruinPlaces } from "./communityRecords";
+import { attribute, peopleOfRecord, restlessDead, weighedPlace } from "./settlementRecords";
 
 /** People at their height at which a ruin is half as great as ruins get. */
 const typicalPeak = 3000;
-/** How much easier a road runs near a ruin: its old roadbed and its stone. */
-const oldRoadbed = 0.85;
+/** How much easier a road runs near a ruin, and over how many metres: its old roadbed and its stone. */
+const oldRoadbed = 0.85,
+  roadbedReach = 1000;
 /** How strongly what a place was still ties people to its remains. */
 const formerRole: Record<string, number> = { capital: 0.8, regionalCapital: 0.55, marketTown: 0.3 };
 
-const goneStatus = ["abandoned", "ruined"];
-const isRuin = (f: AtlasFeature) =>
-  f.kind === "settlement" &&
-  (f.layerId === "ruins" || goneStatus.includes(String(f.attributes.status)));
-const places = recordPlaces("ruin", isRuin);
+const places = ruinPlaces;
 const isA = holdsRecord("ruin", places);
 const around = (state: GenerationState) => 8 * cellSpan(state);
 const sealedVein = magicRule("fire", "scar");
@@ -52,13 +40,6 @@ const factors = {
   isolation: aloneAmong(places, (state) => 2 * around(state)),
   cultural: remembered,
 };
-/** The bench a seat was cut on outlasts it: the seat rule holds a retained ruin's ground too. */
-const caps = (state: RegionalState) =>
-  heldFor(state, "seatCaps", () => {
-    const cap = new Float64Array(state.physical.map.mesh.count);
-    seatCaps(state, cap);
-    return cap;
-  });
 const seatCell = (state: RegionalState, id: string) =>
   state.regional.evidence?.seats.find((seat) => seat.featureId === id)?.cell;
 
@@ -68,7 +49,7 @@ export const ruin: PoiEntry = {
   name: "Ruin",
   recognition: {
     distinct:
-      "A settlement record with no one in it: `kind` settlement and either `layerId` ruins or `status` abandoned or ruined. The inhabited settlement is the same record on layer settlements with status inhabited; a ruin field is this kind with a `ruinField` mark and no people. A killing ground is brine with no record, and a dam or mill left behind is still its own kind.",
+      "A community with no one in it, a camp an earlier round left, or a seat the parent recorded as abandoned or ruined. The inhabited settlement is the same community while people stay; a ruin field is this kind with a `ruinField` mark and no people. A killing ground is brine with no record, and a dam or mill left behind is still its own kind.",
     isA,
   },
   existence: {
@@ -78,7 +59,7 @@ export const ruin: PoiEntry = {
     requires: (state, cell) => isLand(state, cell),
     /** Where remains last and are found: on a vein its people sealed, on ground gentle enough to have held walls. */
     suitability(state, cell) {
-      const held = 1 - Math.min(1, slopeAt(state, cell) / 0.12),
+      const held = 1 - Math.min(1, slopeAt(state, cell) / usableSlope),
         scar = Math.max(
           sealedVein(state, cell) ? 1 : 0,
           shareAround(state, cell, (next) => sealedVein(state, next))
@@ -86,6 +67,12 @@ export const ruin: PoiEntry = {
       return (held + scar) / 2;
     },
     places,
+  },
+  publication: {
+    statement:
+      "A community with no one left publishes where it stood, on the ruins layer; a major camp of an earlier round and a ruin field publish from what the round left. A seat the parent recorded stays as that record.",
+    moment: "society",
+    record: communityRecord,
   },
   fields: {
     statement:
@@ -108,12 +95,9 @@ export const ruin: PoiEntry = {
     statement:
       "A captured ruin is a seat like any other on the refined map: it stays where the parent put it, holds its footprint's gradient down, and moves to the seat the evidence settles on. It proposes no village and sends no one along the ways.",
     carry: carryWhereItLands,
-    realize(state, carried): readonly PoiFieldChange[] {
-      const cap = caps(state);
-      return cellsWithin(state, carried.cell, around(state))
-        .filter((cell) => cap[cell] > 0)
-        .map((cell) => ({ change: "gradientAtMost", cell, gradient: cap[cell] }));
-    },
+    realize: notApplicable(
+      "The bench a seat was cut on outlasts it: the settlement entry's caps step holds every captured seat's ground, a ruin's too."
+    ),
     counterpart: (state, carried) => seatCell(state, carried.feature.id) ?? carried.cell,
     unrealized: stays,
     settle(state, carried) {
@@ -122,14 +106,18 @@ export const ruin: PoiEntry = {
         ? { outcome: "move", cell }
         : { outcome: "keep" };
     },
+    schedule: notApplicable(
+      "The settlement entry's schedule reads, grades and settles every captured seat, this kind's too."
+    ),
   },
   movement: {
     statement:
       "No road is laid to a ruin, but the roadbed it left is easy going and its walls are stone already cut. It carries nothing else and bars nothing.",
-    roads: (state, place, cell) => costNear(oldRoadbed, 2 * cellSpan(state))(state, place, cell),
+    roads: costNear(oldRoadbed, roadbedReach),
     boats: notApplicable("A ruin stands on dry land; a drowned one is gone from this kind."),
     drainage: notApplicable("Remains are too slight to turn the network."),
     magic: notApplicable("The people who carried magic have gone from it."),
+    links: notApplicable("A ruin joins nothing."),
     crosses: notApplicable("A ruin is at most the end of an old way, not a way over a barrier."),
   },
   others: {
@@ -165,7 +153,7 @@ export const ruin: PoiEntry = {
     statement:
       "A ruin shows by how large it once was and how empty its country now is; a fallen capital or a fortress carries a small one, and one among living towns shows late.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.25, isolation: 0.25 }),
+    importance: weighedPlace(factors, { magnitude: 0.5, localConditions: 0.25, isolation: 0.25 }),
   },
   naming: {
     statement:

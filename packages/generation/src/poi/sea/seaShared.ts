@@ -1,9 +1,9 @@
 import type { GenerationState } from "../../process";
 import type { PoiFieldChange, PoiPlace } from "../poiContract";
-import type { PoiKindId } from "../poiKinds";
 import { namingCultureNear, settlementWithin } from "../poiPlaces";
 import {
   adjacent,
+  cellSpan,
   fieldOf,
   gap,
   heldFor,
@@ -40,13 +40,9 @@ export const extentOf = (state: GenerationState, place: PoiPlace) =>
     place.cells.reduce((most, cell) => Math.max(most, gap(state, place.anchor, cell)), 0)
   );
 
-/** A carried place as a place on the child's lattice, for rules written over places. */
-export const placeAt = (kind: PoiKindId, id: string, cell: number): PoiPlace => ({
-  id,
-  kind,
-  cells: [cell],
-  anchor: cell,
-});
+/** A physical reach in metres, never narrower than the two cells a map needs to show it. */
+export const near = (metres: number) => (state: GenerationState) =>
+  Math.max(2 * cellSpan(state), metres);
 
 const besideSea = (state: GenerationState, cell: number) => {
   for (const next of adjacent(state, cell)) if (isSea(state, next)) return true;

@@ -8,8 +8,11 @@ import {
 import type { GenerationState } from "./process";
 import { societyValue } from "./societySupport";
 import { isWorldSociety } from "./societyMapScope";
-import { hasMedium } from "./societyDemand";
+import { hasMedium, tappableFire } from "./societyDemand";
 import { nearestSample, samplesInBox } from "./societySpatial";
+
+/** How far a band goes from its camp to tap a vein, in metres. */
+export const tappingReach = 25_000;
 
 /**
  * The cold-age set of a mobile round: hunt the crowded herds, burn the groves open, dig into
@@ -28,7 +31,7 @@ export function coldAgeWorks(state: GenerationState, c: SocietyCommunity): Socie
     isWorldSociety(state)
       ? hasMedium(state, { communityId: c.id, kind })
       : coldAgeSite(state, c, channel, threshold, reach) >= 0;
-  if (reaches("tapping", "magic:fire:intensity", 100, 25_000)) kinds.push("tapping");
+  if (reaches("tapping", "magic:fire:intensity", tappableFire, tappingReach)) kinds.push("tapping");
   if (reaches("quarrying", "magic:aurora:feature:prism", 1, 30_000)) kinds.push("quarrying");
   const shore = isWorldSociety(state)
     ? hasMedium(state, { communityId: c.id, kind: "weir" })
@@ -61,7 +64,7 @@ export function placeColdAgeWork(state: GenerationState, c: SocietyCommunity, wo
   const grid = state.surface;
   const at =
     work.kind === "tapping"
-      ? coldAgeSite(state, c, "magic:fire:intensity", 100, 25_000)
+      ? coldAgeSite(state, c, "magic:fire:intensity", tappableFire, tappingReach)
       : work.kind === "quarrying"
         ? coldAgeSite(state, c, "magic:aurora:feature:prism", 1, 30_000)
         : work.kind === "weir"

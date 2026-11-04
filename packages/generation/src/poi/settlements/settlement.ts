@@ -1,39 +1,46 @@
 import type { GenerationState } from "../../process";
-import { seatCaps } from "../../regional/seats";
+import { gradeSeats } from "../../regional/grading";
+import { regionalSpan } from "../../regional/lattice";
+import { scaleAround } from "../../regional/network";
+import { placesEnabled } from "../../regional/places";
+import {
+  drawChannelsToSeats,
+  knownSeats,
+  seatCaps,
+  settleSeats,
+  usableSlope,
+} from "../../regional/seats";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
-import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { holdsRecord, namingCultureNear, recordPlaces, within } from "../poiPlaces";
+import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
+import { holdsRecord, namingCultureNear, within } from "../poiPlaces";
 import {
   cellSpan,
-  cellsWithin,
   celsiusAt,
   gap,
-  heldFor,
-  inhabited,
   isLand,
   isRiver,
   sedimentAt,
   shareAround,
   slopeAt,
 } from "../poiReads";
-import { aloneAmong, drawnWhen, sized } from "../poiVisibilityRules";
+import { aloneAmong, sized } from "../poiVisibilityRules";
+import { communityRecord, settlementPlaces } from "./communityRecords";
+import { weighedPlace } from "./settlementRecords";
 
-/** The ground-grade above which a settlement cannot stand, as regional siting holds it. */
-const steepestSite = 0.12;
 /** The cold below which no one settles, in degrees. */
 const coldestSite = -5;
 /** People at which a settlement is half as great as settlements get. */
 const typicalPeople = 5000;
-/** A settlement draws roads to it across this many cells around it. */
-const drawnCells = 3;
-/** The cost of travel on the worn ground around a settlement. */
-const wornGround = 0.6;
+/** The ground a settlement's traffic wears around it, in metres, and what travel costs on it. */
+const wornReach = 2000,
+  wornGround = 0.6;
+/** What people carrying stock save on the ways through a settlement. */
+const carriage = 0.8;
+/** A river seat draws a channel to itself: the ground around it is cheaper to run through. */
+const seatCorridor = 0.5;
 
-const places = recordPlaces(
-  "settlement",
-  (f) => f.kind === "settlement" && f.layerId === "settlements" && inhabited(f)
-);
+const places = settlementPlaces;
 const isA = holdsRecord("settlement", places);
 const peopleOf = (_state: GenerationState, place: PoiPlace) =>
   Number(place.feature?.attributes.population) || 0;
@@ -53,13 +60,6 @@ const factors = {
   isolation: aloneAmong(places, (state) => 2 * around(state)),
   cultural: (_state: GenerationState, place: PoiPlace) => roleWeight[roleOf(place)] ?? 0,
 };
-/** The relief caps the regional seats hold, read once per state from the seat rule itself. */
-const caps = (state: RegionalState) =>
-  heldFor(state, "seatCaps", () => {
-    const cap = new Float64Array(state.physical.map.mesh.count);
-    seatCaps(state, cap);
-    return cap;
-  });
 
 export const settlement: PoiEntry = {
   id: "settlement",
@@ -67,7 +67,7 @@ export const settlement: PoiEntry = {
   name: "Settlement",
   recognition: {
     distinct:
-      "A published inhabited place: a record society or refinement sited, with its people. A ruin is the same record no longer inhabited; a village and a city are one kind at different sizes.",
+      "An inhabited place: a community of the society simulation, a seat the parent left, or a village this map proposed. A ruin is the same place no longer inhabited; a village and a city are one kind at different sizes.",
     isA,
   },
   existence: {
@@ -76,11 +76,11 @@ export const settlement: PoiEntry = {
     way: "sited",
     requires: (state, cell) =>
       isLand(state, cell) &&
-      slopeAt(state, cell) <= steepestSite &&
+      slopeAt(state, cell) <= usableSlope &&
       celsiusAt(state, cell) >= coldestSite,
     /** Flat ground beside water with soil to farm. */
     suitability(state, cell) {
-      const flat = 1 - Math.min(1, slopeAt(state, cell) / steepestSite),
+      const flat = 1 - Math.min(1, slopeAt(state, cell) / usableSlope),
         water = Math.max(
           isRiver(state, cell) ? 1 : 0,
           shareAround(state, cell, (next) => !isLand(state, next))
@@ -90,31 +90,34 @@ export const settlement: PoiEntry = {
     },
     places,
   },
+  publication: {
+    statement:
+      "Each community the map shows publishes as its record, with its people, livelihoods and rank; a seat the parent recorded stays as that record, and a community already drawn stays that subject's finer drawing. A refined map's seats publish before their ground is read, its villages once accepted.",
+    moment: "society",
+    record: communityRecord,
+  },
   fields: {
     statement:
-      "People change the ground around them: land is cleared and turned for food; the ground a seat stands on is graded through its realization on a refined map.",
+      "People change the ground around them, but across a hinterland, not at the seat: the seat itself is graded through its refinement steps.",
     terrain: notApplicable(
-      "Grading a seat is its refinement rule below; a world cell is too coarse to hold one."
+      "Grading a seat is its refinement step below; a world cell is too coarse to hold one."
     ),
     water: notApplicable(
       "Taking water for use is the work of irrigation and dams, which are their own entries."
     ),
     climate: notApplicable("A settlement's warmth is below what the climate field resolves."),
-    cover: notApplicable("Clearing is the clearance entry, sited by the same people."),
+    cover: notApplicable(
+      "Clearing is written across each hinterland by regional/society's declareFields and by the simulation's clearance works."
+    ),
     magic: notApplicable(
-      "People's tenure feeds magic through the society channels, not through the seat."
+      "People's tenure is written by societyRecord's recordSeats, which Hallowed reads; the seat declares nothing further."
     ),
   },
   acrossMaps: {
     statement:
-      "A captured settlement keeps its place on the refined map; its footprint holds the relief's gradient down so usable ground develops there even in hills, and after each round's water it moves to the best ground beside it.",
+      "A captured settlement keeps its place on the refined map; its footprint holds the relief's gradient down so usable ground develops there even in hills, a river seat draws the network to it, and after each round's water it moves to the best ground beside it.",
     carry: carryWhereItLands,
-    realize(state, carried): readonly PoiFieldChange[] {
-      const cap = caps(state);
-      return cellsWithin(state, carried.cell, around(state))
-        .filter((cell) => cap[cell] > 0)
-        .map((cell) => ({ change: "gradientAtMost", cell, gradient: cap[cell] }));
-    },
+    realize: notApplicable("Its footprint's gradient caps are the schedule's caps step below."),
     counterpart: (state, carried) =>
       state.regional.evidence?.seats.find((seat) => seat.featureId === carried.feature.id)?.cell ??
       carried.cell,
@@ -125,15 +128,39 @@ export const settlement: PoiEntry = {
         ? { outcome: "move", cell: seat.cell }
         : { outcome: "keep" };
     },
+    /**
+     * A seat is a cause in every round: read from its captured position every run, so a seat an
+     * earlier refinement moved is re-sited from the same evidence. The written relief is graded
+     * under every seat, because the cap alone is undone by later steps.
+     */
+    schedule: {
+      kind: "settlement",
+      read(state, evidence) {
+        evidence.seats.push(...knownSeats(state));
+      },
+      influence(state, cost) {
+        const span = regionalSpan(state);
+        for (const seat of state.regional.evidence!.seats)
+          if (seat.situation === "river")
+            scaleAround(state, cost, seat.cell, 2 * span, seatCorridor);
+      },
+      support: (state) => drawChannelsToSeats(state),
+      caps: (state, cap) => seatCaps(state, cap),
+      restore: (state) => gradeSeats(state),
+      respond(state: RegionalState) {
+        const domains = state.regional.input.domains;
+        if (domains.includes("physical") && placesEnabled(domains)) settleSeats(state);
+      },
+    },
   },
   movement: {
     statement:
-      "Routes run between settlements and wear the ground near them; a river seat draws the drainage network to its channel.",
-    roads: (state, place, cell) =>
-      costNear(wornGround, drawnCells * cellSpan(state))(state, place, cell),
+      "Routes run between settlements and wear the ground near them, and those who carry stock travel more easily through them. A river seat's draw on the drainage is its schedule's influence step, which reaches every seat, proposed ones aside.",
+    roads: costNear(wornGround, wornReach),
     boats: notApplicable("Boats reach a settlement through its harbour, which is its own entry."),
-    drainage: notApplicable("A river seat's corridor is applied through its refinement cause."),
-    magic: (state, place, cell) => costNear(0.8)(state, place, cell),
+    drainage: notApplicable("A river seat's corridor is its schedule's influence step."),
+    magic: { people: costNear(carriage) },
+    links: notApplicable("A settlement joins nothing by itself; a door or a road does that."),
     crosses: notApplicable("A settlement is an end of routes, not a way over a barrier."),
   },
   others: {
@@ -177,7 +204,7 @@ export const settlement: PoiEntry = {
     statement:
       "A settlement shows by its rank and its people; a capital always outranks size, and a small town alone in empty country shows sooner than the same town among many.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.1, isolation: 0.3 }),
+    importance: weighedPlace(factors, { magnitude: 0.6, localConditions: 0.1, isolation: 0.3 }),
   },
   naming: {
     statement: "Named by its own people, and it may take the name of a landmark beside it.",

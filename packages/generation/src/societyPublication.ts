@@ -2,29 +2,21 @@ import {
   builtinLayers,
   canonicalGeometry,
   unwrapCoordinates,
-  population,
-  type AtlasFeature,
   type SocietyCommunity,
   type SocietyRegion,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import type { PublicationDefinition } from "./publication";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
-import {
-  generatedFeature,
-  putGenerated,
-  putGeneratedNetwork,
-  putGeneratedDetail,
-} from "./mapFeatures";
+import { generatedFeature, putGeneratedNetwork, putGeneratedDetail } from "./mapFeatures";
 import { findRoute } from "./mapRouting";
+import { publishKinds } from "./poi/poiPublish";
 import { communityRoutes } from "./societyContact";
 import { profileOf } from "./societyProfile";
 import { wayClass, wayClasses } from "./societyWays";
-import { publishSocietyWorks } from "./societyWorkPublication";
-import { settlementHierarchy, type SettlementHierarchy } from "./societyHierarchy";
-import { isMajorSettlement, isWorldSociety } from "./societyMapScope";
-import { demandedKinds } from "./societyDemand";
-import { publishRuinFields } from "./societyRuins";
+import { nameLatentWorks, publishUnkindedRecords } from "./societyWorkPublication";
+import type { SettlementHierarchy } from "./societyHierarchy";
+import { isWorldSociety, mappedSociety } from "./societyMapScope";
 
 export function societyPublications(input: AtlasGenerationInput): PublicationDefinition[] {
   const enabled = ["human.cultures", "human.politics", "built.layout"].some(
@@ -47,51 +39,10 @@ export function societyPublications(input: AtlasGenerationInput): PublicationDef
   }));
 }
 export function publishSettlements(state: GenerationState, context: MapProcessContext) {
-  const region = state.society!.region;
-  const hierarchy = settlementHierarchy(region);
-  const profile = profileOf(state);
-  const mapped = new Set(
-    region.communities
-      .filter(
-        (c) =>
-          !isWorldSociety(state) ||
-          isMajorSettlement(c, hierarchy.get(c.id)!, profile.townThreshold)
-      )
-      .map((c) => c.id)
-  );
-  publishSocietyWorks(state);
-  publishRuinFields(state);
-  for (const c of region.communities) {
-    const people = population(c),
-      urban = Math.min(people, c.settlement?.population ?? 0);
-    if (!c.founded || !mapped.has(c.id)) continue;
-    const feature = generatedFeature(
-      state,
-      `community:${c.id}`,
-      c.name,
-      "settlement",
-      c.status === "inhabited" ? "settlements" : "ruins",
-      { type: "Point", coordinates: [c.position.x, c.position.y] },
-      {
-        communityId: c.id,
-        population: urban,
-        communityPopulation: people,
-        settlementPopulation: urban,
-        ruralPopulation: people - urban,
-        groups: c.groups,
-        livelihoods: c.support,
-        status: c.status,
-        founded: c.founded,
-        representedAreaKm2: c.areaKm2,
-        ...siteAttributes(c),
-        worksDemanded: demandedKinds(state, c.id),
-        ...hierarchy.get(c.id),
-        ...communityNameMetadata(c),
-      }
-    );
-    feature.causes = [...c.causes, ...region.history.map((e) => `${e.id}: ${e.causes.join(" ")}`)];
-    putCommunity(state, feature, c.id);
-  }
+  const { hierarchy, mapped } = mappedSociety(state, state.society!.region);
+  nameLatentWorks(state);
+  publishUnkindedRecords(state);
+  publishKinds(state, "society");
   publishRoutes(state, context, mapped, hierarchy);
 }
 type RoadClass = NonNullable<ReturnType<typeof wayClass>>;
@@ -232,34 +183,9 @@ function wayAttributes(
     ),
   };
 }
-/** Why the settlement sits where it does; open plain is the absence of a site. */
-function siteAttributes(c: SocietyCommunity) {
-  return {
-    siteKind: c.site?.kind ?? "plain",
-    siteReason: c.site?.reason ?? "open country, where its people are",
-    fortress: c.site?.fortress ?? false,
-  };
-}
-function communityNameMetadata(c: SocietyCommunity) {
-  return {
-    namingLanguage: c.naming?.language ?? null,
-    namingCulture: c.naming?.culture ?? null,
-    namedInEra: c.naming?.era ?? c.founded,
-  };
-}
 function connectedSettlements(
   a: import("@atlas/domain").SocietyCommunity,
   b: import("@atlas/domain").SocietyCommunity
 ) {
   return a.founded && b.founded && a.status === "inhabited" && b.status === "inhabited";
-}
-function putCommunity(state: GenerationState, feature: AtlasFeature, communityId: string) {
-  if (
-    !putGeneratedDetail(
-      state,
-      feature,
-      (f) => f.kind === "settlement" && f.attributes.communityId === communityId
-    )
-  )
-    putGenerated(state, feature);
 }

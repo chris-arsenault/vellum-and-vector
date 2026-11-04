@@ -2,6 +2,13 @@ import { biomeCode as B } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 
 export const unit = (value: number) => Math.max(0, Math.min(1, value));
+/** The share of wetland cover at which ground is a wetland. */
+export const wetlandCoverShare = 0.3;
+/** Above this gradient water runs off rather than stands. */
+export const standingWaterSlope = 0.015;
+/** The one definition of a wetland: land held wet by what grows on it, not a water surface. */
+export const isWetland = (map: PhysicalField, i: number) =>
+  map.WaterKindCodes.get(i) === 0 && map.WetlandCover.get(i) >= wetlandCoverShare;
 /** Wind speed relative to a 7 m/s reference; maps before atmospheric flow use the reference. */
 export const windStrength = (map: PhysicalField, i: number) => {
   const speed = map.WindSpeed.get(i);
@@ -57,7 +64,7 @@ export function environment(map: PhysicalField, i: number, forcing = neutralEcol
   const water = map.WaterKindCodes.get(i),
     ice = map.IceThickness.get(i);
   // Warm river water keeps a reach open through a skin of ice, not under a glacier.
-  const frozen = ice > 1 && !(warmth >= 50 && ice <= 50);
+  const frozen = ice > frozenIce && !(warmth >= 50 && ice <= 50);
   const warmSeason = unit((temperature + 8) / 18) * unit((52 - temperature) / 18);
   const rain = (map.Rainfall.get(i) + map.Snowfall.get(i)) / 1000;
   // Plant water is the aridity index: precipitation over evaporative demand,
@@ -75,7 +82,7 @@ export function environment(map: PhysicalField, i: number, forcing = neutralEcol
   const summer = temperature + range;
   const winter = temperature - range;
   const drought = unit(1 - moisture * (1 - forcing.seasonality * 0.55) - map.SoilWater.get(i));
-  const flat = unit(1 - map.Slope.get(i) / 0.015);
+  const flat = unit(1 - map.Slope.get(i) / standingWaterSlope);
   const drainage = unit((map.DrainageElevations.get(i) - map.Elevation.get(i)) / (3 * 1024));
   const flood = unit(map.FloodplainIntensity.get(i) / 1000 + map.DeltaIntensity.get(i) / 1000);
   const wetness = water
@@ -103,7 +110,7 @@ export function classifyBiome(map: PhysicalField, i: number, env = environment(m
   if (env.submerged) return B("Freshwater");
   const magical = magicalBiome(map, i);
   if (magical !== null) return magical;
-  if (env.wetness > 0.5) return B(map.TreeCover.get(i) > 0.2 ? "Swamp" : "Marsh");
+  if (isWetland(map, i)) return B(map.TreeCover.get(i) > 0.2 ? "Swamp" : "Marsh");
   if (env.temperature < 2) return B("Tundra");
   return coverBiome(map, i, env);
 }
@@ -130,25 +137,36 @@ function verdantBiome(map: PhysicalField, i: number, trees: number, cover: numbe
 }
 /** Fire's quickened country: a grove where the quickening grew trees, a meadow otherwise. */
 function quickenedBiome(map: PhysicalField, i: number, trees: number, cover: number) {
-  if (map.Quickening.get(i) < 0.25 || cover < 0.12) return null;
+  if (map.Quickening.get(i) < quickenedFrom || cover < 0.12) return null;
   return B(trees >= 0.3 ? "Ember grove" : "Thaw meadow");
 }
 /** Aurora's stilled country: old trees standing in rime, or lichen on bare charged rock. */
 function stilledBiome(map: PhysicalField, i: number, trees: number, cover: number) {
-  if (map.Stillness.get(i) < 0.45) return null;
+  if (map.Stillness.get(i) < stilledFrom) return null;
   if (trees >= 0.3) return B("Rime forest");
   return cover < 0.12 ? B("Glow-lichen barrens") : null;
 }
 /** The coast a Pressure front faces: fog-fed heath, or moss forest where trees took hold. */
 function foggedBiome(map: PhysicalField, i: number, trees: number, cover: number) {
-  if (map.FogForcing.get(i) < 0.3 || cover < 0.12) return null;
+  if (map.FogForcing.get(i) < foggedFrom || cover < 0.12) return null;
   return B(trees >= 0.4 ? "Moss forest" : "Fog heath");
 }
+/** The forcing at which ground is quickened, stilled or fogged country. */
+export const quickenedFrom = 0.25,
+  stilledFrom = 0.45,
+  foggedFrom = 0.3;
+/** The depth of ice, in metres, that freezes ground. */
+export const frozenIce = 1;
+/** Below this share of living cover the ground is bare; below this plant water, bare ground is desert. */
+export const bareCover = 0.12,
+  desertMoisture = 0.25;
+/** The tree share at which open country is woodland. */
+export const woodlandTrees = 0.15;
 function coverBiome(map: PhysicalField, i: number, env: EcologyEnvironment) {
   const trees = map.TreeCover.get(i),
     cover = trees + map.GrassCover.get(i) + map.WetlandCover.get(i);
-  if (cover < 0.12) return B(env.moisture < 0.25 ? "Desert" : "Barren");
-  if (trees < 0.15) return B("Grassland");
+  if (cover < bareCover) return B(env.moisture < desertMoisture ? "Desert" : "Barren");
+  if (trees < woodlandTrees) return B("Grassland");
   if (trees < 0.4) return B(env.temperature > 18 ? "Savanna" : "Woodland");
   if (map.ConiferCover.get(i) > map.BroadleafCover.get(i) || env.temperature < 8)
     return B("Boreal forest");

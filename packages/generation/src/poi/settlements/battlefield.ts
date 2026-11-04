@@ -1,34 +1,43 @@
-import type { AtlasFeature } from "@atlas/domain";
 import type { GenerationState } from "../../process";
+import { besiegedTown } from "../../societySiege";
 import { carryWhereItLands, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holdsRecord, namingCultureNear } from "../poiPlaces";
-import { cellSpan, fieldOf, gap, isLand } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { cellSpan, fieldOf, gap, heldFor, isLand } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
+import { developed, onceWritten } from "./communityRecords";
 import {
-  areaPlaces,
   avoidedGround,
   damagedGround,
-  deadGround,
+  deadAreRecorded,
   deadOf,
   eventFate,
   eventKindOf,
   eventReach,
-  isEvent,
-  peopleWithin,
+  nearTown,
   restlessDead,
   saltedHazard,
+  weighedPlace,
 } from "./settlementRecords";
+import { eventPlaces, frontierPlaces } from "./workRecords";
 
-/** The people a town needs to be worth a siege, as societySiege holds it. */
-const besiegedTown = 100;
 /** The dead at which a battlefield is half as great as battlefields get. */
 const typicalDead = 2000;
 /** The share of its ground's cover an army's camp and works strip at full strength. */
 const stripped = 0.6;
+/** The least distance between two fields where territories meet, in metres. */
+const frontierSpacing = 100_000;
+/** A siege falls on a town: within this many metres of one. */
+const townReach = 2000;
 
-const isSiege = (f: AtlasFeature) => isEvent(f) && f.attributes.eventKind === "siege";
-const places = areaPlaces("battlefield", isSiege);
+const sieges = eventPlaces("battlefield", (event) => event.kind === "siege");
+/** The sieges on this map; where none reach it, where held territories meet. */
+const places = (state: GenerationState): readonly PoiPlace[] =>
+  heldFor(state, "places:battlefield:all", () => {
+    if (!developed(state)) return [];
+    const recorded = sieges(state);
+    return recorded.length ? recorded : frontierPlaces(state, "battlefield", frontierSpacing);
+  });
 const isA = holdsRecord("battlefield", places);
 const around = (state: GenerationState) => 6 * cellSpan(state);
 const reachOf = (state: GenerationState, place: PoiPlace) =>
@@ -50,19 +59,25 @@ export const battlefield: PoiEntry = {
   name: "Battlefield",
   recognition: {
     distinct:
-      "A published `societyEvent` whose `attributes.eventKind` is siege. A disaster site is the same record with any other `eventKind` but collapse; a killing ground is `stock:death/brine` of Salt, with no record, and the two often coincide because the record's casualties feed that stock. A ruin is what the town became, read from the settlement record.",
+      "A society event that is a siege, or a field where held territories meet. A disaster site is the same record of any other event but collapse; a killing ground is `stock:death/brine` of Salt, with no record, and the two often coincide because the record's casualties feed that stock. A ruin is what the town became.",
     isA,
   },
   existence: {
     statement:
-      "Sited by politics, without a war simulation: when a polity falls from active, each settled town of at least 100 people it claimed and no longer controls is besieged where it stands, with the casualties, displacement and ruin any event gives. Sieges below ten thousand dead and displaced stay off the world map; a refined map retains each that reaches it as a record of its affected area.",
+      "Sited by politics, without a war simulation: when a polity falls from active, each settled town of at least 100 people it claimed and no longer controls is besieged where it stands, with the casualties, displacement and ruin any event gives. Sieges below ten thousand dead and displaced stay off the world map; a refined map retains each that reaches it. A map no siege reaches has its fields where a way joins seats held by different polities, the busiest ways first, at least 100 km apart.",
     way: "sited",
     requires: (state, cell) =>
-      isLand(state, cell) && peopleWithin(state, cell, cellSpan(state), besiegedTown),
+      isLand(state, cell) && nearTown(state, cell, townReach, besiegedTown),
     suitability: notApplicable(
-      "Nothing chooses the ground: the siege falls wherever a lost town stands, however poor a place to fight."
+      "Nothing chooses the ground: the siege falls wherever a lost town stands, and a frontier field midway along the way that crosses the line."
     ),
     places,
+  },
+  publication: {
+    statement:
+      "A siege publishes as a historical event, a located one on a map that ran its society and its affected area on a refined map; a frontier field publishes as a located battle.",
+    moment: "society",
+    record: onceWritten,
   },
   fields: {
     statement:
@@ -73,25 +88,17 @@ export const battlefield: PoiEntry = {
     water: notApplicable("An army drinks and fouls, but by nothing the water field resolves."),
     climate: notApplicable("A siege's fires are too brief and too small for the climate field."),
     cover: (_state, place) => damagedGround(place, stripped),
-    magic: (_state, place) => deadGround(place),
+    magic: notApplicable(deadAreRecorded),
   },
   acrossMaps: {
     statement:
-      "A captured battlefield keeps its place around its town on the refined map; its dead lie on the finer cell it lands on, for the region's Salt to brine, whatever the ground has become.",
+      "A captured battlefield keeps its place around its town on the refined map, whatever the ground has become.",
     carry: carryWhereItLands,
-    realize: (_state, carried) => {
-      const place: PoiPlace = {
-        id: carried.feature.id,
-        kind: "battlefield",
-        cells: [carried.cell],
-        anchor: carried.cell,
-        feature: carried.feature,
-      };
-      return deadGround(place);
-    },
+    realize: notApplicable(deadAreRecorded),
     counterpart: (_state, carried) => carried.cell,
     unrealized: stays,
     settle: notApplicable("What has happened does not move with a round's water."),
+    schedule: notApplicable("A battlefield takes no part in refinement's steps."),
   },
   movement: {
     statement:
@@ -102,6 +109,7 @@ export const battlefield: PoiEntry = {
     magic: notApplicable(
       "The brine rides the crust from the dead by Salt's own propagation; a battlefield adds no carrier."
     ),
+    links: notApplicable("A battlefield joins nothing."),
     crosses: notApplicable("Nothing about a siege opens a way across a barrier."),
   },
   others: {
@@ -131,7 +139,7 @@ export const battlefield: PoiEntry = {
     statement:
       "A battlefield shows by its dead above all, and by standing alone in its country's history; the fall of a capital carries a modest one, while the tenth siege of a contested road shows late.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.55, localConditions: 0.15, isolation: 0.3 }),
+    importance: weighedPlace(factors, { magnitude: 0.55, localConditions: 0.15, isolation: 0.3 }),
   },
   naming: {
     statement:

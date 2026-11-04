@@ -1,12 +1,11 @@
-import { units } from "../../canonry/math";
-import { hashUnit } from "../../canonry/noise";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, counterpartOf, goes, movesTo } from "../poiCarry";
-import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
-import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
-import { cellSpan, fieldOf, isLand, magicRule } from "../poiReads";
-import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
-import { magicFieldOf, peakOf, standsIn } from "./anomalyReads";
+import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
+import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";
+import { ruleRecord } from "../poiRecords";
+import { fieldOf, magicRule } from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { countryOf, magicFieldOf, peakOf, standsIn } from "./anomalyReads";
 
 /** Tearing at which a tear is half as great as tears get. */
 const typicalTearing = 0.5;
@@ -14,15 +13,14 @@ const typicalTearing = 0.5;
 const turningWild = 0.15;
 /** Verdure at which living ground has knit a tear shut. */
 const knitShut = 0.5;
-/** The fixed per-cell hash the regional wild writes use, so a shift does not ratchet. */
-const wildHash = 0x7e11;
+/** A tear's country, and how far off a forced crossing or shifting ground reaches, in metres. */
+const countryMetres = 4000,
+  hazardMetres = 2000;
 
-const isTear = magicRule("veil", "tear"),
-  isWild = magicRule("veil", "wild");
-const isA = (state: GenerationState, cell: number) => isTear(state, cell) && !isWild(state, cell);
+const isA = magicRule("veil", "tear");
 const tearingAt = (state: GenerationState, cell: number) => fieldOf(state).Tearing.get(cell);
-const places = regionPlaces("tear", isA, tearingAt);
-const around = (state: GenerationState) => 4 * cellSpan(state);
+const places = rulePlaces("tear", "veil", "tear");
+const around = countryOf(countryMetres);
 const veil = (state: GenerationState) => magicFieldOf(state, "veil");
 const wildAt = (state: GenerationState, cell: number) => veil(state)?.wild.get(cell) ?? 0;
 const peakTearing = (state: GenerationState, place: PoiPlace) => peakOf(state, place, tearingAt);
@@ -33,44 +31,10 @@ const factors = {
   isolation: aloneAmong(places, (state) => 2 * around(state)),
   cultural: attachment(around),
 };
-/** The signed draw of a cell's shift, from the hash the regional writes hold. */
-const drawAt = (cell: number) => hashUnit(wildHash, cell, 0) - 0.5;
-/** The small unsettled share of a stable tear shifts its ground by the wild relief. */
-const shifting = (state: GenerationState, place: PoiPlace): PoiFieldChange[] => {
-  const relief = veil(state)?.definition.parameters.wildRelief ?? 0;
-  return place.cells
-    .filter((cell) => wildAt(state, cell) > 0 && isLand(state, cell))
-    .map((cell) => ({
-      change: "add",
-      band: "Elevation",
-      cell,
-      amount: units(relief * wildAt(state, cell) * 2 * drawAt(cell)),
-    }));
-};
-/** The same share trades cover at the tear's edge: grass to wood on one draw, wood to grass on the other. */
-function coverShift(state: GenerationState, cell: number): PoiFieldChange[] {
-  const map = fieldOf(state),
-    share = (veil(state)?.definition.parameters.wildShuffle ?? 0) * wildAt(state, cell);
-  if (drawAt(cell) > 0) {
-    const moved = map.GrassCover.get(cell) * share;
-    return [
-      { change: "add", band: "GrassCover", cell, amount: -moved },
-      { change: "add", band: "BroadleafCover", cell, amount: moved },
-      { change: "add", band: "TreeCover", cell, amount: moved },
-    ];
-  }
-  const broadleaf = map.BroadleafCover.get(cell),
-    conifer = map.ConiferCover.get(cell),
-    moved = (broadleaf + conifer) * share;
-  return [
-    { change: "add", band: "BroadleafCover", cell, amount: -broadleaf * share },
-    { change: "add", band: "ConiferCover", cell, amount: -conifer * share },
-    { change: "add", band: "TreeCover", cell, amount: -moved },
-    { change: "add", band: "GrassCover", cell, amount: moved },
-  ];
-}
-const tearingHere = (state: GenerationState, place: PoiPlace, cell: number) =>
-  place.cells.includes(cell) ? tearingAt(state, cell) : 0;
+/** A network's cost through a tear's cells: dearer the more torn each is. */
+const dearerBy = (weight: number) => (state: GenerationState, place: PoiPlace) =>
+  place.cells.map((cell) => ({ cell, factor: 1 + weight * tearingAt(state, cell) }));
+const losesItsWay = dearerBy(1);
 
 export const tear: PoiEntry = {
   id: "tear",
@@ -78,7 +42,7 @@ export const tear: PoiEntry = {
   name: "Tear",
   recognition: {
     distinct:
-      "A cell of Veil's tear rule that is not also under its wild rule: tear intensity past the rule's level, on land or a lake, with the wildness below the wild rule's floor. It is strain that holds still. A wild zone is the share of a tear that moved since the last epoch; a door is a tear's cell that was paired with a distant one, and stands inside a tear as a contained place.",
+      "A cell of Veil's tear rule: tear intensity past the rule's level, on land or a lake. A wild zone is the share of a tear that moved since the last epoch and may lie over it; a door is a tear's cell that was paired with a distant one, and stands inside a tear as a contained place.",
     isA,
   },
   existence: {
@@ -89,25 +53,23 @@ export const tear: PoiEntry = {
     suitability: notApplicable("The fronts between systems place it; nothing chooses a site."),
     places,
   },
+  publication: {
+    statement: "Every connected tear publishes as Veil's tear class, outlined by its coverage.",
+    moment: "magic",
+    record: ruleRecord("veil", "tear"),
+  },
   fields: {
     statement:
-      "A tear holds the Tearing band up, and the little of it that is not yet stable moves ground and cover without any cause on the map: streams shift, and a forest edge walks. It stores no water and no heat.",
-    terrain: shifting,
+      "A tear does nothing to a medium as a place: the moved share of Veil's field shifts ground and cover wherever it stands, and Tearing is that field's own reading. It stores no water and no heat.",
+    terrain: notApplicable(
+      "`veilWrites` and `declareWildRelief` move the ground by wildness across Veil's whole field."
+    ),
     water: notApplicable(
-      "A stable tear neither holds nor sheds water; a stream's shift comes through its terrain."
+      "A tear neither holds nor sheds water; a stream's shift comes through the moved ground."
     ),
     climate: notApplicable("Strain carries no heat; the chill belongs to a door's cold pool."),
-    cover: (state, place) =>
-      place.cells
-        .filter((cell) => wildAt(state, cell) > 0 && isLand(state, cell))
-        .flatMap((cell) => coverShift(state, cell)),
-    magic: (state, place) =>
-      place.cells.map((cell) => ({
-        change: "atLeast",
-        band: "Tearing",
-        cell,
-        value: tearingAt(state, cell),
-      })),
+    cover: notApplicable("`veilWrites` trades cover by wildness across Veil's whole field."),
+    magic: notApplicable("`magicLivingFeedback` writes Tearing from Veil's field."),
   },
   acrossMaps: {
     statement:
@@ -120,23 +82,34 @@ export const tear: PoiEntry = {
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: movesTo(counterpart),
+    schedule: notApplicable("Its strain is re-derived with the rest of Veil's field each round."),
   },
   movement: {
     statement:
       "Routes go around an unhoused tear in proportion to how torn it is: forcing it worsens it and is held lethal. Streams and boats meet the same unreliable ground, and what systems carry through a tear loses its way. It opens no way anywhere until it pairs into a door.",
-    roads: (state, place, cell) => 1 + 2 * tearingHere(state, place, cell),
-    boats: (state, place, cell) => 1 + 2 * tearingHere(state, place, cell),
-    drainage: (state, place, cell) => (place.cells.includes(cell) ? 1 + wildAt(state, cell) : 1),
-    magic: (state, place, cell) => 1 + tearingHere(state, place, cell),
+    roads: dearerBy(2),
+    boats: dearerBy(2),
+    drainage: (state, place) =>
+      place.cells.map((cell) => ({ cell, factor: 1 + wildAt(state, cell) })),
+    magic: {
+      crust: losesItsWay,
+      river: losesItsWay,
+      wind: losesItsWay,
+      ice: losesItsWay,
+      people: losesItsWay,
+    },
+    links: notApplicable("An unpaired tear joins nothing; its pair is a door."),
     crosses: notApplicable("An unpaired tear leads nowhere; only a door crosses a barrier."),
   },
   others: {
     statement:
-      "A tear may hold a door and may fray into a wild zone; it is never one, by its own test. Salt ground beneath holds it open, and a door-keeper's town grows from one.",
+      "A tear may hold a door and may fray into a wild zone, which can lie over it. Salt ground beneath holds it open, and a door-keeper's town grows from one.",
     needs: notApplicable(
       "It reads strain between fields, which a system's reach supplies with or without any place."
     ),
-    excludes: [{ kind: "wildZone", holds }],
+    excludes: notApplicable(
+      "A wild share and a door both stand on a tear; strain excludes neither."
+    ),
     contains: [{ kind: "door", holds }],
     pairsWith: [
       { kind: "wildZone", holds: within(around) },
@@ -150,7 +123,7 @@ export const tear: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "forced crossing and shifting ground",
-        reach: 2 * cellSpan(state),
+        reach: hazardMetres,
         severity: peakTearing(state, place),
       },
     ],
@@ -169,7 +142,7 @@ export const tear: PoiEntry = {
     statement:
       "A tear shows by how fully the ground is torn and how sharply that stands out of its country; a tear far from any other rates above one on a long front, and a keeper's town carries a faint one.",
     ...factors,
-    visibleAt: drawnWhen(factors, { magnitude: 0.45, localConditions: 0.35, isolation: 0.2 }),
+    importance: weighed(factors, { magnitude: 0.45, localConditions: 0.35, isolation: 0.2 }),
   },
   naming: {
     statement:

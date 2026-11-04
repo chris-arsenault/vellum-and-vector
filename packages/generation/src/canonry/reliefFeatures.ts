@@ -1,17 +1,12 @@
-import { meshDeltaX } from "./mesh";
-import { spatial, point, unwrapCoordinates, canonicalGeometry } from "@atlas/domain";
-import { nativePosition } from "./atlasWorkspace";
+import { spatial } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import { components, publishPlace } from "./geographicRegions";
-import { Landform } from "./codes";
 import { prominence } from "./landforms";
 import { physicalSampler } from "./physicalMetric";
 import { releaseWorking } from "./physicalNumerics";
-import { generationFeature } from "../generationFeatures";
 import { mapScale, rangeSignificance } from "../worldSignificance";
 import { regionEvidence } from "./worldRegionEvidence";
-import { significantSummit, worldGorgeLength, worldGorgeRelief } from "./worldSiteEvidence";
 
 /**
  * Heights on a ring around each cell. The ring reaches at least one cell spacing, since nearer
@@ -20,7 +15,6 @@ import { significantSummit, worldGorgeLength, worldGorgeRelief } from "./worldSi
 function rings(state: GenerationState) {
   const { map, profile } = state.physical!,
     height = physicalSampler(map.mesh, map.Elevation),
-    // The flanks a named valley is measured against stand as far out on every map's scale.
     radius = Math.max(profile.ReliefRadius, map.mesh.spacing, 50_000 * mapScale(state).length);
   return (i: number) => {
     const values: number[] = [],
@@ -38,23 +32,8 @@ function localRelief(state: GenerationState, ring: (i: number) => number[], i: n
   const values = [state.physical!.map.Elevation.get(i), ...ring(i).filter(Number.isFinite)];
   return (Math.max(...values) - Math.min(...values)) / 1024;
 }
-/** Metres the lower flank of the best cross-section stands above the cell. */
-function valleyDepth(state: GenerationState, ring: (i: number) => number[], i: number) {
-  const values = ring(i),
-    floor = state.physical!.map.Elevation.get(i);
-  let depth = -Infinity;
-  for (let direction = 0; direction < 8; direction++) {
-    const [left, right] = [values[direction], values[direction + 8]];
-    if (Number.isFinite(left) && Number.isFinite(right))
-      depth = Math.max(depth, Math.min(left, right) - floor);
-  }
-  return depth / 1024;
-}
-/**
- * Peaks by prominence and mountain ranges as connected mountain land, read from the generated
- * surface. Valleys follow the published rivers; see `extractValleys`.
- */
-export function extractReliefFeatures(state: GenerationState) {
+/** Mountain ranges as connected mountain land, read from the generated surface. */
+export function extractRanges(state: GenerationState) {
   const dry = state.surface.ocean
     ? spatial.differenceFrom(state.surface.ocean)
     : (shape: Geometry): Geometry | null => shape;
@@ -63,28 +42,6 @@ export function extractReliefFeatures(state: GenerationState) {
     rise = prominence(map),
     land = (i: number) => map.WaterKindCodes.get(i) === 0,
     height = (i: number) => (map.Elevation.get(i) - map.EffectiveSeaLevel) / 1024;
-  components(
-    state,
-    (i) => map.LandformCodes.get(i) === Landform.Peak,
-    (members) => {
-      const summit = members.reduce((best, i) => (rise.get(i) > rise.get(best) ? i : best));
-      if (!significantSummit(state, summit, rise.get(summit) / 1024)) return;
-      publishPlace(
-        state,
-        "peak",
-        "Peak",
-        members,
-        "geology",
-        { prominence: rise.get(summit) / 1024 },
-        undefined,
-        {
-          geometry: point(nativePosition(state.physical!, summit)),
-          anchor: summit,
-          meaning: "prominent summit",
-        }
-      );
-    }
-  );
   const mountain = (i: number) =>
     land(i) &&
     (height(i) >= profile.MountainElevation ||
@@ -117,81 +74,4 @@ export function extractReliefFeatures(state: GenerationState) {
     true
   );
   releaseWorking(map, rise);
-}
-/**
- * Valleys along published rivers: each run of a reach whose flanks stand at least the minimum
- * depth above the channel for the minimum length. The corridor reaches the flank-measuring
- * distance either side of the river's own line, so the river runs along its middle.
- */
-export function extractValleys(
-  state: GenerationState,
-  reaches: Iterable<{ members: number[]; featureIds: string[] }>
-) {
-  const { map, profile } = state.physical!,
-    ring = rings(state),
-    halfWidth = Math.max(profile.ReliefRadius, map.mesh.spacing),
-    [x0, y0] = map.mesh.origin;
-  for (const { members, featureIds } of reaches) {
-    const rivers = featureIds
-      .map((id) => generationFeature(state, id)?.geometry)
-      .filter((geometry): geometry is Geometry => !!geometry);
-    if (!rivers.length) continue;
-    const corridor = spatial.buffer(spatial.unionAll(rivers), halfWidth);
-    for (const run of incisedRuns(state, ring, members)) {
-      const line: Geometry = {
-          type: "LineString",
-          coordinates: unwrapCoordinates(
-            run.map((i) => [x0 + map.mesh.x(i), y0 + map.mesh.y(i)]),
-            map.mesh.periodic?.width
-          ),
-        },
-        buffer = corridor && spatial.buffer(line, map.mesh.spacing),
-        extent = buffer && canonicalGeometry(state.domain.world.reference, buffer),
-        shape = extent && spatial.intersection(corridor!, extent),
-        surface = shape && valleySurface(state, shape);
-      if (!surface) continue;
-      const depth = run.reduce((sum, i) => sum + valleyDepth(state, ring, i), 0) / run.length;
-      publishPlace(
-        state,
-        "valley",
-        "Valley",
-        run,
-        "geology",
-        { depth, rivers: featureIds },
-        surface
-      );
-    }
-  }
-}
-function valleySurface(state: GenerationState, shape: Geometry) {
-  const land = state.surface.ocean ? spatial.difference(shape, state.surface.ocean) : shape;
-  return land && spatial.intersection(land, state.domain.scope.footprint);
-}
-/** Consecutive incised cells of a source-to-mouth reach, kept when long enough to name. */
-function incisedRuns(state: GenerationState, ring: (i: number) => number[], members: number[]) {
-  // A valley is named where it is as long and as deep as a gorge is at the map's scale.
-  const map = state.physical!.map,
-    scale = mapScale(state),
-    runs: number[][] = [];
-  let run: number[] = [];
-  const close = () => {
-    let length = 0;
-    for (let k = 1; k < run.length; k++)
-      length += Math.hypot(
-        meshDeltaX(map.mesh, map.mesh.x(run[k]) - map.mesh.x(run[k - 1])),
-        map.mesh.y(run[k]) - map.mesh.y(run[k - 1])
-      );
-    const minimum = worldGorgeLength * scale.length;
-    if (run.length > 1 && length >= minimum) runs.push(run);
-    run = [];
-  };
-  for (const i of members)
-    if (
-      map.WaterKindCodes.get(i) === 0 &&
-      valleyDepth(state, ring, i) >= worldGorgeRelief * scale.height
-    )
-      run.push(i);
-    else close();
-  close();
-  return runs;
 }

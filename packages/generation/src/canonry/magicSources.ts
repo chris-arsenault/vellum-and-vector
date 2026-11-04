@@ -15,6 +15,20 @@ import { keptLineSources, tenureSources } from "./magicHallowed";
 import { pairingSources, strainSources } from "./magicVeil";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
+/** What a sea cell is worth as a deep locus: its depth, more for a steep drop around it. */
+export function deepSiteScore(map: PhysicalField, i: number) {
+  const here = map.WaterDepths.get(i),
+    degree = map.mesh.degree(i);
+  let depth = here;
+  for (let edge = 0; edge < degree; edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0)
+      depth +=
+        ((Math.max(0, here - map.WaterDepths.get(j)) / map.mesh.edgeLength(i, edge)) * 10_000) /
+        degree;
+  }
+  return depth;
+}
 function oceanSource(state: GenerationState, field: MagicField, seed: number) {
   const map = state.physical!.map;
   const budget = areaBudget(
@@ -26,17 +40,7 @@ function oceanSource(state: GenerationState, field: MagicField, seed: number) {
   for (const source of worldCandidates(map.mesh, seed, Math.max(2048, budget * 64))) {
     const i = nearestTriangle(map.mesh, source.x, source.y);
     if (i < 0 || map.mesh.membership(i) !== 1 || map.WaterKindCodes.get(i) !== 1) continue;
-    let depth = map.WaterDepths.get(i);
-    const here = map.WaterDepths.get(i),
-      degree = map.mesh.degree(i);
-    for (let edge = 0; edge < degree; edge++) {
-      const j = map.mesh.neighbor(i, edge);
-      if (j >= 0)
-        depth +=
-          ((Math.max(0, here - map.WaterDepths.get(j)) / map.mesh.edgeLength(i, edge)) * 10_000) /
-          degree;
-    }
-    candidates.push({ ...source, i, score: depth });
+    candidates.push({ ...source, i, score: deepSiteScore(map, i) });
   }
   // hpc-exempt: seeded candidate objects that separatedCandidates consumes as records.
   candidates.sort((a, b) => b.score - a.score || b.priority - a.priority);
