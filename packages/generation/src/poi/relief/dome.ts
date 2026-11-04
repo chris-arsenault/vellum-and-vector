@@ -48,7 +48,7 @@ export const dome: PoiEntry = {
   name: "Dome",
   recognition: {
     distinct:
-      "A land cell inside a dome-ring record's radius, or one the Salt system's dome step has lifted over a buried bed under strain. A dome is ground pushed up from beneath: a volcano is built on top by lava and flagged, a crater is excavated, and a summit is only a top, which a dome may or may not have. An eroded ring dome and a salt dome are one kind; rings of hard and soft rock or a ring of brine springs are properties of each.",
+      "A land cell inside a dome-ring record's radius, or one the Salt system's dome step has lifted over a buried bed under strain. A dome is ground pushed up from beneath: a volcano is built on top by lava and flagged, a crater is excavated, and a peak is only a top, which a dome may or may not have. An eroded ring dome and a salt dome are one kind; rings of hard and soft rock or a ring of brine springs are properties of each.",
     isA,
   },
   existence: {

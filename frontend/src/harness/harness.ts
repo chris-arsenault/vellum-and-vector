@@ -13,6 +13,7 @@ import {
   removeCheckpoint,
   type CheckpointRecord,
 } from "./harnessWorkspace";
+import { quickTerrain } from "./quickTerrain";
 import { stageRecorder } from "./stageRecord";
 import { channelRanges, fieldInventory, openTerrain, scaleReport, tileTiming } from "./mapReport";
 import { featureReport, mapFeatures } from "./featureReport";
@@ -27,6 +28,8 @@ export interface HarnessOptions {
   regionAt?: [number, number];
   /** Checkpoints to make again rather than reuse; a new world also makes a new region. */
   fresh: Set<string>;
+  /** Only the saved world's region's ground and water, and a picture of them. */
+  quick: boolean;
 }
 /** Defaults: the app's default world at standard quality and its standard region. */
 const defaults = {
@@ -36,6 +39,7 @@ const defaults = {
   HARNESS_REGION_QUALITY: "standard",
   HARNESS_FRESH: "",
   HARNESS_REGION_AT: "",
+  HARNESS_QUICK: "",
 };
 function position(text: string): [number, number] | undefined {
   const at = text.split(",").map(Number);
@@ -52,6 +56,7 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
     regionQuality: read("HARNESS_REGION_QUALITY"),
     regionAt: position(read("HARNESS_REGION_AT")),
     fresh,
+    quick: Boolean(read("HARNESS_QUICK")),
   };
 }
 
@@ -136,6 +141,54 @@ async function ensureRegion(options: HarnessOptions, world: CheckpointRecord, ou
   }
 }
 
+/**
+ * The saved world's region, ground and water only, stopped as soon as they are settled. It
+ * leaves out the living landscape, magic, society, publishing and the full report, and it
+ * writes a picture and the ground's numbers. For judging the terrain in about a minute.
+ */
+async function quickRegion(options: HarnessOptions, out: string) {
+  const world = readCheckpoint(options.world);
+  if (!world) throw new Error(`No saved world named ${options.world}.`);
+  const at = options.regionAt ?? world.position;
+  if (!at) throw new Error("Give HARNESS_REGION_AT=x,y: the world records no highest land.");
+  copyCheckpoint(world.name, quickCheckpoint);
+  const ws = await openHarnessWorkspace(checkpointDirectory(quickCheckpoint)),
+    started = performance.now();
+  let done = false;
+  const observers = {
+    inspect(_path: string[], process: string, state: Parameters<typeof quickTerrain>[0]) {
+      const seconds = () => Math.round((performance.now() - started) / 1000);
+      if (process.endsWith("/structure"))
+        process_report(
+          quickTerrain(state, out, process.split(".")[1].replace("/", "-")),
+          seconds()
+        );
+      if (process !== quickUntil) return;
+      process_report(quickTerrain(state, out), seconds());
+      done = true;
+    },
+    stop: () => done,
+  };
+  try {
+    await refineRegion(
+      ws,
+      world.worldId,
+      { x: at[0], y: at[1], z: 0 },
+      options.regionQuality,
+      observers,
+      ["physical"]
+    );
+  } catch (error) {
+    if (!done) throw error;
+  } finally {
+    await ws.close();
+  }
+}
+const quickCheckpoint = "quick-region",
+  quickUntil = "refinement.refresh";
+const process_report = (report: object, seconds: number) =>
+  process.stdout.write(`\n${seconds} s ${JSON.stringify(report)}\n`);
+
 /** The map's record: scale, fields and layers, channel ranges, features, tiles and images. */
 async function describeMap(record: CheckpointRecord, out: string) {
   const ws = await openHarnessWorkspace(checkpointDirectory(record.name)),
@@ -175,6 +228,10 @@ async function describeMap(record: CheckpointRecord, out: string) {
 export async function runHarness(options: HarnessOptions) {
   const out = join(harnessRoot, "reports", new Date().toISOString().replace(/[:.]/g, "-"));
   mkdirSync(out, { recursive: true });
+  if (options.quick) {
+    await quickRegion(options, out);
+    return out;
+  }
   const world = await ensureWorld(options, out),
     region = await ensureRegion(options, world, out);
   await describeMap(world, out);

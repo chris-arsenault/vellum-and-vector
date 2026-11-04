@@ -7,12 +7,10 @@ export const regionalFjordErosion = 30;
 /**
  * The regional reading of the world's extraction thresholds. The mechanisms (prominence,
  * relief rings, range area, landform radius) are the generator's; a region reads them at its
- * own scale: a summit is named when it stands out against the parent's sample span, a range
- * is mountain country at a few hundred metres of relief, and a published region must span the
- * physical footprint minimum at this map's cell span.
+ * own scale: a range is mountain country at a few hundred metres of relief, and a published
+ * region must span the physical footprint minimum at this map's cell span.
  */
 export function regionalProfile(profile: PhysicalProfile, parentSpan: number, cellSpan: number) {
-  profile.PeakMinimumProminence = Math.max(50, 0.03 * parentSpan);
   profile.ReliefRadius = Math.max(2 * cellSpan, 0.45 * parentSpan);
   profile.LandformNeighborhoodRadius = profile.ReliefRadius;
   profile.MountainElevation = 300;

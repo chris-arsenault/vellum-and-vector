@@ -94,7 +94,6 @@ export * from "./gridCopy";
 export * from "./gridArrays";
 export { authoredFieldChanges } from "./fieldAuthoring";
 export * from "./scale";
-export * from "./placeVisibility";
 export * from "./society";
 export * from "./societyEditing";
 export * from "./societyFeatures";

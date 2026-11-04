@@ -13,7 +13,7 @@ export type PoiGroupId = (typeof poiGroupIds)[number];
 /** Every kind of place, by group; each has one entry. */
 export const poiKindIds = {
   relief: [
-    "summit",
+    "peak",
     "pass",
     "ridge",
     "escarpment",

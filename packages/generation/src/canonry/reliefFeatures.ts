@@ -1,11 +1,12 @@
 import { spatial } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
+import { heldFor, releaseHeld } from "../poi/poiReads";
+import { peakTops } from "../poi/relief/peakTops";
 import { components, publishPlace } from "./geographicRegions";
-import { prominence } from "./landforms";
 import { physicalSampler } from "./physicalMetric";
-import { releaseWorking } from "./physicalNumerics";
 import { mapScale, rangeSignificance } from "../worldSignificance";
+import type { RegionMembers } from "./regionMembers";
 import { regionEvidence } from "./worldRegionEvidence";
 
 /**
@@ -32,46 +33,72 @@ function localRelief(state: GenerationState, ring: (i: number) => number[], i: n
   const values = [state.physical!.map.Elevation.get(i), ...ring(i).filter(Number.isFinite)];
   return (Math.max(...values) - Math.min(...values)) / 1024;
 }
-/** Mountain ranges as connected mountain land, read from the generated surface. */
-export function extractRanges(state: GenerationState) {
-  const dry = state.surface.ocean
-    ? spatial.differenceFrom(state.surface.ocean)
-    : (shape: Geometry): Geometry | null => shape;
+/** Whether a cell is mountain land: high, or standing well over the country around it. */
+function mountainTest(state: GenerationState) {
   const { map, profile } = state.physical!,
     ring = rings(state),
-    rise = prominence(map),
-    land = (i: number) => map.WaterKindCodes.get(i) === 0,
     height = (i: number) => (map.Elevation.get(i) - map.EffectiveSeaLevel) / 1024;
-  const mountain = (i: number) =>
-    land(i) &&
+  return (i: number) =>
+    map.WaterKindCodes.get(i) === 0 &&
     (height(i) >= profile.MountainElevation ||
       (height(i) >= profile.HillElevation &&
         localRelief(state, ring, i) >= profile.MountainLocalRelief));
+}
+/** Whether connected mountain land is great enough to be a range on this map. */
+function isRange(state: GenerationState, members: RegionMembers) {
+  const { map, profile } = state.physical!,
+    area = members.reduce((sum, i) => sum + map.mesh.contentArea(i), 0);
+  if (area < profile.RangeMinimumArea) return null;
+  const evidence = regionEvidence(map, members);
+  return rangeSignificance(evidence, evidence.relief, evidence.span, mapScale(state)).publish
+    ? evidence
+    : null;
+}
+export interface RangeGroup {
+  members: Int32Array;
+  /** Metres between its highest and lowest ground. */
+  relief: number;
+}
+/** The ranges this map holds, as their cells: what peaks stand among. */
+export const rangeGroups = (state: GenerationState): readonly RangeGroup[] =>
+  heldFor(state, "ranges", () => {
+    const groups: RangeGroup[] = [];
+    components(
+      state,
+      mountainTest(state),
+      (members) => {
+        const evidence = isRange(state, members);
+        if (evidence) groups.push({ members: members.slice(), relief: evidence.relief });
+      },
+      false,
+      true
+    );
+    return groups;
+  });
+/** Mountain ranges as connected mountain land, read from the generated surface. */
+export function extractRanges(state: GenerationState) {
+  releaseHeld(state);
+  const dry = state.surface.ocean
+      ? spatial.differenceFrom(state.surface.ocean)
+      : (shape: Geometry): Geometry | null => shape,
+    tops = peakTops(state);
   components(
     state,
-    mountain,
+    mountainTest(state),
     (members, extent) => {
-      const area = members.reduce((sum, i) => sum + map.mesh.contentArea(i), 0),
-        surface = extent && dry(extent);
-      if (area < profile.RangeMinimumArea || !surface) return;
-      const evidence = regionEvidence(map, members);
-      if (!rangeSignificance(evidence, evidence.relief, evidence.span, mapScale(state)).publish)
-        return;
-      const summits = members.filter(
-        (i) => rise.get(i) >= profile.PeakMinimumProminence * 1024
-      ).length;
+      const surface = extent && dry(extent);
+      if (!surface || !isRange(state, members)) return;
       publishPlace(
         state,
         "range",
         "Range",
         members,
         "geology",
-        { summits, area: spatial.area(surface) },
+        { peaks: members.filter((i) => tops.has(i)).length, area: spatial.area(surface) },
         surface
       );
     },
     true,
     true
   );
-  releaseWorking(map, rise);
 }

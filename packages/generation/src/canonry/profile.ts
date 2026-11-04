@@ -369,8 +369,6 @@ export const physicalProfile = {
   LandformNeighborhoodRadius: 10_000,
   GorgeMinimumSlope: 0.009,
   GorgeMinimumIncision: 12,
-  // Metres a summit rises above the highest col joining it to higher ground, or the sea.
-  PeakMinimumProminence: 300,
   // Mountain land: above the first height, or above the second with this much local relief.
   MountainElevation: 1000,
   HillElevation: 500,

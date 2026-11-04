@@ -165,7 +165,7 @@ export const settlement: PoiEntry = {
   },
   others: {
     statement:
-      "Settlements compete for hinterland and stand off from one another; fords, mills, harbours and shrines stand beside them, and a settlement may take the name of the summit above it.",
+      "Settlements compete for hinterland and stand off from one another; fords, mills, harbours and shrines stand beside them, and a settlement may take the name of the peak above it.",
     needs: notApplicable(
       "A settlement needs only ground it can stand on, which its requirement states."
     ),
@@ -210,7 +210,7 @@ export const settlement: PoiEntry = {
     statement: "Named by its own people, and it may take the name of a landmark beside it.",
     namedBy: namingCultureNear,
     takesNameFrom: [
-      { kind: "summit", holds: within((state) => 6 * cellSpan(state)) },
+      { kind: "peak", holds: within((state) => 6 * cellSpan(state)) },
       { kind: "waterfall", holds: within(around) },
     ],
     lendsNameTo: [{ kind: "ruin", holds: (_state, a, b) => a.anchor === b.anchor }],

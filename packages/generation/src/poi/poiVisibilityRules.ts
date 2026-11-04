@@ -22,7 +22,7 @@ const countrySamples = 64;
 /**
  * How far a place stands out of its local conditions: the anchor's reading over the mean of
  * the country within `radius` metres, against that country's whole range. Near one for a
- * summit over plains; near nothing for the same summit among higher ones.
+ * peak over plains; near nothing for the same peak among higher ones.
  */
 export const standsOut =
   (read: (state: GenerationState, cell: number) => number, radius: Factor): Factor =>
@@ -56,7 +56,7 @@ const tiedPopulation = 2000;
 /**
  * People's attachment to a place: anything named after it counts in full; otherwise the
  * strongest tie of a settlement within `reach` metres, by its role or its people, fading with
- * distance. A capital at the foot of a modest summit carries it.
+ * distance. A capital at the foot of a modest peak carries it.
  */
 export const attachment =
   (reach: Factor): Factor =>

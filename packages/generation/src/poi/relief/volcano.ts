@@ -46,12 +46,12 @@ export const volcano: PoiEntry = {
   name: "Volcano",
   recognition: {
     distinct:
-      "A cell within the radius of a volcano the generator recorded as a plume head built it, while that cone still stands above the ground around it. It is decided by that recorded construction, not by shape: a dome rises without lava, a summit needs no event. Whether it is live (VolcanicActivity) or long dead is a property, and a drowned cone is the same kind.",
+      "A cell within the radius of a volcano the generator recorded as a plume head built it, while that cone still stands above the ground around it. It is decided by that recorded construction, not by shape: a dome rises without lava, a peak needs no event. Whether it is live (VolcanicActivity) or long dead is a property, and a drowned cone is the same kind.",
     isA,
   },
   existence: {
     statement:
-      "Both: emerging where a plume head sits this epoch, leaving a chain of older cones as the crust moves; and sited as a great mountain on quiet plains by a landmark record, which publishes as that record. A subduction arc's cones record no event and stand as summits.",
+      "Both: emerging where a plume head sits this epoch, leaving a chain of older cones as the crust moves; and sited as a great mountain on quiet plains by a landmark record, which publishes as that record. A subduction arc's cones record no event and stand as peaks.",
     way: "both",
     requires: sitingAdmits("volcanic-mountain"),
     suitability: sitingSuits("volcanic-mountain"),

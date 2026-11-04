@@ -1,6 +1,6 @@
 import type { MagicFeatureRule } from "@atlas/domain";
 import { craterRelief, volcanicRelief } from "../canonry/geologicalFeatures";
-import { keyCols, prominence, riverDrop } from "../canonry/landforms";
+import { keyCols, riverDrop } from "../canonry/landforms";
 import type { MagicField } from "../canonry/magicState";
 import { significantMagicArea } from "../canonry/worldMagicSignificance";
 import { worldFjordLength } from "../canonry/worldSiteEvidence";
@@ -69,9 +69,6 @@ const complex: Gate = (state, place) => {
     scale = mapScale(state);
   return e.area >= worldComplexArea * scale.area && e.relief >= worldComplexRelief * scale.height;
 };
-const summit: Gate = (state, place) =>
-  heldFor(state, "prominence", () => prominence(fieldOf(state))).get(place.anchor) >=
-  worldRise * 1024 * mapScale(state).height;
 const pass: Gate = (state, place) =>
   (heldFor(state, "relief:keyCols", () => keyCols(fieldOf(state))).get(place.anchor) ?? 0) >=
   worldRise * 1024 * mapScale(state).height;
@@ -131,7 +128,6 @@ const belowTheWorld: Gate = (state, place) =>
   !isWorldGeography(state) || place.feature?.state === "authored";
 
 const gates: Partial<Record<PoiKindId, Gate>> = {
-  summit,
   pass,
   ridge: course,
   escarpment: course,

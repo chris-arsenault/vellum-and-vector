@@ -8,8 +8,8 @@ import { distance, frameEdge, isContent, neighborsOf, positionOf, regionalSpan }
 import { materialBands, materialResistance } from "./material";
 import { clamp, type NetworkWork, type RegionalState } from "./state";
 
-/** Resistance near a known summit or cone, so channels cut around it and it stands on a divide. */
-const summitRepulsion = 12;
+/** Resistance near a known peak or cone, so channels cut around it and it stands on a divide. */
+const peakRepulsion = 12;
 /**
  * Heterogeneity of the ground's erodibility: it decides between valleys the organizing terms
  * leave equal. On a plain nothing else does, and the water finds its way through every local
@@ -34,7 +34,7 @@ export function referenceDischarge(state: RegionalState) {
  * Grow the drainage network once (spec 7.3) by eroding the smoothed captured base down to
  * the established waters (the connected sea, the valleys that leave the frame, captured
  * lakes and the parent's closed basins) through the ground's erodibility: the material
- * bands along the grain, the captured courses and the known summits. Where the network
+ * bands along the grain, the captured courses and the known peaks. Where the network
  * branches, joins, runs along strike or breaks through a band is a consequence of that
  * erosion; no random geography is drawn. Heights are metres above the present sea level.
  */
@@ -199,7 +199,7 @@ export function promoteChannel(state: RegionalState, cell: number) {
 /**
  * The cost of running water through a cell: material resistance (bands, rock, fractures),
  * the heterogeneity that decides between routes the organizing terms leave equal, repulsion
- * around the character's cones, and the established features' influence (summit massifs,
+ * around the character's cones, and the established features' influence (peak massifs,
  * course corridors, river seats) through the cause registry.
  */
 function cellCosts(state: RegionalState, sea: Uint8Array, base: Float64Array) {
@@ -268,15 +268,15 @@ function within(state: RegionalState, center: number, reach: number) {
   return { cells, distances };
 }
 
-/** The factor on each cell's cost around a summit or cone, dearest on the cell itself. */
+/** The factor on each cell's cost around a peak or cone, dearest on the cell itself. */
 export function repulsion(state: RegionalState, center: number, reach: number) {
   const { cells, distances } = within(state, center, reach * 2.5);
   return cells.map((cell, k) => {
     const d = distances[k] / reach;
-    return { cell, factor: (1 + summitRepulsion * Math.exp(-d * d)) * (cell === center ? 50 : 1) };
+    return { cell, factor: (1 + peakRepulsion * Math.exp(-d * d)) * (cell === center ? 50 : 1) };
   });
 }
-/** Dear ground around a summit or cone, dearest on the cell itself. */
+/** Dear ground around a peak or cone, dearest on the cell itself. */
 export function repel(state: RegionalState, cost: Float64Array, center: number, reach: number) {
   for (const { cell, factor } of repulsion(state, center, reach)) cost[cell] *= factor;
 }

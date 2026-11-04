@@ -93,7 +93,7 @@ export const cirque: PoiEntry = {
   },
   others: {
     statement:
-      "A cirque heads a valley, stands below summits and pairs with moraines lower down. A tarn or a light well may lie in it; a moraine does not stand at the same spot.",
+      "A cirque heads a valley, stands below peaks and pairs with moraines lower down. A tarn or a light well may lie in it; a moraine does not stand at the same spot.",
     needs: notApplicable("Its class already required the ice and mountain it stands in."),
     excludes: [{ kind: "moraine", holds: sameSpot }],
     contains: [
@@ -103,7 +103,7 @@ export const cirque: PoiEntry = {
     pairsWith: [
       { kind: "valley", holds: within(spans(4)) },
       { kind: "moraine", holds: within(spans(8)) },
-      { kind: "summit", holds: within(spans(4)) },
+      { kind: "peak", holds: within(spans(4)) },
     ],
   },
   people: {
@@ -132,7 +132,7 @@ export const cirque: PoiEntry = {
   naming: {
     statement: "Named by the valley below, if anyone climbs high enough to name it.",
     namedBy: namingCultureNear,
-    takesNameFrom: [{ kind: "summit", holds: within(spans(4)) }],
+    takesNameFrom: [{ kind: "peak", holds: within(spans(4)) }],
     lendsNameTo: [{ kind: "lake", holds }],
   },
 };

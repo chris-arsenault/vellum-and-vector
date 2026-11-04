@@ -26,6 +26,7 @@ import { ledgerCeilings, ledgerFloors } from "./media";
 import { registerCatalogueCauses } from "../poi/poiCauses";
 import { declarePlaceEffects } from "../poi/poiEffects";
 import { carryPlaces } from "../poi/poiPublish";
+import { markPeakLandforms } from "../poi/relief/peakTops";
 import type { RegionalState } from "./state";
 
 export interface ScheduledStep {
@@ -227,6 +228,7 @@ function classifyLandforms(state: RegionalState) {
     divide = divides(state);
   for (let i = 0; i < divide.length; i++) work.map.RidgeInfluence.set(i, divide[i]);
   landformClassification(work.map, physicalContext(state.regional.input.seed, 0, work.profile));
+  markPeakLandforms(state);
 }
 
 /**

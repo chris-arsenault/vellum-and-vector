@@ -146,9 +146,9 @@ export const auroraField: PoiEntry = {
   },
   naming: {
     statement:
-      "Named by the nearest people, usually the readers who work it, after the summit that rises out of it; an archive may take its name.",
+      "Named by the nearest people, usually the readers who work it, after the peak that rises out of it; an archive may take its name.",
     namedBy: namingCultureNear,
-    takesNameFrom: [{ kind: "summit", holds }],
+    takesNameFrom: [{ kind: "peak", holds }],
     lendsNameTo: [{ kind: "archive", holds: within(around) }],
   },
 };

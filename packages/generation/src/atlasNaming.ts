@@ -90,6 +90,19 @@ const landformTerms: Record<string, string> = {
   dome: "Dome",
   escarpment: "Escarpment",
 };
+/** The word people use for a peak of each form. */
+const peakTerms: Record<string, string> = {
+  horn: "Horn",
+  crag: "Crag",
+  scarred: "Scar",
+  dome: "Dome",
+  shattered: "Scree",
+  table: "Table",
+};
+const formTerm = (kind: string, attributes: Record<string, unknown>) => {
+  const term = kind === "peak" ? peakTerms[String(attributes.form)] : undefined;
+  return term ? { term } : {};
+};
 const geographicDescriptors: Record<string, Pick<AtlasNameRequest, "kind" | "subkind" | "term">> = {
   ...Object.fromEntries(
     Object.entries(landformTerms).map(([subkind, term]) => [
@@ -134,6 +147,7 @@ export function nameGeographicFeature(
     return atlasName(world, {
       key,
       ...geographicDescriptors[kind],
+      ...formTerm(kind, attributes),
       position,
       ...source,
     });

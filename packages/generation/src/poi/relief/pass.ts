@@ -20,7 +20,7 @@ import {
 import { attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import { aloneWithin, sameSpot, spans, standsIn } from "./reliefShape";
 
-/** Height of the lesser summit over its col at which a pass is half as great as passes get. */
+/** Height of the lesser peak over its col at which a pass is half as great as passes get. */
 const typicalRise = 300;
 /** At the greatest passes a road crossing costs this share less than the slopes either side. */
 const greatestSaving = 0.5;
@@ -34,7 +34,7 @@ const riseOf = (state: GenerationState, place: PoiPlace) =>
   metres(cols(state).get(place.anchor) ?? 0);
 const factors = {
   magnitude: sized(riseOf, typicalRise),
-  /** How deep a notch it is in the ground around it: lowness read as summit reads height. */
+  /** How deep a notch it is in the ground around it: lowness read as peak reads height. */
   localConditions: standsOut((state, cell) => -heightAt(state, cell), spans(3)),
   isolation: aloneWithin(isA, spans(6)),
   cultural: attachment(spans(8)),
@@ -64,19 +64,19 @@ export const pass: PoiEntry = {
   name: "Pass",
   recognition: {
     distinct:
-      "A land cell that is the key col of a summit: the generator's prominence pass names it as the cell where that summit's area joins higher ground, and the summit's prominence is measured down to it. It is the highest point on the lowest way between the two tops. A summit is a maximum, a ridge the whole crest line a col lies on, a valley the low ground leading up to it. The classifier marks Landform.Pass from the same key cols.",
+      "A land cell that is the key col of a peak: the generator's prominence pass names it as the cell where that peak's area joins higher ground, and the peak's prominence is measured down to it. It is the highest point on the lowest way between the two tops. A peak is a maximum, a ridge the whole crest line a col lies on, a valley the low ground leading up to it. The classifier marks Landform.Pass from the same key cols.",
     isA,
   },
   existence: {
     statement:
-      "Emerges wherever two summits share a massif, at every size; a low saddle between knolls and a great mountain crossing are one kind. People's cuttings over one are a society work on it, not what makes it a pass.",
+      "Emerges wherever two peaks share a massif, at every size; a low saddle between knolls and a great mountain crossing are one kind. People's cuttings over one are a society work on it, not what makes it a pass.",
     way: "emerges",
     requires: notApplicable("A key col is read from the terrain; nothing has to be there first."),
-    suitability: notApplicable("Nothing chooses where a col lies; it is where the summits join."),
+    suitability: notApplicable("Nothing chooses where a col lies; it is where the peaks join."),
     places,
   },
   publication: {
-    statement: "Every key col publishes as a mountain pass, with how far its summit rises over it.",
+    statement: "Every key col publishes as a mountain pass, with how far its peak rises over it.",
     moment: "geography",
     record: siteRecord({
       kind: "pass",
@@ -133,16 +133,16 @@ export const pass: PoiEntry = {
   },
   others: {
     statement:
-      "A pass lies on a ridge between summits, at the head of a valley on each side; a settlement near it holds the crossing. It cannot share a cell with a summit or stand in a lake.",
-    needs: notApplicable("Being a key col already entails the summits it stands between."),
+      "A pass lies on a ridge between peaks, at the head of a valley on each side; a settlement near it holds the crossing. It cannot share a cell with a peak or stand in a lake.",
+    needs: notApplicable("Being a key col already entails the peaks it stands between."),
     excludes: [
-      { kind: "summit", holds: sameSpot },
+      { kind: "peak", holds: sameSpot },
       { kind: "lake", holds: standsIn },
     ],
     contains: notApplicable("A pass is one point on a crest."),
     pairsWith: [
       { kind: "ridge", holds: standsIn },
-      { kind: "summit", holds: within(spans(4)) },
+      { kind: "peak", holds: within(spans(4)) },
       { kind: "valley", holds: within(spans(4)) },
       { kind: "settlement", holds: within(spans(8)) },
     ],
@@ -161,22 +161,22 @@ export const pass: PoiEntry = {
   },
   time: {
     statement:
-      "A col lowers with its crest and lasts as long as the summits stand. Once headward erosion carries a river through it, the crossing is a valley.",
+      "A col lowers with its crest and lasts as long as the peaks stand. Once headward erosion carries a river through it, the crossing is a valley.",
     fate: (state, place) =>
       isRiver(state, place.anchor) ? { fate: "becomes", kind: "valley" } : { fate: "persists" },
   },
   visibility: {
     statement:
-      "A pass shows by how high its summits stand over it and how few other crossings there are; a low saddle among many earns little, and the one road over a long range or a town at its foot carries it.",
+      "A pass shows by how high its peaks stand over it and how few other crossings there are; a low saddle among many earns little, and the one road over a long range or a town at its foot carries it.",
     ...factors,
     importance: weighed(factors, { magnitude: 0.4, localConditions: 0.2, isolation: 0.4 }),
   },
   naming: {
     statement:
-      "Named by the people who use it, often after the summit above it or the town below it; a town at the crossing may take its name instead.",
+      "Named by the people who use it, often after the peak above it or the town below it; a town at the crossing may take its name instead.",
     namedBy: namingCultureNear,
     takesNameFrom: [
-      { kind: "summit", holds: within(spans(4)) },
+      { kind: "peak", holds: within(spans(4)) },
       { kind: "settlement", holds: within(spans(8)) },
     ],
     lendsNameTo: [{ kind: "settlement", holds: within(spans(4)) }],

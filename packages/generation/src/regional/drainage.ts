@@ -17,6 +17,7 @@ import { updateSlopes } from "./relief";
 import { clamp, naturalBand, type RegionalState } from "./state";
 import { enteringFlow, orderChannels, qualifyChannels } from "./channels";
 import { lakeCells, poolDepth } from "./base";
+import { riversIntoLakes, roundLakes } from "./lakeShores";
 
 /** Annual seepage through intact ground and the additional loss through open fractures. */
 const intactSeepage = 0.05;
@@ -56,6 +57,9 @@ export function routeWater(state: RegionalState) {
   downhillRoutes(state, filled);
   accumulate(state);
   fillLakes(state, filled);
+  roundLakes(state);
+  riversIntoLakes(state);
+  accumulate(state);
   for (let i = 0; i < mesh.count; i++)
     if (map.WaterKindCodes.get(i) !== 0) map.RiverOrders.set(i, 0);
   channelMargins(state);

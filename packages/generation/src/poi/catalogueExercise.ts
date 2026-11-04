@@ -1,9 +1,8 @@
-import { placeDrawn } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { RegionalState } from "../regional/state";
 import { poiCatalogue } from "./catalogue";
 import type { PoiEntry, PoiPlace, PoiRelation } from "./poiContract";
-import { fieldOf, releaseHeld } from "./poiReads";
+import { releaseHeld } from "./poiReads";
 import { placesOf } from "./poiPublish";
 
 /** Places of a kind each function is called on; enough to exercise it, not to measure it. */
@@ -13,8 +12,6 @@ const sampled = 50;
 export interface KindExercise {
   group: string;
   places: number;
-  /** Of the places sampled, how many are drawn at the whole map, a quarter of it and close up. */
-  drawn: { sampled: number; whole: number; quarter: number; close: number };
   milliseconds: number;
   /** Each failure as `role.field: message`. */
   failures: string[];
@@ -112,31 +109,10 @@ function run(calls: Call[], failures: Set<string>) {
     }
   }
 }
-function drawnAt(entry: PoiEntry, state: GenerationState, places: readonly PoiPlace[]) {
-  const weigh = entry.visibility.importance,
-    mesh = fieldOf(state).mesh,
-    width = mesh.bounds[2] - mesh.bounds[0],
-    weights =
-      typeof weigh === "function"
-        ? places.map((place) =>
-            (weigh as (s: GenerationState, q: PoiPlace) => number)(state, place)
-          )
-        : [],
-    count = (metresPerPixel: number) =>
-      weights.filter((weight) => placeDrawn(weight, width, metresPerPixel)).length;
-  return {
-    sampled: places.length,
-    whole: count(width / 1600),
-    quarter: count(width / 6400),
-    close: count(width / 51200),
-  };
-}
 function exerciseKind(entry: PoiEntry, state: GenerationState): KindExercise {
   const started = performance.now(),
-    failures = new Set<string>(),
-    empty = { sampled: 0, whole: 0, quarter: 0, close: 0 };
-  let places: readonly PoiPlace[] = [],
-    drawn = empty;
+    failures = new Set<string>();
+  let places: readonly PoiPlace[] = [];
   try {
     places = placesOf(state, entry);
     // Spaced through the list, so a sample is not just one corner of the map.
@@ -146,14 +122,12 @@ function exerciseKind(entry: PoiEntry, state: GenerationState): KindExercise {
       run(placeCalls(entry, state, place), failures);
       run(refinedCalls(entry, state, place), failures);
     }
-    drawn = drawnAt(entry, state, sample);
   } catch (error) {
     failures.add(`existence.places: ${error instanceof Error ? error.message : String(error)}`);
   }
   return {
     group: entry.group,
     places: places.length,
-    drawn,
     milliseconds: Math.round(performance.now() - started),
     failures: [...failures],
   };

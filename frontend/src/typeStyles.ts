@@ -7,7 +7,7 @@ import type { Geometry } from "geojson";
 import { asArray } from "ol/color.js";
 import type { AtlasFeature, LayerStyle, World } from "./types";
 import type { CartographicPresentation, FeatureTypeStyle } from "@atlas/domain";
-import { describeFeature, placeDrawn, spatial, typePresentation } from "@atlas/domain";
+import { describeFeature, typePresentation } from "@atlas/domain";
 import { featureStyle } from "./vectorStyles";
 import { cartographicFeatureStyle } from "./drawnStyles";
 import type { DrawingGeography } from "./drawnGeography";
@@ -28,7 +28,6 @@ export function typeStyle(
     const type = describeFeature(world, domain),
       effective = typePresentation(type, base);
     if (!effective.visible || !matchesTextFilter(domain, base)) return [];
-    if (!clearsViewBar(world, domain, resolution)) return [];
     const output = styledFeature(
       world,
       domain,
@@ -55,14 +54,6 @@ export function typeStyle(
       );
     return rendered;
   };
-}
-/** A place the generator weighed is drawn when it clears the view's bar; other features always. */
-function clearsViewBar(world: World, domain: AtlasFeature, resolution: number) {
-  const importance = domain.attributes.importance,
-    map = world.areas[domain.areaId]?.footprint;
-  if (typeof importance !== "number" || !map) return true;
-  const [west, , east] = spatial.bounds(map);
-  return placeDrawn(importance, east - west, resolution);
 }
 function styledFeature(
   world: World,

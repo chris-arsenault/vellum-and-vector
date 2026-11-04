@@ -147,12 +147,12 @@ export const shrine: PoiEntry = {
   },
   others: {
     statement:
-      "A shrine needs people to keep it and stands at what they hold holy: a summit, a spring, a fall, a light well, a door, a battlefield's graves. A Fire conduit breaks a ward at its cell, so a working forge is no neighbour for one.",
+      "A shrine needs people to keep it and stands at what they hold holy: a peak, a spring, a fall, a light well, a door, a battlefield's graves. A Fire conduit breaks a ward at its cell, so a working forge is no neighbour for one.",
     needs: [{ kind: "settlement", holds: within(keepersFrom) }],
     excludes: [{ kind: "forge", holds: (_state, a, b) => a.anchor === b.anchor }],
     contains: notApplicable("A shrine is one point, kept by those who come to it."),
     pairsWith: [
-      { kind: "summit", holds: within(around) },
+      { kind: "peak", holds: within(around) },
       { kind: "spring", holds: within(around) },
       { kind: "waterfall", holds: within(around) },
       { kind: "lightWell", holds: within(around) },
@@ -189,7 +189,7 @@ export const shrine: PoiEntry = {
       "Named by the people who keep it, after what it marks; a settlement that grows from its pilgrims takes its name.",
     namedBy: namingCultureNear,
     takesNameFrom: [
-      { kind: "summit", holds: within(around) },
+      { kind: "peak", holds: within(around) },
       { kind: "spring", holds: within(around) },
       { kind: "waterfall", holds: within(around) },
     ],

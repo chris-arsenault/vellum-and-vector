@@ -54,10 +54,10 @@ it("holds every entry to exactly the agreed roles and fields", () => {
 
 it("lists an entry's unwritten fields as its open work", () => {
   const open = {
-    ...poiCatalogue.summit,
-    naming: { ...poiCatalogue.summit.naming, namedBy: unwritten },
+    ...poiCatalogue.peak,
+    naming: { ...poiCatalogue.peak.naming, namedBy: unwritten },
   };
-  expect(unwrittenFields(poiCatalogue.summit)).toEqual([]);
+  expect(unwrittenFields(poiCatalogue.peak)).toEqual([]);
   expect(unwrittenFields(open)).toEqual(["naming.namedBy"]);
 });
 

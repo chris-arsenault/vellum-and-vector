@@ -3,6 +3,7 @@ import type { PhysicalProfile } from "../canonry/profile";
 import { drainageSteps, incisionSteps, sedimentStep } from "../canonry/sequence";
 import { restoreFeatures } from "./causes/registry";
 import { updateSlopes } from "./relief";
+import { ruggedness } from "./ruggedness";
 import type { RegionalState } from "./state";
 
 /**
@@ -27,12 +28,30 @@ export function erodeRegion(state: RegionalState) {
   const work = state.physical,
     profile = regionalErosionProfile(work.profile, work.scale ?? 1, work.map.mesh.spacing),
     steps = [...drainageSteps, ...incisionSteps, ...drainageSteps, sedimentStep],
-    seed = state.regional.input.seed;
+    seed = state.regional.input.seed,
+    before = Float64Array.from({ length: work.map.mesh.count }, (_, i) =>
+      work.map.Elevation.get(i)
+    );
   for (let epoch = 0; epoch < erosionEpochs; epoch++)
     for (const [, salt, run] of steps)
       run(work.map, physicalContext(seed, salt, profile, null, epoch, erosionEpochs));
+  keepPlains(state, before);
   restoreFeatures(state);
   updateSlopes(state);
+}
+
+/**
+ * Erosion cuts where the country falls: level ground, low or high, keeps its level. The world's
+ * process would otherwise dissect every plain and wear the parent's heights away beneath it.
+ */
+function keepPlains(state: RegionalState, before: Float64Array) {
+  const map = state.physical.map,
+    rugged = ruggedness(state, state.regional.network!.base);
+  for (let i = 0; i < before.length; i++) {
+    if (map.mesh.membership(i) !== 1) continue;
+    map.Elevation.set(i, Math.round(before[i] + rugged[i] * (map.Elevation.get(i) - before[i])));
+    map.BedrockElevation.set(i, map.Elevation.get(i) - map.SedimentThickness.get(i));
+  }
 }
 
 /** The world's erosion parameters read at a map whose cells are `scale` of a World cell. */

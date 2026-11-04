@@ -45,7 +45,7 @@ export const ridge: PoiEntry = {
   name: "Ridge",
   recognition: {
     distinct:
-      "A dry land cell off any river where the ground falls away on both sides of a cross-section, faster than a plain slopes, while along the square section it falls less than half as much: the crest line. A summit falls every way and is a point on it, a pass rises along it, a valley is the inverse section, and an escarpment falls on one side only. Landform.Ridge is not the test: it marks steep ground under tectonic influence above 1000 m, which is mostly mountain flank rather than crest.",
+      "A dry land cell off any river where the ground falls away on both sides of a cross-section, faster than a plain slopes, while along the square section it falls less than half as much: the crest line. A peak falls every way and is a point on it, a pass rises along it, a valley is the inverse section, and an escarpment falls on one side only. Landform.Ridge is not the test: it marks steep ground under tectonic influence above 1000 m, which is mostly mountain flank rather than crest.",
     isA,
   },
   existence: {
@@ -98,11 +98,11 @@ export const ridge: PoiEntry = {
   },
   others: {
     statement:
-      "A ridge contains the summits and cols along it and runs between valleys; a frost prism may stand on it. It cannot run through a lake.",
+      "A ridge contains the peaks and cols along it and runs between valleys; a frost prism may stand on it. It cannot run through a lake.",
     needs: notApplicable("Its section test needs nothing else in place."),
     excludes: [{ kind: "lake", holds: standsIn }],
     contains: [
-      { kind: "summit", holds },
+      { kind: "peak", holds },
       { kind: "pass", holds },
     ],
     pairsWith: [
@@ -117,9 +117,7 @@ export const ridge: PoiEntry = {
       defence: sized(crestFall, 150)(state, place),
       sanctity: factors.magnitude(state, place) / 3,
     }),
-    threatens: notApplicable(
-      "Its slides and avalanches are those of its summits and steep slopes."
-    ),
+    threatens: notApplicable("Its slides and avalanches are those of its peaks and steep slopes."),
   },
   time: {
     statement:

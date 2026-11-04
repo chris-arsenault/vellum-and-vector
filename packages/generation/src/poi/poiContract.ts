@@ -222,15 +222,15 @@ export interface PoiVisibility {
   readonly statement: Must<string>;
   /** Its own size against others of its kind. */
   readonly magnitude: VisibilityFactor;
-  /** How far it stands out from local conditions: a summit over plains against one among peaks. */
+  /** How far it stands out from local conditions: a peak over plains against one among peaks. */
   readonly localConditions: VisibilityFactor;
   /** How far it stands from others of its kind that outrank it. */
   readonly isolation: VisibilityFactor;
   /** People's attachment: a capital at its foot, a town named after it, a route over it. */
   readonly cultural: VisibilityFactor;
   /**
-   * What the place weighs, in [0, 1], stored on its record. Whether it is drawn at a view is
-   * `placeDrawn` over this and the view, the one rule the map applies to every kind.
+   * What the place weighs among its kind, in [0, 1]. Nothing reads it yet: the map draws what
+   * exists, and a layer's own scale setting is the one control over when it shows.
    */
   readonly importance: Must<OnPlace<number>>;
 }

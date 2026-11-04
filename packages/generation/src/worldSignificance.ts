@@ -124,7 +124,7 @@ export function riverSignificance(e: RiverEvidence, scale = worldScale) {
   );
 }
 
-/** How far a summit's isolation is searched, at the World's scale. */
+/** How far a peak's isolation is searched, at the World's scale. */
 export const worldPeakIsolation = 60_000;
 /** Falls require both a real drop and water; a dry cliff is not a waterfall. */
 export const worldFallsDrop = 40;

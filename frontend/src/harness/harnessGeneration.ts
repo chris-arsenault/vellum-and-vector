@@ -34,6 +34,8 @@ import type { HarnessWorkspace } from "./harnessWorkspace";
 /** What a run reports while it goes: the runner's own observers plus the worker's messages. */
 export type RunObservers = Pick<MapRunnerOptions, "diagnostic" | "progress" | "inspect"> & {
   message?(message: GenerationWorkspaceMessage): void;
+  /** Ends the run at its next step: the observer has what it came for. */
+  stop?(): boolean;
 };
 const asWorkspace = (ws: HarnessWorkspace) => ws as unknown as BrowserWorkspace;
 
@@ -71,7 +73,7 @@ export async function runGeneration(
     kernel: ws.kernel,
     fields,
     workspace,
-    cancelled: () => false,
+    cancelled: () => observers.stop?.() ?? false,
     send: (message) => observers.message?.(message),
   };
   try {
@@ -142,7 +144,8 @@ export async function refineRegion(
   worldId: string,
   position: Position,
   quality: string,
-  observers?: RunObservers
+  observers?: RunObservers,
+  domains = ["physical", "magic", "built", "cultural", "political"]
 ) {
   let world = await ws.catalog.readEditor(worldId);
   const root = Object.values(world.areas).find((area) => !area.parentId)!.id,
@@ -173,7 +176,7 @@ export async function refineRegion(
     areaId: child,
     quality,
     seed: world.seed,
-    domains: ["physical", "magic", "built", "cultural", "political"],
+    domains,
     parameters: atlasParametersSchema.parse(inheritedGeneration(world, child)?.parameters ?? {}),
   };
   const prepared = await workspaceGenerationSetup(asWorkspace(ws), worldId, request);

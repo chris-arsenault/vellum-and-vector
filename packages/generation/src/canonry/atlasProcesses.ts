@@ -1,6 +1,8 @@
 import { requireThat, type DomainSnapshot } from "@atlas/domain";
 import type { GenerationState, MapProcess } from "../process";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
+import { landformClassification } from "./landforms";
+import { markPeakLandforms } from "../poi/relief/peakTops";
 import { applyNativeStep } from "./contracts";
 import { nativeContext } from "./context";
 import { atlasEpoch, atlasQuality } from "./atlasProfile";
@@ -72,6 +74,15 @@ function executionStep(state: GenerationState, step: NativeStep, iceLoad: boolea
     return [name, salt, (map, context) => crustalSupport(map, context, true)];
   if (name === "plate-advection")
     return [name, salt, (map, context) => plateAdvection(map, context, () => advectMagic(state))];
+  if (name === "landform-classification")
+    return [
+      name,
+      salt,
+      (map, context) => {
+        landformClassification(map, context);
+        markPeakLandforms(state);
+      },
+    ];
   return step;
 }
 function nativeProcess(

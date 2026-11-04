@@ -171,11 +171,11 @@ export const headland: PoiEntry = {
   },
   others: {
     statement:
-      "A headland bounds the bay beside it and takes the rogue waves that come ashore. A harbour stands in its lee, not on its tip, and a shrine or beacon, a summit or a ruin may stand on it.",
+      "A headland bounds the bay beside it and takes the rogue waves that come ashore. A harbour stands in its lee, not on its tip, and a shrine or beacon, a peak or a ruin may stand on it.",
     needs: notApplicable("Its test already requires the sea around it and the ground behind it."),
     excludes: [{ kind: "harbour", holds: (_state, a, b) => a.anchor === b.anchor }],
     contains: [
-      { kind: "summit", holds },
+      { kind: "peak", holds },
       { kind: "shrine", holds },
       { kind: "ruin", holds },
     ],

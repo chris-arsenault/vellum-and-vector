@@ -29,7 +29,7 @@ export const frostPrism: PoiEntry = {
   name: "Frost prism",
   recognition: {
     distinct:
-      "A cell in Aurora's prism rule: strong Aurora intensity on ground classed Peak or Ridge. The landform decides against the system's other classes on the same charge: an aurora field is general charge over ice, a light well sits in a hollow, a melt line lies at the thawing edge. An ordinary iced summit has no charge and is only a summit; a prism outlasts its ice for as long as stored charge holds.",
+      "A cell in Aurora's prism rule: strong Aurora intensity on ground classed Peak or Ridge. The landform decides against the system's other classes on the same charge: an aurora field is general charge over ice, a light well sits in a hollow, a melt line lies at the thawing edge. An ordinary iced peak has no charge and is only a peak; a prism outlasts its ice for as long as stored charge holds.",
     isA,
   },
   existence: {
@@ -81,7 +81,7 @@ export const frostPrism: PoiEntry = {
   },
   others: {
     statement:
-      "A prism stands on a summit's or ridge's ground inside an aurora field and looks down on light wells below; it cannot stand in a lake.",
+      "A prism stands on a peak's or ridge's ground inside an aurora field and looks down on light wells below; it cannot stand in a lake.",
     needs: notApplicable(
       "Its rule reads charge and a high class alone; a relict outlasts the aurora field that charged it."
     ),
@@ -89,7 +89,7 @@ export const frostPrism: PoiEntry = {
     contains: notApplicable("A prism is a small body of ice and rock with nothing inside it."),
     pairsWith: [
       { kind: "ridge", holds: standsIn },
-      { kind: "summit", holds: within(spans(4)) },
+      { kind: "peak", holds: within(spans(4)) },
       { kind: "lightWell", holds: within(spans(6)) },
       { kind: "auroraField", holds: standsIn },
     ],
@@ -121,7 +121,7 @@ export const frostPrism: PoiEntry = {
       "Named by pilgrims and the people below, usually for the height it stands on or the light it throws.",
     namedBy: namingCultureNear,
     takesNameFrom: [
-      { kind: "summit", holds: within(spans(4)) },
+      { kind: "peak", holds: within(spans(4)) },
       { kind: "ridge", holds: standsIn },
     ],
     lendsNameTo: [{ kind: "shrine", holds: within(spans(6)) }],

@@ -1,7 +1,7 @@
 import type { PoiEntry, PoiGroupPage } from "./poiContract";
 import type { PoiGroupId, PoiKindId } from "./poiKinds";
 import { reliefPage } from "./relief/page";
-import { summit } from "./relief/summit";
+import { peak } from "./relief/peak";
 import { pass } from "./relief/pass";
 import { ridge } from "./relief/ridge";
 import { escarpment } from "./relief/escarpment";
@@ -102,7 +102,7 @@ export const poiPages: Readonly<Record<PoiGroupId, PoiGroupPage>> = {
 
 /** One entry per kind; a missing or unknown kind does not compile. */
 export const poiCatalogue: Readonly<Record<PoiKindId, PoiEntry>> = {
-  summit,
+  peak,
   pass,
   ridge,
   escarpment,

@@ -6,7 +6,6 @@ import { noWaterSurface, units, truncate } from "./math";
 import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
 import { physicalDistance, physicalSampler } from "./physicalMetric";
-import { releaseWorking } from "./physicalNumerics";
 import { topographicProminence } from "../topographicProminence";
 
 function shape(
@@ -204,19 +203,8 @@ export function landformClassification(map: PhysicalField, c: PhysicalContext) {
   const valueAt = physicalSampler(map.mesh, map.Elevation);
   for (let i = 0; i < map.mesh.count; i++)
     map.LandformCodes.set(i, classify(map, c.Profile, i, valueAt));
-  // Summits by topographic prominence, which no fixed sampling radius can measure.
-  // A summit outranks glacial classes that persist from earlier ice ages.
-  const { rise, cols } = summitsAndCols(map);
-  for (let i = 0; i < map.mesh.count; i++)
-    if (
-      rise.get(i) >= units(c.Profile.PeakMinimumProminence) &&
-      map.WaterKindCodes.get(i) === 0 &&
-      map.LandformCodes.get(i) !== L.Waterfall
-    )
-      map.LandformCodes.set(i, L.Peak);
-  releaseWorking(map, rise);
   // A pass is a key col; it takes the place of an ordinary relief class, off the rivers.
-  for (const col of cols.keys())
+  for (const col of keyCols(map).keys())
     if (reliefClasses.has(map.LandformCodes.get(col)) && dryCol(map, col))
       map.LandformCodes.set(col, L.Pass);
 }
@@ -232,12 +220,12 @@ function adjacentCells(map: PhysicalField) {
   };
 }
 /**
- * Elevation units a top must rise above its col to be a summit, and so to make that col a pass:
+ * Elevation units a top must rise above its col to be a top, and so to make that col a pass:
  * fifty metres. A lesser rise is a bump in the ground, whatever the map's cell size.
  */
 export const leastRise = 50 * 1024;
-/** Each summit's prominence, and every key col with the rise of the greatest summit it serves. */
-function summitsAndCols(map: PhysicalField) {
+/** Each top's prominence, and every key col with the rise of the greatest top it serves. */
+function topsAndCols(map: PhysicalField) {
   const { rise, saddle } = topographicProminence(
       map.coverage,
       map.Elevation,
@@ -255,18 +243,18 @@ function summitsAndCols(map: PhysicalField) {
   return { rise, cols };
 }
 /**
- * Every key col on this map: the cell where a summit's area joins higher ground, with the rise
- * in elevation units of the greatest summit measured down to it.
+ * Every key col on this map: the cell where a top's area joins higher ground, with the rise
+ * in elevation units of the greatest top measured down to it.
  */
 export function keyCols(map: PhysicalField) {
-  const { rise, cols } = summitsAndCols(map);
+  const { rise, cols } = topsAndCols(map);
   map.coverage.release(rise);
   return cols;
 }
 /**
- * Each summit's prominence in elevation units: its height above the highest col on the way to
+ * Each top's prominence in elevation units: its height above the highest col on the way to
  * higher ground, or above sea level on a landmass without higher ground. Cells join from the
- * highest down; when two summits' areas meet, the lower summit's col is the joining cell.
+ * highest down; when two tops' areas meet, the lower top's col is the joining cell.
  */
 export function prominence(map: PhysicalField) {
   const { rise, saddle } = topographicProminence(

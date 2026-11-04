@@ -17,6 +17,7 @@ import {
   regionalSpan,
   releaseBlurs,
 } from "./lattice";
+import { ruggedness } from "./ruggedness";
 import { materialBands, materialResistance } from "./material";
 import { channelCells } from "./network";
 import { clamp, type NetworkWork, type ReliefWork, type RegionalState } from "./state";
@@ -73,7 +74,7 @@ interface Increments {
  * material, on a hillslope by the material's gradient flattening toward the divide, both
  * held down inside a seat's footprint. The increments are amplified so that the relief
  * blurred to the parent span is the captured base: the parent sets the macro character, the
- * network decides where within it the summits, cols, valleys and low ground lie. Ice then
+ * network decides where within it the peaks, cols, valleys and low ground lie. Ice then
  * carves the surface the climate allows, and cones add their construction. Re-deriving in a
  * later round reads the media as they are then from the same network, so a change updates
  * the relief rather than adding to it. Heights are metres above the present sea level.
@@ -239,12 +240,13 @@ function conditionOnBase(state: RegionalState, h: Float64Array) {
     }
   blurContent(state, macro, reach);
   blurContent(state, blurred, reach);
+  const rugged = ruggedness(state, macro);
   for (let i = 0; i < n; i++) {
     if (!content[i] || sea[i] || lake[i] >= 0) continue;
     const exit = receiver[i] < 0 && !sink[i];
     h[i] = exit
       ? Math.max(state.regional.inheritedHeight.get(i) / 1024 - datum, 1)
-      : h[i] + macro[i] - blurred[i];
+      : macro[i] + rugged[i] * (h[i] - blurred[i]);
   }
 }
 

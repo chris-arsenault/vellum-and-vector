@@ -132,7 +132,7 @@ export const fireCore: PoiEntry = {
   },
   naming: {
     statement:
-      "Named by the nearest people, miners and smiths, after the crater or summit that marks it; the forge beside it may take its name.",
+      "Named by the nearest people, miners and smiths, after the crater or peak that marks it; the forge beside it may take its name.",
     namedBy: namingCultureNear,
     takesNameFrom: [{ kind: "crater", holds: within(around) }],
     lendsNameTo: [

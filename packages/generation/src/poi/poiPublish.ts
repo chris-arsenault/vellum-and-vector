@@ -66,26 +66,12 @@ function publishKind(state: GenerationState, entry: PoiEntry, written: Published
   if (entry.id === "settlement" || entry.id === "ruin") forgetSettlements(state);
 }
 
-/**
- * Store what each published place weighs on its record, once everything that bears on it is on
- * the map: a town beside a summit counts towards the summit. The map reads it to draw by view.
- */
-export function stampImportance(state: GenerationState) {
-  releaseHeld(state);
-  for (const { entry, place, featureId } of published.get(state) ?? []) {
-    const feature = generationFeature(state, featureId),
-      weigh = called<(s: GenerationState, p: PoiPlace) => number>(entry.visibility.importance);
-    if (!feature || !weigh) continue;
-    writeGenerationFeature(state, {
-      ...feature,
-      attributes: { ...feature.attributes, importance: weigh(state, place) },
-    });
-  }
-  releaseHeld(state);
-}
-
-const entryOf = (feature: AtlasFeature): PoiEntry | undefined =>
-  poiCatalogue[feature.attributes.poi as PoiKindId];
+/** Maps saved before a kind took its one name still carry the old one on their records. */
+const formerKinds: Record<string, PoiKindId> = { summit: "peak" };
+const entryOf = (feature: AtlasFeature): PoiEntry | undefined => {
+  const kind = String(feature.attributes.poi);
+  return poiCatalogue[formerKinds[kind] ?? (kind as PoiKindId)];
+};
 /** A place of the parent map, carried here. Its parent's product is captured, never this run's. */
 const isCaptured = (feature: AtlasFeature) =>
   feature.attributes.poi !== undefined && feature.attributes.developedBy !== "regional";
