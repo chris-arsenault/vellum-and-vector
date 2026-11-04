@@ -5,8 +5,9 @@ import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { mapScale } from "../../worldSignificance";
 import type { PoiClaim, PoiOrigin } from "../poiContract";
+import { spacedAmong, standsClear } from "../poiOrigins";
 import { carriedPlaces } from "../poiPublish";
-import { cellSpan, cellsWithin, fieldOf, gap, heightAt, heldFor, isLand, isSea } from "../poiReads";
+import { cellSpan, cellsWithin, fieldOf, heightAt, heldFor, isLand, isSea } from "../poiReads";
 import { settlementPlaces } from "../settlements/communityRecords";
 import { peopleOfRecord } from "../settlements/settlementRecords";
 
@@ -61,22 +62,13 @@ const highestRising = (state: GenerationState, cells: readonly number[]) => {
     if (rise.get(cell) >= leastRise && (best < 0 || rise.get(cell) > rise.get(best))) best = cell;
   return best;
 };
-const clear = (state: GenerationState, taken: Iterable<number>, cell: number, apart: number) => {
-  for (const other of taken) if (gap(state, cell, other) < apart) return false;
-  return true;
-};
 /** Those of the candidates that pass, each standing clear of every peak before it. */
-function spaced(
+const spaced = (
   state: GenerationState,
   claimed: Claimed,
   apart: number,
   passes: (cell: number) => boolean
-) {
-  const taken = new Set(claimed.keys());
-  for (const cell of candidates(state))
-    if (passes(cell) && clear(state, taken, cell, apart)) taken.add(cell);
-  return [...taken].filter((cell) => !claimed.has(cell)).map((anchor) => ({ anchor }));
-}
+) => spacedAmong(state, claimed, candidates(state), apart, passes);
 
 /** The tallest point of a range is always a peak, whatever it rises above its col. */
 function crowns(state: GenerationState) {
@@ -144,7 +136,7 @@ function horns(state: GenerationState, claimed: Claimed) {
   for (const [col, rise] of keyCols(fieldOf(state))) {
     if (rise < bar || hashUnit(salts.horn, col, 0) >= hornChance) continue;
     const top = highestRising(state, cellsWithin(state, col, hornApart * span));
-    if (top < 0 || !clear(state, taken, top, hornApart * span)) continue;
+    if (top < 0 || !standsClear(state, taken, top, hornApart * span)) continue;
     taken.add(top);
     found.push({ anchor: top });
   }

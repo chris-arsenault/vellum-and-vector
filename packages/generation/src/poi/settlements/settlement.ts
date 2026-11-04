@@ -42,6 +42,8 @@ const seatCorridor = 0.5;
 
 /** The share of towns near a peak that take its name. */
 const peakNameChance = 0.2;
+/** The share of towns near a fall that take its name; relations are tried in order. */
+const fallNameChance = 0.2;
 const seatRoles = new Set(["capital", "regionalCapital"]);
 /** A polity is named from its seat, so a seat keeps the name it has. */
 const isSeat = (place: PoiPlace) => seatRoles.has(String(place.feature?.attributes.settlementRole));
@@ -222,7 +224,11 @@ export const settlement: PoiEntry = {
         holds: (state, town, peak) =>
           !isSeat(town) && within((s) => 6 * cellSpan(s))(state, town, peak),
       },
-      { kind: "waterfall", holds: within(around) },
+      {
+        kind: "waterfall",
+        chance: fallNameChance,
+        holds: (state, town, fall) => !isSeat(town) && within(around)(state, town, fall),
+      },
     ],
     lendsNameTo: [{ kind: "ruin", holds: (_state, a, b) => a.anchor === b.anchor }],
   },

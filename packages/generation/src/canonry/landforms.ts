@@ -131,11 +131,11 @@ function gradientAbove(map: PhysicalField, i: number) {
   return above;
 }
 /**
- * The one definition of a waterfall: a land cell of a river that drops at least the least drop
- * to the next cell, at five times the river's gradient above and below it: a step in the long
- * profile. The landform code, the natural surface and the catalogue's entry all read this.
+ * A step in a river's long profile: a land cell of a river that drops at least the least drop
+ * to the next cell, at five times the river's gradient above and below it. A waterfall's origins
+ * read this; a step with no reason to be known stays steep water.
  */
-export function isWaterfall(map: PhysicalField, i: number): boolean {
+export function isRiverStep(map: PhysicalField, i: number): boolean {
   if (map.WaterKindCodes.get(i) !== 0 || map.RiverOrders.get(i) <= 0) return false;
   if (riverDrop(map, i) < waterfallLeastDrop) return false;
   const below = Math.max(0, riverGradient(map, map.FlowTargets.get(i)));
@@ -188,8 +188,6 @@ function classify(
   i: number,
   valueAt: ReturnType<typeof physicalSampler>
 ): number {
-  // First: a step is a waterfall whatever ice or impact left the ground around it.
-  if (isWaterfall(map, i)) return L.Waterfall;
   const preserved = retained(map, p, i, valueAt);
   if (preserved !== 0) return preserved;
   const s = shape(map, i, p.LandformNeighborhoodRadius, valueAt);

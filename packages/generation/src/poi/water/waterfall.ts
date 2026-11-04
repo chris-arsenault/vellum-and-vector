@@ -1,4 +1,5 @@
-import { isWaterfall, riverDrop, riverGradient, waterfallLeastDrop } from "../../canonry/landforms";
+import { Landform } from "../../canonry/codes";
+import { riverGradient } from "../../canonry/landforms";
 import type { GenerationState } from "../../process";
 import { worldFallsDischarge, worldFallsDrop } from "../../worldSignificance";
 import {
@@ -13,22 +14,44 @@ import {
   notApplicable,
   type PoiCarried,
   type PoiEntry,
-  type PoiFieldChange,
+  type PoiNameTerm,
   type PoiPlace,
 } from "../poiContract";
-import { cellPlaces, namingCultureNear, holds, within } from "../poiPlaces";
+import { claimsOf, placesFromOrigins } from "../poiOrigins";
+import { namingCultureNear, holds, within } from "../poiPlaces";
 import { siteRecord } from "../poiRecords";
-import { cellSpan, fieldOf, isLand, isRiver, nearestWhere, toNative } from "../poiReads";
+import { cellSpan, fieldOf, isLand, isRiver, nearestWhere } from "../poiReads";
 import { attachment, aloneAmong, sized, standsOut, weighed } from "../poiVisibilityRules";
-import { flowTarget } from "./waterReads";
+import type { FallForm } from "./waterfallForms";
+import { waterfallOrigins } from "./waterfallOrigins";
+import {
+  dischargeOf,
+  dropOf,
+  fallVariety,
+  formIn,
+  shapedFall,
+  step,
+  wetRock,
+} from "./waterfallShape";
 import type { RegionalState } from "../../regional/state";
 
+/** The word people use for a fall of each form. */
+const formTerms: Readonly<Record<FallForm, string>> = {
+  plunge: "Falls",
+  cataract: "Cataract",
+  cascade: "Cascade",
+  ribbon: "Veil",
+  chute: "Chute",
+};
+const nameTerm = (state: GenerationState, place: PoiPlace): PoiNameTerm => ({
+  kind: "landform",
+  subkind: "waterfall",
+  term: formTerms[formIn(state, place)],
+});
 const gradient = (state: GenerationState, cell: number) => riverGradient(fieldOf(state), cell);
-const isA = (state: GenerationState, cell: number) => isWaterfall(fieldOf(state), cell);
-const places = cellPlaces("waterfall", isA);
-const dropOf = (state: GenerationState, place: PoiPlace) => riverDrop(fieldOf(state), place.anchor);
-const dischargeOf = (state: GenerationState, place: PoiPlace) =>
-  fieldOf(state).FlowAccumulation.get(place.anchor);
+const isA = (state: GenerationState, cell: number) =>
+  claimsOf(state, "waterfall", waterfallOrigins).has(cell);
+const places = (state: GenerationState) => placesFromOrigins("waterfall", waterfallOrigins)(state);
 /** Falls grow with both: a tall trickle and a low cataract are each lesser than a great fall. */
 const greatness = (state: GenerationState, place: PoiPlace) =>
   (sized(dropOf, worldFallsDrop)(state, place) +
@@ -41,21 +64,6 @@ const factors = {
   isolation: aloneAmong(places, around),
   cultural: attachment(around),
 };
-/**
- * The step in the long profile: the lip keeps its height and the ground below is held a whole
- * step beneath it, at least the least drop that falls, so erosion cannot smooth it away. A fall
- * into standing water has its step already: the water's surface is what it drops to.
- */
-function step(state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] {
-  const target = flowTarget(state, place.anchor),
-    lip = fieldOf(state).Elevation.get(place.anchor);
-  if (target < 0 || !isLand(state, place.anchor) || !isLand(state, target)) return [];
-  const drop = Math.max(dropOf(state, place), waterfallLeastDrop);
-  return [
-    { change: "atLeast", band: "Elevation", cell: place.anchor, value: lip },
-    { change: "atMost", band: "Elevation", cell: target, value: lip - toNative(drop) },
-  ];
-}
 const counterpart = counterpartOf(isA, 1);
 /** The refined river must hold the step: at the nearest fall, or the nearest reach of river. */
 function realizedStep(state: RegionalState, carried: PoiCarried) {
@@ -80,19 +88,22 @@ export const waterfall: PoiEntry = {
   name: "Waterfall",
   recognition: {
     distinct:
-      "A river cell that drops at least 10 m to the next cell, with a gradient at least five times the river's above and below it: a step in the long profile. A steadily steep river is a gorge or a rapid reach, not a fall, and no cell off a river can be one.",
+      "A step in a river's long profile that is known as a fall: a river cell dropping at least 10 m to the next, at five times the river's gradient above and below it, for a reason. A steadily steep river is a gorge, a step without a reason is steep water, and no cell off a river can be one.",
     isA,
+    landform: { code: Landform.Waterfall },
   },
   existence: {
+    origins: waterfallOrigins,
     statement:
-      "Emerges where a river meets resistant rock it has not yet worn through; rapids are the same kind at a lesser drop, and a great fall is only a bigger one.",
+      "Emerges from the river's own profile, and is made a fall by what made the step: hard rock over softer, a fault, a tributary left hanging above a deeper valley, a cliff over standing water, or a drop too tall to need a reason. People make others: a town that carries boats round a step names it. A fall the coarser map named stays one, and falls stand apart, so a steep reach is one fall and not a row of them.",
     way: "emerges",
     requires: notApplicable("Its test reads the river itself; it needs nothing else first."),
     suitability: notApplicable("Nothing chooses where a fall stands."),
     places,
   },
   publication: {
-    statement: "Every fall publishes where it stands, with its drop and the water going over it.",
+    statement:
+      "Every fall publishes where it stands, with its drop and the water going over it. A fall a town names on the World comes later than the rest, once there are towns, and leaves the settled ground as it is.",
     moment: "geography",
     record: siteRecord({
       kind: "waterfall",
@@ -106,11 +117,11 @@ export const waterfall: PoiEntry = {
   },
   fields: {
     statement:
-      "A fall holds a step in the river's profile: its lip stays up and its pool stays down, so erosion cannot smooth it away while it stands.",
-    terrain: step,
+      "A fall holds a step in the river's profile, so erosion cannot smooth it away while it stands, and works the ground around it by its form: a plunge or chute leaves the river in a cut below it, a cataract's lip is a broad ledge, a cascade's bed is heaped with fallen rock, a ribbon stands against a cliff. The wet rock beside the lip grows nothing.",
+    terrain: shapedFall,
     water: notApplicable("It keeps the discharge it receives; only the height of the bed changes."),
     climate: notApplicable("Its spray is below what the climate field resolves."),
-    cover: notApplicable("Cover along the channel follows the channel's own moisture."),
+    cover: wetRock,
     magic: notApplicable(
       "Falls neither carry nor generate magic; the river's own carriage passes it."
     ),
@@ -177,9 +188,12 @@ export const waterfall: PoiEntry = {
     importance: weighed(factors, { magnitude: 0.5, localConditions: 0.3, isolation: 0.2 }),
   },
   naming: {
-    statement: "Named by the people nearest it; a portage town may take its name.",
+    statement:
+      "Named by the people nearest it, in words for its form; a portage town may take its name.",
     namedBy: namingCultureNear,
     takesNameFrom: notApplicable("Falls give names; they do not take them."),
     lendsNameTo: [{ kind: "settlement", holds: within(around) }],
+    term: nameTerm,
   },
+  variety: fallVariety,
 };

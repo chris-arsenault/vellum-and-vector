@@ -2,7 +2,31 @@ import type { GenerationState } from "../process";
 import { poiCatalogue } from "./catalogue";
 import type { PoiClaim, PoiEntry, PoiMoment, PoiOrigin, PoiPlace } from "./poiContract";
 import type { PoiKindId } from "./poiKinds";
-import { heldFor } from "./poiReads";
+import { gap, heldFor } from "./poiReads";
+
+/** Whether a cell stands at least `apart` metres from every cell taken. */
+export function standsClear(
+  state: GenerationState,
+  taken: Iterable<number>,
+  cell: number,
+  apart: number
+) {
+  for (const other of taken) if (gap(state, cell, other) < apart) return false;
+  return true;
+}
+/** Those candidates that pass, in order, each standing clear of everything claimed before it. */
+export function spacedAmong(
+  state: GenerationState,
+  claimed: ReadonlyMap<number, PoiClaim>,
+  candidates: readonly number[],
+  apart: number,
+  passes: (cell: number) => boolean
+) {
+  const taken = new Set(claimed.keys());
+  for (const cell of candidates)
+    if (passes(cell) && standsClear(state, taken, cell, apart)) taken.add(cell);
+  return [...taken].filter((cell) => !claimed.has(cell)).map((anchor) => ({ anchor }));
+}
 
 const reached: Record<PoiMoment, (state: GenerationState) => boolean> = {
   geography: () => true,

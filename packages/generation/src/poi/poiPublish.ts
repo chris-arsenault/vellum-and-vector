@@ -105,12 +105,8 @@ export function publishLatePlaces(state: GenerationState, moment: PoiMoment) {
 export const takePublishedNames = (state: GenerationState) =>
   takeNames(state, published.get(state) ?? []);
 
-/** Maps saved before a kind took its one name still carry the old one on their records. */
-const formerKinds: Record<string, PoiKindId> = { summit: "peak" };
-const entryOf = (feature: AtlasFeature): PoiEntry | undefined => {
-  const kind = String(feature.attributes.poi);
-  return poiCatalogue[formerKinds[kind] ?? (kind as PoiKindId)];
-};
+const entryOf = (feature: AtlasFeature): PoiEntry | undefined =>
+  poiCatalogue[String(feature.attributes.poi) as PoiKindId];
 /** A place of the parent map, carried here. Its parent's product is captured, never this run's. */
 const isCaptured = (feature: AtlasFeature) =>
   feature.attributes.poi !== undefined && feature.attributes.developedBy !== "regional";
