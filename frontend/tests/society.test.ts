@@ -6,6 +6,7 @@ import {
   exportMap,
   generatedWorld,
   openFixtureMap,
+  openRegistry,
   pageErrors,
   panel,
   showPreset,
@@ -141,7 +142,16 @@ test("settlement inspection shows residents, mixed languages and history without
     "River speech": { knowledge: 1, use: 0.75 },
     "Coast speech": { knowledge: 0.4, use: 0.25 },
   };
-  await settlementWorld(page, "Society inspection", settlement, true);
+  await openFixtureMap(
+    page,
+    "Society inspection",
+    { features: [settlement], society: societyState(settlement) },
+    { width: 4, height: 1 }
+  );
+  await openRegistry(page);
+  await page.getByLabel("Search registry").fill(settlement.name);
+  await page.getByLabel(`Show ${settlement.name} on map`).click();
+  await expect(panel(page).locator("h2")).toHaveText(settlement.name);
   const before = await exportMap(page);
   await expect(page.getByTitle("200 settlement residents", { exact: true })).toBeVisible();
   await expect(page.getByTitle("800 rural residents", { exact: true })).toBeVisible();
