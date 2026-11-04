@@ -225,6 +225,10 @@ test("road symbols are styled with GeoStyler and kept in a session view", async 
   await page.getByLabel("View name", { exact: true }).fill("Wide roads");
   await page.getByRole("button", { name: "Save map view", exact: true }).click();
   await expect(page.getByRole("button", { name: "Wide roads", exact: true })).toBeVisible();
+  // Saved views are live: reset a separate working view, then return to Wide roads.
+  await page.getByLabel("View name", { exact: true }).fill("Atlas roads");
+  await page.getByRole("button", { name: "Save map view", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Atlas roads", exact: true })).toBeVisible();
   await openLayers(page);
   await page.getByLabel("Search features").fill("Roads");
   await page.getByRole("button", { name: "Style Roads and routes", exact: true }).click();
