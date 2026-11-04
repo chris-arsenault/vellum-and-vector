@@ -94,3 +94,19 @@ and lets their running make the geography. Built:
 
 Open: lakes along unglaciated courses are rare (glaciated regions hold many); range flanks
 drain by close parallel valleys; the oxbows the migration leaves are not published.
+
+## Owner review of phases 2–4 (2026-11-04)
+
+Slightly better; none of these features is near done. The owner questions whether the approach
+is right or the chosen algorithms need more work. Recorded findings, to take up after phase 6:
+
+1. **Waterfalls.** Published waterfalls sit all over the map, many off any river, at nearly even
+   spacing along courses, on reaches that are only sloped. A waterfall is a steep drop; where one
+   stands it must shape the local elevation profile (a step in the long profile, a lip and a
+   plunge), and its placement must come from that profile.
+2. **Rivers never reach the coast.** Drawn rivers stop short of the shore in every case seen,
+   including large trunks ending a few kilometres inland.
+3. **Valleys are just the rivers.** The published valley features trace the river lines almost
+   exactly instead of describing a landform (floor and walls) of their own. Possibly belongs with
+   the POI work (phases 7–8).
+4. **Peaks.** A whole mountain range publishes two peaks.
