@@ -96,13 +96,25 @@ export function atlasInitialState(
     publications: atlasGenerationModules.publications(input, domain.world),
   };
 }
+/**
+ * Cells near the map's cell span. The cells halve from the extent, so they come only in
+ * the extent's width over a power of two; halving until a cell is no wider than the span
+ * stops anywhere down to half of it, up to four times the intended cells. The depth whose
+ * cells lie nearest the span, by ratio, keeps the count within a factor of two of it.
+ */
+export function halvedCellWidth(widest: number, cellSpan: number) {
+  return widest / 2 ** Math.max(0, Math.round(Math.log2(widest / cellSpan)));
+}
 function initialTopology(scope: SpatialScope, cellSpan: number, cache?: BlockCache) {
-  const extent = spatial.bounds(scope.footprint);
+  const extent = spatial.bounds(scope.footprint),
+    widest = Math.max(extent[2] - extent[0], extent[3] - extent[1]),
+    // Repeated halving carries rounding; a cell within it of the chosen width is at it.
+    minimumSize = halvedCellWidth(widest, cellSpan) * (1 + 1e-9);
   return createAdaptiveTopology(
     extent,
     {
-      maximumSize: Math.max(cellSpan, Math.max(extent[2] - extent[0], extent[3] - extent[1]) / 8),
-      minimumSize: cellSpan,
+      maximumSize: Math.max(minimumSize, widest / 8),
+      minimumSize,
       refine: (box) => spatial.intersects(rectangle(box), scope.footprint),
     },
     cache

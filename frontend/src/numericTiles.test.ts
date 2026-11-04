@@ -210,6 +210,32 @@ it("shares adaptive locations across terrain bands while respecting distinct ove
   patch.active.fill(0);
   expect([...sample([49, 49, 51, 51], 1)]).toEqual(new Array(terrainSampleBands).fill(0));
 });
+it("shows a cell's stored value where the cell is narrower than the pixels, and the smooth surface where wider", () => {
+  const raster = fixture("elevation"),
+    bounds: [number, number, number, number] = [0, 0, 100, 100];
+  raster.field = createAdaptiveField(
+    "terrain",
+    { ...raster.field.scope, footprint: rectangle(bounds) },
+    createAdaptiveTopology(bounds, { maximumSize: 10, minimumSize: 10 })
+  );
+  const cellValue = (i: number) => (i * 37) % 11;
+  putChannel(
+    raster.field,
+    "elevation",
+    "metre",
+    generateBand(raster.field.coverage, "float64", "elevation", cellValue)
+  );
+  const sample = numericTileSampler(raster);
+  // Ten-metre cells under twenty-metre pixels: each pixel shows its cell's own sample.
+  const coarse = sample([0, 0, 100, 100], 5),
+    stored = new Set(Array.from({ length: raster.field.active.length }, (_, i) => cellValue(i)));
+  for (let pixel = 0; pixel < 25; pixel++)
+    expect(stored.has(coarse[pixel * terrainSampleBands])).toBe(true);
+  // One-metre pixels inside a cell: the smooth surface varies across it.
+  const fine = sample([42, 42, 48, 48], 6),
+    heights = new Set(Array.from({ length: 36 }, (_, k) => fine[k * terrainSampleBands]));
+  expect(heights.size).toBeGreaterThan(1);
+});
 it("uses actual data ranges and an invertible signed log legend", () => {
   const raster = fixture();
   raster.field.channels.temperature.fill(25);

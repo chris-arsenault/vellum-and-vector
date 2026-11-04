@@ -25,19 +25,58 @@ function displayHeight(raster: LoadedRaster, locate: AdaptivePointLocator) {
     edited = (field.overlays ?? []).some((overlay) => overlay.channels.includes("elevation"));
   return field.topology && !edited ? null : terrainDisplaySampler(field, locate);
 }
+/** Cells narrower than this many pixels show their stored value. */
+const unresolvedPixels = 1.5;
+type Reading = (p: Position) => number;
+/**
+ * A reading at one tile's pixel size: where a cell is narrower than a pixel and a half, the
+ * smooth surface inside it is finer than the screen can show, so the pixel shows the cell's
+ * stored value and no patch is built. Wider cells, and edited fields, keep the smooth reading.
+ */
+function pixelScaled(
+  grid: GridSurface | undefined,
+  channel: string,
+  locate: AdaptivePointLocator,
+  smooth: Reading
+): (pixel: number) => Reading {
+  const t = grid?.topology,
+    values = grid?.channels[channel],
+    edited = (grid?.overlays ?? []).some((overlay) => overlay.channels.includes(channel));
+  if (!grid || !t || !values || edited) return () => smooth;
+  return (pixel) => {
+    const narrow = unresolvedPixels * pixel;
+    return (p) => {
+      const q = fieldPosition(grid, p),
+        x = Math.max(t.bounds[0], Math.min(t.bounds[2], q.x)),
+        y = Math.max(t.bounds[1], Math.min(t.bounds[3], q.y)),
+        { leaf } = locate(t, x, y);
+      if (leaf < 0) return smooth(p);
+      const box = t.leaves.get(leaf) * 4;
+      return t.boxes.get(box + 2) - t.boxes.get(box) < narrow ? values.get(leaf) : smooth(p);
+    };
+  };
+}
 /** The terrain companions of one tile, written after the value and mask bands. */
 function terrainAt(raster: LoadedRaster, locate: AdaptivePointLocator) {
   const water = tileWater(raster, locate);
-  const ice = raster.ice ? fieldInterpolator(raster.ice, "ice", false, locate) : () => 0;
-  const surface = surfaceAt(raster, "finalSurface", locate),
-    natural = surfaceAt(raster, "naturalSurface", locate),
+  const ice = pixelScaled(
+    raster.ice,
+    "ice",
+    locate,
+    raster.ice ? fieldInterpolator(raster.ice, "ice", false, locate) : () => 0
+  );
+  const finalSurface = surfaceAt(raster, "finalSurface", locate),
+    naturalSurface = surfaceAt(raster, "naturalSurface", locate),
     display = displayHeight(raster, locate);
   return (extent: number[], size: number, fold: Fold, own?: TileGeography) => {
     const waterAt = water(extent, size, fold, own),
-      step = (extent[2] - extent[0]) / size;
+      step = (extent[2] - extent[0]) / size,
+      iceAt = ice(step),
+      surface = finalSurface(step),
+      natural = naturalSurface(step);
     return (values: Float32Array, at: number, pixel: number, p: Position, height: number) => {
       waterAt(values, at + 2, pixel, p, height);
-      values[at + 4] = Math.min(1, ice(p));
+      values[at + 4] = Math.min(1, iceAt(p));
       values[at + 5] = step;
       values[at + 6] = surface(p);
       values[at + 7] = natural(p);
@@ -54,12 +93,24 @@ function chartFold(wrap?: number[]): Fold | undefined {
   return (x) => west + ((((x - west) % width) + width) % width);
 }
 /** Surface class for the base map; -1 where no classification exists. */
-function surfaceAt(raster: LoadedRaster, channel: string, locate: AdaptivePointLocator) {
-  if (!raster.surface?.channels[channel]) return () => -1;
-  const read = classInterpolator(raster.surface, channel, locate);
-  return (p: Position) => {
-    const code = read(p);
-    return Number.isFinite(code) ? code : -1;
+function surfaceAt(
+  raster: LoadedRaster,
+  channel: string,
+  locate: AdaptivePointLocator
+): (pixel: number) => Reading {
+  if (!raster.surface?.channels[channel]) return () => () => -1;
+  const read = pixelScaled(
+    raster.surface,
+    channel,
+    locate,
+    classInterpolator(raster.surface, channel, locate)
+  );
+  return (pixel) => {
+    const at = read(pixel);
+    return (p) => {
+      const code = at(p);
+      return Number.isFinite(code) ? code : -1;
+    };
   };
 }
 /** Terrain tiles: physical value, mask, relative height, water, ice, step, final/natural classes, display height. */
@@ -103,9 +154,14 @@ export function numericTileSampler(raster: LoadedRaster) {
     fold = chartFold(raster.wrap);
   const locate = adaptivePointLocator();
   // Classes are reconstructed from memberships so their boundaries match region outlines.
-  const valueAt = categorical(raster)
-    ? classInterpolator(raster.field, raster.channel, locate)
-    : fieldInterpolator(raster.field, raster.channel, false, locate);
+  const value = pixelScaled(
+    raster.field,
+    raster.channel,
+    locate,
+    categorical(raster)
+      ? classInterpolator(raster.field, raster.channel, locate)
+      : fieldInterpolator(raster.field, raster.channel, false, locate)
+  );
   const active = activeSampler(raster.field, raster.channel, locate);
   const terrain = raster.channel === "elevation" ? terrainAt(raster, locate) : null;
   const bands = terrain ? terrainSampleBands : 3;
@@ -116,6 +172,7 @@ export function numericTileSampler(raster: LoadedRaster) {
     const inside = footprint(extent, size, fold);
     if (inside === false) return values;
     const activeAt = active(sampledExtent(extent, raster.wrap)),
+      valueAt = value(dx),
       companions = terrain ? terrain(extent, size, fold ?? Number, own) : null,
       p = { x: 0, y: 0, z: 0 };
     for (let pixel = 0; pixel < size * size; pixel++) {

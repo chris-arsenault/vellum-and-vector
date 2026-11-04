@@ -21,11 +21,13 @@ export function useMapData(
 ) {
   const extent = mapDataExtent(sheet, viewport);
   const scene = useScene(world, areaId, extent, resolution);
-  // Raster references are keyed to a window snapped outward to a power-of-two cell, so a pan
-  // inside that cell neither re-queries references nor changes the registered geography.
-  const window = quantizeWindow((extent ?? bounds(world.areas[areaId].footprint)) as Bounds);
+  // Map tiles read their own sea and lakes, so a live map reads its raster references once:
+  // panning and zooming change nothing they hold. A drawn sheet depicts its whole subject at
+  // one scale and still carries that window and scale in its references.
+  const whole = bounds(world.areas[areaId].footprint) as Bounds,
+    window = sheet ? quantizeWindow((extent ?? whole) as Bounds) : whole;
   const windows = sceneWindows(world, window);
-  const tolerance = displayTolerance(resolution);
+  const tolerance = sheet ? displayTolerance(resolution) : 0;
   const fields = useQuery({
     queryKey: ["fields", world.id, areaId, windows, tolerance],
     staleTime: Infinity,
