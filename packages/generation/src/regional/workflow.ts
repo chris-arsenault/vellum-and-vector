@@ -206,8 +206,10 @@ export function regionalSequence(input: AtlasGenerationInput): ProcessSequence {
       invoke(`refinement.${step.id}`, undefined, stepFeature(step.id))
     ),
     invoke("canonry.project"),
-    ...regionalExtraction(input.domains).map((step) =>
-      step.id === "features" ? invoke("canonry.features") : invoke(`refinement.${step.id}`)
+    ...regionalExtraction(input.domains).flatMap((step) =>
+      step.id === "features"
+        ? [invoke("canonry.features"), invoke("canonry.magic-places")]
+        : [invoke(`refinement.${step.id}`)]
     ),
     invoke("atlas.names", "1"),
   ];

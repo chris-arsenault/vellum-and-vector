@@ -12,6 +12,7 @@ import {
 } from "./atlasWorkspace";
 import { projectNative } from "./atlasProjection";
 import { extractNativeGeography } from "./atlasFeatures";
+import { extractMagicPlaces } from "./geographicRegions";
 import { contributeForcing } from "./atlasForcing";
 import { featureRevisions } from "../generationFeatures";
 import { physicalSchedule } from "./schedule";
@@ -169,6 +170,7 @@ export function atlasNativeProcesses(
     forcingProcess(),
     epochStartProcess(),
     finishProcess(original),
+    magicPlacesProcess(original),
     ...(original.world.areas[input.areaId].profile === "world" ? [] : [adaptiveReliefProcess()]),
     ...Array.from(implementations.values(), (step) =>
       nativeProcess(step, input.resolvedFeatures!, inheritedAbsences)
@@ -301,7 +303,6 @@ function finishProcess(original: DomainSnapshot): MapProcess {
           fractures: enabled("physical.fractures"),
           lakes: enabled("water.routing"),
           landforms: enabled("physical.landforms"),
-          magic: enabled("magic.configured") || enabled("magic.local"),
           ecology: enabled("ecology.living"),
           rivers: enabled("physical.river-networks"),
           landmarks: enabled("physical.landmarks"),
@@ -320,5 +321,32 @@ function finishProcess(original: DomainSnapshot): MapProcess {
       },
     },
     validate: validateWorkspace,
+  };
+}
+
+/** Named magic geography consumes the completed field after the optional human history. */
+export function magicPlacesProcess(original: DomainSnapshot): MapProcess {
+  return {
+    contract: {
+      ...contract("canonry.magic-places", [], ["magicalPlaces"]),
+      workspaceOnly: false,
+    },
+    behavior: {
+      kind: "extract",
+      extract(state, context) {
+        if (!state.physical?.magic) return;
+        context.progress(0, "Extracting magical places");
+        const before = new Map(featureRevisions(state));
+        extractMagicPlaces(state);
+        const generated = new Set(
+          [...featureRevisions(state)]
+            .filter(([id, revision]) => before.get(id) !== revision)
+            .map(([id]) => id)
+        );
+        retainGeographicIdentities(state, original, state.physical.map.mesh.spacing * 2, generated);
+        context.progress(1, "Magical places extracted");
+      },
+    },
+    validate: () => [],
   };
 }

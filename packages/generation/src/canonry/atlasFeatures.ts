@@ -13,7 +13,7 @@ import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
 import { nativePosition } from "./atlasWorkspace";
 import { coordinateKey } from "./worldSources";
 import { extractGeologicalEvents } from "./geologicalFeatures";
-import { extractLakes, extractNamedLandforms, extractMagicPlaces } from "./geographicRegions";
+import { extractLakes, extractNamedLandforms } from "./geographicRegions";
 import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
 import { meanderReach } from "./riverMeanders";
 import type { PhysicalField } from "./field";
@@ -206,7 +206,6 @@ export interface GeographicDeliveries {
   fractures: boolean;
   lakes: boolean;
   landforms: boolean;
-  magic: boolean;
   ecology: boolean;
   rivers: boolean;
   landmarks: boolean;
@@ -218,7 +217,6 @@ const allDeliveries: GeographicDeliveries = {
   fractures: true,
   lakes: true,
   landforms: true,
-  magic: true,
   ecology: true,
   rivers: true,
   landmarks: true,
@@ -240,8 +238,6 @@ export function extractNativeGeography(
     extractNamedLandforms(state);
     extractReliefFeatures(state);
   }
-  context.progress(0.5, "Extracting magical places");
-  if (deliveries.magic) extractMagicPlaces(state);
   context.progress(0.65, "Extracting ecological regions");
   if (deliveries.ecology) extractEcologicalFeatures(state);
   context.progress(0.8, "Extracting river geography");

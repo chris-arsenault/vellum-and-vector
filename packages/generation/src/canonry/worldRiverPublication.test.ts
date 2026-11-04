@@ -45,7 +45,6 @@ function suppliedNetwork(branchFlow: number) {
     fractures: false,
     lakes: false,
     landforms: false,
-    magic: false,
     ecology: false,
     rivers: true,
     landmarks: false,

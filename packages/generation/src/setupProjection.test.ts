@@ -67,6 +67,28 @@ it("projects each capability's operative controls and diagnostic ownership witho
   ]);
 });
 
+it.each([
+  ["without human history", ["physical", "magic"]],
+  ["with human history", ["physical", "magic", "cultural", "political", "built"]],
+])("extracts magical places once at the end %s", (_label, domains) => {
+  const state = world();
+  state.domain.world.humanEras = [
+    { id: "Settlement", years: 100, physicalEpoch: null, mobility: 1, politicalCapacity: 1 },
+  ];
+  const resolved = prepareAtlasGeneration(state.domain, {
+    areaId: "area",
+    seed: 73,
+    quality: "draft",
+    domains,
+  });
+  expect(resolved.diagnostics).toEqual([]);
+  const sequence = resolved.input.configuration!.sequence,
+    ids = sequence.map((step) => step.id);
+  expect(ids.filter((id) => id === "canonry.magic-places")).toHaveLength(1);
+  expect(ids.slice(-2)).toEqual(["canonry.magic-places", "atlas.names"]);
+  expect(ids.includes("human-eras")).toBe(domains.includes("cultural"));
+});
+
 it("keeps disabled choices and owned values visible without classifying them as unavailable", () => {
   const resolved = prepared({
     "physical.glacial-sculpting": { enabled: false, settings: { glaciers: 2.7 } },
@@ -170,6 +192,17 @@ it("uses actual regional consumers and inherited fields rather than blanket geol
   ).toBe(false);
   expect(feature(view, "ecology.living").configurationEditable).toBe(false);
   expect(feature(view, "ecology.living").settings.every((item) => !item.active)).toBe(true);
+});
+
+it("extracts regional magical places once before carrying captured identities", () => {
+  const ids = region().input.configuration!.sequence.map((step) => step.id);
+  expect(ids.filter((id) => id === "canonry.magic-places")).toHaveLength(1);
+  const extraction = ids.indexOf("canonry.features");
+  expect(ids.slice(extraction, extraction + 3)).toEqual([
+    "canonry.features",
+    "canonry.magic-places",
+    "refinement.identity",
+  ]);
 });
 
 it("reports only located sources affecting this extent and does not imply that setup creates sources", () => {

@@ -337,8 +337,6 @@ function publishEnvironmentalChanges(
     fractures: false,
     lakes: available.has("water") && has("rivers"),
     landforms: false,
-    // People make magic (forges, pans, wards, doors): its places are extracted again after them.
-    magic: Boolean(state.physical?.magic?.fields.length) && has("magic"),
     ecology: available.has("productivity") && has("ecology"),
     rivers: available.has("riverOrder"),
     landmarks: false,

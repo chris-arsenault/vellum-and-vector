@@ -320,6 +320,10 @@ system-specific operations where their behavior requires it. Society's reads of 
 the coupling between the pillars are decided in
 [ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
 
+Magical places are extracted once after the optional human history, before final naming.
+Human history reads the numerical fields and material stocks directly. Regional refinement
+uses the same extraction process before carrying captured identities onto its geography.
+
 ### Society
 
 `world.societies[areaId]` retains aggregate communities, joint population groups,

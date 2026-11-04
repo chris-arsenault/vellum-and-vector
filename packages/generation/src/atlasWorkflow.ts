@@ -19,6 +19,7 @@ import {
 import { prepareGeneratedProcess } from "./mapFeatures";
 import { finalizeNamesProcess } from "./societyNaming";
 import { atlasPhysicalSequence } from "./canonry/atlasSequence";
+import { magicPlacesProcess } from "./canonry/atlasProcesses";
 import { atlasQuality } from "./canonry/atlasProfile";
 import { atlasParametersSchema, mapBoundaryName, type AtlasParameters } from "./atlasParameters";
 import {
@@ -302,7 +303,7 @@ function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput)
     "profile_domains",
     "Choose a generation domain supported by this profile."
   );
-  sequence.push(invoke(finalizeNamesProcess(source)));
+  sequence.push(invoke(magicPlacesProcess(source)), invoke(finalizeNamesProcess(source)));
   return sequence;
 }
 export function resolveInput(
