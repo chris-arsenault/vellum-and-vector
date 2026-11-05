@@ -1,6 +1,6 @@
 import type { MagicFeatureRule } from "@atlas/domain";
 import { craterRelief, volcanicRelief } from "../canonry/geologicalFeatures";
-import { keyCols, riverDrop } from "../canonry/landforms";
+import { keyCols } from "../canonry/landforms";
 import type { MagicField } from "../canonry/magicState";
 import { significantMagicArea } from "../canonry/worldMagicSignificance";
 import { worldFjordLength } from "../canonry/worldSiteEvidence";
@@ -12,7 +12,6 @@ import {
   mapScale,
   worldExceptionalLakeArea,
   worldExtent,
-  worldFallsDrop,
   worldLakeDepth,
   worldOutletDischarge,
   worldRiverDischarge,
@@ -21,6 +20,7 @@ import { magicRuleKinds } from "./magicRuleKinds";
 import type { PoiEntry, PoiPlace } from "./poiContract";
 import type { PoiKindId } from "./poiKinds";
 import { fieldOf, heldFor } from "./poiReads";
+import { prominentFall } from "./water/waterfallShape";
 import { wrapOf } from "./sea/shoreForm";
 
 /**
@@ -72,9 +72,7 @@ const pass: Gate = (state, place) =>
   (heldFor(state, "relief:keyCols", () => keyCols(fieldOf(state))).get(place.anchor) ?? 0) >=
   worldRise * 1024 * mapScale(state).height;
 /** Which water is a river is the river's own test: a fall answers only for its drop. */
-const waterfall: Gate = (state, place) =>
-  place.origin === "carried" ||
-  riverDrop(fieldOf(state), place.anchor) >= worldFallsDrop * mapScale(state).height;
+const waterfall: Gate = (state, place) => place.origin === "carried" || prominentFall(state, place);
 const fjord: Gate = (state, place) => {
   const e = evidence(state, place),
     scale = mapScale(state);

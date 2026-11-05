@@ -103,6 +103,7 @@ export const poiPages: Readonly<Record<PoiGroupId, PoiGroupPage>> = {
 /** A kind's slots it has not reached yet, stated as open work. */
 const withOpenWork = (entry: PoiEntry): PoiEntry => ({
   ...entry,
+  trueSize: entry.trueSize ?? unwritten,
   variety: entry.variety ?? unwritten,
   appearance: entry.appearance ?? unwritten,
   account: entry.account ?? unwritten,

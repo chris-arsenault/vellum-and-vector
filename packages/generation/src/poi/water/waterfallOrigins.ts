@@ -4,20 +4,21 @@ import { riversOf } from "../../area/riverCourses";
 import { hashUnit } from "../../canonry/noise";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
-import { mapScale, worldFallsDrop } from "../../worldSignificance";
+import { mapScale } from "../../worldSignificance";
 import type { PoiClaim, PoiOrigin } from "../poiContract";
 import { spacedAmong } from "../poiOrigins";
 import { carriedPlaces } from "../poiPublish";
 import { cellSpan, cellsWithin, fieldOf, fractureAt, heldFor, isLake, isSea } from "../poiReads";
 import { settlementPlaces } from "../settlements/communityRecords";
+import { sizeAtCell } from "./waterfallShape";
 import { flowTarget } from "./waterReads";
 
 type Claimed = ReadonlyMap<number, PoiClaim>;
 
 /** How far apart falls stand, in cell spans: a steep reach is one fall, not a row of them. */
 const fallsApart = 3;
-/** What a step must drop, as a multiple of the size that makes a fall, to need no other reason. */
-const greatDrop = 4;
+/** How tall a fall really is, in metres at the World's scale, to need no other reason. */
+const greatHeight = 100;
 /** How much harder a lip's rock must be than the rock below it to hold a ledge. */
 const ledgeContrast = 150;
 /** Fracture in [0, 1] at which the ground has moved along a fault. */
@@ -58,11 +59,10 @@ function carried(state: GenerationState) {
     .filter((cell) => cell >= 0)
     .map((anchor) => ({ anchor }));
 }
-/** So tall a drop is a fall whatever made it. */
+/** So tall a fall is known whatever made it. */
 const great = (state: GenerationState, claimed: Claimed) => {
-  const bar = greatDrop * worldFallsDrop * mapScale(state).height,
-    map = fieldOf(state);
-  return among(state, claimed, (cell) => riverDrop(map, cell) >= bar);
+  const bar = greatHeight * mapScale(state).height;
+  return among(state, claimed, (cell) => sizeAtCell(state, cell).height >= bar);
 };
 /** Hard rock over softer: what lies below wears back and leaves a ledge. */
 const ledge = (state: GenerationState, claimed: Claimed) => {

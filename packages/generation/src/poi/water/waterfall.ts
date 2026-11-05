@@ -21,10 +21,10 @@ import type { FallForm } from "./waterfallForms";
 import { waterfallOrigins } from "./waterfallOrigins";
 import {
   dischargeOf,
-  dropOf,
   fallVariety,
   formIn,
   shapedFall,
+  sizeOfFall,
   carriedStep,
   wetRock,
 } from "./waterfallShape";
@@ -38,18 +38,27 @@ const formTerms: Readonly<Record<FallForm, string>> = {
   ribbon: "Veil",
   chute: "Chute",
 };
+/** The same word for a system of them. */
+const systemTerms: Readonly<Record<FallForm, string>> = {
+  plunge: "Falls",
+  cataract: "Cataracts",
+  cascade: "Cascades",
+  ribbon: "Veils",
+  chute: "Chutes",
+};
 const nameTerm = (state: GenerationState, place: PoiPlace): PoiNameTerm => ({
   kind: "landform",
   subkind: "waterfall",
-  term: formTerms[formIn(state, place)],
+  term: (sizeOfFall(state, place).members > 1 ? systemTerms : formTerms)[formIn(state, place)],
 });
+const heightOf = (state: GenerationState, place: PoiPlace) => sizeOfFall(state, place).height;
 const gradient = (state: GenerationState, cell: number) => riverGradient(fieldOf(state), cell);
 const isA = (state: GenerationState, cell: number) =>
   claimsOf(state, "waterfall", waterfallOrigins).has(cell);
 const places = (state: GenerationState) => placesFromOrigins("waterfall", waterfallOrigins)(state);
 /** Falls grow with both: a tall trickle and a low cataract are each lesser than a great fall. */
 const greatness = (state: GenerationState, place: PoiPlace) =>
-  (sized(dropOf, worldFallsDrop)(state, place) +
+  (sized(heightOf, worldFallsDrop)(state, place) +
     sized(dischargeOf, worldFallsDischarge)(state, place)) /
   2;
 const around = (state: GenerationState) => 6 * cellSpan(state);
@@ -87,14 +96,14 @@ export const waterfall: PoiEntry = {
   },
   publication: {
     statement:
-      "Every fall publishes where it stands, with its drop and the water going over it. A fall a town names on the World comes later than the rest, once there are towns, and leaves the settled ground as it is.",
+      "Every fall publishes where it stands, with its true size and the water going over it. A fall a town names on the World comes later than the rest, once there are towns, and leaves the settled ground as it is.",
     moment: "geography",
     record: siteRecord({
       kind: "waterfall",
       layer: "geology",
       name: "Waterfall",
       attributes: (state, place) => ({
-        drop: dropOf(state, place),
+        drop: heightOf(state, place),
         discharge: dischargeOf(state, place),
       }),
     }),
@@ -151,7 +160,7 @@ export const waterfall: PoiEntry = {
     statement:
       "A fall offers water power and awe, and blocks river traffic at a place where towns grow up at the portage.",
     offers: (state, place) => ({
-      power: sized(dropOf, worldFallsDrop)(state, place),
+      power: sized(heightOf, worldFallsDrop)(state, place),
       sanctity: greatness(state, place) / 2,
       trade: sized(dischargeOf, worldFallsDischarge)(state, place) / 2,
     }),
@@ -181,4 +190,13 @@ export const waterfall: PoiEntry = {
     term: nameTerm,
   },
   variety: fallVariety,
+  trueSize: {
+    statement:
+      "Roughly the world's falls with a much longer tail. A record on a coarse map says the fall or falls exist in that stretch of river, and a stretch losing far more than one fall's height on broken rock is one named system of many.",
+    size: (state, place) => {
+      const { height, width, length } = sizeOfFall(state, place);
+      return { height, width, length };
+    },
+    represents: (state, place) => ({ members: sizeOfFall(state, place).members }),
+  },
 };

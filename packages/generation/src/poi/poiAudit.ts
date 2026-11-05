@@ -127,6 +127,8 @@ function riverAccount(
     distanceToDrawnRiverCells: cells,
     standing: standing(onChannel, cells, record),
     discharge,
+    trueSize: place.attributes.trueSize ?? null,
+    members: place.attributes.members ?? null,
     courseEvidence: judged?.evidence ?? null,
     courseFails: judged ? riverShortfalls(judged.evidence, mapScale(state)) : null,
   };

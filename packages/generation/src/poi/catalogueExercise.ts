@@ -46,7 +46,10 @@ function placeCalls(entry: PoiEntry, state: GenerationState, p: PoiPlace): Call[
   const onPlace = (fn: never) => (fn as (s: GenerationState, q: PoiPlace) => unknown)(state, p),
     onCell = (fn: never) => (fn as (s: GenerationState, c: number) => unknown)(state, p.anchor);
   const { fields, people, time, visibility, naming, others, existence, recognition } = entry;
+  const size = entry.trueSize && "size" in entry.trueSize ? entry.trueSize : null;
   return [
+    ["trueSize.size", size?.size, onPlace],
+    ["trueSize.represents", size?.represents, onPlace],
     ["variety.of", entry.variety && "of" in entry.variety ? entry.variety.of : null, onPlace],
     ["appearance", entry.appearance, onPlace],
     ["account", entry.account, onPlace],

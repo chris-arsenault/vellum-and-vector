@@ -67,11 +67,21 @@ export function publishKinds(
   for (const entry of entries())
     if (entry.publication.moment === moment && delivered(entry)) publishKind(state, entry, written);
 }
+/** A place's true size, where its kind has answered that. */
+function sizeAttributes(state: GenerationState, entry: PoiEntry, place: PoiPlace) {
+  const trueSize = entry.trueSize;
+  if (!trueSize || "slot" in trueSize) return {};
+  return {
+    trueSize: trueSize.size(state, place),
+    members: trueSize.represents(state, place).members,
+  };
+}
 /** What every record says of its place, whichever kind's record it is. */
 function placeAttributes(state: GenerationState, entry: PoiEntry, place: PoiPlace) {
   const variety = varietyOfEntry(state, entry, place);
   return {
     poi: entry.id,
+    ...sizeAttributes(state, entry, place),
     ...(place.origin ? { origin: place.origin } : {}),
     ...(place.hostedBy ? { hostedBy: place.hostedBy } : {}),
     ...(variety ? { variety } : {}),

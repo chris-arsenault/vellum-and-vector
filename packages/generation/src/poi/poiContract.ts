@@ -322,6 +322,18 @@ export interface PoiVariety<P = PoiPlace> {
   /** Chooses from the place's readings and chance. */
   readonly of: OnPlace<string, P>;
 }
+/**
+ * What one place of this kind really is, whatever map it is on: roughly real sizes with a long
+ * tail. A record can stand for one thing or a system of many, and it carries down unchanged. The
+ * map's symbol for it makes no claim about its size.
+ */
+export interface PoiTrueSize<P = PoiPlace> {
+  readonly statement: string;
+  /** Real measurements in metres. */
+  readonly size: OnPlace<{ height?: number; width?: number; length?: number }, P>;
+  /** One thing, or a system of this many members. */
+  readonly represents: OnPlace<{ members: number }, P>;
+}
 /** How a place shows on the map. Open work: every kind answers it when symbols reach it. */
 export type PoiAppearance = Record<string, unknown>;
 
@@ -331,6 +343,7 @@ export type PoiAppearance = Record<string, unknown>;
  * so they stay listed.
  */
 export interface PlaceRoles<P> {
+  readonly trueSize?: Slot<PoiTrueSize<P>>;
   readonly variety?: Slot<PoiVariety<P>>;
   readonly appearance?: Slot<OnPlace<PoiAppearance, P>>;
   /** A sentence on why this place is here. */

@@ -1,25 +1,76 @@
 import { riverDrop, waterfallLeastDrop } from "../../canonry/landforms";
 import { hashUnit } from "../../canonry/noise";
+import { hostedCell } from "../../area/areaHosting";
 import type { GenerationState } from "../../process";
-import { worldFallsDischarge, worldFallsDrop } from "../../worldSignificance";
+import type { RegionalState } from "../../regional/state";
+import { mapScale, worldFallsDischarge, worldFallsDrop } from "../../worldSignificance";
 import type { PoiFieldChange, PoiPlace, PoiVariety } from "../poiContract";
+import { carriedPlaces } from "../poiPublish";
 import { adjacent, fieldOf, fractureAt, isLand, hasChannel, toNative } from "../poiReads";
 import { varietyOf } from "../poiVariety";
 import { sized } from "../poiVisibilityRules";
 import { bareOf, thinSoilOf } from "../relief/reliefShape";
 import { fallForm, fallShapes, type FallForm } from "./waterfallForms";
+import { trueFallSize, type TrueFallSize } from "./waterfallSize";
 import { flowTarget } from "./waterReads";
 
 /** Rock resistance of soft rock and hard. */
 const softRock = 700,
   hardRock = 1500;
 const salt = 0x7042;
+const salts = { height: 0x7043, width: 0x7044 };
+/** A crest this wide at the World's scale is known there, however low the fall, in metres. */
+const worldFallsWidth = 500;
 const unit = (value: number) => Math.max(0, Math.min(1, value));
 
 export const dropOf = (state: GenerationState, place: PoiPlace) =>
   riverDrop(fieldOf(state), place.anchor);
 export const dischargeOf = (state: GenerationState, place: PoiPlace) =>
   fieldOf(state).FlowAccumulation.get(place.anchor);
+
+const sizes = new WeakMap<GenerationState, Map<string, TrueFallSize>>();
+/** What a parent's record says a carried fall at this cell really is. */
+function carriedSize(state: GenerationState, cell: number): TrueFallSize | null {
+  if (!("regional" in state)) return null;
+  const found = carriedPlaces(state as RegionalState).find(
+    ({ entry, carried }) => entry.id === "waterfall" && hostedCell(state, carried.feature) === cell
+  );
+  const attributes = found?.carried.feature.attributes,
+    size = attributes?.trueSize as Omit<TrueFallSize, "members"> | undefined;
+  return size ? { ...size, members: Number(attributes?.members ?? 1) } : null;
+}
+/** What a fall at this cell would really be, from the river's drop and chance. */
+export function sizeAtCell(state: GenerationState, cell: number) {
+  return trueFallSize(
+    {
+      budget: riverDrop(fieldOf(state), cell),
+      discharge: fieldOf(state).FlowAccumulation.get(cell),
+      fracture: unit(fractureAt(state, cell)),
+    },
+    hashUnit(salts.height, cell, 0),
+    hashUnit(salts.width, cell, 0)
+  );
+}
+/** What a fall really is, settled once: the ground its own step shapes does not choose again. */
+export function sizeOfFall(state: GenerationState, place: PoiPlace) {
+  let kept = sizes.get(state);
+  if (!kept) sizes.set(state, (kept = new Map()));
+  let size = kept.get(place.id);
+  if (!size) {
+    size =
+      (place.origin === "carried" ? carriedSize(state, place.anchor) : null) ??
+      sizeAtCell(state, place.anchor);
+    kept.set(place.id, size);
+  }
+  return size;
+}
+const heightOf = (state: GenerationState, place: PoiPlace) => sizeOfFall(state, place).height;
+/** Whether a fall is known on this map: its real height or crest, at this map's scale. */
+export function prominentFall(state: GenerationState, place: PoiPlace) {
+  const { height, width } = sizeOfFall(state, place),
+    scale = mapScale(state);
+  return height >= worldFallsDrop * scale.height || width >= worldFallsWidth * scale.length;
+}
 
 export const fallVariety: PoiVariety = {
   statement:
@@ -32,7 +83,7 @@ export const fallVariety: PoiVariety = {
           (fieldOf(state).RockResistance.get(cell) - softRock) / (hardRock - softRock)
         ),
         fracture: unit(fractureAt(state, cell)),
-        tall: sized(dropOf, worldFallsDrop)(state, place),
+        tall: sized(heightOf, worldFallsDrop)(state, place),
         broad: sized(dischargeOf, worldFallsDischarge)(state, place),
       },
       hashUnit(salt, cell, 0)

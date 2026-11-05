@@ -30,6 +30,7 @@ const contract = {
 };
 /** The slots kinds answer as their turn comes; everything else is already answered. */
 const openSlots = new Set([
+  "trueSize",
   "variety",
   "appearance",
   "account",
@@ -63,8 +64,8 @@ it("has one page per group and one entry per kind, on its own group", () => {
 
 it("holds every entry to exactly the agreed roles and fields", () => {
   for (const entry of Object.values(poiCatalogue)) {
-    const { id, group, name, variety, appearance, account, ...roles } = entry;
-    expect([id, group, name, variety, appearance, account].every(Boolean)).toBe(true);
+    const { id, group, name, trueSize, variety, appearance, account, ...roles } = entry;
+    expect([id, group, name, trueSize, variety, appearance, account].every(Boolean)).toBe(true);
     expect(Object.keys(roles).sort()).toEqual(Object.keys(contract).sort());
     for (const [role, fields] of Object.entries(contract))
       expect(Object.keys(roles[role as keyof typeof roles]).sort(), `${id}.${role}`).toEqual(
@@ -78,7 +79,7 @@ it("lists an entry's unwritten fields as its open work", () => {
     ...poiCatalogue.peak,
     naming: { ...poiCatalogue.peak.naming, namedBy: unwritten },
   };
-  const peakOpen = ["appearance", "account", "acrossMaps.standsOn"];
+  const peakOpen = ["trueSize", "appearance", "account", "acrossMaps.standsOn"];
   expect(unwrittenFields(poiCatalogue.peak)).toEqual(peakOpen);
   expect(unwrittenFields(open)).toEqual(expect.arrayContaining([...peakOpen, "naming.namedBy"]));
 });
