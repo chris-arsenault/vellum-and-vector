@@ -2,43 +2,27 @@
 
 User direction recorded 2026-11-05. Refines refinement in
 [ADR 0005](0005-scale-contract.md) and
-[ADR 0008](0008-regional-refinement-is-conditioned-amplification.md).
+[ADR 0008](0008-regional-refinement-is-conditioned-amplification.md). It states what these terms
+already meant; it does not change how cell values or an entity's own effects work.
 
 ## Decision
 
-**A named entity is not removed, and it is not fixed.** A named entity on a coarser map
-continues on every finer map. Refinement may change its size, its shape and where it stands.
-It may not take the entity away, and it may not force the ground to match the entity's old
-position or extent.
+**A named entity is not removed.** A named entity on a coarser map continues on every finer map,
+and refinement may change its size, shape and where it stands. A name on the World is a major
+geographic or cultural landmark, so it does not disappear because generation cannot place it.
 
-Two things follow:
+**A coarse value describes the area beneath it, not each child.** A coarse cell that is 50% forest
+means that about half of its child cells are forest. It does not mean that every child cell is
+50% forest. Rain coverage works the same way.
 
-- Generation has no pass that removes a named entity because it cannot be handled. An entity
-  ends only as an event in the world's history.
-- The rule protects the entity's identity. It does not protect its old cells. Nothing is
-  pinned, seeded or held in place on finer ground to keep an entity where it was.
-
-**A coarse cell's value describes its children as a population.** A coarse cell that is 50%
-forest means that about half of its child cells are forest. It does not mean that every child
-cell is 50% forest. Rain coverage works the same way: a coarse share of rain falling on a cell
-means that share of the ground below it is rained on.
-
-Refinement therefore distributes a coarse share among the children, according to their own
-ground, so that the children together come to about the parent's value. Averaging a share into
-every child, or copying it to every child, is wrong.
+**A biome is a line drawn around a generalized area.** A biome's outline contains cells of other
+kinds, because it draws around the area and fills in the divergences. It is reflective of an area
+that is some reasonable percent of that biome, so a finer map finding other ground inside a
+coarse biome's outline is expected and is not a contradiction of it.
 
 ## Consequences
 
-- A forest named on the World continues on a region as that forest. It may be smaller, larger
-  or elsewhere than its coarse outline, wherever the distributed forest cells actually fall.
-- A coarse outline is evidence of where and how much, not a boundary the finer map must keep.
-- Every process that refines a share (cover, rain, magic and any later one) distributes it, and
-  a check of a refined share compares the children's total with the parent, not one child with
-  the parent.
-
-## Alternatives
-
-- **Hold a coarse entity's cells on finer ground.** Rejected by the user: it makes local ground
-  contradict itself to keep an outline that was only ever approximate.
-- **Remove what finer ground does not support.** Rejected by the user: a name on the World is a
-  major geographic or cultural landmark.
+- A forest named on the World continues on a region as that forest, at the size and place the
+  region's own forest takes.
+- What a place does to the ground as its own effect stands as its entry defines it: a fall holds
+  its step, and a peak shapes the rock around it.
