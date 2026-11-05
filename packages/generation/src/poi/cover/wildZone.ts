@@ -1,9 +1,10 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import type { GenerationState } from "../../process";
 import { carryWhereItLands } from "../poiCarry";
 import { notApplicable, type PoiEntry } from "../poiContract";
 import { namingCultureNear, rulePlaces, within } from "../poiPlaces";
 import { ruleRecord } from "../poiRecords";
-import { cellSpan, fieldOf, isRiver, magicRule } from "../poiReads";
+import { cellSpan, fieldOf, hasChannel, magicRule } from "../poiReads";
 import { weighed } from "../poiVisibilityRules";
 import {
   countryCounterpart,
@@ -93,7 +94,7 @@ export const wildZone: PoiEntry = {
     roads: (state, place) => place.cells.map((cell) => ({ cell, factor: unsteady(state, cell) })),
     boats: (state, place) =>
       place.cells
-        .filter((cell) => isRiver(state, cell))
+        .filter((cell) => hasChannel(state, cell))
         .map((cell) => ({ cell, factor: unsteady(state, cell) })),
     drainage: notApplicable(
       "The hashed relief sends streams new ways; the network finds them with no cost term of its own."

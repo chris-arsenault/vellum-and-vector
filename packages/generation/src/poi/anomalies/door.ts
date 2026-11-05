@@ -1,3 +1,4 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { point, type AtlasFeature } from "@atlas/domain";
 import { nativePosition } from "../../canonry/atlasWorkspace";
 import { units } from "../../canonry/math";

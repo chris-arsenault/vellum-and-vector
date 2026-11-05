@@ -1,3 +1,4 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { keyCols } from "../../canonry/landforms";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
@@ -14,7 +15,7 @@ import {
   heightAt,
   heldFor,
   isLand,
-  isRiver,
+  hasChannel,
   metres,
 } from "../poiReads";
 import { attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
@@ -163,7 +164,7 @@ export const pass: PoiEntry = {
     statement:
       "A col lowers with its crest and lasts as long as the peaks stand. Once headward erosion carries a river through it, the crossing is a valley.",
     fate: (state, place) =>
-      isRiver(state, place.anchor) ? { fate: "becomes", kind: "valley" } : { fate: "persists" },
+      hasChannel(state, place.anchor) ? { fate: "becomes", kind: "valley" } : { fate: "persists" },
   },
   visibility: {
     statement:

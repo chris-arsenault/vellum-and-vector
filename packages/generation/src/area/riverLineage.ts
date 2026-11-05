@@ -1,9 +1,9 @@
 import type { AtlasFeature } from "@atlas/domain";
 import type { PhysicalField } from "../canonry/field";
 import type { GenerationState } from "../process";
-import { courseLines, type CapturedCourse } from "./courses";
-import { cellAt, isContent, regionalSpan } from "./lattice";
-import type { RegionalState } from "./state";
+import { courseLines, type CapturedCourse } from "../regional/courses";
+import { cellAt, isContent, regionalSpan } from "../regional/lattice";
+import type { RegionalState } from "../regional/state";
 
 /**
  * A parent map's river on its child. The child's river is the water that runs from where the

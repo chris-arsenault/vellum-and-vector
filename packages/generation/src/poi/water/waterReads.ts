@@ -1,4 +1,4 @@
-import { mappedRiverCells } from "../../canonry/mappedRivers";
+import { mappedRiverCells } from "../../area/riverCourses";
 import type { GenerationState } from "../../process";
 import type { PoiPlace } from "../poiContract";
 import { adjacent, cellSpan, cellsWithin, fieldOf, moistureAt } from "../poiReads";

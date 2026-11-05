@@ -1,3 +1,4 @@
+// @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import type { GenerationState } from "../../process";
 import { bridgeFlow, fordCost, roadTravellers, trackTravellers } from "../../regional/societyWays";
 import { rulingGrade } from "../../regional/ways";

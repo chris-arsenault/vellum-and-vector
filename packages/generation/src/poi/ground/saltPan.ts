@@ -1,3 +1,4 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { saltedGround } from "../../canonry/ecologyBiomes";
 import { bedDissolvesAbove } from "../../canonry/magicSaltStocks";
 import type { GenerationState } from "../../process";

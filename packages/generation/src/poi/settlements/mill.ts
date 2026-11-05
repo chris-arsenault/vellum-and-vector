@@ -1,3 +1,4 @@
+// @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import type { GenerationState } from "../../process";
 import { regionalFeature, regionalId } from "../../regional/extraction/features";
 import { positionOf } from "../../regional/lattice";

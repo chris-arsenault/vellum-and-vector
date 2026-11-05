@@ -1,28 +1,51 @@
-# 0009 — Named entities persist; a coarse cell's value is a share of its children
+# 0009 — Refinement resolves named entities; it does not review them
 
-User direction recorded 2026-11-05. Refines refinement in
-[ADR 0005](0005-scale-contract.md) and
-[ADR 0008](0008-regional-refinement-is-conditioned-amplification.md). It states what these terms
-already meant; it does not change how cell values or an entity's own effects work.
+User direction recorded 2026-11-05. Refines [ADR 0005](0005-scale-contract.md) and
+[ADR 0008](0008-regional-refinement-is-conditioned-amplification.md).
+
+## Context
+
+Maps at different scales are views of one world. Looking closer cannot make something stop
+existing. Generation treated a coarse place as a claim the finer map could fail to confirm: it
+searched near the old position, and what it did not find was removed or left where it was. Either
+result makes the maps disagree about what exists, or leaves a map wrong about where a thing is.
 
 ## Decision
 
-**A named entity is not removed.** A named entity on a coarser map continues on every finer map,
-and refinement may change its size, shape and where it stands. A name on the World is a major
-geographic or cultural landmark, so it does not disappear because generation cannot place it.
+A coarse record of a named entity makes two claims of different strength. That the entity exists
+is firm. Where it stands and how large it is are an estimate at the coarse map's resolution, and
+the finer map has the better answer.
 
-**A coarse value describes the area beneath it, not each child.** A coarse cell that is 50% forest
-means that about half of its child cells are forest. It does not mean that every child cell is
-50% forest. Rain coverage works the same way.
+Refinement therefore answers only where and how big. It can add detail going down and it never
+subtracts a named entity. Moving and resizing are expected. A fact stays a fact across passes on
+one map as well as across maps.
 
-**A biome is a line drawn around a generalized area.** A biome's outline contains cells of other
-kinds, because it draws around the area and fills in the divergences. It is reflective of an area
-that is some reasonable percent of that biome, so a finer map finding other ground inside a
-coarse biome's outline is expected and is not a contradiction of it.
+A coarse value describes the area beneath it. A cell that is 50% forest means about half its
+children are forest, not that each child is 50% forest. A biome's outline draws around a
+generalized area and fills in the divergences. Other ground inside a coarse outline contradicts
+nothing, so nothing is held on finer ground to keep to it.
+
+The rule covers what has become a named fact. Unnamed streams and cell values come and go freely.
 
 ## Consequences
 
-- A forest named on the World continues on a region as that forest, at the size and place the
-  region's own forest takes.
-- What a place does to the ground as its own effect stands as its entry defines it: a fall holds
-  its step, and a peak shapes the rock around it.
+- Failure to find a named entity on a finer map is a generator bug. A child is built from its
+  parent's fields, so either it was not built properly from them or a test looks for the entity
+  wrongly. The cause is traced and fixed. Generation does not handle the failure, and it does not
+  paint the entity onto ground that does not support it.
+- Significance decides whether something is named the first time. A carried entity is not judged
+  by it again.
+- A place left at a position that is now wrong has not survived. It is an unresolved failure, even
+  though its record remains.
+- Two named entities do not collapse into one.
+- An entity's own effect on the ground stands: a fall holds its step and a peak shapes its rock.
+- History can end an entity as an event in the world's story. Generation cannot end one for its own
+  convenience.
+- Lying outside a finer map's frame is not removal. The entity stays on the parent.
+- Across-map rules must always return an answer. A rule that can report absence, such as a search
+  that can come back empty or an outcome that drops the place, has the wrong shape.
+
+## Status of the code
+
+The POI contract's `unrealized` outcomes and empty counterpart searches predate this decision. POI
+entry files carry a `@needsResolution` header until their kinds resolve in this way.

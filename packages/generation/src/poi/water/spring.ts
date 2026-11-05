@@ -1,3 +1,4 @@
+// @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import { components } from "../../canonry/geographicRegions";
 import type { GenerationState } from "../../process";
 import { frameEdge } from "../../regional/lattice";

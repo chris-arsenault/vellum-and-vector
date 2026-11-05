@@ -1,26 +1,19 @@
-import {
-  point,
-  spatial,
-  unwrapCoordinates,
-  type AtlasFeature,
-  type Band,
-  type DrainageReach,
-} from "@atlas/domain";
-import type { PoiHostLink } from "../poi/poiContract";
+import { point, spatial, unwrapCoordinates, type Band, type DrainageReach } from "@atlas/domain";
+import { nativePosition } from "../canonry/atlasWorkspace";
+import type { PhysicalField } from "../canonry/field";
+import { releaseWorking, workingArray } from "../canonry/physicalNumerics";
+import { riverCourseJudgments } from "../canonry/worldRiverCourses";
+import { coordinateKey } from "../canonry/worldSources";
 import { heldFor } from "../poi/poiReads";
-import { continuingRivers, followWater, isRefinedMap } from "../regional/riverLineage";
 import type { GenerationState } from "../process";
 import { isWorldGeography, mapScale } from "../worldSignificance";
-import { nativePosition } from "./atlasWorkspace";
-import type { PhysicalField } from "./field";
-import { releaseWorking, workingArray } from "./physicalNumerics";
-import { coordinateKey } from "./worldSources";
-import { riverCourseJudgments } from "./worldRiverCourses";
+import { continuingRivers, followWater, isRefinedMap } from "./riverLineage";
 
 /**
- * The one definition of a river on this map. The channel field holds all the water that runs;
- * a river is a channel on a course significant at this map's scale, inside its frame. River
- * publication draws exactly these, and places that stand on a river read exactly these.
+ * What a river is on this map, read by the river's area entry. The channel field holds all the
+ * water that runs; a river is a channel on a course significant at this map's scale, inside its
+ * frame, or a parent's river continuing here. River publication draws exactly these, and places
+ * that stand on a river read exactly these.
  */
 
 function riverReach(state: GenerationState, start: number, incoming: Band) {
@@ -208,21 +201,3 @@ const riverPositions = (state: GenerationState) =>
   });
 export const riverPositionAt = (state: GenerationState, cell: number) =>
   riverPositions(state).get(cell);
-
-/** The cell at a position along a river of this map, or -1 where this map does not hold it. */
-export function cellOnRiver(state: GenerationState, riverId: string, along: number) {
-  if (along < 0 || along > 1) return -1;
-  const river = riversOf(state).find((candidate) => candidate.id === riverId);
-  return river ? river.cells[Math.round(along * (river.cells.length - 1))] : -1;
-}
-/**
- * Where a record placed on a river stands on this map: its share of the parent's river, read on
- * the part of that river this map holds. -1 when that part of the river lies off this map.
- */
-export function hostedCell(state: GenerationState, feature: AtlasFeature) {
-  const link = feature.attributes.hostedBy as PoiHostLink | undefined;
-  if (!link || !isRefinedMap(state)) return -1;
-  const river = continuingRivers(state).find((candidate) => candidate.id === link.hostId);
-  if (!river || river.to <= river.from) return -1;
-  return cellOnRiver(state, link.hostId, (link.along - river.from) / (river.to - river.from));
-}

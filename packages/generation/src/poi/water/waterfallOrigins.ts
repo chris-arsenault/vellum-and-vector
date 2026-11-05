@@ -1,5 +1,6 @@
 import { isRiverStep, riverDrop } from "../../canonry/landforms";
-import { hostedCell, riversOf } from "../../canonry/mappedRivers";
+import { hostedCell, linkOn } from "../../area/areaHosting";
+import { riversOf } from "../../area/riverCourses";
 import { hashUnit } from "../../canonry/noise";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
@@ -106,7 +107,7 @@ function portage(state: GenerationState, claimed: Claimed) {
 }
 
 /** Why a step in a river is a fall, in order of claim. Without a reason it stays steep water. */
-export const waterfallOrigins: readonly PoiOrigin[] = [
+const reasons: readonly PoiOrigin[] = [
   {
     id: "carried",
     statement: "A fall the coarser map named, at its place on its river.",
@@ -150,3 +151,12 @@ export const waterfallOrigins: readonly PoiOrigin[] = [
     finds: portage,
   },
 ];
+/** Each fall is found on a river, so it records that river as it is placed. */
+export const waterfallOrigins: readonly PoiOrigin[] = reasons.map((reason) => ({
+  ...reason,
+  finds: (state, claimed) =>
+    reason.finds(state, claimed).map((found) => ({
+      ...found,
+      hostedBy: linkOn(state, "river", found.anchor) ?? undefined,
+    })),
+}));

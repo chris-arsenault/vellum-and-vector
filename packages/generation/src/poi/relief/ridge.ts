@@ -1,9 +1,10 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
 import { areaRecord } from "../poiRecords";
-import { heightAt, isLand, isRiver } from "../poiReads";
+import { heightAt, isLand, hasChannel } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
   lastsWhile,
@@ -24,7 +25,7 @@ const typicalLength = 100_000,
   typicalRelief = 600;
 
 const isA = (state: GenerationState, cell: number) => {
-  if (!isLand(state, cell) || isRiver(state, cell)) return false;
+  if (!isLand(state, cell) || hasChannel(state, cell)) return false;
   const { crest, along } = sectionAt(state, cell),
     plain = state.physical!.profile.PlainSlopeThreshold;
   return crest / sectionRadius(state) > plain && along < crestShare * crest;

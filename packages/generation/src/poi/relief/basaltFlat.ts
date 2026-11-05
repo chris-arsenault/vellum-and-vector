@@ -1,3 +1,4 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { carryWhereItLands, counterpartOf, stays, costNear } from "../poiCarry";
 import { notApplicable, type PoiEntry } from "../poiContract";
 import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";

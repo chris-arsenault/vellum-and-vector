@@ -1,3 +1,4 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import type { GenerationState } from "../../process";
 import { baselineRock } from "../../regional/material";
 import type { RegionalState } from "../../regional/state";

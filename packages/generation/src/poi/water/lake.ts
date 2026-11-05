@@ -1,3 +1,4 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { spatial } from "@atlas/domain";
 import { lakeMembership } from "../../canonry/lakeMembership";
 import { noWaterSurface } from "../../canonry/math";

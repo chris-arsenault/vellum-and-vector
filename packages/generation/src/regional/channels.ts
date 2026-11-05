@@ -1,7 +1,7 @@
 import { resolutionCells } from "@atlas/domain";
 import { distance, isContent, regionalSpan } from "./lattice";
 import { referenceDischarge } from "./network";
-import { holdContinuingChannels } from "./riverLineage";
+import { holdContinuingChannels } from "../area/riverLineage";
 import { clamp, type RegionalState } from "./state";
 
 /** Reference-runoff samples a physical channel drains, in this map's own samples. */

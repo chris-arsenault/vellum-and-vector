@@ -1,3 +1,4 @@
+// @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import type { GenerationState } from "../../process";
 import { bridgeFlow, fordCost, roadTravellers } from "../../regional/societyWays";
 import type { RegionalState } from "../../regional/state";
@@ -17,7 +18,7 @@ import {
   dischargeAt,
   fieldOf,
   isLand,
-  isRiver,
+  hasChannel,
   rockAt,
   wetlandCoverAt,
 } from "../poiReads";
@@ -58,7 +59,7 @@ const factors = {
 /** The approaches held to a grade a laden cart can climb, on the land either side. */
 const graded = (state: GenerationState, cell: number): readonly PoiFieldChange[] =>
   [...adjacent(state, cell)]
-    .filter((next) => isLand(state, next) && !isRiver(state, next))
+    .filter((next) => isLand(state, next) && !hasChannel(state, next))
     .map((next) => ({ change: "gradientAtMost", cell: next, gradient: rulingGrade }));
 /**
  * The crossing tax gone at the span; over the approach, a causeway above the wet ground the

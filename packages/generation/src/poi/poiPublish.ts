@@ -10,8 +10,8 @@ import type { GenerationState } from "../process";
 import type { RegionalState } from "../regional/state";
 import { poiCatalogue } from "./catalogue";
 import { nativePosition } from "../canonry/atlasWorkspace";
-import { hostedCell, riverPositionAt } from "../canonry/mappedRivers";
-import type { PoiCarried, PoiEntry, PoiHostLink, PoiMoment, PoiPlace } from "./poiContract";
+import { hostedCell, linkOn } from "../area/areaHosting";
+import type { PoiCarried, PoiEntry, PoiMoment, PoiPlace } from "./poiContract";
 import type { PoiKindId } from "./poiKinds";
 import { applyNameTerm, takeNames } from "./poiNames";
 import { originsOf } from "./poiOrigins";
@@ -39,8 +39,17 @@ export function placesOf(state: GenerationState, entry: PoiEntry): readonly PoiP
     const found =
       called<(state: GenerationState) => readonly PoiPlace[]>(entry.existence.places)?.(state) ??
       [];
-    return found.filter((place) => realized(state, entry, place));
+    return found
+      .filter((place) => realized(state, entry, place))
+      .map((p) => placed(state, entry, p));
   });
+}
+/** A place on an area records that area now, as it is placed. */
+function placed(state: GenerationState, entry: PoiEntry, place: PoiPlace) {
+  const kind = entry.acrossMaps.standsOn;
+  if (typeof kind === "string" && !place.hostedBy)
+    place.hostedBy = linkOn(state, kind, place.anchor) ?? undefined;
+  return place;
 }
 
 /**
@@ -58,20 +67,13 @@ export function publishKinds(
   for (const entry of entries())
     if (entry.publication.moment === moment && delivered(entry)) publishKind(state, entry, written);
 }
-/** The river a place stands on, as it is placed. */
-function hostOf(state: GenerationState, entry: PoiEntry, place: PoiPlace) {
-  const on = entry.acrossMaps.standsOn === "river" ? riverPositionAt(state, place.anchor) : null;
-  if (!on) return {};
-  const hostedBy: PoiHostLink = { host: "river", hostId: on.riverId, along: on.along };
-  return { hostedBy };
-}
 /** What every record says of its place, whichever kind's record it is. */
 function placeAttributes(state: GenerationState, entry: PoiEntry, place: PoiPlace) {
   const variety = varietyOfEntry(state, entry, place);
   return {
     poi: entry.id,
     ...(place.origin ? { origin: place.origin } : {}),
-    ...hostOf(state, entry, place),
+    ...(place.hostedBy ? { hostedBy: place.hostedBy } : {}),
     ...(variety ? { variety } : {}),
   };
 }

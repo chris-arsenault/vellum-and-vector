@@ -1,3 +1,4 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { Landform } from "../../canonry/codes";
 import { hashUnit } from "../../canonry/noise";
 import { prominence } from "../../canonry/landforms";
@@ -30,7 +31,7 @@ import {
   heldFor,
   iceAt,
   isLand,
-  isRiver,
+  hasChannel,
   metres,
   moistureAt,
   nearestWhere,
@@ -145,7 +146,7 @@ const formed = (state: GenerationState, place: PoiPlace) =>
       face = faceOf(state, place.anchor),
       reach = formReach(state, place);
     return cellsWithin(state, place.anchor, reach)
-      .filter((cell) => isLand(state, cell) && !isRiver(state, cell))
+      .filter((cell) => isLand(state, cell) && !hasChannel(state, cell))
       .map((cell) => {
         const dx = meshDeltaX(mesh, mesh.x(cell) - mesh.x(place.anchor)),
           dy = mesh.y(cell) - mesh.y(place.anchor);

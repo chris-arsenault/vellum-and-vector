@@ -1,3 +1,4 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import type { GenerationState } from "../../process";
 import { besiegedTown } from "../../societySiege";
 import { carryWhereItLands, stays } from "../poiCarry";

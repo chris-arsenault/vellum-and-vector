@@ -1,10 +1,11 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { frozenIce } from "../../canonry/ecologyEnvironment";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { namingCultureNear, rulePlaces } from "../poiPlaces";
 import { ruleRecord } from "../poiRecords";
-import { adjacent, celsiusAt, geothermalAt, heldFor, iceAt, isRiver, magicRule } from "../poiReads";
+import { adjacent, celsiusAt, geothermalAt, heldFor, iceAt, hasChannel, magicRule } from "../poiReads";
 import { weighed } from "../poiVisibilityRules";
 import {
   borders,
@@ -101,7 +102,7 @@ export const thawedHalo: PoiEntry = {
     boats: (state, place) =>
       inFrozenCountry(state, place)
         ? place.cells
-            .filter((cell) => isRiver(state, cell))
+            .filter((cell) => hasChannel(state, cell))
             .map((cell) => ({ cell, factor: openReach }))
         : [],
     drainage: notApplicable(

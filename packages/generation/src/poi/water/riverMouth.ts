@@ -1,3 +1,4 @@
+// @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, counterpartOf, parentSpanOf } from "../poiCarry";

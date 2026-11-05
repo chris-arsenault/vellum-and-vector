@@ -1,3 +1,4 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import type { GenerationState } from "../../process";
 import { gradeSeats } from "../../regional/grading";
 import { regionalSpan } from "../../regional/lattice";
@@ -19,7 +20,7 @@ import {
   celsiusAt,
   gap,
   isLand,
-  isRiver,
+  hasChannel,
   sedimentAt,
   shareAround,
   slopeAt,
@@ -90,7 +91,7 @@ export const settlement: PoiEntry = {
     suitability(state, cell) {
       const flat = 1 - Math.min(1, slopeAt(state, cell) / usableSlope),
         water = Math.max(
-          isRiver(state, cell) ? 1 : 0,
+          hasChannel(state, cell) ? 1 : 0,
           shareAround(state, cell, (next) => !isLand(state, next))
         ),
         soil = Math.min(1, sedimentAt(state, cell));

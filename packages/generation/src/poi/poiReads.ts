@@ -63,7 +63,8 @@ export const isSea = (state: GenerationState, cell: number) =>
   fieldOf(state).WaterKindCodes.get(cell) === Water.Ocean;
 export const isLake = (state: GenerationState, cell: number) =>
   fieldOf(state).WaterKindCodes.get(cell) === Water.Lake;
-export const isRiver = (state: GenerationState, cell: number) =>
+/** Whether water runs in a channel here. This is not a river: a river is the river area's to say. */
+export const hasChannel = (state: GenerationState, cell: number) =>
   fieldOf(state).RiverOrders.get(cell) > 0;
 export const landformAt = (state: GenerationState, cell: number) =>
   fieldOf(state).LandformCodes.get(cell);

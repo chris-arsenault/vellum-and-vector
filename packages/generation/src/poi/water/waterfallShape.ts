@@ -3,7 +3,7 @@ import { hashUnit } from "../../canonry/noise";
 import type { GenerationState } from "../../process";
 import { worldFallsDischarge, worldFallsDrop } from "../../worldSignificance";
 import type { PoiFieldChange, PoiPlace, PoiVariety } from "../poiContract";
-import { adjacent, fieldOf, fractureAt, isLand, isRiver, toNative } from "../poiReads";
+import { adjacent, fieldOf, fractureAt, isLand, hasChannel, toNative } from "../poiReads";
 import { varietyOf } from "../poiVariety";
 import { sized } from "../poiVisibilityRules";
 import { bareOf, thinSoilOf } from "../relief/reliefShape";
@@ -100,7 +100,7 @@ function reachBelow(state: GenerationState, place: PoiPlace, length: number) {
   return reach;
 }
 const isBank = (state: GenerationState, cell: number, reach: readonly number[]) =>
-  isLand(state, cell) && !isRiver(state, cell) && !reach.includes(cell);
+  isLand(state, cell) && !hasChannel(state, cell) && !reach.includes(cell);
 const banksOf = (state: GenerationState, cell: number, reach: readonly number[]) =>
   [...adjacent(state, cell)].filter((near) => isBank(state, near, reach));
 

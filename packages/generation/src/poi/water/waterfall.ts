@@ -1,3 +1,4 @@
+// @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import { Landform } from "../../canonry/codes";
 import { riverGradient } from "../../canonry/landforms";
 import type { GenerationState } from "../../process";
@@ -13,7 +14,7 @@ import {
 import { claimsOf, placesFromOrigins } from "../poiOrigins";
 import { namingCultureNear, holds, within } from "../poiPlaces";
 import { siteRecord } from "../poiRecords";
-import { hostedCell } from "../../canonry/mappedRivers";
+import { hostedCell } from "../../area/areaHosting";
 import { cellSpan, fieldOf } from "../poiReads";
 import { attachment, aloneAmong, sized, standsOut, weighed } from "../poiVisibilityRules";
 import type { FallForm } from "./waterfallForms";

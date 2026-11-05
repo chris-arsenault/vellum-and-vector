@@ -1,9 +1,10 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiBarrier, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";
 import { ruleRecord } from "../poiRecords";
-import { iceAt, isRiver, isSea, magicRule } from "../poiReads";
+import { iceAt, hasChannel, isSea, magicRule } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import { auroraAt, chargeHeldAt, countryOf, weightedArea } from "./anomalyReads";
 
@@ -97,7 +98,7 @@ export const auroraField: PoiEntry = {
       const held = place.cells.filter((cell) => chargeHeldAt(state, cell) > 0),
         barriers: PoiBarrier[] = [];
       if (held.some((cell) => isSea(state, cell))) barriers.push("strait");
-      if (held.some((cell) => isRiver(state, cell))) barriers.push("river");
+      if (held.some((cell) => hasChannel(state, cell))) barriers.push("river");
       return barriers;
     },
   },

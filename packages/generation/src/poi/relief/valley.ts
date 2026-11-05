@@ -1,3 +1,4 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -7,7 +8,7 @@ import {
   dischargeAt,
   heightAt,
   isLand,
-  isRiver,
+  hasChannel,
   landformAt,
   Landform,
   moistureAt,
@@ -138,7 +139,7 @@ export const valley: PoiEntry = {
       };
     },
     threatens: (state, place) =>
-      isRiver(state, place.anchor)
+      hasChannel(state, place.anchor)
         ? [
             {
               hazard: "flood",

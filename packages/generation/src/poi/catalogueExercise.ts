@@ -1,5 +1,7 @@
 import type { GenerationState } from "../process";
 import type { RegionalState } from "../regional/state";
+import type { AreaEntry, AreaPlace } from "../area/areaContract";
+import { areaCatalogue } from "../area/catalogue";
 import { poiCatalogue } from "./catalogue";
 import type { PoiEntry, PoiPlace, PoiRelation } from "./poiContract";
 import { releaseHeld } from "./poiReads";
@@ -136,11 +138,46 @@ function exerciseKind(entry: PoiEntry, state: GenerationState): KindExercise {
     failures: [...failures],
   };
 }
+/** Every rule of an area entry that answers one, run on each of its areas here. */
+function exerciseArea(entry: AreaEntry, state: GenerationState): KindExercise {
+  const started = performance.now(),
+    failures = new Set<string>(),
+    { areas } = entry.existence;
+  const attempt = (name: string, call: () => unknown) => {
+    try {
+      return call();
+    } catch (error) {
+      failures.add(`${name}: ${error instanceof Error ? error.message : String(error)}`);
+      return undefined;
+    }
+  };
+  const found =
+    typeof areas === "function"
+      ? ((attempt("existence.areas", () => areas(state)) as readonly AreaPlace[] | undefined) ?? [])
+      : [];
+  const { people, visibility, time } = entry;
+  const onArea: [string, unknown][] = [
+    ["people.offers", people.offers],
+    ["visibility.importance", visibility.importance],
+    ["time.fate", time.fate],
+  ];
+  for (const place of found)
+    for (const [name, rule] of onArea)
+      if (typeof rule === "function") attempt(name, () => rule(state, place));
+  return {
+    group: entry.form,
+    places: found.length,
+    milliseconds: Math.round(performance.now() - started),
+    failures: [...failures],
+  };
+}
 /** Every rule of every kind run on a real state. It reports what happened and decides nothing. */
 export function exerciseCatalogue(state: GenerationState): Record<string, KindExercise> {
   releaseHeld(state);
   const result: Record<string, KindExercise> = {};
   for (const entry of Object.values(poiCatalogue)) result[entry.id] = exerciseKind(entry, state);
+  for (const entry of Object.values(areaCatalogue))
+    result[`area:${entry.id}`] = exerciseArea(entry, state);
   releaseHeld(state);
   return result;
 }

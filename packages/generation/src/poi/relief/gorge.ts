@@ -1,3 +1,4 @@
+// @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import { canyonCells } from "../../canonry/landmarkCanyon";
 import { incisedReach } from "../../canonry/landforms";
 import type { GenerationState } from "../../process";
