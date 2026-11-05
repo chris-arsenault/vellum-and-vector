@@ -9,7 +9,6 @@ import { putGenerated } from "../mapFeatures";
 import type { GenerationState } from "../process";
 import type { RegionalState } from "../regional/state";
 import { poiCatalogue } from "./catalogue";
-import { stays } from "./poiCarry";
 import type { PoiCarried, PoiEntry, PoiMoment, PoiPlace } from "./poiContract";
 import type { PoiKindId } from "./poiKinds";
 import { applyNameTerm, takeNames } from "./poiNames";
@@ -192,17 +191,15 @@ function standsFor(state: RegionalState, captured: AtlasFeature, developed: Atla
   for (const item of list) if (item.featureId === developed.id) item.featureId = captured.id;
 }
 /**
- * A carried place with no developed record to stand for. What its entry says holds, except that
- * a move needs somewhere to go: a place left where it was would stand on nothing.
+ * A carried place with no developed record to stand for. Publication is no place to delete it:
+ * it stays where it was, and the log says so and what its entry asked for.
  */
 function resolveUnrealized(state: RegionalState, item: CarriedPlace, why: string) {
   const unrealized = called<
       (s: RegionalState, c: PoiCarried) => { outcome: string; cell?: number }
     >(item.entry.acrossMaps.unrealized),
-    outcome = unrealized?.(state, item.carried).outcome ?? "keep",
-    removed = outcome === "drop" || outcome === "move";
-  if (removed) removeGenerationFeature(state, item.carried.feature.id);
-  logCarry(state, item, `${why}: ${removed ? "removed" : "kept where it was"}`);
+    outcome = unrealized?.(state, item.carried).outcome ?? "keep";
+  logCarry(state, item, `${why}: left where it was (entry says ${outcome})`);
 }
 /** What became of every carried place: nothing about carrying happens without a line here. */
 const carryLog = new WeakMap<GenerationState, Record<string, number>>();
@@ -225,21 +222,16 @@ export function carryPlaces(state: RegionalState) {
   for (const { entry, place, featureId } of published.get(state) ?? [])
     for (const cell of place.cells) developedAt.set(`${entry.id}:${cell}`, featureId);
   for (const item of carriedPlaces(state)) carryPlace(state, item, developedAt);
-  leaveUnreached(state);
+  logUnreached(state);
   releaseHeld(state);
 }
-/**
- * A captured place its entry says does not reach this map has no ground here to stand on. A kind
- * that stays whatever the ground holds keeps its record; any other record leaves with it.
- */
-function leaveUnreached(state: RegionalState) {
+/** A captured place its entry says does not reach this map: it stays, and the log says so. */
+function logUnreached(state: RegionalState) {
   const reached = new Set(carriedPlaces(state).map((item) => item.carried.feature.id));
-  for (const stored of [...generationFeatures(state, { areaId: state.regional.input.areaId })]) {
+  for (const stored of generationFeatures(state, { areaId: state.regional.input.areaId })) {
     const entry = isCaptured(stored) ? entryOf(stored) : undefined;
-    if (!entry || reached.has(stored.id) || !called(entry.acrossMaps.counterpart)) continue;
-    const keeps = entry.acrossMaps.unrealized === stays;
-    if (!keeps) removeGenerationFeature(state, stored.id);
-    logCarry(state, { entry }, `does not reach this map: ${keeps ? "kept" : "removed"}`);
+    if (entry && !reached.has(stored.id) && called(entry.acrossMaps.counterpart))
+      logCarry(state, { entry }, "does not reach this map: left where it was");
   }
 }
 function carryPlace(state: RegionalState, item: CarriedPlace, developedAt: Map<string, string>) {
