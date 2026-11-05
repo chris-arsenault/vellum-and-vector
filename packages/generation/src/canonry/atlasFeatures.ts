@@ -1,12 +1,4 @@
-import {
-  chartCopies,
-  unwrapCoordinates,
-  interpolateProfile,
-  point,
-  spatial,
-  type Band,
-  type DrainageReach,
-} from "@atlas/domain";
+import { chartCopies, interpolateProfile, spatial } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState, MapProcessContext } from "../process";
 import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
@@ -18,29 +10,14 @@ import { publishKinds } from "../poi/poiPublish";
 import type { PoiEntry } from "../poi/poiContract";
 import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
 import { meanderReach } from "./riverMeanders";
-import type { PhysicalField } from "./field";
 import { oceanFootprint } from "./geographicContours";
 import { extractRanges } from "./reliefFeatures";
 import { extractOceans } from "./oceanFeatures";
 import { dropClaimedFeatures, extractLandmarks, landmarkClaims } from "./landmarkFeatures";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import { releaseWorking } from "./physicalNumerics";
 import { generationFeature, generationFeatures } from "../generationFeatures";
-import { isWorldGeography, mapScale } from "../worldSignificance";
-import { worldRiverCourses } from "./worldRiverCourses";
-
-function riverReach(state: GenerationState, start: number, incoming: Band) {
-  const map = state.physical!.map,
-    members = [start];
-  let i = start;
-  while (map.FlowTargets.get(i) >= 0) {
-    const j = map.FlowTargets.get(i);
-    members.push(j);
-    if (map.WaterKindCodes.get(j) !== 0 || map.RiverOrders.get(j) <= 0 || incoming.get(j) !== 1)
-      break;
-    i = j;
-  }
-  return members;
-}
+import { isWorldGeography } from "../worldSignificance";
+import { drainageReaches, mappedCourses, reachInFrame, riverInputs } from "./mappedRivers";
 
 function lineParts(geometry: Geometry): number[][][] {
   if (geometry.type === "LineString") return [geometry.coordinates];
@@ -139,67 +116,6 @@ function publishReachCopy(
   }
   return ids;
 }
-/** The retained record of one reach: where it ends, what it carries, and its course. */
-function reachRecord(
-  state: GenerationState,
-  start: number,
-  members: number[],
-  starts: Band
-): DrainageReach {
-  const work = state.physical!,
-    map = work.map,
-    mouth = members.at(-1)!;
-  return {
-    downstream: members.length > 1 && starts.get(mouth) >= 0 ? starts.get(mouth) : null,
-    waterBody: map.WaterKindCodes.get(mouth) !== 0 ? map.WaterBodyIds.get(mouth) : null,
-    order: map.RiverOrders.get(start),
-    basin: map.DrainageBasinIds.get(start),
-    coordinates: unwrapCoordinates(
-      members.map((j) => {
-        const p = nativePosition(work, j);
-        return [Math.round(p.x), Math.round(p.y)] as [number, number];
-      }),
-      map.mesh.periodic?.width
-    ) as [number, number][],
-    discharges: members.map((j) => map.FlowAccumulation.get(j)),
-    catchmentAreas: members.map((j) => map.CatchmentArea.get(j)),
-    featureIds: [],
-  };
-}
-/** Every reach as extraction forms it, linked downstream through the cell it ends on. */
-function* drainageReaches(
-  state: GenerationState,
-  incoming: Band
-): IterableIterator<{ start: number; members: number[]; reach: DrainageReach }> {
-  const map = state.physical!.map,
-    mesh = map.mesh,
-    starts = workingArray(map, "int32", "rivers:reach-starts").fill(-1);
-  let count = 0;
-  for (let i = 0; i < mesh.count; i++)
-    if (mesh.membership(i) === 1 && map.RiverOrders.get(i) > 0 && incoming.get(i) !== 1)
-      starts.set(i, count++);
-  try {
-    for (let i = 0; i < mesh.count; i++) {
-      if (starts.get(i) < 0) continue;
-      const members = riverReach(state, i, incoming);
-      yield { start: i, members, reach: reachRecord(state, i, members, starts) };
-    }
-  } finally {
-    releaseWorking(map, starts);
-  }
-}
-function riverInputs(map: PhysicalField) {
-  // Basin ids are numbered from one per outlet, so the largest is at most the cell count.
-  const incoming = workingArray(map, "int32", "rivers:incoming"),
-    basinDischarge = workingArray(map, "float64", "rivers:basin-discharge", map.mesh.count + 1);
-  for (let i = 0; i < map.mesh.count; i++) {
-    const basin = map.DrainageBasinIds.get(i);
-    basinDischarge.set(basin, Math.max(basinDischarge.get(basin), map.FlowAccumulation.get(i)));
-    const j = map.FlowTargets.get(i);
-    if (map.RiverOrders.get(i) > 0 && j >= 0 && map.RiverOrders.get(j) > 0) incoming.add(j, 1);
-  }
-  return { incoming, basinDischarge };
-}
 export interface GeographicDeliveries {
   oceans: boolean;
   impacts: boolean;
@@ -287,7 +203,7 @@ function extractRiverGeography(state: GenerationState, context: MapProcessContex
   function* publish() {
     // The map shows the rivers significant at its scale; the stored network keeps every reach
     // as latent drainage for finer maps.
-    const courses = worldRiverCourses(reaches, mapScale(state));
+    const courses = mappedCourses(state, reaches);
     if (isWorldGeography(state)) {
       for (const course of courses) {
         const members = course.flatMap((i, n) => records[i].members.slice(n ? 1 : 0)),
@@ -309,8 +225,7 @@ function extractRiverGeography(state: GenerationState, context: MapProcessContex
     for (const [index, { start, members, reach }] of records.entries()) {
       if (!significant.has(index)) continue;
       const discharge = basinDischarge.get(reach.basin);
-      if (!spatial.covers(state.domain.scope.footprint, point(nativePosition(work, start))))
-        continue;
+      if (!reachInFrame(state, start)) continue;
       reach.featureIds = publishReach(state, start, members, paths, discharge);
       yield { members, featureIds: reach.featureIds };
     }

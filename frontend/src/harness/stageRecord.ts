@@ -1,5 +1,5 @@
 import { foldSamples, attachGrid, gridPosition, type GridArrays } from "@atlas/domain";
-import { exerciseCatalogue, type KindExercise } from "@atlas/generation";
+import { auditPlaces, exerciseCatalogue, type KindExercise } from "@atlas/generation";
 import type { RunObservers } from "./harnessGeneration";
 
 /** The last process of every generation sequence. */
@@ -36,7 +36,8 @@ export interface DiagnosticEntry {
 export function stageRecorder() {
   const stages: StageEntry[] = [],
     diagnostics: DiagnosticEntry[] = [],
-    catalogue: Record<string, KindExercise> = {};
+    catalogue: Record<string, KindExercise> = {},
+    placeAudit: Record<string, unknown> = {};
   let started = performance.now(),
     channels = new Set<string>(),
     preview: GridArrays | undefined;
@@ -55,7 +56,10 @@ export function stageRecorder() {
     inspect(path, process, state) {
       const milliseconds = Math.round(performance.now() - started);
       // The run's last step: the map is complete, so the POI catalogue's rules can read it.
-      if (process === lastStep) Object.assign(catalogue, exerciseCatalogue(state));
+      if (process === lastStep) {
+        Object.assign(catalogue, exerciseCatalogue(state));
+        Object.assign(placeAudit, auditPlaces(state));
+      }
       const now = new Set(Object.keys(state.surface.channels));
       stages.push({
         path: path.join("/"),
@@ -83,7 +87,14 @@ export function stageRecorder() {
       if (message.kind === "preview") preview = message.grid;
     },
   };
-  return { stages, diagnostics, catalogue, observers, highestLand: () => highestLand(preview) };
+  return {
+    stages,
+    diagnostics,
+    catalogue,
+    placeAudit,
+    observers,
+    highestLand: () => highestLand(preview),
+  };
 }
 
 /** The highest active cell of the last preview, in map metres. */

@@ -1,5 +1,5 @@
 import { BitSet, type DrainageReach } from "@atlas/domain";
-import { riverSignificance, worldScale } from "../worldSignificance";
+import { riverSignificance, worldScale, type RiverEvidence } from "../worldSignificance";
 
 /** Confluence samples include the receiving river; tributary evidence stops upstream of it. */
 function contribution(reach: DrainageReach) {
@@ -16,8 +16,22 @@ function length(reach: DrainageReach) {
     );
 }
 
+/** One course and what the map decided about it. */
+export interface CourseJudgment {
+  course: number[];
+  evidence: RiverEvidence;
+  publish: boolean;
+}
+/** The courses the map shows, as lists of reaches. */
+export const worldRiverCourses = (reaches: DrainageReach[], scale = worldScale) =>
+  riverCourseJudgments(reaches, scale)
+    .filter((judged) => judged.publish)
+    .map((judged) => judged.course);
 /** Follow the strongest upstream continuation through junctions; other branches stand alone. */
-export function worldRiverCourses(reaches: DrainageReach[], scale = worldScale) {
+export function riverCourseJudgments(
+  reaches: DrainageReach[],
+  scale = worldScale
+): CourseJudgment[] {
   const upstream = reaches.map(() => [] as number[]),
     visited = new BitSet(reaches.length);
   reaches.forEach((reach, i) => {
@@ -35,20 +49,17 @@ export function worldRiverCourses(reaches: DrainageReach[], scale = worldScale) 
       const next = reaches[i].downstream;
       return next === null || continuation[next] !== i;
     });
-  return ends.flatMap((end) => {
+  return ends.map((end) => {
     const course: number[] = [];
     for (let i: number | undefined = end; i !== undefined && !visited.has(i); i = continuation[i]) {
       visited.add(i);
       course.unshift(i);
     }
-    const judgment = riverSignificance(
-      {
-        ...contribution(reaches[end]),
-        length: course.reduce((sum, i) => sum + length(reaches[i]), 0),
-        outlet: reaches[end].waterBody !== null,
-      },
-      scale
-    );
-    return judgment.publish ? [course] : [];
+    const evidence: RiverEvidence = {
+      ...contribution(reaches[end]),
+      length: course.reduce((sum, i) => sum + length(reaches[i]), 0),
+      outlet: reaches[end].waterBody !== null,
+    };
+    return { course, evidence, publish: riverSignificance(evidence, scale).publish };
   });
 }

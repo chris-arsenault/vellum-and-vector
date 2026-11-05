@@ -1,4 +1,5 @@
 import { isRiverStep, riverDrop } from "../../canonry/landforms";
+import { mappedRiverCells } from "../../canonry/mappedRivers";
 import { hashUnit } from "../../canonry/noise";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
@@ -37,12 +38,15 @@ const portageSpans = 2,
 const salt = 0x7041;
 
 const flowOf = (state: GenerationState, cell: number) => fieldOf(state).FlowAccumulation.get(cell);
-/** Every step in a river's profile, tallest first. Most are only steep water, known to no one. */
-const stepsOf = (state: GenerationState): readonly number[] =>
+/**
+ * Every step in a river this map draws, tallest first. A step on a stream below this map's rivers
+ * stays latent with its stream, for the finer map that draws it.
+ */
+export const stepsOf = (state: GenerationState): readonly number[] =>
   heldFor(state, "fall:steps", () => {
     const map = fieldOf(state),
       found: number[] = [];
-    for (let cell = 0; cell < map.mesh.count; cell++)
+    for (const cell of mappedRiverCells(state))
       if (map.mesh.membership(cell) === 1 && isRiverStep(map, cell)) found.push(cell);
     return found.sort((a, b) => riverDrop(map, b) - riverDrop(map, a) || a - b);
   });

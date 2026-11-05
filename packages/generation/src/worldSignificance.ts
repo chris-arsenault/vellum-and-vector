@@ -124,6 +124,16 @@ export function riverSignificance(e: RiverEvidence, scale = worldScale) {
   );
 }
 
+/** Which of a mapped river's tests a course fails: what a report says of a latent one. */
+export function riverShortfalls(e: RiverEvidence, scale = worldScale) {
+  const failed: string[] = [];
+  if (e.discharge < worldRiverDischarge * scale.area) failed.push("discharge");
+  if (e.catchment < worldRiverCatchment * scale.area) failed.push("catchment");
+  const shortOutlet = !e.outlet || e.discharge < worldOutletDischarge * scale.area;
+  if (e.length < worldRiverLength * scale.length && shortOutlet) failed.push("length");
+  return failed;
+}
+
 /** How far a peak's isolation is searched, at the World's scale. */
 export const worldPeakIsolation = 60_000;
 /** Falls require both a real drop and water; a dry cliff is not a waterfall. */

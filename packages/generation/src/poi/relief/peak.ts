@@ -6,7 +6,7 @@ import type { GenerationState } from "../../process";
 import { repulsion } from "../../regional/network";
 import type { RegionalState } from "../../regional/state";
 import { mapScale, worldPeakIsolation } from "../../worldSignificance";
-import { carryWhereItLands, movesTo } from "../poiCarry";
+import { carryWhereItLands, goes, movesTo } from "../poiCarry";
 import {
   notApplicable,
   type PoiCarried,
@@ -258,7 +258,8 @@ export const peak: PoiEntry = {
       "The drainage cost below makes the divide; relief then develops the top, and the top's own form follows."
     ),
     counterpart,
-    unrealized: movesTo(counterpart),
+    unrealized: (state, carried) =>
+      counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
     settle: notApplicable("A peak does not change with a round's water."),
     schedule: notApplicable("Its drainage cost is all a peak does at refinement's other points."),
   },

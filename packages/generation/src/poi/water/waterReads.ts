@@ -1,8 +1,13 @@
+import { mappedRiverCells } from "../../canonry/mappedRivers";
 import type { GenerationState } from "../../process";
 import type { PoiPlace } from "../poiContract";
 import { adjacent, cellSpan, cellsWithin, fieldOf, moistureAt } from "../poiReads";
 
 /** What the water group's entries read in common. Nothing here computes geography or writes. */
+
+/** Whether a cell is on a river this map draws: the one test a place standing on a river uses. */
+export const onMappedRiver = (state: GenerationState, cell: number) =>
+  mappedRiverCells(state).has(cell);
 
 /** The cell a cell drains to, or -1 where its water leaves the network. */
 export const flowTarget = (state: GenerationState, cell: number) =>

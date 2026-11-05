@@ -12,7 +12,6 @@ import {
   mapScale,
   worldExceptionalLakeArea,
   worldExtent,
-  worldFallsDischarge,
   worldFallsDrop,
   worldLakeDepth,
   worldOutletDischarge,
@@ -72,14 +71,9 @@ const complex: Gate = (state, place) => {
 const pass: Gate = (state, place) =>
   (heldFor(state, "relief:keyCols", () => keyCols(fieldOf(state))).get(place.anchor) ?? 0) >=
   worldRise * 1024 * mapScale(state).height;
-const waterfall: Gate = (state, place) => {
-  const map = fieldOf(state),
-    scale = mapScale(state);
-  return (
-    riverDrop(map, place.anchor) >= worldFallsDrop * scale.height &&
-    map.FlowAccumulation.get(place.anchor) >= worldFallsDischarge * scale.area
-  );
-};
+/** Which water is a river is the river's own test: a fall answers only for its drop. */
+const waterfall: Gate = (state, place) =>
+  riverDrop(fieldOf(state), place.anchor) >= worldFallsDrop * mapScale(state).height;
 const riverMouth: Gate = (state, place) =>
   fieldOf(state).FlowAccumulation.get(place.anchor) >= worldRiverDischarge * mapScale(state).area;
 const fjord: Gate = (state, place) => {

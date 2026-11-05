@@ -9,6 +9,7 @@ import { putGenerated } from "../mapFeatures";
 import type { GenerationState } from "../process";
 import type { RegionalState } from "../regional/state";
 import { poiCatalogue } from "./catalogue";
+import { stays } from "./poiCarry";
 import type { PoiCarried, PoiEntry, PoiMoment, PoiPlace } from "./poiContract";
 import type { PoiKindId } from "./poiKinds";
 import { applyNameTerm, takeNames } from "./poiNames";
@@ -190,13 +191,28 @@ function standsFor(state: RegionalState, captured: AtlasFeature, developed: Atla
   const list = published.get(state) ?? [];
   for (const item of list) if (item.featureId === developed.id) item.featureId = captured.id;
 }
-function resolveUnrealized(state: RegionalState, item: CarriedPlace) {
+/**
+ * A carried place with no developed record to stand for. What its entry says holds, except that
+ * a move needs somewhere to go: a place left where it was would stand on nothing.
+ */
+function resolveUnrealized(state: RegionalState, item: CarriedPlace, why: string) {
   const unrealized = called<
-    (s: RegionalState, c: PoiCarried) => { outcome: string; cell?: number }
-  >(item.entry.acrossMaps.unrealized);
-  if (unrealized?.(state, item.carried).outcome === "drop")
-    removeGenerationFeature(state, item.carried.feature.id);
+      (s: RegionalState, c: PoiCarried) => { outcome: string; cell?: number }
+    >(item.entry.acrossMaps.unrealized),
+    outcome = unrealized?.(state, item.carried).outcome ?? "keep",
+    removed = outcome === "drop" || outcome === "move";
+  if (removed) removeGenerationFeature(state, item.carried.feature.id);
+  logCarry(state, item, `${why}: ${removed ? "removed" : "kept where it was"}`);
 }
+/** What became of every carried place: nothing about carrying happens without a line here. */
+const carryLog = new WeakMap<GenerationState, Record<string, number>>();
+function logCarry(state: GenerationState, item: Pick<CarriedPlace, "entry">, outcome: string) {
+  const log = carryLog.get(state) ?? {},
+    line = `${item.entry.id}: ${outcome}`;
+  carryLog.set(state, log);
+  log[line] = (log[line] ?? 0) + 1;
+}
+export const carryOutcomes = (state: GenerationState) => carryLog.get(state) ?? {};
 /**
  * After the map has published its own places: a place the parent carried stands for the
  * developed place the entry says is its counterpart, keeping its name and identity; where the
@@ -209,7 +225,22 @@ export function carryPlaces(state: RegionalState) {
   for (const { entry, place, featureId } of published.get(state) ?? [])
     for (const cell of place.cells) developedAt.set(`${entry.id}:${cell}`, featureId);
   for (const item of carriedPlaces(state)) carryPlace(state, item, developedAt);
+  leaveUnreached(state);
   releaseHeld(state);
+}
+/**
+ * A captured place its entry says does not reach this map has no ground here to stand on. A kind
+ * that stays whatever the ground holds keeps its record; any other record leaves with it.
+ */
+function leaveUnreached(state: RegionalState) {
+  const reached = new Set(carriedPlaces(state).map((item) => item.carried.feature.id));
+  for (const stored of [...generationFeatures(state, { areaId: state.regional.input.areaId })]) {
+    const entry = isCaptured(stored) ? entryOf(stored) : undefined;
+    if (!entry || reached.has(stored.id) || !called(entry.acrossMaps.counterpart)) continue;
+    const keeps = entry.acrossMaps.unrealized === stays;
+    if (!keeps) removeGenerationFeature(state, stored.id);
+    logCarry(state, { entry }, `does not reach this map: ${keeps ? "kept" : "removed"}`);
+  }
 }
 function carryPlace(state: RegionalState, item: CarriedPlace, developedAt: Map<string, string>) {
   const counterpart = called<(s: RegionalState, c: PoiCarried) => number>(
@@ -217,9 +248,12 @@ function carryPlace(state: RegionalState, item: CarriedPlace, developedAt: Map<s
   );
   if (!counterpart) return;
   const cell = counterpart(state, item.carried);
-  if (cell < 0) return resolveUnrealized(state, item);
-  const developed = developedAt.get(`${item.entry.id}:${cell}`),
-    feature = developed && generationFeature(state, developed);
-  if (feature && feature.id !== item.carried.feature.id)
-    standsFor(state, item.carried.feature, feature);
+  if (cell < 0) return resolveUnrealized(state, item, "no counterpart");
+  const developed = developedAt.get(`${item.entry.id}:${cell}`);
+  if (!developed) return resolveUnrealized(state, item, "counterpart below this map's bar");
+  const feature = generationFeature(state, developed);
+  if (!feature) return resolveUnrealized(state, item, "counterpart already stands for another");
+  if (feature.id === item.carried.feature.id) return logCarry(state, item, "is its counterpart");
+  standsFor(state, item.carried.feature, feature);
+  logCarry(state, item, "stands for its counterpart");
 }

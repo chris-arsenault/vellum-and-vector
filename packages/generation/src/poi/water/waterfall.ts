@@ -20,7 +20,8 @@ import {
 import { claimsOf, placesFromOrigins } from "../poiOrigins";
 import { namingCultureNear, holds, within } from "../poiPlaces";
 import { siteRecord } from "../poiRecords";
-import { cellSpan, fieldOf, isLand, isRiver, nearestWhere } from "../poiReads";
+import { cellSpan, fieldOf, isLand, nearestWhere } from "../poiReads";
+import { onMappedRiver } from "./waterReads";
 import { attachment, aloneAmong, sized, standsOut, weighed } from "../poiVisibilityRules";
 import type { FallForm } from "./waterfallForms";
 import { waterfallOrigins } from "./waterfallOrigins";
@@ -75,7 +76,7 @@ function realizedStep(state: RegionalState, carried: PoiCarried) {
             state,
             carried.cell,
             parentSpanOf(state),
-            (c) => isRiver(state, c) && isLand(state, c)
+            (c) => onMappedRiver(state, c) && isLand(state, c)
           );
   return cell < 0
     ? []
@@ -88,7 +89,7 @@ export const waterfall: PoiEntry = {
   name: "Waterfall",
   recognition: {
     distinct:
-      "A step in a river's long profile that is known as a fall: a river cell dropping at least 10 m to the next, at five times the river's gradient above and below it, for a reason. A steadily steep river is a gorge, a step without a reason is steep water, and no cell off a river can be one.",
+      "A step in the long profile of a river this map draws that is known as a fall: a cell dropping at least 10 m to the next, at five times the river's gradient above and below it, for a reason. A steadily steep river is a gorge, a step without a reason is steep water, and a step on a stream this map does not draw stays latent with its stream.",
     isA,
     landform: { code: Landform.Waterfall },
   },
