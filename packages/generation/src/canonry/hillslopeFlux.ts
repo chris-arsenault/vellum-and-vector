@@ -1,3 +1,4 @@
+import { baselineRock } from "../rock/rockCatalogue";
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { clamp } from "./math";
@@ -111,7 +112,7 @@ export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
     "slope:stable",
     (i) =>
       p.MassWastingStableGradient *
-      clamp(0.55 + (map.RockResistance.get(i) / 1000) * 0.45, 0.55, 1.45) *
+      clamp(0.55 + (map.RockResistance.get(i) / baselineRock) * 0.45, 0.55, 1.45) *
       (1 + map.TreeCover.get(i) * 0.2 + map.GrassCover.get(i) * 0.1)
   );
   const budget = workingValues(

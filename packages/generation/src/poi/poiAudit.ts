@@ -11,7 +11,7 @@ import { poiCatalogue } from "./catalogue";
 import type { PoiEntry } from "./poiContract";
 import { originsOf } from "./poiOrigins";
 import { carryOutcomes, placesOf } from "./poiPublish";
-import { cellSpan, featureCell, fieldOf, gap, releaseHeld } from "./poiReads";
+import { cellSpan, featureCell, fieldOf, gap, isLand, releaseHeld, rockKindAt } from "./poiReads";
 import { stepsOf } from "./water/waterfallOrigins";
 
 /**
@@ -221,6 +221,22 @@ function riverAudit(state: GenerationState, features: readonly AtlasFeature[]) {
   };
 }
 
+/** How many land cells each rock kind holds, and the range of resistance it was left with. */
+function rockAudit(state: GenerationState) {
+  const map = fieldOf(state),
+    kinds: Record<string, { cells: number; softest: number; hardest: number }> = {};
+  for (let cell = 0; cell < map.mesh.count; cell++) {
+    if (map.mesh.membership(cell) !== 1 || !isLand(state, cell)) continue;
+    const resistance = map.RockResistance.get(cell),
+      name = rockKindAt(state, cell).id,
+      entry = (kinds[name] ??= { cells: 0, softest: resistance, hardest: resistance });
+    entry.cells++;
+    entry.softest = Math.min(entry.softest, resistance);
+    entry.hardest = Math.max(entry.hardest, resistance);
+  }
+  return kinds;
+}
+
 /** The account of a finished map, for the run's report. */
 export function auditPlaces(state: GenerationState) {
   if (!state.physical) return {};
@@ -234,6 +250,7 @@ export function auditPlaces(state: GenerationState) {
     waterfall: auditFalls(state, features),
     carried: carryOutcomes(state),
     rivers: riverAudit(state, features),
+    rocks: rockAudit(state),
   };
   releaseHeld(state);
   return audit;

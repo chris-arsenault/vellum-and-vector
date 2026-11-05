@@ -1,6 +1,8 @@
 // Canonry process semantics, with physical atlas defaults. Lengths/heights are
 // metres, areas m², water discharge m³/s, ice flux m³/year and slopes rise/run.
 // Temperature remains ten native units per °C with zero °C at 300.
+import { rockCatalogue } from "../rock/rockCatalogue";
+
 // Fractions/strengths explicitly named PerMille (and legacy scalar strengths)
 // remain dimensionless; iterations count numerical passes within one epoch.
 export const physicalProfile = {
@@ -52,8 +54,8 @@ export const physicalProfile = {
   CoastalDetailConvergentAmplitude: 88,
   CoastalDetailRiftedAmplitude: 74,
   CoastalDetailTransformAmplitude: 34,
-  VolcanicRockResistance: 2600,
-  OrogenicRockResistance: 1500,
+  VolcanicRockResistance: rockCatalogue.basalt.resistance,
+  OrogenicRockResistance: rockCatalogue.schist.resistance,
   SedimentRockWeakness: 900,
   SoftSedimentDepth: 45,
   FjordMinimumGlacialErosion: 2,
@@ -113,7 +115,7 @@ export const physicalProfile = {
   OrogenicRootBudgetMaximum: 4000,
   OrogenicSurfaceReliefSharePerMille: 750,
   MaximumOrogenicSurfaceReliefPerPass: 1400,
-  OrogenicCoreRockResistance: 2200,
+  OrogenicCoreRockResistance: rockCatalogue.gneiss.resistance,
   ContinentalRiftThinningBudget: 850,
   ImpactOceanShockDepth: 600,
   ImpactPrimordialShare: 620,

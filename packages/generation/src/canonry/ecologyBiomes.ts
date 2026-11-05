@@ -1,4 +1,5 @@
 import type { GenerationState } from "../process";
+import { baselineRock } from "../rock/rockCatalogue";
 import type { PhysicalField } from "./field";
 
 /** Area-weighted means over a biome region; they name the region, never shape it. */
@@ -116,7 +117,8 @@ function saltRules(
       kind: "flat",
       terms: [
         (i) => map.Salting.get(i) - saltedGround,
-        (i) => map.RockResistance.get(i) - 950,
+        // Ground the salt fused: harder than the salted ground around it.
+        (i) => map.RockResistance.get(i) - baselineRock * 0.95,
         (i) => bareGround - cover(i),
       ],
       name: () => "Glass flat",

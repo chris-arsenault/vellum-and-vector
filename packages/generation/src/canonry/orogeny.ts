@@ -1,5 +1,10 @@
 // OrogenicConstructionLayer finite deformation and constructed summit rock, Canonry 0f62584c.
+import { baselineRock } from "../rock/rockCatalogue";
+import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
+
+/** How far into a range's construction its flanks' schist gives way to core gneiss. */
+const coreInfluence = 0.5;
 import type { PhysicalContext } from "./context";
 import {
   discoverComponents,
@@ -112,12 +117,11 @@ function constructSurface(
   map.BedrockElevation.set(i, next);
   map.SurfaceRockLoad.add(i, applied);
   const influence = clamp((Math.sqrt(crest) * (c.prominence / 1000)) / 1.75, 0, 1);
-  map.RockResistance.set(
+  hardenRock(
+    map,
     i,
-    Math.max(
-      map.RockResistance.get(i),
-      round(1000 + (p.OrogenicCoreRockResistance - 1000) * influence)
-    )
+    influence >= coreInfluence ? "gneiss" : "schist",
+    round(baselineRock + (p.OrogenicCoreRockResistance - baselineRock) * influence)
   );
   rebuild(map, i);
 }

@@ -17,16 +17,16 @@ import {
   magicRule,
   magicValue,
   rainfallAt,
-  rockAt,
+  rockKindAt,
   slopeAt,
   toNative,
 } from "../poiReads";
+import { permeableFrom } from "../../rock/rockCatalogue";
 import { aloneAmong, attachment, sized, weighed } from "../poiVisibilityRules";
 import { drynessAround, inflows, onMappedRiver, spans, standsIn } from "./waterReads";
 
-/** Rock softer than this share of the hardest, or fractured past this share, lets water rise. */
-const softRock = 0.5,
-  openFracture = 0.32;
+/** Ground fractured past this share lets water rise, whatever its rock. */
+const openFracture = 0.32;
 /** Ground this much gentler than the slope above it is a break where groundwater comes out. */
 const slopeBreak = 0.5;
 /** Discharge at which a spring is half as great as springs get, in cubic metres a second. */
@@ -58,7 +58,7 @@ const unfrozen = (state: GenerationState, cell: number) =>
   fieldOf(state).GlacialMeltwater.get(cell) <= 0 &&
   celsiusAt(state, cell) > 0;
 const permeable = (state: GenerationState, cell: number) =>
-  rockAt(state, cell) <= softRock || fractureAt(state, cell) >= openFracture;
+  rockKindAt(state, cell).porosity >= permeableFrom || fractureAt(state, cell) >= openFracture;
 /** Where the slope breaks, so that groundwater reaches the surface rather than a gully forming. */
 const atSlopeBreak = (state: GenerationState, cell: number) => {
   const above = steepestAbove(state, cell);

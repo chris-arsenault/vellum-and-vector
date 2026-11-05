@@ -24,6 +24,7 @@ import type { GenerationState } from "../process";
 const presentChannels = new Set([
   "elevation",
   "rock",
+  "rockKind",
   "fracture",
   "geothermal",
   "margin",

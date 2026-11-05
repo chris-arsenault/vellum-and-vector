@@ -25,17 +25,18 @@ import {
   cellSpan,
   cellsWithin,
   fieldOf,
-  fractureAt,
   gap,
+  hardnessAt,
   heightAt,
   heldFor,
   iceAt,
   isLand,
   hasChannel,
+  jointedAt,
   metres,
   moistureAt,
   nearestWhere,
-  sedimentAt,
+  rockKindAt,
   slopeAt,
   toNative,
 } from "../poiReads";
@@ -66,13 +67,10 @@ const formShare = 0.25,
   largestForm = 1500;
 /** A form reaches at least this many cells, so a coarse map can show it at all. */
 const formSpans = 2.2;
-/** Rock resistance of soft rock and hard, ice that loads a top fully, and readings of each. */
-const softRock = 700,
-  hardRock = 1500,
-  fullIce = 100,
+/** Ice that loads a top fully, and the readings of cold and steepness that do. */
+const fullIce = 100,
   fullCold = 15,
-  fullSteep = 0.3,
-  fullBeds = 200;
+  fullSteep = 0.3;
 const salts = { form: 0x7021, face: 0x7022 };
 
 const unit = (value: number) => Math.max(0, Math.min(1, value));
@@ -99,16 +97,15 @@ const capturedRise = (place: PoiPlace) => Number(place.feature?.attributes.promi
 
 /** What the ground under a peak gives its form: rock, ice and weather. */
 function formOf(state: GenerationState, cell: number): PeakForm {
-  const map = fieldOf(state);
   return peakForm(
     {
-      hardness: unit((map.RockResistance.get(cell) - softRock) / (hardRock - softRock)),
-      fracture: unit(fractureAt(state, cell)),
+      hardness: hardnessAt(state, cell),
+      fracture: jointedAt(state, cell),
       ice: unit(iceAt(state, cell) / fullIce),
       cold: unit(-celsiusAt(state, cell) / fullCold),
       wet: unit(moistureAt(state, cell)),
       steep: unit(slopeAt(state, cell) / fullSteep),
-      bedded: unit(sedimentAt(state, cell) / fullBeds),
+      bedded: rockKindAt(state, cell).bedding,
     },
     hashUnit(salts.form, cell, 0)
   );

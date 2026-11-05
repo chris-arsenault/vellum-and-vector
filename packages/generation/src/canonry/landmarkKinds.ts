@@ -1,8 +1,10 @@
 // Point landmarks and the escarpment: causes, signatures and corrections per catalogue kind.
+import { baselineRock, hardestRock } from "../rock/rockCatalogue";
+import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { Feature } from "./codes";
-import { clamp, rockResistance, round, units } from "./math";
+import { clamp, round, units } from "./math";
 import { nearestTriangle } from "./mesh";
 import { prominence } from "./landforms";
 import { shapeImpact } from "./impacts";
@@ -67,14 +69,13 @@ function raiseMountain(
     const t = 1 - d / radius,
       profile = Math.min(1, shape(d) / reference);
     applied = Math.max(applied, shiftBedrock(map, i, round(height * profile)));
-    map.RockResistance.set(
+    hardenRock(
+      map,
       i,
-      Math.max(
-        map.RockResistance.get(i),
-        rockResistance(
-          volcanic ? 1000 + (p.VolcanicRockResistance - 1000) * profile : 1000 + 3000 * Math.sqrt(t)
-        )
-      )
+      volcanic ? "basalt" : "quartzite",
+      volcanic
+        ? baselineRock + (p.VolcanicRockResistance - baselineRock) * profile
+        : baselineRock + (hardestRock - baselineRock) * Math.sqrt(t)
     );
     if (volcanic) volcanicCauses(map, i, d, radius, t, height * profile, epoch);
   }
@@ -193,7 +194,7 @@ const domeRing: Kind = {
       const d = distance(map, i, placed.center);
       shiftBedrock(map, i, round(height * (1 - (d / radius) ** 2)));
       const resistance = realized ? (crests.has(i) ? 3400 : 600) : 2000;
-      map.RockResistance.set(i, Math.max(map.RockResistance.get(i), rockResistance(resistance)));
+      hardenRock(map, i, "quartzite", resistance);
     }
   },
   measure(map, placed) {

@@ -1,9 +1,11 @@
 import { meshDeltaX } from "./mesh";
 // ImpactCrateringLayer.cs, Canonry 0f62584c.
+import { baselineRock } from "../rock/rockCatalogue";
+import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { clamp, rockResistance, round, truncate, units } from "./math";
+import { clamp, round, truncate, units } from "./math";
 import { hashUnit } from "./noise";
 import { Feature } from "./codes";
 import { nearestTriangle } from "./mesh";
@@ -88,10 +90,7 @@ function shock(
     map.ImpactHeat.set(i, Math.max(map.ImpactHeat.get(i), round(1000 * (1 - distance / radius))));
   if (distance > radius * 1.15 || share <= 0) return;
   const gain = 1600 * (1 - distance / Math.max(0.001, radius * 1.15)) * share;
-  map.RockResistance.set(
-    i,
-    Math.max(map.RockResistance.get(i), rockResistance(1000 + round(gain)))
-  );
+  hardenRock(map, i, "impactite", baselineRock + round(gain));
 }
 function ejecta(
   map: PhysicalField,

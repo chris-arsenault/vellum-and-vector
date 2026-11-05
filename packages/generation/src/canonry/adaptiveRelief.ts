@@ -1,6 +1,7 @@
 // Latent relief realized at a child profile (ADR 0005): the parent's mesh-scale gradient says
 // how rugged and which way; the child adds the ridge-and-valley texture its own mesh resolves.
 import type { Geometry } from "geojson";
+import { baselineRock } from "../rock/rockCatalogue";
 import {
   adaptiveLeafAt,
   fieldInterpolator,
@@ -65,7 +66,7 @@ function cellRelief(
     (regional
       ? Math.max(p.RegionalReliefMinimumSlope * span, gradient * span)
       : Math.max(0, gradient * span - p.ReliefSynthesisFloor)) *
-    clamp(map.RockResistance.get(i) / 1000, 0.6, 1.4);
+    clamp(map.RockResistance.get(i) / baselineRock, 0.6, 1.4);
   if (amplitude <= 0) return 0;
   // Across-strike coordinate follows the gradient; the along-strike one is compressed so the
   // texture reads as ridges parallel to the belt.

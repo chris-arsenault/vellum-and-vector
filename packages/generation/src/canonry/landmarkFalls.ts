@@ -1,8 +1,9 @@
 // The great falls: a caprock step on a river. Below the World mesh's landform rule, so it is
 // latent there, but the step between two cells is a measure World can hold and a Region
 // realizes as lip, plunge pool and gorge.
+import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
-import { rockResistance, round, units } from "./math";
+import { round, units } from "./math";
 import { nearestTriangle } from "./mesh";
 import { cut, distance, shiftBedrock, type Placed } from "./landmarkGeometry";
 import type { LandmarkRecord } from "./landmarkLedger";
@@ -59,8 +60,7 @@ export const falls: Kind = {
       lip,
       ...Array.from({ length: map.mesh.degree(lip) }, (_, e) => map.mesh.neighbor(lip, e)),
     ])
-      if (i >= 0 && map.Elevation.get(i) >= lipElevation)
-        map.RockResistance.set(i, Math.max(map.RockResistance.get(i), rockResistance(3500)));
+      if (i >= 0 && map.Elevation.get(i) >= lipElevation) hardenRock(map, i, "quartzite");
     const foot = footCell(map, lip);
     holdStep(
       map,

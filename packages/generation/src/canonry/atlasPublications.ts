@@ -22,6 +22,7 @@ const nativeOwnership: Ownership[] = [
       "bedrock",
       "sediment",
       "rock",
+      "rockKind",
       "continentalFraction",
       "province",
       "assembly",

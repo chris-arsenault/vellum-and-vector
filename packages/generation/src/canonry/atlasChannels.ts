@@ -1,4 +1,5 @@
 // Explicit projection from Canonry's fixed-point numerical state into GIS channels.
+import { hardestRock } from "../rock/rockCatalogue";
 import type { PhysicalBufferName } from "./field";
 import { ecologyBindings, ecologyRatios } from "./ecologyState";
 
@@ -71,7 +72,7 @@ export const atlasChannels: ChannelBinding[] = [
   amount("impactEjecta", "ImpactEjectaThickness"),
   amount("waterDepth", "WaterDepths"),
   scalar("fracture", "FractureConductance"),
-  { name: "rock", native: "RockResistance", unit: "ratio", scale: 1 / 4000, minimum: 0 },
+  { name: "rock", native: "RockResistance", unit: "ratio", scale: 1 / hardestRock, minimum: 0 },
   scalar("continentalFraction", "CrustContinentalFraction"),
   scalar("crustAge", "CrustAge"),
   scalar("sutureStrength", "CrustSutureStrength"),
@@ -129,6 +130,7 @@ export const atlasChannels: ChannelBinding[] = [
   category("boundaryPair", "TectonicBoundaryPairIds"),
   category("margin", "MarginCodes"),
   category("landform", "LandformCodes"),
+  category("rockKind", "RockKindCodes"),
   category("water", "WaterKindCodes"),
   category("waterBody", "WaterBodyIds"),
   category("basin", "DrainageBasinIds"),

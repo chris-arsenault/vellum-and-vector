@@ -1,4 +1,5 @@
 import type { GenerationState } from "../process";
+import { hardestRock, rockCatalogue } from "../rock/rockCatalogue";
 import type { PhysicalField } from "./field";
 import { reservoirAmount, type MagicField } from "./magicState";
 import { clamp, round } from "./math";
@@ -27,10 +28,9 @@ export function saltWrites(state: GenerationState) {
       if (fire && fire.intensity.get(i) > 0) burn(map, field, fire, i);
     }
 }
-/** The hardest rock the band holds; its channel publishes it as one. */
-const hardestRock = 4000;
 function fuse(map: PhysicalField, i: number, resistance: number) {
   map.RockResistance.set(i, clamp(map.RockResistance.get(i) + round(resistance), 0, hardestRock));
+  map.RockKindCodes.set(i, rockCatalogue.fusedSalt.code);
   map.SoilDepth.set(i, 0);
 }
 /** Fire burns the Salt clean: every reservoir loses its share, and the burnt ground fuses. */

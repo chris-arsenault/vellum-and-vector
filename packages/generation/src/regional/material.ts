@@ -1,4 +1,5 @@
 import { hashUnit } from "../canonry/noise";
+import { baselineRock } from "../rock/rockCatalogue";
 import { grainAt } from "./character";
 import { distance, regionalSpan } from "./lattice";
 import { clamp, type RegionalState } from "./state";
@@ -14,8 +15,6 @@ const bandLength = 1.5;
 const wardResistance = 0.5;
 /** Added resistance of a cone's lava apron at the cone, fading to its base radius (plan: cone extension). */
 const apronHardness = 0.8;
-/** The world's baseline rock resistance; relative resistance is read against it. */
-export const baselineRock = 1000;
 
 /**
  * Material organization: the strata and fold limbs of a belt as bands that are continuous

@@ -1,4 +1,6 @@
 // ContinentalSutureLayer.cs, Canonry 0f62584c: transported material, not site labels.
+import { baselineRock } from "../rock/rockCatalogue";
+import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round } from "./math";
@@ -115,12 +117,11 @@ export function continentalSutures(map: PhysicalField, context: PhysicalContext)
   for (let i = 0; i < count; i++) {
     const suture = map.CrustSutureStrength.get(i);
     if (suture > 0)
-      map.RockResistance.set(
+      hardenRock(
+        map,
         i,
-        Math.max(
-          map.RockResistance.get(i),
-          1000 + Math.trunc(((p.OrogenicCoreRockResistance - 1000) * suture) / 1000)
-        )
+        "gneiss",
+        baselineRock + Math.trunc(((p.OrogenicCoreRockResistance - baselineRock) * suture) / 1000)
       );
   }
   const visited = workingArray(map, "int32", "sutures:visited"),

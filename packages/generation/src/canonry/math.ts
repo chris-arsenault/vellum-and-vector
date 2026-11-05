@@ -1,4 +1,6 @@
 // Ported from Canonry 0f62584c: PhysicalElevation, PhysicalCrust and PhysicalRock.
+import { hardestRock, softestRock } from "../rock/rockCatalogue";
+
 export const clamp = (value: number, low: number, high: number) =>
   Math.max(low, Math.min(high, value));
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -30,4 +32,4 @@ export function crustHeight(value: number, continentalFraction: number): number 
   const foundation = 1000 + 3000 * fraction;
   return -200 + 400 * fraction + ((thickness(value) - foundation) * buoyancy(fraction)) / 1000;
 }
-export const rockResistance = (value: number) => clamp(value, 250, 4000);
+export const rockResistance = (value: number) => clamp(value, softestRock, hardestRock);

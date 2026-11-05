@@ -76,6 +76,7 @@ const integerFields = [
   "VolcanicActivity",
   "VolcanicLastActiveEpoch",
   "LandformCodes",
+  "RockKindCodes",
   "WaterKindCodes",
   "WaterBodyIds",
   "DrainageBasinIds",

@@ -1,3 +1,4 @@
+import { baselineRock } from "../rock/rockCatalogue";
 import {
   gridSampler,
   interpolateSample,
@@ -114,7 +115,7 @@ function initializeInheritedMaterial(map: PhysicalField, surface: Grid) {
     if (!surface.channels.crustSupport) map.CrustSupportElevation.set(i, map.Elevation.get(i));
     if (!surface.channels.continentalFraction)
       map.CrustContinentalFraction.set(i, map.Elevation.get(i) >= map.BaseSeaLevel ? 1000 : 0);
-    if (!surface.channels.rock) map.RockResistance.set(i, 1000);
+    if (!surface.channels.rock) map.RockResistance.set(i, baselineRock);
     if (map.CrustThickness.get(i) <= 0)
       map.CrustThickness.set(i, units(1000 + 3 * map.CrustContinentalFraction.get(i)));
     map.Elevation.set(i, map.BedrockElevation.get(i) + map.SedimentThickness.get(i));

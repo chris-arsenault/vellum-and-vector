@@ -6,7 +6,15 @@ import type { RegionalState } from "../../regional/state";
 import { mapScale, worldFallsDischarge, worldFallsDrop } from "../../worldSignificance";
 import type { PoiFieldChange, PoiPlace, PoiVariety } from "../poiContract";
 import { carriedPlaces } from "../poiPublish";
-import { adjacent, fieldOf, fractureAt, isLand, hasChannel, toNative } from "../poiReads";
+import {
+  adjacent,
+  fieldOf,
+  hardnessAt,
+  hasChannel,
+  isLand,
+  jointedAt,
+  toNative,
+} from "../poiReads";
 import { varietyOf } from "../poiVariety";
 import { sized } from "../poiVisibilityRules";
 import { bareOf, thinSoilOf } from "../relief/reliefShape";
@@ -14,15 +22,10 @@ import { fallForm, fallShapes, type FallForm } from "./waterfallForms";
 import { trueFallSize, type TrueFallSize } from "./waterfallSize";
 import { flowTarget } from "./waterReads";
 
-/** Rock resistance of soft rock and hard. */
-const softRock = 700,
-  hardRock = 1500;
 const salt = 0x7042;
 const salts = { height: 0x7043, width: 0x7044 };
 /** A crest this wide at the World's scale is known there, however low the fall, in metres. */
 const worldFallsWidth = 500;
-const unit = (value: number) => Math.max(0, Math.min(1, value));
-
 export const dropOf = (state: GenerationState, place: PoiPlace) =>
   riverDrop(fieldOf(state), place.anchor);
 export const dischargeOf = (state: GenerationState, place: PoiPlace) =>
@@ -45,7 +48,7 @@ export function sizeAtCell(state: GenerationState, cell: number) {
     {
       budget: riverDrop(fieldOf(state), cell),
       discharge: fieldOf(state).FlowAccumulation.get(cell),
-      fracture: unit(fractureAt(state, cell)),
+      fracture: jointedAt(state, cell),
     },
     hashUnit(salts.height, cell, 0),
     hashUnit(salts.width, cell, 0)
@@ -79,10 +82,8 @@ export const fallVariety: PoiVariety = {
     const cell = place.anchor;
     return fallForm(
       {
-        hardness: unit(
-          (fieldOf(state).RockResistance.get(cell) - softRock) / (hardRock - softRock)
-        ),
-        fracture: unit(fractureAt(state, cell)),
+        hardness: hardnessAt(state, cell),
+        fracture: jointedAt(state, cell),
         tall: sized(heightOf, worldFallsDrop)(state, place),
         broad: sized(dischargeOf, worldFallsDischarge)(state, place),
       },
