@@ -28,8 +28,17 @@ export type Must<T> = T | Unwritten;
 /** A field a kind answers, or states does not apply. */
 export type Slot<T> = T | Unwritten | NotApplicable;
 
+/** What a place stands on and how far along it: the place moves when its host does. */
+export interface PoiHostLink {
+  readonly host: "river" | "ridge" | "range";
+  readonly hostId: string;
+  /** 0 at a river's head, 1 at its end. */
+  readonly along: number;
+}
 /** A place of a kind on one map. Cells are the physical lattice's. */
 export interface PoiPlace {
+  /** What it was placed on, where it stands on something. */
+  readonly hostedBy?: PoiHostLink;
   readonly id: string;
   readonly kind: PoiKindId;
   /** Every cell it occupies; one for a point. */
@@ -65,6 +74,8 @@ export interface PoiFound {
   readonly anchor: number;
   /** Every cell it occupies; its anchor alone when omitted. */
   readonly cells?: readonly number[];
+  /** What it was placed on, known at that moment and never worked out afterwards. */
+  readonly hostedBy?: PoiHostLink;
 }
 /** A place an earlier origin of the kind already claimed, by its anchor. */
 export interface PoiClaim extends PoiFound {

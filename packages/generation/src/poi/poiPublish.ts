@@ -62,6 +62,7 @@ function placeAttributes(state: GenerationState, entry: PoiEntry, place: PoiPlac
   return {
     poi: entry.id,
     ...(place.origin ? { origin: place.origin } : {}),
+    ...(place.hostedBy ? { hostedBy: place.hostedBy } : {}),
     ...(variety ? { variety } : {}),
   };
 }

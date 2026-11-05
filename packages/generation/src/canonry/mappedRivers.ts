@@ -5,6 +5,7 @@ import { isWorldGeography, mapScale } from "../worldSignificance";
 import { nativePosition } from "./atlasWorkspace";
 import type { PhysicalField } from "./field";
 import { releaseWorking, workingArray } from "./physicalNumerics";
+import { coordinateKey } from "./worldSources";
 import { worldRiverCourses } from "./worldRiverCourses";
 
 /**
@@ -96,25 +97,48 @@ export const reachInFrame = (state: GenerationState, start: number) =>
 export const mappedCourses = (state: GenerationState, reaches: DrainageReach[]) =>
   worldRiverCourses(reaches, mapScale(state));
 
-/** Every land cell of a river this map draws, down to its last before the water it runs into. */
-export const mappedRiverCells = (state: GenerationState): ReadonlySet<number> =>
+/** A river of this map: a thing that exists before and whether or not it is ever published. */
+export interface River {
+  readonly id: string;
+  /** Its land cells inside the frame, from its head to its last before the water it runs into. */
+  readonly cells: readonly number[];
+}
+type ReachMembers = { start: number; members: number[] };
+function riverOfCourse(state: GenerationState, reaches: readonly ReachMembers[]): River {
+  const work = state.physical!,
+    all = reaches.flatMap(({ members }, n) => members.slice(n ? 1 : 0)),
+    head = nativePosition(work, all[0]),
+    end = nativePosition(work, all[all.length - 1]);
+  return {
+    id: `river:${coordinateKey(head.x, head.y)}:${coordinateKey(end.x, end.y)}`,
+    cells: reaches
+      .filter(({ start }) => reachInFrame(state, start))
+      .flatMap(({ members }, n) => members.slice(n ? 1 : 0))
+      .filter((cell) => work.map.WaterKindCodes.get(cell) === 0),
+  };
+}
+/** The rivers of this map. Publication draws these; a place on a river is placed on one of these. */
+export const riversOf = (state: GenerationState): readonly River[] =>
   heldFor(state, "rivers:mapped", () => {
     const map = state.physical!.map,
       { incoming, basinDischarge } = riverInputs(map);
     try {
-      const records = [...drainageReaches(state, incoming)],
-        courses = mappedCourses(
-          state,
-          records.map(({ reach }) => reach)
-        );
-      return new Set(
-        courses
-          .flat()
-          .map((index) => records[index])
-          .filter(({ start }) => reachInFrame(state, start))
-          .flatMap(({ members }) => members.filter((cell) => map.WaterKindCodes.get(cell) === 0))
-      );
+      const records = [...drainageReaches(state, incoming)];
+      return mappedCourses(
+        state,
+        records.map(({ reach }) => reach)
+      )
+        .map((course) =>
+          riverOfCourse(
+            state,
+            course.map((index) => records[index])
+          )
+        )
+        .filter((river) => river.cells.length > 0);
     } finally {
       releaseWorking(map, incoming, basinDischarge);
     }
   });
+/** Every cell of this map's rivers. */
+export const mappedRiverCells = (state: GenerationState): ReadonlySet<number> =>
+  heldFor(state, "rivers:cells", () => new Set(riversOf(state).flatMap((river) => river.cells)));

@@ -73,4 +73,5 @@ export const placesFromOrigins =
       cells: claim.cells ?? [claim.anchor],
       anchor: claim.anchor,
       origin: claim.origin,
+      hostedBy: claim.hostedBy,
     }));

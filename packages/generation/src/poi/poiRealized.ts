@@ -74,8 +74,6 @@ const pass: Gate = (state, place) =>
 /** Which water is a river is the river's own test: a fall answers only for its drop. */
 const waterfall: Gate = (state, place) =>
   riverDrop(fieldOf(state), place.anchor) >= worldFallsDrop * mapScale(state).height;
-const riverMouth: Gate = (state, place) =>
-  fieldOf(state).FlowAccumulation.get(place.anchor) >= worldRiverDischarge * mapScale(state).area;
 const fjord: Gate = (state, place) => {
   const e = evidence(state, place),
     scale = mapScale(state);
@@ -135,7 +133,6 @@ const gates: Partial<Record<PoiKindId, Gate>> = {
   caldera: volcano,
   crater,
   waterfall,
-  riverMouth,
   fjord,
   lake,
   wetland: landscape("wetland"),

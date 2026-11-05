@@ -167,6 +167,7 @@ function auditFalls(state: GenerationState, features: readonly AtlasFeature[]) {
     accounts = falls.map((fall) => riverAccount(state, fall, drawn, rivers)),
     scale = mapScale(state);
   return {
+    linkedToTheirRiver: falls.filter((fall) => fall.attributes.hostedBy).length,
     standing: tally(accounts.map((account) => account.standing)),
     standingByOrigin: tally(accounts.map(({ origin, standing: s }) => `${origin}: ${s}`)),
     stepsAndFalls: stepAccount(state, rivers, new Set(accounts.map(({ cell }) => cell))),
