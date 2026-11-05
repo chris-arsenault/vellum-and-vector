@@ -63,6 +63,12 @@ function riverRecords(state: GenerationState) {
       records.set(key(x, y), { reach, index, judged: courseOf.get(index) });
     })
   );
+  // A reach that ends on land ends at its own last point: no other reach flows on through it.
+  reaches.forEach((reach, index) => {
+    const [x, y] = reach.coordinates.at(-1)!;
+    if (!records.has(key(x, y)))
+      records.set(key(x, y), { reach, index, judged: courseOf.get(index) });
+  });
   return {
     judgments,
     at(cell: number) {

@@ -96,7 +96,7 @@ export const reachInFrame = (state: GenerationState, start: number) =>
 export const mappedCourses = (state: GenerationState, reaches: DrainageReach[]) =>
   worldRiverCourses(reaches, mapScale(state));
 
-/** Every cell of a river this map draws, its mouth left to whatever it runs into. */
+/** Every land cell of a river this map draws, down to its last before the water it runs into. */
 export const mappedRiverCells = (state: GenerationState): ReadonlySet<number> =>
   heldFor(state, "rivers:mapped", () => {
     const map = state.physical!.map,
@@ -112,7 +112,7 @@ export const mappedRiverCells = (state: GenerationState): ReadonlySet<number> =>
           .flat()
           .map((index) => records[index])
           .filter(({ start }) => reachInFrame(state, start))
-          .flatMap(({ members }) => members.slice(0, -1))
+          .flatMap(({ members }) => members.filter((cell) => map.WaterKindCodes.get(cell) === 0))
       );
     } finally {
       releaseWorking(map, incoming, basinDischarge);

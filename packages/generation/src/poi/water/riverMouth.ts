@@ -18,14 +18,13 @@ import {
   dischargeAt,
   fieldOf,
   isLand,
-  isRiver,
   isSea,
   nearestWhere,
   waveExposureAt,
 } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import { worldRiverDischarge } from "../../worldSignificance";
-import { flowTarget, spans } from "./waterReads";
+import { flowTarget, onMappedRiver, spans } from "./waterReads";
 
 /** Gradient a delta's fan holds, rise over run. */
 const fanGradient = 0.001;
@@ -43,7 +42,7 @@ function seaBeside(state: GenerationState, cell: number) {
  * frame has no sea beside it and is no mouth.
  */
 const isA = (state: GenerationState, cell: number) => {
-  if (!isLand(state, cell) || !isRiver(state, cell)) return false;
+  if (!isLand(state, cell) || !onMappedRiver(state, cell)) return false;
   const target = flowTarget(state, cell);
   return target >= 0 ? isSea(state, target) : seaBeside(state, cell) >= 0;
 };
@@ -94,7 +93,9 @@ function landToSea(state: RegionalState, start: number) {
  * water down it, and the channel process makes that a channel.
  */
 function channelToSea(state: RegionalState, carried: PoiCarried): readonly PoiFieldChange[] {
-  const start = nearestWhere(state, carried.cell, parentSpanOf(state), (c) => isRiver(state, c)),
+  const start = nearestWhere(state, carried.cell, parentSpanOf(state), (c) =>
+      onMappedRiver(state, c)
+    ),
     path = landToSea(state, start >= 0 ? start : carried.cell),
     map = state.physical.map,
     sea = map.EffectiveSeaLevel;

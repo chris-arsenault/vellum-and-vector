@@ -2,7 +2,8 @@ import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { namingCultureNear, within } from "../poiPlaces";
-import { dischargeAt, isRiver, sedimentAt } from "../poiReads";
+import { dischargeAt, sedimentAt } from "../poiReads";
+import { onMappedRiver } from "../water/waterReads";
 import { siteRecord } from "../poiRecords";
 import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
@@ -186,7 +187,9 @@ export const placer: PoiEntry = {
       const buried =
         sedimentAt(state, place.anchor) >=
         (parameterOf(state, "fire", "buryDepth") ?? defaultBurial);
-      return buried || !isRiver(state, place.anchor) ? { fate: "ends" } : { fate: "persists" };
+      return buried || !onMappedRiver(state, place.anchor)
+        ? { fate: "ends" }
+        : { fate: "persists" };
     },
   },
   visibility: {

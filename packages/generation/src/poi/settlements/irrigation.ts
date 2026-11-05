@@ -7,12 +7,12 @@ import {
   cellsWithin,
   dischargeAt,
   fieldOf,
-  isRiver,
   magicValue,
   moistureAt,
   sedimentAt,
   slopeAt,
 } from "../poiReads";
+import { onMappedRiver } from "../water/waterReads";
 import { aloneAmong, attachment, sized } from "../poiVisibilityRules";
 import { diversionShare } from "../../societyWaterUse";
 import { settledHands, soilShare } from "../../societyWorks";
@@ -42,7 +42,7 @@ const ditched = 1.15,
   canalled = 0.8;
 
 const requires = (state: GenerationState, cell: number) =>
-  isRiver(state, cell) && nearTown(state, cell, wantedReach, settledHands);
+  onMappedRiver(state, cell) && nearTown(state, cell, wantedReach, settledHands);
 /** Dry country with soil to water, level enough to carry it, on a river with flow to spare. */
 function suitability(state: GenerationState, cell: number) {
   const flow = dischargeAt(state, cell),
@@ -101,7 +101,7 @@ const factors = {
   isolation: aloneAmong(places, around),
   cultural: attachment(around),
 };
-const counterpart = counterpartOf(isRiver, 1);
+const counterpart = counterpartOf(onMappedRiver, 1);
 
 export const irrigation: PoiEntry = {
   id: "irrigation",

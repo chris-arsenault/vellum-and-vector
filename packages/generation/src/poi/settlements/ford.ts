@@ -4,7 +4,8 @@ import { rulingGrade } from "../../regional/ways";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { holdsRecord, namingCultureNear, settlementWithin, within } from "../poiPlaces";
-import { cellSpan, dischargeAt, fieldOf, isLand, isRiver, sedimentAt, slopeAt } from "../poiReads";
+import { cellSpan, dischargeAt, fieldOf, isLand, sedimentAt, slopeAt } from "../poiReads";
+import { onMappedRiver } from "../water/waterReads";
 import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
 import { onceWritten } from "./communityRecords";
 import { travellersOf, weighedPlace } from "./settlementRecords";
@@ -19,7 +20,7 @@ const places = fordPlaces;
 const isA = holdsRecord("ford", places);
 const around = (state: GenerationState) => 6 * cellSpan(state);
 const crossable = (state: GenerationState, cell: number) =>
-  isRiver(state, cell) && isLand(state, cell);
+  onMappedRiver(state, cell) && isLand(state, cell);
 /** How much of the river there is to wade through: nothing on a brook, half at bridge flow. */
 const fullness = (state: GenerationState, cell: number) => {
   const flow = dischargeAt(state, cell);
@@ -155,7 +156,7 @@ export const ford: PoiEntry = {
     statement:
       "A ford lasts as long as a river runs there and people use it. Traffic that outgrows it over a large enough river earns a bridge; the ways that stop using it let it go unmarked.",
     fate(state, place) {
-      if (!isRiver(state, place.anchor)) return { fate: "ends" };
+      if (!onMappedRiver(state, place.anchor)) return { fate: "ends" };
       if (!settlementWithin(state, place.anchor, 4 * around(state))) return { fate: "ends" };
       const earned =
         travellersOf(state, place) >= roadTravellers &&

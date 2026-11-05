@@ -7,17 +7,9 @@ import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry
 import { notApplicable, type PoiCarried, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
 import { courseRecord } from "../poiRecords";
-import {
-  dischargeAt,
-  fieldOf,
-  heldFor,
-  isLand,
-  isRiver,
-  landformAt,
-  Landform,
-  metres,
-} from "../poiReads";
+import { dischargeAt, fieldOf, heldFor, isLand, landformAt, Landform, metres } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { onMappedRiver } from "../water/waterReads";
 import {
   landmarksOf,
   lengthOf,
@@ -168,7 +160,9 @@ export const gorge: PoiEntry = {
     statement:
       "A gorge deepens and cuts back while its river runs. When the river leaves or the walls grade back, it is a valley; a fall retreating up it leaves more gorge behind.",
     fate: (state, place) =>
-      isRiver(state, place.anchor) ? { fate: "persists" } : { fate: "becomes", kind: "valley" },
+      onMappedRiver(state, place.anchor)
+        ? { fate: "persists" }
+        : { fate: "becomes", kind: "valley" },
   },
   visibility: {
     statement:

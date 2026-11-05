@@ -21,6 +21,7 @@ import {
   rockAt,
   wetlandCoverAt,
 } from "../poiReads";
+import { onMappedRiver } from "../water/waterReads";
 import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
 import { onceWritten } from "./communityRecords";
 import { travellersOf, weighedPlace } from "./settlementRecords";
@@ -39,7 +40,7 @@ const places = bridgePlaces;
 const isA = holdsRecord("bridge", places);
 const around = (state: GenerationState) => 6 * cellSpan(state);
 const crossable = (state: GenerationState, cell: number) =>
-  isRiver(state, cell) && isLand(state, cell);
+  onMappedRiver(state, cell) && isLand(state, cell);
 const bridgeable = (state: GenerationState, cell: number) =>
   crossable(state, cell) && dischargeAt(state, cell) >= bridgeFlow;
 const widthAt = (state: GenerationState, cell: number) => fieldOf(state).RiverWidth.get(cell);
@@ -171,7 +172,7 @@ export const bridge: PoiEntry = {
     statement:
       "A bridge stands while a road needs it. Traffic falling below a road's leaves it unkept, and a fallen bridge is a ford over its own piers; a river that moves away leaves it stranded as a ruin.",
     fate(state, place) {
-      if (!isRiver(state, place.anchor)) return { fate: "ends", leaves: "ruin" };
+      if (!onMappedRiver(state, place.anchor)) return { fate: "ends", leaves: "ruin" };
       const used =
         travellersOf(state, place) >= roadTravellers &&
         settlementWithin(state, place.anchor, 4 * around(state));

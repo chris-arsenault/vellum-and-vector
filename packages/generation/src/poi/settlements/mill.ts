@@ -12,10 +12,10 @@ import {
   dischargeAt,
   fieldOf,
   heldFor,
-  isRiver,
   slopeAt,
   toNative,
 } from "../poiReads";
+import { onMappedRiver } from "../water/waterReads";
 import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
 import { isRefined, lazyPlace, onceWritten } from "./communityRecords";
 import { isGone, seatOf, weighedPlace } from "./settlementRecords";
@@ -77,7 +77,7 @@ const places = (state: GenerationState): readonly PoiPlace[] =>
 const isA = holdsRecord("mill", places);
 const powerOf = (state: GenerationState, place: PoiPlace) => powerAt(state, place.anchor);
 const fallingChannel = (state: GenerationState, cell: number) =>
-  isRiver(state, cell) && slopeAt(state, cell) >= millGradient;
+  onMappedRiver(state, cell) && slopeAt(state, cell) >= millGradient;
 const reach = (state: GenerationState) => millReach * cellSpan(state);
 const around = (state: GenerationState) => 6 * cellSpan(state);
 const factors = {
@@ -193,7 +193,7 @@ export const mill: PoiEntry = {
     statement:
       "A mill lasts while its seat lives and its river runs. When the seat is gone or the channel moves, the wheel stops and only foundations remain.",
     fate(state, place) {
-      if (!isRiver(state, place.anchor)) return { fate: "ends" };
+      if (!onMappedRiver(state, place.anchor)) return { fate: "ends" };
       const seated = place.feature?.attributes.seat !== undefined;
       return seated && isGone(seatOf(state, place))
         ? { fate: "ends", leaves: "ruin" }

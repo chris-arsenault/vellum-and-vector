@@ -18,13 +18,13 @@ import {
   gap,
   heldFor,
   isLand,
-  isRiver,
   magicRule,
   metres,
   sedimentAt,
   slopeAt,
 } from "../poiReads";
 import { ruleRecord } from "../poiRecords";
+import { onMappedRiver } from "../water/waterReads";
 
 /**
  * What the ground group's entries share: its material tests, which the mine reads as deposits,
@@ -97,7 +97,7 @@ export function flowGradient(state: GenerationState, cell: number) {
 export function gradientInto(state: GenerationState, cell: number) {
   let steepest = 0;
   for (const next of adjacent(state, cell))
-    if (isRiver(state, next) && fieldOf(state).FlowTargets.get(next) === cell)
+    if (onMappedRiver(state, next) && fieldOf(state).FlowTargets.get(next) === cell)
       steepest = Math.max(steepest, flowGradient(state, next));
   return steepest;
 }
@@ -110,7 +110,7 @@ const carryingGradient = 0.001;
 const slackening = 0.5;
 /** Gravel against the current: the bar a river leaves where it slackens, delta silt excepted. */
 const riverBar = (state: GenerationState, cell: number) => {
-  if (!isRiver(state, cell) || sedimentAt(state, cell) < barDepth) return false;
+  if (!onMappedRiver(state, cell) || sedimentAt(state, cell) < barDepth) return false;
   if (fieldOf(state).DeltaIntensity.get(cell) > 0) return false;
   const above = gradientInto(state, cell);
   return above >= carryingGradient && flowGradient(state, cell) <= slackening * above;

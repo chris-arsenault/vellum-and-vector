@@ -23,6 +23,7 @@ import type { PoiPlace } from "../poiContract";
 import type { PoiKindId } from "../poiKinds";
 import { sitedPlaces } from "../poiPlaces";
 import { fieldOf, gap, heldFor, isLand } from "../poiReads";
+import { onMappedRiver } from "../water/waterReads";
 import {
   cellOf,
   developed,
@@ -379,6 +380,9 @@ function crossingFeature(state: RegionalState, cell: number, travellers: number,
  * sizeable river. A seat's own channel cell is no crossing. Nothing is crossed before the ways
  * are traced, and the World traces none.
  */
+/** A way over a stream this map does not draw crosses nothing it shows. */
+const crossesRiver = (state: GenerationState, cell: number) =>
+  isLand(state, cell) && onMappedRiver(state, cell);
 export const crossingsOf = (state: GenerationState) =>
   heldFor(state, "places:crossings", () => {
     const found = { ford: [] as PoiPlace[], bridge: [] as PoiPlace[] };
@@ -386,8 +390,8 @@ export const crossingsOf = (state: GenerationState) =>
     if (!isRefined(state) || !crossings) return found;
     const map = state.physical.map;
     for (let i = 0; i < map.mesh.count; i++) {
-      if (crossings.crossed[i] <= 0 || crossings.seatCells.has(i)) continue;
-      if (map.WaterKindCodes.get(i) !== 0) continue;
+      if (crossings.crossed[i] <= 0 || crossings.seatCells.has(i) || !crossesRiver(state, i))
+        continue;
       const travellers = Math.max(crossings.traffic[i], crossings.crossed[i]),
         bridge = earnsBridge(travellers, map.FlowAccumulation.get(i));
       found[bridge ? "bridge" : "ford"].push(

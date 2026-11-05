@@ -14,12 +14,12 @@ import {
   cellSpan,
   dischargeAt,
   fieldOf,
-  isRiver,
   releaseHeld,
   shareAround,
   slopeAt,
   toNative,
 } from "../poiReads";
+import { onMappedRiver } from "../water/waterReads";
 import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
 import {
   channelAt,
@@ -45,7 +45,7 @@ const damSpacing = 40_000,
 const crestHeight = 6;
 
 const requires = (state: GenerationState, cell: number) =>
-  isRiver(state, cell) && nearTown(state, cell, wantedReach);
+  onMappedRiver(state, cell) && nearTown(state, cell, wantedReach);
 /** A narrow valley on a large river: steep banks either side, plenty of water to hold. */
 function suitability(state: GenerationState, cell: number) {
   const banks = shareAround(state, cell, (next) => slopeAt(state, next) >= gentleBank),
@@ -79,7 +79,7 @@ function damCells(state: RegionalState) {
 }
 const factors = {
   magnitude: sized(dischargeOf, typicalDischarge),
-  localConditions: standsOut((state, cell) => (isRiver(state, cell) ? 1 : 0), around),
+  localConditions: standsOut((state, cell) => (onMappedRiver(state, cell) ? 1 : 0), around),
   isolation: aloneAmong(places, around),
   cultural: attachment(around),
 };
