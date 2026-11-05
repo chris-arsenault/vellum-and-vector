@@ -124,6 +124,11 @@ Geographic significance, the rule that decides what a map names and outlines,
 is one rule for every map, judged at that map's scale
 ([ADR 0005](docs/adr/0005-scale-contract.md)).
 
+A named entity is never removed, and refinement may change its size, shape and place;
+nothing holds it in place on finer ground. A coarse cell's value is a share of its children:
+50% forest means about half the child cells are forest, not that each child is 50% forest
+([ADR 0009](docs/adr/0009-named-entities-persist-and-cells-are-shares.md)).
+
 ### Magic source authority
 
 Per the user's 2026-10-22 clarification, the magic systems are first-class world
