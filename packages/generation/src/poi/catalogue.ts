@@ -109,6 +109,7 @@ const withOpenWork = (entry: PoiEntry): PoiEntry => ({
   recognition: { ...entry.recognition, landform: entry.recognition.landform ?? unwritten },
   existence: { ...entry.existence, origins: entry.existence.origins ?? unwritten },
   naming: { ...entry.naming, term: entry.naming.term ?? unwritten },
+  acrossMaps: { ...entry.acrossMaps, standsOn: entry.acrossMaps.standsOn ?? unwritten },
 });
 const opened = (entries: Readonly<Record<PoiKindId, PoiEntry>>) =>
   Object.fromEntries(

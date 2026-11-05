@@ -15,9 +15,22 @@ import { extractRanges } from "./reliefFeatures";
 import { extractOceans } from "./oceanFeatures";
 import { dropClaimedFeatures, extractLandmarks, landmarkClaims } from "./landmarkFeatures";
 import { releaseWorking } from "./physicalNumerics";
-import { generationFeature, generationFeatures } from "../generationFeatures";
+import {
+  generationFeature,
+  generationFeatures,
+  writeGenerationFeature,
+} from "../generationFeatures";
 import { isWorldGeography } from "../worldSignificance";
-import { drainageReaches, mappedCourses, reachInFrame, riverInputs } from "./mappedRivers";
+import {
+  drainageReaches,
+  establishRivers,
+  mappedCourses,
+  reachInFrame,
+  riverIdOf,
+  riverInputs,
+  riverPositionAt,
+  riversOf,
+} from "./mappedRivers";
 
 function lineParts(geometry: Geometry): number[][][] {
   if (geometry.type === "LineString") return [geometry.coordinates];
@@ -192,7 +205,20 @@ function riverWater(state: GenerationState) {
     },
   };
 }
+/** A river's records say which river they draw, so what stands on it can follow it down. */
+function nameItsRiver(state: GenerationState, ids: readonly string[], riverId: string) {
+  for (const id of ids) {
+    const feature = generationFeature(state, id);
+    if (feature)
+      writeGenerationFeature(state, {
+        ...feature,
+        attributes: { ...feature.attributes, riverId },
+      });
+  }
+}
 function extractRiverGeography(state: GenerationState, context: MapProcessContext) {
+  // Settled first: the working arrays below are the ones this reads with.
+  riversOf(state);
   const work = state.physical!,
     map = work.map,
     paths = createRiverPaths(map),
@@ -215,18 +241,23 @@ function extractRiverGeography(state: GenerationState, context: MapProcessContex
             paths,
             basinDischarge.get(first.reach.basin)
           );
+        nameItsRiver(state, ids, riverIdOf(course.map((i) => reaches[i])));
         for (const i of course) reaches[i].featureIds = ids;
         yield { members, featureIds: ids };
       }
       return;
     }
-    // A finer map publishes the significant courses reach by reach, inside its footprint.
-    const significant = new Set(courses.flat());
-    for (const [index, { start, members, reach }] of records.entries()) {
-      if (!significant.has(index)) continue;
+    // A finer map publishes its rivers reach by reach, inside its footprint.
+    for (const { start, members, reach } of records) {
+      const riverId = members
+        .slice(0, -1)
+        .map((cell) => riverPositionAt(state, cell)?.riverId)
+        .find(Boolean);
+      if (!riverId) continue;
       const discharge = basinDischarge.get(reach.basin);
       if (!reachInFrame(state, start)) continue;
       reach.featureIds = publishReach(state, start, members, paths, discharge);
+      nameItsRiver(state, reach.featureIds, riverId);
       yield { members, featureIds: reach.featureIds };
     }
   }
@@ -237,6 +268,7 @@ function extractRiverGeography(state: GenerationState, context: MapProcessContex
     releaseWorking(map, paths.x, paths.y, paths.upstream);
     if (paths.incoming) releaseWorking(map, paths.incoming);
   }
+  establishRivers(state, reaches);
   state.domain.world.drainage = {
     ...state.domain.world.drainage,
     [state.domain.scope.areaId]: {

@@ -11,7 +11,16 @@ const contract = {
   existence: ["statement", "way", "requires", "suitability", "places", "origins"],
   publication: ["statement", "moment", "record"],
   fields: ["statement", "terrain", "water", "climate", "cover", "magic"],
-  acrossMaps: ["statement", "carry", "realize", "counterpart", "unrealized", "settle", "schedule"],
+  acrossMaps: [
+    "statement",
+    "standsOn",
+    "carry",
+    "realize",
+    "counterpart",
+    "unrealized",
+    "settle",
+    "schedule",
+  ],
   movement: ["statement", "roads", "boats", "drainage", "magic", "links", "crosses"],
   others: ["statement", "needs", "excludes", "contains", "pairsWith"],
   people: ["statement", "offers", "threatens"],
@@ -27,6 +36,7 @@ const openSlots = new Set([
   "recognition.landform",
   "existence.origins",
   "naming.term",
+  "acrossMaps.standsOn",
 ]);
 
 it("gives every place rule of every magic system a kind in the catalogue", () => {
@@ -68,8 +78,9 @@ it("lists an entry's unwritten fields as its open work", () => {
     ...poiCatalogue.peak,
     naming: { ...poiCatalogue.peak.naming, namedBy: unwritten },
   };
-  expect(unwrittenFields(poiCatalogue.peak)).toEqual(["appearance", "account"]);
-  expect(unwrittenFields(open)).toEqual(["appearance", "account", "naming.namedBy"]);
+  const peakOpen = ["appearance", "account", "acrossMaps.standsOn"];
+  expect(unwrittenFields(poiCatalogue.peak)).toEqual(peakOpen);
+  expect(unwrittenFields(open)).toEqual(expect.arrayContaining([...peakOpen, "naming.namedBy"]));
 });
 
 it("leaves no field of any entry unwritten but the slots still open", () => {

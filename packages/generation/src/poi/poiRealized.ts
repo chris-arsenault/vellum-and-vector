@@ -73,6 +73,7 @@ const pass: Gate = (state, place) =>
   worldRise * 1024 * mapScale(state).height;
 /** Which water is a river is the river's own test: a fall answers only for its drop. */
 const waterfall: Gate = (state, place) =>
+  place.origin === "carried" ||
   riverDrop(fieldOf(state), place.anchor) >= worldFallsDrop * mapScale(state).height;
 const fjord: Gate = (state, place) => {
   const e = evidence(state, place),

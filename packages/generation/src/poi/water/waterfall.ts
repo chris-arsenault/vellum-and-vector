@@ -2,14 +2,7 @@ import { Landform } from "../../canonry/codes";
 import { riverGradient } from "../../canonry/landforms";
 import type { GenerationState } from "../../process";
 import { worldFallsDischarge, worldFallsDrop } from "../../worldSignificance";
-import {
-  carryWhereItLands,
-  costNear,
-  counterpartOf,
-  goes,
-  movesTo,
-  parentSpanOf,
-} from "../poiCarry";
+import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import {
   notApplicable,
   type PoiCarried,
@@ -20,8 +13,8 @@ import {
 import { claimsOf, placesFromOrigins } from "../poiOrigins";
 import { namingCultureNear, holds, within } from "../poiPlaces";
 import { siteRecord } from "../poiRecords";
-import { cellSpan, fieldOf, isLand, nearestWhere } from "../poiReads";
-import { onMappedRiver } from "./waterReads";
+import { hostedCell } from "../../canonry/mappedRivers";
+import { cellSpan, fieldOf } from "../poiReads";
 import { attachment, aloneAmong, sized, standsOut, weighed } from "../poiVisibilityRules";
 import type { FallForm } from "./waterfallForms";
 import { waterfallOrigins } from "./waterfallOrigins";
@@ -31,7 +24,7 @@ import {
   fallVariety,
   formIn,
   shapedFall,
-  step,
+  carriedStep,
   wetRock,
 } from "./waterfallShape";
 import type { RegionalState } from "../../regional/state";
@@ -66,21 +59,10 @@ const factors = {
   cultural: attachment(around),
 };
 const counterpart = counterpartOf(isA, 1);
-/** The refined river must hold the step: at the nearest fall, or the nearest reach of river. */
+/** The refined river must hold the step, at the fall's own place on it. */
 function realizedStep(state: RegionalState, carried: PoiCarried) {
-  const found = counterpart(state, carried),
-    cell =
-      found >= 0
-        ? found
-        : nearestWhere(
-            state,
-            carried.cell,
-            parentSpanOf(state),
-            (c) => onMappedRiver(state, c) && isLand(state, c)
-          );
-  return cell < 0
-    ? []
-    : step(state, { id: carried.feature.id, kind: "waterfall", cells: [cell], anchor: cell });
+  const cell = hostedCell(state, carried.feature);
+  return cell < 0 ? [] : carriedStep(state, cell, Number(carried.feature.attributes.drop ?? 0));
 }
 
 export const waterfall: PoiEntry = {
@@ -128,8 +110,9 @@ export const waterfall: PoiEntry = {
     ),
   },
   acrossMaps: {
+    standsOn: "river",
     statement:
-      "A captured fall lands on the refined river, whose finer profile must hold its step; if the river there holds none, the fall takes the nearest step and otherwise goes.",
+      "A captured fall recorded the river it stands on and how far along it, and it stands at that place on the refined river, however the river has bent. The finer ground is made to hold its step there.",
     carry: carryWhereItLands,
     realize: realizedStep,
     counterpart,

@@ -57,6 +57,38 @@ export function step(state: GenerationState, place: PoiPlace): readonly PoiField
     { change: "atMost", band: "Elevation", cell: target, value: lip - toNative(drop) },
   ];
 }
+/** The most a carried fall asks of finer ground, in metres, and how far down it may grade the bed. */
+const largestCarriedDrop = 100,
+  carriedGrade = 40,
+  /** What the bed falls per cell along the graded reach, in metres. */
+  gradedFall = 0.5;
+/**
+ * The step a carried fall needs at its place on its river, whatever the ground there. The lip
+ * holds and the bed below comes down, cell by cell until it meets ground already that low, so
+ * the river still runs downhill below the fall.
+ */
+export function carriedStep(
+  state: GenerationState,
+  cell: number,
+  parentDrop: number
+): readonly PoiFieldChange[] {
+  const map = fieldOf(state),
+    lip = map.Elevation.get(cell),
+    drop = Math.min(largestCarriedDrop, Math.max(parentDrop, waterfallLeastDrop)),
+    floor = lip - toNative(drop),
+    below = reachBelow(
+      state,
+      { id: "", kind: "waterfall", cells: [cell], anchor: cell },
+      carriedGrade
+    );
+  const changes: PoiFieldChange[] = [{ change: "atLeast", band: "Elevation", cell, value: lip }];
+  for (let k = 1; k < below.length; k++) {
+    const value = floor - toNative(gradedFall * (k - 1));
+    if (map.Elevation.get(below[k]) <= value) break;
+    changes.push({ change: "atMost", band: "Elevation", cell: below[k], value });
+  }
+  return changes;
+}
 /** The river's cells from the lip downstream, as far as a form has worn back. */
 function reachBelow(state: GenerationState, place: PoiPlace, length: number) {
   const reach = [place.anchor];

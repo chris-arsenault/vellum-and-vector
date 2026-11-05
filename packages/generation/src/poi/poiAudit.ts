@@ -1,6 +1,9 @@
 import { spatial, type AtlasFeature, type DrainageReach } from "@atlas/domain";
 import { nativePosition } from "../canonry/atlasWorkspace";
+import { riversOf } from "../canonry/mappedRivers";
 import { riverCourseJudgments, type CourseJudgment } from "../canonry/worldRiverCourses";
+import { continuingRivers } from "../regional/riverLineage";
+import type { RegionalState } from "../regional/state";
 import { generationFeatures } from "../generationFeatures";
 import type { GenerationState } from "../process";
 import { mapScale, riverShortfalls } from "../worldSignificance";
@@ -8,7 +11,7 @@ import { poiCatalogue } from "./catalogue";
 import type { PoiEntry } from "./poiContract";
 import { originsOf } from "./poiOrigins";
 import { carryOutcomes, placesOf } from "./poiPublish";
-import { cellSpan, featureCell, fieldOf, releaseHeld } from "./poiReads";
+import { cellSpan, featureCell, fieldOf, gap, releaseHeld } from "./poiReads";
 import { stepsOf } from "./water/waterfallOrigins";
 
 /**
@@ -181,6 +184,41 @@ function auditFalls(state: GenerationState, features: readonly AtlasFeature[]) {
   };
 }
 
+/** What the water does after a river's last land cell. */
+function endOf(state: GenerationState, cell: number) {
+  const map = fieldOf(state),
+    next = map.FlowTargets.get(cell);
+  if (next < 0) return map.mesh.membership(cell) === 1 ? "drains no further" : "leaves the frame";
+  return ["joins land", "sea", "lake"][map.WaterKindCodes.get(next)] ?? "other water";
+}
+/** Every river of this map: where it came from, how long it runs and what stands on it. */
+function riverAudit(state: GenerationState, features: readonly AtlasFeature[]) {
+  const continued = "regional" in state ? continuingRivers(state as RegionalState) : [],
+    parents = new Map(continued.map((river) => [river.id, river])),
+    hosted = features.filter((feature) => feature.attributes.hostedBy),
+    onRiver = (id: string) =>
+      hosted.filter((f) => (f.attributes.hostedBy as { hostId: string }).hostId === id).length;
+  return {
+    parentsOnThisMap: continued.length,
+    placesRecordingARiver: tally(hosted.map((f) => String(f.attributes.poi))),
+    list: riversOf(state).map(({ id, cells }) => ({
+      id,
+      fromParent: parents.has(id),
+      share: parents.has(id) ? [parents.get(id)!.from, parents.get(id)!.to] : null,
+      parentCellsHere: parents.get(id)?.course.cells.length ?? null,
+      cells: cells.length,
+      endFromParentEndCells: parents.has(id)
+        ? gap(state, cells[cells.length - 1], parents.get(id)!.course.cells.at(-1)!) /
+          cellSpan(state)
+        : null,
+      endsIn: endOf(state, cells[cells.length - 1]),
+      drawnAs: features.filter((f) => f.kind === "river" && f.attributes.riverId === id).length,
+      places: onRiver(id),
+      name: parents.get(id)?.course.feature.name ?? null,
+    })),
+  };
+}
+
 /** The account of a finished map, for the run's report. */
 export function auditPlaces(state: GenerationState) {
   if (!state.physical) return {};
@@ -193,6 +231,7 @@ export function auditPlaces(state: GenerationState) {
     ),
     waterfall: auditFalls(state, features),
     carried: carryOutcomes(state),
+    rivers: riverAudit(state, features),
   };
   releaseHeld(state);
   return audit;

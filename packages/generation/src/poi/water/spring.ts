@@ -220,6 +220,7 @@ export const spring: PoiEntry = {
     ),
   },
   acrossMaps: {
+    standsOn: "river",
     statement:
       "A spring lands on the finer ground, which must hold a wet channel head there; each round it moves to the nearest head the developed water shows, and with none it keeps its realized head, because the parent's water still has to come out somewhere.",
     carry: carryWhereItLands,

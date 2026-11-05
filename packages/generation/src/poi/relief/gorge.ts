@@ -101,6 +101,7 @@ export const gorge: PoiEntry = {
     ),
   },
   acrossMaps: {
+    standsOn: "river",
     statement:
       "A captured gorge lands on the refined river: the floor lies no higher than the parent's and the network is drawn into it. A canyon record is re-placed and its signature held by its own cause; if an emergent gorge finds no incised reach it takes the nearest one, and otherwise goes.",
     carry: carryWhereItLands,

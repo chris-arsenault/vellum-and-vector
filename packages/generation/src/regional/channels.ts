@@ -1,6 +1,7 @@
 import { resolutionCells } from "@atlas/domain";
 import { distance, isContent, regionalSpan } from "./lattice";
 import { referenceDischarge } from "./network";
+import { holdContinuingChannels } from "./riverLineage";
 import { clamp, type RegionalState } from "./state";
 
 /** Reference-runoff samples a physical channel drains, in this map's own samples. */
@@ -53,6 +54,7 @@ export function qualifyChannels(state: RegionalState) {
       (i) => (enteringFlow(state, i) > 0 ? shortest : 0)
     );
   for (let i = 0; i < mesh.count; i++) if (length[i] < shortest) map.RiverOrders.set(i, 0);
+  holdContinuingChannels(state);
 }
 /** Longest upstream path through cells that `along` admits, from each start length. */
 function upstreamLengths(

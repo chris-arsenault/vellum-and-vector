@@ -1,4 +1,4 @@
-import type { AtlasFeature } from "@atlas/domain";
+import { point, type AtlasFeature } from "@atlas/domain";
 import {
   generationFeature,
   generationFeatures,
@@ -9,7 +9,9 @@ import { putGenerated } from "../mapFeatures";
 import type { GenerationState } from "../process";
 import type { RegionalState } from "../regional/state";
 import { poiCatalogue } from "./catalogue";
-import type { PoiCarried, PoiEntry, PoiMoment, PoiPlace } from "./poiContract";
+import { nativePosition } from "../canonry/atlasWorkspace";
+import { hostedCell, riverPositionAt } from "../canonry/mappedRivers";
+import type { PoiCarried, PoiEntry, PoiHostLink, PoiMoment, PoiPlace } from "./poiContract";
 import type { PoiKindId } from "./poiKinds";
 import { applyNameTerm, takeNames } from "./poiNames";
 import { originsOf } from "./poiOrigins";
@@ -56,13 +58,20 @@ export function publishKinds(
   for (const entry of entries())
     if (entry.publication.moment === moment && delivered(entry)) publishKind(state, entry, written);
 }
+/** The river a place stands on, as it is placed. */
+function hostOf(state: GenerationState, entry: PoiEntry, place: PoiPlace) {
+  const on = entry.acrossMaps.standsOn === "river" ? riverPositionAt(state, place.anchor) : null;
+  if (!on) return {};
+  const hostedBy: PoiHostLink = { host: "river", hostId: on.riverId, along: on.along };
+  return { hostedBy };
+}
 /** What every record says of its place, whichever kind's record it is. */
 function placeAttributes(state: GenerationState, entry: PoiEntry, place: PoiPlace) {
   const variety = varietyOfEntry(state, entry, place);
   return {
     poi: entry.id,
     ...(place.origin ? { origin: place.origin } : {}),
-    ...(place.hostedBy ? { hostedBy: place.hostedBy } : {}),
+    ...hostOf(state, entry, place),
     ...(variety ? { variety } : {}),
   };
 }
@@ -235,7 +244,35 @@ function logUnreached(state: RegionalState) {
       logCarry(state, { entry }, "does not reach this map: left where it was");
   }
 }
+/** A place recorded on a river stands where that river now runs, however it has moved. */
+function followRiver(state: RegionalState, item: CarriedPlace, developedAt: Map<string, string>) {
+  const cell = hostedCell(state, item.carried.feature),
+    captured = generationFeature(state, item.carried.feature.id);
+  if (cell < 0 || !captured) return logCarry(state, item, "its river is not here: left");
+  const developed = developedAt.get(`${item.entry.id}:${cell}`),
+    feature = developed && generationFeature(state, developed);
+  if (feature && feature.id !== captured.id) {
+    standsFor(state, item.carried.feature, feature);
+    return logCarry(state, item, "follows its river: stands for the place there");
+  }
+  if (captured.geometry.type !== "Point")
+    return logCarry(state, item, "follows its river: a line, not moved");
+  writeGenerationFeature(state, {
+    ...captured,
+    geometry: point(nativePosition(state.physical, cell)),
+    attributes: {
+      ...captured.attributes,
+      capturedRecord: captured.attributes.capturedRecord ?? {
+        geometry: captured.geometry,
+        footprint: captured.footprint,
+        attributes: captured.attributes,
+      },
+    },
+  });
+  logCarry(state, item, "follows its river: moved");
+}
 function carryPlace(state: RegionalState, item: CarriedPlace, developedAt: Map<string, string>) {
+  if (item.carried.feature.attributes.hostedBy) return followRiver(state, item, developedAt);
   const counterpart = called<(s: RegionalState, c: PoiCarried) => number>(
     item.entry.acrossMaps.counterpart
   );

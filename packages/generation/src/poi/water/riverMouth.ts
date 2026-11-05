@@ -184,6 +184,7 @@ export const riverMouth: PoiEntry = {
     ),
   },
   acrossMaps: {
+    standsOn: "river",
     statement:
       "A captured mouth requires the finer map's river to run into the sea. The ground must provide an unbroken fall to the shore: each cell from where the river stops falls evenly to the sea's level, and the routing runs the water down it. The place then moves to the mouth the developed water shows, and each round's shore change can move it again. It goes only when no sea lies near.",
     carry: carryWhereItLands,

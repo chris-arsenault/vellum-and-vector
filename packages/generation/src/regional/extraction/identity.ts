@@ -1,20 +1,12 @@
-import type { DrainageReach } from "@atlas/domain";
 import {
   generationFeature,
   generationFeatures,
   removeGenerationFeature,
   writeGenerationFeature,
 } from "../../generationFeatures";
-import { courseReachShare } from "../causes/course";
-import { courseCells, type CapturedCourse } from "../courses";
-import { adjacency, neighborsOf, regionalSpan } from "../lattice";
+import type { CapturedCourse } from "../courses";
+import { continuingRivers } from "../riverLineage";
 import type { RegionalState } from "../state";
-
-/**
- * Share of a captured course's cells a developed stem must run beside, within the course's
- * valley (the corridor the network was drawn into), to take its identity.
- */
-const identityShare = 0.3;
 
 /**
  * After the world has published the field's geography, carry what only a refinement knows:
@@ -45,113 +37,22 @@ function tagProducts(state: RegionalState) {
   }
 }
 
-/** The developed stem that runs along most of a captured course is that river. */
+/** A continuing river's records draw the captured course: they take its name and identity. */
 function carryCourses(state: RegionalState) {
-  const courses = state.regional.courses ?? [],
-    reaches = state.domain.world.drainage?.[state.regional.input.areaId]?.reaches ?? [];
-  if (!courses.length || !reaches.length) return;
-  const reach = Math.max(regionalSpan(state), state.regional.parentSpan * courseReachShare),
-    corridors = reaches.map((r) => corridor(state, courseCells(state, [r.coordinates]), reach)),
-    taken = new Set<number>();
-  for (const course of courses) {
-    const best = bestReach(
-      course,
-      corridors,
-      (index) => !taken.has(index) && reaches[index].featureIds.length > 0
+  const rivers = [...generationFeatures(state, { areaId: state.regional.input.areaId })].filter(
+    (feature) => feature.kind === "river"
+  );
+  for (const { id, course } of continuingRivers(state)) {
+    const drawn = rivers.filter(
+      (feature) => feature.id !== course.feature.id && feature.attributes.riverId === id
     );
-    if (best < 0) {
-      keepCaptured(state, course);
-      continue;
-    }
-    // The whole stem along the course is that river: the reach that runs beside most of it,
-    // the trunk above it and the water below it, as far as they keep to the course.
-    for (const index of stemAlong(reaches, best, course, corridors, taken)) {
-      taken.add(index);
-      takeIdentity(state, reaches[index].featureIds[0], course);
-    }
+    if (!drawn.length) keepCaptured(state, course);
+    for (const feature of drawn) takeIdentity(state, feature.id, course);
   }
 }
-/** No developed stem stands for the course: the captured river stays on the map as captured. */
+/** No developed record draws the course: the captured river stays on the map as captured. */
 function keepCaptured(state: RegionalState, course: CapturedCourse) {
   if (!generationFeature(state, course.feature.id)) writeGenerationFeature(state, course.feature);
-}
-/** The reaches of one stem through `best`, upstream by the larger inflow and downstream, within the course. */
-function stemAlong(
-  reaches: DrainageReach[],
-  best: number,
-  course: CapturedCourse,
-  corridors: Set<number>[],
-  taken: Set<number>
-) {
-  const along = (index: number) =>
-      !taken.has(index) &&
-      reaches[index].featureIds.length > 0 &&
-      course.cells.some((cell) => corridors[index].has(cell)),
-    stem = [best];
-  for (let down = reaches[best].downstream; down !== null && along(down) && !stem.includes(down);)
-    down = reaches[stem[stem.push(down) - 1]].downstream;
-  for (
-    let up = largestInflow(reaches, best, along);
-    up >= 0;
-    up = largestInflow(reaches, up, along)
-  )
-    stem.push(up);
-  return stem;
-}
-function largestInflow(reaches: DrainageReach[], into: number, along: (index: number) => boolean) {
-  let best = -1,
-    most = 0;
-  for (const [index, reach] of reaches.entries()) {
-    const discharge = ownDischarge(reach);
-    if (reach.downstream === into && along(index) && discharge > most)
-      [best, most] = [index, discharge];
-  }
-  return best;
-}
-/** A reach's discharge on its own last cell (its mouth cell is the confluence it shares). */
-function ownDischarge(reach: DrainageReach) {
-  const n = reach.discharges.length;
-  return n > 1 ? reach.discharges[n - 2] : (reach.discharges[0] ?? 0);
-}
-/** The cells within `reach` of a reach's cells: the ground the developed stem runs along. */
-function corridor(state: RegionalState, cells: Int32Array, reach: number) {
-  const mesh = state.physical.map.mesh,
-    limit = Math.ceil(reach / adjacency(state).step),
-    steps = new Int32Array(mesh.count).fill(-1),
-    queue: number[] = [],
-    around = new Int32Array(mesh.stride);
-  for (const cell of cells) {
-    steps[cell] = 0;
-    queue.push(cell);
-  }
-  for (let head = 0; head < queue.length; head++) {
-    const i = queue[head];
-    if (steps[i] >= limit) continue;
-    const m = neighborsOf(mesh, i, around);
-    for (let k = 0; k < m; k++) {
-      const j = around[k];
-      if (steps[j] >= 0) continue;
-      steps[j] = steps[i] + 1;
-      queue.push(j);
-    }
-  }
-  return new Set(queue);
-}
-/** The eligible reach whose corridor holds the most of the course, if it holds enough of it. */
-function bestReach(
-  course: CapturedCourse,
-  corridors: Set<number>[],
-  eligible: (index: number) => boolean
-) {
-  let best = -1,
-    most = 0;
-  for (const [index, cells] of corridors.entries()) {
-    if (!eligible(index)) continue;
-    let count = 0;
-    for (const cell of course.cells) if (cells.has(cell)) count++;
-    if (count > most) [best, most] = [index, count];
-  }
-  return most >= course.cells.length * identityShare ? best : -1;
 }
 
 /**

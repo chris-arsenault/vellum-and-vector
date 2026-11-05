@@ -1,22 +1,13 @@
 import { isRiverStep, riverDrop } from "../../canonry/landforms";
-import { riversOf } from "../../canonry/mappedRivers";
+import { hostedCell, riversOf } from "../../canonry/mappedRivers";
 import { hashUnit } from "../../canonry/noise";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { mapScale, worldFallsDrop } from "../../worldSignificance";
-import type { PoiClaim, PoiHostLink, PoiOrigin } from "../poiContract";
+import type { PoiClaim, PoiOrigin } from "../poiContract";
 import { spacedAmong } from "../poiOrigins";
 import { carriedPlaces } from "../poiPublish";
-import {
-  cellSpan,
-  cellsWithin,
-  fieldOf,
-  fractureAt,
-  gap,
-  heldFor,
-  isLake,
-  isSea,
-} from "../poiReads";
+import { cellSpan, cellsWithin, fieldOf, fractureAt, heldFor, isLake, isSea } from "../poiReads";
 import { settlementPlaces } from "../settlements/communityRecords";
 import { flowTarget } from "./waterReads";
 
@@ -38,37 +29,16 @@ const portageSpans = 2,
 const salt = 0x7041;
 
 const flowOf = (state: GenerationState, cell: number) => fieldOf(state).FlowAccumulation.get(cell);
-/** Every step on this map's rivers, with the river it is on. No rivers, no steps. */
-const stepLinks = (state: GenerationState): ReadonlyMap<number, PoiHostLink> =>
+/** Every step on this map's rivers, tallest first. No rivers, no steps. */
+export const stepsOf = (state: GenerationState): readonly number[] =>
   heldFor(state, "fall:steps", () => {
     const map = fieldOf(state),
-      links = new Map<number, PoiHostLink>();
-    for (const { id, cells } of riversOf(state))
-      cells.forEach((cell, k) => {
-        if (map.mesh.membership(cell) === 1 && isRiverStep(map, cell) && !links.has(cell))
-          links.set(cell, {
-            host: "river",
-            hostId: id,
-            along: k / Math.max(1, cells.length - 1),
-          });
-      });
-    return links;
+      steps = new Set<number>();
+    for (const { cells } of riversOf(state))
+      for (const cell of cells)
+        if (map.mesh.membership(cell) === 1 && isRiverStep(map, cell)) steps.add(cell);
+    return [...steps].sort((a, b) => riverDrop(map, b) - riverDrop(map, a) || a - b);
   });
-/** Every step on this map's rivers, tallest first. */
-export const stepsOf = (state: GenerationState): readonly number[] => {
-  const map = fieldOf(state);
-  return [...stepLinks(state).keys()].sort(
-    (a, b) => riverDrop(map, b) - riverDrop(map, a) || a - b
-  );
-};
-/** An origin's falls, each with the river it was placed on. */
-const onItsRiver =
-  (finds: PoiOrigin["finds"]): PoiOrigin["finds"] =>
-  (state, claimed) =>
-    finds(state, claimed).map((found) => ({
-      ...found,
-      hostedBy: stepLinks(state).get(found.anchor),
-    }));
 const among = (
   state: GenerationState,
   claimed: Claimed,
@@ -78,19 +48,14 @@ const among = (
     passes(cell, flowTarget(state, cell))
   );
 
-/** A fall the coarser map named stays one: the nearest step within its cell. */
+/** A fall the coarser map named stays one: where it stands on its river, which holds the step. */
 function carried(state: GenerationState) {
   if (!("regional" in state)) return [];
-  const region = state as RegionalState,
-    reach = region.regional.parentSpan;
-  return carriedPlaces(region)
+  return carriedPlaces(state as RegionalState)
     .filter(({ entry }) => entry.id === "waterfall")
-    .flatMap(({ carried: place }) => {
-      const steps = stepsOf(state).filter((cell) => gap(state, cell, place.cell) <= reach);
-      if (!steps.length) return [];
-      const near = (cell: number) => gap(state, cell, place.cell);
-      return [{ anchor: steps.reduce((best, cell) => (near(cell) < near(best) ? cell : best)) }];
-    });
+    .map(({ carried: place }) => hostedCell(state, place.feature))
+    .filter((cell) => cell >= 0)
+    .map((anchor) => ({ anchor }));
 }
 /** So tall a drop is a fall whatever made it. */
 const great = (state: GenerationState, claimed: Claimed) => {
@@ -144,44 +109,44 @@ function portage(state: GenerationState, claimed: Claimed) {
 export const waterfallOrigins: readonly PoiOrigin[] = [
   {
     id: "carried",
-    statement: "The nearest step where the coarser map named a fall.",
+    statement: "A fall the coarser map named, at its place on its river.",
     reads: [],
-    finds: onItsRiver(carried),
+    finds: carried,
   },
   {
     id: "great",
     statement: "A drop so tall it needs no other reason.",
     reads: [],
-    finds: onItsRiver(great),
+    finds: great,
   },
   {
     id: "ledge",
     statement: "Hard rock over softer, which wore back.",
     reads: [],
-    finds: onItsRiver(ledge),
+    finds: ledge,
   },
   {
     id: "fault",
     statement: "A river crossing ground that has moved.",
     reads: [],
-    finds: onItsRiver(fault),
+    finds: fault,
   },
   {
     id: "hanging",
     statement: "A tributary left above the greater river's deeper valley.",
     reads: [],
-    finds: onItsRiver(hanging),
+    finds: hanging,
   },
   {
     id: "shore",
     statement: "A river going over a cliff into standing water.",
     reads: [],
-    finds: onItsRiver(shore),
+    finds: shore,
   },
   {
     id: "portage",
     statement: "A step boats must be carried round, named by the town that carries them.",
     reads: ["settlement"],
-    finds: onItsRiver(portage),
+    finds: portage,
   },
 ];

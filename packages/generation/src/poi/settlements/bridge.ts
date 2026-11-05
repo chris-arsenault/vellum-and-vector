@@ -119,6 +119,7 @@ export const bridge: PoiEntry = {
     magic: notApplicable("A bridge holds no stock; river-borne magic passes under it."),
   },
   acrossMaps: {
+    standsOn: "river",
     statement:
       "A refined map traces its own ways and makes its bridges afresh at extraction. A bridge captured from a coarser map draws the growing channel to its abutments, stands on the nearest channel with its approaches graded there, and goes if no channel lies near.",
     carry: carryWhereItLands,

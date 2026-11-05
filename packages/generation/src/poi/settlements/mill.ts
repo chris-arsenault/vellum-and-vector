@@ -141,6 +141,7 @@ export const mill: PoiEntry = {
     ),
   },
   acrossMaps: {
+    standsOn: "river",
     statement:
       "A refined map sites its own mills at extraction from its own channels. A mill captured from a coarser map takes the nearest reach falling steeply enough, holds its head there, and goes if that ground has none.",
     carry: carryWhereItLands,

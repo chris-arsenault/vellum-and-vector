@@ -144,6 +144,7 @@ export const irrigation: PoiEntry = {
     magic: (_state, place) => keptLine(place),
   },
   acrossMaps: {
+    standsOn: "river",
     statement:
       "A work captured from a coarser map moves its intake to the nearest channel and goes if the finer ground has no river near it.",
     carry: carryWhereItLands,

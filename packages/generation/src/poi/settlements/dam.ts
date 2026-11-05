@@ -130,6 +130,7 @@ export const dam: PoiEntry = {
     magic: (_state, place) => keptLine(place),
   },
   acrossMaps: {
+    standsOn: "river",
     statement:
       "A captured dam snaps to the refined channel near its record; its crest is the lower of the valley's banks, and the water behind it fills the ground below the crest. If no channel lies within reach, the dam goes.",
     carry: carryWhereItLands,

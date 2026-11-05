@@ -96,6 +96,7 @@ export const ford: PoiEntry = {
     magic: notApplicable("A ford holds no stock; river-borne magic runs over it as anywhere else."),
   },
   acrossMaps: {
+    standsOn: "river",
     statement:
       "A refined map traces its own ways and makes its crossings afresh at extraction. A ford captured from a coarser map moves to the nearest channel on the finer ground, which must be wadeable there, and goes if no channel lies near: the crossing follows the river, not the river the crossing.",
     carry: carryWhereItLands,

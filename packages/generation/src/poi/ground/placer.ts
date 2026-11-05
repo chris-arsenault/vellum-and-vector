@@ -119,6 +119,7 @@ export const placer: PoiEntry = {
     ),
   },
   acrossMaps: {
+    standsOn: "river",
     statement:
       "A captured band lands on the refined river, whose finer profile must hold its slack, so the refined reach keeps sorting; Fire's inherited stock comes with the child's field. After a round's water a band follows the channel to the nearest slack reach, and goes if the river no longer has one within a parent span.",
     carry: carryWhereItLands,
