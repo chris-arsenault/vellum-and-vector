@@ -4,7 +4,7 @@ import { resolveGenerationFeatures, type ResolvedFeatures } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
 import { domainFeatureDefinitions } from "../domainFeatures";
 import type { FieldPublicationDefinition, PublicationDefinition } from "../publication";
-import { atlasChannels, type ChannelBinding } from "./atlasChannels";
+import { atlasChannels, structureChannels, type ChannelBinding } from "./atlasChannels";
 import { ecologyBindings } from "./ecologyState";
 import { configuredMagicPublications } from "./atlasMagicPublications";
 
@@ -23,6 +23,7 @@ const nativeOwnership: Ownership[] = [
       "sediment",
       "rock",
       "rockKind",
+      ...structureChannels,
       "continentalFraction",
       "province",
       "assembly",

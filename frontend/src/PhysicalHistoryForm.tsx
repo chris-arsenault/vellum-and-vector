@@ -6,7 +6,7 @@ import { EcologyEpochFields } from "./EcologyEpochFields";
 
 const present: Epoch = {
   id: "Present",
-  tectonics: 0.1,
+  tectonics: 0.4,
   hydrology: 1,
   ice: 0,
   coasts: 1,
@@ -18,7 +18,7 @@ const histories: Record<string, Epoch[]> = {
   temperate: [{ ...present, id: "Formation", tectonics: 1 }, present],
   glacial: [
     { ...present, id: "Formation", tectonics: 1 },
-    { ...present, id: "Cold age", tectonics: 0.4, ice: 1, temperature: -3, seaLevel: -40 },
+    { ...present, id: "Cold age", tectonics: 0.7, ice: 1, temperature: -3, seaLevel: -40 },
     present,
   ],
   cycles: [

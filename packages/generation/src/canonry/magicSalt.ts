@@ -4,6 +4,9 @@ import type { PhysicalField } from "./field";
 import { reservoirAmount, type MagicField } from "./magicState";
 import { clamp, round } from "./math";
 
+/** The share of a full fusing at which salt ground has become glass. */
+const glassFrom = 0.5;
+
 /**
  * What Salt does to the ground it lies on, once per epoch after the shared forcings: bed
  * deep enough fuses the ground to glass (rock resistance up, soil gone), salted ground
@@ -21,16 +24,24 @@ export function saltWrites(state: GenerationState) {
       if (map.WaterKindCodes.get(i) !== 0) continue;
       const p = field.definition.parameters,
         bed = reservoirAmount(field, "bed", i) / map.mesh.area(i);
-      if (bed >= p.glassBed) fuse(map, i, p.glassResistance);
+      if (bed >= p.glassBed) fuse(map, i, p.glassResistance, p.glassResistance);
       const salting = (field.intensity.get(i) / 1000) * field.definition.effects.salting;
       if (salting > 0)
         map.Moisture.set(i, round(map.Moisture.get(i) * (1 - p.desiccation * salting)));
       if (fire && fire.intensity.get(i) > 0) burn(map, field, fire, i);
     }
 }
-function fuse(map: PhysicalField, i: number, resistance: number) {
+function fuse(map: PhysicalField, i: number, resistance: number, full: number) {
   map.RockResistance.set(i, clamp(map.RockResistance.get(i) + round(resistance), 0, hardestRock));
-  map.RockKindCodes.set(i, rockCatalogue.fusedSalt.code);
+  // A scorch hardens what is there; only a bed burnt through is glass.
+  if (resistance >= full * glassFrom) {
+    map.RockResistance.set(
+      i,
+      Math.max(map.RockResistance.get(i), rockCatalogue.saltGlass.resistance)
+    );
+    map.RockLayerKind0.set(i, rockCatalogue.saltGlass.code);
+    map.RockKindCodes.set(i, rockCatalogue.saltGlass.code);
+  }
   map.SoilDepth.set(i, 0);
 }
 /** Fire burns the Salt clean: every reservoir loses its share, and the burnt ground fuses. */
@@ -45,5 +56,10 @@ function burn(map: PhysicalField, field: MagicField, fire: MagicField, i: number
   }
   if (burnt <= 0) return;
   field.lost += burnt;
-  fuse(map, i, p.glassResistance * Math.min(1, burnt / (map.mesh.area(i) * p.saltFull)));
+  fuse(
+    map,
+    i,
+    p.glassResistance * Math.min(1, burnt / (map.mesh.area(i) * p.saltFull)),
+    p.glassResistance
+  );
 }

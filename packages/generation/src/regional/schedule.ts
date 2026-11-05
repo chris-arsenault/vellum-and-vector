@@ -20,6 +20,7 @@ import {
   supportProposals,
 } from "./places";
 import { deriveRelief, updateSlopes } from "./relief";
+import { foldTheColumn, uncoverCuts } from "./rockStructure";
 import { deriveMedia, openFractures } from "./sharedMedia";
 import { declareFields } from "./society";
 import { ledgerCeilings, ledgerFloors } from "./media";
@@ -146,6 +147,7 @@ function contextStep(d: Domains): ScheduledStep {
         updateSlopes(state);
         return;
       }
+      foldTheColumn(state);
       // The fracture set steers the network's cost; the other media follow each round's water.
       openFractures(state);
       growNetwork(state);
@@ -162,7 +164,10 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
         message: `Round ${round}: deriving relief from the network (${label})`,
         run(state) {
           state.regional.round = round;
-          if (d.physical) deriveRelief(state);
+          if (d.physical) {
+            deriveRelief(state);
+            uncoverCuts(state);
+          }
           // The last round's ground is worked by the world's erosion at this map's scale.
           if (d.physical && round === rounds) erodeRegion(state);
           if (round === 2) conjoinFeatures(state);

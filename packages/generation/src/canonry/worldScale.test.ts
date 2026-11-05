@@ -19,7 +19,7 @@ it("scales broad shape with province dimensions while preserving physical featur
     "ContinentalAssemblyCount",
     "TectonicProvinceCount",
     "ImpactMinimumRadius",
-    "CollisionRangeWidth",
+    "OrogenicSheetSpacing",
     "PlateDriftPerEpoch",
     "WindTerrainLength",
   ] as const)

@@ -1,4 +1,4 @@
-import { baselineRock } from "../rock/rockCatalogue";
+import { baselineRock, rockKindOfCode } from "../rock/rockCatalogue";
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { clamp } from "./math";
@@ -113,13 +113,17 @@ export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
     (i) =>
       p.MassWastingStableGradient *
       clamp(0.55 + (map.RockResistance.get(i) / baselineRock) * 0.45, 0.55, 1.45) *
+      // Open joints are where a slope fails: broken rock stands at a gentler angle than tight rock.
+      (1.2 - 0.5 * rockKindOfCode(map.RockKindCodes.get(i)).jointing) *
       (1 + map.TreeCover.get(i) * 0.2 + map.GrassCover.get(i) * 0.1)
   );
   const budget = workingValues(
     map,
     "float64",
     "slope:budget",
-    (i) => p.MaximumHillslopeTransport * Math.sqrt(mesh.area(i)) * (1 - 0.6 * binding(i))
+    (i) =>
+      (p.MaximumHillslopeTransport * Math.sqrt(mesh.area(i)) * (1 - 0.6 * binding(i))) /
+      clamp(map.RockResistance.get(i) / baselineRock, 0.6, 2.5)
   );
   const spent = workingArray(map, "float64", "slope:spent");
   relaxFaces(map, plan, heights, stable, budget, spent);

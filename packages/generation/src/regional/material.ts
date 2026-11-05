@@ -4,10 +4,8 @@ import { grainAt } from "./character";
 import { distance, regionalSpan } from "./lattice";
 import { clamp, type RegionalState } from "./state";
 
-/** Erodibility contrast between the weakest and most resistant band, as an exponent at full coherence. */
-const bandContrast = 0.9;
 /** Hard rock resists; open fractures weaken. Exponents on the relative rock and the fracture share. */
-const rockWeight = 0.6,
+const rockContrast = 0.9,
   fractureWeight = 0.5;
 /** Band width along the grain, as a share of the parent span: strata are continuous along strike. */
 const bandLength = 1.5;
@@ -16,14 +14,28 @@ const wardResistance = 0.5;
 /** Added resistance of a cone's lava apron at the cone, fading to its base radius (plan: cone extension). */
 const apronHardness = 0.8;
 
+/** How many folds one of the parent's thrust sheets resolves into, and how much tilt makes a full one. */
+const foldsPerSheet = 3,
+  fullDip = 800;
 /**
- * Material organization: the strata and fold limbs of a belt as bands that are continuous
- * along the structural grain and vary across it. A white field is integrated along the
- * grain's streamlines, so the bands follow the grain wherever it turns, pinch out where the
- * streamlines diverge, and vanish where the country has no grain. Values in about -1..1.
+ * The fold at a place in one of the parent's thrust sheets: axes repeat across the sheet and run
+ * along it, standing as high as the sheet has tilted. Values in about -1..1.
+ */
+export const sheetFold = (across: number, dip: number) =>
+  Math.sin(2 * Math.PI * foldsPerSheet * across) * clamp(dip / fullDip, 0.2, 1);
+/**
+ * Fold structure: the axes and limbs of a belt as bands that are continuous along the structural
+ * grain and vary across it. Where the world thrust this ground they are the parent's own sheets.
+ * Elsewhere a white field is integrated along the grain's streamlines, so the bands follow the grain
+ * wherever it turns, pinch out where the streamlines diverge, and vanish where the country has no
+ * grain. Values in about -1..1.
  */
 export function materialBands(state: RegionalState): Float64Array {
-  const mesh = state.physical.map.mesh,
+  return (state.regional.structure ??= foldStructure(state));
+}
+function foldStructure(state: RegionalState): Float64Array {
+  const map = state.physical.map,
+    mesh = map.mesh,
     n = mesh.count,
     character = state.regional.character!,
     span = regionalSpan(state),
@@ -33,6 +45,10 @@ export function materialBands(state: RegionalState): Float64Array {
   for (let i = 0; i < n; i++)
     white[i] = hashUnit(state.regional.input.seed ^ 0x1c3d, mesh.identity(i), 0) * 2 - 1;
   for (let i = 0; i < n; i++) {
+    if (map.ThrustSheetIndex.get(i) > 0) {
+      bands[i] = sheetFold(map.ThrustAcross.get(i) / 1000, map.ThrustDip.get(i));
+      continue;
+    }
     const { coherence } = grainAt(character, i);
     if (coherence < 0.05) continue;
     const forward = integrateAlong(state, white, i, 1, steps, span),
@@ -86,18 +102,18 @@ function integrateAlong(
 
 /**
  * Resistance of the material at a cell to being cut: the shared medium rock, water and Fire
- * encounter. Resistant bands, hard rock and intact ground resist; weak bands and open
- * fractures yield. Magic's rock and fracture contributions are read from the present bands,
+ * encounter. The rock exposed there and intact ground resist; open fractures yield. Magic's rock and fracture contributions are read from the present bands,
  * so a round's hardening or cracking changes where the next round cuts.
  */
-export function materialResistance(state: RegionalState, bands: Float64Array, i: number) {
+export function materialResistance(state: RegionalState, i: number) {
   const map = state.physical.map,
     rock = map.RockResistance.get(i) / baselineRock,
     fracture = clamp(map.FractureConductance.get(i) / 1000),
     // Hallowed ground keeps its beds and banks: inside a ward the country resists cutting.
     ward = clamp(map.Warding.get(i));
   return clamp(
-    Math.exp(bandContrast * bands[i] + rockWeight * (rock - 1) - fractureWeight * fracture) *
+    rock ** rockContrast *
+      Math.exp(-fractureWeight * fracture) *
       (1 + wardResistance * ward) *
       (1 + apronHardness * apron(state, i)),
     minimumResistance,

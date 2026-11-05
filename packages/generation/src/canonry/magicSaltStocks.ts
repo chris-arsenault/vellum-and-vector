@@ -1,4 +1,6 @@
 import type { Band, MagicOrigin } from "@atlas/domain";
+import { layerKind, rockLayers, stripRock } from "../rock/rockColumn";
+import { rockCatalogue } from "../rock/rockCatalogue";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
@@ -56,12 +58,20 @@ export function weatherBed(map: PhysicalField, field: MagicField, bed: Band, ori
       bed.set(i, 0);
       continue;
     }
-    const exposed = exposure(map, i, p.buryDepth);
+    const exposed = rockOverBed(map, i) ? 0 : exposure(map, i, p.buryDepth);
     if (exposed > 0) weatherExposed(map, field, i, bed, brine, exposed, moved);
     else if (map.TectonicStrain.get(i) >= p.domeStrain) dome(map, field, i, bed, brine);
   }
   if (dust) for (let i = 0; i < bed.length; i++) dust.add(i, moved.get(i));
   releaseWorking(map, moved);
+}
+/** Rock has been laid over the salt: it waits in the column until something strips down to it. */
+function rockOverBed(map: PhysicalField, i: number) {
+  const salt = rockCatalogue.saltbed.code;
+  if (layerKind(map, i, 0) === salt) return false;
+  for (let layer = 1; layer < rockLayers; layer++)
+    if (layerKind(map, i, layer) === salt) return true;
+  return false;
 }
 /** Moisture past which an exposed bed dissolves. */
 export const bedDissolvesAbove = 500;
@@ -115,6 +125,7 @@ function dissolve(
   if (drop <= 0) return;
   field.subsided.add(i, drop);
   map.BedrockElevation.add(i, -units(drop));
+  stripRock(map, i, units(drop));
   rebuild(map, i);
 }
 /**

@@ -1,7 +1,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
-import { constructionWeight } from "./orogenicShape";
+import { constructionWeight, crossSection, orogenicCrestSection } from "./orogenicShape";
 import { clamp, crustHeight, maximumCrustThickness, units } from "./math";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 function addRoot(map: PhysicalField, cell: number, volume: number) {
@@ -14,11 +14,14 @@ function addRoot(map: PhysicalField, cell: number, volume: number) {
   map.CrustContinentalFraction.set(cell, Math.round(nextFraction * 1000));
   return units(crustHeight(before + column / 1024, nextFraction) - crustHeight(before, fraction));
 }
+/** How much of a belt's root budget any ground in its sheets can take. */
+const sheetRootShare = 0.5;
 function capacity(
   map: PhysicalField,
   context: PhysicalContext,
   component: BoundaryComponent,
-  i: number
+  i: number,
+  section: number
 ) {
   const p = context.Profile,
     fraction = map.CrustContinentalFraction.get(i) / 1000;
@@ -31,7 +34,11 @@ function capacity(
   const root =
     p.OrogenicRootBudgetMinimum +
     rank * (p.OrogenicRootBudgetMaximum - p.OrogenicRootBudgetMinimum);
-  const maximum = units(Math.min(maximumCrustThickness, 1000 + 3000 * fraction + root));
+  // A root stands as deep as the sheet above it was stacked, and shortening thickens the whole of a
+  // sheet, so ground in a belt's sheets can always take some, wherever on the sheet it lies.
+  const stacked = clamp(section / orogenicCrestSection, 0, 1),
+    shaped = root * (map.ThrustSheetIndex.get(i) > 0 ? Math.max(sheetRootShare, stacked) : stacked);
+  const maximum = units(Math.min(maximumCrustThickness, 1000 + 3000 * fraction + shaped));
   return (Math.max(0, maximum - map.CrustThickness.get(i)) * map.mesh.area(i)) / 1024;
 }
 function rootCapacity(
@@ -51,9 +58,12 @@ function rootCapacity(
     if (id < 0 || components[id].code !== 1) continue;
     const area = map.mesh.area(i);
     reserves[id] += (map.CrustRootReserve.get(i) * area) / 1024;
-    if (map.CrustContinentalFraction.get(i) < 350) continue;
-    const weight = constructionWeight(map, context, components[id], frame, i) * area;
-    const room = capacity(map, context, components[id], i);
+    // A belt with a continent builds on it; one without builds an arc on the ocean crust it has.
+    if (map.CrustContinentalFraction.get(i) < 350 && components[id].maximumContinental >= 0.35)
+      continue;
+    const section = crossSection(map, context, components[id], frame, i);
+    const weight = constructionWeight(map, context, components[id], frame, i, section) * area;
+    const room = capacity(map, context, components[id], i, section);
     if (weight > 0 && room > 0) {
       weights.set(i, weight);
       capacities.set(i, room);
@@ -94,6 +104,32 @@ export function distributeOrogenicRoots(
     if (id >= 0 && reserves[id] > 0)
       map.CrustRootReserve.set(i, (map.CrustRootReserve.get(i) * remaining[id]) / reserves[id]);
   }
+  settleStrandedRoots(map, context, components);
   releaseWorking(map, weights, capacities, ratios);
   return admitted;
+}
+/** How much of the root crust a boundary has left behind settles on each pass. */
+const settledPerPass = 0.5;
+/**
+ * Plates carry root crust away from the belt that made it, to ground no convergent belt reaches.
+ * Nothing will ever spend it there, so it settles where it lies, as far as the crust has room, and
+ * the old belt stands on its own root.
+ */
+function settleStrandedRoots(
+  map: PhysicalField,
+  context: PhysicalContext,
+  components: BoundaryComponent[]
+) {
+  const budget = context.Profile.OrogenicRootBudgetMinimum;
+  for (let i = 0; i < map.mesh.count; i++) {
+    const id = map.OrogenicComponentIds.get(i),
+      held = map.CrustRootReserve.get(i);
+    if (held <= 0 || (id >= 0 && components[id].code === 1)) continue;
+    const fraction = map.CrustContinentalFraction.get(i) / 1000,
+      maximum = units(Math.min(maximumCrustThickness, 1000 + 3000 * fraction + budget)),
+      column = Math.min(held * settledPerPass, Math.max(0, maximum - map.CrustThickness.get(i)));
+    if (column <= 0) continue;
+    addRoot(map, i, (column * map.mesh.area(i)) / 1024);
+    map.CrustRootReserve.set(i, held - column);
+  }
 }

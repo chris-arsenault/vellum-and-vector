@@ -50,6 +50,15 @@ const integerFields = [
   // the boundary that built it has moved or closed.
   "StructuralGrainX",
   "StructuralGrainY",
+  // A cell's place in the belt that first reached it, carried with the crust: its boundary pair and
+  // sheet (each one more than the real number, so 0 means none), its fault segment, and how far
+  // across its sheet it joined, per mille from the sheet's rear. Its dip is the metres its beds
+  // have risen through the surface as the sheet tilted.
+  "ThrustPairIds",
+  "ThrustSheetIndex",
+  "ThrustSegmentIds",
+  "ThrustAcross",
+  "ThrustDip",
   "OceanCurrentX",
   "OceanCurrentY",
   "OceanCurrentStrength",
@@ -77,6 +86,14 @@ const integerFields = [
   "VolcanicLastActiveEpoch",
   "LandformCodes",
   "RockKindCodes",
+  "RockLayerKind0",
+  "RockLayerKind1",
+  "RockLayerKind2",
+  "RockLayerKind3",
+  "RockLayerKind4",
+  "RockLayerKind5",
+  "RockLayerKind6",
+  "RockLayerKind7",
   "WaterKindCodes",
   "WaterBodyIds",
   "DrainageBasinIds",
@@ -106,6 +123,14 @@ const integerFields = [
   "Warmth",
 ] as const;
 const elevationFields = [
+  "RockLayerDepth0",
+  "RockLayerDepth1",
+  "RockLayerDepth2",
+  "RockLayerDepth3",
+  "RockLayerDepth4",
+  "RockLayerDepth5",
+  "RockLayerDepth6",
+  "RockLayerDepth7",
   "Elevation",
   "BedrockElevation",
   "CrustThickness",
@@ -260,6 +285,8 @@ export type PhysicalField = Record<PhysicalBufferName, Band> & {
     caldera?: boolean;
   }[];
   faults: { id: string; coordinates: [number, number][]; width: number }[];
+  /** Slip each thrust sheet has taken that has not yet added up to a whole cell of movement. */
+  ThrustSlipOwed: Map<string, number>;
   AvailableFacts: Set<string>;
   EffectiveSeaLevel: number;
   BaseSeaLevel: number;
@@ -309,6 +336,7 @@ export function createField(
     },
     events: [] as PhysicalField["events"],
     faults: [] as PhysicalField["faults"],
+    ThrustSlipOwed: new Map<string, number>(),
     AvailableFacts: new Set<string>(),
     EngineeredDams: null as Band | null,
     EffectiveSeaLevel: 0,

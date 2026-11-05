@@ -1,6 +1,4 @@
 // ContinentalSutureLayer.cs, Canonry 0f62584c: transported material, not site labels.
-import { baselineRock } from "../rock/rockCatalogue";
-import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round } from "./math";
@@ -111,19 +109,8 @@ function recordCollision(
   map.CrustCollisionIntensity.set(i, Math.max(collision, inherited));
 }
 export function continentalSutures(map: PhysicalField, context: PhysicalContext) {
-  const count = map.mesh.count,
-    p = context.Profile;
+  const count = map.mesh.count;
   map.CrustCollisionIntensity.fill(0);
-  for (let i = 0; i < count; i++) {
-    const suture = map.CrustSutureStrength.get(i);
-    if (suture > 0)
-      hardenRock(
-        map,
-        i,
-        "gneiss",
-        baselineRock + Math.trunc(((p.OrogenicCoreRockResistance - baselineRock) * suture) / 1000)
-      );
-  }
   const visited = workingArray(map, "int32", "sutures:visited"),
     distance = workingArray(map, "float64", "sutures:distance");
   let visit = 0;

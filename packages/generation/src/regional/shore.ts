@@ -1,5 +1,5 @@
 import { isContent, neighborsOf, regionalSpan } from "./lattice";
-import { materialBands, materialResistance } from "./material";
+import { materialResistance } from "./material";
 import { clamp, naturalBand, type NetworkWork, type RegionalState } from "./state";
 
 /** Cells of open sea upwind that count as full fetch, and the flanking rays' turn (radians). */
@@ -51,7 +51,6 @@ export function developShore(state: RegionalState, h: Float64Array) {
 function cutShore(state: RegionalState, h: Float64Array, exposure: Float64Array, cut: Uint8Array) {
   const mesh = state.physical.map.mesh,
     network = state.regional.network!,
-    bands = materialBands(state),
     around = new Int32Array(mesh.stride),
     water = (j: number) => network.sea[j] === 1 || h[j] <= 0,
     besideWater = (i: number) => {
@@ -65,7 +64,7 @@ function cutShore(state: RegionalState, h: Float64Array, exposure: Float64Array,
       if (exposure[i] <= 0 || cut[i] || network.sea[i] || h[i] <= 0 || !besideWater(i)) continue;
       const depth = Math.min(
         h[i] + emergence,
-        (cutDepth * exposure[i]) / materialResistance(state, bands, i)
+        (cutDepth * exposure[i]) / materialResistance(state, i)
       );
       if (depth <= 0) continue;
       h[i] -= depth;

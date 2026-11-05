@@ -41,6 +41,7 @@ import { deltaFormation } from "./deltas";
 import { fluvialErosion, sedimentTransport } from "./fluvial";
 import { glacialRunoff } from "./glacialEvolution";
 import { epochHistory, validatePhysical } from "./validation";
+import { initializeRock, lithification, metamorphism } from "../rock/rockHistory";
 
 export type NativeProcess = (map: PhysicalField, context: PhysicalContext) => void;
 export type NativeStep = readonly [name: string, salt: number, process: NativeProcess];
@@ -68,7 +69,14 @@ export const initialSteps: readonly NativeStep[] = [
   ["tectonic-margins", 0, tectonicMargins],
   ["continental-domains", 0x12e5a91, continentalDomains],
   ["tectonic-uplift", 0x4f2b17, tectonicUplift],
-  ["landscape-initialization", 0, initializeLandscape],
+  [
+    "landscape-initialization",
+    0,
+    (map, c) => {
+      initializeLandscape(map);
+      initializeRock(map, c);
+    },
+  ],
   ["orogenic-construction", 0x7249d3, orogenicConstruction],
   ["mantle-plume-roots", 0x37c1, mantlePlumeRoots],
   ["volcanic-construction", 0x73a91d, volcanicConstruction],
@@ -143,5 +151,9 @@ export const incisionSteps: readonly NativeStep[] = [
 ];
 export const sedimentStep: NativeStep = ["sediment-transport", 0, sedimentTransport];
 export const glacialRunoffStep: NativeStep = ["glacial-runoff", 0, glacialRunoff];
+export const rockSteps: readonly NativeStep[] = [
+  ["lithification", 0, lithification],
+  ["rock-metamorphism", 0, metamorphism],
+];
 export const historyStep: NativeStep = ["physical-epoch-history", 0, epochHistory];
 export const validationStep: NativeStep = ["physical-structural-validation", 0, validatePhysical];

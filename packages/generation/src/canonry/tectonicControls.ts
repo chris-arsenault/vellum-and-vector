@@ -12,6 +12,8 @@ export const tectonicGeometryTravelFraction = 0.25;
 export const tectonicRelaxationMyr = 15;
 /** Normal resistance of contacting moving units, applied per million years. */
 export const tectonicContactMyr = 30;
+/** How far from a bounded map's edge a plate's continent starts to slow against it, in metres. */
+export const tectonicEdgeReach = 300_000;
 /** Share of regional differential driving that contributes plate rotation. */
 export const tectonicRotationGain = 0.35;
 /** Initial mechanical plates contain several irregular provinces, independently of crust origin. */

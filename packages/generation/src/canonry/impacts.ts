@@ -1,5 +1,6 @@
 import { meshDeltaX } from "./mesh";
 // ImpactCrateringLayer.cs, Canonry 0f62584c.
+import { stripRock } from "../rock/rockColumn";
 import { baselineRock } from "../rock/rockCatalogue";
 import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
@@ -57,6 +58,7 @@ function excavate(
   map.BedrockElevation.add(i, -cut);
   map.SurfaceRockLoad.add(i, -cut);
   map.ImpactExcavation.add(i, cut);
+  stripRock(map, i, cut);
   if (cut > 0) rebuild(map, i);
   return cut;
 }

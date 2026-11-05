@@ -5,7 +5,7 @@ import { capturedSinks, connectedSea, smoothedBase } from "./base";
 import { influenceCosts } from "./causes/registry";
 import { evolveNetwork } from "./evolution";
 import { distance, frameEdge, isContent, neighborsOf, positionOf, regionalSpan } from "./lattice";
-import { materialBands, materialResistance } from "./material";
+import { materialResistance } from "./material";
 import { clamp, type NetworkWork, type RegionalState } from "./state";
 
 /** Resistance near a known peak or cone, so channels cut around it and it stands on a divide. */
@@ -207,7 +207,6 @@ function cellCosts(state: RegionalState, sea: Uint8Array, base: Float64Array) {
     mesh = map.mesh,
     n = mesh.count,
     span = regionalSpan(state),
-    bands = materialBands(state),
     cost = new Float64Array(n),
     flat = flatness(state, base);
   for (let i = 0; i < n; i++) {
@@ -221,7 +220,7 @@ function cellCosts(state: RegionalState, sea: Uint8Array, base: Float64Array) {
         span * roughnessCells,
         roughnessOctaves
       );
-    cost[i] = materialResistance(state, bands, i) * Math.exp(amplitude * roughness);
+    cost[i] = materialResistance(state, i) * Math.exp(amplitude * roughness);
   }
   influenceCosts(state, cost);
   for (const cone of state.regional.character!.cones) repel(state, cost, cone.cell, cone.radius);

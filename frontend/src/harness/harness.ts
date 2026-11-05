@@ -17,6 +17,8 @@ import { quickTerrain } from "./quickTerrain";
 import { stageRecorder } from "./stageRecord";
 import { channelRanges, fieldInventory, openTerrain, scaleReport, tileTiming } from "./mapReport";
 import { featureReport, mapFeatures } from "./featureReport";
+import { reliefReport } from "./reliefReport";
+import { traceRelief } from "./reliefTrace";
 
 /** What one harness run does; read from the environment of `pnpm harness`. */
 export interface HarnessOptions {
@@ -30,6 +32,10 @@ export interface HarnessOptions {
   fresh: Set<string>;
   /** Only the saved world's region's ground and water, and a picture of them. */
   quick: boolean;
+  /** Only the world: its structure is judged before anything is refined from it. */
+  worldOnly: boolean;
+  /** Saves the world's state at the start of each pass under this name, for `stageReplay`. */
+  snapshots: string;
 }
 /** Defaults: the app's default world at standard quality and its standard region. */
 const defaults = {
@@ -40,6 +46,8 @@ const defaults = {
   HARNESS_FRESH: "",
   HARNESS_REGION_AT: "",
   HARNESS_QUICK: "",
+  HARNESS_WORLD_ONLY: "",
+  HARNESS_SNAPSHOTS: "",
 };
 function position(text: string): [number, number] | undefined {
   const at = text.split(",").map(Number);
@@ -57,6 +65,8 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
     regionAt: position(read("HARNESS_REGION_AT")),
     fresh,
     quick: Boolean(read("HARNESS_QUICK")),
+    worldOnly: Boolean(read("HARNESS_WORLD_ONLY")),
+    snapshots: read("HARNESS_SNAPSHOTS"),
   };
 }
 
@@ -77,7 +87,10 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
   const ws = await openHarnessWorkspace(checkpointDirectory(options.world)),
     recorder = stageRecorder(),
     draft = newGenerationDraft(),
-    started = performance.now();
+    started = performance.now(),
+    stopTrace = traceRelief(
+      options.snapshots ? { label: options.snapshots, quality: options.worldQuality } : undefined
+    );
   draft.recipe.quality = options.worldQuality as typeof draft.recipe.quality;
   try {
     const { worldId, root } = await generateWorld(ws, draft, recorder.observers);
@@ -96,6 +109,9 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
     };
     await ws.save(record);
     write(out, "world-run", { ...recorder, seconds: (performance.now() - started) / 1000 });
+    const { steps, probes } = stopTrace();
+    write(out, "world-trace", steps);
+    write(out, "world-probes", probes);
     sayFailures("world", recorder.diagnostics);
     return record;
   } finally {
@@ -211,6 +227,11 @@ async function describeMap(record: CheckpointRecord, out: string) {
         tiles: await tileTiming(ws, terrain),
       });
       write(out, `${record.kind}-channels`, await channelRanges(ws, terrain.world, areaId));
+      write(
+        out,
+        `${record.kind}-relief`,
+        await reliefReport(ws, terrain.world, areaId, { out, kind: record.kind })
+      );
       await rasterOverview(terrain.raster, features, `${record.kind}-overview`, out);
       await rasterRelief(terrain.raster, `${record.kind}-relief`, out);
     } finally {
@@ -232,9 +253,8 @@ export async function runHarness(options: HarnessOptions) {
     await quickRegion(options, out);
     return out;
   }
-  const world = await ensureWorld(options, out),
-    region = await ensureRegion(options, world, out);
+  const world = await ensureWorld(options, out);
   await describeMap(world, out);
-  await describeMap(region, out);
+  if (!options.worldOnly) await describeMap(await ensureRegion(options, world, out), out);
   return out;
 }

@@ -17,25 +17,44 @@ function checkNativeInputs(map: PhysicalField, contract: NativeContract, name: s
   for (const fact of contract.requires)
     if (!map.AvailableFacts.has(fact)) throw new Error(`${name} requires fresh ${fact}.`);
 }
+/** Something watching the world's steps as they finish, to record what each one did. */
+export type NativeStepObserver = (
+  name: string,
+  map: PhysicalField,
+  context: PhysicalContext
+) => void;
+let stepObserver: NativeStepObserver | null = null;
+export function observeNativeSteps(observer: NativeStepObserver | null) {
+  stepObserver = observer;
+}
+function runChecked(
+  map: PhysicalField,
+  context: PhysicalContext,
+  [name, , process]: NativeStep,
+  contract: NativeContract
+) {
+  try {
+    process(map, context);
+    validateNativeLayer(map, context, name, contract.produces);
+    stepObserver?.(name, map, context);
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(`${name} failed in epoch ${context.EpochIndex + 1}: ${detail}`, { cause });
+  }
+}
 export function applyNativeStep(
   map: PhysicalField,
   context: PhysicalContext,
   step: NativeStep,
   effective?: NativeContract
 ) {
-  const [name, salt, process] = step,
+  const [name, salt] = step,
     contract = effective ?? nativeContracts[name];
   if (!contract || contract.salt !== salt)
     throw new Error(`Unknown Canonry process or salt: ${name}.`);
   const managed = nativeFactsManaged(map.AvailableFacts);
   if (!managed) checkNativeInputs(map, contract, name);
-  try {
-    process(map, context);
-    validateNativeLayer(map, context, name, contract.produces);
-  } catch (cause) {
-    const detail = cause instanceof Error ? cause.message : String(cause);
-    throw new Error(`${name} failed in epoch ${context.EpochIndex + 1}: ${detail}`, { cause });
-  }
+  runChecked(map, context, step, contract);
   if (!managed) {
     for (const fact of contract.invalidates) map.AvailableFacts.delete(fact);
     for (const fact of contract.produces) map.AvailableFacts.add(fact);

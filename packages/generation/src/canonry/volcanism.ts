@@ -7,6 +7,8 @@ import { hashUnit } from "./noise";
 import { Feature } from "./codes";
 import { rebuild } from "./surface";
 import { subductionArcs } from "./volcanicArcs";
+import { rockCatalogue } from "../rock/rockCatalogue";
+import { layDownRock, stripRock } from "../rock/rockColumn";
 
 /** A caldera's radius as a share of its cone's. */
 export const calderaShare = 0.28;
@@ -84,6 +86,8 @@ function constructTriangle(
   );
   map.SurfaceRockLoad.add(i, uplift - cut);
   map.VolcanicConstructionHistory.add(i, uplift);
+  stripRock(map, i, cut);
+  layDownRock(map, i, rockCatalogue.basalt, uplift);
   rebuild(map, i);
   const activity = round(strength * apron);
   map.VolcanicActivity.set(i, Math.max(map.VolcanicActivity.get(i), activity));

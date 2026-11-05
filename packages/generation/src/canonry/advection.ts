@@ -17,6 +17,12 @@ import { tectonicReferenceMyr } from "./tectonicControls";
 import { advectLandmarkDrainage } from "./landmarkTransport";
 import { geologicalPointMotion } from "./geologicalPointMotion";
 import { workingArray, releaseWorking } from "./physicalNumerics";
+import {
+  beginReliefCarry,
+  finishReliefCarry,
+  stepReliefCarry,
+  type ReliefCarry,
+} from "./reliefCarry";
 
 function advectGeometry(map: PhysicalField, distance: number) {
   const vx = physicalSampler(map.mesh, map.CrustMotionX),
@@ -64,6 +70,10 @@ function transportStep(map: PhysicalField, step: number) {
     rebuild(map, i);
   }
 }
+function finishMove(map: PhysicalField, carry: ReliefCarry) {
+  finishReliefCarry(map, carry);
+  for (let i = 0; i < map.mesh.count; i++) rebuild(map, i);
+}
 export function plateAdvection(
   map: PhysicalField,
   context: PhysicalContext,
@@ -76,8 +86,11 @@ export function plateAdvection(
   map.LastPlateDriftStep = total;
   map.OceanicSubduction.fill(0);
   if (total <= 0) return;
+  const carry = beginReliefCarry(map);
   if (!map.tectonics) {
     transportStep(map, total);
+    stepReliefCarry(map, map.transportPlan!, carry);
+    finishMove(map, carry);
     afterStep();
     map.AccumulatedPlateDrift += total;
     return;
@@ -91,6 +104,7 @@ export function plateAdvection(
     prepareTectonicMotion(map, myr);
     tectonicProvinces(map, evolved);
     transportStep(map, step);
+    stepReliefCarry(map, map.transportPlan!, carry);
     afterStep();
     for (let i = 0; i < surplus.length; i++) surplus.add(i, map.ConvergentCrustSurplus.get(i));
     completeTectonicMotion(map, myr, step);
@@ -98,6 +112,7 @@ export function plateAdvection(
       if (map.CrustRiftStrain.get(i) > 0) map.CrustRiftAgeMyr.add(i, myr);
     remaining -= myr;
   }
+  finishMove(map, carry);
   map.ConvergentCrustSurplus.copyFrom(surplus);
   releaseWorking(map, surplus);
   tectonicProvinces(map, evolved);

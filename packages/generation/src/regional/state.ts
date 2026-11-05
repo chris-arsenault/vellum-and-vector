@@ -133,6 +133,10 @@ export interface RegionalWork {
   /** The round being evaluated: 0 before the schedule, 1..3 inside it, 4 at the final refresh. */
   round: number;
   character?: RegionalCharacter;
+  /** The belt's fold axes and troughs, continuous along its grain. */
+  structure?: Float64Array;
+  /** How much of each cell's cut has already uncovered its rock. */
+  uncovered?: Float64Array;
   evidence?: Evidence;
   courses?: CapturedCourse[];
   network?: NetworkWork;

@@ -37,7 +37,7 @@ function chunk(type: string, data: Buffer) {
   check.writeUInt32BE(crc32(Buffer.concat([head, data])) >>> 0);
   return Buffer.concat([size, head, data, check]);
 }
-function png(width: number, height: number, rgb: Uint8Array) {
+export function png(width: number, height: number, rgb: Uint8Array) {
   const head = Buffer.alloc(13),
     raw = Buffer.alloc((3 * width + 1) * height);
   head.writeUInt32BE(width, 0);

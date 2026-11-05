@@ -113,11 +113,13 @@ exterior as an outlet at its own height. Calibration and conditioning blurs are 
 over the frame's cells only.
 
 The captured country's character enters as the world's structural grain, strain, glacial
-reworking and volcanic construction. The drainage network is a geodesic tree over the land
+reworking and volcanic construction. The world's columns interfinger across their parent cells,
+and the belt's folds, continuous along the grain, strip the column on their axes: deep rock crops out
+there, troughs keep what lay on top, and each round's cuts uncover more. The drainage network is a geodesic tree over the land
 rooted at the established waters (the connected sea, open frame edges starting with their
 remaining fall to the sea, captured lakes at their level, the floors of the parent's closed
 basins) and descending a cost field of process terms: climbing the captured base, crossing
-the grain, resistant material bands integrated along the grain, hard rock, open fractures
+the grain, the rock exposed in the column, open fractures
 and warded ground cost; captured courses, the parent's channel raster and a river seat's
 ground are cheap; the ground around known summits and cones is dear; gathered water makes
 its channel cheaper and the country is routed again through it. Ground heterogeneity decides
@@ -672,6 +674,59 @@ physical materials. The surface class of a cell is the class with the largest co
 with rule priority breaking ties, and a second surface records the runner-up where it
 holds a substantial share. An inland map has no fabricated pressure locus. A warm
 present may have no active Aurora while preserving its glacial activity history.
+
+### Rock and relief
+
+Every cell holds a short column of rock on the field's own bands: the top layer is what the
+surface is, the lowest is a basement that never runs out. Erosion strips from the top, deposition
+and eruption add to it, and the surface's resistance follows whatever is exposed while keeping what
+has been done to it. Each kind and its properties come from one catalogue
+(`packages/generation/src/rock/rockCatalogue.ts`). Buried sediment turns to rock by its setting,
+and burial and heat under a belt or along a suture turn rock to its next form.
+
+Plates move in many small steps. Each cell follows where its material has come from across the
+whole move and takes the height and rock of that place when the move ends, so a move carries relief
+instead of averaging it away. Ground with too little arriving is new crust and keeps the shared
+value. An epoch's tectonic activity sets how far its plates travel. On a bounded map a plate slows as
+its continent reaches the edge, so continents stay on the map while oceans can still pass off it.
+
+Rock piled on the crust sinks by about its density over the mantle's, but a strong plate carries a
+load narrower than its flexure length. Narrow ranges therefore stand high while broad high ground
+sinks toward its support.
+
+A convergent belt is its thrust sheets. A cell joins a sheet when the deformation front first reaches
+it, and keeps its sheet, fault segment, place across the sheet and dip, all carried with the crust.
+Each pass of shortening advances the front and closes the sheets up: the one at the boundary holds
+its place and each beyond is drawn in under the leading edge of the one behind, younger rock beneath
+older, up to what a thrust can carry before it locks. Leading edges climb in the same rock each pass,
+so ridges rise where they stand. As a sheet climbs its beds tilt and the surface planes across them,
+which exposes rock in bands along the belt. Rifts keep their tilted, alternately dropped fault blocks
+from pass to pass in the same way. Crust that subducting ocean returns as arc crust feeds a belt's
+roots, as continental crust piled up in a collision does; a belt with no continent builds an arc on
+its ocean crust, and root crust the plates carry away from any convergent belt settles where it lies.
+Interior stress reaches a plate's old
+sutures and province seams and works a zone of crust around them: it thickens and raises older rock
+while the margin is squeezed, and thins and sags while it is pulled apart.
+
+Rock decides erosion. What a river or glacier can move has a limit, and the rock's resistance then
+sets how much of that it cuts, so soft rock wears faster than hard on any slope. A cell's height is the
+mean of its ground, so a valley in a coarse cell lowers that mean and exposes deeper rock only in
+proportion to the share of the cell it covers, while the valley's own depth stays on record as incision.
+Open joints lower the angle a slope holds, porous rock takes water into the ground before it runs off,
+and water dissolves soluble rock wherever it runs.
+
+Each magic system changes the column once per epoch through its own medium. A system's share of the
+ground picks fixed patches of it, so its rock forms bodies that hold the share and build on the same
+ground each pass. Fire hardens rock along veins, seals spent conduits and throws core debris; Aurora
+rots rock open to the sky, and charge grows crystal on the bed under ice; Pressure crushes shore and
+sea floor; Greenwood's roots open rock, its springs lay tufa and its water takes soluble rock; Salt
+lays beds that can be buried and uncovered; Hallowed turns warded ground to kept stone that nothing
+else alters; Veil shuffles the column under a tear. Meetings make their own rock. Each system's stock
+is held or lost according to the rock it lies in. What each makes shows only as far as later processes
+leave it exposed, and it erodes, fails and holds water by its own properties.
+
+A region continues all of this: where the parent thrust the ground, its folds come from the parent's
+sheets, place across them and dip.
 
 ### Named relief
 

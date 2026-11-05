@@ -230,6 +230,25 @@ export function blurContent(state: RegionalState, values: Float64Array, sigma: n
   for (let i = 0; i < values.length; i++) if (isContent(mesh, i)) values[i] = smoothed.get(i);
   releaseWorking(map, input, smoothed);
 }
+/**
+ * Low-pass heights over the land alone, weighing each cell by how much land it averaged. Blurring
+ * the sea in at zero would drag the whole coastal country down toward it.
+ */
+export function blurOverLand(
+  state: RegionalState,
+  values: Float64Array,
+  sea: ArrayLike<number>,
+  sigma: number
+) {
+  const land = Float64Array.from({ length: values.length }, (_, i) => (sea[i] ? 0 : 1));
+  for (let i = 0; i < values.length; i++) if (sea[i]) values[i] = 0;
+  blurContent(state, values, sigma);
+  blurContent(state, land, sigma);
+  for (let i = 0; i < values.length; i++)
+    if (isContent(state.physical.map.mesh, i)) values[i] /= Math.max(land[i], leastLandShare);
+}
+/** The least land a cell's average can stand on before it is read as the sea's own. */
+const leastLandShare = 0.05;
 type Smoother = ReturnType<typeof prepareMetricSmoother>;
 const blurs = new WeakMap<RegionalState, { active: Band; lengths: Map<number, Smoother> }>();
 function smootherFor(state: RegionalState, length: number) {

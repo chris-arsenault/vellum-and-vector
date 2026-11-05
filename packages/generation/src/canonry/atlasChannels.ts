@@ -1,5 +1,6 @@
 // Explicit projection from Canonry's fixed-point numerical state into GIS channels.
 import { hardestRock } from "../rock/rockCatalogue";
+import { rockLayers } from "../rock/rockColumn";
 import type { PhysicalBufferName } from "./field";
 import { ecologyBindings, ecologyRatios } from "./ecologyState";
 
@@ -14,6 +15,16 @@ export interface ChannelBinding {
   minimum?: number;
   maximum?: number;
 }
+/** The rock column and the belt it lies in, which a child map continues from its parent's. */
+export const structureChannels = [
+  ...Array.from({ length: rockLayers }, (_, layer) => `rockLayer${layer}`),
+  ...Array.from({ length: rockLayers }, (_, layer) => `rockDepth${layer}`),
+  "thrustPair",
+  "thrustSheet",
+  "thrustSegment",
+  "thrustAcross",
+  "thrustDip",
+];
 const height = (name: string, native: ArrayName, datum = false): ChannelBinding => ({
   name,
   native,
@@ -80,6 +91,8 @@ export const atlasChannels: ChannelBinding[] = [
   scalar("tectonicStrain", "TectonicStrain"),
   scalar("structuralGrainX", "StructuralGrainX", true),
   scalar("structuralGrainY", "StructuralGrainY", true),
+  scalar("thrustAcross", "ThrustAcross"),
+  { name: "thrustDip", native: "ThrustDip", unit: "metre", scale: 1, minimum: 0 },
   scalar("crustMotionX", "CrustMotionX", true),
   scalar("crustMotionY", "CrustMotionY", true),
   scalar("moisture", "Moisture"),
@@ -131,6 +144,25 @@ export const atlasChannels: ChannelBinding[] = [
   category("margin", "MarginCodes"),
   category("landform", "LandformCodes"),
   category("rockKind", "RockKindCodes"),
+  category("thrustPair", "ThrustPairIds"),
+  category("thrustSheet", "ThrustSheetIndex"),
+  category("thrustSegment", "ThrustSegmentIds"),
+  category("rockLayer0", "RockLayerKind0"),
+  category("rockLayer1", "RockLayerKind1"),
+  category("rockLayer2", "RockLayerKind2"),
+  category("rockLayer3", "RockLayerKind3"),
+  category("rockLayer4", "RockLayerKind4"),
+  category("rockLayer5", "RockLayerKind5"),
+  category("rockLayer6", "RockLayerKind6"),
+  category("rockLayer7", "RockLayerKind7"),
+  amount("rockDepth0", "RockLayerDepth0"),
+  amount("rockDepth1", "RockLayerDepth1"),
+  amount("rockDepth2", "RockLayerDepth2"),
+  amount("rockDepth3", "RockLayerDepth3"),
+  amount("rockDepth4", "RockLayerDepth4"),
+  amount("rockDepth5", "RockLayerDepth5"),
+  amount("rockDepth6", "RockLayerDepth6"),
+  amount("rockDepth7", "RockLayerDepth7"),
   category("water", "WaterKindCodes"),
   category("waterBody", "WaterBodyIds"),
   category("basin", "DrainageBasinIds"),

@@ -1,3 +1,4 @@
+import { meetingInRock } from "../rock/rockMagic";
 import {
   confluenceEffective,
   type Band,
@@ -135,6 +136,7 @@ function applyConfluence(state: GenerationState, held: ConfluenceState, seed: nu
     const c = held.coverage.get(i);
     if (c <= 0) continue;
     actOnRock(map, i, c, e, salt);
+    meetingInRock(map, held.definition.id, i, c, salt);
     actOnWaterAndLife(map, i, c, e);
   }
 }

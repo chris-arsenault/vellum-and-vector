@@ -13,6 +13,7 @@ import {
   incisionSteps,
   initialSteps,
   meltwaterStep,
+  rockSteps,
   sedimentStep,
   validationStep,
   type NativeStep,
@@ -57,7 +58,7 @@ export function physicalSchedule(epochs: PhysicalEpoch[]): ScheduledStep[] {
       "post-glacial"
     );
     append(coastalSteps, epoch, index, "coasts");
-    append([historyStep], epoch, index, "history");
+    append([...rockSteps, historyStep], epoch, index, "history");
   }
   append(
     [

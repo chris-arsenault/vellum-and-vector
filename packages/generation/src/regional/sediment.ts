@@ -1,6 +1,6 @@
 import { units } from "../canonry/math";
 import { distance, isContent } from "./lattice";
-import { materialBands, materialResistance } from "./material";
+import { materialResistance } from "./material";
 import type { NetworkWork, RegionalState } from "./state";
 
 /** Gradient above which a hillslope fails (talus stands at about 27°), and the share of the excess that fails in one pass. */
@@ -26,14 +26,13 @@ const floorLimit = 15,
 export function wasteHillslopes(state: RegionalState, h: Float64Array, supply: Float64Array) {
   const mesh = state.physical.map.mesh,
     network = state.regional.network!,
-    { receiver, order, count } = network,
-    bands = materialBands(state);
+    { receiver, order, count } = network;
   for (let k = count - 1; k >= 0; k--) {
     const j = order[k],
       i = receiver[j];
     if (i < 0 || network.channel[j] || network.lake[j] >= 0 || !isContent(mesh, j)) continue;
     const length = distance(mesh, j, i),
-      stable = stableGradient * Math.sqrt(materialResistance(state, bands, j)),
+      stable = stableGradient * Math.sqrt(materialResistance(state, j)),
       excess = h[j] - h[i] - stable * length;
     if (excess <= 0) continue;
     const failed = Math.min(failureLimit, excess * failureShare);

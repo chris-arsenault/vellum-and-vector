@@ -4,6 +4,7 @@ import { reservoirStock, type MagicField } from "./magicState";
 import type { LocateContext } from "./magicSources";
 import { siteStrength } from "./magicStocks";
 import { clamp, round } from "./math";
+import { rockKindOfCode } from "../rock/rockCatalogue";
 
 /**
  * Greenwood's stands: old growth (a canopy past the stand age with cover past the floor) and
@@ -98,11 +99,13 @@ function springRises(map: PhysicalField, i: number, springFlow: number, springRo
   }
   return true;
 }
-/** The world has no carbonate channel; its published karst proxy is continental, unvolcanic crust. */
+/** Water finds its way through continental crust as far as the rock there dissolves or lets it. */
 function karst(map: PhysicalField, i: number) {
+  const rock = rockKindOfCode(map.RockKindCodes.get(i));
   return (
     (map.CrustContinentalFraction.get(i) / 1000) *
-    (1 - Math.min(1, map.VolcanicConstructionHistory.get(i) / (1024 * 100)))
+    (1 - Math.min(1, map.VolcanicConstructionHistory.get(i) / (1024 * 100))) *
+    (0.3 + 0.7 * Math.max(rock.solubility, rock.porosity))
   );
 }
 /**

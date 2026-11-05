@@ -45,14 +45,16 @@ function toMesh(map: PhysicalField, [x, y]: number[]): Point {
 /** Plate drift per epoch in metres, as `plateAdvection` applies it; empty when advection is off. */
 export function plateDriftSteps(
   p: PhysicalProfile,
-  epochs: number | readonly { tectonicDurationMyr?: number }[],
+  epochs: number | readonly { tectonicDurationMyr?: number; tectonics?: number }[],
   enabled = true
 ) {
   if (!enabled) return [];
   const intervals =
     typeof epochs === "number"
       ? Array(epochs).fill(tectonicDefaultMyr)
-      : epochs.map((epoch) => epoch.tectonicDurationMyr ?? tectonicDefaultMyr);
+      : epochs.map(
+          (epoch) => (epoch.tectonicDurationMyr ?? tectonicDefaultMyr) * (epoch.tectonics ?? 1)
+        );
   return intervals.map((myr) => (p.PlateDriftPerEpoch * myr) / tectonicReferenceMyr);
 }
 /**

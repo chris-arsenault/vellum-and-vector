@@ -6,7 +6,10 @@ import { erode, deposit } from "./surface";
 import { isGrounded, refreshGrounding } from "./glacierSurface";
 import { targetOrder } from "./flowGraph";
 import { workingArray, releaseWorking } from "./physicalNumerics";
+import { baselineRock } from "../rock/rockCatalogue";
 
+/** How much of its power ice spends other than on cutting its bed. */
+const glacialYield = 3.5;
 export function glacialErosion(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
@@ -25,14 +28,13 @@ export function glacialErosion(map: PhysicalField, c: PhysicalContext) {
         (flux - p.GlacierFluxThreshold) / Math.max(1, p.GlacierFluxThreshold) +
         thickness / Math.max(1, p.GlacierThicknessThreshold)) *
       (1 + (p.ChargedIceErosion / 1000) * map.IceCharge.get(i));
-    const resistance = map.CrustTypeCodes.get(i) === 2 ? 4 : 3;
-    const cut = units(
-      clamp(
-        (((power * 3) / resistance) * c.GlaciationStrength) / 1000,
-        1 / 1024,
+    // What ice can move has a limit; hard rock takes less of that, and soft rock cannot take more.
+    const hardness = Math.max(1, map.RockResistance.get(i) / baselineRock),
+      moved = Math.min(
+        (power * p.GlacialCutPerPower * c.GlaciationStrength) / (glacialYield * 1000),
         p.MaximumGlacialErosionPerPass
-      )
-    );
+      ),
+      cut = units(Math.max(1 / 1024, moved / hardness));
     erode(map, i, cut);
     map.CumulativeGlacialErosion.add(i, cut);
     map.SedimentSupply.add(i, cut);

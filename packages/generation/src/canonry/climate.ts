@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, round, toUnits, truncate } from "./math";
+import { rockKindOfCode } from "../rock/rockCatalogue";
 import { latitudeAt } from "./latitude";
 import { marchAirColumns, saturation } from "./airColumn";
 import { beltRainout } from "./belts";
@@ -115,6 +116,8 @@ export function precipitation(map: PhysicalField, c: PhysicalContext) {
     map.Rainfall.set(i, total - snowfall);
   }
 }
+/** How much of the water on fully porous rock goes into the ground instead of running off. */
+const groundwaterShare = 0.35;
 export function runoff(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
@@ -162,6 +165,8 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
     const held = map.EcologyInitialized
       ? Math.min(0.45, 0.3 * map.WetlandCover.get(i) + map.PeatCarbon.get(i) / 60)
       : 0;
-    map.Runoff.set(i, truncate(Math.max(0, available - evaporation) * (1 - held)));
+    // Porous rock takes water into the ground, so less of it runs off over the surface.
+    const seeping = rockKindOfCode(map.RockKindCodes.get(i)).porosity * groundwaterShare;
+    map.Runoff.set(i, truncate(Math.max(0, available - evaporation) * (1 - held) * (1 - seeping)));
   }
 }

@@ -554,6 +554,18 @@
       "CrustalSupport"
     ]
   },
+  "lithification": {
+    "salt": 0,
+    "requires": ["Elevation", "SedimentTransport"],
+    "produces": [],
+    "invalidates": []
+  },
+  "rock-metamorphism": {
+    "salt": 0,
+    "requires": ["Elevation"],
+    "produces": [],
+    "invalidates": []
+  },
   "physical-epoch-history": {
     "salt": 0,
     "requires": [

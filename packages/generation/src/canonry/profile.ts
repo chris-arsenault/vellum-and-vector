@@ -90,7 +90,7 @@ export const physicalProfile = {
   OrogenicInfluenceReach: 520_000,
   // Hinterland plateau: share of the crest section carried flat behind the belt, and the metres
   // behind the boundary over which it fades. The foreland front keeps this share of the range width.
-  OrogenicPlateauWidth: 320_000,
+  OrogenicPlateauWidth: 160_000,
   OrogenicPlateauShare: 0.6,
   OrogenicForelandWidthShare: 0.5,
   // Relief a child profile realizes below its parent's cell from the parent's own gradient:
@@ -103,18 +103,33 @@ export const physicalProfile = {
   RegionalReliefMinimumSlope: 0.008,
   InitialOrogenicConstructionStep: 3200,
   EpochOrogenicConstructionStep: 1200,
-  CollisionRangeWidth: 180_000,
-  SubductionRangeWidth: 100_000,
   RiftShoulderDistance: 70_000,
   TransformRangeWidth: 40_000,
   OrogenicAlongStrikeScale: 420_000,
+  // The width of a thrust sheet in rock of baseline stiffness, and a fault segment's length.
+  OrogenicSheetSpacing: 100_000,
+  OrogenicSegmentLength: 260_000,
+  // How far a belt has already shortened when the world first forms, standing in for the drift
+  // of later passes; how far its front advances per metre of shortening; how far one thrust can
+  // slip on a pass, as a share of a sheet's width; and how high a sheet's leading edge climbs where
+  // it comes fully over the next sheet.
+  OrogenicInitialShortening: 600_000,
+  OrogenicAccretionRatio: 1,
+  ThrustSlipPerSheetWidth: 0.35,
+  // How far a sheet's beds rise through the surface at its leading edge per cell of slip, in metres.
+  ThrustTiltPerCell: 1200,
+  ThrustRampHeight: 1500,
   OrogenicProminenceMinimum: 700,
   OrogenicProminenceMaximum: 1900,
   OrogenicProminenceRankDecay: 2.4,
   OrogenicRootBudgetMinimum: 1200,
-  OrogenicRootBudgetMaximum: 4000,
-  OrogenicSurfaceReliefSharePerMille: 750,
-  MaximumOrogenicSurfaceReliefPerPass: 1400,
+  OrogenicRootBudgetMaximum: 5500,
+  OrogenicSurfaceReliefSharePerMille: 2500,
+  // What a full-strength seam in a fully squeezed plate rises on a pass at full tectonic strength.
+  SutureReactivationStep: 4000,
+  // How far out from a seam the crust is broken enough to take up that stress.
+  SutureReactivationZone: 200_000,
+  MaximumOrogenicSurfaceReliefPerPass: 5000,
   OrogenicCoreRockResistance: rockCatalogue.gneiss.resistance,
   ContinentalRiftThinningBudget: 850,
   ImpactOceanShockDepth: 600,
@@ -123,10 +138,12 @@ export const physicalProfile = {
   PlumeLobeStrength: 620,
   InteriorBasinDepthShare: 260,
   EpochTectonicElevationStep: 240,
-  BedrockLoadResponsePerMille: 280,
+  // Rock on the crust sinks by about its density over the mantle's. A strong plate carries a load
+  // narrower than the flexure length, so narrow ranges stand and broad plateaus sink.
+  BedrockLoadResponsePerMille: 800,
   SedimentLoadResponsePerMille: 360,
   IceLoadResponsePerMille: 860,
-  LithosphericFlexureLength: 35_000,
+  LithosphericFlexureLength: 100_000,
   MassWastingIterations: 4,
   PostFluvialMassWastingIterations: 2,
   // Rise/run: about 35 degrees for baseline rock, varied by material resistance.
@@ -137,9 +154,17 @@ export const physicalProfile = {
   MaximumHillslopeTransport: 550_000,
   FluvialErosionIterations: 13,
   FluvialErosionStrength: 0.32,
-  FluvialEquilibriumGradient: 0.0008,
+  FluvialEquilibriumGradient: 0.0015,
+  // Stream power: catchment to this exponent times slope, on this scale, per iteration.
+  FluvialAreaExponent: 0.5,
+  FluvialPowerScale: 1548,
+  MaximumFluvialCutPerIteration: 60,
+  // A valley's width as a share of the square root of its catchment's area.
+  FluvialValleyWidthShare: 0.05,
+  // How far water lowers fully soluble rock on a pass, in metres at full runoff.
+  DissolvedPerPass: 80,
   // Square metres of catchment before stream power incises; smaller areas are hillslope.
-  FluvialChannelArea: 1e9,
+  FluvialChannelArea: 3e9,
   SedimentTransportFraction: 760,
   SedimentDepositionLength: 10_000,
   SedimentDepositionSlopeThreshold: 0.0034,
@@ -170,7 +195,9 @@ export const physicalProfile = {
   GlacialAblationRunoffStrength: 460,
   BasalMeltRunoffStrength: 180,
   GlacialRetreatRunoffStrength: 260,
-  MaximumGlacialErosionPerPass: 18,
+  MaximumGlacialErosionPerPass: 150,
+  // Metres a glacier cuts per pass for each unit of its flux and thickness over the threshold.
+  GlacialCutPerPower: 40,
   MaximumGlacialDepositionPerPass: 20,
   AncestralValleyMinimumErosion: 5,
   OutwashMinimumGlacialDeposition: 6,

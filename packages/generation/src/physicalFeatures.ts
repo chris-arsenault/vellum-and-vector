@@ -366,7 +366,7 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
     "physical.lifecycle",
     "Formation history",
     {
-      "epoch.history": ["physical-epoch-history"],
+      "epoch.history": ["lithification", "rock-metamorphism", "physical-epoch-history"],
       "present.validation": ["physical-structural-validation"],
     },
     { inherited: true, configuration: clockConfiguration }

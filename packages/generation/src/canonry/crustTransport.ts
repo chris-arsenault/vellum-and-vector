@@ -65,6 +65,8 @@ function accumulate(map: PhysicalField, plan: TransportPlan, old: Columns): Colu
   }
   return result;
 }
+/** The share of oceanic crust going down a subduction zone that comes back up as a belt's crust. */
+export const arcCrustYield = 0.5;
 function retainColumn(map: PhysicalField, plan: TransportPlan, columns: Columns, i: number) {
   let continental = columns.continental.get(i),
     oceanic = columns.oceanic.get(i);
@@ -78,10 +80,14 @@ function retainColumn(map: PhysicalField, plan: TransportPlan, columns: Columns,
     map.TectonicBoundaryCodes.get(i) === 1 && arrival > 1 ? total - total / arrival : 0;
   const excess = Math.max(convergence, total - units(maximumCrustThickness), 0);
   const consumed = Math.min(oceanic, excess),
-    reserve = excess - consumed;
+    shortened = excess - consumed,
+    // A slab going down melts and rises as new crust under the belt above it: what an arc builds on.
+    arc = consumed * arcCrustYield,
+    reserve = shortened + arc;
   oceanic -= consumed;
-  continental -= reserve;
+  continental -= shortened;
   map.crustBudget.oceanConsumed += consumed * area;
+  map.crustBudget.continentalAdjustment += arc * area;
   map.OceanicSubduction.add(i, consumed);
   map.OceanicSubductionHistory.add(i, consumed);
   map.CrustRootReserve.set(i, columns.reserve.get(i) + reserve);

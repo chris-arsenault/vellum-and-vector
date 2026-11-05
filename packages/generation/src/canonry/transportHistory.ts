@@ -6,8 +6,10 @@ import { ecologyCarbon, ecologyMemory, ecologyRatios } from "./ecologyState";
 import { captureCrustColumns, transportCrustColumns } from "./crustTransport";
 import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
+import { kindBands, rockDepthFields } from "../rock/rockColumn";
 
 const intensive = [
+  ...rockDepthFields,
   ...ecologyRatios,
   "CanopyAge",
   "Evapotranspiration",
@@ -263,7 +265,9 @@ export function transportHistory(map: PhysicalField, plan: TransportPlan) {
   const a = accumulator(map),
     scratch = workingArray(map, "float64", "transport:channel"),
     areaWeights = workingArray(map, "float64", "transport:areaWeights", plan.weights.length);
-  const biomes = map.coverage.copyBand(map.BiomeCodes);
+  const biomes = map.coverage.copyBand(map.BiomeCodes),
+    rockBands = kindBands(map),
+    rockKinds = rockBands.map((band) => map.coverage.copyBand(band));
   // Resolve labels before their source fractions/strengths are transported in place.
   for (let source = 0; source < map.mesh.count; source++) {
     let retained = 0;
@@ -296,6 +300,16 @@ export function transportHistory(map: PhysicalField, plan: TransportPlan) {
     completeCategories(a, map, target);
     const source = plan.dominant.get(target);
     map.BiomeCodes.set(target, source >= 0 ? biomes.get(source) : 0);
+    // A kind is not an amount: a cell takes its rock from whatever crust mostly arrived there.
+    rockBands.forEach((band, n) => band.set(target, source >= 0 ? rockKinds[n].get(source) : 0));
   }
-  releaseWorking(map, ...Object.values(crust), ...Object.values(a), scratch, areaWeights, biomes);
+  releaseWorking(
+    map,
+    ...Object.values(crust),
+    ...Object.values(a),
+    scratch,
+    areaWeights,
+    biomes,
+    ...rockKinds
+  );
 }

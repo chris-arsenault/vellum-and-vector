@@ -6,7 +6,7 @@ import { hashUnit } from "./noise";
 import { metricSearch } from "./metricSearch";
 import { meshDeltaX, meshPointX } from "./mesh";
 import { CellQueue, type Band } from "@atlas/domain";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import { workingArray } from "./physicalNumerics";
 
 export interface BoundaryComponent {
   id: number;
@@ -22,6 +22,10 @@ export interface BoundaryComponent {
   strain: number;
   continental: number;
   maximumContinental: number;
+  /** The outermost thrust sheet this belt has reached, or -1 before it has any. */
+  frontSheet: number;
+  /** A seed for what is fixed about this belt from its first pass on. */
+  salt: number;
   x: number;
   y: number;
 }
@@ -30,6 +34,10 @@ export interface OrogenicFrame {
   source: Band;
   // +1 on the belt's hinterland, −1 on its foreland (see assignSides).
   side: Band;
+  /** How far out a cell lies in its belt, counting a narrower foreland as the same sheets. */
+  reach: Band;
+  /** How much of a cell a sheet's leading edge rode over on this pass, in [0, 1]. */
+  overlap: Band;
 }
 const active = (map: PhysicalField, i: number, minimum: number) =>
   map.TectonicBoundaryCodes.get(i) !== 0 && map.TectonicStrain.get(i) >= minimum;
@@ -101,6 +109,8 @@ export function discoverComponents(
       strain: 0,
       continental: 0,
       maximumContinental: 0,
+      frontSheet: -1,
+      salt: context.EpochStableSeed ^ map.TectonicBoundaryPairIds.get(i),
       x: 0,
       y: 0,
     };
@@ -140,7 +150,7 @@ export function rankComponents(components: BoundaryComponent[], context: Physica
   });
 }
 /** Signed across-strike offset (metres) of a cell from its source boundary cell. */
-function acrossStrike(map: PhysicalField, i: number, source: number): number {
+export function acrossStrike(map: PhysicalField, i: number, source: number): number {
   let tx = map.TectonicTangentX.get(source) / 1000,
     ty = map.TectonicTangentY.get(source) / 1000;
   if (Math.abs(tx) + Math.abs(ty) < 0.01) {
@@ -207,6 +217,14 @@ export function propagateInfluence(
     map.OrogenicSystemProminence.set(j, map.OrogenicSystemProminence.get(i));
   });
   assignSides(map, components, source, side);
-  releaseWorking(map);
-  return { distance, source, side };
+  const reach = workingArray(map, "float64", "orogeny:reach"),
+    overlap = workingArray(map, "float64", "orogeny:overlap").fill(0);
+  for (let i = 0; i < reach.length; i++)
+    reach.set(
+      i,
+      side.get(i) < 0
+        ? distance.get(i) / context.Profile.OrogenicForelandWidthShare
+        : distance.get(i)
+    );
+  return { distance, source, side, reach, overlap };
 }

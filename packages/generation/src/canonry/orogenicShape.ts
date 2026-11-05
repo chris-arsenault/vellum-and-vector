@@ -4,8 +4,11 @@ import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
 import { clamp } from "./math";
-import { unitNoise } from "./noise";
+import { hashUnit, unitNoise } from "./noise";
+import { baselineRock } from "../rock/rockCatalogue";
 
+/** The cross-section value at the crest of a convergent belt. */
+export const orogenicCrestSection = 1.55;
 const gaussian = (value: number, center: number, width: number) =>
   Math.exp(-0.5 * ((value - center) / Math.max(0.001, width)) ** 2);
 /**
@@ -18,49 +21,95 @@ function plateauShoulder(p: PhysicalProfile, distance: number): number {
   const t = clamp((distance - width * 0.6) / (width * 0.5), 0, 1);
   return p.OrogenicPlateauShare * (1 - t * t * (3 - 2 * t));
 }
+/** How far out from a rift its blocks reach. */
+export const sheetReach = (p: PhysicalProfile) => p.RiftShoulderDistance * 3.2;
+/** A segment stands higher or lower than the next for what it was built from. */
+export const segmentScale = (c: BoundaryComponent, segment: number) =>
+  0.75 + 0.5 * hashUnit(c.salt ^ 0x51e4, segment, 1);
 /**
- * Cross-section of a belt at a signed side: the foreland (side < 0) rises to the crest within a
- * narrower front; the hinterland (side ≥ 0) carries the crest and the plateau shoulder.
+ * Which thrust sheet a cell joins when the belt first reaches it, and how far across it. Faults cut
+ * a belt into segments along its strike, each with its sheets offset from its neighbours', so
+ * ridges step sideways at them. A sheet is as wide as its rock is stiff.
  */
-export function crossSection(
+export function sheetAt(
   map: PhysicalField,
   context: PhysicalContext,
   c: BoundaryComponent,
   i: number,
   source: number,
-  distance: number,
-  side = 1
+  reach: number
+) {
+  const p = context.Profile,
+    tx = map.TectonicTangentX.get(source) / 1000,
+    ty = map.TectonicTangentY.get(source) / 1000,
+    along = map.mesh.x(i) * tx + map.mesh.y(i) * ty,
+    segment = Math.floor(along / p.OrogenicSegmentLength),
+    stiffness = clamp(map.RockResistance.get(source) / baselineRock, 0.6, 1.6),
+    spacing = p.OrogenicSheetSpacing * stiffness,
+    offset = hashUnit(c.salt ^ 0x51e3, segment, 0) * spacing,
+    position = (reach + offset) / spacing,
+    sheet = Math.floor(position);
+  return { sheet, across: position - sheet, segment };
+}
+const sheetHeld = (map: PhysicalField, c: BoundaryComponent, i: number) =>
+  map.ThrustPairIds.get(i) === c.pair + 1;
+/**
+ * What a pass of shortening does at a cell it has reached: the sheets nearest the front take the
+ * most of it, older ones behind are carried along with less, and where a sheet's leading edge has
+ * just ridden over the next, the rock is stacked and takes most of all.
+ */
+function stackedThrust(map: PhysicalField, c: BoundaryComponent, frame: OrogenicFrame, i: number) {
+  if (!sheetHeld(map, c, i)) return 0;
+  const behind = Math.max(0, c.frontSheet - (map.ThrustSheetIndex.get(i) - 1)),
+    stacked = frame.overlap.get(i);
+  return (
+    1.25 * 0.62 ** behind * (0.3 + 0.7 * stacked) * segmentScale(c, map.ThrustSegmentIds.get(i))
+  );
+}
+/**
+ * Stretching breaks crust into fault blocks: each one tilted, the alternate ones dropped, and each
+ * the same block on every pass, so a block's tilt grows. The rift's axis thins most, and the blocks
+ * run out from it until the stretch is spent.
+ */
+function faultBlocks(
+  map: PhysicalField,
+  context: PhysicalContext,
+  c: BoundaryComponent,
+  i: number,
+  distance: number
+) {
+  const p = context.Profile,
+    axis = gaussian(distance, 0, Math.max(2, p.RiftShoulderDistance * 0.48)) * 0.76;
+  if (!sheetHeld(map, c, i)) return -axis;
+  const across = map.ThrustAcross.get(i) / 1000,
+    block = map.ThrustSheetIndex.get(i) - 1,
+    tilt = block % 2 === 0 ? 0.55 * across : -0.5 * (1 - across);
+  return (
+    gaussian(distance, 0, p.RiftShoulderDistance * 1.6) *
+      tilt *
+      segmentScale(c, map.ThrustSegmentIds.get(i)) -
+    axis
+  );
+}
+/**
+ * Cross-section of a belt at a cell. A convergent belt is what its carried sheets have stacked,
+ * with the plateau shoulder behind them on the hinterland; a rift is its blocks.
+ */
+export function crossSection(
+  map: PhysicalField,
+  context: PhysicalContext,
+  c: BoundaryComponent,
+  frame: OrogenicFrame,
+  i: number
 ): number {
   const p = context.Profile,
-    continental = map.CrustContinentalFraction.get(i) / 1000;
+    continental = map.CrustContinentalFraction.get(i) / 1000,
+    distance = frame.distance.get(i);
   if (c.code === 1) {
-    const mix = clamp(
-      (Math.max(map.CrustCollisionIntensity.get(source) / 1000, c.collision) - 0.08) / 0.42,
-      0,
-      1
-    );
-    const front = side < 0 ? p.OrogenicForelandWidthShare : 1;
-    const w = p.CollisionRangeWidth * front;
-    const collision =
-      (gaussian(distance, 0, w) * 0.42 +
-        gaussian(distance, w * 0.28, w * 0.17) * 0.9 +
-        gaussian(distance, w * 0.72, w * 0.21) * 0.68) *
-      (0.4 + continental * 0.6);
-    const sw = p.SubductionRangeWidth * front;
-    const subduction =
-      (gaussian(distance, 0, sw) * 0.26 + gaussian(distance, sw * 0.42, sw * 0.25) * 1.02) *
-      continental;
-    const plateau = side < 0 ? 0 : plateauShoulder(p, distance) * continental;
-    return subduction * (1 - mix) + collision * mix + plateau;
+    const plateau = frame.side.get(i) < 0 ? 0 : plateauShoulder(p, distance) * continental;
+    return stackedThrust(map, c, frame, i) * (0.4 + continental * 0.6) + plateau;
   }
-  if (c.code === 2) {
-    const d = p.RiftShoulderDistance;
-    return (
-      continental *
-      (gaussian(distance, d, Math.max(2, d * 0.42)) * 0.55 -
-        gaussian(distance, 0, Math.max(2, d * 0.48)) * 0.76)
-    );
-  }
+  if (c.code === 2) return continental * faultBlocks(map, context, c, i, distance);
   return c.code === 3
     ? gaussian(distance, 0, p.TransformRangeWidth) * (0.06 + continental * 0.14)
     : 0;
@@ -136,8 +185,7 @@ export function constructionWeight(
   section?: number
 ): number {
   const source = frame.source.get(i);
-  const shape =
-    section ?? crossSection(map, context, c, i, source, frame.distance.get(i), frame.side.get(i));
+  const shape = section ?? crossSection(map, context, c, frame, i);
   const activity = (map.TectonicStrain.get(source) / 1000) * 0.62 + c.strain * 0.38;
   return activity * alongStrike(map, context, c, i, source) * shape;
 }

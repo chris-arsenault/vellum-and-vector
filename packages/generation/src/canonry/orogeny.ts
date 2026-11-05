@@ -1,10 +1,5 @@
 // OrogenicConstructionLayer finite deformation and constructed summit rock, Canonry 0f62584c.
-import { baselineRock } from "../rock/rockCatalogue";
-import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
-
-/** How far into a range's construction its flanks' schist gives way to core gneiss. */
-const coreInfluence = 0.5;
 import type { PhysicalContext } from "./context";
 import {
   discoverComponents,
@@ -13,7 +8,12 @@ import {
   type BoundaryComponent,
   type OrogenicFrame,
 } from "./orogenicComponents";
-import { constructionWeight, crossSection, summitVariation } from "./orogenicShape";
+import {
+  constructionWeight,
+  crossSection,
+  orogenicCrestSection,
+  summitVariation,
+} from "./orogenicShape";
 import {
   buoyancy,
   clamp,
@@ -25,11 +25,16 @@ import {
   units,
 } from "./math";
 import { rebuild } from "./surface";
+import { stripRock } from "../rock/rockColumn";
 import { adjustCrustColumn } from "./crustTransport";
 import { distributeOrogenicRoots } from "./orogenicRoots";
+import { advanceThrustFronts, slipThrustSheets } from "./orogenicSheets";
+import { sutureReactivation } from "./reactivation";
 import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
+/** How much deeper than its own rise a thrust's crest reaches into the column. */
+const thrustExhumation = 1.5;
 function deformationLimit(
   context: PhysicalContext,
   c: BoundaryComponent,
@@ -50,7 +55,8 @@ function deformationLimit(
   const root =
     p.OrogenicRootBudgetMinimum +
     (p.OrogenicRootBudgetMaximum - p.OrogenicRootBudgetMinimum) * prominence;
-  const maximum = c.code === 1 ? 1.55 : c.code === 2 ? 0.55 : c.code === 3 ? 0.2 : 1;
+  const maximum =
+    c.code === 1 ? orogenicCrestSection : c.code === 2 ? 0.55 : c.code === 3 ? 0.2 : 1;
   return foundation + root * clamp(section / maximum, 0, 1);
 }
 function changeThickness(
@@ -96,12 +102,12 @@ function constructSurface(
   const value = toUnits(admitted),
     p = context.Profile;
   if (value <= 0 || map.CrustContinentalFraction.get(i) / 1000 < 0.35 || c.code !== 1) return;
-  const crest = clamp(section / 1.55, 0, 1);
+  const crest = clamp(section / orogenicCrestSection, 0, 1);
   const requested = units(
     Math.min(
       p.MaximumOrogenicSurfaceReliefPerPass,
       ((value * p.OrogenicSurfaceReliefSharePerMille) / 1000) *
-        (0.38 + Math.sqrt(crest) * 0.62) *
+        (0.2 + crest * 0.8) *
         summitVariation(map, context, c, i, source)
     )
   );
@@ -116,13 +122,8 @@ function constructSurface(
   if (applied <= 0) return;
   map.BedrockElevation.set(i, next);
   map.SurfaceRockLoad.add(i, applied);
-  const influence = clamp((Math.sqrt(crest) * (c.prominence / 1000)) / 1.75, 0, 1);
-  hardenRock(
-    map,
-    i,
-    influence >= coreInfluence ? "gneiss" : "schist",
-    round(baselineRock + (p.OrogenicCoreRockResistance - baselineRock) * influence)
-  );
+  // A sheet's leading edge brings up what it was cut from: the crest of a thrust is older rock.
+  stripRock(map, i, Math.round(applied * crest * thrustExhumation));
   rebuild(map, i);
 }
 function constructTriangle(
@@ -135,11 +136,13 @@ function constructTriangle(
   roots: Band | null
 ) {
   const source = frame.source.get(i),
-    section = crossSection(map, context, c, i, source, frame.distance.get(i), frame.side.get(i));
+    section = crossSection(map, context, c, frame, i);
   const weight = constructionWeight(map, context, c, frame, i, section);
   const drive = step * (c.prominence / 1000) * weight;
-  if (!roots && Math.abs(drive) < 0.5) return;
-  const admitted = roots ? roots.get(i) : changeThickness(map, context, c, i, section, drive);
+  // Only a convergent belt draws on the crust the plates piled up; anything else moves on its own.
+  const fedByRoots = roots !== null && c.code === 1;
+  if (!fedByRoots && Math.abs(drive) < 0.5) return;
+  const admitted = fedByRoots ? roots.get(i) : changeThickness(map, context, c, i, section, drive);
   map.OrogenicConstruction.set(i, admitted);
   recordActivity(map, context, i, admitted);
   recordGrain(map, c, i, source, section, admitted);
@@ -180,11 +183,14 @@ export function orogenicConstruction(map: PhysicalField, context: PhysicalContex
   const components = discoverComponents(map, context, ids);
   rankComponents(components, context);
   const frame = propagateInfluence(map, context, components, ids);
+  advanceThrustFronts(map, context, components, frame);
+  slipThrustSheets(map, context, components, frame);
   const step = context.IsEvolutionEpoch
     ? (context.Profile.EpochOrogenicConstructionStep * context.TectonicStrength) / 1000
     : context.Profile.InitialOrogenicConstructionStep;
+  const frameBands = [frame.distance, frame.source, frame.side, frame.reach, frame.overlap];
   if (step <= 0) {
-    releaseWorking(map, ids, frame.distance, frame.source, frame.side);
+    releaseWorking(map, ids, ...frameBands);
     return;
   }
   const roots = context.IsEvolutionEpoch
@@ -194,5 +200,6 @@ export function orogenicConstruction(map: PhysicalField, context: PhysicalContex
     const id = map.OrogenicComponentIds.get(i);
     if (id >= 0) constructTriangle(map, context, components[id], frame, i, step, roots);
   }
-  releaseWorking(map, ids, frame.distance, frame.source, frame.side, ...(roots ? [roots] : []));
+  if (context.IsEvolutionEpoch) sutureReactivation(map, context);
+  releaseWorking(map, ids, ...frameBands, ...(roots ? [roots] : []));
 }

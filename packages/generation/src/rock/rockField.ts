@@ -1,7 +1,7 @@
 import type { PhysicalField } from "../canonry/field";
 import { hardestRock, rockCatalogue, softestRock, type RockKindId } from "./rockCatalogue";
 
-/** A process that hardens ground leaves its own rock there, where it is harder than what was. */
+/** A process that hardens ground leaves its own rock on the surface, where it is harder than what was. */
 export function hardenRock(
   map: PhysicalField,
   cell: number,
@@ -12,4 +12,5 @@ export function hardenRock(
   if (value <= map.RockResistance.get(cell)) return;
   map.RockResistance.set(cell, value);
   map.RockKindCodes.set(cell, rockCatalogue[kind].code);
+  map.RockLayerKind0.set(cell, rockCatalogue[kind].code);
 }

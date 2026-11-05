@@ -124,7 +124,7 @@ export function defaultEpochs(): World["epochs"] {
     },
     {
       id: "Cold age",
-      tectonics: 0.4,
+      tectonics: 0.7,
       hydrology: 1,
       ice: 1,
       coasts: 1,
@@ -133,7 +133,7 @@ export function defaultEpochs(): World["epochs"] {
     },
     {
       id: "Present",
-      tectonics: 0.1,
+      tectonics: 0.4,
       hydrology: 1,
       ice: 0,
       coasts: 1,

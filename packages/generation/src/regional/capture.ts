@@ -14,6 +14,7 @@ import {
 import type { Geometry } from "geojson";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { atlasInitialState } from "../atlasInitialState";
+import { structureChannels } from "../canonry/atlasChannels";
 import type { GenerationState } from "../process";
 
 /**
@@ -25,6 +26,7 @@ const presentChannels = new Set([
   "elevation",
   "rock",
   "rockKind",
+  ...structureChannels,
   "fracture",
   "geothermal",
   "margin",

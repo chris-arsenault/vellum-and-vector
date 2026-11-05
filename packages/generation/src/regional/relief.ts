@@ -10,6 +10,7 @@ import { transportSediment, wasteHillslopes } from "./sediment";
 import { developShore } from "./shore";
 import {
   blurContent,
+  blurOverLand,
   contentMask,
   distance,
   isContent,
@@ -18,7 +19,7 @@ import {
   releaseBlurs,
 } from "./lattice";
 import { ruggedness } from "./ruggedness";
-import { materialBands, materialResistance } from "./material";
+import { materialResistance } from "./material";
 import { channelCells } from "./network";
 import { clamp, type NetworkWork, type ReliefWork, type RegionalState } from "./state";
 
@@ -125,7 +126,6 @@ function reliefIncrements(state: RegionalState, crest: Float64Array): Increments
     n = mesh.count,
     network = state.regional.network!,
     { receiver, order, count, base } = network,
-    bands = materialBands(state),
     thresholdArea = channelCells * regionalSpan(state) ** 2,
     cap = featureCaps(state),
     increment = new Float64Array(n),
@@ -137,7 +137,7 @@ function reliefIncrements(state: RegionalState, crest: Float64Array): Increments
       i = receiver[j];
     if (i < 0) continue;
     const length = distance(mesh, j, i),
-      material = materialResistance(state, bands, j);
+      material = materialResistance(state, j);
     let gradient: number;
     if (network.channel[j]) {
       const area = Math.max(thresholdArea, network.area[j]);
@@ -233,13 +233,8 @@ function conditionOnBase(state: RegionalState, h: Float64Array) {
     content = contentMask(state),
     macro = new Float64Array(base),
     blurred = new Float64Array(h);
-  for (let i = 0; i < n; i++)
-    if (sea[i]) {
-      macro[i] = 0;
-      blurred[i] = 0;
-    }
-  blurContent(state, macro, reach);
-  blurContent(state, blurred, reach);
+  blurOverLand(state, macro, sea, reach);
+  blurOverLand(state, blurred, sea, reach);
   const rugged = ruggedness(state, macro);
   for (let i = 0; i < n; i++) {
     if (!content[i] || sea[i] || lake[i] >= 0) continue;

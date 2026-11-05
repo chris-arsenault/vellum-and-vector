@@ -3,6 +3,7 @@ import type { TectonicPlate, TectonicSite, TectonicState } from "./tectonicState
 import { meshDeltaX } from "./mesh";
 import {
   tectonicContactMyr,
+  tectonicEdgeReach,
   tectonicRelaxationMyr,
   tectonicRotationGain,
 } from "./tectonicControls";
@@ -105,6 +106,32 @@ function contactResistance(map: PhysicalField, state: TectonicState, myr: number
     second.motionY += (impulse * secondShare * dy) / length;
   }
 }
+/**
+ * What a plate's outward motion keeps as its continent nears the edge of a bounded map: all of it
+ * while the continent is further than `reach` away, and none once it is there.
+ */
+export const edgeAllowance = (gap: number, reach: number) => Math.max(0, Math.min(1, gap / reach));
+/**
+ * A bounded map's edge is the end of the world's crust: an ocean can pass under it, but a continent
+ * cannot leave. A plate slows against the edge as the continent it carries comes up to it, which
+ * also turns the rest of its motion into shortening against whatever it meets.
+ */
+function edgeResistance(map: PhysicalField, members: TectonicSite[], plate: TectonicPlate) {
+  const continent = members.filter((site) => site.assembly > 0);
+  if (!continent.length) return;
+  const [west, south, east, north] = map.mesh.bounds,
+    [originX, originY] = map.mesh.origin,
+    xs = continent.map((site) => site.x),
+    ys = continent.map((site) => site.y);
+  if (!map.mesh.periodic) {
+    if (plate.motionX > 0)
+      plate.motionX *= edgeAllowance(east - originX - Math.max(...xs), tectonicEdgeReach);
+    else plate.motionX *= edgeAllowance(Math.min(...xs) - (west - originX), tectonicEdgeReach);
+  }
+  if (plate.motionY > 0)
+    plate.motionY *= edgeAllowance(north - originY - Math.max(...ys), tectonicEdgeReach);
+  else plate.motionY *= edgeAllowance(Math.min(...ys) - (south - originY), tectonicEdgeReach);
+}
 /** A coarse driven plate model: contacts resist closure; regional driving supplies motion. */
 export function updatePlateMotion(map: PhysicalField, state: TectonicState, myr: number) {
   const weight = 1 - Math.exp(-myr / tectonicRelaxationMyr);
@@ -116,5 +143,11 @@ export function updatePlateMotion(map: PhysicalField, state: TectonicState, myr:
     plate.spin += (spin - plate.spin) * weight;
   }
   contactResistance(map, state, myr);
+  for (const plate of state.plates)
+    edgeResistance(
+      map,
+      state.sites.filter((site) => site.plate === plate.id),
+      plate
+    );
   refreshSiteMotion(map, state);
 }

@@ -79,6 +79,8 @@ export function atlasEpoch(epoch: Epoch) {
     CoastalStrength: round(clamp(epoch.coasts, 0, 1) * 1000),
     TemperatureOffset: round((epoch.temperature - 15) * 10),
     SeaLevelOffset: round(epoch.seaLevel),
-    TectonicDurationMyr: epoch.tectonicDurationMyr ?? tectonicDefaultMyr,
+    // A quiet epoch's plates move that much less: the crust's activity is how far they travel.
+    TectonicDurationMyr:
+      (epoch.tectonicDurationMyr ?? tectonicDefaultMyr) * clamp(epoch.tectonics, 0, 1),
   };
 }

@@ -3,6 +3,7 @@ import { meshDeltaX } from "./mesh";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, truncate, units } from "./math";
+import { rockKindOfCode } from "../rock/rockCatalogue";
 import { erode, deposit } from "./surface";
 import { drainageConditioning } from "./drainageFlood";
 import { resolveLandTargets } from "./flowGuidance";
@@ -11,10 +12,16 @@ import { cellTravel, physicalDistance } from "./physicalMetric";
 import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
-/** A channel cut: eroded, remembered as incision, and booked as sediment supply. */
-export function recordCut(map: PhysicalField, i: number, requested: number) {
-  const amount = erode(map, i, requested);
-  map.CumulativeFluvialErosion.add(i, amount);
+/** How much of a cell a river's valley covers: wider with its catchment, all of a small cell. */
+export const valleyShare = (widthShare: number, catchmentArea: number, cellArea: number) =>
+  clamp((widthShare * Math.sqrt(catchmentArea)) / Math.sqrt(cellArea), 0, 1);
+/**
+ * A channel cut to `depth` across `share` of the cell. A cell's height is the mean of its ground, so
+ * that mean falls by the depth over that share only; the depth itself is remembered as incision.
+ */
+export function recordCut(map: PhysicalField, i: number, depth: number, share = 1) {
+  const amount = erode(map, i, Math.round(depth * share));
+  map.CumulativeFluvialErosion.add(i, depth);
   map.SedimentSupply.add(i, amount);
   map.SedimentProducedTotal += (amount / 1024) * map.mesh.area(i);
 }
@@ -94,15 +101,30 @@ function erodeTriangle(
   const equilibrium = c.Profile.FluvialEquilibriumGradient / Math.max(1, catchment) ** 0.12;
   const erosiveFall = Math.max(0, fall - equilibrium);
   if (erosiveFall <= 0) return;
-  const power = catchment ** 0.42 * Math.sqrt(erosiveFall) * 100;
+  // Stream power: water and slope together, so a trunk on steep ground cuts far more than either.
+  const power =
+    catchment ** c.Profile.FluvialAreaExponent * erosiveFall * c.Profile.FluvialPowerScale;
+  // A river's limit is how much it can carry; the rock then decides how much of that it can cut.
   const requested = units(
-    (Math.min(22, (power * c.Profile.FluvialErosionStrength * 1000) / surfaceResistance(map, i)) *
+    (((Math.min(c.Profile.MaximumFluvialCutPerIteration, power * c.Profile.FluvialErosionStrength) *
+      1000) /
+      surfaceResistance(map, i)) *
       c.HydrologyStrength) /
       1000
   );
-  // Sea level is the base level: a river grades to the sea and never cuts its bed below it.
-  const cut = Math.min(requested, map.Elevation.get(i) - (map.EffectiveSeaLevel + units(1)));
-  if (cut > 0) recordCut(map, i, cut);
+  // A river cuts down to what it runs into, and sea level is the base level beneath everything.
+  const cut = Math.min(
+    requested,
+    units(erosiveFall * length),
+    map.Elevation.get(i) - (map.EffectiveSeaLevel + units(1))
+  );
+  if (cut > 0)
+    recordCut(
+      map,
+      i,
+      cut,
+      valleyShare(c.Profile.FluvialValleyWidthShare, area.get(i), map.mesh.area(i))
+    );
 }
 export function fluvialErosion(map: PhysicalField, c: PhysicalContext) {
   if (map.AvailableFacts.has("Lakes")) erodeOutlets(map, c);
@@ -117,6 +139,20 @@ export function fluvialErosion(map: PhysicalField, c: PhysicalContext) {
       area = contributingArea(map, targets);
     for (let i = 0; i < targets.length; i++) erodeTriangle(map, c, targets, area, i);
     releaseWorking(map, targets, area);
+  }
+  dissolveRock(map, c);
+}
+/** The runoff at which water takes all the soluble rock it can on a pass. */
+const fullRunoff = 1000;
+/** Water takes soluble rock wherever it runs, valley or not: limestone, salt, tufa all go this way. */
+function dissolveRock(map: PhysicalField, c: PhysicalContext) {
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.WaterKindCodes.get(i) === 1) continue;
+    const soluble = rockKindOfCode(map.RockKindCodes.get(i)).solubility,
+      wet = clamp(map.Runoff.get(i) / fullRunoff, 0, 1),
+      cut = units((c.Profile.DissolvedPerPass * soluble * wet * c.HydrologyStrength) / 1000),
+      above = map.Elevation.get(i) - (map.EffectiveSeaLevel + units(1));
+    if (cut > 0 && above > 0) recordCut(map, i, Math.min(cut, above));
   }
 }
 function transportDistance(map: PhysicalField, i: number, previous: Band) {
