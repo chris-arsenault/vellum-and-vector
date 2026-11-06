@@ -21,7 +21,6 @@ import { orogenicConstruction } from "./orogeny";
 import { mantlePlumeRoots } from "./plumes";
 import { volcanicConstruction } from "./volcanism";
 import { impactCratering } from "./impacts";
-import { massWasting } from "./massWasting";
 import { crustalSupport, lithosphericFlexure } from "./support";
 import { continentalMarginEvolution, marineSedimentation } from "./continentalMargins";
 import { coastalDetail } from "./coastalDetail";
@@ -30,7 +29,7 @@ import { geothermal } from "./geothermal";
 import { plateAdvection } from "./advection";
 import { landIce } from "./landIce";
 import { iceFlow } from "./iceFlow";
-import { glacialDeposition, glacialErosion, glacialMeltwater } from "./glacialEvolution";
+import { glacialDeposition, glacialMeltwater } from "./glacialEvolution";
 import { coastalErosion, externalCoastalForcing } from "./coastalEvolution";
 import { seaIce } from "./seaIce";
 import { glacialLandforms } from "./glacialLandforms";
@@ -38,10 +37,15 @@ import { landformClassification } from "./landforms";
 import { riverChannelGeometry } from "./channelGeometry";
 import { floodplains } from "./floodplains";
 import { deltaFormation } from "./deltas";
-import { fluvialErosion, sedimentTransport } from "./fluvial";
+import { sedimentTransport } from "./fluvial";
 import { glacialRunoff } from "./glacialEvolution";
 import { epochHistory, validatePhysical } from "./validation";
 import { initializeRock, lithification, metamorphism } from "../rock/rockHistory";
+import { ice } from "../wear/ice";
+import { slopes, slopesAfterStreams } from "../wear/slopes";
+import { solution } from "../wear/solution";
+import { streams } from "../wear/streams";
+import { wearBy } from "../wear/wearProcesses";
 
 export type NativeProcess = (map: PhysicalField, context: PhysicalContext) => void;
 export type NativeStep = readonly [name: string, salt: number, process: NativeProcess];
@@ -49,7 +53,7 @@ const support: NativeStep = ["crustal-support", 0, (map, c) => crustalSupport(ma
 const flexure: NativeStep = ["lithospheric-flexure", 0, lithosphericFlexure];
 const ocean: NativeStep = ["ocean-connectivity", 0, oceanConnectivity];
 const supportAndMargins: readonly NativeStep[] = [
-  ["mass-wasting", 0, massWasting],
+  ["mass-wasting", 0, wearBy(slopes)],
   support,
   flexure,
   ocean,
@@ -103,7 +107,7 @@ export const geologySteps: readonly NativeStep[] = [
 export const glaciationSteps: readonly NativeStep[] = [
   ["land-ice-mass-balance", 0, landIce],
   ["ice-flow", 0, iceFlow],
-  ["glacial-erosion", 0, glacialErosion],
+  ["glacial-erosion", 0, wearBy(ice)],
   ["glacial-deposition", 0, glacialDeposition],
   ["crustal-support", 0, (map, c) => crustalSupport(map, c, true)],
   flexure,
@@ -146,8 +150,8 @@ export const drainageSteps: readonly NativeStep[] = [
   ["river-network", 0, riverNetwork],
 ];
 export const incisionSteps: readonly NativeStep[] = [
-  ["ancestral-fluvial-erosion", 0, fluvialErosion],
-  ["post-fluvial-mass-wasting", 0, (map, c) => massWasting(map, c, true)],
+  ["ancestral-fluvial-erosion", 0, wearBy(streams, solution)],
+  ["post-fluvial-mass-wasting", 0, wearBy(slopesAfterStreams)],
 ];
 export const sedimentStep: NativeStep = ["sediment-transport", 0, sedimentTransport];
 export const glacialRunoffStep: NativeStep = ["glacial-runoff", 0, glacialRunoff];

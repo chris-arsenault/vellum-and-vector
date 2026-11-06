@@ -1,5 +1,5 @@
 import type { GenerationState } from "../process";
-import { hardestRock, rockCatalogue } from "../rock/rockCatalogue";
+import { fuseRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
 import { reservoirAmount, type MagicField } from "./magicState";
 import { clamp, round } from "./math";
@@ -32,16 +32,8 @@ export function saltWrites(state: GenerationState) {
     }
 }
 function fuse(map: PhysicalField, i: number, resistance: number, full: number) {
-  map.RockResistance.set(i, clamp(map.RockResistance.get(i) + round(resistance), 0, hardestRock));
   // A scorch hardens what is there; only a bed burnt through is glass.
-  if (resistance >= full * glassFrom) {
-    map.RockResistance.set(
-      i,
-      Math.max(map.RockResistance.get(i), rockCatalogue.saltGlass.resistance)
-    );
-    map.RockLayerKind0.set(i, rockCatalogue.saltGlass.code);
-    map.RockKindCodes.set(i, rockCatalogue.saltGlass.code);
-  }
+  fuseRock(map, i, resistance, resistance >= full * glassFrom);
   map.SoilDepth.set(i, 0);
 }
 /** Fire burns the Salt clean: every reservoir loses its share, and the burnt ground fuses. */

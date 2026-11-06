@@ -1,47 +1,12 @@
-// GlacialErosionLayer, GlacialDepositionLayer, GlacialMeltwaterLayer and GlacialRunoffLayer, Canonry 0f62584c.
+// GlacialDepositionLayer, GlacialMeltwaterLayer and GlacialRunoffLayer, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, truncate, units } from "./math";
-import { erode, deposit } from "./surface";
-import { isGrounded, refreshGrounding } from "./glacierSurface";
+import { deposit } from "./surface";
+import { isGrounded } from "./glacierSurface";
 import { targetOrder } from "./flowGraph";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { baselineRock } from "../rock/rockCatalogue";
 
-/** How much of its power ice spends other than on cutting its bed. */
-const glacialYield = 3.5;
-export function glacialErosion(map: PhysicalField, c: PhysicalContext) {
-  const p = c.Profile;
-  for (let i = 0; i < map.mesh.count; i++) {
-    const flux = map.IceFlux.get(i),
-      thickness = map.IceThickness.get(i);
-    if (
-      c.GlaciationStrength === 0 ||
-      flux < p.GlacierFluxThreshold ||
-      thickness <= 0 ||
-      map.GroundedIce.get(i) === 0
-    )
-      continue;
-    // Charge in sliding ice weakens the bed it touches; cold-based ice never reaches here.
-    const power =
-      (1 +
-        (flux - p.GlacierFluxThreshold) / Math.max(1, p.GlacierFluxThreshold) +
-        thickness / Math.max(1, p.GlacierThicknessThreshold)) *
-      (1 + (p.ChargedIceErosion / 1000) * map.IceCharge.get(i));
-    // What ice can move has a limit; hard rock takes less of that, and soft rock cannot take more.
-    const hardness = Math.max(1, map.RockResistance.get(i) / baselineRock),
-      moved = Math.min(
-        (power * p.GlacialCutPerPower * c.GlaciationStrength) / (glacialYield * 1000),
-        p.MaximumGlacialErosionPerPass
-      ),
-      cut = units(Math.max(1 / 1024, moved / hardness));
-    erode(map, i, cut);
-    map.CumulativeGlacialErosion.add(i, cut);
-    map.SedimentSupply.add(i, cut);
-    map.SedimentProducedTotal += (cut / 1024) * map.mesh.area(i);
-  }
-  refreshGrounding(map, p);
-}
 function isTerminus(map: PhysicalField, c: PhysicalContext, i: number, target: number): boolean {
   return (
     map.GroundedIce.get(i) !== 0 &&

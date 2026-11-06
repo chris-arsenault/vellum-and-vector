@@ -1,16 +1,11 @@
 import { hashUnit } from "../canonry/noise";
-import { baselineRock } from "../rock/rockCatalogue";
+import { groundOf } from "../rock/ground";
 import { grainAt } from "./character";
 import { distance, regionalSpan } from "./lattice";
 import { clamp, type RegionalState } from "./state";
 
-/** Hard rock resists; open fractures weaken. Exponents on the relative rock and the fracture share. */
-const rockContrast = 0.9,
-  fractureWeight = 0.5;
 /** Band width along the grain, as a share of the parent span: strata are continuous along strike. */
 const bandLength = 1.5;
-/** Added resistance of fully warded ground (the lore's stable rivers and coasts). */
-const wardResistance = 0.5;
 /** Added resistance of a cone's lava apron at the cone, fading to its base radius (plan: cone extension). */
 const apronHardness = 0.8;
 
@@ -101,28 +96,13 @@ function integrateAlong(
 }
 
 /**
- * Resistance of the material at a cell to being cut: the shared medium rock, water and Fire
- * encounter. The rock exposed there and intact ground resist; open fractures yield. Magic's rock and fracture contributions are read from the present bands,
- * so a round's hardening or cracking changes where the next round cuts.
+ * Resistance of the material at a cell to being cut: the ground as the world reads it, stiffened by
+ * a cone's lava apron, which only a region's character knows. Magic's rock and fracture
+ * contributions are read from the present bands, so a round's hardening or cracking changes where
+ * the next round cuts.
  */
-export function materialResistance(state: RegionalState, i: number) {
-  const map = state.physical.map,
-    rock = map.RockResistance.get(i) / baselineRock,
-    fracture = clamp(map.FractureConductance.get(i) / 1000),
-    // Hallowed ground keeps its beds and banks: inside a ward the country resists cutting.
-    ward = clamp(map.Warding.get(i));
-  return clamp(
-    rock ** rockContrast *
-      Math.exp(-fractureWeight * fracture) *
-      (1 + wardResistance * ward) *
-      (1 + apronHardness * apron(state, i)),
-    minimumResistance,
-    maximumResistance
-  );
-}
-/** Range of relative resistance: soft shale to hard quartzite differ by more than an order of magnitude. */
-const minimumResistance = 0.35,
-  maximumResistance = 3.5;
+export const materialResistance = (state: RegionalState, i: number) =>
+  groundOf(state.physical.map).material(i, 1 + apronHardness * apron(state, i));
 /** How far inside a cone's hard apron the cell lies: 1 at the cone, 0 at and beyond its base. */
 function apron(state: RegionalState, i: number) {
   const mesh = state.physical.map.mesh;

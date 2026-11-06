@@ -1,11 +1,13 @@
 import { expect, it } from "vitest";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { setLayer } from "../rock/rockColumn";
+import { solution } from "../wear/solution";
+import { streams } from "../wear/streams";
+import { wearBy } from "../wear/wearProcesses";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext, type PhysicalEpoch } from "./context";
 import { createField, type PhysicalField } from "./field";
 import { units } from "./math";
-import { fluvialErosion } from "./fluvial";
 import { orogenicConstruction } from "./orogeny";
 import { rebuild } from "./surface";
 import { createWorldMesh } from "./worldMesh";
@@ -168,7 +170,7 @@ it("keeps ridges steeper across the belt than along it after rivers have cut the
   }
   const { along, across } = beltPairs(map),
     before = meanStep(map, across) / meanStep(map, along);
-  fluvialErosion(map, physicalContext(1, 0, atlasPhysicalProfile(), null, 0, 1));
+  wearBy(streams, solution)(map, physicalContext(1, 0, atlasPhysicalProfile(), null, 0, 1));
   const after = meanStep(map, across) / meanStep(map, along);
   expect(after).toBeGreaterThan(before);
 });

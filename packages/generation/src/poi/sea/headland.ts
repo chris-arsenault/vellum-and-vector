@@ -1,5 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import type { GenerationState } from "../../process";
+import { groundOf } from "../../rock/ground";
 import { baselineRock } from "../../rock/rockCatalogue";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, counterpartOf, movesTo, stays } from "../poiCarry";
@@ -205,7 +206,7 @@ export const headland: PoiEntry = {
     statement:
       "The sea cuts a headland back at the rate its waves and forcing exceed its rock. Hard rock stands for epochs; a soft or heavily forced point is lost, and any stack left is an island the test does not count.",
     fate(state, place) {
-      const rock = fieldOf(state).RockResistance.get(place.anchor) / baselineRock;
+      const rock = groundOf(fieldOf(state)).relative(place.anchor);
       return tipExposure(state, place) * (1 + forcingOn(state, place)) > rock
         ? { fate: "ends" }
         : { fate: "persists" };

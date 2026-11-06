@@ -1,5 +1,25 @@
 import type { PhysicalField } from "../canonry/field";
+import { rockResistance, round } from "../canonry/math";
 import { hardestRock, rockCatalogue, softestRock, type RockKindId } from "./rockCatalogue";
+
+/** Hardens or softens the rock at a cell in place, within the limits of what rock can be. */
+export function alterRock(map: PhysicalField, cell: number, change: number) {
+  map.RockResistance.set(cell, rockResistance(map.RockResistance.get(cell) + change));
+}
+/** Salt fuses the rock it lies on: harder for any scorch, and glass where the bed burnt through. */
+export function fuseRock(map: PhysicalField, cell: number, hardening: number, toGlass: boolean) {
+  map.RockResistance.set(
+    cell,
+    Math.max(0, Math.min(hardestRock, map.RockResistance.get(cell) + round(hardening)))
+  );
+  if (!toGlass) return;
+  map.RockResistance.set(
+    cell,
+    Math.max(map.RockResistance.get(cell), rockCatalogue.saltGlass.resistance)
+  );
+  map.RockLayerKind0.set(cell, rockCatalogue.saltGlass.code);
+  map.RockKindCodes.set(cell, rockCatalogue.saltGlass.code);
+}
 
 /** A process that hardens ground leaves its own rock on the surface, where it is harder than what was. */
 export function hardenRock(

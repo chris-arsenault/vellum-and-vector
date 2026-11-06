@@ -1,4 +1,5 @@
 import type { GenerationState } from "../process";
+import { groundOf } from "../rock/ground";
 import { baselineRock } from "../rock/rockCatalogue";
 import type { PhysicalField } from "./field";
 
@@ -118,7 +119,7 @@ function saltRules(
       terms: [
         (i) => map.Salting.get(i) - saltedGround,
         // Ground the salt fused: harder than the salted ground around it.
-        (i) => map.RockResistance.get(i) - baselineRock * 0.95,
+        (i) => groundOf(map).resistance(i) - baselineRock * 0.95,
         (i) => bareGround - cover(i),
       ],
       name: () => "Glass flat",

@@ -1,13 +1,14 @@
 # Documentation
 
-| Document                                        | Contents                                                                                            |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| [Product contract](product-spec.md)             | Required behavior: maps, generation, magic, society, regions, inspection and presentation           |
-| [Generation workflows](generation-workflows.md) | How world and regional generation work: processes, epochs, physical, ecology, magic, society        |
-| [Generation modules](generation-modules.md)     | Feature modules, recipes, process contracts, validity ledger and publication                        |
-| [Backlog](backlog.md)                           | Open product and generation work                                                                    |
-| [Magic lore](lore/magic.md)                     | Character, practice, cost and lore of the seven magic systems; one page per system in `lore/magic/` |
-| [Lore pool](lore-pool/roll.py)                  | Script and source pool for rolling adjacent lore for the magic systems                              |
+| Document                                                              | Contents                                                                                                |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| [Product contract](product-spec.md)                                   | Required behavior: maps, generation, magic, society, regions, inspection and presentation               |
+| [Materials and processes](../MATERIALS-AND-PROCESSES-ARCHITECTURE.md) | Working design for materials and processes, and the method for analysing interactions across the system |
+| [Generation workflows](generation-workflows.md)                       | How world and regional generation work: processes, epochs, physical, ecology, magic, society            |
+| [Generation modules](generation-modules.md)                           | Feature modules, recipes, process contracts, validity ledger and publication                            |
+| [Backlog](backlog.md)                                                 | Open product and generation work                                                                        |
+| [Magic lore](lore/magic.md)                                           | Character, practice, cost and lore of the seven magic systems; one page per system in `lore/magic/`     |
+| [Lore pool](lore-pool/roll.py)                                        | Script and source pool for rolling adjacent lore for the magic systems                                  |
 
 ## Architecture decisions
 
@@ -22,6 +23,7 @@
 | [0007](adr/0007-magic-systems-are-materials.md)                      | Magic systems are materials the world carries                                    |
 | [0008](adr/0008-regional-refinement-is-conditioned-amplification.md) | Regional refinement is a bidirectional, multi-pass process on the one lattice    |
 | [0009](adr/0009-named-entities-persist-and-cells-are-shares.md)      | Refinement resolves where and how big a named entity is, and never its existence |
+| [0010](adr/0010-rock-answers-and-wear-processes.md)                  | Rock answers from its catalogue; what wears the land is a plugin                 |
 
 Files named `*-PLAN.md` in this directory are working copies of open plans and
 are deleted when their plan closes; see the

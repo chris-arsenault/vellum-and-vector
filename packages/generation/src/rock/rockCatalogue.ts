@@ -162,3 +162,38 @@ export const hardnessOf = (resistance: number) =>
   Math.max(0, Math.min(1, (resistance - softFeel) / (hardFeel - softFeel)));
 /** The porosity from which water comes up through rock. */
 export const permeableFrom = 0.3;
+/** What loose sediment resists being cut with, on the same scale as rock. */
+export const sedimentResistance = 300;
+
+const within = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
+const relative = (resistance: number) => resistance / baselineRock;
+/** The relative hardness below which rock gives ice no more to cut: it crushes to a bed ice rides on. */
+const weakestBed = 0.6;
+/** How strongly rock's relative hardness carries into the material water and Fire cut through. */
+const materialContrast = 0.9;
+/**
+ * How rock answers each thing that works on it or reads it, from its properties and its resistance
+ * as altered where it lies. This is the one place those answers are decided; a process asks
+ * `Ground`, which reads the map and answers from here.
+ */
+export const rockResponse = {
+  /** How much of what ice could move this rock gives up. */
+  iceTakes: (moved: number, resistance: number) =>
+    moved / Math.max(weakestBed, relative(resistance)),
+  /** How far its strength steepens the slope it holds. */
+  slopeFirmness: (resistance: number) => within(0.55 + relative(resistance) * 0.45, 0.55, 1.45),
+  /** How far open joints lower the slope it holds: broken rock stands gentler than tight rock. */
+  slopeJoints: (rock: RockKind) => 1.2 - 0.5 * rock.jointing,
+  /** How far its strength holds back what a failing slope sheds. */
+  slopeShedding: (resistance: number) => within(relative(resistance), 0.6, 2.5),
+  /** How far its stiffness spaces a belt's thrust sheets. */
+  sheetStiffness: (resistance: number) => within(relative(resistance), 0.6, 1.6),
+  /** How far its strength sharpens the fine relief it carries. */
+  reliefDetail: (resistance: number) => within(relative(resistance), 0.6, 1.4),
+  /** How far channel banks in it hold a river narrow and deep. */
+  channelBank: (resistance: number) => within(relative(resistance), 0.5, 2),
+  /** How far it holds back water leaking through it. */
+  seepageHold: (resistance: number) => within(relative(resistance), 0.3, 3),
+  /** Its share of what water and Fire must cut through. */
+  material: (resistance: number) => relative(resistance) ** materialContrast,
+};

@@ -12,8 +12,9 @@ the [spatial ADR](docs/adr/0001-spatial-authority.md),
 [landmarks ADR](docs/adr/0006-landmarks-are-injected-causes.md),
 [magic materials ADR](docs/adr/0007-magic-systems-are-materials.md),
 [regional refinement ADR](docs/adr/0008-regional-refinement-is-conditioned-amplification.md)
-(regional refinement is a bidirectional, multi-pass process) and
-[named entities and shares ADR](docs/adr/0009-named-entities-persist-and-cells-are-shares.md) record
+(regional refinement is a bidirectional, multi-pass process),
+[named entities and shares ADR](docs/adr/0009-named-entities-persist-and-cells-are-shares.md) and
+[rock answers and wear processes ADR](docs/adr/0010-rock-answers-and-wear-processes.md) record
 implementation direction. User requirements and explicitly agreed boundaries govern revisions
 to agent-derived choices in those documents and in open plans. The
 [documentation index](docs/README.md) lists every durable document.

@@ -6,7 +6,7 @@ import type { PhysicalProfile } from "./profile";
 import { clamp, elevationLimit, units } from "./math";
 import { meshDeltaX, meshPoint, nearestTriangle } from "./mesh";
 import { rebuild } from "./surface";
-import { recordCut } from "./fluvial";
+import { recordCut } from "../wear/wearLedger";
 import { physicalSampler } from "./physicalMetric";
 import { advanceTectonicPoint, backtrackTectonicPoint } from "./tectonicIntegration";
 import { tectonicDefaultMyr, tectonicReferenceMyr } from "./tectonicControls";

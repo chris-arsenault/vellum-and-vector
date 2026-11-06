@@ -16,6 +16,21 @@ export default ts.config(
       "max-depth": ["warn", 4],
     },
   },
+  {
+    // What rock means is decided in the catalogue and read through `Ground`; see rock/ground.ts.
+    files: ["packages/generation/src/**/*.ts"],
+    ignores: ["packages/generation/src/rock/**", "**/*.test.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "MemberExpression[property.name=/^Rock(Resistance|KindCodes)$/]:not(MemberExpression[property.name=/^(set|fill)$/] > MemberExpression)",
+          message: "Read rock through groundOf(map); what it means belongs in the rock catalogue.",
+        },
+      ],
+    },
+  },
   ...testPolicy,
   prettier
 );

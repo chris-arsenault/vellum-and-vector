@@ -3,7 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, round, toUnits, truncate } from "./math";
-import { rockKindOfCode } from "../rock/rockCatalogue";
+import { groundOf } from "../rock/ground";
 import { latitudeAt } from "./latitude";
 import { marchAirColumns, saturation } from "./airColumn";
 import { beltRainout } from "./belts";
@@ -166,7 +166,7 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
       ? Math.min(0.45, 0.3 * map.WetlandCover.get(i) + map.PeatCarbon.get(i) / 60)
       : 0;
     // Porous rock takes water into the ground, so less of it runs off over the surface.
-    const seeping = rockKindOfCode(map.RockKindCodes.get(i)).porosity * groundwaterShare;
+    const seeping = groundOf(map).kind(i).porosity * groundwaterShare;
     map.Runoff.set(i, truncate(Math.max(0, available - evaporation) * (1 - held) * (1 - seeping)));
   }
 }

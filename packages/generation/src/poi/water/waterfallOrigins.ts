@@ -4,6 +4,7 @@ import { riversOf } from "../../area/riverCourses";
 import { hashUnit } from "../../canonry/noise";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
+import { groundOf } from "../../rock/ground";
 import { mapScale } from "../../worldSignificance";
 import type { PoiClaim, PoiOrigin } from "../poiContract";
 import { spacedAmong } from "../poiOrigins";
@@ -66,11 +67,12 @@ const great = (state: GenerationState, claimed: Claimed) => {
 };
 /** Hard rock over softer: what lies below wears back and leaves a ledge. */
 const ledge = (state: GenerationState, claimed: Claimed) => {
-  const rock = fieldOf(state).RockResistance;
+  const rock = groundOf(fieldOf(state));
   return among(
     state,
     claimed,
-    (cell, target) => target >= 0 && rock.get(cell) - rock.get(target) >= ledgeContrast
+    (cell, target) =>
+      target >= 0 && rock.resistance(cell) - rock.resistance(target) >= ledgeContrast
   );
 };
 /** A river crossing ground that has moved: the scarp is the step. */

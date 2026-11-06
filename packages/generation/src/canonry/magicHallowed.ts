@@ -4,7 +4,8 @@ import type { MagicField, MagicWorkspace } from "./magicState";
 import type { LocateContext } from "./magicSources";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
 import { siteStrength } from "./magicStocks";
-import { clamp, rockResistance, round } from "./math";
+import { alterRock } from "../rock/rockField";
+import { clamp, round } from "./math";
 import { CellQueue, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
@@ -223,10 +224,7 @@ function spillBelow(map: PhysicalField, field: MagicField) {
       target = map.FlowTargets.get(i);
     if (w <= 0 || target < 0 || map.Warding.get(target) > 0 || map.WaterKindCodes.get(target) !== 0)
       continue;
-    map.RockResistance.set(
-      target,
-      rockResistance(map.RockResistance.get(target) - round(spill * w))
-    );
+    alterRock(map, target, -round(spill * w));
   }
 }
 /**

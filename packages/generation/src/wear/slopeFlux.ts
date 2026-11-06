@@ -1,10 +1,10 @@
-import { baselineRock, rockKindOfCode } from "../rock/rockCatalogue";
-import type { PhysicalField } from "./field";
-import type { PhysicalProfile } from "./profile";
-import { clamp } from "./math";
-import { edgeLeadingTo } from "./mesh";
-import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 import type { Band } from "@atlas/domain";
+import type { PhysicalField } from "../canonry/field";
+import type { PhysicalProfile } from "../canonry/profile";
+import { clamp } from "../canonry/math";
+import { edgeLeadingTo } from "../canonry/mesh";
+import { workingArray, workingValues, releaseWorking } from "../canonry/physicalNumerics";
+import { groundOf } from "../rock/ground";
 
 interface Face {
   i: number;
@@ -102,28 +102,24 @@ export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
     "slope:heights",
     (i) => map.Elevation.get(i) / 1024
   );
-  // Living cover holds slopes: roots steepen the stable gradient and bind the material a
-  // slope can shed, so cleared or burnt land moves and wooded land stands.
-  const binding = (i: number) =>
-    clamp(map.TreeCover.get(i) + 0.5 * map.GrassCover.get(i) + 0.5 * map.WetlandCover.get(i), 0, 1);
+  // The step between two cells climbs one hillslope, however wide they are. Rock, its joints and
+  // living cover decide the angle it holds and what it can shed, so cleared land moves and wooded
+  // land stands.
+  const ground = groundOf(map),
+    failsAt = p.MassWastingStableGradient * Math.min(1, p.HillslopeLength / mesh.spacing);
   const stable = workingValues(
     map,
     "float64",
     "slope:stable",
-    (i) =>
-      p.MassWastingStableGradient *
-      clamp(0.55 + (map.RockResistance.get(i) / baselineRock) * 0.45, 0.55, 1.45) *
-      // Open joints are where a slope fails: broken rock stands at a gentler angle than tight rock.
-      (1.2 - 0.5 * rockKindOfCode(map.RockKindCodes.get(i)).jointing) *
-      (1 + map.TreeCover.get(i) * 0.2 + map.GrassCover.get(i) * 0.1)
+    (i) => failsAt * ground.slopeFirmness(i) * ground.slopeJoints(i) * ground.slopeCover(i)
   );
   const budget = workingValues(
     map,
     "float64",
     "slope:budget",
     (i) =>
-      (p.MaximumHillslopeTransport * Math.sqrt(mesh.area(i)) * (1 - 0.6 * binding(i))) /
-      clamp(map.RockResistance.get(i) / baselineRock, 0.6, 2.5)
+      (p.MaximumHillslopeTransport * Math.sqrt(mesh.area(i)) * ground.slopeUnbound(i)) /
+      ground.slopeShedding(i)
   );
   const spent = workingArray(map, "float64", "slope:spent");
   relaxFaces(map, plan, heights, stable, budget, spent);

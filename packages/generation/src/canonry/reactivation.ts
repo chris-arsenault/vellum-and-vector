@@ -28,19 +28,24 @@ const exhumation = 1.5;
 
 /** Each plate's mean signed strain along its edges: squeezing is positive, pulling negative. */
 function plateStress(map: PhysicalField) {
-  const totals = new Map<number, { strain: number; area: number }>();
+  let slots = 0;
+  for (let i = 0; i < map.mesh.count; i++) slots = Math.max(slots, plateSlot(map, i) + 1);
+  const strain = new Float64Array(slots),
+    areas = new Float64Array(slots);
   for (let i = 0; i < map.mesh.count; i++) {
     const code = map.TectonicBoundaryCodes.get(i);
     if (code !== 1 && code !== 2) continue;
-    const plate = map.CrustPlateIds.get(i),
-      area = map.mesh.area(i),
-      held = totals.get(plate) ?? { strain: 0, area: 0 };
-    held.strain += ((code === 1 ? 1 : -1) * map.TectonicStrain.get(i) * area) / 1000;
-    held.area += area;
-    totals.set(plate, held);
+    const plate = plateSlot(map, i),
+      area = map.mesh.area(i);
+    strain[plate] += ((code === 1 ? 1 : -1) * map.TectonicStrain.get(i) * area) / 1000;
+    areas[plate] += area;
   }
-  return new Map([...totals].map(([plate, { strain, area }]) => [plate, strain / area]));
+  for (let plate = 0; plate < slots; plate++)
+    strain[plate] = areas[plate] > 0 ? strain[plate] / areas[plate] : 0;
+  return strain;
 }
+/** A plate's slot in a dense array; a cell with no plate has the first. */
+const plateSlot = (map: PhysicalField, i: number) => map.CrustPlateIds.get(i) + 1;
 function atProvinceSeam(map: PhysicalField, i: number) {
   const province = map.CrustProvinceIds.get(i);
   for (let edge = 0; edge < map.mesh.degree(i); edge++) {
@@ -104,7 +109,7 @@ export function sutureReactivation(map: PhysicalField, context: PhysicalContext)
     { distance, weak } = weakZones(map, reach);
   for (let i = 0; i < map.mesh.count; i++) {
     if (!inInterior(map, i) || weak.get(i) <= 0) continue;
-    const pushed = clamp(stress.get(map.CrustPlateIds.get(i)) ?? 0, -1, 1),
+    const pushed = clamp(stress[plateSlot(map, i)], -1, 1),
       fading = (1 - distance.get(i) / reach) ** 2;
     if (pushed !== 0) moveSeam(map, i, step * pushed * weak.get(i) ** concentration * fading);
   }

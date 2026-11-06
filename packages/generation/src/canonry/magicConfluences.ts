@@ -11,7 +11,8 @@ import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
 import { growRegion } from "./magicRegions";
-import { clamp, rockResistance, round, units } from "./math";
+import { alterRock } from "../rock/rockField";
+import { clamp, round, units } from "./math";
 import { hashUnit } from "./noise";
 import { deposit, rebuild } from "./surface";
 import { retainedArray, releaseWorking } from "./physicalNumerics";
@@ -147,11 +148,7 @@ function actOnRock(map: PhysicalField, i: number, c: number, e: ConfluenceEffect
       i,
       clamp(map.FractureConductance.get(i) + round(e.fractureConductance * c), 0, 1000)
     );
-  if (e.rockResistance)
-    map.RockResistance.set(
-      i,
-      rockResistance(map.RockResistance.get(i) + round(e.rockResistance * c))
-    );
+  if (e.rockResistance) alterRock(map, i, round(e.rockResistance * c));
   if (e.relief) {
     // Bounded, signed roughening of the bedrock: needle fields, not a new range.
     const sign = hashUnit(salt, i, 0) * 2 - 1;

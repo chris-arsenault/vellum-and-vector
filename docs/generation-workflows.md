@@ -681,7 +681,9 @@ Every cell holds a short column of rock on the field's own bands: the top layer 
 surface is, the lowest is a basement that never runs out. Erosion strips from the top, deposition
 and eruption add to it, and the surface's resistance follows whatever is exposed while keeping what
 has been done to it. Each kind and its properties come from one catalogue
-(`packages/generation/src/rock/rockCatalogue.ts`). Buried sediment turns to rock by its setting,
+(`packages/generation/src/rock/rockCatalogue.ts`), which also decides how rock answers each thing that
+works on it. Processes read a cell through `Ground` (`rock/ground.ts`), on world and region alike, and a
+lint rule keeps other generation code from reading the rock bands. Buried sediment turns to rock by its setting,
 and burial and heat under a belt or along a suture turn rock to its next form.
 
 Plates move in many small steps. Each cell follows where its material has come from across the
@@ -708,12 +710,24 @@ Interior stress reaches a plate's old
 sutures and province seams and works a zone of crust around them: it thickens and raises older rock
 while the margin is squeezed, and thins and sags while it is pulled apart.
 
+Whatever wears the land is a process in `packages/generation/src/wear`: streams, solution, ice and
+slopes. A process says what it can do and how its settings read at another map's scale; the ground says
+what that takes from the rock, and a shared ledger keeps the sediment's books. The sequence says when
+each runs.
+
 Rock decides erosion. What a river or glacier can move has a limit, and the rock's resistance then
 sets how much of that it cuts, so soft rock wears faster than hard on any slope. A cell's height is the
 mean of its ground, so a valley in a coarse cell lowers that mean and exposes deeper rock only in
 proportion to the share of the cell it covers, while the valley's own depth stays on record as incision.
-Open joints lower the angle a slope holds, porous rock takes water into the ground before it runs off,
-and water dissolves soluble rock wherever it runs.
+Streams too small to map wear every sloping cell, without a valley on record, so land falls toward its
+rivers. Weak rock lets valleys widen and takes more of a cell; strong rock keeps them narrow. Land that
+has relief to wear therefore leaves hard rock standing, while hard rock on ground already worn to grade
+stays low, as a shield does.
+
+Slopes fail on the same terms at every scale: the step between two cells climbs one hillslope, however
+wide the cells are, so a coarse map's steep flanks shed as a fine map's do. Hard rock holds a steeper
+step and gives up less when it goes, open joints lower the angle a slope holds, porous rock takes water
+into the ground before it runs off, and water dissolves soluble rock wherever it runs.
 
 Each magic system changes the column once per epoch through its own medium. A system's share of the
 ground picks fixed patches of it, so its rock forms bodies that hold the share and build on the same

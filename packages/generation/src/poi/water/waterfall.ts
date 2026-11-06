@@ -1,6 +1,7 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import { Landform } from "../../canonry/codes";
 import { riverGradient } from "../../canonry/landforms";
+import { groundOf } from "../../rock/ground";
 import type { GenerationState } from "../../process";
 import { worldFallsDischarge, worldFallsDrop } from "../../worldSignificance";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
@@ -170,8 +171,7 @@ export const waterfall: PoiEntry = {
     statement:
       "A fall cuts back upstream and lowers as it does; once the bed is graded the step is gone and the river runs on, leaving a gorge below where it stood.",
     fate(state, place) {
-      const map = fieldOf(state),
-        resistant = map.RockResistance.get(place.anchor);
+      const resistant = groundOf(fieldOf(state)).resistance(place.anchor);
       return resistant <= 0 ? { fate: "ends", leaves: "gorge" } : { fate: "persists" };
     },
   },

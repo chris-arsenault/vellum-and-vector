@@ -1,5 +1,6 @@
 import { measureSlopes } from "../canonry/geography";
 import { units } from "../canonry/math";
+import { slopeSettings } from "../wear/wearSettings";
 import { physicalGradients } from "../canonry/physicalMetric";
 import { releaseWorking } from "../canonry/physicalNumerics";
 import { applyGlaciation } from "./glacial";
@@ -30,12 +31,6 @@ const headwaterGradient = 0.04,
 const hillslopeGradient = 0.3,
   reworkedSoftening = 0.6,
   coverSoftening = 0.2;
-/**
- * Length (m) of a hillslope from its channel bank to where it rounds over: the ground a step
- * between cells climbs at the hillslope gradient. A cell wider than that is mostly valley
- * floor and gentle ground, so a coarse map's step rises by one hillslope, not by its width.
- */
-const hillslopeLength = 1000;
 /** Captured lake depth where the parent published none. */
 const defaultLakeDepth = 6;
 /** Calibration passes fitting the parent-span blur of the relief to the captured base. */
@@ -158,7 +153,8 @@ function reliefIncrements(state: RegionalState, crest: Float64Array): Increments
     }
     if (cap[j] > 0) gradient = Math.min(gradient, cap[j]);
     // A channel falls along its whole step; a hillslope rises over one hillslope's length.
-    increment[j] = (network.channel[j] ? length : Math.min(length, hillslopeLength)) * gradient;
+    increment[j] =
+      (network.channel[j] ? length : Math.min(length, slopeSettings.HillslopeLength)) * gradient;
     // A step of the captured base steeper than any profile (an escarpment, a plateau edge)
     // is macro character the path must climb where it stands: a knickpoint, not a fall
     // spread along the whole profile. It is not amplified.

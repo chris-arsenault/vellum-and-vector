@@ -4,6 +4,7 @@ import { deserialize, serialize } from "node:v8";
 import { Band } from "@atlas/domain";
 import type { PhysicalContext } from "../../../packages/generation/src/canonry/context";
 import { createField, type PhysicalField } from "../../../packages/generation/src/canonry/field";
+import { physicalProfile } from "../../../packages/generation/src/canonry/profile";
 import { initialSteps } from "../../../packages/generation/src/canonry/sequence";
 import { createWorldMesh } from "../../../packages/generation/src/canonry/worldMesh";
 import { generationResolution } from "../../../packages/generation/src/resolution";
@@ -113,5 +114,6 @@ export function restoreSnapshot(path: string) {
   }
   Object.assign(map, snapshot.plain, snapshot.held);
   map.AvailableFacts = new Set(snapshot.facts);
-  return { map, seed: snapshot.seed, profile: snapshot.profile };
+  // A setting newer than the snapshot takes the code's value, so old snapshots stay usable.
+  return { map, seed: snapshot.seed, profile: { ...physicalProfile, ...snapshot.profile } };
 }

@@ -1,6 +1,7 @@
 import type { GenerationState, MapProcessContext } from "../process";
 import type { PhysicalField } from "./field";
-import { clamp, rockResistance, round, units } from "./math";
+import { alterRock } from "../rock/rockField";
+import { clamp, round, units } from "./math";
 import { Feature } from "./codes";
 import { rebuild } from "./surface";
 import { generationBindings } from "../generationBindings";
@@ -267,7 +268,7 @@ export function magicRockFeedback(state: GenerationState) {
     let delta = 0;
     for (const field of fields)
       delta += (field.intensity.get(i) / 1000) * field.definition.effects.rockResistance;
-    map.RockResistance.set(i, rockResistance(map.RockResistance.get(i) + round(delta)));
+    alterRock(map, i, round(delta));
     if (map.WaterKindCodes.get(i) !== 1)
       for (const field of conduits) evolveConduit(map, field, i, floor);
   }

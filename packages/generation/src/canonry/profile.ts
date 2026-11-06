@@ -2,6 +2,7 @@
 // metres, areas m², water discharge m³/s, ice flux m³/year and slopes rise/run.
 // Temperature remains ten native units per °C with zero °C at 300.
 import { rockCatalogue } from "../rock/rockCatalogue";
+import { iceSettings, slopeSettings, solutionSettings, streamSettings } from "../wear/wearSettings";
 
 // Fractions/strengths explicitly named PerMille (and legacy scalar strengths)
 // remain dimensionless; iterations count numerical passes within one epoch.
@@ -144,27 +145,10 @@ export const physicalProfile = {
   SedimentLoadResponsePerMille: 360,
   IceLoadResponsePerMille: 860,
   LithosphericFlexureLength: 100_000,
-  MassWastingIterations: 4,
-  PostFluvialMassWastingIterations: 2,
-  // Rise/run: about 35 degrees for baseline rock, varied by material resistance.
-  MassWastingStableGradient: 0.7,
-  MassWastingTransportLength: 10_000,
-  MassWastingTransportFraction: 280,
-  // Cubic metres per metre of contour width in one physical relaxation pass.
-  MaximumHillslopeTransport: 550_000,
-  FluvialErosionIterations: 13,
-  FluvialErosionStrength: 0.32,
-  FluvialEquilibriumGradient: 0.0015,
-  // Stream power: catchment to this exponent times slope, on this scale, per iteration.
-  FluvialAreaExponent: 0.5,
-  FluvialPowerScale: 1548,
-  MaximumFluvialCutPerIteration: 60,
-  // A valley's width as a share of the square root of its catchment's area.
-  FluvialValleyWidthShare: 0.05,
-  // How far water lowers fully soluble rock on a pass, in metres at full runoff.
-  DissolvedPerPass: 80,
-  // Square metres of catchment before stream power incises; smaller areas are hillslope.
-  FluvialChannelArea: 3e9,
+  ...streamSettings,
+  ...solutionSettings,
+  ...iceSettings,
+  ...slopeSettings,
   SedimentTransportFraction: 760,
   SedimentDepositionLength: 10_000,
   SedimentDepositionSlopeThreshold: 0.0034,
@@ -195,9 +179,6 @@ export const physicalProfile = {
   GlacialAblationRunoffStrength: 460,
   BasalMeltRunoffStrength: 180,
   GlacialRetreatRunoffStrength: 260,
-  MaximumGlacialErosionPerPass: 150,
-  // Metres a glacier cuts per pass for each unit of its flux and thickness over the threshold.
-  GlacialCutPerPower: 40,
   MaximumGlacialDepositionPerPass: 20,
   AncestralValleyMinimumErosion: 5,
   OutwashMinimumGlacialDeposition: 6,
