@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, truncate, units } from "./math";
-import { deposit } from "./surface";
+import { deposit } from "../rock/groundLedger";
 import { isGrounded } from "./glacierSurface";
 import { targetOrder } from "./flowGraph";
 import { workingArray, releaseWorking } from "./physicalNumerics";

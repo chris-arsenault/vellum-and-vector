@@ -1,35 +1,13 @@
 // LandscapeSurface.cs and LandscapeInitializationLayer.cs, Canonry 0f62584c.
-import { stripRock } from "../rock/rockColumn";
+import { resetRock } from "../rock/rockField";
 import { reconcileWater, type PhysicalField } from "./field";
 
 export function rebuild(map: PhysicalField, i: number) {
   map.Elevation.set(i, map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
   reconcileWater(map, i);
 }
-/** Takes material off a cell, as a lowering of its mean height. */
-export function erode(map: PhysicalField, i: number, requested: number): number {
-  if (requested <= 0) return 0;
-  const sediment = Math.min(requested, map.SedimentThickness.get(i));
-  map.SedimentThickness.add(i, -sediment);
-  const bedrock = requested - sediment;
-  map.BedrockElevation.add(i, -bedrock);
-  if (bedrock > 0) {
-    map.SurfaceRockLoad.add(i, -bedrock);
-    stripRock(map, i, Math.round(bedrock));
-  }
-  rebuild(map, i);
-  return requested;
-}
-export function deposit(map: PhysicalField, i: number, requested: number): number {
-  const deposited = Math.max(0, requested);
-  map.SedimentThickness.add(i, deposited);
-  map.CumulativeDeposition.add(i, deposited);
-  map.SedimentDepositedTotal += (deposited / 1024) * map.mesh.area(i);
-  rebuild(map, i);
-  return deposited;
-}
 export function initializeLandscape(map: PhysicalField) {
-  map.RockResistance.fill(1000);
+  resetRock(map);
   for (const name of [
     "SedimentThickness",
     "SedimentSupply",

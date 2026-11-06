@@ -1,5 +1,6 @@
 import { hashUnit } from "../canonry/noise";
-import { groundOf } from "../rock/ground";
+import { groundOf, type GroundQuery } from "../rock/ground";
+import { rockCatalogue } from "../rock/rockCatalogue";
 import { grainAt } from "./character";
 import { distance, regionalSpan } from "./lattice";
 import { clamp, type RegionalState } from "./state";
@@ -95,14 +96,33 @@ function integrateAlong(
   return { sum, weight };
 }
 
+/** Hard rock resists, open fractures yield, a ward keeps its beds and banks; soft shale to hard quartzite differ by an order of magnitude. */
+const cutting: GroundQuery<number> = {
+  start: 1,
+  rock: (_, { strength }, { fracture, ward, stiffening }) =>
+    clamp(
+      (strength / rockCatalogue.strata.resistance) ** 0.9 *
+        Math.exp(-0.5 * fracture) *
+        (1 + 0.5 * ward) *
+        stiffening,
+      0.35,
+      3.5
+    ),
+};
 /**
- * Resistance of the material at a cell to being cut: the ground as the world reads it, stiffened by
- * a cone's lava apron, which only a region's character knows. Magic's rock and fracture
- * contributions are read from the present bands, so a round's hardening or cracking changes where
- * the next round cuts.
+ * Resistance of the material at a cell to being cut, for anything on a region that weighs the country
+ * without wearing it. Magic's rock and fracture contributions are read from the present bands, so a
+ * round's hardening or cracking changes where the next round cuts.
  */
 export const materialResistance = (state: RegionalState, i: number) =>
-  groundOf(state.physical.map).material(i, 1 + apronHardness * apron(state, i));
+  groundOf(state.physical.map).fold(i, cutting);
+/** A cone's lava apron stiffens the ground around it, for whatever acts on it or reads it. */
+export function stiffenAroundCones(state: RegionalState) {
+  const ground = groundOf(state.physical.map);
+  ground.stiffenBy(
+    state.regional.character?.cones.length ? (i) => 1 + apronHardness * apron(state, i) : null
+  );
+}
 /** How far inside a cone's hard apron the cell lies: 1 at the cone, 0 at and beyond its base. */
 function apron(state: RegionalState, i: number) {
   const mesh = state.physical.map.mesh;

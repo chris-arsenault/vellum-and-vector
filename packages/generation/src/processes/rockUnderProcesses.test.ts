@@ -9,14 +9,14 @@ import { releaseWorking } from "../canonry/physicalNumerics";
 import { rebuild } from "../canonry/surface";
 import { createWorldMesh } from "../canonry/worldMesh";
 import { ice } from "./ice";
+import { recordCut } from "../rock/groundLedger";
+import { actBy } from "./processCatalogue";
 import { hillslopeFlux } from "./slopeFlux";
 import { solution } from "./solution";
 import { streams, valleyShare } from "./streams";
-import { wearBy } from "./wearProcesses";
-import { recordCut } from "./wearLedger";
 
-const fluvialErosion = wearBy(streams, solution),
-  glacialErosion = wearBy(ice);
+const fluvialErosion = actBy(streams, solution),
+  glacialErosion = actBy(ice);
 
 /**
  * Rain on one tilted slope, its north half soft rock and its south half hard, running down to the

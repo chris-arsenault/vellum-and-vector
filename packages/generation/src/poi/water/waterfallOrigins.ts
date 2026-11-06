@@ -5,6 +5,7 @@ import { hashUnit } from "../../canonry/noise";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { groundOf } from "../../rock/ground";
+import { surfaceResistance } from "../../rock/groundQueries";
 import { mapScale } from "../../worldSignificance";
 import type { PoiClaim, PoiOrigin } from "../poiContract";
 import { spacedAmong } from "../poiOrigins";
@@ -72,7 +73,8 @@ const ledge = (state: GenerationState, claimed: Claimed) => {
     state,
     claimed,
     (cell, target) =>
-      target >= 0 && rock.resistance(cell) - rock.resistance(target) >= ledgeContrast
+      target >= 0 &&
+      rock.fold(cell, surfaceResistance) - rock.fold(target, surfaceResistance) >= ledgeContrast
   );
 };
 /** A river crossing ground that has moved: the scarp is the step. */

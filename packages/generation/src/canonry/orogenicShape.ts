@@ -6,6 +6,7 @@ import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
 import { clamp } from "./math";
 import { hashUnit, unitNoise } from "./noise";
 import { groundOf } from "../rock/ground";
+import { surfaceStanding } from "../rock/groundQueries";
 
 /** The cross-section value at the crest of a convergent belt. */
 export const orogenicCrestSection = 1.55;
@@ -44,7 +45,7 @@ export function sheetAt(
     ty = map.TectonicTangentY.get(source) / 1000,
     along = map.mesh.x(i) * tx + map.mesh.y(i) * ty,
     segment = Math.floor(along / p.OrogenicSegmentLength),
-    stiffness = groundOf(map).sheetStiffness(source),
+    stiffness = groundOf(map).fold(source, surfaceStanding),
     spacing = p.OrogenicSheetSpacing * stiffness,
     offset = hashUnit(c.salt ^ 0x51e3, segment, 0) * spacing,
     position = (reach + offset) / spacing,

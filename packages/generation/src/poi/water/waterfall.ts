@@ -2,6 +2,7 @@
 import { Landform } from "../../canonry/codes";
 import { riverGradient } from "../../canonry/landforms";
 import { groundOf } from "../../rock/ground";
+import { surfaceResistance } from "../../rock/groundQueries";
 import type { GenerationState } from "../../process";
 import { worldFallsDischarge, worldFallsDrop } from "../../worldSignificance";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
@@ -171,7 +172,7 @@ export const waterfall: PoiEntry = {
     statement:
       "A fall cuts back upstream and lowers as it does; once the bed is graded the step is gone and the river runs on, leaving a gorge below where it stood.",
     fate(state, place) {
-      const resistant = groundOf(fieldOf(state)).resistance(place.anchor);
+      const resistant = groundOf(fieldOf(state)).fold(place.anchor, surfaceResistance);
       return resistant <= 0 ? { fate: "ends", leaves: "gorge" } : { fate: "persists" };
     },
   },

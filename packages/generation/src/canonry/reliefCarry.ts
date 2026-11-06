@@ -1,5 +1,4 @@
 import type { Band } from "@atlas/domain";
-import { rockCatalogue } from "../rock/rockCatalogue";
 import {
   columnKindOffset,
   kindBands,
@@ -7,6 +6,7 @@ import {
   rockDepthFields,
   rockLayers,
 } from "../rock/rockColumn";
+import { newBasaltSurface } from "../rock/rockField";
 import { oceanicColumn } from "../rock/rockHistory";
 import type { PhysicalField } from "./field";
 import { meshDeltaX, meshPoint } from "./mesh";
@@ -151,8 +151,7 @@ function takeRock(map: PhysicalField, carry: ReliefCarry, kinds: readonly Band[]
 }
 function newSeaFloor(map: PhysicalField, cell: number) {
   oceanicColumn(map, cell);
-  map.RockKindCodes.set(cell, rockCatalogue.basalt.code);
-  map.RockResistance.set(cell, rockCatalogue.basalt.resistance);
+  newBasaltSurface(map, cell);
 }
 /** The move is over: every cell takes what stood where its material came from. */
 export function finishReliefCarry(map: PhysicalField, carry: ReliefCarry) {

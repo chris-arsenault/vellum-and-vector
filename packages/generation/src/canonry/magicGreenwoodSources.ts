@@ -5,6 +5,7 @@ import type { LocateContext } from "./magicSources";
 import { siteStrength } from "./magicStocks";
 import { clamp, round } from "./math";
 import { groundOf } from "../rock/ground";
+import { surfaceKind, surfaceResistance } from "../rock/groundQueries";
 
 /**
  * Greenwood's stands: old growth (a canopy past the stand age with cover past the floor) and
@@ -82,7 +83,10 @@ export function forgeSources(
 /** Open, unfrozen ground on soft karst at a slope break with the spring flow through it. */
 function springGround(map: PhysicalField, i: number, springFlow: number, springRock: number) {
   if (map.WaterKindCodes.get(i) !== 0 || map.IceThickness.get(i) > 0) return false;
-  if (map.FlowAccumulation.get(i) < springFlow || groundOf(map).resistance(i) > springRock)
+  if (
+    map.FlowAccumulation.get(i) < springFlow ||
+    groundOf(map).fold(i, surfaceResistance) > springRock
+  )
     return false;
   return map.Slope.get(i) <= 0.01 && karst(map, i) >= 0.35;
 }
@@ -101,7 +105,7 @@ function springRises(map: PhysicalField, i: number, springFlow: number, springRo
 }
 /** Water finds its way through continental crust as far as the rock there dissolves or lets it. */
 function karst(map: PhysicalField, i: number) {
-  const rock = groundOf(map).kind(i);
+  const rock = groundOf(map).fold(i, surfaceKind);
   return (
     (map.CrustContinentalFraction.get(i) / 1000) *
     (1 - Math.min(1, map.VolcanicConstructionHistory.get(i) / (1024 * 100))) *

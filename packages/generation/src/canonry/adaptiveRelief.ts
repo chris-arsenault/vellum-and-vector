@@ -2,6 +2,7 @@
 // how rugged and which way; the child adds the ridge-and-valley texture its own mesh resolves.
 import type { Geometry } from "geojson";
 import { groundOf } from "../rock/ground";
+import { surfaceStanding } from "../rock/groundQueries";
 import {
   adaptiveLeafAt,
   fieldInterpolator,
@@ -66,7 +67,7 @@ function cellRelief(
     (regional
       ? Math.max(p.RegionalReliefMinimumSlope * span, gradient * span)
       : Math.max(0, gradient * span - p.ReliefSynthesisFloor)) *
-    groundOf(map).reliefDetail(i);
+    groundOf(map).fold(i, surfaceStanding);
   if (amplitude <= 0) return 0;
   // Across-strike coordinate follows the gradient; the along-strike one is compressed so the
   // texture reads as ridges parallel to the belt.

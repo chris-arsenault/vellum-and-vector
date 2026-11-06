@@ -1,7 +1,8 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import type { GenerationState } from "../../process";
 import { groundOf } from "../../rock/ground";
-import { baselineRock } from "../../rock/rockCatalogue";
+import { surfaceRelative } from "../../rock/groundQueries";
+import { rockCatalogue } from "../../rock/rockCatalogue";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, counterpartOf, movesTo, stays } from "../poiCarry";
 import {
@@ -85,7 +86,7 @@ const pruned = (state: GenerationState, place: PoiPlace): readonly PoiFieldChang
   }));
 /** On the finer ground: the sea's cut leaves resistant rock standing where the point must be. */
 function holdRock(state: RegionalState, carried: PoiCarried): readonly PoiFieldChange[] {
-  const value = heldRock * baselineRock,
+  const value = heldRock * rockCatalogue.strata.resistance,
     rock = cellsWithin(state, carried.cell, state.regional.parentSpan / 2)
       .filter((cell) => isLand(state, cell))
       .map((cell): PoiFieldChange => ({ change: "atLeast", band: "RockResistance", cell, value }));
@@ -206,7 +207,7 @@ export const headland: PoiEntry = {
     statement:
       "The sea cuts a headland back at the rate its waves and forcing exceed its rock. Hard rock stands for epochs; a soft or heavily forced point is lost, and any stack left is an island the test does not count.",
     fate(state, place) {
-      const rock = groundOf(fieldOf(state)).relative(place.anchor);
+      const rock = groundOf(fieldOf(state)).fold(place.anchor, surfaceRelative);
       return tipExposure(state, place) * (1 + forcingOn(state, place)) > rock
         ? { fate: "ends" }
         : { fate: "persists" };

@@ -7,6 +7,12 @@ import { generationFeatures } from "../generationFeatures";
 import type { GenerationState } from "../process";
 import { cellAt, positionOf } from "../regional/lattice";
 import { groundOf } from "../rock/ground";
+import {
+  surfaceHardness,
+  surfaceKind,
+  surfaceOpenness,
+  surfaceShareOfHardest,
+} from "../rock/groundQueries";
 
 /**
  * What POI rules read of the generator's own state. Nothing here computes geography: these
@@ -39,16 +45,16 @@ export const waveExposureAt = (state: GenerationState, cell: number) =>
   fieldOf(state).WaveExposure.get(cell) / 1000;
 /** Rock resistance in [0, 1]. */
 export const rockAt = (state: GenerationState, cell: number) =>
-  groundOf(fieldOf(state)).shareOfHardest(cell);
+  groundOf(fieldOf(state)).fold(cell, surfaceShareOfHardest);
 /** The kind of rock at a cell, from the rock catalogue. */
 export const rockKindAt = (state: GenerationState, cell: number) =>
-  groundOf(fieldOf(state)).kind(cell);
+  groundOf(fieldOf(state)).fold(cell, surfaceKind);
 /** How hard the rock at a cell is for anything judging its character, in [0, 1]. */
 export const hardnessAt = (state: GenerationState, cell: number) =>
-  groundOf(fieldOf(state)).hardness(cell);
+  groundOf(fieldOf(state)).fold(cell, surfaceHardness);
 /** How broken the ground is: its rock's joints, or the fractures that crossed it. */
 export const jointedAt = (state: GenerationState, cell: number) =>
-  groundOf(fieldOf(state)).openness(cell);
+  groundOf(fieldOf(state)).fold(cell, surfaceOpenness);
 /** Rain in metres a year. */
 export const rainfallAt = (state: GenerationState, cell: number) =>
   fieldOf(state).Rainfall.get(cell) / 1000;

@@ -4,7 +4,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, toUnits, units } from "./math";
-import { deposit, erode } from "./surface";
+import { deposit, erode } from "../rock/groundLedger";
 import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { coastalFrame, type CoastalFrame } from "./coastalFrame";

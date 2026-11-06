@@ -12,6 +12,7 @@ import type { PoiEntry } from "./poiContract";
 import { originsOf } from "./poiOrigins";
 import { carryOutcomes, placesOf } from "./poiPublish";
 import { groundOf } from "../rock/ground";
+import { surfaceResistance } from "../rock/groundQueries";
 import { cellSpan, featureCell, fieldOf, gap, isLand, releaseHeld, rockKindAt } from "./poiReads";
 import { stepsOf } from "./water/waterfallOrigins";
 
@@ -228,7 +229,7 @@ function rockAudit(state: GenerationState) {
     kinds: Record<string, { cells: number; softest: number; hardest: number }> = {};
   for (let cell = 0; cell < map.mesh.count; cell++) {
     if (map.mesh.membership(cell) !== 1 || !isLand(state, cell)) continue;
-    const resistance = groundOf(map).resistance(cell),
+    const resistance = groundOf(map).fold(cell, surfaceResistance),
       name = rockKindAt(state, cell).id,
       entry = (kinds[name] ??= { cells: 0, softest: resistance, hardest: resistance });
     entry.cells++;

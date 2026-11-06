@@ -1,8 +1,10 @@
 // Point landmarks and the escarpment: causes, signatures and corrections per catalogue kind.
-import { baselineRock, hardestRock } from "../rock/rockCatalogue";
+import { hardestRock, rockCatalogue } from "../rock/rockCatalogue";
 import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
+
+const ordinary = rockCatalogue.strata.resistance;
 import { Feature } from "./codes";
 import { clamp, round, units } from "./math";
 import { nearestTriangle } from "./mesh";
@@ -74,8 +76,8 @@ function raiseMountain(
       i,
       volcanic ? "basalt" : "quartzite",
       volcanic
-        ? baselineRock + (p.VolcanicRockResistance - baselineRock) * profile
-        : baselineRock + (hardestRock - baselineRock) * Math.sqrt(t)
+        ? ordinary + (p.VolcanicRockResistance - ordinary) * profile
+        : ordinary + (hardestRock - ordinary) * Math.sqrt(t)
     );
     if (volcanic) volcanicCauses(map, i, d, radius, t, height * profile, epoch);
   }

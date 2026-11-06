@@ -14,7 +14,8 @@ import { growRegion } from "./magicRegions";
 import { alterRock } from "../rock/rockField";
 import { clamp, round, units } from "./math";
 import { hashUnit } from "./noise";
-import { deposit, rebuild } from "./surface";
+import { deposit } from "../rock/groundLedger";
+import { rebuild } from "./surface";
 import { retainedArray, releaseWorking } from "./physicalNumerics";
 
 /** A confluence's hold on the mesh this evaluation: where it holds and how much of each cell. */

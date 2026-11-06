@@ -4,7 +4,7 @@ import { meshDeltaX } from "./mesh";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { units } from "./math";
-import { deposit } from "./surface";
+import { deposit } from "../rock/groundLedger";
 import { sourceToOutletOrder } from "./flowGraph";
 import { cellTravel } from "./physicalMetric";
 import { workingArray, releaseWorking } from "./physicalNumerics";

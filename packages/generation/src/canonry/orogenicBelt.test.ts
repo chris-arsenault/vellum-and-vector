@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { setLayer } from "../rock/rockColumn";
-import { solution } from "../wear/solution";
-import { streams } from "../wear/streams";
-import { wearBy } from "../wear/wearProcesses";
+import { actBy } from "../processes/processCatalogue";
+import { solution } from "../processes/solution";
+import { streams } from "../processes/streams";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext, type PhysicalEpoch } from "./context";
 import { createField, type PhysicalField } from "./field";
@@ -170,7 +170,7 @@ it("keeps ridges steeper across the belt than along it after rivers have cut the
   }
   const { along, across } = beltPairs(map),
     before = meanStep(map, across) / meanStep(map, along);
-  wearBy(streams, solution)(map, physicalContext(1, 0, atlasPhysicalProfile(), null, 0, 1));
+  actBy(streams, solution)(map, physicalContext(1, 0, atlasPhysicalProfile(), null, 0, 1));
   const after = meanStep(map, across) / meanStep(map, along);
   expect(after).toBeGreaterThan(before);
 });

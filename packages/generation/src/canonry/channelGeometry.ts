@@ -5,6 +5,7 @@ import type { PhysicalContext } from "./context";
 import { clamp, toUnits, truncate, units } from "./math";
 import { edgeLeadingTo } from "./mesh";
 import { groundOf } from "../rock/ground";
+import { surfaceStanding } from "../rock/groundQueries";
 import { channelDimensions } from "./dimensions";
 import { physicalDistance } from "./physicalMetric";
 import { RecordQueue, type Band } from "@atlas/domain";
@@ -148,7 +149,11 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
     const order = map.RiverOrders.get(i),
       flow = map.FlowAccumulation.get(i);
     if (order <= 0 && (map.WaterKindCodes.get(i) === 0 || flow <= 0)) continue;
-    const dimensions = channelDimensions(flow, map.Slope.get(i), groundOf(map).channelBank(i));
+    const dimensions = channelDimensions(
+      flow,
+      map.Slope.get(i),
+      groundOf(map).fold(i, surfaceStanding)
+    );
     map.RiverWidth.set(i, dimensions.width);
     map.RiverDepth.set(i, dimensions.depth);
     if (order <= 0) continue;

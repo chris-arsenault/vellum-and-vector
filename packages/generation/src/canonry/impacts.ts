@@ -1,7 +1,7 @@
 import { meshDeltaX } from "./mesh";
 // ImpactCrateringLayer.cs, Canonry 0f62584c.
 import { stripRock } from "../rock/rockColumn";
-import { baselineRock } from "../rock/rockCatalogue";
+import { rockCatalogue } from "../rock/rockCatalogue";
 import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
@@ -11,7 +11,8 @@ import { hashUnit } from "./noise";
 import { Feature } from "./codes";
 import { nearestTriangle } from "./mesh";
 import { worldCandidates, separatedCandidates, type WorldCandidate } from "./worldSources";
-import { deposit, rebuild } from "./surface";
+import { deposit } from "../rock/groundLedger";
+import { rebuild } from "./surface";
 import { areaBudget, mediumArea } from "./worldScale";
 
 function impactCount(c: PhysicalContext): number {
@@ -92,7 +93,7 @@ function shock(
     map.ImpactHeat.set(i, Math.max(map.ImpactHeat.get(i), round(1000 * (1 - distance / radius))));
   if (distance > radius * 1.15 || share <= 0) return;
   const gain = 1600 * (1 - distance / Math.max(0.001, radius * 1.15)) * share;
-  hardenRock(map, i, "impactite", baselineRock + round(gain));
+  hardenRock(map, i, "impactite", rockCatalogue.strata.resistance + round(gain));
 }
 function ejecta(
   map: PhysicalField,

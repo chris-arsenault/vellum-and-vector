@@ -17,7 +17,8 @@ export default ts.config(
     },
   },
   {
-    // What rock means is decided in the catalogue and read through `Ground`; see rock/ground.ts.
+    // Facts are the catalogue's, reads go through `Ground`, writes through the rock module and its
+    // ledger. See MATERIALS-AND-PROCESSES-ARCHITECTURE.md.
     files: ["packages/generation/src/**/*.ts"],
     ignores: ["packages/generation/src/rock/**", "**/*.test.ts"],
     rules: {
@@ -25,8 +26,17 @@ export default ts.config(
         "error",
         {
           selector:
-            "MemberExpression[property.name=/^Rock(Resistance|KindCodes)$/]:not(MemberExpression[property.name=/^(set|fill)$/] > MemberExpression)",
-          message: "Read rock through groundOf(map); what it means belongs in the rock catalogue.",
+            "MemberExpression[property.name=/^Rock(Resistance|KindCodes|Layer(Kind|Depth)\\d)$/]",
+          message:
+            "Rock bands belong to the rock module: read through groundOf(map), write through rock/.",
+        },
+        {
+          selector: "ImportSpecifier[imported.name=/^(baselineRock|rockKindOfCode|hardnessOf)$/]",
+          message: "Ask the ground, with a query beside the code that needs it.",
+        },
+        {
+          selector: "ImportSpecifier[imported.name=/^(modes|givenUp)$/]",
+          message: "A process says how it acts with compileMix; how facts answer belongs to modes.",
         },
       ],
     },

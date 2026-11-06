@@ -41,11 +41,11 @@ import { sedimentTransport } from "./fluvial";
 import { glacialRunoff } from "./glacialEvolution";
 import { epochHistory, validatePhysical } from "./validation";
 import { initializeRock, lithification, metamorphism } from "../rock/rockHistory";
-import { ice } from "../wear/ice";
-import { slopes, slopesAfterStreams } from "../wear/slopes";
-import { solution } from "../wear/solution";
-import { streams } from "../wear/streams";
-import { wearBy } from "../wear/wearProcesses";
+import { ice } from "../processes/ice";
+import { actBy } from "../processes/processCatalogue";
+import { slopes, slopesAfterStreams } from "../processes/slopes";
+import { solution } from "../processes/solution";
+import { streams } from "../processes/streams";
 
 export type NativeProcess = (map: PhysicalField, context: PhysicalContext) => void;
 export type NativeStep = readonly [name: string, salt: number, process: NativeProcess];
@@ -53,7 +53,7 @@ const support: NativeStep = ["crustal-support", 0, (map, c) => crustalSupport(ma
 const flexure: NativeStep = ["lithospheric-flexure", 0, lithosphericFlexure];
 const ocean: NativeStep = ["ocean-connectivity", 0, oceanConnectivity];
 const supportAndMargins: readonly NativeStep[] = [
-  ["mass-wasting", 0, wearBy(slopes)],
+  ["mass-wasting", 0, actBy(slopes)],
   support,
   flexure,
   ocean,
@@ -107,7 +107,7 @@ export const geologySteps: readonly NativeStep[] = [
 export const glaciationSteps: readonly NativeStep[] = [
   ["land-ice-mass-balance", 0, landIce],
   ["ice-flow", 0, iceFlow],
-  ["glacial-erosion", 0, wearBy(ice)],
+  ["glacial-erosion", 0, actBy(ice)],
   ["glacial-deposition", 0, glacialDeposition],
   ["crustal-support", 0, (map, c) => crustalSupport(map, c, true)],
   flexure,
@@ -150,8 +150,8 @@ export const drainageSteps: readonly NativeStep[] = [
   ["river-network", 0, riverNetwork],
 ];
 export const incisionSteps: readonly NativeStep[] = [
-  ["ancestral-fluvial-erosion", 0, wearBy(streams, solution)],
-  ["post-fluvial-mass-wasting", 0, wearBy(slopesAfterStreams)],
+  ["ancestral-fluvial-erosion", 0, actBy(streams, solution)],
+  ["post-fluvial-mass-wasting", 0, actBy(slopesAfterStreams)],
 ];
 export const sedimentStep: NativeStep = ["sediment-transport", 0, sedimentTransport];
 export const glacialRunoffStep: NativeStep = ["glacial-runoff", 0, glacialRunoff];

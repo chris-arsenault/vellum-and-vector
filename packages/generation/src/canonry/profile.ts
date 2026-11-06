@@ -2,7 +2,10 @@
 // metres, areas m², water discharge m³/s, ice flux m³/year and slopes rise/run.
 // Temperature remains ten native units per °C with zero °C at 300.
 import { rockCatalogue } from "../rock/rockCatalogue";
-import { iceSettings, slopeSettings, solutionSettings, streamSettings } from "../wear/wearSettings";
+import { iceSettings } from "../processes/iceSettings";
+import { slopeSettings } from "../processes/slopeSettings";
+import { solutionSettings } from "../processes/solutionSettings";
+import { streamSettings } from "../processes/streamSettings";
 
 // Fractions/strengths explicitly named PerMille (and legacy scalar strengths)
 // remain dimensionless; iterations count numerical passes within one epoch.

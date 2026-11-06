@@ -2,7 +2,8 @@ import type { GenerationState } from "../process";
 import { type PhysicalField } from "../canonry/field";
 import { reservoirAmount, type MagicField } from "../canonry/magicState";
 import { units } from "../canonry/math";
-import { erode, rebuild } from "../canonry/surface";
+import { rebuild } from "../canonry/surface";
+import { erode } from "./groundLedger";
 import { fractalNoise, hashUnit } from "../canonry/noise";
 import {
   hardnessOf,

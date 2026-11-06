@@ -7,7 +7,8 @@ Owner direction, 2026-11-06. This file has two jobs:
    part to reuse elsewhere; it is not specific to rock.
 
 Execution is tracked in the Sulion plan "Materials and processes: double dispatch through the ground".
-Numbers in this file are illustrative unless marked as measured. The code holds real values.
+Numbers in this file are illustrative unless marked as measured. The code holds real values. Section 7
+records what was actually built and where it departs from section 3.
 
 ## 1. How we got here
 
@@ -398,11 +399,62 @@ Open questions in this table that the plan must answer:
 - **Extensibility:** the examples in section 4 are re-run against the finished contract and every edit they
   would need is listed. Only an edit outside the new feature and the vocabulary counts as a failure.
 
-## 7. Current state of the code
+## 7. As built
 
-- Committed: phase 3, as `5b3fcb8`.
-- Uncommitted: phase 4's behaviour, `rockResponse`, `Ground`, `WearProcess`, the lint rule and ADR 0010.
-- ADR 0010 describes the interim design. It is revised at the end of this work.
-- A known failing architecture check: a `Map` in `canonry/reactivation.ts`, from phase 3.
-- Retired by this work: `rockResponse`, most `Ground` methods, `wearSettings`, `surface()` and
-  `material()`, positional `rock(...)` entries and `WearProcess` under that name.
+Section 3 is the design as proposed. This section records what was built, and where it differs.
+
+**Built as designed:**
+
+- Modes own how facts answer an attack (`rock/modes.ts`). A process compiles a mix once at load.
+- The catalogue holds named facts and fixed codes, with a `loose` family (`rock/rockCatalogue.ts`).
+- `Ground` carries an action down through sediment and the rock column, and a query over the same stack
+  (`rock/ground.ts`). Fractures, wards and cover bear on both world and region, and a region's cone apron is
+  a modifier the region adds.
+- Streams, solution, ice and slopes are `GroundProcess` modules, each with a settings file the profile
+  assembles (`processes/`). Each says how its own settings read at another scale.
+- One ledger writes what comes off and lands (`rock/groundLedger.ts`).
+- Lint forbids any access to rock bands outside `rock/`, and importing the rule-level helpers.
+
+**Departures, and why:**
+
+| Design said                          | Built                                                                 | Why                                                                                                                                               |
+| ------------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Six candidate modes                  | Four: abrasion, plucking, shear, solution                             | Excavation and heat have no process yet. Adding one is one entry, and a slot with no reader would be a stub                                       |
+| `receive` interception on a material | A data field, `gives`, used by kept stone                             | Data covered the one real exception. A function slot would have had no user                                                                       |
+| `resists` overrides                  | `gives`, stated against ordinary rock's 1                             | Resistance is capped by the field's scale, so an override in resistance could not express refusal                                                 |
+| Effects as a command union           | Typed ledger calls                                                    | Hot paths would have built a throwaway object per cell, and no caller needs a list of effects. `PoiFieldChange` stays the command form for places |
+| `actOn` applies effects              | `actOn` answers how deep, and the process lands it through the ledger | Streams must spread the depth over a share of the cell and record it, which only the process knows                                                |
+| Sediment gains kinds                 | One `alluvium` entry stands for the sediment band                     | A second kind needs a process that makes it. Desertification would add a band and a ledger call                                                   |
+| Void layer and `at()`                | Neither; `fold` with `throughColumn` reads below the surface          | No process digs yet. The read is proven by a test, and the void stays an open question from section 4                                             |
+| Material type renamed                | `RockKind`, in `rockCatalogue.ts` and `rock/`                         | The owner calls it the rock catalogue, and the rename was churn without behaviour                                                                 |
+| Name open                            | `GroundProcess`                                                       | Deep roads made "surface" wrong                                                                                                                   |
+
+**Reconciled on the map, no longer exact to the old code:**
+
+- A river now spends itself on sediment before rock, and fractures and wards bear on it on the world map.
+- Ice plucks by jointing and goes through loose cover first. The floor on soft rock under ice is gone.
+- Slope shedding reads the shear mode, so burning now loosens slopes as its comment always claimed.
+- Thrust sheets, relief detail, channel banks and regional seepage share one limit (`surfaceStanding`).
+- The POI hardness scale runs 600 to 2600, so schist no longer equals quartzite.
+
+**What adding each example would touch, as built:**
+
+| Example                    | Edits                                                                                                                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| New wearing process (wind) | Its module, its settings file, a line each in the profile, process list and sequence, and a `nativeContracts` entry for its step. No other process and no catalogue rule |
+| New attack (heat)          | One entry in `modes`                                                                                                                                                     |
+| New rock kind (a lava)     | One catalogue entry. Every process and reader responds to it                                                                                                             |
+| New fact (runniness)       | A field on `RockFacts` and a value in each of the kinds, enforced by the type                                                                                            |
+| Lava or ejecta             | The above, plus its own flow or spread inside its module, laying rock through `rock/`                                                                                    |
+| Mine or deep road          | A query with `throughColumn` works today. Digging needs a void representation in the column and the ledger: this is the largest gap left                                 |
+| Sand and dust              | A sediment-kind band, written by the ledger and read in `fold`. Unbuilt                                                                                                  |
+
+**Limits that remain:**
+
+- Rock still changes how high and how steep ground is, not where ridges run. Rock bands are phase 6 of the
+  relief plan.
+- Only processes that wear are on the contract. Volcanism, impacts and orogeny write through `rock/` but are
+  not `GroundProcess` modules, so "a process that adds material" is possible through the ledger but unproven
+  by a real one.
+- Coast still does not read rock.
+- Registering a process is still six small edits, though none is in another process.

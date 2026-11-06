@@ -8,8 +8,13 @@ import { clamp, truncate, units } from "../canonry/math";
 import { meshDeltaX } from "../canonry/mesh";
 import { physicalDistance } from "../canonry/physicalMetric";
 import { releaseWorking, workingArray } from "../canonry/physicalNumerics";
-import type { WearProcess, WearWork } from "./wearContract";
-import { recordCut, wearAway } from "./wearLedger";
+import { recordCut, wearAway } from "../rock/groundLedger";
+import { compileMix } from "../rock/modes";
+import type { GroundProcess, ProcessWork } from "./groundProcess";
+import { streamSettings } from "./streamSettings";
+
+/** Flowing water grinds with what it carries. */
+const flowing = compileMix({ abrasion: 1 });
 
 /** How much of a cell a river's valley covers: wider with its catchment, all of a small cell. */
 export const valleyShare = (widthShare: number, catchmentArea: number, cellArea: number) =>
@@ -33,7 +38,7 @@ function controllingSill(map: PhysicalField, start: number, maximumSteps: number
   }
   return selected;
 }
-function cutOutlets({ map, context: c, settings: p }: WearWork) {
+function cutOutlets({ map, context: c, settings: p }: ProcessWork) {
   if (c.HydrologyStrength <= 0) return;
   const cuts = workingArray(map, "float64", "fluvial:outlet-cuts");
   for (let i = 0; i < map.mesh.count; i++) {
@@ -56,7 +61,7 @@ function cutOutlets({ map, context: c, settings: p }: WearWork) {
   releaseWorking(map, cuts);
 }
 /** How steeply the water at a cell falls beyond the slope its catchment grades to, and how far. */
-function erosiveFall({ map, settings: p }: WearWork, target: number, area: number, i: number) {
+function erosiveFall({ map, settings: p }: ProcessWork, target: number, area: number, i: number) {
   const length = Math.hypot(
       meshDeltaX(map.mesh, map.mesh.x(i) - map.mesh.x(target)),
       map.mesh.y(i) - map.mesh.y(target)
@@ -69,7 +74,7 @@ function erosiveFall({ map, settings: p }: WearWork, target: number, area: numbe
     equilibrium = p.FluvialEquilibriumGradient / Math.max(1, catchment) ** 0.12;
   return { catchment, length, steep: Math.max(0, fall - equilibrium) };
 }
-function cutCell(work: WearWork, targets: Band, area: Band, i: number) {
+function cutCell(work: ProcessWork, targets: Band, area: Band, i: number) {
   const { map, context: c, settings: p, ground } = work,
     target = targets.get(i);
   if (target < 0 || map.WaterKindCodes.get(i) === 1) return;
@@ -78,36 +83,31 @@ function cutCell(work: WearWork, targets: Band, area: Band, i: number) {
   // Stream power: water and slope together, so a trunk on steep ground cuts far more than either.
   const power = catchment ** p.FluvialAreaExponent * steep * p.FluvialPowerScale;
   // A river's limit is how much it can carry; the ground then decides how much of that it gives up.
-  const requested = units(
-    (ground.streamTakes(
-      i,
-      Math.min(p.MaximumFluvialCutPerIteration, power * p.FluvialErosionStrength)
-    ) *
-      c.HydrologyStrength) /
-      1000
-  );
   // A river cuts down to what it runs into, and sea level is the base level beneath everything.
-  const cut = Math.min(
-    requested,
-    units(steep * length),
-    map.Elevation.get(i) - (map.EffectiveSeaLevel + units(1))
+  const cut = ground.actOn(
+    i,
+    flowing,
+    (Math.min(p.MaximumFluvialCutPerIteration, power * p.FluvialErosionStrength) *
+      c.HydrologyStrength) /
+      1000,
+    Math.min(units(steep * length), map.Elevation.get(i) - (map.EffectiveSeaLevel + units(1)))
   );
   if (cut <= 0) return;
-  // A big valley covers a share by its catchment; streams too fine to map cover a share of their own.
-  const share = ground.streamWidens(
-    i,
-    Math.max(
+  // A big valley covers a share by its catchment; streams too fine to map cover a share of their
+  // own. Ground that gives up easily lets either widen, and strong ground keeps it narrow.
+  const reach = Math.max(
       p.FluvialDissectionShare,
       valleyShare(p.FluvialValleyWidthShare, area.get(i), map.mesh.area(i))
-    )
-  );
+    ),
+    share = Math.min(1, reach * ground.gives(i, flowing));
   if (area.get(i) >= p.FluvialChannelArea) recordCut(map, i, cut, share);
   else wearAway(map, i, Math.round(cut * share));
 }
-export const streams: WearProcess = {
+export const streams: GroundProcess = {
   id: "streams",
   statement:
     "Water falling beyond the slope its catchment grades to cuts every cell by its power. Catchments big enough leave a valley on record; smaller streams only wear the land down.",
+  settings: streamSettings,
   atScale(settings, { scale }) {
     const finer = scale < 1;
     return {
@@ -120,7 +120,7 @@ export const streams: WearProcess = {
         settings.FluvialEquilibriumGradient * (finer ? settings.FluvialFineGradientShare : 1),
     };
   },
-  wear(work) {
+  run(work) {
     const { map, context: c, settings: p } = work;
     if (map.AvailableFacts.has("Lakes")) cutOutlets(work);
     const iterations =

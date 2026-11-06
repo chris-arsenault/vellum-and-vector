@@ -1,21 +1,18 @@
 /**
- * The one catalogue of rock. A cell's column says what the ground is made of, and everything that
- * asks how rock behaves reads these properties, so no process or place keeps its own idea of what
- * hard means. Resistance is on the scale of the field's `RockResistance` band; the other properties
- * are in [0, 1]. Nothing places a kind on the map: each exists because a process made it there.
+ * The one catalogue of what the ground is made of: facts about each material and nothing about what
+ * acts on it. How facts answer an attack belongs to `modes`, how a process acts belongs to the
+ * process, and `Ground` carries one through the other. Resistance is on the scale of the field's
+ * `RockResistance` band; the other facts are in [0, 1]. Nothing places a kind on the map: each exists
+ * because a process made it there. A new kind is one entry with a new code.
  */
 /**
- * How a rock came to be, whichever process made it: laid down in layers, cooled from melt, changed
- * where it lay, or shattered and rotted into rubble. Magic's rock belongs by how it behaves.
+ * How a material came to be, whichever process made it: laid down in layers, cooled from melt, changed
+ * where it lay, shattered and rotted into rubble, or still loose. Magic's rock belongs by how it behaves.
  */
-export type RockFamily = "sedimentary" | "igneous" | "metamorphic" | "broken";
-export interface RockKind {
-  readonly id: RockKindId;
-  /** What the field's rock bands store. */
-  readonly code: number;
-  readonly name: string;
-  /** How it came to be what it is. */
-  readonly family: RockFamily;
+export type RockFamily = "sedimentary" | "igneous" | "metamorphic" | "broken" | "loose";
+/** One way of attacking material, in the vocabulary processes and materials share. */
+export type ModeId = "abrasion" | "plucking" | "shear" | "solution";
+export interface RockFacts {
   /** What it resists being cut with, on the field's scale. */
   readonly resistance: number;
   /** How far joints and fractures open it. */
@@ -26,8 +23,18 @@ export interface RockKind {
   readonly solubility: number;
   /** How far water moves through it. */
   readonly porosity: number;
+}
+export interface RockKind extends RockFacts {
+  readonly id: RockKindId;
+  /** What the field's rock bands store. Fixed, whatever the order of this file. */
+  readonly code: number;
+  readonly name: string;
+  /** How it came to be what it is. */
+  readonly family: RockFamily;
   /** What burial and heat turn it into, if anything. */
   readonly underHeat?: RockKindId;
+  /** Where it gives up to an attack what its facts would not say, against ordinary rock's 1. */
+  readonly gives?: Readonly<Partial<Record<ModeId, number>>>;
 }
 export const rockKindIds = [
   "strata",
@@ -55,97 +62,314 @@ export const rockKindIds = [
   "saltGlass",
   "keptStone",
   "tornstone",
+  "alluvium",
 ] as const;
 export type RockKindId = (typeof rockKindIds)[number];
 
-type Properties = Pick<
-  RockKind,
-  "resistance" | "jointing" | "bedding" | "solubility" | "porosity" | "underHeat"
->;
-const kind = (
-  id: RockKindId,
-  name: string,
-  family: RockFamily,
-  properties: Properties
-): RockKind => ({
-  id,
-  code: rockKindIds.indexOf(id),
-  name,
-  family,
-  ...properties,
-});
-const rock = (
-  resistance: number,
-  jointing: number,
-  bedding: number,
-  solubility: number,
-  porosity: number,
-  underHeat?: RockKindId
-): Properties => ({ resistance, jointing, bedding, solubility, porosity, underHeat });
-
-export const rockCatalogue: Readonly<Record<RockKindId, RockKind>> = {
+type Entry = RockFacts & Pick<RockKind, "code" | "name" | "family" | "underHeat" | "gives">;
+const entries: Readonly<Record<RockKindId, Entry>> = {
   // What a map records when it knows no better: mixed sediments no process has told apart.
-  strata: kind("strata", "Bedded strata", "sedimentary", rock(1000, 0.3, 0.8, 0.3, 0.5, "schist")),
+  strata: {
+    code: 0,
+    name: "Bedded strata",
+    family: "sedimentary",
+    resistance: 1000,
+    jointing: 0.3,
+    bedding: 0.8,
+    solubility: 0.3,
+    porosity: 0.5,
+    underHeat: "schist",
+  },
   // What settles in deep or quiet water.
-  shale: kind("shale", "Shale", "sedimentary", rock(600, 0.3, 0.9, 0.05, 0.2, "slate")),
+  shale: {
+    code: 1,
+    name: "Shale",
+    family: "sedimentary",
+    resistance: 600,
+    jointing: 0.3,
+    bedding: 0.9,
+    solubility: 0.05,
+    porosity: 0.2,
+    underHeat: "slate",
+  },
   // What rivers and shores lay down on land.
-  sandstone: kind(
-    "sandstone",
-    "Sandstone",
-    "sedimentary",
-    rock(1100, 0.4, 0.8, 0.05, 0.6, "quartzite")
-  ),
+  sandstone: {
+    code: 2,
+    name: "Sandstone",
+    family: "sedimentary",
+    resistance: 1100,
+    jointing: 0.4,
+    bedding: 0.8,
+    solubility: 0.05,
+    porosity: 0.6,
+    underHeat: "quartzite",
+  },
   // What warm shallow seas build.
-  limestone: kind(
-    "limestone",
-    "Limestone",
-    "sedimentary",
-    rock(1200, 0.5, 0.85, 0.9, 0.5, "marble")
-  ),
+  limestone: {
+    code: 3,
+    name: "Limestone",
+    family: "sedimentary",
+    resistance: 1200,
+    jointing: 0.5,
+    bedding: 0.85,
+    solubility: 0.9,
+    porosity: 0.5,
+    underHeat: "marble",
+  },
   // What dry closed basins leave as their water goes.
-  saltbed: kind("saltbed", "Salt bed", "sedimentary", rock(350, 0.1, 0.9, 1, 0.1)),
+  saltbed: {
+    code: 4,
+    name: "Salt bed",
+    family: "sedimentary",
+    resistance: 350,
+    jointing: 0.1,
+    bedding: 0.9,
+    solubility: 1,
+    porosity: 0.1,
+  },
   // Shale under a range's first burial.
-  slate: kind("slate", "Slate", "metamorphic", rock(1300, 0.45, 0.3, 0, 0.1, "schist")),
+  slate: {
+    code: 5,
+    name: "Slate",
+    family: "metamorphic",
+    resistance: 1300,
+    jointing: 0.45,
+    bedding: 0.3,
+    solubility: 0,
+    porosity: 0.1,
+    underHeat: "schist",
+  },
   // A range's flanks: rock squeezed and foliated.
-  schist: kind("schist", "Schist", "metamorphic", rock(1500, 0.5, 0.2, 0.05, 0.15, "gneiss")),
+  schist: {
+    code: 6,
+    name: "Schist",
+    family: "metamorphic",
+    resistance: 1500,
+    jointing: 0.5,
+    bedding: 0.2,
+    solubility: 0.05,
+    porosity: 0.15,
+    underHeat: "gneiss",
+  },
   // Limestone a range has baked.
-  marble: kind("marble", "Marble", "metamorphic", rock(1600, 0.35, 0.1, 0.6, 0.1)),
+  marble: {
+    code: 7,
+    name: "Marble",
+    family: "metamorphic",
+    resistance: 1600,
+    jointing: 0.35,
+    bedding: 0.1,
+    solubility: 0.6,
+    porosity: 0.1,
+  },
   // Sandstone a range has welded, and rock made to stand.
-  quartzite: kind("quartzite", "Quartzite", "metamorphic", rock(3500, 0.35, 0.3, 0, 0.05)),
+  quartzite: {
+    code: 8,
+    name: "Quartzite",
+    family: "metamorphic",
+    resistance: 3500,
+    jointing: 0.35,
+    bedding: 0.3,
+    solubility: 0,
+    porosity: 0.05,
+  },
   // A range's core and old sutures: massive, deep-formed rock.
-  gneiss: kind("gneiss", "Gneiss", "metamorphic", rock(2200, 0.2, 0.05, 0, 0.1)),
+  gneiss: {
+    code: 9,
+    name: "Gneiss",
+    family: "metamorphic",
+    resistance: 2200,
+    jointing: 0.2,
+    bedding: 0.05,
+    solubility: 0,
+    porosity: 0.1,
+  },
   // Melt that cooled below ground, uncovered only when what lay above it wears away.
-  granite: kind("granite", "Granite", "igneous", rock(2400, 0.3, 0, 0, 0.05)),
+  granite: {
+    code: 10,
+    name: "Granite",
+    family: "igneous",
+    resistance: 2400,
+    jointing: 0.3,
+    bedding: 0,
+    solubility: 0,
+    porosity: 0.05,
+  },
   // What volcanoes build: flows that crack into columns.
-  basalt: kind("basalt", "Basalt", "igneous", rock(2600, 0.6, 0.4, 0, 0.35)),
+  basalt: {
+    code: 11,
+    name: "Basalt",
+    family: "igneous",
+    resistance: 2600,
+    jointing: 0.6,
+    bedding: 0.4,
+    solubility: 0,
+    porosity: 0.35,
+  },
   // Volcanic ash, welded or not.
-  tuff: kind("tuff", "Tuff", "igneous", rock(800, 0.5, 0.7, 0.05, 0.6, "schist")),
+  tuff: {
+    code: 12,
+    name: "Tuff",
+    family: "igneous",
+    resistance: 800,
+    jointing: 0.5,
+    bedding: 0.7,
+    solubility: 0.05,
+    porosity: 0.6,
+    underHeat: "schist",
+  },
   // Ground an impact melted and welded.
-  impactite: kind("impactite", "Impactite", "igneous", rock(2000, 0.7, 0, 0, 0.2)),
+  impactite: {
+    code: 13,
+    name: "Impactite",
+    family: "igneous",
+    resistance: 2000,
+    jointing: 0.7,
+    bedding: 0,
+    solubility: 0,
+    porosity: 0.2,
+  },
   // Fire: the rock a vein hardens as it runs through it.
-  veinrock: kind("veinrock", "Veinrock", "metamorphic", rock(3200, 0.25, 0, 0, 0.05)),
+  veinrock: {
+    code: 14,
+    name: "Veinrock",
+    family: "metamorphic",
+    resistance: 3200,
+    jointing: 0.25,
+    bedding: 0,
+    solubility: 0,
+    porosity: 0.05,
+  },
   // Fire: what seals a conduit that has carried its budget.
-  sinter: kind("sinter", "Sinter", "sedimentary", rock(2800, 0.15, 0.5, 0, 0)),
+  sinter: {
+    code: 15,
+    name: "Sinter",
+    family: "sedimentary",
+    resistance: 2800,
+    jointing: 0.15,
+    bedding: 0.5,
+    solubility: 0,
+    porosity: 0,
+  },
   // Fire: the fan of debris a fallen core throws out.
-  corefall: kind("corefall", "Corefall", "broken", rock(700, 0.6, 0.1, 0, 0.7)),
+  corefall: {
+    code: 16,
+    name: "Corefall",
+    family: "broken",
+    resistance: 700,
+    jointing: 0.6,
+    bedding: 0.1,
+    solubility: 0,
+    porosity: 0.7,
+  },
   // Aurora: exposed rock it has weakened over long ages.
-  rimerot: kind("rimerot", "Rimerot", "broken", rock(300, 0.9, 0, 0.2, 0.7)),
+  rimerot: {
+    code: 17,
+    name: "Rimerot",
+    family: "broken",
+    resistance: 300,
+    jointing: 0.9,
+    bedding: 0,
+    solubility: 0.2,
+    porosity: 0.7,
+  },
   // Aurora: charge grown into stone.
-  auroraCrystal: kind("auroraCrystal", "Aurora crystal", "igneous", rock(3800, 0.1, 0, 0, 0)),
+  auroraCrystal: {
+    code: 18,
+    name: "Aurora crystal",
+    family: "igneous",
+    resistance: 3800,
+    jointing: 0.1,
+    bedding: 0,
+    solubility: 0,
+    porosity: 0,
+  },
   // Pressure: rock its rays have crushed along shore and seabed.
-  crushstone: kind("crushstone", "Crushstone", "broken", rock(450, 0.95, 0, 0.05, 0.6)),
+  crushstone: {
+    code: 19,
+    name: "Crushstone",
+    family: "broken",
+    resistance: 450,
+    jointing: 0.95,
+    bedding: 0,
+    solubility: 0.05,
+    porosity: 0.6,
+  },
   // Greenwood: rock roots have opened and bound.
-  rootstone: kind("rootstone", "Rootstone", "broken", rock(800, 0.7, 0.1, 0.3, 0.8)),
+  rootstone: {
+    code: 20,
+    name: "Rootstone",
+    family: "broken",
+    resistance: 800,
+    jointing: 0.7,
+    bedding: 0.1,
+    solubility: 0.3,
+    porosity: 0.8,
+  },
   // Greenwood: what its springs leave as they come up.
-  tufa: kind("tufa", "Spring tufa", "sedimentary", rock(700, 0.4, 0.6, 0.7, 0.8)),
+  tufa: {
+    code: 21,
+    name: "Spring tufa",
+    family: "sedimentary",
+    resistance: 700,
+    jointing: 0.4,
+    bedding: 0.6,
+    solubility: 0.7,
+    porosity: 0.8,
+  },
   // Salt: bed burnt to glass at a basin's heart.
-  saltGlass: kind("saltGlass", "Salt glass", "igneous", rock(3000, 0.4, 0.1, 0.1, 0)),
-  // Hallowed: ground a ward has held unchanged.
-  keptStone: kind("keptStone", "Kept stone", "metamorphic", rock(3000, 0.1, 0.1, 0, 0.05)),
+  saltGlass: {
+    code: 22,
+    name: "Salt glass",
+    family: "igneous",
+    resistance: 3000,
+    jointing: 0.4,
+    bedding: 0.1,
+    solubility: 0.1,
+    porosity: 0,
+  },
+  // Hallowed: ground a ward has held unchanged. It refuses wear its strength alone would give up.
+  keptStone: {
+    code: 23,
+    name: "Kept stone",
+    family: "metamorphic",
+    resistance: 3000,
+    jointing: 0.1,
+    bedding: 0.1,
+    solubility: 0,
+    porosity: 0.05,
+    gives: { abrasion: 0.1, plucking: 0.1, shear: 0.1, solution: 0 },
+  },
   // Veil: ground a tear has shuffled.
-  tornstone: kind("tornstone", "Tornstone", "broken", rock(900, 0.9, 0, 0.1, 0.5)),
+  tornstone: {
+    code: 24,
+    name: "Tornstone",
+    family: "broken",
+    resistance: 900,
+    jointing: 0.9,
+    bedding: 0,
+    solubility: 0.1,
+    porosity: 0.5,
+  },
+  // What rivers, ice and slopes leave lying loose: the sediment on a cell, over its rock.
+  alluvium: {
+    code: 25,
+    name: "Alluvium",
+    family: "loose",
+    resistance: 300,
+    jointing: 0.3,
+    bedding: 0.3,
+    solubility: 0,
+    porosity: 0.5,
+  },
 };
-const byCode = rockKindIds.map((id) => rockCatalogue[id]);
+export const rockCatalogue = Object.fromEntries(
+  rockKindIds.map((id): [RockKindId, RockKind] => [id, { id, ...entries[id] }])
+) as Readonly<Record<RockKindId, RockKind>>;
+const byCode: RockKind[] = [];
+for (const id of rockKindIds) byCode[rockCatalogue[id].code] = rockCatalogue[id];
+/** How many codes a table over the kinds needs. */
+export const rockCodeCount = byCode.length;
 /** The kind a band's code stands for; ordinary strata where a map records none. */
 export const rockKindOfCode = (code: number): RockKind => byCode[code] ?? rockCatalogue.strata;
 
@@ -155,45 +379,10 @@ export const baselineRock = rockCatalogue.strata.resistance;
 export const softestRock = 250,
   hardestRock = 4000;
 /** Where the scale of how hard rock feels starts and tops out. */
-const softFeel = 700,
-  hardFeel = 1500;
+const softFeel = 600,
+  hardFeel = 2600;
 /** How hard a resistance is, in [0, 1], for anything judging rock's character. */
 export const hardnessOf = (resistance: number) =>
   Math.max(0, Math.min(1, (resistance - softFeel) / (hardFeel - softFeel)));
 /** The porosity from which water comes up through rock. */
 export const permeableFrom = 0.3;
-/** What loose sediment resists being cut with, on the same scale as rock. */
-export const sedimentResistance = 300;
-
-const within = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
-const relative = (resistance: number) => resistance / baselineRock;
-/** The relative hardness below which rock gives ice no more to cut: it crushes to a bed ice rides on. */
-const weakestBed = 0.6;
-/** How strongly rock's relative hardness carries into the material water and Fire cut through. */
-const materialContrast = 0.9;
-/**
- * How rock answers each thing that works on it or reads it, from its properties and its resistance
- * as altered where it lies. This is the one place those answers are decided; a process asks
- * `Ground`, which reads the map and answers from here.
- */
-export const rockResponse = {
-  /** How much of what ice could move this rock gives up. */
-  iceTakes: (moved: number, resistance: number) =>
-    moved / Math.max(weakestBed, relative(resistance)),
-  /** How far its strength steepens the slope it holds. */
-  slopeFirmness: (resistance: number) => within(0.55 + relative(resistance) * 0.45, 0.55, 1.45),
-  /** How far open joints lower the slope it holds: broken rock stands gentler than tight rock. */
-  slopeJoints: (rock: RockKind) => 1.2 - 0.5 * rock.jointing,
-  /** How far its strength holds back what a failing slope sheds. */
-  slopeShedding: (resistance: number) => within(relative(resistance), 0.6, 2.5),
-  /** How far its stiffness spaces a belt's thrust sheets. */
-  sheetStiffness: (resistance: number) => within(relative(resistance), 0.6, 1.6),
-  /** How far its strength sharpens the fine relief it carries. */
-  reliefDetail: (resistance: number) => within(relative(resistance), 0.6, 1.4),
-  /** How far channel banks in it hold a river narrow and deep. */
-  channelBank: (resistance: number) => within(relative(resistance), 0.5, 2),
-  /** How far it holds back water leaking through it. */
-  seepageHold: (resistance: number) => within(relative(resistance), 0.3, 3),
-  /** Its share of what water and Fire must cut through. */
-  material: (resistance: number) => relative(resistance) ** materialContrast,
-};

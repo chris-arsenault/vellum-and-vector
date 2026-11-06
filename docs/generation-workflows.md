@@ -680,11 +680,9 @@ present may have no active Aurora while preserving its glacial activity history.
 Every cell holds a short column of rock on the field's own bands: the top layer is what the
 surface is, the lowest is a basement that never runs out. Erosion strips from the top, deposition
 and eruption add to it, and the surface's resistance follows whatever is exposed while keeping what
-has been done to it. Each kind and its properties come from one catalogue
-(`packages/generation/src/rock/rockCatalogue.ts`), which also decides how rock answers each thing that
-works on it. Processes read a cell through `Ground` (`rock/ground.ts`), on world and region alike, and a
-lint rule keeps other generation code from reading the rock bands. Buried sediment turns to rock by its setting,
-and burial and heat under a belt or along a suture turn rock to its next form.
+has been done to it. Each kind and its facts come from one catalogue
+(`packages/generation/src/rock/rockCatalogue.ts`), and a lint rule keeps other generation code from reading
+or writing the rock bands. Buried sediment turns to rock by its setting, and burial and heat under a belt or along a suture turn rock to its next form.
 
 Plates move in many small steps. Each cell follows where its material has come from across the
 whole move and takes the height and rock of that place when the move ends, so a move carries relief
@@ -710,15 +708,20 @@ Interior stress reaches a plate's old
 sutures and province seams and works a zone of crust around them: it thickens and raises older rock
 while the margin is squeezed, and thins and sags while it is pulled apart.
 
-Whatever wears the land is a process in `packages/generation/src/wear`: streams, solution, ice and
-slopes. A process says what it can do and how its settings read at another map's scale; the ground says
-what that takes from the rock, and a shared ledger keeps the sediment's books. The sequence says when
-each runs.
+Processes and materials meet through a shared vocabulary of modes: abrasion, plucking, shear and solution.
+A material holds facts, a mode says how facts answer its attack, and a process says how it acts, as a mix of
+modes, without knowing what any material is. A cell is a stack. An action goes down through it, spending
+itself on loose cover first and then on each layer of rock by what that layer gives up, while cover, open
+fractures and wards bear on it. World and region read the same stack, and a region's cone aprons join it as
+a modifier. Streams, solution, ice and slopes are processes in `packages/generation/src/processes`. Each
+owns its settings and says how they read at another map's scale, one ledger writes what comes off and
+lands, and the sequence says when each runs. `MATERIALS-AND-PROCESSES-ARCHITECTURE.md` at the repository
+root holds the reasoning.
 
-Rock decides erosion. What a river or glacier can move has a limit, and the rock's resistance then
-sets how much of that it cuts, so soft rock wears faster than hard on any slope. A cell's height is the
-mean of its ground, so a valley in a coarse cell lowers that mean and exposes deeper rock only in
-proportion to the share of the cell it covers, while the valley's own depth stays on record as incision.
+Rock decides erosion. A river grinds, so strength is what resists it, and ice plucks along joints, so columnar
+basalt goes before massive gneiss of lesser strength. A cell's height is the mean of its ground, so a valley
+in a coarse cell lowers that mean and exposes deeper rock only in proportion to the share of the cell it
+covers, while the valley's own depth stays on record as incision.
 Streams too small to map wear every sloping cell, without a valley on record, so land falls toward its
 rivers. Weak rock lets valleys widen and takes more of a cell; strong rock keeps them narrow. Land that
 has relief to wear therefore leaves hard rock standing, while hard rock on ground already worn to grade
@@ -726,7 +729,8 @@ stays low, as a shield does.
 
 Slopes fail on the same terms at every scale: the step between two cells climbs one hillslope, however
 wide the cells are, so a coarse map's steep flanks shed as a fine map's do. Hard rock holds a steeper
-step and gives up less when it goes, open joints lower the angle a slope holds, porous rock takes water
+step and gives up less when it goes, open joints lower the angle a slope holds, burning loosens what roots
+held, porous rock takes water
 into the ground before it runs off, and water dissolves soluble rock wherever it runs.
 
 Each magic system changes the column once per epoch through its own medium. A system's share of the

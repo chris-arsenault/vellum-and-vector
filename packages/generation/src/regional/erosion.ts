@@ -3,7 +3,7 @@ import { physicalContext } from "../canonry/context";
 import { releaseWorking } from "../canonry/physicalNumerics";
 import { rockColumnFields } from "../rock/rockColumn";
 import { drainageSteps, incisionSteps, sedimentStep } from "../canonry/sequence";
-import { wearProfileAt } from "../wear/wearProcesses";
+import { profileAtScale } from "../processes/processCatalogue";
 import { restoreFeatures } from "./causes/registry";
 import { updateSlopes } from "./relief";
 import { ruggedness } from "./ruggedness";
@@ -27,7 +27,7 @@ const erosionEpochs = 4;
  */
 export function erodeRegion(state: RegionalState) {
   const work = state.physical,
-    profile = wearProfileAt(work.profile, { scale: work.scale ?? 1, passes: erosionEpochs }),
+    profile = profileAtScale(work.profile, { scale: work.scale ?? 1, passes: erosionEpochs }),
     steps = [...drainageSteps, ...incisionSteps, ...drainageSteps, sedimentStep],
     seed = state.regional.input.seed,
     before = Float64Array.from({ length: work.map.mesh.count }, (_, i) =>

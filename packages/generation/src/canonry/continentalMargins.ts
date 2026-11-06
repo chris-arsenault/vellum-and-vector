@@ -3,7 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, units } from "./math";
-import { deposit } from "./surface";
+import { deposit } from "../rock/groundLedger";
 import { KeyedHeap } from "@atlas/domain";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 

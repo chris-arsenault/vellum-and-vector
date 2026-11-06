@@ -1,6 +1,6 @@
 import { measureSlopes } from "../canonry/geography";
 import { units } from "../canonry/math";
-import { slopeSettings } from "../wear/wearSettings";
+import { slopeSettings } from "../processes/slopeSettings";
 import { physicalGradients } from "../canonry/physicalMetric";
 import { releaseWorking } from "../canonry/physicalNumerics";
 import { applyGlaciation } from "./glacial";

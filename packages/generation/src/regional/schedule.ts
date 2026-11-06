@@ -19,6 +19,7 @@ import {
   proposePlaces,
   supportProposals,
 } from "./places";
+import { stiffenAroundCones } from "./material";
 import { deriveRelief, updateSlopes } from "./relief";
 import { foldTheColumn, uncoverCuts } from "./rockStructure";
 import { deriveMedia, openFractures } from "./sharedMedia";
@@ -140,6 +141,7 @@ function contextStep(d: Domains): ScheduledStep {
     run(state) {
       registerCatalogueCauses();
       state.regional.character = deriveCharacter(state);
+      stiffenAroundCones(state);
       if (d.geography) prepareEcology(state);
       preparePlaces(state);
       readEvidence(state);

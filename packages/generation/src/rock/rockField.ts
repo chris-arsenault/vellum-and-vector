@@ -2,6 +2,20 @@ import type { PhysicalField } from "../canonry/field";
 import { rockResistance, round } from "../canonry/math";
 import { hardestRock, rockCatalogue, softestRock, type RockKindId } from "./rockCatalogue";
 
+/** All ground starts as ordinary rock. */
+export function resetRock(map: PhysicalField) {
+  map.RockResistance.fill(rockCatalogue.strata.resistance);
+}
+/** A map says how strong the rock at a cell is, where it knows no more than that. */
+export function setRockStrength(map: PhysicalField, cell: number, strength: number) {
+  map.RockResistance.set(cell, rockResistance(strength));
+}
+/** New crust's surface is basalt. */
+export function newBasaltSurface(map: PhysicalField, cell: number) {
+  map.RockKindCodes.set(cell, rockCatalogue.basalt.code);
+  map.RockResistance.set(cell, rockCatalogue.basalt.resistance);
+}
+
 /** Hardens or softens the rock at a cell in place, within the limits of what rock can be. */
 export function alterRock(map: PhysicalField, cell: number, change: number) {
   map.RockResistance.set(cell, rockResistance(map.RockResistance.get(cell) + change));

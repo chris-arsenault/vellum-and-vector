@@ -2,6 +2,7 @@ import { KeyedHeap } from "@atlas/domain";
 import { potentialEvaporation } from "../canonry/ecologyEnvironment";
 import { clearWaterSurface } from "../canonry/field";
 import { groundOf } from "../rock/ground";
+import { surfaceStanding } from "../rock/groundQueries";
 import { units } from "../canonry/math";
 import { celsius, regionalPrecipitation } from "./climate";
 import { channelMargins } from "./margins";
@@ -376,6 +377,6 @@ function poolSupply(state: RegionalState, cells: number[]) {
 }
 function seepageRate(state: RegionalState, i: number) {
   const map = state.physical.map,
-    rock = groundOf(map).seepageHold(i);
+    rock = groundOf(map).fold(i, surfaceStanding);
   return intactSeepage + (fracturedSeepage * clamp(map.FractureConductance.get(i) / 1000)) / rock;
 }

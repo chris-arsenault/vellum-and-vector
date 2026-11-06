@@ -1,6 +1,6 @@
 // The great canyon: resistant rims, a channel incised below them, and a captured river.
 import { CellList, radixOrder } from "@atlas/domain";
-import { baselineRock } from "../rock/rockCatalogue";
+import { rockCatalogue } from "../rock/rockCatalogue";
 import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
@@ -295,7 +295,7 @@ export const canyon: Kind = {
         map,
         i,
         "quartzite",
-        baselineRock + 2000 * clamp(1 - (d - width / 4) / (width * 0.75), 0, 1)
+        rockCatalogue.strata.resistance + 2000 * clamp(1 - (d - width / 4) / (width * 0.75), 0, 1)
       );
     deepenCanyon(map, p, placed, units(placed.parameters.depth), false, record?.corridor ?? []);
   },

@@ -1,8 +1,9 @@
 // External forcing read from the authored surface onto the physical coverage each epoch.
 import type { GenerationState } from "../process";
 import { hardestRock } from "../rock/rockCatalogue";
+import { setRockStrength } from "../rock/rockField";
 import { sampleSurfaceAtNative } from "./atlasWorkspace";
-import { clamp, rockResistance, round } from "./math";
+import { clamp, round } from "./math";
 
 /** Heat, rock and coastal pressure the surface channels and the magic workspace apply. */
 export function contributeForcing(state: GenerationState) {
@@ -15,10 +16,7 @@ export function contributeForcing(state: GenerationState) {
         (magic?.heat.get(i) ?? 0)
     );
     if (state.surface.channels.rock)
-      map.RockResistance.set(
-        i,
-        rockResistance(round(sampleSurfaceAtNative(state, "rock", i) * hardestRock))
-      );
+      setRockStrength(map, i, round(sampleSurfaceAtNative(state, "rock", i) * hardestRock));
     const pressure = sampleCoastalPressure(state, i);
     map.ExternalCoastalForcing.set(
       i,

@@ -1,149 +1,179 @@
 import type { PhysicalField } from "../canonry/field";
 import { clamp, units } from "../canonry/math";
-import {
-  baselineRock,
-  hardestRock,
-  hardnessOf,
-  rockKindOfCode,
-  rockResponse,
-  sedimentResistance,
-  type RockKind,
-} from "./rockCatalogue";
+import { givenUp, type CompiledMix } from "./modes";
+import { layerDepth, layerKind, rockLayers } from "./rockColumn";
+import { rockCatalogue, rockKindOfCode, type RockKind } from "./rockCatalogue";
 
 /** The depth of loose sediment that fully covers the rock beneath it, in metres. */
 const fullCover = 25;
-/** How far each kind of cover and burning changes what streams must cut through. */
+/** How far each kind of cover binds the ground, and how far burning undoes it. */
 const rootHold = { tree: 1.2, grass: 0.45, wetland: 0.7 },
   burntShare = 0.5;
-/** How far cover steepens the slope ground holds and binds what it can shed. */
-const slopeHold = { tree: 0.2, grass: 0.1 },
-  slopeBinding = { grass: 0.5, wetland: 0.5, share: 0.6 };
-/** How far open fractures weaken ground and a ward strengthens it, and the bounds of the result. */
-const fractureWeight = 0.5,
-  wardStrength = 0.5,
-  weakestMaterial = 0.35,
-  strongestMaterial = 3.5;
+/** The most any ground gives up against ordinary rock: past this, the attack is what limits it. */
+const mostGiven = 5;
+const loose = rockCatalogue.alluvium;
+
+/** One layer as a query passes it. Reused between layers and cells: read it, do not keep it. */
+export interface GroundLayer {
+  kind: RockKind;
+  /** Its strength where it lies: the surface carries what has been done to it. */
+  strength: number;
+  /** Its thickness, in the field's height units; the deepest layer's is its record, not its end. */
+  thickness: number;
+}
+/** What lies over and through a cell. */
+export interface GroundHere {
+  tree: number;
+  grass: number;
+  wetland: number;
+  fire: number;
+  /** Open fractures and warding, in [0, 1]. */
+  fracture: number;
+  ward: number;
+  /** How far anything else stiffens this ground, such as a cone's apron on a region. */
+  stiffening: number;
+}
+/**
+ * A read of the ground, written by whoever needs it and unknown to `Ground`: a visitor over what lies
+ * in the cell, by family. Rock is visited at the surface alone unless `throughColumn`.
+ */
+export interface GroundQuery<T> {
+  readonly start: T;
+  readonly loose?: (sofar: T, layer: GroundLayer, here: GroundHere) => T;
+  readonly rock?: (sofar: T, layer: GroundLayer, here: GroundHere) => T;
+  readonly throughColumn?: boolean;
+}
 const grounds = new WeakMap<PhysicalField, Ground>();
 
 /**
- * What the ground at a cell is and how it answers what works on it: the rock the catalogue
- * describes, as altered and covered on this map. Everything outside the rock module reads rock
- * here, on world and region alike, so a process never decides for itself what hard means.
+ * A cell as a stack: cover over sediment over rock, with fractures, wards and anything a map adds
+ * bearing on what passes. A process acts down through it and a query reads it, on world and region
+ * alike. Everything outside the rock module reads rock here.
  */
 export class Ground {
+  private stiffen: ((i: number) => number) | null = null;
+  /** An action's power not yet spent, and how deep it has reached, in metres. */
+  private left = 0;
+  private reached = 0;
+  private readonly here: GroundHere = {
+    tree: 0,
+    grass: 0,
+    wetland: 0,
+    fire: 0,
+    fracture: 0,
+    ward: 0,
+    stiffening: 1,
+  };
+  private readonly layer: GroundLayer = { kind: rockCatalogue.strata, strength: 0, thickness: 0 };
   constructor(private readonly map: PhysicalField) {}
-  /** The kind of rock at the surface. */
-  kind(i: number): RockKind {
-    return rockKindOfCode(this.map.RockKindCodes.get(i));
+  /** Something only this map knows stiffens its ground: a region's cones, for one. */
+  stiffenBy(stiffen: ((i: number) => number) | null) {
+    this.stiffen = stiffen;
   }
-  /** Its resistance as altered here, on the catalogue's scale. */
-  resistance(i: number) {
-    return this.map.RockResistance.get(i);
-  }
-  /** Its resistance against ordinary rock. */
-  relative(i: number) {
-    return this.resistance(i) / baselineRock;
-  }
-  /** Its resistance as a share of the hardest rock there is. */
-  shareOfHardest(i: number) {
-    return this.resistance(i) / hardestRock;
-  }
-  /** How hard it is for anything judging its character, in [0, 1]. */
-  hardness(i: number) {
-    return hardnessOf(this.resistance(i));
-  }
-  /** How broken it is: its rock's joints, or the fractures that crossed it. */
-  openness(i: number) {
-    return Math.max(this.kind(i).jointing, Math.min(1, this.map.FractureConductance.get(i) / 1000));
-  }
-  /** What a stream must cut through: the rock, under what covers it and what its roots bind. */
-  surface(i: number) {
-    const map = this.map,
-      cover = clamp(map.SedimentThickness.get(i) / units(fullCover), 0, 1),
-      rock = Math.max(1, map.RockResistance.get(i));
-    // Burnt ground has lost its binding roots for the season: it gullies.
-    const roots =
-      (1 +
-        map.TreeCover.get(i) * rootHold.tree +
-        map.GrassCover.get(i) * rootHold.grass +
-        map.WetlandCover.get(i) * rootHold.wetland) *
-      (1 - burntShare * map.FireActivity.get(i));
-    return Math.max(1, (rock + (sedimentResistance - rock) * cover) * roots);
-  }
-  /** How much of what a stream could move this ground gives up. */
-  streamTakes(i: number, moved: number) {
-    return (moved * baselineRock) / this.surface(i);
-  }
-  /** The share of a cell a stream's reach lowers: weak ground lets it widen, strong keeps it narrow. */
-  streamWidens(i: number, reach: number) {
-    return Math.min(1, (reach * baselineRock) / this.surface(i));
-  }
-  /** How much of what ice could move this ground gives up. */
-  iceTakes(i: number, moved: number) {
-    return rockResponse.iceTakes(moved, this.resistance(i));
-  }
-  /** How far the rock's strength steepens the slope it holds. */
-  slopeFirmness(i: number) {
-    return rockResponse.slopeFirmness(this.resistance(i));
-  }
-  /** How far the rock's joints lower the slope it holds. */
-  slopeJoints(i: number) {
-    return rockResponse.slopeJoints(this.kind(i));
-  }
-  /** How far living cover steepens the slope ground holds. */
-  slopeCover(i: number) {
-    return (
-      1 + this.map.TreeCover.get(i) * slopeHold.tree + this.map.GrassCover.get(i) * slopeHold.grass
-    );
-  }
-  /** The share of what a slope could shed that living cover leaves free. */
-  slopeUnbound(i: number) {
-    const map = this.map,
-      bound = clamp(
-        map.TreeCover.get(i) +
-          slopeBinding.grass * map.GrassCover.get(i) +
-          slopeBinding.wetland * map.WetlandCover.get(i),
-        0,
-        1
-      );
-    return 1 - slopeBinding.share * bound;
-  }
-  /** How far the rock's strength holds back what a failing slope sheds. */
-  slopeShedding(i: number) {
-    return rockResponse.slopeShedding(this.resistance(i));
-  }
-  /** How far the rock's stiffness spaces a belt's thrust sheets. */
-  sheetStiffness(i: number) {
-    return rockResponse.sheetStiffness(this.resistance(i));
-  }
-  /** How far the rock's strength sharpens the fine relief it carries. */
-  reliefDetail(i: number) {
-    return rockResponse.reliefDetail(this.resistance(i));
-  }
-  /** How far a channel's banks hold it narrow and deep. */
-  channelBank(i: number) {
-    return rockResponse.channelBank(this.resistance(i));
-  }
-  /** How far the rock holds back water leaking through it. */
-  seepageHold(i: number) {
-    return rockResponse.seepageHold(this.resistance(i));
-  }
-  /**
-   * What water, rock and Fire meet in cutting this ground: exposed rock and intact ground resist,
-   * open fractures yield, a ward holds its beds and banks. `hardened` is anything else stiffening it.
-   */
-  material(i: number, hardened = 1) {
+  /** How far what lies on this cell changes what a mix does to whatever it reaches. */
+  private bearing(i: number, mix: CompiledMix) {
     const map = this.map,
       fracture = clamp(map.FractureConductance.get(i) / 1000, 0, 1),
       ward = clamp(map.Warding.get(i), 0, 1);
-    return clamp(
-      rockResponse.material(this.resistance(i)) *
-        Math.exp(-fractureWeight * fracture) *
-        (1 + wardStrength * ward) *
-        hardened,
-      weakestMaterial,
-      strongestMaterial
+    let bearing = Math.exp(mix.fracturesWeaken * fracture) / (1 + mix.wardHolds * ward);
+    if (this.stiffen) bearing /= this.stiffen(i);
+    if (mix.coverHolds <= 0) return bearing;
+    const held =
+      (1 +
+        mix.coverHolds *
+          (map.TreeCover.get(i) * rootHold.tree +
+            map.GrassCover.get(i) * rootHold.grass +
+            map.WetlandCover.get(i) * rootHold.wetland)) *
+      (1 - mix.coverHolds * burntShare * map.FireActivity.get(i));
+    return bearing / Math.max(0.1, held);
+  }
+  private rate(mix: CompiledMix, code: number, strength: number, bearing: number) {
+    return clamp(givenUp(mix, code, strength) * bearing, 0, mostGiven);
+  }
+  /**
+   * An action goes down through the cell with the power to move `power` metres of ordinary rock. Each
+   * layer gives up what it does and passes on what is left, and a layer that gives nothing lets it
+   * through. The answer is how deep it reached, in height units, up to `limit`; the process then
+   * lands that through the ledger, as the share of the cell it worked.
+   */
+  actOn(i: number, mix: CompiledMix, power: number, limit: number) {
+    const map = this.map,
+      bearing = this.bearing(i, mix),
+      sediment = map.SedimentThickness.get(i);
+    this.left = power;
+    this.reached = 0;
+    if (sediment > 0)
+      this.take(this.rate(mix, loose.code, loose.resistance, bearing), sediment / 1024);
+    if (this.left > 0) this.walkRock(i, mix, bearing);
+    return Math.min(units(this.reached), limit);
+  }
+  private take(rate: number, thickness: number) {
+    if (rate <= 0) return;
+    const taken = Math.min(thickness, this.left * rate);
+    this.reached += taken;
+    this.left -= taken / rate;
+  }
+  /** Down through the column, its basement never running out. */
+  private walkRock(i: number, mix: CompiledMix, bearing: number) {
+    const map = this.map;
+    this.take(
+      this.rate(mix, map.RockKindCodes.get(i), map.RockResistance.get(i), bearing),
+      this.layerReach(i, 0)
     );
+    for (let at = 1; at < rockLayers && this.left > 1e-9 && layerDepth(map, i, at) > 0; at++) {
+      const kind = rockKindOfCode(layerKind(map, i, at));
+      this.take(this.rate(mix, kind.code, kind.resistance, bearing), this.layerReach(i, at));
+    }
+  }
+  /** How far down a layer goes, in metres; the deepest has no end. */
+  private layerReach(i: number, at: number) {
+    const deepest = at === rockLayers - 1 || layerDepth(this.map, i, at + 1) <= 0;
+    return deepest ? Infinity : layerDepth(this.map, i, at) / 1024;
+  }
+  /**
+   * What this cell's surface gives up to a mix, against ordinary rock's 1, without acting on it:
+   * loose cover counts for as much of the surface as it covers.
+   */
+  gives(i: number, mix: CompiledMix) {
+    const map = this.map,
+      bearing = this.bearing(i, mix),
+      rock = this.rate(mix, map.RockKindCodes.get(i), map.RockResistance.get(i), bearing),
+      cover = clamp(map.SedimentThickness.get(i) / units(fullCover), 0, 1);
+    return rock + (this.rate(mix, loose.code, loose.resistance, bearing) - rock) * cover;
+  }
+  /** Reads the ground with a query. */
+  fold<T>(i: number, query: GroundQuery<T>): T {
+    const map = this.map,
+      here = this.here,
+      layer = this.layer;
+    here.tree = map.TreeCover.get(i);
+    here.grass = map.GrassCover.get(i);
+    here.wetland = map.WetlandCover.get(i);
+    here.fire = map.FireActivity.get(i);
+    here.fracture = clamp(map.FractureConductance.get(i) / 1000, 0, 1);
+    here.ward = clamp(map.Warding.get(i), 0, 1);
+    here.stiffening = this.stiffen ? this.stiffen(i) : 1;
+    let sofar = query.start;
+    const sediment = map.SedimentThickness.get(i);
+    if (query.loose && sediment > 0) {
+      layer.kind = loose;
+      layer.strength = loose.resistance;
+      layer.thickness = sediment;
+      sofar = query.loose(sofar, layer, here);
+    }
+    if (!query.rock) return sofar;
+    layer.kind = rockKindOfCode(map.RockKindCodes.get(i));
+    layer.strength = map.RockResistance.get(i);
+    layer.thickness = layerDepth(map, i, 0);
+    sofar = query.rock(sofar, layer, here);
+    if (!query.throughColumn) return sofar;
+    for (let at = 1; at < rockLayers && layerDepth(map, i, at) > 0; at++) {
+      layer.kind = rockKindOfCode(layerKind(map, i, at));
+      layer.strength = layer.kind.resistance;
+      layer.thickness = layerDepth(map, i, at);
+      sofar = query.rock(sofar, layer, here);
+    }
+    return sofar;
   }
 }
 /** The ground of a map. */

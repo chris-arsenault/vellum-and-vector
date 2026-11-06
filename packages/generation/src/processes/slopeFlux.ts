@@ -4,8 +4,22 @@ import type { PhysicalProfile } from "../canonry/profile";
 import { clamp } from "../canonry/math";
 import { edgeLeadingTo } from "../canonry/mesh";
 import { workingArray, workingValues, releaseWorking } from "../canonry/physicalNumerics";
-import { groundOf } from "../rock/ground";
+import { groundOf, type GroundQuery } from "../rock/ground";
+import { compileMix } from "../rock/modes";
+import { rockCatalogue } from "../rock/rockCatalogue";
 
+const failing = compileMix({ shear: 1 });
+/**
+ * How far this ground steepens or lowers the angle a slope holds: stronger rock stands steeper, open
+ * joints stand gentler, and roots hold what would slide.
+ */
+const angleHeld: GroundQuery<number> = {
+  start: 1,
+  rock: (_, { kind, strength }, { tree, grass }) =>
+    clamp(0.55 + (strength / rockCatalogue.strata.resistance) * 0.45, 0.55, 1.45) *
+    (1.2 - 0.5 * kind.jointing) *
+    (1 + tree * 0.2 + grass * 0.1),
+};
 interface Face {
   i: number;
   j: number;
@@ -102,24 +116,21 @@ export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
     "slope:heights",
     (i) => map.Elevation.get(i) / 1024
   );
-  // The step between two cells climbs one hillslope, however wide they are. Rock, its joints and
-  // living cover decide the angle it holds and what it can shed, so cleared land moves and wooded
-  // land stands.
+  // The step between two cells climbs one hillslope, however wide they are. What it holds and what
+  // it lets go are both the ground's answer, so cleared land moves and wooded land stands.
   const ground = groundOf(map),
     failsAt = p.MassWastingStableGradient * Math.min(1, p.HillslopeLength / mesh.spacing);
   const stable = workingValues(
     map,
     "float64",
     "slope:stable",
-    (i) => failsAt * ground.slopeFirmness(i) * ground.slopeJoints(i) * ground.slopeCover(i)
+    (i) => failsAt * ground.fold(i, angleHeld)
   );
   const budget = workingValues(
     map,
     "float64",
     "slope:budget",
-    (i) =>
-      (p.MaximumHillslopeTransport * Math.sqrt(mesh.area(i)) * ground.slopeUnbound(i)) /
-      ground.slopeShedding(i)
+    (i) => p.MaximumHillslopeTransport * Math.sqrt(mesh.area(i)) * ground.gives(i, failing)
   );
   const spent = workingArray(map, "float64", "slope:spent");
   relaxFaces(map, plan, heights, stable, budget, spent);
