@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { clamp, units } from "./math";
+import { clamp } from "./math";
 import { deposit } from "../rock/groundLedger";
 import { KeyedHeap } from "@atlas/domain";
 import { workingValues, releaseWorking } from "./physicalNumerics";
@@ -92,15 +92,9 @@ function capacity(map: PhysicalField, p: PhysicalProfile, i: number): number {
     Math.ceil(Math.max(0, p.OceanicSubsidenceDepth + 200 - p.ContinentalShelfDepth) / step);
   if (distance <= 0 || distance > width + rise || (margin !== 1 && margin !== 3)) return 0;
   const influence = smooth(1 - (distance - 1) / (width + rise));
+  // Sediment fills the room the sea leaves, nearest the margin first.
   const accommodation = Math.max(0, map.EffectiveSeaLevel - map.Elevation.get(i));
-  return Math.min(
-    accommodation,
-    Math.max(
-      0,
-      units(p.MarineSedimentCapacity * influence * (margin === 3 ? 0.72 : 1)) -
-        map.SedimentThickness.get(i)
-    )
-  );
+  return accommodation * influence * (margin === 3 ? 0.72 : 1);
 }
 export function marineSedimentation(map: PhysicalField, c: PhysicalContext) {
   if (map.SedimentExportedTotal <= 0) return;

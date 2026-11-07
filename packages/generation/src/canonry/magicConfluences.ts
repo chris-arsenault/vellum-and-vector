@@ -14,7 +14,7 @@ import { growRegion } from "./magicRegions";
 import { alterRock } from "../rock/rockField";
 import { clamp, round, units } from "./math";
 import { hashUnit } from "./noise";
-import { deposit } from "../rock/groundLedger";
+import { deposit, raiseRock } from "../rock/groundLedger";
 import { rebuild } from "./surface";
 import { retainedArray, releaseWorking } from "./physicalNumerics";
 
@@ -181,9 +181,8 @@ function actOnWaterAndLife(map: PhysicalField, i: number, c: number, e: Confluen
  */
 function collapseDebris(map: PhysicalField, i: number, depth: number) {
   if (depth <= 0) return;
-  map.BedrockElevation.add(i, -depth);
-  map.SurfaceRockLoad.add(i, -depth);
+  raiseRock(map, i, -depth, "confluences", "loose");
   map.SedimentProducedTotal += (depth / 1024) * map.mesh.area(i);
-  deposit(map, i, depth);
+  deposit(map, i, depth, "confluences", "rock");
 }
 export type ConfluenceSystems = Pick<MagicSystem, "id" | "enabled">[];

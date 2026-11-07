@@ -38,6 +38,11 @@ export default ts.config(
           selector: "ImportSpecifier[imported.name=/^(modes|givenUp)$/]",
           message: "A process says how it acts with compileMix; how facts answer belongs to modes.",
         },
+        {
+          selector: "Property[key.name=/^Maximum\\w*Per(Pass|Iteration|Span)$/]",
+          message:
+            "Caps exist only for numerical reasons. Limit a process by supply, capacity or stepping.",
+        },
       ],
     },
   },

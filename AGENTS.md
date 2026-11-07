@@ -195,6 +195,11 @@ extends its parents and does not restate them: when a child takes over a parent'
 phase, the parent's note names the child phase, and each piece of work has one
 home.
 
+Numerical accuracy and reproducibility are not goals of this repository, and guarding them is
+forbidden: no fingerprints, exact-replay gates, byte-identical comparisons or checks that totals close.
+Judge changes by what the map and the processes do. See
+[ADR 0011](docs/adr/0011-processes-couple-through-keys-and-a-ledger.md) for how processes couple.
+
 The backend and its scripts are historical source outside the active product.
 Preserve that source for later reconsideration. Do not resume backend migration,
 storage or service work from the old plans. Distinguish the implemented browser

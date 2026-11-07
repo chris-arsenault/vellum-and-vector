@@ -19,6 +19,8 @@ export interface PhysicalEpoch {
 }
 export interface PhysicalContext {
   TectonicDurationMyr: number;
+  /** How much work this pass stands for: processes state their rates per unit of it. */
+  Span: number;
   Products?: Pick<ProductLedger, "status">;
   RainfallMultiplier: number;
   Seed: number;
@@ -83,5 +85,6 @@ export function physicalContext(
     TectonicDurationMyr: epoch
       ? (epoch.TectonicDurationMyr ?? tectonicDefaultMyr)
       : tectonicReferenceMyr,
+    Span: epoch ? (epoch.TectonicDurationMyr ?? tectonicDefaultMyr) / tectonicDefaultMyr : 1,
   };
 }

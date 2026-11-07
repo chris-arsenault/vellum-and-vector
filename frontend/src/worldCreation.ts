@@ -114,13 +114,15 @@ export function createWorldSnapshot(
 export function defaultEpochs(): World["epochs"] {
   return [
     {
+      // A violent, assembling world: the land it builds is what later ages wear and rework.
       id: "Formation",
       tectonics: 1,
-      hydrology: 1,
+      hydrology: 0.5,
       ice: 0,
-      coasts: 1,
+      coasts: 0.5,
       temperature: 15,
       seaLevel: 0,
+      tectonicDurationMyr: 20,
     },
     {
       id: "Cold age",
@@ -130,6 +132,7 @@ export function defaultEpochs(): World["epochs"] {
       coasts: 1,
       temperature: -3,
       seaLevel: 0,
+      tectonicDurationMyr: 40,
     },
     {
       id: "Present",
@@ -139,6 +142,7 @@ export function defaultEpochs(): World["epochs"] {
       coasts: 1,
       temperature: 15,
       seaLevel: 0,
+      tectonicDurationMyr: 40,
     },
   ];
 }

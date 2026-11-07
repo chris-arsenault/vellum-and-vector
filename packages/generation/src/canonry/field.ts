@@ -190,6 +190,9 @@ const metricFields = [
   // carry inland from it (0–1,000), the track the weather follows.
   "StormForcing",
   "StormTrack",
+  // How high this ground stood when the first epoch ended, carried with the crust: what lets a later
+  // reader tell old ground from new, and see what became of it.
+  "FirstEpochHeight",
   // Greenwood's verdure: the life in sap and groundwater that ecology grows from (0 to 1).
   "Verdure",
   // What people left on the ground, as amounts the crust carries: person-years at inhabited

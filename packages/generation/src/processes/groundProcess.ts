@@ -1,6 +1,10 @@
+import type { Band } from "@atlas/domain";
 import type { PhysicalContext } from "../canonry/context";
-import type { PhysicalField } from "../canonry/field";
+import type { PhysicalBufferName, PhysicalField } from "../canonry/field";
 import type { PhysicalProfile } from "../canonry/profile";
+import type { AnswerKey } from "../coupling/answers";
+import type { Pool } from "../coupling/flows";
+import type { WearStage } from "../coupling/wearStage";
 import type { Ground } from "../rock/ground";
 
 /** The map a process is about to work on, as its settings need to read it. */
@@ -10,23 +14,45 @@ export interface ProcessReading {
   /** How many passes this map runs in place of the world's history. */
   readonly passes: number;
 }
-/** What a process is handed to work with: it asks the ground and never reads rock itself. */
-export interface ProcessWork {
-  readonly map: PhysicalField;
+/** A band as a process may see it when it only declared reading it. */
+export type ReadOnlyBand = Pick<Band, "get" | "length">;
+/** The field as a process declared it: what it reads, read only, and the mesh it lies on. */
+export type DeclaredField<R extends PhysicalBufferName> = {
+  readonly [K in R]: ReadOnlyBand;
+} & Pick<PhysicalField, "mesh" | "EffectiveSeaLevel">;
+/**
+ * What a process is handed: only what it declared. Reading a band it did not declare will not compile,
+ * and the ledger and stage are the only ways it can change anything.
+ */
+export interface ProcessWork<R extends PhysicalBufferName = never> {
+  readonly field: DeclaredField<R>;
   readonly context: PhysicalContext;
   readonly settings: PhysicalProfile;
   readonly ground: Ground;
+  /** How much work this pass stands for; rates are per unit of it. */
+  readonly span: number;
+  /** The answer to a declared question, as a band. */
+  readonly ask: (key: AnswerKey) => Band;
+  /** The stage of wear demands land in. */
+  readonly wear: WearStage;
+  /** Passes authority the view does not give, for routing and solvers private to a process. */
+  readonly world: PhysicalField;
 }
 /**
- * A process that acts on the ground. How it finds its power is its own: streams route water, ice
- * follows its flux, slopes work between pairs of cells. What every process shares is how it meets the
- * ground, through modes and `Ground`, and how what it does lands, through the ledger. Its settings
- * live in a plain file of their own so the profile can assemble them without loading the process.
+ * Everything that shapes land, declared in one entry. How it finds its power is its own: streams route
+ * water, ice follows its flux, slopes work between pairs of cells. What it needs and what it moves are
+ * stated here, so the table of who affects whom comes from these and cannot go stale.
  */
-export interface GroundProcess {
+export interface GroundProcess<R extends PhysicalBufferName = PhysicalBufferName> {
   readonly id: string;
   /** What it does, in a sentence. */
   readonly statement: string;
+  /** What it reads from the field. */
+  readonly reads: readonly R[];
+  /** What it asks of the world, by key. */
+  readonly asks: readonly AnswerKey[];
+  /** Each `[from, to]` it moves material between. */
+  readonly moves: readonly (readonly [Pool, Pool])[];
   /** Its own settings, as the profile holds them. */
   readonly settings: Readonly<Record<string, number>>;
   /** Its settings as they read on a map of another scale, where they differ from the world's. */
@@ -35,5 +61,9 @@ export interface GroundProcess {
     reading: ProcessReading
   ) => Partial<PhysicalProfile>;
   /** One pass of its work. */
-  readonly run: (work: ProcessWork) => void;
+  readonly run: (work: ProcessWork<R>) => void;
 }
+/** A process with its reads kept exact. Every process is declared through this. */
+export const defineProcess = <const R extends PhysicalBufferName>(
+  process: GroundProcess<R>
+): GroundProcess => process as unknown as GroundProcess;

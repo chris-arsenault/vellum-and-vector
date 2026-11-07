@@ -30,7 +30,7 @@ export function atlasPhysicalProfile(
   // relief decide where it falls.
   profile.PrecipitationBaseline *= settings.rainfall;
   profile.ColumnSaturation *= settings.rainfall;
-  profile.FluvialErosionStrength *= settings.erosion;
+  profile.FluvialErosionRate *= settings.erosion;
   profile.SeaLevel = settings.seaLevel / profile.ElevationScale;
   profile.ImpactCraterCount = settings.impacts;
   profile.ImpactMinimumRadius *= settings.impactSize;
@@ -39,8 +39,7 @@ export function atlasPhysicalProfile(
   profile.VolcanicApronHeight *= settings.volcanism;
   profile.VolcanicCalderaDepth *= settings.volcanism;
   profile.PlateDriftPerEpoch *= settings.plateDrift;
-  profile.MaximumGlacialErosionPerPass *= settings.glaciers;
-  profile.MaximumGlacialDepositionPerPass *= settings.glaciers;
+  profile.GlacialCutPerPower *= settings.glaciers;
   profile.CoastalErosionStrength *= settings.coastalErosion;
   profile.HeartWarmthStrength = 0;
   profile.WarmthPocketCount = 0;

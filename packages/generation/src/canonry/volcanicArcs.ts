@@ -7,6 +7,7 @@ import { Feature } from "./codes";
 import { tectonicArcMeltShare, tectonicArcOffset, tectonicArcRadius } from "./tectonicControls";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { rockCatalogue } from "../rock/rockCatalogue";
+import { raiseRock } from "../rock/groundLedger";
 import { intrudeBasement, layBed } from "../rock/rockColumn";
 
 /** Metres an eruption adds at a cell before it is lava rather than ash. */
@@ -63,8 +64,7 @@ function erupt(map: PhysicalField, context: PhysicalContext, i: number, height: 
       units(elevationLimit) - map.SedimentThickness.get(i) - map.BedrockElevation.get(i)
     )
   );
-  map.BedrockElevation.add(i, uplift);
-  map.SurfaceRockLoad.add(i, uplift);
+  raiseRock(map, i, uplift, "arcs", "melt");
   map.VolcanicConstructionHistory.add(i, uplift);
   // An arc's flanks are ash, its cones lava, and melt that never rose cools below as granite.
   layBed(map, i, uplift >= units(arcLava) ? rockCatalogue.basalt : rockCatalogue.tuff, uplift);

@@ -18,7 +18,7 @@ it("maps creator controls to native physics with declared units", async () => {
   expect(profile.ContinentalCrustFraction).toBe(0.3);
   expect(profile.TemperatureBaseline).toBe(250);
   expect(profile.PrecipitationBaseline).toBe(80);
-  expect(profile.FluvialErosionStrength).toBe(0.16);
+  expect(profile.FluvialErosionRate).toBe(2.08);
   expect(profile.SeaLevel * profile.ElevationScale).toBe(100);
 });
 

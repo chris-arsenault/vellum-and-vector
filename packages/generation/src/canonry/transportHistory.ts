@@ -1,90 +1,16 @@
 // PlateAdvectionLayer.HistorySnapshot and TransportAccumulator, Canonry 0f62584c.
-import type { PhysicalField } from "./field";
-import { clamp, units } from "./math";
+import type { PhysicalBufferName, PhysicalField } from "./field";
+import { clamp } from "./math";
 import { weightScale, type TransportPlan } from "./transportPlan";
-import { ecologyCarbon, ecologyMemory, ecologyRatios } from "./ecologyState";
 import { captureCrustColumns, transportCrustColumns } from "./crustTransport";
 import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { kindBands, rockDepthFields } from "../rock/rockColumn";
+import { kindBands } from "../rock/rockColumn";
+import { freshCrustValue, quantitiesOfKind } from "../coupling/quantities";
 
-const intensive = [
-  ...rockDepthFields,
-  ...ecologyRatios,
-  "CanopyAge",
-  "Evapotranspiration",
-  "Productivity",
-  "AquaticProductivity",
-  "OrganicBurialDepth",
-  "OrganicMaturity",
-  "BedrockElevation",
-  "CrustSupportElevation",
-  "CrustAge",
-  "CrustRiftStrain",
-  "CrustRiftAgeMyr",
-  "RockResistance",
-  "CrustSutureStrength",
-  "ImpactHeat",
-  "Quickening",
-  "Stillness",
-  "IcePersistence",
-  "IceCharge",
-  "ExternalUpwelling",
-  "ExternalSeaSurfaceForcing",
-  "FogForcing",
-  "StormForcing",
-  "StormTrack",
-  "Verdure",
-  "Salting",
-  "LakeMemory",
-  "Warding",
-  "KeptLine",
-  "Tearing",
-  "RiverWarmth",
-  "EcologyStillness",
-  "StructuralGrainX",
-  "StructuralGrainY",
-] as const;
-const extensive = [
-  ...ecologyCarbon,
-  ...ecologyMemory,
-  "Grazers",
-  "Browsers",
-  "Herbivores",
-  "Predators",
-  "AquaticFauna",
-  "Tenure",
-  "WalkedRoute",
-  "MassDeath",
-  "SoilDepth",
-  "SoilWater",
-  "MineralNutrients",
-  "MigrationFlux",
-  "SurfaceRockLoad",
-  "OceanicSubduction",
-  "OceanicSubductionHistory",
-  "SedimentThickness",
-  "SedimentSupply",
-  "CumulativeFluvialErosion",
-  "CumulativeGlacialErosion",
-  "CumulativeGlacialDeposition",
-  "CumulativeCoastalErosion",
-  "CumulativeDeposition",
-  "ImpactExcavation",
-  "ImpactRimUplift",
-  "ImpactEjectaThickness",
-  "VolcanicConstructionHistory",
-  "TectonicActivityHistory",
-] as const;
-const maxima = [
-  "FractureConductance",
-  "GeothermalHistory",
-  "WaveExposureHistory",
-  "MaximumIceThickness",
-  "MaximumIceFlux",
-  "MaximumGroundedIceFlux",
-  "ExternalCoastalForcingHistory",
-] as const;
+const shares = quantitiesOfKind("share"),
+  amounts = quantitiesOfKind("amount"),
+  peaks = quantitiesOfKind("peak");
 const categories = [
   "CrustAssemblyIds",
   "CrustPlateIds",
@@ -188,10 +114,6 @@ function finalize(
     return (sum + fresh * (weightScale - arrival)) / weightScale;
   return sum / arrival;
 }
-function freshValue(name: (typeof intensive)[number]): number {
-  if (name === "BedrockElevation" || name === "CrustSupportElevation") return units(-200);
-  return name === "RockResistance" ? 1000 : 0;
-}
 function completeCategories(a: Accumulator, map: PhysicalField, target: number) {
   map.CrustPlateIds.set(target, a.CrustPlateIds.get(target));
   map.CrustAssemblyIds.set(
@@ -214,7 +136,7 @@ function completeCategories(a: Accumulator, map: PhysicalField, target: number) 
 function accumulateChannel(
   map: PhysicalField,
   plan: TransportPlan,
-  name: (typeof intensive)[number] | (typeof extensive)[number] | (typeof maxima)[number],
+  name: PhysicalBufferName,
   scratch: Band,
   areaWeights?: Band
 ) {
@@ -234,10 +156,10 @@ function accumulateChannel(
 function completeIntensive(
   map: PhysicalField,
   plan: TransportPlan,
-  name: (typeof intensive)[number],
+  name: PhysicalBufferName,
   scratch: Band
 ) {
-  const fresh = freshValue(name),
+  const fresh = freshCrustValue(name),
     values = map[name];
   for (let target = 0; target < map.mesh.count; target++) {
     const arrival = plan.arrivals.get(target),
@@ -248,7 +170,7 @@ function completeIntensive(
 function completeExtensive(
   map: PhysicalField,
   plan: TransportPlan,
-  name: (typeof extensive)[number],
+  name: PhysicalBufferName,
   scratch: Band
 ) {
   const values = map[name];
@@ -283,15 +205,15 @@ export function transportHistory(map: PhysicalField, plan: TransportPlan) {
     map.SedimentExportedTotal +=
       (Math.max(0, 1 - retained) * map.SedimentSupply.get(source) * map.mesh.area(source)) / 1024;
   }
-  for (const name of intensive) {
+  for (const name of shares) {
     accumulateChannel(map, plan, name, scratch, areaWeights);
     completeIntensive(map, plan, name, scratch);
   }
-  for (const name of extensive) {
+  for (const name of amounts) {
     accumulateChannel(map, plan, name, scratch, areaWeights);
     completeExtensive(map, plan, name, scratch);
   }
-  for (const name of maxima) {
+  for (const name of peaks) {
     accumulateChannel(map, plan, name, scratch);
     map[name].copyFrom(scratch);
   }

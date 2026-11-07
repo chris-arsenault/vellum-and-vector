@@ -107,5 +107,8 @@ export function epochHistory(map: PhysicalField, c: PhysicalContext) {
     throw new Error("Physical epoch history was applied out of order.");
   for (let i = 0; i < map.mesh.count; i++)
     map.GeothermalHistory.set(i, Math.max(map.GeothermalHistory.get(i), map.Geothermal.get(i)));
+  if (c.EpochIndex === 0)
+    for (let i = 0; i < map.mesh.count; i++)
+      map.FirstEpochHeight.set(i, (map.Elevation.get(i) - map.EffectiveSeaLevel) / 1024);
   map.CompletedEpochCount++;
 }

@@ -24,7 +24,7 @@ export const buoyancy = (fraction: number) => 300 + 400 * clamp(fraction, 0, 1);
 export const minimumCrustThickness = 800;
 export const maximumCrustThickness = 14_000;
 // Metres above or below the datum that bedrock, support targets and constructed surfaces may reach.
-export const elevationLimit = 8000;
+export const elevationLimit = 14_000;
 export const thickness = (value: number) =>
   clamp(value, minimumCrustThickness, maximumCrustThickness);
 export function crustHeight(value: number, continentalFraction: number): number {

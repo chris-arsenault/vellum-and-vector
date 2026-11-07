@@ -2,34 +2,12 @@ import { meshDeltaX } from "./mesh";
 // CoastalErosionLayer.cs and ExternalCoastalForcingLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import type { PhysicalProfile } from "./profile";
-import { clamp, toUnits, units } from "./math";
+import { units } from "./math";
 import { deposit, erode } from "../rock/groundLedger";
 import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { coastalFrame, type CoastalFrame } from "./coastalFrame";
 
-function coastalResistance(map: PhysicalField, p: PhysicalProfile, i: number): number {
-  let resistance = map.CrustTypeCodes.get(i) === 2 ? 18 : 12;
-  const volcanic = clamp(
-    toUnits(map.VolcanicConstructionHistory.get(i)) / Math.max(1, p.VolcanicConeHeight),
-    0,
-    1
-  );
-  resistance += (volcanic * p.VolcanicRockResistance) / 100;
-  const orogenic = clamp(
-    map.TectonicActivityHistory.get(i) / Math.max(1, p.EpochTectonicElevationStep * 2),
-    0,
-    1
-  );
-  resistance += (orogenic * p.OrogenicRockResistance) / 100;
-  const sediment = clamp(
-    toUnits(map.SedimentThickness.get(i)) / Math.max(1, p.SoftSedimentDepth),
-    0,
-    1
-  );
-  return Math.max(4, resistance - (sediment * p.SedimentRockWeakness) / 100);
-}
 function depositionTargets(
   map: PhysicalField,
   frame: CoastalFrame,
@@ -62,8 +40,8 @@ function depositionTargets(
   }
   return targets;
 }
-function recordCoastalCut(map: PhysicalField, source: number, cut: number) {
-  const removed = erode(map, source, cut);
+export function recordCoastalCut(map: PhysicalField, source: number, cut: number) {
+  const removed = erode(map, source, cut, "coast");
   map.CumulativeCoastalErosion.add(source, removed);
   const volume = (removed / 1024) * map.mesh.area(source);
   map.SedimentProducedTotal += volume;
@@ -88,7 +66,7 @@ function depositCoastalVolume(
   }
   map.SedimentExportedTotal += volume - deposited;
 }
-function depositShoreLoads(
+export function depositShoreLoads(
   map: PhysicalField,
   c: PhysicalContext,
   frame: CoastalFrame,
@@ -105,38 +83,6 @@ function depositShoreLoads(
       load
     );
   }
-}
-export function coastalErosion(map: PhysicalField, c: PhysicalContext) {
-  const p = c.Profile,
-    frame = coastalFrame(map, p.CoastalActiveWidth),
-    loads = workingArray(map, "float64", "coast:loads");
-  for (let i = 0; i < map.mesh.count; i++) {
-    const wave = frame.strength.get(i),
-      water = map.WaterKindCodes.get(i),
-      coverage = frame.coverage.get(i);
-    if (water === 1)
-      map.WaveExposureHistory.set(
-        i,
-        Math.max(map.WaveExposureHistory.get(i), map.WaveExposure.get(i))
-      );
-    else if (coverage > 0)
-      map.WaveExposureHistory.set(i, Math.max(map.WaveExposureHistory.get(i), wave));
-    if (wave < p.CoastalErosionWaveThreshold || water !== 0) continue;
-    const shelfSlope = clamp(map.Slope.get(i) * 10_000, 0, 1000);
-    const forcing =
-      ((wave - p.CoastalErosionWaveThreshold) * p.CoastalErosionStrength) / 1000 +
-      shelfSlope / 18 +
-      Math.abs(p.CoastalSeaLevelChange);
-    const cut = units(
-      (clamp(forcing / coastalResistance(map, p, i), 0, p.MaximumCoastalErosionPerPass) *
-        c.CoastalStrength *
-        coverage) /
-        1000
-    );
-    if (cut > 0) loads.add(frame.source.get(i), recordCoastalCut(map, i, cut));
-  }
-  depositShoreLoads(map, c, frame, loads, false);
-  releaseWorking(map, loads, frame.strength, frame.coverage, frame.source);
 }
 export function externalCoastalForcing(map: PhysicalField, c: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++) {
@@ -156,7 +102,7 @@ export function externalCoastalForcing(map: PhysicalField, c: PhysicalContext) {
       Math.max(map.ExternalCoastalForcingHistory.get(i), forcing)
     );
     const cut = units(
-      (forcing * p.MaximumCoastalErosionPerPass * c.CoastalStrength * coverage) / 1000000
+      (forcing * p.CoastalWearRate * c.Span * c.CoastalStrength * coverage) / 1000000
     );
     if (cut > 0) loads.add(frame.source.get(i), recordCoastalCut(map, i, cut));
   }

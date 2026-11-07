@@ -6,24 +6,30 @@ import { physicalProfile } from "../canonry/profile";
 import { units } from "../canonry/math";
 import { rebuild } from "../canonry/surface";
 import { createWorldMesh } from "../canonry/worldMesh";
-import { wearAway } from "../rock/groundLedger";
 import { compileMix } from "../rock/modes";
 import { setLayer } from "../rock/rockColumn";
 import { rockCatalogue } from "../rock/rockCatalogue";
-import type { GroundProcess } from "./groundProcess";
+import { defineProcess } from "./groundProcess";
 import { actBy, groundProcesses, profileAtScale } from "./processCatalogue";
 
 /** A process no part of the generator has heard of: nothing below it needed to change for it to work. */
 const blowing = compileMix({ abrasion: 1 }),
-  wind: GroundProcess = {
+  wind = defineProcess({
     id: "wind",
     statement: "Wind grinds whatever is not held down.",
+    reads: [],
+    asks: [],
+    moves: [["loose", "load"]],
     settings: {},
-    run({ map, ground }) {
-      for (let i = 0; i < map.mesh.count; i++)
-        wearAway(map, i, ground.actOn(i, blowing, 1, Infinity));
+    run({ field, ground, wear }) {
+      for (let i = 0; i < field.mesh.count; i++)
+        wear.demand(
+          { id: "wind", remembers: "CumulativeFluvialErosion" },
+          i,
+          ground.actOn(i, blowing, 1, Infinity)
+        );
     },
-  };
+  });
 function plain(tree: number) {
   const map = createField(createWorldMesh([-50_000, -50_000, 50_000, 50_000], 40, 25_000));
   for (let i = 0; i < map.mesh.count; i++) {
@@ -52,7 +58,7 @@ it("reads each process's settings at the map's scale", () => {
   // A finer map also resolves channels from less, since its cells see the channel itself.
   expect(region.FluvialChannelArea).toBeCloseTo((world.FluvialChannelArea * 0.01) / 3);
   expect(region.FluvialEquilibriumGradient).toBeCloseTo(world.FluvialEquilibriumGradient * 0.53);
-  expect(region.DissolvedPerPass).toBeCloseTo(world.DissolvedPerPass / 4);
+  expect(region.DissolvedPerSpan).toBeCloseTo(world.DissolvedPerSpan / 4);
   // The World reads its own parameters unchanged.
   expect(profileAtScale(world, { scale: 1, passes: 1 })).toEqual(world);
 });

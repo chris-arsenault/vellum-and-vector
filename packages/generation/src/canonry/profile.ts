@@ -2,6 +2,7 @@
 // metres, areas m², water discharge m³/s, ice flux m³/year and slopes rise/run.
 // Temperature remains ten native units per °C with zero °C at 300.
 import { rockCatalogue } from "../rock/rockCatalogue";
+import { coastSettings } from "../processes/coastSettings";
 import { iceSettings } from "../processes/iceSettings";
 import { slopeSettings } from "../processes/slopeSettings";
 import { solutionSettings } from "../processes/solutionSettings";
@@ -59,7 +60,6 @@ export const physicalProfile = {
   PassiveMarginMaximumGradient: 0.0016,
   RiftedMarginMaximumGradient: 0.0018,
   MarginEvolutionResponsePerMille: 760,
-  MarineSedimentCapacity: 180,
   CoastalDetailBand: 90,
   CoastalDetailStrength: 1000,
   CoastalDetailScale: 70_000,
@@ -69,9 +69,6 @@ export const physicalProfile = {
   CoastalDetailRiftedAmplitude: 74,
   CoastalDetailTransformAmplitude: 34,
   VolcanicRockResistance: rockCatalogue.basalt.resistance,
-  OrogenicRockResistance: rockCatalogue.schist.resistance,
-  SedimentRockWeakness: 900,
-  SoftSedimentDepth: 45,
   FjordMinimumGlacialErosion: 2,
   // Metres from a fjord's axis to the land on both of its flanks.
   FjordMaximumHalfWidth: 15_000,
@@ -136,8 +133,6 @@ export const physicalProfile = {
   OrogenicProminenceMinimum: 700,
   OrogenicProminenceMaximum: 1900,
   OrogenicProminenceRankDecay: 2.4,
-  OrogenicRootBudgetMinimum: 1200,
-  OrogenicRootBudgetMaximum: 5500,
   OrogenicSurfaceReliefSharePerMille: 2500,
   // Metres of crust above its normal thickness that a column bears before the rest starts to flow,
   // the excess at which half of what is over goes, and how far a pass's flow reaches.
@@ -149,9 +144,7 @@ export const physicalProfile = {
   SutureReactivationStep: 8000,
   // How far out from a seam the crust is broken enough to take up that stress.
   SutureReactivationZone: 200_000,
-  MaximumOrogenicSurfaceReliefPerPass: 5000,
   OrogenicCoreRockResistance: rockCatalogue.gneiss.resistance,
-  ContinentalRiftThinningBudget: 850,
   ImpactOceanShockDepth: 600,
   ImpactPrimordialShare: 620,
   PlumeLobeScale: 90_000,
@@ -168,10 +161,12 @@ export const physicalProfile = {
   ...solutionSettings,
   ...iceSettings,
   ...slopeSettings,
+  ...coastSettings,
   SedimentTransportFraction: 760,
   SedimentDepositionLength: 10_000,
-  SedimentDepositionSlopeThreshold: 0.0034,
-  MaximumSedimentDepositionPerPass: 18,
+  // What flowing water can carry, in cubic metres per square metre of catchment per unit of slope,
+  // per unit of span. Past this it drops what it cannot carry.
+  SedimentCarry: 100_000,
   ImpactCraterCount: 6,
   ImpactMinimumRadius: 50_000,
   ImpactMaximumRadius: 180_000,
@@ -198,7 +193,6 @@ export const physicalProfile = {
   GlacialAblationRunoffStrength: 460,
   BasalMeltRunoffStrength: 180,
   GlacialRetreatRunoffStrength: 260,
-  MaximumGlacialDepositionPerPass: 20,
   AncestralValleyMinimumErosion: 5,
   OutwashMinimumGlacialDeposition: 6,
   // Metres of terminus till that build a moraine under a flowing glacier's margin.
@@ -212,7 +206,6 @@ export const physicalProfile = {
   CoastalErosionStrength: 180,
   CoastalActiveWidth: 10_000,
   CoastalDepositionReach: 20_000,
-  MaximumCoastalErosionPerPass: 12,
   CoastalDepositionFraction: 580,
   CoastalSeaLevelChange: 0,
   SeaLevel: 0,
@@ -228,7 +221,7 @@ export const physicalProfile = {
   LakeEvaporationTemperatureStrength: 520,
   LakeInfiltrationLoss: 140,
   LakeOutletOverflowScale: 400,
-  MaximumLakeOutletIncisionPerPass: 140,
+  LakeOutletIncisionPerSpan: 140,
   LakeOutletIncisionSearchDistance: 120_000,
   DrainageGuidanceLookaheadDistance: 120_000,
   DrainageFloorGradientWeight: 1000,

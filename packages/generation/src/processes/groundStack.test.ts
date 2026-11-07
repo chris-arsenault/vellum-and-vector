@@ -66,9 +66,14 @@ function underIce(map: PhysicalField, i: number) {
 const runIce = (map: PhysicalField) => actBy(ice)(map, context());
 
 it("spends a river's power on sediment before the rock under it", () => {
-  const bare = rockLowered(ground(rockCatalogue.quartzite), runStreams),
+  // A thin stream, whose power runs out in the cover: a strong one cuts through either.
+  const thin = (map: PhysicalField, i: number) => map.Runoff.set(i, 5),
+    bare = rockLowered(ground(rockCatalogue.quartzite, thin), runStreams),
     covered = rockLowered(
-      ground(rockCatalogue.quartzite, (map, i) => map.SedimentThickness.set(i, units(2))),
+      ground(rockCatalogue.quartzite, (map, i) => {
+        thin(map, i);
+        map.SedimentThickness.set(i, units(2));
+      }),
       runStreams
     );
   expect(covered).toBeLessThan(bare);

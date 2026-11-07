@@ -25,6 +25,7 @@ import {
   units,
 } from "./math";
 import { rebuild } from "./surface";
+import { raiseRock } from "../rock/groundLedger";
 import { stripRock } from "../rock/rockColumn";
 import { adjustCrustColumn } from "./crustTransport";
 import { crustFlow, distributeOrogenicRoots, pileUpEarlierShortening } from "./orogenicRoots";
@@ -38,29 +39,6 @@ import { workingArray, releaseWorking } from "./physicalNumerics";
  * than they keep as height, so the deep rock of a belt's core reaches the surface.
  */
 const thrustExhumation = 4;
-function deformationLimit(
-  context: PhysicalContext,
-  c: BoundaryComponent,
-  fraction: number,
-  section: number,
-  drive: number
-): number {
-  const p = context.Profile,
-    foundation = 1000 + 3000 * fraction;
-  if (drive < 0)
-    return foundation - p.ContinentalRiftThinningBudget * clamp(Math.abs(section) / 0.76, 0, 1);
-  const prominence = clamp(
-    (c.prominence - p.OrogenicProminenceMinimum) /
-      Math.max(1, p.OrogenicProminenceMaximum - p.OrogenicProminenceMinimum),
-    0,
-    1
-  );
-  const root =
-    p.OrogenicRootBudgetMinimum +
-    (p.OrogenicRootBudgetMaximum - p.OrogenicRootBudgetMinimum) * prominence;
-  const maximum = c.code === 2 ? 0.55 : c.code === 3 ? 0.2 : 1;
-  return foundation + root * clamp(section / maximum, 0, 1);
-}
 function changeThickness(
   map: PhysicalField,
   context: PhysicalContext,
@@ -71,13 +49,7 @@ function changeThickness(
 ): number {
   const fraction = map.CrustContinentalFraction.get(i) / 1000,
     current = toUnits(map.CrustThickness.get(i));
-  const requested = current + drive / (buoyancy(fraction) / 1000);
-  const limit = deformationLimit(context, c, fraction, section, drive);
-  const next = thickness(
-    drive > 0
-      ? Math.min(requested, Math.max(current, limit))
-      : Math.max(requested, Math.min(current, limit))
-  );
+  const next = thickness(current + drive / (buoyancy(fraction) / 1000));
   adjustCrustColumn(map, i, units(next));
   return units(crustHeight(next, fraction) - crustHeight(current, fraction));
 }
@@ -106,12 +78,7 @@ function constructSurface(
   if (value <= 0 || map.CrustContinentalFraction.get(i) / 1000 < 0.35 || c.code !== 1) return;
   const crest = clamp(section / orogenicCrestSection, 0, 1),
     structural = ((value * p.OrogenicSurfaceReliefSharePerMille) / 1000) * (0.2 + crest * 0.8);
-  const requested = units(
-    Math.min(
-      p.MaximumOrogenicSurfaceReliefPerPass,
-      structural * summitVariation(map, context, c, i, source)
-    )
-  );
+  const requested = units(structural * summitVariation(map, context, c, i, source));
   if (requested <= 0) return;
   const old = map.BedrockElevation.get(i);
   const next = clamp(
@@ -121,8 +88,11 @@ function constructSurface(
   );
   const applied = next - old;
   if (applied <= 0) return;
-  map.BedrockElevation.set(i, next);
-  map.SurfaceRockLoad.add(i, applied);
+  raiseRock(map, i, applied, "mountains", "crust");
+  // What stands up was the crust's: a belt builds height by moving what it has, not from nothing.
+  const fraction = map.CrustContinentalFraction.get(i) / 1000,
+    spare = Math.max(0, map.CrustThickness.get(i) - units(1000 + 3000 * fraction));
+  if (spare > 0) adjustCrustColumn(map, i, map.CrustThickness.get(i) - Math.min(spare, applied));
   // A sheet's leading edge brings up what it was cut from, so a belt's core shows older rock. How
   // much follows the belt's structure, not the height of one summit, so rock lines up along it.
   stripRock(map, i, units(structural * crest * thrustExhumation));

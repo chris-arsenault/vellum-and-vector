@@ -118,7 +118,7 @@ function greenwoodInRock(map: PhysicalField, field: MagicField, cell: number, se
   const growth = field.intensity.get(cell),
     solubility = rockKindOfCode(layerKind(map, cell, 0)).solubility;
   if (growth >= dissolveFrom && solubility > 0)
-    erode(map, cell, units((dissolveMetres * solubility * growth) / 1000));
+    erode(map, cell, units((dissolveMetres * solubility * growth) / 1000), "greenwood");
   if (growth >= rootFrom)
     alterTop(map, cell, rockCatalogue.rootstone, units((rootMetres * growth) / 1000));
   if ((field.originSources.spring?.get(cell) ?? 0) >= springFrom)

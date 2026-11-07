@@ -21,6 +21,21 @@ function transportDistance(map: PhysicalField, i: number, previous: Band) {
       )
     : Math.sqrt(map.mesh.area(i));
 }
+/** How much a cell can take before it stands above the graded slope down to where its water goes. */
+function room(
+  map: PhysicalField,
+  p: PhysicalContext["Profile"],
+  i: number,
+  target: number,
+  still: boolean,
+  distance: number
+) {
+  if (map.WaterKindCodes.get(i) !== 0) return Math.max(0, map.WaterDepths.get(i));
+  const base = target >= 0 ? map.Elevation.get(target) : map.EffectiveSeaLevel,
+    catchment = map.CatchmentArea.get(i) / 100_000_000,
+    grade = p.FluvialEquilibriumGradient / Math.max(1, catchment) ** 0.12;
+  return Math.max(0, base + units(still ? 0 : grade * distance) - map.Elevation.get(i));
+}
 export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
   const moving = workingArray(map, "float64", "sediment:moving"),
     p = c.Profile;
@@ -37,21 +52,21 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
     map.SedimentSupply.set(i, 0);
     if (load <= 0) continue;
     const target = map.FlowTargets.get(i);
-    const shouldDeposit =
-      map.WaterKindCodes.get(i) === 2 ||
-      map.Slope.get(i) <= p.SedimentDepositionSlopeThreshold ||
-      (target >= 0 && map.WaterKindCodes.get(target) === 1);
+    // Water carries what its flow and slope can. Standing water carries nothing, and what it cannot
+    // carry settles over the distance it takes to drop out, which is what builds plains and deltas.
+    const still =
+      map.WaterKindCodes.get(i) === 2 || (target >= 0 && map.WaterKindCodes.get(target) === 1);
+    const capacity = still
+      ? 0
+      : p.SedimentCarry * map.CatchmentArea.get(i) * map.Slope.get(i) * c.Span;
     const distance = transportDistance(map, i, previous);
     const capture = -Math.expm1(
       (Math.log1p(-p.SedimentTransportFraction / 1000) * distance) / p.SedimentDepositionLength
     );
-    const deposited = shouldDeposit
-      ? deposit(
-          map,
-          i,
-          Math.min(units(p.MaximumSedimentDepositionPerPass), ((load * 1024) / area) * capture)
-        )
-      : 0;
+    const dropped = Math.max(0, load - capacity) * capture;
+    // It can only build up to the grade the water needs to keep flowing; a lake fills to its surface.
+    const fits = Math.min((dropped * 1024) / area, room(map, p, i, target, still, distance));
+    const deposited = fits > 0 ? deposit(map, i, fits, "rivers") : 0;
     const volume = (deposited / 1024) * area;
     if (target >= 0) moving.add(target, load - volume);
     else map.SedimentExportedTotal += load - volume;

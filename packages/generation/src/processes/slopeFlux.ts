@@ -29,6 +29,7 @@ interface Face {
 }
 function faces(map: PhysicalField, p: PhysicalProfile) {
   const mesh = map.mesh;
+  const ground = groundOf(map);
   let count = 0;
   for (let i = 0; i < mesh.count; i++)
     for (let edge = 0; edge < mesh.degree(i); edge++) if (mesh.neighbor(i, edge) > i) count++;
@@ -53,7 +54,9 @@ function faces(map: PhysicalField, p: PhysicalProfile) {
       columns.distance.set(index, mesh.edgeLength(i, edge));
       columns.diffusion.set(
         index++,
+        // Ground that gives up easily moves freely; what holds together comes away slowly.
         (((p.MassWastingTransportLength ** 2 * p.MassWastingTransportFraction) / 1000) *
+          Math.min(ground.gives(i, failing), ground.gives(j, failing)) *
           mesh.faceLength(i, edge)) /
           mesh.faceDistance(i, edge)
       );
@@ -73,14 +76,7 @@ function faces(map: PhysicalField, p: PhysicalProfile) {
     },
   };
 }
-function exchange(
-  face: Face,
-  heights: Band,
-  stable: Band,
-  area: (i: number) => number,
-  budget: Band,
-  spent: Band
-) {
+function exchange(face: Face, heights: Band, stable: Band, area: (i: number) => number) {
   const { i, j, volume: old } = face,
     areaI = area(i),
     areaJ = area(j);
@@ -90,23 +86,14 @@ function exchange(
     head > 0
       ? Math.max(0, head - stable.get(i) * face.distance)
       : Math.min(0, head + stable.get(j) * face.distance);
-  if (old > 0) spent.add(i, -old);
-  if (old < 0) spent.add(j, old);
-  const desired = driving / (inverse + 1 / face.diffusion);
-  const volume = clamp(
-    desired,
-    -Math.max(0, budget.get(j) - spent.get(j)),
-    Math.max(0, budget.get(i) - spent.get(i))
-  );
-  if (volume > 0) spent.add(i, volume);
-  if (volume < 0) spent.add(j, -volume);
+  const volume = driving / (inverse + 1 / face.diffusion);
   const change = volume - old;
   heights.add(i, -change / areaI);
   heights.add(j, change / areaJ);
   face.volume = volume;
   return Math.abs(change) * Math.max(1 / areaI, 1 / areaJ);
 }
-/** Backward-Euler face exchange with unilateral stable slopes and finite source budgets. */
+/** Backward-Euler face exchange with unilateral stable slopes: ground fails until it stands. */
 export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
   const mesh = map.mesh,
     plan = faces(map, p);
@@ -126,14 +113,7 @@ export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
     "slope:stable",
     (i) => failsAt * ground.fold(i, angleHeld)
   );
-  const budget = workingValues(
-    map,
-    "float64",
-    "slope:budget",
-    (i) => p.MaximumHillslopeTransport * Math.sqrt(mesh.area(i)) * ground.gives(i, failing)
-  );
-  const spent = workingArray(map, "float64", "slope:spent");
-  relaxFaces(map, plan, heights, stable, budget, spent);
+  relaxFaces(map, plan, heights, stable);
   const cuts = workingArray(map, "float64", "slope:cuts"),
     fills = workingArray(map, "float64", "slope:fills");
   for (let at = 0; at < plan.count; at++) {
@@ -146,7 +126,7 @@ export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
       fills.add(i, -volume);
     }
   }
-  releaseWorking(map, heights, stable, budget, spent, plan.slots, ...Object.values(plan.columns));
+  releaseWorking(map, heights, stable, plan.slots, ...Object.values(plan.columns));
   return { cuts, fills };
 }
 /**
@@ -158,9 +138,7 @@ function relaxFaces(
   map: PhysicalField,
   plan: ReturnType<typeof faces>,
   heights: Band,
-  stable: Band,
-  budget: Band,
-  spent: Band
+  stable: Band
 ) {
   const mesh = map.mesh,
     area = (i: number) => mesh.area(i),
@@ -183,7 +161,7 @@ function relaxFaces(
     head = (head + 1) % queue.length;
     queued.set(index, 0);
     const face = plan.get(index);
-    const movement = exchange(face, heights, stable, area, budget, spent);
+    const movement = exchange(face, heights, stable, area);
     plan.columns.volume.set(index, face.volume);
     if (movement <= 1 / 1024) continue;
     enqueueCell(face.i);

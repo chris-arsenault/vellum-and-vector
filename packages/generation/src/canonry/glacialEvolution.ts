@@ -1,7 +1,7 @@
 // GlacialDepositionLayer, GlacialMeltwaterLayer and GlacialRunoffLayer, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { clamp, truncate, units } from "./math";
+import { clamp, truncate } from "./math";
 import { deposit } from "../rock/groundLedger";
 import { isGrounded } from "./glacierSurface";
 import { targetOrder } from "./flowGraph";
@@ -16,6 +16,12 @@ function isTerminus(map: PhysicalField, c: PhysicalContext, i: number, target: n
       (map.IceFlux.get(i) >= c.Profile.GlacierFluxThreshold && map.IceThickness.get(target) === 0))
   );
 }
+function moraineRoom(map: PhysicalField, c: PhysicalContext, i: number, target: number) {
+  const p = c.Profile,
+    holds = p.MassWastingStableGradient * Math.min(p.HillslopeLength, map.mesh.spacing),
+    ahead = target >= 0 ? map.Elevation.get(target) : map.EffectiveSeaLevel;
+  return Math.max(0, ahead + holds * 1024 - map.Elevation.get(i));
+}
 export function glacialDeposition(map: PhysicalField, c: PhysicalContext) {
   const moving = workingArray(map, "float64", "glacier:sediment"),
     order = targetOrder(map, map.IceFlowTargets);
@@ -26,15 +32,10 @@ export function glacialDeposition(map: PhysicalField, c: PhysicalContext) {
     map.SedimentSupply.set(i, 0);
     if (load <= 0) continue;
     const target = map.IceFlowTargets.get(i);
+    // Ice drops what it carries where it ends, which is what a moraine is. A moraine stands no higher
+    // above the ground ahead of it than a slope can hold; what will not fit carries on down.
     const deposited = isTerminus(map, c, i, target)
-      ? deposit(
-          map,
-          i,
-          Math.min(
-            units((c.Profile.MaximumGlacialDepositionPerPass * c.GlaciationStrength) / 1000),
-            (load * 1024) / area
-          )
-        )
+      ? deposit(map, i, Math.min((load * 1024) / area, moraineRoom(map, c, i, target)), "ice")
       : 0;
     if (deposited > 0) map.GroundedIce.set(i, isGrounded(map, i, c.Profile) ? 1 : 0);
     map.CumulativeGlacialDeposition.add(i, deposited);

@@ -14,7 +14,8 @@ the [spatial ADR](docs/adr/0001-spatial-authority.md),
 [regional refinement ADR](docs/adr/0008-regional-refinement-is-conditioned-amplification.md)
 (regional refinement is a bidirectional, multi-pass process),
 [named entities and shares ADR](docs/adr/0009-named-entities-persist-and-cells-are-shares.md) and
-[processes and materials ADR](docs/adr/0010-processes-and-materials-meet-through-modes.md) record
+[processes and materials ADR](docs/adr/0010-processes-and-materials-meet-through-modes.md) and
+[process coupling ADR](docs/adr/0011-processes-couple-through-keys-and-a-ledger.md) record
 implementation direction. User requirements and explicitly agreed boundaries govern revisions
 to agent-derived choices in those documents and in open plans. The
 [documentation index](docs/README.md) lists every durable document.

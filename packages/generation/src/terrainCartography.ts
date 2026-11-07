@@ -21,9 +21,6 @@ function terrain(index: number): FeatureSelection {
       EpochOrogenicConstructionStep: [150, 500, 1400, 600][index],
       OrogenicProminenceMinimum: [350, 350, 800, 500][index],
       OrogenicProminenceMaximum: [1000, 1000, 2200, 1400][index],
-      OrogenicRootBudgetMinimum: [400, 800, 1800, 1000][index],
-      OrogenicRootBudgetMaximum: [1200, 2800, 6400, 3400][index],
-      MaximumOrogenicSurfaceReliefPerPass: [300, 700, 1200, 900][index],
       OrogenicPlateauWidth: [0, 120_000, 360_000, 200_000][index],
       OrogenicPlateauShare: [0, 0.35, 0.7, 0.5][index],
     }),
@@ -33,7 +30,7 @@ function terrain(index: number): FeatureSelection {
     },
     "material.fluvial-transport": profile({
       SedimentTransportFraction: [850, 760, 650, 760][index],
-      MaximumSedimentDepositionPerPass: [30, 18, 12, 20][index],
+      SedimentCarry: [60_000, 100_000, 160_000, 100_000][index],
     }),
     "physical.floodplains": profile({
       FloodplainMaximumWidth: [25_000, 15_000, 8_000, 15_000][index],

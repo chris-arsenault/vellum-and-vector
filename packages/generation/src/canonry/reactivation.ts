@@ -6,6 +6,7 @@ import { buoyancy, clamp, thickness, toUnits, units } from "./math";
 import { metricSearch } from "./metricSearch";
 import { addRoot } from "./orogenicRoots";
 import { releaseWorking, workingArray } from "./physicalNumerics";
+import { raiseRock } from "../rock/groundLedger";
 import { stripRock } from "../rock/rockColumn";
 import { rebuild } from "./surface";
 
@@ -192,8 +193,7 @@ function moveSeam(map: PhysicalField, i: number, metres: number, paid: number) {
     i,
     units(thickness(toUnits(map.CrustThickness.get(i)) + crust - fromRoots))
   );
-  map.BedrockElevation.add(i, rock);
-  map.SurfaceRockLoad.add(i, rock);
+  raiseRock(map, i, rock, "seams", "crust");
   if (rock > 0) {
     // What a seam builds is buried and baked as what any belt builds is, and brings up older rock.
     map.OrogenicConstruction.set(i, Math.max(map.OrogenicConstruction.get(i), rock));

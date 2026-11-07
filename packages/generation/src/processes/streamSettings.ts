@@ -1,12 +1,15 @@
 /** What streams can do, whatever they work on. Imports nothing, so the profile can read it at load. */
 export const streamSettings = {
-  FluvialErosionIterations: 13,
-  FluvialErosionStrength: 0.32,
+  // How finely a pass's cutting is resolved. Changing it does not change how much is cut.
+  FluvialErosionSteps: 13,
+  // Metres of ordinary rock cut per unit of stream power, per unit of span.
+  FluvialErosionRate: 4.16,
   FluvialEquilibriumGradient: 0.0015,
-  // Stream power: catchment to this exponent times slope, on this scale, per iteration.
+  // Stream power: water gathered to this exponent times slope, on this scale.
   FluvialAreaExponent: 0.5,
   FluvialPowerScale: 1548,
-  MaximumFluvialCutPerIteration: 60,
+  // The runoff at which a square metre of ground sends down a square metre's worth of water.
+  FluvialReferenceRunoff: 300,
   // A valley's width as a share of the square root of its catchment's area.
   FluvialValleyWidthShare: 0.05,
   // The share of a cell that streams too small to map lower, however small its catchment.

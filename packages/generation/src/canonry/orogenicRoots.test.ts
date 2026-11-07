@@ -137,7 +137,7 @@ it("starts a world's belts with crust piled by their strain, less from a slab go
 
 it("settles root crust left behind however thick that makes the column", () => {
   const map = continent(),
-    budget = atlasPhysicalProfile().OrogenicRootBudgetMinimum,
+    budget = 1200,
     held = units(budget * 8);
   map.OrogenicComponentIds.fill(-1);
   map.CrustRootReserve.fill(held);

@@ -38,6 +38,22 @@ function fillTargetOrder(targets: Band, indegree: Band, queue: Band) {
   if (count !== n) throw new Error("Flow routing contains a cycle.");
 }
 /** Area draining through each cell along `targets`; a process band. */
+/**
+ * The water each cell gathers from everything draining to it, as the area of ground at the reference
+ * runoff that would send as much: wet ground counts for more than its area, dry ground for less.
+ */
+export function waterGathered(map: PhysicalField, targets: Band, runoff: Band): Band {
+  const accumulated = workingArray(map, "float64", "flow:water", targets.length),
+    order = targetOrder(map, targets);
+  for (let i = 0; i < targets.length; i++) accumulated.set(i, map.mesh.area(i) * runoff.get(i));
+  for (let n = 0; n < order.length; n++) {
+    const i = order.get(n),
+      target = targets.get(i);
+    if (target >= 0) accumulated.add(target, accumulated.get(i));
+  }
+  releaseWorking(map, order);
+  return accumulated;
+}
 export function contributingArea(map: PhysicalField, targets: Band): Band {
   const accumulated = workingArray(map, "float64", "flow:area", targets.length),
     order = targetOrder(map, targets);

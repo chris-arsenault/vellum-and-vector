@@ -6,12 +6,12 @@ import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { clamp, round, truncate, units } from "./math";
+import { clamp, elevationLimit, round, truncate, units } from "./math";
 import { hashUnit } from "./noise";
 import { Feature } from "./codes";
 import { nearestTriangle } from "./mesh";
 import { worldCandidates, separatedCandidates, type WorldCandidate } from "./worldSources";
-import { deposit } from "../rock/groundLedger";
+import { deposit, raiseRock } from "../rock/groundLedger";
 import { rebuild } from "./surface";
 import { areaBudget, mediumArea } from "./worldScale";
 
@@ -55,9 +55,11 @@ function excavate(
 ): number {
   if (distance > radius) return 0;
   const requested = Math.max(1, units(depth * (1 - (distance / radius) ** 2)));
-  const cut = Math.max(0, Math.min(requested, map.BedrockElevation.get(i) - units(-3800)));
-  map.BedrockElevation.add(i, -cut);
-  map.SurfaceRockLoad.add(i, -cut);
+  const cut = Math.max(
+    0,
+    Math.min(requested, map.BedrockElevation.get(i) - units(-elevationLimit))
+  );
+  raiseRock(map, i, -cut, "impacts", "space");
   map.ImpactExcavation.add(i, cut);
   stripRock(map, i, cut);
   if (cut > 0) rebuild(map, i);
@@ -68,10 +70,9 @@ function raiseRim(map: PhysicalField, i: number, distance: number, radius: numbe
   if (influence <= 0) return;
   const uplift = Math.max(
     0,
-    Math.min(units(height * influence), units(3800) - map.BedrockElevation.get(i))
+    Math.min(units(height * influence), units(elevationLimit) - map.BedrockElevation.get(i))
   );
-  map.BedrockElevation.add(i, uplift);
-  map.SurfaceRockLoad.add(i, uplift);
+  raiseRock(map, i, uplift, "impacts", "space");
   map.ImpactRimUplift.add(i, uplift);
   if (uplift > 0) rebuild(map, i);
 }

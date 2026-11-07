@@ -730,7 +730,15 @@ Each pass's crust adds to what earlier passes left, and crust too thick to hold 
 through the continent under its own weight, more of it the thicker the column stands. Crust holds that
 thickness only while being squeezed: once a collision ends, the old belt's root settles out under the
 land around it, and wear that cuts past the rock on a belt thins the root itself, so old belts sink to
-broad raised ground while their deep rock comes to the surface. A world's first
+broad raised ground while their deep rock comes to the surface. The rock a belt raises comes out of its
+crust, so height is moved and not made. Water, warmth and frost turn rock into loose cover, slower under a
+deep mantle, and that cover creeps downhill on any slope. Rivers cut by the water they gather, so wet ground
+and epochs wear more than dry ones. They drop what they cannot carry only up to the grade their water
+needs, and ice drops its load up to what a slope can hold. Waves wear coasts back to a platform below the
+sea. Each process is declared with what it reads, asks and moves, as
+[ADR 0011](adr/0011-processes-couple-through-keys-and-a-ledger.md) sets out. Each epoch is data: strength,
+travel, span and forcing. The first epoch's height is carried with the crust, so a report can tell what
+old ground became. A world's first
 forming stands in for the drift before it, so its belts begin with crust already shortened by their
 strain and go through the same roots and flow, which leaves older high ground for later ranges to stand on.
 Interior stress reaches a plate's old sutures and province seams and works a zone of crust around

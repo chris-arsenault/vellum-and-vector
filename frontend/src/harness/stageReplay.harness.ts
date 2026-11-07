@@ -37,7 +37,6 @@ const out = join(harnessRoot, process.env.HARNESS_OUT ?? "replay.json");
 /** Values under tuning that a world does not scale to its size, so the code's own apply as they are. */
 const reliefValues = [
   "OrogenicSurfaceReliefSharePerMille",
-  "MaximumOrogenicSurfaceReliefPerPass",
   "OrogenicAccretionRatio",
   "OrogenicPlateauWidth",
   "OrogenicPlateauShare",
