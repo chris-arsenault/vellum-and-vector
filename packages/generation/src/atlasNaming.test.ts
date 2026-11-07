@@ -10,7 +10,7 @@ import {
 } from "./namingCultures";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import { landscape } from "./mapFixtures";
-import { extractOceans } from "./canonry/oceanFeatures";
+import { extractOceans } from "./world/oceanFeatures";
 
 function fixture() {
   const state = landscape();

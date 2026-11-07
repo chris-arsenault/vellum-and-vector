@@ -131,7 +131,7 @@ test("regional refinement submits a dedicated surface operation and retains comp
   const processes = child.configuration!.sequence.map((step) =>
     step.kind === "process" ? step.process : ""
   );
-  expect(processes).toContain("canonry.initialize");
+  expect(processes).toContain("atlas.initialize");
   expect(processes.some((process) => process.startsWith("refinement."))).toBe(true);
   expect(history).toEqual({
     epochs: parent.settings!.epochs,

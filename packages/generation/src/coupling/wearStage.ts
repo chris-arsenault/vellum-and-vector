@@ -1,7 +1,7 @@
 import type { Band } from "@atlas/domain";
-import type { PhysicalBufferName, PhysicalField } from "../canonry/field";
-import { units } from "../canonry/math";
-import { releaseWorking, workingArray } from "../canonry/physicalNumerics";
+import type { PhysicalBufferName, PhysicalField } from "../world/field";
+import { units } from "../world/math";
+import { releaseWorking, workingArray } from "../world/physicalNumerics";
 import { wearAway } from "../rock/groundLedger";
 import type { FlowCause } from "./flows";
 
@@ -20,9 +20,10 @@ interface Demand {
   recorded: Band;
 }
 /**
- * One stage of wear. Processes state what they would take from each cell and nothing changes yet, so
- * they all act on the same ground. Settling then shares out what is there: nothing wears below base
- * level, however much is asked for, and competing processes get their share of what can go.
+ * One stage of wear. A process states what it would take from each cell and nothing changes yet, so
+ * every cell it works on is the ground as it stood. Settling then lands it: nothing wears below base
+ * level, however much is asked for. Each process settles when it finishes, so processes act in the
+ * sequence's order; causes demanding in one stage would share what can go.
  */
 export class WearStage {
   private readonly demands = new Map<FlowCause, Demand>();

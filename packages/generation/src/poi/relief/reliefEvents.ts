@@ -1,7 +1,7 @@
 import { canonicalPosition, point, spatial, type AtlasFeature } from "@atlas/domain";
-import type { PhysicalField } from "../../canonry/field";
-import { eventDisk } from "../../canonry/geologicalFeatures";
-import { nearestTriangle } from "../../canonry/mesh";
+import type { PhysicalField } from "../../world/field";
+import { eventDisk } from "../../world/geologicalFeatures";
+import { nearestTriangle } from "../../world/mesh";
 import { generatedFeature } from "../../mapFeatures";
 import type { GenerationState } from "../../process";
 import type { PoiPlace } from "../poiContract";
@@ -80,7 +80,7 @@ export const eventRecord =
       shape = eventDisk(state, center, radius);
     if (!shape) return null;
     const feature = generatedFeature(state, place.id, name(event), kind, "geology", shape, {
-      sourceAlgorithm: "canonry-0f62584c",
+      sourceAlgorithm: "atlas-1",
       causeId: event.id,
       radius,
       center,

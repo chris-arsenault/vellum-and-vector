@@ -1,6 +1,6 @@
 import type { SocietyWork } from "@atlas/domain";
 import type { GenerationState } from "./process";
-import { Feature } from "./canonry/codes";
+import { Feature } from "./world/codes";
 
 /**
  * Consequences that live in the physical workspace rather than a published channel: a weir

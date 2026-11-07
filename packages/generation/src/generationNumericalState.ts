@@ -1,6 +1,6 @@
 import { Band, type Coverage, type GridSurface } from "@atlas/domain";
 import type { GenerationState } from "./process";
-import type { MagicWorkspace } from "./canonry/magicState";
+import type { MagicWorkspace } from "./world/magicState";
 
 type Groups = Map<Coverage, Set<Band>>;
 function add(groups: Groups, coverage: Coverage, band: Band) {

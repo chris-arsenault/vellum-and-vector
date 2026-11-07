@@ -1,12 +1,12 @@
 import { builtinLayers, createAdaptiveField, createAdaptiveTopology, spatial } from "@atlas/domain";
 import { landscape } from "../../packages/generation/src/mapFixtures";
-import { createWorldMesh } from "../../packages/generation/src/canonry/worldMesh";
+import { createWorldMesh } from "../../packages/generation/src/world/worldMesh";
 import {
   refreshWorkspaceSamples,
   type AtlasPhysicalWorkspace,
-} from "../../packages/generation/src/canonry/atlasWorkspace";
-import { createField } from "../../packages/generation/src/canonry/field";
-import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
+} from "../../packages/generation/src/world/atlasWorkspace";
+import { createField } from "../../packages/generation/src/world/field";
+import { atlasPhysicalProfile } from "../../packages/generation/src/world/atlasProfile";
 import { publishKinds } from "../../packages/generation/src/poi/poiPublish";
 
 /** Real ecological polygon extraction on small, controlled communities for the GIS journey. */

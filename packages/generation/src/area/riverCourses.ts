@@ -1,9 +1,9 @@
 import { point, spatial, unwrapCoordinates, type Band, type DrainageReach } from "@atlas/domain";
-import { nativePosition } from "../canonry/atlasWorkspace";
-import type { PhysicalField } from "../canonry/field";
-import { releaseWorking, workingArray } from "../canonry/physicalNumerics";
-import { riverCourseJudgments } from "../canonry/worldRiverCourses";
-import { coordinateKey } from "../canonry/worldSources";
+import { nativePosition } from "../world/atlasWorkspace";
+import type { PhysicalField } from "../world/field";
+import { releaseWorking, workingArray } from "../world/physicalNumerics";
+import { riverCourseJudgments } from "../world/worldRiverCourses";
+import { coordinateKey } from "../world/worldSources";
 import { heldFor } from "../poi/poiReads";
 import type { GenerationState } from "../process";
 import { isWorldGeography, mapScale } from "../worldSignificance";

@@ -1,7 +1,7 @@
 import type { Band } from "@atlas/domain";
-import type { PhysicalContext } from "../../../packages/generation/src/canonry/context";
-import type { PhysicalField } from "../../../packages/generation/src/canonry/field";
-import { meshDeltaX } from "../../../packages/generation/src/canonry/mesh";
+import type { PhysicalContext } from "../../../packages/generation/src/world/context";
+import type { PhysicalField } from "../../../packages/generation/src/world/field";
+import { meshDeltaX } from "../../../packages/generation/src/world/mesh";
 import { rockKindOfCode } from "../../../packages/generation/src/rock/rockCatalogue";
 import {
   layerDepth,
@@ -9,12 +9,12 @@ import {
   rockLayers,
 } from "../../../packages/generation/src/rock/rockColumn";
 import { rockBodies, type BodyGround } from "./reliefBodies";
-import { smoothMetric } from "../../../packages/generation/src/canonry/metricSmoothing";
+import { smoothMetric } from "../../../packages/generation/src/world/metricSmoothing";
 import {
   releaseWorking,
   retainedArray,
   workingArray,
-} from "../../../packages/generation/src/canonry/physicalNumerics";
+} from "../../../packages/generation/src/world/physicalNumerics";
 
 /**
  * Whether the world's mechanisms leave what they claim: how much of each step's change runs across

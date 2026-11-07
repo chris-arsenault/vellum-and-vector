@@ -1,6 +1,6 @@
-import type { PhysicalContext } from "../canonry/context";
-import type { PhysicalField } from "../canonry/field";
-import type { PhysicalProfile } from "../canonry/profile";
+import type { PhysicalContext } from "../world/context";
+import type { PhysicalField } from "../world/field";
+import type { PhysicalProfile } from "../world/profile";
 import { ask, worldMoved } from "../coupling/answers";
 import "../coupling/responders";
 import { WearStage } from "../coupling/wearStage";
@@ -12,7 +12,6 @@ import {
   margins,
   moraines,
   mountains,
-  outsideWaves,
   plates,
   riverLoad,
   seaFloor,
@@ -20,10 +19,11 @@ import {
   shoreDetail,
   volcanoes,
 } from "./builders";
-import { coast } from "./coast";
+import { coast, outsideWaves } from "./coast";
 import { creep } from "./creep";
 import type { GroundProcess, ProcessReading, ProcessWork } from "./groundProcess";
 import { ice } from "./ice";
+import { toolsFor } from "./processTools";
 import { slopes, slopesAfterStreams } from "./slopes";
 import { solution } from "./solution";
 import { streams } from "./streams";
@@ -53,17 +53,16 @@ export const groundProcesses: readonly GroundProcess[] = [
   outsideWaves,
   crustUplift,
 ];
-function workFor(map: PhysicalField, context: PhysicalContext): ProcessWork<never> {
-  const span = context.Span;
+function workFor(map: PhysicalField, context: PhysicalContext): ProcessWork<never, never> {
   return {
     field: map as never,
     context,
     settings: context.Profile,
     ground: groundOf(map),
-    span,
+    span: context.Span,
     ask: (key) => ask(map, key, context),
     wear: new WearStage(map),
-    world: map,
+    tools: toolsFor(map),
   };
 }
 /** A step of the sequence that hands each process in turn only what it declared. */
@@ -71,9 +70,13 @@ export const actBy =
   (...processes: readonly GroundProcess[]) =>
   (map: PhysicalField, context: PhysicalContext) => {
     worldMoved(map);
-    const work = workFor(map, context) as unknown as ProcessWork<never>;
+    const work = workFor(map, context);
     for (const each of processes) {
-      (each.run as (w: ProcessWork<never>) => void)(work);
+      if (each.build) {
+        each.build(map, context);
+        continue;
+      }
+      (each.run as (w: ProcessWork<never, never>) => void)(work);
       work.wear.settle();
     }
   };

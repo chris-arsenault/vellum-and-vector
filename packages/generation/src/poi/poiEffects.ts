@@ -1,6 +1,6 @@
 import type { Band } from "@atlas/domain";
-import type { PhysicalBufferName, PhysicalField } from "../canonry/field";
-import { rebuild } from "../canonry/surface";
+import type { PhysicalBufferName, PhysicalField } from "../world/field";
+import { rebuild } from "../world/surface";
 import type { GenerationState } from "../process";
 import { Contributions, ledgerCeilings, ledgerFloors } from "../regional/media";
 import type { RegionalState } from "../regional/state";

@@ -7,7 +7,6 @@ import { physicalCartography } from "./physicalCartography";
 import { clockConfiguration } from "./featureConfiguration";
 import type { GenerationSlot } from "./generationSlots";
 import { physicalProfileConfiguration } from "./physicalProfileConfiguration";
-export { acceptedEmptyByConsumer } from "./physicalInputs";
 import { landmarkFeature } from "./landmarkFeature";
 
 type Operations = Record<string, (string | [string, ParameterValues])[]>;
@@ -28,7 +27,7 @@ function definition(
 ): GenerationFeature {
   const processes = Object.values(operations)
     .flat()
-    .map((entry) => `canonry.${typeof entry === "string" ? entry : entry[0]}`);
+    .map((entry) => `atlas.${typeof entry === "string" ? entry : entry[0]}`);
   return {
     id,
     label,
@@ -43,10 +42,7 @@ function definition(
     processes: [...new Set(processes)],
     slots: Object.keys(operations) as GenerationSlot[],
     requires: options.requires ?? [],
-    absent: (options.absent ?? []).map((product) => ({
-      product: `canonry:${product}`,
-      initializer: "atlas.absent-physical",
-    })),
+    absent: options.absent ?? [],
     contribute(slot, _configuration, context) {
       if (options.when && !options.when(slot, context)) return [];
       return (operations[slot] ?? []).map((entry): ProcessInvocation => {
@@ -54,8 +50,8 @@ function definition(
         return {
           kind: "process",
           id: name,
-          process: `canonry.${name}`,
-          version: "0f62584c",
+          process: `atlas.${name}`,
+          version: "1",
           parameters,
         };
       });

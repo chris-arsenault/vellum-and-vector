@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { defaultTerrainCells, generationResolution, generationWorkload } from "./resolution";
-import { createWorldMesh } from "./canonry/worldMesh";
-import { createAtlasWorkspace } from "./canonry/atlasWorkspace";
+import { createWorldMesh } from "./world/worldMesh";
+import { createAtlasWorkspace } from "./world/atlasWorkspace";
 import { landscape } from "./mapFixtures";
 import { createGrid, rectangle } from "@atlas/domain";
 

@@ -1,10 +1,10 @@
 import type { MagicFeatureRule } from "@atlas/domain";
-import { craterRelief, volcanicRelief } from "../canonry/geologicalFeatures";
-import { keyCols } from "../canonry/landforms";
-import type { MagicField } from "../canonry/magicState";
-import { significantMagicArea } from "../canonry/worldMagicSignificance";
-import { worldFjordLength } from "../canonry/worldSiteEvidence";
-import { regionEvidence } from "../canonry/worldRegionEvidence";
+import { craterRelief, volcanicRelief } from "../world/geologicalFeatures";
+import { keyCols } from "../world/landforms";
+import type { MagicField } from "../world/magicState";
+import { significantMagicArea } from "../world/worldMagicSignificance";
+import { worldFjordLength } from "../world/worldSiteEvidence";
+import { regionEvidence } from "../world/worldRegionEvidence";
 import type { GenerationState } from "../process";
 import {
   isWorldGeography,

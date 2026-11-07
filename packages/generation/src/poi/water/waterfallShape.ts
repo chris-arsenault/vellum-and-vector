@@ -1,5 +1,5 @@
-import { riverDrop, waterfallLeastDrop } from "../../canonry/landforms";
-import { hashUnit } from "../../canonry/noise";
+import { riverDrop, waterfallLeastDrop } from "../../world/landforms";
+import { hashUnit } from "../../world/noise";
 import { hostedCell } from "../../area/areaHosting";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";

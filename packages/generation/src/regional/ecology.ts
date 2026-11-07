@@ -1,26 +1,26 @@
-import { accumulateOrganicMatter } from "../canonry/ecologyCarbon";
-import { disturbEcology, floodEcology } from "../canonry/ecologyDisturbance";
+import { accumulateOrganicMatter } from "../world/ecologyCarbon";
+import { disturbEcology, floodEcology } from "../world/ecologyDisturbance";
 import {
   classifyBiome,
   environment,
   neutralEcology,
   type EcologyForcing,
-} from "../canonry/ecologyEnvironment";
+} from "../world/ecologyEnvironment";
 import { spatial } from "@atlas/domain";
-import { nativePosition } from "../canonry/atlasWorkspace";
-import { dispersePlants, initializeEcology } from "../canonry/ecologyEstablishment";
-import { livingPlantCarbon, plantGroups } from "../canonry/ecologyGroups";
+import { nativePosition } from "../world/atlasWorkspace";
+import { dispersePlants, initializeEcology } from "../world/ecologyEstablishment";
+import { livingPlantCarbon, plantGroups } from "../world/ecologyGroups";
 import {
   authoritativeCanopy,
   growCommunities,
   normalizeCommunities,
   updateTreeCover,
-} from "../canonry/ecologyGrowth";
-import { ecologicalMagicEffectBindings, ecologicalMagicEffects } from "../canonry/ecologyProcesses";
-import { erosionHistory, evolveSoils } from "../canonry/ecologySoils";
-import { ecologyScalars } from "../canonry/ecologyState";
-import { heldCharge } from "../canonry/magicFeedback";
-import { hashUnit } from "../canonry/noise";
+} from "../world/ecologyGrowth";
+import { ecologicalMagicEffectBindings, ecologicalMagicEffects } from "../world/ecologyProcesses";
+import { erosionHistory, evolveSoils } from "../world/ecologySoils";
+import { ecologyScalars } from "../world/ecologyState";
+import { heldCharge } from "../world/magicFeedback";
+import { hashUnit } from "../world/noise";
 import { generationFeatures } from "../generationFeatures";
 import { capturedCelsius, magicHeat } from "./glacial";
 import { distance, isContent, positionOf, regionalSpan } from "./lattice";

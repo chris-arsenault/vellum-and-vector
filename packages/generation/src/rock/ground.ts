@@ -1,5 +1,5 @@
-import type { PhysicalField } from "../canonry/field";
-import { clamp, units } from "../canonry/math";
+import type { PhysicalField } from "../world/field";
+import { clamp, units } from "../world/math";
 import { givenUp, type CompiledMix } from "./modes";
 import { layerDepth, layerKind, rockLayers } from "./rockColumn";
 import { rockCatalogue, rockKindOfCode, type RockKind } from "./rockCatalogue";

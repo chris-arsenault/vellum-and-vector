@@ -1,6 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { deepOceanZone } from "../../canonry/geography";
-import { deepSiteScore } from "../../canonry/magicSources";
+import { deepOceanZone } from "../../world/geography";
+import { deepSiteScore } from "../../world/magicSources";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, counterpartOf, movesTo, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";

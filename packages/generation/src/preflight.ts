@@ -12,7 +12,7 @@ import {
   type ProcessReconciliation,
 } from "./process";
 import { sequenceStages, type SequenceStage } from "./sequence";
-import { ProductLedger, processRequirements } from "./productLedger";
+import { ProductLedger } from "./productLedger";
 import { validateBehaviorBinding } from "./processTraits";
 import type { ResolvedFeatures } from "./features";
 
@@ -80,15 +80,15 @@ function inspectStage(
     const contract = process.contract;
     validateBehaviorBinding(process, stage);
     invocationParameters(contract, configuration, stage);
-    for (const input of processRequirements(contract)) {
-      if (!products.accepts(input)) {
-        const invalidator = products.invalidatedBy(input.product);
+    for (const product of contract.requires) {
+      if (!products.accepts(product)) {
+        const invalidator = products.invalidatedBy(product);
         diagnostics.push({
           code: "generation_prerequisite",
           severity: "error",
           invocation: path,
-          resource: input.product,
-          message: `${path} requires ${input.product}${invalidator ? `, invalidated by ${invalidator}` : " from an earlier process"}. Restore its producer or disable the dependent choice.`,
+          resource: product,
+          message: `${path} requires ${product}${invalidator ? `, invalidated by ${invalidator}` : " from an earlier process"}. Restore its producer or disable the dependent choice.`,
         });
       }
     }

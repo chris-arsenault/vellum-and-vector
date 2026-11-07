@@ -16,12 +16,7 @@ import { sequenceStages, type SequenceStage } from "./sequence";
 import { validateWorkingMap } from "./mapValidation";
 import { composeAuthoredSamples } from "./mapAuthored";
 import { invocationParameters } from "./preflight";
-import {
-  ProductLedger,
-  bindNativeFacts,
-  detachNativeFacts,
-  processRequirements,
-} from "./productLedger";
+import { ProductLedger } from "./productLedger";
 import { executeProcessBehavior } from "./processTraits";
 import {
   processDiagnostics,
@@ -85,7 +80,6 @@ export class MapRunner {
     const state = prepareWorkingState(initial, options);
     const causes: GenerationCause[][] = [];
     const products = new ProductLedger(state.facts, this.registry.productDefinitions());
-    bindNativeFacts(state, products);
     const validate = workingValidator(state, initial);
     composeAuthoredSamples(state, initial.domain);
     options.progress?.(["prepare"], 0, "Validating inherited geography");
@@ -108,16 +102,12 @@ export class MapRunner {
         this.checkCancelled(options);
         products.enterEpoch(stage.path.join("/"));
         validate();
-        await observeBoundary(
-          options,
-          {
-            configurationHash,
-            kind: "epoch",
-            ancestry: structuredClone(stage.epochs),
-            state,
-          },
-          products
-        );
+        await options.saveBoundary?.({
+          configurationHash,
+          kind: "epoch",
+          ancestry: structuredClone(stage.epochs),
+          state,
+        });
       } else {
         await this.runProcess(
           state,
@@ -141,7 +131,6 @@ export class MapRunner {
     }
     options.progress?.(["finalize"], 0.99, "Validating completed geography");
     validate();
-    detachNativeFacts(state);
     const result: CompletedBoundary = { configurationHash, kind: "final", ancestry: [], state };
     await options.saveBoundary?.(result);
     return result;
@@ -172,17 +161,15 @@ export class MapRunner {
     }
     const process = this.registry.get(stage.invocation!.process, stage.invocation!.version);
     const record = processDiagnostics(state, stage, options.diagnostic);
-    const missing = processRequirements(process.contract).filter(
-      (input) => !products.accepts(input)
-    );
+    const missing = process.contract.requires.filter((product) => !products.accepts(product));
     if (missing.length) {
       record(
-        missing.map((input) => ({
+        missing.map((product) => ({
           code: "stale_fact",
-          message: `Skipped ${process.contract.id}: requires fresh ${input.product} in the current map/epoch.`,
+          message: `Skipped ${process.contract.id}: requires ${product}, which no selected step has written.`,
           severity: "warning",
           invocation: null,
-          resource: input.product,
+          resource: product,
         })),
         "skipped"
       );
@@ -233,11 +220,9 @@ export class MapRunner {
   ) {
     const invocation = stage.invocation!,
       process = this.registry.get(invocation.process, invocation.version);
-    bindNativeFacts(state, products);
     const context = this.context(state, stage, parameters, options, causes, products, original);
     options.progress?.(stage.path, 0, `Starting ${process.contract.id}`);
     await executeProcessBehavior(process, state, context);
-    bindNativeFacts(state, products);
     options.progress?.(stage.path, 0.95, `Validating ${process.contract.id}`);
     if (!process.contract.workspaceOnly) composeAuthoredSamples(state, original);
     const diagnostics = process.validate(state, context);
@@ -371,16 +356,4 @@ function workingValidator(state: GenerationState, initial: GenerationState) {
       "Generation retains completed historical causes while changing the present."
     );
   };
-}
-async function observeBoundary(
-  options: MapRunnerOptions,
-  boundary: CompletedBoundary,
-  products: ProductLedger
-) {
-  detachNativeFacts(boundary.state);
-  try {
-    await options.saveBoundary?.(boundary);
-  } finally {
-    bindNativeFacts(boundary.state, products);
-  }
 }

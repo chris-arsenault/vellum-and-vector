@@ -1,8 +1,8 @@
 import { spatial, type AtlasFeature, type DrainageReach } from "@atlas/domain";
-import { nativePosition } from "../canonry/atlasWorkspace";
+import { nativePosition } from "../world/atlasWorkspace";
 import { riversOf } from "../area/riverCourses";
 import { continuingRivers } from "../area/riverLineage";
-import { riverCourseJudgments, type CourseJudgment } from "../canonry/worldRiverCourses";
+import { riverCourseJudgments, type CourseJudgment } from "../world/worldRiverCourses";
 import type { RegionalState } from "../regional/state";
 import { generationFeatures } from "../generationFeatures";
 import type { GenerationState } from "../process";

@@ -14,7 +14,7 @@ import { SocietySpread } from "./societyTraversal";
 import { dryLand } from "./societySupport";
 import { nearestSocietySample } from "./societySpatial";
 import { profileOf } from "./societyProfile";
-import { areaGeometry } from "./canonry/geographicContours";
+import { areaGeometry } from "./world/geographicContours";
 
 type Meaning = "sovereignty" | "control" | "claim";
 /** Travel budget grows with supported population, independently of ownership-cell area. */

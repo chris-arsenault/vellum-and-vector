@@ -57,7 +57,7 @@ const survey: GenerationModule = {
           temperature: { type: "number", unit: "ratio", required: true },
           multiplier: { type: "number", unit: "ratio", required: true },
         },
-        requires: ["canonry:Elevation"],
+        requires: ["field:Elevation"],
         produces: ["test:survey"],
         invalidates: [],
       },
@@ -143,7 +143,7 @@ it("extends the real atlas recipe, runtime and new-layer publication by register
     const prepared = prepareAtlasGeneration(snapshot, request);
     request.features!["test.survey"].settings!.temperature = 0.9;
     request.features!["test.survey"].configuration!.multiplier = 10;
-    request.processes!["canonry.impact-cratering"] = false;
+    request.processes!["atlas.impact-cratering"] = false;
     expect(prepared.diagnostics).toEqual([]);
     expect(prepared.input.parameters!.temperature).toBe(17);
     expect(prepared.input.configuration!.inputs!.publications).toEqual(
@@ -208,7 +208,7 @@ async function runModule(
   state.domain = structuredClone(message.snapshot);
   state.surface.scope = state.domain.scope;
   state.publications = atlasGenerationModules.publications(prepared.input, state.domain.world);
-  state.facts.add("canonry:Elevation");
+  state.facts.add("field:Elevation");
   const configuration = {
     ...prepared.input.configuration!,
     sequence: [

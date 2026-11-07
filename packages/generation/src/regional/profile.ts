@@ -1,5 +1,5 @@
 import { resolutionCells } from "@atlas/domain";
-import type { PhysicalProfile } from "../canonry/profile";
+import type { PhysicalProfile } from "../world/profile";
 
 /** Metres of glacial erosion a refined map reads as a fjord's trough. */
 export const regionalFjordErosion = 30;

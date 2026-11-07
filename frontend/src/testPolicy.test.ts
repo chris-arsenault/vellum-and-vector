@@ -56,7 +56,7 @@ it.each([
   ["src/example.test.ts", 'import { generateAtlas as run } from "@atlas/generation"; run();'],
   [
     "src/example.test.ts",
-    'import { physicalSchedule } from "../../packages/generation/src/canonry/schedule"; physicalSchedule([]);',
+    'import { physicalSchedule } from "../../packages/generation/src/world/schedule"; physicalSchedule([]);',
   ],
   ["tests/example.test.ts", 'import { test } from "@playwright/test"; test("bad", () => {});'],
 ])("lint rejects an expensive test bypass in %s", async (filePath, code) => {

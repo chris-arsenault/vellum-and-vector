@@ -14,7 +14,7 @@ import {
 import type { Geometry } from "geojson";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { atlasInitialState } from "../atlasInitialState";
-import { structureChannels } from "../canonry/atlasChannels";
+import { structureChannels } from "../world/atlasChannels";
 import type { GenerationState } from "../process";
 
 /**
@@ -187,7 +187,7 @@ export function refinementResolution(
 /**
  * The initial generation state of a refinement: the generator's own child surface over this
  * map's frame at the refinement cell span, with the pinned present channels inherited onto
- * it. The physical field is built from it by `canonry.initialize`, like any other run.
+ * it. The physical field is built from it by `atlas.initialize`, like any other run.
  */
 export function regionalInitialState(
   source: DomainSnapshot,

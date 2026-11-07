@@ -1,6 +1,6 @@
 import { landmarkKind } from "@atlas/domain";
-import { nearestOnPath, pathMetrics, type Placed } from "../../canonry/landmarkGeometry";
-import { maintainLandmark, placeLandmark, type LandmarkLedger } from "../../canonry/landmarks";
+import { nearestOnPath, pathMetrics, type Placed } from "../../world/landmarkGeometry";
+import { maintainLandmark, placeLandmark, type LandmarkLedger } from "../../world/landmarks";
 import { distance, isContent, regionalSpan } from "../lattice";
 import { repel } from "../network";
 import type { Evidence, RegionalState } from "../state";

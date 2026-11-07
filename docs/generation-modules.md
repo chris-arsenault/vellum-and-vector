@@ -153,13 +153,12 @@ Every process binds a behavior. Material transformation awaits both transformati
 asynchronous failure. Behaviors remain trusted operations over shared mutable
 state, rather than a runtime capability sandbox.
 
-One `ProductLedger` drives prerequisite checks, preflight and execution. Native
-`AvailableFacts` is a runtime view of that ledger. Missing, stale and explicitly
-initialized-empty products differ; each consumer names the initializer whose
-empty result it accepts. Epoch response products expire at epoch boundaries;
-carried material, ice state and histories use separate retained products.
-Explicitly omitted event writers can declare persistent neutral history. An
-ordinary empty computation still becomes stale when invalidated.
+One `ProductLedger` drives prerequisite checks, preflight and execution. For world
+steps a product is a band, `field:<band>`, recorded as written when a selected step
+that declares writing it runs, or when the map inherits it. A step can do without a
+band it does not list as needed, since an unwritten band reads as nothing happened;
+a feature that is switched off holds its histories as nothing having happened. Epoch
+response products expire at epoch boundaries.
 
 Process product definitions are the provider authority. Distinct processes
 cannot both produce an exclusive product; repeated invocations of one provider
@@ -187,7 +186,7 @@ one.
 A module declares field or geographic publications with complete layer metadata.
 Fields include units and intensive, extensive or categorical quantity semantics.
 Geographic declarations identify supported kinds and network output. Native
-channel conversion remains in `canonry/atlasChannels.ts`; module publication
+channel conversion remains in `world/atlasChannels.ts`; module publication
 definitions select its bindings before final projection.
 
 The candidate publisher validates registered products, installs compatible new

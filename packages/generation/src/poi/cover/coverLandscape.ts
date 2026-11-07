@@ -1,13 +1,13 @@
 import { placeMinimumCells, type AtlasFeature } from "@atlas/domain";
-import { biomeRules } from "../../canonry/ecologyBiomes";
-import { biomeFamily, summarize } from "../../canonry/ecologyFeatures";
-import { components, placeFeature } from "../../canonry/geographicRegions";
+import { biomeRules } from "../../world/ecologyBiomes";
+import { biomeFamily, summarize } from "../../world/ecologyFeatures";
+import { components, placeFeature } from "../../world/geographicRegions";
 import {
   familyMargin,
   landscapeAttributes,
   landscapeExtent,
   landscapeSurface,
-} from "../../canonry/worldEcologyFeatures";
+} from "../../world/worldEcologyFeatures";
 import type { GenerationState } from "../../process";
 import type { PoiPlace } from "../poiContract";
 import type { PoiKindId } from "../poiKinds";

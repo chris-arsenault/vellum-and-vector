@@ -177,17 +177,16 @@ entrance connections.
 
 ### Procedural generation
 
-The physical generator ports [The Canonry Game's implementation at
-0f62584c](https://github.com/chris-arsenault/the-canonry-game/tree/0f62584c114863ffadeb5e29e021f5fce6b37a61/src/Engine.WorldGen/PhysicalGeneration)
-to TypeScript. It retains the native triangular mesh, fixed-point elevations,
-material transport, physical processes and multi-epoch order. The atlas adapter
-projects completed geography into metric GIS fields and retains authored inputs.
+The physical generator works on a triangular mesh with fixed-point elevations, moves
+material between stocks through one ledger, and runs its processes over repeated
+epochs. The atlas adapter projects completed geography into metric GIS fields and
+retains authored inputs.
 
-The [generation system](docs/generation-workflows.md) follows Canonry's structure
-in TypeScript: configured processes operate on shared GIS/domain working state,
-check required facts, apply their changes, validate them and update fact validity.
-The common contract covers typed parameters, spatial scope, deterministic seeds
-and application/validation for GIS and domain processes.
+In the [generation system](docs/generation-workflows.md), configured processes operate
+on shared GIS/domain working state: each checks that a selected step wrote what it needs,
+applies its changes and validates them. The common contract covers typed parameters,
+spatial scope, deterministic seeds and application/validation for GIS and domain
+processes.
 
 Map profiles configure which processes run, their order and workflow parameters.
 A process can be reused at different levels or several positions in a sequence.
@@ -275,8 +274,8 @@ publication-rule unit tests; none generates a world. For example:
 
 ```sh
 pnpm test packages/domain/src/fieldContours.test.ts
-pnpm test packages/generation/src/canonry/drainageFlood.test.ts
-pnpm test packages/generation/src/canonry/metricSearch.test.ts
+pnpm test packages/generation/src/world/drainageFlood.test.ts
+pnpm test packages/generation/src/world/metricSearch.test.ts
 pnpm --dir frontend test src/rasterTiles.test.ts
 ```
 

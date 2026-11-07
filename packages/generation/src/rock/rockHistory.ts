@@ -1,8 +1,8 @@
-import type { PhysicalContext } from "../canonry/context";
-import type { PhysicalField } from "../canonry/field";
-import { units } from "../canonry/math";
-import { hashUnit, meshNoise } from "../canonry/noise";
-import { rebuild } from "../canonry/surface";
+import type { PhysicalContext } from "../world/context";
+import type { PhysicalField } from "../world/field";
+import { units } from "../world/math";
+import { hashUnit, meshNoise } from "../world/noise";
+import { rebuild } from "../world/surface";
 import { raiseRock } from "./groundLedger";
 import { changeLayer, deepestLayer, layBed, layerDepth, layerKind, setLayer } from "./rockColumn";
 import { rockCatalogue, rockKindOfCode, type RockKindId } from "./rockCatalogue";
@@ -90,7 +90,7 @@ export function lithification(map: PhysicalField) {
     if (sediment < from) continue;
     const amount = sediment - keep;
     map.SedimentThickness.add(i, -amount);
-    raiseRock(map, i, amount, "lithification", "loose");
+    raiseRock(map, i, amount, "burial", "loose");
     layBed(map, i, rockCatalogue[sedimentKind(map, i)], amount);
     rebuild(map, i);
   }

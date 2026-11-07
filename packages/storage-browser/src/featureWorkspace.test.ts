@@ -13,7 +13,7 @@ import { publishGenerationProducts } from "../../generation/src/publication";
 import { MapRunner } from "../../generation/src/mapRunner";
 import { MapProcessRegistry } from "../../generation/src/process";
 import { SqliteFeatureWorkspace } from "./featureWorkspace";
-import { retainGeographicIdentities } from "../../generation/src/canonry/geographicIdentity";
+import { retainGeographicIdentities } from "../../generation/src/world/geographicIdentity";
 import { fixture, scope } from "./catalogFixture";
 
 async function working() {

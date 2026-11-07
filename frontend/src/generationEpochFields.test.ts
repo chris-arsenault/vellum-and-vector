@@ -5,7 +5,7 @@ import {
   setFeatureSetting,
   updateFeature,
 } from "./generationDraft";
-import { atlasEpoch } from "../../packages/generation/src/canonry/atlasProfile";
+import { atlasEpoch } from "../../packages/generation/src/world/atlasProfile";
 import {
   changeEpochControl,
   epochControlValue,

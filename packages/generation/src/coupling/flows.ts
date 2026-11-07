@@ -1,4 +1,4 @@
-import type { PhysicalField } from "../canonry/field";
+import type { PhysicalField } from "../world/field";
 
 /**
  * The stocks material sits in. What changes the land moves material between two of these through the

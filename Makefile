@@ -1,4 +1,4 @@
-.PHONY: ci lint format format-check typecheck test test-architecture test-perf test-browser terraform-fmt-check build dev canonry-fixtures
+.PHONY: ci lint format format-check typecheck test test-architecture process-bands test-perf test-browser terraform-fmt-check build dev
 
 ci: lint format-check typecheck test test-architecture terraform-fmt-check
 
@@ -23,6 +23,10 @@ test:
 test-architecture:
 	pnpm exec vitest run -c vitest.architecture.config.ts
 
+# Writes afresh what each process on the whole field reaches, which the architecture check holds it to.
+process-bands:
+	ATLAS_WRITE_BANDS=1 pnpm exec vitest run -c vitest.architecture.config.ts processBands
+
 # One run of each data structure against its substitute; numbers land in test-results/.
 test-perf:
 	ATLAS_PERF=1 pnpm exec vitest run -c vitest.architecture.config.ts
@@ -38,6 +42,3 @@ build:
 
 dev:
 	pnpm dev
-
-canonry-fixtures:
-	dotnet run --project tools/canonry-reference/CanonryReference.csproj -c Release -- packages/generation/fixtures/canonry-foundation.json packages/generation/src/canonry/contracts.generated.json

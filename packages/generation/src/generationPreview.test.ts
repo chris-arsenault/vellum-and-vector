@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
 import { generationPreview } from "./generationPreview";
 import { landscape } from "./mapFixtures";
-import { createField } from "./canonry/field";
-import { createWorldMesh } from "./canonry/worldMesh";
-import { atlasPhysicalProfile } from "./canonry/atlasProfile";
+import { createField } from "./world/field";
+import { createWorldMesh } from "./world/worldMesh";
+import { atlasPhysicalProfile } from "./world/atlasProfile";
 import { residentBand, rectangle, createGrid, putChannel, generateBand } from "@atlas/domain";
 
 it("previews fractional field edges from real exported geography without rejecting boundary samples", () => {

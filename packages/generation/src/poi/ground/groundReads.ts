@@ -1,9 +1,9 @@
 import type { AtlasFeature, MagicSystem } from "@atlas/domain";
-import { bareGround } from "../../canonry/ecologyBiomes";
-import { potentialEvaporation } from "../../canonry/ecologyEnvironment";
-import type { PhysicalBufferName } from "../../canonry/field";
-import { components } from "../../canonry/geographicRegions";
-import { reservoirAmount } from "../../canonry/magicState";
+import { bareGround } from "../../world/ecologyBiomes";
+import { potentialEvaporation } from "../../world/ecologyEnvironment";
+import type { PhysicalBufferName } from "../../world/field";
+import { components } from "../../world/geographicRegions";
+import { reservoirAmount } from "../../world/magicState";
 import type { GenerationState } from "../../process";
 import { closedBasinAridity } from "../../regional/network";
 import type { RegionalState } from "../../regional/state";

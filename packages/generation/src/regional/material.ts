@@ -1,4 +1,4 @@
-import { hashUnit } from "../canonry/noise";
+import { hashUnit } from "../world/noise";
 import { groundOf, type GroundQuery } from "../rock/ground";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { grainAt } from "./character";

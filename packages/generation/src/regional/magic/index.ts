@@ -1,14 +1,14 @@
 import type { Band, MagicSource } from "@atlas/domain";
-import { evaluateConfluences } from "../../canonry/magicConfluences";
+import { evaluateConfluences } from "../../world/magicConfluences";
 import {
   heldCharge,
   magicLivingFeedback,
   magicOceanFeedback,
   magicThermalFeedback,
-} from "../../canonry/magicFeedback";
-import { classifyMagicFeatures, coverSystems, projectMagic } from "../../canonry/magicFeatures";
-import { propagateMagic } from "../../canonry/magicPropagation";
-import { riverWarmth } from "../../canonry/riverWarmth";
+} from "../../world/magicFeedback";
+import { classifyMagicFeatures, coverSystems, projectMagic } from "../../world/magicFeatures";
+import { propagateMagic } from "../../world/magicPropagation";
+import { riverWarmth } from "../../world/riverWarmth";
 import {
   declareConfluenceWrites,
   declareHallowedWrites,
@@ -23,9 +23,9 @@ import {
   locateMagicSources,
   magicSourceStrategies,
   type SourceStrategy,
-} from "../../canonry/magicSources";
-import { inheritMagicChannel } from "../../canonry/magicInheritance";
-import { initializeMagic, magicKey, systemSeed, type MagicField } from "../../canonry/magicState";
+} from "../../world/magicSources";
+import { inheritMagicChannel } from "../../world/magicInheritance";
+import { initializeMagic, magicKey, systemSeed, type MagicField } from "../../world/magicState";
 import type { RegionalState } from "../state";
 
 /**

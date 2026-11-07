@@ -1,4 +1,4 @@
-import type { PhysicalField } from "../../../packages/generation/src/canonry/field";
+import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import {
   layerDepth,
   rockLayers,

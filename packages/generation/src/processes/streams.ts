@@ -1,12 +1,7 @@
 // FluvialErosionLayer.cs, Canonry 0f62584c.
 import type { Band } from "@atlas/domain";
-import { waterGathered } from "../canonry/flowGraph";
-import { drainageConditioning } from "../canonry/drainageFlood";
-import { resolveLandTargets } from "../canonry/flowGuidance";
-import { clamp, units } from "../canonry/math";
-import { meshDeltaX } from "../canonry/mesh";
-import { physicalDistance } from "../canonry/physicalMetric";
-import { releaseWorking, workingArray } from "../canonry/physicalNumerics";
+import { clamp, units } from "../world/math";
+import { meshDeltaX } from "../world/mesh";
 import type { WearCause } from "../coupling/wearStage";
 import { compileMix } from "../rock/modes";
 import { defineProcess, type ProcessWork } from "./groundProcess";
@@ -20,60 +15,9 @@ const cutting: WearCause = { id: "streams", remembers: "CumulativeFluvialErosion
 export const valleyShare = (widthShare: number, catchmentArea: number, cellArea: number) =>
   clamp((widthShare * Math.sqrt(catchmentArea)) / Math.sqrt(cellArea), 0, 1);
 
-const reads = [
-  "WaterKindCodes",
-  "Elevation",
-  "DrainageParents",
-  "DrainageElevations",
-  "LakeOverflow",
-  "LakeOutletTargets",
-] as const;
+const reads = ["WaterKindCodes", "Elevation", "DrainageElevations"] as const;
 type StreamWork = ProcessWork<(typeof reads)[number]>;
 
-function controllingSill({ field }: StreamWork, start: number, maximumSteps: number): number {
-  let selected = -1,
-    highest = -Number.MAX_VALUE,
-    i = start;
-  for (let distance = 0; distance < maximumSteps && i >= 0;) {
-    const water = field.WaterKindCodes.get(i);
-    if (water === 1) break;
-    if (water === 0 && field.Elevation.get(i) > highest) {
-      selected = i;
-      highest = field.Elevation.get(i);
-    }
-    const parent = field.DrainageParents.get(i);
-    if (parent < 0) break;
-    distance += physicalDistance(field.mesh, i, parent);
-    i = parent;
-  }
-  return selected;
-}
-/** Overflowing lakes cut their outlets, by how much water goes over the sill. */
-function cutOutlets(work: StreamWork) {
-  const { field, context: c, settings: p, world, span, wear } = work;
-  if (c.HydrologyStrength <= 0) return;
-  const cuts = workingArray(world, "float64", "fluvial:outlet-cuts");
-  for (let i = 0; i < field.mesh.count; i++) {
-    const overflow = field.LakeOverflow.get(i),
-      outlet = field.LakeOutletTargets.get(i);
-    if (overflow <= 0 || outlet < 0) continue;
-    const sill = controllingSill(work, outlet, p.LakeOutletIncisionSearchDistance);
-    if (sill < 0) continue;
-    const incision =
-      (p.LakeOutletIncisionPerSpan *
-        span *
-        (overflow / (overflow + p.LakeOutletOverflowScale)) *
-        c.HydrologyStrength) /
-      1000;
-    cuts.set(sill, Math.max(cuts.get(sill), units(incision)));
-  }
-  for (let i = 0; i < cuts.length; i++) {
-    const cut = cuts.get(i);
-    if (cut > 0) wear.demand(cutting, i, cut, cut);
-  }
-  releaseWorking(world, cuts);
-  wear.settle();
-}
 /** How steeply the water at a cell falls beyond the slope its catchment grades to, and how far. */
 function erosiveFall({ field, settings: p }: StreamWork, target: number, water: number, i: number) {
   const length = Math.hypot(
@@ -139,21 +83,21 @@ export const streams = defineProcess({
     };
   },
   run(work) {
-    const { field, context: c, settings: p, world, span, ask, wear } = work;
-    if (world.AvailableFacts.has("Lakes")) cutOutlets(work);
+    const { field, context: c, settings: p, tools, span, ask, wear } = work;
     if (c.HydrologyStrength === 0) return;
-    // Steps are how finely the work is resolved. How much gets done is the rate and the span.
+    // A lake's water falls over its sill like any river's, so its outlet cuts by what comes through
+    // and the fall there, in whatever ground it crosses. Steps are how finely the work is resolved. How much gets done is the rate and the span.
     const steps = p.FluvialErosionSteps,
       perStep = span / steps,
       runoff = ask("runoff");
     for (let step = 0; step < steps; step++) {
       const pass = { ...c, Seed: c.Seed ^ step };
-      drainageConditioning(world, pass);
-      const targets = resolveLandTargets(world, pass),
-        water = waterGathered(world, targets, runoff);
+      tools.conditionDrainage(pass);
+      const targets = tools.landTargets(pass),
+        water = tools.waterGathered(targets, runoff);
       for (let i = 0; i < field.mesh.count; i++) cutCell(work, targets, water, i, perStep);
       wear.settle();
-      releaseWorking(world, targets, water);
+      tools.release(targets, water);
     }
   },
 });

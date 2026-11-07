@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { GenerationFeature, ResolvedFeatures } from "./features";
-import { physicalProfile } from "./canonry/profile";
+import { physicalProfile } from "./world/profile";
 
 /** Only the existing coefficients used by curated outcomes are configurable here. */
 const owners = {

@@ -1,8 +1,8 @@
 import type { AtlasFeature, Band } from "@atlas/domain";
-import { heldCharge } from "../../canonry/magicFeedback";
-import { units } from "../../canonry/math";
-import { reservoirAmount, type MagicField } from "../../canonry/magicState";
-import { hashUnit } from "../../canonry/noise";
+import { heldCharge } from "../../world/magicFeedback";
+import { units } from "../../world/math";
+import { reservoirAmount, type MagicField } from "../../world/magicState";
+import { hashUnit } from "../../world/noise";
 import { generationFeatures } from "../../generationFeatures";
 import { cellAt, frameEdge, isContent, neighborsOf, regionalSpan } from "../lattice";
 import { clamp, naturalBand, type RegionalState } from "../state";

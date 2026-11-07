@@ -1,5 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { craterRelief } from "../../canonry/geologicalFeatures";
+import { craterRelief } from "../../world/geologicalFeatures";
 import type { GenerationState } from "../../process";
 import { rimCost } from "../../regional/causes/landmark";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";

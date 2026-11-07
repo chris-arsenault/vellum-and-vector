@@ -25,8 +25,8 @@ existing bodies, with no rewrite and no new storage.
   medium can shape an answer with no process edited. An answer resolves once into a band and holds until the world
   moves.
 - **Stock-and-flow for writes.** Material moves between named pools through one ledger, which keeps height, column
-  and sediment together and records who moved what. Wear lands through a stage that shares out what can go, so nothing
-  wears below base level however much is asked for.
+  and sediment together and records who moved what, naming each mover as the process it is. Wear lands through a stage,
+  so a process works from the ground as it stood and nothing wears below base level however much is asked for.
 - **Table-driven quantity kinds.** Every band declares a kind, and the kind decides what a plate move does to it. A band
   with no kind fails a test.
 - **Double dispatch stays at the ground only.** Process and layer both really vary there, as ADR 0010 set out.
@@ -51,5 +51,9 @@ Numerical accuracy and reproducibility are not goals. Nothing checks that output
 
 A new responder edits no process, and a new forcing is a key plus the processes that ask it. A new band moves with the
 crust once it has a kind. Removing caps changed the map throughout, and rates are judged by what becomes of old ground
-on the map. Builders' declarations are not enforced by types. The workflow's step facts, used for ordering and
-invalidation, remain alongside the table.
+on the map. A process on its declared view cannot compile a read or write it did not declare, and reaches the rest of
+the world only through its tools. A builder holds the whole field, and what it reaches is worked out from the program
+and held to in the architecture check. A step needs a band only if a selected step wrote it earlier; no validity is
+derived from a write, and the order of the sequence is what keeps a band right. A cell's stack through `Ground` runs
+cover, loose material and rock; the crust beneath is a stock the ledger draws on when wear passes what is piled on it,
+and soil stays ecology's depth rather than a layer.

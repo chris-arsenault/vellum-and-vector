@@ -1,5 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { bareCover, woodlandTrees } from "../../canonry/ecologyEnvironment";
+import { bareCover, woodlandTrees } from "../../world/ecologyEnvironment";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands } from "../poiCarry";
 import { notApplicable, type PoiEntry } from "../poiContract";

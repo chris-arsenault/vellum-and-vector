@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { tectonicDefaultMyr } from "./canonry/tectonicControls";
+import { tectonicDefaultMyr } from "./world/tectonicControls";
 import {
   ecologyEpochSchema,
   magicSystemSchema,

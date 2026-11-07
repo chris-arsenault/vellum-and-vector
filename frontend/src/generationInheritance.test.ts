@@ -6,7 +6,7 @@ import {
   prepareRegionalRefinement,
   type GenerationState,
 } from "@atlas/generation";
-import { createAtlasWorkspace } from "../../packages/generation/src/canonry/atlasWorkspace";
+import { createAtlasWorkspace } from "../../packages/generation/src/world/atlasWorkspace";
 import { sequenceStages } from "../../packages/generation/src/sequence";
 import { generationSnapshot } from "./generationJobs";
 import { constructedWorld } from "./constructedWorldFixture";
@@ -54,7 +54,6 @@ it("inherits impact history and fixed geography from the captured parent cells w
   const work = createAtlasWorkspace(state, "draft");
   expect(work.inherited).toBe(true);
   expect(Array.from(work.map.ImpactExcavation).some((value) => value > 0)).toBe(true);
-  expect(work.map.AvailableFacts.has("Impacts")).toBe(true);
   expect(Array.from(work.map.Elevation).every(Number.isFinite)).toBe(true);
   expect(work.map.SeaLevelInitialized).toBe(true);
   const prepared = prepareRegionalRefinement(domain, {
@@ -65,7 +64,7 @@ it("inherits impact history and fixed geography from the captured parent cells w
   });
   expect(
     sequenceStages(prepared.input.configuration!.sequence).map((stage) => stage.invocation?.process)
-  ).not.toContain("canonry.impact-cratering");
+  ).not.toContain("atlas.impact-cratering");
   expect(prepared.input.configuration!.sequence.some((step) => step.kind === "epochs")).toBe(false);
   expect(prepared.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
   expect(state.domain.world.epochs).toEqual(before.world.epochs);

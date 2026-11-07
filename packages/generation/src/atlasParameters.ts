@@ -373,12 +373,12 @@ function legacyMapBoundary(value: unknown) {
 }
 export const defaultAtlasParameters: AtlasParameters = atlasParametersSchema.parse({});
 const parameterProcesses: Partial<Record<keyof AtlasParameters, string>> = {
-  impacts: "canonry.impact-cratering",
-  impactSize: "canonry.impact-cratering",
-  volcanism: "canonry.volcanic-construction",
-  erosion: "canonry.ancestral-fluvial-erosion",
-  glaciers: "canonry.glacial-erosion",
-  coastalErosion: "canonry.coastal-erosion-and-deposition",
+  impacts: "atlas.impact-cratering",
+  impactSize: "atlas.impact-cratering",
+  volcanism: "atlas.volcanic-construction",
+  erosion: "atlas.ancestral-fluvial-erosion",
+  glaciers: "atlas.glacial-erosion",
+  coastalErosion: "atlas.coastal-erosion-and-deposition",
   vegetation: "atlas.ecology-evolve",
   grazing: "atlas.ecology-evolve",
 };

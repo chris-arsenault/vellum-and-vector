@@ -1,4 +1,4 @@
-import { desertMoisture, environment } from "../../canonry/ecologyEnvironment";
+import { desertMoisture, environment } from "../../world/ecologyEnvironment";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, counterpartOf, goes, stays } from "../poiCarry";

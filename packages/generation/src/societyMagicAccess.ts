@@ -2,7 +2,7 @@ import { gridPosition, type MagicSystem, type SocietyCommunity } from "@atlas/do
 import type { GenerationState } from "./process";
 import { samplesInBox } from "./societySpatial";
 import { societyValue } from "./societySupport";
-import { depositReservoir, drawReservoir, reservoirAmount } from "./canonry/magicState";
+import { depositReservoir, drawReservoir, reservoirAmount } from "./world/magicState";
 
 /**
  * What society asks of a system is a role its effects declare, never its name or the way

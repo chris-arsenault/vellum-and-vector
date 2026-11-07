@@ -7,7 +7,7 @@ import { landscape } from "../../generation/src/mapFixtures";
 import { generatedFeature, putGeneratedNetwork } from "../../generation/src/mapFeatures";
 import { initializeFeatureWorkspace } from "../../generation/src/generationFeatures";
 import { initializeNetworkWorkspace } from "../../generation/src/generationNetworks";
-import { retainGeographicIdentities } from "../../generation/src/canonry/geographicIdentity";
+import { retainGeographicIdentities } from "../../generation/src/world/geographicIdentity";
 
 async function working() {
   let stores!: {

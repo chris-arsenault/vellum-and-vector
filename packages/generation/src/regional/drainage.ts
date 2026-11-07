@@ -1,9 +1,9 @@
 import { KeyedHeap } from "@atlas/domain";
-import { potentialEvaporation } from "../canonry/ecologyEnvironment";
-import { clearWaterSurface } from "../canonry/field";
+import { potentialEvaporation } from "../world/ecologyEnvironment";
+import { clearWaterSurface } from "../world/field";
 import { groundOf } from "../rock/ground";
 import { surfaceStanding } from "../rock/groundQueries";
-import { units } from "../canonry/math";
+import { units } from "../world/math";
 import { celsius, regionalPrecipitation } from "./climate";
 import { channelMargins } from "./margins";
 import {

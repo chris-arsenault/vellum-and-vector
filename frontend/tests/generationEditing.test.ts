@@ -84,7 +84,7 @@ test("removes variant activity errors on restore while preserving unfinished act
   await fire.getByRole("button", { name: "Make a variant", exact: true }).click();
   await page.getByLabel("Fire variant epoch activity · multiplier", { exact: true }).fill("");
   await page.getByLabel("Pressure epoch activity · multiplier", { exact: true }).fill("");
-  await page.getByRole("button", { name: "Restore Canonry examples", exact: true }).click();
+  await page.getByRole("button", { name: "Restore example systems", exact: true }).click();
   await expect(
     page.getByLabel("Fire variant epoch activity · multiplier", { exact: true })
   ).toHaveCount(0);

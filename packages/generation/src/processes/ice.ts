@@ -1,5 +1,4 @@
 // GlacialErosionLayer, Canonry 0f62584c.
-import { refreshGrounding } from "../canonry/glacierSurface";
 import type { WearCause } from "../coupling/wearStage";
 import { compileMix } from "../rock/modes";
 import { defineProcess } from "./groundProcess";
@@ -16,36 +15,26 @@ const scouring: WearCause = {
 export const ice = defineProcess({
   id: "ice",
   statement:
-    "Grounded ice that flows hard enough plucks and grinds its bed by its flux and thickness, more where charge weakens the bed.",
-  reads: ["IceFlux", "IceThickness", "GroundedIce", "IceCharge"],
-  asks: [],
+    "Grounded ice plucks and grinds its bed by how fast it slides and how hard it bites, until it floats or its surface has no fall left to drive it.",
+  reads: ["GroundedIce"],
+  asks: ["iceBite"],
   moves: [
     ["rock", "load"],
     ["loose", "load"],
   ],
   settings: iceSettings,
-  run({ field, context: c, settings: p, ground, span, wear, world }) {
+  run({ field, context: c, settings: p, ground, span, ask, wear, tools }) {
+    const bite = ask("iceBite");
     for (let i = 0; i < field.mesh.count; i++) {
-      const flux = field.IceFlux.get(i),
-        thickness = field.IceThickness.get(i);
-      if (
-        c.GlaciationStrength === 0 ||
-        flux < p.GlacierFluxThreshold ||
-        thickness <= 0 ||
-        field.GroundedIce.get(i) === 0
-      )
-        continue;
-      // Charge in sliding ice weakens the bed it touches; cold-based ice never reaches here.
-      const power =
-          (1 +
-            (flux - p.GlacierFluxThreshold) / Math.max(1, p.GlacierFluxThreshold) +
-            thickness / Math.max(1, p.GlacierThicknessThreshold)) *
-          (1 + (p.ChargedIceErosion / 1000) * field.IceCharge.get(i)),
-        moved =
-          (power * p.GlacialCutPerPower * span * c.GlaciationStrength) / (p.GlacialYield * 1000);
-      wear.demand(scouring, i, ground.actOn(i, glacial, moved, Infinity));
+      if (c.GlaciationStrength === 0 || field.GroundedIce.get(i) === 0) continue;
+      const speed = tools.iceSpeed(i);
+      // Ice frozen to its bed never reaches here.
+      if (speed <= p.GlacierFrozenSpeed) continue;
+      const moved =
+        ((speed * p.GlacialCutPerSpeed * span * c.GlaciationStrength) / 1000) * bite.get(i);
+      wear.demand(scouring, i, ground.actOn(i, glacial, moved, tools.iceCanCut(i, p)));
     }
     wear.settle();
-    refreshGrounding(world, p);
+    tools.refreshGrounding(p);
   },
 });

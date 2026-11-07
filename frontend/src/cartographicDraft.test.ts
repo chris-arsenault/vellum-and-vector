@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { canonryMagicPresets, type MagicSystem } from "@atlas/domain";
 import { configuredPhysicalProfile } from "../../packages/generation/src/physicalProfileConfiguration";
-import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
+import { atlasPhysicalProfile } from "../../packages/generation/src/world/atlasProfile";
 import {
   newGenerationDraft,
   normalizeGenerationRecipe,

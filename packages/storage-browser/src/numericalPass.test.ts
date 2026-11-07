@@ -4,9 +4,9 @@ import {
   metricArray,
   metricProduct,
   type MetricOperator,
-} from "../../generation/src/canonry/metricOperator";
-import { createField, type PhysicalField } from "../../generation/src/canonry/field";
-import { createMesh } from "../../generation/src/canonry/mesh";
+} from "../../generation/src/world/metricOperator";
+import { createField, type PhysicalField } from "../../generation/src/world/field";
+import { createMesh } from "../../generation/src/world/mesh";
 import { blockCacheFixture } from "./blockCacheFixture";
 
 function matrix(map: PhysicalField, count: number): MetricOperator {

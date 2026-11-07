@@ -20,16 +20,16 @@ const strength = (key: EpochValueKey, label: string): EpochControl => ({
 export const physicalApplicability: Record<string, FeatureApplicability> = {
   "physical.foundation": {
     settingConsumers: {
-      continents: ["canonry.tectonic-provinces"],
-      oceanicPlates: ["canonry.tectonic-provinces"],
-      provinces: ["canonry.tectonic-provinces"],
-      landFraction: ["canonry.tectonic-provinces"],
-      mapBoundary: ["canonry.initialize", "canonry.tectonic-provinces"],
+      continents: ["atlas.tectonic-provinces"],
+      oceanicPlates: ["atlas.tectonic-provinces"],
+      provinces: ["atlas.tectonic-provinces"],
+      landFraction: ["atlas.tectonic-provinces"],
+      mapBoundary: ["atlas.initialize", "atlas.tectonic-provinces"],
     },
     initialOnlySettings: ["mapBoundary"],
   },
   "physical.tectonic-history": {
-    settingConsumers: { plateDrift: ["canonry.plate-advection"] },
+    settingConsumers: { plateDrift: ["atlas.plate-advection"] },
     epochControls: [
       strength("tectonics", "Epoch tectonic activity"),
       { key: "tectonicDurationMyr", label: "Geological interval", unit: "Myr", min: 0 },
@@ -37,15 +37,15 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
   },
   "physical.mountains": { epochControls: [strength("tectonics", "Epoch tectonic activity")] },
   "physical.volcanism": {
-    settingConsumers: { volcanism: ["canonry.volcanic-construction"] },
+    settingConsumers: { volcanism: ["atlas.volcanic-construction"] },
     epochControls: [
       { key: "volcanism", label: "Epoch volcanic activity", unit: "multiplier", min: 0 },
     ],
   },
   "physical.impacts": {
     settingConsumers: {
-      impacts: ["canonry.impact-cratering"],
-      impactSize: ["canonry.impact-cratering"],
+      impacts: ["atlas.impact-cratering"],
+      impactSize: ["atlas.impact-cratering"],
     },
     epochControls: [{ key: "impacts", label: "Epoch impact activity", unit: "multiplier", min: 0 }],
   },
@@ -60,17 +60,17 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
     epochControls: [{ key: "seaLevel", label: "Epoch sea level offset", unit: "m" }],
   },
   "physical.coastal-evolution": {
-    settingConsumers: { coastalErosion: ["canonry.coastal-erosion-and-deposition"] },
+    settingConsumers: { coastalErosion: ["atlas.coastal-erosion-and-deposition"] },
     epochControls: [strength("coasts", "Epoch coastal activity")],
   },
   "physical.climate": {
     settingConsumers: {
-      temperature: ["canonry.temperature"],
-      rainfall: ["canonry.precipitation"],
-      seaLevel: ["canonry.ocean-connectivity"],
-      southLatitude: ["canonry.temperature", "canonry.atmospheric-flow"],
-      northLatitude: ["canonry.temperature", "canonry.atmospheric-flow"],
-      latitudeProjection: ["canonry.temperature", "canonry.atmospheric-flow"],
+      temperature: ["atlas.temperature"],
+      rainfall: ["atlas.precipitation"],
+      seaLevel: ["atlas.ocean-connectivity"],
+      southLatitude: ["atlas.temperature", "atlas.atmospheric-flow"],
+      northLatitude: ["atlas.temperature", "atlas.atmospheric-flow"],
+      latitudeProjection: ["atlas.temperature", "atlas.atmospheric-flow"],
     },
     // Latitude belongs to the world frame; regions read their parent's frame.
     initialOnlySettings: ["seaLevel", ...latitudeFrameSettings],
@@ -80,7 +80,7 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
     ],
   },
   "physical.river-incision": {
-    settingConsumers: { erosion: ["canonry.ancestral-fluvial-erosion"] },
+    settingConsumers: { erosion: ["atlas.ancestral-fluvial-erosion"] },
     epochControls: [strength("hydrology", "Epoch hydrological activity")],
   },
   "physical.land-ice": {
@@ -90,7 +90,7 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
     ],
   },
   "physical.glacial-sculpting": {
-    settingConsumers: { glaciers: ["canonry.glacial-erosion", "canonry.glacial-deposition"] },
+    settingConsumers: { glaciers: ["atlas.glacial-erosion", "atlas.glacial-deposition"] },
     epochControls: [strength("ice", "Epoch glacial activity")],
   },
 };

@@ -2,8 +2,8 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 import type { GenerationState } from "@atlas/generation";
-import { physicalSampler } from "../../../packages/generation/src/canonry/physicalMetric";
-import type { PhysicalField } from "../../../packages/generation/src/canonry/field";
+import { physicalSampler } from "../../../packages/generation/src/world/physicalMetric";
+import type { PhysicalField } from "../../../packages/generation/src/world/field";
 
 /**
  * A look at a refined map's ground the moment its water is settled, from the field itself. It

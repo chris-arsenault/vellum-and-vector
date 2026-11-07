@@ -8,10 +8,10 @@ import { landscape } from "./mapFixtures";
 import { MapRunner } from "./mapRunner";
 import { MapProcessRegistry, type ProcessConfiguration } from "./process";
 import { sequenceStages } from "./sequence";
-import { nativeContracts } from "./canonry/contracts";
-import { physicalSchedule } from "./canonry/schedule";
-import { drainageSteps, glacialRunoffStep } from "./canonry/sequence";
-import { atlasEpoch } from "./canonry/atlasProfile";
+import { physicalSteps } from "./world/physicalSteps";
+import { physicalSchedule } from "./world/schedule";
+import { drainageSteps, glacialRunoffStep } from "./world/sequence";
+import { atlasEpoch } from "./world/atlasProfile";
 import { GenerationModuleRegistry, type GenerationModule } from "./generationModules";
 import { atlasGenerationModules } from "./atlasModules";
 import { worldGenerationSettings } from "./generationSettings";
@@ -21,8 +21,8 @@ it("translates legacy glacier choices into one whole feature and rejects a contr
     physicalFeatureDefinitions,
     {},
     {
-      "canonry.glacial-erosion": false,
-      "canonry.glacial-deposition": false,
+      "atlas.glacial-erosion": false,
+      "atlas.glacial-deposition": false,
     },
     {},
     ["physical"],
@@ -36,8 +36,8 @@ it("translates legacy glacier choices into one whole feature and rejects a contr
       physicalFeatureDefinitions,
       {},
       {
-        "canonry.glacial-erosion": false,
-        "canonry.glacial-deposition": true,
+        "atlas.glacial-erosion": false,
+        "atlas.glacial-deposition": true,
       }
     )
   ).toThrow("one feature");
@@ -88,7 +88,7 @@ it("blocks pressure-driven coastal modification when its material target is disa
   );
   expect(
     sequenceStages(prepared.input.configuration!.sequence).some((stage) =>
-      ["canonry.external-coastal-forcing", "canonry.coastal-erosion-and-deposition"].includes(
+      ["atlas.external-coastal-forcing", "atlas.coastal-erosion-and-deposition"].includes(
         stage.invocation?.process ?? ""
       )
     )
@@ -205,7 +205,7 @@ it("preserves shared climate occurrence identities when an unrelated impact feat
     });
   const climateKeys = (configuration: ProcessConfiguration) =>
     sequenceStages(configuration.sequence)
-      .filter((stage) => stage.invocation?.process === "canonry.temperature")
+      .filter((stage) => stage.invocation?.process === "atlas.temperature")
       .map((stage) => [...stage.epochs.map((epoch) => epoch.id), ...stage.path]);
   expect(climateKeys(enabled).length).toBeGreaterThan(1);
   expect(climateKeys(omitted)).toEqual(climateKeys(enabled));
@@ -368,10 +368,8 @@ it("retains reference numerical ordering including the atlas ecological water re
   const domain = source(),
     input = { areaId: domain.scope.areaId, seed: 73, quality: "draft", domains: ["physical"] };
   const actual = sequenceStages(atlasConfiguration(domain, input).sequence)
-    .flatMap((stage) =>
-      stage.invocation ? [stage.invocation.process.slice("canonry.".length)] : []
-    )
-    .filter((name) => Object.hasOwn(nativeContracts, name));
+    .flatMap((stage) => (stage.invocation ? [stage.invocation.process.slice("atlas.".length)] : []))
+    .filter((name) => Object.hasOwn(physicalSteps, name));
   const expected = physicalSchedule(domain.world.epochs.map(atlasEpoch)).flatMap(
     ({ step, phase }) => {
       const refresh =

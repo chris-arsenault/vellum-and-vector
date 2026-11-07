@@ -10,8 +10,8 @@ import {
   type RegularGrid,
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
-import { atlasChannels } from "./canonry/atlasChannels";
-import { nativeIndexAtSurface } from "./canonry/atlasWorkspace";
+import { atlasChannels } from "./world/atlasChannels";
+import { nativeIndexAtSurface } from "./world/atlasWorkspace";
 
 const previewChannels = new Set(["elevation", "water", "ice", "finalSurface"]);
 

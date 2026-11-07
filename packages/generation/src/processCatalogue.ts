@@ -3,42 +3,42 @@ import { atlasGenerationModules } from "./atlasModules";
 
 /** Legacy wizard aliases only. Execution uses feature definitions and contributions. */
 export const optionalProcesses: Record<string, { label: string; group: string; help: string }> = {
-  "canonry.impact-cratering": {
+  "atlas.impact-cratering": {
     label: "Meteor impacts",
     group: "Geology",
     help: "Excavate impact basins, rims and ejecta through the configured history.",
   },
-  "canonry.volcanic-construction": {
+  "atlas.volcanic-construction": {
     label: "Volcanic construction",
     group: "Geology",
     help: "Build volcanic relief from tectonic and plume sources.",
   },
-  "canonry.ancestral-fluvial-erosion": {
+  "atlas.ancestral-fluvial-erosion": {
     label: "River erosion",
     group: "Water",
     help: "Cut terrain and supply sediment. Rivers and drainage can still be generated without incision.",
   },
-  "canonry.glacial-erosion": {
+  "atlas.glacial-erosion": {
     label: "Glacial erosion",
     group: "Ice",
     help: "Excavate terrain beneath moving grounded ice.",
   },
-  "canonry.glacial-deposition": {
+  "atlas.glacial-deposition": {
     label: "Glacial deposition",
     group: "Ice",
     help: "Deposit sediment carried by ice. Requires glacial erosion to supply its evolution contract.",
   },
-  "canonry.coastal-erosion-and-deposition": {
+  "atlas.coastal-erosion-and-deposition": {
     label: "Coastal evolution",
     group: "Water",
     help: "Move coastal sediment and reshape shores under waves and forcing.",
   },
-  "canonry.river-floodplains": {
+  "atlas.river-floodplains": {
     label: "Floodplain classification",
     group: "Water",
     help: "Identify floodplain geography beside the final river network.",
   },
-  "canonry.river-delta-formation": {
+  "atlas.river-delta-formation": {
     label: "Delta classification",
     group: "Water",
     help: "Identify deltas from river sediment, coast and floodplain inputs.",

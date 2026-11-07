@@ -6,7 +6,7 @@ import {
   settlementSiteKinds,
   KeyedHeap,
 } from "@atlas/domain";
-import { projectNative } from "../canonry/atlasProjection";
+import { projectNative } from "../world/atlasProjection";
 import { generationFeature, generationFeatures } from "../generationFeatures";
 import { publishKinds } from "../poi/poiPublish";
 import { regionalCommunitySpacing } from "../regionalSociety";

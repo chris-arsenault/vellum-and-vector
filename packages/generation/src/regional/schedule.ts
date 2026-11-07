@@ -1,6 +1,6 @@
 import type { MapProcessContext } from "../process";
-import { physicalContext } from "../canonry/context";
-import { landformClassification } from "../canonry/landforms";
+import { physicalContext } from "../world/context";
+import { landformClassification } from "../world/landforms";
 import { conjoinFeatures, readEvidence, respondFeatures, supportFeatures } from "./causes/index";
 import { deriveCharacter, measureGrain } from "./character";
 import { respondClimate } from "./climate";

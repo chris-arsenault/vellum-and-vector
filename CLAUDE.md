@@ -50,8 +50,8 @@ numerical resources in OPFS; **Save map** keeps a map across reloads, and unsave
 changes disappear on reload. The
 [generation workflow design](docs/generation-workflows.md) defines the common
 GIS/domain-backed process contract, profile-selected sequences, parameters and
-epoch cycles. Canonry supplies the generation structure and algorithmic baseline:
-shared working state, application/validation, fact validity and causal magic.
+epoch cycles. Steps declare the bands they need and write, and processes shape land
+through declared contracts ([ADR 0011](docs/adr/0011-processes-couple-through-keys-and-a-ledger.md)).
 Workers report progress and can be terminated; there are no restart or recovery
 mechanisms. Initial generation installs streamed output progressively;
 regeneration publishes after validation and a world-revision check.

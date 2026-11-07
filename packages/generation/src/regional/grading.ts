@@ -1,4 +1,4 @@
-import { units } from "../canonry/math";
+import { units } from "../world/math";
 import { distance, isContent, neighborsOf, regionalSpan } from "./lattice";
 import type { RegionalState, Seat } from "./state";
 

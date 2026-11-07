@@ -1,8 +1,8 @@
 import { placeMinimumCells, point, type AtlasFeature } from "@atlas/domain";
-import { nativePosition } from "../canonry/atlasWorkspace";
-import { placeFeature, regionOutline } from "../canonry/geographicRegions";
-import { linkedCourse, magicPlaceGeometry } from "../canonry/placeGeometry";
-import type { MagicField } from "../canonry/magicState";
+import { nativePosition } from "../world/atlasWorkspace";
+import { placeFeature, regionOutline } from "../world/geographicRegions";
+import { linkedCourse, magicPlaceGeometry } from "../world/placeGeometry";
+import type { MagicField } from "../world/magicState";
 import type { GenerationState } from "../process";
 import type { PoiPlace } from "./poiContract";
 import { fieldOf } from "./poiReads";

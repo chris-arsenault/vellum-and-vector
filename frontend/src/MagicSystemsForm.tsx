@@ -100,7 +100,7 @@ export function MagicSystemsEditor({
           change(canonryMagicPresets());
         }}
       >
-        Restore Canonry examples
+        Restore example systems
       </button>
     </>
   );

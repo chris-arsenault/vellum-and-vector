@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
-import { atlasPhysicalProfile } from "../canonry/atlasProfile";
-import { physicalContext } from "../canonry/context";
-import { createField, type PhysicalField } from "../canonry/field";
-import { units } from "../canonry/math";
-import { createMesh } from "../canonry/mesh";
+import { atlasPhysicalProfile } from "../world/atlasProfile";
+import { physicalContext } from "../world/context";
+import { createField, type PhysicalField } from "../world/field";
+import { units } from "../world/math";
+import { createMesh } from "../world/mesh";
 import { layerDepth, layerKind, setLayer } from "./rockColumn";
 import { rockCatalogue } from "./rockCatalogue";
 import { initializeRock, metamorphism } from "./rockHistory";

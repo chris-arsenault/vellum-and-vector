@@ -1,5 +1,5 @@
-import { heldCharge } from "../../canonry/magicFeedback";
-import type { MagicField } from "../../canonry/magicState";
+import { heldCharge } from "../../world/magicFeedback";
+import type { MagicField } from "../../world/magicState";
 import type { GenerationState } from "../../process";
 import type { PoiPlace } from "../poiContract";
 import { cellSpan, fieldOf, magicValue } from "../poiReads";

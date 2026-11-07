@@ -1,4 +1,4 @@
-import type { PhysicalField } from "../../../packages/generation/src/canonry/field";
+import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import { rockKindOfCode } from "../../../packages/generation/src/rock/rockCatalogue";
 import { watchColumn } from "../../../packages/generation/src/rock/rockColumn";
 

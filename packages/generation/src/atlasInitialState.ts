@@ -16,7 +16,7 @@ import {
 } from "@atlas/domain";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
 import type { GenerationState } from "./process";
-import { atlasQuality } from "./canonry/atlasProfile";
+import { atlasQuality } from "./world/atlasProfile";
 import { regionalInputFields, regionalInputChannels, regionalResolution } from "./regionalInputs";
 import { atlasGenerationModules } from "./atlasModules";
 

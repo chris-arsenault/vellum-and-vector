@@ -4,10 +4,10 @@ import {
   pathMetrics,
   placeLandmark,
   type Placed,
-} from "../../canonry/landmarkGeometry";
-import { analyseTerrain, sitingRules } from "../../canonry/landmarkSitingRules";
-import { physicalSampler } from "../../canonry/physicalMetric";
-import { regionEvidence } from "../../canonry/worldRegionEvidence";
+} from "../../world/landmarkGeometry";
+import { analyseTerrain, sitingRules } from "../../world/landmarkSitingRules";
+import { physicalSampler } from "../../world/physicalMetric";
+import { regionEvidence } from "../../world/worldRegionEvidence";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { parentSpanOf } from "../poiCarry";

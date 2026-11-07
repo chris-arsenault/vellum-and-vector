@@ -18,9 +18,9 @@ import {
 } from "./process";
 import { prepareGeneratedProcess } from "./mapFeatures";
 import { finalizeNamesProcess } from "./societyNaming";
-import { atlasPhysicalSequence } from "./canonry/atlasSequence";
-import { magicPlacesProcess } from "./canonry/atlasProcesses";
-import { atlasQuality } from "./canonry/atlasProfile";
+import { atlasPhysicalSequence } from "./world/atlasSequence";
+import { magicPlacesProcess } from "./world/atlasProcesses";
+import { atlasQuality } from "./world/atlasProfile";
 import { atlasParametersSchema, mapBoundaryName, type AtlasParameters } from "./atlasParameters";
 import {
   generationSettingsSchema,
@@ -36,7 +36,7 @@ import {
 } from "./features";
 import { atlasGenerationModules } from "./atlasModules";
 import { serializableBindings } from "./generationBindings";
-import { inheritedChannelNames, inheritedNativeFacts } from "./canonry/inheritedFacts";
+import { inheritedChannelNames, inheritedProducts } from "./world/inheritedFacts";
 import { societySequence } from "./societyProcesses";
 import { atlasInitialState } from "./atlasInitialState";
 import { boundaryDiagnostics, migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
@@ -183,7 +183,7 @@ function checkRunInputs(source: DomainSnapshot, input: AtlasGenerationInput) {
 }
 function inheritedFactsForRun(source: DomainSnapshot, input: AtlasGenerationInput) {
   const channels = inheritedChannelNames(source, input.areaId, input.domains.includes("physical"));
-  return [...channels, ...inheritedNativeFacts(channels).map((fact) => `canonry:${fact}`)];
+  return [...channels, ...inheritedProducts(channels)];
 }
 function configuredSource(source: DomainSnapshot, input: AtlasGenerationInput) {
   const settings = generationSettingsSchema.parse(

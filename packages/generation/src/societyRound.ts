@@ -2,8 +2,8 @@ import { boundEpoch, population, semanticId, type SocietyCommunity } from "@atla
 import type { GenerationState, MapProcess, MapProcessContext, HumanRound } from "./process";
 import type { GenerationSettings } from "./generationSettings";
 import { generationBindings } from "./generationBindings";
-import { projectNative } from "./canonry/atlasProjection";
-import { classifyMagicFeatures, projectMagic } from "./canonry/magicFeatures";
+import { projectNative } from "./world/atlasProjection";
+import { classifyMagicFeatures, projectMagic } from "./world/magicFeatures";
 import { createSocietyGeography } from "./societyGeography";
 import { startingPopulations } from "./societySettlements";
 import { societyCycle } from "./societyEvolution";
@@ -172,7 +172,7 @@ export const humanRoundProcess: MapProcess = {
     id: "human.round",
     version: "1",
     parameters: {},
-    requires: ["canonry:workspace"],
+    requires: ["atlas:workspace"],
     produces: ["atlas:human-round"],
     invalidates: [],
     // The round publishes ruins and a people, so its results are validated like any pass.

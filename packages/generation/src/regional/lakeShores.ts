@@ -1,6 +1,6 @@
-import { clearWaterSurface } from "../canonry/field";
-import { units } from "../canonry/math";
-import { meshWindowCells } from "../canonry/meshWindow";
+import { clearWaterSurface } from "../world/field";
+import { units } from "../world/math";
+import { meshWindowCells } from "../world/meshWindow";
 import { neighborhood, neighborhoodCapacity } from "./lattice";
 import { poolDepth } from "./base";
 import type { RegionalState } from "./state";

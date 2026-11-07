@@ -181,7 +181,7 @@ export function HistoryPreset({ change }: { change: (epochs: Epoch[]) => void })
         <option value="temperate">Temperate history</option>
         <option value="glacial">Glacial past, temperate present</option>
         <option value="cycles">Bombardment & repeated ice ages</option>
-        <option value="canonry">Ice Remembers · four Canonry epochs</option>
+        <option value="canonry">Ice Remembers · four epochs</option>
         <option value="ecological">Ecological cycles · wet, dry, cold and recovery</option>
       </select>
     </label>

@@ -1,12 +1,12 @@
 import { expect, it } from "vitest";
 import { rockCatalogue, type RockKind } from "../rock/rockCatalogue";
 import { setLayer } from "../rock/rockColumn";
-import { atlasPhysicalProfile } from "../canonry/atlasProfile";
-import { physicalContext } from "../canonry/context";
-import { createField, type PhysicalField } from "../canonry/field";
-import { units } from "../canonry/math";
-import { rebuild } from "../canonry/surface";
-import { createWorldMesh } from "../canonry/worldMesh";
+import { atlasPhysicalProfile } from "../world/atlasProfile";
+import { physicalContext } from "../world/context";
+import { createField, type PhysicalField } from "../world/field";
+import { units } from "../world/math";
+import { rebuild } from "../world/surface";
+import { createWorldMesh } from "../world/worldMesh";
 import { ice } from "./ice";
 import { actBy } from "./processCatalogue";
 import { streams } from "./streams";
@@ -57,11 +57,13 @@ function rockLowered(map: PhysicalField, run: (map: PhysicalField) => void) {
   return landMean(map, (i) => (before[i] - map.BedrockElevation.get(i)) / 1024);
 }
 const runStreams = (map: PhysicalField) => actBy(streams)(map, context());
+/** A cell's ice sliding at 100 m a year, on down the slope. */
 function underIce(map: PhysicalField, i: number) {
-  const profile = atlasPhysicalProfile();
-  map.IceFlux.set(i, 2 * profile.GlacierFluxThreshold);
-  map.IceThickness.set(i, 2 * profile.GlacierThicknessThreshold);
+  const thickness = 500;
+  map.IceThickness.set(i, thickness);
+  map.IceFlux.set(i, 100 * thickness * map.mesh.spacing);
   map.GroundedIce.set(i, 1);
+  map.IceFlowTargets.set(i, map.mesh.cellAt(map.mesh.x(i) - 50_000, map.mesh.y(i)));
 }
 const runIce = (map: PhysicalField) => actBy(ice)(map, context());
 

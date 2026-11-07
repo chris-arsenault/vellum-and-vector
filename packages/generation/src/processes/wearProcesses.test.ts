@@ -1,10 +1,10 @@
 import { expect, it } from "vitest";
-import { atlasPhysicalProfile } from "../canonry/atlasProfile";
-import { physicalContext } from "../canonry/context";
-import { createField, type PhysicalField } from "../canonry/field";
-import { units } from "../canonry/math";
-import { rebuild } from "../canonry/surface";
-import { createWorldMesh } from "../canonry/worldMesh";
+import { atlasPhysicalProfile } from "../world/atlasProfile";
+import { physicalContext } from "../world/context";
+import { createField, type PhysicalField } from "../world/field";
+import { units } from "../world/math";
+import { rebuild } from "../world/surface";
+import { createWorldMesh } from "../world/worldMesh";
 import { setLayer } from "../rock/rockColumn";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { creep } from "./creep";

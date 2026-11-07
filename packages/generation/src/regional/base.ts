@@ -1,7 +1,7 @@
 import { KeyedHeap } from "@atlas/domain";
-import { fractalNoise } from "../canonry/noise";
-import { physicalSampler } from "../canonry/physicalMetric";
-import type { PhysicalMesh } from "../canonry/mesh";
+import { fractalNoise } from "../world/noise";
+import { physicalSampler } from "../world/physicalMetric";
+import type { PhysicalMesh } from "../world/mesh";
 import {
   components,
   frameEdge,

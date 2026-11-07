@@ -1,10 +1,10 @@
 import type { Band, SocietyWork } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { workSamples } from "./societyWorks";
-import { flowRouting } from "./canonry/routing";
-import { physicalContext } from "./canonry/context";
-import { workingArray, releaseWorking } from "./canonry/physicalNumerics";
-import type { PhysicalField } from "./canonry/field";
+import { flowRouting } from "./world/routing";
+import { physicalContext } from "./world/context";
+import { workingArray, releaseWorking } from "./world/physicalNumerics";
+import type { PhysicalField } from "./world/field";
 
 /** Anchor river works to the retained channel, including channels omitted from the map. */
 export function anchorRiverWork(state: GenerationState, work: SocietyWork) {

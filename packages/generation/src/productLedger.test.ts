@@ -1,15 +1,13 @@
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { generateBand } from "@atlas/domain";
-import { ProductLedger, bindNativeFacts, processRequirements } from "./productLedger";
+import { ProductLedger } from "./productLedger";
 import { MapRunner } from "./mapRunner";
 import { preflight } from "./preflight";
 import { configuration, epoch, invoke, landscape, options } from "./mapFixtures";
 import { MapProcessRegistry, type MapProcess, type GenerationState } from "./process";
-import { createField } from "./canonry/field";
-import { createMesh } from "./canonry/mesh";
-import { atlasPhysicalProfile } from "./canonry/atlasProfile";
-import { applyNativeStep, nativeContracts } from "./canonry/contracts";
-import { oceanConnectivity } from "./canonry/ocean";
+import { createField } from "./world/field";
+import { createMesh } from "./world/mesh";
+import { atlasPhysicalProfile } from "./world/atlasProfile";
 
 function process(
   id: string,
@@ -32,37 +30,20 @@ function process(
     validate: () => [],
   };
 }
-it("distinguishes named initialized emptiness from produced, missing and stale products", () => {
+it("distinguishes produced, missing and stale products", () => {
   const ledger = new ProductLedger(new Set());
-  const input = {
-    product: "impacts",
-    acceptEmptyFrom: "empty-impacts",
-  };
   expect(ledger.status("impacts")).toBe("missing");
-  ledger.initializeEmpty({ product: "impacts", initializer: "empty-impacts" });
-  expect(ledger.accepts(input)).toBe(true);
-  expect(ledger.accepts({ product: "impacts" })).toBe(false);
-  expect(ledger.accepts({ ...input, acceptEmptyFrom: "unrelated-initializer" })).toBe(false);
-  expect(ledger.facts.has("impacts")).toBe(false);
+  expect(ledger.accepts("impacts")).toBe(false);
   ledger.invalidate("impacts", "terrain");
   expect(ledger.status("impacts")).toBe("stale");
   ledger.produce("impacts");
   expect(ledger.status("impacts")).toBe("available");
-});
-it("uses the effective input's fallback without erasing its prerequisite", () => {
-  const contract = process("fracture").contract;
-  contract.requires = ["impacts", "terrain"];
-  contract.inputs = [{ product: "impacts", acceptEmptyFrom: "empty-impacts" }];
-  expect(processRequirements(contract)).toEqual([
-    { product: "impacts", acceptEmptyFrom: "empty-impacts" },
-    { product: "terrain" },
-  ]);
+  expect(ledger.accepts("impacts")).toBe(true);
 });
 function nativeState(): GenerationState {
   const state = landscape(),
     map = createField(createMesh(32, 0));
   map.Elevation.fill(-1024);
-  map.AvailableFacts.add("Elevation");
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
@@ -79,75 +60,32 @@ function nativeState(): GenerationState {
   };
   return state;
 }
-it("commits native to atlas to native transitions once and serializes observed state with ordinary Sets", async () => {
-  const source = nativeContracts["ocean-connectivity"];
-  const ocean = process("ocean", (state) => {
-    applyNativeStep(
-      state.physical!.map,
-      { Profile: state.physical!.profile, EpochIndex: -1 } as never,
-      ["ocean-connectivity", 0, oceanConnectivity]
+it("lets a step run once a selected step wrote what it needs, and skips it otherwise", async () => {
+  const writes = process("writes-ocean");
+  writes.contract.produces = ["field:WaterKindCodes"];
+  let ran = 0;
+  const needs = process("needs-ocean", () => {
+    ran++;
+  });
+  needs.contract.requires = ["field:WaterKindCodes"];
+  const registry = new MapProcessRegistry().register(writes).register(needs),
+    alone = await new MapRunner(configuration([invoke(needs)]), registry).run(
+      nativeState(),
+      options
     );
-    expect(state.facts.has("canonry:Ocean")).toBe(false);
-  });
-  ocean.contract.requires = source.requires.map((fact) => `canonry:${fact}`);
-  ocean.contract.produces = source.produces.map((fact) => `canonry:${fact}`);
-  ocean.contract.invalidates = source.invalidates.map((fact) => `canonry:${fact}`);
-  const change = process("atlas-change");
-  change.contract.invalidates = ["canonry:Ocean"];
-  const verify = process("verify", (state) => {
-    expect(state.physical!.map.AvailableFacts.has("Ocean")).toBe(true);
-    expect([...state.physical!.map.AvailableFacts]).toContain("Ocean");
-  });
-  verify.contract.requires = ["canonry:Ocean"];
-  const registry = new MapProcessRegistry().register(ocean).register(change).register(verify);
-  const spy = vi.spyOn(ProductLedger.prototype, "commit");
-  try {
-    const result = await new MapRunner(
-      configuration([
-        invoke(ocean, "first"),
-        invoke(change),
-        invoke(ocean, "second"),
-        invoke(verify),
-      ]),
-      registry
-    ).run(nativeState(), options);
-    expect(spy).toHaveBeenCalledTimes(4);
-    // Bands stay with their block cache; the observed fact set itself is an ordinary Set.
-    const cloned = structuredClone(result.state.physical!.map.AvailableFacts);
-    expect([...cloned]).toContain("Ocean");
-  } finally {
-    spy.mockRestore();
-  }
-});
-it("a native view observes atlas invalidation and cannot hide missing effective prerequisites", () => {
-  const state = nativeState(),
-    ledger = new ProductLedger(state.facts);
-  bindNativeFacts(state, ledger);
-  ledger.produce("canonry:Ocean");
-  expect(state.physical!.map.AvailableFacts.has("Ocean")).toBe(true);
-  ledger.invalidate("canonry:Ocean", "atlas heat");
-  expect(state.physical!.map.AvailableFacts.has("Ocean")).toBe(false);
-  expect(ledger.invalidatedBy("canonry:Ocean")).toBe("atlas heat");
-});
-it("the shared executor blocks a native consumer after an atlas operation invalidates its input", async () => {
-  let called = false;
-  const change = process("change");
-  change.contract.invalidates = ["canonry:Elevation"];
-  const native = process("native-consumer", () => {
-    called = true;
-  });
-  native.contract.requires = ["canonry:Elevation"];
-  const registry = new MapProcessRegistry().register(change).register(native);
-  const plan = configuration([invoke(change), invoke(native)]);
-  const result = await new MapRunner(plan, registry).run(nativeState(), options);
-  expect(result.state.diagnostics).toContainEqual(
+  expect(alone.state.diagnostics).toContainEqual(
     expect.objectContaining({
       code: "stale_fact",
-      resource: "canonry:Elevation",
+      resource: "field:WaterKindCodes",
       outcome: "skipped",
     })
   );
-  expect(called).toBe(false);
+  expect(ran).toBe(0);
+  await new MapRunner(configuration([invoke(writes), invoke(needs)]), registry).run(
+    nativeState(),
+    options
+  );
+  expect(ran).toBe(1);
 });
 it("preflight diagnoses and runtime skips prior-epoch response while retaining carried inputs", async () => {
   const produce = process("response");

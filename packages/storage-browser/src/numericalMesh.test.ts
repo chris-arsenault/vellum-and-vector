@@ -1,17 +1,17 @@
 import { expect, it } from "vitest";
-import { createWorldMesh } from "../../generation/src/canonry/worldMesh";
-import { nearestTriangle, triangleAddress, triangleIndex } from "../../generation/src/canonry/mesh";
+import { createWorldMesh } from "../../generation/src/world/worldMesh";
+import { nearestTriangle, triangleAddress, triangleIndex } from "../../generation/src/world/mesh";
 import {
   triangleSampler,
   triangleSample,
   triangleValue,
-} from "../../generation/src/canonry/triangleSampling";
+} from "../../generation/src/world/triangleSampling";
 import {
   projectionInterpolation,
   projectedValues,
-} from "../../generation/src/canonry/atlasSampling";
-import { createField } from "../../generation/src/canonry/field";
-import { atlasPhysicalProfile } from "../../generation/src/canonry/atlasProfile";
+} from "../../generation/src/world/atlasSampling";
+import { createField } from "../../generation/src/world/field";
+import { atlasPhysicalProfile } from "../../generation/src/world/atlasProfile";
 import { blockCacheFixture } from "./blockCacheFixture";
 import { sampleCoverage } from "@atlas/domain";
 

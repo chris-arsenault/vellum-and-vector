@@ -1,8 +1,8 @@
 import type { AtlasFeature } from "@atlas/domain";
-import { Landform, Water } from "../canonry/codes";
-import type { PhysicalField } from "../canonry/field";
-import { meshWindowCells } from "../canonry/meshWindow";
-import { physicalDistance } from "../canonry/physicalMetric";
+import { Landform, Water } from "../world/codes";
+import type { PhysicalField } from "../world/field";
+import { meshWindowCells } from "../world/meshWindow";
+import { physicalDistance } from "../world/physicalMetric";
 import { generationFeatures } from "../generationFeatures";
 import type { GenerationState } from "../process";
 import { cellAt, positionOf } from "../regional/lattice";

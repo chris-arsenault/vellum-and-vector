@@ -1,4 +1,4 @@
-import type { PhysicalBufferName, PhysicalField } from "../canonry/field";
+import type { PhysicalBufferName, PhysicalField } from "../world/field";
 
 /** The bands a ledger writes keep the world's bounds: nothing below zero, the per-mille and resistance scales capped. */
 export const ledgerFloors: Partial<Record<PhysicalBufferName, number>> = {

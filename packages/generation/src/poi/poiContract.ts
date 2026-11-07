@@ -1,6 +1,6 @@
 import type { AtlasFeature } from "@atlas/domain";
 import type { AreaKindId } from "../area/areaKinds";
-import type { PhysicalBufferName } from "../canonry/field";
+import type { PhysicalBufferName } from "../world/field";
 import type { GenerationState } from "../process";
 import type { FeatureCause } from "../regional/causes/registry";
 import type { RegionalState } from "../regional/state";

@@ -60,7 +60,7 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
     processes: ["initialize", "evolve", "respond", "burial", "present"].map(
       (name) => `atlas.ecology-${name}`
     ),
-    requires: ["physical.climate"],
+    requires: ["physical.climate", "water.routing"],
     slots: Object.keys(ecologyOperations) as GenerationSlot[],
     contribute: (slot) =>
       ecologyOperations[slot as GenerationSlot]
@@ -84,11 +84,11 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       "history",
       "classify",
       "project",
-    ].map((name) => `canonry.magic-${name}`),
+    ].map((name) => `atlas.magic-${name}`),
     slots: Object.keys(configuredMagicOperations) as GenerationSlot[],
     contribute: (slot) =>
       configuredMagicOperations[slot as GenerationSlot]
-        ? [operation(`canonry.magic-${configuredMagicOperations[slot as GenerationSlot]}`)]
+        ? [operation(`atlas.magic-${configuredMagicOperations[slot as GenerationSlot]}`)]
         : [],
     conditionalRequires: (_configuration, context) =>
       configuredMagicRequirements(

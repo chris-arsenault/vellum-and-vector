@@ -164,21 +164,13 @@ it("retains usable nested work and records child and parent failures", async () 
   ]);
 });
 
-it("conservatively joins named empty inputs without reviving invalidated approximations", () => {
-  const initial = new ProductLedger(new Set(["terrain"]));
-  initial.initializeEmpty({
-    product: "events",
-    initializer: "no-events",
-    retainOnInvalidation: true,
-  });
-  initial.initializeEmpty({ product: "forcing", initializer: "no-forcing" });
+it("joins two outcomes by what both of them left written", () => {
+  const initial = new ProductLedger(new Set(["terrain", "forcing"]));
   const changed = initial.fork();
-  changed.invalidate("events", "remesh");
   changed.invalidate("forcing", "remesh");
   changed.produce("new-output");
   initial.join(changed, "conditional remesh");
   expect(initial.status("terrain")).toBe("available");
-  expect(initial.accepts({ product: "events", acceptEmptyFrom: "no-events" })).toBe(true);
   expect(initial.status("forcing")).toBe("stale");
   expect(initial.status("new-output")).toBe("stale");
 });

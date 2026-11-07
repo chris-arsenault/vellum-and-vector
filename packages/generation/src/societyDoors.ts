@@ -1,7 +1,7 @@
 import { spatial } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import type { SocietyEdge } from "./societyGeography";
-import { nativePosition } from "./canonry/atlasWorkspace";
+import { nativePosition } from "./world/atlasWorkspace";
 import { nearestSocietySample } from "./societySpatial";
 import { dryLand } from "./societySupport";
 

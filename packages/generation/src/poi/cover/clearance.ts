@@ -1,5 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { environment } from "../../canonry/ecologyEnvironment";
+import { environment } from "../../world/ecologyEnvironment";
 import type { GenerationState } from "../../process";
 import { farmingValue, fieldGrass, iceOnField, steepestField } from "../../regional/society";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";

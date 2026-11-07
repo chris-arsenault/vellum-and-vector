@@ -1,8 +1,8 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { Landform } from "../../canonry/codes";
-import { hashUnit } from "../../canonry/noise";
-import { prominence } from "../../canonry/landforms";
-import { meshDeltaX } from "../../canonry/mesh";
+import { Landform } from "../../world/codes";
+import { hashUnit } from "../../world/noise";
+import { prominence } from "../../world/landforms";
+import { meshDeltaX } from "../../world/mesh";
 import type { GenerationState } from "../../process";
 import { repulsion } from "../../regional/network";
 import type { RegionalState } from "../../regional/state";

@@ -71,27 +71,20 @@ the application layer evaluates shared domain rules against scoped inputs.
 
 ## Procedural generation
 
-Use Canonry's generation structure and algorithms as the baseline: configured
-process order, one shared working state, common application/validation contracts,
-required/produced/invalidated facts, deterministic seeds and causal epoch loops.
-Adapt that structure to TypeScript and the atlas's GIS/domain model. Read the
-corresponding reference implementation before extending its structure.
-Choose numerical fidelity and validation precision from the product's map scale
-and plausibility requirements, including its approximate physical interfaces.
+Generation runs a configured process order on one shared working state, in causal
+epoch loops. This product is not The Canonry Game: its code began as a port and has
+its own processes now. Do not copy Canonry processes in, and do not keep a value or a
+step because Canonry had it. Choose fidelity from the product's map scale and
+plausibility requirements.
 
-**Reference parity means semantic algorithm parity.** Per the user's explicit
-2026-10-18 direction, numerical equivalence to Canonry is not a product target.
-Compare the operations inside process implementations: their inputs, transformations,
-causal order, feedback, state carried between epochs and geographic outputs.
-Enumerating process names alone does not establish this parity.
+A world step declares the bands it needs and writes in `world/physicalSteps.ts`. A step
+that needs a band runs only if a selected step wrote it earlier or the map inherited it;
+nothing says whether a written band is still right, because the sequence's order is what
+keeps it so. The architecture check holds those lists and every process's reach to what
+the code does.
 
-Do not chase matching numbers, hashes, exact seed mappings, rounding or identical
-arrays, or use their differences as evidence that a semantic operation is missing.
-Existing reference fixtures are regression aids, not acceptance requirements for
-atlas adaptations or metre conversion. Assess numerical changes only when they
-change a required mechanism, physical meaning, creator control or useful geography.
-Record concrete missing or materially changed operations separately from parameter,
-representation and implementation differences. Preserve determinism within the atlas.
+Do not trace numerical accuracy or reproducibility: no fingerprints, exact replay,
+byte comparison or closure checks. The generator is being changed on purpose.
 
 The [generation design](docs/generation-workflows.md) describes these adaptations.
 Registered GIS, physical, magical and human/built processes use the same contract.

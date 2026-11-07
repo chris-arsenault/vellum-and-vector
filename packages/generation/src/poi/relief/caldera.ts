@@ -1,6 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { volcanicRelief } from "../../canonry/geologicalFeatures";
-import { calderaShare } from "../../canonry/volcanism";
+import { volcanicRelief } from "../../world/geologicalFeatures";
+import { calderaShare } from "../../world/volcanism";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFate, type PoiPlace } from "../poiContract";

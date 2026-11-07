@@ -1,6 +1,7 @@
-import type { PhysicalField } from "../../../packages/generation/src/canonry/field";
-import type { PhysicalContext } from "../../../packages/generation/src/canonry/context";
-import { observeNativeSteps } from "../../../packages/generation/src/canonry/contracts";
+import type { PhysicalField } from "../../../packages/generation/src/world/field";
+import type { PhysicalContext } from "../../../packages/generation/src/world/context";
+import { observeNativeSteps } from "../../../packages/generation/src/world/physicalSteps";
+import { epochStory } from "./epochStory";
 import { snapshotRecorder } from "./fieldSnapshot";
 import { watchRockColumns } from "./reliefColumn";
 import { reliefProbes } from "./reliefProbes";
@@ -65,6 +66,12 @@ export function traceRelief(snapshots?: { label: string; quality: string }) {
   });
   return () => {
     observeNativeSteps(null);
-    return { steps, probes: probes.read(), columns: stopColumns(last), rock: rock.read(last) };
+    return {
+      steps,
+      probes: probes.read(),
+      columns: stopColumns(last),
+      rock: rock.read(last),
+      story: last ? epochStory(last) : null,
+    };
   };
 }

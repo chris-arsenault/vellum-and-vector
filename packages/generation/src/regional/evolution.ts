@@ -1,5 +1,5 @@
 import { KeyedHeap } from "@atlas/domain";
-import { hashUnit } from "../canonry/noise";
+import { hashUnit } from "../world/noise";
 import {
   distance,
   isContent,

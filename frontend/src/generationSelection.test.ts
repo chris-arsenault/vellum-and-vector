@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { atlasConfiguration, prepareAtlasGeneration } from "@atlas/generation";
 import { physicalFeatureDefinitions } from "../../packages/generation/src/physicalFeatures";
 import { sequenceStages } from "../../packages/generation/src/sequence";
-import { selectedAtlasChannels } from "../../packages/generation/src/canonry/atlasPublications";
+import { selectedAtlasChannels } from "../../packages/generation/src/world/atlasPublications";
 import { constructedWorld } from "./constructedWorldFixture";
 
 const omissions = [

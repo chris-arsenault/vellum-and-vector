@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { PhysicalField } from "../../../packages/generation/src/canonry/field";
+import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import { png } from "./quickTerrain";
 
 /**

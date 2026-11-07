@@ -1,4 +1,4 @@
-import { units } from "../canonry/math";
+import { units } from "../world/math";
 import { distance, isContent } from "./lattice";
 import { materialResistance } from "./material";
 import type { NetworkWork, RegionalState } from "./state";

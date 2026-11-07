@@ -1,8 +1,8 @@
 import type { Band } from "@atlas/domain";
-import { physicalContext } from "../canonry/context";
-import { releaseWorking } from "../canonry/physicalNumerics";
+import { physicalContext } from "../world/context";
+import { releaseWorking } from "../world/physicalNumerics";
 import { rockColumnFields } from "../rock/rockColumn";
-import { drainageSteps, incisionSteps, sedimentStep } from "../canonry/sequence";
+import { drainageSteps, incisionSteps, sedimentStep } from "../world/sequence";
 import { profileAtScale } from "../processes/processCatalogue";
 import { restoreFeatures } from "./causes/registry";
 import { updateSlopes } from "./relief";

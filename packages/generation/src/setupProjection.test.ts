@@ -84,8 +84,8 @@ it.each([
   expect(resolved.diagnostics).toEqual([]);
   const sequence = resolved.input.configuration!.sequence,
     ids = sequence.map((step) => step.id);
-  expect(ids.filter((id) => id === "canonry.magic-places")).toHaveLength(1);
-  expect(ids.slice(-2)).toEqual(["canonry.magic-places", "atlas.names"]);
+  expect(ids.filter((id) => id === "atlas.magic-places")).toHaveLength(1);
+  expect(ids.slice(-2)).toEqual(["atlas.magic-places", "atlas.names"]);
   expect(ids.includes("human-eras")).toBe(domains.includes("cultural"));
 });
 
@@ -196,11 +196,11 @@ it("uses actual regional consumers and inherited fields rather than blanket geol
 
 it("extracts regional magical places once before carrying captured identities", () => {
   const ids = region().input.configuration!.sequence.map((step) => step.id);
-  expect(ids.filter((id) => id === "canonry.magic-places")).toHaveLength(1);
-  const extraction = ids.indexOf("canonry.features");
+  expect(ids.filter((id) => id === "atlas.magic-places")).toHaveLength(1);
+  const extraction = ids.indexOf("atlas.features");
   expect(ids.slice(extraction, extraction + 3)).toEqual([
-    "canonry.features",
-    "canonry.magic-places",
+    "atlas.features",
+    "atlas.magic-places",
     "refinement.identity",
   ]);
 });
@@ -295,7 +295,7 @@ const survey: GenerationModule = {
         id: "test.measure",
         version: "1",
         parameters: { threshold: { type: "number", unit: "ratio", required: true } },
-        requires: ["canonry:Elevation"],
+        requires: ["field:Elevation"],
         produces: ["test:survey"],
         invalidates: [],
       },

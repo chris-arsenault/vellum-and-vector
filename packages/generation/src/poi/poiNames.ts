@@ -1,6 +1,6 @@
 import type { AtlasFeature } from "@atlas/domain";
 import { nameGeographicFeature, nameMetadata } from "../atlasNaming";
-import { hashUnit } from "../canonry/noise";
+import { hashUnit } from "../world/noise";
 import { generationFeature, writeGenerationFeature } from "../generationFeatures";
 import type { GenerationState } from "../process";
 import type { PoiEntry, PoiNameRelation, PoiNameTerm, PoiPlace } from "./poiContract";

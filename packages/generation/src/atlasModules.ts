@@ -1,16 +1,16 @@
 import { atlasGenerationModules, type GenerationModule } from "./generationModules";
 import { physicalFeatureDefinitions } from "./physicalFeatures";
 import { domainFeatureDefinitions } from "./domainFeatures";
-import { atlasNativeProcesses } from "./canonry/atlasProcesses";
-import { landmarkProcesses } from "./canonry/landmarkProcesses";
-import { ecologyProcesses } from "./canonry/ecologyProcesses";
-import { magicProcesses } from "./canonry/magicProcesses";
-import { advectAtlasMagic } from "./canonry/atlasMagic";
+import { atlasNativeProcesses } from "./world/atlasProcesses";
+import { landmarkProcesses } from "./world/landmarkProcesses";
+import { ecologyProcesses } from "./world/ecologyProcesses";
+import { magicProcesses } from "./world/magicProcesses";
+import { advectAtlasMagic } from "./world/atlasMagic";
 import { thermalMagicProcess, magicStorageProcess } from "./mapMagic";
 import { materialMagicProcess } from "./mapMagicEffects";
 import { culturalProcess, politicalProcess } from "./mapPeople";
 import { builtProcess } from "./mapBuilt";
-import { atlasPublicationDefinitions } from "./canonry/atlasPublications";
+import { atlasPublicationDefinitions } from "./world/atlasPublications";
 import { populationProcesses } from "./societyProcesses";
 import { societyPublications } from "./societyPublication";
 

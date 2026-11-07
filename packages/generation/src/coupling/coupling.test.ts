@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
-import { atlasPhysicalProfile } from "../canonry/atlasProfile";
-import { physicalContext } from "../canonry/context";
-import { createField, physicalSchema } from "../canonry/field";
-import { units } from "../canonry/math";
-import { createWorldMesh } from "../canonry/worldMesh";
+import { atlasPhysicalProfile } from "../world/atlasProfile";
+import { physicalContext } from "../world/context";
+import { createField, physicalSchema } from "../world/field";
+import { units } from "../world/math";
+import { createWorldMesh } from "../world/worldMesh";
 import { ask, respondersTo, worldMoved } from "./answers";
 import { answerRows, processRows } from "./couplingTable";
 import { flowRecord } from "./flows";

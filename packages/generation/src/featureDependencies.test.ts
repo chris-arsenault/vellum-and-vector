@@ -3,7 +3,7 @@ import { landscape } from "./mapFixtures";
 import { prepareAtlasGeneration } from "./atlasWorkflow";
 import { magicSystemSchema } from "@atlas/domain";
 import { configuredMagicRequirements } from "./featureDependencies";
-import { magicProcesses } from "./canonry/magicProcesses";
+import { magicProcesses } from "./world/magicProcesses";
 
 function request(strength: number, enabled = true, outside = false) {
   const domain = landscape().domain;
@@ -125,7 +125,7 @@ it("requires ecology for an effective independent rule inside a disabled contain
     })
   );
   const classify = magicProcesses(domain.world.magicSystems).find(
-    (process) => process.contract.id === "canonry.magic-classify"
+    (process) => process.contract.id === "atlas.magic-classify"
   )!;
   expect(classify.contract.requires).toContain("ecology");
 });
@@ -136,7 +136,7 @@ it("does not require the environment for disabled rules that cannot execute", ()
   expect(configuredMagicRequirements(domain.world.magicSystems!)).toEqual([]);
   expect(
     magicProcesses(domain.world.magicSystems).find(
-      (process) => process.contract.id === "canonry.magic-classify"
+      (process) => process.contract.id === "atlas.magic-classify"
     )!.contract.requires
   ).not.toContain("ecology");
 });

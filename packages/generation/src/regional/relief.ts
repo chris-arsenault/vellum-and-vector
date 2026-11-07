@@ -1,8 +1,8 @@
-import { measureSlopes } from "../canonry/geography";
-import { units } from "../canonry/math";
+import { measureSlopes } from "../world/geography";
+import { units } from "../world/math";
 import { slopeSettings } from "../processes/slopeSettings";
-import { physicalGradients } from "../canonry/physicalMetric";
-import { releaseWorking } from "../canonry/physicalNumerics";
+import { physicalGradients } from "../world/physicalMetric";
+import { releaseWorking } from "../world/physicalNumerics";
 import { applyGlaciation } from "./glacial";
 import { baseSmoothing, lakeHollows } from "./base";
 import { featureCaps, restoreFeatures } from "./causes/registry";

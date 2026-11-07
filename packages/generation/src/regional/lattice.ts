@@ -1,8 +1,8 @@
 import { CellList, content, halo, type Band } from "@atlas/domain";
-import type { PhysicalMesh } from "../canonry/mesh";
-import { meshDeltaX } from "../canonry/mesh";
-import { prepareMetricSmoother } from "../canonry/metricSmoothing";
-import { releaseWorking, workingValues } from "../canonry/physicalNumerics";
+import type { PhysicalMesh } from "../world/mesh";
+import { meshDeltaX } from "../world/mesh";
+import { prepareMetricSmoother } from "../world/metricSmoothing";
+import { releaseWorking, workingValues } from "../world/physicalNumerics";
 import type { RegionalState } from "./state";
 
 /** World position of a cell's centre. */

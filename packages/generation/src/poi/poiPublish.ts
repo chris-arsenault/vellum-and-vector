@@ -9,7 +9,7 @@ import { putGenerated } from "../mapFeatures";
 import type { GenerationState } from "../process";
 import type { RegionalState } from "../regional/state";
 import { poiCatalogue } from "./catalogue";
-import { nativePosition } from "../canonry/atlasWorkspace";
+import { nativePosition } from "../world/atlasWorkspace";
 import { hostedCell, linkOn } from "../area/areaHosting";
 import type { PoiCarried, PoiEntry, PoiMoment, PoiPlace } from "./poiContract";
 import type { PoiKindId } from "./poiKinds";

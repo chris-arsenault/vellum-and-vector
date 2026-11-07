@@ -1,11 +1,11 @@
-import { expect, it } from "vitest";
-import { atlasPhysicalProfile } from "../canonry/atlasProfile";
-import { physicalContext } from "../canonry/context";
-import { createField } from "../canonry/field";
-import { physicalProfile } from "../canonry/profile";
-import { units } from "../canonry/math";
-import { rebuild } from "../canonry/surface";
-import { createWorldMesh } from "../canonry/worldMesh";
+import { expect, it, vi } from "vitest";
+import { atlasPhysicalProfile } from "../world/atlasProfile";
+import { physicalContext } from "../world/context";
+import { createField } from "../world/field";
+import { physicalProfile } from "../world/profile";
+import { units } from "../world/math";
+import { rebuild } from "../world/surface";
+import { createWorldMesh } from "../world/worldMesh";
 import { compileMix } from "../rock/modes";
 import { setLayer } from "../rock/rockColumn";
 import { rockCatalogue } from "../rock/rockCatalogue";
@@ -48,6 +48,21 @@ it("takes a new process with no change to rock, ground or any other process", ()
   expect(plain(1)).toBeGreaterThan(plain(0));
 });
 
+it("runs a process on the view it declared, with no way to the rest of the field", () => {
+  const work = vi.fn(),
+    probe = defineProcess({
+      id: "probe",
+      statement: "Looks at what it is handed.",
+      reads: [],
+      asks: [],
+      moves: [],
+      settings: {},
+      run: work,
+    });
+  const map = createField(createWorldMesh([-50_000, -50_000, 50_000, 50_000], 40, 25_000));
+  actBy(probe)(map, physicalContext(1, 0, atlasPhysicalProfile(), null, 0, 1));
+  expect(Object.keys(work.mock.calls[0][0])).not.toContain("world");
+});
 it("assembles the profile from what each process says it owns", () => {
   for (const process of groundProcesses) expect(physicalProfile).toMatchObject(process.settings);
 });

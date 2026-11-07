@@ -1,10 +1,10 @@
 import { chartCopies, interpolateProfile, spatial } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import { nativePosition } from "../canonry/atlasWorkspace";
-import { releaseWorking } from "../canonry/physicalNumerics";
-import { meanderReach } from "../canonry/riverMeanders";
-import { createRiverPaths, riverPath, type RiverPaths } from "../canonry/riverPaths";
-import { coordinateKey } from "../canonry/worldSources";
+import { nativePosition } from "../world/atlasWorkspace";
+import { releaseWorking } from "../world/physicalNumerics";
+import { meanderReach } from "../world/riverMeanders";
+import { createRiverPaths, riverPath, type RiverPaths } from "../world/riverPaths";
+import { coordinateKey } from "../world/worldSources";
 import {
   generationFeature,
   generationFeatures,
@@ -113,7 +113,7 @@ function publishReachCopy(
         discharge: discharges[0],
         basinDischarge,
         ...attributes,
-        sourceAlgorithm: "canonry-0f62584c",
+        sourceAlgorithm: "atlas-1",
       }
     );
     putGeneratedNetwork(state, feature);
@@ -217,7 +217,7 @@ export function publishRivers(state: GenerationState, context: MapProcessContext
   };
   context.recordCause({
     kind: "domain",
-    process: "canonry.geographic-extraction",
+    process: "atlas.geographic-extraction",
     subjects: [],
     description:
       "River reaches follow Canonry's water-budget lakes, capture drainage and Strahler network; raster channels retain crust, erosion, ice and landform history.",

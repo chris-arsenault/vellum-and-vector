@@ -9,12 +9,12 @@ import {
   type Diagnostic,
 } from "@atlas/domain";
 import { atlasRegistry, resolveInput, type AtlasGenerationInput } from "../atlasWorkflow";
-import { nativePosition } from "../canonry/atlasWorkspace";
-import { units } from "../canonry/math";
+import { nativePosition } from "../world/atlasWorkspace";
+import { units } from "../world/math";
 import { atlasGenerationModules } from "../atlasModules";
 import { atlasParametersSchema } from "../atlasParameters";
 import { generationBindings, serializableBindings } from "../generationBindings";
-import { inheritedChannelNames, inheritedNativeFacts } from "../canonry/inheritedFacts";
+import { inheritedChannelNames, inheritedProducts } from "../world/inheritedFacts";
 import { MapRunner, type MapRunnerOptions } from "../mapRunner";
 import { preflight } from "../preflight";
 import type {
@@ -106,7 +106,7 @@ function stepProcess(step: ScheduledStep, produces: string[] = []): MapProcess {
       id: `refinement.${step.id}`,
       version,
       parameters: {},
-      requires: ["canonry:workspace"],
+      requires: ["atlas:workspace"],
       produces,
       invalidates: [],
       workspaceOnly: !step.publishes,
@@ -139,7 +139,7 @@ function beginProcess(input: AtlasGenerationInput): MapProcess {
       id: "refinement.begin",
       version,
       parameters: {},
-      requires: ["canonry:workspace"],
+      requires: ["atlas:workspace"],
       produces: [],
       invalidates: [],
       workspaceOnly: true,
@@ -157,14 +157,14 @@ function beginProcess(input: AtlasGenerationInput): MapProcess {
 /**
  * The regional processes: the schedule's steps as processes beside the world's own. The
  * refresh leaves the field routed and classified, which is the state the world's extraction
- * requires (`canonry:Validated`); the world's own validation operation checks world-process
+ * requires (`atlas:validated`); the world's own validation operation checks world-process
  * invariants that a refinement does not run, so the refresh produces the fact itself.
  */
 export function regionalProcesses(input: AtlasGenerationInput): MapProcess[] {
   return [
     beginProcess(input),
     ...regionalSchedule(input.domains).map((step) =>
-      stepProcess(step, step.id === "refresh" ? ["canonry:Validated"] : [])
+      stepProcess(step, step.id === "refresh" ? ["atlas:validated"] : [])
     ),
     ...regionalExtraction(input.domains)
       .filter((step) => step.id !== "features")
@@ -179,7 +179,7 @@ export function regionalRegistry(
   for (const process of regionalProcesses(input)) registry.register(process);
   return registry;
 }
-const invoke = (id: string, processVersion = "0f62584c", feature?: string): ProcessInvocation => ({
+const invoke = (id: string, processVersion = "1", feature?: string): ProcessInvocation => ({
   kind: "process",
   id,
   process: id,
@@ -200,15 +200,15 @@ function stepFeature(id: string) {
  */
 export function regionalSequence(input: AtlasGenerationInput): ProcessSequence {
   return [
-    invoke("canonry.initialize"),
+    invoke("atlas.initialize"),
     invoke("refinement.begin"),
     ...regionalSchedule(input.domains).map((step) =>
       invoke(`refinement.${step.id}`, undefined, stepFeature(step.id))
     ),
-    invoke("canonry.project"),
+    invoke("atlas.project"),
     ...regionalExtraction(input.domains).flatMap((step) =>
       step.id === "features"
-        ? [invoke("canonry.features"), invoke("canonry.magic-places")]
+        ? [invoke("atlas.features"), invoke("atlas.magic-places")]
         : [invoke(`refinement.${step.id}`)]
     ),
     invoke("atlas.names", "1"),
@@ -216,7 +216,7 @@ export function regionalSequence(input: AtlasGenerationInput): ProcessSequence {
 }
 function initialFacts(source: DomainSnapshot, input: AtlasGenerationInput) {
   const channels = inheritedChannelNames(source, input.areaId, input.domains.includes("physical"));
-  return [...channels, ...inheritedNativeFacts(channels).map((fact) => `canonry:${fact}`)];
+  return [...channels, ...inheritedProducts(channels)];
 }
 
 export function prepareRegionalRefinement(source: DomainSnapshot, input: AtlasGenerationInput) {

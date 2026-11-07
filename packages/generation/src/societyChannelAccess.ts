@@ -1,6 +1,6 @@
 import { gridPosition, type Band } from "@atlas/domain";
 import type { GenerationState } from "./process";
-import { nativePosition } from "./canonry/atlasWorkspace";
+import { nativePosition } from "./world/atlasWorkspace";
 
 type ChannelPoint = readonly [number, number, number];
 /**

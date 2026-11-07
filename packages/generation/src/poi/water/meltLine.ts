@@ -7,7 +7,7 @@ import { ruleRecord } from "../poiRecords";
 import { adjacent, iceAt, isLand, landformAt, Landform, magicRule, magicValue } from "../poiReads";
 import { aloneAmong, attachment, standsOut, weighed } from "../poiVisibilityRules";
 import { areaOf, spans } from "./waterReads";
-import { wetlandCoverShare } from "../../canonry/ecologyEnvironment";
+import { wetlandCoverShare } from "../../world/ecologyEnvironment";
 
 const isA = magicRule("aurora", "melt");
 const chargeAt = (state: GenerationState, cell: number) =>

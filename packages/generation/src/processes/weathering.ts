@@ -1,5 +1,4 @@
 import { compileMix } from "../rock/modes";
-import { weatherRock } from "../rock/groundLedger";
 import { defineProcess } from "./groundProcess";
 import { slopeSettings } from "./slopeSettings";
 
@@ -13,7 +12,9 @@ export const weathering = defineProcess({
   asks: ["wetness", "warmth", "frost"],
   moves: [["rock", "loose"]],
   settings: slopeSettings,
-  run({ field, context: c, settings: p, ground, span, ask, world }) {
+  // A region's passes refine one stretch of the world's history; they do not add more of it.
+  atScale: (settings, { passes }) => ({ WeatheringPerSpan: settings.WeatheringPerSpan / passes }),
+  run({ field, context: c, settings: p, ground, span, ask, tools }) {
     const wetness = ask("wetness"),
       warmth = ask("warmth"),
       frost = ask("frost");
@@ -23,7 +24,7 @@ export const weathering = defineProcess({
         shield = Math.exp(-mantle / p.WeatheringShieldDepth),
         driven = wetness.get(i) * warmth.get(i) + frost.get(i);
       const made = ground.gives(i, breakingDown) * driven * shield * p.WeatheringPerSpan * span;
-      if (made > 0) weatherRock(world, i, (made * 1024 * c.HydrologyStrength) / 1000, "weathering");
+      if (made > 0) tools.weather(i, (made * 1024 * c.HydrologyStrength) / 1000, "weathering");
     }
   },
 });

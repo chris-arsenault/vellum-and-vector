@@ -1,10 +1,10 @@
 import type { GenerationState } from "../process";
-import { type PhysicalField } from "../canonry/field";
-import { reservoirAmount, type MagicField } from "../canonry/magicState";
-import { units } from "../canonry/math";
-import { rebuild } from "../canonry/surface";
-import { erode } from "./groundLedger";
-import { fractalNoise, hashUnit } from "../canonry/noise";
+import { type PhysicalField } from "../world/field";
+import { reservoirAmount, type MagicField } from "../world/magicState";
+import { units } from "../world/math";
+import { rebuild } from "../world/surface";
+import { erode, raiseRock } from "./groundLedger";
+import { fractalNoise, hashUnit } from "../world/noise";
 import {
   hardnessOf,
   rockCatalogue,
@@ -24,8 +24,7 @@ import { alterTop, changeLayer, layDownRock, layerKind, shuffleLayers } from "./
 function addRock(map: PhysicalField, cell: number, kind: RockKindId, metres: number) {
   const amount = units(metres);
   if (amount <= 0) return;
-  map.BedrockElevation.add(cell, amount);
-  map.SurfaceRockLoad.add(cell, amount);
+  raiseRock(map, cell, amount, "magic rock", "space");
   layDownRock(map, cell, rockCatalogue[kind], amount);
   rebuild(map, cell);
 }

@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
-import { createField, type PhysicalField } from "../canonry/field";
-import { units } from "../canonry/math";
-import { rebuild } from "../canonry/surface";
-import { createWorldMesh } from "../canonry/worldMesh";
+import { createField, type PhysicalField } from "../world/field";
+import { units } from "../world/math";
+import { rebuild } from "../world/surface";
+import { createWorldMesh } from "../world/worldMesh";
 import { groundOf, type GroundQuery } from "./ground";
 import { compileMix } from "./modes";
 import { setLayer } from "./rockColumn";

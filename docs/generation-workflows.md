@@ -23,9 +23,9 @@ separate place identity relates it to the source. Numerical inputs have map-owne
 descriptors pinned to immutable resource bytes. Replacing a parent's resource
 does not change those captured inputs, and creating a child does not copy scalar
 arrays. Refinement builds the world's physical field on the child's own triangular
-lattice (`canonry.initialize`), then runs `refinement.begin`, the regional schedule,
-the world's projection and feature extraction (`canonry.project`,
-`canonry.features`), the regional identity, magic-map and place steps, and
+lattice (`atlas.initialize`), then runs `refinement.begin`, the regional schedule,
+the world's projection and feature extraction (`atlas.project`,
+`atlas.features`), the regional identity, magic-map and place steps, and
 `atlas.names`, all through the shared runner. It runs none of the world's epoch
 schedule and replays no physical or human history.
 Preparation reads metadata; resource loading selects the target map's needed
@@ -425,14 +425,10 @@ to the implementation choices described here.
 
 ## Structure and reference
 
-Use Canonry's generation structure and algorithms as the baseline: configured
-process sequences operate on a shared working map, check required facts, apply
-changes, validate results and update fact validity. Adapt that structure to the
-atlas's TypeScript GIS/domain model. Canonry is compared by mechanism: the causes a
-process reads, the transformations it applies, the feedback it supplies, the state it
-carries between epochs and the geography it produces. Its numerical values, hashes,
-seed mappings and rounding are not targets, and its parameters are retuned or replaced
-freely for the atlas. Generation within the atlas is deterministic.
+Configured process sequences operate on a shared working map. Each step checks that a
+selected step earlier wrote what it needs, applies its changes and validates what it
+wrote. Generation is deterministic within a run of one version of the code, and output
+may change whenever the generator does.
 
 This structure governs initial world generation. Independent regional maps build the
 same physical field on their own lattice and run the regional schedule described
@@ -626,7 +622,7 @@ epoch-local forcing such as a heat buffer. Physical and magical processes
 accumulate their own typed consequences, including erosion, deposited material,
 stored cold and occupation history.
 
-A landscape sequence follows Canonry's causal interleaving:
+A landscape sequence interleaves its causes:
 
 1. Apply geology and carry stored magical history with moved material.
 2. Derive climate, apply heat/material feedback and refresh affected facts.
@@ -660,7 +656,7 @@ A confluence that names a system the world lacks is valid and never holds.
 Configurations participate in the generation hash.
 
 Each epoch advects accumulated activity, first occurrence, storage and coastal
-history with Canonry's crust source map. Climate-phase systems (Fire, Pressure)
+history with the crust's source map. Climate-phase systems (Fire, Pressure)
 alter heat, moved water and rock before hydrology; post-glacial systems (Aurora,
 Greenwood, Salt, Veil) act after ice responds, Aurora through the charge its ice holds,
 carrying ice persistence into the following epoch; every evaluation re-applies the
@@ -922,13 +918,11 @@ intervening edits changed the world, keep
 the edits and report the out-of-date generation result. No automatic retry occurs.
 Domain processes remain independent of the browser adapter.
 
-## Physical port and atlas adapter
+## Physical kernel and atlas adapter
 
-`packages/generation/src/canonry/` ports Canonry commit
-`0f62584c114863ffadeb5e29e021f5fce6b37a61`. The physical kernel uses the original
-equilateral triangle graph, 1024 elevation subunits per authored metre, seed salts,
-material histories and epoch order. Its unsigned 64-bit hash uses exact 32-bit
-word arithmetic in JavaScript. Domain-neutral source processes cover crust,
+`packages/generation/src/world/` holds the physical kernel. It uses an equilateral
+triangle graph, 1024 elevation subunits per authored metre, seed salts, material
+histories and epoch order. Domain-neutral source processes cover crust,
 orogeny, volcanoes, impacts, support/flexure, margins, climate, drainage, erosion,
 sediment, glaciers, coasts and final geographic classifications.
 
@@ -940,8 +934,7 @@ at completed epoch boundaries and before publication. Authored samples are also
 composed into the native workspace before physical consumers run. Per-layer
 validation is consolidated in `layerValidation.ts`.
 
-The standalone `physicalProfile` retains Canonry's defaults. `atlasPhysicalProfile`
-adapts them for the atlas rather than copying the game's frozen-world setting:
+`physicalProfile` holds the defaults, and `atlasPhysicalProfile` adapts them to a map:
 
 - Geological causes use world metres and sampling-independent initial sites.
 - Native climate units map to Celsius through a declared freezing point and
@@ -1046,17 +1039,10 @@ Independently owned regional maps dispatch to `regional/workflow.ts`, which
 composes the world's registered initialization, projection and extraction with the
 regional schedule described above.
 
-The optional offline `tools/canonry-reference` program reads the original C#
-library to produce reference fixtures and `contracts.generated.json`. With the
-pinned reference repository at `../the-canonry-game` and .NET 8 available, run
-`make canonry-fixtures`. Ordinary app builds and CI consume committed
-fixtures and need neither that repository nor .NET.
-
 ### Latitude climate
 
-The climate steps keep Canonry's names, order and feature ownership. Their
-bodies implement a latitude-organised climate in place of the reference's
-radial frozen-world climate; the coefficients are declared in code.
+The climate steps implement a latitude-organised climate; the coefficients are
+declared in code.
 
 - `ocean-currents`: belt-driven drift turned along coasts into gyres
   (`oceanGyres.ts`). Western boundaries are intensified and upwelling forms on
@@ -1146,23 +1132,12 @@ drainage boundary is separate from the inherited parent-boundary fields used by
 refinement. Cylinder has no east/west outlet; pole-to-pole coverage also closes the
 polar faces. Transport uses the planar metre chart.
 
-## Reference and implementation state
-
-Read the corresponding Canonry bodies before adapting their structure:
-
-- [Common lifecycle](https://github.com/chris-arsenault/the-canonry-game/blob/main/src/Engine.WorldGen/PhysicalGeneration/Pipeline/IMapGenerationLayer.cs)
-  and [fact contract](https://github.com/chris-arsenault/the-canonry-game/blob/main/src/Engine.WorldGen/PhysicalGeneration/Pipeline/PhysicalGeographyLayerContract.cs).
-- [Pipeline](https://github.com/chris-arsenault/the-canonry-game/blob/main/src/Engine.WorldGen/PhysicalGeneration/Pipeline/PhysicalGeographyPipeline.cs)
-  and [seed/epoch context](https://github.com/chris-arsenault/the-canonry-game/blob/main/src/Engine.WorldGen/PhysicalGeneration/Pipeline/PhysicalGeographyGenerationContext.cs).
-- [Epoch session](https://github.com/chris-arsenault/the-canonry-game/blob/main/src/Engine.WorldGen/PhysicalGeneration/PhysicalGeographyEvolutionSession.cs)
-  and [physical/magical orchestration](https://github.com/chris-arsenault/the-canonry-game/blob/main/src/IceRemembers.Seed/PhysicalGeneration/IceRemembersWorldGenerationOrchestrator.cs).
+## Implementation state
 
 The TypeScript runner applies registered processes to one working map in a browser
 worker. The workspace publishes semantic field groups through immutable resources, retains
 completed causes by area, and uses direct shared domain validation for edits.
-The physical kernel is a source-traceable port; atlas profile settings, GIS projection
-and user-configurable magic are explicit adaptations. The cultural, political and
-macro-settlement generators use the aggregate society state described above;
+The cultural, political and macro-settlement generators use the aggregate society state described above;
 site/interior layouts retain their own processes.
 
 ## Geographic significance at every scale

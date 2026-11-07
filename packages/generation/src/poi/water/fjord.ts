@@ -1,7 +1,7 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { Landform } from "../../canonry/codes";
-import { worldFjordLength } from "../../canonry/worldSiteEvidence";
-import { regionEvidence } from "../../canonry/worldRegionEvidence";
+import { Landform } from "../../world/codes";
+import { worldFjordLength } from "../../world/worldSiteEvidence";
+import { regionEvidence } from "../../world/worldRegionEvidence";
 import type { GenerationState } from "../../process";
 import { regionalFjordErosion } from "../../regional/profile";
 import type { RegionalState } from "../../regional/state";

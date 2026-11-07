@@ -1,13 +1,13 @@
 import { expect, it } from "vitest";
 import { rockCatalogue, type RockKind } from "../rock/rockCatalogue";
 import { setLayer } from "../rock/rockColumn";
-import { atlasPhysicalProfile } from "../canonry/atlasProfile";
-import { physicalContext } from "../canonry/context";
-import { createField, type PhysicalField } from "../canonry/field";
-import { units } from "../canonry/math";
-import { releaseWorking } from "../canonry/physicalNumerics";
-import { rebuild } from "../canonry/surface";
-import { createWorldMesh } from "../canonry/worldMesh";
+import { atlasPhysicalProfile } from "../world/atlasProfile";
+import { physicalContext } from "../world/context";
+import { createField, type PhysicalField } from "../world/field";
+import { units } from "../world/math";
+import { releaseWorking } from "../world/physicalNumerics";
+import { rebuild } from "../world/surface";
+import { createWorldMesh } from "../world/worldMesh";
 import { ice } from "./ice";
 import { recordCut } from "../rock/groundLedger";
 import { actBy } from "./processCatalogue";
@@ -153,9 +153,10 @@ it("lets ice cut soft rock further than hard under the same ice", () => {
   const profile = atlasPhysicalProfile(),
     map = slope(rockCatalogue.shale, rockCatalogue.quartzite);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.IceFlux.set(i, 2 * profile.GlacierFluxThreshold);
-    map.IceThickness.set(i, 2 * profile.GlacierThicknessThreshold);
+    map.IceThickness.set(i, 500);
+    map.IceFlux.set(i, 100 * 500 * map.mesh.spacing);
     map.GroundedIce.set(i, 1);
+    map.IceFlowTargets.set(i, map.mesh.cellAt(map.mesh.x(i) - 50_000, map.mesh.y(i)));
   }
   glacialErosion(map, physicalContext(1, 0, profile, null, 0, 1));
   const cut = (keep: (y: number) => boolean) =>
@@ -189,7 +190,7 @@ it("lets a scarp in soft rock shed more than the same scarp in hard rock", () =>
 it("lowers a cell's mean by the valley's share of it and remembers the valley's own depth", () => {
   const map = slope(rockCatalogue.shale, rockCatalogue.shale),
     was = map.Elevation.get(0);
-  recordCut(map, 0, units(100), 0.1);
+  recordCut(map, 0, units(100), 0.1, "test");
   expect((was - map.Elevation.get(0)) / 1024).toBeCloseTo(10, 1);
   expect(map.CumulativeFluvialErosion.get(0) / 1024).toBeCloseTo(100, 1);
 });

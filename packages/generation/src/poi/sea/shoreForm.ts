@@ -1,5 +1,5 @@
-import { coastDistances } from "../../canonry/magicOcean";
-import { releaseWorking } from "../../canonry/physicalNumerics";
+import { coastDistances } from "../../world/magicOcean";
+import { releaseWorking } from "../../world/physicalNumerics";
 import type { GenerationState } from "../../process";
 import { cellSpan, fieldOf, heldFor, isSea, Landform, landformAt } from "../poiReads";
 

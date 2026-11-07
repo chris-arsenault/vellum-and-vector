@@ -67,7 +67,8 @@ export interface GenerationFeature {
     configuration: ParameterValues | undefined,
     context: FeatureContributionContext
   ): Diagnostic[];
-  absent?: { product: string; initializer: string }[];
+  /** Histories this feature's processes keep, held as nothing having happened when it is off. */
+  absent?: string[];
   slots: readonly GenerationSlot[];
   contribute(
     slot: string,

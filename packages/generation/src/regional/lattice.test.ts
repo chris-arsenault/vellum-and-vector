@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import { createField } from "../canonry/field";
-import { createWorldMesh } from "../canonry/worldMesh";
+import { createField } from "../world/field";
+import { createWorldMesh } from "../world/worldMesh";
 import { blurContent, blurOverLand, releaseBlurs } from "./lattice";
 import type { RegionalState } from "./state";
 

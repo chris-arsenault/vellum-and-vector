@@ -7,24 +7,24 @@ import {
   putChannel,
   type BlockCache,
 } from "@atlas/domain";
-import { createField, type PhysicalField } from "../../generation/src/canonry/field";
-import { atlasPhysicalProfile } from "../../generation/src/canonry/atlasProfile";
-import { physicalContext } from "../../generation/src/canonry/context";
-import { initializeLandscape, validateLandscape } from "../../generation/src/canonry/surface";
-import { oceanConnectivity } from "../../generation/src/canonry/ocean";
-import { bathymetry, oceanDistance } from "../../generation/src/canonry/geography";
-import { temperature } from "../../generation/src/canonry/climate";
+import { createField, type PhysicalField } from "../../generation/src/world/field";
+import { atlasPhysicalProfile } from "../../generation/src/world/atlasProfile";
+import { physicalContext } from "../../generation/src/world/context";
+import { initializeLandscape, validateLandscape } from "../../generation/src/world/surface";
+import { oceanConnectivity } from "../../generation/src/world/ocean";
+import { bathymetry, oceanDistance } from "../../generation/src/world/geography";
+import { temperature } from "../../generation/src/world/climate";
 import { blockCacheFixture } from "./blockCacheFixture";
 import { MapRunner } from "../../generation/src/mapRunner";
 import { MapProcessRegistry, type MapProcess } from "../../generation/src/process";
 import { landscape, configuration, invoke, options } from "../../generation/src/mapFixtures";
-import { drainageConditioning } from "../../generation/src/canonry/drainageFlood";
-import { drainageGuidance } from "../../generation/src/canonry/flowGuidance";
-import { flowRouting } from "../../generation/src/canonry/routing";
-import { riverNetwork } from "../../generation/src/canonry/rivers";
-import { createWorldMesh } from "../../generation/src/canonry/worldMesh";
-import { buildTransportPlan } from "../../generation/src/canonry/transportPlan";
-import { transportHistory } from "../../generation/src/canonry/transportHistory";
+import { drainageConditioning } from "../../generation/src/world/drainageFlood";
+import { drainageGuidance } from "../../generation/src/world/flowGuidance";
+import { flowRouting } from "../../generation/src/world/routing";
+import { riverNetwork } from "../../generation/src/world/rivers";
+import { createWorldMesh } from "../../generation/src/world/worldMesh";
+import { buildTransportPlan } from "../../generation/src/world/transportPlan";
+import { transportHistory } from "../../generation/src/world/transportHistory";
 
 function execute(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) map.Elevation.set(i, map.mesh.x(i) / 10);

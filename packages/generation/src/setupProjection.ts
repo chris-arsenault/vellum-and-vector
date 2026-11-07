@@ -4,7 +4,7 @@ import { activeLocatedSources } from "./featureDependencies";
 import { landmarksInExtent } from "./landmarkSelection";
 import type { GenerationFeature } from "./features";
 import type { GenerationSetup, SetupFeature, SetupSetting } from "./generationPresentation";
-import { inheritedChannelNames } from "./canonry/inheritedFacts";
+import { inheritedChannelNames } from "./world/inheritedFacts";
 import { sequenceStages, type SequenceStage } from "./sequence";
 import type { PublicationDefinition } from "./publication";
 

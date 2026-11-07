@@ -1,7 +1,7 @@
 import { fixtureWorld, fixtureState, commitCommand } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import { atlasParametersSchema } from "@atlas/generation";
-import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
+import { atlasPhysicalProfile } from "../../packages/generation/src/world/atlasProfile";
 import {
   newGenerationDraft,
   prepareDraft,

@@ -1,8 +1,8 @@
 import type { Band, Landmark } from "@atlas/domain";
 import type { GenerationState } from "../process";
-import type { AtlasPhysicalWorkspace } from "../canonry/atlasWorkspace";
-import type { PhysicalBufferName, PhysicalField } from "../canonry/field";
-import type { Placed } from "../canonry/landmarkGeometry";
+import type { AtlasPhysicalWorkspace } from "../world/atlasWorkspace";
+import type { PhysicalBufferName, PhysicalField } from "../world/field";
+import type { Placed } from "../world/landmarkGeometry";
 import type { RegionalCharacter } from "./character";
 import type { CapturedCourse } from "./courses";
 import type { Contributions } from "./media";

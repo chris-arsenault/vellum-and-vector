@@ -3,11 +3,11 @@ import { spatial, gridPosition, point, rectangle } from "@atlas/domain";
 import { worldPoliticsFixture } from "./worldPoliticsFixtures";
 import { initializePolitics } from "./societyPolitics";
 import { publishPolitics } from "./societyPoliticalPublication";
-import { worldGeographyFixture } from "./canonry/worldGeographyFixtures";
+import { worldGeographyFixture } from "./world/worldGeographyFixtures";
 import { publishPoliticalRegions } from "./worldPoliticalRegions";
 import { generatedFeature } from "./mapFeatures";
 import { nearestSocietySample } from "./societySpatial";
-import { atlasPublicationDefinitions } from "./canonry/atlasPublications";
+import { atlasPublicationDefinitions } from "./world/atlasPublications";
 import { publishGenerationProducts } from "./publication";
 import { worldTerritories } from "./worldTerritoryGeography";
 

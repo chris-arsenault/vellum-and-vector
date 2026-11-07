@@ -1,4 +1,4 @@
-import { wardSeals } from "../../canonry/magicHallowed";
+import { wardSeals } from "../../world/magicHallowed";
 import type { GenerationState } from "../../process";
 import type { PoiMagicCarrier, PoiCostList, PoiPlace } from "../poiContract";
 import { fieldOf } from "../poiReads";

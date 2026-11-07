@@ -1,6 +1,6 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
-import { canyonCells } from "../../canonry/landmarkCanyon";
-import { incisedReach } from "../../canonry/landforms";
+import { canyonCells } from "../../world/landmarkCanyon";
+import { incisedReach } from "../../world/landforms";
 import type { GenerationState } from "../../process";
 import { corridorCost } from "../../regional/causes/landmark";
 import type { RegionalState } from "../../regional/state";

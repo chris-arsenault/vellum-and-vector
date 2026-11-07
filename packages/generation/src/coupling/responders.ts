@@ -1,4 +1,4 @@
-import { clamp } from "../canonry/math";
+import { clamp } from "../world/math";
 import { respond } from "./answers";
 
 /** Everything with something to say about what processes ask. Registering here edits no process. */
@@ -23,7 +23,7 @@ respond({
   key: "wetness",
   by: "climate",
   reads: ["Runoff"],
-  base: (map, i, { Profile: p }) => clamp(map.Runoff.get(i) / (p.FluvialReferenceRunoff * 2), 0, 1),
+  base: (map, i, { Profile: p }) => map.Runoff.get(i) / (p.FluvialReferenceRunoff * 2),
 });
 respond({
   key: "wetness",
@@ -42,7 +42,7 @@ respond({
   key: "warmth",
   by: "climate",
   reads: ["Temperature"],
-  base: (map, i) => clamp((map.Temperature.get(i) - freezing) / warm, 0, 1),
+  base: (map, i) => Math.max(0, map.Temperature.get(i) - freezing) / warm,
 });
 // Fire quickens what goes on in the ground, Aurora stills it.
 respond({
@@ -56,6 +56,14 @@ respond({
   by: "aurora",
   reads: ["Stillness"],
   scale: (map, i) => Math.max(0, 1 - map.Stillness.get(i)),
+});
+// How hard sliding ice bites its bed, against plain ice's 1. Charge in the ice weakens what it touches.
+respond({ key: "iceBite", by: "plain ice", reads: [], base: () => 1 });
+respond({
+  key: "iceBite",
+  by: "aurora",
+  reads: ["IceCharge"],
+  scale: (map, i, { Profile: p }) => 1 + (p.ChargedIceErosion / 1000) * map.IceCharge.get(i),
 });
 // Ground that crosses freezing again and again is opened by frost, if it has water to freeze.
 respond({

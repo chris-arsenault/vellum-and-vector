@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import { createField } from "../canonry/field";
-import { createMesh } from "../canonry/mesh";
+import { createField } from "../world/field";
+import { createMesh } from "../world/mesh";
 import { rockCatalogue } from "./rockCatalogue";
 import {
   alterTop,
@@ -18,7 +18,7 @@ import {
   stripRock,
   watchColumn,
 } from "./rockColumn";
-import { atlasChannels, structureChannels } from "../canonry/atlasChannels";
+import { atlasChannels, structureChannels } from "../world/atlasChannels";
 
 const { shale, sandstone, limestone, gneiss, tufa, rimerot } = rockCatalogue,
   nativeBindingNames = atlasChannels.map(({ name }) => name);

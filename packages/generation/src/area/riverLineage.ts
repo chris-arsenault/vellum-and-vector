@@ -1,5 +1,5 @@
 import type { AtlasFeature } from "@atlas/domain";
-import type { PhysicalField } from "../canonry/field";
+import type { PhysicalField } from "../world/field";
 import type { GenerationState } from "../process";
 import { courseLines, type CapturedCourse } from "../regional/courses";
 import { cellAt, isContent, regionalSpan } from "../regional/lattice";

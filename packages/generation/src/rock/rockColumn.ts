@@ -1,4 +1,4 @@
-import type { PhysicalField } from "../canonry/field";
+import type { PhysicalField } from "../world/field";
 import { rockKindOfCode, softestRock, hardestRock, type RockKind } from "./rockCatalogue";
 import { rockLayerDepths, rockLayerKinds, rockLayers } from "./rockLayerFields";
 

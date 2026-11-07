@@ -4,7 +4,6 @@ import {
   type FeatureContributionContext,
 } from "./features";
 import type { ProcessSequence } from "./process";
-import { physicalInputContract } from "./physicalInputs";
 import { atlasGenerationModules } from "./generationModules";
 import { physicalFeatureDefinitions } from "./physicalFeatures";
 
@@ -19,12 +18,4 @@ export function physicalFeatureSequence(
   return definitions
     .filter((feature) => resolved.selection[feature.id])
     .flatMap((feature) => featureContribution(feature, slot, resolved, context));
-}
-
-export function nativeFeatureContract(
-  name: string,
-  resolved: ResolvedFeatures,
-  inheritedAbsences: string[] = []
-) {
-  return physicalInputContract(name, resolved, physicalFeatureDefinitions, inheritedAbsences);
 }

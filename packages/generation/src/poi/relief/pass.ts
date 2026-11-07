@@ -1,5 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { keyCols } from "../../canonry/landforms";
+import { keyCols } from "../../world/landforms";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { rulingGrade } from "../../regional/ways";

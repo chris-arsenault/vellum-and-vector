@@ -1,16 +1,15 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { it } from "vitest";
-import { atlasEpoch } from "../../../packages/generation/src/canonry/atlasProfile";
-import { physicalContext } from "../../../packages/generation/src/canonry/context";
+import { atlasEpoch } from "../../../packages/generation/src/world/atlasProfile";
+import { physicalContext } from "../../../packages/generation/src/world/context";
 import {
   applyNativeStep,
-  nativeContracts,
   observeNativeSteps,
-} from "../../../packages/generation/src/canonry/contracts";
-import type { PhysicalField } from "../../../packages/generation/src/canonry/field";
-import { physicalProfile } from "../../../packages/generation/src/canonry/profile";
-import { physicalSchedule } from "../../../packages/generation/src/canonry/schedule";
+} from "../../../packages/generation/src/world/physicalSteps";
+import type { PhysicalField } from "../../../packages/generation/src/world/field";
+import { physicalProfile } from "../../../packages/generation/src/world/profile";
+import { physicalSchedule } from "../../../packages/generation/src/world/schedule";
 import { defaultEpochs } from "../worldCreation";
 import { restoreSnapshot, snapshotPath } from "./fieldSnapshot";
 import { harnessRoot } from "./harnessWorkspace";
@@ -40,12 +39,10 @@ const reliefValues = [
   "OrogenicAccretionRatio",
   "OrogenicPlateauWidth",
   "OrogenicPlateauShare",
-  "BedrockLoadResponsePerMille",
   "LithosphericFlexureLength",
   "FluvialChannelArea",
   "FluvialEquilibriumGradient",
   "ThrustRampHeight",
-  "ThrustSlipPerSheetWidth",
   "ThrustTiltPerCell",
 ] as const;
 /** The world's epochs, the last repeated as often as a run of more passes needs. */
@@ -69,9 +66,8 @@ function runPass(
   const epochs = epochsFor(total),
     schedule = physicalSchedule(epochs).filter((entry) => entry.index === pass && entry.epoch);
   for (const { step, epoch, index } of schedule) {
-    const contract = { ...nativeContracts[step[0]], requires: [] },
-      context = physicalContext(seed, step[1], profile, epoch, index, epochs.length);
-    applyNativeStep(map, context, step, contract);
+    const context = physicalContext(seed, step[1], profile, epoch, index, epochs.length);
+    applyNativeStep(map, context, step);
     if (step[0] === until) return;
   }
 }

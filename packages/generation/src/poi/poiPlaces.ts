@@ -1,5 +1,5 @@
 import type { AtlasFeature } from "@atlas/domain";
-import { components } from "../canonry/geographicRegions";
+import { components } from "../world/geographicRegions";
 import { generationFeatures } from "../generationFeatures";
 import type { GenerationState } from "../process";
 import { positionOf } from "../regional/lattice";

@@ -1,4 +1,4 @@
-import { units } from "../canonry/math";
+import { units } from "../world/math";
 import {
   isContent,
   neighborhood,

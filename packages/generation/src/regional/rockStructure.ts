@@ -1,6 +1,6 @@
-import { fractalNoise } from "../canonry/noise";
-import { units } from "../canonry/math";
-import { releaseWorking } from "../canonry/physicalNumerics";
+import { fractalNoise } from "../world/noise";
+import { units } from "../world/math";
+import { releaseWorking } from "../world/physicalNumerics";
 import { rockColumnFields, stripRock } from "../rock/rockColumn";
 import { materialBands } from "./material";
 import { clamp, type RegionalState } from "./state";

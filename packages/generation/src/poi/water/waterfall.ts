@@ -1,6 +1,6 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
-import { Landform } from "../../canonry/codes";
-import { riverGradient } from "../../canonry/landforms";
+import { Landform } from "../../world/codes";
+import { riverGradient } from "../../world/landforms";
 import { groundOf } from "../../rock/ground";
 import { surfaceResistance } from "../../rock/groundQueries";
 import type { GenerationState } from "../../process";

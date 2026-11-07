@@ -1,5 +1,5 @@
-import type { PhysicalField } from "../canonry/field";
-import { rockResistance, round } from "../canonry/math";
+import type { PhysicalField } from "../world/field";
+import { rockResistance, round } from "../world/math";
 import { hardestRock, rockCatalogue, softestRock, type RockKindId } from "./rockCatalogue";
 
 /** All ground starts as ordinary rock. */

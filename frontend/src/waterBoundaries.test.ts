@@ -8,18 +8,18 @@ import {
   spatial,
 } from "@atlas/domain";
 import { landscape } from "../../packages/generation/src/mapFixtures";
-import { createField } from "../../packages/generation/src/canonry/field";
-import { createWorldMesh } from "../../packages/generation/src/canonry/worldMesh";
-import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
-import { refreshWorkspaceSamples } from "../../packages/generation/src/canonry/atlasWorkspace";
-import { projectNative } from "../../packages/generation/src/canonry/atlasProjection";
+import { createField } from "../../packages/generation/src/world/field";
+import { createWorldMesh } from "../../packages/generation/src/world/worldMesh";
+import { atlasPhysicalProfile } from "../../packages/generation/src/world/atlasProfile";
+import { refreshWorkspaceSamples } from "../../packages/generation/src/world/atlasWorkspace";
+import { projectNative } from "../../packages/generation/src/world/atlasProjection";
 import {
   oceanFootprint,
   lakeFootprint,
-} from "../../packages/generation/src/canonry/geographicContours";
-import { nearestTriangle } from "../../packages/generation/src/canonry/mesh";
-import { physicalSampler } from "../../packages/generation/src/canonry/physicalMetric";
-import { createRiverPaths, riverPath } from "../../packages/generation/src/canonry/riverPaths";
+} from "../../packages/generation/src/world/geographicContours";
+import { nearestTriangle } from "../../packages/generation/src/world/mesh";
+import { physicalSampler } from "../../packages/generation/src/world/physicalMetric";
+import { createRiverPaths, riverPath } from "../../packages/generation/src/world/riverPaths";
 import { numericTileSampler } from "./numericTiles";
 import { tilePainter } from "./rasterTiles";
 import type { Raster } from "./types";

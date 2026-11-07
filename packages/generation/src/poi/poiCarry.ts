@@ -1,5 +1,5 @@
 import { spatial, type AtlasFeature } from "@atlas/domain";
-import { meshWindowCells } from "../canonry/meshWindow";
+import { meshWindowCells } from "../world/meshWindow";
 import type { GenerationState } from "../process";
 import { cellAt, isContent, positionOf } from "../regional/lattice";
 import type { RegionalState } from "../regional/state";

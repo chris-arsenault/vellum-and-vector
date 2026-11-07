@@ -1,5 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { quickenedFrom } from "../../canonry/ecologyEnvironment";
+import { quickenedFrom } from "../../world/ecologyEnvironment";
 import { notApplicable, type PoiEntry } from "../poiContract";
 import { namingCultureNear } from "../poiPlaces";
 import { grassCoverAt } from "../poiReads";

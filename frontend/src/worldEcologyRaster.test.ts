@@ -1,11 +1,11 @@
 import { expect, it } from "vitest";
 import { putChannel, point, spatial, surfaceCode } from "@atlas/domain";
-import { worldGeographyFixture } from "../../packages/generation/src/canonry/worldGeographyFixtures";
-import { classifyBiome } from "../../packages/generation/src/canonry/ecologyEnvironment";
-import { classifyNaturalSurface } from "../../packages/generation/src/canonry/naturalSurface";
-import { initializeMagic } from "../../packages/generation/src/canonry/magicState";
+import { worldGeographyFixture } from "../../packages/generation/src/world/worldGeographyFixtures";
+import { classifyBiome } from "../../packages/generation/src/world/ecologyEnvironment";
+import { classifyNaturalSurface } from "../../packages/generation/src/world/naturalSurface";
+import { initializeMagic } from "../../packages/generation/src/world/magicState";
 import { publishKinds } from "../../packages/generation/src/poi/poiPublish";
-import { projectedValues } from "../../packages/generation/src/canonry/atlasSampling";
+import { projectedValues } from "../../packages/generation/src/world/atlasSampling";
 import { numericTileSampler, terrainSampleBands } from "./numericTiles";
 
 it("keeps a declared forest at the actual natural-surface tile edge as physical cover moves", () => {

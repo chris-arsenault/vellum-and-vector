@@ -1,4 +1,4 @@
-import type { PhysicalField } from "../../../packages/generation/src/canonry/field";
+import type { PhysicalField } from "../../../packages/generation/src/world/field";
 
 /**
  * What a pass of mountain building had to build with and what it did with it, across the cells of

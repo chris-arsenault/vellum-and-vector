@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import { createField } from "../canonry/field";
-import { createWorldMesh } from "../canonry/worldMesh";
+import { createField } from "../world/field";
+import { createWorldMesh } from "../world/worldMesh";
 import { materialBands, sheetFold } from "./material";
 import type { RegionalState } from "./state";
 

@@ -18,7 +18,7 @@ import { publishSettlements } from "./societyPublication";
 import { emptySupport } from "./societySupport";
 import type { MapProcessContext } from "./process";
 import type { Polygon } from "geojson";
-import { createAtlasWorkspace } from "./canonry/atlasWorkspace";
+import { createAtlasWorkspace } from "./world/atlasWorkspace";
 
 function fixture() {
   const state = landscape(),

@@ -53,7 +53,7 @@ it("normalizes legacy process choices and values without changing the prepared r
     schemaVersion: 1,
     features: undefined,
     parameters: { ...draft.recipe.parameters, volcanism: 0.35 },
-    processes: { "canonry.glacial-erosion": false, "canonry.glacial-deposition": false },
+    processes: { "atlas.glacial-erosion": false, "atlas.glacial-deposition": false },
     settings: {
       ...draft.recipe.settings,
       epochs: draft.recipe.settings.epochs.map((epoch, i) =>

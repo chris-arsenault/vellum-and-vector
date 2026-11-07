@@ -1,7 +1,7 @@
-import { isRiverStep, riverDrop } from "../../canonry/landforms";
+import { isRiverStep, riverDrop } from "../../world/landforms";
 import { hostedCell, linkOn } from "../../area/areaHosting";
 import { riversOf } from "../../area/riverCourses";
-import { hashUnit } from "../../canonry/noise";
+import { hashUnit } from "../../world/noise";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { groundOf } from "../../rock/ground";

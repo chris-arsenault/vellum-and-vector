@@ -1,6 +1,6 @@
-import { keyCols, leastRise, prominence } from "../../canonry/landforms";
-import { hashUnit } from "../../canonry/noise";
-import { rangeGroups } from "../../canonry/rangeGroups";
+import { keyCols, leastRise, prominence } from "../../world/landforms";
+import { hashUnit } from "../../world/noise";
+import { rangeGroups } from "../../world/rangeGroups";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { mapScale } from "../../worldSignificance";

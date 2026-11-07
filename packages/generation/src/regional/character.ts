@@ -1,5 +1,5 @@
-import { physicalGradients } from "../canonry/physicalMetric";
-import { releaseWorking } from "../canonry/physicalNumerics";
+import { physicalGradients } from "../world/physicalMetric";
+import { releaseWorking } from "../world/physicalNumerics";
 import { distance, isContent, neighborsOf, regionalSpan, smoothOverLength } from "./lattice";
 import { clamp, type RegionalState } from "./state";
 

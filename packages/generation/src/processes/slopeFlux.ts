@@ -1,9 +1,9 @@
 import type { Band } from "@atlas/domain";
-import type { PhysicalField } from "../canonry/field";
-import type { PhysicalProfile } from "../canonry/profile";
-import { clamp } from "../canonry/math";
-import { edgeLeadingTo } from "../canonry/mesh";
-import { workingArray, workingValues, releaseWorking } from "../canonry/physicalNumerics";
+import type { PhysicalField } from "../world/field";
+import type { PhysicalProfile } from "../world/profile";
+import { clamp } from "../world/math";
+import { edgeLeadingTo } from "../world/mesh";
+import { workingArray, workingValues, releaseWorking } from "../world/physicalNumerics";
 import { groundOf, type GroundQuery } from "../rock/ground";
 import { compileMix } from "../rock/modes";
 import { rockCatalogue } from "../rock/rockCatalogue";

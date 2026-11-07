@@ -1,13 +1,13 @@
 import type { Band } from "@atlas/domain";
-import type { PhysicalContext } from "../canonry/context";
-import type { PhysicalBufferName, PhysicalField } from "../canonry/field";
-import { retainedArray } from "../canonry/physicalNumerics";
+import type { PhysicalContext } from "../world/context";
+import type { PhysicalBufferName, PhysicalField } from "../world/field";
+import { retainedArray } from "../world/physicalNumerics";
 
 /**
  * A question a process asks of the world, named for what it wants to know and not for where the answer
  * lives. Whoever has something to say about it responds, in their own terms; the asker never learns who.
  */
-export const answerKeys = ["runoff", "wetness", "warmth", "frost"] as const;
+export const answerKeys = ["runoff", "wetness", "warmth", "frost", "iceBite"] as const;
 export type AnswerKey = (typeof answerKeys)[number];
 
 interface ResponderBase {
@@ -72,8 +72,8 @@ function compute(map: PhysicalField, key: AnswerKey, context: PhysicalContext, b
   }
 }
 /**
- * The answer to a key across the map, resolved once into a band and held until the world moves, so a
- * hot loop reads an array and a stale answer cannot be read.
+ * The answer to a key across the map, resolved once into a band and held until the next step begins,
+ * so a hot loop reads an array. Within a step the answer stands as the step found the world.
  */
 export function ask(map: PhysicalField, key: AnswerKey, context: PhysicalContext): Band {
   const held = state(map);

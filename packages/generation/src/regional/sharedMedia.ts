@@ -1,5 +1,5 @@
-import { oceanDistance } from "../canonry/geography";
-import { latitudeAt } from "../canonry/latitude";
+import { oceanDistance } from "../world/geography";
+import { latitudeAt } from "../world/latitude";
 import { distance, isContent, regionalSpan, smoothOverLength } from "./lattice";
 import { materialBands } from "./material";
 import { heightGradients } from "./relief";

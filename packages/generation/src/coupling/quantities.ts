@@ -1,11 +1,6 @@
-import type { PhysicalBufferName } from "../canonry/field";
-import {
-  ecologyCarbon,
-  ecologyMemory,
-  ecologyRatios,
-  ecologyScalars,
-} from "../canonry/ecologyState";
-import { units } from "../canonry/math";
+import type { PhysicalBufferName } from "../world/field";
+import { ecologyCarbon, ecologyMemory, ecologyRatios, ecologyScalars } from "../world/ecologyState";
+import { units } from "../world/math";
 import { rockLayerDepths, rockLayerKinds } from "../rock/rockLayerFields";
 
 /**

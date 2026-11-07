@@ -1,6 +1,6 @@
 import { population, type Position } from "@atlas/domain";
 import type { GenerationState } from "./process";
-import { nativeIndexAtSurface } from "./canonry/atlasWorkspace";
+import { nativeIndexAtSurface } from "./world/atlasWorkspace";
 
 /**
  * What people leave on the ground, written to the mesh at the end of every society cycle as

@@ -1,8 +1,8 @@
-import { seasonality, snowShare } from "../canonry/climate";
-import { potentialEvaporation } from "../canonry/ecologyEnvironment";
-import { latitudeAt } from "../canonry/latitude";
-import { releaseWorking } from "../canonry/physicalNumerics";
-import { deflectWind, windTerrain } from "../canonry/windTerrain";
+import { seasonality, snowShare } from "../world/climate";
+import { potentialEvaporation } from "../world/ecologyEnvironment";
+import { latitudeAt } from "../world/latitude";
+import { releaseWorking } from "../world/physicalNumerics";
+import { deflectWind, windTerrain } from "../world/windTerrain";
 import { capturedCelsius, magicHeat } from "./glacial";
 import { isContent } from "./lattice";
 import { heightGradients } from "./relief";

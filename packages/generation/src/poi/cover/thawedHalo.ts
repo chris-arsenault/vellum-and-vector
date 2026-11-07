@@ -1,11 +1,19 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { frozenIce } from "../../canonry/ecologyEnvironment";
+import { frozenIce } from "../../world/ecologyEnvironment";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { namingCultureNear, rulePlaces } from "../poiPlaces";
 import { ruleRecord } from "../poiRecords";
-import { adjacent, celsiusAt, geothermalAt, heldFor, iceAt, hasChannel, magicRule } from "../poiReads";
+import {
+  adjacent,
+  celsiusAt,
+  geothermalAt,
+  heldFor,
+  iceAt,
+  hasChannel,
+  magicRule,
+} from "../poiReads";
 import { weighed } from "../poiVisibilityRules";
 import {
   borders,

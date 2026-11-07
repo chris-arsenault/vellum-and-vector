@@ -1,5 +1,5 @@
-import { potentialEvaporation } from "../canonry/ecologyEnvironment";
-import { fractalNoise } from "../canonry/noise";
+import { potentialEvaporation } from "../world/ecologyEnvironment";
+import { fractalNoise } from "../world/noise";
 import { celsius, regionalPrecipitation } from "./climate";
 import { capturedSinks, connectedSea, smoothedBase } from "./base";
 import { influenceCosts } from "./causes/registry";

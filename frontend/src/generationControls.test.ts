@@ -1,6 +1,6 @@
 import { fixtureWorld, commitCommand } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
-import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
+import { atlasPhysicalProfile } from "../../packages/generation/src/world/atlasProfile";
 import { makeCommand } from "./useAtlas";
 
 it("maps creator controls to native physics with declared units", async () => {

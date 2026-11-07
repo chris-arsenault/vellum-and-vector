@@ -1,7 +1,7 @@
 import type { MagicPropagation, MagicSource, MagicSystem } from "@atlas/domain";
-import { magicSourceStrategies } from "./canonry/magicSources";
-import { magicPropagationStrategies } from "./canonry/magicPropagation";
-import { coastalMagicParameters } from "./canonry/magicFeedback";
+import { magicSourceStrategies } from "./world/magicSources";
+import { magicPropagationStrategies } from "./world/magicPropagation";
+import { coastalMagicParameters } from "./world/magicFeedback";
 
 export type MagicParameter = keyof MagicSystem["parameters"];
 type Strategies = Pick<MagicSystem, "origins" | "effects">;

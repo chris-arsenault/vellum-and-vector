@@ -10,8 +10,8 @@ import {
 } from "@atlas/domain";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
 import type { FeatureRequirement } from "./features";
-import { effectiveMagicRules } from "./canonry/magicFeatures";
-import { ecologicalMagicEffects } from "./canonry/ecologyProcesses";
+import { effectiveMagicRules } from "./world/magicFeatures";
+import { ecologicalMagicEffects } from "./world/ecologyProcesses";
 function requirement(
   feature: string,
   path: (string | number)[],

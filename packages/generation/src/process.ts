@@ -11,12 +11,7 @@ import type {
 } from "@atlas/domain";
 import { requireThat, sameValue } from "@atlas/domain";
 import type { ProcessBehavior } from "./processTraits";
-import type {
-  EmptyProductInitialization,
-  ProductDefinition,
-  ProductLedger,
-  ProductRequirement,
-} from "./productLedger";
+import type { ProductDefinition, ProductLedger } from "./productLedger";
 
 /** What a human round inside an earlier epoch left for the present society to find. */
 export interface HumanRound {
@@ -51,7 +46,7 @@ export interface GenerationState {
   society?: import("./societyGeography").SocietyWorkspace;
   /** Completed human rounds of earlier epochs; the present society reads their ruins and history. */
   rounds?: HumanRound[];
-  physical?: import("./canonry/atlasWorkspace").AtlasPhysicalWorkspace;
+  physical?: import("./world/atlasWorkspace").AtlasPhysicalWorkspace;
   domain: DomainSnapshot;
   surface: Grid;
   facts: Set<string>;
@@ -75,8 +70,6 @@ export interface MapProcessContract {
   produces: string[];
   invalidates: string[];
   products?: ProductDefinition[];
-  inputs?: ProductRequirement[];
-  initializes?: EmptyProductInitialization[];
   reconciliation?: ProcessReconciliation;
   // Private numerical steps publish no GIS changes until an explicit projection.
   workspaceOnly?: boolean;

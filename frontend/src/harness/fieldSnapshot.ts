@@ -2,11 +2,11 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { deserialize, serialize } from "node:v8";
 import { Band } from "@atlas/domain";
-import type { PhysicalContext } from "../../../packages/generation/src/canonry/context";
-import { createField, type PhysicalField } from "../../../packages/generation/src/canonry/field";
-import { physicalProfile } from "../../../packages/generation/src/canonry/profile";
-import { initialSteps } from "../../../packages/generation/src/canonry/sequence";
-import { createWorldMesh } from "../../../packages/generation/src/canonry/worldMesh";
+import type { PhysicalContext } from "../../../packages/generation/src/world/context";
+import { createField, type PhysicalField } from "../../../packages/generation/src/world/field";
+import { physicalProfile } from "../../../packages/generation/src/world/profile";
+import { initialSteps } from "../../../packages/generation/src/world/sequence";
+import { createWorldMesh } from "../../../packages/generation/src/world/worldMesh";
 import { generationResolution } from "../../../packages/generation/src/resolution";
 import { harnessRoot } from "./harnessWorkspace";
 
@@ -41,7 +41,6 @@ interface Snapshot {
   bands: Record<string, Float64Array>;
   plain: Record<string, number | boolean>;
   held: Record<string, unknown>;
-  facts: string[];
 }
 function capture(map: PhysicalField, context: PhysicalContext, quality: string): Snapshot {
   const bands: Snapshot["bands"] = {},
@@ -63,7 +62,6 @@ function capture(map: PhysicalField, context: PhysicalContext, quality: string):
     bands,
     plain,
     held,
-    facts: [...map.AvailableFacts],
   };
 }
 /** Saves the state at each pass's start, into a named set of snapshots. */
@@ -113,7 +111,6 @@ export function restoreSnapshot(path: string) {
     if (band instanceof Band) for (let i = 0; i < values.length; i++) band.set(i, values[i]);
   }
   Object.assign(map, snapshot.plain, snapshot.held);
-  map.AvailableFacts = new Set(snapshot.facts);
   // A setting newer than the snapshot takes the code's value, so old snapshots stay usable.
   return { map, seed: snapshot.seed, profile: { ...physicalProfile, ...snapshot.profile } };
 }

@@ -1,12 +1,12 @@
 import { spatial, type AtlasFeature } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { largeWorldDomain, largeDomainSpan, mapScale } from "./worldSignificance";
-import { landArea } from "./canonry/regionPartition";
-import { partitionWorldRegion } from "./canonry/worldRegionPartition";
-import { components, publishPlace } from "./canonry/geographicRegions";
-import { membershipSampler, geographicContour } from "./canonry/geographicContours";
-import { nativePosition } from "./canonry/atlasWorkspace";
-import { workingArray, releaseWorking } from "./canonry/physicalNumerics";
+import { landArea } from "./world/regionPartition";
+import { partitionWorldRegion } from "./world/worldRegionPartition";
+import { components, publishPlace } from "./world/geographicRegions";
+import { membershipSampler, geographicContour } from "./world/geographicContours";
+import { nativePosition } from "./world/atlasWorkspace";
+import { workingArray, releaseWorking } from "./world/physicalNumerics";
 
 /** Continental possessions have geographic parts, all belonging to the same polity. */
 export function publishPoliticalRegions(state: GenerationState, parent: AtlasFeature) {

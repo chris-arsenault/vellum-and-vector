@@ -1,7 +1,7 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { spatial } from "@atlas/domain";
-import { lakeMembership } from "../../canonry/lakeMembership";
-import { noWaterSurface } from "../../canonry/math";
+import { lakeMembership } from "../../world/lakeMembership";
+import { noWaterSurface } from "../../world/math";
 import { generatedFeature } from "../../mapFeatures";
 import type { GenerationState } from "../../process";
 import { components, neighborsOf } from "../../regional/lattice";
@@ -76,7 +76,7 @@ function lakeRecord(state: GenerationState, place: PoiPlace) {
     .map((value) => value.toFixed(3))
     .join(":");
   return generatedFeature(state, `lake:${key}`, `Lake ${body}`, "lake", "lakes", shape, {
-    sourceAlgorithm: "canonry-0f62584c",
+    sourceAlgorithm: "atlas-1",
     waterBody: body,
     waterLevel: (map.WaterSurfaceElevations.get(place.anchor) - map.BaseSeaLevel) / 1024,
     area: spatial.area(shape),

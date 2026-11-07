@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
-import { createField } from "../canonry/field";
-import { units } from "../canonry/math";
-import { createWorldMesh } from "../canonry/worldMesh";
+import { createField } from "../world/field";
+import { units } from "../world/math";
+import { createWorldMesh } from "../world/worldMesh";
 import { erode } from "./groundLedger";
 
 function belt(crust: number, rock: number) {
@@ -18,18 +18,18 @@ const crustOf = (map: ReturnType<typeof belt>) => map.CrustThickness.get(0) / 10
 
 it("leaves the crust alone while wear is taking rock piled on it", () => {
   const map = belt(7000, 500);
-  erode(map, 0, units(400));
+  erode(map, 0, units(400), "test");
   expect(crustOf(map)).toBe(7000);
 });
 
 it("thins an old belt's root once wear cuts past the rock on it", () => {
   const map = belt(7000, 100);
-  erode(map, 0, units(500));
+  erode(map, 0, units(500), "test");
   expect(crustOf(map)).toBeLessThan(7000);
 });
 
 it("stops thinning at a normal continental column", () => {
   const map = belt(4000, 0);
-  erode(map, 0, units(500));
+  erode(map, 0, units(500), "test");
   expect(crustOf(map)).toBe(4000);
 });

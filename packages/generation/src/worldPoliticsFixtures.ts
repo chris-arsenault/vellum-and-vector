@@ -1,5 +1,5 @@
 import { putChannel, residentBand, type SocietyCommunity } from "@atlas/domain";
-import { worldGeographyFixture } from "./canonry/worldGeographyFixtures";
+import { worldGeographyFixture } from "./world/worldGeographyFixtures";
 import { emptySupport } from "./societySupport";
 import type { MapProcessContext } from "./process";
 

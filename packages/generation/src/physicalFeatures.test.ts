@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { rectangle } from "@atlas/domain";
 import { prepareAtlasGeneration } from "./atlasWorkflow";
 import { physicalFeatureDefinitions } from "./physicalFeatures";
-import { nativeContracts } from "./canonry/contracts";
+import { physicalSteps } from "./world/physicalSteps";
 import { landscape } from "./mapFixtures";
 import { sequenceStages } from "./sequence";
 
@@ -43,12 +43,12 @@ function prepareOmission(id: string) {
 it("assigns every reference operation to exactly one feature implementation", () => {
   const processes = physicalFeatureDefinitions.flatMap((feature) => feature.processes);
   const reference = processes.filter((id) =>
-    Object.hasOwn(nativeContracts, id.slice("canonry.".length))
+    Object.hasOwn(physicalSteps, id.slice("atlas.".length))
   );
   expect(new Set(processes).size).toBe(processes.length);
   expect(reference.sort()).toEqual(
-    Object.keys(nativeContracts)
-      .map((name) => `canonry.${name}`)
+    Object.keys(physicalSteps)
+      .map((name) => `atlas.${name}`)
       .sort()
   );
 });
@@ -78,12 +78,12 @@ it("keeps initial crust but omits the complete epoch crust update when tectonic 
   const stages = sequenceStages(prepared.input.configuration!.sequence);
   expect(
     stages.some(
-      (stage) => stage.invocation?.process === "canonry.tectonic-provinces" && !stage.epochs.length
+      (stage) => stage.invocation?.process === "atlas.tectonic-provinces" && !stage.epochs.length
     )
   ).toBe(true);
   expect(
     stages.some(
-      (stage) => stage.invocation?.process === "canonry.tectonic-uplift" && stage.epochs.length
+      (stage) => stage.invocation?.process === "atlas.tectonic-uplift" && stage.epochs.length
     )
   ).toBe(false);
 });

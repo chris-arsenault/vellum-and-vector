@@ -1,6 +1,6 @@
 import { gridPosition, neighbors, spatial } from "@atlas/domain";
 import type { GenerationState, HumanRound } from "./process";
-import { Feature } from "./canonry/codes";
+import { Feature } from "./world/codes";
 import { nearestSocietySample } from "./societySpatial";
 import { dryLand, societyValue } from "./societySupport";
 

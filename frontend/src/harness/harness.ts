@@ -112,7 +112,8 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
     };
     await ws.save(record);
     write(out, "world-run", { ...recorder, seconds: (performance.now() - started) / 1000 });
-    const { steps, probes, columns, rock } = stopTrace();
+    const { steps, probes, columns, rock, story } = stopTrace();
+    write(out, "world-story", story);
     write(out, "world-trace", steps);
     write(out, "world-probes", probes);
     write(out, "world-columns", columns);

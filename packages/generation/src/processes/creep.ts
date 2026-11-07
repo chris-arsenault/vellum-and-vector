@@ -1,7 +1,5 @@
 import type { Band } from "@atlas/domain";
 import { compileMix } from "../rock/modes";
-import { releaseWorking, workingArray } from "../canonry/physicalNumerics";
-import { settle, shed } from "../rock/groundLedger";
 import { defineProcess, type ProcessWork } from "./groundProcess";
 import { slopeSettings } from "./slopeSettings";
 
@@ -54,15 +52,17 @@ export const creep = defineProcess({
   asks: [],
   moves: [["loose", "loose"]],
   settings: slopeSettings,
+  // A region's passes refine one stretch of the world's history; they do not add more of it.
+  atScale: (settings, { passes }) => ({ CreepPerSpan: settings.CreepPerSpan / passes }),
   run(work) {
-    const { field, world } = work,
-      leaving = workingArray(world, "float64", "creep:leaving"),
-      arriving = workingArray(world, "float64", "creep:arriving");
+    const { field, tools } = work,
+      leaving = tools.scratch("creep:leaving"),
+      arriving = tools.scratch("creep:arriving");
     for (let i = 0; i < field.mesh.count; i++) creepFrom(work, i, leaving, arriving);
     for (let i = 0; i < field.mesh.count; i++) {
-      if (leaving.get(i) > 0) shed(world, i, leaving.get(i), "creep");
-      if (arriving.get(i) > 0) settle(world, i, arriving.get(i));
+      if (leaving.get(i) > 0) tools.shed(i, leaving.get(i), "creep");
+      if (arriving.get(i) > 0) tools.settle(i, arriving.get(i));
     }
-    releaseWorking(world, leaving, arriving);
+    tools.release(leaving, arriving);
   },
 });
