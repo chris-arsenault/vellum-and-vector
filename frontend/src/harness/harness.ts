@@ -19,6 +19,8 @@ import { channelRanges, fieldInventory, openTerrain, scaleReport, tileTiming } f
 import { featureReport, mapFeatures } from "./featureReport";
 import { reliefReport } from "./reliefReport";
 import { traceRelief } from "./reliefTrace";
+import { processProbeBands, startProcessProbe } from "./processProbe";
+import type { PhysicalBufferName } from "../../../packages/generation/src/world/field";
 
 /** What one harness run does; read from the environment of `pnpm harness`. */
 export interface HarnessOptions {
@@ -36,6 +38,9 @@ export interface HarnessOptions {
   worldOnly: boolean;
   /** Saves the world's state at the start of each pass under this name, for `stageReplay`. */
   snapshots: string;
+  /** Optional map coordinate sampled before/after each process and settlement. */
+  processAt?: [number, number];
+  processBands?: readonly PhysicalBufferName[];
 }
 /** The world the harness judges, so a result is not fitted to the app's default seed. */
 const harnessSeed = 271_828;
@@ -50,6 +55,8 @@ const defaults = {
   HARNESS_QUICK: "",
   HARNESS_WORLD_ONLY: "",
   HARNESS_SNAPSHOTS: "",
+  HARNESS_PROCESS_AT: "",
+  HARNESS_PROCESS_BANDS: "",
 };
 function position(text: string): [number, number] | undefined {
   const at = text.split(",").map(Number);
@@ -69,11 +76,18 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
     quick: Boolean(read("HARNESS_QUICK")),
     worldOnly: Boolean(read("HARNESS_WORLD_ONLY")),
     snapshots: read("HARNESS_SNAPSHOTS"),
+    processAt: position(read("HARNESS_PROCESS_AT")),
+    processBands: processProbeBands(read("HARNESS_PROCESS_BANDS")),
   };
 }
 
 const write = (directory: string, name: string, value: unknown) =>
   writeFileSync(join(directory, `${name}.json`), JSON.stringify(value, null, 2));
+
+const recordProcesses = (options: HarnessOptions, out: string, map: string) =>
+  startProcessProbe(options.processAt, options.processBands, (samples) =>
+    write(out, `${map}-processes`, samples)
+  );
 
 /** A failed step does not stop a run, it skips what depends on it: say so where it will be seen. */
 function sayFailures(map: string, diagnostics: { severity: string; message: string }[]) {
@@ -92,9 +106,11 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
     started = performance.now(),
     stopTrace = traceRelief(
       options.snapshots ? { label: options.snapshots, quality: options.worldQuality } : undefined
-    );
+    ),
+    stopProcesses = recordProcesses(options, out, "world");
   draft.recipe.quality = options.worldQuality as typeof draft.recipe.quality;
   draft.recipe.seed = harnessSeed;
+  let traceStopped = false;
   try {
     const { worldId, root } = await generateWorld(ws, draft, recorder.observers);
     const record: CheckpointRecord = {
@@ -113,6 +129,7 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
     await ws.save(record);
     write(out, "world-run", { ...recorder, seconds: (performance.now() - started) / 1000 });
     const { steps, probes, columns, rock, story } = stopTrace();
+    traceStopped = true;
     write(out, "world-story", story);
     write(out, "world-trace", steps);
     write(out, "world-probes", probes);
@@ -121,7 +138,15 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
     sayFailures("world", recorder.diagnostics);
     return record;
   } finally {
-    await ws.close();
+    try {
+      stopProcesses();
+    } finally {
+      try {
+        if (!traceStopped) stopTrace();
+      } finally {
+        await ws.close();
+      }
+    }
   }
 }
 
@@ -129,12 +154,13 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
 async function ensureRegion(options: HarnessOptions, world: CheckpointRecord, out: string) {
   const reused = !options.fresh.has("region") && readCheckpoint(options.region);
   if (reused && reused.world === world.name) return reused;
+  const at = options.regionAt ?? world.position;
+  if (!at) throw new Error("Give HARNESS_REGION_AT=x,y: the world records no highest land.");
   copyCheckpoint(world.name, options.region);
   const ws = await openHarnessWorkspace(checkpointDirectory(options.region)),
     recorder = stageRecorder(),
-    at = options.regionAt ?? world.position,
-    started = performance.now();
-  if (!at) throw new Error("Give HARNESS_REGION_AT=x,y: the world records no highest land.");
+    started = performance.now(),
+    stopProcesses = recordProcesses(options, out, "region");
   try {
     const { child } = await refineRegion(
       ws,
@@ -159,7 +185,11 @@ async function ensureRegion(options: HarnessOptions, world: CheckpointRecord, ou
     sayFailures("region", recorder.diagnostics);
     return record;
   } finally {
-    await ws.close();
+    try {
+      stopProcesses();
+    } finally {
+      await ws.close();
+    }
   }
 }
 
@@ -175,7 +205,8 @@ async function quickRegion(options: HarnessOptions, out: string) {
   if (!at) throw new Error("Give HARNESS_REGION_AT=x,y: the world records no highest land.");
   copyCheckpoint(world.name, quickCheckpoint);
   const ws = await openHarnessWorkspace(checkpointDirectory(quickCheckpoint)),
-    started = performance.now();
+    started = performance.now(),
+    stopProcesses = recordProcesses(options, out, "quick-region");
   let done = false;
   const observers = {
     inspect(_path: string[], process: string, state: Parameters<typeof quickTerrain>[0]) {
@@ -203,7 +234,11 @@ async function quickRegion(options: HarnessOptions, out: string) {
   } catch (error) {
     if (!done) throw error;
   } finally {
-    await ws.close();
+    try {
+      stopProcesses();
+    } finally {
+      await ws.close();
+    }
   }
 }
 const quickCheckpoint = "quick-region",

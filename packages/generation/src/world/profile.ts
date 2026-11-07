@@ -5,6 +5,8 @@ import { rockCatalogue } from "../rock/rockCatalogue";
 import { coastSettings } from "../processes/coastSettings";
 import { iceSettings } from "../processes/iceSettings";
 import { slopeSettings } from "../processes/slopeSettings";
+import { weatheringSettings } from "../processes/weatheringSettings";
+import { creepSettings } from "../processes/creepSettings";
 import { solutionSettings } from "../processes/solutionSettings";
 import { streamSettings } from "../processes/streamSettings";
 
@@ -156,6 +158,8 @@ export const physicalProfile = {
   ...solutionSettings,
   ...iceSettings,
   ...slopeSettings,
+  ...weatheringSettings,
+  ...creepSettings,
   ...coastSettings,
   SedimentTransportFraction: 760,
   SedimentDepositionLength: 10_000,

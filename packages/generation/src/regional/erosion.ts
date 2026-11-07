@@ -4,6 +4,7 @@ import { physicalContext } from "../world/context";
 import { releaseWorking } from "../world/physicalNumerics";
 import { rockColumnFields } from "../rock/rockColumn";
 import { drainageSteps, incisionSteps, sedimentStep } from "../world/sequence";
+import { runNativeStep } from "../world/physicalSteps";
 import { profileAtScale } from "../processes/processCatalogue";
 import { restoreFeatures } from "./causes/registry";
 import { updateSlopes } from "./relief";
@@ -36,8 +37,12 @@ export function erodeRegion(state: RegionalState) {
     ),
     column = keptRock.map((name) => work.map.coverage.copyBand(work.map[name]));
   for (let epoch = 0; epoch < erosionEpochs; epoch++)
-    for (const [, salt, run] of steps)
-      run(work.map, physicalContext(seed, salt, profile, null, epoch, erosionEpochs));
+    for (const step of steps)
+      runNativeStep(
+        work.map,
+        physicalContext(seed, step[1], profile, null, epoch, erosionEpochs),
+        step
+      );
   keepPlains(state, before, column);
   releaseWorking(work.map, ...column);
   restoreFeatures(state);

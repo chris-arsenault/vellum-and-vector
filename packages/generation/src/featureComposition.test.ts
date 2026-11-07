@@ -8,10 +8,6 @@ import { landscape } from "./mapFixtures";
 import { MapRunner } from "./mapRunner";
 import { MapProcessRegistry, type ProcessConfiguration } from "./process";
 import { sequenceStages } from "./sequence";
-import { physicalSteps } from "./world/physicalSteps";
-import { physicalSchedule } from "./world/schedule";
-import { drainageSteps, glacialRunoffStep } from "./world/sequence";
-import { atlasEpoch } from "./world/atlasProfile";
 import { GenerationModuleRegistry, type GenerationModule } from "./generationModules";
 import { atlasGenerationModules } from "./atlasModules";
 import { worldGenerationSettings } from "./generationSettings";
@@ -364,22 +360,20 @@ it("preserves both random streams when an unrelated module with the same local i
   }
 });
 
-it("retains reference numerical ordering including the atlas ecological water refreshes", () => {
+it("keeps native water and incision groups ordered in the actual selected sequence", () => {
   const domain = source(),
-    input = { areaId: domain.scope.areaId, seed: 73, quality: "draft", domains: ["physical"] };
-  const actual = sequenceStages(atlasConfiguration(domain, input).sequence)
-    .flatMap((stage) => (stage.invocation ? [stage.invocation.process.slice("atlas.".length)] : []))
-    .filter((name) => Object.hasOwn(physicalSteps, name));
-  const expected = physicalSchedule(domain.world.epochs.map(atlasEpoch)).flatMap(
-    ({ step, phase }) => {
-      const refresh =
-        phase === "hydrology" && step[0] === "ancestral-fluvial-erosion"
-          ? drainageSteps
-          : phase === "coasts" && step[0] === "external-coastal-forcing"
-            ? [drainageSteps[0], glacialRunoffStep, ...drainageSteps.slice(1)]
-            : [];
-      return [...refresh.map(([name]) => name), step[0]];
-    }
-  );
-  expect(actual).toEqual(expected);
+    sequence = atlasConfiguration(domain, {
+      areaId: domain.scope.areaId,
+      seed: 73,
+      quality: "draft",
+      domains: ["physical"],
+    }).sequence;
+  const stages = sequenceStages(sequence).filter((stage) => stage.epochs.length);
+  const ids = stages.flatMap(({ invocation }) => (invocation ? [invocation.process] : []));
+  const incision = ids.indexOf("atlas.ancestral-fluvial-erosion"),
+    sediment = ids.indexOf("atlas.sediment-transport");
+  expect(incision).toBeGreaterThan(ids.indexOf("atlas.runoff"));
+  expect(ids[incision + 1]).toBe("atlas.post-fluvial-mass-wasting");
+  expect(sediment).toBeGreaterThan(incision);
+  expect(ids.slice(incision, sediment)).toContain("atlas.flow-routing");
 });

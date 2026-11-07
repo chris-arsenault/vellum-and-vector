@@ -9,10 +9,10 @@ import {
 } from "../../../packages/generation/src/world/physicalSteps";
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import { physicalProfile } from "../../../packages/generation/src/world/profile";
-import { physicalSchedule } from "../../../packages/generation/src/world/schedule";
 import { defaultEpochs } from "../worldCreation";
 import { restoreSnapshot, snapshotPath } from "./fieldSnapshot";
 import { harnessRoot } from "./harnessWorkspace";
+import { nativeWorkload } from "./nativeWorkload";
 import { reliefProbes } from "./reliefProbes";
 import { beltSupply, landHeights, moveBudget, stuckRootCrust } from "./reliefSupply";
 import {
@@ -28,8 +28,7 @@ import {
  * Runs the world's real physical sequence again from a saved pass, with nothing generated:
  * `HARNESS_STAGES=stages HARNESS_PASS=1 HARNESS_UNTIL=crustal-support pnpm --dir frontend harness
  * stageReplay`. Magic and ecology do not run, and a pass's steps run as the world's schedule lists
- * them. Writes each step's probes and, when a later snapshot exists, how far the replay ended from
- * what the full run recorded.
+ * them. Writes each step's geographic probes.
  */
 const out = join(harnessRoot, process.env.HARNESS_OUT ?? "replay.json");
 
@@ -49,10 +48,12 @@ const reliefValues = [
 function epochsFor(passes: number) {
   // A trial of other tectonic strengths, one per epoch: HARNESS_TECTONICS="1,0.4,0.1".
   const trial = process.env.HARNESS_TECTONICS?.split(",").map(Number),
-    epochs = defaultEpochs().map((epoch, n) =>
-      atlasEpoch({ ...epoch, tectonics: trial?.[n] ?? epoch.tectonics })
-    );
-  while (epochs.length < passes) epochs.push(epochs[epochs.length - 1]);
+    epochs = defaultEpochs().map((epoch, n) => ({
+      ...epoch,
+      tectonics: trial?.[n] ?? epoch.tectonics,
+    }));
+  while (epochs.length < passes)
+    epochs.push({ ...epochs[epochs.length - 1], id: `workload-${epochs.length}` });
   return epochs;
 }
 function runPass(
@@ -64,23 +65,21 @@ function runPass(
   total: number
 ) {
   const epochs = epochsFor(total),
-    schedule = physicalSchedule(epochs).filter((entry) => entry.index === pass && entry.epoch);
-  for (const { step, epoch, index } of schedule) {
-    const context = physicalContext(seed, step[1], profile, epoch, index, epochs.length);
+    schedule = nativeWorkload(epochs).filter((entry) => entry.epochIndices[0] === pass);
+  for (const { step, invocation } of schedule) {
+    const context = physicalContext(
+      seed,
+      step[1],
+      profile,
+      atlasEpoch(epochs[pass]),
+      pass,
+      epochs.length
+    );
+    context.IceLoad = Boolean(invocation.parameters?.iceLoad);
+    if (invocation.parameters?.unforced) map.ExternalHeatForcing.fill(0);
     applyNativeStep(map, context, step);
     if (step[0] === until) return;
   }
-}
-function differenceFrom(map: PhysicalField, path: string) {
-  const { map: recorded } = restoreSnapshot(path);
-  let total = 0,
-    cells = 0;
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (map.mesh.membership(i) !== 1) continue;
-    total += ((map.Elevation.get(i) - recorded.Elevation.get(i)) / 1024) ** 2;
-    cells++;
-  }
-  return Math.round(Math.sqrt(total / cells));
 }
 it.runIf(process.env.HARNESS_STAGES)(
   "replays a pass of the world from a snapshot",
@@ -132,8 +131,6 @@ it.runIf(process.env.HARNESS_STAGES)(
     const result = {
       pass,
       seconds: Math.round((performance.now() - started) / 1000),
-      elevationFromRecordedRun:
-        until || count !== 1 ? null : differenceFrom(map, snapshotPath(label, pass + 1)),
       startLand: landAtStart,
       endLand: landHeights(map),
       systems: mountainSystems(map),

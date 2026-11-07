@@ -1,4 +1,8 @@
 import type { Band } from "@atlas/domain";
+import type { PhysicalContext } from "../world/context";
+import { drainageConditioning } from "../world/drainageFlood";
+import { resolveLandTargets } from "../world/flowGuidance";
+import { waterGathered } from "../world/flowGraph";
 import { clamp, units } from "../world/math";
 import { meshDeltaX } from "../world/mesh";
 import type { WearCause } from "../coupling/stage";
@@ -71,6 +75,11 @@ export const streams = defineProcess({
     ["loose", "load"],
   ],
   settings: streamSettings,
+  prepare: (map) => ({
+    conditionDrainage: (context: PhysicalContext) => drainageConditioning(map, context),
+    landTargets: (context: PhysicalContext) => resolveLandTargets(map, context),
+    waterGathered: (targets: Band, rain: Pick<Band, "get">) => waterGathered(map, targets, rain),
+  }),
   atScale(settings, { scale }) {
     const finer = scale < 1;
     return {

@@ -7,6 +7,12 @@ import { ecologyEpochSchema, type Epoch } from "@atlas/domain";
 import { generationBindings } from "../generationBindings";
 import type { ProductLedger } from "../productLedger";
 import { tectonicDefaultMyr, tectonicReferenceMyr } from "./tectonicControls";
+import type { PhysicalField } from "./field";
+export interface ProcessObservation {
+  readonly processes: readonly string[];
+  readonly phase: "before" | "after-run" | "settled";
+  readonly substep: number;
+}
 export interface PhysicalEpoch {
   TectonicDurationMyr?: number;
   StableName: string;
@@ -24,6 +30,12 @@ export interface PhysicalContext {
   Products?: Pick<ProductLedger, "status">;
   /** What else rides the crust and moves whenever the plates do. */
   AfterPlateStep?: () => void;
+  /** Optional live inspection; simultaneous effects are observed after their joint settlement. */
+  ObserveProcess?: (
+    event: ProcessObservation,
+    field: PhysicalField,
+    context: PhysicalContext
+  ) => void;
   /** Whether what ice weighs is counted in what the crust floats under. */
   IceLoad?: boolean;
   RainfallMultiplier: number;

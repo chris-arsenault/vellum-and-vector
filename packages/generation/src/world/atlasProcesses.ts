@@ -2,7 +2,7 @@ import { requireThat, type DomainSnapshot } from "@atlas/domain";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { markPoiLandforms } from "../poi/poiLandforms";
-import { allSteps, applyNativeStep, fieldProduct, physicalSteps } from "./physicalSteps";
+import { allSteps, applyNativeStep, fieldProduct, describeNativeStep } from "./physicalSteps";
 import { nativeContext } from "./context";
 import { atlasQuality } from "./atlasProfile";
 import { configuredPhysicalProfile } from "../physicalProfileConfiguration";
@@ -71,9 +71,9 @@ const afterStep: Readonly<
       description: `Epoch ${epoch + 1}: the selected geological, river, ice and coastal processes retained their material histories. Omitted processes added no new events.`,
     }),
 };
-function nativeProcess(step: NativeStep): MapProcess {
+export function nativeProcess(step: NativeStep): MapProcess {
   const [name, salt] = step,
-    declared = physicalSteps[name];
+    declared = describeNativeStep(step);
   return {
     contract: {
       ...contract(

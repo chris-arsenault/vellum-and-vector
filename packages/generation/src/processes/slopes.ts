@@ -1,5 +1,12 @@
 import { defineProcess, type GroundProcess, type ProcessWork } from "./groundProcess";
 import { slopeSettings } from "./slopeSettings";
+import { hillslopeFlux } from "./slopeFlux";
+import type { PhysicalField } from "../world/field";
+import type { PhysicalProfile } from "../world/profile";
+
+const prepare = (map: PhysicalField) => ({
+  slopeFailure: (settings: PhysicalProfile) => hillslopeFlux(map, settings),
+});
 
 /**
  * Ground too steep to hold fails and comes to rest on its neighbours, so nothing leaves the slope. It
@@ -8,23 +15,20 @@ import { slopeSettings } from "./slopeSettings";
  * next to the first, or at a numerical bound. Each round lands before the next looks at the slopes.
  */
 function failSlopes(
-  { field, settings, tools, stage }: Pick<ProcessWork, "field" | "settings" | "tools" | "stage">,
+  { settings, tools, stage }: ProcessWork<"Elevation", never, ReturnType<typeof prepare>>,
   id: string
 ) {
-  const mesh = field.mesh;
   let first = 0;
   for (let round = 0; round < settings.SlopeRoundsAtMost; round++) {
-    const { cuts, fills } = tools.slopeFailure(settings);
+    const routes = tools.slopeFailure(settings);
     let moved = 0;
-    for (let i = 0; i < mesh.count; i++) {
-      if (cuts.get(i) > 0) {
-        stage.demand("rock", "load", i, (cuts.get(i) * 1024) / mesh.area(i), id);
-        moved += cuts.get(i);
-      }
-      if (fills.get(i) > 0)
-        stage.demand("load", "loose", i, (fills.get(i) * 1024) / mesh.area(i), id);
+    while (routes.size) {
+      const source = routes.shift(),
+        target = routes.field(0),
+        volume = routes.field(1);
+      stage.moveSurface(source, target, volume, id);
+      moved += volume;
     }
-    tools.release(cuts, fills);
     stage.settle();
     first ||= moved;
     if (moved <= first * settings.SlopeRoundsSettled) return;
@@ -44,6 +48,7 @@ const slopeProcess = (id: string): GroundProcess =>
       ["load", "loose"],
     ],
     settings: slopeSettings,
+    prepare,
     settlesItself: true,
     run: (work) => failSlopes(work, id),
   });

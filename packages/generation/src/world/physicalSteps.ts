@@ -1,24 +1,9 @@
 import type { PhysicalBufferName, PhysicalField } from "./field";
-import type { PhysicalContext } from "./context";
+import type { PhysicalContext, ProcessObservation } from "./context";
 import { validateNativeLayer } from "./layerValidation";
-import {
-  climateSteps,
-  coastalSteps,
-  drainageSteps,
-  extractionSteps,
-  geologySteps,
-  glaciationSteps,
-  glacialRunoffStep,
-  historyStep,
-  iceSteps,
-  incisionSteps,
-  initialSteps,
-  meltwaterStep,
-  rockSteps,
-  sedimentStep,
-  validationStep,
-  type NativeStep,
-} from "./sequence";
+import type { NativeStep } from "./sequence";
+import { physicalFeatureDefinitions } from "../physicalFeatures";
+import { nativeStepsOf } from "../physicalFeature";
 
 /**
  * What a world step works from and leaves behind, gathered from the processes it runs. A step that needs
@@ -34,7 +19,7 @@ export interface PhysicalStep {
   readonly movesMaterial: boolean;
 }
 const carried = new Set(["load", "loose"]);
-function declared([, , , processes]: NativeStep): PhysicalStep {
+export function describeNativeStep([, , , processes]: NativeStep): PhysicalStep {
   const unique = <T>(values: readonly T[]) => [...new Set(values)];
   return {
     needs: unique(processes.flatMap((each) => each.needs ?? [])),
@@ -46,31 +31,9 @@ function declared([, , , processes]: NativeStep): PhysicalStep {
   };
 }
 /** Every step a world can run, by name, each once. */
-export const allSteps: readonly NativeStep[] = [
-  ...new Map(
-    [
-      ...initialSteps,
-      ...geologySteps,
-      ...glaciationSteps,
-      ...iceSteps,
-      meltwaterStep,
-      ...coastalSteps,
-      ...extractionSteps,
-      ...climateSteps,
-      ...drainageSteps,
-      ...incisionSteps,
-      sedimentStep,
-      glacialRunoffStep,
-      ...rockSteps,
-      historyStep,
-      validationStep,
-    ]
-      .reverse()
-      .map((step) => [step[0], step] as const)
-  ).values(),
-];
+export const allSteps: readonly NativeStep[] = nativeStepsOf(physicalFeatureDefinitions);
 export const physicalSteps: Readonly<Record<string, PhysicalStep>> = Object.fromEntries(
-  allSteps.map((step) => [step[0], declared(step)])
+  allSteps.map((step) => [step[0], describeNativeStep(step)])
 );
 /** The ledger's name for a band having been written. */
 export const fieldProduct = (band: PhysicalBufferName) => `field:${band}`;
@@ -84,12 +47,40 @@ let stepObserver: NativeStepObserver | null = null;
 export function observeNativeSteps(observer: NativeStepObserver | null) {
   stepObserver = observer;
 }
+export type NativeProcessObserver = (
+  step: string,
+  event: ProcessObservation,
+  map: PhysicalField,
+  context: PhysicalContext
+) => void;
+let processObserver: NativeProcessObserver | null = null;
+/** Optional harness inspection at process boundaries, including joint stage settlement. */
+export function observeNativeProcesses(observer: NativeProcessObserver | null) {
+  processObserver = observer;
+}
+/** Runs the native operation with inspection, without imposing world publication validation. */
+export function runNativeStep(map: PhysicalField, context: PhysicalContext, step: NativeStep) {
+  const [name, , process] = step,
+    observer = processObserver;
+  process(
+    map,
+    observer
+      ? {
+          ...context,
+          ObserveProcess: (event, field, executionContext) => {
+            context.ObserveProcess?.(event, field, executionContext);
+            observer(name, event, field, executionContext);
+          },
+        }
+      : context
+  );
+}
 /** Runs a step, then checks what it left within the physical ranges its bands must hold. */
 export function applyNativeStep(map: PhysicalField, context: PhysicalContext, step: NativeStep) {
-  const [name, , process] = step;
+  const [name] = step;
   try {
-    process(map, context);
-    validateNativeLayer(map, context, physicalSteps[name]?.writes ?? []);
+    runNativeStep(map, context, step);
+    validateNativeLayer(map, context, describeNativeStep(step).writes);
     stepObserver?.(name, map, context);
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause);

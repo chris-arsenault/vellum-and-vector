@@ -1,0 +1,125 @@
+import { beforeEach, expect, it, vi } from "vitest";
+import { createField } from "../../../packages/generation/src/world/field";
+import { createWorldMesh } from "../../../packages/generation/src/world/worldMesh";
+import { physicalContext } from "../../../packages/generation/src/world/context";
+import { physicalProfile } from "../../../packages/generation/src/world/profile";
+import { defineProcess } from "../../../packages/generation/src/processes/groundProcess";
+import { actBy } from "../../../packages/generation/src/processes/processRunner";
+import { runNativeStep } from "../../../packages/generation/src/world/physicalSteps";
+import { harnessOptions, runHarness } from "./harness";
+
+const io = vi.hoisted(() => ({
+  write: vi.fn(),
+  closed: [] as ReturnType<typeof vi.fn>[],
+  generate: vi.fn(),
+  refine: vi.fn(),
+  world: { kind: "world", name: "world", worldId: "w", root: "root", position: [0, 0] },
+}));
+vi.mock("node:fs", async (original) => ({
+  ...(await original<typeof import("node:fs")>()),
+  mkdirSync: vi.fn(),
+  writeFileSync: io.write,
+}));
+vi.mock("./harnessWorkspace", () => ({
+  harnessRoot: "/probe-output",
+  checkpointDirectory: (name: string) => name,
+  copyCheckpoint: vi.fn(),
+  removeCheckpoint: vi.fn(),
+  currentCommit: () => "probe",
+  readCheckpoint: (name: string) => (name === "world" ? io.world : undefined),
+  openHarnessWorkspace: async () => {
+    const close = vi.fn();
+    io.closed.push(close);
+    return { save: vi.fn(), close };
+  },
+}));
+vi.mock("./harnessGeneration", () => ({ generateWorld: io.generate, refineRegion: io.refine }));
+vi.mock("../generationDraft", () => ({
+  newGenerationDraft: () => ({ recipe: {}, width: 100, height: 100 }),
+}));
+vi.mock("./stageRecord", () => ({
+  stageRecorder: () => ({ diagnostics: [], observers: {}, highestLand: () => [0, 0] }),
+}));
+vi.mock("./reliefTrace", () => ({
+  traceRelief: () => () => ({ steps: [], probes: [], columns: [], rock: [], story: null }),
+}));
+vi.mock("./mapReport", () => ({
+  openTerrain: async () => ({
+    raster: { field: { scope: { resolution: 1 } } },
+    rasters: [],
+    world: { areas: { root: { footprint: {} } } },
+    geography: {},
+    close: vi.fn(),
+  }),
+  channelRanges: vi.fn(),
+  fieldInventory: vi.fn(),
+  scaleReport: vi.fn(),
+  tileTiming: vi.fn(),
+}));
+vi.mock("./featureReport", () => ({ mapFeatures: vi.fn(), featureReport: vi.fn() }));
+vi.mock("./reliefReport", () => ({ reliefReport: vi.fn() }));
+vi.mock("../testSupport/regionalOverview", () => ({
+  rasterOverview: vi.fn(),
+  rasterRelief: vi.fn(),
+}));
+vi.mock("./quickTerrain", () => ({ quickTerrain: vi.fn() }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  io.generate.mockReset();
+  io.refine.mockReset();
+  io.closed.length = 0;
+});
+
+it.each(["world", "region", "quick-region"])(
+  "attaches %s point inspection and saves partial samples when its generation operation fails",
+  async (kind) => {
+    const map = createField(createWorldMesh([-500, -500, 500, 500], 16, 0)),
+      at = [map.mesh.origin[0] + map.mesh.x(0), map.mesh.origin[1] + map.mesh.y(0)],
+      probe = defineProcess({
+        id: "failure-probe",
+        statement: "Tests the harness lifecycle.",
+        reads: [],
+        asks: [],
+        moves: [],
+        settings: {},
+        run() {
+          throw new Error("generation operation failed");
+        },
+      }),
+      execute = () =>
+        runNativeStep(map, physicalContext(1, 0, physicalProfile), [
+          "probe-step",
+          0,
+          actBy(probe),
+          [probe],
+        ]);
+    io.generate.mockImplementation(execute);
+    io.refine.mockImplementation(execute);
+    const options = harnessOptions({
+      HARNESS_PROCESS_AT: at.join(","),
+      HARNESS_PROCESS_BANDS: "Runoff,Quickening",
+      HARNESS_FRESH: kind === "world" ? "world" : "region",
+      HARNESS_WORLD_ONLY: kind === "world" ? "1" : "",
+      HARNESS_QUICK: kind === "quick-region" ? "1" : "",
+    });
+    await expect(runHarness(options)).rejects.toThrow("generation operation failed");
+    const written = io.write.mock.calls.find(([name]) =>
+      String(name).endsWith(`/${kind}-processes.json`)
+    );
+    expect(written).toBeDefined();
+    expect(JSON.parse(written![1])).toMatchObject([
+      {
+        step: "probe-step",
+        processes: ["failure-probe"],
+        phase: "before",
+        fields: { Runoff: 0, Quickening: 0 },
+      },
+    ]);
+    for (const close of io.closed) expect(close).toHaveBeenCalledOnce();
+    // A later execution cannot append to the stopped probe or publish it again.
+    const writes = io.write.mock.calls.length;
+    expect(execute).toThrow("generation operation failed");
+    expect(io.write).toHaveBeenCalledTimes(writes);
+  }
+);

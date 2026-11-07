@@ -751,8 +751,18 @@ itself on loose cover first and then on each layer of rock by what that layer gi
 fractures and wards bear on it. World and region read the same stack, and a region's cone aprons join it as
 a modifier. Streams, solution, ice and slopes are processes in `packages/generation/src/processes`. Each
 owns its settings and says how they read at another map's scale, one ledger writes what comes off and
-lands, and the sequence says when each runs. `MATERIALS-AND-PROCESSES-ARCHITECTURE.md` at the repository
+lands, and feature operations say when each runs. Those operations reference executable steps directly,
+so registration and selected execution use the same definitions. `MATERIALS-AND-PROCESSES-ARCHITECTURE.md` at the repository
 root holds the reasoning.
+
+Process-specific routing and solver helpers bind beside their consumer. Shared tools provide only
+scratch storage. A sequential process reads fresh shared answers after its predecessor settles;
+a simultaneous group captures its declared answers before any participant runs and refreshes them
+at the next substep. Immediate writers, including coastal cutting and slope solvers, run separately.
+Routed material keeps its source and destination through settlement; competition at one source does
+not scale another source's deposits. Optional process observers report execution and settlement
+boundaries on worlds and regions. The harness samples selected bands at a world coordinate, with
+captured shared inputs and current answer explanations, without retaining a full field per process.
 
 Rock decides erosion. A river grinds, so strength is what resists it, and ice plucks along joints, so columnar
 basalt goes before massive gneiss of lesser strength. A cell's height is the mean of its ground, so a valley

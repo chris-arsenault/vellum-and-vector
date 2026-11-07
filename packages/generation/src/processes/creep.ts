@@ -1,7 +1,6 @@
-import type { Band } from "@atlas/domain";
 import { compileMix } from "../rock/modes";
 import { defineProcess, type ProcessWork } from "./groundProcess";
-import { slopeSettings } from "./slopeSettings";
+import { creepSettings } from "./creepSettings";
 
 /** Roots hold loose ground together. */
 const loosening = compileMix({ shear: 1 });
@@ -22,7 +21,11 @@ function eachFall(
     if (drop > 0) send(j, drop, mesh.faceLength(i, edge) / mesh.faceDistance(i, edge));
   }
 }
-function creepFrom(work: CreepWork, i: number, leaving: Band, arriving: Band) {
+function creepFrom(
+  work: CreepWork,
+  i: number,
+  send: (source: number, target: number, volume: number) => void
+) {
   const { field, settings: p, ground, span } = work,
     mesh = field.mesh,
     mantle = (field.SedimentThickness.get(i) / 1024) * mesh.area(i);
@@ -40,8 +43,7 @@ function creepFrom(work: CreepWork, i: number, leaving: Band, arriving: Band) {
       share * moves * drop * width,
       (drop / 2) * Math.min(mesh.area(i), mesh.area(j))
     );
-    leaving.add(i, volume);
-    arriving.add(j, volume);
+    send(i, j, volume);
   });
 }
 export const creep = defineProcess({
@@ -54,20 +56,13 @@ export const creep = defineProcess({
     ["loose", "load"],
     ["load", "loose"],
   ],
-  settings: slopeSettings,
+  settings: creepSettings,
   // A region's passes refine one stretch of the world's history; they do not add more of it.
   atScale: (settings, { passes }) => ({ CreepPerSpan: settings.CreepPerSpan / passes }),
   run(work) {
-    const { field, tools, stage } = work,
-      mesh = field.mesh,
-      leaving = tools.scratch("creep:leaving"),
-      arriving = tools.scratch("creep:arriving");
-    for (let i = 0; i < mesh.count; i++) creepFrom(work, i, leaving, arriving);
-    for (let i = 0; i < mesh.count; i++) {
-      const height = 1024 / mesh.area(i);
-      stage.demand("loose", "load", i, leaving.get(i) * height, "creep");
-      stage.demand("load", "loose", i, arriving.get(i) * height, "creep");
-    }
-    tools.release(leaving, arriving);
+    const { field, stage } = work;
+    const send = (source: number, target: number, volume: number) =>
+      stage.moveLoose(source, target, volume, "creep");
+    for (let i = 0; i < field.mesh.count; i++) creepFrom(work, i, send);
   },
 });

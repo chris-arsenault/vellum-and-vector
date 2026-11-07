@@ -33,7 +33,7 @@ export type AnswerKey = (typeof answerKeys)[number];
 
 interface ResponderBase {
   readonly key: AnswerKey;
-  /** Who is answering: what the coupling table and a cell's trace name. */
+  /** Who is answering, as named by explainAnswer. */
   readonly by: string;
   /** What it needs from the field to answer. */
   readonly reads: readonly PhysicalBufferName[];
@@ -61,6 +61,29 @@ export function respond(responder: Responder) {
 }
 export const respondersTo = (key: AnswerKey): readonly Responder[] => registered.get(key)!;
 
+/** Evaluate one cell for inspection, without changing the cached answer or recording a history. */
+export function explainAnswer(
+  map: PhysicalField,
+  key: AnswerKey,
+  i: number,
+  context: PhysicalContext
+) {
+  const responders = respondersTo(key);
+  const contributions = responders.map((one) => {
+    if ("base" in one)
+      return { by: one.by, operation: "base" as const, value: one.base(map, i, context) };
+    if ("add" in one)
+      return { by: one.by, operation: "add" as const, value: one.add(map, i, context) };
+    return { by: one.by, operation: "scale" as const, value: one.scale(map, i, context) };
+  });
+  const base = contributions.find((one) => one.operation === "base");
+  if (!base) throw new Error(`Nothing answers ${key}.`);
+  let value = base.value;
+  for (const one of contributions) if (one.operation === "add") value += one.value;
+  for (const one of contributions) if (one.operation === "scale") value *= one.value;
+  return { value, contributions };
+}
+
 interface Memo {
   band: Band;
   revision: number;
@@ -70,6 +93,15 @@ interface Answers {
   memos: Map<AnswerKey, Memo>;
 }
 const answersOf = new WeakMap<PhysicalField, Answers>();
+/** Inspect the group's captured answers without evaluating a key or changing the cache. */
+export function capturedAnswersAt(map: PhysicalField, cell: number) {
+  const held = answersOf.get(map),
+    values: Partial<Record<AnswerKey, number>> = {};
+  if (!held) return values;
+  for (const [key, memo] of held.memos)
+    if (memo.revision === held.revision) values[key] = memo.band.get(cell);
+  return values;
+}
 function state(map: PhysicalField) {
   let held = answersOf.get(map);
   if (!held) answersOf.set(map, (held = { revision: 0, memos: new Map() }));
@@ -93,8 +125,8 @@ function compute(map: PhysicalField, key: AnswerKey, context: PhysicalContext, b
   }
 }
 /**
- * The answer to a key across the map, resolved once into a band and held until the next step begins,
- * so a hot loop reads an array. Within a step the answer stands as the step found the world.
+ * Resolve a key into a band for hot-loop reads. The driver refreshes answers at each process or
+ * simultaneous substep; a group's declared questions are resolved before any participant runs.
  */
 export function ask(map: PhysicalField, key: AnswerKey, context: PhysicalContext): Band {
   const held = state(map);

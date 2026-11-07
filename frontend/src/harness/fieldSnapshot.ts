@@ -5,10 +5,10 @@ import { Band } from "@atlas/domain";
 import type { PhysicalContext } from "../../../packages/generation/src/world/context";
 import { createField, type PhysicalField } from "../../../packages/generation/src/world/field";
 import { physicalProfile } from "../../../packages/generation/src/world/profile";
-import { initialSteps } from "../../../packages/generation/src/world/sequence";
 import { createWorldMesh } from "../../../packages/generation/src/world/worldMesh";
 import { generationResolution } from "../../../packages/generation/src/resolution";
 import { harnessRoot } from "./harnessWorkspace";
+import { nativeWorkload } from "./nativeWorkload";
 
 /**
  * The world's whole physical state at the start of a pass, saved so a stage can be run again in
@@ -16,9 +16,8 @@ import { harnessRoot } from "./harnessWorkspace";
  * Only the physical field is kept: magic and ecology do not run in a resumed stage.
  */
 const snapshotRoot = join(harnessRoot, "snapshots");
-const lastInitialStep = initialSteps[initialSteps.length - 1][0];
 /** A step after which the next thing to run is the start of a pass, and which pass that is. */
-function passStartingAfter(name: string, context: PhysicalContext) {
+function passStartingAfter(name: string, context: PhysicalContext, lastInitialStep: string) {
   if (name === lastInitialStep) return 0;
   return name === "physical-epoch-history" ? context.EpochIndex + 1 : null;
 }
@@ -67,11 +66,14 @@ function capture(map: PhysicalField, context: PhysicalContext, quality: string):
 /** Saves the state at each pass's start, into a named set of snapshots. */
 export function snapshotRecorder(label: string, quality: string) {
   const directory = join(snapshotRoot, label);
+  const lastInitialStep = nativeWorkload()
+    .filter(({ path }) => path[0].startsWith("formation/"))
+    .at(-1)!.step[0];
   mkdirSync(directory, { recursive: true });
   // The step that ends the first forming runs again in later passes; only its first run counts.
   const saved = new Set<number>();
   return (name: string, map: PhysicalField, context: PhysicalContext) => {
-    const pass = passStartingAfter(name, context);
+    const pass = passStartingAfter(name, context, lastInitialStep);
     if (pass === null || saved.has(pass)) return;
     saved.add(pass);
     writeFileSync(join(directory, `pass-${pass}.bin`), serialize(capture(map, context, quality)));

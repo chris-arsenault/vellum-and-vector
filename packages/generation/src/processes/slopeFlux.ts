@@ -1,4 +1,4 @@
-import type { Band } from "@atlas/domain";
+import { RecordQueue, type Band } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import type { PhysicalProfile } from "../world/profile";
 import { clamp } from "../world/math";
@@ -112,20 +112,17 @@ export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
     (i) => failsAt * ground.fold(i, angleHeld)
   );
   relaxFaces(map, plan, heights, stable);
-  const cuts = workingArray(map, "float64", "slope:cuts"),
-    fills = workingArray(map, "float64", "slope:fills");
+  const routes = new RecordQueue(2);
   for (let at = 0; at < plan.count; at++) {
     const { i, j, volume } = plan.get(at);
     if (volume >= 0) {
-      cuts.add(i, volume);
-      fills.add(j, volume);
+      routes.push(i, j, volume);
     } else {
-      cuts.add(j, -volume);
-      fills.add(i, -volume);
+      routes.push(j, i, -volume);
     }
   }
   releaseWorking(map, heights, stable, plan.slots, ...Object.values(plan.columns));
-  return { cuts, fills };
+  return routes;
 }
 /**
  * Relax every face until no exchange moves material. A bounded ring contains each face at

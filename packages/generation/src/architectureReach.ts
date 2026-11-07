@@ -1,16 +1,13 @@
 import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import ts from "typescript";
-import { physicalSchema } from "./world/field";
 
 /**
- * Reading the program for the architecture checks: what code a body reaches, and the bands and context
- * it touches on the way. Used only by `*.architecture.ts`.
+ * Follow named code references for the epoch-coupling architecture check.
+ * This does not infer field dependencies or claim complete program reach.
  */
 export const source = __dirname;
 export interface Reach {
-  reads: Set<string>;
-  writes: Set<string>;
   /** What it asks of the context that tells it which epoch it is in. */
   epoch: Set<string>;
 }
@@ -22,9 +19,7 @@ export function* sourceFiles(directory: string): Generator<string> {
       yield path;
   }
 }
-const writing = new Set(["set", "fill", "copyFrom", "add", "block"]),
-  reading = new Set(["get", "add", "toArray", "length", "block"]),
-  epochTells = new Set(["IsEvolutionEpoch", "EpochIndex", "EpochCount"]);
+const epochTells = new Set(["IsEvolutionEpoch", "EpochIndex", "EpochCount"]);
 export function program() {
   const path = join(source, "../tsconfig.json"),
     config = ts.parseJsonConfigFileContent(
@@ -40,7 +35,6 @@ export function program() {
 }
 export class Follower {
   private readonly checker: ts.TypeChecker;
-  private readonly bands = new Set(physicalSchema().map(({ name }) => name as string));
   constructor(program: ts.Program) {
     this.checker = program.getTypeChecker();
   }
@@ -64,26 +58,14 @@ export class Follower {
       );
     });
   }
-  private note(access: ts.PropertyAccessExpression, name: string, reach: Reach) {
-    const parent = access.parent;
-    if (!ts.isPropertyAccessExpression(parent) || parent.expression !== access) {
-      reach.reads.add(name);
-      reach.writes.add(name);
-      return;
-    }
-    if (reading.has(parent.name.text)) reach.reads.add(name);
-    if (writing.has(parent.name.text)) reach.writes.add(name);
-  }
   private inspect(node: ts.PropertyAccessExpression, reach: Reach) {
     const name = node.name.text;
-    if (this.bands.has(name) && this.hasProperties(node.expression, "mesh", "EffectiveSeaLevel"))
-      this.note(node, name, reach);
     if (epochTells.has(name) && this.hasProperties(node.expression, "Span", "Profile"))
       reach.epoch.add(name);
   }
-  /** Everything the code at `start` reaches, through every function it can name. */
+  /** Context properties found by following named functions from these expressions. */
   follow(start: ts.Node[]): Reach {
-    const reach: Reach = { reads: new Set(), writes: new Set(), epoch: new Set() },
+    const reach: Reach = { epoch: new Set() },
       seen = new Set<ts.Node>(),
       stack = [...start],
       visit = (node: ts.Node) => {

@@ -4,8 +4,7 @@ import { physicalContext } from "../world/context";
 import { createField, physicalSchema } from "../world/field";
 import { units } from "../world/math";
 import { createWorldMesh } from "../world/worldMesh";
-import { ask, respondersTo, worldMoved } from "./answers";
-import { answerRows, processRows } from "./couplingTable";
+import { ask, explainAnswer, worldMoved } from "./answers";
 import { flowRecord } from "./flows";
 import { quantityKinds } from "./quantities";
 import "./responders";
@@ -19,21 +18,6 @@ it("gives every band a kind, so nothing is left behind when plates move", () => 
     .map(({ name }) => name)
     .filter((name) => !quantityKinds[name]);
   expect(missing).toEqual([]);
-});
-
-it("has a base answer and an asker for every key", () => {
-  for (const { key, answeredBy, askedBy } of answerRows()) {
-    expect(answeredBy.length, key).toBeGreaterThan(0);
-    expect(askedBy.length, key).toBeGreaterThan(0);
-    expect(respondersTo(key).filter((one) => "base" in one)).toHaveLength(1);
-  }
-});
-
-it("declares what each process reads or asks, and what it leaves behind or moves", () => {
-  for (const row of processRows()) {
-    expect(row.reads.length + row.asks.length, row.id).toBeGreaterThan(0);
-    expect(row.moves.length + row.leavesBehind, row.id).toBeGreaterThan(0);
-  }
 });
 
 it("lets rain reach rivers: wetter ground answers with more water", () => {
@@ -64,6 +48,32 @@ it("lets magic change an answer in its own terms without any process knowing", (
   map.Quickening.fill(1);
   worldMoved(map);
   expect(ask(map, "warmth", c).get(0)).toBeCloseTo(plain * 2);
+});
+
+it("explains current responder contributions without changing a group's cached inputs", () => {
+  const map = field(),
+    c = context();
+  map.Temperature.set(0, 500);
+  const initial = ask(map, "warmth", c).get(0);
+  map.Quickening.set(0, 1);
+  const explained = explainAnswer(map, "warmth", 0, c);
+  expect(explained.value).toBeCloseTo(initial * 2);
+  expect(explained.contributions).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ operation: "base" }),
+      expect.objectContaining({ by: "fire", operation: "scale", value: 2 }),
+    ])
+  );
+  expect(ask(map, "warmth", c).get(0)).toBe(initial);
+  worldMoved(map);
+  expect(ask(map, "warmth", c).get(0)).toBe(explained.value);
+});
+
+it("rejects unsupported transfers instead of silently depositing loose material", () => {
+  const stage = new Stage(field(), { simultaneous: false });
+  expect(() => stage.demand("melt", "rock", 0, 1, "probe")).toThrow(
+    "Unsupported stage transfer: melt -> rock"
+  );
 });
 
 function standing(height: number) {

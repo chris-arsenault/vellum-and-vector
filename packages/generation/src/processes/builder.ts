@@ -2,7 +2,6 @@ import type { PhysicalContext } from "../world/context";
 import type { PhysicalBufferName, PhysicalField } from "../world/field";
 import type { AnswerKey } from "../coupling/answers";
 import type { Pool } from "../coupling/flows";
-import reached from "./builderBands.generated.json" with { type: "json" };
 import type { GroundProcess } from "./groundProcess";
 
 /** A process with a long-lived body that works on the whole field. */
@@ -24,18 +23,14 @@ export interface BuilderEntry {
   check?: (map: PhysicalField, context: PhysicalContext) => void;
   build: (map: PhysicalField, context: PhysicalContext) => void;
 }
-const bands = reached as Record<string, { reads: string[]; writes: string[] } | undefined>;
-/**
- * Declares a process that holds the whole field. What it reads and writes is what the code reaches: the
- * architecture check works that out from the program, and fails if this list is out of date.
- */
+/** Adapts an existing algorithm to the sequence; needs/provides are scheduling prerequisites. */
 export const builder = (entry: BuilderEntry): GroundProcess => ({
   needs: [],
   provides: [],
   moves: [],
   asks: [],
   settings: {},
-  reads: (bands[entry.id]?.reads ?? []) as PhysicalBufferName[],
-  writes: (bands[entry.id]?.writes ?? []) as PhysicalBufferName[],
+  reads: [],
+  writes: [],
   ...entry,
 });

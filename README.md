@@ -313,6 +313,18 @@ the run: `HARNESS_WORLD` and `HARNESS_REGION` name the checkpoints,
 `HARNESS_REGION_AT=x,y` picks the region under a point (default: the world's highest
 land), and `HARNESS_FRESH=world` or `HARNESS_FRESH=region` makes a checkpoint again.
 
+For process diagnosis, `HARNESS_PROCESS_AT=x,y` samples one world coordinate during
+world or regional execution. `HARNESS_PROCESS_BANDS=Elevation,Runoff` selects the bands
+to inspect, in their native units. Each sample names the step, process, substep and
+boundary. `capturedAnswers` shows cached inputs; `answers` explains the current field's
+responder contributions. `after-run` includes immediate writes; `settled` includes the
+group's landed demands. Simultaneous settlement names the whole group.
+
+Samples are written to `world-processes.json`, `region-processes.json` or
+`quick-region-processes.json`, including when the run fails. Reused checkpoints do not
+execute processes and produce no new process samples. Band selection lets a new process
+be inspected without adding process-specific probe code.
+
 Map → Appearance → Rendering diagnostics shows the same kind of record live in the
 app: tile workers, tiles waiting, drawn, cancelled and reloaded, and what a tile costs.
 

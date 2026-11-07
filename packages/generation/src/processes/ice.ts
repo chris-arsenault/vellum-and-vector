@@ -2,6 +2,8 @@ import type { WearCause } from "../coupling/stage";
 import { compileMix } from "../rock/modes";
 import { defineProcess } from "./groundProcess";
 import { iceSettings } from "./iceSettings";
+import { iceCanCut, refreshGrounding, slidingSpeed } from "../world/glacierSurface";
+import type { PhysicalProfile } from "../world/profile";
 
 /** Ice pulls blocks out along joints, and grinds with what it carries. */
 const glacial = compileMix({ plucking: 0.7, abrasion: 0.3 });
@@ -24,6 +26,11 @@ export const ice = defineProcess({
     ["loose", "load"],
   ],
   settings: iceSettings,
+  prepare: (map) => ({
+    iceSpeed: (i: number) => slidingSpeed(map, i),
+    iceCanCut: (i: number, settings: PhysicalProfile) => iceCanCut(map, i, settings),
+    refreshGrounding: (settings: PhysicalProfile) => refreshGrounding(map, settings),
+  }),
   settlesItself: true,
   run({ field, context: c, settings: p, ground, span, ask, stage, tools }) {
     const bite = ask("iceBite");

@@ -42,7 +42,7 @@ function fillTargetOrder(targets: Band, indegree: Band, queue: Band) {
  * The water each cell gathers from everything draining to it, as the area of ground at the reference
  * runoff that would send as much: wet ground counts for more than its area, dry ground for less.
  */
-export function waterGathered(map: PhysicalField, targets: Band, runoff: Band): Band {
+export function waterGathered(map: PhysicalField, targets: Band, runoff: Pick<Band, "get">): Band {
   const accumulated = workingArray(map, "float64", "flow:water", targets.length),
     order = targetOrder(map, targets);
   for (let i = 0; i < targets.length; i++) accumulated.set(i, map.mesh.area(i) * runoff.get(i));

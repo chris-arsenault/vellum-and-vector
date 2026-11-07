@@ -6,23 +6,23 @@ import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import {
   freshCrustValue,
-  historyRules,
+  transportRules,
   identityRules,
   quantityKinds,
   returnPools,
-  type HistoryAnswer,
+  type TransportAnswer,
   type IdentityRule,
 } from "../coupling/quantities";
 import { carryOut } from "../rock/groundLedger";
 
 /**
  * A plate move is one history event for every quantity at once, and each answers it by its kind, as
- * `historyRules` sets out: nothing here names a band. A quantity moves with the crust because it is
+ * `transportRules` sets out: nothing here names a band. A quantity moves with the crust because it is
  * declared, and an identity with a rule of its own picks its arrival by that rule.
  */
 const schema = new Map(physicalSchema().map((entry) => [entry.name as string, entry]));
-const answering = (name: string) => historyRules[quantityKinds[name]];
-const bandsAnswering = (answer: HistoryAnswer) =>
+const answering = (name: string) => transportRules[quantityKinds[name]];
+const bandsAnswering = (answer: TransportAnswer) =>
   Object.keys(quantityKinds).filter(
     (name) => answering(name).moved === answer
   ) as PhysicalBufferName[];

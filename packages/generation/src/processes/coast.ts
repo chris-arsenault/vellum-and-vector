@@ -2,6 +2,23 @@ import { clamp, units } from "../world/math";
 import { compileMix } from "../rock/modes";
 import { defineProcess } from "./groundProcess";
 import { coastSettings } from "./coastSettings";
+import type { Band } from "@atlas/domain";
+import type { PhysicalField } from "../world/field";
+import type { PhysicalContext } from "../world/context";
+import { coastalFrame, type CoastalFrame } from "../world/coastalFrame";
+import { depositShoreLoads, recordCoastalCut } from "../world/coastalEvolution";
+
+const prepare = (map: PhysicalField) => ({
+  shoreFrame: (width: number, waves: Pick<Band, "get">, forcing?: Band) =>
+    coastalFrame(map, width, waves, forcing),
+  coastCut: (i: number, cut: number) => recordCoastalCut(map, i, cut),
+  depositShoreLoads: (
+    context: PhysicalContext,
+    frame: CoastalFrame,
+    loads: Band,
+    oceanOnly: boolean
+  ) => depositShoreLoads(map, context, frame, loads, oceanOnly),
+});
 
 /** Waves grind with what they throw, and pull blocks out along joints. */
 const pounding = compileMix({ abrasion: 0.6, plucking: 0.4 });
@@ -19,6 +36,8 @@ export const coast = defineProcess({
     ["loose", "load"],
   ],
   settings: coastSettings,
+  prepare,
+  settlesItself: true,
   run({ field, context: c, settings: p, ground, span, ask, tools }) {
     // Waves work across the platform they have cut, which widens with time.
     const waves = ask("waveEnergy"),
@@ -61,6 +80,8 @@ export const outsideWaves = defineProcess({
     ["loose", "load"],
   ],
   settings: coastSettings,
+  prepare,
+  settlesItself: true,
   run({ field, context: c, settings: p, ground, span, ask, tools }) {
     for (let i = 0; i < field.mesh.count; i++) {
       const forcing = field.ExternalCoastalForcing.get(i);

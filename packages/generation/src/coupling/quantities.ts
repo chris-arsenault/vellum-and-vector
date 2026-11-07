@@ -225,100 +225,25 @@ for (const name of [
 export const quantitiesOfKind = (kind: QuantityKind) =>
   Object.keys(quantityKinds).filter((name) => quantityKinds[name] === kind) as PhysicalBufferName[];
 
-/**
- * What history does to the crust. Each event reaches every quantity, and the quantity's kind answers.
- *
- * - `moved`: the crust under a cell came from elsewhere.
- * - `overlapped`: crust from more than one place arrived on one cell.
- * - `newCrust`: a gap opened and nothing arrived.
- * - `sinking`: crust went down a trench and arrived nowhere.
- * - `rifted`: a cell on a spreading boundary took less than a whole cell's crust, the rest new.
- * - `unroofed`: what lay over the crust was taken off it, and the crust itself stayed.
- */
-export const historyEvents = [
-  "moved",
-  "overlapped",
-  "newCrust",
-  "sinking",
-  "rifted",
-  "unroofed",
-] as const;
-export type HistoryEvent = (typeof historyEvents)[number];
-/**
- * How a kind answers an event:
- * - `mean`, `sum`, `largest`: the arrivals combine by area-weighted mean, area-weighted sum, or the
- *   largest; `dominant`: the crust that mostly arrived, or the quantity's own rule, decides.
- * - `fresh`: what the quantity reads on new crust; `zero`, `none`: nothing, or the band's empty value;
- *   `blend`: the arrivals with new crust in what did not arrive.
- * - `lost`: it goes with the crust; `returns`: its pool takes it back, as the crust's budget does.
- * - `conserved`: crust columns, which crust transport moves by its own budget.
- * - `kept`: nothing happens to it; `recompute`: worked out afresh from other quantities.
- */
-export type HistoryAnswer =
-  | "mean"
-  | "sum"
-  | "largest"
-  | "dominant"
-  | "fresh"
-  | "zero"
-  | "none"
-  | "blend"
-  | "lost"
-  | "returns"
-  | "conserved"
-  | "kept"
-  | "recompute";
-export const historyRules: Readonly<
-  Record<QuantityKind, Readonly<Record<HistoryEvent, HistoryAnswer>>>
+/** Policies actually used when a plate transports quantities. Derived bands are recomputed by
+ * their scheduled processes; crust columns have their own transport operation. */
+export type TransportAnswer = "mean" | "sum" | "largest" | "dominant" | "conserved" | "recompute";
+export const transportRules: Readonly<
+  Record<
+    QuantityKind,
+    {
+      moved: TransportAnswer;
+      newCrust: "fresh" | "zero";
+      rifted: "blend" | "carry";
+    }
+  >
 > = {
-  share: {
-    moved: "mean",
-    overlapped: "mean",
-    newCrust: "fresh",
-    sinking: "lost",
-    rifted: "blend",
-    unroofed: "kept",
-  },
-  amount: {
-    moved: "sum",
-    overlapped: "sum",
-    newCrust: "zero",
-    sinking: "returns",
-    rifted: "sum",
-    unroofed: "kept",
-  },
-  peak: {
-    moved: "largest",
-    overlapped: "largest",
-    newCrust: "zero",
-    sinking: "lost",
-    rifted: "largest",
-    unroofed: "kept",
-  },
-  identity: {
-    moved: "dominant",
-    overlapped: "dominant",
-    newCrust: "none",
-    sinking: "lost",
-    rifted: "dominant",
-    unroofed: "kept",
-  },
-  crust: {
-    moved: "conserved",
-    overlapped: "conserved",
-    newCrust: "conserved",
-    sinking: "returns",
-    rifted: "conserved",
-    unroofed: "kept",
-  },
-  derived: {
-    moved: "recompute",
-    overlapped: "recompute",
-    newCrust: "recompute",
-    sinking: "recompute",
-    rifted: "recompute",
-    unroofed: "recompute",
-  },
+  share: { moved: "mean", newCrust: "fresh", rifted: "blend" },
+  amount: { moved: "sum", newCrust: "zero", rifted: "carry" },
+  peak: { moved: "largest", newCrust: "zero", rifted: "carry" },
+  identity: { moved: "dominant", newCrust: "zero", rifted: "carry" },
+  crust: { moved: "conserved", newCrust: "zero", rifted: "carry" },
+  derived: { moved: "recompute", newCrust: "zero", rifted: "carry" },
 };
 
 /** What a `share` quantity reads on brand new crust, where nothing arrived. */

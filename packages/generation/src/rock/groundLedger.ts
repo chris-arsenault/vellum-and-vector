@@ -41,6 +41,30 @@ export function erode(
   rebuild(map, i);
   return requested;
 }
+/** Removes loose substrate only. Soil is a skin over that substrate, not an additional stock. */
+export function removeLoose(map: PhysicalField, i: number, requested: number, cause: FlowCause) {
+  const amount = Math.min(Math.max(0, requested), Math.max(0, map.SedimentThickness.get(i))),
+    skin = Math.min(amount, units(Math.max(0, map.SoilDepth.get(i))));
+  map.SoilDepth.set(i, Math.max(0, map.SoilDepth.get(i) - skin / 1024));
+  map.SedimentThickness.add(i, -amount);
+  recordFlow(map, cause, "soil", "load", volumeOf(map, i, skin));
+  recordFlow(map, cause, "loose", "load", volumeOf(map, i, amount - skin));
+  rebuild(map, i);
+  return amount;
+}
+/** Removes rock beneath any remaining loose cover; only the soil skin within rock goes with it. */
+export function removeRock(map: PhysicalField, i: number, requested: number, cause: FlowCause) {
+  const amount = Math.max(0, requested),
+    soilInRock = Math.max(0, units(map.SoilDepth.get(i)) - map.SedimentThickness.get(i)),
+    skin = Math.min(amount, soilInRock);
+  map.SoilDepth.set(i, Math.max(0, map.SoilDepth.get(i) - skin / 1024));
+  recordFlow(map, cause, "soil", "load", volumeOf(map, i, skin));
+  recordFlow(map, cause, "rock", "load", volumeOf(map, i, amount - skin));
+  lowerRock(map, i, amount);
+  stripRock(map, i, Math.round(amount));
+  rebuild(map, i);
+  return amount;
+}
 /** Crust a cell holds above what its kind of crust stands on: what shortening has piled up. */
 export function spareCrust(map: PhysicalField, i: number) {
   const fraction = map.CrustContinentalFraction.get(i) / 1000;

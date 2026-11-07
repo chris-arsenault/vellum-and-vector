@@ -77,13 +77,17 @@ its own processes now. Do not copy Canonry processes in, and do not keep a value
 step because Canonry had it. Choose fidelity from the product's map scale and
 plausibility requirements.
 
-Every process in a world's history is one entry in `processes/`, saying what it needs,
-provides, asks and moves. A step in `world/sequence.ts` is a name, a seed salt and the
-processes it runs. To add a process, write its entry, list it in `processCatalogue.ts` and
-give it a place in the sequence; `make process-bands` then records what a whole-field
-process reaches. A step that needs a band runs only if a selected step wrote it earlier or
-the map inherited it; nothing says whether a written band is still right, because the
-sequence's order is what keeps it so. The architecture check holds all of this to the code.
+Every process in a world's history is one entry in `processes/`, owning its algorithm,
+settings and any specialist helpers it binds. A native step is a name, a seed salt and
+the processes it runs. Feature operations in `physicalFeatures.ts` reference those
+executable steps; both selected execution and registration derive from those operations.
+`world/sequence.ts` holds reusable step definitions, not a second runtime schedule. New
+settings join the profile through their plain settings module. Shared questions compose
+responders without editing their consumers. A step that needs a band runs only if a
+selected step wrote it earlier or the map inherited it; ordering keeps its inputs useful.
+Per the owner's 2026-11-07 correction, prioritize clean code, local extension and reasoning
+about actual effects over declaration completeness or metadata enforcement. Typed field
+views guide process authors; whole-field builders and local helpers are not sandboxed.
 
 Do not trace numerical accuracy or reproducibility: no fingerprints, exact replay,
 byte comparison or closure checks. The generator is being changed on purpose.

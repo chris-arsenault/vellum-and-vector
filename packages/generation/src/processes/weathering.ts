@@ -1,6 +1,6 @@
 import { compileMix } from "../rock/modes";
 import { defineProcess } from "./groundProcess";
-import { slopeSettings } from "./slopeSettings";
+import { weatheringSettings } from "./weatheringSettings";
 
 /** Water and frost open rock along its joints and take what dissolves. */
 const breakingDown = compileMix({ plucking: 0.5, solution: 0.5 });
@@ -11,7 +11,7 @@ export const weathering = defineProcess({
   reads: ["WaterKindCodes", "SedimentThickness"],
   asks: ["wetness", "warmth", "frost"],
   moves: [["rock", "loose"]],
-  settings: slopeSettings,
+  settings: weatheringSettings,
   // A region's passes refine one stretch of the world's history; they do not add more of it.
   atScale: (settings, { passes }) => ({ WeatheringPerSpan: settings.WeatheringPerSpan / passes }),
   run({ field, context: c, settings: p, ground, span, ask, stage }) {

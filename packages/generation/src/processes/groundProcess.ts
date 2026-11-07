@@ -22,13 +22,13 @@ export type DeclaredField<R extends PhysicalBufferName, W extends PhysicalBuffer
   readonly [K in R]: ReadOnlyBand;
 } & { readonly [K in W]: Band } & Pick<PhysicalField, "mesh" | "EffectiveSeaLevel">;
 /**
- * What a process is handed: only what it declared. Reading or writing a band it did not declare will
- * not compile. The ground changes through the wear stage and the ledger's own moves in its tools, and
- * there is no way from here to the whole field.
+ * A narrow field view, shared ground operations and locally bound helpers. This is an authoring
+ * interface, not a sandbox: prepare and whole-field builders can use the underlying field.
  */
 export interface ProcessWork<
   R extends PhysicalBufferName = never,
   W extends PhysicalBufferName = never,
+  Operations = object,
 > {
   readonly field: DeclaredField<R, W>;
   readonly context: PhysicalContext;
@@ -38,12 +38,12 @@ export interface ProcessWork<
   readonly span: number;
   /** Which of the step's substeps this is, from 0. */
   readonly substep: number;
-  /** The answer to a declared question, as a band. */
-  readonly ask: (key: AnswerKey) => Band;
+  /** A shared fact. Consumers cannot mutate its cached values through this interface. */
+  readonly ask: (key: AnswerKey) => ReadOnlyBand;
   /** The stage its demands land in, when the driver settles it. */
   readonly stage: Stage;
   /** What a process may do beyond its bands: scratch space, routing, the ledger's moves. */
-  readonly tools: ProcessTools;
+  readonly tools: ProcessTools & Operations;
 }
 interface ProcessDeclaration {
   readonly id: string;
@@ -69,8 +69,8 @@ interface ProcessDeclaration {
    */
   readonly substeps?: (settings: PhysicalProfile, span: number) => number;
   /**
-   * A solver that must see its own moves land before it goes on, as slopes failing until they stand:
-   * it settles the stage itself between rounds, and so never joins a simultaneous step.
+   * An immediate writer or solver that settles within its own run. It cannot join a simultaneous
+   * stage, whose participants must leave their ground changes pending until joint settlement.
    */
   readonly settlesItself?: boolean;
   /** Its settings as they read on a map of another scale, where they differ from the world's. */
@@ -82,7 +82,7 @@ interface ProcessDeclaration {
 /**
  * Everything that shapes land, declared in one entry. How it finds its power is its own: streams route
  * water, ice follows its flux, slopes work between pairs of cells. What it needs and what it moves are
- * stated here, so the table of who affects whom comes from these and cannot go stale.
+ * stated beside the algorithm. The declarations describe intent; observations show actual effects.
  */
 export interface GroundProcess<
   R extends PhysicalBufferName = PhysicalBufferName,
@@ -94,9 +94,11 @@ export interface GroundProcess<
   readonly writes: readonly W[];
   /** One pass of its work on the view it declared. */
   readonly run?: (work: ProcessWork<R, W>) => void;
+  /** Bind existing domain helpers once for this execution, beside their consumer. */
+  readonly prepare?: (map: PhysicalField) => object;
   /**
    * One pass of work on the whole field, for a long-lived body that holds it directly, declared through
-   * `builder`. Its `reads` and `writes` are what the code reaches, which the architecture check derives.
+   * `builder`. Its scheduling prerequisites are explicit; its band reach is not inferred.
    */
   readonly build?: (map: PhysicalField, context: PhysicalContext) => void;
 }
@@ -104,10 +106,12 @@ export interface GroundProcess<
 export const defineProcess = <
   const R extends PhysicalBufferName,
   const W extends PhysicalBufferName = never,
+  Operations extends object = object,
 >(
   process: ProcessDeclaration & {
     readonly reads: readonly R[];
     readonly writes?: readonly W[];
-    readonly run: (work: ProcessWork<R, W>) => void;
+    readonly prepare?: (map: PhysicalField) => Operations;
+    readonly run: (work: ProcessWork<R, W, Operations>) => void;
   }
 ): GroundProcess => ({ writes: [], ...process }) as unknown as GroundProcess;

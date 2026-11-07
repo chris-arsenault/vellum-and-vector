@@ -1,85 +1,36 @@
-import type { ParameterValues } from "@atlas/domain";
-import { atlasParameterDefinitions, type AtlasParameters } from "./atlasParameters";
-import type { GenerationFeature, FeatureContributionContext } from "./features";
-import type { ProcessInvocation } from "./process";
-import { physicalApplicability, climateSettings } from "./physicalApplicability";
-import { physicalCartography } from "./physicalCartography";
+import type { FeatureContributionContext } from "./features";
+import { climateSettings } from "./physicalApplicability";
 import { clockConfiguration } from "./featureConfiguration";
-import type { GenerationSlot } from "./generationSlots";
-import { physicalProfileConfiguration } from "./physicalProfileConfiguration";
 import { landmarkFeature } from "./landmarkFeature";
-
-type Operations = Record<string, (string | [string, ParameterValues])[]>;
-type FeatureOptions = {
-  settings?: (keyof AtlasParameters)[];
-  requires?: string[];
-  absent?: string[];
-  inherited?: boolean;
-  configuration?: Partial<GenerationFeature>;
-  when?(slot: string, context?: FeatureContributionContext): boolean;
-};
-
-function definition(
-  id: string,
-  label: string,
-  operations: Operations,
-  options: FeatureOptions = {}
-): GenerationFeature {
-  const processes = Object.values(operations)
-    .flat()
-    .map((entry) => `atlas.${typeof entry === "string" ? entry : entry[0]}`);
-  return {
-    id,
-    label,
-    applicability: physicalApplicability[id],
-    cartography: [physicalCartography[id] ?? []].flat(),
-    domains: options.inherited ? ["physical", "magic"] : ["physical"],
-    defaultEnabled: true,
-    settings: Object.fromEntries(
-      (options.settings ?? []).map((key) => [key, atlasParameterDefinitions[key]])
-    ),
-    legacyParameters: options.settings ?? [],
-    processes: [...new Set(processes)],
-    slots: Object.keys(operations) as GenerationSlot[],
-    requires: options.requires ?? [],
-    absent: options.absent ?? [],
-    contribute(slot, _configuration, context) {
-      if (options.when && !options.when(slot, context)) return [];
-      return (operations[slot] ?? []).map((entry): ProcessInvocation => {
-        const [name, parameters] = typeof entry === "string" ? [entry, {}] : entry;
-        return {
-          kind: "process",
-          id: name,
-          process: `atlas.${name}`,
-          version: "1",
-          parameters,
-        };
-      });
-    },
-    ...(options.configuration ?? physicalProfileConfiguration(id)),
-  };
-}
+import { physicalFeature, type PhysicalFeature } from "./physicalFeature";
+import {
+  nativeSteps,
+  runoffStep,
+  routingSteps,
+  incisionStage,
+  sedimentStep,
+} from "./world/sequence";
 
 /** Features contribute actual operations at known causal occurrences. */
-export const physicalFeatureDefinitions: GenerationFeature[] = [
-  definition(
+export const physicalFeatureDefinitions: PhysicalFeature[] = [
+  physicalFeature(
     "physical.foundation",
     "Continental foundation",
     {
       "formation.foundation": [
-        "tectonic-provinces",
-        "continental-sutures",
-        "tectonic-margins",
-        "continental-domains",
-        "tectonic-uplift",
-        "landscape-initialization",
+        nativeSteps.tectonicProvinces,
+        nativeSteps.continentalSutures,
+        nativeSteps.tectonicMargins,
+        nativeSteps.continentalDomains,
+        nativeSteps.tectonicUplift,
+        nativeSteps.landscapeInitialization,
       ],
-      "epoch.crust.provinces": ["tectonic-provinces"],
+      "epoch.crust.provinces": [nativeSteps.tectonicProvinces],
       "epoch.crust.structure": [
-        "continental-sutures",
-        "tectonic-margins",
-        "continental-domains",
-        "tectonic-uplift",
+        nativeSteps.continentalSutures,
+        nativeSteps.tectonicMargins,
+        nativeSteps.continentalDomains,
+        nativeSteps.tectonicUplift,
       ],
     },
     {
@@ -91,21 +42,21 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
         Boolean(context?.resolved.selection["physical.tectonic-history"]?.enabled),
     }
   ),
-  definition(
+  physicalFeature(
     "physical.tectonic-history",
     "Tectonic evolution",
     {
-      "epoch.advection": ["plate-advection"],
-      "epoch.crust.activity": ["tectonic-epoch-activity"],
+      "epoch.advection": [nativeSteps.plateAdvection],
+      "epoch.crust.activity": [nativeSteps.tectonicEpochActivity],
     },
     { settings: ["plateDrift"], requires: ["physical.foundation"] }
   ),
-  definition(
+  physicalFeature(
     "physical.mountains",
     "Mountain construction",
     {
-      "formation.mountains": ["orogenic-construction"],
-      "epoch.mountains": ["orogenic-construction"],
+      "formation.mountains": [nativeSteps.orogenicConstruction],
+      "epoch.mountains": [nativeSteps.orogenicConstruction],
       // A child realizes the relief its parent's cells left latent (ADR 0005).
       "terrain.refinement": ["refine-relief"],
     },
@@ -115,12 +66,12 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       when: (slot, context) => slot !== "terrain.refinement" || isRefinement(context),
     }
   ),
-  definition(
+  physicalFeature(
     "physical.volcanism",
     "Volcanic geography",
     {
-      "formation.volcanism": ["mantle-plume-roots", "volcanic-construction"],
-      "epoch.volcanism": ["volcanic-construction"],
+      "formation.volcanism": [nativeSteps.mantlePlumeRoots, nativeSteps.volcanicConstruction],
+      "epoch.volcanism": [nativeSteps.volcanicConstruction],
     },
     {
       settings: ["volcanism"],
@@ -128,22 +79,22 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       absent: ["MantlePlumeRoots", "VolcanicConstruction"],
     }
   ),
-  definition(
+  physicalFeature(
     "physical.impacts",
     "Impact geography",
     {
-      "formation.impacts": ["impact-cratering"],
-      "epoch.impacts": ["impact-cratering"],
+      "formation.impacts": [nativeSteps.impactCratering],
+      "epoch.impacts": [nativeSteps.impactCratering],
     },
     { settings: ["impacts", "impactSize"], requires: ["physical.foundation"], absent: ["Impacts"] }
   ),
   landmarkFeature,
-  definition(
+  physicalFeature(
     "physical.hillslopes",
     "Hillslope transport",
     {
-      "material.hillslopes": ["mass-wasting"],
-      "epoch.after-incision.hillslopes": ["post-fluvial-mass-wasting"],
+      "material.hillslopes": [nativeSteps.massWasting],
+      "epoch.after-incision.hillslopes": [nativeSteps.postFluvialMassWasting],
     },
     {
       requires: ["physical.foundation"],
@@ -152,81 +103,90 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
         Boolean(context?.resolved.selection["physical.river-incision"]?.enabled),
     }
   ),
-  definition(
+  physicalFeature(
     "material.load-response",
     "Crust and material load response",
     {
-      "material.support.before-margins": ["crustal-support", "lithospheric-flexure"],
-      "material.support.after-margins": ["crustal-support", "lithospheric-flexure"],
-      "epoch.ice-load": [["crustal-support", { iceLoad: true }], "lithospheric-flexure"],
-    },
-    { requires: ["physical.foundation"], inherited: true }
-  ),
-  definition(
-    "physical.continental-margins",
-    "Continental margins and marine deposits",
-    {
-      "material.margins": ["continental-margin-evolution", "marine-sedimentation"],
-    },
-    { requires: ["physical.foundation", "ocean.geography", "material.load-response"] }
-  ),
-  definition(
-    "physical.coastal-construction",
-    "Initial coastal construction",
-    {
-      "formation.coastal-construction": ["coastal-detail"],
-    },
-    { requires: ["physical.foundation"] }
-  ),
-  definition(
-    "physical.fractures",
-    "Fault and fracture network",
-    {
-      "geology.fractures": ["fracture-network"],
-    },
-    { requires: ["physical.foundation"], absent: ["Fractures"] }
-  ),
-  definition(
-    "physical.geothermal",
-    "Geothermal geography",
-    {
-      "geology.geothermal": ["geothermal"],
-    },
-    { requires: ["physical.foundation"], absent: ["Geothermal"], inherited: true }
-  ),
-  definition(
-    "ocean.geography",
-    "Ocean and bathymetric geography",
-    {
-      "material.ocean.before-margins": ["ocean-connectivity"],
-      "material.ocean.after-margins": ["ocean-connectivity"],
-      "formation.ocean.final": ["ocean-connectivity"],
-      "climate.ocean": [
-        "ocean-connectivity",
-        "ocean-distance",
-        "bathymetry",
-        "landmasses-and-shelf-groups",
+      "material.support.before-margins": [
+        nativeSteps.crustalSupport,
+        nativeSteps.lithosphericFlexure,
+      ],
+      "material.support.after-margins": [
+        nativeSteps.crustalSupport,
+        nativeSteps.lithosphericFlexure,
+      ],
+      "epoch.ice-load": [
+        [nativeSteps.crustalSupport, { iceLoad: true }],
+        nativeSteps.lithosphericFlexure,
       ],
     },
     { requires: ["physical.foundation"], inherited: true }
   ),
-  definition(
+  physicalFeature(
+    "physical.continental-margins",
+    "Continental margins and marine deposits",
+    {
+      "material.margins": [nativeSteps.continentalMarginEvolution, nativeSteps.marineSedimentation],
+    },
+    { requires: ["physical.foundation", "ocean.geography", "material.load-response"] }
+  ),
+  physicalFeature(
+    "physical.coastal-construction",
+    "Initial coastal construction",
+    {
+      "formation.coastal-construction": [nativeSteps.coastalDetail],
+    },
+    { requires: ["physical.foundation"] }
+  ),
+  physicalFeature(
+    "physical.fractures",
+    "Fault and fracture network",
+    {
+      "geology.fractures": [nativeSteps.fractureNetwork],
+    },
+    { requires: ["physical.foundation"], absent: ["Fractures"] }
+  ),
+  physicalFeature(
+    "physical.geothermal",
+    "Geothermal geography",
+    {
+      "geology.geothermal": [nativeSteps.geothermal],
+    },
+    { requires: ["physical.foundation"], absent: ["Geothermal"], inherited: true }
+  ),
+  physicalFeature(
+    "ocean.geography",
+    "Ocean and bathymetric geography",
+    {
+      "material.ocean.before-margins": [nativeSteps.oceanConnectivity],
+      "material.ocean.after-margins": [nativeSteps.oceanConnectivity],
+      "formation.ocean.final": [nativeSteps.oceanConnectivity],
+      "climate.ocean": [
+        nativeSteps.oceanConnectivity,
+        nativeSteps.oceanDistance,
+        nativeSteps.bathymetry,
+        nativeSteps.landmassesAndShelfGroups,
+      ],
+    },
+    { requires: ["physical.foundation"], inherited: true }
+  ),
+  physicalFeature(
     "physical.ocean-circulation",
     "Ocean circulation and heat transport",
     {
-      "climate.circulation": ["ocean-currents", "warmth-sources"],
+      "climate.circulation": [nativeSteps.oceanCurrents, nativeSteps.warmthSources],
     },
     { requires: ["ocean.geography"], absent: ["OceanCurrents", "Warmth"], inherited: true }
   ),
-  definition(
+  physicalFeature(
     "physical.climate",
     "Climate",
     {
       "climate.atmosphere": [
-        "temperature",
-        "atmospheric-flow",
-        "moisture-transport",
-        "precipitation",
+        nativeSteps.temperature,
+        nativeSteps.atmosphericFlow,
+        nativeSteps.moistureTransport,
+        nativeSteps.precipitation,
       ],
     },
     {
@@ -235,37 +195,31 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       inherited: true,
     }
   ),
-  definition(
+  physicalFeature(
     "water.routing",
     "Water balance and routing",
     {
-      "water.runoff": ["runoff"],
-      "water.routing": [
-        "drainage-conditioning",
-        "lake-basins",
-        "drainage-guidance",
-        "flow-routing",
-        "river-network",
-      ],
+      "water.runoff": [runoffStep],
+      "water.routing": routingSteps,
     },
     {
       requires: ["physical.climate", "ocean.geography"],
       inherited: true,
     }
   ),
-  definition(
+  physicalFeature(
     "physical.river-incision",
     "River incision",
     {
-      "epoch.incision": ["ancestral-fluvial-erosion"],
+      "epoch.incision": incisionStage,
     },
     { settings: ["erosion"], requires: ["water.routing", "material.fluvial-transport"] }
   ),
-  definition(
+  physicalFeature(
     "material.fluvial-transport",
     "Fluvial sediment transport",
     {
-      "epoch.sediment": ["sediment-transport"],
+      "epoch.sediment": [sedimentStep],
     },
     {
       requires: ["water.routing", "ocean.geography"],
@@ -273,14 +227,14 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       inherited: true,
     }
   ),
-  definition(
+  physicalFeature(
     "physical.land-ice",
     "Land ice and meltwater",
     {
-      "ice.model": ["land-ice-mass-balance", "ice-flow"],
-      "ice.flow": ["ice-flow"],
-      "ice.meltwater": ["glacial-meltwater"],
-      "water.glacial-runoff": ["glacial-runoff"],
+      "ice.model": [nativeSteps.landIceMassBalance, nativeSteps.iceFlow],
+      "ice.flow": [nativeSteps.iceFlow],
+      "ice.meltwater": [nativeSteps.glacialMeltwater],
+      "water.glacial-runoff": [nativeSteps.glacialRunoff],
     },
     {
       requires: ["physical.climate", "water.routing", "material.load-response"],
@@ -288,12 +242,12 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       inherited: true,
     }
   ),
-  definition(
+  physicalFeature(
     "physical.glacial-sculpting",
     "Glacial sculpting",
     {
-      "epoch.sculpting": ["glacial-erosion", "glacial-deposition"],
-      "present.glacial-landforms": ["glacial-landforms"],
+      "epoch.sculpting": [nativeSteps.glacialErosion, nativeSteps.glacialDeposition],
+      "present.glacial-landforms": [nativeSteps.glacialLandforms],
     },
     {
       settings: ["glaciers"],
@@ -302,19 +256,19 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       inherited: true,
     }
   ),
-  definition(
+  physicalFeature(
     "physical.sea-ice",
     "Sea ice",
     {
-      "present.sea-ice": ["sea-ice"],
+      "present.sea-ice": [nativeSteps.seaIce],
     },
     { requires: ["physical.climate", "ocean.geography"], absent: ["SeaIce"], inherited: true }
   ),
-  definition(
+  physicalFeature(
     "physical.coastal-evolution",
     "Coastal evolution",
     {
-      "epoch.coasts": ["external-coastal-forcing", "coastal-erosion-and-deposition"],
+      "epoch.coasts": [nativeSteps.externalCoastalForcing, nativeSteps.coastalErosionAndDeposition],
     },
     {
       settings: ["coastalErosion"],
@@ -322,27 +276,27 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       absent: ["CoastalEvolution"],
     }
   ),
-  definition(
+  physicalFeature(
     "physical.river-networks",
     "River networks",
     {
-      "present.river-geometry": ["river-channel-geometry"],
+      "present.river-geometry": [nativeSteps.riverChannelGeometry],
     },
     { requires: ["water.routing"], absent: ["RiverGeometry"], inherited: true }
   ),
-  definition(
+  physicalFeature(
     "physical.floodplains",
     "Floodplains",
     {
-      "present.floodplains": ["river-floodplains"],
+      "present.floodplains": [nativeSteps.riverFloodplains],
     },
     { requires: ["physical.river-networks"], absent: ["Floodplains"], inherited: true }
   ),
-  definition(
+  physicalFeature(
     "physical.deltas",
     "Deltas",
     {
-      "present.deltas": ["river-delta-formation"],
+      "present.deltas": [nativeSteps.riverDeltaFormation],
     },
     {
       requires: ["physical.floodplains", "material.fluvial-transport"],
@@ -350,20 +304,24 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       inherited: true,
     }
   ),
-  definition(
+  physicalFeature(
     "physical.landforms",
     "Landform geography",
     {
-      "present.landforms": ["landform-classification"],
+      "present.landforms": [nativeSteps.landformClassification],
     },
     { requires: ["water.routing", "ocean.geography"], absent: ["Landforms"], inherited: true }
   ),
-  definition(
+  physicalFeature(
     "physical.lifecycle",
     "Formation history",
     {
-      "epoch.history": ["lithification", "rock-metamorphism", "physical-epoch-history"],
-      "present.validation": ["physical-structural-validation"],
+      "epoch.history": [
+        nativeSteps.lithification,
+        nativeSteps.rockMetamorphism,
+        nativeSteps.physicalEpochHistory,
+      ],
+      "present.validation": [nativeSteps.physicalStructuralValidation],
     },
     { inherited: true, configuration: clockConfiguration }
   ),

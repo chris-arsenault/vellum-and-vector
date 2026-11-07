@@ -21,8 +21,8 @@ Give the interaction its own representation.
   wards and map-specific modifiers bearing on what passes. `actOn` carries an action down it and `fold` reads
   it with a query written by whoever needs the answer.
 - One ledger writes what comes off and lands. A lint rule keeps rock bands inside the rock module.
-- What wears the land is a `GroundProcess` module with its own settings and scale rule. `sequence.ts` keeps the
-  order, because order is physics.
+- What wears the land is a `GroundProcess` module with its own settings and scale rule. Feature operations
+  compose its executable steps at explicit causal slots, as ADR 0011 describes.
 
 ## Alternatives
 
@@ -36,7 +36,7 @@ Give the interaction its own representation.
 ## Consequences
 
 A new rock kind or attack is one entry, and every process and reader responds. A new wearing process touches
-no other process and no catalogue rule, though registering it takes six small edits. Queries own their own
+no other process and no catalogue rule. Queries own their own
 curves, so readers can still disagree except where they share one, as `surfaceStanding` does. Processes that
-build the land, loose material kinds and voids have no real user yet, so those parts of the design remain
-unproven.
+build the land use the whole-field adapter described in ADR 0011. Additional loose material kinds and
+voids still need a concrete consumer before extending the representation.

@@ -9,10 +9,4 @@ export const slopeSettings = {
   // Metres from a channel bank to where a hillslope rounds over. A cell wider than this is mostly
   // gentler ground, so the step between two cells climbs one hillslope, not the cell's width.
   HillslopeLength: 1000,
-  // How fast loose cover creeps downhill: metres squared of it per unit of span, on any slope.
-  CreepPerSpan: 2_000_000_000,
-  // How fast rock turns to loose cover on fully wet, warm, bare ground: metres per unit of span.
-  WeatheringPerSpan: 120,
-  // How deep a mantle of loose cover it takes to shield the rock under it, in metres.
-  WeatheringShieldDepth: 40,
 };
