@@ -61,9 +61,9 @@ it("defaults to compound continents and keeps island-world assemblies dispersed"
   expect(configured(newGenerationDraft())).toMatchObject({
     ContinentalAssemblyCount: 4,
     TectonicProvinceCount: 42,
-    ContinentalCrustFraction: 0.35,
+    ContinentalCrustFraction: 0.45,
     ContinentalAssemblyClustering: 1,
-    QualityTargets: { OceanCoverage: { target: 0.65 } },
+    QualityTargets: { OceanCoverage: { target: 0.55 } },
   });
   expect(prepareDraft(newGenerationDraft()).input.parameters!.mapBoundary).toBe(1);
   expect(configured(choose(newGenerationDraft(), "land-and-sea", "islands"))).toMatchObject({

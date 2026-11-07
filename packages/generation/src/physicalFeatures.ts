@@ -87,7 +87,7 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       ],
     },
     {
-      settings: ["continents", "provinces", "landFraction", "mapBoundary"],
+      settings: ["continents", "oceanicPlates", "provinces", "landFraction", "mapBoundary"],
       inherited: true,
       requires: ["physical.lifecycle"],
       when: (slot, context) =>

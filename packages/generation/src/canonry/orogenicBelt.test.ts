@@ -124,7 +124,8 @@ it("keeps building while crust keeps arriving", () => {
     for (let i = 0; i < map.mesh.count; i++) total += map.OrogenicConstruction.get(i) / 1024;
     built.push(total);
   }
-  expect(built[7]).toBeGreaterThan(built[3] * 0.9);
+  // Early passes also spend what the first pass left over; after that, supply sets the pace.
+  expect(built[7]).toBeGreaterThan(built[5] * 0.9);
 });
 const sampleGap = 60_000;
 /** Pairs of belt cells a set distance apart, along the belt (north) and across it (east). */

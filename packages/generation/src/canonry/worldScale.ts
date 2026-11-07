@@ -29,5 +29,7 @@ export function continentalWorldProfile(profile: PhysicalProfile, bounds: Bounds
     ContinentalWarpScale: profile.ContinentalWarpScale * scale,
     ContinentalWarpStrength: profile.ContinentalWarpStrength * scale,
     ContinentalTransitionWidth: profile.ContinentalTransitionWidth * scale,
+    // Plates cross what is there to cross, so how far they travel follows the same scale.
+    PlateDriftPerEpoch: profile.PlateDriftPerEpoch * scale,
   };
 }

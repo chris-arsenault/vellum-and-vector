@@ -7,6 +7,7 @@ import type { TectonicState } from "./tectonicState";
 import type { LandmarkLedger } from "./landmarkLedger";
 import type { CrustBudget } from "./crustTransport";
 import { Band, BlockCache, Coverage, type SampleType } from "@atlas/domain";
+import { rockLayerDepths, rockLayerKinds } from "../rock/rockLayerFields";
 
 const integerFields = [
   "BiomeCodes",
@@ -17,6 +18,8 @@ const integerFields = [
   "CrustCollisionIntensity",
   "CrustSuturePairIds",
   "CrustSutureStrength",
+  // Where crust lies on a seam between provinces; carried with the crust as a suture is.
+  "CrustProvinceSeam",
   "RockResistance",
   "CrustMotionX",
   "CrustMotionY",
@@ -86,14 +89,7 @@ const integerFields = [
   "VolcanicLastActiveEpoch",
   "LandformCodes",
   "RockKindCodes",
-  "RockLayerKind0",
-  "RockLayerKind1",
-  "RockLayerKind2",
-  "RockLayerKind3",
-  "RockLayerKind4",
-  "RockLayerKind5",
-  "RockLayerKind6",
-  "RockLayerKind7",
+  ...rockLayerKinds,
   "WaterKindCodes",
   "WaterBodyIds",
   "DrainageBasinIds",
@@ -123,14 +119,7 @@ const integerFields = [
   "Warmth",
 ] as const;
 const elevationFields = [
-  "RockLayerDepth0",
-  "RockLayerDepth1",
-  "RockLayerDepth2",
-  "RockLayerDepth3",
-  "RockLayerDepth4",
-  "RockLayerDepth5",
-  "RockLayerDepth6",
-  "RockLayerDepth7",
+  ...rockLayerDepths,
   "Elevation",
   "BedrockElevation",
   "CrustThickness",
@@ -268,6 +257,7 @@ export type PhysicalField = Record<PhysicalBufferName, Band> & {
   tectonics: TectonicState | null;
   landmarkLedger: LandmarkLedger | null;
   CrustColumnsInitialized: boolean;
+  ProvinceSeamsMarked: boolean;
   crustBudget: CrustBudget;
   /**
    * Present engineered barriers as a mark band, or null when there are none; natural-lake
@@ -326,6 +316,7 @@ export function createField(
     tectonics: null,
     landmarkLedger: null,
     CrustColumnsInitialized: false,
+    ProvinceSeamsMarked: false,
     crustBudget: {
       oceanCreated: 0,
       oceanConsumed: 0,

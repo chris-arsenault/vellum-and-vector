@@ -21,6 +21,7 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
   "physical.foundation": {
     settingConsumers: {
       continents: ["canonry.tectonic-provinces"],
+      oceanicPlates: ["canonry.tectonic-provinces"],
       provinces: ["canonry.tectonic-provinces"],
       landFraction: ["canonry.tectonic-provinces"],
       mapBoundary: ["canonry.initialize", "canonry.tectonic-provinces"],

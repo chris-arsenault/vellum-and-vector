@@ -682,17 +682,39 @@ surface is, the lowest is a basement that never runs out. Erosion strips from th
 and eruption add to it, and the surface's resistance follows whatever is exposed while keeping what
 has been done to it. Each kind and its facts come from one catalogue
 (`packages/generation/src/rock/rockCatalogue.ts`), and a lint rule keeps other generation code from reading
-or writing the rock bands. Buried sediment turns to rock by its setting, and burial and heat under a belt or along a suture turn rock to its next form.
+or writing the rock bands. Buried sediment turns to rock by its setting. A bed too thin to be what a
+cell's ground is only adds to the rock already there, so a film of ash does not change the map's rock.
+
+What a map shows is where the worn surface cuts through the rock beneath. Continental platforms start with
+kilometres of alternating beds. Rock under a belt or along a suture turns to its next form by how deep and
+how hot it lies, never by chance, so neighbours with one history stay alike and nothing bakes at the surface.
+A belt's crests bring up far more rock than they stand high, by its structure and not by each summit's
+height, so exposed rock falls into zones along the belt: the deepest and highest grade in its core, younger
+beds toward its front. Melt in an arc cools as a batholith below a volcanic shell and shows only once
+erosion has taken the shell.
 
 Plates move in many small steps. Each cell follows where its material has come from across the
 whole move and takes the height and rock of that place when the move ends, so a move carries relief
 instead of averaging it away. Ground with too little arriving is new crust and keeps the shared
-value. An epoch's tectonic activity sets how far its plates travel. On a bounded map a plate slows as
+value. Where plates converge, some crust ends up under other crust and no cell takes up the rock that
+stood on it. That rock rides to where its crust went and stacks there across a thrust sheet's width,
+so a collision piles rock up, and only part of what rode on a sinking slab comes back. Continent
+floats: where it rides up on ocean, the ocean goes down under it and the continent keeps its area, and
+only continent meeting continent is shortened. Sinking ocean pulls its plate after it, so an ocean keeps
+closing until no ocean is left at the contact. An ocean province that reaches what it sinks beneath is
+renewed at its plate's far side, so a plate keeps moving as a conveyor. Continents that meet shorten until
+they lock and weld into one plate along a seam weaker than either; what drove them together ends there.
+A continent's interior is hard to break, so when later pull from sinking ocean tears a welded plate it
+tears along the seam, and the pieces and their shares of the old belt leave with whatever pulls them. Ocean-bearing parts of a plate
+can tear under the same pull, so a merged plate gains new edges around its land and the old edges end up
+inside it. Plates travel furthest in the first epoch and less in each later one, far enough early on for
+oceans to close, separately from how strongly an epoch builds. On a bounded map a plate slows as
 its continent reaches the edge, so continents stay on the map while oceans can still pass off it.
 
 Rock piled on the crust sinks by about its density over the mantle's, but a strong plate carries a
 load narrower than its flexure length. Narrow ranges therefore stand high while broad high ground
-sinks toward its support.
+sinks toward its support. Continent and ocean settle separately, because a margin breaks the plate:
+deep sea floor does not pull down the edge of a continent beside it.
 
 A convergent belt is its thrust sheets. A cell joins a sheet when the deformation front first reaches
 it, and keeps its sheet, fault segment, place across the sheet and dip, all carried with the crust.
@@ -704,9 +726,19 @@ which exposes rock in bands along the belt. Rifts keep their tilted, alternately
 from pass to pass in the same way. Crust that subducting ocean returns as arc crust feeds a belt's
 roots, as continental crust piled up in a collision does; a belt with no continent builds an arc on
 its ocean crust, and root crust the plates carry away from any convergent belt settles where it lies.
-Interior stress reaches a plate's old
-sutures and province seams and works a zone of crust around them: it thickens and raises older rock
-while the margin is squeezed, and thins and sags while it is pulled apart.
+Each pass's crust adds to what earlier passes left, and crust too thick to hold itself up flows outward
+through the continent under its own weight, more of it the thicker the column stands. Crust holds that
+thickness only while being squeezed: once a collision ends, the old belt's root settles out under the
+land around it, and wear that cuts past the rock on a belt thins the root itself, so old belts sink to
+broad raised ground while their deep rock comes to the surface. A world's first
+forming stands in for the drift before it, so its belts begin with crust already shortened by their
+strain and go through the same roots and flow, which leaves older high ground for later ranges to stand on.
+Interior stress reaches a plate's old sutures and province seams and works a zone of crust around
+them. Seams are properties of the crust and travel with it, so each pass works the same ones. A plate's
+strongest push, from convergence at its edges or more gently from an ocean ridge, carries through its
+whole interior, and thickens and raises older rock along its seams, spending root crust the plate's belts
+have left and otherwise the zone's own shortening. Close to a rift through a continent, extension takes
+over from that squeeze, and the seams there thin and sag.
 
 Processes and materials meet through a shared vocabulary of modes: abrasion, plucking, shear and solution.
 A material holds facts, a mode says how facts answer its attack, and a process says how it acts, as a mix of
@@ -910,15 +942,18 @@ adapts them for the atlas rather than copying the game's frozen-world setting:
 - The game's central warmth source and mandatory scattered warmth pockets are
   disabled. User-configured sources provide magical forcing. Land and sea ice
   form where the latitude climate is cold enough, without coverage quotas.
-- Each mantle plume's head moves a bounded distance per epoch along one heading,
-  and that epoch's cone forms at the new head. Older cones go dormant and leave a
-  chain. Fracture conductance moves with the plates, and part of its excess over
+- Mantle plumes stay fixed beneath the moving plates. Each epoch builds a shield
+  volcano over the plume, and the plate carries older ones away dormant, leaving a
+  chain that records the plate's path. Each ocean plate always has at least one plume.
+  Fracture conductance moves with the plates, and part of its excess over
   the floor heals each later epoch, so cooled conduits stop venting.
 - Crust-bound magical amounts follow every internal material transport. Thermal
   forcing refreshes with climate; material feedback and elapsed storage advance
   once per epoch.
 - Continental ancestry and current mechanical membership are separate. Persistent
-  regional driving and contact resistance move and rotate plates. Accumulated
+  regional driving moves and rotates plates. Two continents meeting push back on
+  each other; an ocean between plates sinks and lets them keep closing, so oceans
+  shut and bring continents together. Accumulated
   extension can disconnect a plate into independently driven fragments; compressed
   continental contacts can weld without merging their material origins. Geological
   intervals have their own units, independently of ecological and societal years.
@@ -934,8 +969,8 @@ adapts them for the atlas rather than copying the game's frozen-world setting:
 - A collision belt has a polarity: its hinterland is the side of the boundary
   holding more continental mass. The foreland rises to the crest within a
   narrower front; the hinterland carries the crest and a plateau shoulder that
-  spreads retained continental shortening into roots behind the belt. Root
-  capacity and prominence shape that distribution; evolution cannot manufacture
+  spreads retained continental shortening into roots behind the belt. The belt's
+  cross-section shapes that distribution; evolution cannot manufacture
   continental material to reach a requested summit height. Surface construction
   adds relief above the supported column. The terrain choice sets construction
   budgets and plateau shape; Mountain ranges is the default.
@@ -968,10 +1003,13 @@ metre units. Climate coverage remains an explicit latitude-frame choice.
 
 Initial province sites are independently distributed, allowing unequal blocks
 and locally clustered boundaries. Continental assemblies grow from anchors with
-unequal area budgets. Correlated growth follows province adjacency, without
-prescribed regional centers or exclusions between material origins. Mechanical
-territories are initialized independently: one plate can carry oceanic and
-continental provinces, and one material origin can span multiple plates.
+unequal area budgets, starting away from each other, with the largest few favoured
+so a world tends towards a few main continents and smaller ones. Correlated growth
+follows province adjacency, without prescribed regional centers. An oceanic plate
+takes its share of the world's water before continents grow, so the land sits
+together around open ocean. Plates form around continents: each assembly starts on
+one plate with the ocean around it, so plate edges mostly run through ocean and a
+continent moves as one until it collides or rifts.
 Province contacts
 come from their Voronoi topology, including neighbors across the cylindrical seam,
 so a narrow shared boundary does not disappear between area samples. The crust

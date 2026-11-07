@@ -6,6 +6,8 @@ import {
   tectonicEdgeReach,
   tectonicRelaxationMyr,
   tectonicRotationGain,
+  tectonicSlabPull,
+  tectonicSubductionResistance,
 } from "./tectonicControls";
 
 export function siteMotion(
@@ -95,7 +97,9 @@ function contactResistance(map: PhysicalField, state: TectonicState, myr: number
       [bx, by] = siteMotion(map, b, second);
     const relative = ((bx - ax) * dx + (by - ay) * dy) / length;
     if (relative >= 0) continue;
-    const impulse = -relative * weight,
+    // Continents too buoyant to sink push back; an ocean between plates goes down and lets them close.
+    const buoyant = a.assembly > 0 && b.assembly > 0,
+      impulse = -relative * weight * (buoyant ? 1 : tectonicSubductionResistance),
       firstMass = masses.get(a.plate)!,
       secondMass = masses.get(b.plate)!,
       firstShare = secondMass / (firstMass + secondMass),
@@ -132,14 +136,81 @@ function edgeResistance(map: PhysicalField, members: TectonicSite[], plate: Tect
     plate.motionY *= edgeAllowance(north - originY - Math.max(...ys), tectonicEdgeReach);
   else plate.motionY *= edgeAllowance(Math.min(...ys) - (south - originY), tectonicEdgeReach);
 }
-/** A coarse driven plate model: contacts resist closure; regional driving supplies motion. */
+function addContact(
+  pulls: { x: number; y: number; contacts: number }[],
+  sinking: boolean,
+  dx: number,
+  dy: number,
+  length: number
+) {
+  for (const pull of pulls) {
+    pull.contacts++;
+    if (!sinking) continue;
+    pull.x += dx / length;
+    pull.y += dy / length;
+  }
+}
+/**
+ * Ocean crust sinking at a closing contact pulls the rest of its plate after it, which is most of what
+ * moves real plates. Each plate is pulled towards its sinking edges by the share of its contacts that
+ * are sinking; a continent makes a plate slower to drag, and where no ocean is left the pull ends.
+ */
+function slabPull(map: PhysicalField, state: TectonicState) {
+  const pulls = new Map(state.plates.map((plate) => [plate.id, { x: 0, y: 0, contacts: 0 }])),
+    blocks = new Map<number, { x: number; y: number; contacts: number }>(),
+    own = state.sites.map(() => ({ x: 0, y: 0, contacts: 0 }));
+  const blockOf = (id: number) => {
+    if (!blocks.has(id)) blocks.set(id, { x: 0, y: 0, contacts: 0 });
+    return blocks.get(id)!;
+  };
+  for (const bond of state.bonds) {
+    const a = state.sites[bond.a],
+      b = state.sites[bond.b];
+    if (!bond.active || a.plate === b.plate) continue;
+    const dx = meshDeltaX(map.mesh, b.x - a.x),
+      dy = b.y - a.y,
+      length = Math.max(1, Math.hypot(dx, dy)),
+      closing = (a.motionX - b.motionX) * dx + (a.motionY - b.motionY) * dy > 0;
+    addContact(
+      [pulls.get(a.plate)!, blockOf(a.block), own[bond.a]],
+      closing && a.assembly === 0,
+      dx,
+      dy,
+      length
+    );
+    addContact(
+      [pulls.get(b.plate)!, blockOf(b.block), own[bond.b]],
+      closing && b.assembly === 0,
+      -dx,
+      -dy,
+      length
+    );
+  }
+  state.sites.forEach((site, i) => {
+    // Ocean feels its own edges; a continent is too strong to, and feels its whole block's.
+    const pull = site.assembly === 0 ? own[i] : blocks.get(site.block);
+    site.pullX = pull ? pull.x / Math.max(1, pull.contacts) : 0;
+    site.pullY = pull ? pull.y / Math.max(1, pull.contacts) : 0;
+  });
+  return pulls;
+}
+/** Each province's mass over its area: how much of a plate is continent to drag along. */
+function drag(members: TectonicSite[]) {
+  const mass = members.reduce((sum, site) => sum + site.mass, 0),
+    area = members.reduce((sum, site) => sum + site.area, 0);
+  return area > 0 ? mass / area : 1;
+}
+/** A driven plate model: slabs pull, contacts between continents resist, regions drive the rest. */
 export function updatePlateMotion(map: PhysicalField, state: TectonicState, myr: number) {
-  const weight = 1 - Math.exp(-myr / tectonicRelaxationMyr);
+  const weight = 1 - Math.exp(-myr / tectonicRelaxationMyr),
+    pulls = slabPull(map, state);
   for (const plate of state.plates) {
     const members = state.sites.filter((site) => site.plate === plate.id),
-      [x, y, spin] = driving(map, members, plate);
-    plate.motionX += (x - plate.motionX) * weight;
-    plate.motionY += (y - plate.motionY) * weight;
+      [x, y, spin] = driving(map, members, plate),
+      pull = pulls.get(plate.id)!,
+      strength = tectonicSlabPull / (Math.max(1, pull.contacts) * drag(members));
+    plate.motionX += (x + pull.x * strength - plate.motionX) * weight;
+    plate.motionY += (y + pull.y * strength - plate.motionY) * weight;
     plate.spin += (spin - plate.spin) * weight;
   }
   contactResistance(map, state, myr);

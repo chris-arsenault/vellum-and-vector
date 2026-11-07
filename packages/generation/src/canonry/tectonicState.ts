@@ -5,7 +5,7 @@ import { initialTectonicSites } from "./tectonicInitialization";
 import { provinceAdjacency } from "./provinceTerritories";
 import { meshDeltaX, meshPoint } from "./mesh";
 import { hashUnit } from "./noise";
-import { tectonicReferenceMyr } from "./tectonicControls";
+import { tectonicContinentBondStrength, tectonicReferenceMyr } from "./tectonicControls";
 import { refreshSiteMotion, moveTectonicPoint } from "./tectonicMotion";
 
 export interface TectonicSite extends ProvinceSite {
@@ -18,6 +18,11 @@ export interface TectonicSite extends ProvinceSite {
   mass: number;
   area: number;
   compliance: number;
+  /** The plate this province began on: the piece that moves as one and pulls against a weld. */
+  block: number;
+  /** The pull of sinking ocean on this province's block, a vector of length at most about 1. */
+  pullX: number;
+  pullY: number;
 }
 export interface TectonicPlate {
   id: number;
@@ -36,6 +41,8 @@ export interface TectonicBond {
   shortening: number;
   broken: boolean;
   active: boolean;
+  /** Holds two welded blocks together, so the blocks' pull on each other can open it. */
+  suture?: boolean;
 }
 export interface TectonicState {
   sites: TectonicSite[];
@@ -45,6 +52,8 @@ export interface TectonicState {
   elapsedMyr: number;
   splits: number;
   welds: number;
+  /** Ocean provinces gone down a subduction zone and renewed at their plate's trailing edge. */
+  sunk: number;
   rate: number;
   seed: number;
   bondLookup: Int32Array;
@@ -77,10 +86,15 @@ function initialBonds(map: PhysicalField, sites: TectonicSite[], seed: number) {
   for (let a = 0; a < sites.length; a++)
     for (let b = a + 1; b < sites.length; b++) {
       if (!adjacent[a * sites.length + b]) continue;
+      const craton =
+        (sites[a].assembly > 0 && sites[a].assembly === sites[b].assembly) ||
+        (sites[a].oceanPlate > 0 && sites[a].oceanPlate === sites[b].oceanPlate);
       bonds.push({
         a,
         b,
-        strength: 0.6 + hashUnit(seed ^ 0x5c173, a, b) * 0.8,
+        strength:
+          (0.6 + hashUnit(seed ^ 0x5c173, a, b) * 0.8) *
+          (craton ? tectonicContinentBondStrength : 1),
         extension: 0,
         shortening: 0,
         broken: false,
@@ -102,6 +116,7 @@ export function tectonicSites(map: PhysicalField, context: PhysicalContext): Tec
     elapsedMyr: 0,
     splits: 0,
     welds: 0,
+    sunk: 0,
     rate: context.Profile.PlateDriftPerEpoch / tectonicReferenceMyr,
     seed: context.EpochStableSeed,
     bondLookup: new Int32Array(sites.length * sites.length).fill(-1),

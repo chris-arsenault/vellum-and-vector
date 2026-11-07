@@ -139,7 +139,11 @@ export const worldPeakIsolation = 60_000;
 /** Falls require both a real drop and water; a dry cliff is not a waterfall. */
 export const worldFallsDrop = 40;
 export const worldFallsDischarge = 250;
-/** Mountain systems have relief as well as a broad, connected physical footprint. */
+/**
+ * Mountain systems have relief as well as a broad, connected physical footprint. Unlike a landscape
+ * they may branch: a range and the spurs that join it are one system, however little of their
+ * envelope they fill.
+ */
 export const worldRangeArea = 8_000_000_000;
 export const worldRangeBreadth = 15_000;
 export const worldRangeSpan = 100_000;
@@ -154,8 +158,7 @@ export function rangeSignificance(
     e.area >= worldRangeArea * scale.area &&
       e.breadth >= worldRangeBreadth * scale.length &&
       span >= worldRangeSpan * scale.length &&
-      relief >= worldRangeRelief * scale.height &&
-      e.coherence >= landscapeCoherence,
+      relief >= worldRangeRelief * scale.height,
     "broad mountain system with substantial relief"
   );
 }

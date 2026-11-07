@@ -1,4 +1,4 @@
-import { meshDeltaX, meshPoint } from "./mesh";
+import { meshDeltaX } from "./mesh";
 // VolcanicConstructionLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
@@ -8,32 +8,10 @@ import { Feature } from "./codes";
 import { rebuild } from "./surface";
 import { subductionArcs } from "./volcanicArcs";
 import { rockCatalogue } from "../rock/rockCatalogue";
-import { layDownRock, stripRock } from "../rock/rockColumn";
+import { layBed, stripRock } from "../rock/rockColumn";
 
 /** A caldera's radius as a share of its cone's. */
 export const calderaShare = 0.28;
-/**
- * The plume head after `sequence` epochs. The crust moves over a fixed plume,
- * so in the map frame the head tracks steadily along one heading per plume,
- * leaving older cones behind as a chain.
- */
-export function plumeCenter(
-  context: PhysicalContext,
-  root: { x: number; y: number; id: string },
-  sequence: number
-): [number, number] {
-  const id = Number(root.id.split(":").at(-1)),
-    heading = hashUnit(0x51f3, id, 0) * Math.PI * 2;
-  let [x, y] = [root.x, root.y];
-  for (let step = 1; step <= sequence; step++) {
-    const angle = heading + (hashUnit(0x6a1d, id, step) - 0.5) * 0.5;
-    const distance =
-      context.Profile.MantlePlumeDriftPerEpoch * (0.7 + hashUnit(0x2c87, id, step) * 0.3);
-    x += Math.cos(angle) * distance;
-    y += Math.sin(angle) * distance;
-  }
-  return [x, y];
-}
 function physicalFeatures(
   map: PhysicalField,
   context: PhysicalContext,
@@ -87,7 +65,7 @@ function constructTriangle(
   map.SurfaceRockLoad.add(i, uplift - cut);
   map.VolcanicConstructionHistory.add(i, uplift);
   stripRock(map, i, cut);
-  layDownRock(map, i, rockCatalogue.basalt, uplift);
+  layBed(map, i, rockCatalogue.basalt, uplift);
   rebuild(map, i);
   const activity = round(strength * apron);
   map.VolcanicActivity.set(i, Math.max(map.VolcanicActivity.get(i), activity));
@@ -114,7 +92,8 @@ export function volcanicConstruction(map: PhysicalField, context: PhysicalContex
   for (const root of map.events.filter((event) => event.kind === "plume")) {
     const strength = root.strength;
     if (strength <= 0) continue;
-    const center = meshPoint(map.mesh, ...plumeCenter(context, root, sequence));
+    // A plume stays put in the mantle; the plate carries what it built away, leaving a chain.
+    const center = [root.x, root.y];
     const caldera =
       hashUnit(context.Seed ^ 0x2f41, Number(root.id.split(":").at(-1)), sequence) <
       context.Profile.VolcanicCalderaChance / 1000;

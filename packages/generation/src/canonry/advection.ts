@@ -13,7 +13,7 @@ import {
   tectonicInterval,
 } from "./tectonicIntegration";
 import { tectonicProvinces } from "./provinces";
-import { tectonicReferenceMyr } from "./tectonicControls";
+import { plateTravel } from "./tectonicControls";
 import { advectLandmarkDrainage } from "./landmarkTransport";
 import { geologicalPointMotion } from "./geologicalPointMotion";
 import { workingArray, releaseWorking } from "./physicalNumerics";
@@ -70,8 +70,8 @@ function transportStep(map: PhysicalField, step: number) {
     rebuild(map, i);
   }
 }
-function finishMove(map: PhysicalField, carry: ReliefCarry) {
-  finishReliefCarry(map, carry);
+function finishMove(map: PhysicalField, context: PhysicalContext, carry: ReliefCarry) {
+  finishReliefCarry(map, carry, context.Profile.OrogenicSheetSpacing);
   for (let i = 0; i < map.mesh.count; i++) rebuild(map, i);
 }
 export function plateAdvection(
@@ -79,8 +79,8 @@ export function plateAdvection(
   context: PhysicalContext,
   afterStep: () => void = () => {}
 ) {
-  const rate = context.Profile.PlateDriftPerEpoch / tectonicReferenceMyr,
-    total = rate * context.TectonicDurationMyr;
+  const total = plateTravel(context.Profile, context.EpochIndex, context.TectonicStrength),
+    rate = total / Math.max(1e-9, context.TectonicDurationMyr);
   map.AdvectionSourceIndex.fill(-1);
   map.ConvergentCrustSurplus.fill(0);
   map.LastPlateDriftStep = total;
@@ -90,11 +90,12 @@ export function plateAdvection(
   if (!map.tectonics) {
     transportStep(map, total);
     stepReliefCarry(map, map.transportPlan!, carry);
-    finishMove(map, carry);
+    finishMove(map, context, carry);
     afterStep();
     map.AccumulatedPlateDrift += total;
     return;
   }
+  map.tectonics.rate = rate;
   const surplus = workingArray(map, "float64", "advection:surplus"),
     evolved = { ...context, IsEvolutionEpoch: true };
   let remaining = context.TectonicDurationMyr;
@@ -112,7 +113,7 @@ export function plateAdvection(
       if (map.CrustRiftStrain.get(i) > 0) map.CrustRiftAgeMyr.add(i, myr);
     remaining -= myr;
   }
-  finishMove(map, carry);
+  finishMove(map, context, carry);
   map.ConvergentCrustSurplus.copyFrom(surplus);
   releaseWorking(map, surplus);
   tectonicProvinces(map, evolved);

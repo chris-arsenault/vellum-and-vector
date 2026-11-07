@@ -86,6 +86,55 @@ function boundarySelection(map: PhysicalField, selection: Selection, x: number, 
     }
   }
 }
+/** Whether most of what surrounds a continental cell is ocean crust. */
+function isolatedScrap(map: PhysicalField, i: number) {
+  let land = 0;
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0 && map.CrustContinentalFraction.get(j) >= 500) land++;
+  }
+  return land * 2 < map.mesh.degree(i);
+}
+/**
+ * Continental crust stays on its continent's plate. Province territories are drawn by distance alone,
+ * so a continent moving over ocean reaches past the midline between them; that crust is still the
+ * continent, and the contact between the plates is at its edge. Returns whether this happened here.
+ */
+function holdToContinent(
+  map: PhysicalField,
+  sites: ProvinceSite[],
+  s: Selection,
+  i: number,
+  x: number,
+  y: number
+) {
+  if (map.CrustContinentalFraction.get(i) < 500 || sites[s.nearest].assembly > 0) return false;
+  // A scrap of continent left in the ocean is a terrane: it rides the plate under it until it docks.
+  if (isolatedScrap(map, i)) return false;
+  const assembly = map.CrustAssemblyIds.get(i);
+  let home = -1,
+    closest = Infinity;
+  for (const [index, site] of sites.entries()) {
+    if (site.assembly !== assembly) continue;
+    const distance = Math.hypot(meshDeltaX(map.mesh, x - site.x), y - site.y);
+    if (distance < closest) {
+      closest = distance;
+      home = index;
+    }
+  }
+  if (home < 0) return false;
+  s.nearest = home;
+  s.nearestDistance = closest;
+  return true;
+}
+/** Whether a continental cell has ocean crust beside it: where a held continent meets the ocean. */
+function atContinentEdge(map: PhysicalField, i: number) {
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0 && map.CrustContinentalFraction.get(j) < 500) return true;
+  }
+  return false;
+}
 function clearBoundary(map: PhysicalField, i: number) {
   for (const name of [
     "TectonicBoundaryCodes",
@@ -112,14 +161,13 @@ function assignBoundary(
   i: number,
   sites: ProvinceSite[],
   s: Selection,
-  context: PhysicalContext
+  context: PhysicalContext,
+  held: boolean
 ) {
   const p = context.Profile;
-  const amount = clamp(
-    1 - boundaryDistance(sites, s, map.mesh) / Math.max(0.001, p.RidgeWidth * 0.9),
-    0,
-    1
-  );
+  const amount = held
+    ? Number(atContinentEdge(map, i))
+    : clamp(1 - boundaryDistance(sites, s, map.mesh) / Math.max(0.001, p.RidgeWidth * 0.9), 0, 1);
   if (amount <= 0) {
     clearBoundary(map, i);
     return;
@@ -189,6 +237,7 @@ function assignTriangle(
     fractalNoise(map.mesh, x, y, seed ^ 0x62bd, p.ContinentalWarpScale, 3) *
     p.ContinentalWarpStrength;
   const s = selectSites(sites, x + wx, y + wy, map.mesh),
+    held = context.IsEvolutionEpoch && holdToContinent(map, sites, s, i, x + wx, y + wy),
     site = sites[s.nearest];
   boundarySelection(map, s, x + wx, y + wy);
   map.CrustProvinceIds.set(i, s.nearest + 1);
@@ -212,7 +261,7 @@ function assignTriangle(
   map.CrustBasePotential.set(i, unit(potential));
   if (!context.IsEvolutionEpoch) map.CrustContinentalFraction.set(i, unit(affinity));
   map.CrustTypeCodes.set(i, map.CrustContinentalFraction.get(i) >= 500 ? 2 : 1);
-  assignBoundary(map, i, sites, s, context);
+  assignBoundary(map, i, sites, s, context, held);
 }
 export function tectonicProvinces(map: PhysicalField, context: PhysicalContext) {
   const sites = tectonicSites(map, context);

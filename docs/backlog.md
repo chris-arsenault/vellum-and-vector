@@ -47,6 +47,17 @@ existing code.
       pole-to-pole coverage uses cylindrical metre geometry with independent
       terrain along its closed north and south edges.
 
+- [ ] **27. Carry very long rivers across wide continents.** Parameters support
+      narrow worlds and fat ones, and an Earth-sized, full-latitude example world
+      ships with the product, so continents must be able to hold rivers that cross
+      them. Let the land settings produce broad, compact continents. Let major
+      rivers occupy the long lows that tectonics makes: basins beside ranges, where
+      mountain weight bends the crust down, rifts and failed rifts, and let them cut
+      through ranges where they cross. Let sediment fill those lows into river
+      plains. Judge rivers at world scale by these lows and at regional scale by
+      rock, where trellis drainage forms. Spherical worlds (item 5) are separate
+      work.
+
 ## Magic
 
 - [ ] **6. Hold sea ice with Aurora shelf charge.** Shelf charge already writes

@@ -1,5 +1,6 @@
 import type { PhysicalField } from "../canonry/field";
 import { rockKindOfCode, softestRock, hardestRock, type RockKind } from "./rockCatalogue";
+import { rockLayerDepths, rockLayerKinds, rockLayers } from "./rockLayerFields";
 
 /**
  * Each cell's rock as a short stack on the field's own bands: the top layer is what the surface is,
@@ -7,28 +8,31 @@ import { rockKindOfCode, softestRock, hardestRock, type RockKind } from "./rockC
  * add to it, and the bottom layer is the basement, which never runs out. The field's rock resistance
  * follows whatever is exposed, keeping whatever magic has done to that surface.
  */
-export const rockLayers = 8;
-const kinds = [
-  "RockLayerKind0",
-  "RockLayerKind1",
-  "RockLayerKind2",
-  "RockLayerKind3",
-  "RockLayerKind4",
-  "RockLayerKind5",
-  "RockLayerKind6",
-  "RockLayerKind7",
-] as const;
-const depths = [
-  "RockLayerDepth0",
-  "RockLayerDepth1",
-  "RockLayerDepth2",
-  "RockLayerDepth3",
-  "RockLayerDepth4",
-  "RockLayerDepth5",
-  "RockLayerDepth6",
-  "RockLayerDepth7",
-] as const;
+export { rockLayers };
+const kinds = rockLayerKinds,
+  depths = rockLayerDepths;
 export const rockColumnFields = [...kinds, ...depths] as const;
+/** Sees rock lost to a full column, and rock stripped off the top, for a run's report. */
+export interface ColumnWatcher {
+  /** A layer folded into the one below, `above` beneath the surface; `into` is what it became. */
+  fold(cell: number, kind: number, into: number, thickness: number, above: number): void;
+  strip(cell: number, amount: number): void;
+}
+const watchers = new Set<ColumnWatcher>();
+/** Starts watching; the returned function stops. */
+export function watchColumn(watcher: ColumnWatcher) {
+  watchers.add(watcher);
+  return () => watchers.delete(watcher);
+}
+function reportFold(map: PhysicalField, cell: number) {
+  const thickness = layerDepth(map, cell, rockLayers - 2);
+  if (!watchers.size || thickness <= 0) return;
+  let above = 0;
+  for (let layer = 0; layer < rockLayers - 2; layer++) above += layerDepth(map, cell, layer);
+  const kind = layerKind(map, cell, rockLayers - 2),
+    into = layerDepth(map, cell, rockLayers - 1) > 0 ? layerKind(map, cell, rockLayers - 1) : kind;
+  for (const watcher of watchers) watcher.fold(cell, kind, into, thickness, above);
+}
 
 export const layerKind = (map: PhysicalField, cell: number, layer: number) =>
   map[kinds[layer]].get(cell);
@@ -68,6 +72,7 @@ function expose(map: PhysicalField, cell: number, was: RockKind) {
 }
 /** Strips rock from the top of a column, uncovering what lies beneath. */
 export function stripRock(map: PhysicalField, cell: number, amount: number) {
+  for (const watcher of watchers) watcher.strip(cell, amount);
   let left = amount,
     uncovered = false;
   const was = rockKindOfCode(map.RockLayerKind0.get(cell));
@@ -93,6 +98,7 @@ export function layDownRock(map: PhysicalField, cell: number, kind: RockKind, am
     map.RockLayerDepth0.add(cell, amount);
     return;
   }
+  reportFold(map, cell);
   // A deepest layer still empty takes on the kind folded into it: the basement stays what it was.
   if (layerDepth(map, cell, rockLayers - 1) <= 0)
     map[kinds[rockLayers - 1]].set(cell, layerKind(map, cell, rockLayers - 2));
@@ -101,6 +107,36 @@ export function layDownRock(map: PhysicalField, cell: number, kind: RockKind, am
     setLayer(map, cell, layer, layerKind(map, cell, layer - 1), layerDepth(map, cell, layer - 1));
   setLayer(map, cell, 0, kind.code, amount);
   expose(map, cell, was);
+}
+/** The thinnest bed a cell's mean can hold as a rock of its own, in the field's height units. */
+const thinnestBed = 20 * 1024;
+/**
+ * New rock a process lays over a cell. Spread too thin to be what the cell's ground is, it only adds
+ * to the height of what is already there; otherwise a film of ash would be the surface of a whole
+ * cell until the next rain.
+ */
+export function layBed(map: PhysicalField, cell: number, kind: RockKind, amount: number) {
+  if (amount >= thinnestBed) layDownRock(map, cell, kind, amount);
+  else if (amount > 0) map.RockLayerDepth0.add(cell, amount);
+}
+/** The same, for rock moved from another column, which holds its kind as a code. */
+export function layBedOfCode(map: PhysicalField, cell: number, code: number, amount: number) {
+  layBed(map, cell, rockKindOfCode(code), amount);
+}
+/**
+ * Melt that never rose cools as new rock below: a column's basement becomes it, and a column that is
+ * all one rock keeps a shell of that rock over it, since melt does not reach the surface unseen.
+ */
+export function intrudeBasement(map: PhysicalField, cell: number, kind: RockKind, shell: number) {
+  const deepest = deepestLayer(map, cell);
+  if (deepest > 0) {
+    map[kinds[deepest]].set(cell, kind.code);
+    return;
+  }
+  const whole = layerDepth(map, cell, 0);
+  if (whole <= shell) return;
+  map[depths[0]].set(cell, shell);
+  setLayer(map, cell, 1, kind.code, whole - shell);
 }
 /** Rock changed where it lies, in any layer. */
 export function changeLayer(map: PhysicalField, cell: number, layer: number, kind: RockKind) {

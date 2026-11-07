@@ -2,7 +2,9 @@ import type { PhysicalField } from "../../../packages/generation/src/canonry/fie
 import type { PhysicalContext } from "../../../packages/generation/src/canonry/context";
 import { observeNativeSteps } from "../../../packages/generation/src/canonry/contracts";
 import { snapshotRecorder } from "./fieldSnapshot";
+import { watchRockColumns } from "./reliefColumn";
 import { reliefProbes } from "./reliefProbes";
+import { rockTrace } from "./rockTrace";
 
 /**
  * What each step of the world did to its relief: the height differences within a few cells after
@@ -50,14 +52,19 @@ function snapshot(name: string, map: PhysicalField, context: PhysicalContext) {
 export function traceRelief(snapshots?: { label: string; quality: string }) {
   const steps: ReturnType<typeof snapshot>[] = [],
     probes = reliefProbes(),
-    record = snapshots && snapshotRecorder(snapshots.label, snapshots.quality);
+    record = snapshots && snapshotRecorder(snapshots.label, snapshots.quality),
+    stopColumns = watchRockColumns(),
+    rock = rockTrace();
+  let last: PhysicalField | null = null;
   observeNativeSteps((name, map, context) => {
+    last = map;
+    rock.observe(name, map);
     steps.push(snapshot(name, map, context));
     probes.observe(name, map, context);
     record?.(name, map, context);
   });
   return () => {
     observeNativeSteps(null);
-    return { steps, probes: probes.read() };
+    return { steps, probes: probes.read(), columns: stopColumns(last), rock: rock.read(last) };
   };
 }

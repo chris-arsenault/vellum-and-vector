@@ -15,12 +15,12 @@ it("scales broad shape with province dimensions while preserving physical featur
   expect(bigger.ContinentalWarpStrength).toBe(base.ContinentalWarpStrength * 10);
   expect(bigger.ContinentalWarpScale).toBe(base.ContinentalWarpScale * 10);
   expect(bigger.ContinentalTransitionWidth).toBe(base.ContinentalTransitionWidth * 10);
+  expect(bigger.PlateDriftPerEpoch).toBe(base.PlateDriftPerEpoch * 10);
   for (const name of [
     "ContinentalAssemblyCount",
     "TectonicProvinceCount",
     "ImpactMinimumRadius",
     "OrogenicSheetSpacing",
-    "PlateDriftPerEpoch",
     "WindTerrainLength",
   ] as const)
     expect(bigger[name]).toBe(base[name]);

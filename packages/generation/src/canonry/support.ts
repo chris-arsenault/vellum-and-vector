@@ -4,7 +4,7 @@ import type { PhysicalContext } from "./context";
 import { clamp, crustHeight, elevationLimit, ratio, toUnits, units } from "./math";
 import { rebuild } from "./surface";
 import { smoothMetric } from "./metricSmoothing";
-import { releaseWorking } from "./physicalNumerics";
+import { releaseWorking, workingValues } from "./physicalNumerics";
 import {
   tectonicRiftCoolingMyr,
   tectonicRiftFailure,
@@ -46,12 +46,24 @@ function trenchSupport(map: PhysicalField, context: PhysicalContext, i: number) 
   const oceanic = 1 - map.CrustContinentalFraction.get(i) / 1000;
   return units(context.Profile.ConvergentTrenchDepth * oceanic * (1 - Math.exp(-consumed)));
 }
+/**
+ * A plate bends under a load, but a continent's edge is not bent down by the deep sea floor beside it:
+ * a margin is where the two are broken apart. So continent and ocean each settle among themselves.
+ */
+function settledSupport(map: PhysicalField, context: PhysicalContext) {
+  const p = context.Profile,
+    edge = p.OceanicSubsidenceCompositionLimit * 1000,
+    continent = workingValues(map, "uint8", "flexure:continent", (i) =>
+      map.CrustContinentalFraction.get(i) >= edge ? 1 : 0
+    ),
+    ocean = workingValues(map, "uint8", "flexure:ocean", (i) => (continent.get(i) ? 0 : 1)),
+    onContinent = smoothMetric(map, map.CrustSupportTarget, p.LithosphericFlexureLength, continent),
+    current = smoothMetric(map, onContinent, p.LithosphericFlexureLength, ocean);
+  releaseWorking(map, continent, ocean, onContinent);
+  return current;
+}
 export function lithosphericFlexure(map: PhysicalField, context: PhysicalContext) {
-  const current = smoothMetric(
-    map,
-    map.CrustSupportTarget,
-    context.Profile.LithosphericFlexureLength
-  );
+  const current = settledSupport(map, context);
   for (let i = 0; i < current.length; i++) {
     const value = current.get(i);
     if (!map.CrustSupportInitialized) {

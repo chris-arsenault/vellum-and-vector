@@ -3,7 +3,7 @@ import type { PhysicalField } from "../canonry/field";
 import { units } from "../canonry/math";
 import { hashUnit, meshNoise } from "../canonry/noise";
 import { rebuild } from "../canonry/surface";
-import { changeLayer, deepestLayer, layDownRock, layerKind, setLayer } from "./rockColumn";
+import { changeLayer, deepestLayer, layBed, layerDepth, layerKind, setLayer } from "./rockColumn";
 import { rockCatalogue, rockKindOfCode, type RockKindId } from "./rockCatalogue";
 
 /** Sediment this deep starts turning to rock, and what stays loose on top, in metres. */
@@ -16,22 +16,28 @@ const reefDepth = 200,
 const dryBasin = 400;
 /** A pass of mountain building this strong, in metres, bakes what it buries. */
 const bakingConstruction = 120;
-/** How strongly each influence pushes rock on toward its next form, per pass. */
-const burialOdds = 0.9,
-  sutureOdds = 0.5;
+/** Metres down that the fullest heat reaches, and how much of a full heat an old suture carries. */
+const bakingDepth = 1200,
+  fullHeat = 1,
+  sutureHeat = 0.5;
 const salts = {
   platform: 0x5a11,
   depth: 0x5a12,
   shield: 0x5a13,
-  bake: 0x5a14,
 };
 
+/**
+ * A continental platform's beds, top first: kilometres of alternating sediment from the seas that
+ * came and went over it, so that a thrust cutting through them has something to bring up.
+ */
 const platforms: readonly (readonly RockKindId[])[] = [
-  ["limestone", "shale", "sandstone"],
-  ["sandstone", "shale", "limestone"],
-  ["shale", "sandstone", "limestone"],
-  ["sandstone", "limestone", "shale"],
+  ["limestone", "shale", "sandstone", "shale", "limestone"],
+  ["sandstone", "shale", "limestone", "sandstone", "shale"],
+  ["shale", "sandstone", "limestone", "shale", "sandstone"],
+  ["sandstone", "limestone", "shale", "limestone", "sandstone"],
 ];
+/** How thick each bed of a platform is at its thinnest, in metres: thicker with depth. */
+const bedThickness = [300, 600, 900, 1200, 1500];
 /** Old continental crust, and whether it has been planed down to its basement. */
 function continentalColumn(map: PhysicalField, c: PhysicalContext, i: number) {
   const province = map.CrustProvinceIds.get(i),
@@ -46,7 +52,7 @@ function continentalColumn(map: PhysicalField, c: PhysicalContext, i: number) {
     swell =
       1 + 0.6 * meshNoise(map.mesh, map.mesh.x(i), map.mesh.y(i), c.Seed ^ salts.depth, 180_000, 2);
   stack.forEach((kind, layer) =>
-    setLayer(map, i, layer, rockCatalogue[kind].code, units((150 + 450 * layer) * swell))
+    setLayer(map, i, layer, rockCatalogue[kind].code, units(bedThickness[layer] * swell))
   );
   setLayer(map, i, stack.length, rockCatalogue[basement].code, units(30_000));
 }
@@ -85,26 +91,34 @@ export function lithification(map: PhysicalField) {
     map.SedimentThickness.add(i, -amount);
     map.BedrockElevation.add(i, amount);
     map.SurfaceRockLoad.add(i, amount);
-    layDownRock(map, i, rockCatalogue[sedimentKind(map, i)], amount);
+    layBed(map, i, rockCatalogue[sedimentKind(map, i)], amount);
     rebuild(map, i);
   }
 }
-function bake(map: PhysicalField, c: PhysicalContext, i: number, odds: number) {
-  const deepest = deepestLayer(map, i);
+/** Rock this far down turns to its next form under the fullest heat, and deeper under less. */
+function bake(map: PhysicalField, i: number, heat: number) {
+  const deepest = deepestLayer(map, i),
+    reaches = units(bakingDepth) / heat;
+  let above = 0;
   for (let layer = 0; layer <= deepest; layer++) {
-    const next = rockKindOfCode(layerKind(map, i, layer)).underHeat;
-    // Deeper layers feel it first; the surface only under the strongest building.
-    const felt = odds * (0.4 + (0.6 * layer) / Math.max(1, deepest));
-    if (next && hashUnit(c.EpochStableSeed ^ salts.bake ^ (c.EpochIndex << 16), i, layer) < felt)
-      changeLayer(map, i, layer, rockCatalogue[next]);
+    if (above >= reaches) {
+      const next = rockKindOfCode(layerKind(map, i, layer)).underHeat;
+      if (next) changeLayer(map, i, layer, rockCatalogue[next]);
+    }
+    above += layerDepth(map, i, layer);
   }
 }
-/** Burial and heat: rock under a range and along old sutures turns to its next form. */
-export function metamorphism(map: PhysicalField, c: PhysicalContext) {
+/**
+ * Burial and heat: rock deep under a range or an old suture turns to its next form, whatever its
+ * neighbours do, because grade is how deep and how hot it has been. Nothing at the surface bakes; it
+ * shows only once erosion and thrusts have brought it up, so grade comes to the surface in zones
+ * along the belt, highest where the most has been stripped.
+ */
+export function metamorphism(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {
     const built = map.OrogenicConstruction.get(i) / units(bakingConstruction),
       suture = map.CrustSutureStrength.get(i) / 1000,
-      odds = Math.max(Math.min(burialOdds, built), suture * sutureOdds);
-    if (odds > 0) bake(map, c, i, odds);
+      heat = Math.max(Math.min(fullHeat, built), suture * sutureHeat);
+    if (heat > 0) bake(map, i, heat);
   }
 }

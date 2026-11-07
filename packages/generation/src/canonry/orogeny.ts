@@ -27,14 +27,17 @@ import {
 import { rebuild } from "./surface";
 import { stripRock } from "../rock/rockColumn";
 import { adjustCrustColumn } from "./crustTransport";
-import { distributeOrogenicRoots } from "./orogenicRoots";
+import { crustFlow, distributeOrogenicRoots, pileUpEarlierShortening } from "./orogenicRoots";
 import { advanceThrustFronts, slipThrustSheets } from "./orogenicSheets";
 import { sutureReactivation } from "./reactivation";
 import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
-/** How much deeper than its own rise a thrust's crest reaches into the column. */
-const thrustExhumation = 1.5;
+/**
+ * How much rock a crest's rise brings up, for each metre it stands higher. Ranges lose far more rock
+ * than they keep as height, so the deep rock of a belt's core reaches the surface.
+ */
+const thrustExhumation = 4;
 function deformationLimit(
   context: PhysicalContext,
   c: BoundaryComponent,
@@ -55,8 +58,7 @@ function deformationLimit(
   const root =
     p.OrogenicRootBudgetMinimum +
     (p.OrogenicRootBudgetMaximum - p.OrogenicRootBudgetMinimum) * prominence;
-  const maximum =
-    c.code === 1 ? orogenicCrestSection : c.code === 2 ? 0.55 : c.code === 3 ? 0.2 : 1;
+  const maximum = c.code === 2 ? 0.55 : c.code === 3 ? 0.2 : 1;
   return foundation + root * clamp(section / maximum, 0, 1);
 }
 function changeThickness(
@@ -102,13 +104,12 @@ function constructSurface(
   const value = toUnits(admitted),
     p = context.Profile;
   if (value <= 0 || map.CrustContinentalFraction.get(i) / 1000 < 0.35 || c.code !== 1) return;
-  const crest = clamp(section / orogenicCrestSection, 0, 1);
+  const crest = clamp(section / orogenicCrestSection, 0, 1),
+    structural = ((value * p.OrogenicSurfaceReliefSharePerMille) / 1000) * (0.2 + crest * 0.8);
   const requested = units(
     Math.min(
       p.MaximumOrogenicSurfaceReliefPerPass,
-      ((value * p.OrogenicSurfaceReliefSharePerMille) / 1000) *
-        (0.2 + crest * 0.8) *
-        summitVariation(map, context, c, i, source)
+      structural * summitVariation(map, context, c, i, source)
     )
   );
   if (requested <= 0) return;
@@ -122,8 +123,9 @@ function constructSurface(
   if (applied <= 0) return;
   map.BedrockElevation.set(i, next);
   map.SurfaceRockLoad.add(i, applied);
-  // A sheet's leading edge brings up what it was cut from: the crest of a thrust is older rock.
-  stripRock(map, i, Math.round(applied * crest * thrustExhumation));
+  // A sheet's leading edge brings up what it was cut from, so a belt's core shows older rock. How
+  // much follows the belt's structure, not the height of one summit, so rock lines up along it.
+  stripRock(map, i, units(structural * crest * thrustExhumation));
   rebuild(map, i);
 }
 function constructTriangle(
@@ -133,14 +135,14 @@ function constructTriangle(
   frame: OrogenicFrame,
   i: number,
   step: number,
-  roots: Band | null
+  roots: Band
 ) {
   const source = frame.source.get(i),
     section = crossSection(map, context, c, frame, i);
   const weight = constructionWeight(map, context, c, frame, i, section);
   const drive = step * (c.prominence / 1000) * weight;
   // Only a convergent belt draws on the crust the plates piled up; anything else moves on its own.
-  const fedByRoots = roots !== null && c.code === 1;
+  const fedByRoots = c.code === 1;
   if (!fedByRoots && Math.abs(drive) < 0.5) return;
   const admitted = fedByRoots ? roots.get(i) : changeThickness(map, context, c, i, section, drive);
   map.OrogenicConstruction.set(i, admitted);
@@ -193,13 +195,16 @@ export function orogenicConstruction(map: PhysicalField, context: PhysicalContex
     releaseWorking(map, ids, ...frameBands);
     return;
   }
-  const roots = context.IsEvolutionEpoch
-    ? distributeOrogenicRoots(map, context, components, frame)
-    : null;
+  if (!context.IsEvolutionEpoch) pileUpEarlierShortening(map, context);
+  const roots = distributeOrogenicRoots(map, context, components, frame);
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds.get(i);
     if (id >= 0) constructTriangle(map, context, components[id], frame, i, step, roots);
   }
   if (context.IsEvolutionEpoch) sutureReactivation(map, context);
-  releaseWorking(map, ids, ...frameBands, ...(roots ? [roots] : []));
+  crustFlow(map, context, (i) => {
+    const id = map.OrogenicComponentIds.get(i);
+    return id >= 0 && components[id].code === 1;
+  });
+  releaseWorking(map, ids, ...frameBands, roots);
 }

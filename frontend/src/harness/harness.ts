@@ -37,6 +37,8 @@ export interface HarnessOptions {
   /** Saves the world's state at the start of each pass under this name, for `stageReplay`. */
   snapshots: string;
 }
+/** The world the harness judges, so a result is not fitted to the app's default seed. */
+const harnessSeed = 271_828;
 /** Defaults: the app's default world at standard quality and its standard region. */
 const defaults = {
   HARNESS_WORLD: "world",
@@ -92,6 +94,7 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
       options.snapshots ? { label: options.snapshots, quality: options.worldQuality } : undefined
     );
   draft.recipe.quality = options.worldQuality as typeof draft.recipe.quality;
+  draft.recipe.seed = harnessSeed;
   try {
     const { worldId, root } = await generateWorld(ws, draft, recorder.observers);
     const record: CheckpointRecord = {
@@ -109,9 +112,11 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
     };
     await ws.save(record);
     write(out, "world-run", { ...recorder, seconds: (performance.now() - started) / 1000 });
-    const { steps, probes } = stopTrace();
+    const { steps, probes, columns, rock } = stopTrace();
     write(out, "world-trace", steps);
     write(out, "world-probes", probes);
+    write(out, "world-columns", columns);
+    write(out, "world-rock", rock);
     sayFailures("world", recorder.diagnostics);
     return record;
   } finally {

@@ -13,6 +13,8 @@ interface Candidate {
 }
 export interface ProvinceSite extends Candidate {
   assembly: number;
+  /** The ocean plate this province belongs to from the start, or 0. */
+  oceanPlate: number;
   motionX: number;
   motionY: number;
 }
@@ -20,6 +22,8 @@ interface MaterialGrowth {
   seed: number;
   cohesion: number;
   adjacent: Uint8Array;
+  /** Provinces no continent may grow into, by the ocean plate that holds them. */
+  oceanPlates: Int32Array;
 }
 const deltaX = (dx: number, width = 0) => (width ? dx - Math.round(dx / width) * width : dx);
 const distance2 = (a: Candidate, b: Candidate, width = 0) =>
@@ -47,26 +51,76 @@ function minimumDistance(
     Infinity
   );
 }
+/**
+ * Starts each assembly away from the others, so they tend to grow into separate continents with
+ * ocean between them. Chance still weighs in: origins favour no fixed arrangement.
+ */
 function anchors(
   sites: Candidate[],
   count: number,
   territory: ProvinceTerritories,
   target: number,
-  seed: number
+  seed: number,
+  open: number[],
+  width: number
 ): number[] {
-  const indices = sites.map((_, i) => i);
   const { areas } = territory;
   // Seed each requested assembly without spending its whole area budget on a large block.
-  const smaller = indices.filter((i) => areas[i] <= target / count);
-  const candidates = smaller.length >= count ? smaller : indices;
+  const smaller = open.filter((i) => areas[i] <= target / count);
+  const candidates = smaller.length >= count ? smaller : open;
   const chosen: number[] = [];
-  while (chosen.length < count) {
-    // Origins describe initial material, not a prescribed arrangement of final continents.
+  while (chosen.length < Math.min(count, candidates.length)) {
     const options = candidates.filter((i) => !chosen.includes(i));
-    const next = bestIndex(options, (i) => hashUnit(seed ^ 0x41da3, i, chosen.length));
+    const next = bestIndex(options, (i) => {
+      const chance = hashUnit(seed ^ 0x41da3, i, chosen.length);
+      return chosen.length ? Math.sqrt(minimumDistance(sites, i, chosen, width)) * chance : chance;
+    });
     chosen.push(next);
   }
   return chosen;
+}
+/** Grows each ocean plate as one compact block of provinces from its own start. */
+function oceanPlates(
+  sites: Candidate[],
+  territory: ProvinceTerritories,
+  profile: PhysicalContext["Profile"],
+  seed: number,
+  width: number,
+  [west, south, east, north]: readonly number[]
+) {
+  // The first ocean tends to open across the map's seam, with the land between its shores in view.
+  const seamward = ({ x, y }: Candidate) =>
+    ((2 * x - west - east) / (east - west)) ** 2 *
+    (1 - ((2 * y - south - north) / (north - south)) ** 2);
+  const { areas, adjacent } = territory,
+    result = new Int32Array(sites.length),
+    count = profile.OceanicPlateCount,
+    world = areas.reduce((sum, area) => sum + area, 0),
+    water = world * (1 - profile.ContinentalCrustFraction) * profile.OceanicPlateWaterShare;
+  const open = () => sites.map((_, i) => i).filter((i) => result[i] === 0);
+  for (let plate = 1; plate <= count; plate++) {
+    const starts = open();
+    if (!starts.length) break;
+    const start = bestIndex(starts, (i) => {
+      const held = sites.map((_, j) => j).filter((j) => result[j] > 0),
+        place = held.length
+          ? Math.sqrt(minimumDistance(sites, i, held, width))
+          : seamward(sites[i]);
+      return place * hashUnit(seed ^ 0x37b1, i, plate);
+    });
+    result[start] = plate;
+    let area = areas[start];
+    while (area < water / count) {
+      const edge = open().filter((i) =>
+        result.some((id, j) => id === plate && adjacent[i * sites.length + j])
+      );
+      if (!edge.length) break;
+      const next = bestIndex(edge, (i) => -distance2(sites[i], sites[start], width));
+      result[next] = plate;
+      area += areas[next];
+    }
+  }
+  return result;
 }
 function assemblyDistance(
   sites: Candidate[],
@@ -83,6 +137,13 @@ function assemblyDistance(
     );
   return minimumDistance(sites, candidate, indices, width);
 }
+const touches = (
+  count: number,
+  selected: Int32Array,
+  material: MaterialGrowth,
+  site: number,
+  test: (assembly: number) => boolean
+) => selected.some((id, j) => test(id) && material.adjacent[site * count + j] === 1);
 function frontierSite(
   sites: Candidate[],
   selected: Int32Array,
@@ -94,9 +155,11 @@ function frontierSite(
 ): number {
   let best = -1,
     bestCost = Infinity;
-  const remaining = sites.map((_, i) => i).filter((i) => selected[i] === 0);
+  const remaining = sites
+    .map((_, i) => i)
+    .filter((i) => selected[i] === 0 && material.oceanPlates[i] === 0);
   const contiguous = remaining.filter((i) =>
-    selected.some((id, j) => id === assembly && material.adjacent[i * sites.length + j])
+    touches(sites.length, selected, material, i, (id) => id === assembly)
   );
   const candidates = material.cohesion > 0 && contiguous.length ? contiguous : remaining;
   for (const candidate of candidates) {
@@ -123,18 +186,31 @@ function frontierSite(
     ? bestIndex(candidates, (i) => -assemblyDistance(sites, selected, i, assembly, false, width))
     : -1;
 }
+/** Each assembly's share of the land: varied by chance, with the largest few favoured. */
+function growthWeights(count: number, profile: PhysicalContext["Profile"], seed: number) {
+  const weights = Array.from(
+    { length: count },
+    (_, i) =>
+      1 + (hashUnit(seed ^ 0x4b19, i, 0) * 2 - 1) * profile.ContinentalAssemblyGrowthVariation
+  );
+  // hpc-exempt: a handful of assembly weights, sorted once.
+  const threshold = [...weights].sort((a, b) => b - a)[profile.ContinentalMajorAssemblies - 1];
+  return weights.map((w) => (w >= threshold ? w * profile.ContinentalMajorGrowth : w));
+}
 function assemblies(
   sites: Candidate[],
   territory: ProvinceTerritories,
   context: PhysicalContext,
-  width: number
+  width: number,
+  held: Int32Array
 ): Int32Array {
   const profile = context.Profile,
     seed = context.EpochStableSeed;
   const { areas } = territory;
   const target = areas.reduce((sum, area) => sum + area, 0) * profile.ContinentalCrustFraction;
+  const open = sites.map((_, i) => i).filter((i) => held[i] === 0);
   const result = new Int32Array(sites.length),
-    chosen = anchors(sites, profile.ContinentalAssemblyCount, territory, target, seed);
+    chosen = anchors(sites, profile.ContinentalAssemblyCount, territory, target, seed, open, width);
   chosen.forEach((i, n) => {
     result[i] = n + 1;
   });
@@ -142,15 +218,13 @@ function assemblies(
     seed,
     cohesion: profile.ContinentalAssemblyClustering,
     adjacent: territory.adjacent,
+    oceanPlates: held,
   };
   const directions = chosen.map((_, i): [number, number] => {
     const angle = hashUnit(seed ^ 0x67d3, i, 0) * Math.PI * 2;
     return [Math.cos(angle), Math.sin(angle)];
   });
-  const weights = chosen.map(
-    (_, i) =>
-      1 + (hashUnit(seed ^ 0x4b19, i, 0) * 2 - 1) * profile.ContinentalAssemblyGrowthVariation
-  );
+  const weights = growthWeights(chosen.length, profile, seed);
   const weight = weights.reduce((sum, value) => sum + value, 0);
   const occupied = Float64Array.from(chosen, (i) => areas[i]);
   let total = occupied.reduce((sum, area) => sum + area, 0);
@@ -194,13 +268,10 @@ export function createProvinceSites(map: PhysicalField, context: PhysicalContext
     // hpc-exempt: seeded candidate objects, sorted once.
     .sort((a, b) => b.priority - a.priority)
     .slice(0, p.TectonicProvinceCount);
-  const width = map.mesh.periodic?.width ?? 0;
-  const groups = assemblies(
-    selected,
-    provinceTerritories(selected, map.mesh.bounds, width),
-    context,
-    width
-  );
+  const width = map.mesh.periodic?.width ?? 0,
+    territory = provinceTerritories(selected, map.mesh.bounds, width),
+    held = oceanPlates(selected, territory, p, seed, width, map.mesh.bounds),
+    groups = assemblies(selected, territory, context, width, held);
   const motionOf = (salt: number, key: number): [number, number] => {
     const angle = hashUnit(seed ^ salt, key, 0) * Math.PI * 2;
     const speed = lerp(
@@ -215,6 +286,7 @@ export function createProvinceSites(map: PhysicalField, context: PhysicalContext
     return {
       ...site,
       assembly: groups[i],
+      oceanPlate: held[i],
       motionX,
       motionY,
     };

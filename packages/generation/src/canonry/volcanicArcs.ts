@@ -7,10 +7,12 @@ import { Feature } from "./codes";
 import { tectonicArcMeltShare, tectonicArcOffset, tectonicArcRadius } from "./tectonicControls";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { rockCatalogue } from "../rock/rockCatalogue";
-import { changeLayer, deepestLayer, layDownRock } from "../rock/rockColumn";
+import { intrudeBasement, layBed } from "../rock/rockColumn";
 
 /** Metres an eruption adds at a cell before it is lava rather than ash. */
 const arcLava = 40;
+/** Metres of volcanic rock left over an arc's batholith until erosion uncovers it. */
+const arcShell = 3000;
 
 function overridingSide(map: PhysicalField, cell: number) {
   const state = map.tectonics;
@@ -65,8 +67,8 @@ function erupt(map: PhysicalField, context: PhysicalContext, i: number, height: 
   map.SurfaceRockLoad.add(i, uplift);
   map.VolcanicConstructionHistory.add(i, uplift);
   // An arc's flanks are ash, its cones lava, and melt that never rose cools below as granite.
-  layDownRock(map, i, uplift >= units(arcLava) ? rockCatalogue.basalt : rockCatalogue.tuff, uplift);
-  changeLayer(map, i, deepestLayer(map, i), rockCatalogue.granite);
+  layBed(map, i, uplift >= units(arcLava) ? rockCatalogue.basalt : rockCatalogue.tuff, uplift);
+  intrudeBasement(map, i, rockCatalogue.granite, units(arcShell));
   map.VolcanicActivity.set(i, Math.max(map.VolcanicActivity.get(i), clamp(uplift / 1024, 0, 1000)));
   map.VolcanicLastActiveEpoch.set(i, Math.max(0, context.EpochIndex));
   map.FractureConductance.set(

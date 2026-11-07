@@ -1,6 +1,6 @@
 // Explicit projection from Canonry's fixed-point numerical state into GIS channels.
 import { hardestRock } from "../rock/rockCatalogue";
-import { rockLayers } from "../rock/rockColumn";
+import { rockLayerDepths, rockLayerKinds, rockLayers } from "../rock/rockLayerFields";
 import type { PhysicalBufferName } from "./field";
 import { ecologyBindings, ecologyRatios } from "./ecologyState";
 
@@ -147,22 +147,8 @@ export const atlasChannels: ChannelBinding[] = [
   category("thrustPair", "ThrustPairIds"),
   category("thrustSheet", "ThrustSheetIndex"),
   category("thrustSegment", "ThrustSegmentIds"),
-  category("rockLayer0", "RockLayerKind0"),
-  category("rockLayer1", "RockLayerKind1"),
-  category("rockLayer2", "RockLayerKind2"),
-  category("rockLayer3", "RockLayerKind3"),
-  category("rockLayer4", "RockLayerKind4"),
-  category("rockLayer5", "RockLayerKind5"),
-  category("rockLayer6", "RockLayerKind6"),
-  category("rockLayer7", "RockLayerKind7"),
-  amount("rockDepth0", "RockLayerDepth0"),
-  amount("rockDepth1", "RockLayerDepth1"),
-  amount("rockDepth2", "RockLayerDepth2"),
-  amount("rockDepth3", "RockLayerDepth3"),
-  amount("rockDepth4", "RockLayerDepth4"),
-  amount("rockDepth5", "RockLayerDepth5"),
-  amount("rockDepth6", "RockLayerDepth6"),
-  amount("rockDepth7", "RockLayerDepth7"),
+  ...rockLayerKinds.map((band, layer) => category(`rockLayer${layer}`, band)),
+  ...rockLayerDepths.map((band, layer) => amount(`rockDepth${layer}`, band)),
   category("water", "WaterKindCodes"),
   category("waterBody", "WaterBodyIds"),
   category("basin", "DrainageBasinIds"),

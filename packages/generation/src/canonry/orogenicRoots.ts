@@ -1,10 +1,12 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
-import { constructionWeight, crossSection, orogenicCrestSection } from "./orogenicShape";
-import { clamp, crustHeight, maximumCrustThickness, units } from "./math";
-import { workingArray, releaseWorking } from "./physicalNumerics";
-function addRoot(map: PhysicalField, cell: number, volume: number) {
+import { adjustCrustColumn, arcCrustYield, initializeCrustColumns } from "./crustTransport";
+import { constructionWeight, crossSection } from "./orogenicShape";
+import { crustHeight, maximumCrustThickness, thickness, units } from "./math";
+import { smoothMetric } from "./metricSmoothing";
+import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+export function addRoot(map: PhysicalField, cell: number, volume: number) {
   const before = map.CrustThickness.get(cell) / 1024,
     fraction = map.CrustContinentalFraction.get(cell) / 1000,
     column = (volume * 1024) / map.mesh.area(cell);
@@ -14,33 +16,9 @@ function addRoot(map: PhysicalField, cell: number, volume: number) {
   map.CrustContinentalFraction.set(cell, Math.round(nextFraction * 1000));
   return units(crustHeight(before + column / 1024, nextFraction) - crustHeight(before, fraction));
 }
-/** How much of a belt's root budget any ground in its sheets can take. */
-const sheetRootShare = 0.5;
-function capacity(
-  map: PhysicalField,
-  context: PhysicalContext,
-  component: BoundaryComponent,
-  i: number,
-  section: number
-) {
-  const p = context.Profile,
-    fraction = map.CrustContinentalFraction.get(i) / 1000;
-  const rank = clamp(
-    (component.prominence - p.OrogenicProminenceMinimum) /
-      Math.max(1, p.OrogenicProminenceMaximum - p.OrogenicProminenceMinimum),
-    0,
-    1
-  );
-  const root =
-    p.OrogenicRootBudgetMinimum +
-    rank * (p.OrogenicRootBudgetMaximum - p.OrogenicRootBudgetMinimum);
-  // A root stands as deep as the sheet above it was stacked, and shortening thickens the whole of a
-  // sheet, so ground in a belt's sheets can always take some, wherever on the sheet it lies.
-  const stacked = clamp(section / orogenicCrestSection, 0, 1),
-    shaped = root * (map.ThrustSheetIndex.get(i) > 0 ? Math.max(sheetRootShare, stacked) : stacked);
-  const maximum = units(Math.min(maximumCrustThickness, 1000 + 3000 * fraction + shaped));
-  return (Math.max(0, maximum - map.CrustThickness.get(i)) * map.mesh.area(i)) / 1024;
-}
+/** How much more crust a column can hold. Each pass's crust adds to what earlier passes left. */
+const capacity = (map: PhysicalField, i: number) =>
+  (Math.max(0, units(maximumCrustThickness) - map.CrustThickness.get(i)) * map.mesh.area(i)) / 1024;
 function rootCapacity(
   map: PhysicalField,
   context: PhysicalContext,
@@ -63,7 +41,7 @@ function rootCapacity(
       continue;
     const section = crossSection(map, context, components[id], frame, i);
     const weight = constructionWeight(map, context, components[id], frame, i, section) * area;
-    const room = capacity(map, context, components[id], i, section);
+    const room = capacity(map, i);
     if (weight > 0 && room > 0) {
       weights.set(i, weight);
       capacities.set(i, room);
@@ -104,32 +82,78 @@ export function distributeOrogenicRoots(
     if (id >= 0 && reserves[id] > 0)
       map.CrustRootReserve.set(i, (map.CrustRootReserve.get(i) * remaining[id]) / reserves[id]);
   }
-  settleStrandedRoots(map, context, components);
+  settleStrandedRoots(map, components);
   releaseWorking(map, weights, capacities, ratios);
   return admitted;
+}
+/**
+ * A world's first forming stands in for all the drift before it, so its belts begin as later passes
+ * do, with crust their plates have already shortened: as much as the boundary's strain took up of
+ * that drift, stacked over a thrust sheet's width. What was going down as a slab comes back in part.
+ */
+export function pileUpEarlierShortening(map: PhysicalField, context: PhysicalContext) {
+  const { OrogenicInitialShortening: drift, OrogenicSheetSpacing: width } = context.Profile;
+  initializeCrustColumns(map);
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.TectonicBoundaryCodes.get(i) !== 1) continue;
+    const continent = map.CrustContinentalFraction.get(i) / 1000,
+      returned = continent + (1 - continent) * arcCrustYield;
+    map.CrustRootReserve.add(
+      i,
+      (map.TectonicStrain.get(i) / 1000) * (drift / width) * map.CrustThickness.get(i) * returned
+    );
+  }
 }
 /** How much of the root crust a boundary has left behind settles on each pass. */
 const settledPerPass = 0.5;
 /**
  * Plates carry root crust away from the belt that made it, to ground no convergent belt reaches.
- * Nothing will ever spend it there, so it settles where it lies, as far as the crust has room, and
- * the old belt stands on its own root.
+ * Nothing will ever spend it there, so it settles where it lies and the old belt stands on its own
+ * root, however thick that makes the crust.
  */
-function settleStrandedRoots(
-  map: PhysicalField,
-  context: PhysicalContext,
-  components: BoundaryComponent[]
-) {
-  const budget = context.Profile.OrogenicRootBudgetMinimum;
+function settleStrandedRoots(map: PhysicalField, components: BoundaryComponent[]) {
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds.get(i),
       held = map.CrustRootReserve.get(i);
     if (held <= 0 || (id >= 0 && components[id].code === 1)) continue;
-    const fraction = map.CrustContinentalFraction.get(i) / 1000,
-      maximum = units(Math.min(maximumCrustThickness, 1000 + 3000 * fraction + budget)),
-      column = Math.min(held * settledPerPass, Math.max(0, maximum - map.CrustThickness.get(i)));
+    const column = Math.min(
+      held * settledPerPass,
+      Math.max(0, units(maximumCrustThickness) - map.CrustThickness.get(i))
+    );
     if (column <= 0) continue;
     addRoot(map, i, (column * map.mesh.area(i)) / 1024);
     map.CrustRootReserve.set(i, held - column);
   }
+}
+/** Below this much continent a column is ocean crust, too stiff and thin for crust to flow through. */
+const flowingFraction = 350;
+/**
+ * Crust too thick to hold itself up flows outward under its own weight, so a long collision builds a
+ * thick core and a high region that widens around it, and later ranges rise on that ground. Only the
+ * column above what the crust can bear flows, and the thicker it stands the more of that goes. It bears
+ * that much only while being squeezed: once a collision ends, an old belt's root has nothing holding
+ * it up and settles out under the land around it, leaving broad raised ground where a range stood.
+ */
+export function crustFlow(
+  map: PhysicalField,
+  context: PhysicalContext,
+  squeezed: (cell: number) => boolean = () => true
+) {
+  const { CrustFlowYield: bears, CrustFlowEase: ease, CrustFlowLength: length } = context.Profile,
+    continent = workingValues(map, "uint8", "flow:continent", (i) =>
+      map.CrustContinentalFraction.get(i) >= flowingFraction ? 1 : 0
+    ),
+    flowing = workingValues(map, "float64", "flow:flowing", (i) => {
+      const fraction = map.CrustContinentalFraction.get(i) / 1000,
+        over =
+          map.CrustThickness.get(i) / 1024 - (1000 + 3000 * fraction + (squeezed(i) ? bears : 0));
+      return continent.get(i) && over > 0 ? (over * over) / (over + ease) : 0;
+    }),
+    spread = smoothMetric(map, flowing, length, continent);
+  for (let i = 0; i < map.mesh.count; i++) {
+    const change = spread.get(i) - flowing.get(i);
+    if (change !== 0)
+      adjustCrustColumn(map, i, units(thickness(map.CrustThickness.get(i) / 1024 + change)));
+  }
+  releaseWorking(map, continent, flowing, spread);
 }

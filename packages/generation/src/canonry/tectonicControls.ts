@@ -1,5 +1,17 @@
-/** Distance scale of a normalized unit velocity over the reference interval. */
+/** The geological interval of a context with no epoch. */
 export const tectonicReferenceMyr = 10;
+/**
+ * How far a plate at full speed travels in an epoch. An old, mobile world settles as its epochs pass,
+ * however strongly each later one builds. An epoch of no tectonic activity moves nothing.
+ */
+export function plateTravel(
+  profile: { PlateDriftPerEpoch: number; PlateDriftDecay: number },
+  epochIndex: number,
+  tectonicStrength: number
+) {
+  if (tectonicStrength <= 0) return 0;
+  return profile.PlateDriftPerEpoch * profile.PlateDriftDecay ** Math.max(0, epochIndex);
+}
 /** Default physical history interval; ecology and society keep their model years. */
 export const tectonicDefaultMyr = 20;
 /** Maximum change in boundary driving before contacts are reconciled again. */
@@ -12,6 +24,10 @@ export const tectonicGeometryTravelFraction = 0.25;
 export const tectonicRelaxationMyr = 15;
 /** Normal resistance of contacting moving units, applied per million years. */
 export const tectonicContactMyr = 30;
+/** How much of that resistance a closing contact keeps when ocean crust can sink beneath it. */
+export const tectonicSubductionResistance = 0;
+/** Speed a plate of ocean gains when all its contacts are sinking on one side. */
+export const tectonicSlabPull = 1;
 /** How far from a bounded map's edge a plate's continent starts to slow against it, in metres. */
 export const tectonicEdgeReach = 300_000;
 /** Share of regional differential driving that contributes plate rotation. */
@@ -24,6 +40,14 @@ export const tectonicLocalDrivingShare = 0.45;
 export const tectonicRiftFailure = 0.28;
 /** Maximum ductile share of local driving before a throughgoing rupture. */
 export const tectonicDuctileCompliance = 0.2;
+/** How much harder a continent's interior is to break than crust around it: cratons rarely rift. */
+export const tectonicContinentBondStrength = 4;
+/** A welded seam's strength against what the crust had: old sutures are where continents reopen. */
+export const tectonicSutureStrength = 0.25;
+/** Closure, as a share of the distance between provinces, at which colliding continents lock. */
+export const tectonicCollisionLock = 0.5;
+/** How close an ocean province gets to what it sinks beneath, as a share of its own width. */
+export const tectonicSinkingReach = 0.5;
 /** Shortening beyond an earlier opening needed to establish a welded contact. */
 export const tectonicWeldStrain = 0.2;
 /** Residual closing motion at which an old compressed continental contact can weld. */

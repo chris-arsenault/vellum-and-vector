@@ -1,4 +1,6 @@
 import type { PhysicalField } from "../canonry/field";
+import { adjustCrustColumn } from "../canonry/crustTransport";
+import { units } from "../canonry/math";
 import { rebuild } from "../canonry/surface";
 import { stripRock } from "./rockColumn";
 
@@ -15,11 +17,25 @@ export function erode(map: PhysicalField, i: number, requested: number): number 
   const bedrock = requested - sediment;
   map.BedrockElevation.add(i, -bedrock);
   if (bedrock > 0) {
+    const belowRock = Math.max(0, bedrock - Math.max(0, map.SurfaceRockLoad.get(i)));
     map.SurfaceRockLoad.add(i, -bedrock);
     stripRock(map, i, Math.round(bedrock));
+    if (belowRock > 0) thinCrust(map, i, belowRock);
   }
   rebuild(map, i);
   return requested;
+}
+/**
+ * Wear that has cut through what was piled on the crust is cutting the crust itself, so an old belt's
+ * root goes with it: rebound brings it up to be worn in turn until the ground is back to a plain.
+ * Rock removed already rebounds as lost load, so this is the part of the rise that load does not give.
+ */
+function thinCrust(map: PhysicalField, i: number, amount: number) {
+  const fraction = map.CrustContinentalFraction.get(i) / 1000,
+    foundation = units(1000 + 3000 * fraction),
+    spare = Math.max(0, map.CrustThickness.get(i) - foundation);
+  if (spare > 0)
+    adjustCrustColumn(map, i, map.CrustThickness.get(i) - Math.min(spare, amount * 0.7));
 }
 /** Lays loose material on a cell. */
 export function deposit(map: PhysicalField, i: number, requested: number): number {

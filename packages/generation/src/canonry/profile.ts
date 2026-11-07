@@ -19,7 +19,14 @@ export const physicalProfile = {
   ContinentalAssemblyClustering: 1,
   // Relative variation in initial assembly area budgets; motion stays coherent within each.
   ContinentalAssemblyGrowthVariation: 0.8,
-  ContinentalCrustFraction: 0.35,
+  // How many assemblies start with a larger share of the land, and how much larger: a tendency
+  // towards a few main continents and smaller ones, which history is free to rearrange.
+  ContinentalMajorAssemblies: 2,
+  ContinentalMajorGrowth: 2,
+  // Plates of ocean crust alone, holding this share of the world's water between them.
+  OceanicPlateCount: 1,
+  OceanicPlateWaterShare: 0.5,
+  ContinentalCrustFraction: 0.45,
   ContinentalTransitionWidth: 260_000,
   ContinentalAssemblySeparationDepth: 0.38,
   ContinentalCrustPotentialFloor: 0.62,
@@ -34,7 +41,10 @@ export const physicalProfile = {
   ContinentalSutureDetectionReach: 60_000,
   ContinentalSutureMinimumFraction: 420,
   ContinentalSutureStrengthGain: 620,
-  PlateDriftPerEpoch: 234_000,
+  // How far a full-speed plate travels in the first epoch: far enough to cross an ocean basin, so
+  // oceans close and continents meet. Each later epoch travels this share of the one before.
+  PlateDriftPerEpoch: 2_000_000,
+  PlateDriftDecay: 0.5,
   MarginInfluenceReach: 260_000,
   CrustAgeSaturationDistance: 700_000,
   OceanicSubsidenceDepth: 1200,
@@ -129,8 +139,14 @@ export const physicalProfile = {
   OrogenicRootBudgetMinimum: 1200,
   OrogenicRootBudgetMaximum: 5500,
   OrogenicSurfaceReliefSharePerMille: 2500,
-  // What a full-strength seam in a fully squeezed plate rises on a pass at full tectonic strength.
-  SutureReactivationStep: 4000,
+  // Metres of crust above its normal thickness that a column bears before the rest starts to flow,
+  // the excess at which half of what is over goes, and how far a pass's flow reaches.
+  CrustFlowYield: 3000,
+  CrustFlowEase: 2000,
+  CrustFlowLength: 200_000,
+  // What a full-strength seam rises on a pass at full tectonic strength, under strain of one. Hard
+  // collisions reach about a third of that strain.
+  SutureReactivationStep: 8000,
   // How far out from a seam the crust is broken enough to take up that stress.
   SutureReactivationZone: 200_000,
   MaximumOrogenicSurfaceReliefPerPass: 5000,
@@ -409,9 +425,9 @@ export const physicalProfile = {
   MantlePlumeMinimumShare: 260,
   MantlePlumeStrengthExponent: 1700,
   // Hotspot track length per epoch; each epoch's cone forms at the new head.
-  MantlePlumeDriftPerEpoch: 80_000,
-  VolcanicConeRadius: 8_000,
-  VolcanicConeHeight: 1_200,
+  // A shield volcano built over a plume: far broader and taller from the sea floor than a land cone.
+  VolcanicConeRadius: 60_000,
+  VolcanicConeHeight: 5_000,
   VolcanicApronHeight: 70,
   VolcanicCalderaChance: 180,
   VolcanicCalderaDepth: 90,
@@ -424,7 +440,7 @@ export const physicalProfile = {
   // Share of conductance above the floor that survives each later epoch.
   FractureRetentionPerEpoch: 400,
   QualityTargets: {
-    OceanCoverage: { target: 0.65, minimum: 0.38, maximum: 0.66 },
+    OceanCoverage: { target: 0.55, minimum: 0.38, maximum: 0.66 },
     InlandLakeBodyCount: { minimum: 2, maximum: 80 },
   },
 };

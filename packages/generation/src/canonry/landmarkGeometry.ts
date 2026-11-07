@@ -9,7 +9,7 @@ import { rebuild } from "./surface";
 import { recordCut } from "../rock/groundLedger";
 import { physicalSampler } from "./physicalMetric";
 import { advanceTectonicPoint, backtrackTectonicPoint } from "./tectonicIntegration";
-import { tectonicDefaultMyr, tectonicReferenceMyr } from "./tectonicControls";
+import { plateTravel, tectonicDefaultMyr } from "./tectonicControls";
 
 export type Point = [number, number];
 export interface Placed {
@@ -49,13 +49,12 @@ export function plateDriftSteps(
   enabled = true
 ) {
   if (!enabled) return [];
-  const intervals =
-    typeof epochs === "number"
-      ? Array(epochs).fill(tectonicDefaultMyr)
-      : epochs.map(
-          (epoch) => (epoch.tectonicDurationMyr ?? tectonicDefaultMyr) * (epoch.tectonics ?? 1)
-        );
-  return intervals.map((myr) => (p.PlateDriftPerEpoch * myr) / tectonicReferenceMyr);
+  const list = typeof epochs === "number" ? Array.from({ length: epochs }, () => ({})) : epochs;
+  return list.map((epoch: { tectonicDurationMyr?: number; tectonics?: number }, index) =>
+    (epoch.tectonicDurationMyr ?? tectonicDefaultMyr) > 0
+      ? plateTravel(p, index, epoch.tectonics ?? 1)
+      : 0
+  );
 }
 /**
  * The landmark rides the crust like every other feature, so its authored position is where

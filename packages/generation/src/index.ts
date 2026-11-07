@@ -13,6 +13,7 @@ export { regionalResolution } from "./regionalInputs";
 export { isRegionalRefinement, refinementReads, refinementResolution } from "./regional/capture";
 export { prepareRegionalRefinement, refineRegionalMap } from "./regional/workflow";
 export * from "./atlasParameters";
+export * from "./atlasPresets";
 export { migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
 export * from "./processCatalogue";
 export * from "./generationSettings";

@@ -17,15 +17,21 @@ interface Columns {
   oceanic: Band;
   reserve: Band;
 }
+/** Columns as they arrive in a cell, with how much of the cell's area arrived as continent. */
+interface Arrived extends Columns {
+  land: Band;
+}
+export function initializeCrustColumns(map: PhysicalField) {
+  if (map.CrustColumnsInitialized) return;
+  for (let i = 0; i < map.mesh.count; i++)
+    map.CrustContinentalColumn.set(
+      i,
+      (map.CrustThickness.get(i) * map.CrustContinentalFraction.get(i)) / 1000
+    );
+  map.CrustColumnsInitialized = true;
+}
 export function captureCrustColumns(map: PhysicalField): Columns {
-  if (!map.CrustColumnsInitialized) {
-    for (let i = 0; i < map.mesh.count; i++)
-      map.CrustContinentalColumn.set(
-        i,
-        (map.CrustThickness.get(i) * map.CrustContinentalFraction.get(i)) / 1000
-      );
-    map.CrustColumnsInitialized = true;
-  }
+  initializeCrustColumns(map);
   return {
     continental: map.coverage.copyBand(map.CrustContinentalColumn),
     oceanic: workingValues(map, "float64", "crust:oceanic", (i) =>
@@ -40,18 +46,20 @@ function exported(map: PhysicalField, source: number, share: number, columns: Co
     (columns.continental.get(source) + columns.reserve.get(source)) * share * area;
   map.crustBudget.oceanExported += columns.oceanic.get(source) * share * area;
 }
-function accumulate(map: PhysicalField, plan: TransportPlan, old: Columns): Columns {
-  const result: Columns = {
+function accumulate(map: PhysicalField, plan: TransportPlan, old: Columns): Arrived {
+  const result: Arrived = {
     continental: workingArray(map, "float64", "crust:continental"),
     oceanic: workingArray(map, "float64", "crust:oceanicArrival"),
     reserve: workingArray(map, "float64", "crust:reserve"),
+    land: workingArray(map, "float64", "crust:landArrival"),
   };
   for (let source = 0; source < map.mesh.count; source++) {
     let retained = 0;
     const end = plan.offsets.get(source + 1),
       continental = old.continental.get(source),
       oceanic = old.oceanic.get(source),
-      reserve = old.reserve.get(source);
+      reserve = old.reserve.get(source),
+      buoyant = continental >= oceanic;
     for (let offset = plan.offsets.get(source); offset < end; offset++) {
       const target = plan.targets.get(offset),
         share = plan.weights.get(offset) / weightScale;
@@ -59,6 +67,7 @@ function accumulate(map: PhysicalField, plan: TransportPlan, old: Columns): Colu
       result.continental.add(target, continental * weight);
       result.oceanic.add(target, oceanic * weight);
       result.reserve.add(target, reserve * weight);
+      if (buoyant) result.land.add(target, weight);
       retained += share;
     }
     exported(map, source, Math.max(0, 1 - retained), old);
@@ -67,7 +76,27 @@ function accumulate(map: PhysicalField, plan: TransportPlan, old: Columns): Colu
 }
 /** The share of oceanic crust going down a subduction zone that comes back up as a belt's crust. */
 export const arcCrustYield = 0.5;
-function retainColumn(map: PhysicalField, plan: TransportPlan, columns: Columns, i: number) {
+/**
+ * What closing plates take out of a column, by what is closing. Continent floats, so only continent
+ * meeting continent is shortened; where a continent rides up on ocean, the ocean goes down under it
+ * and the continent keeps its area. Ocean meeting ocean loses what no longer fits.
+ */
+function closure(
+  columns: Arrived,
+  i: number,
+  arrival: number,
+  continental: number,
+  oceanic: number
+) {
+  const land = columns.land.get(i),
+    sea = arrival - land,
+    room = Math.max(0, 1 - land);
+  return {
+    slab: sea > 0 ? oceanic - oceanic * Math.min(1, room / sea) : oceanic,
+    squeezed: land > 1 ? continental - continental / land : 0,
+  };
+}
+function retainColumn(map: PhysicalField, plan: TransportPlan, columns: Arrived, i: number) {
   let continental = columns.continental.get(i),
     oceanic = columns.oceanic.get(i);
   const arrival = plan.arrivals.get(i) / weightScale,
@@ -76,11 +105,13 @@ function retainColumn(map: PhysicalField, plan: TransportPlan, columns: Columns,
   oceanic += fresh;
   map.crustBudget.oceanCreated += fresh * area;
   const total = continental + oceanic;
-  const convergence =
-    map.TectonicBoundaryCodes.get(i) === 1 && arrival > 1 ? total - total / arrival : 0;
-  const excess = Math.max(convergence, total - units(maximumCrustThickness), 0);
-  const consumed = Math.min(oceanic, excess),
-    shortened = excess - consumed,
+  const { slab, squeezed } =
+    map.TectonicBoundaryCodes.get(i) === 1 && arrival > 1
+      ? closure(columns, i, arrival, continental, oceanic)
+      : { slab: 0, squeezed: 0 };
+  const over = Math.max(0, total - slab - squeezed - units(maximumCrustThickness));
+  const consumed = Math.min(oceanic, slab + over),
+    shortened = squeezed + slab + over - consumed,
     // A slab going down melts and rises as new crust under the belt above it: what an arc builds on.
     arc = consumed * arcCrustYield,
     reserve = shortened + arc;

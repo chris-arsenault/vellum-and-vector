@@ -186,6 +186,15 @@ Use native file-editing tools for authored changes and `with-cred --` for
 secret-backed commands in Sulion. Read the applicable Ahara integration and
 language standards before changing their boundaries.
 
+Sulion plans are a non-linear backlog as much as a list of immediate goals. Going
+many sub-plans deep is expected: follow a problem as far as it needs, and record
+work found along the way as a phase wherever it belongs instead of doing it
+inline or dropping it. Review the plan tree from time to time, and at least
+whenever a sub-plan opens or closes, so wanted work is not lost. A sub-plan
+extends its parents and does not restate them: when a child takes over a parent's
+phase, the parent's note names the child phase, and each piece of work has one
+home.
+
 The backend and its scripts are historical source outside the active product.
 Preserve that source for later reconsideration. Do not resume backend migration,
 storage or service work from the old plans. Distinguish the implemented browser

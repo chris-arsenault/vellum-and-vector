@@ -41,6 +41,10 @@ it("recognizes a mountain system by its relief as well as its footprint", () => 
   expect(rangeSignificance(forest, 30, 600_000).publish).toBe(false);
 });
 
+it("keeps a branching mountain system as one range", () => {
+  expect(rangeSignificance({ ...forest, coherence: 0.3 }, 1_200, 600_000).publish).toBe(true);
+});
+
 it("allows a supported small independent state but not an unsupported isolated community", () => {
   const seat = {
     residents: 2_500,

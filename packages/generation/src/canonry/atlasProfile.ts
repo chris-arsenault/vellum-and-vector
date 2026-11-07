@@ -14,6 +14,7 @@ export function atlasPhysicalProfile(
   const settings = atlasParametersSchema.parse(parameters);
   const profile = structuredClone(physicalProfile);
   profile.ContinentalAssemblyCount = settings.continents;
+  profile.OceanicPlateCount = settings.oceanicPlates;
   profile.TectonicProvinceCount = settings.provinces;
   profile.ContinentalCrustFraction = settings.landFraction;
   // The water budget covers what is not continental crust, so the land fraction a cartographer
@@ -79,8 +80,6 @@ export function atlasEpoch(epoch: Epoch) {
     CoastalStrength: round(clamp(epoch.coasts, 0, 1) * 1000),
     TemperatureOffset: round((epoch.temperature - 15) * 10),
     SeaLevelOffset: round(epoch.seaLevel),
-    // A quiet epoch's plates move that much less: the crust's activity is how far they travel.
-    TectonicDurationMyr:
-      (epoch.tectonicDurationMyr ?? tectonicDefaultMyr) * clamp(epoch.tectonics, 0, 1),
+    TectonicDurationMyr: epoch.tectonicDurationMyr ?? tectonicDefaultMyr,
   };
 }

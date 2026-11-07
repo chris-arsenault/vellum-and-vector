@@ -51,6 +51,29 @@ it("turns a share of subducted ocean crust into crust for the belt's roots", () 
   expect(map.CrustRootReserve.get(i)).toBeCloseTo(map.OceanicSubduction.get(i) * arcCrustYield);
   expect(map.CrustRootReserve.get(i)).toBeGreaterThan(0);
 });
+it("lets ocean go down under a continent without shortening the continent", () => {
+  const map = createField(createMesh(4, 0)),
+    i = realCell(map),
+    plan = pileUp(map),
+    others = i + 1;
+  for (let c = 0; c < map.mesh.count; c++) {
+    map.TectonicBoundaryCodes.set(c, 1);
+    map.CrustThickness.set(c, units(1000));
+  }
+  // A continent stays in this cell and half a cell of ocean arrives under it.
+  map.CrustThickness.set(i, units(4000));
+  map.CrustContinentalColumn.set(i, units(4000));
+  map.CrustContinentalFraction.set(i, 1000);
+  map.CrustColumnsInitialized = true;
+  plan.weights.set(i, weightScale);
+  plan.targets.set(others, i);
+  plan.weights.set(others, 0.5 * weightScale);
+  plan.arrivals.set(i, 1.5 * weightScale);
+  transportCrustColumns(map, plan, captureCrustColumns(map));
+  expect(map.CrustContinentalColumn.get(i)).toBeCloseTo(units(4000));
+  expect(map.CrustThickness.get(i)).toBeCloseTo(units(4000));
+  expect(map.OceanicSubduction.get(i)).toBeGreaterThan(0);
+});
 it("sends all of the excess to the roots where continents collide", () => {
   const map = converge(1000),
     i = realCell(map);

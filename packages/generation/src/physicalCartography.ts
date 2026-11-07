@@ -71,7 +71,7 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
       "Multiple crust assemblies form compound continental regions with open oceans, broad interiors, or a dispersed island world. Final coasts follow the terrain and water.",
     choices: [
       choice("broad", "Broad continents", land(2, 24, 0.68, -60, 0.2, 100_000, 1)),
-      choice("broken", "Broken continents", land(4, 42, 0.35, 0, 0.38, 180_000, 1)),
+      choice("broken", "Broken continents", land(4, 42, 0.45, 0, 0.38, 180_000, 1)),
       choice("islands", "Island world", land(10, 70, 0.28, 60, 0.5, 260_000, 0)),
     ],
   },
