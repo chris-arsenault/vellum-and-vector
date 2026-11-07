@@ -103,7 +103,7 @@ export function validatePhysical(map: PhysicalField, c: PhysicalContext) {
   validateLandscape(map);
 }
 export function epochHistory(map: PhysicalField, c: PhysicalContext) {
-  if (!c.IsEvolutionEpoch || c.EpochIndex !== map.CompletedEpochCount)
+  if (c.EpochIndex !== map.CompletedEpochCount)
     throw new Error("Physical epoch history was applied out of order.");
   for (let i = 0; i < map.mesh.count; i++)
     map.GeothermalHistory.set(i, Math.max(map.GeothermalHistory.get(i), map.Geothermal.get(i)));

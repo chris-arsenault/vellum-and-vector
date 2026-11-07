@@ -1,4 +1,5 @@
 import { landmarkKind } from "@atlas/domain";
+import { standGround } from "../../rock/groundLedger";
 import { nearestOnPath, pathMetrics, type Placed } from "../../world/landmarkGeometry";
 import { maintainLandmark, placeLandmark, type LandmarkLedger } from "../../world/landmarks";
 import { distance, isContent, regionalSpan } from "../lattice";
@@ -43,10 +44,7 @@ registerCause({
     for (const { landmark } of state.regional.evidence!.landmarks)
       maintainLandmark(map, state.physical.profile, landmark, 0, ledger);
     for (let i = 0; i < mesh.count; i++)
-      if (!isContent(mesh, i)) {
-        map.Elevation.set(i, exterior[i]);
-        map.BedrockElevation.set(i, exterior[i] - map.SedimentThickness.get(i));
-      }
+      if (!isContent(mesh, i)) standGround(map, i, exterior[i], "landmarks");
     ledgers.set(state, ledger);
   },
 });

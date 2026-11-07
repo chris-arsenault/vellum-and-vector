@@ -4,7 +4,7 @@ import { setLayer } from "../rock/rockColumn";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext, type PhysicalEpoch } from "./context";
 import { createField } from "./field";
-import { units } from "./math";
+import { crustPerRock, units } from "./math";
 import { sutureReactivation } from "./reactivation";
 import { rebuild } from "./surface";
 import { createWorldMesh } from "./worldMesh";
@@ -144,7 +144,9 @@ const allMaterial = (map: ReturnType<typeof continent>) => {
   let total = 0;
   for (let i = 0; i < map.mesh.count; i++)
     total +=
-      ((map.CrustThickness.get(i) + map.CrustRootReserve.get(i) + map.SurfaceRockLoad.get(i)) *
+      ((map.CrustThickness.get(i) +
+        map.CrustRootReserve.get(i) +
+        map.SurfaceRockLoad.get(i) * crustPerRock(1)) *
         map.mesh.area(i)) /
       1024 /
       1e9;

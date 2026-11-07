@@ -8,23 +8,18 @@
       "CrustContinentalFraction",
       "CrustMotionX",
       "CrustMotionY",
-      "CrustPlateIds",
       "CrustProvinceIds",
       "CrustRiftAgeMyr",
       "CrustRiftStrain",
       "CrustRootReserve",
-      "CrustSuturePairIds",
-      "CrustSutureStrength",
       "CrustThickness",
       "Elevation",
-      "FeatureFlags",
       "OceanicSubduction",
       "OceanicSubductionHistory",
       "RockKindCodes",
       "RockLayerDepth0",
       "RockLayerKind0",
       "RockResistance",
-      "SedimentSupply",
       "SedimentThickness",
       "SurfaceRockLoad",
       "TectonicBoundaryCodes",
@@ -34,8 +29,6 @@
       "ThrustPairIds",
       "ThrustSegmentIds",
       "ThrustSheetIndex",
-      "VolcanicConstructionHistory",
-      "VolcanicLastActiveEpoch",
       "WaterSurfaceElevations"
     ],
     "writes": [
@@ -54,11 +47,9 @@
       "CrustRiftAgeMyr",
       "CrustRiftStrain",
       "CrustRootReserve",
-      "CrustSuturePairIds",
       "CrustThickness",
       "CrustTypeCodes",
       "Elevation",
-      "FeatureFlags",
       "InitialTectonicBoundaryCodes",
       "InitialTectonicStrain",
       "LakeOutletTargets",
@@ -79,7 +70,6 @@
       "ThrustPairIds",
       "ThrustSegmentIds",
       "ThrustSheetIndex",
-      "VolcanicLastActiveEpoch",
       "WaterBodyIds",
       "WaterDepths",
       "WaterKindCodes",
@@ -103,6 +93,7 @@
       "FireActivity",
       "FractureConductance",
       "GrassCover",
+      "IceThickness",
       "OrogenicComponentIds",
       "OrogenicConstruction",
       "OrogenicSystemProminence",
@@ -113,6 +104,7 @@
       "RockLayerKind0",
       "RockResistance",
       "SedimentThickness",
+      "SoilDepth",
       "StructuralGrainX",
       "StructuralGrainY",
       "SurfaceRockLoad",
@@ -293,9 +285,7 @@
       "CumulativeDeposition",
       "Elevation",
       "FlowTargets",
-      "SedimentSupply",
       "SedimentThickness",
-      "Slope",
       "WaterDepths",
       "WaterKindCodes",
       "WaterSurfaceElevations"
@@ -394,12 +384,28 @@
     "reads": [
       "ContinentalPotential",
       "CrustAssemblySeparation",
+      "CrustContinentalColumn",
       "CrustContinentalFraction",
       "CrustProvinceIds",
       "CrustSutureStrength",
-      "TectonicActivityHistory"
+      "CrustThickness",
+      "Elevation",
+      "TectonicActivityHistory",
+      "WaterSurfaceElevations"
     ],
-    "writes": ["CrustThickness", "Elevation", "RidgeInfluence", "Uplift"]
+    "writes": [
+      "CrustContinentalColumn",
+      "CrustThickness",
+      "Elevation",
+      "LakeOutletTargets",
+      "LakeOverflow",
+      "RidgeInfluence",
+      "Uplift",
+      "WaterBodyIds",
+      "WaterDepths",
+      "WaterKindCodes",
+      "WaterSurfaceElevations"
+    ]
   },
   "burial": {
     "reads": [
@@ -408,6 +414,7 @@
       "CrustContinentalFraction",
       "CrustThickness",
       "Elevation",
+      "LakeOverflow",
       "Rainfall",
       "RockLayerDepth0",
       "RockLayerKind0",
@@ -436,5 +443,526 @@
       "WaterKindCodes",
       "WaterSurfaceElevations"
     ]
+  },
+  "tectonic-provinces": {
+    "reads": [
+      "CrustAssemblyIds",
+      "CrustContinentalFraction",
+      "CrustRiftStrain",
+      "TectonicBoundaryCodes",
+      "TectonicStrain"
+    ],
+    "writes": [
+      "CrustAssemblyIds",
+      "CrustAssemblySeparation",
+      "CrustBasePotential",
+      "CrustContinentalFraction",
+      "CrustMotionX",
+      "CrustMotionY",
+      "CrustPlateIds",
+      "CrustProvinceIds",
+      "CrustRiftStrain",
+      "CrustTypeCodes",
+      "InitialTectonicBoundaryCodes",
+      "InitialTectonicStrain",
+      "TectonicBoundaryCodes",
+      "TectonicBoundaryPairIds",
+      "TectonicStrain",
+      "TectonicTangentX",
+      "TectonicTangentY"
+    ]
+  },
+  "tectonic-epoch-activity": {
+    "reads": ["InitialTectonicBoundaryCodes", "InitialTectonicStrain"],
+    "writes": ["TectonicBoundaryCodes", "TectonicStrain"]
+  },
+  "continental-sutures": {
+    "reads": [
+      "CrustAssemblyIds",
+      "CrustContinentalFraction",
+      "CrustSuturePairIds",
+      "CrustSutureStrength",
+      "TectonicBoundaryCodes",
+      "TectonicStrain"
+    ],
+    "writes": ["CrustCollisionIntensity", "CrustSuturePairIds", "CrustSutureStrength"]
+  },
+  "tectonic-margins": {
+    "reads": [
+      "AdvectionSourceIndex",
+      "CrustAge",
+      "CrustContinentalFraction",
+      "CrustTypeCodes",
+      "TectonicBoundaryCodes"
+    ],
+    "writes": ["CrustAge", "MarginCodes"]
+  },
+  "continental-domains": {
+    "reads": ["CrustBasePotential", "TectonicBoundaryCodes", "TectonicStrain"],
+    "writes": ["ContinentalPotential"]
+  },
+  "landscape-initialization": {
+    "reads": [
+      "CrustContinentalFraction",
+      "CrustProvinceIds",
+      "Elevation",
+      "RockLayerKind0",
+      "TectonicStrain"
+    ],
+    "writes": [
+      "BedrockElevation",
+      "CrustSupportElevation",
+      "Elevation",
+      "RockKindCodes",
+      "RockResistance",
+      "TectonicActivityHistory",
+      "TectonicStrain",
+      "VolcanicLastActiveEpoch"
+    ]
+  },
+  "mantle-plume-roots": {
+    "reads": ["CrustProvinceIds", "TectonicStrain"],
+    "writes": ["MantlePlumeRootStrength"]
+  },
+  "fracture-network": {
+    "reads": ["FractureConductance", "RidgeInfluence", "TectonicStrain", "Uplift"],
+    "writes": ["FractureConductance"]
+  },
+  "geothermal": {
+    "reads": [
+      "FeatureFlags",
+      "FractureConductance",
+      "ImpactHeat",
+      "TectonicBoundaryCodes",
+      "TectonicStrain",
+      "VolcanicActivity"
+    ],
+    "writes": ["FeatureFlags", "Geothermal", "HeatSourceDensity"]
+  },
+  "crustal-support": {
+    "reads": [
+      "CrustAge",
+      "CrustContinentalFraction",
+      "CrustRiftAgeMyr",
+      "CrustRiftStrain",
+      "CrustThickness",
+      "GroundedIce",
+      "IceThickness",
+      "OceanicSubductionHistory",
+      "SedimentThickness",
+      "SurfaceRockLoad"
+    ],
+    "writes": ["CrustSupportTarget"]
+  },
+  "rock-metamorphism": {
+    "reads": ["RockLayerKind0", "RockResistance"],
+    "writes": ["RockKindCodes", "RockResistance"]
+  },
+  "physical-epoch-history": {
+    "reads": ["Elevation", "Geothermal", "GeothermalHistory"],
+    "writes": ["FirstEpochHeight", "GeothermalHistory"]
+  },
+  "physical-structural-validation": {
+    "reads": [
+      "BathymetricZoneCodes",
+      "BedrockElevation",
+      "CumulativeCoastalErosion",
+      "CumulativeDeposition",
+      "CumulativeFluvialErosion",
+      "CumulativeGlacialDeposition",
+      "CumulativeGlacialErosion",
+      "DeltaIntensity",
+      "DrainageParents",
+      "DrainageRanks",
+      "Elevation",
+      "FeatureFlags",
+      "FloodplainIntensity",
+      "FlowAccumulation",
+      "FlowTargets",
+      "GroundedIce",
+      "IceThickness",
+      "LandformCodes",
+      "MaximumGroundedIceFlux",
+      "MaximumIceFlux",
+      "RiverChannelOrders",
+      "RiverChannelStrength",
+      "RiverOrders",
+      "SedimentThickness",
+      "WaterBodyIds",
+      "WaterDepths",
+      "WaterKindCodes",
+      "WaterSurfaceElevations"
+    ],
+    "writes": ["FlowTargets"]
+  },
+  "ocean-connectivity": {
+    "reads": ["Elevation", "GroundedIce", "IceThickness"],
+    "writes": [
+      "Elevation",
+      "WaterBodyIds",
+      "WaterDepths",
+      "WaterKindCodes",
+      "WaterSurfaceElevations"
+    ]
+  },
+  "ocean-distance": {
+    "reads": ["OceanDistance", "WaterKindCodes"],
+    "writes": ["OceanDistance"]
+  },
+  "bathymetry": {
+    "reads": ["Elevation", "OceanDistance", "WaterDepths", "WaterKindCodes"],
+    "writes": ["BathymetricZoneCodes", "Slope"]
+  },
+  "landmasses-and-shelf-groups": {
+    "reads": ["ContinentalGroupIds", "Elevation", "LandmassIds", "WaterKindCodes"],
+    "writes": ["ContinentalGroupIds", "LandmassClassCodes", "LandmassIds"]
+  },
+  "ocean-currents": {
+    "reads": [
+      "ExternalSeaSurfaceForcing",
+      "ExternalUpwelling",
+      "Geothermal",
+      "OceanCurrentStrength",
+      "OceanCurrentX",
+      "OceanCurrentY",
+      "SeaSurfaceAnomaly",
+      "Upwelling",
+      "WaterDepths",
+      "WaterKindCodes"
+    ],
+    "writes": [
+      "OceanCurrentHeat",
+      "OceanCurrentStrength",
+      "OceanCurrentX",
+      "OceanCurrentY",
+      "SeaSurfaceAnomaly",
+      "Upwelling",
+      "WaveExposure"
+    ]
+  },
+  "warmth-sources": {
+    "reads": [
+      "Elevation",
+      "Geothermal",
+      "OceanCurrentHeat",
+      "OceanDistance",
+      "Warmth",
+      "WaterKindCodes"
+    ],
+    "writes": ["Warmth"]
+  },
+  "temperature": {
+    "reads": [
+      "Elevation",
+      "Evapotranspiration",
+      "ExternalHeatForcing",
+      "FogForcing",
+      "Geothermal",
+      "OceanCurrentHeat",
+      "OceanCurrentStrength",
+      "OceanDistance",
+      "SeaSurfaceAnomaly",
+      "Warmth",
+      "WaterKindCodes"
+    ],
+    "writes": ["Seasonality", "Temperature"]
+  },
+  "atmospheric-flow": {
+    "reads": ["Elevation", "UpwindTargets", "WaterKindCodes", "WindX", "WindY"],
+    "writes": [
+      "MoistureBarriers",
+      "PrecipitationBarriers",
+      "UpwindOceanSources",
+      "UpwindTargets",
+      "WindSpeed",
+      "WindX",
+      "WindY"
+    ]
+  },
+  "moisture-transport": {
+    "reads": [
+      "Elevation",
+      "Evapotranspiration",
+      "ExternalHeatForcing",
+      "SeaSurfaceAnomaly",
+      "Stillness",
+      "StormForcing",
+      "Temperature",
+      "UpwindTargets",
+      "Warding",
+      "WaterKindCodes"
+    ],
+    "writes": [
+      "ColumnPrecipitation",
+      "Moisture",
+      "Seasonality",
+      "StormTrack",
+      "Temperature",
+      "UpwindTargets"
+    ]
+  },
+  "precipitation": {
+    "reads": ["ColumnPrecipitation", "FogForcing", "Seasonality", "Temperature"],
+    "writes": ["Rainfall", "Snowfall"]
+  },
+  "sea-ice": {
+    "reads": [
+      "FeatureFlags",
+      "OceanCurrentHeat",
+      "OceanCurrentStrength",
+      "SeaIceSuitability",
+      "Temperature",
+      "WaterKindCodes",
+      "WaveExposure"
+    ],
+    "writes": ["FeatureFlags", "IceThickness", "SeaIceSuitability"]
+  },
+  "runoff": {
+    "reads": [
+      "CrustThickness",
+      "Evapotranspiration",
+      "FireActivity",
+      "FractureConductance",
+      "GrassCover",
+      "IceThickness",
+      "Infiltration",
+      "PeatCarbon",
+      "Rainfall",
+      "RiverWarmth",
+      "RockKindCodes",
+      "RockResistance",
+      "SedimentThickness",
+      "Snowfall",
+      "SoilDepth",
+      "Temperature",
+      "TreeCover",
+      "Warding",
+      "WaterKindCodes",
+      "WetlandCover"
+    ],
+    "writes": ["Runoff"]
+  },
+  "drainage-conditioning": {
+    "reads": ["DrainageRanks", "Elevation", "WaterKindCodes"],
+    "writes": ["DrainageElevations", "DrainageParents", "DrainageRanks"]
+  },
+  "lake-basins": {
+    "reads": [
+      "DrainageElevations",
+      "DrainageParents",
+      "DrainageRanks",
+      "Elevation",
+      "Rainfall",
+      "Runoff",
+      "Snowfall",
+      "Temperature",
+      "WaterKindCodes"
+    ],
+    "writes": [
+      "LakeOutletTargets",
+      "LakeOverflow",
+      "WaterBodyIds",
+      "WaterDepths",
+      "WaterKindCodes",
+      "WaterSurfaceElevations"
+    ]
+  },
+  "drainage-guidance": {
+    "reads": [
+      "CumulativeFluvialErosion",
+      "CumulativeGlacialErosion",
+      "DrainageElevations",
+      "DrainageParents",
+      "DrainageRanks",
+      "Elevation",
+      "WaterKindCodes"
+    ],
+    "writes": ["DrainageGuidanceTargets"]
+  },
+  "flow-routing": {
+    "reads": [
+      "DrainageBasinIds",
+      "DrainageGuidanceTargets",
+      "DrainageParents",
+      "DrainageRanks",
+      "FlowTargets",
+      "LakeOutletTargets",
+      "WaterBodyIds",
+      "WaterKindCodes"
+    ],
+    "writes": ["DrainageBasinIds", "FlowEdges", "FlowTargets"]
+  },
+  "river-network": {
+    "reads": [
+      "DrainageBasinIds",
+      "FlowAccumulation",
+      "FlowTargets",
+      "LakeOutletTargets",
+      "LakeOverflow",
+      "RiverOrders",
+      "RiverSpineEdgeMasks",
+      "Runoff",
+      "Slope",
+      "WaterKindCodes"
+    ],
+    "writes": [
+      "CatchmentArea",
+      "FlowAccumulation",
+      "FlowTargets",
+      "RiverOrders",
+      "RiverSpineEdgeMasks"
+    ]
+  },
+  "river-channel-geometry": {
+    "reads": [
+      "CrustThickness",
+      "DrainageBasinIds",
+      "Elevation",
+      "FireActivity",
+      "FlowAccumulation",
+      "FlowTargets",
+      "FractureConductance",
+      "GrassCover",
+      "IceThickness",
+      "RiverChannelOrders",
+      "RiverChannelStrength",
+      "RiverOrders",
+      "RiverSpineEdgeMasks",
+      "RiverWidth",
+      "RockKindCodes",
+      "RockResistance",
+      "SedimentThickness",
+      "Slope",
+      "SoilDepth",
+      "TreeCover",
+      "Warding",
+      "WaterKindCodes",
+      "WetlandCover"
+    ],
+    "writes": [
+      "RiverChannelOrders",
+      "RiverChannelStrength",
+      "RiverDepth",
+      "RiverOrders",
+      "RiverSpineEdgeMasks",
+      "RiverWidth"
+    ]
+  },
+  "river-floodplains": {
+    "reads": [
+      "CumulativeDeposition",
+      "DrainageBasinIds",
+      "Elevation",
+      "FloodplainIntensity",
+      "FlowAccumulation",
+      "FlowTargets",
+      "RiverChannelOrders",
+      "RiverChannelStrength",
+      "RiverOrders",
+      "Slope",
+      "WaterKindCodes"
+    ],
+    "writes": ["FloodplainIntensity", "RiverChannelStrength", "RiverOrders"]
+  },
+  "river-delta-formation": {
+    "reads": [
+      "BathymetricZoneCodes",
+      "CumulativeFluvialErosion",
+      "CumulativeGlacialErosion",
+      "DeltaIntensity",
+      "DrainageBasinIds",
+      "FlowAccumulation",
+      "FlowTargets",
+      "OceanCurrentStrength",
+      "RiverChannelOrders",
+      "RiverChannelStrength",
+      "RiverOrders",
+      "WaterKindCodes",
+      "WaveExposure"
+    ],
+    "writes": [
+      "DeltaIntensity",
+      "FloodplainIntensity",
+      "FlowTargets",
+      "RiverChannelOrders",
+      "RiverChannelStrength"
+    ]
+  },
+  "land-ice-mass-balance": {
+    "reads": [
+      "Elevation",
+      "Geothermal",
+      "IceBalance",
+      "IcePersistence",
+      "IceThickness",
+      "MaximumIceThickness",
+      "Moisture",
+      "Snowfall",
+      "Temperature",
+      "WaterKindCodes",
+      "WaterSurfaceElevations"
+    ],
+    "writes": ["IceBalance", "IceRetreat", "IceThickness", "MaximumIceThickness"]
+  },
+  "ice-flow": {
+    "reads": [
+      "Elevation",
+      "GroundedIce",
+      "IceFlowTargets",
+      "IceFlux",
+      "IceThickness",
+      "MaximumGroundedIceFlux",
+      "MaximumIceFlux",
+      "WaterDepths",
+      "WaterKindCodes",
+      "WaterSurfaceElevations"
+    ],
+    "writes": [
+      "GroundedIce",
+      "IceFlowTargets",
+      "IceFlux",
+      "MaximumGroundedIceFlux",
+      "MaximumIceFlux"
+    ]
+  },
+  "glacial-meltwater": {
+    "reads": ["Geothermal", "IceRetreat", "IceThickness", "Temperature", "WaterKindCodes"],
+    "writes": ["GlacialMeltwater"]
+  },
+  "glacial-runoff": {
+    "reads": ["GlacialMeltwater", "Runoff", "WaterKindCodes"],
+    "writes": ["Runoff"]
+  },
+  "glacial-landforms": {
+    "reads": [
+      "CumulativeGlacialDeposition",
+      "CumulativeGlacialErosion",
+      "Elevation",
+      "FlowAccumulation",
+      "MaximumGroundedIceFlux",
+      "MaximumIceThickness",
+      "RiverOrders",
+      "WaterKindCodes"
+    ],
+    "writes": ["LandformCodes", "MaximumIceThickness"]
+  },
+  "landform-classification": {
+    "reads": [
+      "CumulativeFluvialErosion",
+      "CumulativeGlacialDeposition",
+      "CumulativeGlacialErosion",
+      "Elevation",
+      "FlowAccumulation",
+      "ImpactExcavation",
+      "ImpactRimUplift",
+      "LandformCodes",
+      "RidgeInfluence",
+      "RiverOrders",
+      "Slope",
+      "TectonicActivityHistory",
+      "Uplift",
+      "WaterKindCodes"
+    ],
+    "writes": ["Elevation", "LandformCodes", "Slope"]
   }
 }

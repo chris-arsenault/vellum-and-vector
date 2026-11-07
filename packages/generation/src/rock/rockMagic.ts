@@ -62,10 +62,16 @@ const veinFrom = 450,
   sinterMetres = 120,
   corefallMetres = 60,
   coreFrom = 500;
-function fireInRock(map: PhysicalField, field: MagicField, cell: number, seed: number) {
+function fireInRock(
+  map: PhysicalField,
+  field: MagicField,
+  cell: number,
+  seed: number,
+  span: number
+) {
   // A sealed conduit is a place, not a share of the ground: it sinters wherever it is.
   if (field.sealed.get(cell) > 0 && layerKind(map, cell, 0) !== rockCatalogue.sinter.code)
-    addRock(map, cell, "sinter", sinterMetres);
+    addRock(map, cell, "sinter", sinterMetres * span);
   if (!reaches(map, field, cell, seed)) return;
   const heat = field.intensity.get(cell);
   if (heat >= veinFrom && map.FractureConductance.get(cell) > 0) {
@@ -73,7 +79,7 @@ function fireInRock(map: PhysicalField, field: MagicField, cell: number, seed: n
     if (heat >= veinSurfacesFrom) changeLayer(map, cell, 0, rockCatalogue.veinrock);
   }
   const fallen = field.originSources.fallen?.get(cell) ?? 0;
-  if (fallen >= coreFrom) addRock(map, cell, "corefall", (corefallMetres * fallen) / 1000);
+  if (fallen >= coreFrom) addRock(map, cell, "corefall", (corefallMetres * span * fallen) / 1000);
 }
 /** Aurora rots rock open to the sky, ice shields what it covers, and charge grows crystal in it. */
 const rotFrom = 250,
@@ -112,16 +118,29 @@ const rootFrom = 350,
   tufaMetres = 18,
   dissolveFrom = 200,
   dissolveMetres = 120;
-function greenwoodInRock(map: PhysicalField, field: MagicField, cell: number, seed: number) {
+function greenwoodInRock(
+  map: PhysicalField,
+  field: MagicField,
+  cell: number,
+  seed: number,
+  span: number
+) {
   if (!onLand(map, cell) || !reaches(map, field, cell, seed)) return;
   const growth = field.intensity.get(cell),
-    solubility = rockKindOfCode(layerKind(map, cell, 0)).solubility;
+    solubility = rockKindOfCode(layerKind(map, cell, 0)).solubility,
+    above = Math.max(0, map.Elevation.get(cell) - map.EffectiveSeaLevel);
+  // What water dissolves goes down to where the water does, and no further.
   if (growth >= dissolveFrom && solubility > 0)
-    erode(map, cell, units((dissolveMetres * solubility * growth) / 1000), "greenwood");
+    erode(
+      map,
+      cell,
+      Math.min(above, units((dissolveMetres * span * solubility * growth) / 1000)),
+      "greenwood"
+    );
   if (growth >= rootFrom)
     alterTop(map, cell, rockCatalogue.rootstone, units((rootMetres * growth) / 1000));
   if ((field.originSources.spring?.get(cell) ?? 0) >= springFrom)
-    addRock(map, cell, "tufa", tufaMetres);
+    addRock(map, cell, "tufa", tufaMetres * span);
 }
 /** Salt held in a basin is a real bed in the column: it can be buried, and uncovered again. */
 const bedFrom = 0.2,
@@ -211,7 +230,7 @@ const systemsOf = (state: GenerationState) => {
   };
 };
 /** Once per epoch, after the systems and their meetings have acted on the ground. */
-export function magicOnTheColumn(state: GenerationState, seed: number) {
+export function magicOnTheColumn(state: GenerationState, seed: number, span: number) {
   const map = state.physical!.map,
     systems = systemsOf(state),
     leaking = state.physical!.magic!.fields.filter(
@@ -223,10 +242,10 @@ export function magicOnTheColumn(state: GenerationState, seed: number) {
       hallowedInRock(map, cell);
       continue;
     }
-    for (const field of systems.fire) fireInRock(map, field, cell, seed);
+    for (const field of systems.fire) fireInRock(map, field, cell, seed, span);
     for (const field of systems.aurora) auroraInRock(map, field, cell, seed);
     for (const field of systems.pressure) pressureInRock(map, field, cell, seed);
-    for (const field of systems.greenwood) greenwoodInRock(map, field, cell, seed);
+    for (const field of systems.greenwood) greenwoodInRock(map, field, cell, seed, span);
     for (const field of systems.salt) saltInRock(map, field, cell, seed);
     for (const field of systems.tearing) veilInRock(map, field, cell, seed);
   }

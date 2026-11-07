@@ -80,7 +80,7 @@ export function depositShoreLoads(
     depositCoastalVolume(
       map,
       c,
-      depositionTargets(map, frame, i, c.Profile.CoastalDepositionReach, oceanOnly),
+      depositionTargets(map, frame, i, c.Profile.CoastalDepositionReach * c.Span, oceanOnly),
       load
     );
   }

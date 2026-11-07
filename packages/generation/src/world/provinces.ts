@@ -1,6 +1,6 @@
 // TectonicProvinceLayer assignment and boundary stress, Canonry 0f62584c.
 import type { PhysicalContext } from "./context";
-import type { PhysicalField } from "./field";
+import { crustForming, type PhysicalField } from "./field";
 import { clamp, round } from "./math";
 import { meshNoise as fractalNoise } from "./noise";
 import type { ProvinceSite } from "./provinceSites";
@@ -237,7 +237,8 @@ function assignTriangle(
     fractalNoise(map.mesh, x, y, seed ^ 0x62bd, p.ContinentalWarpScale, 3) *
     p.ContinentalWarpStrength;
   const s = selectSites(sites, x + wx, y + wy, map.mesh),
-    held = context.IsEvolutionEpoch && holdToContinent(map, sites, s, i, x + wx, y + wy),
+    forming = crustForming(map),
+    held = !forming && holdToContinent(map, sites, s, i, x + wx, y + wy),
     site = sites[s.nearest];
   boundarySelection(map, s, x + wx, y + wy);
   map.CrustProvinceIds.set(i, s.nearest + 1);
@@ -252,14 +253,13 @@ function assignTriangle(
     site.assembly > 0
       ? Math.max(affinity, p.ContinentalCrustPotentialFloor)
       : Math.min(affinity, p.OceanicCrustPotentialCeiling);
-  if (!context.IsEvolutionEpoch)
-    map.CrustAssemblyIds.set(i, initialAssembly(sites, s, site, affinity));
+  if (forming) map.CrustAssemblyIds.set(i, initialAssembly(sites, s, site, affinity));
   map.CrustAssemblySeparation.set(
     i,
     unit(clamp(map.CrustRiftStrain.get(i), 0, 1) * p.ContinentalAssemblySeparationDepth)
   );
   map.CrustBasePotential.set(i, unit(potential));
-  if (!context.IsEvolutionEpoch) map.CrustContinentalFraction.set(i, unit(affinity));
+  if (forming) map.CrustContinentalFraction.set(i, unit(affinity));
   map.CrustTypeCodes.set(i, map.CrustContinentalFraction.get(i) >= 500 ? 2 : 1);
   assignBoundary(map, i, sites, s, context, held);
 }

@@ -1,4 +1,4 @@
-// GlacialDepositionLayer, GlacialMeltwaterLayer and GlacialRunoffLayer, Canonry 0f62584c.
+import { respond } from "../coupling/answers";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, truncate } from "./math";
@@ -64,10 +64,8 @@ export function glacialMeltwater(map: PhysicalField, c: PhysicalContext) {
     const basal = truncate(
       (truncate((ice * map.Geothermal.get(i)) / 1000) * p.BasalMeltRunoffStrength) / 1000
     );
-    const retreat = truncate(
-      (Math.max(0, map.MaximumIceThickness.get(i) - ice) * p.GlacialRetreatRunoffStrength) / 1000
-    );
-    map.GlacialMeltwater.set(i, clamp(surface + basal + retreat, 0, 1000));
+    const retreat = truncate((map.IceRetreat.get(i) * p.GlacialRetreatRunoffStrength) / 1000);
+    map.GlacialMeltwater.set(i, surface + basal + retreat);
   }
 }
 export function glacialRunoff(map: PhysicalField, c: PhysicalContext) {
@@ -76,11 +74,16 @@ export function glacialRunoff(map: PhysicalField, c: PhysicalContext) {
       i,
       map.WaterKindCodes.get(i) !== 0
         ? 0
-        : clamp(
-            map.Runoff.get(i) +
-              truncate((map.GlacialMeltwater.get(i) * c.HydrologyStrength) / 1000),
+        : Math.max(
             0,
-            c.Profile.PrecipitationCeiling
+            map.Runoff.get(i) + truncate((map.GlacialMeltwater.get(i) * c.HydrologyStrength) / 1000)
           )
     );
 }
+/** Ice melting off the land sends its water down with the rain's. */
+respond({
+  key: "discharge",
+  by: "ice melt",
+  reads: ["GlacialMeltwater"],
+  add: (map, i, { Profile: p }) => map.GlacialMeltwater.get(i) / p.FluvialReferenceRunoff,
+});

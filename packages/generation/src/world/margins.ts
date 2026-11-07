@@ -1,8 +1,7 @@
 // TectonicMarginLayer.cs and TectonicEpochLayer.cs, Canonry 0f62584c.
-import type { PhysicalField } from "./field";
+import { crustForming, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round } from "./math";
-import { hashUnit } from "./noise";
 import { metricSearch } from "./metricSearch";
 import { tectonicOceanMaturityMyr } from "./tectonicControls";
 import { workingArray, releaseWorking } from "./physicalNumerics";
@@ -67,18 +66,17 @@ function assignMarginsAndAge(
       i,
       code === 1 ? 2 : code === 2 ? 3 : code === 3 ? 4 : map.CrustTypeCodes.get(i) === 2 ? 1 : 0
     );
-    ageTriangle(map, context, i, spreading.get(i), scale, increment);
+    ageTriangle(map, i, spreading.get(i), scale, increment);
   }
 }
 function ageTriangle(
   map: PhysicalField,
-  context: PhysicalContext,
   i: number,
   distance: number,
   scale: number,
   increment: number
 ) {
-  if (!context.IsEvolutionEpoch)
+  if (crustForming(map))
     map.CrustAge.set(
       i,
       round(Math.sqrt(distance === unreachable ? 1 : clamp(distance / scale, 0, 1)) * 1000)
@@ -87,23 +85,13 @@ function ageTriangle(
   else if (map.CrustContinentalFraction.get(i) < 500)
     map.CrustAge.set(i, Math.min(1000, map.CrustAge.get(i) + increment));
 }
-export function tectonicEpoch(map: PhysicalField, context: PhysicalContext) {
-  if (!context.IsEvolutionEpoch)
-    throw new Error("Tectonic epoch activity requires an evolution epoch.");
-  const persistence = context.Profile.TectonicBoundaryPersistence / 1000;
+export function tectonicEpoch(map: PhysicalField) {
+  // A boundary works as hard as its plates' relative motion, which is already in its strain.
   for (let i = 0; i < map.mesh.count; i++) {
     const code = map.InitialTectonicBoundaryCodes.get(i),
-      strain = map.InitialTectonicStrain.get(i);
-    if (code === 0 || strain === 0) {
-      map.TectonicBoundaryCodes.set(i, 0);
-      map.TectonicStrain.set(i, 0);
-      continue;
-    }
-    const pairActivity = hashUnit(context.Seed ^ 0x58d7, map.TectonicBoundaryPairIds.get(i), code);
-    map.TectonicBoundaryCodes.set(i, code);
-    map.TectonicStrain.set(
-      i,
-      round(clamp(strain * (persistence + (1 - persistence) * pairActivity), 0, 1000))
-    );
+      strain = map.InitialTectonicStrain.get(i),
+      active = code !== 0 && strain !== 0;
+    map.TectonicBoundaryCodes.set(i, active ? code : 0);
+    map.TectonicStrain.set(i, active ? strain : 0);
   }
 }

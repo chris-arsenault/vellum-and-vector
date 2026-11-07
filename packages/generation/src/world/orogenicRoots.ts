@@ -1,7 +1,12 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
-import { adjustCrustColumn, arcCrustYield, initializeCrustColumns } from "./crustTransport";
+import {
+  addContinentalRoot,
+  adjustCrustColumn,
+  arcCrustYield,
+  initializeCrustColumns,
+} from "./crustTransport";
 import { constructionWeight, crossSection } from "./orogenicShape";
 import { crustHeight, maximumCrustThickness, thickness, units } from "./math";
 import { smoothMetric } from "./metricSmoothing";
@@ -10,8 +15,7 @@ export function addRoot(map: PhysicalField, cell: number, volume: number) {
   const before = map.CrustThickness.get(cell) / 1024,
     fraction = map.CrustContinentalFraction.get(cell) / 1000,
     column = (volume * 1024) / map.mesh.area(cell);
-  map.CrustThickness.add(cell, column);
-  map.CrustContinentalColumn.add(cell, column);
+  addContinentalRoot(map, cell, column);
   const nextFraction = map.CrustContinentalColumn.get(cell) / map.CrustThickness.get(cell);
   map.CrustContinentalFraction.set(cell, Math.round(nextFraction * 1000));
   return units(crustHeight(before + column / 1024, nextFraction) - crustHeight(before, fraction));
@@ -148,9 +152,13 @@ export function crustFlow(
       const fraction = map.CrustContinentalFraction.get(i) / 1000,
         over =
           map.CrustThickness.get(i) / 1024 - (1000 + 3000 * fraction + (squeezed(i) ? bears : 0));
-      return continent.get(i) && over > 0 ? (over * over) / (over + ease) : 0;
+      // The thicker it stands the faster it goes, and what stays after one span flows again in the next.
+      return continent.get(i) && over > 0
+        ? over * (1 - (1 - over / (over + ease)) ** context.Span)
+        : 0;
     }),
-    spread = smoothMetric(map, flowing, length, continent);
+    // How far it spreads grows with the square root of how long it has, as anything spreading does.
+    spread = smoothMetric(map, flowing, length * Math.sqrt(context.Span), continent);
   for (let i = 0; i < map.mesh.count; i++) {
     const change = spread.get(i) - flowing.get(i);
     if (change !== 0)

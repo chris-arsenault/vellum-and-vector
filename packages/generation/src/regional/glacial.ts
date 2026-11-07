@@ -1,3 +1,4 @@
+import { deposit, looseTo } from "../rock/groundLedger";
 import { units } from "../world/math";
 import {
   isContent,
@@ -246,9 +247,11 @@ function cutTroughs(
     if (lowering[i] > 0.25 * depth || (lowering[i] > 0 && flux[i] >= cirqueFlux)) basin[i] = 1;
     if (sea[i] || !isContent(mesh, i)) continue;
     h[i] -= lowering[i] + flank[i];
-    map.SedimentThickness.set(
+    looseTo(
+      map,
       i,
-      Math.max(0, natural.get(i) + Math.round(applied.appliedTo("SedimentThickness", i)))
+      Math.max(0, natural.get(i) + Math.round(applied.appliedTo("SedimentThickness", i))),
+      "regional"
     );
     map.CumulativeGlacialErosion.set(i, erosion.get(i) + units(lowering[i] + flank[i]));
   }
@@ -288,7 +291,7 @@ function leaveMoraines(
     if (j < 0 || sea[j] || flux[j] > 0) continue;
     const moraine = moraineShare * depth * clamp(flux[i] / cirqueFlux);
     h[j] += moraine;
-    map.SedimentThickness.add(j, units(moraine));
+    deposit(map, j, units(moraine), "regional");
   }
 }
 

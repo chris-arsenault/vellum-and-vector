@@ -4,8 +4,12 @@ import { depositShoreLoads } from "../world/coastalEvolution";
 import { coastalFrame } from "../world/coastalFrame";
 import { physicalContext } from "../world/context";
 import { createField, type PhysicalField } from "../world/field";
+import { glacialMeltwater } from "../world/glacialEvolution";
 import { landIce } from "../world/landIce";
-import { elevationLimit, units } from "../world/math";
+import { crustFlow } from "../world/orogenicRoots";
+import { crustPerRock, elevationLimit, units } from "../world/math";
+import { allSteps } from "../world/physicalSteps";
+import { crustalSupport } from "../world/support";
 import { workingArray } from "../world/physicalNumerics";
 import { rebuild } from "../world/surface";
 import { volcanicConstruction } from "../world/volcanism";
@@ -16,6 +20,7 @@ import { setLayer } from "../rock/rockColumn";
 import { outsideWaves } from "./coast";
 import { ice } from "./ice";
 import { actBy } from "./processCatalogue";
+import { slopes } from "./slopes";
 import { streams } from "./streams";
 
 /** What stops each process is the material there and how the process works, not a set amount. */
@@ -113,20 +118,92 @@ it("piles ice higher the further it stands from its edge, and thinner near it", 
   expect(map.IceThickness.get(margin)).toBeGreaterThan(0);
   expect(map.IceThickness.get(inland)).toBeGreaterThan(2 * map.IceThickness.get(margin));
 });
+it("gives meltwater from ice lost this pass, and none from a glacier long gone", () => {
+  const map = land(() => 500);
+  map.Temperature.fill(400);
+  map.MaximumIceThickness.fill(900);
+  map.IceRetreat.set(0, 300);
+  glacialMeltwater(map, context());
+  expect(map.GlacialMeltwater.get(0)).toBeGreaterThan(0);
+  expect(map.GlacialMeltwater.get(1)).toBe(0);
+});
+it("stands the same slope after failing, whatever size the cells are", () => {
+  const steepness = (cell: number) => {
+    const map = createField(createWorldMesh([-300_000, -300_000, 300_000, 300_000], 4000, cell));
+    map.EffectiveSeaLevel = 0;
+    for (let i = 0; i < map.mesh.count; i++) {
+      setLayer(map, i, 0, rockCatalogue.schist.code, units(30_000));
+      map.RockKindCodes.set(i, rockCatalogue.schist.code);
+      map.RockResistance.set(i, rockCatalogue.schist.resistance);
+      map.BedrockElevation.set(i, units(map.mesh.x(i) > 0 ? 4000 : 500));
+      rebuild(map, i);
+    }
+    actBy(slopes)(map, context());
+    let worst = 0;
+    for (let i = 0; i < map.mesh.count; i++)
+      for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+        const j = map.mesh.neighbor(i, edge);
+        if (j < 0) continue;
+        const hold = map.mesh.spacing / Math.min(1000, map.mesh.spacing);
+        worst = Math.max(
+          worst,
+          ((map.Elevation.get(i) - map.Elevation.get(j)) / 1024) * (1 / hold)
+        );
+      }
+    return worst;
+  };
+  // What is left stands near the steepest the ground holds over one hillslope, at either size.
+  expect(steepness(10_000)).toBeLessThan(1200);
+  expect(steepness(25_000)).toBeLessThan(1200);
+});
+it("lets crust flow further and more of it over a longer span", () => {
+  const spread = (span: number) => {
+    const map = land(() => 500, 4000);
+    for (let i = 0; i < map.mesh.count; i++)
+      if (Math.abs(map.mesh.x(i)) < 60_000) map.CrustThickness.set(i, units(9000));
+    const c = { ...context(), Span: span };
+    crustFlow(map, c, () => false);
+    return map.CrustThickness.get(map.mesh.cellAt(0, 0)) / 1024;
+  };
+  expect(spread(2)).toBeLessThan(spread(1));
+  expect(spread(1)).toBeLessThan(9000);
+});
+it("counts what ice weighs in the crust's support only when the step is told to", () => {
+  const target = (iceLoad: boolean) => {
+    const map = land(() => 1000),
+      step = allSteps.find(([name]) => name === "crustal-support")!;
+    map.IceThickness.set(0, 2000);
+    map.GroundedIce.set(0, 1);
+    step[2](map, { ...context(), IceLoad: iceLoad });
+    return map.CrustSupportTarget.get(0);
+  };
+  expect(target(true)).toBeLessThan(target(false));
+});
 it("stands no rock without crust to stand it from, and takes what it stands out of the crust", () => {
   const none = land(() => 1000, 4000),
     some = land(() => 1000, 4300);
   expect(raiseFromCrust(none, 0, units(1000), "test")).toBe(0);
-  expect(raiseFromCrust(some, 0, units(1000), "test")).toBe(units(300));
-  expect(some.CrustThickness.get(0)).toBe(units(4000));
-  expect(some.SurfaceRockLoad.get(0)).toBe(units(300));
+  const stood = raiseFromCrust(some, 0, units(5000), "test") / 1024;
+  expect(stood).toBeCloseTo(300 / crustPerRock(1), 3);
+  expect(stood).toBeLessThan(5000);
+  expect(some.CrustThickness.get(0) / 1024).toBeCloseTo(4000, 3);
+  expect(some.SurfaceRockLoad.get(0) / 1024).toBeCloseTo(stood, 3);
+});
+it("leaves the ground floating where it was when rock stands up out of its own crust", () => {
+  const map = land(() => 1000, 5000),
+    context_ = context();
+  crustalSupport(map, context_, false);
+  const before = map.CrustSupportTarget.get(0),
+    stood = raiseFromCrust(map, 0, units(500), "test");
+  crustalSupport(map, context_, false);
+  expect((map.CrustSupportTarget.get(0) - before + stood) / 1024).toBeCloseTo(0, 0);
 });
 it("keeps rock load from falling below what wear took out of crust", () => {
   const map = land(() => 1000, 4100);
   raiseRock(map, 0, units(50), "test", "crust");
   // 50 m of pile, 100 m of spare crust, and the rest is a hole that nothing lifts back.
   erode(map, 0, units(5000), "test");
-  const taken = 50 + 100 / 0.8;
+  const taken = 50 + 100 / crustPerRock(1) / 0.8;
   expect(map.SurfaceRockLoad.get(0) / 1024).toBeCloseTo(50 - taken, 3);
   expect(map.CrustThickness.get(0)).toBe(units(4000));
   erode(map, 0, units(5000), "test");
@@ -164,7 +241,7 @@ it("grows a vent that stays put by the volume it is fed, not a set height each p
 it("fills the sea with what waves carry and no higher", () => {
   const map = land((x) => (x < 0 ? -2 : 500)),
     c = context(),
-    frame = coastalFrame(map, c.Profile.CoastalActiveWidth),
+    frame = coastalFrame(map, c.Profile.CoastalActiveWidth, map.WaveExposure),
     loads = workingArray(map, "float64", "test:loads"),
     i = map.mesh.cellAt(25_000, 0);
   map.WaveExposure.fill(100);

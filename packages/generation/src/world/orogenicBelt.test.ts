@@ -68,6 +68,8 @@ function belt(boundary = 1) {
 function runPass(map: PhysicalField, pass: number) {
   const profile = atlasPhysicalProfile();
   map.LastPlateDriftStep = pass === 0 ? 0 : drift;
+  // The first pass is the world forming; after it, plates carry the crust.
+  map.CrustFormed = pass > 0;
   orogenicConstruction(
     map,
     pass === 0
@@ -192,7 +194,11 @@ it("builds an arc from root crust where a belt has no continent to build on", ()
   const before = held();
   runPass(map, 1);
   expect(held()).toBeLessThan(before * 0.8);
-  expect(map.CrustThickness.get(map.mesh.cellAt(0, 0))).toBeGreaterThan(units(1000));
+  // What the reserve gave now stands as thicker crust or as rock on it, somewhere along the belt.
+  let built = 0;
+  for (let i = 0; i < map.mesh.count; i++)
+    built += map.CrustThickness.get(i) - units(1000) + Math.max(0, map.SurfaceRockLoad.get(i));
+  expect(built).toBeGreaterThan(0);
 });
 it("settles root crust stranded on ground no convergent belt reaches", () => {
   const map = belt(2),

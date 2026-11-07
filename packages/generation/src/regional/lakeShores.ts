@@ -1,3 +1,4 @@
+import { standGround } from "../rock/groundLedger";
 import { clearWaterSurface } from "../world/field";
 import { units } from "../world/math";
 import { meshWindowCells } from "../world/meshWindow";
@@ -33,9 +34,7 @@ function bodiesOf(state: RegionalState) {
   return bodies;
 }
 function setGround(state: RegionalState, cell: number, value: number) {
-  const map = state.physical.map;
-  map.Elevation.set(cell, value);
-  map.BedrockElevation.set(cell, value - map.SedimentThickness.get(cell));
+  standGround(state.physical.map, cell, value, "regional");
 }
 /** The centre of a lake's water and the radius of a circle of its area. */
 function circleOf(state: RegionalState, cells: readonly number[]) {

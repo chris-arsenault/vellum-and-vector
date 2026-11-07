@@ -3,7 +3,7 @@ import type { PhysicalField } from "./field";
 import { alterRock } from "../rock/rockField";
 import { clamp, round, units } from "./math";
 import { Feature } from "./codes";
-import { displaceGround } from "../rock/groundLedger";
+import { displaceGround, meltIce } from "../rock/groundLedger";
 import { generationBindings } from "../generationBindings";
 import { magicBudget, originStocks, reservoirStock } from "./magicState";
 import { advanceStocks } from "./magicStocks";
@@ -59,18 +59,16 @@ export function magicThermalFeedback(state: GenerationState) {
     const previous = magic.heat.get(i),
       rounded = round(heat);
     magic.heat.set(i, rounded);
+    // The heat is forcing on the climate, which warms the air by it when it next works out the
+    // temperature; nothing here sets the temperature itself.
     map.ExternalHeatForcing.add(i, rounded - previous);
-    map.Temperature.set(i, clamp(map.Temperature.get(i) - previous + rounded, 0, 1000));
     // Melt is a removal, not a level: within one epoch each cell loses at most the largest
     // melt any evaluation asked for, so the climate and post-glacial passes do not both melt.
-    const ice = map.IceThickness.get(i),
-      owed = Math.min(ice, Math.max(0, round(melt) - magic.melt.get(i)));
+    // Ice melted from below pools under the glacier, and the runoff pass cuts its outburst
+    // channels below the margin.
+    const owed = Math.max(0, round(melt) - magic.melt.get(i));
     magic.melt.set(i, Math.max(magic.melt.get(i), round(melt)));
-    map.IceThickness.set(i, Math.max(0, ice - owed));
-    // Ice melted from below pools under the glacier and leaves as meltwater: the runoff
-    // pass cuts its outburst channels below the margin.
-    if (owed > 0)
-      map.GlacialMeltwater.set(i, clamp(map.GlacialMeltwater.get(i) + round(owed), 0, 1000));
+    meltIce(map, i, owed, "fire", true);
   }
 }
 /**
@@ -242,9 +240,9 @@ export function magicOceanFeedback(state: GenerationState) {
         i,
         clamp(round(map.Upwelling.get(i) + upwelling - magic.upwelling.get(i)), 0, 1000)
       );
+      // The sea's warmth comes from its surface anomaly when the climate next works it out.
       const delta = seaSurface - magic.seaSurface.get(i);
       map.SeaSurfaceAnomaly.set(i, round(map.SeaSurfaceAnomaly.get(i) + delta));
-      map.Temperature.set(i, clamp(round(map.Temperature.get(i) + delta), 0, 1000));
     }
     magic.upwelling.set(i, upwelling);
     magic.seaSurface.set(i, seaSurface);

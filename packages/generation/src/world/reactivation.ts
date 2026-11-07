@@ -2,7 +2,15 @@ import type { Band } from "@atlas/domain";
 import type { PhysicalContext } from "./context";
 import { adjustCrustColumn } from "./crustTransport";
 import type { PhysicalField } from "./field";
-import { buoyancy, clamp, minimumCrustThickness, thickness, toUnits, units } from "./math";
+import {
+  buoyancy,
+  clamp,
+  crustPerRock,
+  minimumCrustThickness,
+  thickness,
+  toUnits,
+  units,
+} from "./math";
 import { metricSearch } from "./metricSearch";
 import { addRoot } from "./orogenicRoots";
 import { releaseWorking, workingArray } from "./physicalNumerics";
@@ -159,7 +167,8 @@ const crustFor = (map: PhysicalField, i: number, metres: number) =>
 const rootVolume = (map: PhysicalField, i: number, column: number) => column * map.mesh.area(i);
 /** All a seam's rise takes, crust and rock together, in metres of column. */
 const riseTakes = (map: PhysicalField, i: number, metres: number) =>
-  crustFor(map, i, metres) + metres * surfaceShare;
+  crustFor(map, i, metres) +
+  metres * surfaceShare * crustPerRock(map.CrustContinentalFraction.get(i) / 1000);
 /** Crust a cell can give up to a shortening plate: all its column above the thinnest crust can be. */
 const givenToShortening = (map: PhysicalField, i: number) =>
   Math.max(0, map.CrustThickness.get(i) - units(minimumCrustThickness));

@@ -22,6 +22,13 @@ export const buoyancy = (fraction: number) => 300 + 400 * clamp(fraction, 0, 1);
 // Rock on the crust sinks by about its density over the mantle's. A strong plate carries a load
 // narrower than the flexure length, so narrow ranges stand and broad plateaus sink.
 export const rockLoadResponsePerMille = 800;
+/**
+ * How much of the model's crust column weighs the same as a metre of rock. A unit of column lifts the
+ * ground by its buoyancy and a metre of rock presses it down by the load response, so moving rock
+ * between the two by this measure leaves what the ground floats at as it was.
+ */
+export const crustPerRock = (fraction: number) =>
+  (1 - rockLoadResponsePerMille / 1000) / (buoyancy(fraction) / 1000);
 // Metres of the model's crust column. Continental foundation is 4,000; buoyancy lifts each
 // metre above it by 0.7, so the ceiling bounds isostatic height at about 7,200 m (ADR 0005 plan).
 export const minimumCrustThickness = 800;

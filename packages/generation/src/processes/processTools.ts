@@ -9,8 +9,6 @@ import { resolveLandTargets } from "../world/flowGuidance";
 import { iceCanCut, refreshGrounding, slidingSpeed } from "../world/glacierSurface";
 import { releaseWorking, workingArray } from "../world/physicalNumerics";
 import type { PhysicalProfile } from "../world/profile";
-import type { FlowCause } from "../coupling/flows";
-import { settle, shed, weatherRock } from "../rock/groundLedger";
 import { hillslopeFlux } from "./slopeFlux";
 
 /**
@@ -21,12 +19,6 @@ export interface ProcessTools {
   /** A working band of this map's cells, cleared, to hand back through `release`. */
   scratch(name: string): Band;
   release(...bands: Band[]): void;
-  /** Failed or crept ground leaves a cell by volume. */
-  shed(i: number, volume: number, cause: FlowCause): void;
-  /** Ground that moved comes to rest on a cell by volume. */
-  settle(i: number, volume: number): void;
-  /** Rock turns to loose cover where it stands. */
-  weather(i: number, amount: number, cause: FlowCause): void;
   /** What fails between cells this pass: `cuts` to shed and `fills` to settle, by volume. */
   slopeFailure(settings: PhysicalProfile): { cuts: Band; fills: Band };
   /** Works out afresh where water drains to, as the land stands now. */
@@ -41,8 +33,8 @@ export interface ProcessTools {
   iceCanCut(i: number, settings: PhysicalProfile): number;
   /** Works out afresh which ice stands on its bed. */
   refreshGrounding(settings: PhysicalProfile): void;
-  /** The shore waves reach, from the sea's exposure or the given forcing. */
-  shoreFrame(width: number, forcing?: Band): CoastalFrame;
+  /** The shore waves reach, from the energy of the waves at sea or the given forcing on land. */
+  shoreFrame(width: number, waves: Band, forcing?: Band): CoastalFrame;
   /** Waves take a cut off a cell, and say the volume it comes to. */
   coastCut(i: number, cut: number): number;
   /** What waves took comes to rest where the shore shelters it, in what room it has. */
@@ -58,9 +50,6 @@ export interface ProcessTools {
 export const toolsFor = (map: PhysicalField): ProcessTools => ({
   scratch: (name) => workingArray(map, "float64", name).fill(0),
   release: (...bands) => releaseWorking(map, ...bands),
-  shed: (i, volume, cause) => shed(map, i, volume, cause),
-  settle: (i, volume) => settle(map, i, volume),
-  weather: (i, amount, cause) => weatherRock(map, i, amount, cause),
   slopeFailure: (settings) => hillslopeFlux(map, settings),
   conditionDrainage: (context) => drainageConditioning(map, context),
   landTargets: (context) => resolveLandTargets(map, context),
@@ -68,7 +57,7 @@ export const toolsFor = (map: PhysicalField): ProcessTools => ({
   iceSpeed: (i) => slidingSpeed(map, i),
   iceCanCut: (i, settings) => iceCanCut(map, i, settings),
   refreshGrounding: (settings) => refreshGrounding(map, settings),
-  shoreFrame: (width, forcing) => coastalFrame(map, width, forcing),
+  shoreFrame: (width, waves, forcing) => coastalFrame(map, width, waves, forcing),
   coastCut: (i, cut) => recordCoastalCut(map, i, cut),
   depositShoreLoads: (context, frame, loads, oceanOnly) =>
     depositShoreLoads(map, context, frame, loads, oceanOnly),

@@ -1,4 +1,5 @@
 import type { Band } from "@atlas/domain";
+import { standGround } from "../rock/groundLedger";
 import { physicalContext } from "../world/context";
 import { releaseWorking } from "../world/physicalNumerics";
 import { rockColumnFields } from "../rock/rockColumn";
@@ -57,8 +58,8 @@ function keepPlains(state: RegionalState, before: Float64Array, column: readonly
     rugged = ruggedness(state, state.regional.network!.base);
   for (let i = 0; i < before.length; i++) {
     if (map.mesh.membership(i) !== 1) continue;
-    map.Elevation.set(i, Math.round(before[i] + rugged[i] * (map.Elevation.get(i) - before[i])));
-    map.BedrockElevation.set(i, map.Elevation.get(i) - map.SedimentThickness.get(i));
+    const kept = Math.round(before[i] + rugged[i] * (map.Elevation.get(i) - before[i]));
+    standGround(map, i, kept, "regional");
     if (rugged[i] < plainFrom) keptRock.forEach((name, n) => map[name].set(i, column[n].get(i)));
   }
 }

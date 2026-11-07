@@ -77,11 +77,13 @@ its own processes now. Do not copy Canonry processes in, and do not keep a value
 step because Canonry had it. Choose fidelity from the product's map scale and
 plausibility requirements.
 
-A world step declares the bands it needs and writes in `world/physicalSteps.ts`. A step
-that needs a band runs only if a selected step wrote it earlier or the map inherited it;
-nothing says whether a written band is still right, because the sequence's order is what
-keeps it so. The architecture check holds those lists and every process's reach to what
-the code does.
+Every process in a world's history is one entry in `processes/`, saying what it needs,
+provides, asks and moves. A step in `world/sequence.ts` is a name, a seed salt and the
+processes it runs. To add a process, write its entry, list it in `processCatalogue.ts` and
+give it a place in the sequence; `make process-bands` then records what a whole-field
+process reaches. A step that needs a band runs only if a selected step wrote it earlier or
+the map inherited it; nothing says whether a written band is still right, because the
+sequence's order is what keeps it so. The architecture check holds all of this to the code.
 
 Do not trace numerical accuracy or reproducibility: no fingerprints, exact replay,
 byte comparison or closure checks. The generator is being changed on purpose.

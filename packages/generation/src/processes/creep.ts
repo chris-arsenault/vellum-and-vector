@@ -49,19 +49,24 @@ export const creep = defineProcess({
   statement:
     "Loose cover moves downhill on any slope, faster the steeper it is, slower under roots, which rounds ranges off and fills the low ground.",
   reads,
-  asks: [],
-  moves: [["loose", "loose"]],
+  asks: ["rootHold"],
+  moves: [
+    ["loose", "load"],
+    ["load", "loose"],
+  ],
   settings: slopeSettings,
   // A region's passes refine one stretch of the world's history; they do not add more of it.
   atScale: (settings, { passes }) => ({ CreepPerSpan: settings.CreepPerSpan / passes }),
   run(work) {
-    const { field, tools } = work,
+    const { field, tools, stage } = work,
+      mesh = field.mesh,
       leaving = tools.scratch("creep:leaving"),
       arriving = tools.scratch("creep:arriving");
-    for (let i = 0; i < field.mesh.count; i++) creepFrom(work, i, leaving, arriving);
-    for (let i = 0; i < field.mesh.count; i++) {
-      if (leaving.get(i) > 0) tools.shed(i, leaving.get(i), "creep");
-      if (arriving.get(i) > 0) tools.settle(i, arriving.get(i));
+    for (let i = 0; i < mesh.count; i++) creepFrom(work, i, leaving, arriving);
+    for (let i = 0; i < mesh.count; i++) {
+      const height = 1024 / mesh.area(i);
+      stage.demand("loose", "load", i, leaving.get(i) * height, "creep");
+      stage.demand("load", "loose", i, arriving.get(i) * height, "creep");
     }
     tools.release(leaving, arriving);
   },

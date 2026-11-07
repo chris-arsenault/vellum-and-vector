@@ -35,7 +35,6 @@ const scalars = new Set<string>([
   "WaveExposure",
   "MoistureBarriers",
   "PrecipitationBarriers",
-  "GlacialMeltwater",
   "SeaIceSuitability",
   "FloodplainIntensity",
   "DeltaIntensity",
@@ -45,14 +44,9 @@ const waterRates = new Set<string>(["Rainfall", "Snowfall", "Runoff"]);
 function validateScalars(map: PhysicalField, c: PhysicalContext, writes: readonly string[]) {
   for (const band of writes)
     if (scalars.has(band))
-      scalar(
-        map,
-        band as IntegerName,
-        0,
-        waterRates.has(band) ? c.Profile.PrecipitationCeiling : 1000
-      );
+      scalar(map, band as IntegerName, 0, waterRates.has(band) ? Infinity : 1000);
 }
-function validateDrainage(map: PhysicalField) {
+export function validateDrainage(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {
     const target = map.FlowTargets.get(i),
       water = map.WaterKindCodes.get(i);
@@ -72,7 +66,7 @@ function validateDrainage(map: PhysicalField) {
   }
   releaseWorking(map, sourceToOutletOrder(map));
 }
-function validateChannels(map: PhysicalField) {
+export function validateChannels(map: PhysicalField) {
   scalar(map, "RiverChannelStrength");
   for (let i = 0; i < map.mesh.count; i++) {
     const strength = map.RiverChannelStrength.get(i),
@@ -88,7 +82,7 @@ function validateChannels(map: PhysicalField) {
       throw new Error("River channel does not cover its flow spine.");
   }
 }
-function validateIce(map: PhysicalField, c: PhysicalContext) {
+export function validateIce(map: PhysicalField, c: PhysicalContext) {
   scalar(map, "GroundedIce", 0, 1);
   for (let i = 0; i < map.mesh.count; i++) {
     if (
@@ -99,7 +93,7 @@ function validateIce(map: PhysicalField, c: PhysicalContext) {
       throw new Error("Ice flow or grounding contradicts its support surface.");
   }
 }
-function validateBudget(map: PhysicalField) {
+export function validateBudget(map: PhysicalField) {
   const supplied = map.coverage.reduce(
     map.SedimentSupply,
     (held, value) => held + (value !== 0 ? 1 : 0),
@@ -112,16 +106,12 @@ function validateBudget(map: PhysicalField) {
   )
     throw new Error("Sediment transport did not conserve its supplied load.");
 }
+/** What holds after any step: the bands it wrote are in range and the land is one surface. */
 export function validateNativeLayer(
   map: PhysicalField,
   c: PhysicalContext,
-  name: string,
   writes: readonly string[]
 ) {
   validateScalars(map, c, writes);
   if (map.CrustSupportInitialized) validateLandscape(map);
-  if (name === "flow-routing") validateDrainage(map);
-  if (name === "river-channel-geometry") validateChannels(map);
-  if (name === "ice-flow") validateIce(map, c);
-  if (name === "sediment-transport" || name === "glacial-deposition") validateBudget(map);
 }

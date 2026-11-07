@@ -1,3 +1,4 @@
+import { respond } from "../coupling/answers";
 import type { PhysicalField } from "./field";
 import { environment, unit, type EcologyForcing } from "./ecologyEnvironment";
 
@@ -100,3 +101,22 @@ export function groupSuitability(
   // verdict, while shade still decides who grows under whom.
   return Math.max(climate, f.verdure) * shade;
 }
+
+/** How far each kind of cover binds the ground it grows in. */
+const rootHold = { tree: 1.2, grass: 0.45, wetland: 0.7 };
+respond({
+  key: "rootHold",
+  by: "plants",
+  reads: ["TreeCover", "GrassCover", "WetlandCover"],
+  base: (map, i) =>
+    map.TreeCover.get(i) * rootHold.tree +
+    map.GrassCover.get(i) * rootHold.grass +
+    map.WetlandCover.get(i) * rootHold.wetland,
+});
+// Wetlands hold their water, so the ground under them stays wet.
+respond({
+  key: "wetness",
+  by: "wetlands",
+  reads: ["WetlandCover"],
+  add: (map, i) => map.WetlandCover.get(i) * 0.5,
+});

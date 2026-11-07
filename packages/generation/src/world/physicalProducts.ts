@@ -2,21 +2,10 @@ import type { GenerationState, MapProcessContext } from "../process";
 import type { ProcessBehavior } from "../processTraits";
 import { requireThat } from "@atlas/domain";
 
-const materialTransformations = new Set([
-  "mass-wasting",
-  "post-fluvial-mass-wasting",
-  "marine-sedimentation",
-  "ancestral-fluvial-erosion",
-  "sediment-transport",
-  "glacial-erosion",
-  "glacial-deposition",
-  "external-coastal-forcing",
-  "coastal-erosion-and-deposition",
-]);
 type Operation = (state: GenerationState, context: MapProcessContext) => void | Promise<void>;
 /** Material traits check the common budget even when several mechanisms supply it. */
-export function nativeBehavior(name: string, operation: Operation): ProcessBehavior {
-  return materialTransformations.has(name)
+export function nativeBehavior(movesMaterial: boolean, operation: Operation): ProcessBehavior {
+  return movesMaterial
     ? { kind: "material-transformation", transform: operation, balance: materialBudget }
     : { kind: "model-pass", applyPass: operation };
 }

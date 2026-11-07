@@ -1,4 +1,6 @@
 import type { GenerationState } from "../process";
+import { respond } from "../coupling/answers";
+import { spoilSoil } from "../rock/groundLedger";
 import { fuseRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
 import { reservoirAmount, type MagicField } from "./magicState";
@@ -34,7 +36,7 @@ export function saltWrites(state: GenerationState) {
 function fuse(map: PhysicalField, i: number, resistance: number, full: number) {
   // A scorch hardens what is there; only a bed burnt through is glass.
   fuseRock(map, i, resistance, resistance >= full * glassFrom);
-  map.SoilDepth.set(i, 0);
+  spoilSoil(map, i, 1, "salt");
 }
 /** Fire burns the Salt clean: every reservoir loses its share, and the burnt ground fuses. */
 function burn(map: PhysicalField, field: MagicField, fire: MagicField, i: number) {
@@ -55,3 +57,10 @@ function burn(map: PhysicalField, field: MagicField, fire: MagicField, i: number
     p.glassResistance
   );
 }
+// Salt crystals wedge rock apart, so salted ground weathers as if wetter.
+respond({
+  key: "wetness",
+  by: "salt",
+  reads: ["Salting"],
+  add: (map, i) => map.Salting.get(i) * 0.5,
+});

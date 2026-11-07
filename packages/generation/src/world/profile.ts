@@ -38,7 +38,6 @@ export const physicalProfile = {
   TectonicMotionMinimum: 0.22,
   TectonicMotionMaximum: 0.72,
   TectonicConvergenceThreshold: 0.12,
-  TectonicBoundaryPersistence: 420,
   ContinentalSutureDetectionReach: 60_000,
   ContinentalSutureMinimumFraction: 420,
   ContinentalSutureStrengthGain: 620,
@@ -125,13 +124,14 @@ export const physicalProfile = {
   // leading edge climbs where it comes fully over the next sheet.
   OrogenicInitialShortening: 600_000,
   OrogenicAccretionRatio: 1,
-  // How far a sheet's beds rise through the surface at its leading edge per cell of slip, in metres.
-  ThrustTiltPerCell: 1200,
-  ThrustRampHeight: 1500,
+  // How far a sheet's beds rise through the surface, and how far its leading edge climbs, per metre
+  // of slip: the dip of a thrust's ramp.
+  ThrustTiltGradient: 0.04,
+  ThrustRampGradient: 0.04,
   OrogenicProminenceMinimum: 700,
   OrogenicProminenceMaximum: 1900,
   OrogenicProminenceRankDecay: 2.4,
-  OrogenicSurfaceReliefSharePerMille: 2500,
+  OrogenicRockShare: 0.5,
   // Metres of crust above its normal thickness that a column bears before the rest starts to flow,
   // the excess at which half of what is over goes, and how far a pass's flow reaches.
   CrustFlowYield: 3000,
@@ -196,7 +196,6 @@ export const physicalProfile = {
   ImpactLandformMinimumExcavation: 18,
   ImpactLandformMinimumRimUplift: 8,
   InheritedRidgeActivityThreshold: 60,
-  CoastalErosionWaveThreshold: 420,
   CoastalErosionStrength: 180,
   CoastalActiveWidth: 10_000,
   CoastalDepositionReach: 20_000,
@@ -308,7 +307,6 @@ export const physicalProfile = {
   OceanCurrentWarmthStrength: 120,
   PrecipitationBaseline: 40,
   // Precipitation and runoff are millimetres per year, up to this ceiling.
-  PrecipitationCeiling: 4000,
   // Downwind air columns (precipitation in mm/year). Over the
   // sea a column approaches OceanColumnHumidity of saturation, which grows by
   // ColumnSaturationGrowth per °C from ColumnSaturation at 20 °C. Over land it
@@ -423,7 +421,7 @@ export const physicalProfile = {
   FractureWidth: 10_000,
   FractureConductanceFloor: 25,
   // Share of conductance above the floor that survives each later epoch.
-  FractureRetentionPerEpoch: 400,
+  FractureRetentionPerSpan: 400,
   QualityTargets: {
     OceanCoverage: { target: 0.55, minimum: 0.38, maximum: 0.66 },
     InlandLakeBodyCount: { minimum: 2, maximum: 80 },

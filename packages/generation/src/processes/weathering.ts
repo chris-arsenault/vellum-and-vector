@@ -14,7 +14,7 @@ export const weathering = defineProcess({
   settings: slopeSettings,
   // A region's passes refine one stretch of the world's history; they do not add more of it.
   atScale: (settings, { passes }) => ({ WeatheringPerSpan: settings.WeatheringPerSpan / passes }),
-  run({ field, context: c, settings: p, ground, span, ask, tools }) {
+  run({ field, context: c, settings: p, ground, span, ask, stage }) {
     const wetness = ask("wetness"),
       warmth = ask("warmth"),
       frost = ask("frost");
@@ -24,7 +24,8 @@ export const weathering = defineProcess({
         shield = Math.exp(-mantle / p.WeatheringShieldDepth),
         driven = wetness.get(i) * warmth.get(i) + frost.get(i);
       const made = ground.gives(i, breakingDown) * driven * shield * p.WeatheringPerSpan * span;
-      if (made > 0) tools.weather(i, (made * 1024 * c.HydrologyStrength) / 1000, "weathering");
+      if (made > 0)
+        stage.demand("rock", "loose", i, (made * 1024 * c.HydrologyStrength) / 1000, "weathering");
     }
   },
 });

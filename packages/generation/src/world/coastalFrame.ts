@@ -9,14 +9,18 @@ export interface CoastalFrame {
   coverage: Band;
   source: Band;
 }
-function seedShores(map: PhysicalField, forcing?: Band) {
+/**
+ * Where waves reach land: each dry cell's face on open water, with the energy of the waves there, or
+ * with what `forcing` raises on the dry cell itself.
+ */
+function seedShores(map: PhysicalField, waves: Pick<Band, "get">, forcing?: Band) {
   const columns = Array.from({ length: 7 }, () => new FloatList());
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) !== 0) continue;
     for (let edge = 0; edge < map.mesh.degree(i); edge++) {
       const j = map.mesh.neighbor(i, edge);
       if (j < 0 || map.WaterKindCodes.get(j) !== 1) continue;
-      const strength = forcing ? forcing.get(i) : map.WaveExposure.get(j);
+      const strength = forcing ? forcing.get(i) : waves.get(j);
       if (strength <= 0) continue;
       const { x, y, nx, ny, length } = physicalFace(map.mesh, i, edge);
       [x, y, nx, ny, length, strength, i].forEach((v, at) => columns[at].push(v));
@@ -40,8 +44,13 @@ function shoreDistance(
   return Math.hypot(dx + ny * along, dy - nx * along);
 }
 /** Fractional cell coverage of a physical shore band, including unresolved strips. */
-export function coastalFrame(map: PhysicalField, width: number, forcing?: Band): CoastalFrame {
-  const shores = seedShores(map, forcing),
+export function coastalFrame(
+  map: PhysicalField,
+  width: number,
+  waves: Pick<Band, "get">,
+  forcing?: Band
+): CoastalFrame {
+  const shores = seedShores(map, waves, forcing),
     nearest = workingArray(map, "int32", "coast:nearest").fill(-1),
     distance = workingArray(map, "float64", "coast:distance").fill(Infinity),
     queue = new CellQueue();

@@ -5,7 +5,7 @@ import { edgeAllowance, updatePlateMotion } from "./tectonicMotion";
 import type { TectonicSite, TectonicState } from "./tectonicState";
 import { createWorldMesh } from "./worldMesh";
 
-it("travels furthest in the first epoch, whatever the epoch's strength, and not at all with none", () => {
+it("travels by its speed, for as long as the epoch lasts, at the epoch's strength", () => {
   const profile = { PlateDriftPerMyr: 1000 };
   expect(plateTravel(profile, 20, 1000)).toBe(20_000);
   expect(plateTravel(profile, 40, 500)).toBe(20_000);

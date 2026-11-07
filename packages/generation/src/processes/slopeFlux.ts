@@ -27,7 +27,7 @@ interface Face {
   diffusion: number;
   volume: number;
 }
-function faces(map: PhysicalField, p: PhysicalProfile) {
+function faces(map: PhysicalField) {
   const mesh = map.mesh;
   const ground = groundOf(map);
   let count = 0;
@@ -54,11 +54,8 @@ function faces(map: PhysicalField, p: PhysicalProfile) {
       columns.distance.set(index, mesh.edgeLength(i, edge));
       columns.diffusion.set(
         index++,
-        // Ground that gives up easily moves freely; what holds together comes away slowly.
-        (((p.MassWastingTransportLength ** 2 * p.MassWastingTransportFraction) / 1000) *
-          Math.min(ground.gives(i, failing), ground.gives(j, failing)) *
-          mesh.faceLength(i, edge)) /
-          mesh.faceDistance(i, edge)
+        // Ground that gives up easily goes in fewer rounds; what holds together comes away slowly.
+        Math.min(ground.gives(i, failing), ground.gives(j, failing))
       );
     }
   return {
@@ -86,7 +83,8 @@ function exchange(face: Face, heights: Band, stable: Band, area: (i: number) => 
     head > 0
       ? Math.max(0, head - stable.get(i) * face.distance)
       : Math.min(0, head + stable.get(j) * face.distance);
-  const volume = driving / (inverse + 1 / face.diffusion);
+  // What would level the step, less by how much the ground holds together: the same at any cell size.
+  const volume = face.diffusion > 0 ? driving / (inverse * (1 + 1 / face.diffusion)) : 0;
   const change = volume - old;
   heights.add(i, -change / areaI);
   heights.add(j, change / areaJ);
@@ -96,7 +94,7 @@ function exchange(face: Face, heights: Band, stable: Band, area: (i: number) => 
 /** Backward-Euler face exchange with unilateral stable slopes: ground fails until it stands. */
 export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
   const mesh = map.mesh,
-    plan = faces(map, p);
+    plan = faces(map);
   const heights = workingValues(
     map,
     "float64",

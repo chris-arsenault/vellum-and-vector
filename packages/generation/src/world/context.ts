@@ -24,12 +24,13 @@ export interface PhysicalContext {
   Products?: Pick<ProductLedger, "status">;
   /** What else rides the crust and moves whenever the plates do. */
   AfterPlateStep?: () => void;
+  /** Whether what ice weighs is counted in what the crust floats under. */
+  IceLoad?: boolean;
   RainfallMultiplier: number;
   Seed: number;
   EpochStableSeed: number;
   EpochIndex: number;
   EpochCount: number;
-  IsEvolutionEpoch: boolean;
   Profile: PhysicalProfile;
   TectonicStrength: number;
   HydrologyStrength: number;
@@ -83,7 +84,6 @@ export function physicalContext(
     EpochIndex,
     EpochCount,
     Profile,
-    IsEvolutionEpoch: epoch !== null,
     TectonicDurationMyr: epoch
       ? (epoch.TectonicDurationMyr ?? tectonicDefaultMyr)
       : tectonicReferenceMyr,

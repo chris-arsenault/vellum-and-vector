@@ -1,6 +1,6 @@
 import type { PhysicalField } from "./field";
 import type { Band } from "@atlas/domain";
-import { maximumCrustThickness, minimumCrustThickness, units } from "./math";
+import { clamp, maximumCrustThickness, minimumCrustThickness, units } from "./math";
 import { weightScale, type TransportPlan } from "./transportPlan";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
@@ -138,6 +138,23 @@ export function transportCrustColumns(map: PhysicalField, plan: TransportPlan, o
 }
 
 /** Existing vertical column adjustments remain explicit until their process supplies material. */
+/**
+ * A column holds within the numerical limits on crust. Crust that arrives on a column too thick to
+ * take it waits under it as root, and is not lost.
+ */
+export function keepCrustInBounds(map: PhysicalField, i: number) {
+  const over = map.CrustThickness.get(i) - units(maximumCrustThickness);
+  if (over > 0) map.CrustRootReserve.add(i, over);
+  map.CrustThickness.set(
+    i,
+    clamp(map.CrustThickness.get(i), units(minimumCrustThickness), units(maximumCrustThickness))
+  );
+}
+/** Continental crust joins the bottom of a column as root, all of it continental. */
+export function addContinentalRoot(map: PhysicalField, i: number, column: number) {
+  map.CrustThickness.add(i, column);
+  map.CrustContinentalColumn.add(i, column);
+}
 export function adjustCrustColumn(map: PhysicalField, i: number, next: number) {
   if (map.CrustColumnsInitialized) {
     const delta = next - map.CrustThickness.get(i),

@@ -1,143 +1,36 @@
-// PlateAdvectionLayer.HistorySnapshot and TransportAccumulator, Canonry 0f62584c.
-import type { PhysicalBufferName, PhysicalField } from "./field";
+import { physicalSchema, type PhysicalBufferName, type PhysicalField } from "./field";
 import { clamp } from "./math";
 import { weightScale, type TransportPlan } from "./transportPlan";
 import { captureCrustColumns, transportCrustColumns } from "./crustTransport";
 import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { freshCrustValue, quantitiesOfKind } from "../coupling/quantities";
+import {
+  freshCrustValue,
+  historyRules,
+  identityRules,
+  quantityKinds,
+  returnPools,
+  type HistoryAnswer,
+  type IdentityRule,
+} from "../coupling/quantities";
+import { carryOut } from "../rock/groundLedger";
 
-const shares = quantitiesOfKind("share"),
-  amounts = quantitiesOfKind("amount"),
-  peaks = quantitiesOfKind("peak");
-/** Identities that take more than the crust that mostly arrived: see `addCategories`. */
-const categories = [
-  "CrustAssemblyIds",
-  "CrustPlateIds",
-  "CrustSuturePairIds",
-  "VolcanicLastActiveEpoch",
-  "FeatureFlags",
-] as const;
-/** Every other identity moves with the crust that mostly arrived, so a new one moves by being one. */
-const dominantIdentities = quantitiesOfKind("identity").filter(
-  (name) => !(categories as readonly string[]).includes(name)
-);
-type Accumulator = Record<(typeof categories)[number], Band> & {
-  assemblyContribution: Band;
-  plateContribution: Band;
-  sutureContribution: Band;
-};
-function accumulator(map: PhysicalField): Accumulator {
-  const fields = Object.fromEntries(
-    categories.map((name) => [
-      name,
-      workingArray(map, "float64", `transport:${name}`).fill(
-        name === "VolcanicLastActiveEpoch" ? -1 : 0
-      ),
-    ])
-  );
-  return {
-    ...fields,
-    assemblyContribution: workingArray(map, "float64", "transport:assemblyContribution"),
-    plateContribution: workingArray(map, "float64", "transport:plateContribution"),
-    sutureContribution: workingArray(map, "float64", "transport:sutureContribution"),
-  } as Accumulator;
-}
-function addAssembly(
-  a: Accumulator,
-  map: PhysicalField,
-  source: number,
-  target: number,
-  weight: number
-) {
-  const id = map.CrustAssemblyIds.get(source),
-    fraction = map.CrustContinentalFraction.get(source);
-  const contribution = weight * fraction,
-    held = a.assemblyContribution.get(target);
-  if (
-    id > 0 &&
-    fraction > 0 &&
-    (contribution > held || (contribution === held && id < a.CrustAssemblyIds.get(target)))
-  ) {
-    a.CrustAssemblyIds.set(target, id);
-    a.assemblyContribution.set(target, contribution);
-  }
-}
-function addSuture(
-  a: Accumulator,
-  map: PhysicalField,
-  source: number,
-  target: number,
-  weight: number
-) {
-  const pair = map.CrustSuturePairIds.get(source),
-    strength = map.CrustSutureStrength.get(source);
-  const contribution = weight * strength,
-    held = a.sutureContribution.get(target);
-  if (
-    pair <= 0 ||
-    strength <= 0 ||
-    contribution < held ||
-    (contribution === held && pair >= a.CrustSuturePairIds.get(target))
-  )
-    return;
-  a.CrustSuturePairIds.set(target, pair);
-  a.sutureContribution.set(target, contribution);
-}
-function addCategories(
-  a: Accumulator,
-  map: PhysicalField,
-  source: number,
-  target: number,
-  weight: number
-) {
-  addAssembly(a, map, source, target, weight);
-  addSuture(a, map, source, target, weight);
-  if (weight > a.plateContribution.get(target)) {
-    a.CrustPlateIds.set(target, map.CrustPlateIds.get(source));
-    a.plateContribution.set(target, weight);
-  }
-  if (weight >= weightScale / 20) {
-    a.VolcanicLastActiveEpoch.set(
-      target,
-      Math.max(a.VolcanicLastActiveEpoch.get(target), map.VolcanicLastActiveEpoch.get(source))
-    );
-    a.FeatureFlags.set(target, a.FeatureFlags.get(target) | map.FeatureFlags.get(source));
-  }
-}
-function finalize(
-  sum: number,
-  arrival: number,
-  fresh: number,
-  boundary: number,
-  isExtensive: boolean
-): number {
-  if (arrival <= 0) return fresh;
-  if (isExtensive) return sum / weightScale;
-  if (boundary === 2 && arrival < weightScale)
-    return (sum + fresh * (weightScale - arrival)) / weightScale;
-  return sum / arrival;
-}
-function completeCategories(a: Accumulator, map: PhysicalField, target: number) {
-  map.CrustPlateIds.set(target, a.CrustPlateIds.get(target));
-  map.CrustAssemblyIds.set(
-    target,
-    map.CrustContinentalFraction.get(target) > 0 ? a.CrustAssemblyIds.get(target) : 0
-  );
-  map.CrustSuturePairIds.set(
-    target,
-    map.CrustSutureStrength.get(target) > 0 ? a.CrustSuturePairIds.get(target) : 0
-  );
-  map.VolcanicLastActiveEpoch.set(target, a.VolcanicLastActiveEpoch.get(target));
-  map.FeatureFlags.set(target, a.FeatureFlags.get(target));
-  if (map.VolcanicConstructionHistory.get(target) <= 0) {
-    map.FeatureFlags.set(target, map.FeatureFlags.get(target) & ~((1 << 8) | (1 << 9) | (1 << 10)));
-    map.VolcanicLastActiveEpoch.set(target, -1);
-  }
-}
+/**
+ * A plate move is one history event for every quantity at once, and each answers it by its kind, as
+ * `historyRules` sets out: nothing here names a band. A quantity moves with the crust because it is
+ * declared, and an identity with a rule of its own picks its arrival by that rule.
+ */
+const schema = new Map(physicalSchema().map((entry) => [entry.name as string, entry]));
+const answering = (name: string) => historyRules[quantityKinds[name]];
+const bandsAnswering = (answer: HistoryAnswer) =>
+  Object.keys(quantityKinds).filter(
+    (name) => answering(name).moved === answer
+  ) as PhysicalBufferName[];
+const ruled = Object.keys(identityRules) as PhysicalBufferName[];
+const dominant = bandsAnswering("dominant").filter((name) => !identityRules[name]);
 
-/** Each source channel stays intact until its complete scatter has been accumulated. */
-function accumulateChannel(
+/** Each source's scatter, accumulated over its targets: summed by area, or the largest arriving. */
+function accumulate(
   map: PhysicalField,
   plan: TransportPlan,
   name: PhysicalBufferName,
@@ -157,21 +50,20 @@ function accumulateChannel(
     }
   }
 }
-function completeIntensive(
-  map: PhysicalField,
-  plan: TransportPlan,
-  name: PhysicalBufferName,
-  scratch: Band
-) {
-  const fresh = freshCrustValue(name),
-    values = map[name];
-  for (let target = 0; target < map.mesh.count; target++) {
-    const arrival = plan.arrivals.get(target),
-      boundary = map.TectonicBoundaryCodes.get(target);
-    values.set(target, finalize(scratch.get(target), arrival, fresh, boundary, false));
-  }
+/** What a cell holds once everything has arrived, by what its quantity answers each event. */
+function arrived(name: PhysicalBufferName, sum: number, arrival: number, boundary: number) {
+  const rules = answering(name),
+    fresh = rules.newCrust === "fresh" ? freshCrustValue(name) : 0;
+  if (arrival <= 0) return fresh;
+  if (rules.moved === "sum") return sum / weightScale;
+  if (rules.rifted === "blend" && boundary === 2 && arrival < weightScale)
+    return (sum + fresh * (weightScale - arrival)) / weightScale;
+  return sum / arrival;
 }
-function completeExtensive(
+/** A whole-number band holds only what its storage can. */
+const stored = (name: PhysicalBufferName, value: number) =>
+  schema.get(name)?.type === "int32" ? clamp(value, -2147483648, 2147483647) : value;
+function complete(
   map: PhysicalField,
   plan: TransportPlan,
   name: PhysicalBufferName,
@@ -179,20 +71,74 @@ function completeExtensive(
 ) {
   const values = map[name];
   for (let target = 0; target < map.mesh.count; target++) {
-    const value = finalize(scratch.get(target), plan.arrivals.get(target), 0, 0, true);
-    values.set(
-      target,
-      name === "TectonicActivityHistory" ? clamp(value, -2147483648, 2147483647) : value
+    const value = arrived(
+      name,
+      scratch.get(target),
+      plan.arrivals.get(target),
+      map.TectonicBoundaryCodes.get(target)
     );
+    values.set(target, stored(name, value));
   }
 }
-export function transportHistory(map: PhysicalField, plan: TransportPlan) {
-  const crust = captureCrustColumns(map);
-  const a = accumulator(map),
-    scratch = workingArray(map, "float64", "transport:channel"),
-    areaWeights = workingArray(map, "float64", "transport:areaWeights", plan.weights.length);
-  const kinds = dominantIdentities.map((name) => map.coverage.copyBand(map[name]));
-  // Resolve labels before their source fractions/strengths are transported in place.
+interface Picking {
+  name: PhysicalBufferName;
+  rule: IdentityRule;
+  value: Band;
+  held: Band;
+}
+function picking(map: PhysicalField): Picking[] {
+  return ruled.map((name) => ({
+    name,
+    rule: identityRules[name]!,
+    value: workingArray(map, "float64", `transport:${name}`).fill(schema.get(name)!.initial),
+    held: workingArray(map, "float64", `transport:held:${name}`).fill(0),
+  }));
+}
+/** One arrival offered to an identity with a rule of its own. */
+function offer(map: PhysicalField, p: Picking, source: number, target: number, weight: number) {
+  const id = map[p.name].get(source),
+    { pick, least = 0 } = p.rule;
+  if (weight < least * weightScale) return;
+  if (pick === "every") p.value.set(target, p.value.get(target) | id);
+  else if (pick === "latest") p.value.set(target, Math.max(p.value.get(target), id));
+  else offerHeaviest(map, p, source, target, weight);
+}
+/** The arrival bringing most of what it is weighed by takes the cell; a tie goes to the lower id. */
+function offerHeaviest(
+  map: PhysicalField,
+  p: Picking,
+  source: number,
+  target: number,
+  weight: number
+) {
+  const id = map[p.name].get(source),
+    weighBy = p.rule.weighBy,
+    by = weighBy ? map[weighBy].get(source) : 1,
+    contribution = weight * by,
+    held = p.held.get(target);
+  if (weighBy && (id <= 0 || by <= 0)) return;
+  if (contribution < held || (contribution === held && held > 0 && id >= p.value.get(target)))
+    return;
+  p.value.set(target, id);
+  p.held.set(target, contribution);
+}
+/** An identity holds while what it stands for stands; otherwise it goes, or clears what it says. */
+function settlePick(map: PhysicalField, p: Picking, target: number) {
+  const { heldWhile, clears } = p.rule,
+    value = p.value.get(target),
+    holds = !heldWhile || map[heldWhile].get(target) > 0;
+  if (holds) map[p.name].set(target, value);
+  else if (clears) map[p.name].set(target, value & ~clears);
+  else map[p.name].set(target, schema.get(p.name)!.initial);
+}
+/** What sinks with the crust: lost with it, or back to its pool where it is material on its way. */
+function sinking(map: PhysicalField, source: number, retained: number) {
+  for (const [name, pool] of Object.entries(returnPools)) {
+    const lost = Math.max(0, 1 - retained) * map[name as PhysicalBufferName].get(source);
+    if (pool === "sea" && lost > 0) carryOut(map, (lost * map.mesh.area(source)) / 1024, "plates");
+  }
+}
+function scatter(map: PhysicalField, plan: TransportPlan, picks: Picking[], areaWeights: Band) {
   for (let source = 0; source < map.mesh.count; source++) {
     let retained = 0;
     const end = plan.offsets.get(source + 1);
@@ -201,32 +147,41 @@ export function transportHistory(map: PhysicalField, plan: TransportPlan) {
         weight = plan.weights.get(offset);
       if (target < 0) continue;
       areaWeights.set(offset, (weight * map.mesh.area(source)) / map.mesh.area(target));
-      addCategories(a, map, source, target, weight);
+      for (const p of picks) offer(map, p, source, target, weight);
       retained += weight / weightScale;
     }
-    map.SedimentExportedTotal +=
-      (Math.max(0, 1 - retained) * map.SedimentSupply.get(source) * map.mesh.area(source)) / 1024;
+    sinking(map, source, retained);
   }
-  for (const name of shares) {
-    accumulateChannel(map, plan, name, scratch, areaWeights);
-    completeIntensive(map, plan, name, scratch);
+}
+export function transportHistory(map: PhysicalField, plan: TransportPlan) {
+  const crust = captureCrustColumns(map),
+    picks = picking(map),
+    scratch = workingArray(map, "float64", "transport:channel"),
+    areaWeights = workingArray(map, "float64", "transport:areaWeights", plan.weights.length),
+    kinds = dominant.map((name) => map.coverage.copyBand(map[name]));
+  // Identities pick from their sources before what they weigh by moves in place.
+  scatter(map, plan, picks, areaWeights);
+  for (const name of [...bandsAnswering("mean"), ...bandsAnswering("sum")]) {
+    accumulate(map, plan, name, scratch, areaWeights);
+    complete(map, plan, name, scratch);
   }
-  for (const name of amounts) {
-    accumulateChannel(map, plan, name, scratch, areaWeights);
-    completeExtensive(map, plan, name, scratch);
-  }
-  for (const name of peaks) {
-    accumulateChannel(map, plan, name, scratch);
+  for (const name of bandsAnswering("largest")) {
+    accumulate(map, plan, name, scratch);
     map[name].copyFrom(scratch);
   }
   transportCrustColumns(map, plan, crust);
   for (let target = 0; target < map.mesh.count; target++) {
-    completeCategories(a, map, target);
+    for (const p of picks) settlePick(map, p, target);
     const source = plan.dominant.get(target);
     // A kind is not an amount: a cell takes it from whatever crust mostly arrived there.
-    dominantIdentities.forEach((name, n) =>
-      map[name].set(target, source >= 0 ? kinds[n].get(source) : 0)
-    );
+    dominant.forEach((name, n) => map[name].set(target, source >= 0 ? kinds[n].get(source) : 0));
   }
-  releaseWorking(map, ...Object.values(crust), ...Object.values(a), scratch, areaWeights, ...kinds);
+  releaseWorking(
+    map,
+    ...Object.values(crust),
+    ...picks.flatMap((p) => [p.value, p.held]),
+    scratch,
+    areaWeights,
+    ...kinds
+  );
 }

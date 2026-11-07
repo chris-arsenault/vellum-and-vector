@@ -1,4 +1,4 @@
-// TemperatureLayer, MoistureLayer, PrecipitationLayer and RunoffLayer, Canonry 0f62584c.
+import { respond } from "../coupling/answers";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
@@ -105,11 +105,11 @@ export function precipitation(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
     // Fog drip on a coast facing an upwelling band is water the column did not carry.
-    const total = clamp(
-      truncate((p.PrecipitationBaseline + map.ColumnPrecipitation.get(i)) * c.RainfallMultiplier) +
-        truncate(map.FogForcing.get(i) * p.FogDrip),
+    // No more falls than the air brought: the column is what limits it.
+    const total = Math.max(
       0,
-      p.PrecipitationCeiling
+      truncate((p.PrecipitationBaseline + map.ColumnPrecipitation.get(i)) * c.RainfallMultiplier) +
+        truncate(map.FogForcing.get(i) * p.FogDrip)
     );
     const snow = snowShare(p, map.Temperature.get(i), map.Seasonality.get(i) * 10);
     const snowfall = truncate((total * snow) / 1000);
@@ -135,10 +135,9 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
       0,
       1000
     );
-    const available = clamp(
-      map.Rainfall.get(i) + truncate((map.Snowfall.get(i) * melt) / 1000),
+    const available = Math.max(
       0,
-      p.PrecipitationCeiling
+      map.Rainfall.get(i) + truncate((map.Snowfall.get(i) * melt) / 1000)
     );
     const loss = clamp(
       p.RunoffMinimumLossPerMille +
@@ -171,3 +170,35 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
     map.Runoff.set(i, truncate(Math.max(0, available - evaporation) * (1 - held) * (1 - seeping)));
   }
 }
+
+/** What climate answers of the ground. Temperature is ten native units per degree, freezing at 300. */
+const freezing = 300,
+  warm = 200,
+  frostBand = 100;
+respond({
+  key: "discharge",
+  by: "climate",
+  reads: ["Runoff"],
+  base: (map, i, { Profile: p }) => map.Runoff.get(i) / p.FluvialReferenceRunoff,
+});
+respond({
+  key: "wetness",
+  by: "climate",
+  reads: ["Runoff"],
+  base: (map, i, { Profile: p }) => map.Runoff.get(i) / (p.FluvialReferenceRunoff * 2),
+});
+respond({
+  key: "warmth",
+  by: "climate",
+  reads: ["Temperature"],
+  base: (map, i) => Math.max(0, map.Temperature.get(i) - freezing) / warm,
+});
+// Ground that crosses freezing again and again is opened by frost, if it has water to freeze.
+respond({
+  key: "frost",
+  by: "climate",
+  reads: ["Temperature", "Rainfall"],
+  base: (map, i, { Profile: p }) =>
+    clamp(1 - Math.abs(map.Temperature.get(i) - freezing) / frostBand, 0, 1) *
+    clamp(map.Rainfall.get(i) / p.FluvialReferenceRunoff, 0, 1),
+});

@@ -4,7 +4,7 @@ import type { PhysicalBufferName, PhysicalField } from "../world/field";
 import type { PhysicalProfile } from "../world/profile";
 import type { AnswerKey } from "../coupling/answers";
 import type { Pool } from "../coupling/flows";
-import type { WearStage } from "../coupling/wearStage";
+import type { Stage } from "../coupling/stage";
 import type { Ground } from "../rock/ground";
 import type { ProcessTools } from "./processTools";
 
@@ -34,12 +34,14 @@ export interface ProcessWork<
   readonly context: PhysicalContext;
   readonly settings: PhysicalProfile;
   readonly ground: Ground;
-  /** How much work this pass stands for; rates are per unit of it. */
+  /** How much work this substep stands for; rates are per unit of it. */
   readonly span: number;
+  /** Which of the step's substeps this is, from 0. */
+  readonly substep: number;
   /** The answer to a declared question, as a band. */
   readonly ask: (key: AnswerKey) => Band;
-  /** The stage of wear demands land in. */
-  readonly wear: WearStage;
+  /** The stage its demands land in, when the driver settles it. */
+  readonly stage: Stage;
   /** What a process may do beyond its bands: scratch space, routing, the ledger's moves. */
   readonly tools: ProcessTools;
 }
@@ -51,8 +53,26 @@ interface ProcessDeclaration {
   readonly asks: readonly AnswerKey[];
   /** Each `[from, to]` it moves material between. */
   readonly moves: readonly (readonly [Pool, Pool])[];
+  /** Bands it cannot run without, which a selected step must have written earlier. */
+  readonly needs?: readonly PhysicalBufferName[];
+  /** Bands other steps can rely on once it has run. */
+  readonly provides?: readonly PhysicalBufferName[];
+  /** What it leaves that is not a band. */
+  readonly leaves?: readonly string[];
+  /** What must hold once it has run, or the run is wrong. */
+  readonly check?: (map: PhysicalField, context: PhysicalContext) => void;
   /** Its own settings, as the profile holds them. */
   readonly settings: Readonly<Record<string, number>>;
+  /**
+   * How finely its step rule needs a span cut to stay stable: the driver runs that many substeps, each
+   * a stage, and hands each its share of the span. One when it does not say.
+   */
+  readonly substeps?: (settings: PhysicalProfile, span: number) => number;
+  /**
+   * A solver that must see its own moves land before it goes on, as slopes failing until they stand:
+   * it settles the stage itself between rounds, and so never joins a simultaneous step.
+   */
+  readonly settlesItself?: boolean;
   /** Its settings as they read on a map of another scale, where they differ from the world's. */
   readonly atScale?: (
     settings: PhysicalProfile,
@@ -75,8 +95,8 @@ export interface GroundProcess<
   /** One pass of its work on the view it declared. */
   readonly run?: (work: ProcessWork<R, W>) => void;
   /**
-   * One pass of work on the whole field, for a long-lived body that holds it directly. Its `reads` and
-   * `writes` are what the code reaches, which the architecture check derives and holds it to.
+   * One pass of work on the whole field, for a long-lived body that holds it directly, declared through
+   * `builder`. Its `reads` and `writes` are what the code reaches, which the architecture check derives.
    */
   readonly build?: (map: PhysicalField, context: PhysicalContext) => void;
 }

@@ -1,11 +1,10 @@
 import { requireThat, type DomainSnapshot } from "@atlas/domain";
-import type { GenerationState, MapProcess } from "../process";
+import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
-import { landformClassification } from "./landforms";
 import { markPoiLandforms } from "../poi/poiLandforms";
-import { applyNativeStep, fieldProduct, physicalSteps } from "./physicalSteps";
+import { allSteps, applyNativeStep, fieldProduct, physicalSteps } from "./physicalSteps";
 import { nativeContext } from "./context";
-import { atlasEpoch, atlasQuality } from "./atlasProfile";
+import { atlasQuality } from "./atlasProfile";
 import { configuredPhysicalProfile } from "../physicalProfileConfiguration";
 import {
   composeNativeAuthoring,
@@ -19,8 +18,6 @@ import { extractConfluencePlaces } from "./geographicRegions";
 import { publishKinds } from "../poi/poiPublish";
 import { contributeForcing } from "./atlasForcing";
 import { featureRevisions } from "../generationFeatures";
-import { physicalSchedule } from "./schedule";
-import { crustalSupport } from "./support";
 import { reconcileWater } from "./field";
 import type { NativeStep } from "./sequence";
 import { advectMagic } from "./magicState";
@@ -61,28 +58,19 @@ function restoreAuthoring(work: AtlasPhysicalWorkspace) {
   }
   refreshGrounding(work.map, work.profile);
 }
-function executionStep(state: GenerationState, step: NativeStep, iceLoad: boolean): NativeStep {
-  const [name, salt] = step;
-  if (iceLoad && name === "crustal-support")
-    return [name, salt, (map, context) => crustalSupport(map, context, true)];
-  // Magic rides the crust: what it carries moves whenever the plates do, through their own step.
-  if (name === "plate-advection")
-    return [
-      name,
-      salt,
-      (map, context) => step[2](map, { ...context, AfterPlateStep: () => advectMagic(state) }),
-    ];
-  if (name === "landform-classification")
-    return [
-      name,
-      salt,
-      (map, context) => {
-        landformClassification(map, context);
-        markPoiLandforms(state);
-      },
-    ];
-  return step;
-}
+/** What the atlas records beyond the field once a step has run, by the step it follows. */
+const afterStep: Readonly<
+  Record<string, (state: GenerationState, context: MapProcessContext, epoch: number) => void>
+> = {
+  "landform-classification": (state) => markPoiLandforms(state),
+  "physical-epoch-history": (_state, context, epoch) =>
+    context.recordCause({
+      kind: "domain",
+      process: "atlas.physical-epoch-history",
+      subjects: [],
+      description: `Epoch ${epoch + 1}: the selected geological, river, ice and coastal processes retained their material histories. Omitted processes added no new events.`,
+    }),
+};
 function nativeProcess(step: NativeStep): MapProcess {
   const [name, salt] = step,
     declared = physicalSteps[name];
@@ -91,30 +79,27 @@ function nativeProcess(step: NativeStep): MapProcess {
       ...contract(
         `atlas.${name}`,
         ["atlas:workspace", ...declared.needs.map(fieldProduct)],
-        [...declared.writes.map(fieldProduct), ...(declared.leaves ?? [])]
+        [...declared.writes.map(fieldProduct), ...declared.leaves]
       ),
       parameters: nativeFlags,
     },
-    behavior: nativeBehavior(name, async (state, context) => {
+    behavior: nativeBehavior(declared.movesMaterial, async (state, context) => {
       const work = state.physical!;
-      const c = nativeContext(state, context, salt);
+      const c = {
+        ...nativeContext(state, context, salt),
+        IceLoad: Boolean(context.parameters.iceLoad),
+        // Magic rides the crust: what it carries moves whenever the plates do.
+        AfterPlateStep: () => advectMagic(state),
+      };
       if (context.parameters.initial) {
         c.EpochIndex = 0;
         c.Seed = generationBindings(context).seed ^ salt ^ 0x45d9f3b;
       }
-      const map = work.map;
       restoreAuthoring(work);
-      if (name === "temperature" && context.parameters.unforced) map.ExternalHeatForcing.fill(0);
-      const selected = executionStep(state, step, Boolean(context.parameters.iceLoad));
-      applyNativeStep(map, c, selected);
+      if (context.parameters.unforced) work.map.ExternalHeatForcing.fill(0);
+      applyNativeStep(work.map, c, step);
       restoreAuthoring(work);
-      if (name === "physical-epoch-history")
-        context.recordCause({
-          kind: "domain",
-          process: `atlas.${name}`,
-          subjects: [],
-          description: `Epoch ${c.EpochIndex + 1}: the selected geological, river, ice and coastal processes retained their material histories. Omitted processes added no new events.`,
-        });
+      afterStep[name]?.(state, context, c.EpochIndex);
     }),
     validate: validateWorkspace,
   };
@@ -123,20 +108,6 @@ export function atlasNativeProcesses(
   input: AtlasGenerationInput,
   original: DomainSnapshot
 ): MapProcess[] {
-  const steps = physicalSchedule([
-    atlasEpoch({
-      id: "epoch",
-      tectonics: 1,
-      hydrology: 1,
-      ice: 1,
-      coasts: 1,
-      temperature: 15,
-      seaLevel: 0,
-    }),
-  ]);
-  const implementations = new Map<string, NativeStep>();
-  for (const { step } of steps)
-    if (!implementations.has(step[0])) implementations.set(step[0], step);
   const channels = inheritedChannelNames(
     original,
     input.areaId,
@@ -153,7 +124,7 @@ export function atlasNativeProcesses(
     finishProcess(original),
     magicPlacesProcess(original),
     ...(original.world.areas[input.areaId].profile === "world" ? [] : [adaptiveReliefProcess()]),
-    ...Array.from(implementations.values(), nativeProcess),
+    ...allSteps.map(nativeProcess),
   ];
 }
 function initializeProcess(): MapProcess {

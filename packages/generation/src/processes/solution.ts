@@ -15,7 +15,7 @@ export const solution = defineProcess({
   atScale: (settings, { passes }) => ({
     DissolvedPerSpan: settings.DissolvedPerSpan / passes,
   }),
-  run({ field, context: c, settings: p, ground, span, ask, wear }) {
+  run({ field, context: c, settings: p, ground, span, ask, stage }) {
     const wetness = ask("wetness");
     for (let i = 0; i < field.mesh.count; i++) {
       if (field.WaterKindCodes.get(i) === 1) continue;
@@ -25,7 +25,7 @@ export const solution = defineProcess({
         (p.DissolvedPerSpan * span * wetness.get(i) * c.HydrologyStrength) / 1000,
         Infinity
       );
-      wear.demand(dissolved, i, cut);
+      stage.wear(dissolved, i, cut);
     }
   },
 });

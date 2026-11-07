@@ -4,110 +4,137 @@ import { continentalMarginEvolution, marineSedimentation } from "../world/contin
 import { coastalDetail } from "../world/coastalDetail";
 import { tectonicUplift } from "../world/uplift";
 import { impactCratering } from "../world/impacts";
+import { validateBudget } from "../world/layerValidation";
 import { orogenicConstruction } from "../world/orogeny";
 import { sedimentTransport } from "../world/fluvial";
 import { lithosphericFlexure } from "../world/support";
 import { volcanicConstruction } from "../world/volcanism";
-import type { PhysicalContext } from "../world/context";
-import type { PhysicalBufferName, PhysicalField } from "../world/field";
-import type { Pool } from "../coupling/flows";
 import { lithification } from "../rock/rockHistory";
-import reached from "./builderBands.generated.json" with { type: "json" };
-import type { GroundProcess } from "./groundProcess";
+import { builder } from "./builder";
 
-/**
- * What builds and carries the land. Their bodies are long-lived and work on the whole field, so they
- * hold it directly, and what they read and write is what the code reaches: the architecture check works
- * that out from the program and fails if this list is out of date. What they build goes through the
- * ledger, and what they move is what they say here.
- */
-const builder = (
-  id: keyof typeof reached,
-  statement: string,
-  moves: readonly (readonly [Pool, Pool])[],
-  build: (map: PhysicalField, context: PhysicalContext) => void
-): GroundProcess => ({
-  id,
-  statement,
-  reads: reached[id].reads as PhysicalBufferName[],
-  writes: reached[id].writes as PhysicalBufferName[],
-  asks: [],
-  moves,
-  settings: {},
-  build,
+/** What builds and carries the land, moving material through the ledger as it says here. */
+const provinces = "CrustProvinceIds",
+  sea = "WaterKindCodes",
+  ground = "Elevation",
+  bedrock = "BedrockElevation",
+  rock = "RockKindCodes",
+  loose = "SedimentThickness";
+export const plates = builder({
+  id: "plates",
+  statement: "Plates carry everything on them, close oceans and collide.",
+  needs: [provinces, rock],
+  provides: [ground, bedrock, "CrustThickness", "CrustPlateIds", provinces],
+  moves: [["crust", "crust"]],
+  build: (map, context) => plateAdvection(map, context, context.AfterPlateStep),
 });
-export const plates = builder(
-  "plates",
-  "Plates carry everything on them, close oceans and collide.",
-  [["crust", "crust"]],
-  (map, context) => plateAdvection(map, context, context.AfterPlateStep)
-);
-export const mountains = builder(
-  "mountains",
-  "Where plates close, crust thickens over its roots and rock stands on it.",
-  [["crust", "rock"]],
-  (map, context) => orogenicConstruction(map, context)
-);
-export const volcanoes = builder(
-  "volcanoes",
-  "Plumes and sinking slabs melt rock that rises and builds volcanoes.",
-  [["melt", "rock"]],
-  (map, context) => volcanicConstruction(map, context)
-);
-export const impacts = builder(
-  "impacts",
-  "What falls digs a crater, throws out what it dug and raises a rim.",
-  [["rock", "space"]],
-  (map, context) => impactCratering(map, context)
-);
-export const settling = builder(
-  "settling",
-  "The crust settles under what stands on it, and rises as that wears away.",
-  [["crust", "crust"]],
-  (map, context) => lithosphericFlexure(map, context)
-);
-export const riverLoad = builder(
-  "river-load",
-  "Rivers carry what their water and slope can, and drop what they cannot.",
-  [
+export const mountains = builder({
+  id: "mountains",
+  statement: "Where plates close, crust thickens over its roots and rock stands on it.",
+  needs: [ground, provinces, rock],
+  provides: [ground, bedrock, "CrustThickness", "OrogenicConstruction"],
+  moves: [["crust", "rock"]],
+  build: (map, context) => orogenicConstruction(map, context),
+});
+export const volcanoes = builder({
+  id: "volcanoes",
+  statement: "Plumes and sinking slabs melt rock that rises and builds volcanoes.",
+  needs: [ground, rock],
+  provides: [
+    ground,
+    bedrock,
+    "VolcanicConstructionHistory",
+    "VolcanicActivity",
+    "FractureConductance",
+  ],
+  moves: [["melt", "rock"]],
+  build: (map, context) => volcanicConstruction(map, context),
+});
+export const impacts = builder({
+  id: "impacts",
+  statement: "What falls digs a crater, throws out what it dug and raises a rim.",
+  needs: [ground, rock],
+  provides: [ground, bedrock, "SedimentSupply", "ImpactExcavation", "FractureConductance"],
+  moves: [
+    ["rock", "space"],
+    ["space", "rock"],
+    ["space", "loose"],
+  ],
+  build: (map, context) => impactCratering(map, context),
+});
+export const settling = builder({
+  id: "settling",
+  statement: "The crust settles under what stands on it, and rises as that wears away.",
+  needs: ["CrustSupportTarget"],
+  provides: [ground, bedrock, "CrustSupportElevation"],
+  moves: [["crust", "crust"]],
+  build: (map, context) => lithosphericFlexure(map, context),
+});
+export const riverLoad = builder({
+  id: "river-load",
+  statement: "Rivers carry what their water and slope can, and drop what they cannot.",
+  needs: [ground, "FlowTargets", "CatchmentArea"],
+  provides: [ground, loose, "CumulativeDeposition"],
+  moves: [
     ["load", "loose"],
     ["load", "sea"],
   ],
-  (map, context) => sedimentTransport(map, context)
-);
-export const moraines = builder(
-  "moraines",
-  "Ice drops what it carries where it ends.",
-  [["load", "loose"]],
-  (map, context) => glacialDeposition(map, context)
-);
-export const seaFloor = builder(
-  "sea-floor",
-  "What rivers bring to the sea fills the room it has, nearest the margin first.",
-  [["sea", "loose"]],
-  (map, context) => marineSedimentation(map, context)
-);
-export const margins = builder(
-  "margins",
-  "A continent's edge sags to the sea floor by what kind of margin it is.",
-  [["crust", "crust"]],
-  (map) => continentalMarginEvolution(map)
-);
-export const shoreDetail = builder(
-  "shore-detail",
-  "A new coast takes the small shape its kind of margin gives it.",
-  [["crust", "rock"]],
-  (map, context) => coastalDetail(map, context)
-);
-export const crustUplift = builder(
-  "crust-uplift",
-  "Crust takes its first thickness and height from what it is made of.",
-  [["crust", "crust"]],
-  (map, context) => tectonicUplift(map, context)
-);
-export const burial = builder(
-  "burial",
-  "Sediment buried under more of itself turns to rock of the kind its setting makes.",
-  [["loose", "rock"]],
-  (map) => lithification(map)
-);
+  asks: ["discharge", "looseSupply", "loadCapacity"],
+  check: validateBudget,
+  build: (map, context) => sedimentTransport(map, context),
+});
+export const moraines = builder({
+  id: "moraines",
+  statement: "Ice drops what it carries where it ends.",
+  needs: [ground, "IceFlowTargets", "IceFlux"],
+  provides: [ground, loose, "CumulativeGlacialDeposition"],
+  moves: [
+    ["load", "loose"],
+    ["load", "sea"],
+  ],
+  check: validateBudget,
+  build: (map, context) => glacialDeposition(map, context),
+});
+export const seaFloor = builder({
+  id: "sea-floor",
+  statement: "What rivers bring to the sea fills the room it has, nearest the margin first.",
+  needs: [ground, sea, "OceanMarginDistance"],
+  provides: [ground, loose, "CumulativeDeposition"],
+  moves: [["sea", "loose"]],
+  build: (map, context) => marineSedimentation(map, context),
+});
+export const margins = builder({
+  id: "margins",
+  statement: "A continent's edge sags to the sea floor by what kind of margin it is.",
+  needs: [ground, sea, "MarginCodes"],
+  provides: [ground, bedrock, "CoastalMarginCodes", "OceanMarginDistance"],
+  moves: [["crust", "crust"]],
+  build: (map) => continentalMarginEvolution(map),
+});
+export const shoreDetail = builder({
+  id: "shore-detail",
+  statement: "A new coast takes the small shape its kind of margin gives it.",
+  needs: [ground, "MarginCodes"],
+  provides: [ground, bedrock],
+  moves: [["crust", "crust"]],
+  build: (map, context) => coastalDetail(map, context),
+});
+export const crustUplift = builder({
+  id: "crust-uplift",
+  statement: "Crust takes its first thickness and height from what it is made of.",
+  needs: [provinces, "ContinentalPotential"],
+  provides: [ground, bedrock, "CrustThickness"],
+  moves: [["crust", "crust"]],
+  build: (map, context) => tectonicUplift(map, context),
+});
+export const burial = builder({
+  id: "burial",
+  statement:
+    "Sediment buried under more of itself turns to rock of the kind its setting makes, and water with no way out dries to salt.",
+  needs: [ground, rock],
+  provides: [rock, bedrock],
+  moves: [
+    ["loose", "rock"],
+    ["sea", "rock"],
+  ],
+  build: (map, context) => lithification(map, context.Span),
+});

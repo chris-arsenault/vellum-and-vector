@@ -1,37 +1,5 @@
-// PhysicalGeographyEvolutionSession process order, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { oceanConnectivity } from "./ocean";
-import { bathymetry, landmasses, oceanDistance } from "./geography";
-import { oceanCurrents } from "./currents";
-import { warmthSources } from "./warmth";
-import { temperature, moisture, precipitation, runoff } from "./climate";
-import { atmosphericFlow } from "./atmosphere";
-import { drainageConditioning } from "./drainageFlood";
-import { lakeBasins } from "./lakes";
-import { drainageGuidance } from "./flowGuidance";
-import { flowRouting } from "./routing";
-import { riverNetwork } from "./rivers";
-import { tectonicProvinces, continentalDomains } from "./provinces";
-import { continentalSutures } from "./sutures";
-import { tectonicMargins, tectonicEpoch } from "./margins";
-import { initializeLandscape } from "./surface";
-import { mantlePlumeRoots } from "./plumes";
-import { crustalSupport } from "./support";
-import { fractureNetwork } from "./fractures";
-import { geothermal } from "./geothermal";
-import { landIce } from "./landIce";
-import { iceFlow } from "./iceFlow";
-import { glacialMeltwater } from "./glacialEvolution";
-import { seaIce } from "./seaIce";
-import { glacialLandforms } from "./glacialLandforms";
-import { landformClassification } from "./landforms";
-import { riverChannelGeometry } from "./channelGeometry";
-import { floodplains } from "./floodplains";
-import { deltaFormation } from "./deltas";
-import { glacialRunoff } from "./glacialEvolution";
-import { epochHistory, validatePhysical } from "./validation";
-import { initializeRock, metamorphism } from "../rock/rockHistory";
 import {
   burial,
   crustUplift,
@@ -46,126 +14,201 @@ import {
   shoreDetail,
   volcanoes,
 } from "../processes/builders";
+import {
+  airMoisture,
+  airTemperature,
+  currents,
+  landBodies,
+  oceanFill,
+  rainfall,
+  seaFloorZones,
+  seaFreezing,
+  shoreDistance,
+  warmth,
+  winds,
+} from "../processes/climateProcesses";
+import { coast, outsideWaves } from "../processes/coast";
+import { creep } from "../processes/creep";
+import {
+  baking,
+  crustHeat,
+  domains,
+  epochActivity,
+  epochRecord,
+  finalCheck,
+  firstLandscape,
+  fractures,
+  marginKinds,
+  plumeRoots,
+  provinceLayout,
+  support,
+  sutures,
+} from "../processes/crustProcesses";
+import type { GroundProcess } from "../processes/groundProcess";
 import { ice } from "../processes/ice";
-import { actBy } from "../processes/processCatalogue";
+import { actBy, actTogether } from "../processes/processCatalogue";
 import { slopes, slopesAfterStreams } from "../processes/slopes";
 import { solution } from "../processes/solution";
 import { streams } from "../processes/streams";
-import { creep } from "../processes/creep";
+import {
+  channelForm,
+  deltaForm,
+  drainageFlood,
+  drainageTurns,
+  floodplainForm,
+  iceBalance,
+  iceLandforms,
+  iceSpread,
+  lakes,
+  landforms,
+  meltRunoff,
+  meltwater,
+  rivers,
+  routing,
+  waterOff,
+} from "../processes/waterProcesses";
 import { weathering } from "../processes/weathering";
-import { coast, outsideWaves } from "../processes/coast";
 
 export type NativeProcess = (map: PhysicalField, context: PhysicalContext) => void;
-export type NativeStep = readonly [name: string, salt: number, process: NativeProcess];
-const support: NativeStep = ["crustal-support", 0, (map, c) => crustalSupport(map, c, false)];
-const flexure: NativeStep = ["lithospheric-flexure", 0, actBy(settling)];
-const ocean: NativeStep = ["ocean-connectivity", 0, oceanConnectivity];
+/** How a step's processes meet: in turn, or together on the same ground, sharing what they compete for. */
+export interface StepOptions {
+  readonly simultaneous: boolean;
+}
+/** A named step of a world's history: its seed salt, how it runs, and the processes it runs. */
+export type NativeStep = readonly [
+  name: string,
+  salt: number,
+  process: NativeProcess,
+  processes: readonly GroundProcess[],
+  options?: StepOptions,
+];
+/** A step whose processes run in turn, as order is physics. */
+const step = (name: string, salt: number, ...processes: GroundProcess[]): NativeStep => [
+  name,
+  salt,
+  actBy(...processes),
+  processes,
+];
+/** A step whose processes compete for the same ground, and share what there is. */
+const stage = (name: string, salt: number, ...processes: GroundProcess[]): NativeStep => [
+  name,
+  salt,
+  actTogether(...processes),
+  processes,
+  { simultaneous: true },
+];
+const supportStep = step("crustal-support", 0, support);
+const flexure = step("lithospheric-flexure", 0, settling);
+const ocean = step("ocean-connectivity", 0, oceanFill);
 const supportAndMargins: readonly NativeStep[] = [
-  ["mass-wasting", 0, actBy(slopes)],
-  support,
+  step("mass-wasting", 0, slopes),
+  supportStep,
   flexure,
   ocean,
-  ["continental-margin-evolution", 0, actBy(margins)],
-  ["marine-sedimentation", 0, actBy(seaFloor)],
-  support,
+  step("continental-margin-evolution", 0, margins),
+  step("marine-sedimentation", 0, seaFloor),
+  supportStep,
   flexure,
   ocean,
 ];
 const thermal: readonly NativeStep[] = [
-  ["fracture-network", 0x6f9d2b1, fractureNetwork],
-  ["geothermal", 0x152b37, geothermal],
+  step("fracture-network", 0x6f9d2b1, fractures),
+  step("geothermal", 0x152b37, crustHeat),
 ];
+const crustSetup: readonly NativeStep[] = [
+  step("continental-sutures", 0, sutures),
+  step("tectonic-margins", 0, marginKinds),
+  step("continental-domains", 0x12e5a91, domains),
+  step("tectonic-uplift", 0x4f2b17, crustUplift),
+];
+const provinceStep = step("tectonic-provinces", 0x6b31e7, provinceLayout);
+const buildingSteps: readonly NativeStep[] = [step("orogenic-construction", 0x7249d3, mountains)];
+const volcanoStep = step("volcanic-construction", 0x73a91d, volcanoes);
+const impactStep = step("impact-cratering", 0x4d73a1, impacts);
 export const initialSteps: readonly NativeStep[] = [
-  ["tectonic-provinces", 0x6b31e7, tectonicProvinces],
-  ["continental-sutures", 0, continentalSutures],
-  ["tectonic-margins", 0, tectonicMargins],
-  ["continental-domains", 0x12e5a91, continentalDomains],
-  ["tectonic-uplift", 0x4f2b17, actBy(crustUplift)],
-  [
-    "landscape-initialization",
-    0,
-    (map, c) => {
-      initializeLandscape(map);
-      initializeRock(map, c);
-    },
-  ],
-  ["orogenic-construction", 0x7249d3, actBy(mountains)],
-  ["mantle-plume-roots", 0x37c1, mantlePlumeRoots],
-  ["volcanic-construction", 0x73a91d, actBy(volcanoes)],
-  ["impact-cratering", 0x4d73a1, actBy(impacts)],
+  provinceStep,
+  ...crustSetup,
+  step("landscape-initialization", 0, firstLandscape),
+  ...buildingSteps,
+  step("mantle-plume-roots", 0x37c1, plumeRoots),
+  volcanoStep,
+  impactStep,
   ...supportAndMargins,
-  ["coastal-detail", 0x2ba7d1, actBy(shoreDetail)],
+  step("coastal-detail", 0x2ba7d1, shoreDetail),
   ocean,
   ...thermal,
 ];
 export const geologySteps: readonly NativeStep[] = [
-  ["plate-advection", 0, actBy(plates)],
-  ["tectonic-provinces", 0x6b31e7, tectonicProvinces],
-  ["tectonic-epoch-activity", 0x1d71c3, tectonicEpoch],
-  ["continental-sutures", 0, continentalSutures],
-  ["tectonic-margins", 0, tectonicMargins],
-  ["continental-domains", 0x12e5a91, continentalDomains],
-  ["tectonic-uplift", 0x4f2b17, actBy(crustUplift)],
-  ["orogenic-construction", 0x7249d3, actBy(mountains)],
-  ["volcanic-construction", 0x73a91d, actBy(volcanoes)],
-  ["impact-cratering", 0x4d73a1, actBy(impacts)],
+  step("plate-advection", 0, plates),
+  provinceStep,
+  step("tectonic-epoch-activity", 0x1d71c3, epochActivity),
+  ...crustSetup,
+  ...buildingSteps,
+  volcanoStep,
+  impactStep,
   ...supportAndMargins,
   ...thermal,
 ];
+export const iceSteps: readonly NativeStep[] = [
+  step("land-ice-mass-balance", 0, iceBalance),
+  step("ice-flow", 0, iceSpread),
+];
 export const glaciationSteps: readonly NativeStep[] = [
-  ["land-ice-mass-balance", 0, landIce],
-  ["ice-flow", 0, iceFlow],
-  ["glacial-erosion", 0, actBy(ice)],
-  ["glacial-deposition", 0, actBy(moraines)],
-  ["crustal-support", 0, (map, c) => crustalSupport(map, c, true)],
+  ...iceSteps,
+  step("glacial-erosion", 0, ice),
+  step("glacial-deposition", 0, moraines),
+  // The schedule runs this one under ice; the product says so through the step's ice-load parameter.
+  [
+    "crustal-support",
+    0,
+    (map, context) => supportStep[2](map, { ...context, IceLoad: true }),
+    [support],
+  ],
   flexure,
 ];
-export const iceSteps: readonly NativeStep[] = [
-  ["land-ice-mass-balance", 0, landIce],
-  ["ice-flow", 0, iceFlow],
-];
-export const meltwaterStep: NativeStep = ["glacial-meltwater", 0, glacialMeltwater];
+export const meltwaterStep = step("glacial-meltwater", 0, meltwater);
 export const coastalSteps: readonly NativeStep[] = [
-  ["external-coastal-forcing", 0, actBy(outsideWaves)],
-  ["coastal-erosion-and-deposition", 0, actBy(coast)],
+  step("external-coastal-forcing", 0, outsideWaves),
+  step("coastal-erosion-and-deposition", 0, coast),
 ];
 export const extractionSteps: readonly NativeStep[] = [
-  ["glacial-landforms", 0, glacialLandforms],
-  ["sea-ice", 0, seaIce],
-  ["landform-classification", 0, landformClassification],
-  ["river-channel-geometry", 0, riverChannelGeometry],
-  ["river-floodplains", 0, floodplains],
-  ["river-delta-formation", 0, deltaFormation],
+  step("glacial-landforms", 0, iceLandforms),
+  step("sea-ice", 0, seaFreezing),
+  step("landform-classification", 0, landforms),
+  step("river-channel-geometry", 0, channelForm),
+  step("river-floodplains", 0, floodplainForm),
+  step("river-delta-formation", 0, deltaForm),
 ];
 export const climateSteps: readonly NativeStep[] = [
-  ["ocean-connectivity", 0, oceanConnectivity],
-  ["ocean-distance", 0, oceanDistance],
-  ["bathymetry", 0, bathymetry],
-  ["landmasses-and-shelf-groups", 0, landmasses],
-  ["ocean-currents", 0x6c41e2, oceanCurrents],
-  ["warmth-sources", 0x4a51c73, warmthSources],
-  ["temperature", 0, temperature],
-  ["atmospheric-flow", 0x4e28b3, atmosphericFlow],
-  ["moisture-transport", 0x5e29, moisture],
-  ["precipitation", 0x3b7d19, precipitation],
+  ocean,
+  step("ocean-distance", 0, shoreDistance),
+  step("bathymetry", 0, seaFloorZones),
+  step("landmasses-and-shelf-groups", 0, landBodies),
+  step("ocean-currents", 0x6c41e2, currents),
+  step("warmth-sources", 0x4a51c73, warmth),
+  step("temperature", 0, airTemperature),
+  step("atmospheric-flow", 0x4e28b3, winds),
+  step("moisture-transport", 0x5e29, airMoisture),
+  step("precipitation", 0x3b7d19, rainfall),
 ];
 export const drainageSteps: readonly NativeStep[] = [
-  ["runoff", 0, runoff],
-  ["drainage-conditioning", 0, drainageConditioning],
-  ["lake-basins", 0x7a31, lakeBasins],
-  ["drainage-guidance", 0x61bd23, drainageGuidance],
-  ["flow-routing", 0, flowRouting],
-  ["river-network", 0, riverNetwork],
+  step("runoff", 0, waterOff),
+  step("drainage-conditioning", 0, drainageFlood),
+  step("lake-basins", 0x7a31, lakes),
+  step("drainage-guidance", 0x61bd23, drainageTurns),
+  step("flow-routing", 0, routing),
+  step("river-network", 0, rivers),
 ];
 export const incisionSteps: readonly NativeStep[] = [
-  ["ancestral-fluvial-erosion", 0, actBy(weathering, streams, solution)],
-  ["post-fluvial-mass-wasting", 0, actBy(slopesAfterStreams, creep)],
+  // Rivers and creeping cover take from the same loose ground, so they share it where it runs short.
+  stage("ancestral-fluvial-erosion", 0, weathering, streams, solution, creep),
+  step("post-fluvial-mass-wasting", 0, slopesAfterStreams),
 ];
-export const sedimentStep: NativeStep = ["sediment-transport", 0, actBy(riverLoad)];
-export const glacialRunoffStep: NativeStep = ["glacial-runoff", 0, glacialRunoff];
+export const sedimentStep = step("sediment-transport", 0, riverLoad);
+export const glacialRunoffStep = step("glacial-runoff", 0, meltRunoff);
 export const rockSteps: readonly NativeStep[] = [
-  ["lithification", 0, actBy(burial)],
-  ["rock-metamorphism", 0, metamorphism],
+  step("lithification", 0, burial),
+  step("rock-metamorphism", 0, baking),
 ];
-export const historyStep: NativeStep = ["physical-epoch-history", 0, epochHistory];
-export const validationStep: NativeStep = ["physical-structural-validation", 0, validatePhysical];
+export const historyStep = step("physical-epoch-history", 0, epochRecord);
+export const validationStep = step("physical-structural-validation", 0, finalCheck);

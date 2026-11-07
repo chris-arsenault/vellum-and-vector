@@ -6,6 +6,9 @@ import { refreshSiteMotion, siteMotion } from "./tectonicMotion";
 import {
   tectonicCollisionLock,
   tectonicDuctileCompliance,
+  tectonicInsulationMyr,
+  tectonicLidRadius,
+  tectonicPlumeHeadReach,
   tectonicRiftFailure,
   tectonicSinkingReach,
   tectonicSutureStrength,
@@ -14,15 +17,12 @@ import {
 } from "./tectonicControls";
 
 /**
- * The closing or opening speed a shared bond feels. Sinking ocean pulls on what it is attached to, so
- * a seam or anything with ocean on it can tear; a whole continent carries the pull without tearing.
+ * The closing or opening speed a shared bond feels: what drives each side, and sinking ocean pulling on
+ * what it is attached to. Any bond can tear under it. An old seam gives first and a craton last, and
+ * that is the bond's strength, not a rule about which bonds may break.
  */
-function sharedLoad(bond: TectonicBond, a: TectonicSite, b: TectonicSite) {
-  const pull = bond.suture || a.assembly === 0 || b.assembly === 0 ? 1 : 0;
-  return [
-    b.driveX - a.driveX + (b.pullX - a.pullX) * pull,
-    b.driveY - a.driveY + (b.pullY - a.pullY) * pull,
-  ];
+function sharedLoad(a: TectonicSite, b: TectonicSite) {
+  return [b.driveX - a.driveX + b.pullX - a.pullX, b.driveY - a.driveY + b.pullY - a.pullY];
 }
 function loadBond(map: PhysicalField, state: TectonicState, bond: TectonicBond, distance: number) {
   const a = state.sites[bond.a],
@@ -32,7 +32,7 @@ function loadBond(map: PhysicalField, state: TectonicState, bond: TectonicBond, 
     length = Math.max(map.mesh.spacing, Math.hypot(dx, dy));
   const shared = a.plate === b.plate;
   if (!shared && !bond.active) return;
-  const [vx, vy] = shared ? sharedLoad(bond, a, b) : [b.motionX - a.motionX, b.motionY - a.motionY];
+  const [vx, vy] = shared ? sharedLoad(a, b) : [b.motionX - a.motionX, b.motionY - a.motionY];
   const relative = (vx * dx + vy * dy) / length;
   bond.extension += (Math.max(0, relative) * distance) / (length * bond.strength);
   bond.shortening += (Math.max(0, -relative) * distance) / length;
@@ -189,8 +189,45 @@ function sinkProvinces(map: PhysicalField, state: TectonicState) {
     state.sunk++;
   }
 }
+/** A province pushed away from a point in the mantle, by this much of a plate's full speed. */
+function pushAway(map: PhysicalField, site: TectonicSite, x: number, y: number, gained: number) {
+  const dx = meshDeltaX(map.mesh, site.x - x),
+    dy = site.y - y,
+    away = Math.max(1, Math.hypot(dx, dy));
+  site.driveX += (dx / away) * gained;
+  site.driveY += (dy / away) * gained;
+}
+/**
+ * A continent is a lid on the mantle. Heat gathers under it until it domes and pushes the crust outward
+ * from the middle, sooner under a wide lid than a small one, so any continent loads itself in time and
+ * tears where it is weakest.
+ */
+function warmUnderContinents(map: PhysicalField, state: TectonicState, myr: number) {
+  for (const plate of state.plates) {
+    const members = state.sites.filter((site) => site.plate === plate.id && site.assembly > 0);
+    if (members.length < 2) continue;
+    const area = members.reduce((sum, site) => sum + site.area, 0),
+      x = members.reduce((sum, site) => sum + site.x, 0) / members.length,
+      y = members.reduce((sum, site) => sum + site.y, 0) / members.length,
+      gained = (Math.sqrt(area / Math.PI) / tectonicLidRadius) * (myr / tectonicInsulationMyr);
+    for (const site of members) pushAway(map, site, x, y, gained);
+  }
+}
+/** A plume's head spreads under whatever lies over it and pushes it apart: rifts start over plumes. */
+function spreadOverPlumes(map: PhysicalField, state: TectonicState, myr: number) {
+  for (const plume of map.events) {
+    if (plume.kind !== "plume") continue;
+    const reach = plume.radius * tectonicPlumeHeadReach,
+      gained = (plume.strength / 1000) * (myr / tectonicInsulationMyr);
+    for (const site of state.sites)
+      if (Math.hypot(meshDeltaX(map.mesh, site.x - plume.x), site.y - plume.y) <= reach)
+        pushAway(map, site, plume.x, plume.y, gained);
+  }
+}
 /** Failure must disconnect the mechanical graph; a damaged edge alone is not a new plate. */
 export function deformTectonicBonds(map: PhysicalField, state: TectonicState, myr: number) {
+  warmUnderContinents(map, state, myr);
+  spreadOverPlumes(map, state, myr);
   for (const site of state.sites) site.compliance = 0;
   for (const bond of state.bonds) loadBond(map, state, bond, state.rate * myr);
   splitPlates(map, state, myr);

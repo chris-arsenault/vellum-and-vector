@@ -1,5 +1,7 @@
-// TectonicUpliftLayer.cs, Canonry 0f62584c: crustal thickness owns height.
-import type { PhysicalField } from "./field";
+// Crustal thickness owns height.
+import { crustForming, type PhysicalField } from "./field";
+import { adjustCrustColumn } from "./crustTransport";
+import { standSurface } from "./surface";
 import type { PhysicalContext } from "./context";
 import { buoyancy, clamp, crustHeight, scaled, thickness, units } from "./math";
 import { meshNoise as fractalNoise, hashUnit } from "./noise";
@@ -47,12 +49,12 @@ function initializeSurface(
       provinceOffset * fraction +
       (relief * p.ElevationScale) / (buoyancy(fraction) / 1000)
   );
-  map.CrustThickness.set(i, units(column));
-  map.Elevation.set(i, scaled(crustHeight(column, fraction) / p.ElevationScale, p.ElevationScale));
+  adjustCrustColumn(map, i, units(column));
+  standSurface(map, i, scaled(crustHeight(column, fraction) / p.ElevationScale, p.ElevationScale));
 }
 export function tectonicUplift(map: PhysicalField, context: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++) {
-    if (!context.IsEvolutionEpoch)
+    if (crustForming(map))
       initializeSurface(map, context, i, map.CrustContinentalFraction.get(i) / 1000);
     const inherited = clamp(
       map.TectonicActivityHistory.get(i) /

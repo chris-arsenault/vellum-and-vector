@@ -1,3 +1,4 @@
+import { displaceGround } from "../rock/groundLedger";
 import { units } from "../world/math";
 import { distance, isContent, neighborsOf, regionalSpan } from "./lattice";
 import type { RegionalState, Seat } from "./state";
@@ -32,9 +33,7 @@ export function gradeSeat(state: RegionalState, seat: Seat) {
     if (!relax(state, seat, cells, inside, h, movable)) break;
   cells.forEach((i, k) => {
     const delta = Math.round(h[k]) - map.Elevation.get(i);
-    if (!delta) return;
-    map.Elevation.add(i, delta);
-    map.BedrockElevation.add(i, delta);
+    if (delta) displaceGround(map, i, delta, "regional");
   });
 }
 

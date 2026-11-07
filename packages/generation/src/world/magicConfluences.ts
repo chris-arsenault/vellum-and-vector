@@ -14,7 +14,7 @@ import { growRegion } from "./magicRegions";
 import { alterRock } from "../rock/rockField";
 import { clamp, round, units } from "./math";
 import { hashUnit } from "./noise";
-import { deposit, displaceGround, raiseRock } from "../rock/groundLedger";
+import { deposit, displaceGround, meltIce, raiseRock, spoilSoil } from "../rock/groundLedger";
 import { retainedArray, releaseWorking } from "./physicalNumerics";
 
 /** A confluence's hold on the mesh this evaluation: where it holds and how much of each cell. */
@@ -155,7 +155,7 @@ function actOnRock(map: PhysicalField, i: number, c: number, e: ConfluenceEffect
     displaceGround(map, i, units(e.relief * c * sign), "confluences");
   }
   if (e.soilRemoval) {
-    map.SoilDepth.set(i, map.SoilDepth.get(i) * (1 - e.soilRemoval * c));
+    spoilSoil(map, i, e.soilRemoval * c, "confluences");
     map.SoilWater.set(i, map.SoilWater.get(i) * (1 - e.soilRemoval * c));
   }
 }
@@ -167,7 +167,7 @@ function actOnWaterAndLife(map: PhysicalField, i: number, c: number, e: Confluen
       clamp(map.ExternalCoastalForcing.get(i) + round(e.coastalForcing * c), 0, 1000)
     );
   if (e.fog) map.FogForcing.set(i, Math.max(map.FogForcing.get(i), e.fog * c));
-  if (e.iceMelt) map.IceThickness.set(i, Math.max(0, map.IceThickness.get(i) - e.iceMelt * c));
+  if (e.iceMelt) meltIce(map, i, e.iceMelt * c, "confluences");
   if (e.debris) collapseDebris(map, i, units(e.debris * c));
   if (e.toxicity)
     map.EcologicalToxicity.set(i, Math.max(map.EcologicalToxicity.get(i), e.toxicity * c));

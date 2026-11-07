@@ -2,7 +2,7 @@ import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { alignedNeighbor } from "./atmosphere";
 import { clamp } from "./math";
-import { carryOut, settle, shed } from "../rock/groundLedger";
+import { carryOut, settle, shed, spoilSoil } from "../rock/groundLedger";
 
 /**
  * What a storm track does to the ground it crosses, once per epoch after the climate pass:
@@ -19,7 +19,7 @@ export function stormWrites(state: GenerationState) {
     const track = map.StormTrack.get(i) / 1000;
     if (track <= 0 || map.WaterKindCodes.get(i) !== 0) continue;
     const scour = p.StormScour * track * clamp(map.Slope.get(i) / 0.05, 0, 1);
-    map.SoilDepth.set(i, map.SoilDepth.get(i) * (1 - scour));
+    spoilSoil(map, i, scour, "storms");
     map.SoilWater.set(i, map.SoilWater.get(i) * (1 - scour));
     if (bare(map, i)) driveDunes(map, i, p.DuneMobility * track);
   }

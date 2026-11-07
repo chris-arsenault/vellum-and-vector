@@ -136,6 +136,8 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
   map.SeaLevelInitialized = true;
   inheritChannels(surface, work, parent, datum);
   map.CrustSupportInitialized = true;
+  // The parent formed this crust; here it is only carried on.
+  map.CrustFormed = true;
   initializeInheritedMaterial(map, surface);
   map.SedimentProducedTotal = map.coverage.reduce(
     map.CumulativeDeposition,

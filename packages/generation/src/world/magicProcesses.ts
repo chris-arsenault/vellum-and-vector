@@ -22,6 +22,7 @@ import { saltWrites } from "./magicSalt";
 import { hallowedWrites } from "./magicHallowed";
 import { veilWrites } from "./magicVeil";
 import { magicOnTheColumn } from "../rock/rockMagic";
+import { nativeContext } from "./context";
 import { generationBindings } from "../generationBindings";
 import type { ProcessBehavior } from "../processTraits";
 import { ecologyLabels, type Epoch, type MagicConfluence, type MagicSystem } from "@atlas/domain";
@@ -141,7 +142,7 @@ export function magicProcesses(
       saltWrites(state);
       hallowedWrites(state);
       veilWrites(state, epoch);
-      magicOnTheColumn(state, seed);
+      magicOnTheColumn(state, seed, nativeContext(state, context, 0).Span);
     },
     coast: magicCoastalFeedback,
     history: retainMagicHistory,

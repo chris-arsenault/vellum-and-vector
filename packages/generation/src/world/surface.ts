@@ -1,9 +1,17 @@
-// LandscapeSurface.cs and LandscapeInitializationLayer.cs, Canonry 0f62584c.
 import { resetRock } from "../rock/rockField";
 import { reconcileWater, type PhysicalField } from "./field";
 
+/** The surface is what stands on the rock: the rock and the loose cover over it. */
 export function rebuild(map: PhysicalField, i: number) {
   map.Elevation.set(i, map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
+  reconcileWater(map, i);
+}
+/**
+ * A forming world's first surface, which the crust's thickness sets before there is rock or cover to
+ * build it from. Laying out the landscape then takes its rock from here.
+ */
+export function standSurface(map: PhysicalField, i: number, elevation: number) {
+  map.Elevation.set(i, elevation);
   reconcileWater(map, i);
 }
 export function initializeLandscape(map: PhysicalField) {

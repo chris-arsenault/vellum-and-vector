@@ -10,7 +10,7 @@ import {
   toUnits,
   units,
 } from "./math";
-import { rebuild } from "./surface";
+import { displaceGround } from "../rock/groundLedger";
 import { smoothMetric } from "./metricSmoothing";
 import { releaseWorking, workingValues } from "./physicalNumerics";
 import {
@@ -87,8 +87,7 @@ export function lithosphericFlexure(map: PhysicalField, context: PhysicalContext
       units(elevationLimit) - map.SedimentThickness.get(i)
     );
     map.CrustSupportElevation.set(i, old + bedrock - before);
-    map.BedrockElevation.set(i, bedrock);
-    rebuild(map, i);
+    displaceGround(map, i, bedrock - before, "settling");
   }
   map.CrustSupportInitialized = true;
   releaseWorking(map, current);

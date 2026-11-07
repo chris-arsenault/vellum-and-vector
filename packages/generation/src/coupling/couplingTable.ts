@@ -12,6 +12,8 @@ export interface ProcessRow {
   reads: readonly string[];
   asks: readonly AnswerKey[];
   moves: readonly (readonly [Pool, Pool])[];
+  /** How many bands and other things it leaves for later steps. */
+  leavesBehind: number;
 }
 export interface AnswerRow {
   key: AnswerKey;
@@ -19,7 +21,13 @@ export interface AnswerRow {
   askedBy: string[];
 }
 export const processRows = (): ProcessRow[] =>
-  groundProcesses.map(({ id, reads, asks, moves }) => ({ id, reads, asks, moves }));
+  groundProcesses.map(({ id, reads, asks, moves, provides, leaves }) => ({
+    id,
+    reads,
+    asks,
+    moves,
+    leavesBehind: (provides?.length ?? 0) + (leaves?.length ?? 0),
+  }));
 export const answerRows = (): AnswerRow[] =>
   answerKeys.map((key) => ({
     key,

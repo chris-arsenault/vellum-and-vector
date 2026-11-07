@@ -35,15 +35,15 @@ const out = join(harnessRoot, process.env.HARNESS_OUT ?? "replay.json");
 
 /** Values under tuning that a world does not scale to its size, so the code's own apply as they are. */
 const reliefValues = [
-  "OrogenicSurfaceReliefSharePerMille",
+  "OrogenicRockShare",
   "OrogenicAccretionRatio",
   "OrogenicPlateauWidth",
   "OrogenicPlateauShare",
   "LithosphericFlexureLength",
   "FluvialChannelArea",
   "FluvialEquilibriumGradient",
-  "ThrustRampHeight",
-  "ThrustTiltPerCell",
+  "ThrustRampGradient",
+  "ThrustTiltGradient",
 ] as const;
 /** The world's epochs, the last repeated as often as a run of more passes needs. */
 function epochsFor(passes: number) {

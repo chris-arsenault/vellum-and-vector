@@ -6,7 +6,7 @@ import { units } from "../world/math";
 import { createMesh } from "../world/mesh";
 import { layerDepth, layerKind, setLayer } from "./rockColumn";
 import { rockCatalogue } from "./rockCatalogue";
-import { initializeRock, metamorphism } from "./rockHistory";
+import { initializeRock, lithification, metamorphism } from "./rockHistory";
 
 const { shale, slate, limestone, marble, sandstone, quartzite, gneiss } = rockCatalogue,
   context = () => physicalContext(7, 0, atlasPhysicalProfile(), null, 0, 1);
@@ -24,30 +24,52 @@ function buried(built: (i: number) => number): PhysicalField {
 }
 const kinds = (map: PhysicalField, i: number) => [0, 1, 2].map((layer) => layerKind(map, i, layer));
 
+function basin(rain: number, overflow: number, depth: number) {
+  const map = createField(createMesh(40, 1));
+  setLayer(map, 0, 0, shale.code, units(1000));
+  map.WaterKindCodes.set(0, 2);
+  map.WaterDepths.set(0, units(depth));
+  map.Rainfall.set(0, rain);
+  map.LakeOverflow.set(0, overflow);
+  lithification(map, 1);
+  return map;
+}
+it("dries closed water in a dry land to a salt bed, with no river bringing anything", () => {
+  const map = basin(100, 0, 500);
+  expect(layerKind(map, 0, 0)).toBe(rockCatalogue.saltbed.code);
+  expect(map.BedrockElevation.get(0)).toBeGreaterThan(0);
+});
+it("leaves no salt where water has a way out or rain keeps it fresh", () => {
+  expect(layerKind(basin(100, 50, 500), 0, 0)).toBe(shale.code);
+  expect(layerKind(basin(2000, 0, 500), 0, 0)).toBe(shale.code);
+});
+it("lays no more salt than there was water to dry", () => {
+  expect(basin(100, 0, 3).BedrockElevation.get(0)).toBe(units(3));
+});
 it("bakes what lies deep under full heat and leaves the surface", () => {
   const map = buried(() => 500);
-  metamorphism(map);
+  metamorphism(map, context());
   expect(kinds(map, 0)).toEqual([shale.code, limestone.code, quartzite.code]);
 });
 it("gives neighbours with one history one result, without a roll", () => {
   const map = buried(() => 500);
-  metamorphism(map);
+  metamorphism(map, context());
   const columns = new Set(Array.from({ length: map.mesh.count }, (_, i) => kinds(map, i).join()));
   expect(columns.size).toBe(1);
 });
 it("reaches less deep under less heat, so grade falls away from a belt's core", () => {
   const map = buried(() => 12);
-  metamorphism(map);
+  metamorphism(map, context());
   // A tenth of the heat needs ten times the depth, past the sandstone's top at 4 km.
   expect(kinds(map, 0)).toEqual([shale.code, limestone.code, sandstone.code]);
 });
 it("carries on to a layer's next form with another pass", () => {
   const map = buried(() => 500);
   setLayer(map, 0, 2, limestone.code, units(2000));
-  metamorphism(map);
+  metamorphism(map, context());
   expect(layerKind(map, 0, 2)).toBe(marble.code);
   setLayer(map, 0, 2, shale.code, units(2000));
-  metamorphism(map);
+  metamorphism(map, context());
   expect(layerKind(map, 0, 2)).toBe(slate.code);
 });
 it("starts a continental platform with kilometres of alternating beds", () => {

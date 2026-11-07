@@ -1,11 +1,10 @@
-// SedimentTransportLayer.cs, Canonry 0f62584c.
 import type { Band } from "@atlas/domain";
 import { meshDeltaX } from "./mesh";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { units } from "./math";
 import { carryOut, deposit } from "../rock/groundLedger";
-import { ask } from "../coupling/answers";
+import { ask, respond } from "../coupling/answers";
 import { sourceToOutletOrder, waterGathered } from "./flowGraph";
 import { cellTravel } from "./physicalMetric";
 import { workingArray, releaseWorking } from "./physicalNumerics";
@@ -46,11 +45,13 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
     if (target >= 0) previous.set(target, i);
   }
   const order = sourceToOutletOrder(map),
-    water = waterGathered(map, map.FlowTargets, ask(map, "runoff", c));
+    water = waterGathered(map, map.FlowTargets, ask(map, "discharge", c)),
+    supply = ask(map, "looseSupply", c),
+    carries = ask(map, "loadCapacity", c);
   for (let n = 0; n < order.length; n++) {
     const i = order.get(n),
       area = map.mesh.area(i);
-    const load = moving.get(i) + (map.SedimentSupply.get(i) / 1024) * area;
+    const load = moving.get(i) + (supply.get(i) / 1024) * area;
     map.SedimentSupply.set(i, 0);
     if (load <= 0) continue;
     const target = map.FlowTargets.get(i);
@@ -58,7 +59,7 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
     // carry settles over the distance it takes to drop out, which is what builds plains and deltas.
     const still =
       map.WaterKindCodes.get(i) === 2 || (target >= 0 && map.WaterKindCodes.get(target) === 1);
-    const capacity = still ? 0 : p.SedimentCarry * water.get(i) * map.Slope.get(i) * c.Span;
+    const capacity = still ? 0 : carries.get(i) * water.get(i) * c.Span;
     const distance = transportDistance(map, i, previous);
     const capture = -Math.expm1(
       (Math.log1p(-p.SedimentTransportFraction / 1000) * distance) / p.SedimentDepositionLength
@@ -73,3 +74,17 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
   }
   releaseWorking(map, order, moving, previous, water);
 }
+/** Flowing water carries more the steeper it runs. */
+respond({
+  key: "loadCapacity",
+  by: "flowing water",
+  reads: ["Slope"],
+  base: (map, i, { Profile: p }) => p.SedimentCarry * map.Slope.get(i),
+});
+/** What wear has fed to the water on each cell since the water last carried it away. */
+respond({
+  key: "looseSupply",
+  by: "worn ground",
+  reads: ["SedimentSupply"],
+  base: (map, i) => map.SedimentSupply.get(i),
+});

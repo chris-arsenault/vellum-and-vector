@@ -173,6 +173,7 @@ const metricFields = [
   "MaximumIceFlux",
   "MaximumGroundedIceFlux",
   "IceThickness",
+  "IceRetreat",
   "MaximumIceThickness",
   // Magic written into shared fields that the ordinary processes consume (0 to 1 unless
   // noted): Fire's quickening of living processes; Aurora's stillness and the share of
@@ -260,6 +261,8 @@ export type PhysicalField = Record<PhysicalBufferName, Band> & {
   tectonics: TectonicState | null;
   landmarkLedger: LandmarkLedger | null;
   CrustColumnsInitialized: boolean;
+  /** Whether plates have begun to carry the crust the world first laid out. */
+  CrustFormed: boolean;
   ProvinceSeamsMarked: boolean;
   crustBudget: CrustBudget;
   /**
@@ -302,6 +305,11 @@ export type PhysicalField = Record<PhysicalBufferName, Band> & {
   FloodFlatFillTotal: number;
   FloodFillTotal: number;
 };
+/**
+ * Whether the crust is still forming: no plate has carried it anywhere yet. What a world first lays
+ * out, it lays out here; once plates move, everything builds on what they carry.
+ */
+export const crustForming = (map: PhysicalField) => !map.CrustFormed;
 /** A physical field over the mesh; the cache bounds resident blocks and spills the rest. */
 export function createField(
   mesh: PhysicalMesh,
@@ -318,6 +326,7 @@ export function createField(
     tectonics: null,
     landmarkLedger: null,
     CrustColumnsInitialized: false,
+    CrustFormed: false,
     ProvinceSeamsMarked: false,
     crustBudget: {
       oceanCreated: 0,

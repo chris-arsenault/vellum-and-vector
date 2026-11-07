@@ -1,8 +1,7 @@
-// FluvialErosionLayer.cs, Canonry 0f62584c.
 import type { Band } from "@atlas/domain";
 import { clamp, units } from "../world/math";
 import { meshDeltaX } from "../world/mesh";
-import type { WearCause } from "../coupling/wearStage";
+import type { WearCause } from "../coupling/stage";
 import { compileMix } from "../rock/modes";
 import { defineProcess, type ProcessWork } from "./groundProcess";
 import { streamSettings } from "./streamSettings";
@@ -33,7 +32,7 @@ function erosiveFall({ field, settings: p }: StreamWork, target: number, water: 
   return { catchment, length, steep: Math.max(0, fall - equilibrium) };
 }
 function cutCell(work: StreamWork, targets: Band, water: Band, i: number, perStep: number) {
-  const { field, context: c, settings: p, ground, wear } = work,
+  const { field, context: c, settings: p, ground, stage } = work,
     target = targets.get(i);
   if (target < 0 || field.WaterKindCodes.get(i) === 1) return;
   const { catchment, length, steep } = erosiveFall(work, target, water.get(i), i);
@@ -57,14 +56,16 @@ function cutCell(work: StreamWork, targets: Band, water: Band, i: number, perSte
       valleyShare(p.FluvialValleyWidthShare, water.get(i), field.mesh.area(i))
     ),
     share = Math.min(1, reach * ground.gives(i, flowing));
-  wear.demand(cutting, i, cut * share, water.get(i) >= p.FluvialChannelArea ? cut : 0);
+  stage.wear(cutting, i, cut * share, water.get(i) >= p.FluvialChannelArea ? cut : 0);
 }
 export const streams = defineProcess({
   id: "streams",
   statement:
     "Water falling beyond the slope its catchment grades to cuts every cell by the power it carries, so wet ground and big rivers cut most.",
   reads,
-  asks: ["runoff"],
+  needs: ["Elevation", "WaterKindCodes", "RockKindCodes"],
+  provides: ["Elevation", "BedrockElevation", "SedimentSupply"],
+  asks: ["discharge", "rootHold"],
   moves: [
     ["rock", "load"],
     ["loose", "load"],
@@ -82,22 +83,18 @@ export const streams = defineProcess({
         settings.FluvialEquilibriumGradient * (finer ? settings.FluvialFineGradientShare : 1),
     };
   },
+  // Substeps are how finely the work is resolved; how much gets done is the rate and the span.
+  substeps: (p, span) => p.FluvialErosionStepsPerSpan * span,
   run(work) {
-    const { field, context: c, settings: p, tools, span, ask, wear } = work;
+    const { field, context: c, tools, span, substep, ask } = work;
     if (c.HydrologyStrength === 0) return;
     // A lake's water falls over its sill like any river's, so its outlet cuts by what comes through
-    // and the fall there, in whatever ground it crosses. Steps are how finely the work is resolved. How much gets done is the rate and the span.
-    const steps = p.FluvialErosionSteps,
-      perStep = span / steps,
-      runoff = ask("runoff");
-    for (let step = 0; step < steps; step++) {
-      const pass = { ...c, Seed: c.Seed ^ step };
-      tools.conditionDrainage(pass);
-      const targets = tools.landTargets(pass),
-        water = tools.waterGathered(targets, runoff);
-      for (let i = 0; i < field.mesh.count; i++) cutCell(work, targets, water, i, perStep);
-      wear.settle();
-      tools.release(targets, water);
-    }
+    // and the fall there, in whatever ground it crosses.
+    const pass = { ...c, Seed: c.Seed ^ substep };
+    tools.conditionDrainage(pass);
+    const targets = tools.landTargets(pass),
+      water = tools.waterGathered(targets, ask("discharge"));
+    for (let i = 0; i < field.mesh.count; i++) cutCell(work, targets, water, i, span);
+    tools.release(targets, water);
   },
 });

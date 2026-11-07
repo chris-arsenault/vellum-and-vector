@@ -1,20 +1,26 @@
+import { ask, respond } from "../coupling/answers";
 import type { PhysicalContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
 import { units } from "../world/math";
 import { hashUnit, meshNoise } from "../world/noise";
 import { rebuild } from "../world/surface";
-import { raiseRock } from "./groundLedger";
+import { lithify, raiseRock } from "./groundLedger";
 import { changeLayer, deepestLayer, layBed, layerDepth, layerKind, setLayer } from "./rockColumn";
 import { rockCatalogue, rockKindOfCode, type RockKindId } from "./rockCatalogue";
 
-/** Sediment this deep starts turning to rock, and what stays loose on top, in metres. */
-const lithifyFrom = 20,
-  looseCover = 5;
+/**
+ * What lies buried deeper than this, in metres, is under enough weight to turn to rock; what is above it
+ * stays loose however long it lies. Of what is deep enough, this share is still loose after a span.
+ */
+const lithifyFrom = 1000,
+  stillLoosePerSpan = 0.5;
 /** Water shallow and warm enough to build limestone, in metres and native temperature. */
 const reefDepth = 200,
   reefWarmth = 480;
 /** The rain below which a closed basin dries to salt, in native units. */
 const dryBasin = 400;
+/** The salt a closed basin lays down as it dries and refills, in metres per unit of span. */
+const saltPerSpan = 100;
 /** A pass of mountain building this strong, in metres, bakes what it buries. */
 const bakingConstruction = 120;
 /** Metres down that the fullest heat reaches, and how much of a full heat an old suture carries. */
@@ -81,16 +87,33 @@ function sedimentKind(map: PhysicalField, i: number): RockKindId {
   if (water === 2) return map.Rainfall.get(i) < dryBasin ? "saltbed" : "shale";
   return "sandstone";
 }
+/**
+ * Water with no way out and little rain to replace it dries, and what it held stays as salt. A sea cut
+ * off when its ocean closes lays down a bed this way with no river bringing anything to it, and the
+ * plates can carry that bed up to stand as a salt plain.
+ */
+function dryClosedWater(map: PhysicalField, span: number) {
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.WaterKindCodes.get(i) !== 2 || map.LakeOverflow.get(i) > 0) continue;
+    if (map.Rainfall.get(i) >= dryBasin) continue;
+    const salt = Math.min(units(saltPerSpan * span), map.WaterDepths.get(i));
+    if (salt <= 0) continue;
+    raiseRock(map, i, salt, "burial", "sea");
+    layBed(map, i, rockCatalogue.saltbed, salt);
+    rebuild(map, i);
+  }
+}
 /** Sediment buried under more of itself turns to rock of the kind its setting makes. */
-export function lithification(map: PhysicalField) {
+export function lithification(map: PhysicalField, span: number) {
+  dryClosedWater(map, span);
   const from = units(lithifyFrom),
-    keep = units(looseCover);
+    hardened = 1 - stillLoosePerSpan ** span;
   for (let i = 0; i < map.mesh.count; i++) {
     const sediment = map.SedimentThickness.get(i);
-    if (sediment < from) continue;
-    const amount = sediment - keep;
-    map.SedimentThickness.add(i, -amount);
-    raiseRock(map, i, amount, "burial", "loose");
+    if (sediment <= from) continue;
+    const amount = Math.round((sediment - from) * hardened);
+    if (amount <= 0) continue;
+    lithify(map, i, amount, "burial");
     layBed(map, i, rockCatalogue[sedimentKind(map, i)], amount);
     rebuild(map, i);
   }
@@ -114,11 +137,18 @@ function bake(map: PhysicalField, i: number, heat: number) {
  * shows only once erosion and thrusts have brought it up, so grade comes to the surface in zones
  * along the belt, highest where the most has been stripped.
  */
-export function metamorphism(map: PhysicalField) {
-  for (let i = 0; i < map.mesh.count; i++) {
-    const built = map.OrogenicConstruction.get(i) / units(bakingConstruction),
-      suture = map.CrustSutureStrength.get(i) / 1000,
-      heat = Math.max(Math.min(fullHeat, built), suture * sutureHeat);
-    if (heat > 0) bake(map, i, heat);
-  }
+export function metamorphism(map: PhysicalField, context: PhysicalContext) {
+  const heat = ask(map, "heat", context);
+  for (let i = 0; i < map.mesh.count; i++) if (heat.get(i) > 0) bake(map, i, heat.get(i));
 }
+/** The crust's own heat: what a belt has built on it, or an old suture beneath it. */
+respond({
+  key: "heat",
+  by: "burial",
+  reads: ["OrogenicConstruction", "CrustSutureStrength"],
+  base: (map, i) =>
+    Math.max(
+      Math.min(fullHeat, map.OrogenicConstruction.get(i) / units(bakingConstruction)),
+      (map.CrustSutureStrength.get(i) / 1000) * sutureHeat
+    ),
+});

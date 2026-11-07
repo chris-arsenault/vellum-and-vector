@@ -1,6 +1,6 @@
 import { meshDeltaX } from "./mesh";
 // FractureNetworkLayer.cs, Canonry 0f62584c; world-space steering replaces lattice directions.
-import type { PhysicalField } from "./field";
+import { crustForming, type PhysicalField } from "./field";
 import { areaBudget, mediumArea } from "./worldScale";
 import type { PhysicalContext } from "./context";
 import { hashSigned, hashUnit } from "./noise";
@@ -146,7 +146,7 @@ function candidateScore(map: PhysicalField, i: number) {
  */
 function prepareFractures(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile,
-    keep = c.IsEvolutionEpoch ? p.FractureRetentionPerEpoch / 1000 : 1;
+    keep = crustForming(map) ? 1 : (p.FractureRetentionPerSpan / 1000) ** c.Span;
   for (let i = 0; i < map.mesh.count; i++)
     map.FractureConductance.set(
       i,

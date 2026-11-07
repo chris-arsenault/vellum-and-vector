@@ -46,6 +46,12 @@ export const tectonicDuctileCompliance = 0.2;
 export const tectonicContinentBondStrength = 4;
 /** A welded seam's strength against what the crust had: old sutures are where continents reopen. */
 export const tectonicSutureStrength = 0.25;
+/** How long heat gathers under a wide continent or a plume before it pushes at a plate's full speed. */
+export const tectonicInsulationMyr = 60;
+/** The radius of continent, in metres, that traps heat that fast; a smaller lid traps it slower. */
+export const tectonicLidRadius = 1_500_000;
+/** How far a plume's spreading head reaches, as a share of the plume's own radius. */
+export const tectonicPlumeHeadReach = 3;
 /** Closure, as a share of the distance between provinces, at which colliding continents lock. */
 export const tectonicCollisionLock = 0.5;
 /** How close an ocean province gets to what it sinks beneath, as a share of its own width. */

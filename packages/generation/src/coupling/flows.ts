@@ -4,7 +4,17 @@ import type { PhysicalField } from "../world/field";
  * The stocks material sits in. What changes the land moves material between two of these through the
  * ledger, and the record of who moved what is how a report tells what became of the ground.
  */
-export const pools = ["rock", "loose", "load", "sea", "crust", "melt", "space"] as const;
+export const pools = [
+  "rock",
+  "soil",
+  "loose",
+  "load",
+  "sea",
+  "crust",
+  "ice",
+  "melt",
+  "space",
+] as const;
 export type Pool = (typeof pools)[number];
 const poolIndex = Object.fromEntries(pools.map((pool, n) => [pool, n])) as Record<Pool, number>;
 /** Who moved it. */

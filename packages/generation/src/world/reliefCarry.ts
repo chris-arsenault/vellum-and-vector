@@ -7,11 +7,12 @@ import {
   rockDepthFields,
   rockLayers,
 } from "../rock/rockColumn";
+import { shiftRock } from "../rock/groundLedger";
 import { newBasaltSurface } from "../rock/rockField";
 import { oceanicColumn } from "../rock/rockHistory";
 import { adjustCrustColumn, arcCrustYield } from "./crustTransport";
 import type { PhysicalField } from "./field";
-import { clamp, elevationLimit, units } from "./math";
+import { clamp, crustPerRock, elevationLimit, units } from "./math";
 import { meshDeltaX, meshPoint } from "./mesh";
 import { metricSearch } from "./metricSearch";
 import { smoothMetric } from "./metricSmoothing";
@@ -298,11 +299,16 @@ function stackRock(map: PhysicalField, cell: number, kind: number, metres: numbe
   const room =
       units(elevationLimit) - map.SedimentThickness.get(cell) - map.BedrockElevation.get(cell),
     rock = Math.round(Math.min(metres, Math.max(0, room)));
-  map.BedrockElevation.add(cell, rock);
-  map.SurfaceRockLoad.add(cell, rock);
+  shiftRock(map, cell, rock, "plates");
   layBedOfCode(map, cell, kind, rock);
   // What will not stand here goes down into the crust instead of vanishing.
-  if (metres > rock) adjustCrustColumn(map, cell, map.CrustThickness.get(cell) + metres - rock);
+  if (metres > rock)
+    adjustCrustColumn(
+      map,
+      cell,
+      map.CrustThickness.get(cell) +
+        (metres - rock) * crustPerRock(map.CrustContinentalFraction.get(cell) / 1000)
+    );
 }
 /** The move is over: every cell takes what stood where its material came from. */
 export function finishReliefCarry(map: PhysicalField, carry: ReliefCarry, sheetWidth: number) {

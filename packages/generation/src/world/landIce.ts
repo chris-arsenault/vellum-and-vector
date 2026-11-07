@@ -82,15 +82,18 @@ function dryLandBalance(map: PhysicalField, c: PhysicalContext, cutoff: number) 
       // Snow piles on by how far the balance is in credit, up to what ice this far from its edge
       // can stand to before it spreads away.
       gained = ((balance - cutoff) * 2 * c.Span * c.GlaciationStrength) / 1000,
-      stands = p.IceYieldHeight * Math.sqrt(edge.get(i) + map.mesh.spacing / 2);
+      stands = p.IceYieldHeight * Math.sqrt(edge.get(i) + map.mesh.spacing / 2),
+      before = map.IceThickness.get(i);
     map.IceThickness.set(
       i,
       truncate(
         balance >= cutoff
-          ? Math.min(map.IceThickness.get(i) + gained, Math.max(stands, map.IceThickness.get(i)))
+          ? Math.min(before + gained, Math.max(stands, before))
           : meltedThickness(map, c, i, cutoff - balance)
       )
     );
+    // What went this pass is what can run off as meltwater, and a glacier long gone gives none.
+    map.IceRetreat.set(i, Math.max(0, before - map.IceThickness.get(i)));
     map.MaximumIceThickness.set(
       i,
       Math.max(map.MaximumIceThickness.get(i), map.IceThickness.get(i))
@@ -139,7 +142,8 @@ function advanceLakes(map: PhysicalField, c: PhysicalContext) {
         i,
         Math.max(
           0,
-          map.IceThickness.get(i) - c.Profile.IceAblationStep * (1 - map.IcePersistence.get(i))
+          map.IceThickness.get(i) -
+            c.Profile.IceAblationStep * c.Span * (1 - map.IcePersistence.get(i))
         )
       );
     else if (water === 0 && map.IceThickness.get(i) > 0) {

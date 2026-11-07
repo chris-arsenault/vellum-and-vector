@@ -1,6 +1,6 @@
 import { meshDeltaX } from "./mesh";
 // VolcanicConstructionLayer.cs, Canonry 0f62584c.
-import type { PhysicalField } from "./field";
+import { crustForming, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, elevationLimit, round, units } from "./math";
 import { hashUnit } from "./noise";
@@ -132,15 +132,14 @@ function constructTriangle(
 export function volcanicConstruction(map: PhysicalField, context: PhysicalContext) {
   map.VolcanicActivity.fill(0);
   if (!hasVolcanism(context)) return;
-  const clear =
-    Feature.MantlePlume |
-    (context.IsEvolutionEpoch
-      ? 0
-      : Feature.VolcanicCone | Feature.VolcanicCaldera | Feature.LavaPlain);
+  const forming = crustForming(map),
+    clear =
+      Feature.MantlePlume |
+      (forming ? Feature.VolcanicCone | Feature.VolcanicCaldera | Feature.LavaPlain : 0);
   for (let i = 0; i < map.mesh.count; i++)
     map.FeatureFlags.set(i, map.FeatureFlags.get(i) & ~clear);
-  const sequence = context.IsEvolutionEpoch ? context.EpochIndex + 1 : 0,
-    recorded = context.IsEvolutionEpoch ? context.EpochIndex : 0,
+  const sequence = forming ? 0 : context.EpochIndex + 1,
+    recorded = forming ? 0 : context.EpochIndex,
     rise = workingArray(map, "float64", "volcano:rise");
   for (const root of map.events.filter((event) => event.kind === "plume")) {
     const strength = root.strength;

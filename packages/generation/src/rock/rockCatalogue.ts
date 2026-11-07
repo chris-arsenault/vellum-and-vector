@@ -9,7 +9,7 @@
  * How a material came to be, whichever process made it: laid down in layers, cooled from melt, changed
  * where it lay, shattered and rotted into rubble, or still loose. Magic's rock belongs by how it behaves.
  */
-export type RockFamily = "sedimentary" | "igneous" | "metamorphic" | "broken" | "loose";
+export type RockFamily = "sedimentary" | "igneous" | "metamorphic" | "broken" | "loose" | "ice";
 /** One way of attacking material, in the vocabulary processes and materials share. */
 export type ModeId = "abrasion" | "plucking" | "shear" | "solution";
 export interface RockFacts {
@@ -63,6 +63,8 @@ export const rockKindIds = [
   "keptStone",
   "tornstone",
   "alluvium",
+  "soil",
+  "glacierIce",
 ] as const;
 export type RockKindId = (typeof rockKindIds)[number];
 
@@ -361,6 +363,30 @@ const entries: Readonly<Record<RockKindId, Entry>> = {
     bedding: 0.3,
     solubility: 0,
     porosity: 0.5,
+  },
+  // The living skin of the ground that climate and plants make of whatever lies on top: fine, open,
+  // and held together only by what grows in it.
+  soil: {
+    code: 26,
+    name: "Soil",
+    family: "loose",
+    resistance: 250,
+    jointing: 0.2,
+    bedding: 0,
+    solubility: 0.1,
+    porosity: 0.6,
+  },
+  // Ice lying on the ground. It moves as ice and melts as ice; what acts on the ground passes beneath.
+  glacierIce: {
+    code: 27,
+    name: "Glacier ice",
+    family: "ice",
+    resistance: 250,
+    jointing: 0.5,
+    bedding: 0.5,
+    solubility: 0,
+    porosity: 0,
+    gives: { abrasion: 0, plucking: 0, shear: 0, solution: 0 },
   },
 };
 export const rockCatalogue = Object.fromEntries(

@@ -16,7 +16,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { clamp, units } from "./math";
 import { fractalNoise } from "./noise";
-import { rebuild } from "./surface";
+import { displaceGround } from "../rock/groundLedger";
 import { nativeContext } from "./context";
 import { composeNativeAuthoring, nativePosition, parentChannels } from "./atlasWorkspace";
 import { workingArray, releaseWorking } from "./physicalNumerics";
@@ -134,8 +134,7 @@ function applyConserved(map: PhysicalField, proposal: Proposal): ReliefSynthesis
     );
     const applied = units(change);
     if (applied === 0) continue;
-    map.BedrockElevation.add(i, applied);
-    rebuild(map, i);
+    displaceGround(map, i, applied, "regional");
     changed++;
     square += change * change;
   }
@@ -189,8 +188,7 @@ export function synthesizeRegionalRelief(
       ),
       applied = units(delta);
     if (!applied) continue;
-    map.BedrockElevation.add(i, applied);
-    rebuild(map, i);
+    displaceGround(map, i, applied, "regional");
     changed++;
     square += delta * delta;
   }

@@ -1,5 +1,5 @@
 // OceanConnectivityLayer.cs, Canonry 0f62584c.
-import { setWaterSurface, type PhysicalField } from "./field";
+import { crustForming, setWaterSurface, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { noWaterSurface, units } from "./math";
 import { oceanSeeds, OceanComponents, visitConnectedOcean } from "./oceanComponents";
@@ -87,7 +87,7 @@ export function groundedIceWater(map: PhysicalField) {
  */
 function seaLevel(map: PhysicalField, c: PhysicalContext) {
   const owned = !map.SeaLevelInitialized || map.BaseOceanVolume > 0;
-  if (owned && !c.IsEvolutionEpoch && map.CompletedEpochCount === 0) {
+  if (owned && crustForming(map) && map.CompletedEpochCount === 0) {
     let area = 0;
     for (let i = 0; i < map.mesh.count; i++) area += map.mesh.contentArea(i);
     const target = area * c.Profile.QualityTargets.OceanCoverage.target;

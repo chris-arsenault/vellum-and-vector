@@ -1,5 +1,5 @@
 // OrogenicConstructionLayer finite deformation and constructed summit rock, Canonry 0f62584c.
-import type { PhysicalField } from "./field";
+import { crustForming, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import {
   discoverComponents,
@@ -14,7 +14,16 @@ import {
   orogenicCrestSection,
   summitVariation,
 } from "./orogenicShape";
-import { buoyancy, clamp, crustHeight, round, thickness, toUnits, units } from "./math";
+import {
+  buoyancy,
+  clamp,
+  crustHeight,
+  crustPerRock,
+  round,
+  thickness,
+  toUnits,
+  units,
+} from "./math";
 import { rebuild } from "./surface";
 import { raiseFromCrust } from "../rock/groundLedger";
 import { stripRock } from "../rock/rockColumn";
@@ -68,7 +77,11 @@ function constructSurface(
     p = context.Profile;
   if (value <= 0 || map.CrustContinentalFraction.get(i) / 1000 < 0.35 || c.code !== 1) return;
   const crest = clamp(section / orogenicCrestSection, 0, 1),
-    structural = ((value * p.OrogenicSurfaceReliefSharePerMille) / 1000) * (0.2 + crest * 0.8);
+    fraction = map.CrustContinentalFraction.get(i) / 1000,
+    // Of the crust that reached this column, this share stands up as rock and the rest stays as root.
+    rockFromCrust =
+      (value / (buoyancy(fraction) / 1000) / crustPerRock(fraction)) * p.OrogenicRockShare,
+    structural = rockFromCrust * (0.2 + crest * 0.8);
   const requested = units(structural * summitVariation(map, context, c, i, source));
   if (requested <= 0) return;
   // What stands up was the crust's: a belt builds height by moving what it has, not from nothing.
@@ -137,24 +150,25 @@ export function orogenicConstruction(map: PhysicalField, context: PhysicalContex
   const frame = propagateInfluence(map, context, components, ids);
   advanceThrustFronts(map, context, components, frame);
   const climb = slipThrustSheets(map, context, components, frame);
-  const step = context.IsEvolutionEpoch
-    ? (context.Profile.EpochOrogenicConstructionStep * context.Span * context.TectonicStrength) /
-      1000
-    : context.Profile.InitialOrogenicConstructionStep;
+  const forming = crustForming(map),
+    step = forming
+      ? context.Profile.InitialOrogenicConstructionStep
+      : (context.Profile.EpochOrogenicConstructionStep * context.Span * context.TectonicStrength) /
+        1000;
   const frameBands = [frame.distance, frame.source, frame.side, frame.reach, frame.overlap];
   if (step <= 0) {
     climbThrustRamps(map, context, components.length, climb);
     releaseWorking(map, ids, ...frameBands);
     return;
   }
-  if (!context.IsEvolutionEpoch) pileUpEarlierShortening(map, context);
+  if (forming) pileUpEarlierShortening(map, context);
   const roots = distributeOrogenicRoots(map, context, components, frame);
   climbThrustRamps(map, context, components.length, climb);
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds.get(i);
     if (id >= 0) constructTriangle(map, context, components[id], frame, i, step, roots);
   }
-  if (context.IsEvolutionEpoch) sutureReactivation(map, context);
+  if (!forming) sutureReactivation(map, context);
   crustFlow(map, context, (i) => {
     const id = map.OrogenicComponentIds.get(i);
     return id >= 0 && components[id].code === 1;

@@ -1,4 +1,3 @@
-// PhysicalGeographyEvolutionSession.cs phase composition, Canonry 0f62584c.
 import type { PhysicalEpoch } from "./context";
 import {
   climateSteps,
@@ -38,8 +37,7 @@ export function physicalSchedule(epochs: PhysicalEpoch[]): ScheduledStep[] {
   ) => {
     for (const step of steps) schedule.push({ step, epoch, index, phase });
   };
-  // The reference session initializes through Apply(useEpoch: true): index zero,
-  // even though no evolution epoch is bound yet.
+  // The world's first forming counts as index zero, with no epoch's data bound to it.
   append(initialSteps, null, 0, "initial-geology");
   for (const [index, epoch] of epochs.entries()) {
     append(geologySteps, epoch, index, "geology");

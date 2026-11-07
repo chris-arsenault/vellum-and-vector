@@ -21,9 +21,9 @@ const blowing = compileMix({ abrasion: 1 }),
     asks: [],
     moves: [["loose", "load"]],
     settings: {},
-    run({ field, ground, wear }) {
+    run({ field, ground, stage }) {
       for (let i = 0; i < field.mesh.count; i++)
-        wear.demand(
+        stage.wear(
           { id: "wind", remembers: "CumulativeFluvialErosion" },
           i,
           ground.actOn(i, blowing, 1, Infinity)

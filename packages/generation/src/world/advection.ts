@@ -1,7 +1,7 @@
 // PlateAdvectionLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { clamp, maximumCrustThickness, minimumCrustThickness, units } from "./math";
+import { keepCrustInBounds } from "./crustTransport";
 import { buildTransportPlan, releaseTransportPlan } from "./transportPlan";
 import { transportHistory } from "./transportHistory";
 import { rebuild } from "./surface";
@@ -62,10 +62,7 @@ function transportStep(map: PhysicalField, step: number) {
   advectLandmarkDrainage(map, plan, step);
   transportHistory(map, plan);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.CrustThickness.set(
-      i,
-      clamp(map.CrustThickness.get(i), units(minimumCrustThickness), units(maximumCrustThickness))
-    );
+    keepCrustInBounds(map, i);
     map.AdvectionSourceIndex.set(i, plan.dominant.get(i));
     rebuild(map, i);
   }
@@ -81,6 +78,8 @@ export function plateAdvection(
 ) {
   const total = plateTravel(context.Profile, context.TectonicDurationMyr, context.TectonicStrength),
     rate = total / Math.max(1e-9, context.TectonicDurationMyr);
+  // From here on the plates carry the crust: what the world first laid out is formed.
+  map.CrustFormed = true;
   map.AdvectionSourceIndex.fill(-1);
   map.ConvergentCrustSurplus.fill(0);
   map.LastPlateDriftStep = total;
@@ -96,14 +95,13 @@ export function plateAdvection(
     return;
   }
   map.tectonics.rate = rate;
-  const surplus = workingArray(map, "float64", "advection:surplus"),
-    evolved = { ...context, IsEvolutionEpoch: true };
+  const surplus = workingArray(map, "float64", "advection:surplus");
   let remaining = context.TectonicDurationMyr;
   while (remaining > 1e-9) {
     const myr = tectonicInterval(map, remaining, rate),
       step = rate * myr;
     prepareTectonicMotion(map, myr);
-    tectonicProvinces(map, evolved);
+    tectonicProvinces(map, context);
     transportStep(map, step);
     stepReliefCarry(map, map.transportPlan!, carry);
     afterStep();
@@ -116,6 +114,6 @@ export function plateAdvection(
   finishMove(map, context, carry);
   map.ConvergentCrustSurplus.copyFrom(surplus);
   releaseWorking(map, surplus);
-  tectonicProvinces(map, evolved);
+  tectonicProvinces(map, context);
   map.AccumulatedPlateDrift += total;
 }

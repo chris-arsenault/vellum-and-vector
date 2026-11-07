@@ -8,7 +8,8 @@ import { ask, respondersTo, worldMoved } from "./answers";
 import { answerRows, processRows } from "./couplingTable";
 import { flowRecord } from "./flows";
 import { quantityKinds } from "./quantities";
-import { WearStage } from "./wearStage";
+import "./responders";
+import { Stage } from "./stage";
 
 const field = () => createField(createWorldMesh([0, 0, 1_000_000, 1_000_000], 16, 0));
 const context = () => physicalContext(1, 0, atlasPhysicalProfile());
@@ -28,10 +29,10 @@ it("has a base answer and an asker for every key", () => {
   }
 });
 
-it("declares what each process reads, asks and moves", () => {
+it("declares what each process reads or asks, and what it leaves behind or moves", () => {
   for (const row of processRows()) {
-    expect(row.moves.length, row.id).toBeGreaterThan(0);
     expect(row.reads.length + row.asks.length, row.id).toBeGreaterThan(0);
+    expect(row.moves.length + row.leavesBehind, row.id).toBeGreaterThan(0);
   }
 });
 
@@ -40,19 +41,19 @@ it("lets rain reach rivers: wetter ground answers with more water", () => {
     c = context();
   map.Runoff.set(0, 100);
   map.Runoff.set(1, 400);
-  const runoff = ask(map, "runoff", c);
-  expect(runoff.get(1)).toBeCloseTo(runoff.get(0) * 4);
+  const discharge = ask(map, "discharge", c);
+  expect(discharge.get(1)).toBeCloseTo(discharge.get(0) * 4);
 });
 
 it("holds an answer until the world moves, then answers afresh", () => {
   const map = field(),
     c = context();
   map.Runoff.set(0, 100);
-  const before = ask(map, "runoff", c).get(0);
+  const before = ask(map, "discharge", c).get(0);
   map.Runoff.set(0, 300);
-  expect(ask(map, "runoff", c).get(0)).toBe(before);
+  expect(ask(map, "discharge", c).get(0)).toBe(before);
   worldMoved(map);
-  expect(ask(map, "runoff", c).get(0)).toBeCloseTo(before * 3);
+  expect(ask(map, "discharge", c).get(0)).toBeCloseTo(before * 3);
 });
 
 it("lets magic change an answer in its own terms without any process knowing", () => {
@@ -78,8 +79,8 @@ const streams = { id: "a", remembers: "CumulativeFluvialErosion" } as const,
 
 it("changes nothing until a stage settles, then lands everyone's demands", () => {
   const map = standing(100),
-    stage = new WearStage(map);
-  stage.demand(streams, 0, units(10));
+    stage = new Stage(map, { simultaneous: false });
+  stage.wear(streams, 0, units(10));
   expect(map.Elevation.get(0)).toBe(units(100));
   stage.settle();
   expect(map.Elevation.get(0)).toBeCloseTo(units(90), -1);
@@ -87,9 +88,9 @@ it("changes nothing until a stage settles, then lands everyone's demands", () =>
 
 it("shares out what is left above the sea when more is asked than can go", () => {
   const map = standing(10),
-    stage = new WearStage(map);
-  stage.demand(streams, 0, units(30));
-  stage.demand(acid, 0, units(10));
+    stage = new Stage(map, { simultaneous: true });
+  stage.wear(streams, 0, units(30));
+  stage.wear(acid, 0, units(10));
   stage.settle();
   const left = (map.Elevation.get(0) - map.EffectiveSeaLevel) / 1024;
   expect(left).toBeGreaterThanOrEqual(0.9);
@@ -100,8 +101,8 @@ it("shares out what is left above the sea when more is asked than can go", () =>
 
 it("lets ice cut below the sea where water cannot", () => {
   const map = standing(10),
-    stage = new WearStage(map);
-  stage.demand(ice, 0, units(50));
+    stage = new Stage(map, { simultaneous: false });
+  stage.wear(ice, 0, units(50));
   stage.settle();
   expect(map.Elevation.get(0)).toBeLessThan(0);
 });

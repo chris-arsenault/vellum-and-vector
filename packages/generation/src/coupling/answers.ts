@@ -7,7 +7,28 @@ import { retainedArray } from "../world/physicalNumerics";
  * A question a process asks of the world, named for what it wants to know and not for where the answer
  * lives. Whoever has something to say about it responds, in their own terms; the asker never learns who.
  */
-export const answerKeys = ["runoff", "wetness", "warmth", "frost", "iceBite"] as const;
+export const answerKeys = [
+  /** The water each cell sends downstream, against the reference runoff. */
+  "discharge",
+  /** How wet the ground stays. */
+  "wetness",
+  /** How warm the ground's air is, above freezing. */
+  "warmth",
+  /** How often the ground crosses freezing with water to freeze. */
+  "frost",
+  /** How hard sliding ice bites its bed, against plain ice's 1. */
+  "iceBite",
+  /** The energy of the waves on a cell of open water, on the field's 0 to 1000 scale. */
+  "waveEnergy",
+  /** Worn ground fed to the water on a cell this pass, in height units. */
+  "looseSupply",
+  /** What a unit of water carries on this ground, per unit of span. */
+  "loadCapacity",
+  /** How far roots bind the ground, as a share added to bare ground's hold. */
+  "rootHold",
+  /** How hot buried rock gets here, as a share of full metamorphic heat. */
+  "heat",
+] as const;
 export type AnswerKey = (typeof answerKeys)[number];
 
 interface ResponderBase {

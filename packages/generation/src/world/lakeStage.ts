@@ -74,11 +74,7 @@ function directInput(map: PhysicalField, p: PhysicalProfile, i: number): number 
     0,
     1000
   );
-  return clamp(
-    map.Rainfall.get(i) + truncate((map.Snowfall.get(i) * melt) / 1000),
-    0,
-    p.PrecipitationCeiling
-  );
+  return Math.max(0, map.Rainfall.get(i) + truncate((map.Snowfall.get(i) * melt) / 1000));
 }
 /** The depression's cells from the lowest floor up. */
 function basinCells(map: PhysicalField, component: Depression) {

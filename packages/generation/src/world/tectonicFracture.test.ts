@@ -142,6 +142,70 @@ it("tears a welded plate along its seam when its blocks are pulled apart", () =>
   expect(right.driveX).toBeGreaterThan(0);
 });
 
+it("tears welded continents apart in time with nothing pulling on them", () => {
+  const map = field(),
+    left = site(map, 1, 1, -200_000, 1),
+    right = site(map, 2, 1, 200_000, 2);
+  right.block = 2;
+  const state = stateOf(
+    map,
+    [left, right],
+    [bondOf(0, 1, { suture: true, strength: 0.25 })],
+    95_000
+  );
+  deformTectonicBonds(map, state, 1);
+  expect(state.splits).toBe(0);
+  for (let n = 0; n < 30 && state.splits === 0; n++) deformTectonicBonds(map, state, 1);
+  expect(state.splits).toBe(1);
+  expect(left.driveX).toBeLessThan(0);
+  expect(right.driveX).toBeGreaterThan(0);
+});
+/** Myr until a two-province continent tears, with its one bond at this strength and nothing else on it. */
+function myrToTear(bond: Partial<TectonicBond>, area = 250_000_000_000) {
+  const map = field(),
+    left = site(map, 1, 1, -200_000, 1),
+    right = site(map, 2, 1, 200_000, 1);
+  left.area = right.area = area;
+  const state = stateOf(map, [left, right], [bondOf(0, 1, bond)], 95_000);
+  for (let myr = 1; myr <= 400; myr++) {
+    deformTectonicBonds(map, state, 1);
+    if (state.splits) return myr;
+  }
+  return Infinity;
+}
+it("tears a continent that was never welded, later than an old seam", () => {
+  const intact = myrToTear({ strength: 4 }),
+    seam = myrToTear({ strength: 0.25, suture: true });
+  expect(intact).toBeLessThan(Infinity);
+  expect(seam).toBeLessThan(intact);
+});
+it("tears a wide continent sooner than a small one", () => {
+  expect(myrToTear({ strength: 4 }, 4e12)).toBeLessThan(myrToTear({ strength: 4 }, 1e11));
+});
+it("rifts a continent over a plume sooner than one with none under it", () => {
+  const tear = (plume: boolean) => {
+    const map = field(),
+      left = site(map, 1, 1, -200_000, 1),
+      right = site(map, 2, 1, 200_000, 1);
+    if (plume)
+      map.events.push({
+        id: "plume:1",
+        kind: "plume",
+        x: (left.x + right.x) / 2,
+        y: left.y,
+        radius: 110_000,
+        epoch: 0,
+        strength: 1000,
+      });
+    const state = stateOf(map, [left, right], [bondOf(0, 1, { strength: 4 })], 95_000);
+    for (let myr = 1; myr <= 400; myr++) {
+      deformTectonicBonds(map, state, 1);
+      if (state.splits) return myr;
+    }
+    return Infinity;
+  };
+  expect(tear(true)).toBeLessThan(tear(false));
+});
 it("tears ocean away from a continent's margin under pull, giving the plate a new edge", () => {
   const map = field(),
     land = site(map, 1, 1, -200_000, 1),
@@ -153,13 +217,19 @@ it("tears ocean away from a continent's margin under pull, giving the plate a ne
   expect(land.plate).not.toBe(ocean.plate);
 });
 
-it("holds an unwelded plate together under the same pull", () => {
-  const map = field(),
-    left = site(map, 1, 1, -200_000, 1),
-    right = site(map, 2, 1, 200_000, 1);
-  left.pullX = -0.5;
-  right.pullX = 0.5;
-  const state = stateOf(map, [left, right], [bondOf(0, 1)], 95_000);
-  deformTectonicBonds(map, state, 10);
-  expect(state.splits).toBe(0);
+it("lets ocean sinking at a continent's margin tear the continent, not only an old seam", () => {
+  const tearUnderPull = (strength: number) => {
+    const map = field(),
+      margin = site(map, 1, 1, 200_000, 1),
+      interior = site(map, 2, 1, -200_000, 1);
+    margin.pullX = 0.5;
+    const state = stateOf(map, [interior, margin], [bondOf(0, 1, { strength })], 95_000);
+    for (let myr = 1; myr <= 200; myr++) {
+      deformTectonicBonds(map, state, 1);
+      if (state.splits) return myr;
+    }
+    return Infinity;
+  };
+  expect(tearUnderPull(4)).toBeLessThan(Infinity);
+  expect(tearUnderPull(0.25)).toBeLessThan(tearUnderPull(4));
 });

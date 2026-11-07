@@ -1,4 +1,5 @@
 import type { GenerationState } from "../process";
+import { respond } from "../coupling/answers";
 import type { PhysicalField } from "./field";
 import { reservoirStock, type MagicField } from "./magicState";
 import type { LocateContext } from "./magicSources";
@@ -112,6 +113,14 @@ function karst(map: PhysicalField, i: number) {
     (0.3 + 0.7 * Math.max(rock.solubility, rock.porosity))
   );
 }
+// What Greenwood's springs feed keeps wet the ground its verdure reaches, so rivers, slopes and soil
+// all feel it without knowing it is Greenwood's.
+respond({
+  key: "wetness",
+  by: "greenwood",
+  reads: ["Verdure"],
+  add: (map, i) => map.Verdure.get(i) * 0.5,
+});
 /**
  * Greenwood's springs: where a catchment's recharge reaches the surface through soft, soluble
  * rock on a slope break, stronger where a buried peat stratum lies beneath. The spring is

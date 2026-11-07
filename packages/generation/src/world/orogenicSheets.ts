@@ -1,10 +1,10 @@
 import type { Band } from "@atlas/domain";
-import { headroom, raiseRock, spareCrust } from "../rock/groundLedger";
+import { headroom, raiseRock, shiftRock, spareCrust } from "../rock/groundLedger";
 import { overthrust, stripRock } from "../rock/rockColumn";
 import type { PhysicalContext } from "./context";
 import { adjustCrustColumn } from "./crustTransport";
-import type { PhysicalField } from "./field";
-import { clamp, elevationLimit, units } from "./math";
+import { crustForming, type PhysicalField } from "./field";
+import { clamp, crustPerRock, elevationLimit, units } from "./math";
 import { meshPoint } from "./mesh";
 import { releaseWorking, workingArray } from "./physicalNumerics";
 import {
@@ -40,8 +40,8 @@ function slipShare(behind: number, front: number) {
   return slipKept ** behind / total;
 }
 /**
- * How far the thrust at a sheet's leading edge slips on a pass. A thrust can only carry so much
- * before it locks; what it cannot take goes into thickening the crust beneath, which the roots hold.
+ * How far the thrust at a sheet's leading edge slips on a pass. A thrust rides no further than the
+ * sheet ahead of it in each span of time; shortening past that stays with the crust's roots.
  */
 export const thrustSlip = (shortening: number, sheet: number, front: number, most: number) =>
   sheet > front ? 0 : Math.min(most, shortening * slipShare(front - sheet, front));
@@ -58,9 +58,9 @@ export function drawnIn(shortening: number, sheet: number, front: number, most: 
  * a distance of its own.
  */
 function shorteningOf(map: PhysicalField, context: PhysicalContext, c: BoundaryComponent) {
-  const moved = context.IsEvolutionEpoch
-    ? map.LastPlateDriftStep
-    : context.Profile.OrogenicInitialShortening;
+  const moved = crustForming(map)
+    ? context.Profile.OrogenicInitialShortening
+    : map.LastPlateDriftStep;
   return c.strain * moved;
 }
 const pairKey = (c: BoundaryComponent) => c.pair + 1;
@@ -269,18 +269,14 @@ function planCell(
   if (top !== i) moved.origin.set(i, top);
   if (under >= 0) moved.under.set(i, under);
   if (!isLeadingEdge(map, c, top, sheetOnTop, out)) return;
-  const climb = clamp(
-    thrustSlip(slip.shortening(c), sheetOnTop, c.frontSheet, slip.most) / map.mesh.spacing,
-    0,
-    1
-  );
-  moved.climb.set(i, climb);
-  frame.overlap.set(i, climb);
+  const metres = thrustSlip(slip.shortening(c), sheetOnTop, c.frontSheet, slip.most);
+  moved.climb.set(i, metres);
+  frame.overlap.set(i, clamp(metres / map.mesh.spacing, 0, 1));
 }
-/** How high a sheet's leading edge climbs in a pass, in the field's units. */
-function rampRise(map: PhysicalField, context: PhysicalContext, i: number, climb: number) {
+/** How high a sheet's leading edge climbs in a pass, in the field's units: its slip up the ramp. */
+function rampRise(map: PhysicalField, context: PhysicalContext, i: number, slip: number) {
   const continental = map.CrustContinentalFraction.get(i) / 1000;
-  return units(context.Profile.ThrustRampHeight * climb * (0.4 + 0.6 * continental));
+  return units(context.Profile.ThrustRampGradient * slip * (0.4 + 0.6 * continental));
 }
 function placeLoad(map: PhysicalField, i: number, was: Band, moved: MovedRock) {
   const origin = moved.origin.get(i),
@@ -291,10 +287,15 @@ function placeLoad(map: PhysicalField, i: number, was: Band, moved: MovedRock) {
       units(-elevationLimit),
       units(elevationLimit) - map.SedimentThickness.get(i)
     );
-  map.SurfaceRockLoad.add(i, bedrock - map.BedrockElevation.get(i));
-  map.BedrockElevation.set(i, bedrock);
+  shiftRock(map, i, bedrock - map.BedrockElevation.get(i), "mountains");
   // What a sheet brings that will not stand here goes down into the crust instead of vanishing.
-  if (wanted > bedrock) adjustCrustColumn(map, i, map.CrustThickness.get(i) + wanted - bedrock);
+  if (wanted > bedrock)
+    adjustCrustColumn(
+      map,
+      i,
+      map.CrustThickness.get(i) +
+        (wanted - bedrock) * crustPerRock(map.CrustContinentalFraction.get(i) / 1000)
+    );
 }
 /** How high this pass would raise a cell's leading edge, as far as the height limit leaves room. */
 function rampWanted(map: PhysicalField, context: PhysicalContext, i: number, climb: number) {
@@ -309,7 +310,11 @@ function beltMaterial(map: PhysicalField, context: PhysicalContext, belts: numbe
     if (id < 0) continue;
     const area = map.mesh.area(i) / 1024;
     held[id] += spareCrust(map, i) * area;
-    if (climb.get(i) > 0) wanted[id] += rampWanted(map, context, i, climb.get(i)) * area;
+    if (climb.get(i) > 0)
+      wanted[id] +=
+        rampWanted(map, context, i, climb.get(i)) *
+        crustPerRock(map.CrustContinentalFraction.get(i) / 1000) *
+        area;
   }
   return { wanted, held };
 }
@@ -406,7 +411,7 @@ export function slipThrustSheets(
     slip: PassSlip = {
       shortening: (c) => shorteningOf(map, context, c),
       // A thrust cannot ride past the sheet ahead of it: beyond that the next thrust takes up the slip.
-      most: p.OrogenicSheetSpacing,
+      most: p.OrogenicSheetSpacing * context.Span,
     },
     moved = movedRock(map),
     moves = movesOfPass(map, slip);
@@ -426,7 +431,7 @@ export function slipThrustSheets(
   }
   releaseHeldRock(map, held);
   releaseWorking(map, was, moved.origin, moved.under, moved.left);
-  tiltSheets(map, components, slip, p.ThrustTiltPerCell);
+  tiltSheets(map, components, slip, p.ThrustTiltGradient);
   return moved.climb;
 }
 /**
@@ -438,14 +443,14 @@ function tiltSheets(
   map: PhysicalField,
   components: BoundaryComponent[],
   slip: PassSlip,
-  tiltPerCell: number
+  tiltGradient: number
 ) {
   for (let i = 0; i < map.mesh.count; i++) {
     const c = riding(map, components, i);
     if (!c || !inBelt(map, c, i)) continue;
     const sheet = map.ThrustSheetIndex.get(i) - 1,
-      taken = thrustSlip(slip.shortening(c), sheet, c.frontSheet, slip.most) / map.mesh.spacing,
-      rise = tiltPerCell * taken * (map.ThrustAcross.get(i) / 1000);
+      taken = thrustSlip(slip.shortening(c), sheet, c.frontSheet, slip.most),
+      rise = tiltGradient * taken * (map.ThrustAcross.get(i) / 1000);
     if (rise <= 0) continue;
     map.ThrustDip.add(i, Math.round(rise));
     stripRock(map, i, units(rise));

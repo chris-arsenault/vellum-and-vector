@@ -1,6 +1,6 @@
 import type { PhysicalField } from "../world/field";
 import { adjustCrustColumn } from "../world/crustTransport";
-import { elevationLimit, rockLoadResponsePerMille, units } from "../world/math";
+import { crustPerRock, elevationLimit, rockLoadResponsePerMille, units } from "../world/math";
 import { rebuild } from "../world/surface";
 import { recordFlow, type FlowCause, type Pool } from "../coupling/flows";
 import { stripRock } from "./rockColumn";
@@ -12,7 +12,10 @@ import { stripRock } from "./rockColumn";
 
 const volumeOf = (map: PhysicalField, i: number, height: number) =>
   (height / 1024) * map.mesh.area(i);
-/** Takes material off a cell, as a lowering of its mean height: loose cover first, then rock. */
+/**
+ * Takes material off a cell, as a lowering of its mean height: the soil first, which is the top of
+ * whatever lies there, then the rest of the loose cover, then rock.
+ */
 export function erode(
   map: PhysicalField,
   i: number,
@@ -21,12 +24,17 @@ export function erode(
   to: Pool = "load"
 ): number {
   if (requested <= 0) return 0;
-  const sediment = Math.min(requested, map.SedimentThickness.get(i));
+  const skin = Math.min(requested, units(Math.max(0, map.SoilDepth.get(i)))),
+    sediment = Math.min(requested, Math.max(0, map.SedimentThickness.get(i)));
+  if (skin > 0) {
+    map.SoilDepth.set(i, Math.max(0, map.SoilDepth.get(i) - skin / 1024));
+    recordFlow(map, cause, "soil", to, volumeOf(map, i, skin));
+  }
   map.SedimentThickness.add(i, -sediment);
-  recordFlow(map, cause, "loose", to, volumeOf(map, i, sediment));
+  recordFlow(map, cause, "loose", to, volumeOf(map, i, Math.max(0, sediment - skin)));
   if (requested > sediment) {
     const bedrock = requested - sediment;
-    recordFlow(map, cause, "rock", to, volumeOf(map, i, bedrock));
+    recordFlow(map, cause, "rock", to, volumeOf(map, i, bedrock - Math.max(0, skin - sediment)));
     lowerRock(map, i, bedrock);
     stripRock(map, i, Math.round(bedrock));
   }
@@ -40,16 +48,18 @@ export function spareCrust(map: PhysicalField, i: number) {
 }
 /**
  * Rock comes off the top of a cell: first what was piled on the crust, then the crust's own column,
- * so an old belt's root goes with it. Lost load lets the ground rise back. Crust that goes lowers the
- * ground by its buoyancy alone, so load falls by what makes up the rest of the rise. Below the crust's
- * spare column nothing rises back: the cut stays a hole.
+ * so an old belt's root goes with it. Either way the ground rises back by the same share, since a metre
+ * of crust's rock weighs what a metre of piled rock does: the crust's buoyancy gives up part of that,
+ * and the load gives the rest. Below the crust's spare column nothing rises back: the cut stays a hole.
  */
 function lowerRock(map: PhysicalField, i: number, amount: number) {
   const pile = Math.max(0, map.SurfaceRockLoad.get(i)),
     below = Math.max(0, amount - pile),
-    crust = Math.min(spareCrust(map, i), below);
+    perRock = crustPerRock(map.CrustContinentalFraction.get(i) / 1000),
+    crust = Math.min(spareCrust(map, i), below * perRock),
+    rootRock = crust / perRock;
   map.BedrockElevation.add(i, -amount);
-  map.SurfaceRockLoad.add(i, -(amount - below) - crust / (rockLoadResponsePerMille / 1000));
+  map.SurfaceRockLoad.add(i, -(amount - below) - rootRock / (rockLoadResponsePerMille / 1000));
   if (crust > 0) adjustCrustColumn(map, i, map.CrustThickness.get(i) - crust);
 }
 /** The most this cell's surface can still rise before it reaches the height limit. */
@@ -134,9 +144,10 @@ export function raiseRock(
  * leaves room, and says how much stood: nothing stands that was not there to move.
  */
 export function raiseFromCrust(map: PhysicalField, i: number, wanted: number, cause: FlowCause) {
-  const amount = Math.min(wanted, spareCrust(map, i), headroom(map, i));
+  const perRock = crustPerRock(map.CrustContinentalFraction.get(i) / 1000),
+    amount = Math.min(wanted, spareCrust(map, i) / perRock, headroom(map, i));
   if (amount <= 0) return 0;
-  adjustCrustColumn(map, i, map.CrustThickness.get(i) - amount);
+  adjustCrustColumn(map, i, map.CrustThickness.get(i) - amount * perRock);
   raiseRock(map, i, amount, cause, "crust");
   return amount;
 }
@@ -148,6 +159,60 @@ export function displaceGround(map: PhysicalField, i: number, amount: number, ca
   map.BedrockElevation.add(i, amount);
   recordFlow(map, cause, "crust", "crust", volumeOf(map, i, Math.abs(amount)));
   rebuild(map, i);
+}
+/** The ground comes to stand at `elevation`, its loose cover kept and its rock taking the change. */
+export function standGround(map: PhysicalField, i: number, elevation: number, cause: FlowCause) {
+  const change = elevation - (map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
+  if (change !== 0) displaceGround(map, i, change, cause);
+  else rebuild(map, i);
+}
+/** Rock already standing moves with what carries it: plates or a thrust sheet, piling or thinning. */
+export function shiftRock(map: PhysicalField, i: number, change: number, cause: FlowCause) {
+  map.BedrockElevation.add(i, change);
+  map.SurfaceRockLoad.add(i, change);
+  recordFlow(map, cause, "rock", "rock", volumeOf(map, i, Math.abs(change)));
+  rebuild(map, i);
+}
+/** Loose cover buried deep enough becomes rock where it lies, and the ground stays where it is. */
+export function lithify(map: PhysicalField, i: number, amount: number, cause: FlowCause) {
+  const hardened = Math.min(amount, Math.max(0, map.SedimentThickness.get(i)));
+  if (hardened <= 0) return 0;
+  map.SedimentThickness.add(i, -hardened);
+  raiseRock(map, i, hardened, cause, "loose");
+  rebuild(map, i);
+  return hardened;
+}
+/** A cell's loose cover comes to `thickness`: laid where it grows, taken where it thins. */
+export function looseTo(map: PhysicalField, i: number, thickness: number, cause: FlowCause) {
+  const change = Math.max(0, thickness) - map.SedimentThickness.get(i);
+  if (change > 0) deposit(map, i, change, cause);
+  else if (change < 0) erode(map, i, -change, cause);
+}
+/**
+ * Ice on a cell melts by `amount` metres, as far as there is ice, and says how much went. Melt from
+ * beneath pools under the glacier and leaves as meltwater, which the runoff pass sends down.
+ */
+export function meltIce(
+  map: PhysicalField,
+  i: number,
+  amount: number,
+  cause: FlowCause,
+  beneath = false
+) {
+  const melted = Math.min(Math.max(0, amount), map.IceThickness.get(i));
+  if (melted <= 0) return 0;
+  map.IceThickness.set(i, map.IceThickness.get(i) - melted);
+  recordFlow(map, cause, "ice", "melt", melted * map.mesh.area(i));
+  if (beneath)
+    map.GlacialMeltwater.set(i, Math.min(1000, map.GlacialMeltwater.get(i) + Math.round(melted)));
+  return melted;
+}
+/** Soil spoilt where it lies, by salt or scouring: it is loose ground again and no longer soil. */
+export function spoilSoil(map: PhysicalField, i: number, share: number, cause: FlowCause) {
+  const lost = map.SoilDepth.get(i) * Math.min(1, Math.max(0, share));
+  if (lost <= 0) return;
+  map.SoilDepth.set(i, map.SoilDepth.get(i) - lost);
+  recordFlow(map, cause, "soil", "loose", volumeOf(map, i, units(lost)));
 }
 /**
  * Rock turning to loose cover where it stands: the column loses it and the mantle gains it, and the

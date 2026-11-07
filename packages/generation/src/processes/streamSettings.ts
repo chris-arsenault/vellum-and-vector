@@ -1,7 +1,8 @@
 /** What streams can do, whatever they work on. Imports nothing, so the profile can read it at load. */
 export const streamSettings = {
-  // How finely a pass's cutting is resolved. Changing it does not change how much is cut.
-  FluvialErosionSteps: 13,
+  // How many times cutting is worked out per unit of span. A river cuts no further than its fall in one
+  // working, so a lowering climbs one cell upstream each time: a longer span gets more of them.
+  FluvialErosionStepsPerSpan: 13,
   // Metres of ordinary rock cut per unit of stream power, per unit of span.
   FluvialErosionRate: 4.16,
   FluvialEquilibriumGradient: 0.0015,

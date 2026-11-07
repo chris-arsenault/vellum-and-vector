@@ -1,3 +1,4 @@
+import { standGround } from "../rock/groundLedger";
 import { measureSlopes } from "../world/geography";
 import { units } from "../world/math";
 import { slopeSettings } from "../processes/slopeSettings";
@@ -363,14 +364,14 @@ function writeSurface(state: RegionalState, h: Float64Array, cut: Uint8Array) {
     if (!isContent(mesh, i)) continue;
     if (sea[i]) {
       // The captured sea floor, unless the shore's work raised it toward a bar or delta.
-      map.Elevation.set(i, datum + units(Math.max(h[i], Math.min(base[i], -1))));
+      standGround(map, i, datum + units(Math.max(h[i], Math.min(base[i], -1))), "regional");
       map.CumulativeFluvialErosion.set(i, 0);
     } else {
-      map.Elevation.set(i, datum + units(h[i]) + Math.round(applied.appliedTo("Elevation", i)));
+      const ground = datum + units(h[i]) + Math.round(applied.appliedTo("Elevation", i));
+      standGround(map, i, ground, "regional");
       // Ground the sea cut is not a river's incision.
       map.CumulativeFluvialErosion.set(i, cut[i] ? 0 : units(Math.max(0, base[i] - h[i])));
     }
-    map.BedrockElevation.set(i, map.Elevation.get(i) - map.SedimentThickness.get(i));
   }
 }
 

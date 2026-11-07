@@ -1,3 +1,4 @@
+import { deposit as layLoose } from "../rock/groundLedger";
 import { units } from "../world/math";
 import { distance, isContent } from "./lattice";
 import { materialResistance } from "./material";
@@ -63,7 +64,7 @@ export function transportSediment(state: RegionalState, h: Float64Array, supply:
     const thickness = Math.min(floorLimit, deposit[i] / mesh.contentArea(i));
     if (thickness <= 0) continue;
     h[i] += thickness;
-    map.SedimentThickness.add(i, units(thickness));
+    layLoose(map, i, units(thickness), "regional");
   }
   state.regional.sediment = { mouthLoad };
 }

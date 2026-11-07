@@ -1,4 +1,4 @@
-// GlacierSurface.cs, Canonry 0f62584c.
+import { respond } from "../coupling/answers";
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { ratio, units } from "./math";
@@ -44,3 +44,5 @@ export function iceCanCut(map: PhysicalField, i: number, p: PhysicalProfile) {
 export function refreshGrounding(map: PhysicalField, p: PhysicalProfile) {
   for (let i = 0; i < map.mesh.count; i++) map.GroundedIce.set(i, isGrounded(map, i, p) ? 1 : 0);
 }
+/** Plain ice bites its bed as ice does; what else is in the ice says how much harder. */
+respond({ key: "iceBite", by: "plain ice", reads: [], base: () => 1 });

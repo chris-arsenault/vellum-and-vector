@@ -157,12 +157,7 @@ function addContact(
  */
 function slabPull(map: PhysicalField, state: TectonicState) {
   const pulls = new Map(state.plates.map((plate) => [plate.id, { x: 0, y: 0, contacts: 0 }])),
-    blocks = new Map<number, { x: number; y: number; contacts: number }>(),
     own = state.sites.map(() => ({ x: 0, y: 0, contacts: 0 }));
-  const blockOf = (id: number) => {
-    if (!blocks.has(id)) blocks.set(id, { x: 0, y: 0, contacts: 0 });
-    return blocks.get(id)!;
-  };
   for (const bond of state.bonds) {
     const a = state.sites[bond.a],
       b = state.sites[bond.b];
@@ -171,24 +166,13 @@ function slabPull(map: PhysicalField, state: TectonicState) {
       dy = b.y - a.y,
       length = Math.max(1, Math.hypot(dx, dy)),
       closing = (a.motionX - b.motionX) * dx + (a.motionY - b.motionY) * dy > 0;
-    addContact(
-      [pulls.get(a.plate)!, blockOf(a.block), own[bond.a]],
-      closing && a.assembly === 0,
-      dx,
-      dy,
-      length
-    );
-    addContact(
-      [pulls.get(b.plate)!, blockOf(b.block), own[bond.b]],
-      closing && b.assembly === 0,
-      -dx,
-      -dy,
-      length
-    );
+    addContact([pulls.get(a.plate)!, own[bond.a]], closing && a.assembly === 0, dx, dy, length);
+    addContact([pulls.get(b.plate)!, own[bond.b]], closing && b.assembly === 0, -dx, -dy, length);
   }
   state.sites.forEach((site, i) => {
-    // Ocean feels its own edges; a continent is too strong to, and feels its whole block's.
-    const pull = site.assembly === 0 ? own[i] : blocks.get(site.block);
+    // Each piece of crust feels its own edges: ocean going down under a continent's margin pulls on
+    // that margin and not on its far side. Whether that tears anything is the crust's strength.
+    const pull = own[i];
     site.pullX = pull ? pull.x / Math.max(1, pull.contacts) : 0;
     site.pullY = pull ? pull.y / Math.max(1, pull.contacts) : 0;
   });

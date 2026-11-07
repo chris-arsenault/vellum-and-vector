@@ -1,6 +1,6 @@
 import type { Band } from "@atlas/domain";
 import type { PhysicalBufferName, PhysicalField } from "../world/field";
-import { rebuild } from "../world/surface";
+import { standGround } from "../rock/groundLedger";
 import type { GenerationState } from "../process";
 import { Contributions, ledgerCeilings, ledgerFloors } from "../regional/media";
 import type { RegionalState } from "../regional/state";
@@ -187,7 +187,6 @@ function holdLandscape(map: PhysicalField) {
   for (let cell = 0; cell < map.mesh.count; cell++) {
     const sediment = map.SedimentThickness.get(cell);
     if (map.Elevation.get(cell) === map.BedrockElevation.get(cell) + sediment) continue;
-    map.BedrockElevation.set(cell, map.Elevation.get(cell) - sediment);
-    rebuild(map, cell);
+    standGround(map, cell, map.Elevation.get(cell), "landmarks");
   }
 }

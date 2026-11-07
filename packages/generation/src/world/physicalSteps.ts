@@ -1,233 +1,77 @@
-import type { PhysicalBufferName } from "./field";
+import type { PhysicalBufferName, PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import type { PhysicalField } from "./field";
-import type { NativeStep } from "./sequence";
 import { validateNativeLayer } from "./layerValidation";
+import {
+  climateSteps,
+  coastalSteps,
+  drainageSteps,
+  extractionSteps,
+  geologySteps,
+  glaciationSteps,
+  glacialRunoffStep,
+  historyStep,
+  iceSteps,
+  incisionSteps,
+  initialSteps,
+  meltwaterStep,
+  rockSteps,
+  sedimentStep,
+  validationStep,
+  type NativeStep,
+} from "./sequence";
 
 /**
- * What each world step works from and leaves behind, in the bands themselves. A step that needs a band
- * cannot run unless a selected step wrote it earlier, or the map inherited it. That is all this says:
- * a band's being written says nothing about whether it is still right, and a band a step can do
- * without is not listed here, because an unwritten band reads as nothing happened. The architecture
- * check holds these lists to what the code actually reads and writes.
+ * What a world step works from and leaves behind, gathered from the processes it runs. A step that needs
+ * a band cannot run unless a selected step wrote it earlier, or the map inherited it. That is all this
+ * says: a band's being written says nothing about whether it is still right, and a band a step can do
+ * without is not listed, because an unwritten band reads as nothing happened.
  */
 export interface PhysicalStep {
   readonly needs: readonly PhysicalBufferName[];
   readonly writes: readonly PhysicalBufferName[];
-  /** What a step leaves that is not a band. */
-  readonly leaves?: readonly string[];
+  readonly leaves: readonly string[];
+  /** Whether it moves loose material, so the sediment's books are checked after it. */
+  readonly movesMaterial: boolean;
 }
-const provinces = "CrustProvinceIds",
-  sea = "WaterKindCodes",
-  ground = "Elevation",
-  rock = "RockKindCodes";
-export const physicalSteps: Readonly<Record<string, PhysicalStep>> = {
-  "tectonic-provinces": {
-    needs: [],
-    writes: [
-      provinces,
-      "CrustPlateIds",
-      "CrustContinentalFraction",
-      "CrustMotionX",
-      "CrustMotionY",
-      "TectonicBoundaryCodes",
-      "InitialTectonicBoundaryCodes",
-      "TectonicStrain",
-    ],
-  },
-  "tectonic-epoch-activity": {
-    needs: ["InitialTectonicBoundaryCodes"],
-    writes: ["TectonicBoundaryCodes", "TectonicStrain"],
-  },
-  "continental-sutures": {
-    needs: ["TectonicBoundaryCodes", "CrustContinentalFraction"],
-    writes: ["CrustSutureStrength", "CrustCollisionIntensity"],
-  },
-  "tectonic-margins": {
-    needs: ["TectonicBoundaryCodes", "CrustContinentalFraction"],
-    writes: ["MarginCodes", "CrustAge"],
-  },
-  "continental-domains": { needs: ["TectonicBoundaryCodes"], writes: ["ContinentalPotential"] },
-  "tectonic-uplift": {
-    needs: [provinces, "ContinentalPotential"],
-    writes: [ground, "BedrockElevation", "CrustThickness"],
-  },
-  "landscape-initialization": {
-    needs: [provinces],
-    writes: [rock, "RockResistance", "CrustSupportElevation", "BedrockElevation"],
-  },
-  "plate-advection": {
-    needs: [provinces, rock],
-    writes: [ground, "BedrockElevation", "CrustThickness", "CrustPlateIds", provinces],
-  },
-  "orogenic-construction": {
-    needs: [ground, provinces, rock],
-    writes: [ground, "BedrockElevation", "CrustThickness", "OrogenicConstruction"],
-  },
-  "mantle-plume-roots": { needs: [provinces], writes: ["MantlePlumeRootStrength"] },
-  "volcanic-construction": {
-    needs: [ground, rock],
-    writes: [
-      ground,
-      "BedrockElevation",
-      "VolcanicConstructionHistory",
-      "VolcanicActivity",
-      "FractureConductance",
-    ],
-  },
-  "impact-cratering": {
-    needs: [ground, rock],
-    writes: [
-      ground,
-      "BedrockElevation",
-      "SedimentSupply",
-      "ImpactExcavation",
-      "FractureConductance",
-    ],
-  },
-  "mass-wasting": {
-    needs: [ground, rock],
-    writes: [ground, "BedrockElevation", "SedimentThickness"],
-  },
-  "post-fluvial-mass-wasting": {
-    needs: [ground, rock],
-    writes: [ground, "BedrockElevation", "SedimentThickness"],
-  },
-  "crustal-support": { needs: ["CrustThickness"], writes: ["CrustSupportTarget"] },
-  "lithospheric-flexure": {
-    needs: ["CrustSupportTarget"],
-    writes: [ground, "BedrockElevation", "CrustSupportElevation"],
-  },
-  "ocean-connectivity": {
-    needs: [ground],
-    writes: [sea, "WaterDepths", "WaterSurfaceElevations", "WaterBodyIds"],
-  },
-  "continental-margin-evolution": {
-    needs: [ground, sea, "MarginCodes"],
-    writes: [ground, "BedrockElevation", "CoastalMarginCodes", "OceanMarginDistance"],
-  },
-  "marine-sedimentation": {
-    needs: [ground, sea, "OceanMarginDistance"],
-    writes: [ground, "SedimentThickness", "CumulativeDeposition"],
-  },
-  "coastal-detail": {
-    needs: [ground, "MarginCodes"],
-    writes: [ground, "BedrockElevation"],
-  },
-  "fracture-network": { needs: ["TectonicStrain"], writes: ["FractureConductance"] },
-  geothermal: {
-    needs: ["TectonicBoundaryCodes", "FractureConductance"],
-    writes: ["Geothermal", "HeatSourceDensity"],
-  },
-  "ocean-distance": { needs: [sea], writes: ["OceanDistance"] },
-  bathymetry: { needs: [ground, sea], writes: ["BathymetricZoneCodes", "Slope"] },
-  "landmasses-and-shelf-groups": {
-    needs: [ground, sea],
-    writes: ["LandmassIds", "LandmassClassCodes", "ContinentalGroupIds"],
-  },
-  "ocean-currents": {
-    needs: [sea, "WaterDepths"],
-    writes: ["OceanCurrentX", "OceanCurrentY", "OceanCurrentStrength", "WaveExposure"],
-  },
-  "warmth-sources": { needs: [ground, sea], writes: ["Warmth"] },
-  temperature: { needs: [ground, sea], writes: ["Temperature", "Seasonality"] },
-  "atmospheric-flow": {
-    needs: [ground, sea],
-    writes: ["WindX", "WindY", "UpwindTargets", "MoistureBarriers", "PrecipitationBarriers"],
-  },
-  "moisture-transport": {
-    needs: [ground, sea, "Temperature", "UpwindTargets"],
-    writes: ["Moisture", "ColumnPrecipitation"],
-  },
-  precipitation: {
-    needs: ["Temperature", "ColumnPrecipitation"],
-    writes: ["Rainfall", "Snowfall"],
-  },
-  runoff: { needs: [sea, "Temperature", "Rainfall"], writes: ["Runoff"] },
-  "drainage-conditioning": {
-    needs: [ground, sea],
-    writes: ["DrainageElevations", "DrainageParents", "DrainageRanks"],
-  },
-  "lake-basins": {
-    needs: [ground, sea, "Runoff", "DrainageElevations"],
-    writes: ["LakeOutletTargets", "LakeOverflow", sea, "WaterDepths", "WaterSurfaceElevations"],
-  },
-  "drainage-guidance": {
-    needs: [ground, sea, "DrainageElevations"],
-    writes: ["DrainageGuidanceTargets"],
-  },
-  "flow-routing": {
-    needs: [sea, "DrainageParents", "DrainageGuidanceTargets"],
-    writes: ["FlowTargets", "FlowEdges", "DrainageBasinIds"],
-  },
-  "river-network": {
-    needs: ["Runoff", "FlowTargets"],
-    writes: ["RiverOrders", "CatchmentArea", "FlowAccumulation"],
-  },
-  "ancestral-fluvial-erosion": {
-    needs: [ground, sea, rock],
-    writes: [ground, "BedrockElevation", "SedimentSupply"],
-  },
-  "sediment-transport": {
-    needs: [ground, "FlowTargets", "CatchmentArea"],
-    writes: [ground, "SedimentThickness", "CumulativeDeposition"],
-  },
-  "land-ice-mass-balance": {
-    needs: [ground, sea, "Temperature", "Moisture", "Snowfall"],
-    writes: ["IceThickness", "IceBalance", "MaximumIceThickness"],
-  },
-  "ice-flow": {
-    needs: [ground, sea, "IceThickness"],
-    writes: ["IceFlux", "IceFlowTargets", "GroundedIce"],
-  },
-  "glacial-erosion": {
-    needs: [ground, rock, "IceFlux", "IceFlowTargets", "IceThickness"],
-    writes: [ground, "BedrockElevation", "SedimentSupply"],
-  },
-  "glacial-deposition": {
-    needs: [ground, "IceFlowTargets", "IceFlux"],
-    writes: [ground, "SedimentThickness", "CumulativeGlacialDeposition"],
-  },
-  "glacial-meltwater": {
-    needs: [sea, "Temperature", "IceThickness"],
-    writes: ["GlacialMeltwater"],
-  },
-  "glacial-runoff": { needs: [sea, "Runoff"], writes: ["Runoff"] },
-  "external-coastal-forcing": {
-    needs: [ground, sea],
-    writes: [ground, "BedrockElevation", "CumulativeCoastalErosion"],
-  },
-  "coastal-erosion-and-deposition": {
-    needs: [ground, sea, rock],
-    writes: [ground, "BedrockElevation", "CumulativeCoastalErosion"],
-  },
-  "glacial-landforms": { needs: [ground, sea], writes: ["LandformCodes"] },
-  "sea-ice": { needs: [sea, "Temperature"], writes: ["SeaIceSuitability"] },
-  "landform-classification": {
-    needs: [ground, sea, "RiverOrders"],
-    writes: ["LandformCodes", "Slope"],
-  },
-  "river-channel-geometry": {
-    needs: [ground, "FlowTargets", "RiverOrders"],
-    writes: ["RiverWidth", "RiverDepth", "RiverChannelStrength", "RiverChannelOrders"],
-  },
-  "river-floodplains": {
-    needs: [ground, "FlowTargets", "RiverOrders", "RiverChannelOrders"],
-    writes: ["FloodplainIntensity"],
-  },
-  "river-delta-formation": {
-    needs: [sea, "FlowTargets", "RiverOrders", "RiverChannelOrders"],
-    writes: ["DeltaIntensity"],
-  },
-  lithification: { needs: [ground, rock], writes: [rock, "BedrockElevation"] },
-  "rock-metamorphism": { needs: ["RockResistance"], writes: [rock, "RockResistance"] },
-  "physical-epoch-history": { needs: [ground], writes: ["FirstEpochHeight"] },
-  "physical-structural-validation": {
-    needs: [sea, "FlowTargets"],
-    writes: [],
-    leaves: ["atlas:validated"],
-  },
-};
+const carried = new Set(["load", "loose"]);
+function declared([, , , processes]: NativeStep): PhysicalStep {
+  const unique = <T>(values: readonly T[]) => [...new Set(values)];
+  return {
+    needs: unique(processes.flatMap((each) => each.needs ?? [])),
+    writes: unique(processes.flatMap((each) => each.provides ?? [])),
+    leaves: unique(processes.flatMap((each) => each.leaves ?? [])),
+    movesMaterial: processes.some((each) =>
+      each.moves.some(([from, to]) => carried.has(from) || carried.has(to))
+    ),
+  };
+}
+/** Every step a world can run, by name, each once. */
+export const allSteps: readonly NativeStep[] = [
+  ...new Map(
+    [
+      ...initialSteps,
+      ...geologySteps,
+      ...glaciationSteps,
+      ...iceSteps,
+      meltwaterStep,
+      ...coastalSteps,
+      ...extractionSteps,
+      ...climateSteps,
+      ...drainageSteps,
+      ...incisionSteps,
+      sedimentStep,
+      glacialRunoffStep,
+      ...rockSteps,
+      historyStep,
+      validationStep,
+    ]
+      .reverse()
+      .map((step) => [step[0], step] as const)
+  ).values(),
+];
+export const physicalSteps: Readonly<Record<string, PhysicalStep>> = Object.fromEntries(
+  allSteps.map((step) => [step[0], declared(step)])
+);
 /** The ledger's name for a band having been written. */
 export const fieldProduct = (band: PhysicalBufferName) => `field:${band}`;
 /** Something watching the world's steps as they finish, to record what each one did. */
@@ -245,7 +89,7 @@ export function applyNativeStep(map: PhysicalField, context: PhysicalContext, st
   const [name, , process] = step;
   try {
     process(map, context);
-    validateNativeLayer(map, context, name, physicalSteps[name]?.writes ?? []);
+    validateNativeLayer(map, context, physicalSteps[name]?.writes ?? []);
     stepObserver?.(name, map, context);
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause);

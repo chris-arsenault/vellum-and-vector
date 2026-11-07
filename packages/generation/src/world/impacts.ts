@@ -3,7 +3,7 @@ import { meshDeltaX } from "./mesh";
 import { stripRock } from "../rock/rockColumn";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { hardenRock } from "../rock/rockField";
-import type { PhysicalField } from "./field";
+import { crustForming, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, elevationLimit, round, truncate, units } from "./math";
@@ -15,18 +15,18 @@ import { deposit, raiseRock } from "../rock/groundLedger";
 import { rebuild } from "./surface";
 import { areaBudget, mediumArea } from "./worldScale";
 
-function impactCount(c: PhysicalContext): number {
+function impactCount(map: PhysicalField, c: PhysicalContext): number {
   if (c.Profile.ImpactCraterCount === 0) return 0;
   const primordial = truncate(
     (c.Profile.ImpactCraterCount * c.Profile.ImpactPrimordialShare) / 1000
   );
-  if (!c.IsEvolutionEpoch) return primordial;
+  if (crustForming(map)) return primordial;
   // What falls after the first forming falls evenly through time, however long each epoch lasts.
   const share = (c.Profile.ImpactCraterCount - primordial) / Math.max(1, c.EpochCount);
   return Math.max(1, round(share * c.Span));
 }
 function centers(map: PhysicalField, c: PhysicalContext): WorldCandidate[] {
-  const count = areaBudget(impactCount(c), mediumArea(map));
+  const count = areaBudget(impactCount(map, c), mediumArea(map));
   if (count === 0) return [];
   const ranked = worldCandidates(map.mesh, c.Seed, Math.max(256, count * 256)).sort(
     (a, b) => b.priority - a.priority
@@ -164,7 +164,7 @@ export function impactCratering(map: PhysicalField, c: PhysicalContext) {
       x: center.x,
       y: center.y,
       radius,
-      epoch: c.IsEvolutionEpoch ? c.EpochIndex : -1,
+      epoch: crustForming(map) ? -1 : c.EpochIndex,
       strength: 1000,
     });
     applyImpact(map, c.Profile, center, radius);
