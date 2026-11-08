@@ -23,7 +23,6 @@ export type ProcessBehavior =
   | {
       kind: "material-transformation";
       transform: Operation;
-      balance: Operation;
     };
 
 /** Dispatches operational interfaces; it never infers time from world settings. */
@@ -47,7 +46,7 @@ export function executeProcessBehavior(
     case "forcing-contributor":
       return behavior.contribute(state, context);
     case "material-transformation":
-      return transformMaterial(behavior, state, context);
+      return behavior.transform(state, context);
   }
 }
 export function validateBehaviorBinding(
@@ -55,14 +54,6 @@ export function validateBehaviorBinding(
   context: Pick<MapProcessContext, "epochs">
 ) {
   if (process.behavior?.kind === "elapsed") elapsedYears(process.behavior.duration, context);
-}
-async function transformMaterial(
-  behavior: Extract<ProcessBehavior, { kind: "material-transformation" }>,
-  state: GenerationState,
-  context: MapProcessContext
-) {
-  await behavior.transform(state, context);
-  await behavior.balance(state, context);
 }
 export function elapsedYears(binding: DurationBinding, context: Pick<MapProcessContext, "epochs">) {
   const years =

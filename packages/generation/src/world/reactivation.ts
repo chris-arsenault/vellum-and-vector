@@ -6,7 +6,9 @@ import { buoyancy, clamp, crustPerRock, thickness, toUnits, units } from "./math
 import { metricSearch } from "./metricSearch";
 import { addRoot } from "./orogenicRoots";
 import { releaseWorking, workingArray } from "./physicalNumerics";
-import { displaceGround } from "../rock/groundLedger";
+import { deformGround, displaceGroundField, shiftGroundField } from "../rock/groundDeformation";
+import { groundOf } from "../rock/ground";
+import { yieldingPlane } from "../rock/groundQueries";
 import { markGroundSeam, spendRootReserve } from "../rock/groundWorld";
 
 /**
@@ -50,19 +52,39 @@ function edgePush(map: PhysicalField, i: number) {
     : 0;
 }
 /**
- * How hard each plate is squeezed: the strongest push along its edges. Plate interiors are mostly in
- * compression from ridge push and convergence, and one hard collision loads a whole plate, as the
- * Himalaya does Asia. A boundary's strain tapers across its width, so a mean would mostly measure that.
+ * Each plate retains the direction of its loading. Opposed pushes reinforce compression along
+ * their shared axis; differently oriented contacts do not become one directionless maximum.
  */
 function plateSqueeze(map: PhysicalField) {
   let slots = 0;
   for (let i = 0; i < map.mesh.count; i++) slots = Math.max(slots, plateSlot(map, i) + 1);
-  const squeeze = new Float64Array(slots);
+  const xx = new Float64Array(slots),
+    xy = new Float64Array(slots),
+    yy = new Float64Array(slots),
+    weight = new Float64Array(slots),
+    maximum = new Float64Array(slots);
   for (let i = 0; i < map.mesh.count; i++) {
-    const plate = plateSlot(map, i);
-    squeeze[plate] = Math.max(squeeze[plate], edgePush(map, i));
+    const plate = plateSlot(map, i),
+      push = edgePush(map, i),
+      tx = map.TectonicTangentX.get(i),
+      ty = map.TectonicTangentY.get(i),
+      length = Math.hypot(tx, ty);
+    if (push <= 0 || length <= 0) continue;
+    const nx = -ty / length,
+      ny = tx / length;
+    xx[plate] += push * nx * nx;
+    xy[plate] += push * nx * ny;
+    yy[plate] += push * ny * ny;
+    weight[plate] += push;
+    maximum[plate] = Math.max(maximum[plate], push);
   }
-  return squeeze;
+  for (let plate = 0; plate < slots; plate++) {
+    const scale = weight[plate] > 0 ? maximum[plate] / weight[plate] : 0;
+    xx[plate] *= scale;
+    xy[plate] *= scale;
+    yy[plate] *= scale;
+  }
+  return { xx, xy, yy };
 }
 /**
  * How hard the nearest rift through a continent pulls, and how far off it lies. Extension stays close
@@ -72,6 +94,7 @@ function plateSqueeze(map: PhysicalField) {
 function riftPull(map: PhysicalField, reach: number) {
   const distance = workingArray(map, "float64", "seams:riftDistance").fill(Infinity),
     pull = workingArray(map, "float64", "seams:pull").fill(0),
+    source = workingArray(map, "int32", "seams:riftSource").fill(-1),
     isRift = (i: number) =>
       map.TectonicBoundaryCodes.get(i) === 2 &&
       map.CrustContinentalFraction.get(i) >= interiorFraction,
@@ -85,25 +108,64 @@ function riftPull(map: PhysicalField, reach: number) {
     for (let i = 0; i < map.mesh.count; i++) {
       if (!isRift(i)) continue;
       pull.set(i, strongest.get(map.TectonicBoundaryPairIds.get(i)) ?? 0);
+      source.set(i, i);
       distance.set(i, 0);
       yield i;
     }
   }
-  metricSearch(map.mesh, rifts(), distance, reach, (target, from) =>
-    pull.set(target, pull.get(from))
-  );
-  return { distance, pull };
+  metricSearch(map.mesh, rifts(), distance, reach, (target, from) => {
+    pull.set(target, pull.get(from));
+    source.set(target, source.get(from));
+  });
+  return { distance, pull, source };
 }
-/** The stress on crust at a cell: squeezing is positive, pulling negative. */
+/** Resolve a directional horizontal load on an inherited axial weakness; unknown fabric is isotropic. */
+export function resolvedLoading(
+  xx: number,
+  xy: number,
+  yy: number,
+  grainX: number,
+  grainY: number
+) {
+  const coherence = clamp(Math.hypot(grainX, grainY) / 1000, 0, 1),
+    angle = Math.atan2(grainY, grainX) / 2,
+    tx = Math.cos(angle),
+    ty = Math.sin(angle),
+    nx = -ty,
+    ny = tx,
+    normal = xx * nx * nx + 2 * xy * nx * ny + yy * ny * ny,
+    shear = Math.abs(tx * (xx * nx + xy * ny) + ty * (xy * nx + yy * ny)),
+    directed = normal + Math.sign(normal) * shear;
+  return ((xx + yy) / 2) * (1 - coherence) + directed * coherence;
+}
+/** A stronger favorably oriented bed can yield before a weaker bed the load does not engage. */
+export const loadedPlane = (xx: number, xy: number, yy: number) =>
+  yieldingPlane((material) => resolvedLoading(xx, xy, yy, material.grainX, material.grainY));
+/** Squeezing is positive, pulling negative; both retain the direction of the contact applying them. */
 function stressAt(
   map: PhysicalField,
   i: number,
-  squeeze: Float64Array,
+  squeeze: ReturnType<typeof plateSqueeze>,
   rift: ReturnType<typeof riftPull>,
   reach: number
 ) {
-  const near = 1 - Math.min(1, rift.distance.get(i) / reach);
-  return squeeze[plateSlot(map, i)] * (1 - near) - rift.pull.get(i) * near;
+  const near = 1 - Math.min(1, rift.distance.get(i) / reach),
+    plate = plateSlot(map, i),
+    source = rift.source.get(i),
+    tx = source >= 0 ? map.TectonicTangentX.get(source) : 0,
+    ty = source >= 0 ? map.TectonicTangentY.get(source) : 0,
+    length = Math.max(1, Math.hypot(tx, ty)),
+    nx = -ty / length,
+    ny = tx / length,
+    pull = rift.pull.get(i) * near;
+  return groundOf(map).fold(
+    i,
+    loadedPlane(
+      squeeze.xx[plate] - pull * nx * nx,
+      squeeze.xy[plate] - pull * nx * ny,
+      squeeze.yy[plate] - pull * ny * ny
+    )
+  );
 }
 /** A plate's slot in a dense array; a cell with no plate has the first. */
 const plateSlot = (map: PhysicalField, i: number) => map.CrustPlateIds.get(i) + 1;
@@ -207,11 +269,23 @@ function moveSeam(map: PhysicalField, i: number, metres: number) {
     crust = crustFor(map, i, metres);
   if (metres > 0) addRoot(map, i, rootVolume(map, i, crust));
   else adjustCrustColumn(map, i, units(thickness(toUnits(map.CrustThickness.get(i)) + crust)));
-  displaceGround(map, i, rock, "mountains");
   if (rock > 0) {
     // Thickening drives burial and heat; uplift alone does not uncover the deeper beds.
     map.OrogenicConstruction.set(i, Math.max(map.OrogenicConstruction.get(i), rock));
   }
+  return rock;
+}
+function loadStrike(
+  map: PhysicalField,
+  i: number,
+  move: number,
+  squeeze: ReturnType<typeof plateSqueeze>,
+  riftSource: number
+) {
+  if (move < 0 && riftSource >= 0)
+    return Math.atan2(map.TectonicTangentY.get(riftSource), map.TectonicTangentX.get(riftSource));
+  const plate = plateSlot(map, i);
+  return Math.atan2(2 * squeeze.xy[plate], squeeze.xx[plate] - squeeze.yy[plate]) / 2 + Math.PI / 2;
 }
 export function sutureReactivation(map: PhysicalField, context: PhysicalContext) {
   const p = context.Profile,
@@ -222,17 +296,41 @@ export function sutureReactivation(map: PhysicalField, context: PhysicalContext)
     reach = p.SutureReactivationZone,
     { distance, weak } = weakZones(map, reach),
     rift = riftPull(map, reach),
-    moves = workingArray(map, "float64", "seams:moves").fill(0);
+    moves = workingArray(map, "float64", "seams:moves").fill(0),
+    displacement = workingArray(map, "float64", "seams:displacement").fill(0),
+    raised = workingArray(map, "float64", "seams:raised").fill(0);
   for (let i = 0; i < map.mesh.count; i++) {
     if (!inInterior(map, i) || weak.get(i) <= 0) continue;
-    const stress = stressAt(map, i, squeeze, rift, reach),
-      fading = (1 - distance.get(i) / reach) ** 2;
-    moves.set(i, step * clamp(stress, -1, 1) * weak.get(i) * fading);
+    const { response, mobility } = stressAt(map, i, squeeze, rift, reach),
+      width = reach * Math.sqrt(mobility),
+      fading = width > 0 ? Math.max(0, 1 - distance.get(i) / width) ** 2 : 0;
+    moves.set(i, step * clamp(response, -1, 1) * weak.get(i) * fading);
   }
-  const paid = spendPlateCrust(map, moves, squeeze.length);
+  const paid = spendPlateCrust(map, moves, squeeze.xx.length);
   for (let i = 0; i < map.mesh.count; i++) {
     const move = moves.get(i);
-    if (move !== 0) moveSeam(map, i, move > 0 ? move * paid[plateSlot(map, i)] : move);
+    if (move === 0) continue;
+    const plate = plateSlot(map, i),
+      admitted = move > 0 ? move * paid[plate] : move,
+      angle = loadStrike(map, i, move, squeeze, rift.source.get(i));
+    const movement = moveSeam(map, i, admitted);
+    // Compression spends crust to raise standing rock, whose load must drive flexure.
+    // Extension offsets the retained column without inventing a negative surface deposit.
+    raised.set(i, Math.max(0, movement));
+    displacement.set(i, Math.min(0, movement));
+    deformGround(map, i, Math.cos(angle), Math.sin(angle), weak.get(i), units(Math.abs(admitted)));
   }
-  releaseWorking(map, distance, weak, rift.distance, rift.pull, moves);
+  displaceGroundField(map, displacement, "reactivation");
+  shiftGroundField(map, raised, "reactivation");
+  releaseWorking(
+    map,
+    distance,
+    weak,
+    rift.distance,
+    rift.pull,
+    rift.source,
+    moves,
+    displacement,
+    raised
+  );
 }

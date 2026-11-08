@@ -93,7 +93,7 @@ export const support = builder({
   statement: "Each column finds the height it floats at under its crust, rock, sediment and ice.",
   needs: ["CrustThickness"],
   provides: ["CrustSupportTarget"],
-  build: (map, context) => crustalSupport(map, context, Boolean(context.IceLoad)),
+  build: crustalSupport,
 });
 export const baking = builder({
   id: "rock-metamorphism",

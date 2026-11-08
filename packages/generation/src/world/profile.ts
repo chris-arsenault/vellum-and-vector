@@ -9,6 +9,8 @@ import { weatheringSettings } from "../processes/weatheringSettings";
 import { creepSettings } from "../processes/creepSettings";
 import { solutionSettings } from "../processes/solutionSettings";
 import { streamSettings } from "../processes/streamSettings";
+import { lavaSettings } from "../processes/lavaSettings";
+import { marineSettings } from "../processes/marineSettings";
 
 // Fractions/strengths explicitly named PerMille (and legacy scalar strengths)
 // remain dimensionless; iterations count numerical passes within one epoch.
@@ -51,13 +53,7 @@ export const physicalProfile = {
   // Thermal subsidence belongs to oceanic lithosphere: full at continental fraction 0, fading
   // linearly to none at this fraction, so an aged continental platform keeps its height.
   OceanicSubsidenceCompositionLimit: 0.5,
-  PassiveShelfWidth: 240_000,
-  RiftedShelfWidth: 160_000,
-  ContinentalShelfDepth: 150,
   ConvergentTrenchDepth: 900,
-  ContinentalRiseMinimumWidth: 240_000,
-  PassiveMarginMaximumGradient: 0.0016,
-  RiftedMarginMaximumGradient: 0.0018,
   MarginEvolutionResponsePerMille: 760,
   CoastalDetailBand: 90,
   CoastalDetailStrength: 1000,
@@ -96,13 +92,6 @@ export const physicalProfile = {
   InteriorReliefScale: 120_000,
   OrogenicMinimumComponentArea: 600_000_000,
   OrogenicMinimumStrain: 80,
-  // Metres from a belt's boundary that construction reaches; it must cover the plateau.
-  OrogenicInfluenceReach: 520_000,
-  // Hinterland plateau: share of the crest section carried flat behind the belt, and the metres
-  // behind the boundary over which it fades. The foreland front keeps this share of the range width.
-  OrogenicPlateauWidth: 160_000,
-  OrogenicPlateauShare: 0.6,
-  OrogenicForelandWidthShare: 0.5,
   // Relief a child profile realizes below its parent's cell from the parent's own gradient:
   // amplitude is the gain times the parent cell's relief above the floor (metres), stretched
   // along the ridge direction by the anisotropy. Parent-cell means are conserved.
@@ -111,10 +100,6 @@ export const physicalProfile = {
   ReliefSynthesisAnisotropy: 3,
   // Independent maps resolve rolling lowland relief as well as inherited mountain slopes.
   RegionalReliefMinimumSlope: 0.008,
-  InitialOrogenicConstructionStep: 3200,
-  EpochOrogenicConstructionStep: 1200,
-  RiftShoulderDistance: 70_000,
-  TransformRangeWidth: 40_000,
   OrogenicAlongStrikeScale: 420_000,
   // The width of a thrust sheet in rock of baseline stiffness, and a fault segment's length.
   OrogenicSheetSpacing: 100_000,
@@ -128,9 +113,6 @@ export const physicalProfile = {
   // of slip: the dip of a thrust's ramp.
   ThrustTiltGradient: 0.04,
   ThrustRampGradient: 0.04,
-  OrogenicProminenceMinimum: 700,
-  OrogenicProminenceMaximum: 1900,
-  OrogenicProminenceRankDecay: 2.4,
   OrogenicRockShare: 0.5,
   // Metres of crust above its normal thickness that a column bears before the rest starts to flow,
   // the excess at which half of what is over goes, and how far a pass's flow reaches.
@@ -149,10 +131,14 @@ export const physicalProfile = {
   PlumeLobeStrength: 620,
   InteriorBasinDepthShare: 260,
   EpochTectonicElevationStep: 240,
+  // Porous bulk sediment, not grain density; saturation/compaction do not yet vary this load.
   SedimentLoadResponsePerMille: 360,
-  IceLoadResponsePerMille: 860,
+  // Ice/asthenosphere density ratio: Le Meur & Huybrechts, doi:10.3189/S0260305500013586.
+  IceLoadResponsePerMille: (1000 * 910) / 3300,
   LithosphericFlexureLength: 100_000,
   ...streamSettings,
+  ...lavaSettings,
+  ...marineSettings,
   ...solutionSettings,
   ...iceSettings,
   ...slopeSettings,
@@ -407,15 +393,9 @@ export const physicalProfile = {
   MantlePlumeStrength: 940,
   MantlePlumeMinimumShare: 260,
   MantlePlumeStrengthExponent: 1700,
-  // Hotspot track length per epoch; each epoch's cone forms at the new head.
-  // A shield volcano built over a plume: far broader and taller from the sea floor than a land cone.
+  // Reference dimensions determine plume supply volume; terrain and cooling determine its shape.
   VolcanicConeRadius: 60_000,
   VolcanicConeHeight: 5_000,
-  // The steepest lava stands, as rise over run: what a shield's flanks settle at.
-  VolcanicRepose: 0.1,
-  VolcanicApronHeight: 70,
-  VolcanicCalderaChance: 180,
-  VolcanicCalderaDepth: 90,
   FractureBranchCount: 24,
   FractureMinimumLength: 180_000,
   FractureMaximumLength: 1_200_000,

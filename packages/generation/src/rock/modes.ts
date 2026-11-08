@@ -7,7 +7,7 @@ import {
   type RockFacts,
   rockKindOfCode,
 } from "./rockCatalogue";
-import type { MaterialLayer } from "./rockColumn";
+import { materialStrength, type MaterialLayer } from "./rockColumn";
 
 /**
  * The vocabulary between processes and materials: each mode is one way of attacking material. A
@@ -109,9 +109,7 @@ export const givenUp = (mix: CompiledMix, code: number, strength: number) =>
 
 /** Both retained constituents answer the action; damage belongs to this bed, not the next outcrop. */
 export function materialGives(mix: CompiledMix, layer: MaterialLayer, loose = false, x = 0, y = 0) {
-  const strength = loose
-      ? Math.min(layer.strength, rockCatalogue.alluvium.resistance)
-      : layer.strength,
+  const strength = materialStrength(layer, loose),
     first = givenUp(mix, layer.kind, strength),
     second = givenUp(mix, layer.secondaryKind, strength);
   const length = x * x + y * y,
@@ -122,8 +120,13 @@ export function materialGives(mix: CompiledMix, layer: MaterialLayer, loose = fa
     bedding =
       rockKindOfCode(layer.kind).bedding * (1 - layer.secondaryShare) +
       rockKindOfCode(layer.secondaryKind).bedding * layer.secondaryShare;
+  // A bed falling toward the action opens a release plane; the opposite face cuts across it.
+  // Unlike the inherited axial grain, signed inclination distinguishes the two directions.
+  const dip = length > 0 ? -(layer.bedSlopeX * x + layer.bedSlopeY * y) / Math.sqrt(length) : 0,
+    release = dip / Math.hypot(1, dip);
   return (
     (1 + 0.5 * mix.fabricResponse * bedding * alignment) *
+    (1 + 0.5 * mix.fabricResponse * bedding * release) *
     ((first + (second - first) * layer.secondaryShare) *
       Math.exp(mix.fracturesWeaken * layer.damage))
   );
@@ -140,9 +143,15 @@ export function burialResponse(layer: MaterialLayer, epoch: number): MaterialLay
     ...layer,
     kind: first.code,
     secondaryKind: second.code,
-    strength:
-      first.resistance * (1 - layer.secondaryShare) + second.resistance * layer.secondaryShare,
+    strength: Math.max(
+      0,
+      layer.strength +
+        (first.resistance - rockKindOfCode(layer.kind).resistance) * (1 - layer.secondaryShare) +
+        (second.resistance - rockKindOfCode(layer.secondaryKind).resistance) * layer.secondaryShare
+    ),
     damage: layer.damage * 0.5,
+    // Cemented aggregate remains distinct from the intact clasts that supplied it.
+    consolidation: 0.65,
     altered: epoch,
   };
 }
@@ -162,6 +171,7 @@ export function heatedMaterial(layer: MaterialLayer, epoch: number): MaterialLay
     strength:
       first.resistance * (1 - layer.secondaryShare) + second.resistance * layer.secondaryShare,
     damage: layer.damage * 0.5,
+    consolidation: 1,
     altered: epoch,
   };
 }

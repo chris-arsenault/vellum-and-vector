@@ -56,6 +56,10 @@ function fixture() {
     map.mesh.count
   );
   const plan: TransportPlan = {
+    deformationXX: scratch("float64", [1, 1, 1, 1]),
+    deformationXY: scratch("float64", [0, 0, 0, 0]),
+    deformationYX: scratch("float64", [0, 0, 0, 0]),
+    deformationYY: scratch("float64", [1, 1, 1, 1]),
     offsets: workingValues(
       map,
       "int32",

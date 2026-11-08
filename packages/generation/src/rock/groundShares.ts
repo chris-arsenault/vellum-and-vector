@@ -2,7 +2,14 @@ import type { PhysicalField } from "../world/field";
 import { reconcileWater } from "../world/field";
 import { clamp } from "../world/math";
 import { columnFields, columns, materialProperties, type Column } from "./rockLayerFields";
-import { copyLayer, deepestLayer, layerDepth, readLayer, type MaterialLayer } from "./rockColumn";
+import {
+  copyLayer,
+  deepestLayer,
+  layerDepth,
+  materialStrength,
+  readLayer,
+  type MaterialLayer,
+} from "./rockColumn";
 import { groundStorage } from "./groundStorage";
 
 export type GroundFacet = "land" | "cut";
@@ -57,7 +64,10 @@ export function projectGround(map: PhysicalField, cell: number) {
   owned.GroundCutCover.set(cell, valleyCover);
   owned.Elevation.set(cell, map.BedrockElevation.get(cell) + cover);
   owned.RockKindCodes.set(cell, share > 0.5 ? valley.kind : land.kind);
-  owned.RockResistance.set(cell, land.strength * (1 - share) + valley.strength * share);
+  owned.RockResistance.set(
+    cell,
+    materialStrength(land) * (1 - share) + materialStrength(valley) * share
+  );
   owned.StructuralGrainX.set(cell, land.grainX * (1 - share) + valley.grainX * share);
   owned.StructuralGrainY.set(cell, land.grainY * (1 - share) + valley.grainY * share);
   reconcileWater(map, cell);

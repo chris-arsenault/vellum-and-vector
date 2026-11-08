@@ -21,7 +21,7 @@ function nativeGroup(
   slot: string,
   occurrence: string,
   context: Composition,
-  options: { initial?: boolean; iceLoad?: boolean; material?: boolean } = {}
+  options: { initial?: boolean; material?: boolean } = {}
 ): ProcessSequence {
   const body: ProcessSequence = [];
   const bound = { ...context, ...options };
@@ -38,7 +38,6 @@ function nativeGroup(
       ...step,
       parameters: {
         initial: options.initial ?? false,
-        iceLoad: options.iceLoad ?? false,
         ...step.parameters,
       },
     });
@@ -127,12 +126,16 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     ...climate("epoch.after-incision-climate", context),
     ...drainage("epoch.after-incision-water", context),
     ...nativeGroup("epoch.sediment", "epoch", context),
-    ...nativeGroup("ice.model", "epoch.glaciation", context, { iceLoad: true }),
+    ...nativeGroup("ice.model", "epoch.glaciation", context),
+    // Accumulation changes actual water storage and loading before that ice sculpts its bed.
+    ...nativeGroup("epoch.ice-load", "epoch.after-ice-balance", context),
+    ...nativeGroup("climate.ocean", "epoch.after-ice-balance", context),
+    ...nativeGroup("ice.flow", "epoch.after-ice-balance", context),
     ...nativeGroup("epoch.sculpting", "epoch", context),
     ...nativeGroup("epoch.ice-load", "epoch", context),
     ...climate("epoch.after-glaciation-climate", context),
     ...drainage("epoch.after-glaciation-water", context),
-    ...nativeGroup("ice.model", "epoch.post-glacial", context),
+    ...nativeGroup("ice.flow", "epoch.post-glacial", context),
     ...nativeGroup("ice.meltwater", "epoch.post-glacial", context),
     ...drainage("epoch.meltwater", context, true),
     ...contributions("epoch.post-glacial-forcing", context),
@@ -202,10 +205,10 @@ export function atlasPhysicalSequence(
     ...contributions("present.climate-forcing", context),
     ...(!physical ? contributions("present.material-forcing", context) : []),
     ...drainage("present.initial-water", context),
-    ...nativeGroup("ice.model", "present.initial-ice", context),
+    ...nativeGroup("ice.flow", "present.initial-ice", context),
     ...nativeGroup("ice.meltwater", "present", context),
     ...drainage("present.meltwater", context, true),
-    ...nativeGroup("ice.model", "present.final-ice", context),
+    ...nativeGroup("ice.flow", "present.final-ice", context),
     ...presentExtraction(context),
     ...contributions("present.post-glacial-forcing", context),
     ...(!physical ? contributions("present.influence-history", context) : []),

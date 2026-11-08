@@ -16,12 +16,7 @@ import { plateTravel } from "./tectonicControls";
 import { advectLandmarkDrainage } from "./landmarkTransport";
 import { geologicalPointMotion } from "./geologicalPointMotion";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import {
-  beginReliefCarry,
-  finishReliefCarry,
-  stepReliefCarry,
-  type ReliefCarry,
-} from "./reliefCarry";
+import { beginReliefCarry, finishReliefCarry } from "./reliefCarry";
 
 function advectGeometry(map: PhysicalField, distance: number) {
   const vx = physicalSampler(map.mesh, map.CrustMotionX),
@@ -65,9 +60,6 @@ function transportStep(map: PhysicalField, step: number) {
     map.AdvectionSourceIndex.set(i, plan.dominant.get(i));
   }
 }
-function finishMove(map: PhysicalField, context: PhysicalContext, carry: ReliefCarry) {
-  finishReliefCarry(map, carry, context.Profile.OrogenicSheetSpacing);
-}
 /** Land this interval before building on it; the next move carries the newly made rock. */
 function deformInterval(
   map: PhysicalField,
@@ -77,8 +69,7 @@ function deformInterval(
 ) {
   const carry = beginReliefCarry(map);
   transportStep(map, distance);
-  stepReliefCarry(map, map.transportPlan!, carry);
-  finishMove(map, context, carry);
+  finishReliefCarry(map, carry, map.transportPlan!);
   context.AfterPlateStep?.();
   const interval = {
     ...context,

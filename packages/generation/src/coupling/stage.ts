@@ -3,7 +3,7 @@ import type { MutablePhysicalBufferName, PhysicalField } from "../world/field";
 import { releaseWorking, workingArray } from "../world/physicalNumerics";
 import { deposit, raiseFromCrust, weatherRock, weatherRockBy } from "../rock/groundLedger";
 import { facetShare, type GroundFacet } from "../rock/groundShares";
-import { groundOf } from "../rock/ground";
+import { groundOf, type GroundDirection } from "../rock/ground";
 import type { CompiledMix } from "../rock/modes";
 import type { FlowCause, Pool } from "./flows";
 import { settleRemovals, type GroundSource, type RemovalRequest } from "./stageRemoval";
@@ -164,8 +164,15 @@ export class Stage {
     request.recorded!.add(cell, recorded);
   }
   /** Each occupied surface answers the same forcing before any pending action changes it. */
-  attack(cause: WearCause, cell: number, mix: CompiledMix, power: number, limit: number) {
-    const depths = groundOf(this.map).surfaceAction(cell, mix, power, limit);
+  attack(
+    cause: WearCause,
+    cell: number,
+    mix: CompiledMix,
+    power: number,
+    limit: number,
+    direction?: GroundDirection
+  ) {
+    const depths = groundOf(this.map).surfaceAction(cell, mix, power, limit, -Infinity, direction);
     for (const [index, facet] of (["land", "cut"] as const).entries()) {
       const amount = depths[index] * facetShare(this.map, cell, facet);
       if (amount <= 0) continue;
@@ -189,18 +196,25 @@ export class Stage {
     this.route("loose", source, target, volume, cause);
   }
   /** Slope failure carries the surface's cover and then rock, rather than pretending it is all rock. */
-  moveSurface(source: number, target: number, volume: number, cause: FlowCause) {
-    this.route("surface", source, target, volume, cause);
+  moveSurface(
+    source: number,
+    target: number,
+    volume: number,
+    cause: FlowCause,
+    facet?: GroundFacet
+  ) {
+    this.route("surface", source, target, volume, cause, facet);
   }
   private route(
     from: GroundSource,
     source: number,
     target: number,
     volume: number,
-    cause: FlowCause
+    cause: FlowCause,
+    facet?: GroundFacet
   ) {
     if (volume <= 0) return;
-    const request = this.removal(from, cause, undefined, true);
+    const request = this.removal(from, cause, undefined, true, facet);
     request.amount.add(source, (volume * 1024) / this.map.mesh.area(source));
     request.routes!.push(source, target, volume);
   }

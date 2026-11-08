@@ -1,9 +1,9 @@
 import type { Band } from "@atlas/domain";
-import { headroom, shiftRock, spareCrust } from "../rock/groundLedger";
+import { headroom, spareCrust } from "../rock/groundLedger";
+import { shiftGroundField } from "../rock/groundDeformation";
 import {
   moveHeldSheet,
   superposeHeldSheets,
-  recordSheetTilt,
   joinGroundSheet,
   leaveGroundSheet,
 } from "../rock/groundTransport";
@@ -16,7 +16,7 @@ import { releaseWorking, workingArray } from "./physicalNumerics";
 import { holdRock, releaseHeldRock, type HeldRock } from "./reliefCarry";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
 import { acrossStrike } from "./orogenicComponents";
-import { segmentScale, sheetAt, sheetReach } from "./orogenicShape";
+import { segmentScale, sheetAt } from "./orogenicShape";
 
 /**
  * A belt is its thrust sheets, and they are rock, not a pattern. A cell joins a sheet when the
@@ -55,7 +55,7 @@ export function drawnIn(shortening: number, sheet: number, front: number, most: 
  * as this belt's strain took it up. A world's first forming has no move behind it, so it stands in
  * a distance of its own.
  */
-function shorteningOf(map: PhysicalField, context: PhysicalContext, c: BoundaryComponent) {
+export function shorteningOf(map: PhysicalField, context: PhysicalContext, c: BoundaryComponent) {
   const moved = crustForming(map)
     ? context.Profile.OrogenicInitialShortening
     : map.LastPlateDriftStep;
@@ -71,17 +71,19 @@ export const inBelt = (map: PhysicalField, c: BoundaryComponent, i: number) =>
 
 /** How far out each belt's sheets reach now, and which is the outermost. */
 function currentFronts(map: PhysicalField, components: BoundaryComponent[], frame: OrogenicFrame) {
-  const fronts = new Float64Array(components.length);
+  const work = new Float64Array(components.length),
+    distance = new Float64Array(components.length);
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds.get(i);
     if (id < 0 || !inBelt(map, components[id], i)) continue;
-    fronts[id] = Math.max(fronts[id], frame.reach.get(i));
+    work[id] = Math.max(work[id], frame.distance.get(i));
+    distance[id] = Math.max(distance[id], frame.reach.get(i));
     components[id].frontSheet = Math.max(
       components[id].frontSheet,
       map.ThrustSheetIndex.get(i) - 1
     );
   }
-  return fronts;
+  return { work, distance };
 }
 /**
  * A cell joins the sheets its belt's front is making now, numbered on from the last one it made and
@@ -96,14 +98,13 @@ function joinSheet(
   firstNew: number,
   stood: number
 ) {
-  const narrowing = frame.side.get(i) < 0 ? context.Profile.OrogenicForelandWidthShare : 1,
-    { sheet, across, segment } = sheetAt(
+  const { sheet, across, segment } = sheetAt(
       map,
       context,
       c,
       i,
       frame.source.get(i),
-      Math.max(0, frame.reach.get(i) - stood) * narrowing
+      Math.max(0, frame.reach.get(i) - stood)
     ),
     numbered = firstNew + sheet;
   joinGroundSheet(map, i, pairKey(c), numbered + 1, segment, across);
@@ -125,12 +126,10 @@ export function advanceThrustFronts(
     const c = components[id],
       source = frame.source.get(i);
     if (source < 0) continue;
-    const convergent = c.code === 1,
-      advance = convergent ? shorteningOf(map, context, c) * p.OrogenicAccretionRatio : 0,
-      reached = convergent
-        ? frame.reach.get(i) <= fronts[id] + advance
-        : c.code === 2 && frame.distance.get(i) <= sheetReach(p);
-    if (reached) joinSheet(map, context, c, frame, i, firstNew[id], fronts[id]);
+    if (c.code !== 1) continue;
+    const advance = shorteningOf(map, context, c) * p.OrogenicAccretionRatio,
+      reached = frame.distance.get(i) <= fronts.work[id] + advance;
+    if (reached) joinSheet(map, context, c, frame, i, firstNew[id], fronts.distance[id]);
   }
 }
 
@@ -310,17 +309,18 @@ export function climbThrustRamps(
   climb: Band
 ) {
   const { wanted, held } = beltMaterial(map, context, belts, climb),
-    paid = wanted.map((asked, id) => (asked > 0 ? Math.min(1, held[id] / asked) : 0));
+    paid = wanted.map((asked, id) => (asked > 0 ? Math.min(1, held[id] / asked) : 0)),
+    movement = workingArray(map, "float64", "sheets:rampMovement").fill(0);
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds.get(i);
     if (id < 0 || paid[id] <= 0) continue;
     const rise = climb.get(i) > 0 ? rampWanted(map, context, i, climb.get(i)) * paid[id] : 0,
       spent = (paid[id] * wanted[id]) / held[id];
     adjustCrustColumn(map, i, map.CrustThickness.get(i) - spareCrust(map, i) * spent);
-    if (rise <= 0) continue;
-    shiftRock(map, i, rise, "mountains");
+    if (rise > 0) movement.set(i, rise);
   }
-  releaseWorking(map, climb);
+  shiftGroundField(map, movement, "mountains");
+  releaseWorking(map, climb, movement);
 }
 function placeRock(map: PhysicalField, i: number, held: HeldRock, moved: MovedRock) {
   const origin = moved.origin.get(i),
@@ -353,6 +353,16 @@ function leaveBelt(map: PhysicalField, i: number) {
 }
 /** How much of the climb at a thrust's edge the rock just behind it takes. */
 const backLimbShare = 0.6;
+function sameLimb(map: PhysicalField, frame: OrogenicFrame, i: number, j: number) {
+  if (j < 0) return false;
+  const source = frame.source.get(i);
+  return (
+    map.ThrustSheetIndex.get(j) === map.ThrustSheetIndex.get(i) &&
+    map.ThrustPairIds.get(j) === map.ThrustPairIds.get(i) &&
+    map.OrogenicComponentIds.get(j) === map.OrogenicComponentIds.get(i) &&
+    Math.sign(acrossStrike(map, j, source)) === Math.sign(acrossStrike(map, i, source))
+  );
+}
 /**
  * A ramp lifts a fold, not a line of single cells: the rock beside a climbing edge rises with it,
  * back along its own sheet and along the thrust, so a ridge holds together along its length.
@@ -365,14 +375,16 @@ function addBackLimbs(map: PhysicalField, frame: OrogenicFrame, moved: MovedRock
     if (climb <= 0 || !sheet) continue;
     for (let edge = 0; edge < map.mesh.degree(i); edge++) {
       const j = map.mesh.neighbor(i, edge);
-      if (j >= 0 && map.ThrustSheetIndex.get(j) === sheet)
-        limb.set(j, Math.max(limb.get(j), climb * backLimbShare));
+      if (sameLimb(map, frame, i, j)) limb.set(j, Math.max(limb.get(j), climb * backLimbShare));
     }
   }
   for (let i = 0; i < map.mesh.count; i++)
     if (limb.get(i) > moved.climb.get(i)) {
       moved.climb.set(i, limb.get(i));
-      frame.overlap.set(i, Math.max(frame.overlap.get(i), limb.get(i)));
+      frame.overlap.set(
+        i,
+        Math.max(frame.overlap.get(i), clamp(limb.get(i) / map.mesh.spacing, 0, 1))
+      );
     }
   releaseWorking(map, limb);
 }
@@ -404,26 +416,5 @@ export function slipThrustSheets(
   }
   releaseHeldRock(map, held);
   releaseWorking(map, moved.origin, moved.under, moved.left);
-  tiltSheets(map, components, slip, p.ThrustTiltGradient);
   return moved.climb;
-}
-/**
- * A sheet records the tilt acquired as it climbs. The separate ramp operation moves its
- * placement; tilting alone removes no material and cannot paint a different exposed bed.
- */
-function tiltSheets(
-  map: PhysicalField,
-  components: BoundaryComponent[],
-  slip: PassSlip,
-  tiltGradient: number
-) {
-  for (let i = 0; i < map.mesh.count; i++) {
-    const c = riding(map, components, i);
-    if (!c || !inBelt(map, c, i)) continue;
-    const sheet = map.ThrustSheetIndex.get(i) - 1,
-      taken = thrustSlip(slip.shortening(c), sheet, c.frontSheet, slip.most),
-      rise = tiltGradient * taken * (map.ThrustAcross.get(i) / 1000);
-    if (rise <= 0) continue;
-    recordSheetTilt(map, i, rise);
-  }
 }

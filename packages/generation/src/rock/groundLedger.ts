@@ -10,8 +10,7 @@ import {
 import { recordFlow, type FlowCause, type Pool } from "../coupling/flows";
 import { layDownPackage, materialLayer, type MaterialLayer } from "./rockColumn";
 import { rockCatalogue, type RockKind } from "./rockCatalogue";
-import { placeMaterial, withdrawColumn, type MaterialReceiver } from "./groundMaterial";
-import { buryCover } from "./groundBurial";
+import { withdrawColumn, type MaterialReceiver } from "./groundMaterial";
 export { buryCover, lithify, lithifyBuried } from "./groundBurial";
 import {
   coverColumn,
@@ -26,6 +25,8 @@ import { widenIncision } from "./groundIncision";
 import { groundStorage } from "./groundStorage";
 import { groundOf } from "./ground";
 import type { CompiledMix } from "./modes";
+import { constructMaterial, depositedMaterial } from "./groundConstruction";
+export { constructMaterial } from "./groundConstruction";
 
 /**
  * The one writer of what comes off and lands on the ground: height, sediment, the rock column and
@@ -224,7 +225,7 @@ export function depositPackage(
     const material = materials[at],
       depth = Math.min(Math.max(0, material.depth), room);
     if (depth <= 0) continue;
-    admitted.unshift({ ...material, depth });
+    admitted.unshift(depositedMaterial({ ...material, depth }, map.CompletedEpochCount));
     room -= depth;
     deposited += depth;
   }
@@ -309,10 +310,12 @@ export function carryOut(
   map: PhysicalField,
   volume: number,
   cause: FlowCause,
-  material?: MaterialLayer
+  material?: MaterialLayer,
+  receivingCell = -1
 ) {
   map.SedimentExportedTotal += volume;
-  if (material && volume > 0) seaLoadOf(map).add(0, { ...material, depth: volume });
+  if (material && volume > 0 && receivingCell >= 0)
+    seaLoadOf(map).add(receivingCell, { ...material, depth: volume });
   recordFlow(map, cause, "load", "sea", volume);
 }
 /** Failed ground leaves a cell by volume, to rest on its neighbours. */
@@ -333,17 +336,13 @@ export function constructRock(
   cause: FlowCause,
   from: Pool
 ) {
-  const amount = Math.min(Math.max(0, requested), headroom(map, i));
-  if (amount <= 0) return 0;
-  buryCover(map, i);
-  for (const facet of ["land", "cut"] as const)
-    if (facetShare(map, i, facet) > 0)
-      placeMaterial(map, i, facet, materialLayer(kind.code, amount, {}, map.CompletedEpochCount));
-  groundStorage(map).BedrockElevation.add(i, amount);
-  groundStorage(map).SurfaceRockLoad.add(i, amount);
-  recordFlow(map, cause, from, "rock", volumeOf(map, i, amount));
-  projectGround(map, i);
-  return amount;
+  return constructMaterial(
+    map,
+    i,
+    materialLayer(kind.code, requested, {}, map.CompletedEpochCount),
+    cause,
+    from
+  );
 }
 /**
  * A cell's crust stands up as rock on it, as far as it has crust piled up to give and the height limit

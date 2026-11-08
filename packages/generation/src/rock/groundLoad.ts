@@ -46,6 +46,10 @@ export class MaterialLoad {
       damage: value("damage"),
       grainX: value("grainX"),
       grainY: value("grainY"),
+      bedSlopeX: value("bedSlopeX"),
+      bedSlopeY: value("bedSlopeY"),
+      deposited: value("deposited"),
+      consolidation: value("consolidation"),
       formedMin: value("formedMin"),
       formedMax: value("formedMax"),
       altered: value("altered"),
@@ -93,7 +97,7 @@ export function loadOf(map: PhysicalField) {
   return load;
 }
 const seaLoads = new WeakMap<PhysicalField, MaterialLoad>();
-/** Offshore material is mixed into cell zero; no source-cell placement is claimed after export. */
+/** Offshore material remains at its receiving cell until connected marine transport moves it. */
 export function seaLoadOf(map: PhysicalField) {
   let load = seaLoads.get(map);
   if (!load) {

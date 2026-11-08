@@ -116,10 +116,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
         nativeSteps.crustalSupport,
         nativeSteps.lithosphericFlexure,
       ],
-      "epoch.ice-load": [
-        [nativeSteps.crustalSupport, { iceLoad: true }],
-        nativeSteps.lithosphericFlexure,
-      ],
+      "epoch.ice-load": [nativeSteps.crustalSupport, nativeSteps.lithosphericFlexure],
     },
     { requires: ["physical.foundation"], inherited: true }
   ),

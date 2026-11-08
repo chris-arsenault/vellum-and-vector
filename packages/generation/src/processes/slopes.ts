@@ -9,10 +9,9 @@ const prepare = (map: PhysicalField) => ({
 });
 
 /**
- * Ground too steep to hold fails and comes to rest on its neighbours, so nothing leaves the slope. It
- * goes on until the ground stands, which takes a moment against any span here, so how much fails comes
- * from how steep things are and not from a count of rounds. The rounds stop once a round moves little
- * next to the first, or at a numerical bound. Each round lands before the next looks at the slopes.
+ * Oversteep ground fails, and an exposed weak foundation can release its cap as one finite slab.
+ * The actual material comes to rest on a neighbor. Each round lands before the next reads the
+ * changed contacts; rounds stop when movement settles or the configured solver bound is reached.
  */
 function failSlopes(
   { settings, tools, stage }: ProcessWork<"Elevation", never, ReturnType<typeof prepare>>,
@@ -25,8 +24,15 @@ function failSlopes(
     while (routes.size) {
       const source = routes.shift(),
         target = routes.field(0),
-        volume = routes.field(1);
-      stage.moveSurface(source, target, volume, id);
+        volume = routes.field(1),
+        facet = routes.field(2);
+      stage.moveSurface(
+        source,
+        target,
+        volume,
+        id,
+        facet < 0 ? undefined : facet === 0 ? "land" : "cut"
+      );
       moved += volume;
     }
     stage.settle();
@@ -38,7 +44,7 @@ const slopeProcess = (id: string): GroundProcess =>
   defineProcess({
     id,
     statement:
-      "Where the step between cells is steeper than the ground can hold over one hillslope, it fails until it stands, and what falls rests on its neighbours.",
+      "Oversteep slopes and caps above exposed weak foundations fail according to their material and bedding; what falls rests on their neighbors.",
     reads: ["Elevation"],
     needs: ["Elevation", "RockKindCodes"],
     provides: ["Elevation", "BedrockElevation", "SedimentThickness"],

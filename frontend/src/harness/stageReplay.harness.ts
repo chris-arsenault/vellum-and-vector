@@ -75,7 +75,6 @@ function runPass(
       pass,
       epochs.length
     );
-    context.IceLoad = Boolean(invocation.parameters?.iceLoad);
     if (invocation.parameters?.unforced) map.ExternalHeatForcing.fill(0);
     applyNativeStep(
       map,

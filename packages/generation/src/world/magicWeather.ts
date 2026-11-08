@@ -44,7 +44,8 @@ function driveDunes(map: PhysicalField, i: number, share: number) {
     carried = carried ? mergeMaterial(carried, volume) : volume;
   });
   if (!carried || carried.depth <= 0) return;
-  if (map.WaterKindCodes.get(target) === 1) carryOut(map, carried.depth, "pressure", carried);
+  if (map.WaterKindCodes.get(target) === 1)
+    carryOut(map, carried.depth, "pressure", carried, target);
   else {
     const area = map.mesh.area(target),
       deposited = deposit(map, target, (carried.depth * 1024) / area, "pressure", "load", carried),

@@ -5,6 +5,7 @@ import { createWorldMesh } from "../world/worldMesh";
 import { MaterialLoad, loadOf, seaLoadOf } from "./groundLoad";
 import { materialLayer } from "./rockColumn";
 import { rockCatalogue } from "./rockCatalogue";
+import { carryOut } from "./groundLedger";
 
 const field = () => createField(createWorldMesh([0, 0, 1000, 1000], 16, 0));
 const { basalt, shale } = rockCatalogue;
@@ -75,4 +76,15 @@ it("leaves empty cells outside the footprint with a finite supply projection", (
   expect(map.mesh.area(0)).toBe(0);
   load.take(0, 0);
   expect(map.SedimentSupply.get(0)).toBe(0);
+});
+
+it("keeps offshore deliveries at their receiving cells and off-map exports outside the field", () => {
+  const map = field(),
+    sea = seaLoadOf(map);
+  carryOut(map, 20, "river-load", materialLayer(basalt.code, 20, {}, 2), 1);
+  carryOut(map, 30, "moraines", materialLayer(shale.code, 30, {}, 7), 2);
+  carryOut(map, 10, "river-load", materialLayer(basalt.code, 10, {}, 3));
+  expect(sea.get(1)).toMatchObject({ kind: basalt.code, depth: 20, formedMin: 2 });
+  expect(sea.get(2)).toMatchObject({ kind: shale.code, depth: 30, formedMin: 7 });
+  expect(sea.amount(0)).toBe(0);
 });

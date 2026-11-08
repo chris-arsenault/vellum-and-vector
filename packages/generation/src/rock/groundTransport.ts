@@ -5,19 +5,15 @@ import { adjustCrustColumn } from "./crustTransport";
 import { crustHeight, crustPerRock, units } from "../world/math";
 import { recordFlow } from "../coupling/flows";
 import { allColumnFields, columnFields, materialProperties, type Column } from "./rockLayerFields";
-import { layDownPackage, materialLayer, type MaterialLayer } from "./rockColumn";
+import { materialLayer, type MaterialLayer } from "./rockColumn";
+import { buryUnderPackage } from "./groundBurial";
 import { rockKindOfCode } from "./rockCatalogue";
-import {
-  buryCover,
-  carryOut,
-  depositPackage,
-  headroom,
-  shiftRock,
-  standGround,
-} from "./groundLedger";
-import { projectGround, resetShares, facetShare } from "./groundShares";
+import { carryOut, depositPackage, headroom, shiftRock, standGround } from "./groundLedger";
+import { projectGround, resetShares } from "./groundShares";
 import { oceanicColumn } from "./rockHistory";
-import { loadOf, MaterialLoad } from "./groundLoad";
+import { loadOf, seaLoadOf, MaterialLoad } from "./groundLoad";
+import { deformFabric, deformSlope, deformGround, type Deformation } from "./groundTransform";
+export { deformFabric, deformSlope, deformGround, type Deformation } from "./groundTransform";
 import { weightScale, type TransportPlan } from "../world/transportPlan";
 import { groundStorage } from "./groundStorage";
 import { observeTransfer } from "./groundTransferObservation";
@@ -103,9 +99,13 @@ export function heldLayer(
     damage: value("damage"),
     grainX: value("grainX"),
     grainY: value("grainY"),
+    bedSlopeX: value("bedSlopeX"),
+    bedSlopeY: value("bedSlopeY"),
     formedMin: value("formedMin"),
     formedMax: value("formedMax"),
     altered: value("altered"),
+    deposited: value("deposited"),
+    consolidation: value("consolidation"),
     mixed: value("mixed"),
   });
 }
@@ -158,12 +158,14 @@ export function placeCarriedGround(
   held: HeldRock,
   cell: number,
   origin: number,
-  placement: readonly number[]
+  f: Deformation
 ) {
   const observed = observeTransfer(map, held, origin, cell, "plate-placement");
   takeHeldRock(map, held, cell, origin);
-  groundPlacementFields.forEach((name, n) => groundStorage(map)[name].set(cell, placement[n]));
-  projectGround(map, cell);
+  groundPlacementFields.forEach((name, n) =>
+    groundStorage(map)[name].set(cell, held.before[n].get(origin))
+  );
+  deformGround(map, cell, f);
   observed();
 }
 /** An opening really forms new ocean crust; no abandoned donor strata remain underneath it. */
@@ -184,35 +186,6 @@ export function formTransportOpening(map: PhysicalField, cell: number) {
   );
   stored.BedrockElevation.set(cell, map.CrustSupportElevation.get(cell));
   oceanicColumn(map, cell);
-  projectGround(map, cell);
-}
-export type Deformation = readonly [number, number, number, number];
-/** Transform an axial fabric with the actual local motion gradient; translation has identity F. */
-export function deformFabric(x: number, y: number, f: Deformation): readonly [number, number] {
-  const coherence = Math.hypot(x, y);
-  if (coherence <= 0) return [0, 0];
-  const angle = Math.atan2(y, x) / 2,
-    tx = f[0] * Math.cos(angle) + f[1] * Math.sin(angle),
-    ty = f[2] * Math.cos(angle) + f[3] * Math.sin(angle),
-    length = Math.hypot(tx, ty);
-  return length > 1e-12
-    ? [
-        (coherence * (tx * tx - ty * ty)) / (length * length),
-        (coherence * 2 * tx * ty) / (length * length),
-      ]
-    : [0, 0];
-}
-export function deformGround(map: PhysicalField, cell: number, f: Deformation) {
-  for (const column of Object.values(columnFields))
-    for (let slot = 0; slot < column.kind.length; slot++) {
-      const [x, y] = deformFabric(
-        map[column.grainX[slot]].get(cell),
-        map[column.grainY[slot]].get(cell),
-        f
-      );
-      groundStorage(map)[column.grainX[slot]].set(cell, x);
-      groundStorage(map)[column.grainY[slot]].set(cell, y);
-    }
   projectGround(map, cell);
 }
 /** Top-first slice of an intact donor. A basement can supply more than its recorded thickness. */
@@ -244,18 +217,21 @@ function collisionBeds(
     const part = facet === "land" ? 1 - share : share;
     if (part <= 0) continue;
     for (const layer of sliceLayers(held, source, facet, sourceDepth)) {
-      const [grainX, grainY] = deformFabric(layer.grainX, layer.grainY, f);
+      const [grainX, grainY] = deformFabric(layer.grainX, layer.grainY, f),
+        [bedSlopeX, bedSlopeY] = deformSlope(layer.bedSlopeX, layer.bedSlopeY, f);
       result.push({
         ...layer,
         depth: layer.depth * part * (landedDepth / sourceDepth),
         grainX,
         grainY,
+        bedSlopeX,
+        bedSlopeY,
       });
     }
   }
   return result;
 }
-/** A lost donor's coherent beds join the collision pile, limited to the material that arrived. */
+/** An overlapping donor's coherent beds join the collision pile; excess deepens the crust. */
 export function accreteHeldGround(
   map: PhysicalField,
   held: HeldRock,
@@ -267,18 +243,6 @@ export function accreteHeldGround(
 ) {
   const observed = observeTransfer(map, held, source, target, "rock-accretion"),
     admitted = Math.min(Math.max(0, amount), headroom(map, target));
-  if (admitted <= 0) {
-    observed(0);
-    return 0;
-  }
-  buryCover(map, target);
-  const layers = collisionBeds(held, source, sourceDepth ?? admitted, admitted, f);
-  // Colliding donor shares stack vertically; unresolved horizontal parcel alignment is lost.
-  for (const facet of ["land", "cut"] as const)
-    if (facetShare(map, target, facet) > 0) layDownPackage(map, target, facet, layers);
-  groundStorage(map).BedrockElevation.add(target, admitted);
-  groundStorage(map).SurfaceRockLoad.add(target, admitted);
-  recordFlow(map, "plates", "rock", "rock", (admitted * map.mesh.area(target)) / 1024);
   if (amount > admitted)
     adjustCrustColumn(
       map,
@@ -286,13 +250,19 @@ export function accreteHeldGround(
       map.CrustThickness.get(target) +
         (amount - admitted) * crustPerRock(map.CrustContinentalFraction.get(target) / 1000)
     );
+  if (admitted <= 0) {
+    observed(0);
+    return 0;
+  }
+  const layers = collisionBeds(held, source, sourceDepth ?? admitted, admitted, f);
+  // Colliding donor shares stack vertically; unresolved horizontal parcel alignment is lost.
+  buryUnderPackage(map, target, layers);
+  groundStorage(map).BedrockElevation.add(target, admitted);
+  groundStorage(map).SurfaceRockLoad.add(target, admitted);
+  recordFlow(map, "plates", "rock", "rock", (admitted * map.mesh.area(target)) / 1024);
   projectGround(map, target);
   observed(admitted);
   return admitted;
-}
-/** A sheet's placement changes; its represented beds are not stripped to paint an outcrop. */
-export function recordSheetTilt(map: PhysicalField, cell: number, rise: number) {
-  groundStorage(map).ThrustDip.add(cell, Math.round(rise));
 }
 export function joinGroundSheet(
   map: PhysicalField,
@@ -324,7 +294,8 @@ export function accreteHeldCover(
   held: HeldRock,
   target: number,
   source: number,
-  areaRatio: number
+  areaRatio: number,
+  f: Deformation = [1, 0, 0, 1]
 ) {
   const observed = observeTransfer(map, held, source, target, "cover-accretion"),
     share = heldProperty(held, "GroundCutShare", source),
@@ -335,15 +306,21 @@ export function accreteHeldCover(
     if (part <= 0) continue;
     for (const layer of collisionLayers(held, source, column)) {
       const depth = layer.depth * part * areaRatio;
-      if (depth > 0) arriving.push({ ...layer, depth });
+      if (depth <= 0) continue;
+      const [grainX, grainY] = deformFabric(layer.grainX, layer.grainY, f),
+        [bedSlopeX, bedSlopeY] = deformSlope(layer.bedSlopeX, layer.bedSlopeY, f);
+      arriving.push({ ...layer, depth, grainX, grainY, bedSlopeX, bedSlopeY });
     }
   }
   observed(depositPackage(map, target, arriving, "plates", "loose"));
 }
-/** Mobile sediment follows routes as actual material; offshore load has no crust-bound location. */
-export function transportGroundLoad(map: PhysicalField, plan: TransportPlan) {
-  const current = loadOf(map),
-    arriving = new MaterialLoad(map, "plates:load");
+function transportLoad(
+  map: PhysicalField,
+  plan: TransportPlan,
+  current: MaterialLoad,
+  key: string
+) {
+  const arriving = new MaterialLoad(map, key);
   for (let source = 0; source < map.mesh.count; source++) {
     const material = current.get(source);
     if (material.depth <= 0) continue;
@@ -363,6 +340,11 @@ export function transportGroundLoad(map: PhysicalField, plan: TransportPlan) {
     current.add(cell, arriving.get(cell));
   }
   arriving.release();
+}
+/** Both terrestrial cargo and local marine deposits retain their receiving geography through motion. */
+export function transportGroundLoad(map: PhysicalField, plan: TransportPlan) {
+  transportLoad(map, plan, loadOf(map), "plates:load");
+  transportLoad(map, plan, seaLoadOf(map), "plates:seaLoad");
 }
 /** Sheet translation replaces the donor package and its standing load in one owner operation. */
 export function moveHeldSheet(map: PhysicalField, held: HeldRock, cell: number, source: number) {
@@ -391,7 +373,7 @@ export function landCollisionPackage(
 ) {
   const rock = Math.max(0, heldPlacement(held, "SurfaceRockLoad", source));
   accreteHeldGround(map, held, target, source, rock * areaRatio, f, rock);
-  accreteHeldCover(map, held, target, source, areaRatio);
+  accreteHeldCover(map, held, target, source, areaRatio, f);
 }
 export function superposeHeldSheets(
   map: PhysicalField,

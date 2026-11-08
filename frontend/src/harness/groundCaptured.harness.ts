@@ -11,7 +11,6 @@ import {
   holdRock,
   landCollisionPackage,
   releaseHeldRock,
-  watchGroundTransfers,
 } from "../../../packages/generation/src/rock/groundTransport";
 import { compileMix } from "../../../packages/generation/src/rock/modes";
 import { layDownPackage } from "../../../packages/generation/src/rock/rockColumn";
@@ -36,6 +35,7 @@ import {
 } from "../../../packages/generation/src/world/context";
 import {
   applyNativeStep,
+  observeNativeSteps,
   withPlateDeformation,
 } from "../../../packages/generation/src/world/physicalSteps";
 import { plateTravel } from "../../../packages/generation/src/world/tectonicControls";
@@ -45,8 +45,9 @@ import { writeGroundSection } from "./groundSection";
 import { harnessRoot } from "./harnessWorkspace";
 import { write } from "./harness";
 import { groundProbeCells } from "./groundProbe";
-import { startProcessProbe } from "./processProbe";
+import { movementObserver, startProcessProbe, timedNativeStep } from "./processProbe";
 import { nativeWorkload } from "./nativeWorkload";
+import { drawHeights } from "./reliefSystems";
 
 type Section = ReturnType<ReturnType<typeof groundOf>["section"]>;
 interface Captured {
@@ -255,34 +256,9 @@ it.runIf(process.env.HARNESS_CAPTURED)(
   120_000
 );
 
-function movementObserver(count: number) {
-  const counts = {
-      operations: {
-        "plate-placement": 0,
-        "rock-accretion": 0,
-        "cover-accretion": 0,
-        "sheet-move": 0,
-      },
-      acceptedRock: 0,
-      acceptedCover: 0,
-      sourceChanges: 0,
-    },
-    cells = new Set(Array.from({ length: count }, (_, cell) => cell));
-  let previousSource = -1;
-  const stop = watchGroundTransfers(cells, (event) => {
-    if (event.phase !== "after") return;
-    counts.operations[event.operation]++;
-    if (event.operation === "rock-accretion") {
-      if ((event.accepted ?? 0) > 0) counts.acceptedRock++;
-      if (event.source !== previousSource) counts.sourceChanges++;
-      previousSource = event.source;
-    }
-    if (event.operation === "cover-accretion" && (event.accepted ?? 0) > 0) counts.acceptedCover++;
-  });
-  return { counts, stop };
-}
-
 function intervalObservation(map: PhysicalField) {
+  if (process.env.HARNESS_CAPTURED_TIMING === "1")
+    return { counts: { materialProbe: "Disabled for native-step timing." }, stop: () => {} };
   const cells = groundProbeCells(process.env.HARNESS_GROUND_CELLS ?? "");
   if (!cells.length) return movementObserver(map.mesh.count);
   return {
@@ -300,10 +276,15 @@ function runInterval(
   map: PhysicalField,
   context: PhysicalContext,
   epochs: NonNullable<ReturnType<typeof restoreSnapshot>["epochs"]>,
-  construction: boolean
+  construction: boolean,
+  timings: { step: string; ms: number }[],
+  observe: (name: string) => void
 ) {
   let intervals = 0;
-  const after = () => intervals++;
+  const after = () => {
+    intervals++;
+    observe("carried");
+  };
   if (construction) {
     const entry = nativeWorkload(epochs).find(
       (candidate) =>
@@ -312,11 +293,26 @@ function runInterval(
     if (!entry) throw new Error("Saved epoch has no selected plate-advection step.");
     applyNativeStep(
       map,
-      withPlateDeformation(map, { ...context, AfterPlateStep: after }, entry.deformation),
-      entry.step
+      withPlateDeformation(
+        map,
+        { ...context, AfterPlateStep: after },
+        entry.deformation.map((step) => timedNativeStep(step, timings))
+      ),
+      timedNativeStep(entry.step, timings)
     );
   } else plateAdvection(map, context, after);
   return intervals;
+}
+
+/** Optional pictures separate carried terrain from each subsequent construction/load operation. */
+function intervalPictures(map: PhysicalField) {
+  let frame = 0;
+  return (name: string) => {
+    if (process.env.HARNESS_CAPTURED_PICTURES !== "1") return;
+    const stem = `${output}-${frame++}-${name}`;
+    drawHeights(map, dirname(stem), `${basename(stem)}-heights.png`, false);
+    writeGroundSection(map, stem, process.env.HARNESS_GROUND_CELLS ?? "");
+  };
 }
 
 it.runIf(process.env.HARNESS_CAPTURED_INTERVAL)(
@@ -346,17 +342,22 @@ it.runIf(process.env.HARNESS_CAPTURED_INTERVAL)(
         TectonicDurationMyr: durationMyr,
         Span: (original.Span * durationMyr) / original.TectonicDurationMyr,
       },
+      timings: { step: string; ms: number }[] = [],
       construction = process.env.HARNESS_CAPTURED_CONSTRUCTION === "1",
-      observer = intervalObservation(map);
+      observer = intervalObservation(map),
+      picture = intervalPictures(map);
+    picture("before");
+    observeNativeSteps((name) => picture(name));
     let intervals = 0,
       operationMs = 0,
       observationWriteMs = 0;
     const memoryBefore = process.memoryUsage(),
       started = performance.now();
     try {
-      intervals = runInterval(map, interval, epochs, construction);
+      intervals = runInterval(map, interval, epochs, construction, timings, picture);
       operationMs = performance.now() - started;
     } finally {
+      observeNativeSteps(null);
       const writeStarted = performance.now();
       observer.stop();
       observationWriteMs = performance.now() - writeStarted;
@@ -365,12 +366,14 @@ it.runIf(process.env.HARNESS_CAPTURED_INTERVAL)(
       interpretation:
         "Saved-field first-interval diagnostic. Original epoch/profile determine duration and travel rate; Span is proportional. Construction opt-in runs the selected native plate step with its actual embedded deformation steps. This does not complete an epoch or establish geographic acceptance. Selected-site material observations replace all-field event counts when requested; writing observations is outside operation timing.",
       construction,
+      picturesIncludedInTiming: process.env.HARNESS_CAPTURED_PICTURES === "1",
       snapshot: label,
       pass,
       cells: map.mesh.count,
       seed,
       importMs,
       operationMs,
+      timings,
       observationWriteMs,
       intervals,
       originalDurationMyr: original.TectonicDurationMyr,

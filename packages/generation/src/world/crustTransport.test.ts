@@ -31,7 +31,18 @@ function pileUp(map: PhysicalField): TransportPlan {
     dominant.set(i, i);
   }
   offsets.set(count, count);
-  return { offsets, targets, weights, arrivals, dominant, dominantWeight };
+  return {
+    offsets,
+    targets,
+    weights,
+    arrivals,
+    dominant,
+    dominantWeight,
+    deformationXX: workingArray(map, "float64", "test:fxx").fill(1),
+    deformationXY: workingArray(map, "float64", "test:fxy"),
+    deformationYX: workingArray(map, "float64", "test:fyx"),
+    deformationYY: workingArray(map, "float64", "test:fyy").fill(1),
+  };
 }
 function converge(fraction: number) {
   const map = createField(createMesh(4, 0));

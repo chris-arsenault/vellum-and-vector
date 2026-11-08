@@ -85,7 +85,7 @@ it("dispatches a selected native feature through the registry derived from its o
       run,
     }),
     feature = physicalFeature("test.native", "Native probe", {
-      "epoch.incision": [[step("probe-step", 7, probe), { iceLoad: true }]],
+      "epoch.incision": [[step("probe-step", 7, probe), { unforced: true }]],
     }),
     resolve = (enabled: boolean) =>
       resolveGenerationFeatures([feature], { "test.native": { enabled } }, {}, {}, ["physical"]),
@@ -120,6 +120,7 @@ it("dispatches a selected native feature through the registry derived from its o
     fixed: [],
     inherited: false,
   };
+  map.ExternalHeatForcing.fill(1);
   await executeProcessBehavior(registry.get(invocation.process, invocation.version), state, {
     scope: state.domain.scope,
     invocation: [invocation.id],
@@ -141,7 +142,7 @@ it("dispatches a selected native feature through the registry derived from its o
   expect(run).toHaveBeenCalledWith(
     expect.objectContaining({
       field: map,
-      context: expect.objectContaining({ IceLoad: true }),
     })
   );
+  expect(map.ExternalHeatForcing.get(0)).toBe(0);
 });

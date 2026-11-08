@@ -1,10 +1,12 @@
 import type { Band } from "@atlas/domain";
 import { meshDeltaX } from "./mesh";
 import type { PhysicalField } from "./field";
+import { isOpenOutlet } from "./field";
 import type { PhysicalContext } from "./context";
 import { units } from "./math";
 import { carryOut, deposit } from "../rock/groundLedger";
 import { loadOf, MaterialLoad } from "../rock/groundLoad";
+import type { MaterialLayer } from "../rock/rockColumn";
 import { cutShare, facetSurface } from "../rock/groundShares";
 import { ask, respond } from "../coupling/answers";
 import { sourceToOutletOrder, waterGathered } from "./flowGraph";
@@ -56,6 +58,11 @@ function landRiverLoad(map: PhysicalField, i: number, fits: number, moving: Mate
       )
     : 0;
 }
+/** A closed lake keeps rejected sediment; only a physical map outlet exports it. */
+function releaseRiverLoad(map: PhysicalField, cell: number, material: MaterialLayer) {
+  if (isOpenOutlet(map, cell)) carryOut(map, material.depth, "river-load", material);
+  else loadOf(map).add(cell, material);
+}
 export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
   const moving = new MaterialLoad(map, "sediment:moving"),
     supply = loadOf(map),
@@ -74,6 +81,10 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
     moving.add(i, supply.take(i, supply.amount(i)));
     const load = moving.amount(i);
     if (load <= 0) continue;
+    if (map.WaterKindCodes.get(i) === 1) {
+      carryOut(map, load, "river-load", moving.take(i, load), i);
+      continue;
+    }
     const target = map.FlowTargets.get(i);
     // Water carries what its flow and slope can. Standing water carries nothing, and what it cannot
     // carry settles over the distance it takes to drop out, which is what builds plains and deltas.
@@ -92,7 +103,7 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
     moving.take(i, volume);
     const carried = moving.take(i, moving.amount(i));
     if (target >= 0) moving.add(target, carried);
-    else carryOut(map, carried.depth, "river-load", carried);
+    else releaseRiverLoad(map, i, carried);
   }
   moving.release();
   releaseWorking(map, order, previous, water);

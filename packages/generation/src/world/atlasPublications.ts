@@ -51,7 +51,11 @@ const nativeOwnership: Ownership[] = [
   [["physical.fractures", "physical.impacts", "physical.volcanism"], "geology", ["fracture"]],
   ["physical.geothermal", "geology", ["geothermal", "geothermalHistory"]],
   ["physical.impacts", "geology", ["impactExcavation", "impactRim", "impactEjecta"]],
-  ["physical.volcanism", "geology", ["volcanicConstruction", "volcanicLastActiveEpoch"]],
+  [
+    "physical.volcanism",
+    "geology",
+    ["volcanicConstruction", "volcanicLastActiveEpoch", "volcanicMeltSupply"],
+  ],
   ["physical.landmarks", "geology", ["landmarkMaintenance"]],
   ["physical.river-incision", "geology", ["fluvialErosion"]],
   [

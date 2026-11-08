@@ -25,7 +25,6 @@ export interface FeatureContributionContext {
   input: AtlasGenerationInput;
   resolved: ResolvedFeatures;
   initial?: boolean;
-  iceLoad?: boolean;
   material?: boolean;
   process?: string;
 }

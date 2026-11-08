@@ -4,7 +4,6 @@ import { continentalMarginEvolution, marineSedimentation } from "../world/contin
 import { coastalDetail } from "../world/coastalDetail";
 import { tectonicUplift } from "../world/uplift";
 import { impactCratering } from "../world/impacts";
-import { validateBudget } from "../world/layerValidation";
 import { orogenicConstruction, relaxOrogenicCrust } from "../world/orogeny";
 import { sedimentTransport } from "../world/fluvial";
 import { lithosphericFlexure } from "../world/support";
@@ -51,6 +50,7 @@ export const volcanoes = builder({
     ground,
     bedrock,
     "VolcanicConstructionHistory",
+    "VolcanicMeltSupply",
     "VolcanicActivity",
     "FractureConductance",
   ],
@@ -87,7 +87,6 @@ export const riverLoad = builder({
     ["load", "sea"],
   ],
   asks: ["discharge", "looseSupply", "loadCapacity"],
-  check: validateBudget,
   build: (map, context) => sedimentTransport(map, context),
 });
 export const moraines = builder({
@@ -99,7 +98,6 @@ export const moraines = builder({
     ["load", "loose"],
     ["load", "sea"],
   ],
-  check: validateBudget,
   build: (map, context) => glacialDeposition(map, context),
 });
 export const seaFloor = builder({

@@ -19,7 +19,9 @@ Give the interaction its own representation.
   states how it acts as a mix of modes, compiled at load to tables by kind.
 - Ground owns material, placement and surviving geological state. An intact share and an incised share
   use the same lattice, each with a bounded rock column and finite loose cover. Layers retain composition,
-  strength, damage, fabric and formation/alteration ages. Elevation and exposed-material fields are projections.
+  clast strength, damage, fabric and formation/alteration ages. Signed bed inclination, deposition age
+  and consolidation describe the bed separately from its source material. Elevation and exposed-material
+  fields are projections.
 - `Ground` reads those columns. Top-down actions stop at material they cannot remove. Surface-removal actions
   evaluate each occupied share before removal commits; face queries expose only contacts above neighboring
   terrain. `fold` supports consumer queries, and `section` exposes copied inspection records.
@@ -32,6 +34,15 @@ Give the interaction its own representation.
   commit material and placement together through the rock owner.
   In-place weathering evaluates rock beneath each facet's cover, spends forcing through successive
   beds, and places the converted substrate beneath that cover with its retained composition.
+  Reworked deposits establish new bedding without resetting clast history. Burial changes aggregate
+  strength through consolidation under actual overburden, including deposits entombed in rock columns.
+  Partial burial averages its response within the retained bed. Differential displacement bends retained beds; horizontal deformation
+  transforms their slopes separately from axial fabric. These transformations belong to owner operations.
+  Directional shear and plucking read the bed inclination. Exposed weak support can release a finite
+  surface package, including its cap, which enters ordinary material routing.
+  Plate transport reconstructs placement and material together from retained physical overlap.
+  A sweep through actual contact altitudes combines occupied material intervals, preserving finite
+  cover and facet shares. Collision adds only the separately identified convergent excess.
 - Production fields and named Coverage lookups expose live read-only ground views. Bulk reads and
   snapshots give independent storage. Import boundaries restore packages, then derive their projections;
   ordinary process helpers cannot acquire writable backing or call internal column setters.
@@ -62,4 +73,7 @@ Bounded columns preserve the surface cap and basement while coarsening internal 
 the two largest material constituents; finer ordering and minority chemical responses can be lost.
 Combining cut profiles preserves material packages but loses their unresolved horizontal alignment.
 Neighbor-face queries do not locate a subcell channel against a particular edge. These approximations
-support material-dependent generation without claiming full three-dimensional stratigraphy.
+support material-dependent generation without claiming full three-dimensional stratigraphy. Support
+failure removes a bulk slab; it does not preserve a hidden cavity beneath an overhang.
+Area remapping can blur features near the cell span and combines unresolved lateral distinctions.
+It does not preserve point samples or interpret sampling differences as geological collisions.

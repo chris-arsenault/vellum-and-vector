@@ -39,7 +39,6 @@ import { atlasPublicationDefinitions, selectedAtlasChannels } from "./atlasPubli
 import { inheritedChannelNames, inheritedProducts } from "./inheritedFacts";
 
 const nativeFlags: MapProcess["contract"]["parameters"] = {
-  iceLoad: { type: "boolean", unit: null, required: false, default: false },
   initial: { type: "boolean", unit: null, required: false, default: false },
   unforced: { type: "boolean", unit: null, required: false, default: false },
 };
@@ -97,7 +96,6 @@ export function nativeProcess(
       const work = state.physical!;
       const c = {
         ...nativeContext(state, context, salt),
-        IceLoad: Boolean(context.parameters.iceLoad),
         // Magic rides the crust: what it carries moves whenever the plates do.
         AfterPlateStep: () => advectMagic(state),
       };

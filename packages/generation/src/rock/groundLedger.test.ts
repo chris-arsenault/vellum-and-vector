@@ -176,7 +176,8 @@ it("buries each cover package in order and applies weak-bed state to each materi
     altered: 8,
     grainX: 0.6,
     damage: 0.5,
-    strength: rocks.alluvium.resistance,
+    strength: rocks.basalt.resistance,
+    consolidation: 0,
   });
   expect(readLayer(map, 0, 1)).toMatchObject({
     kind: rocks.limestone.code,

@@ -15,7 +15,7 @@ const carriesIceLoad = (map: PhysicalField, cell: number) =>
 function releaseIceLoad(map: PhysicalField, moving: MaterialLoad, cell: number) {
   const material = moving.take(cell, moving.amount(cell));
   if (material.depth <= 0) return;
-  if (map.WaterKindCodes.get(cell) === 1) carryOut(map, material.depth, "moraines", material);
+  if (map.WaterKindCodes.get(cell) === 1) carryOut(map, material.depth, "moraines", material, cell);
   else loadOf(map).add(cell, material);
 }
 

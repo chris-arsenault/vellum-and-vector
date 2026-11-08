@@ -1,17 +1,13 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { nearestTriangle, meshDeltaX, meshPoint } from "./mesh";
-import { clamp, elevationLimit, units } from "./math";
-import { Feature } from "./codes";
-import { tectonicArcMeltShare, tectonicArcOffset, tectonicArcRadius } from "./tectonicControls";
+import { tectonicArcMeltShare, tectonicArcOffset } from "./tectonicControls";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { rockCatalogue } from "../rock/rockCatalogue";
-import { constructRock } from "../rock/groundLedger";
 import { intrudeBasement } from "../rock/rockColumn";
+import type { VolcanicLava } from "../processes/volcanicLava";
 
-/** Metres an eruption adds at a cell before it is lava rather than ash. */
-const arcLava = 40;
-/** Metres of volcanic rock left over an arc's batholith until erosion uncovers it. */
+/** Metres of older volcanic rock retained above an arc's intrusive basement. */
 const arcShell = 3000;
 
 function overridingSide(map: PhysicalField, cell: number) {
@@ -24,87 +20,49 @@ function overridingSide(map: PhysicalField, cell: number) {
   const ai = nearestTriangle(map.mesh, a.x, a.y),
     bi = nearestTriangle(map.mesh, b.x, b.y);
   if (ai < 0 || bi < 0) return null;
-  // Continental buoyancy takes priority; at ocean/ocean contacts the younger side overrides.
-  const score = (i: number) => map.CrustContinentalFraction.get(i) * 2 - map.CrustAge.get(i);
-  const sign = score(ai) >= score(bi) ? -1 : 1,
+  const score = (i: number) => map.CrustContinentalFraction.get(i) * 2 - map.CrustAge.get(i),
+    sign = score(ai) >= score(bi) ? -1 : 1,
     dx = meshDeltaX(map.mesh, b.x - a.x),
     dy = b.y - a.y,
     length = Math.max(1, Math.hypot(dx, dy));
   return [(sign * dx) / length, (sign * dy) / length];
 }
-function footprint(map: PhysicalField, x: number, y: number) {
-  const root = nearestTriangle(map.mesh, x, y);
-  if (root < 0) return [];
-  const queue = [root],
-    seen = new Set(queue),
-    targets: { cell: number; weight: number }[] = [];
-  for (let head = 0; head < queue.length; head++) {
-    const i = queue[head],
-      distance = Math.hypot(meshDeltaX(map.mesh, map.mesh.x(i) - x), map.mesh.y(i) - y);
-    const weight = Math.max(0, 1 - distance / tectonicArcRadius) ** 2;
-    if (weight > 0) targets.push({ cell: i, weight: weight * map.mesh.area(i) });
-    if (distance > tectonicArcRadius + map.mesh.spacing) continue;
-    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
-      const j = map.mesh.neighbor(i, edge);
-      if (j >= 0 && !seen.has(j)) {
-        seen.add(j);
-        queue.push(j);
-      }
-    }
-  }
-  // An unresolved front contributes its area-averaged volume, never an invented island polygon.
-  return targets.length ? targets : [{ cell: root, weight: map.mesh.area(root) }];
-}
-function erupt(map: PhysicalField, context: PhysicalContext, i: number, height: number) {
-  const uplift = Math.max(
-    0,
-    Math.min(
-      height,
-      units(elevationLimit) - map.SedimentThickness.get(i) - map.BedrockElevation.get(i)
-    )
-  );
-  // An arc's flanks are ash, its cones lava, and melt that never rose cools below as granite.
-  const built = constructRock(
-    map,
-    i,
-    uplift,
-    uplift >= units(arcLava) ? rockCatalogue.basalt : rockCatalogue.tuff,
-    "volcanoes",
-    "melt"
-  );
-  map.VolcanicConstructionHistory.add(i, built);
-  intrudeBasement(map, i, rockCatalogue.granite, units(arcShell));
-  map.VolcanicActivity.set(i, Math.max(map.VolcanicActivity.get(i), clamp(uplift / 1024, 0, 1000)));
-  map.VolcanicLastActiveEpoch.set(i, Math.max(0, context.EpochIndex));
-  map.FractureConductance.set(
-    i,
-    Math.max(map.FractureConductance.get(i), map.VolcanicActivity.get(i))
-  );
-  map.FeatureFlags.set(i, map.FeatureFlags.get(i) | Feature.VolcanicCone);
-}
-/** Melt follows actual oceanic consumption, on the overriding side, independently of plumes. */
-export function subductionArcs(map: PhysicalField, context: PhysicalContext) {
-  const added = workingArray(map, "float64", "arcs:added");
-  for (let i = 0; i < map.mesh.count; i++) {
-    const subduction = map.OceanicSubduction.get(i);
-    if (subduction <= 0) continue;
-    const normal = overridingSide(map, i);
-    if (!normal) continue;
+
+/** Sinking crust supplies vents on the overriding side; terrain, not a radial kernel, routes melt. */
+export function subductionArcs(map: PhysicalField, context: PhysicalContext, lava: VolcanicLava) {
+  const supply = workingArray(map, "float64", "arcs:supply");
+  for (let cell = 0; cell < map.mesh.count; cell++) {
+    const consumed = map.OceanicSubduction.get(cell),
+      normal = overridingSide(map, cell);
+    if (consumed <= 0 || !normal) continue;
     const [x, y] = meshPoint(
-      map.mesh,
-      map.mesh.x(i) + normal[0] * tectonicArcOffset,
-      map.mesh.y(i) + normal[1] * tectonicArcOffset
-    );
-    const targets = footprint(map, x, y),
-      total = targets.reduce((sum, target) => sum + target.weight, 0);
-    const volume = subduction * map.mesh.area(i) * tectonicArcMeltShare;
-    for (const target of targets)
-      added.add(target.cell, (volume * target.weight) / (total * map.mesh.area(target.cell)));
+        map.mesh,
+        map.mesh.x(cell) + normal[0] * tectonicArcOffset,
+        map.mesh.y(cell) + normal[1] * tectonicArcOffset
+      ),
+      source = nearestTriangle(map.mesh, x, y);
+    if (source >= 0)
+      supply.add(source, (consumed / 1024) * map.mesh.area(cell) * tectonicArcMeltShare);
   }
-  for (let i = 0; i < map.mesh.count; i++) {
-    const height = added.get(i);
-    if (height > 0) erupt(map, context, i, height);
+  try {
+    for (let source = 0; source < map.mesh.count; source++) {
+      const volume = supply.get(source);
+      if (volume <= 0) continue;
+      const eruption = lava.erupt(source, volume);
+      if (eruption.volume <= 0) continue;
+      intrudeBasement(map, source, rockCatalogue.granite, arcShell * 1024);
+      map.events.push({
+        id: `volcano:arc:${source}:${context.EpochIndex}`,
+        kind: "volcano",
+        x: map.mesh.x(source),
+        y: map.mesh.y(source),
+        radius: eruption.radius,
+        epoch: Math.max(0, context.EpochIndex),
+        strength: map.VolcanicActivity.get(source),
+      });
+    }
+    map.OceanicSubduction.fill(0);
+  } finally {
+    releaseWorking(map, supply);
   }
-  map.OceanicSubduction.fill(0);
-  releaseWorking(map, added);
 }

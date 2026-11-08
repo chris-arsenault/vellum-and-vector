@@ -11,15 +11,16 @@ import { fieldProduct } from "./physicalSteps";
 
 /**
  * What an inherited map brings written: every band its channels carry. A surface with elevation also
- * has the material, zero sediment supply and inert geothermal the workspace sets up under it, even when
- * the surface was authored and has no geological fields of its own.
+ * has the substrate and initially absent sediment supply, geothermal and ice the workspace sets up,
+ * even when authored without geological fields. Supplied ice replaces that empty initial band.
  */
 export function inheritedProducts(channels: Iterable<string>): string[] {
   const names = new Set(channels),
     bands = new Set<PhysicalBufferName>();
   for (const { name, native } of atlasChannels) if (names.has(name)) bands.add(native);
   if (names.has("elevation"))
-    for (const band of ["RockKindCodes", "SedimentSupply", "Geothermal"] as const) bands.add(band);
+    for (const band of ["RockKindCodes", "SedimentSupply", "Geothermal", "IceThickness"] as const)
+      bands.add(band);
   return [...bands].map(fieldProduct);
 }
 /**

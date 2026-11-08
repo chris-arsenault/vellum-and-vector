@@ -93,19 +93,6 @@ export function validateIce(map: PhysicalField, c: PhysicalContext) {
       throw new Error("Ice flow or grounding contradicts its support surface.");
   }
 }
-export function validateBudget(map: PhysicalField) {
-  const supplied = map.coverage.reduce(
-    map.SedimentSupply,
-    (held, value) => held + (value !== 0 ? 1 : 0),
-    0
-  );
-  if (
-    Math.abs(map.SedimentDepositedTotal + map.SedimentExportedTotal - map.SedimentProducedTotal) >
-      Math.max(0.001, map.SedimentProducedTotal * 1e-9) ||
-    supplied
-  )
-    throw new Error("Sediment transport did not conserve its supplied load.");
-}
 /** What holds after any step: the bands it wrote are in range and the land is one surface. */
 export function validateNativeLayer(
   map: PhysicalField,

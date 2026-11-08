@@ -8,12 +8,16 @@ import { atlasGenerationModules } from "./generationModules";
 import { physicalFeatureDefinitions } from "./physicalFeatures";
 import { nativeStepsOf } from "./physicalFeature";
 
-/** Selected mountain operations run while contacts still exist, inside the plate move. */
+/** Construction, immediate failure and load response settle before the next plate move. */
 export function plateDeformationSteps(
   resolved: ResolvedFeatures,
   context?: FeatureContributionContext
 ) {
-  const operations = physicalFeatureSequence("epoch.mountains", resolved, context),
+  const operations = [
+      "epoch.mountains",
+      "material.hillslopes",
+      "material.support.before-margins",
+    ].flatMap((slot) => physicalFeatureSequence(slot, resolved, context)),
     steps = nativeStepsOf(physicalFeatureDefinitions);
   return operations.flatMap((operation) => {
     if (operation.kind !== "process") return [];

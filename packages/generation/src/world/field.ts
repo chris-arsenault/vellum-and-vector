@@ -53,7 +53,6 @@ const integerFields = [
   "TectonicTangentX",
   "TectonicTangentY",
   "OrogenicComponentIds",
-  "OrogenicSystemProminence",
   // Persistent structural grain of constructed relief: doubled-angle axial direction of the
   // belt's strike times its coherence (per-mille). Kept where construction happened and
   // carried with the crust, so a region can read how its relief is organized long after
@@ -156,6 +155,7 @@ const elevationFields = [
   "ImpactRimUplift",
   "ImpactEjectaThickness",
   "VolcanicConstructionHistory",
+  "VolcanicMeltSupply",
   // Cumulative correction that held authored landmarks to their signatures.
   "LandmarkMaintenance",
   "Slope",

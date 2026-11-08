@@ -12,7 +12,7 @@ import { atlasPhysicalProfile } from "../world/atlasProfile";
 import { projectNative } from "../world/atlasProjection";
 import { createMesh } from "../world/mesh";
 import { createField } from "../world/field";
-import { groundResourceArea, groundResourceBindings } from "./groundResources";
+import { groundResourceBindings } from "./groundResources";
 import { materialLayer, readLayer, setLayer, type MaterialLayer } from "./rockColumn";
 import { rockCatalogue } from "./rockCatalogue";
 import { groundFixture } from "./groundStorage";
@@ -197,9 +197,9 @@ function layeredSource() {
     map.GroundCutShare.set(cell, 0.25);
     map.GroundCutDepth.set(cell, 40 * 1024);
     loadOf(map).add(cell, { ...cargo, depth: map.mesh.area(cell) * 2 });
+    seaLoadOf(map).add(cell, { ...cargo, depth: map.mesh.area(cell) * 0.5 });
     projectGround(map, cell);
   }
-  seaLoadOf(map).add(0, { ...cargo, depth: groundResourceArea(map) * 0.5 });
   projectNative(state, false, false, atlasChannels, new Set(["seaDatum"]));
   return state;
 }
@@ -293,11 +293,18 @@ it("reopens mixed cargo by area and lands its retained provenance without changi
     load = loadOf(map),
     held = load.get(cell);
   expect(held).toMatchObject({ ...cargo, depth: map.mesh.area(cell) * 2 });
-  expect(seaLoadOf(map).get(0)).toMatchObject({ ...cargo, depth: groundResourceArea(map) * 0.5 });
+  expect(seaLoadOf(map).get(cell)).toMatchObject({ ...cargo, depth: map.mesh.area(cell) * 0.5 });
   const parcel = load.take(cell, map.mesh.area(cell)),
     depth = (parcel.depth / map.mesh.area(cell)) * 1024;
   deposit(map, cell, depth, "settling", "load", parcel);
-  expect(readLayer(map, cell, 0, "loose")).toMatchObject({ ...cargo, depth: 1024 });
+  expect(readLayer(map, cell, 0, "loose")).toMatchObject({
+    ...cargo,
+    depth: 1024,
+    bedSlopeX: 0,
+    bedSlopeY: 0,
+    deposited: map.CompletedEpochCount,
+    consolidation: 0,
+  });
   expect(readLayer(map, cell, 1, "loose")).toMatchObject(cover[0]);
   expect(loaded.channels.GroundLoadVolume.get(0)).toBe(2);
   expect(loaded.channels.GroundLoadSecondaryKind.get(0)).toBe(rockCatalogue.shale.code);

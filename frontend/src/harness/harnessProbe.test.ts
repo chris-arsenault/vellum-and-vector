@@ -136,9 +136,12 @@ it.each(["world", "region", "quick-region"])(
       HARNESS_PROCESS_BANDS: "Runoff,Quickening",
       HARNESS_FRESH: kind === "world" ? "world" : "region",
       HARNESS_WORLD_ONLY: kind === "world" ? "1" : "",
+      HARNESS_WORLD_SIZE: "2000000,1500000",
       HARNESS_QUICK: kind === "quick-region" ? "1" : "",
     });
     await expect(runHarness(options)).rejects.toThrow("generation operation failed");
+    if (kind === "world")
+      expect(io.generate.mock.calls[0][1]).toMatchObject({ width: 2_000_000, height: 1_500_000 });
     const written = io.write.mock.calls.find(([name]) =>
       String(name).endsWith(`/${kind}-processes.json`)
     );

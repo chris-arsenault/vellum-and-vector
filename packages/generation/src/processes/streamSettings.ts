@@ -13,8 +13,6 @@ export const streamSettings = {
   FluvialReferenceRunoff: 300,
   // A valley's width as a share of the square root of its catchment's area.
   FluvialValleyWidthShare: 0.05,
-  // The share of a cell that streams too small to map lower, however small its catchment.
-  FluvialDissectionShare: 0.3,
   // Square metres of catchment before a stream leaves a valley on record; smaller ones only wear the land.
   FluvialChannelArea: 3e9,
   // On a finer map, the share of the world's catchment a channel starts from beyond area alone,

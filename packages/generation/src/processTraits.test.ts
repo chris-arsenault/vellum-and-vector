@@ -85,7 +85,7 @@ it("binds elapsed evolution to the explicit epoch fraction and rejects an absent
   );
 });
 
-it("executes forcing contributions and checks material balance after the transformation completes", async () => {
+it("executes forcing contributions and awaits material transformation completion", async () => {
   const calls: string[] = [];
   const state = landscape(),
     ctx = context();
@@ -106,31 +106,26 @@ it("executes forcing contributions and checks material balance after the transfo
         await Promise.resolve();
         calls.push("material");
       },
-      balance() {
-        calls.push("balance");
-      },
     }),
     state,
     ctx
   );
-  expect(calls).toEqual(["forcing", "material", "balance"]);
+  expect(calls).toEqual(["forcing", "material"]);
 });
 
-it("awaits asynchronous material balance before validating or exposing products", async () => {
+it("awaits asynchronous material transformation before validating or exposing products", async () => {
   const calls: string[] = [];
   const process = definition({
     kind: "material-transformation",
-    transform() {
-      calls.push("transform");
-    },
-    async balance() {
+    async transform() {
+      calls.push("started");
       await Promise.resolve();
-      calls.push("balance");
+      calls.push("completed");
     },
   });
-  process.contract.produces = ["balanced"];
+  process.contract.produces = ["transformed"];
   process.validate = (state) => {
-    expect(state.facts.has("balanced")).toBe(false);
+    expect(state.facts.has("transformed")).toBe(false);
     calls.push("validate");
     return [];
   };
@@ -138,19 +133,18 @@ it("awaits asynchronous material balance before validating or exposing products"
     configuration([invoke(process)]),
     new MapProcessRegistry().register(process)
   ).run(landscape(), options);
-  expect(calls).toEqual(["transform", "balance", "validate"]);
-  expect(result.state.facts.has("balanced")).toBe(true);
+  expect(calls).toEqual(["started", "completed", "validate"]);
+  expect(result.state.facts.has("transformed")).toBe(true);
 });
 
-it("rejects failed asynchronous balance before validation or delivery", async () => {
+it("rejects failed asynchronous transformation before validation or delivery", async () => {
   let validated = false;
   let delivered = false;
   const process = definition({
     kind: "material-transformation",
-    transform() {},
-    async balance() {
+    async transform() {
       await Promise.resolve();
-      throw new Error("Unbalanced transported material");
+      throw new Error("Material transformation failed");
     },
   });
   process.validate = () => {
@@ -167,7 +161,7 @@ it("rejects failed asynchronous balance before validation or delivery", async ()
         },
       }
     )
-  ).rejects.toThrow("Unbalanced transported material");
+  ).rejects.toThrow("Material transformation failed");
   expect(validated).toBe(false);
   expect(delivered).toBe(false);
 });

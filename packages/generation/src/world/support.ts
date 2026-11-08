@@ -10,7 +10,7 @@ import {
   toUnits,
   units,
 } from "./math";
-import { setSupportTarget, supportedAt } from "../rock/groundDeformation";
+import { setSupportTarget, supportGroundField } from "../rock/groundDeformation";
 import { smoothMetric } from "./metricSmoothing";
 import { releaseWorking, workingValues } from "./physicalNumerics";
 import {
@@ -19,7 +19,7 @@ import {
   tectonicRiftSubsidence,
 } from "./tectonicControls";
 
-export function crustalSupport(map: PhysicalField, context: PhysicalContext, includeIce: boolean) {
+export function crustalSupport(map: PhysicalField, context: PhysicalContext) {
   const p = context.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
     const fraction = map.CrustContinentalFraction.get(i) / 1000;
@@ -37,7 +37,7 @@ export function crustalSupport(map: PhysicalField, context: PhysicalContext, inc
     let load =
       ratio(map.SurfaceRockLoad.get(i), rockLoadResponsePerMille, 1000) +
       ratio(map.SedimentThickness.get(i), p.SedimentLoadResponsePerMille, 1000);
-    if (includeIce && map.GroundedIce.get(i) !== 0)
+    if (map.GroundedIce.get(i) !== 0)
       load += ratio(units(map.IceThickness.get(i)), p.IceLoadResponsePerMille, 1000);
     setSupportTarget(
       map,
@@ -51,6 +51,8 @@ export function crustalSupport(map: PhysicalField, context: PhysicalContext, inc
   }
 }
 function trenchSupport(map: PhysicalField, context: PhysicalContext, i: number) {
+  // Stored consumption describes the parcel's past; a trench needs a current convergent load.
+  if (context.TectonicStrength <= 0 || map.TectonicBoundaryCodes.get(i) !== 1) return 0;
   const consumed = map.OceanicSubductionHistory.get(i) / units(1000);
   const oceanic = 1 - map.CrustContinentalFraction.get(i) / 1000;
   return units(context.Profile.ConvergentTrenchDepth * oceanic * (1 - Math.exp(-consumed)));
@@ -73,22 +75,6 @@ function settledSupport(map: PhysicalField, context: PhysicalContext) {
 }
 export function lithosphericFlexure(map: PhysicalField, context: PhysicalContext) {
   const current = settledSupport(map, context);
-  for (let i = 0; i < current.length; i++) {
-    const value = current.get(i);
-    if (!map.CrustSupportInitialized) {
-      supportedAt(map, i, value, 0);
-      continue;
-    }
-    const old = map.CrustSupportElevation.get(i),
-      shift = value - old,
-      before = map.BedrockElevation.get(i);
-    const bedrock = clamp(
-      before + shift,
-      units(-elevationLimit),
-      units(elevationLimit) - map.SedimentThickness.get(i)
-    );
-    supportedAt(map, i, old + bedrock - before, bedrock - before);
-  }
-  map.CrustSupportInitialized = true;
+  supportGroundField(map, current);
   releaseWorking(map, current);
 }

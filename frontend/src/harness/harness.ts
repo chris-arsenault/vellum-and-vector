@@ -28,6 +28,8 @@ export interface HarnessOptions {
   seed: number;
   world: string;
   worldQuality: string;
+  /** Optional ordinary world dimensions in metres; cell span still follows quality. */
+  worldSize?: [number, number];
   region: string;
   regionQuality: string;
   /** Map metres of the point whose subdivision becomes the region. */
@@ -51,6 +53,7 @@ const harnessSeed = 271_828;
 const defaults = {
   HARNESS_WORLD: "world",
   HARNESS_WORLD_QUALITY: "standard",
+  HARNESS_WORLD_SIZE: "",
   HARNESS_REGION: "region",
   HARNESS_REGION_QUALITY: "standard",
   HARNESS_FRESH: "",
@@ -70,11 +73,16 @@ function position(text: string): [number, number] | undefined {
 export function harnessOptions(env: Record<string, string | undefined>): HarnessOptions {
   const read = (key: keyof typeof defaults) => env[key] || defaults[key];
   const fresh = new Set(read("HARNESS_FRESH").split(",").filter(Boolean));
+  const size = read("HARNESS_WORLD_SIZE"),
+    worldSize = position(size);
+  if (size && (!worldSize || worldSize.some((value) => value <= 0)))
+    throw new Error("HARNESS_WORLD_SIZE requires positive width,height in metres.");
   if (fresh.has("world")) fresh.add("region");
   return {
     seed: Number(read("HARNESS_SEED")),
     world: read("HARNESS_WORLD"),
     worldQuality: read("HARNESS_WORLD_QUALITY"),
+    worldSize,
     region: read("HARNESS_REGION"),
     regionQuality: read("HARNESS_REGION_QUALITY"),
     regionAt: position(read("HARNESS_REGION_AT")),
@@ -139,6 +147,7 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
     stopProcesses = recordProcesses(options, out, "world");
   draft.recipe.quality = options.worldQuality as typeof draft.recipe.quality;
   draft.recipe.seed = options.seed;
+  if (options.worldSize) [draft.width, draft.height] = options.worldSize;
   let traceStopped = false;
   try {
     const { worldId, root } = await generateWorld(ws, draft, recorder.observers);

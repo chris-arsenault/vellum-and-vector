@@ -38,8 +38,6 @@ export interface PhysicalContext {
     field: PhysicalField,
     context: PhysicalContext
   ) => void;
-  /** Whether what ice weighs is counted in what the crust floats under. */
-  IceLoad?: boolean;
   RainfallMultiplier: number;
   Seed: number;
   EpochStableSeed: number;
@@ -78,8 +76,7 @@ export function nativeContext(state: GenerationState, context: MapProcessContext
 function epochProfile(base: PhysicalProfile, definition: Epoch | undefined) {
   const profile = { ...base };
   profile.ImpactCraterCount = round(profile.ImpactCraterCount * (definition?.impacts ?? 1));
-  for (const key of ["VolcanicConeHeight", "VolcanicApronHeight", "VolcanicCalderaDepth"] as const)
-    profile[key] *= definition?.volcanism ?? 1;
+  profile.VolcanicConeHeight *= definition?.volcanism ?? 1;
   return profile;
 }
 export function physicalContext(

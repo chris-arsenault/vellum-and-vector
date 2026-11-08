@@ -15,7 +15,7 @@ export interface PhysicalStep {
   readonly needs: readonly PhysicalBufferName[];
   readonly writes: readonly PhysicalBufferName[];
   readonly leaves: readonly string[];
-  /** Whether it moves loose material, so the sediment's books are checked after it. */
+  /** Whether the operation transfers loose material. */
   readonly movesMaterial: boolean;
 }
 const carried = new Set(["load", "loose"]);

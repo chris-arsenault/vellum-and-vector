@@ -50,3 +50,32 @@ it("finds geodesic distances from several seeds within the reach, visiting each 
   // The reach cut something off.
   expect(Array.from(expected).some((d) => !Number.isFinite(d))).toBe(true);
 });
+
+it("can spend a finite work budget along material-weighted faces", () => {
+  const mesh = createWorldMesh([0, 0, 6000, 6000], 36, 0),
+    seed = 0,
+    neighbor = mesh.neighbor(seed, 0),
+    edgeLength = mesh.edgeLength(seed, 0),
+    weak = residentBand("float64", new Float64Array(mesh.count).fill(Infinity)),
+    strong = residentBand("float64", new Float64Array(mesh.count).fill(Infinity));
+  weak.set(seed, 0);
+  strong.set(seed, 0);
+  metricSearch(
+    mesh,
+    [seed],
+    weak,
+    edgeLength,
+    () => {},
+    (i, _, edge) => mesh.edgeLength(i, edge) / 2
+  );
+  metricSearch(
+    mesh,
+    [seed],
+    strong,
+    edgeLength,
+    () => {},
+    (i, _, edge) => mesh.edgeLength(i, edge) * 2
+  );
+  expect(Number.isFinite(weak.get(neighbor))).toBe(true);
+  expect(strong.get(neighbor)).toBe(Infinity);
+});

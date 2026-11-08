@@ -6,6 +6,9 @@ it("counts a band as inherited only when a channel carried it, and the ground un
   expect(elevation).toContain("field:Elevation");
   expect(elevation).toContain("field:RockKindCodes");
   expect(elevation).toContain("field:Geothermal"); // Explicitly initialized inert substrate.
+  expect(elevation).toContain("field:IceThickness"); // Empty initial band, not a glacial history.
+  expect(elevation).not.toContain("field:MaximumIceThickness");
+  expect(inheritedProducts(["iceThickness"])).toContain("field:IceThickness");
   expect(elevation).not.toContain("field:ImpactExcavation");
   expect(inheritedProducts(["impactExcavation"])).toContain("field:ImpactExcavation");
 });

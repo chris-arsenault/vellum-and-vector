@@ -1,12 +1,14 @@
-import { meshDeltaX } from "./mesh";
 // CoastalErosionLayer.cs and ExternalCoastalForcingLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { carryOut, deposit, erodeFacets } from "../rock/groundLedger";
+import { carryOut, erodeFacets } from "../rock/groundLedger";
+import { depositPond } from "../rock/groundDeposition";
 import { loadOf } from "../rock/groundLoad";
 import type { MaterialLayer } from "../rock/rockColumn";
 import type { Band } from "@atlas/domain";
 import type { CoastalFrame } from "./coastalFrame";
+import { metricSearch } from "./metricSearch";
+import { releaseWorking, workingArray } from "./physicalNumerics";
 
 function depositionTargets(
   map: PhysicalField,
@@ -15,28 +17,39 @@ function depositionTargets(
   reach: number,
   oceanOnly: boolean
 ): [number, number][] {
-  const queue = [source],
-    visited = new Set(queue),
+  const visited = new Set<number>(),
     targets: [number, number][] = [],
-    sx = map.mesh.x(source),
-    sy = map.mesh.y(source),
-    sourceStrength = frame.strength.get(source);
-  for (let head = 0; head < queue.length; head++) {
-    const i = queue[head];
-    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
-      const j = map.mesh.neighbor(i, edge);
-      if (j < 0 || visited.has(j)) continue;
-      visited.add(j);
-      const distance = Math.hypot(meshDeltaX(map.mesh, map.mesh.x(j) - sx), map.mesh.y(j) - sy);
-      if (distance >= reach) continue;
-      queue.push(j);
-      const ocean = map.WaterKindCodes.get(j) === 1,
-        wave = ocean ? map.WaveExposure.get(j) : frame.strength.get(j);
-      const shelter = oceanOnly
-        ? Number(ocean) / (1 + wave + map.OceanCurrentStrength.get(j))
-        : Math.max(0, sourceStrength - wave);
-      if (shelter > 0) targets.push([j, shelter * (1 - distance / reach) * map.mesh.area(j)]);
+    sourceStrength = frame.strength.get(source),
+    distance = workingArray(map, "float64", "coast:distance").fill(Infinity);
+  distance.set(source, 0);
+  try {
+    metricSearch(
+      map.mesh,
+      [source],
+      distance,
+      reach,
+      (target) => {
+        visited.add(target);
+      },
+      // A dry shore can receive material, but cannot relay it across land to another sea.
+      (i, _, edge) =>
+        i === source || map.WaterKindCodes.get(i) === 1 ? map.mesh.edgeLength(i, edge) : Infinity
+    );
+    for (const target of visited) {
+      if (distance.get(target) >= reach) continue;
+      const ocean = map.WaterKindCodes.get(target) === 1,
+        wave = ocean ? map.WaveExposure.get(target) : frame.strength.get(target),
+        shelter = oceanOnly
+          ? Number(ocean) / (1 + wave + map.OceanCurrentStrength.get(target))
+          : Math.max(0, sourceStrength - wave);
+      if (shelter > 0)
+        targets.push([
+          target,
+          shelter * (1 - distance.get(target) / reach) * map.mesh.area(target),
+        ]);
     }
+  } finally {
+    releaseWorking(map, distance);
   }
   return targets;
 }
@@ -58,6 +71,7 @@ export function recordCoastalCut(
 function depositCoastalVolume(
   map: PhysicalField,
   c: PhysicalContext,
+  source: number,
   targets: [number, number][],
   material: MaterialLayer
 ) {
@@ -67,18 +81,32 @@ function depositCoastalVolume(
     deposited = 0;
   for (const [target, share] of targets) {
     const amount = Math.min(remaining, (remaining * share) / weight),
-      area = map.mesh.area(target),
-      // What waves carry fills the sea up to its surface and no higher; the rest goes out to sea.
-      room = Math.max(0, map.EffectiveSeaLevel - map.Elevation.get(target));
+      area = map.mesh.area(target);
+    // What waves carry fills submerged accommodation; emergent rock receives no coating.
     const actual =
-      (deposit(map, target, Math.min((amount * 1024) / area, room), "coast", "load", material) /
+      (depositPond(
+        map,
+        target,
+        (amount * 1024) / area,
+        map.EffectiveSeaLevel,
+        "coast",
+        "load",
+        material
+      ) /
         1024) *
       area;
     deposited += actual;
     remaining = Math.max(0, remaining - actual);
     weight -= share;
   }
-  carryOut(map, volume - deposited, "coast", { ...material, depth: volume - deposited });
+  const remainingMaterial = { ...material, depth: volume - deposited },
+    entry =
+      map.WaterKindCodes.get(source) === 1
+        ? source
+        : targets.find(([target]) => map.WaterKindCodes.get(target) === 1)?.[0];
+  if (entry !== undefined)
+    carryOut(map, remainingMaterial.depth, "coast", remainingMaterial, entry);
+  else loadOf(map).add(source, remainingMaterial);
 }
 export function depositShoreLoads(
   map: PhysicalField,
@@ -93,6 +121,7 @@ export function depositShoreLoads(
     depositCoastalVolume(
       map,
       c,
+      i,
       depositionTargets(map, frame, i, c.Profile.CoastalDepositionReach * c.Span, oceanOnly),
       loadOf(map).take(i, load)
     );

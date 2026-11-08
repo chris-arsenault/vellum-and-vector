@@ -1,18 +1,20 @@
 // OrogenicConstructionLayer component discovery, ranking and influence, Canonry 0f62584c.
-import type { PhysicalField } from "./field";
+import { crustForming, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { round, toUnits } from "./math";
-import { hashUnit } from "./noise";
 import { metricSearch } from "./metricSearch";
+import { physicalDistance } from "./physicalMetric";
 import { meshDeltaX, meshPointX } from "./mesh";
 import { CellQueue, type Band } from "@atlas/domain";
-import { workingArray } from "./physicalNumerics";
+import { releaseWorking, workingArray, workingValues } from "./physicalNumerics";
+import { groundOf } from "../rock/ground";
+import { averageGroundQuery } from "../rock/groundQuery";
+import { compileMix, materialGives } from "../rock/modes";
 
 export interface BoundaryComponent {
   id: number;
   code: number;
   pair: number;
-  prominence: number;
   count: number;
   area: number;
   totalWeight: number;
@@ -30,11 +32,10 @@ export interface BoundaryComponent {
   y: number;
 }
 export interface OrogenicFrame {
+  /** Accumulated shortening work through the intervening material, in baseline-rock metres. */
   distance: Band;
   source: Band;
-  // +1 on the belt's hinterland, −1 on its foreland (see assignSides).
-  side: Band;
-  /** How far out a cell lies in its belt, counting a narrower foreland as the same sheets. */
+  /** Physical distance from the current belt contact. */
   reach: Band;
   /** How much of a cell a sheet's leading edge rode over on this pass, in [0, 1]. */
   overlap: Band;
@@ -99,7 +100,6 @@ export function discoverComponents(
       id: components.length,
       code: map.TectonicBoundaryCodes.get(i),
       pair: map.TectonicBoundaryPairIds.get(i),
-      prominence: 0,
       count: 0,
       area: 0,
       totalWeight: 0,
@@ -120,35 +120,6 @@ export function discoverComponents(
   }
   return components;
 }
-function componentScore(c: BoundaryComponent, context: PhysicalContext) {
-  const variation = hashUnit(context.EpochStableSeed ^ 0x35a7, c.pair, c.code);
-  return (
-    Math.log2(c.area / 100_000_000 + 1) *
-    (0.7 + variation * 0.6) *
-    (0.55 + c.strain) *
-    (1 + Math.max(c.collision, c.suture) * 3.2) *
-    (0.35 + c.continental + c.maximumContinental * 0.45)
-  );
-}
-export function rankComponents(components: BoundaryComponent[], context: PhysicalContext) {
-  const p = context.Profile;
-  for (const component of components) component.prominence = p.OrogenicProminenceMinimum;
-  const ranked = components
-    .filter(
-      (c) =>
-        c.code === 1 && c.area >= p.OrogenicMinimumComponentArea && c.maximumContinental >= 0.35
-    )
-    .map((c) => ({ c, score: componentScore(c, context) }))
-    // hpc-exempt: boundary component records, sorted once.
-    .sort((a, b) => b.score - a.score || a.c.pair - b.c.pair);
-  ranked.forEach(({ c }, rank) => {
-    c.prominence = round(
-      p.OrogenicProminenceMinimum +
-        (p.OrogenicProminenceMaximum - p.OrogenicProminenceMinimum) *
-          Math.exp(-rank / p.OrogenicProminenceRankDecay)
-    );
-  });
-}
 /** Signed across-strike offset (metres) of a cell from its source boundary cell. */
 export function acrossStrike(map: PhysicalField, i: number, source: number): number {
   let tx = map.TectonicTangentX.get(source) / 1000,
@@ -162,33 +133,34 @@ export function acrossStrike(map: PhysicalField, i: number, source: number): num
     (map.mesh.y(i) - map.mesh.y(source)) * tx
   );
 }
-/**
- * A belt's hinterland is the side of its boundary that holds more continental mass: the
- * overriding plate of a subduction, the larger plate of a collision, where Tibet stands behind
- * the Himalaya. Cells there read +1, the foreland −1; boundary cells themselves count as interior.
- */
-function assignSides(
+const shear = compileMix({ shear: 1 });
+const yielding = averageGroundQuery({
+  start: 0,
+  throughColumn: true,
+  rock: (weakest, { material }) => Math.max(weakest, materialGives(shear, material)),
+});
+/** Shortening work increases with resistance and the standing wedge it must move. */
+export const deformationCost = (distance: number, response: number, load: number) =>
+  response > 0 ? (distance * (1 + Math.max(0, load))) / response : Infinity;
+function retainReached(
   map: PhysicalField,
+  context: PhysicalContext,
   components: BoundaryComponent[],
-  source: Band,
-  side: Band
+  distance: Band
 ) {
-  const mass = new Float64Array(components.length);
+  const fronts = new Float64Array(components.length),
+    drift = crustForming(map) ? context.Profile.OrogenicInitialShortening : map.LastPlateDriftStep;
   for (let i = 0; i < map.mesh.count; i++) {
-    const id = map.OrogenicComponentIds.get(i),
-      from = source.get(i);
-    if (id < 0 || from < 0) continue;
-    const offset = acrossStrike(map, i, from);
-    if (offset !== 0)
-      mass[id] +=
-        Math.sign(offset) * (map.CrustContinentalFraction.get(i) / 1000) * map.mesh.area(i);
+    const id = map.OrogenicComponentIds.get(i);
+    if (id >= 0 && map.ThrustPairIds.get(i) === components[id].pair + 1)
+      fronts[id] = Math.max(fronts[id], distance.get(i));
   }
   for (let i = 0; i < map.mesh.count; i++) {
-    const id = map.OrogenicComponentIds.get(i),
-      from = source.get(i);
-    if (id < 0 || from < 0) continue;
-    const offset = acrossStrike(map, i, from);
-    side.set(i, offset === 0 ? 1 : Math.sign(offset) * (mass[id] < 0 ? -1 : 1));
+    const id = map.OrogenicComponentIds.get(i);
+    if (id < 0) continue;
+    const budget =
+      fronts[id] + components[id].strain * drift * context.Profile.OrogenicAccretionRatio;
+    if (distance.get(i) > budget) map.OrogenicComponentIds.set(i, -1);
   }
 }
 export function propagateInfluence(
@@ -199,32 +171,44 @@ export function propagateInfluence(
 ): OrogenicFrame {
   const distance = workingArray(map, "float64", "orogeny:distance").fill(Infinity),
     source = workingArray(map, "int32", "orogeny:source").fill(-1),
-    side = workingArray(map, "float64", "orogeny:side");
+    reach = workingArray(map, "float64", "orogeny:reach").fill(0),
+    ground = groundOf(map),
+    resistance = workingValues(map, "float64", "orogeny:resistance", (i) =>
+      deformationCost(
+        1,
+        ground.fold(i, yielding),
+        map.CrustThickness.get(i) > 0 ? map.SurfaceRockLoad.get(i) / map.CrustThickness.get(i) : 0
+      )
+    );
   function* seeds() {
     for (let i = 0; i < ids.length; i++) {
       const id = ids.get(i);
-      if (id < 0 || components[id].area < context.Profile.OrogenicMinimumComponentArea) continue;
+      if (
+        id < 0 ||
+        components[id].code !== 1 ||
+        components[id].area < context.Profile.OrogenicMinimumComponentArea
+      )
+        continue;
       map.OrogenicComponentIds.set(i, id);
-      map.OrogenicSystemProminence.set(i, components[id].prominence);
       distance.set(i, 0);
       source.set(i, i);
       yield i;
     }
   }
-  metricSearch(map.mesh, seeds(), distance, context.Profile.OrogenicInfluenceReach, (j, i) => {
-    source.set(j, source.get(i));
-    map.OrogenicComponentIds.set(j, map.OrogenicComponentIds.get(i));
-    map.OrogenicSystemProminence.set(j, map.OrogenicSystemProminence.get(i));
-  });
-  assignSides(map, components, source, side);
-  const reach = workingArray(map, "float64", "orogeny:reach"),
-    overlap = workingArray(map, "float64", "orogeny:overlap").fill(0);
-  for (let i = 0; i < reach.length; i++)
-    reach.set(
-      i,
-      side.get(i) < 0
-        ? distance.get(i) / context.Profile.OrogenicForelandWidthShare
-        : distance.get(i)
-    );
-  return { distance, source, side, reach, overlap };
+  metricSearch(
+    map.mesh,
+    seeds(),
+    distance,
+    Infinity,
+    (j, i) => {
+      source.set(j, source.get(i));
+      map.OrogenicComponentIds.set(j, map.OrogenicComponentIds.get(i));
+      reach.set(j, reach.get(i) + physicalDistance(map.mesh, i, j));
+    },
+    (i, j, edge) => (map.mesh.edgeLength(i, edge) * (resistance.get(i) + resistance.get(j))) / 2
+  );
+  retainReached(map, context, components, distance);
+  releaseWorking(map, resistance);
+  const overlap = workingArray(map, "float64", "orogeny:overlap").fill(0);
+  return { distance, source, reach, overlap };
 }

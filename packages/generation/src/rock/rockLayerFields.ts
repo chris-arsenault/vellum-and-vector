@@ -1,4 +1,4 @@
-import { rockKindOfCode } from "./rockCatalogue";
+import { rockCatalogue, rockKindOfCode } from "./rockCatalogue";
 
 export interface MaterialLayer {
   readonly kind: number;
@@ -9,6 +9,13 @@ export interface MaterialLayer {
   readonly damage: number;
   readonly grainX: number;
   readonly grainY: number;
+  /** Bed elevation gradients, dz/dx and dz/dy; unlike axial fabric these distinguish opposite sides. */
+  readonly bedSlopeX: number;
+  readonly bedSlopeY: number;
+  /** Epoch of this bed's deposition, separate from formation ages of its constituents. */
+  readonly deposited: number;
+  /** Loose aggregate (0), cemented sediment (between), intact or thermally welded rock (1). */
+  readonly consolidation: number;
   readonly formedMin: number;
   readonly formedMax: number;
   readonly altered: number;
@@ -32,6 +39,10 @@ export const materialProperties = [
   "damage",
   "grainX",
   "grainY",
+  "bedSlopeX",
+  "bedSlopeY",
+  "deposited",
+  "consolidation",
   "formedMin",
   "formedMax",
   "altered",
@@ -47,6 +58,10 @@ const suffixes = {
   damage: "Damage",
   grainX: "GrainX",
   grainY: "GrainY",
+  bedSlopeX: "BedSlopeX",
+  bedSlopeY: "BedSlopeY",
+  deposited: "Deposited",
+  consolidation: "Consolidation",
   formedMin: "FormedMin",
   formedMax: "FormedMax",
   altered: "Altered",
@@ -78,6 +93,10 @@ function fields<C extends Column>(column: C): ColumnFields<C> {
     damage: names("damage"),
     grainX: names("grainX"),
     grainY: names("grainY"),
+    bedSlopeX: names("bedSlopeX"),
+    bedSlopeY: names("bedSlopeY"),
+    deposited: names("deposited"),
+    consolidation: names("consolidation"),
     formedMin: names("formedMin"),
     formedMax: names("formedMax"),
     altered: names("altered"),
@@ -119,6 +138,10 @@ export function materialLayer(
     damage: 0,
     grainX: 0,
     grainY: 0,
+    bedSlopeX: 0,
+    bedSlopeY: 0,
+    deposited: epoch,
+    consolidation: rockKindOfCode(kind).family === "loose" ? 0 : 1,
     formedMin: epoch,
     formedMax: epoch,
     altered: epoch,
@@ -161,8 +184,10 @@ function components(a: MaterialLayer, b: MaterialLayer) {
 export function blendLayers(a: MaterialLayer, b: MaterialLayer): MaterialLayer {
   const depth = a.depth + b.depth,
     share = depth > 0 ? b.depth / depth : 0,
-    mean = (property: "strength" | "damage" | "grainX" | "grainY") =>
-      a[property] + (b[property] - a[property]) * share;
+    mean = (
+      property:
+        "strength" | "damage" | "grainX" | "grainY" | "bedSlopeX" | "bedSlopeY" | "consolidation"
+    ) => a[property] + (b[property] - a[property]) * share;
   return {
     ...components(a, b),
     depth,
@@ -170,6 +195,10 @@ export function blendLayers(a: MaterialLayer, b: MaterialLayer): MaterialLayer {
     damage: mean("damage"),
     grainX: mean("grainX"),
     grainY: mean("grainY"),
+    bedSlopeX: mean("bedSlopeX"),
+    bedSlopeY: mean("bedSlopeY"),
+    consolidation: mean("consolidation"),
+    deposited: Math.max(a.deposited, b.deposited),
     formedMin: Math.min(a.formedMin, b.formedMin),
     formedMax: Math.max(a.formedMax, b.formedMax),
     altered: Math.max(a.altered, b.altered),
@@ -177,3 +206,11 @@ export function blendLayers(a: MaterialLayer, b: MaterialLayer): MaterialLayer {
   };
 }
 export const mergeMaterial = blendLayers;
+
+/** Aggregate strength belongs to the bed; constituent strength survives disaggregation and transport. */
+export function materialStrength(layer: MaterialLayer, loose = false) {
+  const looseStrength = Math.min(layer.strength, rockCatalogue.alluvium.resistance);
+  return loose
+    ? looseStrength
+    : looseStrength + (layer.strength - looseStrength) * layer.consolidation;
+}

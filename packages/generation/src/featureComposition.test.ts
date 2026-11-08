@@ -12,11 +12,16 @@ import { GenerationModuleRegistry, type GenerationModule } from "./generationMod
 import { atlasGenerationModules } from "./atlasModules";
 import { worldGenerationSettings } from "./generationSettings";
 
-it("omits mountain construction inside plate motion when that feature is disabled", () => {
+it("omits disabled mountain construction while retaining selected surface and load feedback", () => {
   const selected = resolveGenerationFeatures(physicalFeatureDefinitions, {
     "physical.mountains": { enabled: false },
   });
-  expect(plateDeformationSteps(selected).map(([name]) => name)).toEqual(["continental-sutures"]);
+  expect(plateDeformationSteps(selected).map(([name]) => name)).toEqual([
+    "continental-sutures",
+    "mass-wasting",
+    "crustal-support",
+    "lithospheric-flexure",
+  ]);
   expect(physicalFeatureSequence("material.relaxation", selected)).toHaveLength(1);
 });
 

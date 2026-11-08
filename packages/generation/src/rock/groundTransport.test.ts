@@ -3,7 +3,7 @@ import { createTestField as createField } from "./groundTestFixture";
 import { createMesh } from "../world/mesh";
 import { elevationLimit, units } from "../world/math";
 import { rockCatalogue } from "./rockCatalogue";
-import { readLayer, setLayer } from "./rockColumn";
+import { readLayer, setLayer, watchColumn, type MaterialLayer } from "./rockColumn";
 import { openCut, projectGround } from "./groundShares";
 import { withdrawColumn } from "./groundMaterial";
 import {
@@ -45,7 +45,7 @@ it("moves a complete material package and both surface shares to its new placeme
   map.GroundCutDepth.set(0, units(20));
   setLayer(map, 0, 0, shale.code, units(8), { altered: 2 }, "cutLoose");
   const held = holdRock(map);
-  placeCarriedGround(map, held, 1, 0, [units(500), units(450), units(40)]);
+  placeCarriedGround(map, held, 1, 0, [1, 0, 0, 1]);
   expect(readLayer(map, 1, 0)).toMatchObject({
     kind: basalt.code,
     strength: 2900,
@@ -62,7 +62,7 @@ it("moves a complete material package and both surface shares to its new placeme
   expect(map.GroundCutDepth.get(1)).toBe(units(20));
   expect(map.CrustSuturePairIds.get(1)).toBe(7);
   expect(map.CrustSutureStrength.get(1)).toBe(800);
-  expect(map.Elevation.get(1)).toBe(units(502));
+  expect(map.Elevation.get(1)).toBe(units(302));
   releaseHeldRock(map, held);
 });
 it("accretes the actual bounded donor slice and exposes its inherited contrast after removal", () => {
@@ -149,13 +149,17 @@ it("admits older land cover before cut cover and retains the partially landed be
   releaseHeldRock(map, held);
 });
 
-it("leaves loose cover and its history untouched when no incoming rock can land", () => {
+it("deepens crust when incoming rock cannot land without disturbing existing cover", () => {
   const map = ground();
   map.BedrockElevation.set(1, units(100_000));
   setLayer(map, 1, 0, shale.code, units(8), { formedMin: 2, altered: 4 }, "loose");
   projectGround(map, 1);
-  const held = holdRock(map);
+  const held = holdRock(map),
+    crust = map.CrustThickness.get(1),
+    surface = map.Elevation.get(1);
   expect(accreteHeldGround(map, held, 1, 0, units(40))).toBe(0);
+  expect(map.CrustThickness.get(1)).toBeGreaterThan(crust);
+  expect(map.Elevation.get(1)).toBe(surface);
   expect(readLayer(map, 1, 0, "loose")).toMatchObject({
     kind: shale.code,
     depth: units(8),
@@ -164,4 +168,56 @@ it("leaves loose cover and its history untouched when no incoming rock can land"
   });
   expect(readLayer(map, 1, 0).kind).toBe(granite.code);
   releaseHeldRock(map, held);
+});
+
+it("buries each facet's cover before collision beds while preserving substantial inherited contacts", () => {
+  const map = ground(),
+    { tufa, rimerot, sandstone, limestone, quartzite, gneiss } = rockCatalogue,
+    kinds = [tufa, rimerot, sandstone, shale, limestone, basalt, quartzite, granite];
+  kinds.forEach((kind, slot) =>
+    setLayer(map, 1, slot, kind.code, units(slot < 2 ? 0.5 : (slot - 1) * 100), {
+      formedMin: 5,
+      formedMax: 5,
+    })
+  );
+  openCut(map, 1, 0.25);
+  setLayer(map, 1, 0, gneiss.code, units(1), { formedMin: 8, formedMax: 8 }, "loose");
+  setLayer(map, 1, 1, sandstone.code, units(2.5), { formedMin: 7, formedMax: 7 }, "loose");
+  setLayer(map, 1, 0, limestone.code, units(4), { formedMin: 6, formedMax: 6 }, "cutLoose");
+  map.CompletedEpochCount = 9;
+  projectGround(map, 1);
+  const before = map.Elevation.get(1),
+    held = holdRock(map),
+    merges: MaterialLayer[] = [],
+    stop = watchColumn({ fold() {}, strip() {}, merge: (_, __, ___, layer) => merges.push(layer) });
+  try {
+    accreteHeldGround(map, held, 1, 0, units(40));
+    for (const [facet, mixtureDepth] of [
+      ["land", 34.5],
+      ["cut", 35],
+    ] as const) {
+      expect(readLayer(map, 1, 0, facet)).toMatchObject({ kind: basalt.code, depth: units(10) });
+      expect(readLayer(map, 1, 1, facet)).toMatchObject({
+        depth: units(mixtureDepth),
+        mixed: 1,
+        altered: 9,
+      });
+      expect(readLayer(map, 1, 2, facet)).toMatchObject({
+        kind: sandstone.code,
+        depth: units(100),
+        formedMin: 5,
+        mixed: 0,
+      });
+    }
+    expect(map.SedimentThickness.get(1)).toBe(0);
+    expect(map.Elevation.get(1)).toBe(before + units(40));
+    expect(map.GroundCutDepth.get(1)).toBe(units(-0.5));
+    expect(merges.some((layer) => layer.formedMax === 8 && layer.altered === 9)).toBe(true);
+    withdrawColumn(map, 1, "land", units(44.5));
+    expect(readLayer(map, 1, 0)).toMatchObject({ kind: sandstone.code, depth: units(100) });
+    expect(heldLayers(held, 0)[0]).toMatchObject({ kind: basalt.code, altered: 3 });
+  } finally {
+    stop();
+    releaseHeldRock(map, held);
+  }
 });

@@ -16,6 +16,11 @@ export interface TransportPlan {
   arrivals: Band;
   dominant: Band;
   dominantWeight: Band;
+  /** Local donor deformation captured before material and province ownership move. */
+  deformationXX: Band;
+  deformationXY: Band;
+  deformationYX: Band;
+  deformationYY: Band;
 }
 type Builder = Omit<TransportPlan, "targets" | "weights"> & {
   targets: BandList;
@@ -85,16 +90,19 @@ export function buildTransportPlan(map: PhysicalField, step: number): TransportP
     arrivals: workingArray(map, "float64", "transport:arrivals"),
     dominant: workingArray(map, "int32", "transport:dominant").fill(-1),
     dominantWeight: workingArray(map, "float64", "transport:dominantWeight"),
+    deformationXX: workingArray(map, "float64", "transport:deformationXX"),
+    deformationXY: workingArray(map, "float64", "transport:deformationXY"),
+    deformationYX: workingArray(map, "float64", "transport:deformationYX"),
+    deformationYY: workingArray(map, "float64", "transport:deformationYY"),
   };
   for (let i = 0; i < count; i++) {
     plan.offsets.set(i, plan.targets.length);
-    const move = transform ? (x: number, y: number) => transform(i, x, y) : undefined;
-    const [x, y] = move
-      ? move(map.mesh.x(i), map.mesh.y(i))
-      : [
-          map.mesh.x(i) + (map.CrustMotionX.get(i) * step) / 1000,
-          map.mesh.y(i) + (map.CrustMotionY.get(i) * step) / 1000,
-        ];
+    const { move, deformation: f } = transform(i),
+      [x, y] = move(map.mesh.x(i), map.mesh.y(i));
+    plan.deformationXX.set(i, f[0]);
+    plan.deformationXY.set(i, f[1]);
+    plan.deformationYX.set(i, f[2]);
+    plan.deformationYY.set(i, f[3]);
     scatter(map, plan, i, x, y, move);
   }
   plan.offsets.set(count, plan.targets.length);
@@ -114,6 +122,10 @@ function planBands(plan: TransportPlan) {
     plan.arrivals,
     plan.dominant,
     plan.dominantWeight,
+    plan.deformationXX,
+    plan.deformationXY,
+    plan.deformationYX,
+    plan.deformationYY,
   ];
 }
 /** Give a plan's bands back to the coverage. */

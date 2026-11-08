@@ -7,11 +7,13 @@ import {
   deepestLayer,
   layerDepth,
   materialLayer,
+  materialStrength,
   readLayer,
   rockLayers,
 } from "./rockColumn";
 import { rockCatalogue, rockKindOfCode, type RockKind } from "./rockCatalogue";
 import type { GroundHere, GroundLayer, GroundQuery } from "./groundQuery";
+import { supportFailureDepth } from "./groundFailure";
 export type { GroundHere, GroundLayer, GroundQuery } from "./groundQuery";
 import {
   coverColumn,
@@ -44,6 +46,8 @@ export interface GroundTaken {
   rock: number;
   crust: number;
 }
+/** Horizontal displacement of the acting carrier, in the field's coordinate frame. */
+export type GroundDirection = readonly [number, number];
 const grounds = new WeakMap<PhysicalField, Ground>();
 
 /**
@@ -87,6 +91,12 @@ export class Ground {
   coverDepth(i: number, facet: GroundFacet) {
     return columnThickness(this.map, i, coverColumn(facet));
   }
+  surface(i: number, facet: GroundFacet) {
+    return facetSurface(this.map, i, facet);
+  }
+  share(i: number, facet: GroundFacet) {
+    return facetShare(this.map, i, facet);
+  }
   /** Supported read surface contains no mutable Band alias, including through retained views. */
   view(name: "Elevation" | "BedrockElevation" | "SedimentThickness" | "RockResistance") {
     const band = this.map[name];
@@ -95,12 +105,13 @@ export class Ground {
   /** Exposed neighbor contacts, area-weighted; no subcell edge position is asserted. */
   face(i: number, neighbor: number) {
     const exposed = [] as ReturnType<Ground["section"]>;
-    for (const facet of ["land", "cut"] as const)
+    for (const facet of ["land", "cut"] as const) {
+      const section = this.section(i, facet);
       for (const beside of ["land", "cut"] as const) {
         const share = facetShare(this.map, neighbor, beside);
         if (share <= 0) continue;
         const floor = facetSurface(this.map, neighbor, beside);
-        for (const layer of this.section(i, facet)) {
+        for (const layer of section) {
           const bottom = Math.max(floor, layer.basement ? -Infinity : layer.bottom);
           if (layer.top > bottom)
             exposed.push({
@@ -111,6 +122,7 @@ export class Ground {
             });
         }
       }
+    }
     return exposed;
   }
   /** Existing slope failure reads exposed support rather than pretending a face is all cap rock. */
@@ -119,13 +131,56 @@ export class Ground {
       extent = 0;
     const mesh = this.map.mesh,
       x = meshDeltaX(mesh, mesh.x(neighbor) - mesh.x(i)),
-      y = mesh.y(neighbor) - mesh.y(i);
-    for (const layer of this.face(i, neighbor)) {
-      const weight = layer.depth * layer.share;
-      response += materialGives(mix, layer, layer.medium === "loose", x, y) * weight;
-      extent += weight;
-    }
+      y = mesh.y(neighbor) - mesh.y(i),
+      landShare = this.share(neighbor, "land"),
+      cutShare = this.share(neighbor, "cut"),
+      landFloor = this.surface(neighbor, "land"),
+      cutFloor = this.surface(neighbor, "cut");
+    for (const facet of ["land", "cut"] as const)
+      for (const layer of this.section(i, facet)) {
+        const bottom = layer.basement ? -Infinity : layer.bottom,
+          weight =
+            layer.share *
+            (Math.max(0, layer.top - Math.max(landFloor, bottom)) * landShare +
+              Math.max(0, layer.top - Math.max(cutFloor, bottom)) * cutShare);
+        if (weight <= 0) continue;
+        response += materialGives(mix, layer, layer.medium === "loose", x, y) * weight;
+        extent += weight;
+      }
     return extent > 0 ? (response / extent) * this.bearing(i, mix) : this.gives(i, mix);
+  }
+  /** A finite slab can fail above an exposed weak foundation, independently on each surface. */
+  failureDepth(
+    i: number,
+    neighbor: number,
+    facet: GroundFacet,
+    mix: CompiledMix,
+    run: number,
+    stable: number
+  ) {
+    return this.failureFrom(i, facet, mix)(neighbor, run, stable);
+  }
+  /** One unchanged source facet evaluated against several neighbors. Discard before settlement. */
+  failureFrom(i: number, facet: GroundFacet, mix: CompiledMix) {
+    const mesh = this.map.mesh,
+      section = this.section(i, facet),
+      bearing = this.bearing(i, mix),
+      x = mesh.x(i),
+      y = mesh.y(i);
+    return (neighbor: number, run: number, stable: number) => {
+      // Without subcell edge locations, an occupied higher neighbor can still buttress this face.
+      let floor = -Infinity;
+      for (const part of ["land", "cut"] as const)
+        if (this.share(neighbor, part) > 0) floor = Math.max(floor, this.surface(neighbor, part));
+      return supportFailureDepth(
+        section,
+        floor,
+        [meshDeltaX(mesh, mesh.x(neighbor) - x), mesh.y(neighbor) - y],
+        run,
+        stable / bearing,
+        mix
+      );
+    };
   }
   /** Something only this map knows stiffens its ground: a region's cones, for one. */
   stiffenBy(stiffen: ((i: number) => number) | null) {
@@ -163,7 +218,8 @@ export class Ground {
     mix: CompiledMix,
     power: number,
     limit: number,
-    facet: GroundFacet = cutShare(this.map, i) > 0.5 ? "cut" : "land"
+    facet: GroundFacet = cutShare(this.map, i) > 0.5 ? "cut" : "land",
+    direction: GroundDirection = [0, 0]
   ) {
     const bearing = this.bearing(i, mix),
       part = facet === "cut" && cutShare(this.map, i) <= 0 ? "land" : facet;
@@ -182,7 +238,7 @@ export class Ground {
       const depth = layer.depth / 1024,
         exposed = Math.max(0, depth - masked);
       masked = Math.max(0, masked - depth);
-      if (exposed > 0) this.take(materialGives(mix, layer, true) * bearing, exposed);
+      if (exposed > 0) this.take(materialGives(mix, layer, true, ...direction) * bearing, exposed);
     }
     if (this.left > 0)
       this.walkRock(
@@ -190,18 +246,26 @@ export class Ground {
         mix,
         bearing,
         part,
-        Math.max(0, skin - columnThickness(this.map, i, cover) / 1024)
+        Math.max(0, skin - columnThickness(this.map, i, cover) / 1024),
+        direction
       );
     return Math.min(units(this.reached), limit);
   }
   /** Forcing reaching rock beneath cover; the caller supplies attenuation through that cover. */
-  rockAction(i: number, mix: CompiledMix, power: number, limit: number, facet: GroundFacet) {
+  rockAction(
+    i: number,
+    mix: CompiledMix,
+    power: number,
+    limit: number,
+    facet: GroundFacet,
+    direction: GroundDirection = [0, 0]
+  ) {
     this.left = power;
     this.reached = 0;
     this.limit = limit / 1024;
     this.start(i);
     if (facetShare(this.map, i, facet) <= 0) return 0;
-    this.walkRock(i, mix, this.bearing(i, mix), facet);
+    this.walkRock(i, mix, this.bearing(i, mix), facet, 0, direction);
     return Math.min(units(this.reached), limit);
   }
   /** Each occupied surface answers the same forcing before either material stack is changed. */
@@ -210,7 +274,8 @@ export class Ground {
     mix: CompiledMix,
     power: number,
     limit: number,
-    minimumSurface = -Infinity
+    minimumSurface = -Infinity,
+    direction: GroundDirection = [0, 0]
   ): readonly [number, number] {
     const depth = (facet: GroundFacet) =>
       facetShare(this.map, i, facet) > 0
@@ -219,7 +284,8 @@ export class Ground {
             mix,
             power,
             Math.min(limit, Math.max(0, facetSurface(this.map, i, facet) - minimumSurface)),
-            facet
+            facet,
+            direction
           )
         : 0;
     return [depth("land"), depth("cut")];
@@ -245,13 +311,23 @@ export class Ground {
     this.left -= taken / rate;
   }
   /** Down through the column, less what soil has made of its top, and on into the crust. */
-  private walkRock(i: number, mix: CompiledMix, bearing: number, facet: GroundFacet, masked = 0) {
+  private walkRock(
+    i: number,
+    mix: CompiledMix,
+    bearing: number,
+    facet: GroundFacet,
+    masked = 0,
+    direction: GroundDirection = [0, 0]
+  ) {
     const last = deepestLayer(this.map, i, facet);
     for (let at = 0; at <= last && this.left > 0 && this.reached < this.limit; at++) {
       const layer = readLayer(this.map, i, at, facet);
       this.at = at === last ? "crust" : "rock";
       const depth = at === last ? Infinity : layer.depth / 1024;
-      this.take(materialGives(mix, layer) * bearing, Math.max(0, depth - masked));
+      this.take(
+        materialGives(mix, layer, false, ...direction) * bearing,
+        Math.max(0, depth - masked)
+      );
       masked = Math.max(0, masked - depth);
     }
   }
@@ -297,7 +373,7 @@ export class Ground {
     const material = readLayer(map, i, 0, facet);
     layer.kind = rockKindOfCode(material.kind);
     layer.material = material;
-    layer.strength = material.strength;
+    layer.strength = materialStrength(material);
     layer.thickness = material.depth;
     return this.foldColumn(i, query, query.rock(sofar, layer, here), facet);
   }
@@ -318,7 +394,7 @@ export class Ground {
         rockKindOfCode(material.kind),
         query.throughColumn ? material.depth : columnThickness(map, i, cover)
       );
-      layer.strength = Math.min(material.strength, rockCatalogue.alluvium.resistance);
+      layer.strength = materialStrength(material, true);
       layer.material = material;
       sofar = query.loose(sofar, layer, here);
     }
@@ -336,7 +412,7 @@ export class Ground {
       const material = readLayer(map, i, at, facet);
       layer.kind = rockKindOfCode(material.kind);
       layer.material = material;
-      layer.strength = material.strength;
+      layer.strength = materialStrength(material);
       layer.thickness = material.depth;
       sofar = query.rock!(sofar, layer, this.here);
     }

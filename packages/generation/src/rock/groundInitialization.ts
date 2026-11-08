@@ -17,8 +17,8 @@ export function initializeLandscape(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {
     resetShares(map, i);
     loadOf(map).clear(i);
+    seaLoadOf(map).clear(i);
   }
-  seaLoadOf(map).clear(0);
   groundStorage(map).SedimentThickness.fill(0);
   groundStorage(map).SedimentSupply.fill(0);
   for (const name of [

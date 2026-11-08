@@ -77,6 +77,13 @@ function accumulate(map: PhysicalField, plan: TransportPlan, old: Columns): Arri
 }
 /** The share of oceanic crust going down a subduction zone that comes back up as a belt's crust. */
 export const arcCrustYield = 0.5;
+/** Fractions of each arriving area that remain at the surface of a convergent contact. */
+export function collisionAreaShares(land: number, sea: number) {
+  return {
+    continentalRetained: land > 1 ? 1 / land : 1,
+    oceanicRetained: sea > 0 ? Math.min(1, Math.max(0, 1 - land) / sea) : 1,
+  };
+}
 /**
  * What closing plates take out of a column, by what is closing. Continent floats, so only continent
  * meeting continent is shortened; where a continent rides up on ocean, the ocean goes down under it
@@ -91,10 +98,10 @@ function closure(
 ) {
   const land = columns.land.get(i),
     sea = arrival - land,
-    room = Math.max(0, 1 - land);
+    shares = collisionAreaShares(land, sea);
   return {
-    slab: sea > 0 ? oceanic - oceanic * Math.min(1, room / sea) : oceanic,
-    squeezed: land > 1 ? continental - continental / land : 0,
+    slab: sea > 0 ? oceanic * (1 - shares.oceanicRetained) : oceanic,
+    squeezed: continental * (1 - shares.continentalRetained),
   };
 }
 function retainColumn(map: PhysicalField, plan: TransportPlan, columns: Arrived, i: number) {

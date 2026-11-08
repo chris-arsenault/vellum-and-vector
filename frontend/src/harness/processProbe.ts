@@ -12,6 +12,57 @@ import {
   type NativeProcessObserver,
 } from "../../../packages/generation/src/world/physicalSteps";
 import { groundProbe } from "./groundProbe";
+import type { NativeStep } from "../../../packages/generation/src/world/sequence";
+import { watchGroundTransfers } from "../../../packages/generation/src/rock/groundTransport";
+
+/** Optional transfer counts for a captured interval; selected material probes replace this scan. */
+export function movementObserver(count: number) {
+  const counts = {
+      operations: {
+        "plate-placement": 0,
+        "plate-remap": 0,
+        "rock-accretion": 0,
+        "cover-accretion": 0,
+        "sheet-move": 0,
+      },
+      acceptedRock: 0,
+      acceptedCover: 0,
+      sourceChanges: 0,
+    },
+    cells = new Set(Array.from({ length: count }, (_, cell) => cell));
+  let previousSource = -1;
+  const stop = watchGroundTransfers(cells, (event) => {
+    if (event.phase !== "after") return;
+    counts.operations[event.operation]++;
+    if (event.operation === "rock-accretion") {
+      if ((event.accepted ?? 0) > 0) counts.acceptedRock++;
+      if (event.source !== previousSource) counts.sourceChanges++;
+      previousSource = event.source;
+    }
+    if (event.operation === "cover-accretion" && (event.accepted ?? 0) > 0) counts.acceptedCover++;
+  });
+  return { counts, stop };
+}
+
+/** Harness-only elapsed native operations; nested entries are included in their parent's time. */
+export function timedNativeStep(
+  step: NativeStep,
+  timings: { step: string; ms: number }[]
+): NativeStep {
+  return [
+    step[0],
+    step[1],
+    (map, context) => {
+      const started = performance.now();
+      try {
+        step[2](map, context);
+      } finally {
+        timings.push({ step: step[0], ms: performance.now() - started });
+      }
+    },
+    step[3],
+  ];
+}
 
 const defaultBands: readonly PhysicalBufferName[] = [
   "Elevation",

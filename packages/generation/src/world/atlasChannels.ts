@@ -82,6 +82,7 @@ export const atlasChannels: ChannelBinding[] = [
   amount("deposition", "CumulativeDeposition"),
   amount("glacialDeposition", "CumulativeGlacialDeposition"),
   amount("volcanicConstruction", "VolcanicConstructionHistory"),
+  amount("volcanicMeltSupply", "VolcanicMeltSupply"),
   amount("landmarkMaintenance", "LandmarkMaintenance"),
   amount("impactExcavation", "ImpactExcavation"),
   amount("impactRim", "ImpactRimUplift"),

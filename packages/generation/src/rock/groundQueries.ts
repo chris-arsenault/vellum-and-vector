@@ -2,6 +2,8 @@ import { baselineRock, hardestRock, hardnessOf, rockCatalogue } from "./rockCata
 import type { RockKind } from "./rockCatalogue";
 import type { GroundQuery } from "./ground";
 import { averageGroundQuery, groundFact } from "./groundQuery";
+import { compileMix, materialGives } from "./modes";
+import type { MaterialLayer } from "./rockColumn";
 
 /**
  * Reads of the surface that many readers share. A reader with its own question writes its own query
@@ -51,3 +53,42 @@ export const surfaceStanding = averageGroundQuery({
   start: 1,
   rock: (_, { strength }) => Math.max(0.6, Math.min(1.6, strength / baselineRock)),
 });
+
+interface YieldingPlane {
+  response: number;
+  compliance: number;
+  mobility: number;
+  slopeX: number;
+  slopeY: number;
+}
+const shear = compileMix({ shear: 1 });
+/** Select the bed most responsive to this loading, keeping its weakness and signed dip together.
+ * Each occupied facet resolves its own beds before their mechanical responses are combined. */
+export function yieldingPlane(
+  loading: (material: Readonly<MaterialLayer>) => number = () => 1
+): GroundQuery<YieldingPlane> {
+  return {
+    start: { response: 0, compliance: 0, mobility: 0, slopeX: 0, slopeY: 0 },
+    throughColumn: true,
+    rock: (best, { material }) => {
+      const compliance = materialGives(shear, material),
+        mobility = compliance / (1 + compliance),
+        response = loading(material) * mobility;
+      return Math.abs(response) > Math.abs(best.response)
+        ? { response, compliance, mobility, slopeX: material.bedSlopeX, slopeY: material.bedSlopeY }
+        : best;
+    },
+    acrossFacets: (land, cut, share) => {
+      const a = land.compliance * (1 - share),
+        b = cut.compliance * share,
+        compliance = a + b;
+      return {
+        response: land.response * (1 - share) + cut.response * share,
+        compliance,
+        mobility: land.mobility * (1 - share) + cut.mobility * share,
+        slopeX: compliance > 0 ? (land.slopeX * a + cut.slopeX * b) / compliance : 0,
+        slopeY: compliance > 0 ? (land.slopeY * a + cut.slopeY * b) / compliance : 0,
+      };
+    },
+  };
+}

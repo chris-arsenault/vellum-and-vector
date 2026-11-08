@@ -1,17 +1,7 @@
 // ContinentalMarginEvolutionLayer.cs and MarineSedimentationLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
-import type { PhysicalContext } from "./context";
-import type { PhysicalProfile } from "./profile";
-import { clamp } from "./math";
-import { deposit } from "../rock/groundLedger";
-import { seaLoadOf } from "../rock/groundLoad";
 import { KeyedHeap } from "@atlas/domain";
-import { workingValues, releaseWorking } from "./physicalNumerics";
-
-const smooth = (value: number) => {
-  const c = clamp(value, 0, 1);
-  return c * c * (3 - 2 * c);
-};
+export { marineSedimentation } from "../processes/marineSediment";
 function adjacentLandMargin(map: PhysicalField, i: number): number {
   let selected = -1,
     priority = -1;
@@ -82,53 +72,4 @@ export function continentalMarginEvolution(map: PhysicalField) {
   // Crust support owns structural relief and subsidence. Distance from today's coast
   // supplies a sediment frame, never a replacement crust column or bathymetric profile.
   marginFrame(map);
-}
-function capacity(map: PhysicalField, p: PhysicalProfile, i: number): number {
-  const margin = map.CoastalMarginCodes.get(i),
-    distance = map.OceanMarginDistance.get(i);
-  const width = margin === 1 ? p.PassiveShelfWidth : p.RiftedShelfWidth;
-  const step = margin === 1 ? p.PassiveMarginMaximumGradient : p.RiftedMarginMaximumGradient;
-  const rise =
-    p.ContinentalRiseMinimumWidth +
-    Math.ceil(Math.max(0, p.OceanicSubsidenceDepth + 200 - p.ContinentalShelfDepth) / step);
-  if (distance <= 0 || distance > width + rise || (margin !== 1 && margin !== 3)) return 0;
-  const influence = smooth(1 - (distance - 1) / (width + rise));
-  // Sediment fills the room the sea leaves, nearest the margin first.
-  const accommodation = Math.max(0, map.EffectiveSeaLevel - map.Elevation.get(i));
-  return accommodation * influence * (margin === 3 ? 0.72 : 1);
-}
-export function marineSedimentation(map: PhysicalField, c: PhysicalContext) {
-  const cargo = seaLoadOf(map);
-  if (cargo.amount(0) <= 0) return;
-  const capacities = workingValues(
-    map,
-    "float64",
-    "marine:capacity",
-    (i) => (capacity(map, c.Profile, i) / 1024) * map.mesh.area(i)
-  );
-  let remainingCapacity = map.coverage.reduce(capacities, (sum, value) => sum + value, 0);
-  const exported = map.SedimentExportedTotal;
-  const initialBudget = Math.min(exported, cargo.amount(0), remainingCapacity);
-  let budget = initialBudget;
-  for (let i = 0; i < map.mesh.count; i++) {
-    const available = capacities.get(i);
-    if (available <= 0 || budget <= 0) {
-      remainingCapacity -= available;
-      continue;
-    }
-    const amount =
-      remainingCapacity <= 0
-        ? 0
-        : Math.min(available, budget, (budget * available) / remainingCapacity);
-    if (amount > 0) {
-      const area = map.mesh.area(i);
-      const deposited =
-        (deposit(map, i, (amount * 1024) / area, "sea-floor", "sea", cargo.get(0)) / 1024) * area;
-      cargo.take(0, deposited);
-      budget -= Math.min(budget, deposited);
-    }
-    remainingCapacity -= available;
-  }
-  map.SedimentExportedTotal = exported - initialBudget + budget;
-  releaseWorking(map, capacities);
 }

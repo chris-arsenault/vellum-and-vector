@@ -42,6 +42,9 @@ do not establish what an algorithm actually did.
   settle during their own run execute separately. Whole-field builders adapt existing algorithms
   to the same sequence; they are not narrow-view processes. Their dependencies are not inferred
   from an incomplete source scan.
+  Selected mountain construction, immediate slope failure and load response settle between plate
+  movements. Ice mass balance advances once per epoch; later flow refreshes reuse that mass.
+  Support reads retained grounded ice whenever it runs.
 - **Transport by quantity kind.** Bands declare how plate transport carries them. Geological
   packages travel through the ground owner, keeping their columns, alteration, fabric and seam
   identity together; generic scalar transport does not average these facts independently. The transport

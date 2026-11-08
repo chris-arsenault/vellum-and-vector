@@ -36,8 +36,6 @@ export function atlasPhysicalProfile(
   profile.ImpactMinimumRadius *= settings.impactSize;
   profile.ImpactMaximumRadius *= settings.impactSize;
   profile.VolcanicConeHeight *= settings.volcanism;
-  profile.VolcanicApronHeight *= settings.volcanism;
-  profile.VolcanicCalderaDepth *= settings.volcanism;
   profile.PlateDriftPerMyr *= settings.plateDrift;
   profile.GlacialCutPerSpeed *= settings.glaciers;
   profile.CoastalErosionStrength *= settings.coastalErosion;

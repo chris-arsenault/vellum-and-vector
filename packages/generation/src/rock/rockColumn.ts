@@ -26,6 +26,7 @@ export {
   materialLayer,
   blendLayers,
   mergeMaterial,
+  materialStrength,
   type MaterialLayer,
   type MaterialState,
 } from "./rockLayerFields";
@@ -58,7 +59,7 @@ export const layerValue = (
   layer: number,
   property: MaterialProperty,
   column: Column = "land"
-) => map[columnFields[column][property][layer]].get(cell);
+) => groundStorage(map)[columnFields[column][property][layer]].get(cell);
 export const layerKind = (
   map: PhysicalField,
   cell: number,
@@ -79,7 +80,8 @@ export function readLayer(
   column: Column = "land"
 ): MaterialLayer {
   const fields = columnFields[column],
-    value = (property: MaterialProperty) => map[fields[property][layer]].get(cell),
+    stored = groundStorage(map),
+    value = (property: MaterialProperty) => stored[fields[property][layer]].get(cell),
     kind = value("kind");
   return {
     kind,
@@ -90,6 +92,10 @@ export function readLayer(
     damage: value("damage"),
     grainX: value("grainX"),
     grainY: value("grainY"),
+    bedSlopeX: value("bedSlopeX"),
+    bedSlopeY: value("bedSlopeY"),
+    deposited: value("deposited"),
+    consolidation: value("consolidation"),
     formedMin: value("formedMin"),
     formedMax: value("formedMax"),
     altered: value("altered"),
@@ -223,10 +229,16 @@ function sameMaterial(a: MaterialLayer, b: MaterialLayer) {
     a.damage === b.damage &&
     a.grainX === b.grainX &&
     a.grainY === b.grainY &&
+    sameBed(a, b) &&
     a.altered === b.altered &&
     a.mixed === b.mixed
   );
 }
+const sameBed = (a: MaterialLayer, b: MaterialLayer) =>
+  a.bedSlopeX === b.bedSlopeX &&
+  a.bedSlopeY === b.bedSlopeY &&
+  a.deposited === b.deposited &&
+  a.consolidation === b.consolidation;
 /** Every nonempty deposit arrives as material; capacity may coarsen buried contacts, never discard it. */
 export function layDownRock(
   map: PhysicalField,
@@ -246,6 +258,16 @@ export function layDownRock(
  * representation can lose a thin buried barrier, even though its material and age remain in a mixture.
  */
 export function layDownPackage(
+  map: PhysicalField,
+  cell: number,
+  column: Column,
+  incoming: readonly MaterialLayer[]
+) {
+  insertColumnPackage(map, cell, column, incoming);
+  projectGround(map, cell);
+}
+/** Owner-only insertion; the complete operation publishes after placement and cover also settle. */
+export function insertColumnPackage(
   map: PhysicalField,
   cell: number,
   column: Column,
@@ -275,7 +297,6 @@ export function layDownPackage(
     }
   }
   writeColumn(map, cell, column, layers);
-  projectGround(map, cell);
 }
 function writeColumn(map: PhysicalField, cell: number, column: Column, layers: MaterialLayer[]) {
   const stored = groundStorage(map),
@@ -362,6 +383,10 @@ export function alterTop(
       formedMax: was.formedMax,
       grainX: was.grainX,
       grainY: was.grainY,
+      bedSlopeX: was.bedSlopeX,
+      bedSlopeY: was.bedSlopeY,
+      deposited: was.deposited,
+      consolidation: was.consolidation,
       damage: was.damage,
       altered: map.CompletedEpochCount,
     },

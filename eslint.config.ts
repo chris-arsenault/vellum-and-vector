@@ -21,6 +21,7 @@ const ownerImports = [
       "stripRock",
       "layDownRock",
       "layDownPackage",
+      "insertColumnPackage",
       "coarsenColumn",
       "layBed",
       "layBedOfCode",
@@ -45,6 +46,11 @@ const ownerImports = [
     group: ["**/groundIncision", "**/groundIncision.ts"],
     importNames: ["widenIncision"],
     message: "Facet widening is internal to the incision operation.",
+  },
+  {
+    group: ["**/groundBurial", "**/groundBurial.ts"],
+    importNames: ["buryUnderPackage"],
+    message: "Combined column burial belongs inside a complete ground emplacement operation.",
   },
 ];
 const resourceImports = {

@@ -671,11 +671,33 @@ present may have no active Aurora while preserving its glacial activity history.
 
 ### Rock and relief
 
+Geological references motivate interacting ingredients. The Rocky Mountains include
+[Pryor fault blocks](https://www.nps.gov/bica/learn/nature/2-mountain-building.htm) with tilted
+beds, steep eroded fronts and gentler resistant dip slopes; these motivate signed bedding and
+directional failure. The [Appalachian history](https://www.nps.gov/articles/000/shenandoah-valley-geology.htm)
+connects marine deposition, collision, separation, erosion and valley filling, motivating
+preserved material through successive epochs. Research on
+[Himalaya–Karakoram–Tibet](https://www.usgs.gov/publications/multi-stage-crustal-thickening-surface-uplift-and-collision-western-himalaya-karakoram)
+describes multiple stages of thickening, motivating persistent broad support beneath later
+localized deformation rather than a prescribed plateau shoulder.
+
+The [Mogollon Rim and Verde Valley study](https://asu.elsevierpure.com/en/publications/incision-history-of-the-verde-valley-region-and-implications-for-/)
+links weak-bed exposure, escarpment retreat, basalt-buried channels and renewed incision after
+drainage integration. It motivates exposed-support failure and connected deposition followed
+by re-exposure; it does not establish one universal origin for escarpments.
+[San Francisco Mountain](https://www.usgs.gov/volcanoes/san-francisco-volcanic-field/science/geology-and-history)
+motivates repeated localized volcanic construction, while
+[Red Butte and other inverted volcanic landscapes](https://home.nps.gov/articles/000/volcanic-inverted-topography.htm)
+motivate lava occupying lows and later protecting them during differential erosion. These are
+physical references, not named presets or a requirement that every world contain every form.
+
 Ground owns the field's geological material and placement. Each cell retains intact and incised
 area shares, each with rock beds and finite loose cover above an unbounded basement. Layers keep
-composition, strength, damage, directional fabric and formation/alteration ages. Erosion visits
+composition, clast strength, damage, directional fabric and formation/alteration ages. Signed bedding,
+deposition age and consolidation describe the bed independently of its source. Reworking establishes
+new bedding while retaining the source material. Erosion visits
 the material it removes; deposition carries that material into its destination. Thin deposits
-remain beds. Burial acts on each share's actual overburden and retained constituents, while
+enter as beds and may later merge during column coarsening. Burial acts on each share's actual overburden and retained constituents, while
 overlying construction initially entombs loose material as a weak substrate.
 
 Ground queries expose the retained material snapshot. Numeric readers combine constituent facts
@@ -700,16 +722,20 @@ support beneath a resistant cap.
 What a map shows is where the worn surface cuts through the rock beneath. Continental platforms start with
 kilometres of alternating beds. Rock under a belt or along a suture turns to its next form by how deep and
 how hot it lies, never by chance, so neighbours with one history stay alike and nothing bakes at the surface.
-Uplift translates existing columns; exposure changes through removal, transported packages or alteration.
-Melt in an arc cools as a batholith below a volcanic shell and shows only once
-erosion has taken the shell.
+Uniform uplift translates existing columns; differential displacement bends their retained bedding.
+Exposure changes through removal, transported packages or alteration.
+Arc intrusion changes basement beneath retained overburden; later removal can expose it.
 
 Plates move in deformation intervals. Each interval carries the existing relief and then builds
-mountains at its active contacts before those contacts can weld shut. The next interval carries
-the newly built rock along with the older terrain. Ground with too little arriving is new crust and keeps the shared
-value. Where plates converge, some crust ends up under other crust and no cell takes up the rock that
-stood on it. That rock rides to where its crust went and stacks there across a thrust sheet's width,
-carrying its represented beds and thinning the package as it spreads. A collision piles rock up,
+mountains at its active contacts before those contacts can weld shut. Selected slope failure and
+load response settle before the next movement. The next interval carries
+the newly built rock along with the older terrain. Ground resamples placement, beds, cover and
+occupied facets together from retained arriving area. A sweep through actual contact altitudes
+combines the material present at each interval; empty space contributes no rock. Bounded columns
+coarsen the resulting contacts. This represents unresolved lateral mixing and can blur small features.
+Only absent surviving coverage forms new ground. Actual convergent area overlap stacks
+material at its receiver; categorical sampling never creates collision material. The source's local
+motion transforms its retained bedding and fabric. A collision piles rock up,
 and only part of what rode on a sinking slab comes back. Continent
 floats: where it rides up on ocean, the ocean goes down under it and the continent keeps its area, and
 only continent meeting continent is shortened. Sinking ocean pulls its plate after it, so an ocean keeps
@@ -733,8 +759,9 @@ Each pass of shortening advances the front and closes the sheets up: the one at 
 its place and each beyond is drawn in under the leading edge of the one behind, younger rock beneath
 older, up to what a thrust can carry before it locks. Leading edges climb in the same rock each pass,
 so ridges rise where they stand. Sheet movement carries retained beds and transforms their axial fabric.
-Stored sheet dip does not represent a full three-dimensional bedding plane. Rifts keep their tilted, alternately dropped fault blocks
-from pass to pass in the same way. Crust that subducting ocean returns as arc crust feeds a belt's
+Per-bed slopes transform with horizontal movement and differential vertical displacement; the columns
+remain a finite representation of contacts. Opening at province contacts displaces blocks according
+to inherited inclination and material compliance. Crust that subducting ocean returns as arc crust feeds a belt's
 roots, as continental crust piled up in a collision does; a belt with no continent builds an arc on
 its ocean crust, and root crust the plates carry away from any convergent belt settles where it lies.
 Each interval's crust adds to what earlier intervals left. A separate relaxation process lets
@@ -755,12 +782,25 @@ forming stands in for the drift before it, so its belts begin with crust already
 strain and go through the same roots and flow, which leaves older high ground for later ranges to stand on.
 Interior stress reaches a plate's old sutures and province seams and works a zone of crust around
 them. Seams are properties of the crust and travel with it, so each pass works the same ones. A plate's
-strongest push, from continent meeting continent at its edges, or more gently from ocean going down at
-its margin or from an ocean ridge, carries through its whole interior, and thickens and raises older rock along its seams, spending the root crust that this
+loading retains the directions of its active contacts and resolves against inherited fabric and
+material yielding. It thickens and raises older rock along its seams, spending the root crust that this
 pass's shortening brought and the plate's belts did not take up: once that is spent a seam rises no
 further, since a plate does not thin its whole body to feed one. Close to a rift through a continent, extension takes over from that squeeze, and the
 seams there thin and sag. Crust holds a belt's extra thickness only on the sheets a live belt is
 shortening; an older belt's root within a live boundary's reach, but not yet on its sheets, settles.
+
+Sediment enters the sea at its river mouth, ice margin or connected shore. Sediment gravity flows
+split down connected bed gradients and settle as their suspension declines; closed depressions
+retain material locally. Deposition fills the lower occupied surface before covering higher ground.
+Later uplift and wear read those actual beds, including their source history and consolidation.
+
+Plumes and subduction arcs supply the same connected lava routing. Mobile head, yield resistance
+and cooling determine where a pulse reaches; its solid deposits change subsequent routes. Lava
+can fill a cut before coating intact ground. Random caldera carving is absent: this model does not
+represent the reservoir withdrawal and failure needed to explain collapse.
+Supply rejected by the ground's height limit remains unemplaced. Its thermal history is unresolved;
+it retries locally with a later eruption, receives no inherited routing mobility, and acquires a
+rock formation age only when solid emplacement succeeds.
 
 Processes and materials meet through a shared vocabulary of modes: abrasion, plucking, shear and solution.
 A material holds facts, a mode says how facts answer its attack, and a process says how it acts, as a mix of
@@ -792,11 +832,14 @@ rivers. A valley's share of a cell follows its catchment; what the water gets do
 ground's answer alone, so strength counts once. Land that has relief to wear therefore leaves hard rock
 standing, while hard rock on ground already worn to grade stays low, as a shield does.
 
-Slopes fail on the same terms at every scale: the step between two cells climbs one hillslope, however
-wide the cells are, so a coarse map's steep flanks shed as a fine map's do. Hard rock holds a steeper
-step and gives up less when it goes, open joints lower the angle a slope holds, burning loosens what roots
+Resolved slope failure compares neighboring heights across their actual separation. An unresolved
+hillslope length does not turn a gentle regional flank into a cliff. Hard rock holds a steeper
+slope and gives up less when it goes, open joints lower the angle a slope holds, burning loosens what roots
 held, porous rock takes water
 into the ground before it runs off, and water dissolves soluble rock wherever it runs.
+Directional shear and plucking also read signed bed inclination. An exposed weak foundation can
+release its overlying cap as a finite slab; both enter the downslope material route. This approximates
+bulk retreat without hidden cavities or unresolved overhang geometry.
 
 Each magic system changes the column once per epoch through its own medium. A system's share of the
 ground picks fixed patches of it, so its rock forms bodies that hold the share and build on the same
@@ -897,7 +940,12 @@ arrays; bands never cross a worker port.
 
 Plate advection transports carried fields one at a time through reusable scratch
 space. It resolves category provenance before updating source fractions and
-strengths, retaining material conservation, historical maxima and new-crust rules.
+strengths, retaining historical maxima and new-crust rules. Ground reconstructs placement and
+complete material sections from the same retained areas, with finite cover and occupied-facet weights.
+Continental shortening and oceanic subduction use the same area-retention rule for
+crust and surface material. Only convergent excess stacks at its receiving footprint.
+Bed orientation follows each donor's continuous motion, rather than differences
+between independently moving neighboring plates.
 
 World-to-display interpolation builds compact typed weights in batches rather
 than retaining JavaScript sample objects for every display cell. Repeated physical
@@ -957,7 +1005,7 @@ sediment, glaciers, coasts and final geographic classifications.
 
 The atlas runs these registered processes through the shared runner. Native
 steps update private numerical arrays; projection and feature extraction update
-GIS state. Numerical checks cover ranges, landscape budgets, flow topology,
+GIS state. Numerical checks cover ranges and flow topology,
 river coverage and grounding. GIS validation runs when spatial state changes,
 at completed epoch boundaries and before publication. Authored samples are also
 composed into the native workspace before physical consumers run. Per-layer
@@ -996,14 +1044,6 @@ validation is consolidated in `layerValidation.ts`.
   epoch water-level offsets apply separately. The eventual exposed land fraction
   can change as crust moves and basin capacity changes. A child inherits its
   parent's datum and never moves it. Rivers grade to the sea and never cut below it.
-- A collision belt has a polarity: its hinterland is the side of the boundary
-  holding more continental mass. The foreland rises to the crest within a
-  narrower front; the hinterland carries the crest and a plateau shoulder that
-  spreads retained continental shortening into roots behind the belt. The belt's
-  cross-section shapes that distribution; evolution cannot manufacture
-  continental material to reach a requested summit height. Surface construction
-  adds relief above the supported column. The terrain choice sets construction
-  budgets and plateau shape; Mountain ranges is the default.
 - Ice mass balance follows climate: the lapse rate already in the temperature
   field carries altitude, and the separate altitude bonus is zero except under
   the Glacier-carved terrain choice. Terrain selection preserves the shared

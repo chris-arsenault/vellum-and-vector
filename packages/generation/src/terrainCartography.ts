@@ -13,17 +13,6 @@ function terrain(index: number): FeatureSelection {
       settings: { plateDrift: [0.15, 0.6, 1.2, 0.7][index] },
       ...profile({ EpochTectonicElevationStep: [60, 160, 320, 160][index] }),
     },
-    // The root budget carries the crest (0.7 m of height per metre of root), so rank sets
-    // height; the per-pass bedrock relief adds summit texture. Plateaus are the root spread
-    // behind the belt: none on plains, wide under Mountain ranges.
-    "physical.mountains": profile({
-      InitialOrogenicConstructionStep: [400, 1600, 3600, 2200][index],
-      EpochOrogenicConstructionStep: [150, 500, 1400, 600][index],
-      OrogenicProminenceMinimum: [350, 350, 800, 500][index],
-      OrogenicProminenceMaximum: [1000, 1000, 2200, 1400][index],
-      OrogenicPlateauWidth: [0, 120_000, 360_000, 200_000][index],
-      OrogenicPlateauShare: [0, 0.35, 0.7, 0.5][index],
-    }),
     "physical.river-incision": {
       settings: { erosion: [0.25, 0.7, 1.5, 0.7][index] },
       ...profile({ FluvialEquilibriumGradient: [0.0012, 0.0008, 0.0004, 0.0008][index] }),

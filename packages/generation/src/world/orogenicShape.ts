@@ -1,29 +1,16 @@
 // OrogenicConstructionLayer cross sections and along-strike relief, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import type { PhysicalProfile } from "./profile";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
-import { clamp } from "./math";
+import { units } from "./math";
 import { hashUnit, unitNoise } from "./noise";
 import { groundOf } from "../rock/ground";
-import { surfaceStanding } from "../rock/groundQueries";
+import { surfaceStanding, yieldingPlane } from "../rock/groundQueries";
+import { releaseWorking, workingArray } from "./physicalNumerics";
+import { displaceGroundField } from "../rock/groundDeformation";
 
 /** The cross-section value at the crest of a convergent belt. */
 export const orogenicCrestSection = 1.55;
-const gaussian = (value: number, center: number, width: number) =>
-  Math.exp(-0.5 * ((value - center) / Math.max(0.001, width)) ** 2);
-/**
- * The hinterland carries part of the crest section flat behind the belt and lets it go over the
- * last part of the plateau width: the root budget spread into a plateau rather than a crest.
- */
-function plateauShoulder(p: PhysicalProfile, distance: number): number {
-  const width = p.OrogenicPlateauWidth;
-  if (width <= 0 || p.OrogenicPlateauShare <= 0) return 0;
-  const t = clamp((distance - width * 0.6) / (width * 0.5), 0, 1);
-  return p.OrogenicPlateauShare * (1 - t * t * (3 - 2 * t));
-}
-/** How far out from a rift its blocks reach. */
-export const sheetReach = (p: PhysicalProfile) => p.RiftShoulderDistance * 3.2;
 /** A segment stands higher or lower than the next for what it was built from. */
 export const segmentScale = (c: BoundaryComponent, segment: number) =>
   0.75 + 0.5 * hashUnit(c.salt ^ 0x51e4, segment, 1);
@@ -45,7 +32,7 @@ export function sheetAt(
     ty = map.TectonicTangentY.get(source) / 1000,
     along = map.mesh.x(i) * tx + map.mesh.y(i) * ty,
     segment = Math.floor(along / p.OrogenicSegmentLength),
-    stiffness = groundOf(map).fold(source, surfaceStanding),
+    stiffness = groundOf(map).fold(i, surfaceStanding),
     spacing = p.OrogenicSheetSpacing * stiffness,
     offset = hashUnit(c.salt ^ 0x51e3, segment, 0) * spacing,
     position = (reach + offset) / spacing,
@@ -68,33 +55,8 @@ function stackedThrust(map: PhysicalField, c: BoundaryComponent, frame: Orogenic
   );
 }
 /**
- * Stretching breaks crust into fault blocks: each one tilted, the alternate ones dropped, and each
- * the same block on every pass, so a block's tilt grows. The rift's axis thins most, and the blocks
- * run out from it until the stretch is spent.
- */
-function faultBlocks(
-  map: PhysicalField,
-  context: PhysicalContext,
-  c: BoundaryComponent,
-  i: number,
-  distance: number
-) {
-  const p = context.Profile,
-    axis = gaussian(distance, 0, Math.max(2, p.RiftShoulderDistance * 0.48)) * 0.76;
-  if (!sheetHeld(map, c, i)) return -axis;
-  const across = map.ThrustAcross.get(i) / 1000,
-    block = map.ThrustSheetIndex.get(i) - 1,
-    tilt = block % 2 === 0 ? 0.55 * across : -0.5 * (1 - across);
-  return (
-    gaussian(distance, 0, p.RiftShoulderDistance * 1.6) *
-      tilt *
-      segmentScale(c, map.ThrustSegmentIds.get(i)) -
-    axis
-  );
-}
-/**
- * Cross-section of a belt at a cell. A convergent belt is what its carried sheets have stacked,
- * with the plateau shoulder behind them on the hinterland; a rift is its blocks.
+ * Roots enter where shortening has actually engaged sheets. Broad support comes later from
+ * the retained thick crust and its flow; no prescribed plateau is added to this allocation.
  */
 export function crossSection(
   map: PhysicalField,
@@ -103,17 +65,78 @@ export function crossSection(
   frame: OrogenicFrame,
   i: number
 ): number {
-  const p = context.Profile,
-    continental = map.CrustContinentalFraction.get(i) / 1000,
-    distance = frame.distance.get(i);
-  if (c.code === 1) {
-    const plateau = frame.side.get(i) < 0 ? 0 : plateauShoulder(p, distance) * continental;
-    return stackedThrust(map, c, frame, i) * (0.4 + continental * 0.6) + plateau;
+  const continental = map.CrustContinentalFraction.get(i) / 1000;
+  return c.code === 1 ? stackedThrust(map, c, frame, i) * (0.4 + continental * 0.6) : 0;
+}
+
+const faultPlane = yieldingPlane();
+/** Slip follows an existing dip, or first localizes on the more compliant side of a contact. */
+export function faultDisplacement(opening: number, first: number, second: number, dip: number) {
+  const polarity = Math.sign(dip) || Math.sign(first - second),
+    yielding = first + second;
+  if (opening === 0 || yielding <= 0 || polarity === 0) return [0, 0] as const;
+  return [
+    (-opening * polarity * first) / (1 + yielding),
+    (opening * polarity * second) / (1 + yielding),
+  ] as const;
+}
+function faultNormal(map: PhysicalField, i: number, j: number, edge: number) {
+  const code = map.TectonicBoundaryCodes.get(i),
+    source = code === 2 || code === 3 ? i : j,
+    active = map.TectonicBoundaryCodes.get(source);
+  if (active !== 2 && active !== 3) return null;
+  const tx = map.TectonicTangentX.get(source),
+    ty = map.TectonicTangentY.get(source),
+    length = Math.hypot(tx, ty);
+  if (length === 0) return null;
+  const sign = Math.sign(-ty * map.mesh.edgeX(i, edge) + tx * map.mesh.edgeY(i, edge));
+  return [(-ty * sign) / length, (tx * sign) / length] as const;
+}
+/** Opening or oblique closure offsets retained blocks; pure strike slip supplies no vertical throw. */
+export function displaceFaultBlocks(map: PhysicalField, context: PhysicalContext) {
+  const ground = groundOf(map),
+    mesh = map.mesh,
+    response = workingArray(map, "float64", "faults:response"),
+    sx = workingArray(map, "float64", "faults:slopeX"),
+    sy = workingArray(map, "float64", "faults:slopeY"),
+    movement = workingArray(map, "float64", "faults:movement").fill(0),
+    weight = workingArray(map, "float64", "faults:weight").fill(0),
+    travel = map.LastPlateDriftStep * context.Profile.ThrustTiltGradient;
+  for (let i = 0; i < mesh.count; i++) {
+    const plane = ground.fold(i, faultPlane);
+    response.set(i, plane.compliance);
+    sx.set(i, plane.slopeX);
+    sy.set(i, plane.slopeY);
   }
-  if (c.code === 2) return continental * faultBlocks(map, context, c, i, distance);
-  return c.code === 3
-    ? gaussian(distance, 0, p.TransformRangeWidth) * (0.06 + continental * 0.14)
-    : 0;
+  for (let i = 0; i < mesh.count; i++) {
+    for (let edge = 0; edge < mesh.degree(i); edge++) {
+      const j = mesh.neighbor(i, edge);
+      if (j <= i || map.CrustProvinceIds.get(i) === map.CrustProvinceIds.get(j)) continue;
+      const normal = faultNormal(map, i, j, edge);
+      if (!normal) continue;
+      const [nx, ny] = normal,
+        opening =
+          ((map.CrustMotionX.get(j) - map.CrustMotionX.get(i)) * nx +
+            (map.CrustMotionY.get(j) - map.CrustMotionY.get(i)) * ny) /
+          1000,
+        dip = ((sx.get(i) + sx.get(j)) * nx + (sy.get(i) + sy.get(j)) * ny) / 2,
+        [first, second] = faultDisplacement(
+          opening * travel,
+          response.get(i),
+          response.get(j),
+          dip
+        ),
+        face = mesh.faceLength(i, edge);
+      movement.add(i, units(first) * face);
+      movement.add(j, units(second) * face);
+      weight.add(i, face);
+      weight.add(j, face);
+    }
+  }
+  for (let i = 0; i < mesh.count; i++)
+    if (weight.get(i) > 0) movement.set(i, movement.get(i) / weight.get(i));
+  displaceGroundField(map, movement, "fault displacement");
+  releaseWorking(map, response, sx, sy, movement, weight);
 }
 function alongNoise(
   map: PhysicalField,

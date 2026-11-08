@@ -94,20 +94,52 @@ function exchange(face: Face, heights: Band, stable: Band, area: (i: number) => 
   face.volume = volume;
   return Math.abs(change) * Math.max(1 / areaI, 1 / areaJ);
 }
+/** One foundation releases at most one finite surface slab from a cell in this settlement. */
+function supportFailures(map: PhysicalField, failsAt: number) {
+  const ground = groundOf(map),
+    mesh = map.mesh,
+    failed = workingArray(map, "uint8", "slope:failed").fill(0),
+    routes = new RecordQueue(3);
+  for (let i = 0; i < mesh.count; i++) {
+    let target = -1,
+      volume = 0,
+      selected = 0;
+    for (const [part, facet] of (["land", "cut"] as const).entries()) {
+      const share = ground.share(i, facet);
+      if (share <= 0) continue;
+      const stable = failsAt * ground.fold(i, angleHeld, facet);
+      let failure: ReturnType<typeof ground.failureFrom> | undefined;
+      for (let edge = 0; edge < mesh.degree(i); edge++) {
+        const j = mesh.neighbor(i, edge);
+        if (j < 0 || ground.surface(i, facet) <= map.Elevation.get(j)) continue;
+        failure ??= ground.failureFrom(i, facet, failing);
+        const depth = failure(j, mesh.edgeLength(i, edge), stable),
+          candidate = (depth * share * mesh.area(i)) / 1024;
+        if (candidate <= volume) continue;
+        target = j;
+        volume = candidate;
+        selected = part;
+      }
+    }
+    if (volume <= 0) continue;
+    failed.set(i, 1);
+    routes.push(i, target, volume, selected);
+  }
+  return { failed, routes };
+}
 /** Backward-Euler face exchange with unilateral stable slopes: ground fails until it stands. */
 export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
-  const mesh = map.mesh,
-    plan = faces(map);
+  const plan = faces(map);
   const heights = workingValues(
     map,
     "float64",
     "slope:heights",
     (i) => map.Elevation.get(i) / 1024
   );
-  // The step between two cells climbs one hillslope, however wide they are. What it holds and what
-  // it lets go are both the ground's answer, so cleared land moves and wooded land stands.
+  // These heights span the represented neighbor distance. An assumed subcell hillslope length
+  // cannot turn a gentle regional flank into a failing cliff. Material still sets its stable angle.
   const ground = groundOf(map),
-    failsAt = p.MassWastingStableGradient * Math.min(1, p.HillslopeLength / mesh.spacing);
+    failsAt = p.MassWastingStableGradient;
   const stable = workingValues(
     map,
     "float64",
@@ -115,16 +147,13 @@ export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
     (i) => failsAt * ground.fold(i, angleHeld)
   );
   relaxFaces(map, plan, heights, stable);
-  const routes = new RecordQueue(2);
+  const { failed, routes } = supportFailures(map, failsAt);
   for (let at = 0; at < plan.count; at++) {
     const { i, j, volume } = plan.get(at);
-    if (volume >= 0) {
-      routes.push(i, j, volume);
-    } else {
-      routes.push(j, i, -volume);
-    }
+    if (volume >= 0 && !failed.get(i)) routes.push(i, j, volume, -1);
+    else if (volume < 0 && !failed.get(j)) routes.push(j, i, -volume, -1);
   }
-  releaseWorking(map, heights, stable, plan.slots, ...Object.values(plan.columns));
+  releaseWorking(map, heights, stable, failed, plan.slots, ...Object.values(plan.columns));
   return routes;
 }
 /**

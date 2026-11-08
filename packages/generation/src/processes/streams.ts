@@ -51,15 +51,16 @@ function cutCell(work: StreamWork, targets: Band, water: Band, i: number, perSte
     flowing,
     (power * perStep * c.HydrologyStrength) / 1000,
     units(steep * length),
-    "cut"
+    "cut",
+    [
+      meshDeltaX(field.mesh, field.mesh.x(target) - field.mesh.x(i)),
+      field.mesh.y(target) - field.mesh.y(i),
+    ]
   );
   if (cut <= 0) return;
   // A big valley covers a share of the cell by its catchment; streams too fine to map cover a share
   // of their own. The ground has already said how deep the water gets: strength counts once.
-  const share = Math.max(
-    p.FluvialDissectionShare,
-    valleyShare(p.FluvialValleyWidthShare, water.get(i), field.mesh.area(i))
-  );
+  const share = valleyShare(p.FluvialValleyWidthShare, water.get(i), field.mesh.area(i));
   stage.cut(cutting, i, cut, share, water.get(i) >= p.FluvialChannelArea);
 }
 export const streams = defineProcess({

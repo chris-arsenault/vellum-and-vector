@@ -23,6 +23,7 @@ import {
   seaLoadIntegerFields,
   seaLoadScalarFields,
 } from "./groundLoad";
+import { loadFields, seaLoadFields } from "./groundLoadFields";
 
 const aliases = new Map<string, string>([
   ...columnFields.land.kind.map((name, layer) => [name, `rockLayer${layer}`] as [string, string]),
@@ -51,7 +52,7 @@ export const groundResourceBindings: ChannelBinding[] = [
 ].map((native) => {
   const category = categories.has(native),
     depth = depths.has(native),
-    epoch = /(?:FormedMin|FormedMax|Altered)\d*$/.test(native);
+    epoch = /(?:FormedMin|FormedMax|Altered|Deposited)\d*$/.test(native);
   return {
     name: aliases.get(native) ?? native,
     native: native as PhysicalBufferName,
@@ -66,7 +67,7 @@ export const groundResourceBindings: ChannelBinding[] = [
             : "ratio",
     scale: depth ? 1 / 1024 : 1,
     ...resourceBounds(native),
-    global: native.startsWith("SeaLoad"),
+    global: false,
     areaDensity: native.endsWith("Volume"),
     discrete: true,
   };
@@ -100,7 +101,8 @@ function missingProperty(
     return surface && imported.has("RockResistance")
       ? map.RockResistance.get(cell)
       : rockKindOfCode(kind).resistance;
-  if (property === "formedMin" || property === "formedMax" || property === "altered") return -1;
+  if (property === "consolidation") return rockKindOfCode(kind).family === "loose" ? 0 : 1;
+  if (["formedMin", "formedMax", "altered", "deposited"].includes(property)) return -1;
   return 0;
 }
 function importedDepth(
@@ -186,8 +188,24 @@ function initializeImportedPlacement(
     ground.CrustThickness.set(cell, units(1000 + 3 * map.CrustContinentalFraction.get(cell)));
   map.CrustTypeCodes.set(cell, map.CrustContinentalFraction.get(cell) >= 500 ? 2 : 1);
 }
+function initializeImportedCargo(map: PhysicalField, imported: ReadonlySet<PhysicalBufferName>) {
+  const storage = groundStorage(map);
+  for (const fields of [loadFields, seaLoadFields]) {
+    for (const property of materialProperties) {
+      if (imported.has(fields[property])) continue;
+      for (let cell = 0; cell < map.mesh.count; cell++) {
+        if (map[fields.depth].get(cell) <= 0) continue;
+        storage[fields[property]].set(
+          cell,
+          missingProperty(map, cell, map[fields.kind].get(cell), property, false, imported)
+        );
+      }
+    }
+  }
+}
 /** Import has finished: ground columns now own the projections, including on legacy input. */
 export function finishGroundImport(map: PhysicalField, imported: ReadonlySet<PhysicalBufferName>) {
+  initializeImportedCargo(map, imported);
   const complete = allColumnFields.every((name) => imported.has(name));
   for (let cell = 0; cell < map.mesh.count; cell++) {
     initializeImportedPlacement(map, cell, imported);

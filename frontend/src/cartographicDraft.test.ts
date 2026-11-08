@@ -166,7 +166,7 @@ it("passes all owned native coefficients into the actual physical profile, prese
     ContinentalAssemblyCount: 10,
     ContinentalWarpStrength: 260_000,
     InteriorReliefStrength: 0.25,
-    InitialOrogenicConstructionStep: 3600,
+    PlateDriftPerMyr: 120_000,
     FluvialEquilibriumGradient: 0.0004,
     FloodplainMaximumWidth: 8_000,
     CoastalDepositionReach: 35_000,
@@ -178,6 +178,27 @@ it("passes all owned native coefficients into the actual physical profile, prese
   draft = setFeatureSetting(draft, "physical.climate", "temperature", 22);
   expect(cartographicValue(draft, control("warmth"))).toBe("custom");
   expect(cartographicValue(draft, control("terrain"))).toBe("ranges");
+});
+
+it("reopens recipes carrying retired mountain shape controls while preserving their history", () => {
+  const draft = newGenerationDraft();
+  draft.recipe.features!["physical.mountains"] = {
+    enabled: true,
+    configuration: {
+      profile: {
+        OrogenicPlateauWidth: 360_000,
+        OrogenicProminenceMaximum: 2200,
+        InitialOrogenicConstructionStep: 3600,
+      },
+    },
+  };
+  const normalized = normalizeGenerationRecipe(draft.recipe);
+  expect(normalized.features!["physical.mountains"]).toMatchObject({
+    enabled: true,
+    configuration: {},
+  });
+  expect(normalized.settings.epochs).toEqual(draft.recipe.settings.epochs);
+  expect(prepareDraft({ ...draft, recipe: normalized }).input.parameters!.plateDrift).toBe(1.2);
 });
 
 it("keeps renamed clock identities, other systems and authored activity when applying curated outcomes", () => {
