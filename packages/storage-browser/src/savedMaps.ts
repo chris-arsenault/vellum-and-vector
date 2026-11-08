@@ -6,10 +6,9 @@ export interface SavedMapSummary {
   name: string;
   version: number;
   savedAt: string;
-  root?: CatalogRoot;
+  root: CatalogRoot;
 }
-export type SavedMapRecord<Legacy = unknown> =
-  { format: 1; data: Legacy } | { format: 2; root: CatalogRoot };
+export type SavedMapRecord = { format: 3; root: CatalogRoot };
 
 const databaseName = "vellum-and-vector-maps";
 function openDatabase(): Promise<IDBDatabase> {
@@ -50,15 +49,12 @@ export async function listSavedMaps(): Promise<SavedMapSummary[]> {
   );
   return summaries.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
-/** Null when an older save lacks a catalog root: cleanup must then retain all storage. */
-export async function savedRoots(): Promise<CatalogRoot[] | null> {
+export async function savedRoots(): Promise<CatalogRoot[]> {
   const summaries = await listSavedMaps();
-  return summaries.every((summary) => summary.root)
-    ? summaries.map((summary) => summary.root!)
-    : null;
+  return summaries.map((summary) => summary.root);
 }
-export function readSavedMap<Legacy>(id: string) {
-  return transact<SavedMapRecord<Legacy> | undefined>("readonly", (transaction) =>
+export function readSavedMap(id: string) {
+  return transact<SavedMapRecord | undefined>("readonly", (transaction) =>
     transaction.objectStore("maps").get(id)
   );
 }
@@ -66,7 +62,7 @@ export function registerSavedMap(summary: SavedMapSummary & { root: CatalogRoot 
   return transact("readwrite", (transaction) => {
     transaction
       .objectStore("maps")
-      .put({ format: 2, root: summary.root } satisfies SavedMapRecord, summary.id);
+      .put({ format: 3, root: summary.root } satisfies SavedMapRecord, summary.id);
     return transaction.objectStore("summaries").put(summary);
   });
 }

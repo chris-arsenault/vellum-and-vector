@@ -1,4 +1,4 @@
-import { spatial } from "@atlas/domain";
+import { MapScale, spatial } from "@atlas/domain";
 import { SettlementSurface } from "./SettlementSurface";
 import type { EditorState } from "./useEditor";
 import type { AtlasFeature, World } from "./types";
@@ -21,7 +21,7 @@ export function FeatureInformation({ world, editor }: { world: World; editor: Ed
         {enclosed && (
           <>
             <dt>Area</dt>
-            <dd>{(spatial.area(footprint) / 1e6).toLocaleString()} km²</dd>
+            <dd>{MapScale.areaUnits(spatial.area(footprint), "m2", "km2").toLocaleString()} km²</dd>
           </>
         )}
       </dl>

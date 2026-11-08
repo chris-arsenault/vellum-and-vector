@@ -29,9 +29,10 @@ it.each(["open", "cylinder", "globe"])(
           ];
     const grid = sampleCoverage(count),
       interpolation = projectionInterpolation(mesh, count, position, grid);
+    const map = createField(mesh);
     const work = {
-      map: createField(mesh),
-      profile: atlasPhysicalProfile(),
+      map,
+      profile: atlasPhysicalProfile({}, {}, map.scale),
       samples: interpolation.samples,
       grid,
       interpolation,

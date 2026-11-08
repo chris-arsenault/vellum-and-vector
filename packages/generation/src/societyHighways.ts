@@ -4,6 +4,7 @@ import { nearestSample } from "./societySpatial";
 import { dryLand } from "./societySupport";
 import { profileOf } from "./societyProfile";
 import { wayClasses, wornCost } from "./societyWays";
+import { mapScale } from "./worldSignificance";
 
 /**
  * Grand highways are built, not worn. A strong polity raises one along a way its traffic has
@@ -19,7 +20,7 @@ const highwaySupport = 0.6;
 /** Political capacity (an era variable) below which no highway is raised. */
 const highwayCapacity = 1;
 /** Open country: samples along the line within this relief, below this slope and tree cover. */
-const openCountry = { relief: 150, slope: 0.02, trees: 0.5, samples: 24 };
+const openCountry = { relief: 0.0000375, slope: 0.02, trees: 0.5, samples: 24 };
 
 function openLine(state: GenerationState, a: SocietyCommunity, b: SocietyCommunity) {
   const { channels } = state.surface;
@@ -38,7 +39,7 @@ function openLine(state: GenerationState, a: SocietyCommunity, b: SocietyCommuni
     low = Math.min(low, z);
     high = Math.max(high, z);
   }
-  return high - low <= openCountry.relief;
+  return high - low <= mapScale(state).length(openCountry.relief, 0.5);
 }
 function polityOf(state: GenerationState, id: string) {
   const politics = state.society!.region.politics;

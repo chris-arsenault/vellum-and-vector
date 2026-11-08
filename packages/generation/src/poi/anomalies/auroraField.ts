@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiBarrier, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -9,12 +11,12 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { auroraAt, chargeHeldAt, countryOf, weightedArea } from "./anomalyReads";
 
 /** Fully charged ground at which a field is half as great as fields get, in square metres. */
-const typicalArea = 1e10;
+const typicalArea = MapScale.area(0.000625);
 /** The share of a field under the melt rule at which its ice is going faster than it holds. */
 const wastingShare = 0.5;
 /** A field's country, and how far its cold shadow lies past it, in metres. */
-const countryMetres = 30_000,
-  shadowMetres = 10_000;
+const countryMetres = MapScale.length(0.0075),
+  shadowMetres = MapScale.length(0.0025);
 
 const isA = magicRule("aurora", "field");
 const isMelting = magicRule("aurora", "melt");
@@ -126,7 +128,7 @@ export const auroraField: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "stilled growth and cold shadow",
-        reach: shadowMetres,
+        reach: mapScale(state).resolveMeasure(shadowMetres),
         severity: chargeHeldAt(state, place.anchor),
       },
     ],

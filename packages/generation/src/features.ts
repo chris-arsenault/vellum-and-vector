@@ -51,9 +51,9 @@ export interface GenerationFeature {
   domains: string[];
   defaultEnabled: boolean;
   settings: Record<string, AtlasParameterDefinition>;
-  legacyParameters?: (keyof AtlasParameters)[];
+  parameterKeys?: (keyof AtlasParameters)[];
   configuration?: z.ZodType<ParameterValues>;
-  configurationFromLegacy?(settings: ParameterValues): ParameterValues;
+  configurationFromSettings?(settings: ParameterValues): ParameterValues;
   configurationBinding?: FeatureConfigurationBinding;
   configurationPresentation?: ConfigurationPresentation;
   processes: string[];
@@ -98,14 +98,13 @@ export const featureSelectionSchema = z.record(
     .strict()
 );
 
-/** Legacy process names are translated once; no executor consults them. */
+/** Bind feature selections to their current map settings. */
 export function resolveGenerationFeatures(
   definitions: GenerationFeature[],
   selected: FeatureSelection = {},
-  legacy: Record<string, boolean> = {},
   parameters: Partial<AtlasParameters> = {},
   domains: string[] = ["physical"],
-  legacySettings?: ParameterValues
+  settings?: ParameterValues
 ): ResolvedFeatures {
   const draft = featureSelectionSchema.parse(selected);
   const byId = new Map(definitions.map((definition) => [definition.id, definition]));
@@ -116,19 +115,11 @@ export function resolveGenerationFeatures(
   );
   for (const id of Object.keys(draft))
     requireThat(byId.has(id), "unknown_feature", `Unknown generation feature ${id}.`);
-  const translated = translateLegacy(definitions, legacy);
   const effective = atlasParametersSchema.parse(parameters);
   const selection: ResolvedFeatures["selection"] = {};
   for (const definition of definitions) {
-    const bound = resolveFeature(
-      definition,
-      draft[definition.id],
-      translated,
-      effective,
-      domains,
-      legacySettings
-    );
-    for (const key of definition.legacyParameters ?? []) effective[key] = bound.settings[key];
+    const bound = resolveFeature(definition, draft[definition.id], effective, domains, settings);
+    for (const key of definition.parameterKeys ?? []) effective[key] = bound.settings[key];
     selection[definition.id] = bound;
   }
   const diagnostics = dependencyDiagnostics(definitions, selection);
@@ -137,23 +128,22 @@ export function resolveGenerationFeatures(
 function resolveFeature(
   feature: GenerationFeature,
   draft: FeatureSelection[string] | undefined,
-  translated: Record<string, boolean>,
   effective: AtlasParameters,
   domains: string[],
-  legacy: ParameterValues | undefined
+  settings: ParameterValues | undefined
 ) {
   return {
     enabled:
       domains.some((domain) => feature.domains.includes(domain)) &&
-      (draft?.enabled ?? translated[feature.id] ?? feature.defaultEnabled),
+      (draft?.enabled ?? feature.defaultEnabled),
     settings: resolveSettings(feature, draft?.settings ?? {}, effective),
-    configuration: resolveConfiguration(feature, draft?.configuration, legacy),
+    configuration: resolveConfiguration(feature, draft?.configuration, settings),
   };
 }
 function resolveConfiguration(
   feature: GenerationFeature,
   draft: ParameterValues | undefined,
-  legacy: ParameterValues | undefined
+  settings: ParameterValues | undefined
 ) {
   requireThat(
     !draft || feature.configuration,
@@ -163,14 +153,14 @@ function resolveConfiguration(
   if (!feature.configuration) return undefined;
   // Catalog/publication callers can inspect selection without binding a world.
   // Preparation always supplies the complete settings before execution.
-  if (legacy === undefined && draft === undefined) return undefined;
-  const defaults = legacy === undefined ? {} : feature.configurationFromLegacy?.(legacy);
+  if (settings === undefined && draft === undefined) return undefined;
+  const defaults = settings === undefined ? {} : feature.configurationFromSettings?.(settings);
   return feature.configuration.parse({ ...defaults, ...draft });
 }
 function resolveSettings(
   feature: GenerationFeature,
   draft: Record<string, number>,
-  legacy: AtlasParameters
+  parameters: AtlasParameters
 ) {
   for (const key of Object.keys(draft))
     requireThat(
@@ -183,30 +173,12 @@ function resolveSettings(
       key,
       parameterSchema(definition).parse(
         draft[key] ??
-          (feature.legacyParameters?.includes(key as keyof AtlasParameters)
-            ? legacy[key as keyof AtlasParameters]
+          (feature.parameterKeys?.includes(key as keyof AtlasParameters)
+            ? parameters[key as keyof AtlasParameters]
             : undefined)
       ),
     ])
   );
-}
-function translateLegacy(definitions: GenerationFeature[], legacy: Record<string, boolean>) {
-  const result: Record<string, boolean> = {};
-  for (const [process, enabled] of Object.entries(legacy)) {
-    const owner = definitions.find((definition) => definition.processes.includes(process));
-    requireThat(
-      owner,
-      "unknown_process",
-      `Process ${process} has no selectable feature; use feature settings.`
-    );
-    requireThat(
-      result[owner.id] === undefined || result[owner.id] === enabled,
-      "coupled_processes",
-      `${owner.label} is one feature. Its operations must be selected together.`
-    );
-    result[owner.id] = enabled;
-  }
-  return result;
 }
 function dependencyDiagnostics(
   definitions: GenerationFeature[],

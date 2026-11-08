@@ -6,9 +6,10 @@ import { workingArray, releaseWorking } from "./physicalNumerics";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { intrudeBasement } from "../rock/rockColumn";
 import type { VolcanicLava } from "../processes/volcanicLava";
+import { MapScale } from "@atlas/domain";
 
 /** Metres of older volcanic rock retained above an arc's intrusive basement. */
-const arcShell = 3000;
+const arcShell = 0.00075;
 
 function overridingSide(map: PhysicalField, cell: number) {
   const state = map.tectonics;
@@ -37,12 +38,15 @@ export function subductionArcs(map: PhysicalField, context: PhysicalContext, lav
     if (consumed <= 0 || !normal) continue;
     const [x, y] = meshPoint(
         map.mesh,
-        map.mesh.x(cell) + normal[0] * tectonicArcOffset,
-        map.mesh.y(cell) + normal[1] * tectonicArcOffset
+        map.mesh.x(cell) + normal[0] * tectonicArcOffset(map.scale),
+        map.mesh.y(cell) + normal[1] * tectonicArcOffset(map.scale)
       ),
       source = nearestTriangle(map.mesh, x, y);
     if (source >= 0)
-      supply.add(source, (consumed / 1024) * map.mesh.area(cell) * tectonicArcMeltShare);
+      supply.add(
+        source,
+        MapScale.metres(consumed, "native") * map.mesh.area(cell) * tectonicArcMeltShare
+      );
   }
   try {
     for (let source = 0; source < map.mesh.count; source++) {
@@ -50,7 +54,12 @@ export function subductionArcs(map: PhysicalField, context: PhysicalContext, lav
       if (volume <= 0) continue;
       const eruption = lava.erupt(source, volume);
       if (eruption.volume <= 0) continue;
-      intrudeBasement(map, source, rockCatalogue.granite, arcShell * 1024);
+      intrudeBasement(
+        map,
+        source,
+        rockCatalogue.granite,
+        MapScale.native(map.scale.length(arcShell))
+      );
       map.events.push({
         id: `volcano:arc:${source}:${context.EpochIndex}`,
         kind: "volcano",

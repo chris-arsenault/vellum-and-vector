@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { usableSlope } from "../../regional/seats";
 import type { RegionalState } from "../../regional/state";
@@ -14,7 +15,7 @@ import { attribute, peopleOfRecord, restlessDead, weighedPlace } from "./settlem
 const typicalPeak = 3000;
 /** How much easier a road runs near a ruin, and over how many metres: its old roadbed and its stone. */
 const oldRoadbed = 0.85,
-  roadbedReach = 1000;
+  roadbedReach = MapScale.length(0.00025);
 /** How strongly what a place was still ties people to its remains. */
 const formerRole: Record<string, number> = { capital: 0.8, regionalCapital: 0.55, marketTown: 0.3 };
 
@@ -97,7 +98,7 @@ export const ruin: PoiEntry = {
       "A captured ruin is a seat like any other on the refined map: it stays where the parent put it, holds its footprint's gradient down, and moves to the seat the evidence settles on. It proposes no village and sends no one along the ways.",
     carry: carryWhereItLands,
     realize: notApplicable(
-      "The bench a seat was cut on outlasts it: the settlement entry's caps step holds every captured seat's ground, a ruin's too."
+      "The bench a seat was cut on outlasts it: the settlement entry's restore step grades every captured seat's ground, a ruin's too."
     ),
     counterpart: (state, carried) => seatCell(state, carried.feature.id) ?? carried.cell,
     unrealized: stays,

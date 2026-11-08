@@ -1,15 +1,7 @@
 // CrustalSupportLayer.cs and LithosphericFlexureLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import {
-  clamp,
-  crustHeight,
-  elevationLimit,
-  ratio,
-  rockLoadResponsePerMille,
-  toUnits,
-  units,
-} from "./math";
+import { clamp, crustHeight, ratio, rockLoadResponsePerMille, toUnits, units } from "./math";
 import { setSupportTarget, supportGroundField } from "../rock/groundDeformation";
 import { smoothMetric } from "./metricSmoothing";
 import { releaseWorking, workingValues } from "./physicalNumerics";
@@ -23,11 +15,11 @@ export function crustalSupport(map: PhysicalField, context: PhysicalContext) {
   const p = context.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
     const fraction = map.CrustContinentalFraction.get(i) / 1000;
-    const airy = units(crustHeight(toUnits(map.CrustThickness.get(i)), fraction));
+    const airy = units(crustHeight(toUnits(map.CrustThickness.get(i)), fraction, map.scale));
     const oceanic = clamp(1 - fraction / p.OceanicSubsidenceCompositionLimit, 0, 1);
     const subsidence = units(((oceanic * map.CrustAge.get(i)) / 1000) * p.OceanicSubsidenceDepth);
     const riftCooling = units(
-      ((tectonicRiftSubsidence *
+      ((tectonicRiftSubsidence(map.scale) *
         p.ContinentalAssemblySeparationDepth *
         p.MarginEvolutionResponsePerMille) /
         1000) *
@@ -42,18 +34,14 @@ export function crustalSupport(map: PhysicalField, context: PhysicalContext) {
     setSupportTarget(
       map,
       i,
-      clamp(
-        airy - subsidence - riftCooling - trenchSupport(map, context, i) - load,
-        units(-elevationLimit),
-        units(elevationLimit)
-      )
+      airy - subsidence - riftCooling - trenchSupport(map, context, i) - load
     );
   }
 }
 function trenchSupport(map: PhysicalField, context: PhysicalContext, i: number) {
   // Stored consumption describes the parcel's past; a trench needs a current convergent load.
   if (context.TectonicStrength <= 0 || map.TectonicBoundaryCodes.get(i) !== 1) return 0;
-  const consumed = map.OceanicSubductionHistory.get(i) / units(1000);
+  const consumed = map.OceanicSubductionHistory.get(i) / units(map.scale.length(0.00025));
   const oceanic = 1 - map.CrustContinentalFraction.get(i) / 1000;
   return units(context.Profile.ConvergentTrenchDepth * oceanic * (1 - Math.exp(-consumed)));
 }

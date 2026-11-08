@@ -22,12 +22,13 @@ const steepRoughness = 0.5,
   roughnessOctaves = 4;
 /** Reference-runoff samples a mapped channel drains, in this map's own samples. */
 export const channelCells = 128;
-export const referenceRunoff = 0.4;
+const referenceRunoff = 0.0000001;
 export const secondsPerYear = 365.25 * 24 * 3600;
 
 /** Discharge of one interior sample at reference runoff, in m³/s. */
 export function referenceDischarge(state: RegionalState) {
-  return (referenceRunoff * regionalSpan(state) ** 2) / secondsPerYear;
+  const scale = state.physical.map.scale;
+  return (scale.length(referenceRunoff) * scale.cellArea()) / secondsPerYear;
 }
 
 /**
@@ -41,7 +42,7 @@ export function referenceDischarge(state: RegionalState) {
 export function growNetwork(state: RegionalState): NetworkWork {
   const map = state.physical.map,
     n = map.mesh.count,
-    datum = map.EffectiveSeaLevel / 1024,
+    datum = MapScale.metres(map.EffectiveSeaLevel, "native"),
     evidence = state.regional.evidence!,
     base = smoothedBase(state, datum),
     sea = connectedSea(state, base),
@@ -86,7 +87,8 @@ export function growNetwork(state: RegionalState): NetworkWork {
 export const closedBasinAridity = 0.5;
 function closedBasin(state: RegionalState, i: number) {
   return (
-    regionalPrecipitation(state, i) < closedBasinAridity * potentialEvaporation(celsius(state, i))
+    regionalPrecipitation(state, i) <
+    closedBasinAridity * potentialEvaporation(celsius(state, i), state.physical.map.scale)
   );
 }
 
@@ -147,7 +149,7 @@ export function gatherFlow(state: RegionalState, network: NetworkWork) {
   flow.fill(0);
   for (let k = 0; k < count; k++) {
     const i = order[k],
-      runoff = Math.max(0, map.Runoff.get(i) / 1000);
+      runoff = Math.max(0, MapScale.metres(map.Runoff.get(i), "mm"));
     area[i] = mesh.contentArea(i) + (inflow[i] / reference) * cellArea;
     flow[i] = (runoff * mesh.contentArea(i)) / secondsPerYear + inflow[i];
   }
@@ -206,7 +208,6 @@ function cellCosts(state: RegionalState, sea: Uint8Array, base: Float64Array) {
   const map = state.physical.map,
     mesh = map.mesh,
     n = mesh.count,
-    span = regionalSpan(state),
     cost = new Float64Array(n),
     flat = flatness(state, base);
   for (let i = 0; i < n; i++) {
@@ -217,7 +218,7 @@ function cellCosts(state: RegionalState, sea: Uint8Array, base: Float64Array) {
         p.x,
         p.y,
         state.regional.input.seed ^ 0x3a27,
-        span * roughnessCells,
+        map.scale.cells(roughnessCells),
         roughnessOctaves
       );
     cost[i] = materialResistance(state, i) * Math.exp(amplitude * roughness);
@@ -329,3 +330,4 @@ function entryProtection(state: RegionalState, entries: { cell: number }[]) {
   for (const { cell } of entries) for (const i of within(state, cell, reach).cells) guarded[i] = 1;
   return guarded;
 }
+import { MapScale } from "@atlas/domain";

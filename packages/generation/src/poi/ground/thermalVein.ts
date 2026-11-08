@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { tappingReach } from "../../societyColdAge";
 import { carryWhereItLands, costNear, counterpartOf } from "../poiCarry";
@@ -10,9 +12,10 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { aroundOf, lengthOf, movesOrGoes, sealedAt, veinAt } from "./groundReads";
 
 /** A course length at which a vein is half as great as veins get, a regional conduit, in metres. */
-const typicalLength = 100_000;
+const typicalLength = MapScale.length(0.025);
 /** How far a burst of steam and gas reaches from the fracture, in metres. */
-const burstReach = 2000;
+// length-unit: fraction
+const burstReach = 0.0005;
 /** Water finds fractured rock an easier way down than sound rock. */
 const fracturedDrainage = 0.8;
 /** Going over ground kept thawed in frost country is easier than over the frost around it. */
@@ -22,7 +25,8 @@ const fireAt = (state: GenerationState, cell: number) =>
   magicValue(state, "fire", "intensity", cell);
 const strengthOf = (state: GenerationState, place: PoiPlace) =>
   Math.min(1, fireAt(state, place.anchor) / 1000);
-const reachOf = (state: GenerationState) => Math.max(aroundOf(state), tappingReach);
+const reachOf = (state: GenerationState) =>
+  Math.max(aroundOf(state), mapScale(state).resolveMeasure(tappingReach));
 const places = rulePlaces("thermalVein", "fire", "vein");
 const counterpart = counterpartOf(veinAt, 1);
 const factors = {
@@ -130,7 +134,7 @@ export const thermalVein: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "steam and gas burst",
-        reach: burstReach,
+        reach: mapScale(state).length(burstReach),
         severity: strengthOf(state, place),
       },
     ],

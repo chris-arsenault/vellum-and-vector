@@ -1,3 +1,4 @@
+import { MapScale } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 import type { RegionMembers } from "./regionMembers";
 import { meshDeltaX } from "./mesh";
@@ -63,6 +64,6 @@ export function regionEvidence(
     coherence: Math.min(1, area / Math.max(1, span * breadth)),
     strength: totalStrength / scale,
     contrast: margin > 0 ? contrast / margin : 0,
-    relief: (high - low) / 1024,
+    relief: MapScale.metres(high - low, "native"),
   };
 }

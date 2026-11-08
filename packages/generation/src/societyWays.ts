@@ -1,6 +1,8 @@
 import type { SocietyConnection } from "@atlas/domain";
 import type { GenerationState } from "./process";
-import { defaultSocietyProfile, profileOf, type SocietyProfile } from "./societyProfile";
+import { profileOf, type SocietyProfile } from "./societyProfile";
+import { atlasParameterDefinitions } from "./atlasParameters";
+import { mapScale } from "./worldSignificance";
 
 /**
  * Ways are made by use. Each connection remembers how many people travel it in a year, as
@@ -13,8 +15,10 @@ import { defaultSocietyProfile, profileOf, type SocietyProfile } from "./society
 /** Years over which a way forgets its traffic. */
 const wearMemory = 150;
 /** Travel cost over which market traffic between two towns falls by e. */
-const marketReach = 100000;
+// length-unit: fraction
+const marketReach = 0.025;
 /** Yearly travellers between two towns, as a share of the geometric mean of their sizes. */
+// length-unit: ratio
 const marketTravel = 0.1;
 /** A track needs this share of the travellers a road needs. */
 const trackShare = 0.1;
@@ -24,7 +28,11 @@ const roadSpeed = 0.6;
 const highwaySpeed = 0.45;
 
 /** Yearly travellers that make a way a track, a road; a highway is built, not worn (M3b). */
-export function wayClasses(profile: Pick<SocietyProfile, "roadTraffic"> = defaultSocietyProfile) {
+export function wayClasses(
+  profile: Pick<SocietyProfile, "roadTraffic"> = {
+    roadTraffic: atlasParameterDefinitions.roadTraffic.default,
+  }
+) {
   return { track: profile.roadTraffic * trackShare, road: profile.roadTraffic };
 }
 export function wayClass(
@@ -68,7 +76,9 @@ export function wearWays(state: GenerationState, years: number) {
     const a = towns.get(link.from) ?? 0,
       b = towns.get(link.to) ?? 0;
     const market =
-      a > 0 && b > 0 ? Math.sqrt(a * b) * travel * Math.exp(-link.distance / marketReach) : 0;
+      a > 0 && b > 0
+        ? Math.sqrt(a * b) * travel * Math.exp(-link.distance / mapScale(state).length(marketReach))
+        : 0;
     const yearly = traffic[i] / Math.max(1e-9, years) + market;
     link.wear = (link.wear ?? 0) * keep + yearly * (1 - keep);
     link.travelCost = wornCost(link, classes);

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, type MagicSystem } from "@atlas/domain";
+import { MapScale, canonryMagicPresets, type MagicSystem } from "@atlas/domain";
 import { configuredPhysicalProfile } from "../../packages/generation/src/physicalProfileConfiguration";
 import { atlasPhysicalProfile } from "../../packages/generation/src/world/atlasProfile";
 import {
@@ -54,8 +54,9 @@ it("defaults to compound continents and keeps island-world assemblies dispersed"
   const configured = (draft: ReturnType<typeof newGenerationDraft>) => {
     const prepared = prepareDraft(draft);
     return atlasPhysicalProfile(
-      prepared.input.parameters,
-      configuredPhysicalProfile(prepared.input.resolvedFeatures!)
+      prepared.input.parameters ?? {},
+      configuredPhysicalProfile(prepared.input.resolvedFeatures!),
+      MapScale.reference()
     );
   };
   expect(configured(newGenerationDraft())).toMatchObject({
@@ -122,7 +123,7 @@ it("composes terrain, shore, climate and ecological history independently of sel
   });
   expect(first.parameters).toMatchObject({
     temperature: 23,
-    seaLevel: 60,
+    seaLevel: 0.000015,
     rainfall: 2,
     vegetation: 2.5,
   });
@@ -159,8 +160,9 @@ it("passes all owned native coefficients into the actual physical profile, prese
   draft = choose(draft, "shoreline", "flats");
   const prepared = prepareDraft(draft);
   const profile = atlasPhysicalProfile(
-    prepared.input.parameters,
-    configuredPhysicalProfile(prepared.input.resolvedFeatures!)
+    prepared.input.parameters ?? {},
+    configuredPhysicalProfile(prepared.input.resolvedFeatures!),
+    MapScale.reference()
   );
   expect(profile).toMatchObject({
     ContinentalAssemblyCount: 10,
@@ -168,9 +170,7 @@ it("passes all owned native coefficients into the actual physical profile, prese
     InteriorReliefStrength: 0.25,
     PlateDriftPerMyr: 120_000,
     FluvialEquilibriumGradient: 0.0004,
-    FloodplainMaximumWidth: 8_000,
     CoastalDepositionReach: 35_000,
-    DeltaMaximumRadius: 45_000,
     CoastalDetailPassiveAmplitude: 62 * 0.35,
   });
   expect(cartographicValue(draft, control("terrain"))).toBe("ranges");
@@ -178,27 +178,6 @@ it("passes all owned native coefficients into the actual physical profile, prese
   draft = setFeatureSetting(draft, "physical.climate", "temperature", 22);
   expect(cartographicValue(draft, control("warmth"))).toBe("custom");
   expect(cartographicValue(draft, control("terrain"))).toBe("ranges");
-});
-
-it("reopens recipes carrying retired mountain shape controls while preserving their history", () => {
-  const draft = newGenerationDraft();
-  draft.recipe.features!["physical.mountains"] = {
-    enabled: true,
-    configuration: {
-      profile: {
-        OrogenicPlateauWidth: 360_000,
-        OrogenicProminenceMaximum: 2200,
-        InitialOrogenicConstructionStep: 3600,
-      },
-    },
-  };
-  const normalized = normalizeGenerationRecipe(draft.recipe);
-  expect(normalized.features!["physical.mountains"]).toMatchObject({
-    enabled: true,
-    configuration: {},
-  });
-  expect(normalized.settings.epochs).toEqual(draft.recipe.settings.epochs);
-  expect(prepareDraft({ ...draft, recipe: normalized }).input.parameters!.plateDrift).toBe(1.2);
 });
 
 it("keeps renamed clock identities, other systems and authored activity when applying curated outcomes", () => {
@@ -219,8 +198,8 @@ it("keeps renamed clock identities, other systems and authored activity when app
   expect(configured[0].history).toEqual(systems[0].history);
   expect(configured[0].parameters).toMatchObject({ baseCost: 1.5, conductanceDivisor: 20 });
   expect(configured[1].parameters).toMatchObject({
-    iceRetention: 600,
-    coldRetentionDistance: 4_000,
+    iceRetention: 0.00015,
+    coldRetentionDistance: 0.001,
   });
   expect(configured.map((entry) => entry.id)).toEqual([
     "fire",

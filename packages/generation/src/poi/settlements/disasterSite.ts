@@ -1,5 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import type { AtlasFeature } from "@atlas/domain";
+import { MapScale, type AtlasFeature } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import {
   avalancheIce,
@@ -43,7 +44,7 @@ import {
 import { eventPlaces } from "./workRecords";
 
 /** How far, in metres, wreck costs a road around where it struck. */
-const wreckReach = 3000;
+const wreckReach = MapScale.length(0.00075);
 /** How a place's yearly chance counts toward suitability: the chance of one in about a thousand years. */
 const remembered = 1000;
 /** The dead and displaced at which a disaster is half as great as disasters get. */
@@ -69,8 +70,12 @@ const deadAt = (state: GenerationState, cell: number) => fieldOf(state).MassDeat
 /** The yearly chance of each physical exposure at a cell, as `physicalExposures` rates them. */
 function exposure(state: GenerationState, cell: number) {
   const map = fieldOf(state),
-    avalanche = slopeAt(state, cell) > avalancheSlope && iceAt(state, cell) > avalancheIce,
-    coastal = heightAt(state, cell) < waveHeight && map.OceanDistance.get(cell) < waveShore;
+    avalanche =
+      slopeAt(state, cell) > avalancheSlope &&
+      iceAt(state, cell) > mapScale(state).resolveMeasure(avalancheIce),
+    coastal =
+      heightAt(state, cell) < mapScale(state).resolveMeasure(waveHeight) &&
+      map.OceanDistance.get(cell) < mapScale(state).resolveMeasure(waveShore);
   return (
     (avalanche ? avalancheRate : 0) +
     map.FloodFrequency.get(cell) * floodRate +

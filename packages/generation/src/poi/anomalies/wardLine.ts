@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, counterpartOf, stays } from "../poiCarry";
 import { notApplicable, type PoiCost, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -10,10 +12,10 @@ import { countryOf, magicFieldOf, peakOf } from "./anomalyReads";
 import { hallowedAt, peakWard, wardArea, wardedCarriers } from "./wardReads";
 
 /** A kept line this long, in metres, is half as great as lines get. */
-const typicalLength = 50_000;
+const typicalLength = MapScale.length(0.0125);
 /** A line's country, and how far from it a crossing party is turned back, in metres. */
-const countryMetres = 10_000,
-  watchMetres = 2000;
+const countryMetres = MapScale.length(0.0025),
+  watchMetres = MapScale.length(0.0005);
 /** What it costs a road to cross a kept line where no way is worn through it. */
 const watchedCrossing = 2;
 
@@ -125,7 +127,7 @@ export const wardLine: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "what the ward turns back, at its edge",
-        reach: watchMetres,
+        reach: mapScale(state).resolveMeasure(watchMetres),
         severity: peakOf(state, place, hallowedAt) / 2000,
       },
     ],

@@ -56,6 +56,23 @@ it("lets a map stiffen its own ground for everything that acts on it", () => {
   ground.stiffenBy(() => 2);
   expect(ground.gives(0, grinding)).toBeCloseTo(plain / 2);
 });
+it("burning weakens only root support even for strongly weighted material actions", () => {
+  const map = column(() => {}),
+    ground = groundOf(map),
+    strong = compileMix({ abrasion: 4 }),
+    bare = ground.gives(0, strong);
+  ground.heldBy({ get: () => 1 });
+  const rooted = ground.gives(0, strong);
+  map.FireActivity.set(0, 1);
+  const burned = ground.gives(0, strong);
+  expect(rooted).toBeLessThan(burned);
+  expect(burned).toBeLessThan(bare);
+  expect(Number.isFinite(burned)).toBe(true);
+  ground.heldBy({ get: () => 0 });
+  expect(ground.gives(0, strong)).toBe(bare);
+  map.FireActivity.set(0, 0);
+  expect(ground.gives(0, strong)).toBe(bare);
+});
 it("lets a query walk the column below the surface, without knowing about it in advance", () => {
   const map = column((m) => {
     setLayer(m, 0, 0, shale.code, units(10));

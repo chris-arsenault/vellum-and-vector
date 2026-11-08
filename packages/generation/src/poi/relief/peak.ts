@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import { Landform } from "../../world/codes";
 import { hashUnit } from "../../world/noise";
 import { prominence } from "../../world/landforms";
@@ -49,7 +50,7 @@ import { bareOf, ringHeights, sectionRadius, thinSoilOf } from "./reliefShape";
 /** A peak rules over this many times its prominence around it; seen against this many times its height. */
 const dominance = 20;
 /** Prominence at which a peak is half as great as peaks get. */
-const typicalProminence = 1000;
+const typicalProminence = MapScale.length(0.00025, 0.5);
 /** What some peaks weigh for the reason they are peaks, whatever their size. */
 const originWeight: Readonly<Record<string, number>> = { crown: 0.85, carried: 0.7 };
 /** The word people use for a peak of each form. */
@@ -62,13 +63,11 @@ const formTerms: Readonly<Record<PeakForm, string>> = {
   table: "Table",
 };
 /** The size a form works at: a share of the rise, and a floor at the World's scale, in metres. */
-const formShare = 0.25,
-  formFloor = 80,
-  largestForm = 1500;
+const formShare = 0.25;
 /** A form reaches at least this many cells, so a coarse map can show it at all. */
 const formSpans = 2.2;
 /** Ice that loads a top fully, and the readings of cold and steepness that do. */
-const fullIce = 100,
+const fullIce = MapScale.length(0.000025, 0.5),
   fullCold = 15,
   fullSteep = 0.3;
 const salts = { form: 0x7021, face: 0x7022 };
@@ -83,7 +82,7 @@ const originOf = (state: GenerationState, place: PoiPlace) =>
   claims(state).get(place.anchor)?.origin ?? "high";
 const places = (state: GenerationState) => placesFromOrigins("peak", peakOrigins)(state);
 const foot = (state: GenerationState, place: PoiPlace) =>
-  Math.max(2 * cellSpan(state), riseOf(state, place) * dominance);
+  mapScale(state).supported(riseOf(state, place) * dominance, 2);
 /** The greatest peak within the parent's cell of where a captured peak stood, or -1. */
 function counterpart(state: RegionalState, carried: PoiCarried) {
   let best = -1;
@@ -93,7 +92,8 @@ function counterpart(state: RegionalState, carried: PoiCarried) {
   return best;
 }
 /** How far a captured peak reads as rising: the parent's own record, as it published it. */
-const capturedRise = (place: PoiPlace) => Number(place.feature?.attributes.prominence ?? 300);
+const capturedRise = (state: GenerationState, place: PoiPlace) =>
+  Number(place.feature?.attributes.prominence ?? mapScale(state).length(0.000075, 0.5));
 
 /** What the ground under a peak gives its form: rock, ice and weather. */
 function formOf(state: GenerationState, cell: number): PeakForm {
@@ -101,7 +101,7 @@ function formOf(state: GenerationState, cell: number): PeakForm {
     {
       hardness: hardnessAt(state, cell),
       fracture: jointedAt(state, cell),
-      ice: unit(iceAt(state, cell) / fullIce),
+      ice: unit(iceAt(state, cell) / mapScale(state).resolveMeasure(fullIce)),
       cold: unit(-celsiusAt(state, cell) / fullCold),
       wet: unit(moistureAt(state, cell)),
       steep: unit(slopeAt(state, cell) / fullSteep),
@@ -132,9 +132,12 @@ function faceOf(state: GenerationState, cell: number) {
   return (low * Math.PI) / 8 + (hashUnit(salts.face, cell, 0) - 0.5) * (Math.PI / 2);
 }
 const formSize = (state: GenerationState, place: PoiPlace) =>
-  Math.min(largestForm, formShare * riseOf(state, place) + formFloor * mapScale(state).height);
+  Math.min(
+    mapScale(state).length(0.000375, 0.5),
+    formShare * riseOf(state, place) + mapScale(state).length(0.00002, 0.5)
+  );
 const formReach = (state: GenerationState, place: PoiPlace) =>
-  Math.max(formSpans * cellSpan(state), 0.8 * foot(state, place));
+  mapScale(state).supported(0.8 * foot(state, place), formSpans);
 /** The ground a peak's form works on, with what it does at each cell. */
 const formed = (state: GenerationState, place: PoiPlace) =>
   heldFor(state, `peak:form:${place.anchor}`, () => {
@@ -181,7 +184,7 @@ function rawRock(state: GenerationState, place: PoiPlace) {
   const bare = formed(state, place)
     .filter(({ shape }) => shape.bare)
     .map(({ cell }) => cell);
-  return [...bareOf(bare), ...thinSoilOf(bare)];
+  return [...bareOf(bare), ...thinSoilOf(state, bare)];
 }
 
 const factors = {
@@ -192,7 +195,7 @@ const factors = {
   /** Half when the nearest higher ground lies at the edge of what it rules over. */
   isolation(state: GenerationState, place: PoiPlace) {
     const top = fieldOf(state).Elevation.get(place.anchor),
-      reach = worldPeakIsolation * mapScale(state).length,
+      reach = mapScale(state).resolveMeasure(worldPeakIsolation),
       higher = nearestWhere(
         state,
         place.anchor,
@@ -269,8 +272,13 @@ export const peak: PoiEntry = {
       repulsion(
         state as RegionalState,
         place.anchor,
-        Math.min(1, Math.max(0.25, capturedRise(place) / typicalProminence)) *
-          (state as RegionalState).regional.parentSpan
+        Math.min(
+          1,
+          Math.max(
+            0.25,
+            capturedRise(state, place) / mapScale(state).resolveMeasure(typicalProminence)
+          )
+        ) * (state as RegionalState).regional.parentSpan
       ),
     magic: notApplicable("A peak neither carries nor blocks magic."),
     links: notApplicable("A peak joins nothing."),
@@ -290,7 +298,8 @@ export const peak: PoiEntry = {
     offers: (state, place) => ({ sanctity: factors.magnitude(state, place) }),
     threatens(state, place) {
       const map = fieldOf(state);
-      return map.Slope.get(place.anchor) > 0.15 && map.IceThickness.get(place.anchor) > 1
+      return map.Slope.get(place.anchor) > 0.15 &&
+        map.IceThickness.get(place.anchor) > map.scale.length(0.00000025, 0.5)
         ? [{ hazard: "avalanche", reach: foot(state, place) / 2, severity: 0.5 }]
         : [];
     },

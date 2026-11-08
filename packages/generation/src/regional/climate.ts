@@ -9,7 +9,7 @@ import { heightGradients } from "./relief";
 import { clamp, naturalBand, type RegionalState } from "./state";
 
 /** Lapse of temperature with height (°C/m). */
-const lapse = 0.0065;
+const lapse = 26_000;
 /** Warming of a fully sun-exposed slope, and cooling of a fully pooled floor (°C). */
 const aspectTemperature = 3,
   poolingTemperature = 4;
@@ -36,15 +36,24 @@ export function respondClimate(state: RegionalState) {
   const { gx, gy } = heightGradients(state);
   for (let i = 0; i < mesh.count; i++) {
     if (!isContent(mesh, i)) continue;
-    const delta = (map.Elevation.get(i) - state.regional.inheritedHeight.get(i)) / 1024,
-      exposure = (gx[i] * map.WindX.get(i) + gy[i] * map.WindY.get(i)) / 1000,
+    const delta = MapScale.metres(
+        map.Elevation.get(i) - state.regional.inheritedHeight.get(i),
+        "native"
+      ),
+      exposure = MapScale.metres(gx[i] * map.WindX.get(i) + gy[i] * map.WindY.get(i), "mm"),
       rainFactor = 1 + 0.35 * Math.tanh(exposure / 0.01);
     map.Temperature.set(i, nativeTemperature(localTemperature(state, i, delta)));
     splitPrecipitation(state, i, rainFactor);
     map.Moisture.set(
       i,
       Math.round(
-        clamp(moisture.get(i) * rainFactor - delta / 10 + applied.appliedTo("Moisture", i), 0, 1000)
+        clamp(
+          moisture.get(i) * rainFactor -
+            delta / map.scale.length(0.0000025) +
+            applied.appliedTo("Moisture", i),
+          0,
+          1000
+        )
       )
     );
     // Until the ecology engine owns the soil, the captured depth plus this round's deposits
@@ -53,9 +62,9 @@ export function respondClimate(state: RegionalState) {
       map.SoilDepth.set(
         i,
         Math.max(
-          0.02,
+          map.scale.length(0.000000005),
           soil.get(i) +
-            (map.SedimentThickness.get(i) / 1024) * 0.3 +
+            MapScale.metres(map.SedimentThickness.get(i), "native") * 0.3 +
             applied.appliedTo("SoilDepth", i)
         )
       );
@@ -65,11 +74,9 @@ export function respondClimate(state: RegionalState) {
       i,
       Math.max(
         0,
-        Math.round(
-          runoff.get(i) * rainFactor * coverRetention(state, i) +
-            map.GlacialMeltwater.get(i) +
-            applied.appliedTo("Runoff", i)
-        )
+        runoff.get(i) * rainFactor * coverRetention(state, i) +
+          map.GlacialMeltwater.get(i) +
+          applied.appliedTo("Runoff", i)
       )
     );
   }
@@ -82,14 +89,14 @@ function localTemperature(state: RegionalState, i: number, delta: number) {
     pooled = media ? media.pooling[i] * poolingTemperature : 0;
   return (
     capturedCelsius(state, i) -
-    delta * lapse +
+    delta * state.physical.map.scale.inverseLength(lapse) +
     sun -
     pooled +
     magicHeat(state, i) +
     state.regional.contributions.appliedTo("Temperature", i) / 10
   );
 }
-const nativeTemperature = (celsius: number) => Math.round(clamp((celsius + 30) * 10, 0, 1000));
+const nativeTemperature = (celsius: number) => Math.round((celsius + 30) * 10);
 
 /**
  * The captured wind deflected by the developed relief with the world's own rule (valley
@@ -105,13 +112,13 @@ function deflectCapturedWind(state: RegionalState) {
     terrain = windTerrain(map, profile);
   for (let i = 0; i < mesh.count; i++) {
     if (!isContent(mesh, i)) continue;
-    const x = windX.get(i) / 1000,
-      y = windY.get(i) / 1000,
+    const x = MapScale.metres(windX.get(i), "mm"),
+      y = MapScale.metres(windY.get(i), "mm"),
       speed = Math.hypot(x, y);
     if (speed === 0) continue;
     const [dx, dy] = deflectWind(terrain, profile, i, x / speed, y / speed);
-    map.WindX.set(i, Math.round(dx * speed * 1000));
-    map.WindY.set(i, Math.round(dy * speed * 1000));
+    map.WindX.set(i, Math.round(MapScale.inUnits(dx * speed, "mm")));
+    map.WindY.set(i, Math.round(MapScale.inUnits(dy * speed, "mm")));
   }
   releaseWorking(map, terrain.terrain, terrain.gradientX, terrain.gradientY, terrain.height);
 }
@@ -121,14 +128,13 @@ const canopyInterception = 0.3,
   wetlandHold = 0.3;
 /**
  * What the developed cover does to the captured runoff: trees grown since the capture
- * intercept, wetland holds, cleared ground sheds more. Bounded, so the cover shifts the
- * budget and never replaces it.
+ * intercept, wetland holds, cleared ground sheds more.
  */
 function coverRetention(state: RegionalState, i: number) {
   const map = state.physical.map,
     trees = map.TreeCover.get(i) - naturalBand(state, "TreeCover").get(i),
     wetland = map.WetlandCover.get(i) - naturalBand(state, "WetlandCover").get(i);
-  return clamp(1 - canopyInterception * trees - wetlandHold * wetland, 0.4, 1.5);
+  return Math.max(0, 1 - canopyInterception * trees - wetlandHold * wetland);
 }
 
 /**
@@ -153,11 +159,9 @@ function splitPrecipitation(state: RegionalState, i: number, rainFactor: number)
         : distance / profile.ContinentalityDistance,
     halfRange = seasonality(profile, latitudeAt(profile, map, i), continentality);
   map.Seasonality.set(i, halfRange);
-  const snow = Math.round(
-    (total * snowShare(profile, map.Temperature.get(i), halfRange * 10)) / 1000
-  );
+  const snow = (total * snowShare(profile, map.Temperature.get(i), halfRange * 10)) / 1000;
   map.Snowfall.set(i, snow);
-  map.Rainfall.set(i, Math.round(total) - snow);
+  map.Rainfall.set(i, total - snow);
 }
 
 /** Present temperature in °C. */
@@ -167,7 +171,7 @@ export function celsius(state: RegionalState, i: number) {
 /** Rain plus snow (m/yr). */
 export function regionalPrecipitation(state: RegionalState, i: number) {
   const map = state.physical.map;
-  return (map.Rainfall.get(i) + map.Snowfall.get(i)) / 1000;
+  return MapScale.metres(map.Rainfall.get(i) + map.Snowfall.get(i), "mm");
 }
 /** Share of the topographic wetness that reaches the ground's water supply. */
 const wetnessSupply = 0.3;
@@ -177,7 +181,9 @@ const wetnessSupply = 0.3;
  * above it (the wetness medium): soil water in a valley floor outlasts the rain.
  */
 export function regionalMoisture(state: RegionalState, i: number) {
-  const climate = regionalPrecipitation(state, i) / potentialEvaporation(celsius(state, i)),
+  const climate =
+      regionalPrecipitation(state, i) /
+      potentialEvaporation(celsius(state, i), state.physical.map.scale),
     gathered = state.regional.media ? state.regional.media.wetness[i] * wetnessSupply : 0;
   return clamp(climate + gathered * Math.min(1, climate));
 }
@@ -191,7 +197,10 @@ export function regionalWetness(state: RegionalState, i: number) {
   const map = state.physical.map,
     media = state.regional.media,
     moisture = regionalMoisture(state, i);
-  if (map.WaterKindCodes.get(i)) return clamp(1 - map.WaterDepths.get(i) / 1024 / 3);
+  if (map.WaterKindCodes.get(i))
+    return clamp(
+      1 - MapScale.metres(map.WaterDepths.get(i), "native") / map.scale.length(0.00000075)
+    );
   const humid = Math.max(0, (moisture - 0.7) * 1.8),
     // Water does not stand on a slope, however much arrives: the frame-relative index is
     // damped by the ground's own gradient.
@@ -202,3 +211,4 @@ export function regionalWetness(state: RegionalState, i: number) {
     clamp(map.FloodplainIntensity.get(i) / 1000 + map.DeltaIntensity.get(i) / 1000 + humid)
   );
 }
+import { MapScale } from "@atlas/domain";

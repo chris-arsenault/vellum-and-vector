@@ -19,12 +19,10 @@ const nativeOwnership: Ownership[] = [
     "physical.foundation",
     "geology",
     [
-      "bedrock",
       "sediment",
       "rock",
       "rockKind",
       ...structureChannels,
-      "continentalFraction",
       "province",
       "assembly",
       "suturePair",
@@ -33,7 +31,6 @@ const nativeOwnership: Ownership[] = [
       "crustAge",
     ],
   ],
-  ["material.load-response", "geology", ["crustThickness", "crustSupport", "rockLoad"]],
   [
     "physical.tectonic-history",
     "geology",
@@ -354,7 +351,6 @@ export function atlasPublicationDefinitions(
     resolveGenerationFeatures(
       [...physicalFeatureDefinitions, ...domainFeatureDefinitions],
       input.features,
-      input.processes,
       input.parameters,
       input.domains
     );

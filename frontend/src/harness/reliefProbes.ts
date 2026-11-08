@@ -1,4 +1,4 @@
-import type { Band, ReadBand } from "@atlas/domain";
+import { MapScale, type Band, type ReadBand } from "@atlas/domain";
 import type { PhysicalContext } from "../../../packages/generation/src/world/context";
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import { meshDeltaX } from "../../../packages/generation/src/world/mesh";
@@ -24,8 +24,7 @@ import {
  */
 
 type Values = { get(i: number): number };
-const metres = 1024;
-const units = (value: number) => value * metres;
+const units = (value: number) => MapScale.inUnits(value, "native");
 /** How long the smoothing is that splits relief into sizes, smallest first, in metres. */
 const scales = [50_000, 100_000, 200_000];
 /** Below this a cell's structural grain is too faint to measure against. */
@@ -158,8 +157,10 @@ function reliefBySize(map: PhysicalField, field: ReadBand) {
   releaseWorking(map, ...smoothed);
   return Object.fromEntries(
     held.map((sum, k) => [
-      k < scales.length ? `under${scales[k] / 1000}km` : `over${scales[k - 1] / 1000}km`,
-      round(Math.sqrt(sum / count) / metres),
+      k < scales.length
+        ? `under${MapScale.inUnits(scales[k], "km")}km`
+        : `over${MapScale.inUnits(scales[k - 1], "km")}km`,
+      round(MapScale.metres(Math.sqrt(sum / count), "native")),
     ])
   );
 }
@@ -190,7 +191,8 @@ function tally() {
 function rockStanding(map: PhysicalField) {
   const stands = tally();
   for (let i = 0; i < map.mesh.count; i++)
-    if (isLand(map, i)) stands.add(hardness(map, i), standing(map, map.Elevation, i) / metres);
+    if (isLand(map, i))
+      stands.add(hardness(map, i), MapScale.metres(standing(map, map.Elevation, i), "native"));
   return stands.read();
 }
 /** How often a land cell's land neighbour is the same rock: low means confetti, high bodies. */
@@ -229,7 +231,7 @@ function bodyGround(map: PhysicalField): BodyGround {
     }
   return {
     count: map.mesh.count,
-    cellKm2: land ? area / land / 1e6 : 0,
+    cellKm2: land ? MapScale.areaUnits(area / land, "m2", "km2") : 0,
     included: (i) => isLand(map, i),
     around: (i) => neighbours(map, i),
     x: (i) => map.mesh.x(i),
@@ -272,8 +274,8 @@ function interiorSeams(map: PhysicalField) {
     )
       continue;
     const group = atSeam(map, i) ? "seam" : "between";
-    stands.add(group, standing(map, map.Elevation, i) / metres);
-    heights.add(group, (map.Elevation.get(i) - map.EffectiveSeaLevel) / metres);
+    stands.add(group, MapScale.metres(standing(map, map.Elevation, i), "native"));
+    heights.add(group, MapScale.metres(map.Elevation.get(i) - map.EffectiveSeaLevel, "native"));
   }
   return { standing: stands.read(), height: heights.read() };
 }
@@ -306,10 +308,10 @@ function stepChange(name: string, map: PhysicalField, epoch: number, change: Ban
     down = 0;
   for (let i = 0; i < map.mesh.count; i++) {
     if (!isLand(map, i)) continue;
-    const moved = change.get(i) / metres;
+    const moved = MapScale.metres(change.get(i), "native");
     cells++;
     total += moved * moved;
-    short += (standing(map, change, i) / metres) ** 2;
+    short += MapScale.metres(standing(map, change, i), "native") ** 2;
     if (moved > 0) up += moved;
     else down -= moved;
   }
@@ -340,8 +342,8 @@ export function thrustsStand(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (!isLand(map, i) || !map.ThrustPairIds.get(i)) continue;
     const group = atThrust(map, i) ? "thrust" : "behind";
-    height.add(group, standing(map, map.Elevation, i) / metres);
-    rock.add(group, standing(map, map.SurfaceRockLoad, i) / metres);
+    height.add(group, MapScale.metres(standing(map, map.Elevation, i), "native"));
+    rock.add(group, MapScale.metres(standing(map, map.SurfaceRockLoad, i), "native"));
   }
   return { height: height.read(), rock: rock.read() };
 }
@@ -374,7 +376,7 @@ function passInStep(
 function cutsByRock(map: PhysicalField, epoch: number, was: Band) {
   const cuts = tally();
   for (let i = 0; i < map.mesh.count; i++) {
-    const cut = (map.CumulativeFluvialErosion.get(i) - was.get(i)) / metres;
+    const cut = MapScale.metres(map.CumulativeFluvialErosion.get(i) - was.get(i), "native");
     if (cut > 0 && isLand(map, i)) cuts.add(hardness(map, i), cut);
     was.set(i, map.CumulativeFluvialErosion.get(i));
   }

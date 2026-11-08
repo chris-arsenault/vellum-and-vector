@@ -1,4 +1,4 @@
-import { spatial } from "@atlas/domain";
+import { MapScale, spatial } from "@atlas/domain";
 import { RegionalGeneration } from "./RegionalGeneration";
 import { RegionsPanel, RegionList } from "./RegionsPanel";
 import { FeatureInformation } from "./FeatureInformation";
@@ -27,7 +27,10 @@ function MapOverview({ editor }: { editor: EditorState }) {
       <p>Click a feature on the map to see what it is and how it formed.</p>
       <dl>
         <dt>Map area</dt>
-        <dd>{(spatial.area(editor.area.footprint) / 1e6).toLocaleString()} km²</dd>
+        <dd>
+          {MapScale.areaUnits(spatial.area(editor.area.footprint), "m2", "km2").toLocaleString()}{" "}
+          km²
+        </dd>
       </dl>
       <div className="selection-next">
         <h3>Explore a smaller region</h3>

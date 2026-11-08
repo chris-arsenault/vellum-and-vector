@@ -81,7 +81,7 @@ export class MaterialLoad {
     const area = this.map.mesh.area(cell);
     groundStorage(this.map).SedimentSupply.set(
       cell,
-      area > 0 ? (this.amount(cell) * 1024) / area : 0
+      area > 0 ? MapScale.inUnits(this.amount(cell) / area, "native") : 0
     );
   }
 }
@@ -106,3 +106,4 @@ export function seaLoadOf(map: PhysicalField) {
   }
   return load;
 }
+import { MapScale } from "@atlas/domain";

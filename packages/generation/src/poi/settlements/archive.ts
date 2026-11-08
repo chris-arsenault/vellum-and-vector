@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { memoryCold, memoryIce } from "../../societyMagic";
 import { carryWhereItLands, costNear, goes } from "../poiCarry";
@@ -19,22 +21,22 @@ import { workPlaces, workRecord } from "./workRecords";
 /** Readers' traffic over this many metres, and what crystals do to carried Pressure, which dissipates near them. */
 const readersRoad = 0.9,
   dissipated = 3,
-  readersReach = 2000;
+  readersReach = MapScale.length(0.0005);
 /** People at whose seat an archive is half as great as archives get. */
 const typicalPeople = 5000;
 /** How far reading strains the mind, against what else endangers people. */
 const strainSeverity = 0.2;
 /** An archive stands at a seat: within this many metres of one. */
-const seatReach = 5000;
+const seatReach = MapScale.length(0.00125);
 /** The least distance between two archives people site, and a sited archive's reach, in metres. */
-const archiveSpacing = 100_000,
-  archiveRadius = 200;
+const archiveSpacing = MapScale.length(0.025),
+  archiveRadius = MapScale.length(0.00005);
 
 const auroraAt = (state: GenerationState, cell: number) =>
   Math.min(1, magicValue(state, "aurora", "intensity", cell) / 1000);
 /** How much of a memory the ground retains, as `auroraUse` reckons it. */
 const retentionAt = (state: GenerationState, cell: number) =>
-  Math.min(1, iceAt(state, cell) / memoryIce) *
+  Math.min(1, iceAt(state, cell) / mapScale(state).resolveMeasure(memoryIce)) *
   Math.max(0, Math.min(1, -celsiusAt(state, cell) / memoryCold));
 const held = (state: GenerationState, cell: number) =>
   iceAt(state, cell) > 0 && auroraAt(state, cell) > 0;

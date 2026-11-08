@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -11,8 +13,8 @@ import { countryOf, intensityOf, magicFieldOf, peakOf, standsIn } from "./anomal
 /** Source strength, per mille, at which a core is half as great as cores get. */
 const typicalSource = 500;
 /** A core's country, how far its hot ground reaches, and the cost of a road across it. */
-const countryMetres = 30_000,
-  hotMetres = 5000,
+const countryMetres = MapScale.length(0.0075),
+  hotMetres = MapScale.length(0.00125),
   hotRoad = 1.5;
 
 const isA = magicRule("fire", "core");
@@ -116,7 +118,11 @@ export const fireCore: PoiEntry = {
       return { power: strength, materials: strength };
     },
     threatens: (state, place) => [
-      { hazard: "burning ground", reach: hotMetres, severity: peakFire(state, place) },
+      {
+        hazard: "burning ground",
+        reach: mapScale(state).resolveMeasure(hotMetres),
+        severity: peakFire(state, place),
+      },
     ],
   },
   time: {

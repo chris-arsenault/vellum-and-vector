@@ -10,7 +10,6 @@ import {
   defaultWorldDimensions,
   defaultHumanEras,
   mapBoundaryName,
-  migrateBoundarySelection,
   inheritMapBoundary,
   isRegionalRefinement,
   prepareRegionalRefinement,
@@ -38,12 +37,11 @@ export function newGenerationDraft(): GenerationDraft {
     name: "",
     ...defaultWorldDimensions,
     recipe: generationRecipeSchema.parse({
-      schemaVersion: 1,
+      schemaVersion: 3,
       seed: 104729,
       quality: "standard",
       domains: ["physical", "magic", "cultural", "political", "built"],
       parameters: defaultAtlasParameters,
-      processes: {},
       settings: {
         epochs: defaultEpochs(),
         humanEras: defaultHumanEras(),
@@ -60,28 +58,27 @@ export function newGenerationDraft(): GenerationDraft {
   return normalizeGenerationDraft({ ...draft, recipe: { ...draft.recipe, features } });
 }
 
-/** Import compatibility once; subsequent edits belong to feature selections. */
+/** Bind feature-owned configuration to the execution settings. */
 export function normalizeGenerationRecipe(value: unknown): GenerationRecipe {
-  const parsed = generationRecipeSchema.parse(value);
-  const recipe = { ...parsed, features: migrateBoundarySelection(parsed.features) };
-  const legacy = atlasGenerationModules.prepareSettings(recipe.features ?? {}, recipe.settings);
+  const recipe = generationRecipeSchema.parse(value);
+  const settings = atlasGenerationModules.prepareSettings(recipe.features ?? {}, recipe.settings);
   // Preserve selection intent while domains gate the prepared request separately.
   const domains = [...new Set(atlasFeatureDefinitions.flatMap((feature) => feature.domains))];
   const resolved = resolveGenerationFeatures(
     atlasFeatureDefinitions,
     recipe.features,
-    recipe.processes,
     recipe.parameters,
     domains,
-    legacy as unknown as ParameterValues
+    settings as unknown as ParameterValues
   );
   return {
     ...recipe,
-    schemaVersion: 2,
+    schemaVersion: 3,
     features: resolved.selection,
     parameters: resolved.parameters,
-    processes: {},
-    settings: generationSettingsSchema.parse(atlasGenerationModules.bindSettings(resolved, legacy)),
+    settings: generationSettingsSchema.parse(
+      atlasGenerationModules.bindSettings(resolved, settings)
+    ),
   };
 }
 
@@ -102,7 +99,7 @@ export function updateFeature(
   patch: FeatureSelection[string]
 ): GenerationDraft {
   const normalized =
-    draft.recipe.schemaVersion === 2 && draft.recipe.features
+    draft.recipe.schemaVersion === 3 && draft.recipe.features
       ? draft
       : normalizeGenerationDraft(draft);
   const definition = atlasFeatureDefinitions.find((feature) => feature.id === id);

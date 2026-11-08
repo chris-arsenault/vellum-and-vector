@@ -1,7 +1,6 @@
 // PlateAdvectionLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { keepCrustInBounds } from "../rock/crustTransport";
 import { buildTransportPlan, releaseTransportPlan } from "./transportPlan";
 import { transportHistory } from "./transportHistory";
 import { physicalSampler } from "./physicalMetric";
@@ -55,10 +54,7 @@ function transportStep(map: PhysicalField, step: number) {
   map.transportPlan = plan;
   advectLandmarkDrainage(map, plan, step);
   transportHistory(map, plan);
-  for (let i = 0; i < map.mesh.count; i++) {
-    keepCrustInBounds(map, i);
-    map.AdvectionSourceIndex.set(i, plan.dominant.get(i));
-  }
+  for (let i = 0; i < map.mesh.count; i++) map.AdvectionSourceIndex.set(i, plan.dominant.get(i));
 }
 /** Land this interval before building on it; the next move carries the newly made rock. */
 function deformInterval(

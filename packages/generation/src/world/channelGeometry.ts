@@ -113,8 +113,8 @@ function tryWiden(
   const strength = Math.max(
     1,
     map.RiverChannelStrength.get(front.spine) -
-      (p.RiverChannelWidthDecay * depth) / 10_000 -
-      relief -
+      (p.RiverChannelWidthDecay * depth) / map.scale.length(0.0025) -
+      relief / map.scale.length(2.5e-7) -
       slope
   );
   const order = map.RiverChannelOrders.get(front.spine),
@@ -128,14 +128,17 @@ function tryWiden(
 function expansionSteps(map: PhysicalField, c: PhysicalContext, i: number): number {
   const p = c.Profile,
     order = map.RiverOrders.get(i),
-    discharge = truncate(map.FlowAccumulation.get(i) / Math.max(1, p.RiverAccumulationThreshold));
+    discharge = truncate(
+      map.FlowAccumulation.get(i) /
+        Math.max(map.scale.volume(1.5625e-20), p.RiverAccumulationThreshold)
+    );
   if (order < p.RiverChannelWideningOrder && discharge < p.RiverChannelWideningDischargeMultiplier)
     return 0;
   const scale = Math.max(
     order - p.RiverChannelWideningOrder,
     truncate(discharge / p.RiverChannelWideningDischargeMultiplier)
   );
-  return Math.min(p.RiverChannelMaximumWidth / 2, (map.RiverWidth.get(i) / 2) * (1 + scale * 0.05));
+  return (map.RiverWidth.get(i) / 2) * (1 + scale * 0.05);
 }
 export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
   map.RiverChannelStrength.fill(0);
@@ -152,12 +155,15 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
     const dimensions = channelDimensions(
       flow,
       map.Slope.get(i),
-      groundOf(map).fold(i, surfaceStanding)
+      groundOf(map).fold(i, surfaceStanding),
+      map.scale
     );
     map.RiverWidth.set(i, dimensions.width);
     map.RiverDepth.set(i, dimensions.depth);
     if (order <= 0) continue;
-    const discharge = Math.min(12, truncate(flow / Math.max(1, p.RiverAccumulationThreshold)));
+    const discharge = truncate(
+      flow / Math.max(map.scale.volume(1.5625e-20), p.RiverAccumulationThreshold)
+    );
     map.RiverChannelStrength.set(
       i,
       clamp(

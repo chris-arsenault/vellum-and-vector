@@ -43,7 +43,7 @@ it("rejects unowned processes within a contributed epoch", () => {
   ).toThrow("cannot contribute unowned process someone.else");
 });
 
-it("applies configuration only to declared compatibility fields and isolates adapter mutations", () => {
+it("applies configuration only to declared settings and isolates adapter mutations", () => {
   const definition = feature(),
     settings = generationSettingsSchema.parse({
       epochs: [
@@ -62,7 +62,7 @@ it("applies configuration only to declared compatibility fields and isolates ada
       magicSystems: canonryMagicPresets(),
     });
   definition.configuration = z.object({ title: z.string() });
-  definition.configurationFromLegacy = () => ({ title: "Configured" });
+  definition.configurationFromSettings = () => ({ title: "Configured" });
   definition.configurationBinding = {
     fields: ["humanEras"],
     bind: (_configuration, input) => {
@@ -73,7 +73,6 @@ it("applies configuration only to declared compatibility fields and isolates ada
   const registry = new GenerationModuleRegistry().register({ id: "test", features: [definition] });
   const resolved = resolveGenerationFeatures(
     [definition],
-    {},
     {},
     {},
     ["physical"],

@@ -1,4 +1,5 @@
 import type { GenerationRecipe } from "@atlas/generation";
+import { MapScale } from "@atlas/domain";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { NumberField } from "./WorkflowFields";
 import { GenerationResolution } from "./GenerationResolution";
@@ -29,11 +30,11 @@ export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
             label={key === "width" ? "Width" : "Height"}
             unit="km"
             fieldKey={"world." + key}
-            value={draft[key] / 1000}
+            value={MapScale.inUnits(draft[key], "km")}
             min={Number.MIN_VALUE}
             step="any"
             readOnly={inherited}
-            change={(value) => change({ ...draft, [key]: value * 1000 })}
+            change={(value) => change({ ...draft, [key]: MapScale.metres(value, "km") })}
           />
         ))}
         <GenerationResolution

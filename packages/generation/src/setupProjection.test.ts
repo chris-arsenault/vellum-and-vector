@@ -102,7 +102,7 @@ it("keeps disabled choices and owned values visible without classifying them as 
 
 it("places the shared sea-level control with its scheduled ocean consumer while climate is off", () => {
   const resolved = prepared({
-    "physical.climate": { enabled: false, settings: { seaLevel: 125 } },
+    "physical.climate": { enabled: false, settings: { seaLevel: 0.00003125 } },
   });
   const view = projectGenerationSetup(resolved),
     climate = feature(view, "physical.climate"),
@@ -113,11 +113,11 @@ it("places the shared sea-level control with its scheduled ocean consumer while 
     owner: "physical.climate",
     controlFeature: "ocean.geography",
     active: true,
-    value: 125,
+    value: 0.00003125,
   });
   expect(climate.settings.find((setting) => setting.key === "temperature")?.active).toBe(false);
-  expect(resolved.input.parameters?.seaLevel).toBe(125);
-  expect(resolved.input.configuration!.inputs?.parameters).toMatchObject({ seaLevel: 125 });
+  expect(resolved.input.parameters?.seaLevel).toBe(0.00003125);
+  expect(resolved.input.configuration!.inputs?.parameters).toMatchObject({ seaLevel: 0.00003125 });
   expect(
     feature(view, "ocean.geography").settings.some((setting) => setting.key === "seaLevel")
   ).toBe(false);
@@ -354,7 +354,7 @@ it("uses declared nested applicability and conditional prerequisites in inherite
       {
         ...survey.features[0],
         configuration: z.object({ threshold: z.number() }),
-        configurationFromLegacy: () => ({ threshold: 0.5 }),
+        configurationFromSettings: () => ({ threshold: 0.5 }),
         configurationPresentation: { applicability: "any" },
       },
     ],

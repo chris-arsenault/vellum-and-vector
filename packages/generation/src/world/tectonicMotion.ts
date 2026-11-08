@@ -129,12 +129,23 @@ function edgeResistance(map: PhysicalField, members: TectonicSite[], plate: Tect
     ys = continent.map((site) => site.y);
   if (!map.mesh.periodic) {
     if (plate.motionX > 0)
-      plate.motionX *= edgeAllowance(east - originX - Math.max(...xs), tectonicEdgeReach);
-    else plate.motionX *= edgeAllowance(Math.min(...xs) - (west - originX), tectonicEdgeReach);
+      plate.motionX *= edgeAllowance(
+        east - originX - Math.max(...xs),
+        tectonicEdgeReach(map.scale)
+      );
+    else
+      plate.motionX *= edgeAllowance(
+        Math.min(...xs) - (west - originX),
+        tectonicEdgeReach(map.scale)
+      );
   }
   if (plate.motionY > 0)
-    plate.motionY *= edgeAllowance(north - originY - Math.max(...ys), tectonicEdgeReach);
-  else plate.motionY *= edgeAllowance(Math.min(...ys) - (south - originY), tectonicEdgeReach);
+    plate.motionY *= edgeAllowance(north - originY - Math.max(...ys), tectonicEdgeReach(map.scale));
+  else
+    plate.motionY *= edgeAllowance(
+      Math.min(...ys) - (south - originY),
+      tectonicEdgeReach(map.scale)
+    );
 }
 function addContact(
   pulls: { x: number; y: number; contacts: number }[],

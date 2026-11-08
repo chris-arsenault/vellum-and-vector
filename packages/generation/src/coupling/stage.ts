@@ -1,4 +1,4 @@
-import { RecordQueue, type Band } from "@atlas/domain";
+import { MapScale, RecordQueue, type Band } from "@atlas/domain";
 import type { MutablePhysicalBufferName, PhysicalField } from "../world/field";
 import { releaseWorking, workingArray } from "../world/physicalNumerics";
 import { deposit, raiseFromCrust, weatherRock, weatherRockBy } from "../rock/groundLedger";
@@ -215,7 +215,7 @@ export class Stage {
   ) {
     if (volume <= 0) return;
     const request = this.removal(from, cause, undefined, true, facet);
-    request.amount.add(source, (volume * 1024) / this.map.mesh.area(source));
+    request.amount.add(source, MapScale.inUnits(volume / this.map.mesh.area(source), "native"));
     request.routes!.push(source, target, volume);
   }
   /** Land withdrawals first, then their routed deposits and independent local transformations. */
@@ -223,7 +223,10 @@ export class Stage {
     const requests = [...this.removals.values()],
       landed = settleRemovals(this.map, requests, this.simultaneous, (request, cell, material) => {
         const cargo = (request as Removal).cargo ?? loadOf(this.map);
-        cargo.add(cell, { ...material, depth: (material.depth / 1024) * this.map.mesh.area(cell) });
+        cargo.add(cell, {
+          ...material,
+          depth: MapScale.metres(material.depth, "native") * this.map.mesh.area(cell),
+        });
       }),
       moved = new Map<FlowCause, number>();
     for (const request of requests) {
@@ -258,7 +261,7 @@ export class Stage {
       sum += taken;
       if (taken <= 0) continue;
       // Routed material lands here; un-routed withdrawals feed the later carrier process.
-      this.map.SedimentProducedTotal += (taken / 1024) * this.map.mesh.area(i);
+      this.map.SedimentProducedTotal += MapScale.metres(taken, "native") * this.map.mesh.area(i);
       if (!request.wear) continue;
       this.map[request.wear.remembers].add(
         i,
@@ -279,16 +282,17 @@ export class Stage {
       const offered = volume * granted,
         material = request.cargo!.get(source),
         received =
-          (deposit(
-            this.map,
-            target,
-            (volume * granted * 1024) / this.map.mesh.area(target),
-            request.cause,
-            "load",
-            material
-          ) /
-            1024) *
-          this.map.mesh.area(target);
+          MapScale.metres(
+            deposit(
+              this.map,
+              target,
+              MapScale.inUnits((volume * granted) / this.map.mesh.area(target), "native"),
+              request.cause,
+              "load",
+              material
+            ),
+            "native"
+          ) * this.map.mesh.area(target);
       if (received < offered)
         loadOf(this.map).add(source, { ...material, depth: offered - received });
     }

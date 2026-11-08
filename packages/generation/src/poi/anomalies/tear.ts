@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -15,8 +17,8 @@ const turningWild = 0.15;
 /** Verdure at which living ground has knit a tear shut. */
 const knitShut = 0.5;
 /** A tear's country, and how far off a forced crossing or shifting ground reaches, in metres. */
-const countryMetres = 4000,
-  hazardMetres = 2000;
+const countryMetres = MapScale.length(0.001),
+  hazardMetres = MapScale.length(0.0005);
 
 const isA = magicRule("veil", "tear");
 const tearingAt = (state: GenerationState, cell: number) => fieldOf(state).Tearing.get(cell);
@@ -124,7 +126,7 @@ export const tear: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "forced crossing and shifting ground",
-        reach: hazardMetres,
+        reach: mapScale(state).resolveMeasure(hazardMetres),
         severity: peakTearing(state, place),
       },
     ],

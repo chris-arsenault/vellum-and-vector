@@ -1,3 +1,4 @@
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { alignedNeighbor } from "./atmosphere";
@@ -40,7 +41,10 @@ function driveDunes(map: PhysicalField, i: number, share: number) {
   if (target < 0) return;
   let carried: MaterialLayer | undefined;
   removeLoose(map, i, moving, "pressure", (material) => {
-    const volume = { ...material, depth: (material.depth * map.mesh.area(i)) / 1024 };
+    const volume = {
+      ...material,
+      depth: MapScale.metres(material.depth, "native") * map.mesh.area(i),
+    };
     carried = carried ? mergeMaterial(carried, volume) : volume;
   });
   if (!carried || carried.depth <= 0) return;
@@ -48,8 +52,15 @@ function driveDunes(map: PhysicalField, i: number, share: number) {
     carryOut(map, carried.depth, "pressure", carried, target);
   else {
     const area = map.mesh.area(target),
-      deposited = deposit(map, target, (carried.depth * 1024) / area, "pressure", "load", carried),
-      remaining = carried.depth - (deposited * area) / 1024;
+      deposited = deposit(
+        map,
+        target,
+        MapScale.native(carried.depth / area),
+        "pressure",
+        "load",
+        carried
+      ),
+      remaining = carried.depth - MapScale.metres(deposited, "native") * area;
     if (remaining > 0) loadOf(map).add(target, { ...carried, depth: remaining });
   }
 }

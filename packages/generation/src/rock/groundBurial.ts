@@ -89,10 +89,7 @@ function partiallyConsolidated(
   if (fraction >= 1) return response;
   if (layer.kind !== response.kind || layer.secondaryKind !== response.secondaryKind)
     return {
-      ...blendLayers(
-        { ...layer, depth: 1 - fraction },
-        { ...response, depth: fraction }
-      ),
+      ...blendLayers({ ...layer, depth: 1 - fraction }, { ...response, depth: fraction }),
       depth: layer.depth,
     };
   return {
@@ -149,7 +146,7 @@ export function buryUnderPackage(
   if (buried <= 0) return;
   stored.BedrockElevation.add(i, buried);
   stored.SurfaceRockLoad.add(i, buried);
-  recordFlow(map, "burial", "loose", "rock", (buried / 1024) * map.mesh.area(i));
+  recordFlow(map, "burial", "loose", "rock", MapScale.metres(buried, "native") * map.mesh.area(i));
 }
 function consolidateCover(
   map: PhysicalField,
@@ -179,7 +176,8 @@ function consolidateCover(
   if (hardened <= 0) return 0;
   stored.BedrockElevation.add(i, hardened);
   stored.SurfaceRockLoad.add(i, hardened);
-  recordFlow(map, cause, "loose", "rock", (hardened / 1024) * map.mesh.area(i));
+  recordFlow(map, cause, "loose", "rock", MapScale.metres(hardened, "native") * map.mesh.area(i));
   projectGround(map, i);
   return hardened;
 }
+import { MapScale } from "@atlas/domain";

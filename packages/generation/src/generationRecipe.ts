@@ -5,12 +5,11 @@ import { featureSelectionSchema } from "./features";
 
 export const generationRecipeSchema = z
   .object({
-    schemaVersion: z.union([z.literal(1), z.literal(2)]),
+    schemaVersion: z.literal(3),
     seed: z.number().int(),
     quality: z.enum(["draft", "standard", "fine"]),
     domains: z.array(z.enum(["physical", "magic", "cultural", "political", "built"])).min(1),
     parameters: atlasParametersSchema,
-    processes: z.record(z.string(), z.boolean()),
     features: featureSelectionSchema.optional(),
     settings: generationSettingsSchema,
   })

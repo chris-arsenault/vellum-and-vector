@@ -19,6 +19,7 @@ import { practiceOpportunities, seekerShares, seekingFactor } from "./societySee
 import { drawToCentres, urbanTargets } from "./societyCentres";
 import { compactGroups } from "./societyGroups";
 import { bindSocietyProfile } from "./societyProfile";
+import { mapScale } from "./worldSignificance";
 
 export function initializePopulation(state: GenerationState, context: MapProcessContext) {
   const prior = societyAncestor(state);
@@ -31,7 +32,12 @@ export function initializePopulation(state: GenerationState, context: MapProcess
     name: "Residents",
     state: "generated",
     relations: [],
-    attributes: { foodDemand: 1, growth: 1, mobility: 1, divingDepth: 200 },
+    attributes: {
+      foodDemand: 1,
+      growth: 1,
+      mobility: 1,
+      divingDepth: mapScale(state).length(0.00005),
+    },
   };
   if (prior) {
     inheritSociety(state, prior);

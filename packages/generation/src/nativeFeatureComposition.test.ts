@@ -20,7 +20,7 @@ import { respondersTo, type AnswerKey } from "./coupling/answers";
 it("passes the movement interval and operation salt to embedded deformation", () => {
   const run = vi.fn(),
     map = createField(createWorldMesh([0, 0, 1000, 1000], 16, 0)),
-    context = physicalContext(73, 0, physicalProfile),
+    context = physicalContext(73, 0, map.scale.resolve(physicalProfile)),
     moving = withPlateDeformation(map, context, [["probe", 7, run, []]]);
   moving.DuringPlateStep!({ ...context, Span: 0.125, TectonicDurationMyr: 2.5 });
   expect(run).toHaveBeenCalledWith(
@@ -88,7 +88,7 @@ it("dispatches a selected native feature through the registry derived from its o
       "epoch.incision": [[step("probe-step", 7, probe), { unforced: true }]],
     }),
     resolve = (enabled: boolean) =>
-      resolveGenerationFeatures([feature], { "test.native": { enabled } }, {}, {}, ["physical"]),
+      resolveGenerationFeatures([feature], { "test.native": { enabled } }, {}, ["physical"]),
     selected = featureContribution(feature, "epoch.incision", resolve(true)),
     omitted = featureContribution(feature, "epoch.incision", resolve(false)),
     registry = nativeStepsOf([feature]).reduce(
@@ -114,7 +114,7 @@ it("dispatches a selected native feature through the registry derived from its o
   ];
   state.physical = {
     map,
-    profile: physicalProfile,
+    profile: map.scale.resolve(physicalProfile),
     samples: state.surface.coverage.scratch("int32", "probe:samples", 0),
     grid: state.surface.coverage,
     fixed: [],

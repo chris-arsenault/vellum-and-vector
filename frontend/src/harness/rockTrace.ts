@@ -1,4 +1,5 @@
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
+import { MapScale } from "@atlas/domain";
 import { rockKindOfCode } from "../../../packages/generation/src/rock/rockCatalogue";
 import { watchColumn } from "../../../packages/generation/src/rock/rockColumn";
 
@@ -92,8 +93,8 @@ function zones(map: PhysicalField, strippedHere: Float64Array) {
       kind = rockKindOfCode(map.RockKindCodes.get(i)).id;
     cells[zone]++;
     kinds[zone].set(kind, (kinds[zone].get(kind) ?? 0) + 1);
-    stripped[zone].push(strippedHere[i] / 1024);
-    height[zone].push((map.Elevation.get(i) - map.EffectiveSeaLevel) / 1024);
+    stripped[zone].push(MapScale.metres(strippedHere[i], "native"));
+    height[zone].push(MapScale.metres(map.Elevation.get(i) - map.EffectiveSeaLevel, "native"));
   }
   return zoneNames.map((name, zone) => ({
     zone: name,
@@ -155,7 +156,7 @@ export function rockTrace() {
   const stop = watchColumn({
     fold() {},
     strip(cell, amount) {
-      strippedNow += amount / 1024;
+      strippedNow += MapScale.metres(amount, "native");
       if (stripped && cell < stripped.length) stripped[cell] += amount;
     },
   });
@@ -195,7 +196,7 @@ export function rockTrace() {
         .map(([name, r]) => ({
           name,
           runs: r.runs,
-          strippedKm: Math.round(r.stripped / 1000),
+          strippedKm: Math.round(MapScale.inUnits(r.stripped, "km")),
           surfacesChanged: r.surfaces,
           agreementChange: Math.round(r.agreement * 1000) / 1000,
           changes: top(r.changes, r.surfaces, 6),

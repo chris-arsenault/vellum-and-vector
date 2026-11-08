@@ -42,7 +42,7 @@ function fixture(disabled: string[] = []) {
   state.publications = atlasPublicationDefinitions(input);
   state.physical = {
     map,
-    profile: atlasPhysicalProfile(),
+    profile: atlasPhysicalProfile({}, {}, map.scale),
     samples: residentBand("int32", new Int32Array(state.surface.active.length)),
     grid: state.surface.coverage,
     fixed: [],

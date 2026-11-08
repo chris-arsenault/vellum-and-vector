@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFate, type PoiPlace } from "../poiContract";
@@ -9,8 +10,8 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { areaOf, meanOf, spans, standsIn } from "./reliefShape";
 
 /** Thickness and area at which a fan is half as great as fans get. */
-const typicalThickness = 10,
-  typicalArea = 2_000_000_000;
+const typicalThickness = MapScale.length(0.0000025, 0.5),
+  typicalArea = MapScale.area(0.000125);
 
 const isA = magicRule("fire", "fan");
 const thicknessAt = (state: GenerationState, cell: number) =>

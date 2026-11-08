@@ -1,3 +1,4 @@
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { heldFor } from "../poi/poiReads";
 import { components } from "./geographicRegions";
@@ -13,7 +14,7 @@ import { regionEvidence } from "./worldRegionEvidence";
 function rings(state: GenerationState) {
   const { map, profile } = state.physical!,
     height = physicalSampler(map.mesh, map.Elevation),
-    radius = Math.max(profile.ReliefRadius, map.mesh.spacing, 50_000 * mapScale(state).length);
+    radius = map.scale.supported(Math.max(profile.ReliefRadius, map.scale.length(0.0125)));
   return (i: number) => {
     const values: number[] = [],
       x = map.mesh.x(i),
@@ -28,13 +29,13 @@ function rings(state: GenerationState) {
 /** Metres between the highest and lowest terrain within the relief radius. */
 function localRelief(state: GenerationState, ring: (i: number) => number[], i: number) {
   const values = [state.physical!.map.Elevation.get(i), ...ring(i).filter(Number.isFinite)];
-  return (Math.max(...values) - Math.min(...values)) / 1024;
+  return MapScale.metres(Math.max(...values) - Math.min(...values), "native");
 }
 /** Whether a cell is mountain land: high, or standing well over the country around it. */
 export function mountainTest(state: GenerationState) {
   const { map, profile } = state.physical!,
     ring = rings(state),
-    height = (i: number) => (map.Elevation.get(i) - map.EffectiveSeaLevel) / 1024;
+    height = (i: number) => MapScale.metres(map.Elevation.get(i) - map.EffectiveSeaLevel, "native");
   return (i: number) =>
     map.WaterKindCodes.get(i) === 0 &&
     (height(i) >= profile.MountainElevation ||

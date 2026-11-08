@@ -8,6 +8,7 @@ import { surfacePorosity } from "../rock/groundQueries";
 import { latitudeAt } from "./latitude";
 import { marchAirColumns, saturation } from "./airColumn";
 import { beltRainout } from "./belts";
+import { MapScale } from "@atlas/domain";
 
 /** Annual-mean insolation departure from the global mean, in native units. */
 export function insolationTemperature(p: PhysicalProfile, latitude: number) {
@@ -54,21 +55,17 @@ export function temperature(map: PhysicalField, c: PhysicalContext) {
     );
     map.Temperature.set(
       i,
-      clamp(
-        p.TemperatureBaseline +
-          c.TemperatureOffset +
-          insolationTemperature(p, latitude) +
-          (sea ? map.SeaSurfaceAnomaly.get(i) : 0) -
-          lapse +
-          heat +
-          current +
-          map.Warmth.get(i) +
-          map.ExternalHeatForcing.get(i) -
-          round(map.FogForcing.get(i) * p.FogCooling) -
-          round(map.Evapotranspiration.get(i) * 15),
-        0,
-        1000
-      )
+      p.TemperatureBaseline +
+        c.TemperatureOffset +
+        insolationTemperature(p, latitude) +
+        (sea ? map.SeaSurfaceAnomaly.get(i) : 0) -
+        lapse +
+        heat +
+        current +
+        map.Warmth.get(i) +
+        map.ExternalHeatForcing.get(i) -
+        round(map.FogForcing.get(i) * p.FogCooling) -
+        round(map.Evapotranspiration.get(i) * 15)
     );
   }
 }
@@ -87,7 +84,7 @@ export function moisture(map: PhysicalField, c: PhysicalContext) {
       map.Moisture.set(i, 1000);
       continue;
     }
-    map.Temperature.set(i, clamp(round(map.Temperature.get(i) + column.airHeat.get(i)), 0, 1000));
+    map.Temperature.set(i, round(map.Temperature.get(i) + column.airHeat.get(i)));
     map.Seasonality.set(i, seasonality(p, latitudeAt(p, map, i), 1 - column.maritime.get(i)));
     map.Moisture.set(
       i,
@@ -108,11 +105,11 @@ export function precipitation(map: PhysicalField, c: PhysicalContext) {
     // No more falls than the air brought: the column is what limits it.
     const total = Math.max(
       0,
-      truncate((p.PrecipitationBaseline + map.ColumnPrecipitation.get(i)) * c.RainfallMultiplier) +
-        truncate(map.FogForcing.get(i) * p.FogDrip)
+      (p.PrecipitationBaseline + map.ColumnPrecipitation.get(i)) * c.RainfallMultiplier +
+        map.FogForcing.get(i) * p.FogDrip
     );
     const snow = snowShare(p, map.Temperature.get(i), map.Seasonality.get(i) * 10);
-    const snowfall = truncate((total * snow) / 1000);
+    const snowfall = (total * snow) / 1000;
     map.Snowfall.set(i, snowfall);
     map.Rainfall.set(i, total - snowfall);
   }
@@ -135,10 +132,7 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
       0,
       1000
     );
-    const available = Math.max(
-      0,
-      map.Rainfall.get(i) + truncate((map.Snowfall.get(i) * melt) / 1000)
-    );
+    const available = Math.max(0, map.Rainfall.get(i) + (map.Snowfall.get(i) * melt) / 1000);
     const loss = clamp(
       p.RunoffMinimumLossPerMille +
         truncate((temperature * p.RunoffTemperatureLossPerMille) / 1000),
@@ -146,28 +140,29 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
       1000
     );
     const vegetationLoss = Math.min(
-      0.35,
+      1,
       map.TreeCover.get(i) * 0.22 + map.GrassCover.get(i) * 0.08 + map.WetlandCover.get(i) * 0.12
     );
     const ecologicalLoss = map.EcologyInitialized
       ? Math.min(
           available,
-          map.Evapotranspiration.get(i) * 1000 + available * map.Infiltration.get(i) * 0.08
+          MapScale.inUnits(map.Evapotranspiration.get(i), "mm") +
+            available * map.Infiltration.get(i) * 0.08
         )
       : available * vegetationLoss;
     // Magical warmth carried down the channel evaporates more of what the channel carries.
-    const warmLoss = truncate((available * map.RiverWarmth.get(i) * p.WarmRiverEvaporation) / 1000);
+    const warmLoss = (available * map.RiverWarmth.get(i) * p.WarmRiverEvaporation) / 1000;
     const evaporation =
       (map.EcologyInitialized
         ? Math.max((available * loss) / 1000, ecologicalLoss)
         : (available * loss) / 1000 + ecologicalLoss) + warmLoss;
     // Wetlands and peat hold water back, so the floods below them are flatter.
     const held = map.EcologyInitialized
-      ? Math.min(0.45, 0.3 * map.WetlandCover.get(i) + map.PeatCarbon.get(i) / 60)
+      ? Math.min(1, 0.3 * map.WetlandCover.get(i) + map.PeatCarbon.get(i) / 60)
       : 0;
     // Porous rock takes water into the ground, so less of it runs off over the surface.
     const seeping = groundOf(map).fold(i, surfacePorosity) * groundwaterShare;
-    map.Runoff.set(i, truncate(Math.max(0, available - evaporation) * (1 - held) * (1 - seeping)));
+    map.Runoff.set(i, Math.max(0, available - evaporation) * (1 - held) * (1 - seeping));
   }
 }
 

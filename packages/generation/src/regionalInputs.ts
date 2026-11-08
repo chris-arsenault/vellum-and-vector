@@ -5,6 +5,8 @@ import {
   type DomainSnapshot,
   type Grid,
   ownsMapGeography,
+  MapScale,
+  defaultTerrainCells,
 } from "@atlas/domain";
 import { generationResolution } from "./resolution";
 
@@ -34,17 +36,9 @@ export function regionalInputChannels(fields: Grid[]) {
   for (const grid of fields) for (const name of Object.keys(grid.channels)) result.set(name, grid);
   return result;
 }
-/** Linear refinement per quality; hierarchy depth and named administrative ranks are irrelevant. */
-const regionalSubdivision = { draft: 2, standard: 4, fine: 8 };
-const regionInteriorSamples = 8;
+/** Independent maps choose resolution from their own frame and selected detail. */
 export function regionalResolution(source: DomainSnapshot, areaId: string, quality: string) {
   const area = source.world.areas[areaId],
-    base = generationResolution(quality, area.profile);
-  if (!area.parentId) return base;
-  const parent = regionalInputChannels(regionalInputFields(source, areaId)).get("elevation"),
-    parentSpan = parent?.scope.resolution ?? base.cellSpan * 4,
-    footprintWidth = (2 * spatial.area(area.footprint)) / spatial.length(area.footprint),
-    factor = regionalSubdivision[quality as keyof typeof regionalSubdivision],
-    cellSpan = Math.min(base.cellSpan, parentSpan / factor, footprintWidth / regionInteriorSamples);
-  return { cellSpan, cellArea: cellSpan ** 2, cellAreaKm2: cellSpan ** 2 / 1e6 };
+    scale = MapScale.fromCells(spatial.bounds(area.footprint), defaultTerrainCells);
+  return generationResolution(quality, area.profile, scale);
 }

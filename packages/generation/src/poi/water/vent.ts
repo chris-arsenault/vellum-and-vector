@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
@@ -8,12 +10,12 @@ import { fieldOf, geothermalAt, magicRule, magicValue, metres, toNative } from "
 import { aloneAmong, attachment, standsOut, weighed } from "../poiVisibilityRules";
 import { areaOf, spans } from "./waterReads";
 
-/** The depth a plume loses a third of its reach over, in metres. */
-const plumeDepth = 300;
-/** Below this depth, in metres, boats feel a vent's warmed water and gas. */
-const shoalVent = 50;
-/** Metres of sediment a vent's circulation leaves on its mound. */
-const flushedSediment = 1;
+/** The depth a plume loses a third of its reach over. */
+const plumeDepth = MapScale.length(0.000075, 0.5);
+/** Below this depth boats feel a vent's warmed water and gas. */
+const shoalVent = MapScale.length(0.0000125, 0.5);
+/** Sediment a vent's circulation leaves on its mound. */
+const flushedSediment = MapScale.length(0.00000025, 0.5);
 /** Sea-surface warmth, in the band's native tenths of a degree, of a shallow vent. */
 const warmedWater = 30;
 /** Per-mille upwelling a shallow plume raises. */
@@ -29,25 +31,27 @@ const depthOf = (state: GenerationState, place: PoiPlace) =>
   metres(fieldOf(state).WaterDepths.get(place.anchor));
 /** How much of a vent's heat reaches the surface; nothing of a deep one does. */
 const reachesSurface = (state: GenerationState, place: PoiPlace) =>
-  Math.exp(-depthOf(state, place) / plumeDepth);
+  Math.exp(-depthOf(state, place) / mapScale(state).resolveMeasure(plumeDepth));
 const heatOf = (state: GenerationState, place: PoiPlace) => heatAt(state, place.anchor);
 const around = spans(10);
 const counterpart = counterpartOf(isA, 1);
 const factors = {
   magnitude: (state: GenerationState, place: PoiPlace) =>
-    (heatOf(state, place) + areaOf(state, place) / (areaOf(state, place) + 1e8)) / 2,
+    (heatOf(state, place) +
+      areaOf(state, place) / (areaOf(state, place) + mapScale(state).area(0.00000625))) /
+    2,
   localConditions: standsOut(geothermalAt, around),
   isolation: aloneAmong(places, around),
   cultural: attachment(around),
 };
 
 /** Its circulation flushes the mound clear of the sediment settling everywhere else. */
-const flushedMound = (_state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
+const flushedMound = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
   place.cells.map((cell) => ({
     change: "atMost",
     band: "SedimentThickness",
     cell,
-    value: toNative(flushedSediment),
+    value: toNative(mapScale(state).resolveMeasure(flushedSediment)),
   }));
 /**
  * A shallow vent's plume rises through the water, warming it and drawing up what lies below.
@@ -126,7 +130,9 @@ export const vent: PoiEntry = {
       "Boats give a shallow vent's warm gassy water a wide berth and deep ones never notice it. Fire runs easily through its fractured conduit. Nothing on land or in the drainage reaches it.",
     roads: notApplicable("A vent is under the sea; ways do not enter it."),
     boats: (state, place) =>
-      depthOf(state, place) < shoalVent ? costNear(2, spans(1))(state, place) : [],
+      depthOf(state, place) < mapScale(state).resolveMeasure(shoalVent)
+        ? costNear(2, spans(1))(state, place)
+        : [],
     drainage: notApplicable("Rivers end at the shore; the sea floor is no part of the network."),
     magic: { crust: costNear(0.7) },
     links: notApplicable("A vent joins no two cells."),
@@ -155,7 +161,7 @@ export const vent: PoiEntry = {
       return { food: reach * heatOf(state, place), materials: reach / 2, sanctity: reach / 2 };
     },
     threatens: (state, place) =>
-      depthOf(state, place) < shoalVent
+      depthOf(state, place) < mapScale(state).resolveMeasure(shoalVent)
         ? [
             {
               hazard: "boiling water and gas",
@@ -184,7 +190,8 @@ export const vent: PoiEntry = {
     statement:
       "Most vents have no name; only one near people, whose water visibly boils, gets one from its sailors.",
     namedBy: (state, place) =>
-      depthOf(state, place) < shoalVent && settlementWithin(state, place.anchor, 2 * around(state))
+      depthOf(state, place) < mapScale(state).resolveMeasure(shoalVent) &&
+      settlementWithin(state, place.anchor, 2 * around(state))
         ? namingCultureNear(state, place)
         : null,
     takesNameFrom: notApplicable("No nearby place gives a name to what lies under the sea."),

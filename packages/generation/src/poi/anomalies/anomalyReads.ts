@@ -1,15 +1,17 @@
+import type { RelativeMeasure } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import { heldCharge } from "../../world/magicFeedback";
 import type { MagicField } from "../../world/magicState";
 import type { GenerationState } from "../../process";
 import type { PoiPlace } from "../poiContract";
-import { cellSpan, fieldOf, magicValue } from "../poiReads";
+import { fieldOf, magicValue } from "../poiReads";
 
 /**
  * A place's country, `metres` around it. A place is read against its country, which takes at
  * least the cells beside it to see, whatever the map's cell size.
  */
-export const countryOf = (metres: number) => (state: GenerationState) =>
-  Math.max(2 * cellSpan(state), metres);
+export const countryOf = (reach: RelativeMeasure) => (state: GenerationState) =>
+  mapScale(state).supported(mapScale(state).resolveMeasure(reach), 2);
 
 /** One system's whole field, for the channels and parameters `magicValue` does not name. */
 export const magicFieldOf = (state: GenerationState, system: string): MagicField | undefined =>

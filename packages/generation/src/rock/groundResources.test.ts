@@ -3,15 +3,17 @@ import { residentBand } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { atlasPhysicalProfile } from "../world/atlasProfile";
 import { projectNative } from "../world/atlasProjection";
+import { atlasChannels } from "../world/atlasChannels";
 import type { PhysicalBufferName } from "../world/field";
 import { createTestField as createField } from "./groundTestFixture";
 import { createMesh } from "../world/mesh";
 import { finishGroundImport, groundResourceBindings } from "./groundResources";
 import { allColumnFields, allColumnIntegerFields, columnFields } from "./rockLayerFields";
-import { layDownRock, readLayer, setLayer, stripRock } from "./rockColumn";
+import { readLayer, setLayer } from "./rockColumn";
 import { rockCatalogue } from "./rockCatalogue";
+import { refinementReads } from "../regional/capture";
 
-it("publishes every material field once with its own units and legacy land aliases", () => {
+it("publishes every material field once with its own units and public land channel names", () => {
   const byNative = new Map(groundResourceBindings.map((binding) => [binding.native, binding]));
   expect(byNative.size).toBe(groundResourceBindings.length);
   expect(new Set(groundResourceBindings.map(({ name }) => name)).size).toBe(byNative.size);
@@ -28,6 +30,20 @@ it("publishes every material field once with its own units and legacy land alias
     areaDensity: true,
     scale: 1,
   });
+  const { domain } = landscape();
+  domain.world.fields.push({
+    id: "ground-input",
+    areaId: domain.scope.areaId,
+    layerId: "physical",
+    samples: 1,
+    algorithm: "supplied",
+    source: { kind: "operation", id: "supplied" },
+    input: true,
+    channels: groundResourceBindings.map(({ name }) => name),
+  });
+  expect(refinementReads(domain, domain.scope.areaId)[0].names).toEqual(
+    groundResourceBindings.map(({ name }) => name)
+  );
 });
 
 it("reconstructs projections from supplied facet material without overwriting its history", () => {
@@ -49,7 +65,7 @@ it("reconstructs projections from supplied facet material without overwriting it
   map.Elevation.set(0, 99_000);
   map.SedimentThickness.set(0, 7000);
   map.RockResistance.set(0, 999);
-  finishGroundImport(map, new Set<PhysicalBufferName>([...allColumnFields, "BedrockElevation"]));
+  finishGroundImport(map, new Set(atlasChannels.map(({ native }) => native)));
   expect(map.SedimentThickness.get(0)).toBe(65);
   expect(map.Elevation.get(0)).toBe(10_065);
   expect(map.RockResistance.get(0)).toBeLessThan(1500);
@@ -67,7 +83,7 @@ it("reconstructs projections from supplied facet material without overwriting it
   });
 });
 
-it("imports known legacy surface facts without inventing buried history", () => {
+it("rejects incomplete material input without synthesizing missing layers or history", () => {
   const map = createField(createMesh(4, 0));
   map.RockKindCodes.set(0, rockCatalogue.basalt.code);
   map.RockResistance.set(0, 1750);
@@ -79,25 +95,7 @@ it("imports known legacy surface facts without inventing buried history", () => 
     "SedimentThickness",
     "BedrockElevation",
   ]);
-  finishGroundImport(map, imported);
-  expect(readLayer(map, 0, 0)).toMatchObject({
-    kind: rockCatalogue.basalt.code,
-    strength: 1750,
-    formedMin: -1,
-    formedMax: -1,
-    altered: -1,
-  });
-  expect(readLayer(map, 0, 0, "loose")).toMatchObject({ depth: 55, formedMin: -1 });
-  expect(map.Elevation.get(0)).toBe(1055);
-  expect(map.GroundCutShare.get(0)).toBe(0);
-  layDownRock(map, 0, rockCatalogue.tufa, 20);
-  stripRock(map, 0, 30);
-  expect(readLayer(map, 0, 0)).toMatchObject({
-    kind: rockCatalogue.basalt.code,
-    formedMin: -1,
-    formedMax: -1,
-    altered: -1,
-  });
+  expect(() => finishGroundImport(map, imported)).toThrow("complete current-format");
 });
 
 it("publishes local sea cargo and carrier volumes as area densities", () => {
@@ -108,7 +106,7 @@ it("publishes local sea cargo and carrier volumes as area densities", () => {
     );
   state.physical = {
     map,
-    profile: atlasPhysicalProfile(),
+    profile: atlasPhysicalProfile({}, {}, map.scale),
     grid: state.surface.coverage,
     samples: residentBand(
       "int32",

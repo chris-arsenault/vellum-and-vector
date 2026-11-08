@@ -5,6 +5,7 @@ import {
   putChannel,
   semanticId,
   requireThat,
+  MapScale,
   type Band,
   type Grid,
 } from "@atlas/domain";
@@ -50,13 +51,13 @@ export const initializeTerrainProcess: MapProcess = {
     invalidates,
     parameters: {
       provinces: { type: "integer", unit: "count", required: false, default: 7, minimum: 2 },
-      relief: { type: "number", unit: "metre", required: false, default: 1800, minimum: 0 },
-      seaLevel: { type: "number", unit: "metre", required: false, default: 0 },
+      relief: { type: "number", unit: "map-span", required: false, default: 0.00045, minimum: 0 },
+      seaLevel: { type: "number", unit: "map-span", required: false, default: 0 },
       plateSpeed: {
         type: "number",
-        unit: "metre/year",
+        unit: "map-span/year",
         required: false,
-        default: 0.025,
+        default: 6.25e-9,
         minimum: 0,
       },
     },
@@ -68,7 +69,7 @@ export const initializeTerrainProcess: MapProcess = {
         seed = Math.floor(context.random(true) * 4294967296);
       const plates = provinces(grid, context),
         fields = initialFields(grid);
-      const scale = Math.max(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]);
+      const scale = MapScale.fromCells(grid.bounds, grid.active.length);
       for (let i = 0; i < grid.active.length; i++) {
         checkProgress(context, i, grid.active.length, "Assembling persistent crustal provinces");
         if (!grid.active.get(i)) continue;
@@ -106,7 +107,9 @@ export const initializeTerrainProcess: MapProcess = {
 
 function provinces(grid: Grid, context: MapProcessContext): Province[] {
   const count = Number(context.parameters.provinces),
-    speed = Number(context.parameters.plateSpeed);
+    speed = MapScale.fromCells(grid.bounds, grid.active.length).length(
+      Number(context.parameters.plateSpeed)
+    );
   const cells = grid.coverage.scratch(
     "int32",
     "terrain:active-cells",
@@ -165,7 +168,7 @@ function initializeCell(
   plates: Province[],
   fields: Record<string, Band>,
   seed: number,
-  scale: number,
+  scale: MapScale,
   context: MapProcessContext
 ) {
   const p = gridPosition(grid, i),
@@ -174,24 +177,26 @@ function initializeCell(
       .sort((a, b) => a.distance - b.distance);
   const first = sorted[0],
     second = sorted[1],
-    relief = Number(context.parameters.relief);
-  const x = (p.x - grid.bounds[0]) / scale,
-    y = (p.y - grid.bounds[1]) / scale;
+    relief = scale.length(Number(context.parameters.relief));
+  const x = scale.fraction(p.x - grid.bounds[0]),
+    y = scale.fraction(p.y - grid.bounds[1]);
   const broad = smoothNoise(x * 3, y * 3, seed),
     hills = smoothNoise(x * 12, y * 12, seed ^ 1171);
   const fine = smoothNoise(x * 37, y * 37, seed ^ 9631);
-  const margin = Math.exp(-(second.distance - first.distance) / Math.max(1, scale * 0.045));
+  const margin = Math.exp(-(second.distance - first.distance) / scale.length(0.045));
   const continental = first.plate.continental * 0.55 + (broad + 1) * 0.225;
   const dx = second.plate.x - first.plate.x,
     dy = second.plate.y - first.plate.y;
   const convergence =
     ((first.plate.dx - second.plate.dx) * dx + (first.plate.dy - second.plate.dy) * dy) /
-    Math.max(1, Math.hypot(dx, dy));
+    Math.max(scale.length(2.5e-7), Math.hypot(dx, dy));
   const ridge =
-    (Math.max(0, convergence) / Math.max(0.001, Number(context.parameters.plateSpeed))) * margin;
+    (Math.max(0, convergence) /
+      scale.length(Math.max(2.5e-10, Number(context.parameters.plateSpeed)))) *
+    margin;
   fields.elevation.set(
     i,
-    Number(context.parameters.seaLevel) +
+    scale.length(Number(context.parameters.seaLevel)) +
       relief * ((continental - 0.48) * 3 + hills * 0.22 + fine * 0.06 + ridge * 0.8)
   );
   fields.bedrock.set(
@@ -220,9 +225,9 @@ export const tectonicsProcess: MapProcess = {
       activity: { type: "number", unit: "ratio", required: false, default: 1, minimum: 0 },
       upliftRate: {
         type: "number",
-        unit: "metre/year",
+        unit: "map-span/year",
         required: false,
-        default: 0.002,
+        default: 5e-10,
         minimum: 0,
       },
       advection: { type: "boolean", unit: null, required: false, default: true },
@@ -235,6 +240,7 @@ export const tectonicsProcess: MapProcess = {
     kind: "model-pass",
     applyPass(state, context) {
       const grid = state.surface,
+        scale = MapScale.fromCells(grid.bounds, grid.active.length),
         elevation = requireChannel(grid, "elevation", "metre");
       const bedrock = requireChannel(grid, "bedrock", "metre"),
         sediment = requireChannel(grid, "sediment", "metre");
@@ -244,7 +250,7 @@ export const tectonicsProcess: MapProcess = {
         links = adjacency(grid, false),
         years = epochYears(context);
       const activity = Number(context.parameters.activity),
-        rate = Number(context.parameters.upliftRate);
+        rate = scale.length(Number(context.parameters.upliftRate));
       const uplift = grid.coverage.scratch("float64", "terrain:uplift", elevation.length),
         fracture = requireChannel(grid, "fracture", "ratio");
       if (context.parameters.advection) advect(state, mobile, years * activity, motionX, motionY);
@@ -260,13 +266,16 @@ export const tectonicsProcess: MapProcess = {
               sum +
               ((motionX.get(i) - motionX.get(j)) * (b.x - a.x) +
                 (motionY.get(i) - motionY.get(j)) * (b.y - a.y)) /
-                Math.max(1, length)
+                Math.max(scale.length(2.5e-7), length)
             );
           }, 0) / Math.max(1, links(i).length);
-        uplift.set(i, rate * Math.tanh(closure / 0.01) * activity);
+        uplift.set(i, rate * Math.tanh(closure / scale.length(2.5e-9)) * activity);
         bedrock.add(i, uplift.get(i) * years);
         elevation.set(i, bedrock.get(i) + sediment.get(i));
-        fracture.set(i, Math.min(1, fracture.get(i) + Math.abs(closure) * years * 0.0001));
+        fracture.set(
+          i,
+          Math.min(1, fracture.get(i) + Math.abs(closure) * years * scale.inverseLength(400))
+        );
       }
       putChannel(grid, "uplift", "metre/year", uplift);
       context.recordCause({

@@ -36,10 +36,11 @@ const channelInitiation = 0.1;
 /** Share of the difference to the neighbours' mean that hillslope creep removes per step. */
 const creepPerStep = 0.35;
 /** Unevenness (m) of the ground below the parent's resolution. */
-const microRelief = 3;
+const microRelief = 0.00000075;
 /** A captured river's bed as a share of the smoothed base under it, and its least fall per cell (m). */
+// length-unit: ratio
 const courseDepth = 0.85,
-  courseFall = 0.01;
+  courseFall = 0.0000000025;
 
 /** A cell's neighbourhood, gathered once: the evolution reads it every step. */
 interface Neighbourhood {
@@ -98,7 +99,8 @@ export function evolveNetwork(
   for (let i = 0; i < n; i++)
     h[i] = root[i]
       ? network.level[i]
-      : network.base[i] + microRelief * hashUnit(seed, mesh.identity(i), 0);
+      : network.base[i] +
+        state.physical.map.scale.length(microRelief) * hashUnit(seed, mesh.identity(i), 0);
   carveCourses(state, network, root, h);
   const uplift = structuralUpliftField(state, network, root);
   for (let step = 0; step <= evolutionSteps; step++) {
@@ -146,7 +148,10 @@ function carveCourses(
     if (network.base[cells[0]] < network.base[cells.at(-1)!]) cells.reverse();
     let level = Infinity;
     for (const i of cells) {
-      level = Math.min(level - courseFall, courseDepth * network.base[i]);
+      level = Math.min(
+        level - state.physical.map.scale.length(courseFall),
+        courseDepth * network.base[i]
+      );
       if (!root[i]) h[i] = Math.min(h[i], level);
     }
   }

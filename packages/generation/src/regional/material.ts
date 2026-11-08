@@ -5,21 +5,23 @@ import { rockCatalogue } from "../rock/rockCatalogue";
 import { grainAt } from "./character";
 import { distance, regionalSpan } from "./lattice";
 import { clamp, type RegionalState } from "./state";
+import type { MapScale } from "@atlas/domain";
 
 /** Band width along the grain, as a share of the parent span: strata are continuous along strike. */
+// length-unit: ratio
 const bandLength = 1.5;
 /** Added resistance of a cone's lava apron at the cone, fading to its base radius (plan: cone extension). */
 const apronHardness = 0.8;
 
 /** How many folds one of the parent's thrust sheets resolves into, and how much tilt makes a full one. */
 const foldsPerSheet = 3,
-  fullDip = 800;
+  fullDip = 0.0002;
 /**
  * The fold at a place in one of the parent's thrust sheets: axes repeat across the sheet and run
  * along it, standing as high as the sheet has tilted. Values in about -1..1.
  */
-export const sheetFold = (across: number, dip: number) =>
-  Math.sin(2 * Math.PI * foldsPerSheet * across) * clamp(dip / fullDip, 0.2, 1);
+export const sheetFold = (across: number, dip: number, scale: MapScale) =>
+  Math.sin(2 * Math.PI * foldsPerSheet * across) * clamp(dip / scale.length(fullDip), 0.2, 1);
 /**
  * Fold structure: the axes and limbs of a belt as bands that are continuous along the structural
  * grain and vary across it. Where the world thrust this ground they are the parent's own sheets.
@@ -36,14 +38,14 @@ function foldStructure(state: RegionalState): Float64Array {
     n = mesh.count,
     character = state.regional.character!,
     span = regionalSpan(state),
-    steps = Math.max(3, Math.round((state.regional.parentSpan * bandLength) / span)),
+    steps = Math.max(3, Math.round(map.scale.cellCount(state.regional.parentSpan * bandLength))),
     white = new Float64Array(n),
     bands = new Float64Array(n);
   for (let i = 0; i < n; i++)
     white[i] = hashUnit(state.regional.input.seed ^ 0x1c3d, mesh.identity(i), 0) * 2 - 1;
   for (let i = 0; i < n; i++) {
     if (map.ThrustSheetIndex.get(i) > 0) {
-      bands[i] = sheetFold(map.ThrustAcross.get(i) / 1000, map.ThrustDip.get(i));
+      bands[i] = sheetFold(map.ThrustAcross.get(i) / 1000, map.ThrustDip.get(i), map.scale);
       continue;
     }
     const { coherence } = grainAt(character, i);

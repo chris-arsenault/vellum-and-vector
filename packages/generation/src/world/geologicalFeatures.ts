@@ -1,4 +1,4 @@
-import { canonicalGeometry, unwrapCoordinates, point, spatial } from "@atlas/domain";
+import { MapScale, canonicalGeometry, unwrapCoordinates, point, spatial } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
 import { physicalSampler } from "./physicalMetric";
@@ -6,7 +6,8 @@ import { mapScale } from "../worldSignificance";
 
 type Event = NonNullable<GenerationState["physical"]>["map"]["events"][number];
 /** Fault systems need a long retained trace; individual local fractures remain physical. */
-const worldFaultLength = 150_000;
+// length-unit: fraction
+const worldFaultLength = 0.0375;
 
 export function volcanicRelief(state: GenerationState, event: Event) {
   const map = state.physical!.map,
@@ -19,7 +20,7 @@ export function volcanicRelief(state: GenerationState, event: Event) {
       event.y + Math.sin(angle) * event.radius * 2
     );
   }
-  return (height(event.x, event.y) - surrounding / 16) / 1024;
+  return MapScale.metres(height(event.x, event.y) - surrounding / 16, "native");
 }
 
 export function eventDisk(
@@ -62,7 +63,7 @@ export function craterRelief(state: GenerationState, event: Event) {
   const floor = (height(event.x, event.y) + ring(event.radius * 0.4)) / 2,
     rim = ring(event.radius),
     plain = ring(event.radius * 2);
-  const relief = Math.min(rim - floor, rim - plain) / 1024;
+  const relief = MapScale.metres(Math.min(rim - floor, rim - plain), "native");
   return Number.isFinite(relief) ? relief : 0;
 }
 /** Long fault traces. Volcanoes, calderas and craters are the catalogue's, read from these events. */
@@ -79,7 +80,7 @@ export function extractFaults(state: GenerationState) {
           sum + Math.hypot(p[0] - fault.coordinates[i][0], p[1] - fault.coordinates[i][1]),
         0
       );
-    if (length < worldFaultLength * mapScale(state).length) continue;
+    if (length < mapScale(state).length(worldFaultLength)) continue;
     const line = {
       type: "LineString" as const,
       coordinates: unwrapCoordinates(

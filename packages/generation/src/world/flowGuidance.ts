@@ -4,16 +4,16 @@ import type { PhysicalField } from "./field";
 import { isOpenOutlet } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { clamp, round, toUnits } from "./math";
+import { clamp } from "./math";
 import { hashUnit } from "./noise";
 import { contributingArea } from "./flowGraph";
 import { physicalDistance, physicalGradients } from "./physicalMetric";
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 const epsilon = 0.0000001;
 function normalize(x: number, y: number): [number, number] {
-  const length = Math.max(0.000001, Math.sqrt(x * x + y * y));
+  const length = Math.hypot(x, y) || 1;
   return [x / length, y / length];
 }
 function desiredDirection(map: PhysicalField, source: number, target: number): [number, number] {
@@ -24,9 +24,9 @@ function desiredDirection(map: PhysicalField, source: number, target: number): [
 }
 function coordinateTie(map: PhysicalField, source: number, target: number, seed: number): number {
   return hashUnit(
-    seed ^ round(map.mesh.x(source) * 4096),
-    round(map.mesh.y(source) * 4096) ^ round(map.mesh.x(target) * 4096),
-    round(map.mesh.y(target) * 4096)
+    seed ^ (MapScale.native(map.mesh.x(source)) * 4),
+    (MapScale.native(map.mesh.y(source)) * 4) ^ (MapScale.native(map.mesh.x(target)) * 4),
+    MapScale.native(map.mesh.y(target)) * 4
   );
 }
 export function legalAdjacentTarget(map: PhysicalField, source: number, target: number): boolean {
@@ -47,7 +47,12 @@ function candidateScore(
   alignment: number
 ): number {
   const inherited = clamp(
-    toUnits(map.CumulativeFluvialErosion.get(target) + map.CumulativeGlacialErosion.get(target)),
+    (100 *
+      MapScale.metres(
+        map.CumulativeFluvialErosion.get(target) + map.CumulativeGlacialErosion.get(target),
+        "native"
+      )) /
+      map.scale.length(0.000025),
     0,
     100
   );
@@ -57,7 +62,10 @@ function candidateScore(
     map.mesh.y(source) - map.mesh.y(target)
   );
   const drop =
-    (map.DrainageElevations.get(source) - map.DrainageElevations.get(target)) / (1024 * length);
+    MapScale.metres(
+      map.DrainageElevations.get(source) - map.DrainageElevations.get(target),
+      "native"
+    ) / length;
   if (drop <= 0) {
     const progress = clamp(map.DrainageRanks.get(source) - map.DrainageRanks.get(target), 0, 20);
     return (
@@ -67,7 +75,7 @@ function candidateScore(
     );
   }
   const floorDrop = clamp(
-    (map.Elevation.get(source) - map.Elevation.get(target)) / (1024 * length),
+    MapScale.metres(map.Elevation.get(source) - map.Elevation.get(target), "native") / length,
     -0.005,
     0.02
   );
@@ -111,9 +119,7 @@ function descentDirection(
     distance += segment;
     current = parent;
   }
-  return Math.abs(x) < 0.000001 && Math.abs(y) < 0.000001
-    ? desiredDirection(map, source, current)
-    : normalize(x, y);
+  return x === 0 && y === 0 ? desiredDirection(map, source, current) : normalize(x, y);
 }
 type Step = { target: number; x: number; y: number };
 /** Downhill moves from a land cell, or null beside the sea, where existing routing decides. */
@@ -192,15 +198,20 @@ function aspectTarget(
   const { left, right, p } = bracket(twoSteps, ax, ay);
   const draw = hashUnit(
     c.EpochStableSeed ^ 0x2f8a,
-    round(map.mesh.x(source) * 1024),
-    round(map.mesh.y(source) * 1024)
+    MapScale.native(map.mesh.x(source)),
+    MapScale.native(map.mesh.y(source))
   );
   return draw < p ? steps[left].target : steps[right].target;
 }
-function captureScore(area: Band | null, target: number, p: PhysicalProfile): number {
+function captureScore(
+  map: PhysicalField,
+  area: Band | null,
+  target: number,
+  p: PhysicalProfile
+): number {
   return area === null
     ? 0
-    : (Math.log2(1 + area.get(target) / 100_000_000) * p.DrainageCaptureWeight) / 1000;
+    : (Math.log2(1 + area.get(target) / map.scale.area(6.25e-6)) * p.DrainageCaptureWeight) / 1000;
 }
 /** Sloping ground follows the descent; flats, shores and enclosed cells keep scored guidance. */
 function selectTarget(
@@ -233,7 +244,7 @@ function scoredTarget(
     const alignment = map.mesh.edgeX(source, edge) * dx + map.mesh.edgeY(source, edge) * dy;
     const score =
       candidateScore(map, c.Profile, source, target, alignment) +
-      captureScore(area, target, c.Profile);
+      captureScore(map, area, target, c.Profile);
     if (score > bestScore + epsilon) {
       best = target;
       bestScore = score;

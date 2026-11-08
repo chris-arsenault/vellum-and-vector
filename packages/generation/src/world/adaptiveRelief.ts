@@ -7,6 +7,7 @@ import {
   adaptiveLeafAt,
   fieldInterpolator,
   spatial,
+  MapScale,
   type Band,
   type Grid,
   type Position,
@@ -127,7 +128,9 @@ function applyConserved(map: PhysicalField, proposal: Proposal): ReliefSynthesis
   for (let i = 0; i < map.mesh.count; i++) {
     const parent = proposal.cell.get(i);
     if (parent < 0) continue;
-    const floor = (map.EffectiveSeaLevel + units(1) - map.Elevation.get(i)) / 1024;
+    const floor =
+      MapScale.metres(map.EffectiveSeaLevel - map.Elevation.get(i), "native") +
+      map.scale.length(2.5e-7);
     const change = Math.max(
       proposal.delta.get(i) - proposal.sums[parent] / proposal.weights[parent],
       floor
@@ -218,7 +221,7 @@ export function adaptiveReliefProcess(): MapProcess {
           work.map,
           parent,
           state.surface.scope.footprint,
-          work.map.mesh.spacing * 2,
+          work.map.scale.cells(2),
           c.Seed,
           work.profile
         );

@@ -13,13 +13,9 @@ export function nativeWorkload(epochs?: Epoch[]) {
   if (epochs) draft.recipe.settings.epochs = epochs;
   const source = draftWorldSnapshot(draft),
     steps = new Map(allSteps.map((step) => [`atlas.${step[0]}`, step])),
-    resolved = resolveGenerationFeatures(
-      physicalFeatureDefinitions,
-      undefined,
-      undefined,
-      undefined,
-      ["physical"]
-    ),
+    resolved = resolveGenerationFeatures(physicalFeatureDefinitions, undefined, undefined, [
+      "physical",
+    ]),
     deformation = plateDeformationSteps(resolved);
   return sequenceStages(
     atlasConfiguration(source, {

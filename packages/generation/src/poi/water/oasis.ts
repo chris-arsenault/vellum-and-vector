@@ -1,5 +1,7 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import type { GenerationState } from "../../process";
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { namingCultureNear, rulePlaces, within } from "../poiPlaces";
@@ -9,8 +11,9 @@ import { aloneAmong, attachment, weighed } from "../poiVisibilityRules";
 import { areaOf, drynessAround, spans } from "./waterReads";
 
 /** Metres of soil water it holds out to its edge. */
-const heldWater = 0.4;
+const heldWater = MapScale.length(0.0000001, 0.5);
 /** How far a caravan bends to it, in cell spans, and how much cheaper the going gets there. */
+// length-unit: ratio
 const caravanReach = 4,
   caravanSaving = 0.6;
 
@@ -25,7 +28,9 @@ const strengthOf = (state: GenerationState, place: PoiPlace) =>
 const factors = {
   /** Half its weight is its spring's strength; the rest grows with the ground it holds. */
   magnitude: (state: GenerationState, place: PoiPlace) =>
-    (strengthOf(state, place) + areaOf(state, place) / (areaOf(state, place) + 1e7)) / 2,
+    (strengthOf(state, place) +
+      areaOf(state, place) / (areaOf(state, place) + mapScale(state).area(0.000000625))) /
+    2,
   localConditions: drynessAround(around),
   isolation: aloneAmong(places, around),
   cultural: attachment(around),
@@ -37,7 +42,12 @@ const wateredCells = (
 ): readonly PoiFieldChange[] =>
   cells
     .filter((cell) => isLand(state, cell))
-    .map((cell) => ({ change: "atLeast", band: "SoilWater", cell, value: heldWater }));
+    .map((cell) => ({
+      change: "atLeast",
+      band: "SoilWater",
+      cell,
+      value: mapScale(state).resolveMeasure(heldWater),
+    }));
 const wateredGround = (state: GenerationState, place: PoiPlace) => wateredCells(state, place.cells);
 /** Trees over it end the rule that made it: the system no longer holds it as bare-ground water. */
 const groveWithin = (state: GenerationState, place: PoiPlace) => !isA(state, place.anchor);

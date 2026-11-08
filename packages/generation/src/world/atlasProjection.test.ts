@@ -9,6 +9,42 @@ import { createTestField as createField } from "../rock/groundTestFixture";
 import { createMesh } from "./mesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { Landform } from "./codes";
+import { groundResourceBindings } from "../rock/groundResources";
+import { refinementChannel } from "../regional/capture";
+
+it("publishes complete ground for refinement without requiring load response", () => {
+  const features = resolveGenerationFeatures(
+    physicalFeatureDefinitions,
+    Object.fromEntries(
+      physicalFeatureDefinitions.map(({ id }) => [
+        id,
+        { enabled: ["physical.foundation", "physical.lifecycle"].includes(id) },
+      ])
+    )
+  );
+  expect(features.diagnostics).toEqual([]);
+  const selected = selectedAtlasChannels(features).map(({ name }) => name);
+  for (const { name } of groundResourceBindings) {
+    expect(selected).toContain(name);
+    expect(refinementChannel(name)).toBe(true);
+  }
+  const publications = atlasPublicationDefinitions({
+    areaId: "area",
+    domains: ["physical"],
+    quality: "draft",
+    seed: 73,
+    resolvedFeatures: features,
+  });
+  for (const { name } of groundResourceBindings)
+    expect(publications).toContainEqual(
+      expect.objectContaining({
+        kind: "field",
+        channel: name,
+        publish: true,
+        owners: ["physical.foundation"],
+      })
+    );
+});
 
 function fixture(selected: FeatureSelection = {}) {
   const state = landscape(),
@@ -29,7 +65,7 @@ function fixture(selected: FeatureSelection = {}) {
   map.Snowfall.fill(1000);
   state.physical = {
     map,
-    profile: atlasPhysicalProfile(),
+    profile: atlasPhysicalProfile({}, {}, map.scale),
     samples: residentBand(
       "int32",
       Int32Array.from(state.surface.active, (_, i) => i % 4)

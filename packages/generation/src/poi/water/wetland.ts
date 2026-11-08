@@ -45,7 +45,7 @@ const factors = {
 
 /** Standing water holds its ground flat: what does not run off does not cut. */
 const heldFlat = (_state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  place.cells.map((cell) => ({ change: "gradientAtMost", cell, gradient: standingWaterSlope }));
+  place.cells.map((cell) => ({ change: "gradeGround", cell, gradient: standingWaterSlope }));
 /** A band's area-weighted mean over a wetland. */
 function meanOver(state: GenerationState, place: PoiPlace, read: (cell: number) => number) {
   const mesh = fieldOf(state).mesh,
@@ -124,7 +124,7 @@ export const wetland: PoiEntry = {
     realize: (state, carried) =>
       cellsWithin(state, carried.cell, parentSpanOf(state) / 2)
         .filter((cell) => isLand(state, cell))
-        .map((cell) => ({ change: "gradientAtMost", cell, gradient: standingWaterSlope })),
+        .map((cell) => ({ change: "gradeGround", cell, gradient: standingWaterSlope })),
     counterpart,
     unrealized: (state, carried) =>
       counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),

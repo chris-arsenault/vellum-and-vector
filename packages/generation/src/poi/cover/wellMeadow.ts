@@ -15,7 +15,8 @@ import {
 } from "./coverShared";
 
 /** Area at which a Well meadow is half as great as they get: 200 square kilometres. */
-const typicalArea = 2e8;
+// length-unit: fraction
+const typicalArea = 0.0000125;
 const isA = isFamily("well");
 const places = landscapePlaces("wellMeadow", "well", verdureAt);
 const factors = countryFactors(places, typicalArea, verdureAt);

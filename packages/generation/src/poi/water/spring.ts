@@ -1,5 +1,6 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import { components } from "../../world/geographicRegions";
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { frameEdge } from "../../regional/lattice";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
@@ -30,11 +31,11 @@ const openFracture = 0.32;
 /** Ground this much gentler than the slope above it is a break where groundwater comes out. */
 const slopeBreak = 0.5;
 /** Discharge at which a spring is half as great as springs get, in cubic metres a second. */
-const typicalDischarge = 5;
+const typicalDischarge = MapScale.volume(7.8125e-20);
 /** Metres a rising spring saps its head hollow below the ground above it. */
-const sappedHollow = 2;
+const sappedHollow = MapScale.length(0.0000005, 0.5);
 /** Metres of soil water a spring's flush holds; cover a flush holds, under a wetland's own. */
-const flushWater = 0.3,
+const flushWater = MapScale.length(0.000000075, 0.5),
   flushCover = 0.15;
 
 const hotRule = magicRule("fire", "spring"),
@@ -152,7 +153,7 @@ function headShape(state: GenerationState, place: PoiPlace): readonly PoiFieldCh
           change: "atMost",
           band: "Elevation",
           cell: anchor,
-          value: ground - toNative(sappedHollow),
+          value: ground - toNative(fieldOf(state).scale.resolveMeasure(sappedHollow)),
         },
       ];
 }
@@ -164,7 +165,7 @@ const headWater = (state: GenerationState, place: PoiPlace): readonly PoiFieldCh
     change: "atLeast",
     band: "SoilWater",
     cell,
-    value: flushWater,
+    value: fieldOf(state).scale.resolveMeasure(flushWater),
   }));
 /** A cold flush holds wet sedge; water near boiling holds bare ground. */
 const flush = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
@@ -230,7 +231,7 @@ export const spring: PoiEntry = {
         change: "atLeast",
         band: "SoilWater",
         cell,
-        value: flushWater,
+        value: fieldOf(state).scale.resolveMeasure(flushWater),
       })),
     counterpart,
     unrealized: movesTo(counterpart),

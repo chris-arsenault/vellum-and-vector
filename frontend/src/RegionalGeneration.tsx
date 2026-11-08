@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { spatial, regionalScale, mapRefinementLevel } from "@atlas/domain";
+import {
+  spatial,
+  regionalScale,
+  mapRefinementLevel,
+  MapScale,
+  defaultTerrainCells,
+} from "@atlas/domain";
 import { atlasWorkspace } from "./atlasWorkspace";
 import { inheritedGeneration } from "./generationJobs";
 import { useGenerate } from "./useAtlas";
@@ -56,7 +62,11 @@ function useRegionalGeneration(world: World, editor: EditorState) {
 }
 function regionalResolution(world: World, areaId: string, quality: string) {
   return {
-    ...regionalScale(Math.max(1, mapRefinementLevel(world.areas, areaId)), quality),
+    ...regionalScale(
+      Math.max(1, mapRefinementLevel(world.areas, areaId)),
+      quality,
+      MapScale.fromCells(spatial.bounds(world.areas[areaId].footprint), defaultTerrainCells)
+    ),
     cells: undefined,
   };
 }
@@ -119,9 +129,12 @@ function RegionalContext({
         <div>
           <dt>Selected area</dt>
           <dd>
-            {(spatial.area(editor.area.footprint) / 1e6).toLocaleString(undefined, {
-              maximumFractionDigits: 1,
-            })}{" "}
+            {MapScale.areaUnits(spatial.area(editor.area.footprint), "m2", "km2").toLocaleString(
+              undefined,
+              {
+                maximumFractionDigits: 1,
+              }
+            )}{" "}
             km²
           </dd>
         </div>

@@ -7,7 +7,7 @@ import { nearestTriangle } from "./mesh";
 import { worldCandidates } from "./worldSources";
 import { CellList, FloatList, KeyedHeap, radixOrder, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { areaBudget, mediumArea, referenceOceanArea, referenceCoastLength } from "./worldScale";
+import { areaBudget, mediumArea } from "./worldScale";
 
 function coastlineLength(map: PhysicalField) {
   let length = 0;
@@ -117,7 +117,7 @@ export function oceanPropagation(
   }
   for (const [index, i] of oceanSources(
     map,
-    areaBudget(p.coastalSources, coastlineLength(map), referenceCoastLength),
+    areaBudget(p.coastalSources, coastlineLength(map), map.scale.length(5)),
     seed,
     p.coastalSourceDistance
   ).entries()) {
@@ -136,7 +136,7 @@ export function oceanPropagation(
   const wakes = areaBudget(
     p.wakeSources,
     mediumArea(map, (i) => map.WaterKindCodes.get(i) === 1),
-    referenceOceanArea
+    map.scale.area(0.39)
   );
   for (const [index, i] of oceanSources(map, wakes, seed ^ 0x3359).entries())
     traceOceanBeam(
@@ -144,7 +144,13 @@ export function oceanPropagation(
       field,
       seed ^ Math.imul(index, 7919),
       i,
-      hashUnit(seed ^ Math.imul(index, 7919), Math.round(map.mesh.x(i) / 10_000), 0) * Math.PI * 2,
+      hashUnit(
+        seed ^ Math.imul(index, 7919),
+        Math.round(map.mesh.x(i) / map.scale.length(0.0025)),
+        0
+      ) *
+        Math.PI *
+        2,
       p.wakeStrength * activity,
       p.wakeDistance,
       true

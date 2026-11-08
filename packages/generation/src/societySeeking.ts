@@ -10,6 +10,7 @@ import {
 import type { GenerationState } from "./process";
 import { accessibleDive, magicAt } from "./societyMagicAccess";
 import { nearestSample } from "./societySpatial";
+import { mapScale } from "./worldSignificance";
 
 /**
  * The shares steer seeking. A people weighs a destination by how far its own practices find
@@ -26,7 +27,7 @@ export function practiceOpportunity(state: GenerationState, c: SocietyCommunity)
   // A seat whose conduit has sealed offers Fire people nothing: the vein is cold, and they go.
   const fire = magicAt(state, "quickens", i, "sealed") > 0 ? 0 : magicAt(state, "quickens", i),
     aurora = magicAt(state, "stills", i);
-  const dive = accessibleDive(state, c, 200),
+  const dive = accessibleDive(state, c, mapScale(state).length(0.00005)),
     pressure = dive >= 0 ? magicAt(state, "moves-water", dive) : 0;
   for (const [id, value] of [
     ["fire-forge", fire],

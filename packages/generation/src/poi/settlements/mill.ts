@@ -1,5 +1,6 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import type { GenerationState } from "../../process";
+import { MapScale } from "@atlas/domain";
 import { regionalFeature, regionalId } from "../../regional/extraction/features";
 import { positionOf } from "../../regional/lattice";
 import type { Place } from "../../regional/societyWays";
@@ -23,11 +24,12 @@ import { isGone, seatOf, weighedPlace } from "./settlementRecords";
 
 /** A channel's fall that turns a mill and the mill's reach from its seat in cells. */
 const millGradient = 0.01,
+  // length-unit: ratio
   millReach = 3;
 /** Slope by discharge at which a mill is half as strong as mills get. */
-const typicalPower = 1;
+const typicalPower = MapScale.volume(1.5625e-20);
 /** The head a mill's weir and pond hold above the bed, in metres. */
-const millHead = 2;
+const millHead = MapScale.length(0.0000005, 0.5);
 /** A flash lock through the weir: what it costs a boat to pass, against open river. */
 const weirCost = 3;
 /** The lane everyone with grain walks to it. */
@@ -92,7 +94,8 @@ const pond = (state: GenerationState, cell: number): readonly PoiFieldChange[] =
     change: "atLeast",
     band: "WaterSurfaceElevations",
     cell,
-    value: fieldOf(state).Elevation.get(cell) + toNative(millHead),
+    value:
+      fieldOf(state).Elevation.get(cell) + toNative(fieldOf(state).scale.resolveMeasure(millHead)),
   },
 ];
 const counterpart = counterpartOf(fallingChannel, 1);
@@ -114,7 +117,7 @@ export const mill: PoiEntry = {
       fallingChannel(state, cell) && settlementWithin(state, cell, reach(state)),
     suitability: (state, cell) => {
       const power = powerAt(state, cell);
-      return power / (power + typicalPower);
+      return power / (power + fieldOf(state).scale.resolveMeasure(typicalPower));
     },
     places,
   },

@@ -1,5 +1,7 @@
 import {
   gridPosition,
+  MapScale,
+  type RelativeMeasure,
   population,
   type SocietyCommunity,
   type SocietyWork,
@@ -10,9 +12,12 @@ import { societyValue } from "./societySupport";
 import { isWorldSociety } from "./societyMapScope";
 import { hasMedium, tappableFire } from "./societyDemand";
 import { nearestSample, samplesInBox } from "./societySpatial";
+import { mapScale } from "./worldSignificance";
 
 /** How far a band goes from its camp to tap a vein, in metres. */
-export const tappingReach = 25_000;
+export const tappingReach = MapScale.length(0.00625);
+const quarryReach = MapScale.length(0.0075);
+const weirReach = MapScale.length(0.00375);
 
 /**
  * The cold-age set of a mobile round: hunt the crowded herds, burn the groves open, dig into
@@ -27,12 +32,17 @@ export function coldAgeWorks(state: GenerationState, c: SocietyCommunity): Socie
   if (v("treeCover") > 0.25) kinds.push("burning");
   // At World a band works the veins, prisms and shore its own unit holds; a finer profile
   // looks for the site within a day's reach of the camp (ADR 0005).
-  const reaches = (kind: SocietyWorkKind, channel: string, threshold: number, reach: number) =>
+  const reaches = (
+    kind: SocietyWorkKind,
+    channel: string,
+    threshold: number,
+    reach: RelativeMeasure
+  ) =>
     isWorldSociety(state)
       ? hasMedium(state, { communityId: c.id, kind })
       : coldAgeSite(state, c, channel, threshold, reach) >= 0;
   if (reaches("tapping", "magic:fire:intensity", tappableFire, tappingReach)) kinds.push("tapping");
-  if (reaches("quarrying", "magic:aurora:feature:prism", 1, 30_000)) kinds.push("quarrying");
+  if (reaches("quarrying", "magic:aurora:feature:prism", 1, quarryReach)) kinds.push("quarrying");
   const shore = isWorldSociety(state)
     ? hasMedium(state, { communityId: c.id, kind: "weir" })
     : i >= 0 && state.society!.coast.get(i) > 0;
@@ -45,10 +55,11 @@ function coldAgeSite(
   c: SocietyCommunity,
   channel: string,
   threshold: number,
-  reach: number,
+  reachMeasure: RelativeMeasure,
   accepts: (i: number) => boolean = () => true
 ) {
-  const { x, y } = c.position;
+  const { x, y } = c.position,
+    reach = mapScale(state).resolveMeasure(reachMeasure);
   let best = -1,
     distance = reach;
   for (const i of samplesInBox(state.surface, [x - reach, y - reach, x + reach, y + reach])) {
@@ -66,15 +77,15 @@ export function placeColdAgeWork(state: GenerationState, c: SocietyCommunity, wo
     work.kind === "tapping"
       ? coldAgeSite(state, c, "magic:fire:intensity", tappableFire, tappingReach)
       : work.kind === "quarrying"
-        ? coldAgeSite(state, c, "magic:aurora:feature:prism", 1, 30_000)
+        ? coldAgeSite(state, c, "magic:aurora:feature:prism", 1, quarryReach)
         : work.kind === "weir"
           ? coldAgeSite(
               state,
               c,
               "water",
               1,
-              15_000,
-              (i) => societyValue(state, "waterDepth", i) < 30
+              weirReach,
+              (i) => societyValue(state, "waterDepth", i) < mapScale(state).length(0.0000075, 0.5)
             )
           : -1;
   if (at >= 0) work.position = gridPosition(grid, at);

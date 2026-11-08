@@ -1,4 +1,4 @@
-import { biomeCode as B } from "@atlas/domain";
+import { MapScale, biomeCode as B } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 
 export const unit = (value: number) => Math.max(0, Math.min(1, value));
@@ -9,10 +9,10 @@ export const standingWaterSlope = 0.015;
 /** The one definition of a wetland: land held wet by what grows on it, not a water surface. */
 export const isWetland = (map: PhysicalField, i: number) =>
   map.WaterKindCodes.get(i) === 0 && map.WetlandCover.get(i) >= wetlandCoverShare;
-/** Wind speed relative to a 7 m/s reference; maps before atmospheric flow use the reference. */
+/** Wind speed relative to the map's prevailing-flow scale; absent flow uses unit strength. */
 export const windStrength = (map: PhysicalField, i: number) => {
   const speed = map.WindSpeed.get(i);
-  return speed > 0 ? speed / 7 : 1;
+  return speed > 0 ? speed / map.scale.length(0.00000175) : 1;
 };
 export const approach = (value: number, target: number, years: number, time: number) =>
   target + (value - target) * Math.exp(-years / time);
@@ -54,23 +54,26 @@ export const neutralEcology: EcologyForcing = {
   verdure: 0,
   salting: 0,
 };
-/** Potential evaporation in m/year at a mean temperature in °C, never below 0.25. */
-export const potentialEvaporation = (celsius: number) => Math.max(0.25, 0.3 + 0.045 * celsius);
+/** Potential evaporation in metres/year from relative depth controls and temperature in °C. */
+export const potentialEvaporation = (celsius: number, scale: MapScale) =>
+  scale.length(Math.max(6.25e-8, 7.5e-8 + 1.125e-8 * celsius));
 export function environment(map: PhysicalField, i: number, forcing = neutralEcology) {
   // A river carrying magical warmth is warmer than its banks and does not freeze.
   const warmth = map.RiverOrders.get(i) >= 1 ? map.RiverWarmth.get(i) : 0;
   const temperature = (map.Temperature.get(i) + warmth) / 10 - 30;
-  const depth = map.WaterDepths.get(i) / 1024;
+  const depth = MapScale.metres(map.WaterDepths.get(i), "native");
   const water = map.WaterKindCodes.get(i),
     ice = map.IceThickness.get(i);
   // Warm river water keeps a reach open through a skin of ice, not under a glacier.
-  const frozen = ice > frozenIce && !(warmth >= 50 && ice <= 50);
+  const frozen =
+    ice > map.scale.resolveMeasure(frozenIce) &&
+    !(warmth >= 50 && ice <= map.scale.length(0.0000125));
   const warmSeason = unit((temperature + 8) / 18) * unit((52 - temperature) / 18);
-  const rain = (map.Rainfall.get(i) + map.Snowfall.get(i)) / 1000;
+  const rain = MapScale.metres(map.Rainfall.get(i) + map.Snowfall.get(i), "mm");
   // Plant water is the aridity index: precipitation over evaporative demand,
   // about 1.4 m/year at 25 °C. Column humidity is not surface humidity: heavy
   // rainout drains the column exactly where plants have most water.
-  const moisture = Math.min(1, rain / potentialEvaporation(temperature));
+  const moisture = Math.min(1, rain / potentialEvaporation(temperature, map.scale));
   // Climate supplies each cell's seasonal half-range; the epoch's seasonality
   // scales it, with the neutral 0.3 leaving it unchanged. Before climate has
   // run, the former uniform 7.5 °C half-range at neutral seasonality applies.
@@ -81,14 +84,21 @@ export function environment(map: PhysicalField, i: number, forcing = neutralEcol
       : forcing.seasonality * 25;
   const summer = temperature + range;
   const winter = temperature - range;
-  const drought = unit(1 - moisture * (1 - forcing.seasonality * 0.55) - map.SoilWater.get(i));
+  const drought = unit(
+    1 -
+      moisture * (1 - forcing.seasonality * 0.55) -
+      map.SoilWater.get(i) / map.scale.length(2.5e-7)
+  );
   const flat = unit(1 - map.Slope.get(i) / standingWaterSlope);
-  const drainage = unit((map.DrainageElevations.get(i) - map.Elevation.get(i)) / (3 * 1024));
+  const drainage = unit(
+    MapScale.metres(map.DrainageElevations.get(i) - map.Elevation.get(i), "native") /
+      map.scale.length(7.5e-7)
+  );
   const flood = unit(map.FloodplainIntensity.get(i) / 1000 + map.DeltaIntensity.get(i) / 1000);
   const wetness = water
-    ? unit(1 - depth / 3)
+    ? unit(1 - depth / map.scale.length(7.5e-7))
     : flat * unit(drainage + flood + (moisture - 0.7) * 1.8);
-  const submerged = water !== 0 && (water === 1 || depth > 1.5);
+  const submerged = water !== 0 && (water === 1 || depth > map.scale.length(3.75e-7));
   return {
     temperature,
     depth,
@@ -155,8 +165,8 @@ function foggedBiome(map: PhysicalField, i: number, trees: number, cover: number
 export const quickenedFrom = 0.25,
   stilledFrom = 0.45,
   foggedFrom = 0.3;
-/** The depth of ice, in metres, that freezes ground. */
-export const frozenIce = 1;
+/** Relative ice depth that freezes ground. */
+export const frozenIce = MapScale.length(2.5e-7);
 /** Below this share of living cover the ground is bare; below this plant water, bare ground is desert. */
 export const bareCover = 0.12,
   desertMoisture = 0.25;

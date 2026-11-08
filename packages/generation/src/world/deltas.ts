@@ -6,7 +6,7 @@ import { clamp } from "./math";
 import { sourceToOutletOrder } from "./flowGraph";
 import { physicalDistance } from "./physicalMetric";
 import { workingValues, releaseWorking } from "./physicalNumerics";
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 
 function sedimentDelivery(map: PhysicalField): Band {
   const delivery = workingValues(
@@ -14,8 +14,10 @@ function sedimentDelivery(map: PhysicalField): Band {
     "float64",
     "delta:delivery",
     (i) =>
-      ((map.CumulativeFluvialErosion.get(i) + map.CumulativeGlacialErosion.get(i)) / 1024) *
-      map.mesh.area(i)
+      MapScale.metres(
+        map.CumulativeFluvialErosion.get(i) + map.CumulativeGlacialErosion.get(i),
+        "native"
+      ) * map.mesh.area(i)
   );
   const order = sourceToOutletOrder(map);
   for (let n = 0; n < order.length; n++) {
@@ -67,7 +69,7 @@ function stepDirection(
   const f = Math.fround,
     x = f(meshDeltaX(map.mesh, map.mesh.x(target) - map.mesh.x(source))),
     y = f(map.mesh.y(target) - map.mesh.y(source));
-  const length = Math.max(f(0.001), f(Math.sqrt(f(f(x * x) + f(y * y)))));
+  const length = f(Math.sqrt(f(f(x * x) + f(y * y)))) || 1;
   return [x, y, length];
 }
 function pointsIntoFan(
@@ -93,11 +95,10 @@ function buildFan(map: PhysicalField, c: PhysicalContext, mouth: number, ocean: 
   markDelta(map, mouth, 1000, order);
   for (let head = 0; head < queue.length; head++) {
     const front = queue[head];
-    if (front.depth > p.DeltaMaximumRadius || !receiveDelta(map, mouth, front.i)) continue;
-    const intensity = 1000 - (front.depth / 10_000) * p.DeltaIntensityDecay;
+    if (!receiveDelta(map, mouth, front.i)) continue;
+    const intensity = 1000 - (front.depth / map.scale.length(0.0025)) * p.DeltaIntensityDecay;
     if (intensity <= map.DeltaIntensity.get(front.i)) continue;
     markDelta(map, front.i, intensity, order);
-    if (front.depth >= p.DeltaMaximumRadius) continue;
     for (let edge = 0; edge < map.mesh.degree(front.i); edge++) {
       const j = map.mesh.neighbor(front.i, edge);
       if (

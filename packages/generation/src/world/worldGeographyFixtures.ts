@@ -38,7 +38,7 @@ export function worldGeographyFixture(
     map = createField(mesh),
     work = {
       map,
-      profile: atlasPhysicalProfile(),
+      profile: atlasPhysicalProfile({}, {}, map.scale),
       fixed: [],
       inherited: false,
       samples: state.surface.coverage.scratch("int32", "physical:samples", 0),

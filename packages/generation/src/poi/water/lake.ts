@@ -1,5 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { spatial } from "@atlas/domain";
+import { MapScale, spatial } from "@atlas/domain";
 import { lakeMembership } from "../../world/lakeMembership";
 import { noWaterSurface } from "../../world/math";
 import { generatedFeature } from "../../mapFeatures";
@@ -31,9 +31,10 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { areaOf, spans } from "./waterReads";
 
 /** Interpolated captured depth (m) above which ground beside a captured lake is lake. */
-const lakeShoreDepth = 0.5;
+// length-unit: fraction
+const lakeShoreDepth = 0.000000125;
 /** Metres of depth under which a lake has gone: filled, or drained to a film. */
-const shallowest = 1;
+const shallowest = MapScale.length(0.00000025, 0.5);
 /** Rain below this, in metres a year, leaves a dead lake's salts on the ground. */
 const aridRain = 0.25;
 /** Per-mille moisture a broad lake holds on its shore. */
@@ -78,7 +79,10 @@ function lakeRecord(state: GenerationState, place: PoiPlace) {
   return generatedFeature(state, `lake:${key}`, `Lake ${body}`, "lake", "lakes", shape, {
     sourceAlgorithm: "atlas-1",
     waterBody: body,
-    waterLevel: (map.WaterSurfaceElevations.get(place.anchor) - map.BaseSeaLevel) / 1024,
+    waterLevel: MapScale.metres(
+      map.WaterSurfaceElevations.get(place.anchor) - map.BaseSeaLevel,
+      "native"
+    ),
     area: spatial.area(shape),
     depth: depthOf(state, place),
   });
@@ -146,12 +150,12 @@ function capturedLakes(state: RegionalState): Evidence["lakes"] {
     datum = map.EffectiveSeaLevel,
     lakes: Evidence["lakes"] = [],
     around = new Int32Array(mesh.stride),
-    depth = (i: number) => map.WaterDepths.get(i) / 1024,
+    depth = (i: number) => MapScale.metres(map.WaterDepths.get(i), "native"),
     lakeWater = (i: number) => {
       const kind = map.WaterKindCodes.get(i);
       if (kind === 1) return false;
-      if (kind === 2) return depth(i) > lakeShoreDepth;
-      if (depth(i) <= lakeShoreDepth) return false;
+      if (kind === 2) return depth(i) > map.scale.length(lakeShoreDepth, 0.5);
+      if (depth(i) <= map.scale.length(lakeShoreDepth, 0.5)) return false;
       const m = neighborsOf(mesh, i, around);
       for (let k = 0; k < m; k++) if (map.WaterKindCodes.get(around[k]) === 2) return true;
       return false;
@@ -162,10 +166,12 @@ function capturedLakes(state: RegionalState): Evidence["lakes"] {
     for (const i of members) {
       const surface = map.WaterSurfaceElevations.get(i),
         known = surface !== noWaterSurface;
-      level += (known ? surface : state.regional.inheritedHeight.get(i) + depth(i) * 1024) - datum;
+      level +=
+        (known ? surface : state.regional.inheritedHeight.get(i) + MapScale.native(depth(i))) -
+        datum;
       weight++;
     }
-    lakes.push({ cells: members, level: level / weight / 1024 });
+    lakes.push({ cells: members, level: MapScale.metres(level / weight, "native") });
   });
   return lakes;
 }
@@ -278,7 +284,8 @@ export const lake: PoiEntry = {
     statement:
       "A lake lasts while its basin holds water. Filled or drained it leaves a wetland, or a salt pan where the country is arid; a reservoir whose dam is gone is emptied the same way.",
     fate(state, place) {
-      if (depthOf(state, place) >= shallowest) return { fate: "persists" };
+      if (depthOf(state, place) >= fieldOf(state).scale.resolveMeasure(shallowest))
+        return { fate: "persists" };
       return rainfallAt(state, place.anchor) < aridRain
         ? { fate: "ends", leaves: "saltPan" }
         : { fate: "ends", leaves: "wetland" };

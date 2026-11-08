@@ -1,4 +1,3 @@
-import type { FeatureSelection } from "./features";
 import type { DomainSnapshot } from "@atlas/domain";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
 import { mapBoundaryValue } from "./atlasParameters";
@@ -46,24 +45,5 @@ export function inheritMapBoundary(
           },
         }
       : {}),
-  };
-}
-
-/** Older climate recipes stored the longitude choice before it owned world topology. */
-export function migrateBoundarySelection(selection: FeatureSelection | undefined) {
-  const climate = selection?.["physical.climate"];
-  if (!climate?.settings || typeof climate.settings.wrapLongitude !== "number") return selection;
-  const { wrapLongitude, ...settings } = climate.settings;
-  const foundation = selection!["physical.foundation"] ?? { enabled: true };
-  return {
-    ...selection,
-    "physical.climate": { ...climate, settings },
-    "physical.foundation": {
-      ...foundation,
-      settings: {
-        mapBoundary: wrapLongitude,
-        ...foundation.settings,
-      },
-    },
   };
 }

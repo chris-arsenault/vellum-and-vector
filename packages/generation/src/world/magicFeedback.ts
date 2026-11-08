@@ -10,7 +10,7 @@ import { magicBudget, originStocks, reservoirStock } from "./magicState";
 import { advanceStocks } from "./magicStocks";
 import { rememberLakes } from "./magicSaltSources";
 import { markRim, wardCoasts } from "./magicHallowed";
-import type { Band, MagicSystem } from "@atlas/domain";
+import { MapScale, type Band, type MagicSystem } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 export const coastalMagicParameters: (keyof MagicSystem["parameters"])[] = [
@@ -34,7 +34,10 @@ export function heldCharge(map: PhysicalField, field: Field, i: number) {
   // Relict charge in the ground keeps acting after the ice has gone, at a reduced strength,
   // so a deglaciated valley stays cold until the charge has thawed away.
   const relict = field.definition.parameters.relictStrength * unit((stored - 300) / 150);
-  return unit(strength) * Math.max(unit(map.IceThickness.get(i) / 50), relict);
+  return (
+    unit(strength) *
+    Math.max(unit(map.IceThickness.get(i) / map.scale.length(0.0000125, 0.5)), relict)
+  );
 }
 export function magicThermalFeedback(state: GenerationState) {
   const work = state.physical!,
@@ -113,7 +116,10 @@ export function magicLivingFeedback(state: GenerationState) {
 }
 /** Shelf, water shallower than 400 m, or a cell on the shore: where a ray lifts deep water. */
 function shoals(map: PhysicalField, i: number) {
-  if ([2, 3].includes(map.BathymetricZoneCodes.get(i)) || map.WaterDepths.get(i) < 400 * 1024)
+  if (
+    [2, 3].includes(map.BathymetricZoneCodes.get(i)) ||
+    map.WaterDepths.get(i) < units(map.scale.length(0.0001, 0.5))
+  )
     return true;
   for (let edge = 0; edge < map.mesh.degree(i); edge++) {
     const j = map.mesh.neighbor(i, edge);
@@ -143,8 +149,7 @@ function movedWater(map: PhysicalField, fields: Field[]): OceanForcing {
     const shoaling = shoals(map, i);
     for (const field of fields) moveWaterAt(map, forcing, field, i, shoaling);
     forcing.upwelling.set(i, clamp(round(forcing.upwelling.get(i)), 0, 1000));
-    // A front cools the surface by a few degrees, never into a sea of its own.
-    forcing.seaSurface.set(i, clamp(round(forcing.seaSurface.get(i)), -60, 60));
+    forcing.seaSurface.set(i, round(forcing.seaSurface.get(i)));
     forcing.storm.set(i, clamp(round(forcing.storm.get(i)), 0, 1000));
   }
   return forcing;
@@ -365,15 +370,13 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
   releaseWorking(map, totals);
 }
 /**
- * Thawing ground charge on bare land lets the ground settle, like thermokarst: a bounded
- * subsidence per cell that leaves the small closed basins Salt's dead lakes will read.
+ * Thawing ground charge on bare land lets the ground settle, like thermokarst,
+ * leaving the small closed basins Salt's dead lakes will read.
  */
 function thawSubsidence(map: PhysicalField, field: Field, i: number, thawed: number) {
   if (thawed <= 0 || map.IceThickness.get(i) > 0 || map.WaterKindCodes.get(i) !== 0) return;
   const p = field.definition.parameters,
-    room = p.thawSubsidenceLimit - field.subsided.get(i);
-  if (room <= 0) return;
-  const metres = Math.min(room, (p.thawSubsidence * thawed) / 1000);
+    metres = (p.thawSubsidence * thawed) / 1000;
   if (metres <= 0) return;
   field.subsided.add(i, metres);
   displaceGround(map, i, -units(metres), "aurora");
@@ -438,7 +441,7 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
       maximum = Math.max(maximum, value);
     }
     const budget = magicBudget(field, map),
-      km2 = (value: number) => Math.round(value / 1_000_000);
+      km2 = (value: number) => Math.round(MapScale.areaUnits(value, "m2", "km2"));
     context.recordCause({
       kind: "domain",
       process: "atlas.magic-history",

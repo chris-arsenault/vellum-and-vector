@@ -2,7 +2,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, round } from "./math";
-import { latitudeAt, metresPerDegree } from "./latitude";
+import { latitudeAt } from "./latitude";
 import { circulation } from "./atmosphere";
 import { insolationTemperature } from "./climate";
 import { physicalGradients } from "./physicalMetric";
@@ -195,11 +195,9 @@ function carriedAnomaly(map: PhysicalField, c: PhysicalContext, upstream: Band) 
  * Eddies mix water where opposing drifts meet, so a circulation cell boundary
  * is a front rather than a step; aligned boundary currents stay sharp. Mixing
  * is solved only within three lengths of a front, where its weight exceeds e⁻⁹.
- * On a map with few kilometres per degree the length shrinks to a few degrees,
- * so a front never spans a whole belt.
  */
 function mixFronts(map: PhysicalField, p: PhysicalProfile, carried: Band) {
-  const length = Math.min(p.SeaSurfaceMixing, p.SeaSurfaceMixingDegrees * metresPerDegree(p)),
+  const length = p.SeaSurfaceMixing,
     opposing = opposition(map),
     reach = length * 3,
     front = oceanPathDistance(

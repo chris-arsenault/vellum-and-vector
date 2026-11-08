@@ -1,5 +1,5 @@
 // The great canyon: resistant rims, a channel incised below them, and a captured river.
-import { CellList, radixOrder } from "@atlas/domain";
+import { CellList, MapScale, radixOrder } from "@atlas/domain";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { hardenRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
@@ -20,7 +20,8 @@ import {
 import { note, type LandmarkRecord } from "./landmarkLedger";
 import type { Kind } from "./landmarkKind";
 
-const baseLevel = (map: PhysicalField) => map.EffectiveSeaLevel + units(1);
+const baseLevel = (map: PhysicalField) =>
+  map.EffectiveSeaLevel + units(map.scale.length(0.00000025));
 
 /**
  * Floor cells of a canyon with their station index, and the rim cells beside them. At a mesh
@@ -30,10 +31,10 @@ const baseLevel = (map: PhysicalField) => map.EffectiveSeaLevel + units(1);
  */
 export function canyonCells(map: PhysicalField, placed: Placed, corridor: Iterable<number> = []) {
   const metrics = pathMetrics(map, placed.path),
-    width = placed.parameters.rimWidth * 1000,
-    floorWidth = Math.max(width / 4, map.mesh.spacing * 0.55),
-    rimReach = Math.max(width, floorWidth + map.mesh.spacing * 1.2),
-    step = map.mesh.spacing / 2,
+    width = MapScale.metres(placed.parameters.rimWidth, "km"),
+    floorWidth = map.scale.supported(width / 4, 0.55),
+    rimReach = Math.max(width, floorWidth + map.scale.cells(1.2)),
+    step = map.scale.cells(0.5),
     line = stations(map, metrics, step),
     channel = new Set(corridor);
   const floor: { i: number; station: number }[] = [],
@@ -106,12 +107,12 @@ function deepenCanyon(
     base = baseLevel(map);
   // A captured river may already have cut the head deeper; the floor descends from there.
   let previous = Number.isFinite(profile.floorLevel[0])
-      ? profile.floorLevel[0] + units(0.2)
+      ? profile.floorLevel[0] + units(map.scale.length(0.00000005))
       : Infinity,
     applied = 0;
   for (let k = 0; k < count; k++) {
     const rim = Number.isFinite(profile.rimLevel[k]) ? profile.rimLevel[k] : profile.floorLevel[k];
-    target[k] = Math.min(previous - units(0.2), rim - depth);
+    target[k] = Math.min(previous - units(map.scale.length(0.00000005)), rim - depth);
     previous = target[k];
   }
   for (const { i, station } of profile.floor) {
@@ -147,7 +148,7 @@ function cutCorridor(map: PhysicalField, from: number, to: number, floorWidth: n
     const j = map.mesh.neighbor(from, edge);
     if (j >= 0) lowest = Math.min(lowest, map.Elevation.get(j));
   }
-  const start = lowest - units(3);
+  const start = lowest - units(map.scale.length(0.00000075));
   if (start <= baseLevel(map)) return null;
   const exit = map.FlowTargets.get(from);
   const fall =
@@ -156,7 +157,10 @@ function cutCorridor(map: PhysicalField, from: number, to: number, floorWidth: n
         Math.max(1, distance(map, exit, [ax, ay]))
       : 0;
   const gradient = Math.max(2 / 1000, 1.5 * fall);
-  const end = Math.min(map.Elevation.get(to), start - units(2) - gradient * length);
+  const end = Math.min(
+    map.Elevation.get(to),
+    start - units(map.scale.length(0.0000005)) - gradient * length
+  );
   const cells: number[] = [];
   let applied = 0;
   for (let i = 0; i < map.mesh.count; i++) {
@@ -197,12 +201,16 @@ function reachesSea(map: PhysicalField, from: number, steps: number) {
  */
 function riversNear(map: PhysicalField, head: number, reach: number, floor: Set<number>) {
   const base = baseLevel(map),
-    nearSea = Math.ceil(reach / map.mesh.spacing),
+    nearSea = Math.ceil(map.scale.cellCount(reach)),
     candidates = new CellList(),
     at: [number, number] = [map.mesh.x(head), map.mesh.y(head)];
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) !== 0 || map.RiverOrders.get(i) <= 0 || floor.has(i)) continue;
-    if (map.Elevation.get(i) <= base + units(5) || reachesSea(map, i, nearSea)) continue;
+    if (
+      map.Elevation.get(i) <= base + units(map.scale.length(0.00000125)) ||
+      reachesSea(map, i, nearSea)
+    )
+      continue;
     if (distance(map, i, at) > reach) continue;
     candidates.push(i);
   }
@@ -253,7 +261,7 @@ export function captureInto(map: PhysicalField, record: LandmarkRecord, target: 
   if (target.head < 0) return 0;
   const { head, floor, reach } = target,
     held = heldRiver(map, floor, record),
-    steps = 4 * Math.ceil(reach / map.mesh.spacing) + 8;
+    steps = 4 * Math.ceil(map.scale.cellCount(reach)) + 8;
   if (!anyRiver(map)) return 0;
   for (const best of riversNear(map, head, reach, floor)) {
     if (map.FlowAccumulation.get(best) <= held) break;
@@ -266,12 +274,12 @@ export function captureInto(map: PhysicalField, record: LandmarkRecord, target: 
       record,
       `Captured the river at (${Math.round(map.mesh.x(best) + map.mesh.origin[0])}, ${Math.round(map.mesh.y(best) + map.mesh.origin[1])}) into the ${target.label}.`
     );
-    return corridor.applied / 1024;
+    return MapScale.metres(corridor.applied, "native");
   }
   if (!record.capture)
     note(
       record,
-      `No river within ${Math.round(reach / 1000)} km of the ${target.label}; it carries local drainage only.`
+      `No river within ${Math.round(MapScale.inUnits(reach, "km"))} km of the ${target.label}; it carries local drainage only.`
     );
   return 0;
 }
@@ -282,7 +290,7 @@ export function captureRiver(map: PhysicalField, placed: Placed, record: Landmar
     head: channelCell(map, geometry.line[0]),
     floor: new Set(geometry.floor.map((cell) => cell.i)),
     floorWidth: geometry.floorWidth,
-    reach: placed.parameters.captureDistance * 1000,
+    reach: MapScale.metres(placed.parameters.captureDistance, "km"),
     label: "canyon head",
   });
 }
@@ -301,7 +309,9 @@ export const canyon: Kind = {
   },
   measure(map, placed, record) {
     const profile = canyonProfile(map, placed, record?.corridor);
-    const depths = profile.line.map((_, k) => (profile.rimLevel[k] - profile.floorLevel[k]) / 1024);
+    const depths = profile.line.map((_, k) =>
+      MapScale.metres(profile.rimLevel[k] - profile.floorLevel[k], "native")
+    );
     return { depth: mean(depths) };
   },
   maintain(map, p, placed, shortfall, _epoch, record) {

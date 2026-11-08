@@ -10,6 +10,7 @@ import type { GenerationState, MapProcessContext, MapProcess } from "./process";
 import { practiceOpportunities, seekingFactor } from "./societySeeking";
 import { centers } from "./mapPeople";
 import { profileOf } from "./societyProfile";
+import { mapScale } from "./worldSignificance";
 import { initializePopulation, nearestCommunity, withCommunityIndex } from "./societyPopulation";
 import { communityReach } from "./societyContact";
 import { generationBindings } from "./generationBindings";
@@ -111,7 +112,10 @@ function polityReach(
   const seat = region.communities.findIndex((c) => c.id === polity.seat);
   const distance = communityReach(region, seat);
   const entity = state.domain.world.entities[polity.id];
-  const scale = Math.max(1000, Number(entity?.attributes.reach ?? 250000));
+  const scale = Math.max(
+    mapScale(state).length(0.00025),
+    Number(entity?.attributes.reach ?? mapScale(state).length(0.0625))
+  );
   const health = Math.max(0, Math.min(1, polity.support));
   const institution = institutionalSupport(state, polity);
   const seeker = seat >= 0 ? communityPractices(region.communities[seat].groups) : {};

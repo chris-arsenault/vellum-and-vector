@@ -67,7 +67,6 @@ export type WorkspaceOperation =
   | { kind: "close" }
   | CatalogCall
   | { kind: "importWorld"; worldId: string; snapshot: DomainSnapshot }
-  | { kind: "openLegacyWorld"; worldId: string; saved: import("./legacySave").LegacySavedWorld }
   | { kind: "openSavedWorld"; worldId: string; root: { name: string; path: string } }
   | { kind: "saveWorld"; worldId: string }
   | { kind: "export"; worldId: string; areaId?: string }

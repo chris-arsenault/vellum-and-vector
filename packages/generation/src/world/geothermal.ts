@@ -22,9 +22,16 @@ export function geothermal(map: PhysicalField, c: PhysicalContext) {
     const plume =
       (volcanicActivity / 1000) *
       0.68 *
-      clamp(1 + (lobes * c.Profile.PlumeLobeStrength) / 1000, 0, 1.6);
+      Math.max(0, 1 + (lobes * c.Profile.PlumeLobeStrength) / 1000);
     const broad =
-      unitNoise(map.mesh, x, y, c.Seed, Math.max(140_000, map.mesh.contentRadius * 0.34), 2) * 0.1;
+      unitNoise(
+        map.mesh,
+        x,
+        y,
+        c.Seed,
+        Math.max(map.scale.length(0.035), map.mesh.contentRadius * 0.34),
+        2
+      ) * 0.1;
     const geothermal = round(clamp(boundary + fracture + impact + plume + broad, 0, 1) * 1000);
     map.Geothermal.set(i, geothermal);
     map.HeatSourceDensity.set(

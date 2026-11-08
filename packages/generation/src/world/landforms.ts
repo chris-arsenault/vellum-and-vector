@@ -7,6 +7,7 @@ import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
 import { physicalDistance, physicalSampler } from "./physicalMetric";
 import { topographicProminence } from "../topographicProminence";
+import { MapScale } from "@atlas/domain";
 
 function shape(
   map: PhysicalField,
@@ -98,7 +99,7 @@ function historical(
     : 0;
 }
 /** The least drop, in metres, that falls rather than runs; a real height, whatever the cell. */
-export const waterfallLeastDrop = 10;
+export const waterfallLeastDrop = (map: PhysicalField) => map.scale.length(0.0000025);
 /** A river's gradient over this many times the reach above and below it is a step, not a slope. */
 const waterfallStepRatio = 5;
 /** The height water runs at: the ground, or the surface of the water standing on it. */
@@ -113,7 +114,7 @@ function riverLevel(map: PhysicalField, i: number) {
 /** Metres a river falls from a cell to the next: to its surface where that cell holds water. */
 export function riverDrop(map: PhysicalField, i: number) {
   const target = map.FlowTargets.get(i);
-  return target < 0 ? 0 : (riverLevel(map, i) - riverLevel(map, target)) / 1024;
+  return target < 0 ? 0 : MapScale.metres(riverLevel(map, i) - riverLevel(map, target), "native");
 }
 /** A river's gradient from a cell to the next, rise over run. */
 export function riverGradient(map: PhysicalField, i: number) {
@@ -137,7 +138,7 @@ function gradientAbove(map: PhysicalField, i: number) {
  */
 export function isRiverStep(map: PhysicalField, i: number): boolean {
   if (map.WaterKindCodes.get(i) !== 0 || map.RiverOrders.get(i) <= 0) return false;
-  if (riverDrop(map, i) < waterfallLeastDrop) return false;
+  if (riverDrop(map, i) < waterfallLeastDrop(map)) return false;
   const below = Math.max(0, riverGradient(map, map.FlowTargets.get(i)));
   return riverGradient(map, i) >= waterfallStepRatio * Math.max(gradientAbove(map, i), below);
 }
@@ -219,9 +220,9 @@ function adjacentCells(map: PhysicalField) {
 }
 /**
  * Elevation units a top must rise above its col to be a top, and so to make that col a pass:
- * fifty metres. A lesser rise is a bump in the ground, whatever the map's cell size.
+ * declared relative to the map, independently of its cell size.
  */
-export const leastRise = 50 * 1024;
+export const leastRise = (map: PhysicalField) => MapScale.native(map.scale.length(0.0000125));
 /** Each top's prominence, and every key col with the rise of the greatest top it serves. */
 function topsAndCols(map: PhysicalField) {
   const { rise, saddle } = topographicProminence(
@@ -234,7 +235,7 @@ function topsAndCols(map: PhysicalField) {
     cols = new Map<number, number>();
   for (let cell = 0; cell < map.mesh.count; cell++) {
     const col = saddle.get(cell);
-    if (col >= 0 && rise.get(cell) >= leastRise)
+    if (col >= 0 && rise.get(cell) >= leastRise(map))
       cols.set(col, Math.max(cols.get(col) ?? 0, rise.get(cell)));
   }
   map.coverage.release(saddle);

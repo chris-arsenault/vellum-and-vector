@@ -71,6 +71,14 @@ the application layer evaluates shared domain rules against scoped inputs.
 
 ## Procedural generation
 
+**User correction — 2026-11-08:** Support only current map and configuration
+formats. Do not add or preserve legacy facades, converters or migration fallbacks.
+Processes have no arbitrary output or geographic caps. Keep constraints required
+by numerical representation and actual material availability; bounded fractions
+are distinct from caps on terrain, rates or feature extent. All dimensional
+declarations resolve through `MapScale`, and measured settings must not re-enter
+the relative configuration boundary.
+
 Generation runs a configured process order on one shared working state, in causal
 epoch loops. This product is not The Canonry Game: its code began as a port and has
 its own processes now. Do not copy Canonry processes in, and do not keep a value or a

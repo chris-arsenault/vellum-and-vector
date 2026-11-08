@@ -142,7 +142,7 @@ export type PoiFieldChange =
   | { readonly change: "add"; readonly magic: PoiMagicBand; cell: number; amount: number }
   | { readonly change: "atMost"; readonly magic: PoiMagicBand; cell: number; value: number }
   | { readonly change: "atLeast"; readonly magic: PoiMagicBand; cell: number; value: number }
-  | { readonly change: "gradientAtMost"; cell: number; gradient: number };
+  | { readonly change: "gradeGround"; cell: number; gradient: number };
 type FieldEffect<P> = Slot<OnPlace<readonly PoiFieldChange[], P>>;
 
 /** Effect on fields: what it does to each medium while it exists: source, sink, store, barrier, a shape held. */

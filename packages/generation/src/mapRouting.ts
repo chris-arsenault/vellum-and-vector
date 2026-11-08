@@ -5,6 +5,7 @@ import {
   requireThat,
   spatial,
   KeyedHeap,
+  MapScale,
   type Band,
   type Grid,
   type Position,
@@ -63,7 +64,8 @@ function searchRoute(
   { costs, previous, queue }: { costs: Band; previous: Band; queue: RouteHeap }
 ) {
   const start = nearest(grid, from),
-    end = nearest(grid, to);
+    end = nearest(grid, to),
+    scale = MapScale.fromCells(grid.bounds, grid.active.length);
   // Every edge uses the same footprint. Read its topology once per route
   // while retaining exact segment checks at concavities and holes.
   const covers = spatial.geometryCoverage(grid.scope.footprint);
@@ -82,7 +84,7 @@ function searchRoute(
     if (queue.cost() !== here + remaining(cell)) continue;
     if (cell === end) return routePoints(grid, previous, start, end, from, to);
     for (const next of neighbors(grid, cell, true, covers)) {
-      const step = routeCost(grid, cell, next, kind);
+      const step = routeCost(grid, cell, next, kind, scale);
       const cost = here + step;
       if (cost >= costs.get(next)) continue;
       costs.set(next, cost);
@@ -92,22 +94,22 @@ function searchRoute(
   }
   return [];
 }
-function routeCost(grid: Grid, from: number, to: number, kind: string) {
+function routeCost(grid: Grid, from: number, to: number, kind: string, scale: MapScale) {
   const a = gridPosition(grid, from),
     b = gridPosition(grid, to),
     distance = gridDistance(grid, a, b);
-  if (kind === "river") return riverCost(grid, from, to, distance);
-  if (kind === "sea") return distance * seaFactor(grid, to);
+  if (kind === "river") return riverCost(grid, from, to, distance, scale);
+  if (kind === "sea") return distance * seaFactor(grid, to, scale);
   if (kind === "road" && oceanCell(grid, to)) return Infinity;
   const rise = grid.channels.elevation.get(to) - grid.channels.elevation.get(from);
-  const slope = 1 + (Math.abs(rise) / Math.max(1, distance)) * 20;
+  const slope = 1 + (Math.abs(rise) / Math.max(scale.length(2.5e-7), distance)) * 20;
   return distance * slope * (kind === "road" ? landFactor(grid, from, to) : 1);
 }
 /** A river runs downhill only, and the more water it carries the easier it is to follow. */
-function riverCost(grid: Grid, from: number, to: number, distance: number) {
+function riverCost(grid: Grid, from: number, to: number, distance: number, scale: MapScale) {
   const heights = grid.channels.drainageElevation ?? grid.channels.elevation;
-  if (heights.get(to) - heights.get(from) > 1e-6) return Infinity;
-  return distance * (1 + 1 / (1 + (grid.channels.flow?.get(to) ?? 0)));
+  if (heights.get(to) - heights.get(from) > scale.length(2.5e-13)) return Infinity;
+  return distance * (1 + 1 / (1 + (grid.channels.flow?.get(to) ?? 0) / scale.volume(1.5625e-20)));
 }
 /**
  * A pre-modern lane hugs the coast: shallow water beside the shore costs its distance, deep
@@ -115,10 +117,10 @@ function riverCost(grid: Grid, from: number, to: number, distance: number) {
  * over the shore cell and no further.
  */
 export const landCellSeaCost = 4;
-function seaFactor(grid: Grid, to: number) {
+function seaFactor(grid: Grid, to: number, scale: MapScale) {
   if (!oceanCell(grid, to)) return landCellSeaCost;
   const depth = Math.max(0, -grid.channels.elevation.get(to));
-  return 1 + Math.min(1, depth / 1000);
+  return 1 + Math.min(1, depth / scale.length(0.00025));
 }
 /** A road along a river bank costs this share of open ground: the valley floor is the way. */
 const riverBankFactor = 0.7;

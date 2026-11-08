@@ -4,6 +4,7 @@ import {
   putChannel,
   spatial,
   requireThat,
+  MapScale,
   type ParameterDefinitions,
   type World,
 } from "@atlas/domain";
@@ -56,7 +57,13 @@ function activity(context: MapProcessContext, source: Source): number {
     : 0;
 }
 
-function forcingAt(state: GenerationState, source: Source, multiplier: number, i: number): number {
+function forcingAt(
+  state: GenerationState,
+  source: Source,
+  multiplier: number,
+  i: number,
+  scale: MapScale
+): number {
   const position = gridPosition(state.surface, i),
     covered = !source.scope || spatial.covers(source.scope, point(position)),
     distance = Math.hypot(position.x - source.source.x, position.y - source.source.y),
@@ -64,11 +71,11 @@ function forcingAt(state: GenerationState, source: Source, multiplier: number, i
       ? source.strength *
         Math.max(0, 1 - distance / source.radius) *
         multiplier *
-        propagationWeight(state, source, i)
+        propagationWeight(state, source, i, scale)
       : 0;
   return source.effect === "cold" ? -forcing : forcing;
 }
-function propagationWeight(state: GenerationState, source: Source, i: number) {
+function propagationWeight(state: GenerationState, source: Source, i: number, scale: MapScale) {
   const grid = state.surface;
   switch (source.propagation) {
     case "fracture":
@@ -79,7 +86,8 @@ function propagationWeight(state: GenerationState, source: Source, i: number) {
         Math.min(
           1,
           (20 -
-            (grid.channels.temperature?.get(i) ?? 15 - grid.channels.elevation.get(i) * 0.0065)) /
+            (grid.channels.temperature?.get(i) ??
+              15 - grid.channels.elevation.get(i) * scale.inverseLength(26000))) /
             30
         )
       );
@@ -95,7 +103,13 @@ export function magicalForcing(
   source: Source,
   i: number
 ) {
-  return forcingAt(state, source, activity(context, source), i);
+  return forcingAt(
+    state,
+    source,
+    activity(context, source),
+    i,
+    MapScale.fromCells(state.surface.bounds, state.surface.active.length)
+  );
 }
 
 // Re-evaluation replaces instantaneous forcing; it never advances stored history.
@@ -112,6 +126,7 @@ export const thermalMagicProcess: MapProcess = {
     kind: "forcing-contributor",
     contribute(state, context) {
       const grid = state.surface,
+        scale = MapScale.fromCells(grid.bounds, grid.active.length),
         heat = surfaceArray(state, "magic:heat"),
         stored = surfaceArray(state, "magic:stored");
       for (const source of sources(state, context)) {
@@ -121,7 +136,7 @@ export const thermalMagicProcess: MapProcess = {
             ? requireChannel(grid, key, "celsius")
             : surfaceArray(state, key),
           forcing = surfaceValues(state, "magic:forcing", (i) =>
-            forcingAt(state, source, multiplier, i)
+            forcingAt(state, source, multiplier, i, scale)
           ),
           forcingKey = `magic:${source.id}:forcing`;
         for (let i = 0; i < heat.length; i++) {

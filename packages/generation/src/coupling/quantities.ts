@@ -1,6 +1,7 @@
 import type { PhysicalBufferName } from "../world/field";
 import { ecologyCarbon, ecologyMemory, ecologyRatios, ecologyScalars } from "../world/ecologyState";
 import { units } from "../world/math";
+import type { MapScale } from "@atlas/domain";
 import { rockLayerDepths, rockLayerKinds } from "../rock/rockLayerFields";
 import {
   groundMaterialFields,
@@ -277,8 +278,9 @@ export const transportRules: Readonly<
 };
 
 /** What a `share` quantity reads on brand new crust, where nothing arrived. */
-export const freshCrustValue = (name: PhysicalBufferName) => {
-  if (name === "BedrockElevation" || name === "CrustSupportElevation") return units(-200);
+export const freshCrustValue = (name: PhysicalBufferName, scale: MapScale) => {
+  if (name === "BedrockElevation" || name === "CrustSupportElevation")
+    return units(scale.length(-0.00005));
   return name === "RockResistance" ? 1000 : 0;
 };
 /**

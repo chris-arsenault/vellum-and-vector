@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -9,7 +10,7 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { areaOf, faunaAt, near, pressureLength, stormAt } from "./seaShared";
 
 /** Area at which a front is half as great as fronts get: 2,000 square kilometres. */
-const typicalArea = 2e9;
+const typicalArea = MapScale.area(0.000125);
 /** Extra boat cost at full upwelling: fog and cold, heavy water. */
 const fogDrag = 0.5;
 /** A boundary between water masses holds back what the current carries. */
@@ -20,7 +21,7 @@ const fogWater = 0.3;
 const isA = magicRule("pressure", "front");
 const places = rulePlaces("upwellingFront", "pressure", "front");
 /** The sea around a front that bears on it: 100 km. */
-const around = near(100_000);
+const around = near(0.025);
 const counterpart = counterpartOf(isA, 2);
 
 const factors = {

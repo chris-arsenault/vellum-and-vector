@@ -1,4 +1,4 @@
-import { KeyedHeap, type ReadBand } from "@atlas/domain";
+import { KeyedHeap, MapScale, type ReadBand } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import type { PhysicalContext } from "../world/context";
 import { workingValues, releaseWorking } from "../world/physicalNumerics";
@@ -16,16 +16,19 @@ export const marineSettledShare = (
 function downhill(map: PhysicalField, bed: ReadBand, i: number, edge: number) {
   const j = map.mesh.neighbor(i, edge);
   if (j < 0 || map.WaterKindCodes.get(j) !== 1) return 0;
-  return Math.max(0, bed.get(i) - bed.get(j)) / (1024 * map.mesh.edgeLength(i, edge));
+  return (
+    MapScale.metres(Math.max(0, bed.get(i) - bed.get(j)), "native") / map.mesh.edgeLength(i, edge)
+  );
 }
 function settle(map: PhysicalField, i: number, fraction: number) {
   const cargo = seaLoadOf(map),
     area = map.mesh.area(i),
-    wanted = (cargo.amount(i) * fraction * 1024) / area,
+    wanted = MapScale.inUnits((cargo.amount(i) * fraction) / area, "native"),
     actual =
-      (depositPond(map, i, wanted, map.EffectiveSeaLevel, "sea-floor", "sea", cargo.get(i)) /
-        1024) *
-      area;
+      MapScale.metres(
+        depositPond(map, i, wanted, map.EffectiveSeaLevel, "sea-floor", "sea", cargo.get(i)),
+        "native"
+      ) * area;
   cargo.take(i, actual);
   map.SedimentExportedTotal = Math.max(0, map.SedimentExportedTotal - actual);
 }

@@ -25,7 +25,7 @@ import { workspaceGenerationSetup } from "../workspaceGenerationSetup";
 import { WorkspaceFields } from "../workspaceFields";
 import { executeWorkspaceCommand } from "../workspaceCommands";
 import { importState } from "../workspaceImport";
-import { LegacyFields } from "../legacyFields";
+import { SnapshotFields } from "../snapshotFields";
 import { draftWorldSnapshot, prepareDraft, type GenerationDraft } from "../generationDraft";
 import { inheritedGeneration } from "../generationJobs";
 import type { WorkspaceClient } from "../WorkspaceClient";
@@ -103,14 +103,7 @@ export async function generateWorld(
 ) {
   const snapshot = draftWorldSnapshot(draft);
   // The app's import (importWorkspace), with the harness's block cache in place of OPFS.
-  await importState(
-    asWorkspace(ws),
-    new LegacyFields(),
-    snapshot,
-    undefined,
-    undefined,
-    ws.working.cache
-  );
+  await importState(asWorkspace(ws), new SnapshotFields(), snapshot, undefined, ws.working.cache);
   await runGeneration(ws, snapshot.world.id, prepareDraft(draft).input, observers);
   return { worldId: snapshot.world.id, root: snapshot.scope.areaId };
 }

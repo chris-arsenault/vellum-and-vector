@@ -2,12 +2,11 @@
 import type { PhysicalField } from "./field";
 import { isOpenOutlet } from "./field";
 import type { PhysicalContext } from "./context";
-import { round } from "./math";
 import { hashUnit } from "./noise";
 import { edgeLeadingTo } from "./mesh";
 import { selectByOutletAlignment } from "./flowGuidance";
 import { sourceToOutletOrder } from "./flowGraph";
-import { CellQueue, type Band } from "@atlas/domain";
+import { CellQueue, MapScale, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { lakeMembership } from "./lakeMembership";
 
@@ -15,7 +14,11 @@ function stableRoot(map: PhysicalField, members: Iterable<number>, seed: number)
   let selected = -1,
     best = -Number.MAX_VALUE;
   for (const i of members) {
-    const score = hashUnit(seed ^ 0x6c53, round(map.mesh.x(i) * 1024), round(map.mesh.y(i) * 1024));
+    const score = hashUnit(
+      seed ^ 0x6c53,
+      MapScale.native(map.mesh.x(i)),
+      MapScale.native(map.mesh.y(i))
+    );
     if (score > best) {
       selected = i;
       best = score;

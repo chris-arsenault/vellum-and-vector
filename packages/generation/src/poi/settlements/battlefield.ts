@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { besiegedTown } from "../../societySiege";
 import { carryWhereItLands, stays } from "../poiCarry";
@@ -27,9 +29,9 @@ const typicalDead = 2000;
 /** The share of its ground's cover an army's camp and works strip at full strength. */
 const stripped = 0.6;
 /** The least distance between two fields where territories meet, in metres. */
-const frontierSpacing = 100_000;
+const frontierSpacing = MapScale.length(0.025);
 /** A siege falls on a town: within this many metres of one. */
-const townReach = 2000;
+const townReach = MapScale.length(0.0005);
 
 const sieges = eventPlaces("battlefield", (event) => event.kind === "siege");
 /** The sieges on this map; where none reach it, where held territories meet. */
@@ -37,7 +39,9 @@ const places = (state: GenerationState): readonly PoiPlace[] =>
   heldFor(state, "places:battlefield:all", () => {
     if (!developed(state)) return [];
     const recorded = sieges(state);
-    return recorded.length ? recorded : frontierPlaces(state, "battlefield", frontierSpacing);
+    return recorded.length
+      ? recorded
+      : frontierPlaces(state, "battlefield", mapScale(state).resolveMeasure(frontierSpacing));
   });
 const isA = holdsRecord("battlefield", places);
 const around = (state: GenerationState) => 6 * cellSpan(state);

@@ -1,5 +1,6 @@
 import {
   gridPosition,
+  MapScale,
   livelihoodChannels,
   semanticId,
   fillBand,
@@ -326,7 +327,7 @@ export function refreshSocietySupport(state: GenerationState) {
   for (let i = 0; i < work.owner.length; i++) {
     const c = work.region.communities[work.owner.get(i)];
     if (!c) continue;
-    const area = state.surface.measures.get(i) / 1e6,
+    const area = MapScale.areaUnits(state.surface.measures.get(i), "m2", "km2"),
       support = supportAt(state, i, work.river.get(i), work.coast.get(i)),
       skill = skills[work.owner.get(i)];
     c.areaKm2 += area;

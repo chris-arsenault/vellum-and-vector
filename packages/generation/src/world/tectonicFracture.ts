@@ -209,7 +209,8 @@ function warmUnderContinents(map: PhysicalField, state: TectonicState, myr: numb
     const area = members.reduce((sum, site) => sum + site.area, 0),
       x = members.reduce((sum, site) => sum + site.x, 0) / members.length,
       y = members.reduce((sum, site) => sum + site.y, 0) / members.length,
-      gained = (Math.sqrt(area / Math.PI) / tectonicLidRadius) * (myr / tectonicInsulationMyr);
+      gained =
+        (Math.sqrt(area / Math.PI) / tectonicLidRadius(map.scale)) * (myr / tectonicInsulationMyr);
     for (const site of members) pushAway(map, site, x, y, gained);
   }
 }

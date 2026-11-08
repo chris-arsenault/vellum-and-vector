@@ -13,7 +13,9 @@ export const weathering = defineProcess({
   moves: [["rock", "loose"]],
   settings: weatheringSettings,
   // A region's passes refine one stretch of the world's history; they do not add more of it.
-  atScale: (settings, { passes }) => ({ WeatheringPerSpan: settings.WeatheringPerSpan / passes }),
+  forExecution: (settings, { passes }) => ({
+    WeatheringPerSpan: settings.WeatheringPerSpan / passes,
+  }),
   run({ field, context: c, settings: p, span, ask, stage }) {
     const wetness = ask("wetness"),
       warmth = ask("warmth"),

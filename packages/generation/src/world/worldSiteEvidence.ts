@@ -1,2 +1,3 @@
-/** A long glacial inlet, the size against which a fjord is judged great. */
-export const worldFjordLength = 80_000;
+import { MapScale } from "@atlas/domain";
+/** A long glacial inlet, relative to the map's extent. */
+export const worldFjordLength = MapScale.length(0.02);

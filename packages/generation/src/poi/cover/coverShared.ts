@@ -1,3 +1,4 @@
+import { MapScale } from "@atlas/domain";
 import { desertMoisture, environment } from "../../world/ecologyEnvironment";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
@@ -63,10 +64,10 @@ export const hazardReach = countryOf;
 /** Visibility of a stretch of country, from its area and the reading that sets it apart. */
 export const countryFactors = (
   places: (state: GenerationState) => readonly PoiPlace[],
-  typicalArea: number,
+  typicalAreaFraction: number,
   read: (state: GenerationState, cell: number) => number
 ) => ({
-  magnitude: sized(areaOf, typicalArea),
+  magnitude: sized(areaOf, MapScale.area(typicalAreaFraction)),
   localConditions: standsOut(read, countryOf),
   isolation: aloneAmong(places, spanOf),
   cultural: attachment(spanOf),

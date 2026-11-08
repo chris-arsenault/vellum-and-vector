@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -9,11 +10,11 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { auroraAt, chargeHeldAt, countryOf, standsIn } from "./anomalyReads";
 
 /** Ice thickness in metres at which a well's reservoir is half as great as wells get. */
-const typicalIce = 500;
+const typicalIce = MapScale.length(0.000125, 0.5);
 /** How much a cell's softened rock cheapens a channel cut through it, at full intensity. */
 const cutThrough = 0.3;
 /** A well's country, in metres. */
-const countryMetres = 5000;
+const countryMetres = MapScale.length(0.00125);
 
 const hollows: readonly number[] = [Landform.Cirque, Landform.Basin, Landform.Valley];
 const isA = magicRule("aurora", "well");

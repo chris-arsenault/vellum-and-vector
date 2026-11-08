@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createField } from "../world/field";
+import { createTestField as createField } from "./groundTestFixture";
 import { createWorldMesh } from "../world/worldMesh";
 import { units } from "../world/math";
 import { Stage } from "../coupling/stage";

@@ -1,9 +1,9 @@
 // AtmosphericFlow.cs and AtmosphericFlowLayer.cs, Canonry 0f62584c.
-import { EpochStamps } from "@atlas/domain";
+import { EpochStamps, MapScale } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { clamp, round, toUnits, truncate } from "./math";
+import { clamp, round, truncate } from "./math";
 import { meshWorldNoise as fractalNoise } from "./noise";
 import { latitudeAt } from "./latitude";
 import { deflectWind, windSpeed, windTerrain } from "./windTerrain";
@@ -79,26 +79,32 @@ function traceAirMass(map: PhysicalField, scale: number, start: number, visited:
     ocean = -1;
   const startElevation = map.Elevation.get(start);
   visited.begin();
-  for (let distance = 0; distance < 180_000;) {
+  for (let distance = 0; distance < map.scale.length(0.045);) {
     const next = map.UpwindTargets.get(current);
     if (next < 0 || visited.marked(next)) break;
     distance += physicalDistance(map.mesh, current, next);
-    if (distance > 180_000) break;
+    if (distance > map.scale.length(0.045)) break;
     visited.mark(next);
     current = next;
     barrier = Math.max(barrier, map.Elevation.get(current) - startElevation);
-    if (distance <= 140_000) moistureBarrier = barrier;
+    if (distance <= map.scale.length(0.035)) moistureBarrier = barrier;
     if (map.WaterKindCodes.get(current) === 1) {
       ocean = current;
       break;
     }
   }
   const normalize = (value: number) =>
-    clamp(truncate((toUnits(value) * 1000) / Math.max(1, truncate(scale / 2))), 0, 1000);
+    clamp(
+      truncate(
+        (MapScale.metres(value, "native") * 1000) / Math.max(map.scale.length(2.5e-7), scale / 2)
+      ),
+      0,
+      1000
+    );
   map.MoistureBarriers.set(start, normalize(moistureBarrier < 0 ? barrier : moistureBarrier));
   map.PrecipitationBarriers.set(start, normalize(barrier));
   map.UpwindOceanSources.set(start, ocean);
-  return toUnits(barrier);
+  return MapScale.metres(barrier, "native");
 }
 export function atmosphericFlow(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile,

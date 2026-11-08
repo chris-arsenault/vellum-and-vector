@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import { conditionReader } from "../../world/magicRegions";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
@@ -12,8 +14,8 @@ import { countryOf, magicFieldOf, peakOf } from "./anomalyReads";
 /** Fallen stock, as the rule reads it, at which a deviation is half as strong as they get. */
 const typicalStock = 1000;
 /** How far beyond its deposit a needle swings, and a deviation's country, in metres. */
-const swingMetres = 10_000,
-  countryMetres = 30_000;
+const swingMetres = MapScale.length(0.0025),
+  countryMetres = MapScale.length(0.0075);
 /** The most a full deviation adds to the cost of an open-sea passage and of an unmarked land way. */
 const seaLoss = 2,
   landLoss = 0.25;
@@ -146,7 +148,7 @@ export const compassDeviation: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "false bearing",
-        reach: swingMetres,
+        reach: mapScale(state).resolveMeasure(swingMetres),
         severity: swing(state, place),
       },
     ],

@@ -12,20 +12,21 @@ const present: Epoch = {
   coasts: 1,
   temperature: 15,
   seaLevel: 0,
+  lengthUnits: "relative",
 };
 const histories: Record<string, Epoch[]> = {
   young: [{ ...present, id: "Formation", tectonics: 1 }],
   temperate: [{ ...present, id: "Formation", tectonics: 1 }, present],
   glacial: [
     { ...present, id: "Formation", tectonics: 1 },
-    { ...present, id: "Cold age", tectonics: 0.7, ice: 1, temperature: -3, seaLevel: -40 },
+    { ...present, id: "Cold age", tectonics: 0.7, ice: 1, temperature: -3, seaLevel: -0.00001 },
     present,
   ],
   cycles: [
     { ...present, id: "Formation", tectonics: 1, volcanism: 1.5, impacts: 2 },
-    { ...present, id: "First ice age", ice: 1, temperature: -15, seaLevel: -100 },
+    { ...present, id: "First ice age", ice: 1, temperature: -15, seaLevel: -0.000025 },
     { ...present, id: "Interglacial", ice: 0.2, temperature: 18 },
-    { ...present, id: "Second ice age", ice: 1, temperature: -10, seaLevel: -70 },
+    { ...present, id: "Second ice age", ice: 1, temperature: -10, seaLevel: -0.0000175 },
     present,
   ],
   canonry: [
@@ -37,7 +38,7 @@ const histories: Record<string, Epoch[]> = {
       ice: 0.1,
       coasts: 0.12,
       temperature: 29.5,
-      seaLevel: 35,
+      seaLevel: 0.00000875,
       magicActivity: { fire: 0.65, aurora: 0.16, pressure: 0.32 },
     },
     {
@@ -47,7 +48,7 @@ const histories: Record<string, Epoch[]> = {
       ice: 0.09,
       coasts: 0.58,
       temperature: 38,
-      seaLevel: 20,
+      seaLevel: 0.000005,
       magicActivity: { fire: 0.9, aurora: 0.38, pressure: 0.56 },
     },
     {
@@ -58,7 +59,7 @@ const histories: Record<string, Epoch[]> = {
       ice: 1,
       coasts: 0.76,
       temperature: 1,
-      seaLevel: -45,
+      seaLevel: -0.00001125,
       magicActivity: { fire: 0.72, aurora: 1, pressure: 0.76 },
     },
     {
@@ -285,12 +286,12 @@ function EpochClimate({ epoch, change }: { epoch: Epoch; change: (epoch: Epoch) 
         />
       </label>
       <label>
-        Sea level shift · m
+        Sea level shift · % of map span
         <input
           type="number"
           step="any"
-          value={epoch.seaLevel}
-          onChange={(event) => change({ ...epoch, seaLevel: Number(event.target.value) })}
+          value={epoch.seaLevel * 100}
+          onChange={(event) => change({ ...epoch, seaLevel: Number(event.target.value) / 100 })}
         />
       </label>
     </>

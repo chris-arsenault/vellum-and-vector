@@ -1,16 +1,16 @@
+import { MapScale } from "@atlas/domain";
 import {
   cellAt,
   isContent,
   neighborhood,
   neighborhoodCapacity,
   neighborsOf,
-  regionalSpan,
 } from "../../regional/lattice";
 import type { RegionalState } from "../../regional/state";
 
 /** How far (in cells) a dam record snaps to the channel it holds, and the most a crest rises above the bed (m). */
 const damSnap = 2,
-  crestLimit = 60;
+  crestLimit = MapScale.length(0.000015, 0.5);
 
 /** The river cell nearest a position within the snap distance, or -1. */
 export function channelNear(state: RegionalState, cell: number) {
@@ -21,7 +21,7 @@ export function channelNear(state: RegionalState, cell: number) {
   const around = new Int32Array(mesh.stride),
     queue = [cell],
     seen = new Set<number>([cell]), // hpc-exempt: a few cells around one dam
-    reach = damSnap * regionalSpan(state);
+    reach = map.scale.cells(damSnap);
   for (let head = 0; head < queue.length; head++) {
     const m = neighborsOf(mesh, queue[head], around);
     for (let k = 0; k < m; k++) {
@@ -108,5 +108,5 @@ export function crestAt(state: RegionalState, dam: number) {
   }
   banks.sort((a, b) => b - a);
   const bank = banks.length >= 2 ? banks[1] : (banks[0] ?? bed);
-  return Math.min(bank, bed + crestLimit * 1024);
+  return Math.min(bank, bed + MapScale.native(map.scale.resolveMeasure(crestLimit)));
 }

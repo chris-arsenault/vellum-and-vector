@@ -1,15 +1,15 @@
 // WarmthSourceLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { lerp, round, truncate, units } from "./math";
+import { lerp, round, truncate } from "./math";
 import { hashUnit } from "./noise";
 import { nearestTriangle, triangleIdentity } from "./mesh";
 import { paintMaximum, triangleDistanceSquared } from "./radial";
-import { CellList } from "@atlas/domain";
+import { CellList, MapScale } from "@atlas/domain";
 
 function candidateSets(map: PhysicalField, c: PhysicalContext) {
   const result = Array.from({ length: 4 }, () => new CellList()),
-    peak = units(c.Profile.PeakElevationThreshold);
+    peak = MapScale.native(c.Profile.PeakElevationThreshold);
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.mesh.membership(i) !== 1) continue;
     if (map.WaterKindCodes.get(i) === 1) {
@@ -18,8 +18,8 @@ function candidateSets(map: PhysicalField, c: PhysicalContext) {
     }
     const distance = map.OceanDistance.get(i),
       elevation = map.Elevation.get(i);
-    if (distance > 0 && distance <= 120_000) result[1].push(i);
-    if (distance >= 200_000 && elevation < peak) result[2].push(i);
+    if (distance > 0 && distance <= map.scale.length(0.03)) result[1].push(i);
+    if (distance >= map.scale.length(0.05) && elevation < peak) result[2].push(i);
     if (elevation >= peak && map.Geothermal.get(i) >= 420) result[3].push(i);
   }
   return result.map((values) => values.finish());
@@ -44,7 +44,7 @@ function selectSource(
         ? 0
         : Math.min(...selected.map((j) => triangleDistanceSquared(map.mesh, i, j)));
     const score =
-      distance / 100_000_000 +
+      distance / map.scale.area(6.25e-6) +
       map.Geothermal.get(i) * 0.25 +
       map.OceanCurrentHeat.get(i) * 0.22 +
       hashUnit(seed ^ 0x4b67, triangleIdentity(map.mesh, i), sample);

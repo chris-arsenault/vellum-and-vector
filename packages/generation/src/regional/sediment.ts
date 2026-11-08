@@ -6,23 +6,21 @@ import type { NetworkWork, RegionalState } from "./state";
 
 /** Gradient above which a hillslope fails (talus stands at about 27°), and the share of the excess that fails in one pass. */
 const stableGradient = 0.5,
-  failureShare = 0.3,
-  failureLimit = 40;
+  failureShare = 0.3;
 /** Share of a valley's incision below the captured base that is moving sediment in one round. */
 const incisionSupplyShare = 0.05;
 /** Channel gradient below which a load starts to settle, and the distance over which a load settles out on flat ground (m). */
 const settlingGradient = 0.004,
-  settlingLength = 10_000;
-/** The most a cell's floor rises in one round (m), and the share of a load that stops where a channel enters a lake. */
-const floorLimit = 15,
-  lakeEntryShare = 0.8;
+  // length-unit: fraction
+  settlingLength = 0.0025;
+/** Share of a load that stops where a channel enters a lake. */
+const lakeEntryShare = 0.8;
 
 /**
- * Capped mass wasting (plan: one failure pass as a hillslope term after the surface is
- * drainable): a hillslope cell that stands steeper above its receiver than the material holds
- * fails by a bounded share of the excess. The failed rock is the round's sediment supply at
+ * A hillslope cell that stands steeper above its receiver than the material holds
+ * fails by a share of the excess. The failed rock is the round's sediment supply at
  * that cell. Channels and basins keep their heights; a knickpoint step the base carries is
- * macro character and is softened only by this bounded share.
+ * macro character and is softened only by this share.
  */
 export function wasteHillslopes(state: RegionalState, h: Float64Array, supply: Float64Array) {
   const mesh = state.physical.map.mesh,
@@ -36,7 +34,7 @@ export function wasteHillslopes(state: RegionalState, h: Float64Array, supply: F
       stable = stableGradient * Math.sqrt(materialResistance(state, j)),
       excess = h[j] - h[i] - stable * length;
     if (excess <= 0) continue;
-    const failed = Math.min(failureLimit, excess * failureShare);
+    const failed = excess * failureShare;
     h[j] -= failed;
     supply[j] += failed * mesh.contentArea(j);
   }
@@ -48,7 +46,7 @@ export function wasteHillslopes(state: RegionalState, h: Float64Array, supply: F
  * hillslope rock and a share of each channel's incision below the captured base; it travels
  * down the tree and settles where the gradient falls: on floors and at the foot of steep
  * ground as fans, at the first cell of a lake as a small delta, and at the sea as the mouth
- * load the coast will read. Deposits raise the derived surface by their thickness, bounded,
+ * load the coast will read. Deposits raise the derived surface by their thickness,
  * and the sediment band is the captured thickness plus the ledger plus this round's deposit.
  */
 export function transportSediment(state: RegionalState, h: Float64Array, supply: Float64Array) {
@@ -61,7 +59,7 @@ export function transportSediment(state: RegionalState, h: Float64Array, supply:
   // (the glacial step starts it afresh each derivation); the round's deposit goes on top.
   for (let i = 0; i < n; i++) {
     if (!isContent(mesh, i) || network.sea[i]) continue;
-    const thickness = Math.min(floorLimit, deposit[i] / mesh.contentArea(i));
+    const thickness = deposit[i] / mesh.contentArea(i);
     if (thickness <= 0) continue;
     h[i] += thickness;
     layLoose(map, i, units(thickness), "regional");
@@ -111,5 +109,8 @@ function settledShare(state: RegionalState, i: number, j: number) {
   const length = distance(state.physical.map.mesh, i, j),
     gradient = Math.max(0, network.base[i] - network.base[j]) / length;
   // A load crossing flat ground settles over kilometres, not in the first flat cell.
-  return Math.min(1, length / settlingLength) * Math.max(0, 1 - gradient / settlingGradient);
+  return (
+    Math.min(1, length / state.physical.map.scale.length(settlingLength)) *
+    Math.max(0, 1 - gradient / settlingGradient)
+  );
 }

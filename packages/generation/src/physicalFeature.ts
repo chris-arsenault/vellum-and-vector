@@ -56,7 +56,7 @@ export function physicalFeature(
     settings: Object.fromEntries(
       (options.settings ?? []).map((key) => [key, atlasParameterDefinitions[key]])
     ),
-    legacyParameters: options.settings ?? [],
+    parameterKeys: options.settings ?? [],
     processes: [...new Set(processes)],
     slots: Object.keys(operations) as GenerationSlot[],
     requires: options.requires ?? [],

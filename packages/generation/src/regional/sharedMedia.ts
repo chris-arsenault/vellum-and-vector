@@ -22,7 +22,8 @@ export interface SharedMedia {
 /** Gradient at which a slope's exposure counts in full (about 17°). */
 const fullExposureGradient = 0.3;
 /** Depth below the surrounding smoothed surface that pools cold air in full (m). */
-const poolingDepth = 60;
+// length-unit: fraction
+const poolingDepth = 0.000015;
 /** Smoothing length of the surrounding surface, as a share of the parent span. */
 const poolingSmoothingShare = 0.5;
 /** Gradient above which a floor no longer pools (air drains off a slope). */
@@ -116,12 +117,13 @@ function derivePooling(
   const map = state.physical.map,
     n = map.mesh.count,
     surrounding = new Float64Array(n);
-  for (let i = 0; i < n; i++) surrounding[i] = map.Elevation.get(i) / 1024;
+  for (let i = 0; i < n; i++) surrounding[i] = MapScale.metres(map.Elevation.get(i), "native");
   smoothOverLength(state, surrounding, state.regional.parentSpan * poolingSmoothingShare);
   for (let i = 0; i < n; i++) {
-    const below = surrounding[i] - map.Elevation.get(i) / 1024,
+    const below = surrounding[i] - MapScale.metres(map.Elevation.get(i), "native"),
       gentle = clamp(1 - Math.hypot(gx[i], gy[i]) / poolingDrainGradient);
-    into[i] = map.WaterKindCodes.get(i) === 1 ? 0 : clamp(below / poolingDepth) * gentle;
+    into[i] =
+      map.WaterKindCodes.get(i) === 1 ? 0 : clamp(below / map.scale.length(poolingDepth)) * gentle;
   }
 }
 
@@ -168,3 +170,4 @@ export function openFractures(state: RegionalState) {
     );
   }
 }
+import { MapScale } from "@atlas/domain";

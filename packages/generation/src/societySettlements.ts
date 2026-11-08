@@ -1,8 +1,15 @@
-import { population, languageUse, type SocietyCommunity, type SocietyRegion } from "@atlas/domain";
+import {
+  population,
+  languageUse,
+  type MapScale,
+  type SocietyCommunity,
+  type SocietyRegion,
+} from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import { communityName } from "./societyNaming";
 import { nearestSample } from "./societySpatial";
 import { dryLand } from "./societySupport";
+import { mapScale } from "./worldSignificance";
 
 /** Founders occupy a subset of suitable country. Empty catchments remain destinations. */
 export function startingPopulations(state: GenerationState, context: MapProcessContext) {
@@ -24,15 +31,18 @@ export function startingPopulations(state: GenerationState, context: MapProcessC
 }
 
 export function contactPopulation(state: GenerationState) {
-  return communityContacts(state.society!.region);
+  return communityContacts(state.society!.region, mapScale(state));
 }
-export function communityContacts(region: Pick<SocietyRegion, "communities" | "connections">) {
+export function communityContacts(
+  region: Pick<SocietyRegion, "communities" | "connections">,
+  scale: MapScale
+) {
   const communities = new Map(region.communities.map((c) => [c.id, c]));
   const contact = new Map<string, number>();
   for (const route of region.connections) {
     const a = communities.get(route.from)!,
       b = communities.get(route.to)!;
-    const access = Math.exp(-route.travelCost / 50000);
+    const access = Math.exp(-route.travelCost / scale.length(0.0125));
     contact.set(a.id, (contact.get(a.id) ?? 0) + population(b) * access);
     contact.set(b.id, (contact.get(b.id) ?? 0) + population(a) * access);
   }

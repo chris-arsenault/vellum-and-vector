@@ -32,7 +32,7 @@ export function setPhysicalHistory(
   changes.worldMetadata = {
     name: snapshot.world.name,
     seed: snapshot.world.seed,
-    epochs,
+    epochs: epochs.map((epoch) => ({ ...epoch, lengthUnits: "relative" as const })),
     humanEras: snapshot.world.humanEras,
   };
   return changes;

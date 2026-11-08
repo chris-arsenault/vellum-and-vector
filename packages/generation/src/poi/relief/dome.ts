@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { rimCost } from "../../regional/causes/landmark";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
@@ -22,14 +23,18 @@ import {
 } from "./reliefShape";
 
 /** Area and relief at which a dome is half as great as domes get: its default record's diameter. */
-const typicalArea = 1_600_000_000,
-  typicalRelief = 150;
+const typicalArea = MapScale.area(0.0001),
+  typicalRelief = MapScale.length(0.0000375, 0.5);
 
 /** Metres a buried salt bed under strain has lifted the ground, as Salt's own dome step books it. */
 const saltLifted = (state: GenerationState, cell: number) =>
   state.physical?.magic?.fields.find((f) => f.definition.id === "salt")?.domed?.get(cell) ?? 0;
 const inRecord = (state: GenerationState, cell: number) =>
-  landmarkGround(state, "dome-ring", (placed) => (placed.parameters.diameter * 1000) / 2).has(cell);
+  landmarkGround(
+    state,
+    "dome-ring",
+    (placed) => MapScale.metres(placed.parameters.diameter, "km") / 2
+  ).has(cell);
 const isA = (state: GenerationState, cell: number) =>
   isLand(state, cell) && (inRecord(state, cell) || saltLifted(state, cell) > 0);
 const places = regionPlaces("dome", isA, heightAt);

@@ -14,7 +14,6 @@ const owners = {
   "physical.tectonic-history": ["EpochTectonicElevationStep"],
   "physical.river-incision": ["FluvialEquilibriumGradient"],
   "material.fluvial-transport": ["SedimentTransportFraction", "SedimentCarry"],
-  "physical.floodplains": ["FloodplainMaximumWidth"],
   "physical.coastal-construction": [
     "CoastalDetailStrength",
     "CoastalDetailScale",
@@ -25,11 +24,10 @@ const owners = {
     "CoastalDetailTransformAmplitude",
   ],
   "physical.coastal-evolution": ["CoastalDepositionFraction", "CoastalDepositionReach"],
-  "physical.deltas": ["DeltaMaximumRadius"],
   "physical.glacial-sculpting": ["IceAltitudeBalance"],
   "physical.volcanism": ["MantlePlumeCount"],
   "physical.impacts": ["ImpactPrimordialShare"],
-} satisfies Record<string, (keyof typeof physicalProfile)[]>;
+} satisfies Record<string, (keyof typeof physicalProfile.values)[]>;
 
 type ProfileCoefficient = (typeof owners)[keyof typeof owners][number];
 export type PhysicalProfileOverrides = Partial<Record<ProfileCoefficient, number>>;
@@ -44,28 +42,6 @@ const coefficientSchemas: Partial<Record<ProfileCoefficient, z.ZodNumber>> = {
 };
 
 export function physicalProfileConfiguration(id: string): Partial<GenerationFeature> {
-  // Saved recipes may still carry removed shape controls. Accept their old shape without
-  // reviving their effects or rejecting an otherwise usable local map.
-  if (id === "physical.mountains")
-    return {
-      configuration: z
-        .object({
-          profile: z
-            .object({
-              InitialOrogenicConstructionStep: z.number().optional(),
-              EpochOrogenicConstructionStep: z.number().optional(),
-              OrogenicProminenceMinimum: z.number().optional(),
-              OrogenicProminenceMaximum: z.number().optional(),
-              OrogenicPlateauWidth: z.number().optional(),
-              OrogenicPlateauShare: z.number().optional(),
-            })
-            .strict()
-            .optional(),
-        })
-        .strict()
-        .transform(() => ({})),
-      configurationFromLegacy: () => ({}),
-    };
   const keys = owners[id as keyof typeof owners];
   if (!keys) return {};
   const profile = z
@@ -85,7 +61,7 @@ export function physicalProfileConfiguration(id: string): Partial<GenerationFeat
     );
   return {
     configuration: z.object({ profile: profile.default({}) }).strict(),
-    configurationFromLegacy: () => ({ profile: {} }),
+    configurationFromSettings: () => ({ profile: {} }),
   };
 }
 

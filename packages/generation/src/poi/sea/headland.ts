@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { groundOf } from "../../rock/ground";
 import { surfaceRelative } from "../../rock/groundQueries";
@@ -28,9 +29,9 @@ import { areaOf, exposureBeside, extentOf, near, seaFacing } from "./seaShared";
 import { showsForm, wrapOf } from "./shoreForm";
 
 /** Area at which a headland is half as great as headlands get: 500 square kilometres. */
-const typicalArea = 5e8;
+const typicalArea = MapScale.area(0.00003125);
 /** A headland stands at least this many metres out of the water. */
-const emergence = 1;
+const emergence = MapScale.length(0.00000025, 0.5);
 /** The rock a refined headland holds, in multiples of the world's baseline. */
 const heldRock = 2;
 /** Extra cost of rounding it, at full wave exposure. */
@@ -43,7 +44,7 @@ const shedding = 1.5;
 const isA = showsForm("headland");
 const places = regionPlaces("headland", isA, wrapOf);
 /** The country around a headland that bears on it: 40 km. */
-const around = near(40_000);
+const around = near(0.01);
 /** The worst waves on its shore; the world map writes exposure on the water beside it. */
 const tipExposure = (state: GenerationState, place: PoiPlace) =>
   seaFacing(state, place.cells).reduce(
@@ -68,7 +69,8 @@ const factors = {
 
 /** The shore of a headland stays out of the water. */
 function standing(state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] {
-  const value = fieldOf(state).EffectiveSeaLevel + toNative(emergence);
+  const value =
+    fieldOf(state).EffectiveSeaLevel + toNative(fieldOf(state).scale.resolveMeasure(emergence));
   return seaFacing(state, place.cells).map((cell) => ({
     change: "atLeast",
     band: "Elevation",
@@ -98,7 +100,9 @@ function holdRock(state: RegionalState, carried: PoiCarried): readonly PoiFieldC
           change: "atLeast",
           band: "Elevation",
           cell: carried.cell,
-          value: fieldOf(state).EffectiveSeaLevel + toNative(emergence),
+          value:
+            fieldOf(state).EffectiveSeaLevel +
+            toNative(fieldOf(state).scale.resolveMeasure(emergence)),
         },
       ]
     : rock;

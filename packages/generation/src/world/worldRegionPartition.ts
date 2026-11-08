@@ -1,4 +1,4 @@
-import { KeyedHeap } from "@atlas/domain";
+import { MapScale, KeyedHeap } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import type { RegionMembers } from "./regionMembers";
@@ -19,7 +19,7 @@ function crossingCost(map: PhysicalField, i: number, j: number, length: number) 
   const basin = map.DrainageBasinIds.get(i),
     other = map.DrainageBasinIds.get(j),
     divide = basin > 0 && other > 0 && basin !== other ? basinCrossingCost : 0,
-    rise = Math.abs(map.Elevation.get(i) - map.Elevation.get(j)) / 1024,
+    rise = MapScale.metres(Math.abs(map.Elevation.get(i) - map.Elevation.get(j)), "native"),
     climate = Math.abs(map.Temperature.get(i) - map.Temperature.get(j));
   return length * (1 + divide + rise / terrainRiseScale + climate / climateTransitionScale);
 }
@@ -88,7 +88,7 @@ export function partitionWorldRegion(state: GenerationState, members: RegionMemb
       const e = regionEvidence(map, piece);
       return (
         e.area >= evidence.area * provinceMinimumShare &&
-        e.breadth >= landscapeMinimumBreadth * scale.length
+        e.breadth >= scale.resolveMeasure(landscapeMinimumBreadth)
       );
     });
     if (credible) pending.push(...pieces);

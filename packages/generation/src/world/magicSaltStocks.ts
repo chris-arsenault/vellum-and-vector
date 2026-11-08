@@ -42,7 +42,7 @@ export function seepBrine(map: PhysicalField, field: MagicField, brine: Band, or
 /**
  * Bed between evaluations: inert under sediment unless strain domes it; dissolved to the
  * sea where the sea covers it; on wet ground an exposed bed dissolves back to brine and the
- * ground drops a bounded sink; on bare dry ground the wind lifts a share to the downwind
+ * ground sinks; on bare dry ground the wind lifts a share to the downwind
  * cell as dust.
  */
 export function weatherBed(map: PhysicalField, field: MagicField, bed: Band, origin: MagicOrigin) {
@@ -129,14 +129,13 @@ function dissolve(
   if (dissolved <= 0) return;
   bed.add(i, -dissolved);
   brine.add(i, dissolved);
-  const room = Math.max(0, p.thawSubsidenceLimit - field.subsided.get(i)),
-    drop = Math.min(room, p.sinkDepth * Math.min(1, dissolved / (map.mesh.area(i) * p.saltFull)));
+  const drop = p.sinkDepth * Math.min(1, dissolved / (map.mesh.area(i) * p.saltFull));
   if (drop <= 0) return;
   field.subsided.add(i, drop);
   displaceGround(map, i, -units(drop), "salt");
 }
 /**
- * A buried bed under strain rises as a dome: the ground over it lifts by a bounded amount
+ * A buried bed under strain rises as a dome: the ground over it lifts according to the stock
  * per epoch and a share of the bed seeps to the ring of cells around it as brine, the brine
  * springs that ring a salt dome.
  */
@@ -148,8 +147,7 @@ function dome(
   brine: Band | undefined
 ) {
   const p = field.definition.parameters,
-    room = Math.max(0, p.domeLimit - field.domed.get(i)),
-    rise = Math.min(room, p.domeRise * Math.min(1, bed.get(i) / (map.mesh.area(i) * p.saltFull)));
+    rise = p.domeRise * Math.min(1, bed.get(i) / (map.mesh.area(i) * p.saltFull));
   if (rise > 0) {
     field.domed.add(i, rise);
     displaceGround(map, i, units(rise), "salt");

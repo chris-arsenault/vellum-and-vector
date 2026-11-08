@@ -12,13 +12,16 @@ import type { RegionalState } from "./state";
  * water back into a smooth curve. Together they leave a lake rounder than the valley it filled.
  */
 /** How far an arm reaches from a lake's centre before it silts up, as a share of the lake's radius. */
+// length-unit: ratio
 const armReach = 1.25;
 /** How far from its centre a lake's waves cut the shore, as a share of its radius. */
+// length-unit: ratio
 const shoreReach = 0.9;
 /** The highest ground above its water, in metres, that a lake's waves can cut away. */
-const cutHeight = 60;
+// length-unit: fraction
+const cutHeight = 0.000015;
 /** Metres silted ground stands over the water it replaced. */
-const siltRise = 1;
+const siltRise = 0.00000025;
 
 function bodiesOf(state: RegionalState) {
   const map = state.physical.map,
@@ -61,7 +64,11 @@ function siltArms(
   for (const cell of cells) {
     if (Math.hypot(mesh.x(cell) - circle.x, mesh.y(cell) - circle.y) <= armReach * circle.radius)
       continue;
-    setGround(state, cell, Math.max(map.Elevation.get(cell), stage + units(siltRise)));
+    setGround(
+      state,
+      cell,
+      Math.max(map.Elevation.get(cell), stage + units(map.scale.length(siltRise)))
+    );
     map.WaterKindCodes.set(cell, 0);
     map.WaterBodyIds.set(cell, 0);
     clearWaterSurface(map, cell);
@@ -76,7 +83,7 @@ function cutShore(
   const map = state.physical.map,
     mesh = map.mesh,
     reach = shoreReach * circle.radius,
-    floor = stage - units(poolDepth + 1);
+    floor = stage - units(poolDepth(map.scale) + map.scale.length(0.00000025));
   for (const cell of meshWindowCells(mesh, [
     circle.x - reach,
     circle.y - reach,
@@ -86,7 +93,7 @@ function cutShore(
     if (
       mesh.membership(cell) !== 1 ||
       map.WaterKindCodes.get(cell) !== 0 ||
-      map.Elevation.get(cell) - stage > units(cutHeight) ||
+      map.Elevation.get(cell) - stage > units(map.scale.length(cutHeight)) ||
       Math.hypot(mesh.x(cell) - circle.x, mesh.y(cell) - circle.y) > reach
     )
       continue;

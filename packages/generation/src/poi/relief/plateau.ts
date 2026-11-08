@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, parentSpanOf, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -17,9 +18,9 @@ import {
 } from "./reliefShape";
 
 /** Area at which a plateau is half as great as plateaus get: a world relief complex. */
-const typicalArea = 8e9;
+const typicalArea = MapScale.area(0.0005);
 /** Height above its base where a plateau is half as tall as plateaus get. */
-const typicalHeight = 1500;
+const typicalHeight = MapScale.length(0.000375, 0.5);
 
 const isA = (state: GenerationState, cell: number) => {
   if (!isLand(state, cell)) return false;

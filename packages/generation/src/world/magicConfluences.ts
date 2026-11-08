@@ -1,9 +1,10 @@
 import { meetingInRock } from "../rock/rockMagic";
 import {
   confluenceEffective,
+  MapScale,
   type Band,
   type ConfluenceEffects,
-  type MagicConfluence,
+  type ResolvedConfluence,
   type MagicFeatureRule,
   type MagicSystem,
 } from "@atlas/domain";
@@ -20,18 +21,18 @@ import { retainedArray, releaseWorking } from "./physicalNumerics";
 
 /** A confluence's hold on the mesh this evaluation: where it holds and how much of each cell. */
 export interface ConfluenceState {
-  definition: MagicConfluence;
+  definition: ResolvedConfluence;
   members: Band;
   coverage: Band;
 }
 export interface ConfluenceWorkspace {
-  definitions: MagicConfluence[];
+  definitions: ResolvedConfluence[];
   states: Record<string, ConfluenceState>;
   /** Strain between systems per cell, 0–1: the product of two intensities times their front. */
   strain: Band;
 }
 export function createConfluenceWorkspace(
-  definitions: MagicConfluence[],
+  definitions: ResolvedConfluence[],
   map: PhysicalField
 ): ConfluenceWorkspace {
   return {
@@ -49,7 +50,7 @@ export function activeConfluences(state: GenerationState) {
     confluenceEffective(confluence, systems)
   );
 }
-function participants(state: GenerationState, confluence: MagicConfluence) {
+function participants(state: GenerationState, confluence: ResolvedConfluence) {
   const fields = state.physical!.magic!.fields;
   return confluence.systems.map((id) => fields.find((field) => field.definition.id === id)!);
 }
@@ -181,6 +182,6 @@ function actOnWaterAndLife(map: PhysicalField, i: number, c: number, e: Confluen
 function collapseDebris(map: PhysicalField, i: number, depth: number) {
   if (depth <= 0) return;
   weatherRock(map, i, depth, "confluences");
-  map.SedimentProducedTotal += (depth / 1024) * map.mesh.area(i);
+  map.SedimentProducedTotal += MapScale.metres(depth, "native") * map.mesh.area(i);
 }
 export type ConfluenceSystems = Pick<MagicSystem, "id" | "enabled">[];

@@ -1,4 +1,4 @@
-import { spatial, type AtlasFeature } from "@atlas/domain";
+import { spatial, MapScale, type AtlasFeature } from "@atlas/domain";
 import { generationFeatures, writeGenerationFeature } from "../generationFeatures";
 import { celsius, regionalMoisture } from "./climate";
 import { cellAt, isContent } from "./lattice";
@@ -7,7 +7,7 @@ import { traceWays, type Place } from "./societyWays";
 import { clamp, naturalBand, type RegionalState } from "./state";
 
 /** Field area a resident needs (m²), and the pasture beyond the fields as a share of it. */
-const fieldPerResident = 10_000,
+const fieldPerResident = MapScale.area(6.25e-10),
   pastureShare = 1.5;
 /** Shares of the tree cohorts cleared on fields and on pasture, and the grass that takes their place. */
 const fieldClearance = 0.8,
@@ -17,9 +17,9 @@ const fieldClearance = 0.8,
 export const fieldGrass = 0.2;
 /** The steepest ground fields are laid on, and the deepest ice. */
 export const steepestField = 0.12,
-  iceOnField = 1;
+  iceOnField = MapScale.length(0.00000025, 0.5);
 /** Travel cost (m) over which a place's pull on its land fades. */
-const fieldDecay = 3000;
+const fieldDecay = MapScale.length(0.00075);
 
 type Fields = { place: Int32Array; kind: Uint8Array };
 
@@ -64,9 +64,10 @@ function allocate(
   fields: Fields
 ) {
   const mesh = state.physical.map.mesh,
-    worth = (i: number) => farming(state, i) * Math.exp(-cost[i] / fieldDecay);
+    worth = (i: number) =>
+      farming(state, i) * Math.exp(-cost[i] / state.physical.map.scale.resolveMeasure(fieldDecay));
   cells.sort((a, b) => worth(b) - worth(a) || a - b);
-  let need = place.residents * fieldPerResident,
+  let need = place.residents * state.physical.map.scale.resolveMeasure(fieldPerResident),
     pasture = need * pastureShare;
   for (const i of cells) {
     if (need > 0) {
@@ -112,7 +113,7 @@ const farmable = (state: RegionalState, i: number) =>
   isContent(state.physical.map.mesh, i) &&
   state.physical.map.WaterKindCodes.get(i) === 0 &&
   state.physical.map.Slope.get(i) <= steepestField &&
-  state.physical.map.IceThickness.get(i) < iceOnField;
+  state.physical.map.IceThickness.get(i) < state.physical.map.scale.resolveMeasure(iceOnField);
 /** Farming suitability 0..1 on the present ground: soil, water, warmth, gentle slope. */
 function farming(state: RegionalState, i: number) {
   const map = state.physical.map;
@@ -120,12 +121,19 @@ function farming(state: RegionalState, i: number) {
     map.SoilDepth.get(i),
     regionalMoisture(state, i),
     celsius(state, i),
-    map.Slope.get(i)
+    map.Slope.get(i),
+    map.scale
   );
 }
 /** Farming suitability from soil depth (m), plant water, degrees and slope. */
-export const farmingValue = (soil: number, moisture: number, degrees: number, slope: number) =>
-  clamp(soil / 0.5) *
+export const farmingValue = (
+  soil: number,
+  moisture: number,
+  degrees: number,
+  slope: number,
+  scale: MapScale
+) =>
+  clamp(soil / scale.length(0.000000125, 0.5)) *
   clamp(moisture / 0.5) *
   clamp((degrees + 2) / 16) *
   clamp(1 - slope / steepestField);

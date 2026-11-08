@@ -1,5 +1,5 @@
 import type { PhysicalField } from "./field";
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 import { environment, approach, unit, type EcologyForcing } from "./ecologyEnvironment";
 import { migrateAnimals } from "./ecologyMovement";
 import { crossingTime, waterDistance, type Crossing } from "./ecologyCrossing";
@@ -50,23 +50,27 @@ function eatPlants(map: PhysicalField, i: number, demand: number, browser: boole
   map.ConiferSaplings.set(i, map.ConiferSaplings.get(i) * (1 - fraction));
   return eaten;
 }
-const animalCrossing: Crossing = { carrier: "current", reach: 120_000, interval: 50 };
+const animalCrossing = { carrier: "current", reach: MapScale.length(0.03), interval: 50 } as const;
 /**
  * Rare swimmers and rafters found a small population on unoccupied land with
  * food, once a crossing from occupied land would arrive within the epoch.
  */
 function foundAcrossWater(map: PhysicalField, population: Band, capacity: Band, years: number) {
+  const crossing: Crossing = {
+    ...animalCrossing,
+    reach: map.scale.resolveMeasure(animalCrossing.reach),
+  };
   const landed = waterDistance(
     map,
     (i) => population.get(i) > 1e-6,
-    animalCrossing.carrier,
-    animalCrossing.reach * 6
+    crossing.carrier,
+    crossing.reach * 6
   );
   for (let i = 0; i < population.length; i++)
     if (
       population.get(i) < 1e-7 &&
       capacity.get(i) > 0 &&
-      crossingTime(animalCrossing, landed.get(i)) <= years
+      crossingTime(crossing, landed.get(i)) <= years
     )
       population.set(i, capacity.get(i) * 0.01);
   releaseWorking(map, landed);
@@ -96,11 +100,11 @@ export function evolveAnimals(
     (i) => map.AquaticProductivity.get(i) * 0.12 * (1 - map.EcologicalToxicity.get(i))
   );
   const speed = forcing(0).migration;
-  migrateAnimals(map, map.Grazers, graze, years, 12_000 * speed);
-  migrateAnimals(map, map.Browsers, browse, years, 8000 * speed);
+  migrateAnimals(map, map.Grazers, graze, years, map.scale.length(0.003) * speed);
+  migrateAnimals(map, map.Browsers, browse, years, map.scale.length(0.002) * speed);
   foundAcrossWater(map, map.Grazers, graze, years);
   foundAcrossWater(map, map.Browsers, browse, years);
-  migrateAnimals(map, map.AquaticFauna, aquatic, years, 20_000 * speed, true);
+  migrateAnimals(map, map.AquaticFauna, aquatic, years, map.scale.length(0.005) * speed, true);
   for (let i = 0; i < map.mesh.count; i++) {
     consume(map, map.Grazers, graze, i, years, false);
     consume(map, map.Browsers, browse, i, years, true);
@@ -112,7 +116,7 @@ export function evolveAnimals(
     "ecology:prey-capacity",
     (i) => map.Herbivores.get(i) * 0.08
   );
-  migrateAnimals(map, map.Predators, prey, years, 18_000 * speed);
+  migrateAnimals(map, map.Predators, prey, years, map.scale.length(0.0045) * speed);
   foundAcrossWater(map, map.Predators, prey, years);
   for (let i = 0; i < map.mesh.count; i++) {
     const herbivores = map.Herbivores.get(i),

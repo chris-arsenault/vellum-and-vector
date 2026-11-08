@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -26,8 +27,8 @@ import {
 } from "./reliefShape";
 
 /** A flank depth and length at which a valley is half as great as valleys get: a world gorge's. */
-const typicalDepth = 300,
-  typicalLength = 100_000;
+const typicalDepth = MapScale.length(0.000075, 0.5),
+  typicalLength = MapScale.length(0.025);
 
 const classed = (state: GenerationState, cell: number) => {
   const code = landformAt(state, cell);
@@ -131,7 +132,10 @@ export const valley: PoiEntry = {
     statement:
       "A valley gives water, deep soil, a way through and shelter, more where it is wet and carries a large river. An ice-cut floor is wider and gives more ground; a river in spate takes what stands on its floor.",
     offers(state, place) {
-      const water = sized((s, p) => dischargeAt(s, p.anchor), 100)(state, place);
+      const water = sized((s, p) => dischargeAt(s, p.anchor), MapScale.volume(1.5625e-18))(
+        state,
+        place
+      );
       return {
         water,
         food: glacial(state, place) ? 1 : moistureAt(state, place.anchor),

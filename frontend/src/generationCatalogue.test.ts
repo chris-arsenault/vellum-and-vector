@@ -35,8 +35,14 @@ it("validates creator controls from the same definitions used to present them", 
     expect(atlasParametersSchema.parse({})[key as keyof typeof atlasParameterDefinitions]).toBe(
       definition.default
     );
-    expect(atlasParametersSchema.safeParse({ [key]: definition.minimum - 1 }).success).toBe(false);
+    if ("minimum" in definition)
+      expect(atlasParametersSchema.safeParse({ [key]: definition.minimum - 1 }).success).toBe(
+        false
+      );
   }
   expect(atlasParametersSchema.safeParse({ rainfallTypo: 2 }).success).toBe(false);
   expect(atlasParametersSchema.parse({ rainfall: 0, impactSize: 0.01 }).rainfall).toBe(0);
+  expect(
+    atlasParametersSchema.parse({ rainfall: 12, seaLevel: 0.1, temperature: -80, provinces: 300 })
+  ).toMatchObject({ rainfall: 12, seaLevel: 0.1, temperature: -80, provinces: 300 });
 });

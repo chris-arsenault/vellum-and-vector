@@ -4,6 +4,7 @@ import {
   neighbors,
   settlementSiteKinds,
   spatial,
+  MapScale,
   type Band,
   type SettlementSiteKind,
   type SocietyCommunity,
@@ -29,10 +30,12 @@ const unit = (value: number) => Math.max(0, Math.min(1, value));
 
 class SiteReader {
   readonly grid;
+  readonly scale;
   private readonly covers;
   private lastRing: { cell: number; neighbors: number[] } | undefined;
   constructor(readonly state: Pick<GenerationState, "surface">) {
     this.grid = state.surface;
+    this.scale = MapScale.fromCells(this.grid.bounds, this.grid.active.length);
     this.covers = spatial.geometryCoverage(this.grid.scope.footprint);
   }
   value(name: string, i: number, fallback = 0) {
@@ -72,7 +75,7 @@ class SiteReader {
   ice(i: number) {
     return this.grid.channels.iceThickness
       ? this.value("iceThickness", i)
-      : this.value("ice", i) * 1000;
+      : MapScale.metres(this.value("ice", i), "km");
   }
   /** A class holds a site where its coverage passes a tenth; membership stands in where none is published. */
   feature(system: string, rule: string, i: number) {
@@ -99,10 +102,11 @@ function pass(r: SiteReader, i: number): SiteOpportunity | null {
   }
   const rise = highest - own,
     drop = own - lowest;
-  if (changes < 4 || rise < 150 || drop < 150) return null;
+  if (changes < 4 || rise < r.scale.length(0.0000375) || drop < r.scale.length(0.0000375))
+    return null;
   return {
     kind: "pass",
-    score: unit(Math.min(rise, drop) / 600),
+    score: unit(Math.min(rise, drop) / r.scale.length(0.00015)),
     reason: `a col ${Math.round(rise)} m below the heights and ${Math.round(drop)} m above the lowlands on both sides`,
   };
 }
@@ -122,12 +126,13 @@ function riverNode(r: SiteReader, i: number): SiteOpportunity | null {
   if (!junction && !mouth) return null;
   return {
     kind: "river-node",
-    score: unit(Math.log1p(r.value("flow", i)) / 8) + (junction ? 0.3 : 0),
+    score:
+      unit(Math.log1p(r.value("flow", i) / r.scale.volume(1.5625e-20)) / 8) + (junction ? 0.3 : 0),
     reason: junction ? "a river junction" : "where the river leaves the hills for the plain",
   };
 }
 /** Depth that lets a laden ship lie near the shore, and the Pressure that wrecks a mole. */
-export const harbourGoodDepth = 10,
+export const harbourGoodDepth = MapScale.length(0.0000025),
   harbourSurge = 400;
 /** How a stretch of sea serves a harbour: shelter, lee, depth, surge, and the storm season. */
 function harbourWaters(r: SiteReader, sea: number[]) {
@@ -135,7 +140,7 @@ function harbourWaters(r: SiteReader, sea: number[]) {
   const shelter = sea.length <= 3 ? 1 : sea.length <= 4 ? 0.6 : 0.2,
     // Wave exposure is published as a 0..1 ratio of the native 0..1000.
     lee = 1 - sea.reduce((s, j) => s + r.value("waveExposure", j), 0) / sea.length,
-    depth = peak("waterDepth") >= harbourGoodDepth ? 1 : 0.4,
+    depth = peak("waterDepth") >= r.scale.resolveMeasure(harbourGoodDepth) ? 1 : 0.4,
     surge = peak("magic:pressure:intensity") >= harbourSurge ? 0.3 : 1,
     // A harbour on a storm track is closed for the season the storms run.
     seasonal = peak("stormTrack") >= 0.3;
@@ -193,11 +198,11 @@ function plainNode(r: SiteReader, i: number): SiteOpportunity | null {
   return { kind: "plain-node", score, reason };
 }
 /** Ice thicker than this, in metres, is ground nobody settles. */
-export const uninhabitableIce = 1;
+export const uninhabitableIce = MapScale.length(2.5e-7);
 /** Ground nobody settles: ice, the heart of a core, the inside of an Aurora field. */
 function uninhabitable(r: SiteReader, i: number) {
   return (
-    r.ice(i) > uninhabitableIce ||
+    r.ice(i) > r.scale.resolveMeasure(uninhabitableIce) ||
     r.value("quickening", i) >= 0.6 ||
     r.value("stillness", i) >= 0.6 ||
     r.feature("fire", "core", i)
@@ -302,8 +307,8 @@ function fortress(r: SiteReader, site: number, kind: SettlementSiteKind) {
       slope = r.value("slope", j);
     return (
       dryLand(r.state, j) &&
-      above >= 100 &&
-      above <= 500 &&
+      above >= r.scale.length(0.000025) &&
+      above <= r.scale.length(0.000125) &&
       slope >= 0.008 &&
       slope <= 0.05 &&
       r.value("landform", j) !== 6
@@ -394,7 +399,7 @@ function passFoot(
     origin = gridPosition(r.grid, seed);
   const foot = r
     .ring(choice.cell)
-    .filter((j) => dryLand(r.state, j) && col - r.elevation(j) >= 50)
+    .filter((j) => dryLand(r.state, j) && col - r.elevation(j) >= r.scale.length(0.0000125))
     .sort((a, b) => {
       const ownA = Number(owner.get(a) === unit),
         ownB = Number(owner.get(b) === unit);

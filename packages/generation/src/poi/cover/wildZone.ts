@@ -19,7 +19,8 @@ import {
 } from "./coverShared";
 
 /** Area at which a wild zone is half as great as they get: 1,000 square kilometres. */
-const typicalArea = 1e9;
+// length-unit: fraction
+const typicalArea = 0.0000625;
 /** Verdure past which Greenwood has knit the ground and the strain has nothing to tear. */
 const knitFrom = 0.5;
 const isA = magicRule("veil", "wild");

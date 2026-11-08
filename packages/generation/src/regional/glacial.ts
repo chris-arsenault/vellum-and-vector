@@ -1,4 +1,5 @@
 import { deposit, looseTo } from "../rock/groundLedger";
+import { MapScale } from "@atlas/domain";
 import { units } from "../world/math";
 import {
   isContent,
@@ -10,7 +11,7 @@ import {
 import { clamp, naturalBand, type ReliefWork, type RegionalState } from "./state";
 
 /** Lapse of temperature with the height the relief gained over the captured base (°C/m). */
-const lapse = 0.0065;
+const lapse = 26_000;
 /** Temperature at which snow accumulates, and the span over which accumulation reaches full. */
 const accumulationTemperature = -2,
   accumulationSpan = 8;
@@ -22,20 +23,19 @@ const recordedAccumulation = 0.6,
   recordedFloor = 0.05;
 /** Flux (in cells of full accumulation) a glacier gathers before it leaves its cirque. */
 const cirqueFlux = 10;
-/** Cirque depth at full strength (m): a physical size, the same at every refinement level. */
-const cirqueDepth = 120;
-/** Trough deepening per square root of flux beyond the cirque, and its limit, as shares of cirque depth. */
-const troughShare = 0.4,
-  troughLimit = 3;
+/** Cirque depth at full strength, relative to the map. */
+// length-unit: fraction
+const cirqueDepth = 0.00003;
+/** Trough deepening per square root of flux beyond the cirque, as a share of cirque depth. */
+const troughShare = 0.4;
 /** Share of a trough's deepening its flanks take, giving the valley its U. */
 const flankShare = 0.5;
 /** Moraine height at a terminus, as a share of cirque depth. */
 const moraineShare = 0.3;
-/** Ice thickness (m) per square root of the ice-covered area feeding a cell (km²), and its bound. */
-const iceThicknessScale = 40,
-  iceThicknessLimit = 600;
+/** Ice thickness per square root of the ice-covered area feeding a cell. */
+const iceThicknessScale = 0.04;
 /** Meltwater (m/yr) a fully warm ice surface yields. */
-const meltYield = 1;
+const meltYield = 0.00000025;
 
 interface IceBudget {
   accumulation: Float64Array;
@@ -58,7 +58,7 @@ export function applyGlaciation(state: RegionalState, h: Float64Array, relief: R
   const budget = iceBudget(state, h),
     { present, thickness, target } = surfaceFlow(state, budget, h),
     relict = relictFlow(state),
-    depth = cirqueDepth,
+    depth = state.physical.map.scale.length(cirqueDepth),
     flux = relief.iceFlux;
   for (let i = 0; i < flux.length; i++) flux[i] = Math.max(present[i], relict[i]);
   const lowering = carving(state, budget, flux, depth);
@@ -92,8 +92,11 @@ function iceBudget(state: RegionalState, h: Float64Array): IceBudget {
     if (sea[i] || !isContent(mesh, i)) continue;
     // Aurora's held ice is the ledger's contribution to the written thickness (once, in
     // `writeIce`); it is not snow that flows and carves. M5 decides whether it should.
-    const t = capturedCelsius(state, i) - lapse * (h[i] - base[i]) + magicHeat(state, i),
-      precipitation = (map.Rainfall.get(i) + map.Snowfall.get(i)) / 1000,
+    const t =
+        capturedCelsius(state, i) -
+        map.scale.inverseLength(lapse) * (h[i] - base[i]) +
+        magicHeat(state, i),
+      precipitation = MapScale.metres(map.Rainfall.get(i) + map.Snowfall.get(i), "mm"),
       snow = clamp((accumulationTemperature - t) / accumulationSpan) * (0.3 + precipitation),
       share = mesh.contentArea(i) / cellArea;
     accumulation[i] = snow * share;
@@ -140,11 +143,7 @@ function surfaceFlow(state: RegionalState, { accumulation, melt }: IceBudget, h:
       target[i] = j;
       if (j >= 0) present[j] += present[i];
     }
-    for (const i of land)
-      thickness[i] = Math.min(
-        iceThicknessLimit,
-        iceThicknessScale * Math.sqrt((present[i] * cellArea) / 1e6)
-      );
+    for (const i of land) thickness[i] = iceThicknessScale * Math.sqrt(present[i] * cellArea);
   }
   return { present, thickness, target };
 }
@@ -216,7 +215,7 @@ function carving(
     // beyond it the full glacier cuts its trough.
     if (f < 1) lowering[i] = cold[i] ? depth * 4 * f * (1 - f) * strength : 0;
     else if (network.channel[i] || f >= 2)
-      lowering[i] = Math.min(troughLimit, troughShare * Math.sqrt(f - 1)) * depth * strength;
+      lowering[i] = troughShare * Math.sqrt(f - 1) * depth * strength;
   }
   return lowering;
 }
@@ -310,6 +309,9 @@ function writeIce(state: RegionalState, thickness: Float64Array, { warmth }: Ice
     map.IceThickness.set(i, Math.max(0, thickness[i] + applied.appliedTo("IceThickness", i)));
     const iced = map.IceThickness.get(i) > 0;
     map.GroundedIce.set(i, Number(iced));
-    map.GlacialMeltwater.set(i, iced ? Math.round(1000 * meltYield * warmth[i]) : 0);
+    map.GlacialMeltwater.set(
+      i,
+      iced ? MapScale.inUnits(map.scale.length(meltYield) * warmth[i], "mm") : 0
+    );
   }
 }

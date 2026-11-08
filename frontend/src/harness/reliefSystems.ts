@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import { MapScale } from "@atlas/domain";
 import { join } from "node:path";
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import { png } from "./quickTerrain";
@@ -9,7 +10,6 @@ import { png } from "./quickTerrain";
  * says what built it and how it stands, and measures the lowland interior of each landmass.
  * Observes only.
  */
-const metres = 1024;
 /** Ground this high counts as raised, in metres: low enough to catch old, worn ranges. */
 const raisedFrom = 600;
 /** A body smaller than this many cells is a hill or a cone, not a range. */
@@ -25,7 +25,7 @@ const plainBelow = 1500,
   plainInland = 150_000;
 
 const height = (map: PhysicalField, i: number) =>
-  (map.Elevation.get(i) - map.EffectiveSeaLevel) / metres;
+  MapScale.metres(map.Elevation.get(i) - map.EffectiveSeaLevel, "native");
 const isLand = (map: PhysicalField, i: number) =>
   map.mesh.membership(i) === 1 && height(map, i) > 0;
 function around(map: PhysicalField, i: number) {
@@ -65,7 +65,9 @@ function describeRange(map: PhysicalField, cells: readonly number[]) {
     active = share((i) => map.OrogenicConstruction.get(i) > 0),
     sheeted = share((i) => map.ThrustSheetIndex.get(i) > 0),
     sutured = share((i) => map.CrustSutureStrength.get(i) > 100),
-    volcanic = share((i) => map.VolcanicConstructionHistory.get(i) > 100 * metres);
+    volcanic = share(
+      (i) => map.VolcanicConstructionHistory.get(i) > MapScale.inUnits(100, "native")
+    );
   return {
     cells: cells.length,
     mean: Math.round(heights.reduce((sum, h) => sum + h, 0) / cells.length),
@@ -126,11 +128,11 @@ function deepestInland(map: PhysicalField, id: number) {
   for (let i = 0; i < map.mesh.count; i++)
     if (isLand(map, i) && map.LandmassIds.get(i) === id)
       deepest = Math.max(deepest, map.OceanDistance.get(i));
-  return Math.round(deepest / 1000);
+  return Math.round(MapScale.inUnits(deepest, "km"));
 }
 /** How wide the land above each height runs, across the long way of each connected body of it. */
 export function widthsAbove(map: PhysicalField, thresholds = [1000, 2000, 3000, 4000]) {
-  const span = Math.sqrt(map.mesh.area(map.mesh.cellAt(0, 0))) / 1000;
+  const span = MapScale.inUnits(Math.sqrt(map.mesh.area(map.mesh.cellAt(0, 0))), "km");
   return {
     cellKm: Math.round(span),
     bands: thresholds.map((from) => {
@@ -156,7 +158,7 @@ export function mountainSystems(map: PhysicalField) {
       .map((cells) => describeRange(map, cells)),
     plains = plainsOf(map),
     landmasses = new Map<number, number>(),
-    cellKm2 = (map.mesh.spacing * map.mesh.spacing * 0.433) / 1e6;
+    cellKm2 = MapScale.areaUnits(map.mesh.spacing * map.mesh.spacing * 0.433, "m2", "km2");
   for (let i = 0; i < map.mesh.count; i++)
     if (isLand(map, i))
       landmasses.set(map.LandmassIds.get(i), (landmasses.get(map.LandmassIds.get(i)) ?? 0) + 1);
@@ -206,7 +208,7 @@ export function landSlopes(map: PhysicalField) {
     if (!isLand(map, i)) continue;
     let steepest = 0;
     for (const j of around(map, i)) {
-      const run = map.mesh.spacing / 1000;
+      const run = MapScale.inUnits(map.mesh.spacing, "km");
       steepest = Math.max(steepest, Math.abs(height(map, i) - height(map, j)) / run);
     }
     slopes.push(steepest);
@@ -233,8 +235,8 @@ function rangeWidth(map: PhysicalField, cells: readonly number[]) {
     long = Math.sqrt((xx + yy + spread) / 2 / cells.length) * 3.46,
     area = cells.reduce((sum, i) => sum + map.mesh.area(i), 0);
   return {
-    lengthKm: Math.round(long / 1000),
-    widthKm: Math.round(area / Math.max(1, long) / 1000),
+    lengthKm: Math.round(MapScale.inUnits(long, "km")),
+    widthKm: Math.round(MapScale.inUnits(area / Math.max(1, long), "km")),
   };
 }
 const heightColours: readonly (readonly [number, readonly [number, number, number]])[] = [

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createGrid, putChannel, rectangle, residentBand } from "@atlas/domain";
+import { MapScale, createGrid, putChannel, rectangle, residentBand } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import { chooseSettlementSites, rankSites } from "./societySites";
 import type { MapProcessContext } from "./process";
@@ -126,8 +126,9 @@ it("holds a pass from a spur only when a hazard lies below it", () => {
   const owner = residentBand("int32", new Int32Array(grid.active.length));
   const river = residentBand("float64", new Float64Array(owner.length)),
     coast = residentBand("float64", new Float64Array(owner.length));
-  // A reachable spur beside the col, 300 m above it, on a moderate slope.
-  state.surface.channels.elevation.set(cell(9, 3), 650);
+  // A reachable spur beside the col at this map's relative relief, on a moderate slope.
+  const scale = MapScale.fromCells(grid.bounds, grid.active.length);
+  state.surface.channels.elevation.set(cell(9, 3), 350 + scale.length(0.000075));
   state.surface.channels.slope.set(cell(9, 3), 0.02);
   const quiet = chooseSettlementSites(state, context, owner, [cell(4, 7)], river, coast);
   expect(quiet[0].site?.fortress).toBe(false);

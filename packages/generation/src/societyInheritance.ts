@@ -1,5 +1,6 @@
 import {
   mergePopulation,
+  MapScale,
   population,
   spatial,
   type SocietyRegion,
@@ -46,7 +47,12 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
     region = work.region;
   retainSocietyFootprints(state);
   const heirs = new Map<string, Heir[]>();
-  const local = localTownAllocations(prior.communities, prior.connections);
+  const parentBounds = spatial.bounds(state.domain.world.areas[prior.areaId].footprint);
+  const local = localTownAllocations(
+    prior.communities,
+    prior.connections,
+    MapScale.fromCells(parentBounds, Math.max(1, prior.communities.length))
+  );
   const countries = region.communities.filter((c) => c.footprint);
   spatial.withIndex(
     countries.map((c) => c.footprint!),

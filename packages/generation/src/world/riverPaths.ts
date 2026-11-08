@@ -1,6 +1,6 @@
 import type { PhysicalField } from "./field";
 import { physicalSampler } from "./physicalMetric";
-import { spatial, type Band, type ReadBand } from "@atlas/domain";
+import { spatial, MapScale, type Band, type ReadBand } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { meshDeltaX, meshPointX } from "./mesh";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
@@ -254,7 +254,7 @@ export function riverPath(map: PhysicalField, paths: RiverPaths, members: number
     appendCurve(
       [a, handle(map, paths, i, j, false), handle(map, paths, i, j, true), d],
       segment,
-      Math.min(100, map.mesh.spacing / 64),
+      Math.min(map.scale.length(0.000025), map.scale.cells(1 / 64)),
       stations
     );
     for (let n = start; n < stations.length; n++) stations[n].point[0] += offset;
@@ -273,10 +273,18 @@ export function riverPath(map: PhysicalField, paths: RiverPaths, members: number
       widths: profile(members, stations, map.RiverWidth),
       depths: profile(members, stations, map.RiverDepth),
       catchmentAreas: profile(members, stations, map.CatchmentArea),
-      elevations: profile(members, stations, map.DrainageElevations, 1 / 1024, map.BaseSeaLevel),
+      elevations: profile(
+        members,
+        stations,
+        map.DrainageElevations,
+        MapScale.metres(1, "native"),
+        map.BaseSeaLevel
+      ),
       bedElevations: paths.elevationAt
-        ? stations.map(({ point }) => (paths.elevationAt!(...point) - map.BaseSeaLevel) / 1024)
-        : profile(members, stations, map.Elevation, 1 / 1024, map.BaseSeaLevel),
+        ? stations.map(({ point }) =>
+            MapScale.metres(paths.elevationAt!(...point) - map.BaseSeaLevel, "native")
+          )
+        : profile(members, stations, map.Elevation, MapScale.metres(1, "native"), map.BaseSeaLevel),
     },
   };
 }

@@ -1,5 +1,6 @@
 import {
   gridPosition,
+  MapScale,
   population,
   semanticId,
   spatial,
@@ -22,6 +23,7 @@ import { authoredFields } from "./mapAuthored";
 import { anchorRiverWork } from "./societyWaterUse";
 import { nearestSample, samplesInBox } from "./societySpatial";
 import { societyWorkName } from "./societyNaming";
+import { mapScale } from "./worldSignificance";
 
 export function makeWork(
   state: GenerationState,
@@ -32,7 +34,10 @@ export function makeWork(
   // A World unit makes demands of its country; only a finer profile, or an explicit
   // position, locates a work.
   const demand = position === undefined && isWorldSociety(state),
-    radius = Math.min(5000, Math.sqrt(c.areaKm2) * 200);
+    radius = Math.min(
+      mapScale(state).length(0.00125),
+      Math.sqrt(MapScale.areaUnits(c.areaKm2, "km2", "m2")) * 0.2
+    );
   const work: SocietyWork = {
     id: semanticId(state.domain.world.id, "society-work", `${c.id}:${kind}`),
     communityId: c.id,
@@ -105,8 +110,8 @@ export function planSocietyWorks(state: GenerationState) {
   addAuthoredWorks(state, existing);
 }
 /** Water a harbour stands in (m), the seat it may lie from (m), and the people who build one. */
-export const harbourDepth = 30,
-  harbourReach = 10_000,
+export const harbourDepth = MapScale.length(0.0000075, 0.5),
+  harbourReach = MapScale.length(0.0025),
   harbourHands = 1000;
 /**
  * A unit demands a harbour of the shore it holds: its coast medium, the same cells the demand
@@ -132,11 +137,11 @@ function addHarbors(state: GenerationState, existing: Set<string>) {
 }
 function harborSample(state: GenerationState, position: SocietyCommunity["position"]) {
   const { x, y } = position,
-    reach = harbourReach;
+    reach = mapScale(state).resolveMeasure(harbourReach);
   for (const i of samplesInBox(state.surface, [x - reach, y - reach, x + reach, y + reach])) {
     if (
       societyValue(state, "water", i) !== 1 ||
-      societyValue(state, "waterDepth", i) >= harbourDepth
+      societyValue(state, "waterDepth", i) >= mapScale(state).resolveMeasure(harbourDepth)
     )
       continue;
     const p = gridPosition(state.surface, i);
@@ -246,7 +251,10 @@ export function* workSamples(state: GenerationState, work: SocietyWork) {
       d = Math.hypot(p.x - work.position.x, p.y - work.position.y);
     if (d <= work.radius) {
       found = true;
-      yield { i, fraction: Math.exp(-d / Math.max(1, work.radius)) };
+      yield {
+        i,
+        fraction: Math.exp(-d / Math.max(mapScale(state).length(0.00000025), work.radius)),
+      };
     }
   }
   if (!found) {
@@ -318,8 +326,8 @@ function applyWorkSample(
 ) {
   const v = (name: string) => societyValue(state, name, i);
   const terrain: Partial<Record<SocietyWorkKind, number>> = {
-    pass: -8,
-    weir: 4,
+    pass: -mapScale(state).length(0.000002, 0.5),
+    weir: mapScale(state).length(0.000001, 0.5),
   };
   if (terrain[work.kind]) edit("elevation", v("elevation") + terrain[work.kind]! * rise);
   if (work.kind === "weir" || work.kind === "quarrying")
@@ -354,8 +362,8 @@ function applyLivingWork(
       return;
   }
 }
-/** The share of what a water work diverts that reaches the soil. */
-export const soilShare = 0.02;
+/** Soil water depth per diverted flow; the coarse exposure interval is folded into this inverse area. */
+export const soilShare = MapScale.measure(3.2e11, -2);
 function irrigate(
   state: GenerationState,
   i: number,
@@ -365,7 +373,10 @@ function irrigate(
   const available = societyValue(state, "flow", i),
     diverted = Math.min(available * 0.2, amount);
   edit("flow", available - diverted);
-  edit("soilWater", societyValue(state, "soilWater", i) + diverted * soilShare);
+  edit(
+    "soilWater",
+    societyValue(state, "soilWater", i) + diverted * mapScale(state).resolveMeasure(soilShare)
+  );
 }
 /**
  * Clearing and burning take the trees and what lives in them: the Greenwood's sap under the

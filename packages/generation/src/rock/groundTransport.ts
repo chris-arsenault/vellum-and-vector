@@ -1,14 +1,13 @@
 import type { Band } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import { releaseWorking } from "../world/physicalNumerics";
-import { adjustCrustColumn } from "./crustTransport";
-import { crustHeight, crustPerRock, units } from "../world/math";
+import { crustHeight, units } from "../world/math";
 import { recordFlow } from "../coupling/flows";
 import { allColumnFields, columnFields, materialProperties, type Column } from "./rockLayerFields";
 import { materialLayer, type MaterialLayer } from "./rockColumn";
 import { buryUnderPackage } from "./groundBurial";
 import { rockKindOfCode } from "./rockCatalogue";
-import { carryOut, depositPackage, headroom, shiftRock, standGround } from "./groundLedger";
+import { carryOut, depositPackage, shiftRock, standGround } from "./groundLedger";
 import { projectGround, resetShares } from "./groundShares";
 import { oceanicColumn } from "./rockHistory";
 import { loadOf, seaLoadOf, MaterialLoad } from "./groundLoad";
@@ -179,8 +178,9 @@ export function formTransportOpening(map: PhysicalField, cell: number) {
     cell,
     units(
       crustHeight(
-        map.CrustThickness.get(cell) / 1024,
-        map.CrustContinentalFraction.get(cell) / 1000
+        MapScale.metres(map.CrustThickness.get(cell), "native"),
+        map.CrustContinentalFraction.get(cell) / 1000,
+        map.scale
       )
     )
   );
@@ -231,7 +231,7 @@ function collisionBeds(
   }
   return result;
 }
-/** An overlapping donor's coherent beds join the collision pile; excess deepens the crust. */
+/** An overlapping donor's coherent beds join the collision pile. */
 export function accreteHeldGround(
   map: PhysicalField,
   held: HeldRock,
@@ -242,14 +242,7 @@ export function accreteHeldGround(
   sourceDepth?: number
 ) {
   const observed = observeTransfer(map, held, source, target, "rock-accretion"),
-    admitted = Math.min(Math.max(0, amount), headroom(map, target));
-  if (amount > admitted)
-    adjustCrustColumn(
-      map,
-      target,
-      map.CrustThickness.get(target) +
-        (amount - admitted) * crustPerRock(map.CrustContinentalFraction.get(target) / 1000)
-    );
+    admitted = Math.max(0, amount);
   if (admitted <= 0) {
     observed(0);
     return 0;
@@ -259,7 +252,13 @@ export function accreteHeldGround(
   buryUnderPackage(map, target, layers);
   groundStorage(map).BedrockElevation.add(target, admitted);
   groundStorage(map).SurfaceRockLoad.add(target, admitted);
-  recordFlow(map, "plates", "rock", "rock", (admitted * map.mesh.area(target)) / 1024);
+  recordFlow(
+    map,
+    "plates",
+    "rock",
+    "rock",
+    MapScale.metres(admitted, "native") * map.mesh.area(target)
+  );
   projectGround(map, target);
   observed(admitted);
   return admitted;
@@ -351,16 +350,8 @@ export function moveHeldSheet(map: PhysicalField, held: HeldRock, cell: number, 
   const observed = observeTransfer(map, held, source, cell, "sheet-move"),
     wanted = heldPlacement(held, "SurfaceRockLoad", source) - map.SurfaceRockLoad.get(cell);
   takeHeldRock(map, held, cell, source);
-  const admitted = Math.min(wanted, headroom(map, cell));
-  shiftRock(map, cell, admitted, "mountains");
-  if (wanted > admitted)
-    adjustCrustColumn(
-      map,
-      cell,
-      map.CrustThickness.get(cell) +
-        (wanted - admitted) * crustPerRock(map.CrustContinentalFraction.get(cell) / 1000)
-    );
-  observed(admitted);
+  shiftRock(map, cell, wanted, "mountains");
+  observed(wanted);
 }
 /** A collision route carries a whole donor package; callers cannot forget its cover or history. */
 export function landCollisionPackage(
@@ -386,3 +377,4 @@ export function superposeHeldSheets(
   landCollisionPackage(map, held, cell, top, 1, [1, 0, 0, 1]);
   takeHeldSheet(map, held, cell, top);
 }
+import { MapScale } from "@atlas/domain";

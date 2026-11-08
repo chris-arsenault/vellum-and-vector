@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createField } from "../world/field";
+import { createTestField as createField } from "./groundTestFixture";
 import { createWorldMesh } from "../world/worldMesh";
 import { units } from "../world/math";
 import { groundOf } from "./ground";
@@ -126,11 +126,17 @@ it("averages only the buried part of each occupied bed and leaves shallow or cem
   // Further overburden engages the whole bed. Once cemented, later burial does not age it again.
   constructMaterial(map, 1, materialLayer(rocks.basalt.code, units(100)), "cap", "crust", "land");
   lithifyBuried(map, 1, units(1000), 1, "burial");
-  const cemented = groundOf(map).section(1).find((layer) => layer.kind === rocks.sandstone.code);
+  const cemented = groundOf(map)
+    .section(1)
+    .find((layer) => layer.kind === rocks.sandstone.code);
   expect(cemented?.consolidation).toBe(0.65);
   map.CompletedEpochCount = 12;
   lithifyBuried(map, 1, units(1000), 0.5, "burial");
-  expect(groundOf(map).section(1).find((layer) => layer.kind === rocks.sandstone.code)).toEqual(cemented);
+  expect(
+    groundOf(map)
+      .section(1)
+      .find((layer) => layer.kind === rocks.sandstone.code)
+  ).toEqual(cemented);
 });
 
 it("retains the unconverted constituent when an entombed loose material consolidates gradually", () => {

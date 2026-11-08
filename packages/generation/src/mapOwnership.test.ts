@@ -19,7 +19,7 @@ it("retains known captured POIs while replacing their surrounding generated geog
     ...world.areas.area,
     parentId: "parent",
     profile: "region",
-    map: { sourceAreaId: "parent", sourceRevision: 1 },
+    map: { sourceAreaId: "parent", sourceRevision: 1, refinementLevel: 1 },
   };
   const site = generatedFeature(state, "site", "Known spring", "fire:core", "magic", {
     type: "Point",
@@ -75,7 +75,7 @@ it("presents complete child geometry beyond the starting outline without exposin
     profile: "region",
     regionId: "selection",
     footprint: rectangle([1000, 100, 2000, 900]),
-    map: { sourceAreaId: "area", sourceRevision: 1 },
+    map: { sourceAreaId: "area", sourceRevision: 1, refinementLevel: 1 },
   };
   state.domain.scope.areaId = "child";
   const local = [rectangle([1500, 500, 2500, 1000]), rectangle([3000, 1500, 5000, 2500])].map(
@@ -108,7 +108,7 @@ it.each(["add", "move", "remove"] as const)(
       ...world.areas.area,
       parentId: "parent",
       profile: "region",
-      map: { sourceAreaId: "parent", sourceRevision: 1 },
+      map: { sourceAreaId: "parent", sourceRevision: 1, refinementLevel: 1 },
     };
     const feature = generatedFeature(
       state,
@@ -181,7 +181,7 @@ it("keeps junction elevations separate for maps with the same horizontal coordin
     ...world.areas.area,
     id: "child",
     parentId: "area",
-    map: { sourceAreaId: "area", sourceRevision: 1 },
+    map: { sourceAreaId: "area", sourceRevision: 1, refinementLevel: 1 },
   };
   state.domain.scope = { ...state.domain.scope, areaId: "child" };
   putGeneratedNetwork(

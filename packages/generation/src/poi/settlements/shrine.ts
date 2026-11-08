@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { uninhabitableIce } from "../../societySites";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
@@ -22,12 +24,12 @@ import { workPlaces, workRecord } from "./workRecords";
 /** The worn way pilgrims make over this many metres, and what they carry along it. */
 const pilgrimRoad = 0.8,
   pilgrimCarriage = 0.85,
-  pilgrimReach = 2000;
+  pilgrimReach = MapScale.length(0.0005);
 /** How far, in metres, people walk to keep a shrine. */
-const keepersReach = 15_000;
+const keepersReach = MapScale.length(0.00375);
 /** The least distance between two shrines, a shrine's own ground, in metres. */
-const shrineSpacing = 60_000,
-  shrineRadius = 200;
+const shrineSpacing = MapScale.length(0.015),
+  shrineRadius = MapScale.length(0.00005);
 /** The share of its ground in trees a shrine's uncut grove keeps, where trees can stand at all. */
 const groveCover = 0.3,
   groveMoisture = 0.3;
@@ -60,7 +62,7 @@ function holiness(state: GenerationState, cell: number) {
 
 const requires = (state: GenerationState, cell: number) =>
   isLand(state, cell) &&
-  iceAt(state, cell) <= uninhabitableIce &&
+  iceAt(state, cell) <= mapScale(state).resolveMeasure(uninhabitableIce) &&
   nearTown(state, cell, keepersReach);
 const places = workPlaces("shrine", null, {
   record: "shrine",
@@ -73,7 +75,7 @@ const places = workPlaces("shrine", null, {
 });
 const isA = holdsRecord("shrine", places);
 const around = (state: GenerationState) => 6 * cellSpan(state);
-const keepersFrom = () => keepersReach;
+const keepersFrom = (state: GenerationState) => mapScale(state).resolveMeasure(keepersReach);
 const wardAt = (state: GenerationState, cell: number) =>
   Math.min(1, magicValue(state, "hallowed", "intensity", cell) / 1000);
 const holinessOf = (state: GenerationState, place: PoiPlace) => holiness(state, place.anchor);

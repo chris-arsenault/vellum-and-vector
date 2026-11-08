@@ -20,7 +20,8 @@ import {
 } from "./coverShared";
 
 /** Area at which a fog coast is half as great as they get: 2,000 square kilometres. */
-const typicalArea = 2e9;
+// length-unit: fraction
+const typicalArea = 0.000125;
 const fogAt = (state: GenerationState, cell: number) => fieldOf(state).FogForcing.get(cell);
 const isA = isFamily("fog");
 const places = landscapePlaces("fogHeath", "fog", fogAt);

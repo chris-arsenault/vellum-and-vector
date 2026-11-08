@@ -5,7 +5,7 @@ import { plantGroups, groupSuitability, type PlantGroup } from "./ecologyGroups"
 import { ecologicalFront, type EcologicalFront } from "./ecologyMovement";
 import { windStrength, type EcologyForcing } from "./ecologyEnvironment";
 import { crossingTime, waterDistance, type Crossing } from "./ecologyCrossing";
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 
 export function initializeEcology(map: PhysicalField, seed = 42, inherited = false) {
@@ -14,7 +14,11 @@ export function initializeEcology(map: PhysicalField, seed = 42, inherited = fal
     inheritFunctionalGroups(map, i);
     const water = map.WaterKindCodes.get(i);
     if (!inherited && water !== 1) founders(map, i, seed);
-    if (!inherited && water > 0 && map.WaterDepths.get(i) < 200 * 1024)
+    if (
+      !inherited &&
+      water > 0 &&
+      MapScale.metres(map.WaterDepths.get(i), "native") < map.scale.length(0.00005)
+    )
       map.AquaticFauna.set(i, Math.max(map.AquaticFauna.get(i), 0.0001));
   }
   map.EcologyInitialized = true;
@@ -34,11 +38,17 @@ function founders(map: PhysicalField, i: number, seed: number) {
     map.mesh.x(i) + map.mesh.origin[0],
     map.mesh.y(i) + map.mesh.origin[1],
     seed,
-    70_000,
+    map.scale.length(0.0175),
     2
   );
   const lift = (band: Band, floor: number) => band.set(i, Math.max(band.get(i), floor));
-  lift(map.SoilDepth, Math.min(0.5, map.SedimentThickness.get(i) / 1024 + 0.12));
+  lift(
+    map.SoilDepth,
+    Math.min(
+      map.scale.length(1.25e-7),
+      MapScale.metres(map.SedimentThickness.get(i), "native") + map.scale.length(3e-8)
+    )
+  );
   lift(map.MineralNutrients, 0.08);
   lift(map.GrassSeed, 0.15);
   lift(map.BroadleafSeed, diversity > 0.45 ? 0.08 : 0);
@@ -66,7 +76,10 @@ export function dispersePlants(
       map[group.seed].get(i) + map[group.cover].get(i) > 0.00001 ? 0 : Infinity
     );
     // Propagules also cross the sea, arriving later the farther they must travel.
-    const crossing = group.crossing as Crossing;
+    const crossing: Crossing = {
+      ...group.crossing,
+      reach: map.scale.resolveMeasure(group.crossing.reach),
+    };
     const landed = waterDistance(
       map,
       (i) => starts.get(i) === 0,
@@ -98,11 +111,11 @@ function seedTravel(
   const along =
     ((meshDeltaX(map.mesh, map.mesh.x(j) - map.mesh.x(i)) * map.WindX.get(i) +
       (map.mesh.y(j) - map.mesh.y(i)) * map.WindY.get(i)) /
-      Math.max(1, distance * 1000)) *
+      (distance * 1000)) *
     windStrength(map, i);
   const waterborne = group.id === "wetland" && map.FlowTargets.get(i) === j ? 3 : 1;
   const speed =
-    group.spread *
+    map.scale.resolveMeasure(group.spread) *
     f.migration *
     Math.max(0, 1 + f.dispersal) *
     Math.max(0.2, 1 + along * 0.6) *

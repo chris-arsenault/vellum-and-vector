@@ -1,18 +1,23 @@
 import { fixtureWorld, commitCommand } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
+import { MapScale } from "@atlas/domain";
 import { atlasPhysicalProfile } from "../../packages/generation/src/world/atlasProfile";
 import { makeCommand } from "./useAtlas";
 
 it("maps creator controls to native physics with declared units", async () => {
-  const profile = atlasPhysicalProfile({
-    continents: 7,
-    provinces: 30,
-    landFraction: 0.3,
-    temperature: -5,
-    rainfall: 2,
-    erosion: 0.5,
-    seaLevel: 100,
-  });
+  const profile = atlasPhysicalProfile(
+    {
+      continents: 7,
+      provinces: 30,
+      landFraction: 0.3,
+      temperature: -5,
+      rainfall: 2,
+      erosion: 0.5,
+      seaLevel: 0.000025,
+    },
+    {},
+    MapScale.reference()
+  );
   expect(profile.ContinentalAssemblyCount).toBe(7);
   expect(profile.TectonicProvinceCount).toBe(30);
   expect(profile.ContinentalCrustFraction).toBe(0.3);

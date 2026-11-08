@@ -1,6 +1,6 @@
 import type { PhysicalField } from "../world/field";
 import type { Band } from "@atlas/domain";
-import { clamp, maximumCrustThickness, minimumCrustThickness, units } from "../world/math";
+import { clamp, units } from "../world/math";
 import { weightScale, type TransportPlan } from "../world/transportPlan";
 import { workingArray, workingValues, releaseWorking } from "../world/physicalNumerics";
 import { groundStorage } from "./groundStorage";
@@ -42,7 +42,7 @@ export function captureCrustColumns(map: PhysicalField): Columns {
   };
 }
 function exported(map: PhysicalField, source: number, share: number, columns: Columns) {
-  const area = map.mesh.area(source) / 1024;
+  const area = map.mesh.area(source) * MapScale.metres(1, "native");
   map.crustBudget.continentalExported +=
     (columns.continental.get(source) + columns.reserve.get(source)) * share * area;
   map.crustBudget.oceanExported += columns.oceanic.get(source) * share * area;
@@ -108,18 +108,16 @@ function retainColumn(map: PhysicalField, plan: TransportPlan, columns: Arrived,
   let continental = columns.continental.get(i),
     oceanic = columns.oceanic.get(i);
   const arrival = plan.arrivals.get(i) / weightScale,
-    area = map.mesh.area(i) / 1024;
-  const fresh = Math.max(0, 1 - arrival) * units(1000);
+    area = map.mesh.area(i) * MapScale.metres(1, "native");
+  const fresh = Math.max(0, 1 - arrival) * units(map.scale.length(0.00025));
   oceanic += fresh;
   map.crustBudget.oceanCreated += fresh * area;
-  const total = continental + oceanic;
   const { slab, squeezed } =
     map.TectonicBoundaryCodes.get(i) === 1 && arrival > 1
       ? closure(columns, i, arrival, continental, oceanic)
       : { slab: 0, squeezed: 0 };
-  const over = Math.max(0, total - slab - squeezed - units(maximumCrustThickness));
-  const consumed = Math.min(oceanic, slab + over),
-    shortened = squeezed + slab + over - consumed,
+  const consumed = Math.min(oceanic, slab),
+    shortened = squeezed + slab - consumed,
     // A slab going down melts and rises as new crust under the belt above it: what an arc builds on.
     arc = consumed * arcCrustYield,
     reserve = shortened + arc;
@@ -131,9 +129,6 @@ function retainColumn(map: PhysicalField, plan: TransportPlan, columns: Arrived,
   map.OceanicSubductionHistory.add(i, consumed);
   groundStorage(map).CrustRootReserve.set(i, columns.reserve.get(i) + reserve);
   map.ConvergentCrustSurplus.set(i, reserve);
-  const basal = Math.max(0, units(minimumCrustThickness) - continental - oceanic);
-  oceanic += basal;
-  map.crustBudget.oceanCreated += basal * area;
   groundStorage(map).CrustContinentalColumn.set(i, continental);
   groundStorage(map).CrustThickness.set(i, continental + oceanic);
   refreshFraction(map, i);
@@ -145,26 +140,6 @@ export function transportCrustColumns(map: PhysicalField, plan: TransportPlan, o
   releaseWorking(map, ...Object.values(columns));
 }
 
-/** Existing vertical column adjustments remain explicit until their process supplies material. */
-/**
- * A column holds within the numerical limits on crust. Crust that arrives on a column too thick to
- * take it waits under it as root, and is not lost.
- */
-export function keepCrustInBounds(map: PhysicalField, i: number) {
-  const over = map.CrustThickness.get(i) - units(maximumCrustThickness);
-  if (over > 0) {
-    groundStorage(map).CrustRootReserve.add(i, over);
-    groundStorage(map).CrustContinentalColumn.add(
-      i,
-      (-over * map.CrustContinentalFraction.get(i)) / 1000
-    );
-  }
-  groundStorage(map).CrustThickness.set(
-    i,
-    clamp(map.CrustThickness.get(i), units(minimumCrustThickness), units(maximumCrustThickness))
-  );
-  refreshFraction(map, i);
-}
 /** Continental crust joins the bottom of a column as root, all of it continental. */
 export function addContinentalRoot(map: PhysicalField, i: number, column: number) {
   groundStorage(map).CrustThickness.add(i, column);
@@ -175,7 +150,7 @@ export function adjustCrustColumn(map: PhysicalField, i: number, next: number) {
   if (map.CrustColumnsInitialized) {
     const delta = next - map.CrustThickness.get(i),
       continental = (delta * map.CrustContinentalFraction.get(i)) / 1000,
-      area = map.mesh.area(i) / 1024;
+      area = map.mesh.area(i) * MapScale.metres(1, "native");
     groundStorage(map).CrustContinentalColumn.add(i, continental);
     map.crustBudget.continentalAdjustment += continental * area;
     map.crustBudget.oceanAdjustment += (delta - continental) * area;
@@ -192,3 +167,4 @@ function refreshFraction(map: PhysicalField, cell: number) {
       : 0
   );
 }
+import { MapScale } from "@atlas/domain";

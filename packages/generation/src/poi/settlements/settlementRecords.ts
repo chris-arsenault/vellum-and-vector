@@ -1,4 +1,10 @@
-import { canonryConfluencePresets, spatial, type AtlasFeature } from "@atlas/domain";
+import {
+  canonryConfluencePresets,
+  spatial,
+  type AtlasFeature,
+  type RelativeMeasure,
+} from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { keptCondition, lineMemory } from "../../societyRecord";
 import type { PoiCost, PoiFieldChange, PoiHazard, PoiPlace, PoiVisibility } from "../poiContract";
@@ -13,8 +19,11 @@ import { ruinPlaces, settlementPlaces } from "./communityRecords";
  * A distance in metres on this map: a physical reach never shrinks below the cells touching a
  * cell, the nearest thing a map of any size can tell apart.
  */
-export const touching = (state: GenerationState, metres: number) =>
-  Math.max(metres, 1.5 * cellSpan(state));
+export const touching = (state: GenerationState, reach: number | RelativeMeasure) =>
+  mapScale(state).supported(
+    typeof reach === "number" ? reach : mapScale(state).resolveMeasure(reach),
+    1.5
+  );
 
 export const attribute = (place: PoiPlace, name: string, otherwise = 0) => {
   const value = Number(place.feature?.attributes[name]);
@@ -67,8 +76,17 @@ const townsReach = (state: GenerationState, reach: number, least: number) =>
     return marked;
   });
 /** Whether a settlement of at least `least` people stands within `reach` metres of a cell. */
-export const nearTown = (state: GenerationState, cell: number, reach: number, least = 0) =>
-  townsReach(state, reach, least)[cell] === 1;
+export const nearTown = (
+  state: GenerationState,
+  cell: number,
+  reach: number | RelativeMeasure,
+  least = 0
+) =>
+  townsReach(
+    state,
+    typeof reach === "number" ? reach : mapScale(state).resolveMeasure(reach),
+    least
+  )[cell] === 1;
 /** The settlement a work's record names: a seat by its record, or by its community. */
 const townsById = (state: GenerationState) =>
   heldFor(state, "townsById", () => {

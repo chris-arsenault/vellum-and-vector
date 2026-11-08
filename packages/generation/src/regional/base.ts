@@ -1,4 +1,4 @@
-import { KeyedHeap } from "@atlas/domain";
+import { KeyedHeap, MapScale } from "@atlas/domain";
 import { fractalNoise } from "../world/noise";
 import { physicalSampler } from "../world/physicalMetric";
 import type { PhysicalMesh } from "../world/mesh";
@@ -22,9 +22,11 @@ const displacementShare = 0.18;
  */
 export const baseSmoothing = 0.15;
 /** Sea floor below this depth keeps its sampled value; shallower water is smoothed with the shore. */
-const shelfDepth = 30;
+// length-unit: fraction
+const shelfDepth = 0.0000075;
 /** Depth distinguishing a captured closed basin (a desert pan) from sampling roughness. */
-const capturedBasinDepth = 20;
+// length-unit: fraction
+const capturedBasinDepth = 0.000005;
 
 /**
  * Sample the captured surface (metres above the datum) with a gentle displacement, then
@@ -35,10 +37,10 @@ export function smoothedBase(state: RegionalState, datum: number) {
     mesh = map.mesh,
     n = mesh.count,
     inherited = state.regional.inheritedHeight,
-    at = physicalSampler(mesh, (i) => inherited.get(i) / 1024 - datum),
+    at = physicalSampler(mesh, (i) => MapScale.metres(inherited.get(i), "native") - datum),
     [w, s, e, nn] = mesh.bounds,
     sample = (x: number, y: number) => at(clamp(x, w, e), clamp(y, s, nn)),
-    wavelength = Math.max(state.regional.parentSpan, regionalSpan(state) * 4),
+    wavelength = map.scale.supported(state.regional.parentSpan, 4),
     sampled = new Float64Array(n),
     clamped = new Float64Array(n);
   for (let i = 0; i < n; i++) {
@@ -52,7 +54,7 @@ export function smoothedBase(state: RegionalState, datum: number) {
       x + warpX * wavelength * displacementShare,
       y + warpY * wavelength * displacementShare
     );
-    clamped[i] = Math.max(sampled[i], -shelfDepth);
+    clamped[i] = Math.max(sampled[i], -map.scale.length(shelfDepth));
   }
   const reach = state.regional.parentSpan * baseSmoothing;
   smoothOverLength(state, clamped, reach);
@@ -131,7 +133,10 @@ export function capturedSinks(
       }
       // The bowl's lowest cell is its sink; the rest of the bowl drains to it, and the whole
       // bowl may lie below its spill, so the routing can stand water in it.
-      if (deepest < capturedBasinDepth || !resolvesComponent(mesh, members, regionalSpan(state)))
+      if (
+        deepest < state.physical.map.scale.length(capturedBasinDepth) ||
+        !resolvesComponent(mesh, members, regionalSpan(state))
+      )
         return;
       sink[lowest] = 1;
       for (const i of members) bowl[i] = 1;
@@ -141,7 +146,7 @@ export function capturedSinks(
 }
 
 /** Water deeper than this (m) over a spill-filled floor is standing water worth a stage. */
-export const poolDepth = 2;
+export const poolDepth = (scale: MapScale) => scale.length(0.0000005);
 /** The fewest cells a pool spans before the map holds it as a lake. */
 export const lakeCells = 3;
 
@@ -160,7 +165,7 @@ export function lakeHollows(state: RegionalState, h: Float64Array, sea: Uint8Arr
     (i) => !sea[i] && filled[i] - h[i] > 1e-3,
     (members) => {
       if (members.length < lakeCells) return;
-      if (!members.some((i) => filled[i] - h[i] >= poolDepth)) return;
+      if (!members.some((i) => filled[i] - h[i] >= poolDepth(state.physical.map.scale))) return;
       for (const i of members) held[i] = 1;
     }
   );

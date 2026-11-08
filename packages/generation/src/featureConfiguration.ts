@@ -45,10 +45,13 @@ const culturalSchema = z
     ),
   })
   .strict();
-const legacy = (settings: ParameterValues) => generationSettingsSchema.parse(settings);
+const settingsOf = (settings: ParameterValues) => generationSettingsSchema.parse(settings);
 type Configuration = Pick<
   GenerationFeature,
-  "configuration" | "configurationFromLegacy" | "configurationBinding" | "configurationPresentation"
+  | "configuration"
+  | "configurationFromSettings"
+  | "configurationBinding"
+  | "configurationPresentation"
 >;
 
 function physicalOnly(epoch: GenerationSettings["epochs"][number]) {
@@ -75,7 +78,9 @@ function checkEpochs(ids: string[], settings: GenerationSettings) {
 
 export const clockConfiguration: Configuration = {
   configuration: clockSchema,
-  configurationFromLegacy: (settings) => ({ epochs: legacy(settings).epochs.map(physicalOnly) }),
+  configurationFromSettings: (settings) => ({
+    epochs: settingsOf(settings).epochs.map(physicalOnly),
+  }),
   configurationPresentation: {
     applicability: "initial",
     epochs: { path: "epochs", shape: "clock" },
@@ -95,9 +100,9 @@ export const clockConfiguration: Configuration = {
 };
 export const ecologyConfiguration: Configuration = {
   configuration: ecologySchema,
-  configurationFromLegacy: (settings) => ({
+  configurationFromSettings: (settings) => ({
     epochs: Object.fromEntries(
-      legacy(settings).epochs.map((epoch) => [
+      settingsOf(settings).epochs.map((epoch) => [
         epoch.id,
         ecologyEpochSchema.parse(epoch.ecology ?? {}),
       ])
@@ -130,11 +135,11 @@ export const ecologyConfiguration: Configuration = {
 };
 export const magicConfiguration: Configuration = {
   configuration: magicSchema,
-  configurationFromLegacy: (settings) => ({
-    magicSystems: legacy(settings).magicSystems,
-    confluences: legacy(settings).confluences,
+  configurationFromSettings: (settings) => ({
+    magicSystems: settingsOf(settings).magicSystems,
+    confluences: settingsOf(settings).confluences,
     activity: Object.fromEntries(
-      legacy(settings).epochs.map((epoch) => [epoch.id, epoch.magicActivity ?? {}])
+      settingsOf(settings).epochs.map((epoch) => [epoch.id, epoch.magicActivity ?? {}])
     ),
   }),
   configurationPresentation: {
@@ -169,8 +174,8 @@ export const magicConfiguration: Configuration = {
 };
 export const culturalConfiguration: Configuration = {
   configuration: culturalSchema,
-  configurationFromLegacy: (settings) => ({
-    eras: legacy(settings).humanEras.map((era) => ({ ...era })),
+  configurationFromSettings: (settings) => ({
+    eras: settingsOf(settings).humanEras.map((era) => ({ ...era })),
   }),
   configurationPresentation: { applicability: "initial" },
   configurationBinding: {

@@ -15,7 +15,7 @@ it("displays an independent map's field beyond its starting outline", async () =
     parent = crypto.randomUUID();
   snapshot.world.areas[parent] = { ...structuredClone(child), id: parent };
   child.parentId = parent;
-  child.map = { sourceAreaId: parent, sourceRevision: 1 };
+  child.map = { sourceAreaId: parent, sourceRevision: 1, refinementLevel: 1 };
   child.footprint = rectangle([500, 100, 3500, 900]);
   registerWorldSnapshot(snapshot);
   const rasters = await readMapRasters(snapshot.world.id, child.id),
@@ -34,7 +34,11 @@ it("keeps parent raster geography current without invalidating it for an indepen
       ...structuredClone(snapshot.world.areas[snapshot.scope.areaId]),
       id: crypto.randomUUID(),
       parentId: snapshot.scope.areaId,
-      map: { sourceAreaId: snapshot.scope.areaId, sourceRevision: snapshot.world.version },
+      map: {
+        sourceAreaId: snapshot.scope.areaId,
+        sourceRevision: snapshot.world.version,
+        refinementLevel: 1,
+      },
     };
   await catalog.commit({
     operationId: crypto.randomUUID(),

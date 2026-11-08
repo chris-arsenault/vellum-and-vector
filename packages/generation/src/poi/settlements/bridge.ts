@@ -1,5 +1,6 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import type { GenerationState } from "../../process";
+import { MapScale } from "@atlas/domain";
 import { bridgeFlow, fordCost, roadTravellers } from "../../regional/societyWays";
 import type { RegionalState } from "../../regional/state";
 import { rulingGrade, wetGroundCost } from "../../regional/ways";
@@ -29,7 +30,7 @@ import { travellersOf, weighedPlace } from "./settlementRecords";
 import { bridgePlaces, crossingPlaces } from "./workRecords";
 
 /** A span at which a river becomes hard to bridge, in metres of its width. */
-const hardSpan = 50;
+const hardSpan = MapScale.length(0.0000125);
 /** Threading a laden boat between the piers. */
 const piersCost = 1.25;
 /** How strongly abutments hold the channel the network grows through. */
@@ -43,12 +44,16 @@ const around = (state: GenerationState) => 6 * cellSpan(state);
 const crossable = (state: GenerationState, cell: number) =>
   onMappedRiver(state, cell) && isLand(state, cell);
 const bridgeable = (state: GenerationState, cell: number) =>
-  crossable(state, cell) && dischargeAt(state, cell) >= bridgeFlow;
+  crossable(state, cell) &&
+  dischargeAt(state, cell) >= fieldOf(state).scale.resolveMeasure(bridgeFlow);
 const widthAt = (state: GenerationState, cell: number) => fieldOf(state).RiverWidth.get(cell);
 /** Traffic and water together: a great road on a little river is not a great bridge. */
 const greatness = (state: GenerationState, place: PoiPlace) =>
   (sized(travellersOf, roadTravellers)(state, place) +
-    sized((s, p) => dischargeAt(s, p.anchor), 10 * bridgeFlow)(state, place)) /
+    sized((s, p) => dischargeAt(s, p.anchor), fieldOf(state).scale.resolveMeasure(bridgeFlow) * 10)(
+      state,
+      place
+    )) /
   2;
 const factors = {
   magnitude: greatness,
@@ -60,7 +65,7 @@ const factors = {
 const graded = (state: GenerationState, cell: number): readonly PoiFieldChange[] =>
   [...adjacent(state, cell)]
     .filter((next) => isLand(state, next) && !hasChannel(state, next))
-    .map((next) => ({ change: "gradientAtMost", cell: next, gradient: rulingGrade }));
+    .map((next) => ({ change: "gradeGround", cell: next, gradient: rulingGrade }));
 /**
  * The crossing tax gone at the span; over the approach, a causeway above the wet ground the
  * road search otherwise charges for.
@@ -99,7 +104,8 @@ export const bridge: PoiEntry = {
     /** Firm rock for its footings, a narrow span and no broad flood for its approaches to cross. */
     suitability(state, cell) {
       const width = widthAt(state, cell),
-        narrow = hardSpan / (hardSpan + width),
+        span = fieldOf(state).scale.resolveMeasure(hardSpan),
+        narrow = span / (span + width),
         dry = 1 - fieldOf(state).FloodplainIntensity.get(cell) / 1000;
       return (rockAt(state, cell) + narrow + dry) / 3;
     },

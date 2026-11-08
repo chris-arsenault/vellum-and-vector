@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
@@ -9,7 +10,7 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { extentOf, namedFromShore, near, pressureAt, pressureLength, stormAt } from "./seaShared";
 
 /** Length at which a wake is half as great as wakes get: half a preset wake's reach. */
-const typicalLength = 350_000;
+const typicalLength = MapScale.length(0.0875);
 /** The most wave exposure the still layer lets stand on it (per-mille). */
 const stillExposure = 500;
 /** Boats' cost on the calm water of a wake. */
@@ -22,7 +23,7 @@ const anomalyAt = (state: GenerationState, cell: number) =>
   fieldOf(state).SeaSurfaceAnomaly.get(cell);
 const places = rulePlaces("ancientWake", "pressure", "wake");
 /** The sea around a wake that bears on it: 100 km. */
-const around = near(100_000);
+const around = near(0.025);
 const wakeReach = (state: GenerationState) => pressureLength(state, "wakeDistance", typicalLength);
 const counterpart = counterpartOf(isA, 2);
 

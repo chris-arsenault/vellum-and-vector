@@ -12,7 +12,6 @@ import { atlasPhysicalProfile } from "../world/atlasProfile";
 import { projectNative } from "../world/atlasProjection";
 import { createMesh } from "../world/mesh";
 import { createField } from "../world/field";
-import { groundResourceBindings } from "./groundResources";
 import { materialLayer, readLayer, setLayer, type MaterialLayer } from "./rockColumn";
 import { rockCatalogue } from "./rockCatalogue";
 import { groundFixture } from "./groundStorage";
@@ -60,7 +59,7 @@ function source() {
   }
   state.physical = {
     map,
-    profile: atlasPhysicalProfile(),
+    profile: atlasPhysicalProfile({}, {}, map.scale),
     grid: state.surface.coverage,
     samples,
     interpolation: {
@@ -84,7 +83,7 @@ function source() {
 
 it("publishes and imports each supplied material package from one donor across a contact", () => {
   const state = source();
-  projectNative(state, false, false, groundResourceBindings, new Set());
+  projectNative(state, false, false, atlasChannels, new Set());
   for (let cell = 0; cell < state.surface.active.length; cell++) {
     const material = packages[cell % 2];
     expect(state.surface.channels.rockLayer0.get(cell)).toBe(material.kind);

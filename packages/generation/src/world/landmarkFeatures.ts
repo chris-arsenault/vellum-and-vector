@@ -2,6 +2,7 @@
 // the detected landform that is the landmark itself.
 import {
   landmarkKind,
+  MapScale,
   landmarkLayer,
   lineParts,
   spatial,
@@ -26,37 +27,40 @@ type Work = NonNullable<GenerationState["physical"]>;
 /** Metres around the landmark's geometry that its published footprint covers. */
 function footprintReach(landmark: Landmark, work: Work) {
   const p = landmark.parameters;
-  if (landmarkKind(landmark.kind)?.system) return p.reach * 1000;
+  if (landmarkKind(landmark.kind)?.system) return MapScale.metres(p.reach, "km");
   switch (landmark.kind) {
     case "volcanic-mountain":
     case "resistant-mountain":
-      return p.baseRadius * 1000;
+      return MapScale.metres(p.baseRadius, "km");
     case "canyon":
-      return Math.max((p.rimWidth * 1000) / 2, work.map.mesh.spacing * 0.6);
+      return work.map.scale.supported(MapScale.metres(p.rimWidth, "km") / 2, 0.6);
     case "dome-ring":
     case "impact-ring":
-      return (p.diameter * 1000) / 2;
+      return MapScale.metres(p.diameter, "km") / 2;
     case "escarpment":
-      return p.scarpWidth * 1000;
+      return MapScale.metres(p.scarpWidth, "km");
     default:
-      return work.map.mesh.spacing;
+      return work.map.scale.cells(1);
   }
 }
 /** The radius a point kind's signature claims around its anchor, or null for a line kind. */
-function claimRadius(kind: string, p: Record<string, number>, spacing: number) {
+function claimRadius(kind: string, p: Record<string, number>, scale: MapScale) {
   switch (kind) {
     case "volcanic-mountain":
     case "resistant-mountain":
-      return Math.max(p.baseRadius * 500, spacing);
+      return scale.supported(MapScale.metres(p.baseRadius, "km") / 2, 1);
     case "dome-ring":
-      return (p.diameter * 1000) / 2;
+      return MapScale.metres(p.diameter, "km") / 2;
     case "impact-ring":
-      return (p.diameter * 1000) / 2 + Math.max(p.diameter * 170, spacing);
+      return (
+        MapScale.metres(p.diameter, "km") / 2 +
+        scale.supported(MapScale.metres(p.diameter, "km") * 0.17, 1)
+      );
     case "canyon":
     case "escarpment":
       return null;
     default:
-      return spacing;
+      return scale.cells(1);
   }
 }
 /** The cells a landmark's signature occupies; a detected landform there is the landmark. */
@@ -66,7 +70,7 @@ function claimedCells(work: Work, landmark: Landmark, record: LandmarkRecord): n
   // A magic source claims no landform: the places its system makes around it are its own.
   if (!placed || landmarkKind(landmark.kind)?.system) return [];
   const p = placed.parameters,
-    radius = claimRadius(landmark.kind, p, map.mesh.spacing),
+    radius = claimRadius(landmark.kind, p, map.scale),
     cells: number[] = [];
   if (landmark.kind === "canyon")
     return canyonCells(map, placed, record.corridor).floor.map((cell) => cell.i);
@@ -74,7 +78,8 @@ function claimedCells(work: Work, landmark: Landmark, record: LandmarkRecord): n
   for (let i = 0; i < map.mesh.count; i++) {
     const inside =
       radius === null
-        ? nearestOnPath(map, metrics, map.mesh.x(i), map.mesh.y(i)).distance <= p.scarpWidth * 1000
+        ? nearestOnPath(map, metrics, map.mesh.x(i), map.mesh.y(i)).distance <=
+          MapScale.metres(p.scarpWidth, "km")
         : distance(map, i, placed.center) <= radius;
     if (inside) cells.push(i);
   }

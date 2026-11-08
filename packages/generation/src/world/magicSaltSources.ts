@@ -1,3 +1,4 @@
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
@@ -60,5 +61,8 @@ export function deadLakeSources(
 export function rememberLakes(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes.get(i) === 2)
-      map.LakeMemory.set(i, Math.max(map.LakeMemory.get(i), map.WaterDepths.get(i) / 1024));
+      map.LakeMemory.set(
+        i,
+        Math.max(map.LakeMemory.get(i), MapScale.metres(map.WaterDepths.get(i), "native"))
+      );
 }

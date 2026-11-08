@@ -1,4 +1,4 @@
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 import type { PhysicalContext } from "../world/context";
 import { drainageConditioning } from "../world/drainageFlood";
 import { resolveLandTargets } from "../world/flowGuidance";
@@ -29,9 +29,12 @@ function erosiveFall({ field, settings: p }: StreamWork, target: number, water: 
     ),
     fall = Math.max(
       0,
-      (field.DrainageElevations.get(i) - field.DrainageElevations.get(target)) / (1024 * length)
+      MapScale.metres(
+        field.DrainageElevations.get(i) - field.DrainageElevations.get(target),
+        "native"
+      ) / length
     ),
-    catchment = water / 100_000_000,
+    catchment = water / field.scale.area(0.00000625),
     equilibrium = p.FluvialEquilibriumGradient / Math.max(1, catchment) ** 0.12;
   return { catchment, length, steep: Math.max(0, fall - equilibrium) };
 }
@@ -81,16 +84,12 @@ export const streams = defineProcess({
     landTargets: (context: PhysicalContext) => resolveLandTargets(map, context),
     waterGathered: (targets: Band, rain: Pick<Band, "get">) => waterGathered(map, targets, rain),
   }),
-  atScale(settings, { scale }) {
-    const finer = scale < 1;
+  forExecution(settings, { refined }) {
     return {
       FluvialChannelArea:
-        settings.FluvialChannelArea *
-        scale *
-        scale *
-        (finer ? settings.FluvialFineChannelShare : 1),
+        settings.FluvialChannelArea * (refined ? settings.FluvialFineChannelShare : 1),
       FluvialEquilibriumGradient:
-        settings.FluvialEquilibriumGradient * (finer ? settings.FluvialFineGradientShare : 1),
+        settings.FluvialEquilibriumGradient * (refined ? settings.FluvialFineGradientShare : 1),
     };
   },
   // Substeps are how finely the work is resolved; how much gets done is the rate and the span.

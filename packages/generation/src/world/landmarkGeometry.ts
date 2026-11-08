@@ -3,7 +3,7 @@
 import { landmarkKind, type Landmark } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
-import { clamp, elevationLimit, units } from "./math";
+import { clamp, units } from "./math";
 import { meshDeltaX, meshPoint, nearestTriangle } from "./mesh";
 import { displaceGround, excavateRock, recordCut } from "../rock/groundLedger";
 import { physicalSampler } from "./physicalMetric";
@@ -211,7 +211,7 @@ export function channelCell(map: PhysicalField, station: { x: number; y: number 
 }
 /** Metres above the published datum. */
 export const metres = (map: PhysicalField, elevation: number) =>
-  (elevation - map.BaseSeaLevel) / 1024;
+  MapScale.metres(elevation - map.BaseSeaLevel, "native");
 export const unitsAbove = (map: PhysicalField, value: number) => map.BaseSeaLevel + units(value);
 
 /* ---------- supported changes ---------- */
@@ -221,20 +221,13 @@ export const unitsAbove = (map: PhysicalField, value: number) => map.BaseSeaLeve
  * and the next crustal-support pass answers it with flexure. No material is produced.
  */
 export function shiftBedrock(map: PhysicalField, i: number, requested: number) {
-  const old = map.BedrockElevation.get(i);
-  const next = clamp(
-    old + requested,
-    units(-elevationLimit),
-    units(elevationLimit) - map.SedimentThickness.get(i)
-  );
-  const applied = next - old;
-  if (applied === 0) return 0;
-  displaceGround(map, i, applied, "landmarks");
-  return applied;
+  if (requested === 0) return 0;
+  displaceGround(map, i, requested, "landmarks");
+  return requested;
 }
 /** A cut booked as river incision down to base level; the sediment leaves through transport. */
 export function cut(map: PhysicalField, i: number, requested: number) {
-  const base = map.EffectiveSeaLevel + units(1);
+  const base = map.EffectiveSeaLevel + units(map.scale.length(0.00000025));
   const amount = Math.min(requested, map.Elevation.get(i) - base);
   if (amount <= 0) return 0;
   recordCut(map, i, amount, 1, "landmarks");
@@ -242,11 +235,10 @@ export function cut(map: PhysicalField, i: number, requested: number) {
 }
 /** Excavation that leaves the map, as an impact's does. */
 export function excavate(map: PhysicalField, i: number, requested: number) {
-  const amount = Math.max(0, Math.min(requested, map.BedrockElevation.get(i) - units(-3800)));
-  if (amount <= 0) return 0;
-  excavateRock(map, i, amount, "landmarks", "space");
+  if (requested <= 0) return 0;
+  const amount = excavateRock(map, i, requested, "landmarks", "space");
   map.ImpactExcavation.add(i, amount);
-  const volume = (amount / 1024) * map.mesh.area(i);
+  const volume = MapScale.metres(amount, "native") * map.mesh.area(i);
   map.SedimentProducedTotal += volume;
   map.SedimentExportedTotal += volume;
   return amount;
@@ -257,22 +249,26 @@ export function excavate(map: PhysicalField, i: number, requested: number) {
 /** Realized when the defining dimension spans at least two cells (rings: one cell apart). */
 export function realizedAt(map: PhysicalField, placed: Placed) {
   const p = placed.parameters,
-    span = map.mesh.spacing,
+    span = map.scale.cells(1),
     length = pathMetrics(map, placed.path).total;
   // A magic source is realized where its reach covers at least the cell it is injected in.
-  if (landmarkKind(placed.landmark.kind)?.system) return p.reach * 1000 >= span;
+  if (landmarkKind(placed.landmark.kind)?.system) return MapScale.metres(p.reach, "km") >= span;
   switch (placed.landmark.kind) {
     case "volcanic-mountain":
     case "resistant-mountain":
-      return p.baseRadius * 2000 >= 2 * span;
+      return MapScale.metres(p.baseRadius, "km") * 2 >= map.scale.cells(2);
     case "canyon":
     case "escarpment":
       return length >= 2 * span;
     case "dome-ring":
-      return p.diameter * 1000 >= 2 * span && (p.diameter * 500) / p.ringCount >= span;
+      return (
+        MapScale.metres(p.diameter, "km") >= map.scale.cells(2) &&
+        MapScale.metres(p.diameter, "km") / (2 * p.ringCount) >= span
+      );
     case "impact-ring":
-      return p.diameter * 1000 >= 2 * span;
+      return MapScale.metres(p.diameter, "km") >= map.scale.cells(2);
     default:
       return false;
   }
 }
+import { MapScale } from "@atlas/domain";

@@ -165,7 +165,7 @@ function widenSlice(
     oldShare > 0 ? combine(snapshot(map, cell, "cutLoose"), loose, fraction, false) : loose
   );
   const nextRock = (oldShare * oldRock + added * (landRock - rockRemoved)) / share,
-    soil = Math.min(skin, gap / 1024) * added;
+    soil = Math.min(skin, MapScale.metres(gap, "native")) * added;
   groundStorage(map).GroundCutShare.set(cell, share);
   groundStorage(map).GroundCutDepth.set(cell, landRock - nextRock);
   return {
@@ -173,7 +173,8 @@ function widenSlice(
     rock: rockRemoved * added,
     loose: looseRemoved * added,
     soil,
-    cutSkin: (skin * oldShare + Math.max(0, skin - gap / 1024) * added) / share,
+    cutSkin: (skin * oldShare + Math.max(0, skin - MapScale.metres(gap, "native")) * added) / share,
     share,
   };
 }
+import { MapScale } from "@atlas/domain";

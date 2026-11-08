@@ -1,4 +1,4 @@
-import type { Epoch } from "@atlas/domain";
+import { MapScale, type Epoch } from "@atlas/domain";
 import { physicalProfile, type PhysicalProfile } from "./profile";
 import { clamp, round } from "./math";
 import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
@@ -8,11 +8,12 @@ import { tectonicDefaultMyr } from "./tectonicControls";
 
 export { atlasQuality } from "../resolution";
 export function atlasPhysicalProfile(
-  parameters: Partial<AtlasParameters> = {},
-  overrides: PhysicalProfileOverrides = {}
+  parameters: Partial<AtlasParameters>,
+  overrides: PhysicalProfileOverrides,
+  scale: MapScale
 ): PhysicalProfile {
   const settings = atlasParametersSchema.parse(parameters);
-  const profile = structuredClone(physicalProfile);
+  const profile = scale.resolve(physicalProfile, overrides);
   profile.ContinentalAssemblyCount = settings.continents;
   profile.OceanicPlateCount = settings.oceanicPlates;
   profile.TectonicProvinceCount = settings.provinces;
@@ -24,14 +25,14 @@ export function atlasPhysicalProfile(
   profile.LatitudeSouth = settings.southLatitude;
   profile.LatitudeNorth = settings.northLatitude;
   profile.LatitudeProjection = settings.latitudeProjection;
-  profile.MapBoundary = parameters.mapBoundary ?? parameters.wrapLongitude ?? settings.mapBoundary;
+  profile.MapBoundary = settings.mapBoundary;
   profile.WrapLongitude = Number(profile.MapBoundary === 1);
   // Rainfall sets moisture supply: how much water the air holds before belts and
   // relief decide where it falls.
   profile.PrecipitationBaseline *= settings.rainfall;
   profile.ColumnSaturation *= settings.rainfall;
   profile.FluvialErosionRate *= settings.erosion;
-  profile.SeaLevel = settings.seaLevel / profile.ElevationScale;
+  profile.SeaLevel = scale.length(settings.seaLevel) / profile.ElevationScale;
   profile.ImpactCraterCount = settings.impacts;
   profile.ImpactMinimumRadius *= settings.impactSize;
   profile.ImpactMaximumRadius *= settings.impactSize;
@@ -53,7 +54,7 @@ export function atlasPhysicalProfile(
   profile.SeaIceCurrentResistance = 20;
   profile.SeaIceWaveResistance = 20;
   profile.SeaIceSuitabilityVariation = 30;
-  return Object.assign(profile, overrides);
+  return profile;
 }
 /** Latitude of a world northing under the given settings and world frame [south, north]. */
 export function atlasLatitude(
@@ -61,14 +62,21 @@ export function atlasLatitude(
   extentY: [number, number],
   worldY: number
 ) {
-  const profile = atlasPhysicalProfile(parameters);
-  profile.WorldExtentY = extentY;
-  return latitudeAtY(profile, worldY);
+  const settings = atlasParametersSchema.parse(parameters);
+  return latitudeAtY(
+    {
+      LatitudeSouth: settings.southLatitude,
+      LatitudeNorth: settings.northLatitude,
+      LatitudeProjection: settings.latitudeProjection,
+      WorldExtentY: extentY,
+    },
+    worldY
+  );
 }
 // Atlas temperatures are Celsius; the native snow threshold (300) represents
 // zero Celsius, with ten native climate units per degree. Epoch settings are
-// absolute baseline temperature, sea-level metres and dimensionless strengths.
-export function atlasEpoch(epoch: Epoch) {
+// absolute baseline temperature, relative sea-level shifts and dimensionless strengths.
+export function atlasEpoch(epoch: Epoch, scale: MapScale) {
   return {
     StableName: epoch.id,
     TectonicStrength: round(clamp(epoch.tectonics, 0, 1) * 1000),
@@ -76,7 +84,7 @@ export function atlasEpoch(epoch: Epoch) {
     GlaciationStrength: round(clamp(epoch.ice, 0, 1) * 1000),
     CoastalStrength: round(clamp(epoch.coasts, 0, 1) * 1000),
     TemperatureOffset: round((epoch.temperature - 15) * 10),
-    SeaLevelOffset: round(epoch.seaLevel),
+    SeaLevelOffset: scale.length(epoch.seaLevel),
     TectonicDurationMyr: epoch.tectonicDurationMyr ?? tectonicDefaultMyr,
   };
 }

@@ -1,8 +1,9 @@
-import { gridPosition, type MagicSystem, type SocietyCommunity } from "@atlas/domain";
+import { gridPosition, MapScale, type MagicSystem, type SocietyCommunity } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { samplesInBox } from "./societySpatial";
 import { societyValue } from "./societySupport";
 import { depositReservoir, drawReservoir, reservoirAmount } from "./world/magicState";
+import { mapScale } from "./worldSignificance";
 
 /**
  * What society asks of a system is a role its effects declare, never its name or the way
@@ -22,7 +23,7 @@ export const magicRoles: Record<MagicRole, (effects: MagicSystem["effects"]) => 
 export function magicSystemForRole(systems: MagicSystem[] | undefined, role: MagicRole) {
   return systems?.find((system) => system.enabled && magicRoles[role](system.effects));
 }
-export function systemHasRole(system: MagicSystem, role: MagicRole) {
+export function systemHasRole(system: Pick<MagicSystem, "effects">, role: MagicRole) {
   return magicRoles[role](system.effects);
 }
 /** The enabled system in this role, read at a sample in the field's own units. */
@@ -105,8 +106,12 @@ export function depositAt(
 }
 /** The nearest ocean sample within a community's reach that lies between 50 m and its depth limit. */
 export function accessibleDive(state: GenerationState, c: SocietyCommunity, limit: number) {
+  const scale = mapScale(state);
   let best = -1,
-    distance = Math.min(100000, Math.sqrt(c.areaKm2) * 1500);
+    distance = Math.min(
+      scale.length(0.025),
+      Math.sqrt(MapScale.areaUnits(c.areaKm2, "km2", "m2")) * 1.5
+    );
   const { x, y } = c.position;
   for (const i of samplesInBox(state.surface, [
     x - distance,
@@ -115,7 +120,8 @@ export function accessibleDive(state: GenerationState, c: SocietyCommunity, limi
     y + distance,
   ])) {
     const depth = societyValue(state, "waterDepth", i);
-    if (societyValue(state, "water", i) !== 1 || depth < 50 || depth > limit) continue;
+    if (societyValue(state, "water", i) !== 1 || depth < scale.length(0.0000125) || depth > limit)
+      continue;
     const p = gridPosition(state.surface, i),
       d = Math.hypot(p.x - c.position.x, p.y - c.position.y);
     if (d < distance) {

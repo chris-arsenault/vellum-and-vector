@@ -1,5 +1,7 @@
 import {
   population,
+  MapScale,
+  spatial,
   type AtlasFeature,
   type DomainSnapshot,
   type SocietyRegion,
@@ -106,7 +108,13 @@ function publishedSizes(major: AtlasFeature[], roles: Map<string, SettlementHier
 export function societyInventory(snapshot: DomainSnapshot, areaId: string): SocietyInventory {
   const region = snapshot.world.societies?.[areaId];
   if (!region) throw new Error(`No society for area ${areaId}.`);
-  const roles = settlementHierarchy(region);
+  const roles = settlementHierarchy(
+    region,
+    MapScale.fromCells(
+      spatial.bounds(snapshot.world.areas[areaId].footprint),
+      Math.max(1, region.communities.length)
+    )
+  );
   const features = Object.values(snapshot.world.features).filter((f) => f.areaId === areaId);
   const routes = features.filter((f) => f.layerId === "roads");
   const roadsAt = routeEndpoints(routes);

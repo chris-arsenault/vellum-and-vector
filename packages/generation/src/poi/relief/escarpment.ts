@@ -1,10 +1,11 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
 import { areaRecord } from "../poiRecords";
-import { cellSpan, isLand, landformAt, Landform, metres, slopeAt } from "../poiReads";
+import { cellSpan, fieldOf, isLand, landformAt, Landform, metres, slopeAt } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import {
   landmarkGround,
@@ -23,8 +24,8 @@ const stepRatio = 3;
 /** The least gradient across the face that is a step rather than a long fall of the land. */
 const steepestPlain = 0.02;
 /** Throw and length at which a scarp is half as great as scarps get. */
-const typicalThrow = 300,
-  typicalLength = 100_000;
+const typicalThrow = MapScale.length(0.000075, 0.5),
+  typicalLength = MapScale.length(0.025);
 
 interface Step {
   /** Metres between the top of the face and its foot. */
@@ -58,7 +59,7 @@ function stepAt(state: GenerationState, cell: number): Step {
   return best;
 }
 const scarpWidth = (state: GenerationState, parameters: Record<string, number>) =>
-  Math.max(parameters.scarpWidth * 1000, 1.2 * cellSpan(state));
+  fieldOf(state).scale.supported(MapScale.metres(parameters.scarpWidth, "km"), 1.2);
 const faulted = (state: GenerationState, cell: number) =>
   landmarkGround(state, "escarpment", (placed) => scarpWidth(state, placed.parameters)).has(cell);
 const incised = (state: GenerationState, cell: number) => {

@@ -2,6 +2,8 @@ import type { Band } from "@atlas/domain";
 import type { PhysicalBufferName } from "../world/field";
 import type { GenerationState } from "../process";
 import { Contributions, ledgerCeilings, ledgerFloors } from "../regional/media";
+import { gradeGround } from "../regional/grading";
+import { isContent } from "../regional/lattice";
 import type { RegionalState } from "../regional/state";
 import { poiCatalogue } from "./catalogue";
 import type { PoiCarried, PoiFieldChange, PoiMagicBand, PoiPlace } from "./poiContract";
@@ -19,7 +21,7 @@ type Changes = Map<number, CellChange>;
 interface Declared {
   bands: Map<PhysicalBufferName, Changes>;
   magic: Map<string, { target: PoiMagicBand; cells: Changes }>;
-  caps: Map<number, number>;
+  grades: Map<number, number>;
 }
 const roles = ["terrain", "water", "climate", "cover", "magic"] as const;
 
@@ -36,9 +38,12 @@ function take(change: CellChange, declared: PoiFieldChange) {
 const magicKey = (target: PoiMagicBand) =>
   `${target.system}:${"stock" in target ? `stock:${target.stock}` : target.channel}`;
 function collect(declared: Declared, change: PoiFieldChange) {
-  if (change.change === "gradientAtMost") {
-    const held = declared.caps.get(change.cell);
-    declared.caps.set(change.cell, held ? Math.min(held, change.gradient) : change.gradient);
+  if (change.change === "gradeGround") {
+    const held = declared.grades.get(change.cell);
+    declared.grades.set(
+      change.cell,
+      held === undefined ? change.gradient : Math.min(held, change.gradient)
+    );
   } else if ("magic" in change) {
     const key = magicKey(change.magic);
     let entry = declared.magic.get(key);
@@ -51,7 +56,7 @@ function collect(declared: Declared, change: PoiFieldChange) {
   }
 }
 type PlaceEffect = (state: GenerationState, place: PoiPlace) => readonly PoiFieldChange[];
-const nothingDeclared = (): Declared => ({ bands: new Map(), magic: new Map(), caps: new Map() });
+const nothingDeclared = (): Declared => ({ bands: new Map(), magic: new Map(), grades: new Map() });
 /** What a parent's places must be given on this refined map. */
 function declareCarried(state: GenerationState, declared: Declared) {
   if (!("regional" in state)) return;
@@ -116,7 +121,7 @@ export function declarePlaceEffects(state: GenerationState, ledger: Contribution
   releaseHeld(state);
   const declared = declaredChanges(state),
     map = fieldOf(state);
-  latestCaps.set(state, declared.caps);
+  latestGrades.set(state, declared.grades);
   for (const [band, cells] of declared.bands)
     for (const [cell, change] of cells) {
       const total = totalOver(map[band].get(cell) - ledger.appliedTo(band, cell), change);
@@ -133,20 +138,33 @@ export function declarePlaceEffects(state: GenerationState, ledger: Contribution
   releaseHeld(state);
 }
 
-/** The gradient caps of the round's declaration: the relief that follows holds to them. */
-const latestCaps = new WeakMap<GenerationState, Map<number, number>>();
+/** The ground grades requested by the round's feature declarations. */
+const latestGrades = new WeakMap<GenerationState, Map<number, number>>();
 /** Before a round has declared anything, only the parent's places stand on this ground. */
-function carriedCaps(state: RegionalState) {
+function carriedGrades(state: RegionalState) {
   const declared = nothingDeclared();
   releaseHeld(state);
   declareCarried(state, declared);
   releaseHeld(state);
-  return declared.caps;
+  return declared.grades;
 }
-/** Per-cell gradient caps from every place's declared change, for the relief step (0 = none). */
-export function placeCaps(state: RegionalState, cap: Float64Array) {
-  for (const [cell, gradient] of latestCaps.get(state) ?? carriedCaps(state))
-    cap[cell] = cap[cell] > 0 ? Math.min(cap[cell], gradient) : gradient;
+/** Realize each declared footprint through Ground after natural relief develops. */
+export function gradePlaces(state: RegionalState) {
+  const map = state.physical.map,
+    targets = new Map(
+      [...(latestGrades.get(state) ?? carriedGrades(state))].filter(
+        ([cell]) => isContent(map.mesh, cell) && map.WaterKindCodes.get(cell) === 0
+      )
+    ),
+    footprint = new Map(targets);
+  // A grade belongs to cell faces: even a single-cell bench needs its neighboring land.
+  for (const [cell, grade] of targets)
+    for (let edge = 0; edge < map.mesh.degree(cell); edge++) {
+      const next = map.mesh.neighbor(cell, edge);
+      if (next < 0 || !isContent(map.mesh, next) || map.WaterKindCodes.get(next) !== 0) continue;
+      footprint.set(next, Math.min(footprint.get(next) ?? Infinity, grade));
+    }
+  gradeGround(state, footprint);
 }
 
 /**

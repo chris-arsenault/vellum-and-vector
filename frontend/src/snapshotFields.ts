@@ -1,18 +1,13 @@
 import {
-  attachGrid,
-  Band,
   gridType,
   requireThat,
   type DomainSnapshot,
-  type GridArrays,
   type GridSurface,
   type ChangeSet,
 } from "@atlas/domain";
 
-/** Only explicit imports of the released IndexedDB format contain resident grids. Mint
- * immutable resource identities because that format allowed arrays to change in place.
- * That format stored plain typed arrays; they become resident bands here. */
-export class LegacyFields {
+/** Publish a supplied resident snapshot's fields as immutable workspace resources. */
+export class SnapshotFields {
   private ids = new WeakMap<GridSurface, string>();
   prepare(source: DomainSnapshot) {
     const artifacts: NonNullable<ChangeSet["fieldArtifacts"]> = [];
@@ -22,9 +17,7 @@ export class LegacyFields {
       if (previous) return previous;
       const id = crypto.randomUUID();
       this.ids.set(saved, id);
-      const grid =
-        saved.active instanceof Band ? saved : attachGrid(saved as unknown as GridArrays);
-      const { overlays, ...samples } = grid;
+      const { overlays, ...samples } = saved;
       void overlays;
       artifacts.push({
         grid: samples,
@@ -34,9 +27,9 @@ export class LegacyFields {
           schemaId: gridType.id,
           schemaVersion: gridType.version,
           revision: id,
-          scope: grid.scope,
+          scope: saved.scope,
           unit: "grid",
-          facts: Object.keys(grid.channels),
+          facts: Object.keys(saved.channels),
           lineage: [],
         },
       });

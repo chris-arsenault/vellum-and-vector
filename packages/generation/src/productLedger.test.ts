@@ -46,7 +46,7 @@ function nativeState(): GenerationState {
   map.Elevation.fill(-1024);
   state.physical = {
     map,
-    profile: atlasPhysicalProfile(),
+    profile: atlasPhysicalProfile({}, {}, map.scale),
     samples: generateBand(
       state.surface.coverage,
       "int32",

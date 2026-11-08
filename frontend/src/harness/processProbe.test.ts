@@ -32,7 +32,7 @@ it("records actual process boundaries at one coordinate through the native step 
       field.Quickening.fill(1);
     },
   });
-  const context = physicalContext(1, 0, physicalProfile),
+  const context = physicalContext(1, 0, map.scale.resolve(physicalProfile)),
     existing = vi.fn();
   context.ObserveProcess = existing;
   observeNativeProcesses(probe.observe);
@@ -67,7 +67,7 @@ it("locates world coordinates on translated maps and reads caller-selected field
     "sample",
     { processes: ["sample"], phase: "settled", substep: 0 },
     map,
-    physicalContext(1, 0, physicalProfile)
+    physicalContext(1, 0, map.scale.resolve(physicalProfile))
   );
   expect(probe.read()).toMatchObject([{ cell: 0, at, fields: { Quickening: 3, Runoff: 0 } }]);
   expect(() => processProbeBands("misspelled-band")).toThrow("Unknown process probe band");
@@ -104,7 +104,7 @@ it("distinguishes a simultaneous group's captured inputs from current facts usin
     });
   observeNativeProcesses(probe.observe);
   try {
-    runNativeStep(map, physicalContext(1, 0, physicalProfile), [
+    runNativeStep(map, physicalContext(1, 0, map.scale.resolve(physicalProfile)), [
       "regional-probe",
       0,
       (field, context) =>
@@ -149,7 +149,7 @@ it("publishes partial samples on failure and detaches before publication", () =>
       },
     }),
     run = () =>
-      runNativeStep(map, physicalContext(1, 0, physicalProfile), [
+      runNativeStep(map, physicalContext(1, 0, map.scale.resolve(physicalProfile)), [
         "probe",
         0,
         actBy(broken),

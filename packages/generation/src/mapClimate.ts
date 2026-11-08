@@ -3,6 +3,7 @@ import {
   neighbors,
   putChannel,
   requireThat,
+  MapScale,
   type Grid,
   type ParameterDefinitions,
 } from "@atlas/domain";
@@ -12,12 +13,12 @@ import type { MapProcess } from "./process";
 const temperatureParameters: ParameterDefinitions = {
   temperature: { type: "number", unit: "celsius", required: false, default: 15 },
   temperatureOffset: { type: "number", unit: "celsius", required: false, default: 0 },
-  seaLevel: { type: "number", unit: "metre", required: false, default: 0 },
+  seaLevel: { type: "number", unit: "map-span", required: false, default: 0 },
   lapseRate: {
     type: "number",
-    unit: "celsius/metre",
+    unit: "celsius/map-span",
     required: false,
-    default: 0.0065,
+    default: 26000,
     minimum: 0,
   },
 };
@@ -45,6 +46,7 @@ export const temperatureProcess: MapProcess = {
     kind: "model-pass",
     applyPass(state, context) {
       const grid = state.surface,
+        scale = MapScale.fromCells(grid.bounds, grid.active.length),
         elevation = requireChannel(grid, "elevation", "metre"),
         heat = requireChannel(grid, "heat", "celsius"),
         temperature = surfaceArray(state, "temperature"),
@@ -54,8 +56,8 @@ export const temperatureProcess: MapProcess = {
           i,
           Number(context.parameters.temperature) +
             Number(context.parameters.temperatureOffset) -
-            Math.max(0, elevation.get(i) - Number(context.parameters.seaLevel)) *
-              Number(context.parameters.lapseRate)
+            Math.max(0, elevation.get(i) - scale.length(Number(context.parameters.seaLevel))) *
+              scale.inverseLength(Number(context.parameters.lapseRate))
         );
         temperature.set(i, natural.get(i) + heat.get(i));
       }
@@ -109,15 +111,21 @@ export const precipitationProcess: MapProcess = {
         default: "east",
         choices: ["east", "west", "north", "south"],
       },
-      seaLevel: { type: "number", unit: "metre", required: false, default: 0 },
+      seaLevel: { type: "number", unit: "map-span", required: false, default: 0 },
       incomingMoisture: {
         type: "number",
-        unit: "metre/year",
+        unit: "map-span/year",
         required: false,
-        default: 1,
+        default: 0.00000025,
         minimum: 0,
       },
-      evaporation: { type: "number", unit: "metre/year", required: false, default: 1, minimum: 0 },
+      evaporation: {
+        type: "number",
+        unit: "map-span/year",
+        required: false,
+        default: 0.00000025,
+        minimum: 0,
+      },
       condensation: {
         type: "number",
         unit: "ratio",
@@ -128,9 +136,9 @@ export const precipitationProcess: MapProcess = {
       },
       orographicCondensation: {
         type: "number",
-        unit: "1/metre",
+        unit: "1/map-span",
         required: false,
-        default: 0.0005,
+        default: 2000,
         minimum: 0,
       },
       snowTemperature: { type: "number", unit: "celsius", required: false, default: 0 },
@@ -150,6 +158,7 @@ export const precipitationProcess: MapProcess = {
     kind: "model-pass",
     applyPass(state, context) {
       const grid = state.surface,
+        scale = MapScale.fromCells(grid.bounds, grid.active.length),
         elevation = requireChannel(grid, "elevation", "metre"),
         temperature = requireChannel(grid, "temperature", "celsius"),
         precipitation = surfaceArray(state, "precipitation"),
@@ -162,17 +171,17 @@ export const precipitationProcess: MapProcess = {
           const connected = previous >= 0 && neighbors(grid, i).includes(previous),
             incoming = connected
               ? moisture.get(previous)
-              : Number(context.parameters.incomingMoisture),
-            ocean = elevation.get(i) <= Number(context.parameters.seaLevel),
+              : scale.length(Number(context.parameters.incomingMoisture)),
+            ocean = elevation.get(i) <= scale.length(Number(context.parameters.seaLevel)),
             evaporation = ocean
-              ? Number(context.parameters.evaporation) *
+              ? scale.length(Number(context.parameters.evaporation)) *
                 Math.max(0, Math.min(2, (temperature.get(i) + 20) / 40))
               : 0,
             lift = connected ? Math.max(0, elevation.get(i) - elevation.get(previous)) : 0,
             fraction = Math.min(
               1,
               Number(context.parameters.condensation) +
-                lift * Number(context.parameters.orographicCondensation)
+                lift * scale.inverseLength(Number(context.parameters.orographicCondensation))
             ),
             available = incoming + evaporation,
             snowFraction = Math.max(
@@ -222,9 +231,9 @@ export const iceBalanceProcess: MapProcess = {
     parameters: {
       meltFactor: {
         type: "number",
-        unit: "metre/celsius/year",
+        unit: "map-span/celsius/year",
         required: false,
-        default: 0.1,
+        default: 0.000000025,
         minimum: 0,
       },
     },
@@ -247,6 +256,7 @@ export const iceBalanceProcess: MapProcess = {
         "Ice balance advances once per epoch; refresh climate without advancing ice again."
       );
       const grid = state.surface,
+        scale = MapScale.fromCells(grid.bounds, grid.active.length),
         temperature = requireChannel(grid, "temperature", "celsius"),
         snowfall = requireChannel(grid, "snowfall", "metre/year"),
         ice = grid.channels.ice ? requireChannel(grid, "ice", "metre") : surfaceArray(state, "ice"),
@@ -267,7 +277,9 @@ export const iceBalanceProcess: MapProcess = {
           i,
           Math.min(
             ice.get(i) + accumulation.get(i),
-            Math.max(0, temperature.get(i)) * Number(context.parameters.meltFactor) * years
+            Math.max(0, temperature.get(i)) *
+              scale.length(Number(context.parameters.meltFactor)) *
+              years
           )
         );
         ice.set(i, Math.max(0, ice.get(i) + accumulation.get(i) - meltwater.get(i)));

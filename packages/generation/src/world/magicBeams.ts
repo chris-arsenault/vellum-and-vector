@@ -129,24 +129,29 @@ function advanceBeam(
   wake: boolean,
   decay: number
 ) {
-  const nx = beam.x + Math.cos(beam.angle) * travel,
+  const characteristic = map.scale.length(0.0025),
+    nx = beam.x + Math.cos(beam.angle) * travel,
     ny = beam.y + Math.sin(beam.angle) * travel;
   const next = nearestTriangle(map.mesh, nx, ny);
   if (reflects(map, next)) {
     if (wake || ++beam.bounces > 4) return false;
     beam.angle +=
-      Math.PI * (0.58 + hashUnit(seed, Math.floor(beam.x / 10_000), beam.bounces) * 0.62);
+      Math.PI * (0.58 + hashUnit(seed, Math.floor(beam.x / characteristic), beam.bounces) * 0.62);
     beam.energy -= 90;
   } else {
     beam.x = nx;
     beam.y = ny;
     if (wake)
       beam.angle +=
-        (hashSigned(seed, Math.floor(distance / 10_000), Math.floor(beam.x / 10_000)) *
+        (hashSigned(
+          seed,
+          Math.floor(distance / characteristic),
+          Math.floor(beam.x / characteristic)
+        ) *
           0.16 *
           travel) /
-        10_000;
-    else beam.energy -= (decay * (1 + beam.bounces * 0.67) * travel) / 10_000;
+        characteristic;
+    else beam.energy -= (decay * (1 + beam.bounces * 0.67) * travel) / characteristic;
   }
   return true;
 }

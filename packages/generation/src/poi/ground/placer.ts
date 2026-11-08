@@ -1,4 +1,6 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
@@ -26,12 +28,12 @@ const richStock = 1000;
 /** Spent vein ore per square metre at which a band is rich. */
 const richOre = 1000;
 /** A course length and discharge at which a band is half as great as bands get. */
-const typicalLength = 40_000,
-  typicalDischarge = 250;
+const typicalLength = MapScale.length(0.01),
+  typicalDischarge = MapScale.volume(3.90625e-18);
 /** The discharge a gravel reach can still be waded at, in cubic metres a second. */
-const wadeable = 50;
+const wadeable = MapScale.volume(7.8125e-19);
 /** Sediment deeper than this buries a band out of reach, where Fire has no burial depth to give. */
-const defaultBurial = 20;
+const defaultBurial = 0.000005;
 /** A gravel bar shoals a boat's channel and turns the growing channel aside. */
 const shoaling = 2,
   deflection = 1.25;
@@ -65,7 +67,7 @@ const factors = {
 /** The slack reach, held: the gentle bed that keeps sorting grains out of the river. */
 const slackReach = (state: GenerationState, cell: number): readonly PoiFieldChange[] => {
   const gradient = flowGradient(state, cell);
-  return gradient > 0 ? [{ change: "gradientAtMost", cell, gradient }] : [];
+  return gradient > 0 ? [{ change: "gradeGround", cell, gradient }] : [];
 };
 
 export const placer: PoiEntry = {
@@ -146,7 +148,8 @@ export const placer: PoiEntry = {
     drainage: costNear(deflection),
     magic: { river: costNear(slackHold) },
     links: notApplicable("A band joins no two cells for walkers."),
-    crosses: (state, place) => (dischargeAt(state, place.anchor) <= wadeable ? ["river"] : []),
+    crosses: (state, place) =>
+      dischargeAt(state, place.anchor) <= mapScale(state).resolveMeasure(wadeable) ? ["river"] : [],
   },
   others: {
     statement:
@@ -188,7 +191,7 @@ export const placer: PoiEntry = {
     fate(state, place) {
       const buried =
         sedimentAt(state, place.anchor) >=
-        (parameterOf(state, "fire", "buryDepth") ?? defaultBurial);
+        (parameterOf(state, "fire", "buryDepth") ?? mapScale(state).length(defaultBurial, 0.5));
       return buried || !onMappedRiver(state, place.anchor)
         ? { fate: "ends" }
         : { fate: "persists" };

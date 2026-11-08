@@ -3,22 +3,24 @@ import type { PhysicalField } from "./field";
 import { migrateMeanders } from "./meanders";
 import { hashUnit } from "./noise";
 import type { RiverPaths } from "./riverPaths";
+import { MapScale } from "@atlas/domain";
 
 type Point = [number, number];
 
 /** Channel width (m) per square root of discharge (m³/s): downstream hydraulic geometry. */
-const widthPerRootDischarge = 4;
+const widthPerRootDischarge = MapScale.measure(8000, -0.5);
 /** Meander wavelength in channel widths, used only to decide whether bends resolve on this map. */
 const wavelengthWidths = 11;
 /** Shortest wavelength a map draws, as a share of its cell spacing: a drawn line zooms past its cells. */
+// length-unit: count
 const resolvedWavelength = 0.1;
 /** Valley gradient above which a channel is confined to its line and does not meander. */
 const meanderingGradient = 0.004;
 /** Height above the channel (m) a flood reaches: a base and more for larger rivers. */
-const floodRelief = 2,
-  floodReliefPerLog = 3;
+const floodRelief = MapScale.length(0.0000005),
+  floodReliefPerLog = MapScale.length(0.00000075);
 /** Resolution (m) at which the floor is read: finer than any channel that meanders on a map. */
-const maskCell = 25;
+const maskCell = MapScale.length(0.00000625);
 /** Migration steps: the floodplain's working time. */
 const floodplainSteps = 240;
 
@@ -43,14 +45,22 @@ export function meanderReach(
   start: number
 ): MeanderedReach | null {
   const discharge = Math.max(0, ...(profiles.discharges ?? [0])),
-    width = widthPerRootDischarge * Math.sqrt(discharge),
+    width = map.scale.resolveMeasure(widthPerRootDischarge) * Math.sqrt(discharge),
     elevationAt = paths.elevationAt;
-  if (!elevationAt || wavelengthWidths * width < resolvedWavelength * map.mesh.spacing) return null;
+  if (!elevationAt || wavelengthWidths * width < map.scale.cells(resolvedWavelength)) return null;
   const [ox, oy] = map.mesh.origin,
     valley = geometry.coordinates.map(([x, y]) => [x - ox, y - oy] as Point);
   if (gradient(valley, profiles.bedElevations) > meanderingGradient) return null;
-  const relief = floodRelief + floodReliefPerLog * Math.log10(1 + discharge),
-    floor = floodFloor(valley, (x, y) => elevationAt(x, y) / 1024, relief),
+  const relief =
+      map.scale.resolveMeasure(floodRelief) +
+      map.scale.resolveMeasure(floodReliefPerLog) *
+        Math.log10(1 + discharge / map.scale.volume(1.5625e-20)),
+    floor = floodFloor(
+      map.scale,
+      valley,
+      (x, y) => MapScale.metres(elevationAt(x, y), "native"),
+      relief
+    ),
     salt = start ^ 0x6d2b;
   const { line, oxbows } = migrateMeanders({
     line: valley,
@@ -116,8 +126,14 @@ function gradient(line: Point[], beds: number[] | undefined) {
  * The ground a flood reaches: no higher above the valley line's nearest bed than the flood's
  * relief. The valley line is indexed on a coarse grid; a candidate reads the nearest station.
  */
-function floodFloor(valley: Point[], height: (x: number, y: number) => number, relief: number) {
-  const size = 1000,
+function floodFloor(
+  scale: MapScale,
+  valley: Point[],
+  height: (x: number, y: number) => number,
+  relief: number
+) {
+  const size = scale.length(0.00025),
+    cellSpan = scale.resolveMeasure(maskCell),
     grid = new Map<string, number[]>(), // hpc-exempt: the stations of one reach
     beds = valley.map(([x, y]) => height(x, y)),
     key = (x: number, y: number) => `${Math.floor(x / size)},${Math.floor(y / size)}`;
@@ -144,16 +160,16 @@ function floodFloor(valley: Point[], height: (x: number, y: number) => number, r
     ys = valley.map((p) => p[1]),
     x0 = Math.min(...xs) - 2 * size,
     y0 = Math.min(...ys) - 2 * size,
-    columns = Math.ceil((Math.max(...xs) + 2 * size - x0) / maskCell) + 1,
-    rows = Math.ceil((Math.max(...ys) + 2 * size - y0) / maskCell) + 1,
+    columns = Math.ceil((Math.max(...xs) + 2 * size - x0) / cellSpan) + 1,
+    rows = Math.ceil((Math.max(...ys) + 2 * size - y0) / cellSpan) + 1,
     mask = new Int8Array(columns * rows).fill(-1);
   return ([x, y]: Point) => {
-    const c = Math.floor((x - x0) / maskCell),
-      r = Math.floor((y - y0) / maskCell);
+    const c = Math.floor((x - x0) / cellSpan),
+      r = Math.floor((y - y0) / cellSpan);
     if (c < 0 || r < 0 || c >= columns || r >= rows) return false;
     const k = r * columns + c;
     if (mask[k] < 0)
-      mask[k] = Number(reaches(x0 + (c + 0.5) * maskCell, y0 + (r + 0.5) * maskCell));
+      mask[k] = Number(reaches(x0 + (c + 0.5) * cellSpan, y0 + (r + 0.5) * cellSpan));
     return mask[k] === 1;
   };
 }

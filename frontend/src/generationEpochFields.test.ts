@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { MapScale } from "@atlas/domain";
 import {
   newGenerationDraft,
   prepareDraft,
@@ -24,7 +25,9 @@ it("edits temperature as the actual native offset relative to the shared 15-degr
   const epoch = draftEpochs(draft)[0];
   expect(epoch.temperature).toBe(9);
   expect(epochControlValue(epoch, control)).toBe(-6);
-  expect(atlasEpoch(prepareDraft(draft).source.world.epochs[0]).TemperatureOffset).toBe(-60);
+  expect(
+    atlasEpoch(prepareDraft(draft).source.world.epochs[0], MapScale.reference()).TemperatureOffset
+  ).toBe(-60);
   expect(prepareDraft(draft).input.parameters!.temperature).toBe(24);
 });
 
@@ -45,7 +48,9 @@ it("keeps shared tectonic modulation reachable for mountains when plate evolutio
   const prepared = prepareDraft(draft);
   expect(prepared.input.resolvedFeatures!.selection["physical.mountains"].enabled).toBe(true);
   expect(prepared.diagnostics).toEqual([]);
-  expect(atlasEpoch(prepared.source.world.epochs[0]).TectonicStrength).toBe(350);
+  expect(atlasEpoch(prepared.source.world.epochs[0], MapScale.reference()).TectonicStrength).toBe(
+    350
+  );
 });
 
 it("reads control descriptors from the projected feature without an identity-based UI table", () => {

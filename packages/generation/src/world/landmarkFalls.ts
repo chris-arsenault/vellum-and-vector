@@ -19,9 +19,7 @@ function lipCell(map: PhysicalField, placed: Placed, record?: LandmarkRecord) {
     const j = map.mesh.neighbor(nearest, edge);
     if (j >= 0) candidates.push(j);
   }
-  const nearby = candidates.filter(
-    (i) => distance(map, i, placed.center) <= map.mesh.spacing * 1.1
-  );
+  const nearby = candidates.filter((i) => distance(map, i, placed.center) <= map.scale.cells(1.1));
   return nearby.reduce(
     (best, i) =>
       best < 0 || map.FlowAccumulation.get(i) > map.FlowAccumulation.get(best) ? i : best,
@@ -74,7 +72,7 @@ export const falls: Kind = {
     const lip = lipCell(map, placed, record),
       foot = lip < 0 ? -1 : footCell(map, lip);
     if (lip < 0 || foot < 0) return { drop: NaN };
-    return { drop: (map.Elevation.get(lip) - map.Elevation.get(foot)) / 1024 };
+    return { drop: MapScale.metres(map.Elevation.get(lip) - map.Elevation.get(foot), "native") };
   },
   maintain(map, _p, placed, shortfall, _epoch, record) {
     const lip = lipCell(map, placed, record);
@@ -85,9 +83,10 @@ export const falls: Kind = {
     return captureInto(map, record, {
       head: lip,
       floor: new Set([lip, ...record.corridor].filter((i) => i >= 0)),
-      floorWidth: map.mesh.spacing * 0.55,
-      reach: placed.parameters.captureDistance * 1000,
+      floorWidth: map.scale.cells(0.55),
+      reach: MapScale.metres(placed.parameters.captureDistance, "km"),
       label: "falls",
     });
   },
 };
+import { MapScale } from "@atlas/domain";

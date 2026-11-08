@@ -10,7 +10,8 @@ import { builder } from "./builder";
 import { coast, outsideWaves } from "./coast";
 
 const field = () => createField(createWorldMesh([0, 0, 1_000, 1_000], 16, 0));
-const context = () => physicalContext(1, 0, physicalProfile);
+const context = (map: ReturnType<typeof field>) =>
+  physicalContext(1, 0, map.scale.resolve(physicalProfile));
 const declaration = {
   statement: "Executor probe.",
   reads: [],
@@ -32,7 +33,7 @@ it("binds a process's own helper once, with its inferred type, across substeps",
     },
   });
   const map = field(),
-    c = context();
+    c = context(map);
   actBy(probe)(map, c);
   expect(prepare).toHaveBeenCalledExactlyOnceWith(map);
   expect(read.mock.calls).toEqual([[c.Span / 2], [c.Span / 2]]);
@@ -53,7 +54,7 @@ it("refreshes shared facts between sequential processes and substeps", () => {
   });
   const map = field();
   map.Runoff.fill(100);
-  actBy(probe, probe)(map, context());
+  actBy(probe, probe)(map, context(map));
   expect(seen[0]).toBeGreaterThan(0);
   expect(seen.map((n) => n / seen[0])).toEqual([1, 2, 4, 8]);
 });
@@ -78,7 +79,7 @@ it("freezes shared inputs for a simultaneous group and observes its joint settle
     },
   });
   const map = field(),
-    c = context();
+    c = context(map);
   map.Runoff.fill(100);
   c.ObserveProcess = ({ processes, phase }) => events.push(`${processes.join("+")}:${phase}`);
   const settle = vi.spyOn(Stage.prototype, "settle").mockImplementation(() => {
@@ -98,7 +99,7 @@ it("freezes shared inputs for a simultaneous group and observes its joint settle
     "land",
     "write+read:settled",
   ]);
-  actBy(read)(map, context());
+  actBy(read)(map, context(map));
   expect(seen[1]).toBe(seen[0] * 2);
 });
 
@@ -107,8 +108,9 @@ it("keeps immediate writers and whole-field builders out of joint stages", () =>
   for (const process of [coast, outsideWaves, whole])
     expect(() => actTogether(process)).toThrow(`${process.id} cannot run together`);
   const events: string[] = [],
-    c = context();
+    map = field(),
+    c = context(map);
   c.ObserveProcess = ({ phase }) => events.push(phase);
-  actBy(whole)(field(), c);
+  actBy(whole)(map, c);
   expect(events).toEqual(["before", "settled"]);
 });

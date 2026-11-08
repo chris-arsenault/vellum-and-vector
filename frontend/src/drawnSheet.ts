@@ -1,5 +1,5 @@
 import type RenderEvent from "ol/render/Event.js";
-import { regionLineage } from "@atlas/domain";
+import { MapScale, regionLineage } from "@atlas/domain";
 import type { DrawnMapInput } from "./drawnMap";
 import { drawnLegend, type DrawnLegendEntry } from "./drawnLegend";
 
@@ -152,5 +152,11 @@ function scale(ctx: PaperContext, resolution: number, width: number, height: num
   ctx.stroke();
   ctx.textAlign = "center";
   ctx.font = "10px Georgia, serif";
-  ctx.fillText(distance >= 1000 ? `${distance / 1000} km` : `${distance} m`, x + length / 2, y - 7);
+  ctx.fillText(
+    MapScale.inUnits(distance, "km") >= 1
+      ? `${MapScale.inUnits(distance, "km")} km`
+      : `${distance} m`,
+    x + length / 2,
+    y - 7
+  );
 }

@@ -121,9 +121,9 @@ export const domainCartography = {
       explanation:
         "What settlement the map shows: many market towns, towns with a few cities drawing their hinterlands, or great cities gathering whole regions. Places below the World town size stay latent for finer maps.",
       choices: [
-        choice("markets", "Market towns", towns(2500, 120)),
-        choice("cities", "Towns and cities", towns(5000, 200)),
-        choice("great", "Great cities", towns(10000, 300)),
+        choice("markets", "Market towns", towns(2500, 0.03)),
+        choice("cities", "Towns and cities", towns(5000, 0.05)),
+        choice("great", "Great cities", towns(10000, 0.075)),
       ],
     },
     {

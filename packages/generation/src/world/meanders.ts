@@ -13,6 +13,7 @@ type Point = [number, number];
 const localWeight = -1,
   upstreamWeight = 2.5;
 /** Channel widths over which upstream curvature still drives a bank. */
+// length-unit: ratio
 const upstreamReach = 5;
 /** Bank erosion of one step, in channel widths per unit of dimensionless curvature. */
 const erosionPerStep = 0.05;
@@ -21,12 +22,15 @@ const largestShift = 0.05;
 /** Passes of the three-station binomial filter over the curvature: the bank responds to the bend, not to station noise. */
 const curvatureSmoothing = 4;
 /** Station spacing in channel widths. */
+// length-unit: ratio
 const stationSpacing = 0.5;
 /** Neck width, in channel widths, at which a flood cuts a loop off. */
+// length-unit: ratio
 const cutoffWidth = 1;
 /** Room (channel widths) the floor must give on each side for the bank to move. */
 const bendRoom = 2;
 /** Widths across which a flood takes a chute over a bend, and how much longer the bend must be. */
+// length-unit: ratio
 const chuteReach = 3,
   chuteRatio = 6;
 /** Migration steps between looks for necks and chutes a flood would cut. */

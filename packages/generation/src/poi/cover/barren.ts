@@ -24,9 +24,10 @@ import {
 } from "./coverShared";
 
 /** Area at which barren ground is half as great as it gets: 100,000 square kilometres. */
-const typicalArea = 1e11;
+// length-unit: fraction
+const typicalArea = 0.00625;
 /** The soil depth, in metres, from which returning rain can start cover. */
-const startingSoil = 0.3;
+const startingSoil = 0.000000075;
 const isA = isFamily("barren");
 const bareness = (state: GenerationState, cell: number) => 1 - livingCoverAt(state, cell);
 const places = landscapePlaces("barren", "barren", bareness);
@@ -115,7 +116,7 @@ export const barren: PoiEntry = {
     fate(state, place) {
       const watered = meanOver(state, place, plantWaterAt) >= desertMoisture,
         soil = meanOver(state, place, (_s, cell) => fieldOf(state).SoilDepth.get(cell));
-      return watered && soil >= startingSoil
+      return watered && soil >= fieldOf(state).scale.length(startingSoil, 0.5)
         ? { fate: "becomes", kind: "grassland" }
         : { fate: "persists" };
     },

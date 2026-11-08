@@ -5,7 +5,7 @@ import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { clamp } from "./math";
 import type { WorldCandidate } from "./worldSources";
-import { areaBudget, mediumArea, referenceLandArea } from "./worldScale";
+import { areaBudget, mediumArea } from "./worldScale";
 import type { PhysicalField } from "./field";
 import { hashUnit } from "./noise";
 import { MultiKeyHeap, SmallIntSet, type MagicOrigin } from "@atlas/domain";
@@ -49,14 +49,15 @@ export function geothermalSources(
   const budget = areaBudget(
     p.maximumSources,
     mediumArea(map, (i) => map.WaterKindCodes.get(i) !== 1),
-    referenceLandArea
+    map.scale.area(0.36)
   );
   if (budget === 0) return;
   const candidates = geothermalCandidates(state, field, seed);
   const selected: (WorldCandidate & { i: number })[] = [];
   for (const source of candidates) {
     const i = source.i;
-    const spacing = p.sourceSpacing + ((1000 - map.HeatSourceDensity.get(i)) * 10_000) / 150;
+    const spacing =
+      p.sourceSpacing + ((1000 - map.HeatSourceDensity.get(i)) * map.scale.length(0.0025)) / 150;
     if (
       selected.some(
         (j) => Math.hypot(meshDeltaX(map.mesh, source.x - j.x), source.y - j.y) < spacing

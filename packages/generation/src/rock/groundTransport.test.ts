@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { createTestField as createField } from "./groundTestFixture";
 import { createMesh } from "../world/mesh";
-import { elevationLimit, units } from "../world/math";
+import { units } from "../world/math";
 import { rockCatalogue } from "./rockCatalogue";
 import { readLayer, setLayer, watchColumn, type MaterialLayer } from "./rockColumn";
 import { openCut, projectGround } from "./groundShares";
@@ -120,28 +120,33 @@ it("rotates axial fabric with material deformation while leaving pure translatio
   expect(readLayer(map, 0, 0).altered).toBe(3);
 });
 
-it("admits older land cover before cut cover and retains the partially landed bed", () => {
+it("lands land and cut cover above former height ceilings with their retained beds", () => {
   const map = ground();
   openCut(map, 0, 0.5);
   setLayer(map, 0, 0, basalt.code, units(4), { altered: 1 }, "loose");
   setLayer(map, 0, 1, shale.code, units(6), { altered: 2 }, "loose");
   setLayer(map, 0, 0, granite.code, units(8), { altered: 3 }, "cutLoose");
   setLayer(map, 0, 1, shale.code, units(10), { altered: 4 }, "cutLoose");
-  map.BedrockElevation.set(1, units(elevationLimit - 6));
+  map.BedrockElevation.set(1, units(20_000));
   projectGround(map, 1);
   const held = holdRock(map);
   accreteHeldCover(map, held, 1, 0, 1);
   expect(readLayer(map, 1, 0, "loose")).toMatchObject({
-    kind: shale.code,
-    depth: units(1),
-    altered: 4,
+    kind: granite.code,
+    depth: units(4),
+    altered: 3,
   });
   expect(readLayer(map, 1, 1, "loose")).toMatchObject({
+    kind: shale.code,
+    depth: units(5),
+    altered: 4,
+  });
+  expect(readLayer(map, 1, 2, "loose")).toMatchObject({
     kind: basalt.code,
     depth: units(2),
     altered: 1,
   });
-  expect(readLayer(map, 1, 2, "loose")).toMatchObject({
+  expect(readLayer(map, 1, 3, "loose")).toMatchObject({
     kind: shale.code,
     depth: units(3),
     altered: 2,
@@ -149,24 +154,26 @@ it("admits older land cover before cut cover and retains the partially landed be
   releaseHeldRock(map, held);
 });
 
-it("deepens crust when incoming rock cannot land without disturbing existing cover", () => {
+it("lands incoming rock on high ground and buries its existing cover", () => {
   const map = ground();
+  map.CompletedEpochCount = 9;
   map.BedrockElevation.set(1, units(100_000));
   setLayer(map, 1, 0, shale.code, units(8), { formedMin: 2, altered: 4 }, "loose");
   projectGround(map, 1);
   const held = holdRock(map),
     crust = map.CrustThickness.get(1),
     surface = map.Elevation.get(1);
-  expect(accreteHeldGround(map, held, 1, 0, units(40))).toBe(0);
-  expect(map.CrustThickness.get(1)).toBeGreaterThan(crust);
-  expect(map.Elevation.get(1)).toBe(surface);
-  expect(readLayer(map, 1, 0, "loose")).toMatchObject({
+  expect(accreteHeldGround(map, held, 1, 0, units(40))).toBe(units(40));
+  expect(map.CrustThickness.get(1)).toBe(crust);
+  expect(map.Elevation.get(1)).toBe(surface + units(40));
+  expect(map.SedimentThickness.get(1)).toBe(0);
+  expect(readLayer(map, 1, 2)).toMatchObject({
     kind: shale.code,
     depth: units(8),
     formedMin: 2,
-    altered: 4,
+    altered: 9,
   });
-  expect(readLayer(map, 1, 0).kind).toBe(granite.code);
+  expect(readLayer(map, 1, 0).kind).toBe(basalt.code);
   releaseHeldRock(map, held);
 });
 

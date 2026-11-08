@@ -29,7 +29,7 @@ export const landmarkFeature: GenerationFeature = {
     landscapeLandmarks: atlasParameterDefinitions.landscapeLandmarks,
     magicLandmarks: atlasParameterDefinitions.magicLandmarks,
   },
-  legacyParameters: ["landscapeLandmarks", "magicLandmarks"],
+  parameterKeys: ["landscapeLandmarks", "magicLandmarks"],
   processes: ["landmark.emplace", "landmark.maintain"],
   slots: ["epoch.landmarks", "epoch.landmark-maintenance"],
   requires: ["physical.foundation"],

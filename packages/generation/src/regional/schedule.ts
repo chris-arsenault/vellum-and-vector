@@ -1,4 +1,5 @@
 import type { MapProcessContext } from "../process";
+import { MapScale } from "@atlas/domain";
 import { physicalContext } from "../world/context";
 import { landformClassification } from "../world/landforms";
 import { conjoinFeatures, readEvidence, respondFeatures, supportFeatures } from "./causes/index";
@@ -41,7 +42,7 @@ export interface ScheduledStep {
 
 export const rounds = 3;
 /** Relief change (m) at any cell below which magic's follow-up reroute waits for the next round. */
-const reliefFollowUp = 0.5;
+const reliefFollowUp = 0.000000125;
 
 /** Which domains this run develops; the schedule's gates. */
 interface Domains {
@@ -192,7 +193,10 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
           const changed = applied.commit(state.physical.map, ledgerFloors, ledgerCeilings);
           // The one declared follow-up: relief magic changed by a resolvable amount reroutes
           // water before the living landscape and places read it.
-          if ((changed.get("Elevation") ?? 0) >= reliefFollowUp * 1024) {
+          if (
+            (changed.get("Elevation") ?? 0) >=
+            MapScale.native(state.physical.map.scale.length(reliefFollowUp))
+          ) {
             updateSlopes(state);
             routeWater(state);
             deriveMedia(state);

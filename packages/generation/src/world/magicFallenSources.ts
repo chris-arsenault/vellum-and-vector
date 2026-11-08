@@ -4,7 +4,7 @@ import type { MagicField } from "./magicState";
 import type { LocateContext } from "./magicSources";
 import { exposure, heldStock, releaseShare, siteStrength } from "./magicStocks";
 import { meshDeltaX, nearestTriangle } from "./mesh";
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 
 /**
  * Fallen cores. Each impact seeds a finite stock once, on the crater and its ejecta in
@@ -72,7 +72,7 @@ function seedFallenStock(
       dy = map.mesh.y(i) - event.y,
       distance = Math.hypot(dx, dy);
     if (distance > event.radius * 2.4) continue;
-    const ejecta = map.ImpactEjectaThickness.get(i) / 1024,
+    const ejecta = MapScale.metres(map.ImpactEjectaThickness.get(i), "native"),
       downwind = distance > 0 ? Math.max(0, (dx * wx + dy * wy) / distance) : 0,
       amount = ejecta * map.mesh.area(i) * p.fallenDensity * (1 + 0.6 * downwind);
     if (amount <= 0) continue;

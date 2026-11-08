@@ -2,13 +2,15 @@ import { semanticId, type SocietyCommunity, type SocietyPolity } from "@atlas/do
 import type { GenerationState } from "./process";
 import { applySocietyEvent, unitRadius } from "./societyHazards";
 import { isWorldSociety } from "./societyMapScope";
+import { mapScale } from "./worldSignificance";
 
 /** A town this large is worth a siege; a camp or a village changes hands without one. */
 export const besiegedTown = 100;
 /** Magnitude of a siege when the polity fragmented, and when it collapsed outright. */
 const siegeMagnitude = { fragmented: 0.6, collapsed: 0.9 } as const;
 /** Radius of a located siege at a profile fine enough to hold one, metres. */
-const siegeRadius = 5000;
+// length-unit: fraction
+const siegeRadius = 0.00125;
 
 /**
  * A polity that falls from active to fragmented or collapsed has lost its towns to someone:
@@ -34,7 +36,7 @@ export function besiegeLost(
       era,
       kind: "siege",
       position: c.position,
-      radius: isWorldSociety(state) ? unitRadius(c) : siegeRadius,
+      radius: isWorldSociety(state) ? unitRadius(c) : mapScale(state).length(siegeRadius),
       magnitude,
       casualties: 0,
       displaced: 0,

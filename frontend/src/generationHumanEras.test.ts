@@ -9,7 +9,7 @@ import {
 } from "./generationHumanEras";
 
 // The default schedule is an ice-age round bound to the Cold age, then three settled eras.
-it("renames operative cultural eras while retaining their imported compatibility metadata", () => {
+it("renames cultural eras while retaining their capacity and physical epoch", () => {
   const draft = newGenerationDraft();
   const shaped = updateHumanEra(draft, 1, { physicalEpoch: "Cold age", politicalCapacity: 2.5 });
   const renamed = renameHumanEra(shaped, 1, "Early settlement");

@@ -44,13 +44,12 @@ settlements. This is a single geographic heuristic, without equal-area balancing
 or an exact district count. Keeping a region does not move its neighbours' proposed
 boundaries. Whole landmasses and smaller named regions remain choices.
 
-Regional terrain uses a fixed physical scale ladder calibrated from the default
-world's usable land and approximate regional subdivision. Each successive level
-uses finer cells and suggests smaller subjects. A map captures its own level when
-created, so resolution does not depend on live parent geography. Quality changes
-sampling density at that level; selection does not fit cell size to a budget.
-The policy declarations live in `packages/domain/src/regionalScale.ts`. Rectangular
-sampling frames and coastal context add samples beyond the selected land area.
+Each independent map derives cell size from its actual frame and chosen detail's
+sample count. A smaller map therefore samples finer geography without a fixed
+metre ladder. Captured hierarchy levels guide suggested selection sizes, not a
+second resolution law. `MapScale` owns the conversions used by
+`packages/domain/src/regionalScale.ts` and generation resolution. Rectangular
+sampling frames and coastal context determine the area being sampled.
 Setup shows approximate spacing and sample count before generation.
 
 Child maps use a rectangular working frame around the subject, including nearby
@@ -63,13 +62,11 @@ invalid regardless of where their geometry lies.
 Later generation pages all of the map's own feature records, including geometry
 beyond the starting outline. Presentation and export preserve that geometry.
 Presentation, inspection, registry and export read the open map's geography.
-Existing saved regions capture their composed detail once when opened, retaining
-their finer geometry and surface patches. Zoom never opens another map or exposes
-the surrounding world.
+Current saved maps reopen their own geography and captured context. Older map
+formats are unsupported. Zoom never opens another map or exposes the surrounding world.
 
 Captured source drawings and surface patches become initial context rather than
-authored constraints on the child. Conversion preserves a saved map's own
-drawings and protections. Numerical import keeps material amounts distinct from
+authored constraints on the child. Numerical import keeps material amounts distinct from
 influence and scales captured amounts by represented area. Height, temperature
 and vector components remain signed.
 
@@ -101,7 +98,7 @@ so every effect is a derivation term or a ledger total, never an in-place additi
 Thresholds stated in cells, flow units or epochs are restated in physical units.
 
 Established features enter through a cause registry. Each established-feature kind
-declares the hooks it needs (`read`, `influence`, `support`, `caps`, `restore`,
+declares the hooks it needs (`read`, `influence`, `support`, `restore`,
 `conjoin`, `respond`), and the schedule calls them at fixed points; a new kind of
 established feature is a registry entry, not a new schedule call. Evidence is ordered by
 identity, so a repeated refinement reads it identically.
@@ -147,8 +144,8 @@ channels route around and moves to the realized summit of its massif; a captured
 course is a corridor the network follows, its discharge enters across the frame edge, and
 the stem that follows it carries the river's name, identity and the course itself as
 evidence for the next refinement; a captured lake is the base level its tributaries rise
-from. A known settlement's footprint caps the hillslope relief around it in the form the
-network gives that ground, a river seat draws its channel, and a seat still on unusable
+from. A known settlement grades its footprint through the ground owner after relief
+develops, a river seat draws its channel, and a seat still on unusable
 ground moves to the best usable ground within reach that keeps its situation. New villages
 are proposed once at the network's events, compete for hinterland over the travel cost of
 the present surface, and take their support in the last round or are dropped. Each round
@@ -808,7 +805,7 @@ modes, without knowing what any material is. A cell is a stack. An action goes d
 itself on loose cover first and then on each layer of rock by what that layer gives up, while cover, open
 fractures and wards bear on it. World and region read the same stack, and a region's cone aprons join it as
 a modifier. Streams, solution, ice and slopes are processes in `packages/generation/src/processes`. Each
-owns its settings and says how they read at another map's scale, one ledger writes what comes off and
+owns relative settings resolved by the shared `MapScale`, one ledger writes what comes off and
 lands, and feature operations say when each runs. Those operations reference executable steps directly,
 so registration and selected execution use the same definitions. `MATERIALS-AND-PROCESSES-ARCHITECTURE.md` at the repository
 root holds the reasoning.
@@ -1013,10 +1010,11 @@ validation is consolidated in `layerValidation.ts`.
 
 `physicalProfile` holds the defaults, and `atlasPhysicalProfile` adapts them to a map:
 
-- Geological causes use world metres and sampling-independent initial sites.
+- Geological controls declare relative dimensions and resolve once against the
+  map's frame through `MapScale`; initial sites remain sampling-independent.
 - Native climate units map to Celsius through a declared freezing point and
-  scale. Epoch temperature settings remain Celsius and sea levels remain metres
-  relative to the world's calibrated sea datum.
+  scale. Epoch temperature settings remain Celsius; sea-level offsets are map-span
+  fractions resolved relative to the world's sea datum.
 - The game's central warmth source and mandatory scattered warmth pockets are
   disabled. User-configured sources provide magical forcing. Land and sea ice
   form where the latitude climate is cold enough, without coverage quotas.
@@ -1050,15 +1048,14 @@ validation is consolidated in `layerValidation.ts`.
   clock's temperature, ice, water forcing and elapsed times. The default clock
   includes a cold age independently of terrain selection.
 
-Detail presets specify physical area per terrain cell in km². The creation
-profile selects the physical scale; world dimensions determine how many cells
-are required. `resolution.ts` owns the presets and workload calculation shared
-by setup and generation. Setup shows live estimates for every preset and warns
+Detail presets select a sample count. `MapScale` derives physical cell area and
+spacing from each map's frame. `resolution.ts` owns the presets and workload
+calculation shared by setup and generation. Setup shows live estimates for every preset and warns
 above the default world's Standard workload. This warning does not limit map
 size or detail. Numerical boundary support adds halo cells.
 
 All qualities execute the physical processes and configured epochs. Generation
-cost increases with physical extent and numerical detail. Scratch bands and the
+cost increases with numerical detail and process workload. Scratch bands and the
 scratch file are discarded before the result leaves the worker; no intermediate
 state is stored.
 
@@ -1066,10 +1063,12 @@ Continental deformation and crust transitions follow the characteristic province
 size, so a larger world retains broad, irregular land masses. Candidate placement
 covers the complete rectangular domain. Continent and province totals remain
 creator choices. Impact, plume and fracture budgets express prevalence per
-reference world area. Fire core budgets follow land area, Pressure loci and wake
+relative map area. Fire core budgets follow land area, Pressure loci and wake
 budgets follow ocean area, and coastal impulse budgets follow shoreline length.
-Their footprint widths, spacing, travel distances and physical feedback retain
-metre units. Climate coverage remains an explicit latitude-frame choice.
+Their footprint widths, spacing, travel distances and dimensional feedback resolve
+from relative declarations through `MapScale`. Physical fields and coordinates
+remain measured data, with unit encoding handled by that same utility. Climate
+coverage remains an explicit latitude-frame choice.
 
 Initial province sites are independently distributed, allowing unequal blocks
 and locally clustered boundaries. Continental assemblies grow from anchors with
@@ -1130,8 +1129,8 @@ declared in code.
   uplift; pressure-belt rainout comes from `belts.ts`. Marine heat, maritime
   character and magical heat travel with the air; air relaxes toward part of the
   magical forcing beneath it with travel, and that heat spreads across the wind.
-- `precipitation`: column precipitation with the epoch multiplier, in mm/year up to a
-  ceiling, split into rain and snow by the share of a sinusoidal year below freezing.
+- `precipitation`: column precipitation with the epoch multiplier, in fractional
+  mm/year, split into rain and snow by the share of a sinusoidal year below freezing.
   The equatorial convergence spreads to stand in for the rain belt's seasonal
   migration; subtropical subsidence dries the subtropics and caps uplift rain there.
 - `land-ice-mass-balance` and `sea-ice`: ice extent follows mass balance and cold
@@ -1149,17 +1148,15 @@ The triangular world lattice has reciprocal short links across the seam;
 geographic noise and reconstructed samples share the same period. Extracted
 geometry is cut into chart pieces, retaining network junctions and directed river
 profiles. The editor repeats the metre chart and normalizes edits into it.
-The Ocean surrounded choice is shown unavailable. Configurations with an explicit
-legacy longitude choice retain that choice.
+The Ocean surrounded choice is shown unavailable.
 
 The setup's Latitude frame choice offers a northern band, both hemispheres
 and pole-to-pole coverage. It does not change the map boundary. Pole-to-pole
-cylinders retain local terrain and the same metre-scale noise up to their
+cylinders retain local terrain and map-relative noise up to their
 north/south edges. Those faces close drainage and reflect transported material
 locally; they do not merge longitudes into a single point or provide a shortcut
 through a spherical pole. The connected ocean starts in the deepest basin. Physical
-transport lengths stay in map kilometres; only the front-mixing width is capped in
-degrees of latitude, so a small full-globe map keeps distinct belts. A numerical
+transport lengths, including front mixing, resolve against the map frame. A numerical
 patch without a world frame sits at the mid latitude.
 
 **Rainfall regimes.** The `rainfall` setting scales moisture supply (column
@@ -1220,10 +1217,9 @@ catalog.
 
 Every map applies the same judgments at its own scale. A map holds about the same
 number of cells at every refinement level, so a finer map is the same kind of map
-of a smaller country. Its scale factor is its cell span over a World cell's at the
-same quality, exactly one on the World map. Lengths and breadths scale with the
-factor; areas, catchments and discharges with its square; heights, depths and
-drops with its square root. Large connected areas split only through the
+of a smaller country. `MapScale` resolves all dimensional thresholds from the
+actual frame, independently of sampling density. Declarations distinguish lengths,
+areas, volumes and compound dimensions; nonlinear scaling is explicit. Large connected areas split only through the
 continental partition, judged at the same scale. What a map does not name stays
 latent on it: physical water, stored drainage reaches, cover and magic coverage.
 

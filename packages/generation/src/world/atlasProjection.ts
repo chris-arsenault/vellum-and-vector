@@ -1,4 +1,4 @@
-import { gridPosition, putChannel, type Band } from "@atlas/domain";
+import { gridPosition, putChannel, MapScale, type Band } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
@@ -122,17 +122,19 @@ function projectDerivedClimate(state: GenerationState, emit: DerivedEmitter) {
   const work = state.physical!,
     map = work.map;
   emit("seaDatum", "metre", () =>
-    work.grid.scratch("float64", "seaDatum", work.samples.length).fill(map.BaseSeaLevel / 1024)
+    work.grid
+      .scratch("float64", "seaDatum", work.samples.length)
+      .fill(MapScale.metres(map.BaseSeaLevel, "native"))
   );
   emit("flow", "cubic-metre/second", () => projectedValues(work, map.FlowAccumulation));
   emit("drainageElevation", "metre", () => {
     const values = projectedValues(work, map.DrainageElevations);
     for (let i = 0; i < values.length; i++)
-      values.set(i, (values.get(i) - map.BaseSeaLevel) / 1024);
+      values.set(i, MapScale.metres(values.get(i) - map.BaseSeaLevel, "native"));
     return values;
   });
   emit("precipitation", "metre/year", () =>
-    projectedValues(work, (i) => (map.Rainfall.get(i) + map.Snowfall.get(i)) / 1000)
+    projectedValues(work, (i) => MapScale.metres(map.Rainfall.get(i) + map.Snowfall.get(i), "mm"))
   );
 }
 function projectDerivedMaterial(
@@ -143,13 +145,13 @@ function projectDerivedMaterial(
   const work = state.physical!,
     map = work.map;
   emit("erosion", "metre", () =>
-    projectedValues(
-      work,
-      (i) =>
-        (map.CumulativeFluvialErosion.get(i) +
+    projectedValues(work, (i) =>
+      MapScale.metres(
+        map.CumulativeFluvialErosion.get(i) +
           map.CumulativeGlacialErosion.get(i) +
-          map.CumulativeCoastalErosion.get(i)) /
-        1024
+          map.CumulativeCoastalErosion.get(i),
+        "native"
+      )
     )
   );
   // Keep substrate useful to cave generation without inventing a second geology.
@@ -159,7 +161,12 @@ function projectDerivedMaterial(
       work,
       (i) =>
         (map.CrustContinentalFraction.get(i) / 1000) *
-        (1 - Math.min(1, map.VolcanicConstructionHistory.get(i) / (1024 * 100)))
+        (1 -
+          Math.min(
+            1,
+            MapScale.metres(map.VolcanicConstructionHistory.get(i), "native") /
+              map.scale.length(0.000025)
+          ))
     )
   );
 }
@@ -172,9 +179,12 @@ function projectWaterLevels(work: AtlasPhysicalWorkspace, emit: DerivedEmitter) 
       projectedValues(
         work,
         (i) =>
-          ((map.WaterKindCodes.get(i) ? map.WaterSurfaceElevations.get(i) : map.EffectiveSeaLevel) -
-            map.BaseSeaLevel) /
-          1024,
+          MapScale.metres(
+            (map.WaterKindCodes.get(i)
+              ? map.WaterSurfaceElevations.get(i)
+              : map.EffectiveSeaLevel) - map.BaseSeaLevel,
+            "native"
+          ),
         true
       ),
     "category"
@@ -182,7 +192,7 @@ function projectWaterLevels(work: AtlasPhysicalWorkspace, emit: DerivedEmitter) 
   emit("seaLevel", "metre", () =>
     work.grid
       .scratch("float64", "seaLevel", work.samples.length)
-      .fill((map.EffectiveSeaLevel - map.BaseSeaLevel) / 1024)
+      .fill(MapScale.metres(map.EffectiveSeaLevel - map.BaseSeaLevel, "native"))
   );
 }
 

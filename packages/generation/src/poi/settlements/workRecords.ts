@@ -8,8 +8,10 @@ import {
   type SocietyRegion,
   type SocietyWork,
   type SocietyWorkKind,
+  type RelativeMeasure,
 } from "@atlas/domain";
 import { namingVersion } from "../../atlasNaming";
+import { mapScale } from "../../worldSignificance";
 import { generationFeature, generationFeatures } from "../../generationFeatures";
 import type { GenerationState } from "../../process";
 import { regionalFeature, regionalId } from "../../regional/extraction/features";
@@ -133,9 +135,9 @@ export interface SitedWork {
   record: string;
   layer: string;
   label: string;
-  radius: number;
+  radius: RelativeMeasure;
   /** The least distance between two, in metres. */
-  spacing: number;
+  spacing: RelativeMeasure;
   requires: OnCell<boolean>;
   suitability: OnCell<number>;
 }
@@ -156,7 +158,7 @@ function sitedFeature(state: GenerationState, kind: PoiKindId, shape: SitedWork,
     sited: true,
     site: at,
     seat: nearestTown(state, cell)?.id,
-    radius: shape.radius,
+    radius: mapScale(state).resolveMeasure(shape.radius),
     magnitude: 1,
     condition: 1,
     maintained: true,
@@ -169,12 +171,11 @@ function groundPlaces(
   recorded: readonly PoiPlace[]
 ) {
   if (!state.physical) return [];
-  const found = sitedPlaces(kind, shape.requires, shape.suitability, () => shape.spacing)(state);
+  const spacing = mapScale(state).resolveMeasure(shape.spacing),
+    found = sitedPlaces(kind, shape.requires, shape.suitability, () => spacing)(state);
   return found
     .filter(({ anchor }) =>
-      recorded.every(
-        (other) => other.anchor < 0 || gap(state, anchor, other.anchor) >= shape.spacing
-      )
+      recorded.every((other) => other.anchor < 0 || gap(state, anchor, other.anchor) >= spacing)
     )
     .map(({ anchor }) => {
       const place = lazyPlace(kind, localId(state, `${kind}:${anchor}`), anchor, () =>
@@ -359,8 +360,8 @@ export function frontierPlaces(state: GenerationState, kind: PoiKindId, spacing:
 }
 
 /** Whether a way's crossing of a channel earns a bridge. */
-const earnsBridge = (travellers: number, flow: number) =>
-  travellers >= roadTravellers && flow >= bridgeFlow;
+const earnsBridge = (travellers: number, flow: number, threshold: number) =>
+  travellers >= roadTravellers && flow >= threshold;
 function crossingFeature(state: RegionalState, cell: number, travellers: number, bridge: boolean) {
   const map = state.physical.map,
     p = positionOf(map.mesh, cell),
@@ -393,7 +394,11 @@ export const crossingsOf = (state: GenerationState) =>
       if (crossings.crossed[i] <= 0 || crossings.seatCells.has(i) || !crossesRiver(state, i))
         continue;
       const travellers = Math.max(crossings.traffic[i], crossings.crossed[i]),
-        bridge = earnsBridge(travellers, map.FlowAccumulation.get(i));
+        bridge = earnsBridge(
+          travellers,
+          map.FlowAccumulation.get(i),
+          map.scale.resolveMeasure(bridgeFlow)
+        );
       found[bridge ? "bridge" : "ford"].push(
         lazyPlace(bridge ? "bridge" : "ford", regionalId(state, `crossing:${i}`), i, () =>
           crossingFeature(state, i, travellers, bridge)

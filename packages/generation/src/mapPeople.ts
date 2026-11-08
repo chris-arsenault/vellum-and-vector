@@ -21,6 +21,7 @@ import { initializeCultures, diffuseCultures } from "./societyCulture";
 import { publishCultures } from "./societyCulturePublication";
 import { atlasName, geographicNamingCulture } from "./atlasNaming";
 import { bindSocietyProfile } from "./societyProfile";
+import { mapScale } from "./worldSignificance";
 
 export function* landCells(state: GenerationState) {
   const covers = spatial.pointCoverage(state.domain.scope.footprint);
@@ -28,12 +29,14 @@ export function* landCells(state: GenerationState) {
     if (dryLand(state, i) && covers(gridPosition(state.surface, i))) yield i;
 }
 export function suitability(state: GenerationState, i: number) {
-  const grid = state.surface;
+  const grid = state.surface,
+    scale = mapScale(state);
   const temperature = grid.channels.temperature?.get(i) ?? 15;
-  const rain = grid.channels.rainfall?.get(i) ?? 0.5;
+  const rain =
+    (grid.channels.rainfall?.get(i) ?? scale.length(0.000000125)) / scale.length(0.00000025);
   return (
     (Math.exp(-Math.abs(temperature - 16) / 20) * (0.2 + Math.min(1, rain))) /
-    (1 + Math.max(0, grid.channels.elevation.get(i)) / 1500)
+    (1 + Math.max(0, grid.channels.elevation.get(i)) / scale.length(0.000375, 0.5))
   );
 }
 export function centers(
@@ -83,10 +86,7 @@ function selectCenters(state: GenerationState, context: MapProcessContext, count
   for (const i of landCells(state))
     candidates.push(i, suitability(state, i) * (0.6 + context.random() * 0.4));
   const selected: number[] = [];
-  const span = Math.max(
-    state.surface.bounds[2] - state.surface.bounds[0],
-    state.surface.bounds[3] - state.surface.bounds[1]
-  );
+  const separation = mapScale(state).length(1 / (count * 1.5));
   // Scores never change. Visit the ranked candidates once, including when the
   // remaining land cannot fit another origin at the requested separation.
   while (candidates.size && selected.length < count) {
@@ -95,7 +95,7 @@ function selectCenters(state: GenerationState, context: MapProcessContext, count
     if (
       selected.some((j) => {
         const p = gridPosition(state.surface, j);
-        return Math.hypot(position.x - p.x, position.y - p.y) < span / (count * 1.5);
+        return Math.hypot(position.x - p.x, position.y - p.y) < separation;
       })
     )
       continue;

@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, counterpartOf, stays } from "../poiCarry";
@@ -27,14 +28,14 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { near, pressureAt, pressureLength, seaFacing } from "./seaShared";
 
 /** What the preset declares where the system's parameters are absent: its origin's distance from shore and its spokes' reach. */
-const presetShoreDistance = 100_000,
-  presetSpokes = 300_000;
+const presetShoreDistance = MapScale.length(0.025),
+  presetSpokes = MapScale.length(0.075);
 /** Cut history at which an impact's shore is half as harmed as they get (native 0..1000). */
-const typicalCut = 400;
+const typicalCut = MapScale.length(0.0001, 0.5);
 /** The most canopy a shore keeps where the water is thrown onto it. */
 const strippedCanopy = 0.5;
 /** How far around the impact the water itself stands up: 50 km. */
-const risenReach = near(50_000);
+const risenReach = near(0.0125);
 /** Extra boat cost at the impact; a road on the shore it strikes costs this many times more. */
 const seasRisen = 2,
   brokenRoad = 1.2;

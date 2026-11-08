@@ -20,7 +20,8 @@ type Claimed = ReadonlyMap<number, PoiClaim>;
 /** How far apart falls stand, in cell spans: a steep reach is one fall, not a row of them. */
 const fallsApart = 3;
 /** How tall a fall really is, in metres at the World's scale, to need no other reason. */
-const greatHeight = 100;
+// length-unit: fraction
+const greatHeight = 0.000025;
 /** How much harder a lip's rock must be than the rock below it to hold a ledge. */
 const ledgeContrast = 150;
 /** Fracture in [0, 1] at which the ground has moved along a fault. */
@@ -63,7 +64,7 @@ function carried(state: GenerationState) {
 }
 /** So tall a fall is known whatever made it. */
 const great = (state: GenerationState, claimed: Claimed) => {
-  const bar = greatHeight * mapScale(state).height;
+  const bar = mapScale(state).length(greatHeight, 0.5);
   return among(state, claimed, (cell) => sizeAtCell(state, cell).height >= bar);
 };
 /** Hard rock over softer: what lies below wears back and leaves a ledge. */

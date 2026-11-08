@@ -1,4 +1,4 @@
-import { gridPosition, type Grid, type World } from "@atlas/domain";
+import { gridPosition, MapScale, type Grid, type World } from "@atlas/domain";
 import { FieldInputCache, FieldWorkingSet } from "@atlas/storage-browser";
 import { rockKindOfCode } from "../../../packages/generation/src/rock/rockCatalogue";
 import type { HarnessWorkspace } from "./harnessWorkspace";
@@ -126,7 +126,7 @@ function savedRockBodies(cells: readonly Cell[], channels: Channels, span: numbe
     code = (i: number) => channels.rockKind.get(i),
     ground = {
       count: channels.rockKind.length,
-      cellKm2: (span * span) / 1e6,
+      cellKm2: MapScale.areaUnits(span * span, "m2", "km2"),
       included: (i: number) => byIndex.has(i),
       around: (i: number) => near(byIndex.get(i)!).map((cell) => cell.index),
       x: (i: number) => byIndex.get(i)!.x,
@@ -157,7 +157,7 @@ function reliefOf(grid: Grid, channels: Channels) {
       })
     );
   return {
-    cellSpanKm: span / 1000,
+    cellSpanKm: MapScale.inUnits(span, "km"),
     landCells: cells.length,
     localMetres: localCells * span,
     hypsometry: Object.fromEntries(

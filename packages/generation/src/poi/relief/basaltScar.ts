@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import { carryWhereItLands, costNear, counterpartOf, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry } from "../poiContract";
 import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";
@@ -8,7 +9,7 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { areaOf, holdGradient, lastsWhile, spans, standsIn, thinSoilOf } from "./reliefShape";
 
 /** Area at which a scar is half as great as scars get: a long sealed conduit's. */
-const typicalArea = 500_000_000;
+const typicalArea = MapScale.area(0.00003125);
 
 const isA = magicRule("fire", "scar");
 const places = rulePlaces("basaltScar", "fire", "scar");
@@ -48,7 +49,7 @@ export const basaltScar: PoiEntry = {
     terrain: (state, place) => holdGradient(state, place.cells),
     water: notApplicable("Sealed rock sheds water through the ordinary drainage."),
     climate: notApplicable("Cold rock changes no air the climate field resolves."),
-    cover: (_state, place) => thinSoilOf(place.cells),
+    cover: (state, place) => thinSoilOf(state, place.cells),
     magic: notApplicable(
       "Fire's rock feedback collapses the conductance at the seal; the conduit's cores stay as its spent stock."
     ),

@@ -1,4 +1,4 @@
-import type { Band } from "@atlas/domain";
+import type { Band, RelativeMeasure } from "@atlas/domain";
 import type { PhysicalContext } from "../world/context";
 import type { MutablePhysicalBufferName, PhysicalBufferName, PhysicalField } from "../world/field";
 import type { PhysicalProfile } from "../world/profile";
@@ -10,8 +10,8 @@ import type { ProcessTools } from "./processTools";
 
 /** The map a process is about to work on, as its settings need to read it. */
 export interface ProcessReading {
-  /** This map's cell size as a share of a world cell's. */
-  readonly scale: number;
+  /** Independent refinement uses its local channel-reading policy. */
+  readonly refined: boolean;
   /** How many passes this map runs in place of the world's history. */
   readonly passes: number;
 }
@@ -23,7 +23,7 @@ export type DeclaredField<
   W extends MutablePhysicalBufferName = never,
 > = {
   readonly [K in R]: ReadOnlyBand;
-} & { readonly [K in W]: Band } & Pick<PhysicalField, "mesh" | "EffectiveSeaLevel">;
+} & { readonly [K in W]: Band } & Pick<PhysicalField, "mesh" | "scale" | "EffectiveSeaLevel">;
 /**
  * A narrow field view, shared ground operations and locally bound helpers. This is an authoring
  * interface, not a sandbox: prepare and whole-field builders can use the underlying field.
@@ -65,7 +65,7 @@ interface ProcessDeclaration {
   /** What must hold once it has run, or the run is wrong. */
   readonly check?: (map: PhysicalField, context: PhysicalContext) => void;
   /** Its own settings, as the profile holds them. */
-  readonly settings: Readonly<Record<string, number>>;
+  readonly settings: Readonly<Record<string, number | RelativeMeasure>>;
   /**
    * How finely its step rule needs a span cut to stay stable: the driver runs that many substeps, each
    * a stage, and hands each its share of the span. One when it does not say.
@@ -76,8 +76,8 @@ interface ProcessDeclaration {
    * stage, whose participants must leave their ground changes pending until joint settlement.
    */
   readonly settlesItself?: boolean;
-  /** Its settings as they read on a map of another scale, where they differ from the world's. */
-  readonly atScale?: (
+  /** Pass cadence and dimensionless reading policy; geographic dimensions are already resolved. */
+  readonly forExecution?: (
     settings: PhysicalProfile,
     reading: ProcessReading
   ) => Partial<PhysicalProfile>;

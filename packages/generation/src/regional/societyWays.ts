@@ -1,4 +1,4 @@
-import type { AtlasFeature } from "@atlas/domain";
+import { MapScale, type AtlasFeature } from "@atlas/domain";
 import { generationFeatures } from "../generationFeatures";
 import { networkFactors, placeLinks } from "../poi/poiCosts";
 import { putRegionalFeature, putRegionalNetwork } from "./extraction/features";
@@ -14,7 +14,7 @@ export const trackTravellers = 10,
 const wearDiscount = 1.2;
 export const fordCost = 3;
 /** River flow (m³/s) above which a road crosses by a bridge. */
-export const bridgeFlow = 20;
+export const bridgeFlow = MapScale.volume(3.125e-19);
 
 export interface Place {
   feature: AtlasFeature | null;

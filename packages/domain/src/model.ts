@@ -72,6 +72,8 @@ export interface Epoch {
   ice: number;
   coasts: number;
   temperature: number;
+  /** Generation controls use map-relative dimensions. */
+  lengthUnits?: "relative";
   seaLevel: number;
 }
 export interface Area {

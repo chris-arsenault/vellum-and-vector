@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
@@ -9,16 +11,16 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { areaOf, extentOf, namedFromShore, near, pressureAt, pressureLength } from "./seaShared";
 
 /** Area at which a crush zone is half as great as they get: 10,000 square kilometres. */
-const typicalArea = 1e10;
+const typicalArea = MapScale.area(0.000625);
 /** The sediment, in metres, a bed under no pressure at all could keep beneath a crush. */
-const unpressedBed = 200;
+const unpressedBed = MapScale.length(0.00005, 0.5);
 /** Extra boat cost at full intensity: a surface crossing is possible but ruinous. */
 const crushDrag = 6;
 
 const isA = magicRule("pressure", "crush");
 const places = rulePlaces("crushZone", "pressure", "crush");
 /** The sea around a zone that bears on it: 100 km. */
-const around = near(100_000);
+const around = near(0.025);
 const counterpart = counterpartOf(isA, 2);
 
 const factors = {
@@ -37,7 +39,7 @@ const scoured = (state: GenerationState, place: PoiPlace): readonly PoiFieldChan
       change: "atMost",
       band: "SedimentThickness",
       cell,
-      value: toNative(unpressedBed * (1 - pressureAt(state, cell))),
+      value: toNative(mapScale(state).resolveMeasure(unpressedBed) * (1 - pressureAt(state, cell))),
     }));
 
 export const crushZone: PoiEntry = {

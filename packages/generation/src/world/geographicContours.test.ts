@@ -53,9 +53,10 @@ function fixture(bounds: Bounds = [0, 0, 2000, 1000], cylinder = false) {
   state.domain.world.reference.domain = footprint;
   state.domain.world.areas.area.footprint = footprint;
   state.surface = createGrid("contour-fixture", scope, 5, 3);
+  const map = createField(mesh);
   state.physical = {
-    map: createField(mesh),
-    profile: atlasPhysicalProfile(),
+    map,
+    profile: atlasPhysicalProfile({}, {}, map.scale),
     samples: residentBand("int32", new Int32Array(state.surface.active.length)),
     grid: state.surface.coverage,
     fixed: [],

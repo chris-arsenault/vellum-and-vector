@@ -19,7 +19,7 @@ export function supportFailureDepth(
 ) {
   if (section.length === 0 || run <= 0) return 0;
   const surface = section[0].top,
-    gradient = (surface - floor) / (1024 * run);
+    gradient = MapScale.metres(surface - floor, "native") / run;
   let capResponse = 0,
     capDepth = 0,
     failed = 0;
@@ -41,3 +41,4 @@ export function supportFailureDepth(
   }
   return failed;
 }
+import { MapScale } from "@atlas/domain";

@@ -1,4 +1,4 @@
-import { effectiveTraits, type World } from "@atlas/domain";
+import { effectiveTraits, MapScale, type World } from "@atlas/domain";
 import { bounds } from "./presentation";
 
 export function RegionGenerationContext({ world, areaId }: { world: World; areaId: string }) {
@@ -13,10 +13,10 @@ export function RegionGenerationContext({ world, areaId }: { world: World; areaI
         locked crossings
       </summary>
       <p>
-        {area.profile} · {((extent[2] - extent[0]) / 1000).toLocaleString()} ×{" "}
-        {((extent[3] - extent[1]) / 1000).toLocaleString()} km. Completed physical epochs and system
-        definitions are inherited; local generation preserves fixed crossings and protected
-        geography.
+        {area.profile} · {MapScale.inUnits(extent[2] - extent[0], "km").toLocaleString()} ×{" "}
+        {MapScale.inUnits(extent[3] - extent[1], "km").toLocaleString()} km. Completed physical
+        epochs and system definitions are inherited; local generation preserves fixed crossings and
+        protected geography.
       </p>
       <h3>Effective spatial traits</h3>
       {traits.length ? (

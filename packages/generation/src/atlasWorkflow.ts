@@ -39,7 +39,7 @@ import { serializableBindings } from "./generationBindings";
 import { inheritedChannelNames, inheritedProducts } from "./world/inheritedFacts";
 import { societySequence } from "./societyProcesses";
 import { atlasInitialState } from "./atlasInitialState";
-import { boundaryDiagnostics, migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
+import { boundaryDiagnostics, inheritMapBoundary } from "./worldBoundary";
 import { isRegionalRefinement } from "./regional/capture";
 import { refineRegionalMap } from "./regional/workflow";
 
@@ -49,7 +49,6 @@ export interface AtlasGenerationInput {
   quality: string;
   seed: number;
   parameters?: Partial<AtlasParameters>;
-  processes?: Record<string, boolean>;
   features?: FeatureSelection;
   resolvedFeatures?: ResolvedFeatures;
   settings?: GenerationSettings;
@@ -125,7 +124,6 @@ export function prepareAtlasGeneration(
   );
   source = proceduralSnapshot(source, sourceFeatures);
   input = structuredClone(input);
-  input.features = migrateBoundarySelection(input.features);
   input = inheritMapBoundary(source, input);
   source = configuredSource(source, input);
   checkRunInputs(source, input);
@@ -133,7 +131,6 @@ export function prepareAtlasGeneration(
     ...input,
     settings: worldGenerationSettings(source.world),
     parameters: atlasParametersSchema.parse(input.parameters ?? {}),
-    processes: input.processes ?? {},
   };
   input = resolveInput(source, input);
   source = configuredSource(source, input);
@@ -229,10 +226,7 @@ function usesInheritedInputs(source: DomainSnapshot, input: AtlasGenerationInput
   );
 }
 function checkNewSelection(source: DomainSnapshot, input: AtlasGenerationInput) {
-  if (
-    Object.values(input.processes ?? {}).some((enabled) => !enabled) ||
-    Object.values(input.features ?? {}).some((feature) => feature.enabled === false)
-  )
+  if (Object.values(input.features ?? {}).some((feature) => feature.enabled === false))
     requireThat(
       !source.world.generations.some((run) => run.areaId === input.areaId),
       "process_selection",
@@ -313,20 +307,19 @@ export function resolveInput(
   const suppliedSettings = generationSettingsSchema.parse(
     input.settings ?? worldGenerationSettings(source.world)
   );
-  const legacySettings = atlasGenerationModules.prepareSettings(
+  const preparedSettings = atlasGenerationModules.prepareSettings(
     input.features ?? {},
     suppliedSettings
   );
   const resolvedFeatures = resolveGenerationFeatures(
     atlasFeatureDefinitions,
     input.features,
-    input.processes,
     input.parameters,
     input.domains,
-    legacySettings as unknown as ParameterValues
+    preparedSettings as unknown as ParameterValues
   );
   const settings = generationSettingsSchema.parse(
-    atlasGenerationModules.bindSettings(resolvedFeatures, legacySettings)
+    atlasGenerationModules.bindSettings(resolvedFeatures, preparedSettings)
   );
   return { ...input, settings, resolvedFeatures, parameters: resolvedFeatures.parameters };
 }

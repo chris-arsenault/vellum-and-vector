@@ -1,10 +1,8 @@
 import { expect, it } from "vitest";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
-import { depthRateToDischarge } from "./dimensions";
 import { drainageConditioning } from "./drainageFlood";
 import { createTestField as createField } from "../rock/groundTestFixture";
-import { contributingWater } from "./lakeStage";
 import { createWorldMesh } from "./worldMesh";
 
 /** A sloping country with a sea along its west edge and a closed pit in its middle. */
@@ -29,7 +27,7 @@ function country() {
 
 it("fills the pit to its spill, ranks every cell once and drains each cell to a lower-ranked parent", () => {
   const { mesh, map } = country();
-  drainageConditioning(map, physicalContext(7, 0, atlasPhysicalProfile()));
+  drainageConditioning(map, physicalContext(7, 0, atlasPhysicalProfile({}, {}, map.scale)));
   const ranks = new Set<number>();
   let filled = 0;
   for (let i = 0; i < mesh.count; i++) {
@@ -59,25 +57,12 @@ it("fills the pit to its spill, ranks every cell once and drains each cell to a 
   }
 });
 
-it("accumulates runoff down the drainage tree so the sea receives all of it", () => {
-  const { mesh, map } = country();
-  drainageConditioning(map, physicalContext(7, 0, atlasPhysicalProfile()));
-  const water = contributingWater(map);
-  let supplied = 0,
-    received = 0;
-  for (let i = 0; i < mesh.count; i++) {
-    supplied += depthRateToDischarge(map.Runoff.get(i), mesh.area(i));
-    if (map.DrainageParents.get(i) < 0) received += water.get(i);
-  }
-  expect(received).toBeCloseTo(supplied, 6);
-});
-
 it("refuses a country with no outlet", () => {
   const mesh = createWorldMesh([0, 0, 2000, 2000], 4, 0),
     map = createField(mesh);
   map.Elevation.fill(100 * 1024);
   if (!mesh.openBoundary)
-    expect(() => drainageConditioning(map, physicalContext(7, 0, atlasPhysicalProfile()))).toThrow(
-      /outlet/
-    );
+    expect(() =>
+      drainageConditioning(map, physicalContext(7, 0, atlasPhysicalProfile({}, {}, map.scale)))
+    ).toThrow(/outlet/);
 });

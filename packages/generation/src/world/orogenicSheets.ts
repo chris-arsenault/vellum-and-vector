@@ -1,5 +1,5 @@
 import type { Band } from "@atlas/domain";
-import { headroom, spareCrust } from "../rock/groundLedger";
+import { availableCrust } from "../rock/groundLedger";
 import { shiftGroundField } from "../rock/groundDeformation";
 import {
   moveHeldSheet,
@@ -276,9 +276,9 @@ function rampRise(map: PhysicalField, context: PhysicalContext, i: number, slip:
   const continental = map.CrustContinentalFraction.get(i) / 1000;
   return units(context.Profile.ThrustRampGradient * slip * (0.4 + 0.6 * continental));
 }
-/** How high this pass would raise a cell's leading edge, as far as the height limit leaves room. */
+/** How high this pass would raise a cell's leading edge before available crust is shared. */
 function rampWanted(map: PhysicalField, context: PhysicalContext, i: number, climb: number) {
-  return Math.min(rampRise(map, context, i, climb), headroom(map, i));
+  return rampRise(map, context, i, climb);
 }
 /** What each belt's ramps would take, and the crust its shortening has piled up, by volume. */
 function beltMaterial(map: PhysicalField, context: PhysicalContext, belts: number, climb: Band) {
@@ -287,8 +287,8 @@ function beltMaterial(map: PhysicalField, context: PhysicalContext, belts: numbe
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds.get(i);
     if (id < 0) continue;
-    const area = map.mesh.area(i) / 1024;
-    held[id] += spareCrust(map, i) * area;
+    const area = map.mesh.area(i) * MapScale.metres(1, "native");
+    held[id] += availableCrust(map, i) * area;
     if (climb.get(i) > 0)
       wanted[id] +=
         rampWanted(map, context, i, climb.get(i)) *
@@ -316,7 +316,7 @@ export function climbThrustRamps(
     if (id < 0 || paid[id] <= 0) continue;
     const rise = climb.get(i) > 0 ? rampWanted(map, context, i, climb.get(i)) * paid[id] : 0,
       spent = (paid[id] * wanted[id]) / held[id];
-    adjustCrustColumn(map, i, map.CrustThickness.get(i) - spareCrust(map, i) * spent);
+    adjustCrustColumn(map, i, map.CrustThickness.get(i) - availableCrust(map, i) * spent);
     if (rise > 0) movement.set(i, rise);
   }
   shiftGroundField(map, movement, "mountains");
@@ -418,3 +418,4 @@ export function slipThrustSheets(
   releaseWorking(map, moved.origin, moved.under, moved.left);
   return moved.climb;
 }
+import { MapScale } from "@atlas/domain";

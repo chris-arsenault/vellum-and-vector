@@ -6,7 +6,7 @@ import {
   neutralEcology,
   type EcologyForcing,
 } from "../world/ecologyEnvironment";
-import { spatial } from "@atlas/domain";
+import { MapScale, spatial } from "@atlas/domain";
 import { nativePosition } from "../world/atlasWorkspace";
 import { dispersePlants, initializeEcology } from "../world/ecologyEstablishment";
 import { livingPlantCarbon, plantGroups } from "../world/ecologyGroups";
@@ -36,12 +36,12 @@ const allConifer = 2,
 const youngCanopy = 40;
 /** Seed a group holds wherever its cover is present, as a share of that cover. */
 const seedFromPresence = 0.2;
-/** Soil water (m) the wetness medium and the channel margin add to the captured supply. */
-const wetnessSupply = 0.2,
-  riparianSupply = 0.3;
-/** Fire causes: magic heat (°C) that ignites, the block (m) whose driest fuel gets one keyed draw, its chance, and a settlement edge's. */
+/** Relative water depths the wetness medium and channel margin add to captured supply. */
+const wetnessSupply = MapScale.length(5e-8),
+  riparianSupply = MapScale.length(7.5e-8);
+/** Fire causes: magic heat (°C), relative ignition-block span, its chance and a settlement edge's. */
 const fireHeat = 3,
-  fireBlock = 10_000,
+  fireBlock = MapScale.length(0.0025),
   fireChance = 0.35,
   seatFireChance = 0.2;
 
@@ -131,9 +131,9 @@ const seedFloor: Record<string, number> = {
 function rememberHistory(state: RegionalState) {
   const map = state.physical.map;
   for (let i = 0; i < map.mesh.count; i++) {
-    map.EcologySediment.set(i, map.SedimentThickness.get(i) / 1024);
-    map.EcologyVolcanic.set(i, map.VolcanicConstructionHistory.get(i) / 1024);
-    map.EcologyImpact.set(i, map.ImpactExcavation.get(i) / 1024);
+    map.EcologySediment.set(i, MapScale.metres(map.SedimentThickness.get(i), "native"));
+    map.EcologyVolcanic.set(i, MapScale.metres(map.VolcanicConstructionHistory.get(i), "native"));
+    map.EcologyImpact.set(i, MapScale.metres(map.ImpactExcavation.get(i), "native"));
     map.EcologyErosion.set(i, erosionHistory(map, i));
     map.EcologyIce.set(i, map.IceThickness.get(i));
   }
@@ -148,14 +148,14 @@ function supplySoilWater(state: RegionalState) {
   for (let i = 0; i < mesh.count; i++) {
     if (!isContent(mesh, i)) continue;
     // The ground holds no more than its soil can: the engine's capacity for the soil depth.
-    const capacity = Math.max(0.05, soilCapacity * map.SoilDepth.get(i));
+    const capacity = Math.max(map.scale.length(1.25e-8), soilCapacity * map.SoilDepth.get(i));
     map.SoilWater.set(
       i,
       Math.min(
         capacity,
         natural.get(i) +
-          wetnessSupply * (wetness?.[i] ?? 0) +
-          (riparianSupply * map.FloodplainIntensity.get(i)) / 1000
+          map.scale.resolveMeasure(wetnessSupply) * (wetness?.[i] ?? 0) +
+          (map.scale.resolveMeasure(riparianSupply) * map.FloodplainIntensity.get(i)) / 1000
       )
     );
   }
@@ -237,19 +237,24 @@ function fireCauses(state: RegionalState) {
 /** Ground that can burn: a content land cell not under ice. */
 function burnable(state: RegionalState, i: number) {
   const map = state.physical.map;
-  return isContent(map.mesh, i) && map.WaterKindCodes.get(i) === 0 && map.IceThickness.get(i) < 1;
+  return (
+    isContent(map.mesh, i) &&
+    map.WaterKindCodes.get(i) === 0 &&
+    map.IceThickness.get(i) < map.scale.length(2.5e-7)
+  );
 }
 /** The driest best-fuelled land cell of each block, with its risk (drought times fuel). */
 function driestFuel(state: RegionalState) {
   const map = state.physical.map,
     mesh = map.mesh,
-    driest = new Map<number, { cell: number; risk: number }>(); // hpc-exempt: one entry per 10 km block
+    blockSpan = map.scale.resolveMeasure(fireBlock),
+    driest = new Map<number, { cell: number; risk: number }>(); // hpc-exempt: one entry per ignition block
   for (let i = 0; i < mesh.count; i++) {
     if (!burnable(state, i)) continue;
     const fuel = clamp(livingPlantCarbon(map, i) / 5);
     if (fuel <= 0.05) continue;
     const p = positionOf(mesh, i),
-      block = Math.floor(p.x / fireBlock) * 4096 + Math.floor(p.y / fireBlock),
+      block = Math.floor(p.x / blockSpan) * 4096 + Math.floor(p.y / blockSpan),
       risk = environment(map, i).drought * fuel,
       best = driest.get(block);
     if (!best || risk > best.risk) driest.set(block, { cell: i, risk });

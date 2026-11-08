@@ -1,4 +1,4 @@
-import type { MagicFeatureRule } from "@atlas/domain";
+import { MapScale, type MagicFeatureRule } from "@atlas/domain";
 import { craterRelief, volcanicRelief } from "../world/geologicalFeatures";
 import { keyCols } from "../world/landforms";
 import type { MagicField } from "../world/magicState";
@@ -32,16 +32,16 @@ import { wrapOf } from "./sea/shoreForm";
 type Gate = (state: GenerationState, place: PoiPlace) => boolean;
 
 /** World sizes that make a landform a place at the World's scale. */
-const worldRise = 600,
-  worldCourseLength = 100_000,
-  worldCourseRelief = 300,
-  worldComplexArea = 8e9,
-  worldComplexRelief = 300,
-  worldFjordBreadth = 8_000,
-  worldLakeArea = 2e9,
-  worldVolcanoRelief = 1_000,
-  worldCraterRelief = 150,
-  worldCraterRadius = 15_000;
+const worldRise = MapScale.length(0.00015, 0.5),
+  worldCourseLength = MapScale.length(0.025),
+  worldCourseRelief = MapScale.length(0.000075, 0.5),
+  worldComplexArea = MapScale.area(0.0005),
+  worldComplexRelief = MapScale.length(0.000075, 0.5),
+  worldFjordBreadth = MapScale.length(0.002),
+  worldLakeArea = MapScale.area(0.000125),
+  worldVolcanoRelief = MapScale.length(0.00025, 0.5),
+  worldCraterRelief = MapScale.length(0.0000375, 0.5),
+  worldCraterRadius = MapScale.length(0.00375);
 /** The share of the circle a coast must wrap for its form to be a named place. */
 const clearForm = 0.7;
 /** How strong a tie to people carries a landform a size alone would not: a market town beside it. */
@@ -49,9 +49,9 @@ const strongTie = 0.45;
 /** Sites with magic must mark an exceptional source. */
 const exceptionalFireSource = 600,
   exceptionalGeothermal = 400,
-  exceptionalIceThickness = 500,
+  exceptionalIceThickness = MapScale.length(0.000125, 0.5),
   exceptionalIceCharge = 0.8;
-const magicalCourseLength = 100_000,
+const magicalCourseLength = MapScale.length(0.025),
   magicalCourseCoverage = 0.5;
 
 const evidence = (state: GenerationState, place: PoiPlace) =>
@@ -61,34 +61,44 @@ const areaOf = (state: GenerationState, place: PoiPlace) => evidence(state, plac
 const course: Gate = (state, place) => {
   const e = evidence(state, place),
     scale = mapScale(state);
-  return e.span >= worldCourseLength * scale.length && e.relief >= worldCourseRelief * scale.height;
+  return (
+    e.span >= scale.resolveMeasure(worldCourseLength) &&
+    e.relief >= scale.resolveMeasure(worldCourseRelief)
+  );
 };
 const complex: Gate = (state, place) => {
   const e = evidence(state, place),
     scale = mapScale(state);
-  return e.area >= worldComplexArea * scale.area && e.relief >= worldComplexRelief * scale.height;
+  return (
+    e.area >= scale.resolveMeasure(worldComplexArea) &&
+    e.relief >= scale.resolveMeasure(worldComplexRelief)
+  );
 };
 const pass: Gate = (state, place) =>
   (heldFor(state, "relief:keyCols", () => keyCols(fieldOf(state))).get(place.anchor) ?? 0) >=
-  worldRise * 1024 * mapScale(state).height;
+  MapScale.native(mapScale(state).resolveMeasure(worldRise));
 /** Which water is a river is the river's own test: a fall answers only for its drop. */
 const waterfall: Gate = (state, place) => place.origin === "carried" || prominentFall(state, place);
 const fjord: Gate = (state, place) => {
   const e = evidence(state, place),
     scale = mapScale(state);
-  return e.span >= worldFjordLength * scale.length && e.breadth >= worldFjordBreadth * scale.length;
+  return (
+    e.span >= scale.resolveMeasure(worldFjordLength) &&
+    e.breadth >= scale.resolveMeasure(worldFjordBreadth)
+  );
 };
 const lake: Gate = (state, place) => {
   const map = fieldOf(state),
     scale = mapScale(state),
     area = areaOf(state, place);
-  if (area >= worldLakeArea * scale.area) return true;
-  if (area < worldExceptionalLakeArea * scale.area) return false;
+  if (area >= scale.resolveMeasure(worldLakeArea)) return true;
+  if (area < scale.resolveMeasure(worldExceptionalLakeArea)) return false;
   const reads = (read: (cell: number) => number) =>
     place.cells.reduce((most, cell) => Math.max(most, read(cell)), 0);
   return (
-    reads((cell) => map.WaterDepths.get(cell) / 1024) >= worldLakeDepth * scale.height ||
-    reads((cell) => map.FlowAccumulation.get(cell)) >= worldOutletDischarge * scale.area
+    reads((cell) => MapScale.metres(map.WaterDepths.get(cell), "native")) >=
+      scale.resolveMeasure(worldLakeDepth) ||
+    reads((cell) => map.FlowAccumulation.get(cell)) >= scale.resolveMeasure(worldOutletDischarge)
   );
 };
 const landscape =
@@ -100,7 +110,9 @@ const eventOf = (state: GenerationState, place: PoiPlace) =>
   fieldOf(state).events.find((event) => place.id.startsWith(event.id));
 const volcano: Gate = (state, place) => {
   const event = eventOf(state, place);
-  return !event || volcanicRelief(state, event) >= worldVolcanoRelief * mapScale(state).height;
+  return (
+    !event || volcanicRelief(state, event) >= mapScale(state).resolveMeasure(worldVolcanoRelief)
+  );
 };
 const crater: Gate = (state, place) => {
   const event = eventOf(state, place),
@@ -108,8 +120,8 @@ const crater: Gate = (state, place) => {
   if (!event) return true;
   const relief = craterRelief(state, event);
   return (
-    event.radius >= worldCraterRadius * scale.length &&
-    relief >= worldCraterRelief * scale.height &&
+    event.radius >= scale.resolveMeasure(worldCraterRadius) &&
+    relief >= scale.resolveMeasure(worldCraterRelief) &&
     relief >= state.physical!.profile.ImpactVisibleRelief
   );
 };
@@ -179,11 +191,11 @@ function exceptionalSource(
         field.source.get(i) >= exceptionalFireSource &&
         map.Geothermal.get(i) >= exceptionalGeothermal,
       aurora: () =>
-        map.IceThickness.get(i) >= exceptionalIceThickness &&
+        map.IceThickness.get(i) >= mapScale(state).resolveMeasure(exceptionalIceThickness) &&
         map.IceCharge.get(i) >= exceptionalIceCharge,
       pressure: () => rule.id === "locus" && field.source.get(i) > 0,
       greenwood: () =>
-        map.FlowAccumulation.get(i) >= worldRiverDischarge * mapScale(state).area &&
+        map.FlowAccumulation.get(i) >= mapScale(state).resolveMeasure(worldRiverDischarge) &&
         field.source.get(i) > 0,
       veil: () => rule.id === "door" && (field.originSources.door?.get(i) ?? 0) > 0,
     };
@@ -204,7 +216,8 @@ function magicPlace(
   if (rule.cartography === "course") {
     const e = regionEvidence(fieldOf(state), place.cells, coverage);
     return (
-      e.span >= magicalCourseLength * mapScale(state).length && e.strength >= magicalCourseCoverage
+      e.span >= mapScale(state).resolveMeasure(magicalCourseLength) &&
+      e.strength >= magicalCourseCoverage
     );
   }
   return significantMagicArea(state, place.cells, coverage);

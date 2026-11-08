@@ -31,7 +31,7 @@ const survey: GenerationModule = {
       configuration: z
         .object({ multiplier: z.number().positive(), title: z.string().min(1) })
         .strict(),
-      configurationFromLegacy: () => ({ multiplier: 1, title: "Default survey" }),
+      configurationFromSettings: () => ({ multiplier: 1, title: "Default survey" }),
       processes: ["test.survey.measure"],
       slots: ["present.products", "epoch.incision"],
       contribute: (slot, configuration) =>
@@ -138,12 +138,11 @@ it("extends the real atlas recipe, runtime and new-layer publication by register
           configuration: { multiplier: 3, title: "Requested" },
         },
       },
-      processes: {},
     };
     const prepared = prepareAtlasGeneration(snapshot, request);
     request.features!["test.survey"].settings!.temperature = 0.9;
     request.features!["test.survey"].configuration!.multiplier = 10;
-    request.processes!["atlas.impact-cratering"] = false;
+    request.features!["physical.impacts"] = { enabled: false };
     expect(prepared.diagnostics).toEqual([]);
     expect(prepared.input.parameters!.temperature).toBe(17);
     expect(prepared.input.configuration!.inputs!.publications).toEqual(

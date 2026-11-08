@@ -1,5 +1,6 @@
 import { fixtureWorld, fixtureState, commitCommand } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
+import { MapScale } from "@atlas/domain";
 import { atlasParametersSchema } from "@atlas/generation";
 import { atlasPhysicalProfile } from "../../packages/generation/src/world/atlasProfile";
 import {
@@ -11,12 +12,12 @@ import {
 import { applyCartographicChoice, cartographicControls } from "./cartographicDraft";
 import { canonicalGeometry, type Command } from "@atlas/domain";
 
-it("defaults new worlds to Cylinder and preserves explicit legacy open configurations", async () => {
+it("defaults new worlds to Cylinder and accepts an explicit open boundary", async () => {
   const draft = newGenerationDraft();
   expect(prepareDraft(draft).source.world.reference.boundaryMode).toBe("cylinder");
   expect(draftWorldSnapshot(draft).world.reference.boundaryMode).toBe("cylinder");
-  expect(atlasParametersSchema.parse({ wrapLongitude: 0 }).mapBoundary).toBe(0);
-  expect(atlasPhysicalProfile({ mapBoundary: 2 }).WrapLongitude).toBe(0);
+  expect(atlasParametersSchema.parse({ mapBoundary: 0 }).mapBoundary).toBe(0);
+  expect(atlasPhysicalProfile({ mapBoundary: 2 }, {}, MapScale.reference()).WrapLongitude).toBe(0);
 });
 
 it.each([

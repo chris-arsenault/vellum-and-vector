@@ -1,9 +1,16 @@
-import { population, spatial, type SocietyCommunity, type SocietyConnection } from "@atlas/domain";
+import {
+  population,
+  spatial,
+  type MapScale,
+  type SocietyCommunity,
+  type SocietyConnection,
+} from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { concentration, communityContacts } from "./societySettlements";
 import { nearestSocietySample } from "./societySpatial";
 import { dryLand } from "./societySupport";
 import { wornCost } from "./societyWays";
+import { mapScale } from "./worldSignificance";
 
 /** Compatibility for maps created before local-town allocations were retained. */
 export function unresolvedTownResidents(c: SocietyCommunity, contacts = 0) {
@@ -18,9 +25,7 @@ export function regionalCommunitySpacing(
   retained: SocietyCommunity[] = []
 ) {
   const grid = state.surface;
-  const nominal = { world: 100000, region: 25000, local: 2500, site: 250, interior: 25 }[
-    state.domain.world.areas[state.domain.scope.areaId].profile
-  ];
+  const nominal = mapScale(state).length(0.025);
   const territories = retained.filter(
     (c) => c.footprint && spatial.intersects(c.footprint, grid.scope.footprint)
   );
@@ -38,9 +43,10 @@ export function regionalCommunitySpacing(
 
 export function localTownAllocations(
   communities: SocietyCommunity[],
-  connections: SocietyConnection[]
+  connections: SocietyConnection[],
+  scale: MapScale
 ) {
-  const contacts = communityContacts({ communities, connections });
+  const contacts = communityContacts({ communities, connections }, scale);
   return new Map(communities.map((c) => [c.id, unresolvedTownResidents(c, contacts.get(c.id))]));
 }
 

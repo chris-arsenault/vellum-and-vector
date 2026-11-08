@@ -1,6 +1,6 @@
 import type { PhysicalField } from "../world/field";
 import type { ReadBand } from "@atlas/domain";
-import { clamp, elevationLimit, units } from "../world/math";
+import { clamp, units } from "../world/math";
 import { physicalGradients } from "../world/physicalMetric";
 import { releaseWorking, workingValues } from "../world/physicalNumerics";
 import type { FlowCause } from "../coupling/flows";
@@ -32,7 +32,7 @@ export function deformGround(
       if (layerDepth(map, cell, slot, facet) <= 0) continue;
       const layer = readLayer(map, cell, slot, facet),
         thickness = slot === columnSize(facet) - 1 ? map.CrustThickness.get(cell) : layer.depth,
-        strain = movement / (movement + Math.max(units(1), thickness)),
+        strain = movement / (movement + Math.max(units(map.scale.length(0.00000025)), thickness)),
         jointing = materialFact(layer, "jointing");
       setLayer(
         map,
@@ -70,7 +70,11 @@ function tiltBeds(map: PhysicalField, cell: number, x: number, y: number) {
   }
 }
 function bendGround(map: PhysicalField, movement: ReadBand) {
-  const gradient = physicalGradients(map.mesh, (cell) => movement.get(cell) / 1024, map.coverage);
+  const gradient = physicalGradients(
+    map.mesh,
+    (cell) => MapScale.metres(movement.get(cell), "native"),
+    map.coverage
+  );
   for (let cell = 0; cell < map.mesh.count; cell++)
     tiltBeds(map, cell, gradient.x.get(cell), gradient.y.get(cell));
   releaseWorking(map, gradient.x, gradient.y);
@@ -80,29 +84,15 @@ function applyDisplacement(map: PhysicalField, movement: ReadBand, cause: FlowCa
   for (let cell = 0; cell < map.mesh.count; cell++)
     if (movement.get(cell) !== 0) displaceGround(map, cell, movement.get(cell), cause);
 }
-const admittedMovement = (map: PhysicalField, cell: number, movement: number) =>
-  clamp(
-    movement,
-    units(-elevationLimit) - map.BedrockElevation.get(cell),
-    units(elevationLimit) - map.Elevation.get(cell)
-  );
 /** One deformation moves the package and its bed planes; a translation leaves every dip unchanged. */
 export function displaceGroundField(map: PhysicalField, displacement: ReadBand, cause: FlowCause) {
-  const movement = workingValues(map, "float64", "ground:displacement", (cell) =>
-    admittedMovement(map, cell, displacement.get(cell))
-  );
-  applyDisplacement(map, movement, cause);
-  releaseWorking(map, movement);
+  applyDisplacement(map, displacement, cause);
 }
 /** Existing standing rock rides a ramp; the actual rise also bends its inherited contacts. */
 export function shiftGroundField(map: PhysicalField, displacement: ReadBand, cause: FlowCause) {
-  const movement = workingValues(map, "float64", "ground:rockMovement", (cell) =>
-    admittedMovement(map, cell, displacement.get(cell))
-  );
-  bendGround(map, movement);
+  bendGround(map, displacement);
   for (let cell = 0; cell < map.mesh.count; cell++)
-    if (movement.get(cell) !== 0) shiftRock(map, cell, movement.get(cell), cause);
-  releaseWorking(map, movement);
+    if (displacement.get(cell) !== 0) shiftRock(map, cell, displacement.get(cell), cause);
 }
 /** Crust available beneath each column limits the rise before bedding is deformed. */
 export function raiseGroundField(map: PhysicalField, requested: ReadBand, cause: FlowCause) {
@@ -112,7 +102,7 @@ export function raiseGroundField(map: PhysicalField, requested: ReadBand, cause:
   bendGround(map, movement);
   releaseWorking(map, movement);
 }
-/** Support bending changes placement and bedding together, using only the displacement admitted. */
+/** Support bending changes placement and bedding together by the proposed displacement. */
 export function supportGroundField(map: PhysicalField, support: ReadBand) {
   const stored = groundStorage(map);
   if (!map.CrustSupportInitialized) {
@@ -120,8 +110,11 @@ export function supportGroundField(map: PhysicalField, support: ReadBand) {
     map.CrustSupportInitialized = true;
     return;
   }
-  const movement = workingValues(map, "float64", "ground:supportMovement", (cell) =>
-    admittedMovement(map, cell, support.get(cell) - map.CrustSupportElevation.get(cell))
+  const movement = workingValues(
+    map,
+    "float64",
+    "ground:supportMovement",
+    (cell) => support.get(cell) - map.CrustSupportElevation.get(cell)
   );
   for (let cell = 0; cell < map.mesh.count; cell++)
     stored.CrustSupportElevation.add(cell, movement.get(cell));
@@ -132,3 +125,4 @@ export function supportGroundField(map: PhysicalField, support: ReadBand) {
 export function setSupportTarget(map: PhysicalField, cell: number, elevation: number) {
   groundStorage(map).CrustSupportTarget.set(cell, elevation);
 }
+import { MapScale } from "@atlas/domain";

@@ -1,4 +1,5 @@
 import { isContent, neighborsOf, regionalSpan } from "./lattice";
+import { MapScale } from "@atlas/domain";
 import { materialResistance } from "./material";
 import { clamp, naturalBand, type NetworkWork, type RegionalState } from "./state";
 
@@ -6,19 +7,20 @@ import { clamp, naturalBand, type NetworkWork, type RegionalState } from "./stat
 const fetchCells = 24,
   flankTurn = Math.PI / 5;
 /** Cut (m) of a fully exposed shore cell of baseline material in one round, and how many cells inland the sea's work reaches. */
-const cutDepth = 12,
+// length-unit: fraction
+const cutDepth = 0.000003,
   cutReachCells = 3;
 /** A sea cell this shallow (m) beside land can fill in the lee; it emerges this much above the datum. */
-const fillDepth = 10,
-  emergence = 1;
+// length-unit: fraction
+const fillDepth = 0.0000025,
+  emergence = 0.00000025;
 /** Exposure below which a shore is shelter where sediment settles, and below which a loaded mouth builds a delta. */
 const shelterExposure = 0.3,
   deltaExposure = 0.5;
 /** Mouth load (m³) per cell of shallow sea within reach that makes a delta rather than an estuary. */
-const deltaLoad = 50_000;
-/** Estuary deepening (m) per square root of the mouth's discharge (m³/s), bounded. */
-const estuaryDeepening = 0.6,
-  estuaryLimit = 25;
+const deltaLoad = 7.8125e-16;
+/** Estuary deepening as a map-span share per square root of relative mouth discharge. */
+const estuaryDeepening = 0.00000015;
 
 /**
  * Shore development (plan W4) and mouth form (W3) as relief terms. Each shore cell reads its
@@ -63,8 +65,8 @@ function cutShore(state: RegionalState, h: Float64Array, exposure: Float64Array,
     for (let i = 0; i < mesh.count; i++) {
       if (exposure[i] <= 0 || cut[i] || network.sea[i] || h[i] <= 0 || !besideWater(i)) continue;
       const depth = Math.min(
-        h[i] + emergence,
-        (cutDepth * exposure[i]) / materialResistance(state, i)
+        h[i] + state.physical.map.scale.length(emergence),
+        (state.physical.map.scale.length(cutDepth) * exposure[i]) / materialResistance(state, i)
       );
       if (depth <= 0) continue;
       h[i] -= depth;
@@ -94,8 +96,8 @@ function shoreExposure(state: RegionalState, h: Float64Array) {
     let beside = false;
     for (let k = 0; k < m && !beside; k++) beside = water(around[k]) !== water(i);
     if (!beside) continue;
-    const wx = windX.get(i) / 1000,
-      wy = windY.get(i) / 1000,
+    const wx = MapScale.metres(windX.get(i), "mm"),
+      wy = MapScale.metres(windY.get(i), "mm"),
       angle = Math.atan2(wy, wx),
       rays = [angle, angle + flankTurn, angle - flankTurn].map((a) =>
         fetchAlong(mesh, water, i, -Math.cos(a) * span, -Math.sin(a) * span)
@@ -156,7 +158,8 @@ function fetchAlong(
 
 /** Deltas and estuaries at the shore roots that carry a mouth load; returns the load left for the lee. */
 function formMouths(state: RegionalState, h: Float64Array, exposure: Float64Array) {
-  const mesh = state.physical.map.mesh,
+  const scale = state.physical.map.scale,
+    mesh = state.physical.map.mesh,
     network = state.regional.network!,
     mouthLoad = state.regional.sediment?.mouthLoad,
     around = new Int32Array(mesh.stride);
@@ -166,13 +169,14 @@ function formMouths(state: RegionalState, h: Float64Array, exposure: Float64Arra
     if (!isContent(mesh, i) || !isMouth(network, i)) continue;
     const shallows = shallowSea(state, h, i, around);
     if (
-      mouthLoad[i] > deltaLoad * shallows.length &&
+      mouthLoad[i] > state.physical.map.scale.volume(deltaLoad) * shallows.length &&
       exposure[i] < deltaExposure &&
       shallows.length
     ) {
-      spare += buildDelta(mesh, h, shallows, mouthLoad[i]);
+      spare += buildDelta(mesh, h, shallows, mouthLoad[i], state.physical.map.scale);
     } else {
-      h[i] -= Math.min(estuaryLimit, estuaryDeepening * Math.sqrt(network.flow[i]));
+      const flow = network.flow[i] / scale.volume(1.5625e-20);
+      h[i] -= scale.length(estuaryDeepening * Math.sqrt(flow));
       spare += mouthLoad[i];
     }
   }
@@ -186,19 +190,19 @@ const isMouth = (network: NetworkWork, i: number) =>
   network.lake[i] < 0 &&
   !network.sink[i] &&
   network.flow[i] > 0;
-/** Shallow sea cells beside a mouth, out to two cells. */
+/** Connected shallow sea beside a mouth can receive the river's supplied sediment. */
 function shallowSea(state: RegionalState, h: Float64Array, mouth: number, around: Int32Array) {
   const mesh = state.physical.map.mesh,
     found: number[] = [],
-    seen = new Set<number>([mouth]), // hpc-exempt: a few cells around one river mouth
+    seen = new Set<number>([mouth]), // hpc-exempt: connected shallow cells around one river mouth
     queue = [mouth];
-  for (let head = 0; head < queue.length && head < 32; head++) {
+  for (let head = 0; head < queue.length; head++) {
     const m = neighborsOf(mesh, queue[head], around);
     for (let k = 0; k < m; k++) {
       const j = around[k];
       if (seen.has(j) || !isContent(mesh, j)) continue;
       seen.add(j);
-      if (state.regional.network!.sea[j] && h[j] > -fillDepth) {
+      if (state.regional.network!.sea[j] && h[j] > -state.physical.map.scale.length(fillDepth)) {
         found.push(j);
         queue.push(j);
       }
@@ -211,11 +215,12 @@ function buildDelta(
   mesh: RegionalState["physical"]["map"]["mesh"],
   h: Float64Array,
   shallows: number[],
-  load: number
+  load: number,
+  scale: MapScale
 ) {
   let left = load;
   for (const j of shallows) {
-    const rise = Math.min(emergence - h[j], left / mesh.contentArea(j));
+    const rise = Math.min(scale.length(emergence) - h[j], left / mesh.contentArea(j));
     if (rise <= 0) continue;
     h[j] += rise;
     left -= rise * mesh.contentArea(j);
@@ -235,13 +240,21 @@ function fillShelter(
     sheltered: number[] = [];
   // Only the sea's own shallows fill: never a lake floor or ground the cut has just taken.
   for (let i = 0; i < mesh.count; i++)
-    if (exposure[i] >= 0 && exposure[i] < shelterExposure && sea[i] && h[i] > -fillDepth)
+    if (
+      exposure[i] >= 0 &&
+      exposure[i] < shelterExposure &&
+      sea[i] &&
+      h[i] > -state.physical.map.scale.length(fillDepth)
+    )
       sheltered.push(i);
   sheltered.sort((a, b) => exposure[a] - exposure[b] || a - b);
   let left = volume;
   for (const j of sheltered) {
     if (left <= 0) break;
-    const rise = Math.min(emergence - h[j], left / mesh.contentArea(j));
+    const rise = Math.min(
+      state.physical.map.scale.length(emergence) - h[j],
+      left / mesh.contentArea(j)
+    );
     if (rise <= 0) continue;
     h[j] += rise;
     left -= rise * mesh.contentArea(j);

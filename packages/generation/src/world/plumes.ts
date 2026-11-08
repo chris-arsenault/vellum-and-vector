@@ -30,7 +30,7 @@ function oceanPlatePlumes(
       ranked.filter(
         (source) => oceanPlateAt(map, nearestTriangle(map.mesh, source.x, source.y)) === plate
       ),
-      areaBudget(profile.MantlePlumeCount, area),
+      areaBudget(profile.MantlePlumeCount, area, map.scale.area(0.75)),
       profile.MantlePlumeMinimumSpacing,
       map.mesh
     )
@@ -39,7 +39,7 @@ function oceanPlatePlumes(
 export function mantlePlumeRoots(map: PhysicalField, context: PhysicalContext) {
   map.MantlePlumeRootStrength.fill(0);
   const p = context.Profile;
-  const worldCount = areaBudget(p.MantlePlumeCount, mediumArea(map));
+  const worldCount = areaBudget(p.MantlePlumeCount, mediumArea(map), map.scale.area(0.75));
   const candidates = worldCandidates(map.mesh, context.Seed, Math.max(256, worldCount * 256));
   const ranked = candidates
     .map((source) => {

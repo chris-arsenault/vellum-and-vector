@@ -1,4 +1,5 @@
-/** What slopes can do. Imports nothing, so the profile can read it at load. */
+import { MapScale } from "@atlas/domain";
+/** What slopes can do. */
 export const slopeSettings = {
   // Numerical: the most rounds of failure a pass resolves, and the share of the first round's movement
   // below which the ground counts as standing.
@@ -8,5 +9,5 @@ export const slopeSettings = {
   MassWastingStableGradient: 0.7,
   // Reference metres for unresolved hillslope profiles and moraine accommodation. This is not
   // the distance between resolved terrain samples used by mass failure.
-  HillslopeLength: 1000,
+  HillslopeLength: MapScale.length(0.00025),
 };

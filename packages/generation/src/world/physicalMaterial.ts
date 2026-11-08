@@ -1,4 +1,4 @@
-import { putChannel } from "@atlas/domain";
+import { putChannel, MapScale } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { Landform } from "./codes";
@@ -8,7 +8,7 @@ function landMaterial(map: PhysicalField, i: number): number {
   if (map.DeltaIntensity.get(i) > 0 || map.FloodplainIntensity.get(i) > 0) return 3;
   if (map.LandformCodes.get(i) === Landform.Moraine) return 10;
   if (map.Geothermal.get(i) >= 760) return 9;
-  if (map.IceThickness.get(i) >= 300) return 5;
+  if (map.IceThickness.get(i) >= map.scale.length(0.000075)) return 5;
   return exposedMaterial(map, i);
 }
 function exposedMaterial(map: PhysicalField, i: number): number {
@@ -22,7 +22,7 @@ function exposedMaterial(map: PhysicalField, i: number): number {
 function oceanMaterial(map: PhysicalField, i: number): number {
   if (map.BathymetricZoneCodes.get(i) === 4) return 7;
   if (
-    map.WaterDepths.get(i) <= 125 * 1024 &&
+    map.WaterDepths.get(i) <= MapScale.native(map.scale.length(0.00003125)) &&
     map.Temperature.get(i) >= 300 &&
     map.Geothermal.get(i) >= 150
   )

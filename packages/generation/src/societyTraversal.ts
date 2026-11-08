@@ -2,6 +2,7 @@ import { gridDistance, gridPosition, neighbors, spatial, type Band } from "@atla
 import type { GenerationState } from "./process";
 import { RouteHeap } from "./mapRouting";
 import { dryLand } from "./societySupport";
+import { mapScale } from "./worldSignificance";
 
 export interface SocietyEdge {
   a: number;
@@ -10,13 +11,15 @@ export interface SocietyEdge {
   distance: number;
   kind?: "river" | "sea" | "door";
 }
+// length-unit: ratio
 const riverTravel = 0.5;
+// length-unit: ratio
 const seaTravel = 0.5;
-const seaLaunch = 10000;
 
 /** The numerical topology already owns adjacency; travel reads its local edges on demand. */
 function localEdges(state: GenerationState, marine: boolean) {
   const grid = state.surface,
+    seaLaunch = mapScale(state).length(0.0025),
     covers = spatial.geometryCoverage(grid.scope.footprint);
   const sea = (i: number) => Boolean(grid.active.get(i)) && grid.channels.water?.get(i) === 1;
   return function* (i: number): Iterable<SocietyEdge> {
@@ -47,7 +50,7 @@ function landEdge(
     riverOrder = grid.channels.riverOrder,
     river = riverOrder !== undefined && riverOrder.get(a) >= 1 && riverOrder.get(b) >= 1,
     rise = Math.abs(grid.channels.elevation.get(b) - grid.channels.elevation.get(a));
-  if (!river && rise / Math.max(1, distance) > 0.6) return null;
+  if (!river && rise / Math.max(mapScale(state).length(0.00000025), distance) > 0.6) return null;
   return {
     a,
     b,

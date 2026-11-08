@@ -1,13 +1,15 @@
-import { distance, isContent, neighborsOf, regionalSpan } from "./lattice";
+import { distance, isContent, neighborsOf } from "./lattice";
 import { clamp, type RegionalState } from "./state";
 
-/** Floodplain half-width per square root of mean discharge, in metres. */
-const floodWidth = 80;
+/** Floodplain half-width as a span share per square root of relative discharge. */
+// length-unit: fraction
+const floodWidth = 0.00002;
+const dischargeUnit = 1.5625e-20;
 /** Only low-gradient ground retains floodwater. */
 const floodplainGradient = 0.012;
 /** Height above the channel a floor reaches (m): a base, more for larger rivers and over sediment. */
-const floorRelief = 2,
-  floorReliefPerLog = 3;
+const floorRelief = 0.0000005,
+  floorReliefPerLog = 0.00000075;
 
 /**
  * The valley floor (plan: river floodplains as a breadth-first floor, not a one-ring stamp):
@@ -41,12 +43,12 @@ function floorFrom(
 ) {
   const map = state.physical.map,
     mesh = map.mesh,
-    flow = map.FlowAccumulation.get(source),
+    flow = map.FlowAccumulation.get(source) / map.scale.volume(dischargeUnit),
     // At least the channel's own ring: a small river's floor is its banks, where the ground is flat.
-    width = Math.max(1.5 * regionalSpan(state), floodWidth * Math.sqrt(flow)),
-    reach = Math.max(0, floorRelief + floorReliefPerLog * Math.log10(1 + flow)),
+    width = map.scale.supported(map.scale.length(floodWidth) * Math.sqrt(flow), 1.5),
+    reach = map.scale.length(Math.max(0, floorRelief + floorReliefPerLog * Math.log10(1 + flow))),
     // The channel's surface already carries its deposits; the floor is read from it.
-    channel = map.Elevation.get(source) / 1024,
+    channel = MapScale.metres(map.Elevation.get(source), "native"),
     basin = map.DrainageBasinIds.get(source),
     around = new Int32Array(mesh.stride),
     queue = [source],
@@ -55,8 +57,7 @@ function floorFrom(
   for (let head = 0; head < queue.length; head++) {
     const i = queue[head],
       d = distance(mesh, source, i),
-      covered =
-        clamp(1 - d / Math.max(width, 1)) * clamp(1 - map.Slope.get(i) / floodplainGradient);
+      covered = clamp(1 - d / width) * clamp(1 - map.Slope.get(i) / floodplainGradient);
     if (i !== source) {
       floodplain[i] = Math.max(floodplain[i], covered);
       if (coast) delta[i] = Math.max(delta[i], covered);
@@ -66,7 +67,7 @@ function floorFrom(
     for (let k = 0; k < m; k++) {
       const j = around[k];
       if (seen.has(j) || !land(state, j) || map.DrainageBasinIds.get(j) !== basin) continue;
-      if (map.Elevation.get(j) / 1024 - channel > reach) continue;
+      if (MapScale.metres(map.Elevation.get(j), "native") - channel > reach) continue;
       seen.add(j);
       queue.push(j);
     }
@@ -78,3 +79,4 @@ function touchesSea(state: RegionalState, i: number, around: Int32Array) {
   for (let k = 0; k < m; k++) if (map.WaterKindCodes.get(around[k]) === 1) return true;
   return false;
 }
+import { MapScale } from "@atlas/domain";

@@ -4,6 +4,7 @@ import type { World } from "./model";
 import { geometrySchema } from "./schemas";
 import { requireThat } from "./errors";
 import { spatial } from "./spatial";
+import { MapScale } from "./mapScale";
 
 export const regionViewSchema = z.object({
   parentId: z.uuid().nullable(),
@@ -14,9 +15,12 @@ export type RegionView = World["views"][number] & {
 };
 
 /** A geographic map needs room for an area, rather than a narrow line or sliver. */
-export const minimumRegionWidthMetres = 100;
-export function usefulRegionSize(geometry: Geometry): boolean {
-  return (2 * spatial.area(geometry)) / spatial.length(geometry) >= minimumRegionWidthMetres;
+export const minimumRegionWidthMetres = (source: Geometry) =>
+  MapScale.fromCells(spatial.bounds(source), 1).length(0.000025);
+export function usefulRegionSize(geometry: Geometry, source: Geometry): boolean {
+  return (
+    (2 * spatial.area(geometry)) / spatial.length(geometry) >= minimumRegionWidthMetres(source)
+  );
 }
 export function regionViews(world: World, areaId: string): RegionView[] {
   return world.views.filter((v): v is RegionView => v.areaId === areaId && !!v.region);
@@ -120,9 +124,9 @@ export function validateRegionView(world: World, view: World["views"][number]) {
     "A region needs a closed polygonal outline."
   );
   requireThat(
-    usefulRegionSize(footprint),
+    usefulRegionSize(footprint, area.footprint),
     "region_size",
-    `Choose an area with a useful width of at least ${minimumRegionWidthMetres} metres.`
+    `Choose an area with a useful width of at least ${minimumRegionWidthMetres(area.footprint)} metres.`
   );
   const candidate = { ...world, views: [...world.views.filter((v) => v.id !== view.id), view] };
   regionLineage(candidate, view.id);

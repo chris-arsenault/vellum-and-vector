@@ -1,5 +1,7 @@
 import {
   canonryConfluencePresets,
+  MapScale,
+  resolveConfluences,
   canonryMagicPresets,
   confluenceEffective,
   mergePopulation,
@@ -14,6 +16,7 @@ import { nearestSample } from "./societySpatial";
 import { societyValue } from "./societySupport";
 import { isWorldSociety } from "./societyMapScope";
 import { fieldInterpolator } from "@atlas/domain";
+import { mapScale } from "./worldSignificance";
 
 interface Exposure {
   kind: string;
@@ -25,42 +28,47 @@ interface Exposure {
 function exposures(state: GenerationState, c: SocietyCommunity): Exposure[] {
   const i = nearestSample(state, c.position),
     v = (name: string) => societyValue(state, name, i);
-  return [...physicalExposures(v), ...magicalExposures(state, i)];
+  return [...physicalExposures(v, mapScale(state)), ...magicalExposures(state, i)];
 }
 /** Steep iced ground sheds an avalanche, at this yearly chance. */
 export const avalancheSlope = 0.15,
-  avalancheIce = 1,
+  avalancheIce = MapScale.length(0.00000025, 0.5),
   avalancheRate = 0.002;
 /** A flood's yearly chance at full flood frequency. */
 export const floodRate = 0.02;
 /** A coast low and near the sea takes a tsunami, at this yearly chance at full strain. */
-export const waveHeight = 20,
-  waveShore = 10_000,
+export const waveHeight = MapScale.length(0.000005, 0.5),
+  waveShore = MapScale.length(0.0025),
   tsunamiRate = 0.00001;
-export const tsunamiHazard = { severity: 0.4, radius: 10_000 };
-function physicalExposures(v: (name: string) => number): Exposure[] {
+export const tsunamiHazard = { severity: 0.4, radius: MapScale.length(0.0025) };
+function physicalExposures(v: (name: string) => number, scale: MapScale): Exposure[] {
   return [
     {
       kind: "avalanche",
-      rate: v("slope") > avalancheSlope && v("iceThickness") > avalancheIce ? avalancheRate : 0,
+      rate:
+        v("slope") > avalancheSlope && v("iceThickness") > scale.resolveMeasure(avalancheIce)
+          ? avalancheRate
+          : 0,
       severity: 0.5,
-      radius: 1500,
+      radius: scale.length(0.000375),
       cause: "Snow-bearing steep terrain released downslope.",
     },
     {
       kind: "flood",
       rate: v("floodFrequency") * floodRate,
       severity: 0.12,
-      radius: 5000,
+      radius: scale.length(0.00125),
       cause: "River flood frequency and exposed settlement terrain.",
     },
     {
       kind: "tsunami",
       rate:
-        v("elevation") < waveHeight && v("oceanDistance") < waveShore
+        v("elevation") < scale.resolveMeasure(waveHeight) &&
+        v("oceanDistance") < scale.resolveMeasure(waveShore)
           ? v("tectonicStrain") * tsunamiRate
           : 0,
       ...tsunamiHazard,
+      radius: scale.resolveMeasure(tsunamiHazard.radius),
       cause: "An active coastal strain zone triggered marine inundation.",
     },
   ];
@@ -71,7 +79,10 @@ function physicalExposures(v: (name: string) => number): Exposure[] {
  */
 function magicalExposures(state: GenerationState, i: number): Exposure[] {
   const systems = state.domain.world.magicSystems ?? canonryMagicPresets();
-  return (state.domain.world.confluences ?? canonryConfluencePresets()).flatMap((confluence) => {
+  return resolveConfluences(
+    state.domain.world.confluences ?? canonryConfluencePresets(),
+    mapScale(state)
+  ).flatMap((confluence) => {
     if (!confluence.hazard || !confluenceEffective(confluence, systems)) return [];
     const coverage = societyValue(state, `magic:confluence:${confluence.id}:coverage`, i);
     if (coverage <= 0) return [];
@@ -112,7 +123,11 @@ export function applySocietyEvent(state: GenerationState, event: SocietyEvent) {
     if (distance > event.radius || c.protected || !terrainExposure(state, event, c)) continue;
     const severity = Math.min(
       1,
-      Math.max(0, event.magnitude * (1 - distance / Math.max(1, event.radius)))
+      Math.max(
+        0,
+        event.magnitude *
+          (1 - distance / Math.max(mapScale(state).length(0.00000025), event.radius))
+      )
     );
     const casualties = population(c) * severity * 0.2;
     for (const g of c.groups) g.count *= 1 - severity * 0.2;
@@ -177,7 +192,7 @@ export function resolveSocietyHazards(
 }
 /** The radius of a circle with the unit's country, in metres. */
 export function unitRadius(c: Pick<SocietyCommunity, "areaKm2">) {
-  return Math.sqrt((c.areaKm2 * 1e6) / Math.PI);
+  return Math.sqrt(MapScale.areaUnits(c.areaKm2, "km2", "m2") / Math.PI);
 }
 function applyAuthoredHazards(state: GenerationState, era: string) {
   for (const f of generationFeatures(state, { kind: "societyEvent" })) {
@@ -190,7 +205,7 @@ function applyAuthoredHazards(state: GenerationState, era: string) {
       continue;
     if (f.attributes.eventKind === "collapse") continue;
     const magnitude = Number(f.attributes.magnitude ?? 0.5),
-      radius = Number(f.attributes.radius ?? 1000);
+      radius = Number(f.attributes.radius ?? mapScale(state).length(0.00025));
     if (!validHazard(magnitude, radius)) continue;
     applySocietyEvent(state, {
       id: f.id,
@@ -214,12 +229,13 @@ function terrainExposure(state: GenerationState, event: SocietyEvent, c: Society
   if (!["avalanche", "tsunami", "flood"].includes(event.kind)) return true;
   const height = fieldInterpolator(state.surface, "elevation");
   const start = height(event.position);
-  const ceiling = event.kind === "tsunami" ? 20 : start + (event.kind === "flood" ? 5 : 0);
+  const scale = mapScale(state);
+  const ceiling =
+    event.kind === "tsunami"
+      ? scale.resolveMeasure(waveHeight)
+      : start + (event.kind === "flood" ? scale.length(0.00000125, 0.5) : 0);
   const distance = Math.hypot(c.position.x - event.position.x, c.position.y - event.position.y);
-  const steps = Math.max(
-    1,
-    Math.ceil(distance / Math.max(1, state.surface.scope.resolution ?? 1000))
-  );
+  const steps = Math.max(1, Math.ceil(scale.cellCount(distance)));
   for (let n = 0; n <= steps; n++) {
     const t = n / steps;
     if (

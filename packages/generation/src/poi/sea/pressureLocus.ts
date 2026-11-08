@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import { deepOceanZone } from "../../world/geography";
 import { deepSiteScore } from "../../world/magicSources";
 import type { GenerationState } from "../../process";
@@ -11,11 +13,11 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { depthAt, namedFromShore, near, pressureAt, pressureLength } from "./seaShared";
 
 /** Depth at which a locus is half as great as they get, and the depth that half-suits a site. */
-const typicalDepth = 4000;
+const typicalDepth = MapScale.length(0.001, 0.5);
 /** A preset ray's reach, where the system's parameters are absent. */
-const presetRays = 2_000_000;
+const presetRays = MapScale.length(0.5);
 /** The surface water around a locus that is broken, 30 km, and the extra cost of crossing it. */
-const brokenReach = near(30_000),
+const brokenReach = near(0.0075),
   brokenWater = 3;
 
 const isA = magicRule("pressure", "locus");
@@ -36,7 +38,7 @@ const factors = {
 /** The site's worth, through the score the system itself ranks its picks by. */
 function deepAndSteep(state: GenerationState, cell: number) {
   const score = metres(deepSiteScore(fieldOf(state), cell));
-  return score / (score + typicalDepth);
+  return score / (score + mapScale(state).resolveMeasure(typicalDepth));
 }
 
 export const pressureLocus: PoiEntry = {

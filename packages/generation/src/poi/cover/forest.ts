@@ -26,7 +26,8 @@ import {
 } from "./coverShared";
 
 /** Area at which a forest is half as great as forests get: 50,000 square kilometres. */
-const typicalArea = 5e10;
+// length-unit: fraction
+const typicalArea = 0.003125;
 /** The mean ecological damage past which a canopy does not come back within the epoch. */
 const lostCanopy = 0.5;
 const isA = isFamily("forest");

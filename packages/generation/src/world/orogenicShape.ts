@@ -156,7 +156,7 @@ function alongNoise(
   const x = map.mesh.x(i),
     y = map.mesh.y(i),
     width = map.mesh.periodic?.width;
-  const offset = pair * (summit ? 310_000 : 190_000);
+  const offset = pair * map.scale.length(summit ? 0.0775 : 0.0475);
   if (!width) return unitNoise(x * tx + y * ty, offset, seed, scale, 3);
   const phase = ((x % width) + width) % width,
     t = phase / width;

@@ -1,4 +1,9 @@
-import type { SocietyCommunity, SocietyMagicPractice, SocietyRegion } from "@atlas/domain";
+import {
+  MapScale,
+  type SocietyCommunity,
+  type SocietyMagicPractice,
+  type SocietyRegion,
+} from "@atlas/domain";
 import { Badge, LinkList, Meter, Section, ShareBar, Stat, StatGrid } from "./InspectionSurface";
 import { compact, percent } from "./surfaceData";
 import {
@@ -151,7 +156,7 @@ function ReachSection({ region, community, select }: TieProps) {
           id: neighbour.id,
           label: neighbour.name,
           channel: link.kind,
-          meta: `${compact(link.distance / 1000)} km · ${link.kind}`,
+          meta: `${compact(MapScale.inUnits(link.distance, "km"))} km · ${link.kind}`,
           select: select(
             (f) => f.kind === "settlement" && f.attributes.communityId === neighbour.id
           ),

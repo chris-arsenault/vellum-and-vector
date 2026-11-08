@@ -5,7 +5,9 @@ import { rectangle } from "./presentation";
 
 it("validates physical history and preserves it once a child has inherited its boundaries", async () => {
   const initial = fixtureWorld({ name: "History", seed: 9, width: 1000, height: 1000 }),
-    epochs = initial.epochs.slice(0, 1);
+    epochs = initial.epochs
+      .slice(0, 1)
+      .map((epoch) => ({ ...epoch, lengthUnits: "relative" as const }));
   const history = (
     await commitCommand(initial.id, makeCommand(initial, "setPhysicalEpochs", { epochs }))
   ).candidate;

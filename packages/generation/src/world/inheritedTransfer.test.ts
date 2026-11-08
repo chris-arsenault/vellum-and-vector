@@ -10,6 +10,7 @@ import {
 } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { createAtlasWorkspace, nativePosition } from "./atlasWorkspace";
+import { groundResourceBindings } from "../rock/groundResources";
 
 it("imports bounded ecological fractions and nonnegative ice history without restricting elevation", () => {
   const state = landscape(),
@@ -26,6 +27,15 @@ it("imports bounded ecological fractions and nonnegative ice history without res
       refine: () => false,
     })
   );
+  for (const { name, unit } of groundResourceBindings)
+    putChannel(
+      state.surface,
+      name,
+      unit,
+      generateChannel(state.surface, name, (i) =>
+        name === "bedrock" || name === "crustSupport" ? gridPosition(state.surface, i).x - 125 : 0
+      )
+    );
   for (const [name, unit, scale] of [
     ["elevation", "metre", 1],
     ["grassCover", "ratio", 1 / 750],

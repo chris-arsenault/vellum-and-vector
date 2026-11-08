@@ -1,12 +1,6 @@
 import type { PhysicalField } from "../world/field";
 import { adjustCrustColumn } from "./crustTransport";
-import {
-  clamp,
-  crustPerRock,
-  elevationLimit,
-  rockLoadResponsePerMille,
-  units,
-} from "../world/math";
+import { clamp, crustPerRock, rockLoadResponsePerMille, units } from "../world/math";
 import { recordFlow, type FlowCause, type Pool } from "../coupling/flows";
 import { layDownPackage, materialLayer, type MaterialLayer } from "./rockColumn";
 import { rockCatalogue, type RockKind } from "./rockCatalogue";
@@ -34,7 +28,7 @@ export { constructMaterial } from "./groundConstruction";
  */
 
 const volumeOf = (map: PhysicalField, i: number, height: number) =>
-  (height / 1024) * map.mesh.area(i);
+  MapScale.metres(height, "native") * map.mesh.area(i);
 /**
  * Takes material off a cell, as a lowering of its mean height: the soil first, which is the top of
  * whatever lies there, then the rest of the loose cover, then rock.
@@ -130,7 +124,10 @@ function removeFacet(
   }
   map.SoilDepth.set(
     i,
-    Math.max(0, map.SoilDepth.get(i) - (Math.min(loose + rock, exposedSoil) * share) / 1024)
+    Math.max(
+      0,
+      map.SoilDepth.get(i) - MapScale.metres(Math.min(loose + rock, exposedSoil) * share, "native")
+    )
   );
   recordFlow(map, cause, "loose", to, volumeOf(map, i, loose * share));
   recordFlow(map, cause, "rock", to, volumeOf(map, i, rock * share));
@@ -162,22 +159,21 @@ export function excavateRock(
   projectGround(map, i);
   return removed;
 }
-/** Crust a cell holds above what its kind of crust stands on: what shortening has piled up. */
-export function spareCrust(map: PhysicalField, i: number) {
-  const fraction = map.CrustContinentalFraction.get(i) / 1000;
-  return Math.max(0, map.CrustThickness.get(i) - units(1000 + 3000 * fraction));
+/** The finite crust column available beneath the ground. */
+export function availableCrust(map: PhysicalField, i: number) {
+  return Math.max(0, map.CrustThickness.get(i));
 }
 /**
  * Rock comes off the top of a cell: first what was piled on the crust, then the crust's own column,
  * so an old belt's root goes with it. Either way the ground rises back by the same share, since a metre
  * of crust's rock weighs what a metre of piled rock does: the crust's buoyancy gives up part of that,
- * and the load gives the rest. Below the crust's spare column nothing rises back: the cut stays a hole.
+ * and the load gives the rest. Once the crust is exhausted nothing rises back: the cut stays a hole.
  */
 function lowerRock(map: PhysicalField, i: number, amount: number) {
   const pile = Math.max(0, map.SurfaceRockLoad.get(i)),
     below = Math.max(0, amount - pile),
     perRock = crustPerRock(map.CrustContinentalFraction.get(i) / 1000),
-    crust = Math.min(spareCrust(map, i), below * perRock),
+    crust = Math.min(availableCrust(map, i), below * perRock),
     rootRock = crust / perRock;
   groundStorage(map).BedrockElevation.add(i, -amount);
   groundStorage(map).SurfaceRockLoad.add(
@@ -186,17 +182,8 @@ function lowerRock(map: PhysicalField, i: number, amount: number) {
   );
   if (crust > 0) adjustCrustColumn(map, i, map.CrustThickness.get(i) - crust);
 }
-/** The most this cell's surface can still rise before it reaches the height limit. */
-export const headroom = (map: PhysicalField, i: number) =>
-  Math.max(0, units(elevationLimit) - map.Elevation.get(i));
-function depositionRoom(map: PhysicalField, i: number, facet?: GroundFacet) {
-  return facet
-    ? Math.max(0, units(elevationLimit) - facetSurface(map, i, facet)) * facetShare(map, i, facet)
-    : headroom(map, i);
-}
 /**
- * Lays loose material on a cell, as far as the height limit lets it, and says how much it laid: what
- * does not fit stays with whoever was carrying it.
+ * Lays the supplied loose material on the receiving cell or occupied facet.
  */
 export function deposit(
   map: PhysicalField,
@@ -209,7 +196,7 @@ export function deposit(
 ): number {
   return depositPackage(map, i, [{ ...material, depth: requested }], cause, from, facet);
 }
-/** Top-first package; older beds claim height capacity first and rejected material stays with its carrier. */
+/** A top-first package keeps its bed order as it joins the receiving cover. */
 export function depositPackage(
   map: PhysicalField,
   i: number,
@@ -218,17 +205,11 @@ export function depositPackage(
   from: Pool = "load",
   facet?: GroundFacet
 ): number {
-  const admitted: MaterialLayer[] = [];
-  let room = depositionRoom(map, i, facet),
-    deposited = 0;
-  for (let at = materials.length - 1; at >= 0 && room > 0; at--) {
-    const material = materials[at],
-      depth = Math.min(Math.max(0, material.depth), room);
-    if (depth <= 0) continue;
-    admitted.unshift(depositedMaterial({ ...material, depth }, map.CompletedEpochCount));
-    room -= depth;
-    deposited += depth;
-  }
+  if (facet && facetShare(map, i, facet) <= 0) return 0;
+  const admitted = materials
+      .filter((material) => material.depth > 0)
+      .map((material) => depositedMaterial(material, map.CompletedEpochCount)),
+    deposited = admitted.reduce((total, material) => total + material.depth, 0);
   if (deposited <= 0) return 0;
   for (const part of facet ? [facet] : (["land", "cut"] as const)) {
     const share = facetShare(map, i, part);
@@ -242,14 +223,14 @@ export function depositPackage(
   }
   recordFlow(map, cause, from, "loose", volumeOf(map, i, deposited));
   map.CumulativeDeposition.add(i, deposited);
-  map.SedimentDepositedTotal += (deposited / 1024) * map.mesh.area(i);
+  map.SedimentDepositedTotal += MapScale.metres(deposited, "native") * map.mesh.area(i);
   projectGround(map, i);
   return deposited;
 }
 /** Takes a lowering off a cell and feeds what came off to the sediment on the move. */
 export function wearAway(map: PhysicalField, i: number, lowering: number, cause: FlowCause) {
   const worn = erode(map, i, lowering, cause);
-  map.SedimentProducedTotal += (worn / 1024) * map.mesh.area(i);
+  map.SedimentProducedTotal += MapScale.metres(worn, "native") * map.mesh.area(i);
   return worn;
 }
 /**
@@ -320,12 +301,12 @@ export function carryOut(
 }
 /** Failed ground leaves a cell by volume, to rest on its neighbours. */
 export function shed(map: PhysicalField, i: number, volume: number, cause: FlowCause) {
-  erode(map, i, (volume * 1024) / map.mesh.area(i), cause, "loose");
+  erode(map, i, MapScale.inUnits(volume / map.mesh.area(i), "native"), cause, "loose");
   map.SedimentProducedTotal += volume;
 }
 /** Failed ground comes to rest on a cell, by volume. */
 export function settle(map: PhysicalField, i: number, volume: number) {
-  deposit(map, i, (volume * 1024) / map.mesh.area(i), "slopes");
+  deposit(map, i, MapScale.inUnits(volume / map.mesh.area(i), "native"), "slopes");
 }
 /** Construction creates an actual bed and its placement in the same operation. */
 export function constructRock(
@@ -345,12 +326,12 @@ export function constructRock(
   );
 }
 /**
- * A cell's crust stands up as rock on it, as far as it has crust piled up to give and the height limit
- * leaves room, and says how much stood: nothing stands that was not there to move.
+ * A cell's crust stands up as rock on it, as far as it has crust piled up to give,
+ * and says how much stood: nothing stands that was not there to move.
  */
 export function raiseFromCrust(map: PhysicalField, i: number, wanted: number, cause: FlowCause) {
   const perRock = crustPerRock(map.CrustContinentalFraction.get(i) / 1000),
-    amount = Math.min(wanted, spareCrust(map, i) / perRock, headroom(map, i));
+    amount = Math.min(wanted, availableCrust(map, i) / perRock);
   if (amount <= 0) return 0;
   adjustCrustColumn(map, i, map.CrustThickness.get(i) - amount * perRock);
   groundStorage(map).SurfaceRockLoad.add(i, amount);
@@ -404,7 +385,7 @@ export function weatherRockBy(
   const ground = groundOf(map),
     depths: [number, number] = [0, 0];
   for (const [index, facet] of (["land", "cut"] as const).entries()) {
-    const mantle = ground.coverDepth(i, facet) / 1024,
+    const mantle = MapScale.metres(ground.coverDepth(i, facet), "native"),
       shield = Math.exp(-mantle / shieldDepth);
     depths[index] = ground.rockAction(i, mix, power * shield, Infinity, facet);
   }
@@ -438,3 +419,4 @@ export function weatherRockFacets(
   projectGround(map, i);
   return converted;
 }
+import { MapScale } from "@atlas/domain";

@@ -1,4 +1,5 @@
-import { spatial, type AtlasFeature } from "@atlas/domain";
+import { spatial, type AtlasFeature, type RelativeMeasure } from "@atlas/domain";
+import { mapScale } from "../worldSignificance";
 import { meshWindowCells } from "../world/meshWindow";
 import type { GenerationState } from "../process";
 import { cellAt, isContent, positionOf } from "../regional/lattice";
@@ -60,11 +61,20 @@ export const movesTo =
 
 /** A network's cost multiplied by `factor` on the cells of a place, or within `reach` metres of its anchor. */
 export const costNear =
-  (factor: number, reach: number | ((state: GenerationState, place: PoiPlace) => number) = 0) =>
+  (
+    factor: number,
+    reach: number | RelativeMeasure | ((state: GenerationState, place: PoiPlace) => number) = 0
+  ) =>
   (state: GenerationState, place: PoiPlace): readonly PoiCost[] =>
-    groundOf(state, place, typeof reach === "function" ? reach(state, place) : reach).map(
-      (cell) => ({ cell, factor })
-    );
+    groundOf(
+      state,
+      place,
+      typeof reach === "function"
+        ? reach(state, place)
+        : typeof reach === "number"
+          ? reach
+          : mapScale(state).resolveMeasure(reach)
+    ).map((cell) => ({ cell, factor }));
 /** Every cell of a place and those within `radius` metres of its anchor. */
 export const groundOf = (state: GenerationState, place: PoiPlace, radius: number) =>
   radius > 0

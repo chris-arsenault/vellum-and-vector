@@ -27,7 +27,7 @@ function around(map: PhysicalField, placed: Placed) {
   const cells = [centre];
   for (let edge = 0; edge < map.mesh.degree(centre); edge++) {
     const j = map.mesh.neighbor(centre, edge);
-    if (j >= 0 && distance(map, j, placed.center) <= map.mesh.spacing * 1.1) cells.push(j);
+    if (j >= 0 && distance(map, j, placed.center) <= map.scale.cells(1.1)) cells.push(j);
   }
   return cells;
 }
@@ -57,7 +57,7 @@ function upsertSource(
     spaceId: scope.spaceId,
     name: placed.landmark.name || (landmarkKind(placed.landmark.kind)?.label ?? system),
     source: position,
-    radius: placed.parameters.reach * 1000,
+    radius: MapScale.metres(placed.parameters.reach, "km"),
     strength,
     propagation: "radial",
     effect: effects[system] ?? "heat",
@@ -112,3 +112,4 @@ function magicKind(id: string, system: string): Kind {
 export const magicLandmarkKinds: Record<string, Kind> = Object.fromEntries(
   catalogue.filter((kind) => kind.system).map((kind) => [kind.id, magicKind(kind.id, kind.system!)])
 );
+import { MapScale } from "@atlas/domain";

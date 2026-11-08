@@ -2,10 +2,11 @@ import { population, type SocietyCommunity, type SocietyPolity } from "@atlas/do
 import type { GenerationState } from "./process";
 import { communityReach } from "./societyContact";
 import { generationFeatures } from "./generationFeatures";
-import { independenceSignificance } from "./worldSignificance";
+import { independenceSignificance, mapScale } from "./worldSignificance";
 
 /** An independent regional base must remain in practical contact with its proposed seat. */
-const independentBaseReach = 250_000;
+// length-unit: fraction
+const independentBaseReach = 0.0625;
 
 export function independentPoliticalBase(
   state: GenerationState,
@@ -26,7 +27,8 @@ export function independentPoliticalBase(
   for (const seat of candidates) {
     const distances = communityReach(region, region.communities.indexOf(seat)),
       base = candidates.filter(
-        (c) => distances[region.communities.indexOf(c)] <= independentBaseReach
+        (c) =>
+          distances[region.communities.indexOf(c)] <= mapScale(state).length(independentBaseReach)
       ),
       judgment = independenceSignificance({
         residents: population(seat),

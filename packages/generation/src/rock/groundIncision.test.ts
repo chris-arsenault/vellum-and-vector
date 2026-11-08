@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { Stage } from "../coupling/stage";
 import { createTestField } from "./groundTestFixture";
 import { createWorldMesh } from "../world/worldMesh";
-import { elevationLimit, units } from "../world/math";
+import { units } from "../world/math";
 import { groundOf } from "./ground";
 import { cutGround, deposit, erode, lithifyBuried, removeRock } from "./groundLedger";
 import { loadOf } from "./groundLoad";
@@ -151,17 +151,16 @@ it("removes the requested surface depth from both bare and covered shares", () =
   expect(map.SedimentThickness.get(0) / 1024).toBeCloseTo(1.8);
 });
 
-it("retains rejected routed material and records only the deposit that fits", () => {
+it("lands routed material above former height ceilings and rejects an absent facet", () => {
   const map = field();
-  map.BedrockElevation.set(1, units(elevationLimit - 0.25));
+  map.BedrockElevation.set(1, units(20_000));
   projectGround(map, 1);
   const stage = new Stage(map, { simultaneous: true });
   stage.moveSurface(0, 1, map.mesh.area(0), "test");
   stage.settle();
-  expect(map.SedimentThickness.get(1) / 1024).toBeCloseTo(0.25);
-  expect(loadOf(map).get(0)).toMatchObject({ kind: rocks.quartzite.code, formedMin: 4 });
-  expect(loadOf(map).amount(0) / map.mesh.area(0)).toBeCloseTo(0.75);
-  expect(map.CumulativeDeposition.get(1) / 1024).toBeCloseTo(0.25);
+  expect(map.SedimentThickness.get(1) / 1024).toBeCloseTo(1);
+  expect(loadOf(map).amount(0)).toBe(0);
+  expect(map.CumulativeDeposition.get(1) / 1024).toBeCloseTo(1);
   const before = map.CumulativeDeposition.get(2);
   expect(
     deposit(map, 2, units(1), "test", "load", materialLayer(rocks.basalt.code, 0), "cut")

@@ -13,7 +13,8 @@ import { travellersOf, weighedPlace } from "./settlementRecords";
 import { crossingPlaces, fordPlaces } from "./workRecords";
 
 /** The depth a person and a loaded beast can wade, in metres. */
-const wadeableDepth = 1;
+// length-unit: fraction
+const wadeableDepth = 0.00000025;
 /** What the shallows cost a laden boat, which must be lightened or dragged. */
 const shallowsCost = 2;
 
@@ -25,7 +26,7 @@ const crossable = (state: GenerationState, cell: number) =>
 /** How much of the river there is to wade through: nothing on a brook, half at bridge flow. */
 const fullness = (state: GenerationState, cell: number) => {
   const flow = dischargeAt(state, cell);
-  return flow / (flow + bridgeFlow);
+  return flow / (flow + fieldOf(state).scale.resolveMeasure(bridgeFlow));
 };
 /**
  * The crossing tax the road search applies to a channel, as a known ford lowers it: the worn
@@ -38,8 +39,13 @@ const taxAt = (state: GenerationState, place: PoiPlace) => [
   },
 ];
 /** The bed held shallow enough to wade. */
-const wadeable = (cell: number): readonly PoiFieldChange[] => [
-  { change: "atMost", band: "RiverDepth", cell, value: wadeableDepth },
+const wadeable = (state: GenerationState, cell: number): readonly PoiFieldChange[] => [
+  {
+    change: "atMost",
+    band: "RiverDepth",
+    cell,
+    value: fieldOf(state).scale.length(wadeableDepth, 0.5),
+  },
 ];
 const factors = {
   /** Read when called: the ways' module may still be loading as this one does. */
@@ -86,7 +92,7 @@ export const ford: PoiEntry = {
     terrain: notApplicable(
       "Its cut banks are narrower than a cell; what matters of the bed is its depth, under water."
     ),
-    water: (_state, place) => wadeable(place.anchor),
+    water: (state, place) => wadeable(state, place.anchor),
     climate: notApplicable("A shallow exchanges nothing with the air that its river does not."),
     cover(state, place) {
       const traffic = Math.log2(1 + travellersOf(state, place) / trackTravellers);
@@ -103,7 +109,7 @@ export const ford: PoiEntry = {
     carry: carryWhereItLands,
     realize(state, carried) {
       const cell = counterpart(state, carried);
-      return cell < 0 ? [] : wadeable(cell);
+      return cell < 0 ? [] : wadeable(state, cell);
     },
     counterpart,
     unrealized: (state, carried) =>
@@ -162,7 +168,8 @@ export const ford: PoiEntry = {
       if (!settlementWithin(state, place.anchor, 4 * around(state))) return { fate: "ends" };
       const earned =
         travellersOf(state, place) >= roadTravellers &&
-        fieldOf(state).FlowAccumulation.get(place.anchor) >= bridgeFlow;
+        fieldOf(state).FlowAccumulation.get(place.anchor) >=
+          fieldOf(state).scale.resolveMeasure(bridgeFlow);
       return earned ? { fate: "becomes", kind: "bridge" } : { fate: "persists" };
     },
   },

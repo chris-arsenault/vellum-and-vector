@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import { environment } from "../../world/ecologyEnvironment";
 import type { GenerationState } from "../../process";
 import { farmingValue, fieldGrass, iceOnField, steepestField } from "../../regional/society";
@@ -27,20 +29,22 @@ import { borders, coverCosts, meanOver, sharesNoGround, standsIn, withinOwn } fr
 const woodedWater = 0.4,
   woodedWarmth = 2;
 /** How far from a community people work ground, in metres. */
-const farthestWork = 5000;
+const farthestWork = 0.00125;
 /** A sited clearance's radius, and how far apart two stand, in metres. */
-const sitedRadius = 2500,
-  siteSpacing = 30_000;
+// length-unit: fraction
+const sitedRadius = 0.000625,
+  // length-unit: fraction
+  siteSpacing = 0.0075;
 /** The share of a cleared cell's ground each tree cohort keeps. */
 const standing = 0.05;
 /** A worked clearance runs lanes that cut a road's cost. */
 const fieldLanes = 0.8;
 /** Radius in metres at which a clearance is half as great as clearances get. */
-const typicalRadius = 2500;
+const typicalRadius = MapScale.length(0.000625);
 
 const clamped = (value: number) => Math.max(0, Math.min(1, value));
-const radiusIn = (feature: PoiPlace["feature"]) =>
-  Number(feature?.attributes.radius) || sitedRadius;
+const radiusIn = (state: GenerationState, feature: PoiPlace["feature"]) =>
+  Number(feature?.attributes.radius) || mapScale(state).length(sitedRadius);
 const footprint = (state: GenerationState, cell: number, radius: number) =>
   cellsWithin(state, cell, radius).filter((other) => isLand(state, other));
 
@@ -50,7 +54,9 @@ const workedGround = (state: GenerationState) =>
     const cells = new Set<number>();
     for (const town of settlementsOf(state)) {
       const at = featureCell(state, town);
-      if (at >= 0) for (const cell of cellsWithin(state, at, farthestWork)) cells.add(cell);
+      if (at >= 0)
+        for (const cell of cellsWithin(state, at, mapScale(state).length(farthestWork)))
+          cells.add(cell);
     }
     return cells;
   });
@@ -61,7 +67,7 @@ const workedGround = (state: GenerationState) =>
 const requires = (state: GenerationState, cell: number) =>
   isLand(state, cell) &&
   slopeAt(state, cell) <= steepestField &&
-  iceAt(state, cell) < iceOnField &&
+  iceAt(state, cell) < mapScale(state).resolveMeasure(iceOnField) &&
   environment(fieldOf(state), cell).moisture >= woodedWater &&
   celsiusAt(state, cell) >= woodedWarmth &&
   workedGround(state).has(cell);
@@ -71,28 +77,33 @@ const suitability = (state: GenerationState, cell: number) => {
     map.SoilDepth.get(cell),
     environment(map, cell).moisture,
     celsiusAt(state, cell),
-    map.Slope.get(cell)
+    map.Slope.get(cell),
+    map.scale
   );
 };
 const recorded = recordPlaces("clearance", (feature) => feature.kind === "clearance");
-const sited = sitedPlaces("clearance", requires, suitability, () => siteSpacing);
+const sited = sitedPlaces("clearance", requires, suitability, (state) =>
+  mapScale(state).length(siteSpacing)
+);
 /** Recorded works first, then new sites that stand clear of them, each on the ground it covers. */
 const places = (state: GenerationState): readonly PoiPlace[] =>
   heldFor(state, "footprints:clearance", () => {
     const works = recorded(state),
       fresh = sited(state).filter((site) =>
-        works.every((work) => gap(state, work.anchor, site.anchor) >= siteSpacing)
+        works.every(
+          (work) => gap(state, work.anchor, site.anchor) >= mapScale(state).length(siteSpacing)
+        )
       );
     return [...works, ...fresh].map((place) => ({
       ...place,
-      cells: footprint(state, place.anchor, radiusIn(place.feature)),
+      cells: footprint(state, place.anchor, radiusIn(state, place.feature)),
     }));
   });
 const clearedCells = (state: GenerationState) =>
   heldFor(state, "cells:clearance", () => new Set(places(state).flatMap((p) => p.cells)));
 const isA = (state: GenerationState, cell: number) => clearedCells(state).has(cell);
 
-const radiusOf = (_state: GenerationState, place: PoiPlace) => radiusIn(place.feature);
+const radiusOf = (state: GenerationState, place: PoiPlace) => radiusIn(state, place.feature);
 const around = (state: GenerationState, place: PoiPlace) =>
   Math.max(2 * cellSpan(state), 2 * radiusOf(state, place));
 const openness = (state: GenerationState, cell: number) => 1 - treeCoverAt(state, cell);
@@ -129,7 +140,7 @@ const record = siteRecord({
   kind: "clearance",
   layer: "landUse",
   name: "Clearance",
-  attributes: (_state, place) => ({ radius: radiusIn(place.feature) }),
+  attributes: (state, place) => ({ radius: radiusIn(state, place.feature) }),
 });
 
 export const clearance: PoiEntry = {
@@ -165,7 +176,7 @@ export const clearance: PoiEntry = {
       "The soil process writes infiltration and the climate process writes runoff over the whole field from its cover."
     ),
     climate: notApplicable("The soil process writes evapotranspiration over the whole field."),
-    cover: (state, place) => opened(state, place.cells, radiusIn(place.feature)),
+    cover: (state, place) => opened(state, place.cells, radiusIn(state, place.feature)),
     magic: notApplicable("Magic's feedback writes verdure over the whole field by intensity."),
   },
   acrossMaps: {
@@ -173,7 +184,7 @@ export const clearance: PoiEntry = {
       "A captured clearance keeps where it landed, and the child's cover is held open over the ground its radius reaches, each round, because refinement's own ecology would regrow it. It stays where it landed: no fine ground undoes a record.",
     carry: carryWhereItLands,
     realize: (state, carried) => {
-      const radius = radiusIn(carried.feature);
+      const radius = radiusIn(state, carried.feature);
       return opened(state, footprint(state, carried.cell, radius), radius);
     },
     counterpart: (_state, carried) => carried.cell,
@@ -192,7 +203,7 @@ export const clearance: PoiEntry = {
   others: {
     statement:
       "It needs the people who keep it and is cut out of forest, with whose edge it runs. It shares no ground with standing water. Irrigation and mills belong to the same people's land.",
-    needs: [{ kind: "settlement", holds: within(() => farthestWork) }],
+    needs: [{ kind: "settlement", holds: within((state) => mapScale(state).length(farthestWork)) }],
     excludes: sharesNoGround("wetland", "lake"),
     contains: standsIn("irrigation"),
     pairsWith: [...borders("forest"), { kind: "mill", holds: withinOwn(around) }],

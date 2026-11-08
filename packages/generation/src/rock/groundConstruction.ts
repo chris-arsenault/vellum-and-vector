@@ -1,15 +1,9 @@
 import type { PhysicalField } from "../world/field";
-import { elevationLimit, units } from "../world/math";
+import { MapScale } from "@atlas/domain";
 import { recordFlow, type FlowCause, type Pool } from "../coupling/flows";
 import { buryCover } from "./groundBurial";
 import { placeMaterial } from "./groundMaterial";
-import {
-  facetShare,
-  facetSurface,
-  moveFacet,
-  projectGround,
-  type GroundFacet,
-} from "./groundShares";
+import { facetShare, moveFacet, projectGround, type GroundFacet } from "./groundShares";
 import type { MaterialLayer } from "./rockColumn";
 import { groundStorage } from "./groundStorage";
 
@@ -25,10 +19,7 @@ export function constructMaterial(
   let built = 0;
   for (const facet of only ? [only] : (["land", "cut"] as const)) {
     const share = facetShare(map, cell, facet),
-      depth = Math.min(
-        Math.max(0, material.depth),
-        Math.max(0, units(elevationLimit) - facetSurface(map, cell, facet))
-      );
+      depth = Math.max(0, material.depth);
     if (share <= 0 || depth <= 0) continue;
     buryCover(map, cell, facet);
     placeMaterial(map, cell, facet, { ...material, depth });
@@ -37,7 +28,7 @@ export function constructMaterial(
   }
   if (built <= 0) return 0;
   groundStorage(map).SurfaceRockLoad.add(cell, built);
-  recordFlow(map, cause, from, "rock", (built / 1024) * map.mesh.area(cell));
+  recordFlow(map, cause, from, "rock", MapScale.metres(built, "native") * map.mesh.area(cell));
   projectGround(map, cell);
   return built;
 }

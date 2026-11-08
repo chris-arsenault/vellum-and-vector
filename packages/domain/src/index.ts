@@ -1,4 +1,5 @@
 export * from "./model";
+export * from "./mapScale";
 export * from "./regionalScale";
 export * from "./regionalDistricts";
 export * from "./networkWorkspace";
@@ -6,6 +7,7 @@ export * from "./featureCatalogue";
 export * from "./featureReads";
 export * from "./drainage";
 export * from "./magicSystems";
+export * from "./magicDimensions";
 export * from "./magicConfluences";
 export * from "./magicEffects";
 export * from "./magicPresets";

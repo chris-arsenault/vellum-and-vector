@@ -24,7 +24,7 @@ import { fileStoreFixture } from "../../../packages/storage-browser/src/fileStor
 import { createWorldSnapshot, worldScope, type WorldCreationInput } from "../worldCreation";
 import { executeWorkspaceCommand } from "../workspaceCommands";
 import { importState } from "../workspaceImport";
-import { LegacyFields } from "../legacyFields";
+import { SnapshotFields } from "../snapshotFields";
 import { WorkspaceFields } from "../workspaceFields";
 import { listTemplates } from "../atlasTemplates";
 import { workspaceRasters } from "../workspaceRasters";
@@ -94,10 +94,9 @@ async function ready(id: string) {
   if (signature !== entry.signature) {
     entry.saved = await importState(
       current,
-      new LegacyFields(),
+      new SnapshotFields(),
       entry.snapshot,
       entry.saved,
-      undefined,
       current.working.cache
     );
     entry.signature = signature;

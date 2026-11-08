@@ -3,9 +3,15 @@ import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { clamp, round } from "./math";
 import { worldCandidates, separatedCandidates } from "./worldSources";
-import { areaBudget, mediumArea, referenceOceanArea } from "./worldScale";
+import { areaBudget, mediumArea } from "./worldScale";
 import type { PhysicalField } from "./field";
-import { type Band, type MagicOrigin, type MagicSource, type MagicSystem } from "@atlas/domain";
+import {
+  MapScale,
+  type Band,
+  type MagicOrigin,
+  type MagicSource,
+  type MagicSystem,
+} from "@atlas/domain";
 import { originStocks, stockKey, systemSeed, withOrigin } from "./magicState";
 import { geothermalSources } from "./magicGeothermalSources";
 import { impactSources } from "./magicFallenSources";
@@ -24,7 +30,8 @@ export function deepSiteScore(map: PhysicalField, i: number) {
     const j = map.mesh.neighbor(i, edge);
     if (j >= 0)
       depth +=
-        ((Math.max(0, here - map.WaterDepths.get(j)) / map.mesh.edgeLength(i, edge)) * 10_000) /
+        ((Math.max(0, here - map.WaterDepths.get(j)) / map.mesh.edgeLength(i, edge)) *
+          map.scale.length(0.0025)) /
         degree;
   }
   return depth;
@@ -34,7 +41,7 @@ function oceanSource(state: GenerationState, field: MagicField, seed: number) {
   const budget = areaBudget(
     1,
     mediumArea(map, (i) => map.WaterKindCodes.get(i) === 1),
-    referenceOceanArea
+    map.scale.area(0.39)
   );
   const candidates = [];
   for (const source of worldCandidates(map.mesh, seed, Math.max(2048, budget * 64))) {
@@ -97,7 +104,8 @@ function coldSources(state: GenerationState, field: MagicField) {
         0,
         field.definition.parameters.baseInput -
           map.Temperature.get(i) +
-          Math.max(0, map.Elevation.get(i) / 1024) / 10
+          Math.max(0, MapScale.metres(map.Elevation.get(i), "native")) /
+            map.scale.length(0.0000025, 0.5)
       )
     );
 }

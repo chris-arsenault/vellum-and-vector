@@ -11,7 +11,7 @@ export function tectonicInterval(map: PhysicalField, remaining: number, rate: nu
     (maximum, site) => Math.max(maximum, Math.hypot(site.motionX, site.motionY)),
     0.001
   );
-  return Math.min(remaining, tectonicStepMyr, tectonicStepTravel / (speed * rate));
+  return Math.min(remaining, tectonicStepMyr, tectonicStepTravel(map.scale) / (speed * rate));
 }
 export function prepareTectonicMotion(map: PhysicalField, myr: number) {
   refreshTectonicContacts(map, map.tectonics!);

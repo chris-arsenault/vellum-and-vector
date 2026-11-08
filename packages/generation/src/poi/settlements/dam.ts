@@ -1,5 +1,7 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import { generationFeatures } from "../../generationFeatures";
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, goes, movesTo } from "../poiCarry";
@@ -36,14 +38,14 @@ import { workPlaces, workRecord } from "./workRecords";
 /** A bank gentler than this does not hold a reservoir in. */
 const gentleBank = 0.02;
 /** Discharge at which a dam's river is half as great as dammed rivers get. */
-const typicalDischarge = 250;
+const typicalDischarge = MapScale.volume(3.90625e-18);
 /** People build a dam only within this many metres of where they live. */
-const wantedReach = 30_000;
+const wantedReach = MapScale.length(0.0075);
 /** The least distance between two dams people site, and a sited dam's reach, in metres. */
-const damSpacing = 40_000,
-  damRadius = 300;
+const damSpacing = MapScale.length(0.01),
+  damRadius = MapScale.length(0.000075);
 /** Height a dam's crest adds at full strength, in metres. */
-const crestHeight = 6;
+const crestHeight = MapScale.length(0.0000015, 0.5);
 
 const requires = (state: GenerationState, cell: number) =>
   onMappedRiver(state, cell) && nearTown(state, cell, wantedReach);
@@ -51,7 +53,7 @@ const requires = (state: GenerationState, cell: number) =>
 function suitability(state: GenerationState, cell: number) {
   const banks = shareAround(state, cell, (next) => slopeAt(state, next) >= gentleBank),
     flow = dischargeAt(state, cell);
-  return (banks + flow / (flow + typicalDischarge)) / 2;
+  return (banks + flow / (flow + mapScale(state).resolveMeasure(typicalDischarge))) / 2;
 }
 const places = workPlaces("dam", "dam", {
   record: "dam",
@@ -65,7 +67,7 @@ const places = workPlaces("dam", "dam", {
 const isA = holdsRecord("dam", places);
 const dischargeOf = (state: GenerationState, place: PoiPlace) => dischargeAt(state, place.anchor);
 const around = (state: GenerationState) => 6 * cellSpan(state);
-const wantedFrom = () => wantedReach;
+const wantedFrom = (state: GenerationState) => mapScale(state).resolveMeasure(wantedReach);
 /** The cells each dam on this map holds a reservoir behind: captured records, and its own places. */
 function damCells(state: RegionalState) {
   const cells = new Set<number>();
@@ -117,7 +119,7 @@ export const dam: PoiEntry = {
         change: "add",
         band: "Elevation",
         cell,
-        amount: toNative(crestHeight * strengthOf(place) * share),
+        amount: toNative(mapScale(state).resolveMeasure(crestHeight) * strengthOf(place) * share),
       })),
     water(state, place) {
       const map = fieldOf(state),

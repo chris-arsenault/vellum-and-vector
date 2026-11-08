@@ -1,4 +1,4 @@
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 import { meshDeltaX } from "./mesh";
 import type { PhysicalField } from "./field";
 import { isOpenOutlet } from "./field";
@@ -41,7 +41,7 @@ function room(
   if (map.WaterKindCodes.get(i) !== 0)
     return Math.max(0, map.WaterDepths.get(i) + map.Elevation.get(i) - surface) * share;
   const base = target >= 0 ? riverSurface(map, target) : map.EffectiveSeaLevel,
-    catchment = map.CatchmentArea.get(i) / 100_000_000,
+    catchment = map.CatchmentArea.get(i) / map.scale.area(0.00000625),
     grade = p.FluvialEquilibriumGradient / Math.max(1, catchment) ** 0.12;
   return Math.max(0, base + units(still ? 0 : grade * distance) - surface) * share;
 }
@@ -97,9 +97,12 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
     );
     const dropped = Math.max(0, load - capacity) * capture;
     // It can only build up to the grade the water needs to keep flowing; a lake fills to its surface.
-    const fits = Math.min((dropped * 1024) / area, room(map, p, i, target, still, distance));
+    const fits = Math.min(
+      MapScale.inUnits(dropped / area, "native"),
+      room(map, p, i, target, still, distance)
+    );
     const deposited = landRiverLoad(map, i, fits, moving);
-    const volume = (deposited / 1024) * area;
+    const volume = MapScale.metres(deposited, "native") * area;
     moving.take(i, volume);
     const carried = moving.take(i, moving.amount(i));
     if (target >= 0) moving.add(target, carried);

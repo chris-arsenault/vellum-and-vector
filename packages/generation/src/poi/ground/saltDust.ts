@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -18,13 +20,14 @@ import {
 } from "./groundReads";
 
 /** An area at which a plume is half as great as plumes get, in square metres. */
-const typicalArea = 2_000_000_000;
+const typicalArea = MapScale.area(0.000125);
 /** The salt on the air slows a day's walk; it is a nuisance, not a wall. */
 const foulGoing = 1.15;
 /** Wind that lifts dust passes over bare salted ground without losing what it carries. */
 const openToWind = 0.8;
 /** How far a plume's blight falls beyond its ground, in metres. */
-const blightReach = 20_000;
+// length-unit: fraction
+const blightReach = 0.005;
 /** Dust a rule reads as a place, when Salt is absent and no definition gives it. */
 const lostFloor = 10;
 
@@ -131,7 +134,7 @@ export const saltDust: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "salt blight on fields and wells",
-        reach: blightReach,
+        reach: mapScale(state).length(blightReach),
         severity: severityAt(state, place),
       },
     ],

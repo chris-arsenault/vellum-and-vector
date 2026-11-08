@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiCarried, type PoiEntry, type PoiFieldChange } from "../poiContract";
@@ -41,16 +43,16 @@ import {
 import { workPlaces, workRecord } from "./workRecords";
 
 /** Height a built quay adds at full strength, in metres. */
-const quayHeight = 5;
+const quayHeight = MapScale.length(0.00000125, 0.5);
 /** Wave exposure behind a mole, per mille. */
 const shelteredWaves = 300;
 /** Sailing inside the mole, the road along the quay, and how far in metres the quay runs. */
 const inTheHarbour = 0.9,
   quayRoad = 0.7,
-  quayReach = 1000;
+  quayReach = MapScale.length(0.00025);
 /** The least distance between two harbours people site, and a sited harbour's reach, in metres. */
-const harbourSpacing = 30_000,
-  harbourRadius = 500;
+const harbourSpacing = MapScale.length(0.0075),
+  harbourRadius = MapScale.length(0.000125);
 /** People a harbour at half as great as harbours get serves. */
 const typicalPeople = 5000;
 /** A mole across the water is raised seabed: what it costs a current or a Pressure ray. */
@@ -63,7 +65,7 @@ const depthAt = (state: GenerationState, cell: number) =>
 /** Sea a mole can stand in: shallow, or the sea beside a shore, whatever depth a map's cell averages. */
 const shallows = (state: GenerationState, cell: number) =>
   isSea(state, cell) &&
-  (depthAt(state, cell) < harbourDepth ||
+  (depthAt(state, cell) < mapScale(state).resolveMeasure(harbourDepth) ||
     shareAround(state, cell, (next) => isLand(state, next)) > 0);
 const servedOf = (state: GenerationState, place: PoiPlace) => seatPeople(state, place);
 const around = (state: GenerationState) => 6 * cellSpan(state);
@@ -79,7 +81,11 @@ function waters(state: GenerationState, cell: number) {
   if (!sea.length) return 0;
   const hemmed = shareAround(state, cell, (next) => isLand(state, next)),
     lee = 1 - sea.reduce((sum, next) => sum + waveExposureAt(state, next), 0) / sea.length,
-    depth = Math.max(...sea.map((next) => depthAt(state, next))) >= harbourGoodDepth ? 1 : 0.4,
+    depth =
+      Math.max(...sea.map((next) => depthAt(state, next))) >=
+      mapScale(state).resolveMeasure(harbourGoodDepth)
+        ? 1
+        : 0.4,
     surged = magicValue(state, "pressure", "intensity", cell) >= harbourSurge;
   return ((hemmed + lee + depth) / 3) * (surged ? 0.3 : 1);
 }
@@ -126,7 +132,7 @@ function realizedQuay(state: RegionalState, carried: PoiCarried): readonly PoiFi
   return [
     { change: "atMost", band: "WaveExposure", cell, value: shelteredWaves },
     ...(land >= 0
-      ? ([{ change: "gradientAtMost", cell: land, gradient: quayGradient }] as const)
+      ? ([{ change: "gradeGround", cell: land, gradient: quayGradient }] as const)
       : []),
   ];
 }
@@ -162,7 +168,7 @@ export const harbour: PoiEntry = {
         change: "add",
         band: "Elevation",
         cell,
-        amount: toNative(quayHeight * strengthOf(place) * share),
+        amount: toNative(mapScale(state).resolveMeasure(quayHeight) * strengthOf(place) * share),
       })),
     water: (_state, place) => [
       { change: "atMost", band: "WaveExposure", cell: place.anchor, value: shelteredWaves },
@@ -200,7 +206,12 @@ export const harbour: PoiEntry = {
   others: {
     statement:
       "A harbour needs a settlement to serve and lies best in a bay, a fjord or a river mouth, in the lee of a headland; where Pressure crushes the water a mole does not stand.",
-    needs: [{ kind: "settlement", holds: within(() => harbourReach) }],
+    needs: [
+      {
+        kind: "settlement",
+        holds: within((state) => mapScale(state).resolveMeasure(harbourReach)),
+      },
+    ],
     excludes: [{ kind: "crushZone", holds: (_state, a, b) => b.cells.includes(a.anchor) }],
     contains: notApplicable("A harbour is one work; its mole and quay are parts of it."),
     pairsWith: [
@@ -221,12 +232,18 @@ export const harbour: PoiEntry = {
       const map = fieldOf(state),
         strained = map.TectonicStrain.get(place.anchor) > 0,
         exposed =
-          heightAt(state, place.anchor) < waveHeight &&
-          map.OceanDistance.get(place.anchor) < waveShore,
+          heightAt(state, place.anchor) < map.scale.resolveMeasure(waveHeight) &&
+          map.OceanDistance.get(place.anchor) < map.scale.resolveMeasure(waveShore),
         surged = magicValue(state, "pressure", "intensity", place.anchor) >= harbourSurge;
       return [
         ...(strained && exposed
-          ? [{ hazard: "tsunami", severity: tsunamiHazard.severity, reach: tsunamiHazard.radius }]
+          ? [
+              {
+                hazard: "tsunami",
+                severity: tsunamiHazard.severity,
+                reach: map.scale.resolveMeasure(tsunamiHazard.radius),
+              },
+            ]
           : []),
         ...(surged
           ? [
@@ -259,9 +276,17 @@ export const harbour: PoiEntry = {
       "Named by the community that built it, in its record, usually after that settlement or the bay it lies in.",
     namedBy: cultureOfWork,
     takesNameFrom: [
-      { kind: "settlement", holds: within(() => harbourReach) },
+      {
+        kind: "settlement",
+        holds: within((state) => mapScale(state).resolveMeasure(harbourReach)),
+      },
       { kind: "bay", holds: within(around) },
     ],
-    lendsNameTo: [{ kind: "settlement", holds: within(() => harbourReach) }],
+    lendsNameTo: [
+      {
+        kind: "settlement",
+        holds: within((state) => mapScale(state).resolveMeasure(harbourReach)),
+      },
+    ],
   },
 };

@@ -2,7 +2,8 @@
 // the epoch each forms in, where it belongs and how large it is, and records the result as
 // a landmark the later epochs, the next run and the creator all read.
 import {
-  defaultLandmarkParameters,
+  generatedLandmarkMeasures,
+  MapScale,
   landmarkKind,
   semanticId,
   TopK,
@@ -28,7 +29,6 @@ export interface Taken {
   reach: number;
 }
 
-const km = 1000;
 /** The spread a world's landmarks are drawn from, in rotation, so a few give a few kinds. */
 export const landscapeMix = [
   "volcanic-mountain",
@@ -92,27 +92,30 @@ export function landmarkRoster(
   });
 }
 /** Catalogue defaults varied within a quarter either way, so two mountains are not twins. */
-export function seededMeasures(kindId: string, seed: number, ordinal: number) {
+export function seededMeasures(kindId: string, seed: number, ordinal: number, scale: MapScale) {
   const kind = landmarkKind(kindId)!,
-    values = defaultLandmarkParameters(kind);
-  kind.parameters.forEach((p, n) => {
+    measures = generatedLandmarkMeasures(kind, scale),
+    values: Record<string, number> = {};
+  measures.forEach((p, n) => {
     const u = hashUnit(seed ^ 0x2e9b, ordinal, n);
     values[p.key] = p.default * (0.75 + 0.5 * u);
   });
-  return clampMeasures(kindId, values);
+  return clampMeasures(kindId, values, scale);
 }
-export function clampMeasures(kindId: string, values: Record<string, number>) {
+export function clampMeasures(kindId: string, values: Record<string, number>, scale: MapScale) {
   const kind = landmarkKind(kindId)!;
   return Object.fromEntries(
-    kind.parameters.map((p) => {
+    generatedLandmarkMeasures(kind, scale).map((p) => {
       const value = clamp(values[p.key] ?? p.default, p.min, p.max);
-      return [p.key, p.unit === "rings" ? Math.round(value) : Math.round(value * 100) / 100];
+      return [p.key, p.unit === "rings" ? Math.round(value) : value];
     })
   );
 }
 function apart(map: PhysicalField, i: number, reach: number, taken: Taken[]) {
   return taken.every(
-    (other) => distance(map, i, other.point) >= Math.max(reach + other.reach + 50 * km, 200 * km)
+    (other) =>
+      distance(map, i, other.point) >=
+      Math.max(reach + other.reach + map.scale.length(0.0125), map.scale.length(0.05))
   );
 }
 function candidates(t: Terrain, entry: RosterEntry, seed: number) {
@@ -138,7 +141,7 @@ export function siteLandmark(
   const rule = sitingRules[entry.kind],
     kind = landmarkKind(entry.kind);
   if (!rule || !kind) return null;
-  const seeded = seededMeasures(entry.kind, seed, entry.ordinal),
+  const seeded = seededMeasures(entry.kind, seed, entry.ordinal, t.map.scale),
     reach = kind.reach(seeded);
   let best = -1,
     top = -Infinity;
@@ -153,7 +156,7 @@ export function siteLandmark(
     }
   }
   if (best < 0) return null;
-  const parameters = clampMeasures(entry.kind, rule.fit?.(t, best, seeded) ?? seeded);
+  const parameters = clampMeasures(entry.kind, rule.fit?.(t, best, seeded) ?? seeded, t.map.scale);
   return { site: rule.shape(t, best, parameters), parameters };
 }
 /** The record of a sited landmark, drawn where its anchor stands at present. */

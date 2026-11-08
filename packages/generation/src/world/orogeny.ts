@@ -29,7 +29,7 @@ function recordActivity(map: PhysicalField, context: PhysicalContext, i: number,
   );
   if (value <= 0) return;
   const uplift = value / Math.max(1, map.mesh.spacing * context.Profile.ThrustRampGradient);
-  map.Uplift.set(i, Math.max(map.Uplift.get(i), clamp(uplift, 0, 1.5)));
+  map.Uplift.set(i, Math.max(map.Uplift.get(i), uplift));
   map.RidgeInfluence.set(i, Math.max(map.RidgeInfluence.get(i), clamp(uplift * 1.3, 0, 1)));
 }
 function constructSurface(

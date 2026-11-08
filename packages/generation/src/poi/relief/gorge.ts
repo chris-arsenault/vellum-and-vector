@@ -1,4 +1,5 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import { canyonCells } from "../../world/landmarkCanyon";
 import { incisedReach } from "../../world/landforms";
 import type { GenerationState } from "../../process";
@@ -24,10 +25,10 @@ import {
 } from "./reliefShape";
 
 /** Length and rim-to-floor relief at which a gorge is half as great: a world gorge's. */
-const typicalLength = 100_000,
-  typicalRelief = 300;
+const typicalLength = MapScale.length(0.025),
+  typicalRelief = MapScale.length(0.000075, 0.5);
 /** Discharge at which a gorge's river is half as great as they get. */
-const typicalDischarge = 250;
+const typicalDischarge = MapScale.volume(3.90625e-18);
 
 /** The floor cells of every canyon record, by the generator's own canyon geometry. */
 const canyonFloors = (state: GenerationState) =>

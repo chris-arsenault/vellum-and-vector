@@ -7,6 +7,7 @@ import { isGrounded } from "./glacierSurface";
 import { validateLandscape } from "../rock/groundInitialization";
 import { allowsBoundaryDrainage, isOpenOutlet } from "./field";
 import { releaseWorking } from "./physicalNumerics";
+import { MapScale } from "@atlas/domain";
 
 const range = (value: number, low: number, high: number) => value >= low && value <= high;
 function validateCodes(map: PhysicalField, unclassified = false) {
@@ -109,6 +110,9 @@ export function epochHistory(map: PhysicalField, c: PhysicalContext) {
     map.GeothermalHistory.set(i, Math.max(map.GeothermalHistory.get(i), map.Geothermal.get(i)));
   if (c.EpochIndex === 0)
     for (let i = 0; i < map.mesh.count; i++)
-      map.FirstEpochHeight.set(i, (map.Elevation.get(i) - map.EffectiveSeaLevel) / 1024);
+      map.FirstEpochHeight.set(
+        i,
+        MapScale.metres(map.Elevation.get(i) - map.EffectiveSeaLevel, "native")
+      );
   map.CompletedEpochCount++;
 }

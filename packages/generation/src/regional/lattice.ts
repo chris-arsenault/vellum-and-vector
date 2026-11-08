@@ -18,7 +18,7 @@ export function cellAt(mesh: PhysicalMesh, x: number, y: number) {
 }
 /** The sample span of this map's own cells (m). */
 export function regionalSpan(state: RegionalState) {
-  return state.domain.scope.resolution ?? state.physical.map.mesh.spacing;
+  return state.physical.map.scale.cells(1);
 }
 export const isContent = (mesh: PhysicalMesh, i: number) => mesh.membership(i) === content;
 export const isHalo = (mesh: PhysicalMesh, i: number) => mesh.membership(i) === halo;
@@ -127,7 +127,7 @@ export function smoothOverLength(
 ) {
   if (sigma <= 0) return;
   const { offsets, neighbors, weights, rate, step } = adjacency(state),
-    passes = Math.min(1000, Math.max(1, Math.ceil((4 * sigma * sigma) / (step * step)))),
+    passes = Math.max(1, Math.ceil((4 * sigma * sigma) / (step * step))),
     n = values.length,
     previous = new Float64Array(n);
   for (let pass = 0; pass < passes; pass++) {

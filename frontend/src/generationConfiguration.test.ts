@@ -78,25 +78,19 @@ it("diagnoses an invalidated fact at its actual causal invocation", async () => 
   expect(errors[0].message).toContain("invalidated by terrain");
 });
 
-it("translates legacy switches into coupled features and explains dependencies", async () => {
+it("explains omitted feature dependencies", async () => {
   const { source, input } = request();
   const climate = prepareAtlasGeneration(source, {
     ...input,
-    processes: { "atlas.temperature": false },
+    features: { "physical.climate": { enabled: false } },
   });
   expect(climate.diagnostics.some((item) => item.resource === "physical.climate")).toBe(true);
   expect(() =>
-    prepareAtlasGeneration(source, { ...input, processes: { misspelled: false } })
-  ).toThrow("has no selectable feature");
-  expect(() =>
-    prepareAtlasGeneration(source, {
-      ...input,
-      processes: { "atlas.glacial-erosion": false, "atlas.glacial-deposition": true },
-    })
-  ).toThrow("one feature");
+    prepareAtlasGeneration(source, { ...input, features: { misspelled: { enabled: false } } })
+  ).toThrow("Unknown generation feature");
   const delta = prepareAtlasGeneration(source, {
     ...input,
-    processes: { "atlas.river-floodplains": false },
+    features: { "physical.floodplains": { enabled: false } },
   });
   expect(
     delta.diagnostics.some((diagnostic) => diagnostic.resource === "physical.floodplains")

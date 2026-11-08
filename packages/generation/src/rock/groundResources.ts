@@ -1,29 +1,16 @@
 import type { ChannelBinding } from "../world/atlasChannels";
-import type { ReadBand } from "@atlas/domain";
-import { units } from "../world/math";
+import { MapScale, requireThat, type ReadBand } from "@atlas/domain";
 import type { PhysicalBufferName, PhysicalField } from "../world/field";
-import { rockCatalogue, rockKindOfCode } from "./rockCatalogue";
-import { setLayer } from "./rockColumn";
 import { projectGround } from "./groundShares";
 import { groundStorage } from "./groundStorage";
 import type { GroundOwnedName } from "./groundStorage";
-import {
-  allColumnFields,
-  allColumnIntegerFields,
-  columnFields,
-  columns,
-  materialProperties,
-  type Column,
-  type MaterialProperty,
-  type MaterialState,
-} from "./rockLayerFields";
+import { allColumnFields, allColumnIntegerFields, columnFields, columns } from "./rockLayerFields";
 import {
   loadIntegerFields,
   loadScalarFields,
   seaLoadIntegerFields,
   seaLoadScalarFields,
 } from "./groundLoad";
-import { loadFields, seaLoadFields } from "./groundLoadFields";
 
 const aliases = new Map<string, string>([
   ...columnFields.land.kind.map((name, layer) => [name, `rockLayer${layer}`] as [string, string]),
@@ -40,7 +27,7 @@ const depths = new Set<string>([
   "GroundCutCover",
 ]);
 /** Native names preserve material metadata; the existing land kind/depth channels retain their names. */
-export const groundResourceBindings: ChannelBinding[] = [
+const materialResourceBindings: ChannelBinding[] = [
   ...allColumnFields,
   "GroundCutShare",
   "GroundCutDepth",
@@ -65,13 +52,51 @@ export const groundResourceBindings: ChannelBinding[] = [
           : native.endsWith("Volume")
             ? "cubic-metre/square-metre"
             : "ratio",
-    scale: depth ? 1 / 1024 : 1,
+    scale: depth ? MapScale.metres(1, "native") : 1,
     ...resourceBounds(native),
     global: false,
     areaDensity: native.endsWith("Volume"),
     discrete: true,
   };
 });
+/** Placement and composition belong to the ground record as much as its material columns. */
+export const groundResourceBindings: ChannelBinding[] = [
+  ...materialResourceBindings,
+  {
+    name: "bedrock",
+    native: "BedrockElevation",
+    unit: "metre",
+    scale: MapScale.metres(1, "native"),
+    datum: true,
+  },
+  {
+    name: "crustSupport",
+    native: "CrustSupportElevation",
+    unit: "metre",
+    scale: MapScale.metres(1, "native"),
+    datum: true,
+  },
+  {
+    name: "crustThickness",
+    native: "CrustThickness",
+    unit: "metre",
+    scale: MapScale.metres(1, "native"),
+    minimum: 0,
+  },
+  {
+    name: "rockLoad",
+    native: "SurfaceRockLoad",
+    unit: "metre",
+    scale: MapScale.metres(1, "native"),
+  },
+  {
+    name: "continentalFraction",
+    native: "CrustContinentalFraction",
+    unit: "ratio",
+    scale: 1 / 1000,
+    minimum: 0,
+  },
+];
 function resourceBounds(native: string) {
   if (/Share\d*$/.test(native)) return { minimum: 0, maximum: 1 };
   if (depths.has(native) && native !== "GroundCutDepth") return { minimum: 0 };
@@ -87,72 +112,6 @@ export function groundResourceArea(map: PhysicalField) {
   return area;
 }
 
-/** Missing legacy history stays unknown (-1), rather than being assigned to the current epoch. */
-function missingProperty(
-  map: PhysicalField,
-  cell: number,
-  kind: number,
-  property: MaterialProperty,
-  surface: boolean,
-  imported: ReadonlySet<PhysicalBufferName>
-) {
-  if (property === "secondaryKind") return kind;
-  if (property === "strength")
-    return surface && imported.has("RockResistance")
-      ? map.RockResistance.get(cell)
-      : rockKindOfCode(kind).resistance;
-  if (property === "consolidation") return rockKindOfCode(kind).family === "loose" ? 0 : 1;
-  if (["formedMin", "formedMax", "altered", "deposited"].includes(property)) return -1;
-  return 0;
-}
-function importedDepth(
-  map: PhysicalField,
-  imported: ReadonlySet<PhysicalBufferName>,
-  name: PhysicalBufferName,
-  cell: number,
-  fallback: number
-) {
-  return imported.has(name) ? map[name].get(cell) : fallback;
-}
-function initializeColumn(
-  map: PhysicalField,
-  cell: number,
-  column: Column,
-  imported: ReadonlySet<PhysicalBufferName>,
-  legacyCover: number
-) {
-  const fields = columnFields[column];
-  for (let slot = 0; slot < fields.kind.length; slot++) {
-    const surface = column === "land" && slot === 0,
-      loose = column === "loose" && slot === 0,
-      kind = imported.has(fields.kind[slot])
-        ? map[fields.kind[slot]].get(cell)
-        : surface
-          ? map.RockKindCodes.get(cell)
-          : rockCatalogue.alluvium.code,
-      recordedDepth = importedDepth(
-        map,
-        imported,
-        fields.depth[slot],
-        cell,
-        loose ? legacyCover : 0
-      ),
-      // One native unit marks a present, unbounded basement; it is not a known thickness.
-      depth = surface ? Math.max(1, recordedDepth) : recordedDepth;
-    if (depth <= 0 && !surface) continue;
-    const state = Object.fromEntries(
-      materialProperties
-        .filter((property) => property !== "kind" && property !== "depth")
-        .map((property) => [
-          property,
-          imported.has(fields[property][slot])
-            ? map[fields[property][slot]].get(cell)
-            : missingProperty(map, cell, kind, property, surface, imported),
-        ])
-    ) as MaterialState;
-    setLayer(map, cell, slot, kind, depth, state, column);
-  }
-}
 /** Copy a complete resource band into its owner during explicit import; no writable alias escapes. */
 export function importGroundBand(
   map: PhysicalField,
@@ -169,56 +128,20 @@ export function importGroundBand(
         : (cell: number) => source[cell];
   for (let cell = 0; cell < map.mesh.count; cell++) target.set(cell, valueAt(cell));
 }
-function initializeImportedPlacement(
-  map: PhysicalField,
-  cell: number,
-  imported: ReadonlySet<PhysicalBufferName>
-) {
-  const ground = groundStorage(map);
-  if (!imported.has("BedrockElevation"))
-    ground.BedrockElevation.set(cell, map.Elevation.get(cell) - map.SedimentThickness.get(cell));
-  if (!imported.has("CrustSupportElevation"))
-    ground.CrustSupportElevation.set(cell, map.Elevation.get(cell));
-  if (!imported.has("CrustContinentalFraction"))
-    ground.CrustContinentalFraction.set(
-      cell,
-      map.Elevation.get(cell) >= map.BaseSeaLevel ? 1000 : 0
-    );
-  if (map.CrustThickness.get(cell) <= 0)
-    ground.CrustThickness.set(cell, units(1000 + 3 * map.CrustContinentalFraction.get(cell)));
-  map.CrustTypeCodes.set(cell, map.CrustContinentalFraction.get(cell) >= 500 ? 2 : 1);
-}
-function initializeImportedCargo(map: PhysicalField, imported: ReadonlySet<PhysicalBufferName>) {
-  const storage = groundStorage(map);
-  for (const fields of [loadFields, seaLoadFields]) {
-    for (const property of materialProperties) {
-      if (imported.has(fields[property])) continue;
-      for (let cell = 0; cell < map.mesh.count; cell++) {
-        if (map[fields.depth].get(cell) <= 0) continue;
-        storage[fields[property]].set(
-          cell,
-          missingProperty(map, cell, map[fields.kind].get(cell), property, false, imported)
-        );
-      }
-    }
-  }
-}
-/** Import has finished: ground columns now own the projections, including on legacy input. */
+/** Complete current-format material records own the reconstructed projections. */
 export function finishGroundImport(map: PhysicalField, imported: ReadonlySet<PhysicalBufferName>) {
-  initializeImportedCargo(map, imported);
-  const complete = allColumnFields.every((name) => imported.has(name));
+  requireThat(
+    groundResourceBindings.every(({ native }) => imported.has(native)),
+    "ground_import",
+    "Ground import requires complete current-format material records."
+  );
   for (let cell = 0; cell < map.mesh.count; cell++) {
-    initializeImportedPlacement(map, cell, imported);
-    if (!complete) {
-      const legacyCover = map.SedimentThickness.get(cell);
-      for (const column of columns) initializeColumn(map, cell, column, imported, legacyCover);
-    }
+    map.CrustTypeCodes.set(cell, map.CrustContinentalFraction.get(cell) >= 500 ? 2 : 1);
     projectGround(map, cell);
     const area = map.mesh.area(cell);
     groundStorage(map).SedimentSupply.set(
       cell,
-      area > 0 ? (map.GroundLoadVolume.get(cell) * 1024) / area : 0
+      area > 0 ? MapScale.inUnits(map.GroundLoadVolume.get(cell) / area, "native") : 0
     );
   }
-  if (!imported.has("Geothermal")) map.Geothermal.fill(0);
 }

@@ -155,9 +155,11 @@ test("edits shared tectonic activity through active consumers and ocean levels w
   await page.getByRole("checkbox", { name: "Climate", exact: true }).uncheck();
   await tuneGeneration(page, "Ocean and bathymetric geography");
   const ocean = page.locator(".setup-tuning");
-  await expect(ocean.getByLabel("Sea level adjustment · m", { exact: true })).toBeEnabled();
-  await ocean.getByLabel("Sea level adjustment · m", { exact: true }).fill("30");
-  await ocean.getByLabel("Epoch sea level offset · m", { exact: true }).fill("12");
+  await expect(
+    ocean.getByLabel("Sea level adjustment · map fraction", { exact: true })
+  ).toBeEnabled();
+  await ocean.getByLabel("Sea level adjustment · map fraction", { exact: true }).fill("0.0000075");
+  await ocean.getByLabel("Epoch sea level offset · of map span", { exact: true }).fill("0.000003");
   await tuneGeneration(page, "Climate");
   await page.getByRole("checkbox", { name: "Climate", exact: true }).check();
   await stage(page, /Review & generate/).click();
@@ -176,8 +178,8 @@ test("edits shared tectonic activity through active consumers and ocean levels w
         }
       ).generationFixtureInput
   );
-  expect(input.parameters.seaLevel).toBe(30);
-  expect(input.settings.epochs[0]).toMatchObject({ tectonics: 0.2, seaLevel: 12 });
+  expect(input.parameters.seaLevel).toBe(0.0000075);
+  expect(input.settings.epochs[0]).toMatchObject({ tectonics: 0.2, seaLevel: 0.000003 });
   expect(input.features["physical.tectonic-history"].enabled).toBe(false);
 });
 

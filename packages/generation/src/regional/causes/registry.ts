@@ -5,8 +5,7 @@ import type { Evidence, RegionalState } from "../state";
  * the refinement reads has one entry saying what it does at each point of the schedule:
  * `read` its captured evidence onto the state (context); `influence` the network's cost field
  * (context, before the network is grown); `support` what the ground must provide once the
- * network exists (a river seat's channel); `caps` the relief gradients its footprint holds
- * down (every structure step); `conjoin` with other features (round two); `respond` on the
+ * network exists (a river seat's channel); `conjoin` with other features (round two); `respond` on the
  * developed ground after a round's water (a seat settles). Entries register themselves when
  * their module loads; `./index` loads them all. The processes later milestones add for
  * established features (canals, portage pairs, gorge dams, ruin response, the landmark
@@ -18,7 +17,6 @@ export interface FeatureCause {
   read?(state: RegionalState, evidence: Evidence): void;
   influence?(state: RegionalState, cost: Float64Array): void;
   support?(state: RegionalState): void;
-  caps?(state: RegionalState, cap: Float64Array): void;
   /** After a structure step's relief is written: restore the feature's signature on it. */
   restore?(state: RegionalState): void;
   conjoin?(state: RegionalState): void;
@@ -65,12 +63,6 @@ export function influenceCosts(state: RegionalState, cost: Float64Array) {
 /** Context, after the network: what the ground must provide for each feature. */
 export function supportFeatures(state: RegionalState) {
   for (const cause of causes) cause.support?.(state);
-}
-/** Structure step: per-cell hillslope gradient caps from the features' footprints (0 = none). */
-export function featureCaps(state: RegionalState) {
-  const cap = new Float64Array(state.physical.map.mesh.count);
-  for (const cause of causes) cause.caps?.(state, cap);
-  return cap;
 }
 /** After the relief is written: each feature's signature restored by the smallest correction. */
 export function restoreFeatures(state: RegionalState) {

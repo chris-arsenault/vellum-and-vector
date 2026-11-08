@@ -6,27 +6,6 @@ import {
   validateMagicSystems,
 } from "./index";
 
-it("parses a legacy source and propagation pair into one origin and drops the pair", () => {
-  const system = magicSystemSchema.parse({
-    id: "warm",
-    name: "Warm",
-    source: "geothermal",
-    propagation: "fracture",
-    phase: "climate",
-  });
-  expect(system.origins).toEqual([
-    {
-      id: "geothermal",
-      source: "geothermal",
-      propagation: "fracture",
-      renewal: "conduit-fed",
-      parameters: {},
-      stocks: [],
-    },
-  ]);
-  expect("source" in system).toBe(false);
-  expect("propagation" in system).toBe(false);
-});
 it("keeps declared origins, their renewal, parameter overrides and stocks", () => {
   const system = magicSystemSchema.parse({
     id: "fire",
@@ -50,7 +29,7 @@ it("keeps declared origins, their renewal, parameter overrides and stocks", () =
   expect(originParameters(system, system.origins[1]).baseCost).toBe(7);
   expect(system.origins[1].stocks[0].carriers).toEqual(["crust", "river"]);
 });
-it("needs either an origin or the legacy pair", () => {
+it("requires an origin", () => {
   expect(() => magicSystemSchema.parse({ id: "x", name: "X", phase: "climate" })).toThrow();
 });
 it("rejects duplicate origin ids and unknown origin conditions, and accepts known ones", () => {

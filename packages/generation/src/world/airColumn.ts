@@ -1,5 +1,5 @@
 import type { PhysicalField } from "./field";
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
@@ -221,7 +221,9 @@ function overLand(
   const lifted = air.q * (1 - Math.exp(-rise / p.OrographicLiftHeight));
   const depletion = 1 - Math.exp((-d * rainout) / p.ColumnRainLength);
   return {
-    q: (air.q - lifted) * (1 - depletion) + map.Evapotranspiration.get(i) * 1000 * depletion,
+    q:
+      (air.q - lifted) * (1 - depletion) +
+      MapScale.inUnits(map.Evapotranspiration.get(i), "mm") * depletion,
     heat: air.heat * Math.exp(-d / p.AirHeatLength),
     sea: air.sea * Math.exp(-d / p.MaritimeLength),
     orographic: lifted * (p.ColumnRainLength / Math.max(d, Math.sqrt(map.mesh.area(i)))),

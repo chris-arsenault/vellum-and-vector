@@ -1,4 +1,4 @@
-import type { Band, MagicOrigin, MagicStock } from "@atlas/domain";
+import { MapScale, type Band, type MagicOrigin, type MagicStock } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
@@ -146,8 +146,7 @@ function collapseOverdrawn(map: PhysicalField, field: MagicField, origin: MagicO
     const recharge = source * map.mesh.area(i);
     if (drawn < p.overdrawShare * recharge) continue;
     field.sealed.set(i, 1);
-    const room = Math.max(0, p.thawSubsidenceLimit - field.subsided.get(i)),
-      drop = Math.min(room, p.sinkDepth);
+    const drop = p.sinkDepth;
     if (drop <= 0) continue;
     field.subsided.add(i, drop);
     displaceGround(map, i, -units(drop), "fire");
@@ -176,7 +175,14 @@ function carryWithIce(map: PhysicalField, field: MagicField, origin: MagicOrigin
   for (let i = 0; i < ice.length; i++) {
     let held = ice.get(i);
     if (held <= 0) continue;
-    const melt = held * p.meltwaterLoss * clamp(map.GlacialMeltwater.get(i) / 1000, 0, 1);
+    const melt =
+      held *
+      p.meltwaterLoss *
+      clamp(
+        MapScale.metres(map.GlacialMeltwater.get(i), "mm") / map.scale.length(0.00000025),
+        0,
+        1
+      );
     held -= melt;
     lost += melt;
     if (map.IceThickness.get(i) <= 0) {

@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { MapScale } from "@atlas/domain";
 import { createWorldMesh } from "./worldMesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
@@ -6,11 +7,15 @@ import { latitudeAt, latitudeAtY, northingAtLatitude } from "./latitude";
 import { atlasParametersSchema } from "../atlasParameters";
 
 it("maps world northing linearly under the even-degree projection, for a world and a region", () => {
-  const profile = atlasPhysicalProfile({
-    southLatitude: -20,
-    northLatitude: 60,
-    latitudeProjection: 0,
-  });
+  const profile = atlasPhysicalProfile(
+    {
+      southLatitude: -20,
+      northLatitude: 60,
+      latitudeProjection: 0,
+    },
+    {},
+    MapScale.reference()
+  );
   profile.WorldExtentY = [0, 3_000_000];
   const world = createField(createWorldMesh([0, 0, 4_000_000, 3_000_000], 4096, 100_000));
   const region = createField(
@@ -29,7 +34,11 @@ it("maps world northing linearly under the even-degree projection, for a world a
 
 it("spaces latitudes by equal area, independent of the world's size", () => {
   for (const height of [1_000_000, 3_000_000, 12_000_000]) {
-    const globe = atlasPhysicalProfile({ southLatitude: -90, northLatitude: 90 });
+    const globe = atlasPhysicalProfile(
+      { southLatitude: -90, northLatitude: 90 },
+      {},
+      MapScale.reference()
+    );
     globe.WorldExtentY = [0, height];
     expect(latitudeAtY(globe, 0)).toBeCloseTo(-90, 9);
     expect(latitudeAtY(globe, height / 2)).toBeCloseTo(0, 9);
@@ -37,7 +46,11 @@ it("spaces latitudes by equal area, independent of the world's size", () => {
     // Half of a hemisphere's area lies below 30°, so 30° sits at three quarters.
     expect(latitudeAtY(globe, (height * 3) / 4)).toBeCloseTo(30, 9);
   }
-  const band = atlasPhysicalProfile({ southLatitude: 10, northLatitude: 70 });
+  const band = atlasPhysicalProfile(
+    { southLatitude: 10, northLatitude: 70 },
+    {},
+    MapScale.reference()
+  );
   band.WorldExtentY = [0, 3_000_000];
   const sin = (degrees: number) => Math.sin((degrees * Math.PI) / 180);
   expect(sin(latitudeAtY(band, 1_500_000))).toBeCloseTo((sin(10) + sin(70)) / 2, 12);
@@ -49,11 +62,15 @@ it("spaces latitudes by equal area, independent of the world's size", () => {
 
 it("inverts the projection and keeps regions on their parent's latitudes", () => {
   for (const latitudeProjection of [0, 1]) {
-    const profile = atlasPhysicalProfile({
-      southLatitude: -70,
-      northLatitude: 70,
-      latitudeProjection,
-    });
+    const profile = atlasPhysicalProfile(
+      {
+        southLatitude: -70,
+        northLatitude: 70,
+        latitudeProjection,
+      },
+      {},
+      MapScale.reference()
+    );
     profile.WorldExtentY = [-2_000_000, 2_000_000];
     for (const latitude of [-70, -45, -3, 0, 12, 61, 70])
       expect(latitudeAtY(profile, northingAtLatitude(profile, latitude))).toBeCloseTo(latitude, 9);
@@ -67,11 +84,15 @@ it("inverts the projection and keeps regions on their parent's latitudes", () =>
 });
 
 it("places a map without a world frame at its mid latitude", () => {
-  const profile = atlasPhysicalProfile({
-    southLatitude: 20,
-    northLatitude: 60,
-    latitudeProjection: 0,
-  });
+  const profile = atlasPhysicalProfile(
+    {
+      southLatitude: 20,
+      northLatitude: 60,
+      latitudeProjection: 0,
+    },
+    {},
+    MapScale.reference()
+  );
   const map = createField(createWorldMesh([0, 0, 400_000, 400_000], 256, 10_000));
   for (let i = 0; i < map.mesh.count; i += 11)
     if (map.mesh.membership(i) !== 0) expect(latitudeAt(profile, map, i)).toBe(40);

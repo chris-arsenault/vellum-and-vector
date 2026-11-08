@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { createTestField as createField } from "./groundTestFixture";
-import { elevationLimit, units } from "../world/math";
+import { units } from "../world/math";
 import { createWorldMesh } from "../world/worldMesh";
 import { buryCover, depositPackage, erode, lithify, weatherRockFacets } from "./groundLedger";
 import { groundOf } from "./ground";
@@ -33,10 +33,10 @@ it("thins an old belt's root once wear cuts past the rock on it", () => {
   expect(crustOf(map)).toBeLessThan(7000);
 });
 
-it("stops thinning at a normal continental column", () => {
+it("continues thinning an available column below its buoyancy reference thickness", () => {
   const map = belt(4000, 0);
   erode(map, 0, units(500), "test");
-  expect(crustOf(map)).toBe(4000);
+  expect(crustOf(map)).toBeLessThan(4000);
 });
 
 function coveredGround(height = 100) {
@@ -98,28 +98,34 @@ it("weathers beneath retained cover and keeps converted beds in their original v
   });
   expect(readLayer(map, 0, 0)).toMatchObject({ kind: rocks.limestone.code, depth: units(2) });
 });
-it("admits older package beds first and retains the partial boundary bed's material", () => {
-  const map = coveredGround(elevationLimit - 5),
+it("lands every supplied package bed on high ground in its original order", () => {
+  const map = coveredGround(20_000),
     packageBeds = [
       materialLayer(rocks.basalt.code, units(3), { formedMin: 7, formedMax: 7 }),
       materialLayer(rocks.shale.code, units(4), { formedMin: 4, formedMax: 4, grainX: 0.5 }),
       materialLayer(rocks.limestone.code, units(2), { formedMin: 1, formedMax: 1 }),
     ];
-  expect(depositPackage(map, 0, packageBeds, "test")).toBe(units(5));
+  expect(depositPackage(map, 0, packageBeds, "test")).toBe(units(9));
   expect(readLayer(map, 0, 0, "loose")).toMatchObject({
-    kind: rocks.shale.code,
+    kind: rocks.basalt.code,
     depth: units(3),
+    formedMin: 7,
+  });
+  expect(readLayer(map, 0, 1, "loose")).toMatchObject({
+    kind: rocks.shale.code,
+    depth: units(4),
     formedMin: 4,
     grainX: 0.5,
   });
-  expect(readLayer(map, 0, 1, "loose")).toMatchObject({
+  expect(readLayer(map, 0, 2, "loose")).toMatchObject({
     kind: rocks.limestone.code,
     depth: units(2),
     formedMin: 1,
   });
   expect(packageBeds[1].depth).toBe(units(4));
-  expect(depositPackage(map, 0, packageBeds, "test")).toBe(0);
-  expect(readLayer(map, 0, 0, "loose").kind).toBe(rocks.shale.code);
+  expect(depositPackage(map, 0, packageBeds, "test")).toBe(units(9));
+  expect(map.Elevation.get(0)).toBe(units(20_018));
+  expect(readLayer(map, 0, 0, "loose").kind).toBe(rocks.basalt.code);
 });
 it("lands a mean-height package only in the chosen facet with local bed depths", () => {
   const map = coveredGround();

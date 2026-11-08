@@ -40,7 +40,7 @@ function fracturePropagation(state: GenerationState, field: MagicField, activity
         ((p.baseCost + (1000 - conductance) / p.conductanceDivisor) *
           map.mesh.edgeLength(i, edge) *
           placed(j)) /
-          1000;
+          map.scale.length(0.00025);
       if (next <= field.intensity.get(j)) continue;
       field.intensity.set(j, next);
       field.parents.set(j, i);
@@ -62,7 +62,7 @@ function rootPropagation(state: GenerationState, field: MagicField, activity: nu
   const barrier = (i: number) =>
     map.WaterKindCodes.get(i) !== 0 ||
     map.IceThickness.get(i) > 0 ||
-    (cover(i) < p.rootFloor && map.SoilDepth.get(i) < 0.3);
+    (cover(i) < p.rootFloor && map.SoilDepth.get(i) < map.scale.length(0.000000075, 0.5));
   field.parents = retainedArray(map, "int32", "magic:root-parents").fill(-1);
   const queue = new KeyedHeap("max");
   for (let i = 0; i < map.mesh.count; i++)
@@ -78,7 +78,10 @@ function rootPropagation(state: GenerationState, field: MagicField, activity: nu
       const j = map.mesh.neighbor(i, edge);
       if (j < 0 || barrier(j)) continue;
       const next =
-        value - (p.rootCost * map.mesh.edgeLength(i, edge) * placed(j)) / 1000 / (0.1 + cover(j));
+        value -
+        (p.rootCost * map.mesh.edgeLength(i, edge) * placed(j)) /
+          map.scale.length(0.00025) /
+          (0.1 + cover(j));
       if (next <= field.intensity.get(j)) continue;
       field.intensity.set(j, next);
       field.parents.set(j, i);
@@ -128,7 +131,7 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
   // Warmest first, streamed over the blocks.
   for (const i of map.coverage.order(map.Temperature, true)) {
     const target = coldTarget(state, i, seed),
-      capacity = clamp(map.IceThickness.get(i), 0, 900),
+      capacity = Math.max(0, map.IceThickness.get(i)),
       area = map.mesh.area(i),
       source = field.source.get(i);
     const edge = edgeLeadingTo(map.mesh, i, target);
@@ -157,7 +160,9 @@ function radialPropagation(state: GenerationState, field: MagicField) {
   const work = state.physical!,
     map = work.map;
   for (const source of field.located) {
-    const radius = source.radius || Math.max(1, field.definition.parameters.sourceSpacing);
+    const radius =
+      source.radius ||
+      Math.max(map.scale.length(0.00000025), field.definition.parameters.sourceSpacing);
     for (let i = 0; i < map.mesh.count; i++) {
       const distance = Math.hypot(map.mesh.x(i) - source.x, map.mesh.y(i) - source.y);
       field.intensity.set(
@@ -250,7 +255,6 @@ export const magicPropagationStrategies: Record<MagicPropagation, PropagationStr
       "desiccation",
       "domeStrain",
       "domeRise",
-      "domeLimit",
       "domeSeep",
       "saltBurn",
     ],

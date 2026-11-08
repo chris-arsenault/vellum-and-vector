@@ -5,7 +5,6 @@ import {
   fixtureState,
 } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
-import { generationRecipeSchema, prepareAtlasGeneration } from "@atlas/generation";
 import { createGrid, rectangle } from "@atlas/domain";
 import {
   newGenerationDraft,
@@ -44,36 +43,6 @@ it("previews complete initial settings without publishing worlds or changing def
   const world = registerWorldSnapshot(preview.source);
   expect(fixtureState(world.id).snapshot.world.epochs[0].ecology?.migration).toBe(2);
   expect(draftPreview(newGenerationDraft()).input.settings?.epochs[0].ecology?.migration).toBe(1);
-});
-
-it("normalizes legacy process choices and values without changing the prepared request", async () => {
-  const draft = newGenerationDraft();
-  const legacy = generationRecipeSchema.parse({
-    ...draft.recipe,
-    schemaVersion: 1,
-    features: undefined,
-    parameters: { ...draft.recipe.parameters, volcanism: 0.35 },
-    processes: { "atlas.glacial-erosion": false, "atlas.glacial-deposition": false },
-    settings: {
-      ...draft.recipe.settings,
-      epochs: draft.recipe.settings.epochs.map((epoch, i) =>
-        i ? epoch : { ...epoch, ecology: { migration: 2 }, magicActivity: { fire: 0.6 } }
-      ),
-    },
-  });
-  const source = createWorldSnapshot(
-    { ...draft, name: "New world", seed: legacy.seed, settings: legacy.settings },
-    draft.worldId
-  );
-  const before = prepareAtlasGeneration(source, { ...legacy, areaId: source.scope.areaId });
-  const normalized = normalizeGenerationDraft({ ...draft, recipe: legacy });
-  const after = prepareDraft(normalized);
-  expect(normalized.recipe.schemaVersion).toBe(2);
-  expect(normalized.recipe.processes).toEqual({});
-  expect(normalized.recipe.features!["physical.glacial-sculpting"].enabled).toBe(false);
-  expect(normalized.recipe.features!["physical.volcanism"].settings!.volcanism).toBe(0.35);
-  expect(after.input.configuration).toEqual(before.input.configuration);
-  expect(after.diagnostics).toEqual(before.diagnostics);
 });
 
 it("preserves owned scalar and nested values when switching a feature off and on", async () => {
@@ -119,7 +88,7 @@ it("keeps invalid owned values editable while preparation rejects them", async (
   expect(prepareDraft(repaired).input.parameters!.volcanism).toBe(0.4);
 });
 
-it("derives compatibility fields from owned values instead of treating them as another authority", async () => {
+it("derives execution settings from feature-owned values", async () => {
   const draft = setFeatureSetting(newGenerationDraft(), "physical.volcanism", "volcanism", 0.4);
   draft.recipe.parameters.volcanism = 1.2;
   draft.recipe.settings.epochs[0].temperature = 99;

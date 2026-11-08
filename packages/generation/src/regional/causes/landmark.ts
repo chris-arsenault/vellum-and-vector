@@ -1,4 +1,4 @@
-import { landmarkKind } from "@atlas/domain";
+import { landmarkKind, MapScale } from "@atlas/domain";
 import { standGround } from "../../rock/groundLedger";
 import { nearestOnPath, pathMetrics, type Placed } from "../../world/landmarkGeometry";
 import { maintainLandmark, placeLandmark, type LandmarkLedger } from "../../world/landmarks";
@@ -52,7 +52,6 @@ registerCause({
 /** The world's landmark records whose placed geometry stands in the frame. */
 function capturedLandmarks(state: RegionalState): Evidence["landmarks"] {
   const map = state.physical.map,
-    mesh = map.mesh,
     found: Evidence["landmarks"] = [];
   for (const landmark of state.domain.world.landmarks ?? []) {
     const kind = landmarkKind(landmark.kind);
@@ -61,7 +60,7 @@ function capturedLandmarks(state: RegionalState): Evidence["landmarks"] {
     if (!placed) continue;
     // A record stands in the frame when its ground reaches content (a line may cross the
     // whole frame with both ends outside it).
-    const reach = Math.max(kind.reach(placed.parameters), mesh.spacing);
+    const reach = map.scale.supported(kind.reach(placed.parameters), 1);
     if (nearPath(state, placed, reach).length) found.push({ landmark, placed });
   }
   return found;
@@ -73,12 +72,12 @@ const steers: Record<string, Steer> = {
   "volcanic-mountain": massif,
   "resistant-mountain": massif,
   canyon: (state, cost, placed) =>
-    corridor(state, cost, placed, (placed.parameters.rimWidth * 1000) / 2),
-  falls: (state, cost, placed) => corridor(state, cost, placed, 2 * regionalSpan(state)),
+    corridor(state, cost, placed, MapScale.metres(placed.parameters.rimWidth, "km") / 2),
+  falls: (state, cost, placed) => corridor(state, cost, placed, state.physical.map.scale.cells(2)),
   "dome-ring": ring,
   "impact-ring": ring,
   escarpment: (state, _cost, placed) =>
-    openFault(state, placed, placed.parameters.scarpWidth * 1000),
+    openFault(state, placed, MapScale.metres(placed.parameters.scarpWidth, "km")),
 };
 function steer(state: RegionalState, cost: Float64Array, placed: Placed) {
   const mesh = state.physical.map.mesh,
@@ -86,13 +85,14 @@ function steer(state: RegionalState, cost: Float64Array, placed: Placed) {
   steers[placed.landmark.kind]?.(state, cost, placed, center);
 }
 function massif(state: RegionalState, cost: Float64Array, placed: Placed, center: number) {
-  if (center >= 0) repel(state, cost, center, placed.parameters.baseRadius * 1000);
+  if (center >= 0) repel(state, cost, center, MapScale.metres(placed.parameters.baseRadius, "km"));
 }
 function corridor(state: RegionalState, cost: Float64Array, placed: Placed, reach: number) {
   for (const i of nearPath(state, placed, reach)) cost[i] *= corridorCost;
 }
 function ring(state: RegionalState, cost: Float64Array, placed: Placed, center: number) {
-  if (center >= 0) steerRim(state, cost, center, (placed.parameters.diameter * 1000) / 2);
+  if (center >= 0)
+    steerRim(state, cost, center, MapScale.metres(placed.parameters.diameter, "km") / 2);
 }
 
 /** Content cells within `reach` of the landmark's path. */

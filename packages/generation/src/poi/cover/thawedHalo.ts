@@ -7,6 +7,7 @@ import { namingCultureNear, rulePlaces } from "../poiPlaces";
 import { ruleRecord } from "../poiRecords";
 import {
   adjacent,
+  fieldOf,
   celsiusAt,
   geothermalAt,
   heldFor,
@@ -30,9 +31,11 @@ import {
 } from "./coverShared";
 
 /** Area at which a halo is half as great as halos get: 2,000 square kilometres. */
-const typicalArea = 2e9;
+// length-unit: fraction
+const typicalArea = 0.000125;
 /** A road's cost on thawed ground, and a boat's on an open reach, in frozen country. */
 const thawedRoad = 0.7,
+  // length-unit: ratio
   openReach = 0.8;
 const isA = magicRule("fire", "halo");
 const places = rulePlaces("thawedHalo", "fire", "halo");
@@ -45,7 +48,9 @@ const scar = magicRule("fire", "scar");
 const inFrozenCountry = (state: GenerationState, place: PoiPlace) =>
   heldFor(state, `halo-rim:${place.id}`, () =>
     place.cells.some((cell) =>
-      [...adjacent(state, cell)].some((next) => iceAt(state, next) > frozenIce)
+      [...adjacent(state, cell)].some(
+        (next) => iceAt(state, next) > fieldOf(state).scale.resolveMeasure(frozenIce)
+      )
     )
   );
 

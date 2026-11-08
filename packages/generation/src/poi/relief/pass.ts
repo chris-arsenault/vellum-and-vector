@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import { keyCols } from "../../world/landforms";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
@@ -22,7 +23,7 @@ import { attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import { aloneWithin, sameSpot, spans, standsIn } from "./reliefShape";
 
 /** Height of the lesser peak over its col at which a pass is half as great as passes get. */
-const typicalRise = 300;
+const typicalRise = MapScale.length(0.000075, 0.5);
 /** At the greatest passes a road crossing costs this share less than the slopes either side. */
 const greatestSaving = 0.5;
 
@@ -44,7 +45,7 @@ const factors = {
 const crossing = (state: GenerationState, cell: number, ceiling: number): PoiFieldChange[] => [
   { change: "atMost", band: "Elevation", cell, value: ceiling },
   ...cellsWithin(state, cell, cellSpan(state)).map((near): PoiFieldChange => ({
-    change: "gradientAtMost",
+    change: "gradeGround",
     cell: near,
     gradient: rulingGrade,
   })),

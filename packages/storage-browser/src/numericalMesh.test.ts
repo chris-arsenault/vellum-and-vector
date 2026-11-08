@@ -6,10 +6,7 @@ import {
   triangleSample,
   triangleValue,
 } from "../../generation/src/world/triangleSampling";
-import {
-  projectionInterpolation,
-  projectedValues,
-} from "../../generation/src/world/atlasSampling";
+import { projectionInterpolation, projectedValues } from "../../generation/src/world/atlasSampling";
 import { createField } from "../../generation/src/world/field";
 import { atlasPhysicalProfile } from "../../generation/src/world/atlasProfile";
 import { blockCacheFixture } from "./blockCacheFixture";
@@ -73,7 +70,7 @@ it("reuses evicting interpolation bands across channels and block boundaries", (
       samples: interpolation.samples,
       grid,
       interpolation,
-      profile: atlasPhysicalProfile(),
+      profile: atlasPhysicalProfile({}, {}, map.scale),
       fixed: [],
       inherited: false,
       sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },

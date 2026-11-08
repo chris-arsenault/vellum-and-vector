@@ -124,7 +124,7 @@ const fanOf = (state: GenerationState, place: PoiPlace) =>
   );
 /** A delta holds its fan nearly flat. */
 const heldFan = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
-  fanOf(state, place).map((cell) => ({ change: "gradientAtMost", cell, gradient: fanGradient }));
+  fanOf(state, place).map((cell) => ({ change: "gradeGround", cell, gradient: fanGradient }));
 /** Exposure of the sea the mouth opens on. */
 const openSea = (state: GenerationState, place: PoiPlace) => {
   const sea = seaBeside(state, place.anchor);

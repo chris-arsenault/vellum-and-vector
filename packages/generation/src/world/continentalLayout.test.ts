@@ -18,7 +18,7 @@ it("counts pieces on opposite chart edges as one landmass when the cylinder join
     map.WaterKindCodes.set(i, dry ? 0 : 1);
     map.Elevation.set(i, dry ? 1024 : -1024);
   }
-  landmasses(map, physicalContext(73, 0, atlasPhysicalProfile()));
+  landmasses(map, physicalContext(73, 0, atlasPhysicalProfile({}, {}, map.scale)));
   const left = nearestTriangle(map.mesh, -1.9e6, 0),
     right = nearestTriangle(map.mesh, 1.9e6, 0),
     center = nearestTriangle(map.mesh, 0, 0);

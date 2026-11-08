@@ -1,5 +1,5 @@
-import { BitSet, type DrainageReach } from "@atlas/domain";
-import { riverSignificance, worldScale, type RiverEvidence } from "../worldSignificance";
+import { BitSet, type MapScale, type DrainageReach } from "@atlas/domain";
+import { riverSignificance, type RiverEvidence } from "../worldSignificance";
 
 /** Confluence samples include the receiving river; tributary evidence stops upstream of it. */
 function contribution(reach: DrainageReach) {
@@ -23,15 +23,12 @@ export interface CourseJudgment {
   publish: boolean;
 }
 /** The courses the map shows, as lists of reaches. */
-export const worldRiverCourses = (reaches: DrainageReach[], scale = worldScale) =>
+export const worldRiverCourses = (reaches: DrainageReach[], scale: MapScale) =>
   riverCourseJudgments(reaches, scale)
     .filter((judged) => judged.publish)
     .map((judged) => judged.course);
 /** Follow the strongest upstream continuation through junctions; other branches stand alone. */
-export function riverCourseJudgments(
-  reaches: DrainageReach[],
-  scale = worldScale
-): CourseJudgment[] {
+export function riverCourseJudgments(reaches: DrainageReach[], scale: MapScale): CourseJudgment[] {
   const upstream = reaches.map(() => [] as number[]),
     visited = new BitSet(reaches.length);
   reaches.forEach((reach, i) => {

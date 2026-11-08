@@ -1,4 +1,4 @@
-import { biomes, naturalSurfaceNames, surfaceCode } from "@atlas/domain";
+import { biomes, naturalSurfaceNames, surfaceCode, MapScale } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { Feature, Landform } from "./codes";
@@ -7,7 +7,12 @@ type Surface = (typeof naturalSurfaceNames)[number];
 function frozenNeighbor(map: PhysicalField, i: number) {
   for (let edge = 0; edge < map.mesh.degree(i); edge++) {
     const j = map.mesh.neighbor(i, edge);
-    if (j >= 0 && map.WaterKindCodes.get(j) === 1 && map.IceThickness.get(j) >= 50) return true;
+    if (
+      j >= 0 &&
+      map.WaterKindCodes.get(j) === 1 &&
+      map.IceThickness.get(j) >= map.scale.length(0.0000125)
+    )
+      return true;
   }
   return false;
 }
@@ -35,7 +40,7 @@ function specialOcean(map: PhysicalField, i: number): Surface | null {
   const shallow = [2, 3].includes(map.BathymetricZoneCodes.get(i));
   if (
     shallow &&
-    map.WaterDepths.get(i) <= 160 * 1024 &&
+    map.WaterDepths.get(i) <= MapScale.native(map.scale.length(0.00004)) &&
     (map.Temperature.get(i) >= 260 || map.OceanCurrentHeat.get(i) >= 420) &&
     map.Geothermal.get(i) >= 60
   )
@@ -46,9 +51,9 @@ function frozenOcean(map: PhysicalField, i: number): Surface | null {
   const shallow = [2, 3].includes(map.BathymetricZoneCodes.get(i)),
     ice = map.IceThickness.get(i),
     flags = map.FeatureFlags.get(i);
-  if (shallow && ice >= 75) return "Ice shelf";
+  if (shallow && ice >= map.scale.length(0.00001875)) return "Ice shelf";
   if (flags & Feature.PermanentSeaIce) return "Pack ice";
-  if (flags & Feature.PermanentIceMargin || ice >= 50) return "Sea ice";
+  if (flags & Feature.PermanentIceMargin || ice >= map.scale.length(0.0000125)) return "Sea ice";
   if (frozenNeighbor(map, i)) return "Polynya";
   return null;
 }
@@ -56,9 +61,10 @@ function landClimate(map: PhysicalField, i: number): Surface {
   const biome = biomes[map.BiomeCodes.get(i)]?.name;
   const ecological = naturalSurfaceNames.find((name) => name === biome);
   if (ecological) return ecological;
-  return legacyLandClimate(map, i);
+  return climateSurface(map, i);
 }
-function legacyLandClimate(map: PhysicalField, i: number): Surface {
+/** Unclassified ground and biomes without a dedicated surface label retain their climate surface. */
+function climateSurface(map: PhysicalField, i: number): Surface {
   const temperature = map.Temperature.get(i),
     moisture = map.Moisture.get(i);
   if (temperature >= 335 && moisture >= 260) return "Open field";
@@ -94,8 +100,8 @@ function landSurface(map: PhysicalField, i: number): Surface {
   if (map.WaterKindCodes.get(i) === 2) return "Lake";
   if (map.LandformCodes.get(i) === Landform.Moraine) return "Moraine";
   const ice = map.IceThickness.get(i);
-  if (ice >= 300) return "Glacier";
-  if (ice >= 250) return "Snowfield";
+  if (ice >= map.scale.length(0.000075)) return "Glacier";
+  if (ice >= map.scale.length(0.0000625)) return "Snowfield";
   return landRelief(map, i);
 }
 function fluvialSurface(map: PhysicalField, i: number): Surface | null {

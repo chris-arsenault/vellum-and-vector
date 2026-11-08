@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -26,7 +27,8 @@ const shunned = 1.5;
 /** A recorded killing on the ground attaches people to it this strongly, whatever lives near it now. */
 const rememberedTie = 0.6;
 /** How far its foulness reaches into water and fields, in metres. */
-const blightReach = 5000;
+// length-unit: fraction
+const blightReach = 0.00125;
 /** Air wet enough that Salt's flushing, which grows with moisture, outruns what the dead left. */
 const flushing = 0.6;
 
@@ -161,7 +163,7 @@ export const killingGround: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "foul water and failed crops",
-        reach: blightReach,
+        reach: mapScale(state).length(blightReach),
         severity: Math.min(1, saltingAt(state, place.anchor) + greatness(state, place) / 2),
       },
     ],

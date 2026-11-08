@@ -47,11 +47,29 @@ maximum-size rule.
 **Significance is judged at each map's scale (user direction 2026-11-03).** Every
 map holds about the same number of cells, so a finer map is the same kind of map
 of a smaller country. One set of significance rules, subdivision included,
-applies to every profile, with the World's thresholds scaled by the map's cell
-span over a World cell's at the same quality: lengths linearly, areas and
-discharges by its square, heights by its square root. The World's factor is one.
+applies to every profile. Generated geographic dimensions are relative declarations
+resolved by the shared `MapScale` against the map's actual frame. Lengths, areas,
+volumes and inverse or fractional dimensions retain their declared dimensional
+powers. Nonlinear scaling is explicit in the declaration; resolution controls
+sampling and declared cell support independently of feature size.
 A per-map cell minimum alone would name every resolved fragment of a finer map.
 What a map does not name stays latent on it.
+
+**One length authority (user correction 2026-11-08).** `MapScale` owns map-relative
+dimensions, cell conversions and geographic unit codecs. Its characteristic span
+is the width of an equal-area 4:3 frame, so translation and aspect changes alone
+do not alter isotropic lengths. Definitions resolve once at their owning map;
+consumers receive measured quantities. Coordinates and captured geography remain
+measured data. Resolved settings carry a distinct type and runtime marker so they
+cannot be supplied again as relative overrides. Only the current map format is
+supported; old maps and configurations have no conversion path. Architecture checks
+reject competing codecs, fixed dimensional declarations and bypasses of the
+definition boundary; source review remains necessary for untyped arithmetic.
+
+Processes have no arbitrary geographic or output ceilings. Material availability,
+bounded fractions and numerical solver constraints describe their own limits;
+they do not impose a maximum terrain height or crust thickness. Water depth rates
+retain fractional millimetres so smaller maps do not lose water to integer storage.
 
 **Intensive and structural society works.** An intensive work (clearance,
 burning, hunting, conservation, irrigation, tapping, quarrying) is a fraction

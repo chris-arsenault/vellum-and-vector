@@ -1,8 +1,7 @@
 // OceanDistanceLayer, BathymetryLayer and LandmassLayer, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
-import { CellList, type Band } from "@atlas/domain";
+import { CellList, MapScale, type Band } from "@atlas/domain";
 import type { PhysicalContext } from "./context";
-import { units } from "./math";
 import { metricSearch } from "./metricSearch";
 import { physicalGradients } from "./physicalMetric";
 import { releaseWorking } from "./physicalNumerics";
@@ -40,7 +39,7 @@ function touchesLand(map: PhysicalField, i: number) {
 export function measureSlopes(map: PhysicalField) {
   const gradient = physicalGradients(map.mesh, (i) => map.Elevation.get(i), map.coverage);
   for (let i = 0; i < map.mesh.count; i++)
-    map.Slope.set(i, Math.hypot(gradient.x.get(i), gradient.y.get(i)) / 1024);
+    map.Slope.set(i, MapScale.metres(Math.hypot(gradient.x.get(i), gradient.y.get(i)), "native"));
   releaseWorking(map, gradient.x, gradient.y);
 }
 /** The bathymetric zone below the shelf break. */
@@ -52,18 +51,18 @@ export function bathymetry(map: PhysicalField, c: PhysicalContext) {
       const depth = map.WaterDepths.get(i);
       map.BathymetricZoneCodes.set(
         i,
-        depth <= units(c.Profile.ShelfDepth)
+        depth <= MapScale.native(c.Profile.ShelfDepth)
           ? 2
-          : depth <= units(c.Profile.ShelfBreakDepth)
+          : depth <= MapScale.native(c.Profile.ShelfBreakDepth)
             ? 3
             : deepOceanZone
       );
     } else {
       const distance = map.OceanDistance.get(i);
       const shelf =
-        map.Elevation.get(i) <= map.EffectiveSeaLevel + units(c.Profile.ShelfDepth / 2) &&
+        map.Elevation.get(i) <= map.EffectiveSeaLevel + MapScale.native(c.Profile.ShelfDepth / 2) &&
         distance >= 0 &&
-        distance <= 180_000;
+        distance <= map.scale.length(0.045);
       map.BathymetricZoneCodes.set(i, shelf ? 1 : 0);
     }
   }
@@ -104,7 +103,7 @@ export function landmasses(map: PhysicalField, c: PhysicalContext) {
     const code = area >= c.Profile.IslandAreaThreshold ? 2 : 1;
     for (const j of members) map.LandmassClassCodes.set(j, code);
   }
-  const shelfFloor = map.EffectiveSeaLevel - units(c.Profile.ShelfBreakDepth);
+  const shelfFloor = map.EffectiveSeaLevel - MapScale.native(c.Profile.ShelfBreakDepth);
   const shelf = (i: number) => map.Elevation.get(i) >= shelfFloor;
   next = 0;
   for (let i = 0; i < map.mesh.count; i++) {

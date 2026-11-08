@@ -21,7 +21,8 @@ import {
 } from "./coverShared";
 
 /** Area at which an ember grove is half as great as they get: 2,000 square kilometres. */
-const typicalArea = 2e9;
+// length-unit: fraction
+const typicalArea = 0.000125;
 const isA = isFamily("ember");
 const places = landscapePlaces("emberGrove", "ember", quickeningAt);
 const factors = countryFactors(places, typicalArea, quickeningAt);

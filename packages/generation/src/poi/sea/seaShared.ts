@@ -1,9 +1,10 @@
+import type { RelativeMeasure } from "@atlas/domain";
 import type { GenerationState } from "../../process";
+import { mapScale } from "../../worldSignificance";
 import type { PoiFieldChange, PoiPlace } from "../poiContract";
 import { namingCultureNear, settlementWithin } from "../poiPlaces";
 import {
   adjacent,
-  cellSpan,
   fieldOf,
   gap,
   heldFor,
@@ -24,9 +25,16 @@ export const pressureAt = (state: GenerationState, cell: number) =>
 type PressureLength =
   "rayDistance" | "coastalRayDistance" | "coastalSourceDistance" | "wakeDistance";
 /** A length Pressure's own preset declares, in metres; `absent` where the system is absent. */
-export function pressureLength(state: GenerationState, name: PressureLength, absent: number) {
+export function pressureLength(
+  state: GenerationState,
+  name: PressureLength,
+  absent: RelativeMeasure | 0
+) {
   const field = state.physical?.magic?.fields.find((f) => f.definition.id === "pressure");
-  return field?.definition.parameters[name] ?? absent;
+  return (
+    field?.definition.parameters[name] ??
+    (absent === 0 ? 0 : mapScale(state).resolveMeasure(absent))
+  );
 }
 
 /** The ground area of a place, in square metres. */
@@ -41,8 +49,8 @@ export const extentOf = (state: GenerationState, place: PoiPlace) =>
   );
 
 /** A physical reach in metres, never narrower than the two cells a map needs to show it. */
-export const near = (metres: number) => (state: GenerationState) =>
-  Math.max(2 * cellSpan(state), metres);
+export const near = (fraction: number) => (state: GenerationState) =>
+  mapScale(state).supported(mapScale(state).length(fraction), 2);
 
 const besideSea = (state: GenerationState, cell: number) => {
   for (const next of adjacent(state, cell)) if (isSea(state, next)) return true;
@@ -68,9 +76,11 @@ export function exposureBeside(state: GenerationState, cell: number) {
 export const heldUnder = (
   state: GenerationState,
   cells: readonly number[],
-  depth: number
+  depth: number | RelativeMeasure
 ): PoiFieldChange[] => {
-  const value = fieldOf(state).EffectiveSeaLevel - toNative(depth);
+  const value =
+    fieldOf(state).EffectiveSeaLevel -
+    toNative(typeof depth === "number" ? depth : mapScale(state).resolveMeasure(depth));
   return cells.map((cell) => ({ change: "atMost", band: "Elevation", cell, value }));
 };
 /** Water depth at a cell, in metres. */

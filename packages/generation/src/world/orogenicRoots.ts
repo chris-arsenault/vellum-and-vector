@@ -9,28 +9,22 @@ import {
   initializeCrustColumns,
 } from "../rock/crustTransport";
 import { constructionWeight, crossSection } from "./orogenicShape";
-import {
-  crustHeight,
-  crustPerRock,
-  maximumCrustThickness,
-  minimumCrustThickness,
-  thickness,
-  units,
-} from "./math";
+import { crustHeight, crustFoundation, crustPerRock, units } from "./math";
 import { smoothMetric } from "./metricSmoothing";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import { MapScale } from "@atlas/domain";
 export function addRoot(map: PhysicalField, cell: number, volume: number) {
-  const before = map.CrustThickness.get(cell) / 1024,
+  const before = MapScale.metres(map.CrustThickness.get(cell), "native"),
     fraction = map.CrustContinentalFraction.get(cell) / 1000,
-    column = (volume * 1024) / map.mesh.area(cell);
+    column = MapScale.inUnits(volume / map.mesh.area(cell), "native");
   addContinentalRoot(map, cell, column);
   const nextFraction = map.CrustContinentalColumn.get(cell) / map.CrustThickness.get(cell);
-  return units(crustHeight(before + column / 1024, nextFraction) - crustHeight(before, fraction));
+  return units(
+    crustHeight(before + MapScale.metres(column, "native"), nextFraction, map.scale) -
+      crustHeight(before, fraction, map.scale)
+  );
 }
-/** How much more crust a column can hold. Each pass's crust adds to what earlier passes left. */
-const capacity = (map: PhysicalField, i: number) =>
-  (Math.max(0, units(maximumCrustThickness) - map.CrustThickness.get(i)) * map.mesh.area(i)) / 1024;
-function rootCapacity(
+function rootWeights(
   map: PhysicalField,
   context: PhysicalContext,
   components: BoundaryComponent[],
@@ -39,28 +33,23 @@ function rootCapacity(
   // Per-component totals are a handful of records; per-cell measures are bands.
   const reserves = new Float64Array(components.length),
     totals = new Float64Array(components.length),
-    weights = workingArray(map, "float64", "roots:weights"),
-    capacities = workingArray(map, "float64", "roots:capacities"),
-    ratios = workingArray(map, "float64", "roots:ratios").fill(Infinity);
+    weights = workingArray(map, "float64", "roots:weights");
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds.get(i);
     if (id < 0 || components[id].code !== 1) continue;
     const area = map.mesh.area(i);
-    reserves[id] += (map.CrustRootReserve.get(i) * area) / 1024;
+    reserves[id] += MapScale.metres(map.CrustRootReserve.get(i), "native") * area;
     // A belt with a continent builds on it; one without builds an arc on the ocean crust it has.
     if (map.CrustContinentalFraction.get(i) < 350 && components[id].maximumContinental >= 0.35)
       continue;
     const section = crossSection(map, context, components[id], frame, i);
     const weight = constructionWeight(map, context, components[id], frame, i, section) * area;
-    const room = capacity(map, i);
-    if (weight > 0 && room > 0) {
+    if (weight > 0) {
       weights.set(i, weight);
-      capacities.set(i, room);
-      ratios.set(i, room / weight);
       totals[id] += weight;
     }
   }
-  return { reserves, totals, weights, capacities, ratios };
+  return { reserves, totals, weights };
 }
 /** Shortened continental columns feed roots; ranked relief cannot manufacture crust. */
 export function distributeOrogenicRoots(
@@ -69,31 +58,21 @@ export function distributeOrogenicRoots(
   components: BoundaryComponent[],
   frame: OrogenicFrame
 ) {
-  const { reserves, totals, weights, capacities, ratios } = rootCapacity(
-      map,
-      context,
-      components,
-      frame
-    ),
-    remaining = reserves.slice(),
+  const { reserves, totals, weights } = rootWeights(map, context, components, frame),
     admitted = workingArray(map, "float64", "roots:admitted");
-  // One external order preserves the capacity order within every independent belt.
-  for (const i of map.coverage.order(ratios)) {
-    if (!Number.isFinite(ratios.get(i))) break;
-    const id = map.OrogenicComponentIds.get(i);
-    if (remaining[id] <= 0) continue;
-    const weight = weights.get(i);
-    const volume = Math.min(capacities.get(i), (remaining[id] * weight) / totals[id]);
+  for (let i = 0; i < map.mesh.count; i++) {
+    const weight = weights.get(i),
+      id = map.OrogenicComponentIds.get(i);
+    if (weight <= 0 || reserves[id] <= 0) continue;
+    const volume = (reserves[id] * weight) / totals[id];
     if (volume > 0) admitted.add(i, addRoot(map, i, volume));
-    remaining[id] -= volume;
-    totals[id] -= weight;
   }
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds.get(i);
-    if (id >= 0 && reserves[id] > 0) retainRootReserve(map, i, remaining[id] / reserves[id]);
+    if (id >= 0 && totals[id] > 0) retainRootReserve(map, i, 0);
   }
   settleStrandedRoots(map, components, context.Span);
-  releaseWorking(map, weights, capacities, ratios);
+  releaseWorking(map, weights);
   return admitted;
 }
 /**
@@ -128,12 +107,9 @@ function settleStrandedRoots(map: PhysicalField, components: BoundaryComponent[]
     const id = map.OrogenicComponentIds.get(i),
       held = map.CrustRootReserve.get(i);
     if (held <= 0 || (id >= 0 && components[id].code === 1)) continue;
-    const column = Math.min(
-      held * settled,
-      Math.max(0, units(maximumCrustThickness) - map.CrustThickness.get(i))
-    );
+    const column = held * settled;
     if (column <= 0) continue;
-    addRoot(map, i, (column * map.mesh.area(i)) / 1024);
+    addRoot(map, i, MapScale.metres(column, "native") * map.mesh.area(i));
     spendRootReserve(map, i, column);
   }
 }
@@ -146,17 +122,15 @@ export function mobileCrust(
   fraction: number,
   supported: number,
   ease: number,
-  span: number
+  span: number,
+  scale: MapScale
 ) {
   const over =
     column +
     Math.max(0, surfaceRock) * crustPerRock(fraction) -
-    (1000 + 3000 * fraction + supported);
+    (crustFoundation(fraction, scale) + supported);
   if (over <= 0 || span <= 0) return 0;
-  return Math.min(
-    Math.max(0, column - minimumCrustThickness),
-    over * (1 - (ease / (over + ease)) ** span)
-  );
+  return Math.min(Math.max(0, column), over * (1 - (ease / (over + ease)) ** span));
 }
 /**
  * Crust too thick to hold itself up flows outward under its own weight, so a long collision builds a
@@ -177,12 +151,13 @@ export function crustFlow(
     flowing = workingValues(map, "float64", "flow:flowing", (i) => {
       return continent.get(i)
         ? mobileCrust(
-            map.CrustThickness.get(i) / 1024,
-            map.SurfaceRockLoad.get(i) / 1024,
+            MapScale.metres(map.CrustThickness.get(i), "native"),
+            MapScale.metres(map.SurfaceRockLoad.get(i), "native"),
             map.CrustContinentalFraction.get(i) / 1000,
             squeezed(i) ? bears : 0,
             ease,
-            context.Span
+            context.Span,
+            map.scale
           )
         : 0;
     }),
@@ -191,7 +166,11 @@ export function crustFlow(
   for (let i = 0; i < map.mesh.count; i++) {
     const change = spread.get(i) - flowing.get(i);
     if (change !== 0)
-      adjustCrustColumn(map, i, units(thickness(map.CrustThickness.get(i) / 1024 + change)));
+      adjustCrustColumn(
+        map,
+        i,
+        units(Math.max(0, MapScale.metres(map.CrustThickness.get(i), "native") + change))
+      );
   }
   releaseWorking(map, continent, flowing, spread);
 }

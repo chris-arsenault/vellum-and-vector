@@ -1,5 +1,6 @@
-import { neighbors, spatial, type SocietySupport } from "@atlas/domain";
+import { neighbors, spatial, MapScale, type SocietySupport } from "@atlas/domain";
 import type { GenerationState } from "./process";
+import { mapScale } from "./worldSignificance";
 export { channelAccess } from "./societyChannelAccess";
 
 export const emptySupport = (): SocietySupport => ({
@@ -34,8 +35,12 @@ export function supportAt(
   const value = (name: string, fallback = 0) => societyValue(state, name, i, fallback);
   const temperature = value("temperature", 15);
   const growing = Math.exp(-Math.pow((temperature - 18) / 20, 2));
-  const moisture = Math.max(0, Math.min(1, value("moisture", value("rainfall", 0.5))));
-  const soil = Math.min(1, value("soilDepth", 0.3) / 0.5);
+  const scale = mapScale(state);
+  const moisture = Math.max(
+    0,
+    Math.min(1, value("moisture", value("rainfall", scale.length(1.25e-7)) / scale.length(2.5e-7)))
+  );
+  const soil = Math.min(1, value("soilDepth", scale.length(7.5e-8)) / scale.length(1.25e-7));
   const slope = value("slope");
   const water = Math.min(1, Math.max(moisture, river, storedSoilWater(state, i)));
   const grass = value("grassCover", 0.2);
@@ -61,7 +66,13 @@ export function supportAt(
     gathering,
     fishing,
     water,
-    capacity: (farming + grazing + gathering + fishing) * (1 - Math.min(1, value("ice"))),
+    capacity:
+      (farming + grazing + gathering + fishing) *
+      (1 -
+        Math.min(
+          1,
+          value("iceThickness", MapScale.metres(value("ice"), "km")) / scale.length(0.00025)
+        )),
   };
 }
 /**
@@ -90,10 +101,13 @@ export function coastalFishery(state: GenerationState) {
 }
 /** The water a cell's soil can hold, metres: its depth times a porosity that rises with carbon. */
 export function soilWaterCapacity(state: GenerationState, i: number) {
-  const depth = societyValue(state, "soilDepth", i, 0.3);
+  const depth = societyValue(state, "soilDepth", i, mapScale(state).length(7.5e-8));
   const carbon = Math.min(1, societyValue(state, "soilCarbon", i) / 30);
   return depth * (0.12 + carbon * 0.15);
 }
 function storedSoilWater(state: GenerationState, i: number) {
-  return societyValue(state, "soilWater", i) / Math.max(0.01, soilWaterCapacity(state, i));
+  return (
+    societyValue(state, "soilWater", i) /
+    Math.max(mapScale(state).length(2.5e-9), soilWaterCapacity(state, i))
+  );
 }

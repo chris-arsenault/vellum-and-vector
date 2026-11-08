@@ -10,6 +10,7 @@ import { societyCycle } from "./societyEvolution";
 import { roundCycle, societyStep } from "./societyTempo";
 import { isMajorRuin } from "./societyMapScope";
 import { profileOf } from "./societyProfile";
+import { mapScale } from "./worldSignificance";
 
 type Era = GenerationSettings["humanEras"][number];
 /**
@@ -62,7 +63,12 @@ function foundRound(state: GenerationState, context: MapProcessContext, era: Era
     name: "Residents",
     state: "generated",
     relations: [],
-    attributes: { foodDemand: 1, growth: 1, mobility: 1, divingDepth: 200 },
+    attributes: {
+      foodDemand: 1,
+      growth: 1,
+      mobility: 1,
+      divingDepth: mapScale(state).length(0.00005),
+    },
   };
   const work = createSocietyGeography(state, context, { mobile: true, round: era.id });
   const starts = startingPopulations(state, context);

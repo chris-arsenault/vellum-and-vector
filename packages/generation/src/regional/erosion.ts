@@ -3,7 +3,7 @@ import { physicalContext } from "../world/context";
 import { holdRock, restoreGround, releaseHeldRock, type HeldRock } from "../rock/groundTransport";
 import { drainageSteps, incisionSteps, sedimentStep } from "../world/sequence";
 import { runNativeStep } from "../world/physicalSteps";
-import { profileAtScale } from "../processes/processCatalogue";
+import { profileForExecution } from "../processes/processCatalogue";
 import { restoreFeatures } from "./causes/registry";
 import { updateSlopes } from "./relief";
 import { ruggedness } from "./ruggedness";
@@ -27,7 +27,7 @@ const erosionEpochs = 4;
  */
 export function erodeRegion(state: RegionalState) {
   const work = state.physical,
-    profile = profileAtScale(work.profile, { scale: work.scale ?? 1, passes: erosionEpochs }),
+    profile = profileForExecution(work.profile, { refined: true, passes: erosionEpochs }),
     steps = [...drainageSteps, ...incisionSteps, ...drainageSteps, sedimentStep],
     seed = state.regional.input.seed,
     before = Float64Array.from({ length: work.map.mesh.count }, (_, i) =>

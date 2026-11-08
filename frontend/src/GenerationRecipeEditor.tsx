@@ -28,7 +28,7 @@ function RecipeEditor({ flow }: { flow: GenerationWorkflow }) {
       fields.clear();
       flow.setJson({ text: "", dirty: false });
       setError(null);
-      setNotice(compatibilityNotice(submitted, recipe));
+      setNotice("Configuration applied.");
     } catch (failure) {
       setError(failure);
     }
@@ -36,8 +36,8 @@ function RecipeEditor({ flow }: { flow: GenerationWorkflow }) {
   return (
     <div>
       <p className="hint">
-        Feature selections own parameters and nested configuration. Compatibility fields are derived
-        from those values. Applying updates the draft without starting generation.
+        Feature selections own parameters and nested configuration. Applying updates the draft
+        without starting generation.
       </p>
       <label htmlFor="generation-configuration">Generation configuration</label>
       <textarea
@@ -77,24 +77,4 @@ function exportRecipe(flow: GenerationWorkflow) {
   } catch {
     return JSON.stringify(flow.draft.recipe, null, 2);
   }
-}
-function compatibilityNotice(
-  submitted: unknown,
-  normalized: ReturnType<typeof normalizeGenerationRecipe>
-) {
-  if (
-    !submitted ||
-    typeof submitted !== "object" ||
-    !("features" in submitted) ||
-    !submitted.features
-  )
-    return "Configuration applied.";
-  const changed = (["parameters", "settings", "processes"] as const).filter(
-    (key) =>
-      key in submitted &&
-      JSON.stringify(submitted[key as keyof typeof submitted]) !== JSON.stringify(normalized[key])
-  );
-  return changed.length
-    ? `Configuration applied. Feature-owned values take precedence; compatibility ${changed.join(", ")} were regenerated.`
-    : "Configuration applied.";
 }

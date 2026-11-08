@@ -1,4 +1,5 @@
 import type { PhysicalField } from "./field";
+import { MapScale } from "@atlas/domain";
 import { environment, neutralEcology, unit, type EcologyForcing } from "./ecologyEnvironment";
 
 // Exact constant-input, first-order pool balance remains stable over geological time.
@@ -13,7 +14,7 @@ export function accumulateOrganicMatter(
   for (let i = 0; i < map.mesh.count; i++) {
     const env = environment(map, i),
       f = forcing(i);
-    const preservation = Math.exp(-Math.max(-3, Math.min(3, f.preservation)));
+    const preservation = Math.exp(-f.preservation);
     const temperature = Math.exp((env.temperature - 15) / 25);
     const wet = env.submerged ? 1 : env.wetness;
     // Dead matter decays within a season under quickening and hardly at all when stilled.
@@ -42,15 +43,16 @@ const buried = [
   "GasCarbon",
 ] as const;
 function burial(map: PhysicalField, i: number) {
-  const sediment = map.SedimentThickness.get(i) / 1024;
+  const sediment = MapScale.metres(map.SedimentThickness.get(i), "native");
   const delta = sediment - map.EcologySediment.get(i);
   const existing = buried.reduce((sum, name) => sum + map[name].get(i), 0);
   const oldDepth = map.OrganicBurialDepth.get(i);
   const depth = Math.max(0, oldDepth + delta);
   // Exhumation loses exposed source carbon; it never reverses thermal maturity.
-  const exposed = delta < 0 ? unit((-delta - oldDepth) / Math.max(1, -delta)) : 0;
+  const exposed =
+    delta < 0 ? unit((-delta - oldDepth) / Math.max(map.scale.length(2.5e-7), -delta)) : 0;
   for (const name of buried) map[name].set(i, map[name].get(i) * (1 - exposed));
-  const fraction = -Math.expm1(-Math.max(0, delta) / 2);
+  const fraction = -Math.expm1(-Math.max(0, delta) / map.scale.length(5e-7));
   const plant = (map.SoilCarbon.get(i) + map.PeatCarbon.get(i)) * fraction;
   const aquatic = map.AquaticCarbon.get(i) * fraction;
   map.SoilCarbon.set(i, map.SoilCarbon.get(i) * (1 - fraction));
@@ -69,11 +71,13 @@ function burial(map: PhysicalField, i: number) {
 }
 function mature(map: PhysicalField, i: number, years: number) {
   const depth = map.OrganicBurialDepth.get(i);
-  // Geothermal ratio adds up to 40 C/km to a 25 C/km background gradient.
-  const gradient = 0.025 + Math.max(0, map.Geothermal.get(i) / 1000) * 0.04;
+  // Temperature rises through a relative burial length; geothermal forcing steepens it.
+  const gradient = map.scale.inverseLength(
+    100_000 + Math.max(0, map.Geothermal.get(i) / 1000) * 160_000
+  );
   const temperature = map.Temperature.get(i) / 10 - 30 + depth * gradient;
-  if (depth < 10 || years === 0) return;
-  const dose = (years / 1_000_000) * Math.exp(Math.min(20, (temperature - 100) / 18));
+  if (depth < map.scale.length(2.5e-6) || years === 0) return;
+  const dose = (years / 1_000_000) * Math.exp((temperature - 100) / 18);
   map.OrganicMaturity.add(i, dose);
   const conversion = temperature >= 60 ? -Math.expm1(-dose / 4) : 0;
   const plant = map.BuriedPlantCarbon.get(i) * conversion;

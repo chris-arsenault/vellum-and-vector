@@ -71,7 +71,7 @@ function runPass(
       seed,
       step[1],
       profile,
-      atlasEpoch(epochs[pass]),
+      atlasEpoch(epochs[pass], map.scale),
       pass,
       epochs.length
     );

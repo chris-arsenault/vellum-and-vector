@@ -56,7 +56,8 @@ export const coast = defineProcess({
       // What the waves can do against this rock is for the ground to answer.
       const steep = clamp(field.Slope.get(i) * 10_000, 0, 1000),
         energy = (wave * p.CoastalErosionStrength) / 1000,
-        forcing = energy + steep / 18 + Math.abs(p.CoastalSeaLevelChange),
+        forcing =
+          energy + steep / 18 + Math.abs(p.CoastalSeaLevelChange) / field.scale.length(2.5e-7),
         power = (forcing * p.CoastalWearRate * span * c.CoastalStrength * coverage) / 1000,
         platform = field.EffectiveSeaLevel - units(p.CoastalPlatformDepth),
         cut = ground.surfaceAction(i, pounding, power, Infinity, platform);

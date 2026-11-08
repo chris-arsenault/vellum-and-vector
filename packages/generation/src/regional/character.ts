@@ -1,6 +1,6 @@
 import { physicalGradients } from "../world/physicalMetric";
 import { releaseWorking } from "../world/physicalNumerics";
-import { distance, isContent, neighborsOf, regionalSpan, smoothOverLength } from "./lattice";
+import { distance, isContent, neighborsOf, smoothOverLength } from "./lattice";
 import { clamp, type RegionalState } from "./state";
 
 /**
@@ -22,9 +22,9 @@ export interface RegionalCharacter {
 }
 
 /** Glacial erosion (m) that counts as thorough reworking at any refinement level. */
-const fullReworking = 40;
+const fullReworking = 0.00001;
 /** Captured volcanic construction (m) below which no cone is resolved. */
-const coneFloor = 50;
+const coneFloor = 0.0000125;
 /** Grain below this coherence is noise, not organization. */
 const coherenceFloor = 0.05;
 
@@ -37,9 +37,17 @@ export function deriveCharacter(state: RegionalState): RegionalCharacter {
     strain = new Float64Array(n),
     captured = readCapturedGrain(state, grainX, grainY);
   if (!captured)
-    measureGrain(state, (i) => state.regional.inheritedHeight.get(i) / 1024, grainX, grainY);
+    measureGrain(
+      state,
+      (i) => MapScale.metres(state.regional.inheritedHeight.get(i), "native"),
+      grainX,
+      grainY
+    );
   for (let i = 0; i < n; i++) {
-    reworking[i] = clamp(map.CumulativeGlacialErosion.get(i) / 1024 / fullReworking);
+    reworking[i] = clamp(
+      MapScale.metres(map.CumulativeGlacialErosion.get(i), "native") /
+        map.scale.length(fullReworking)
+    );
     strain[i] = clamp(map.TectonicStrain.get(i) / 1000);
   }
   return {
@@ -128,17 +136,24 @@ function volcanicCones(state: RegionalState) {
   const map = state.physical.map,
     mesh = map.mesh,
     cones: RegionalCharacter["cones"] = [],
-    span = regionalSpan(state),
-    window = Math.max(2 * span, state.regional.parentSpan),
-    construction = (i: number) => map.VolcanicConstructionHistory.get(i) / 1024;
+    window = map.scale.supported(state.regional.parentSpan, 2),
+    construction = (i: number) => MapScale.metres(map.VolcanicConstructionHistory.get(i), "native");
   for (let i = 0; i < mesh.count; i++) {
     const value = construction(i);
-    if (!isContent(mesh, i) || value < coneFloor || map.WaterKindCodes.get(i) === 1) continue;
+    if (
+      !isContent(mesh, i) ||
+      value < map.scale.length(coneFloor) ||
+      map.WaterKindCodes.get(i) === 1
+    )
+      continue;
     if (!localMaximum(mesh, construction, i, window)) continue;
     cones.push({
       cell: i,
-      radius: Math.max(2.5 * span, state.regional.parentSpan * 0.5 * Math.sqrt(value / 300)),
-      height: Math.min(900, value) * 0.6,
+      radius: map.scale.supported(
+        state.regional.parentSpan * 0.5 * Math.sqrt(value / map.scale.length(0.000075)),
+        2.5
+      ),
+      height: value * 0.6,
     });
   }
   return cones;
@@ -168,3 +183,4 @@ function localMaximum(
   }
   return true;
 }
+import { MapScale } from "@atlas/domain";

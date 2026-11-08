@@ -3,6 +3,7 @@ import { hardestRock } from "../rock/rockCatalogue";
 import { groundResourceBindings } from "../rock/groundResources";
 import type { PhysicalBufferName } from "./field";
 import { ecologyBindings, ecologyRatios } from "./ecologyState";
+import { MapScale } from "@atlas/domain";
 
 type ArrayName = PhysicalBufferName;
 export interface ChannelBinding {
@@ -34,7 +35,7 @@ const height = (name: string, native: ArrayName, datum = false): ChannelBinding 
   name,
   native,
   unit: "metre",
-  scale: 1 / 1024,
+  scale: MapScale.metres(1, "native"),
   datum,
 });
 const amount = (name: string, native: ArrayName): ChannelBinding => ({
@@ -71,11 +72,7 @@ export const atlasChannels: ChannelBinding[] = [
     minimum: 0,
     maximum: ecologyRatios.some((ratio) => ratio === native) ? 1 : undefined,
   })),
-  height("bedrock", "BedrockElevation", true),
   amount("sediment", "SedimentThickness"),
-  amount("crustThickness", "CrustThickness"),
-  height("crustSupport", "CrustSupportElevation", true),
-  height("rockLoad", "SurfaceRockLoad"),
   amount("fluvialErosion", "CumulativeFluvialErosion"),
   amount("glacialErosion", "CumulativeGlacialErosion"),
   amount("coastalErosion", "CumulativeCoastalErosion"),
@@ -90,7 +87,6 @@ export const atlasChannels: ChannelBinding[] = [
   amount("waterDepth", "WaterDepths"),
   scalar("fracture", "FractureConductance"),
   { name: "rock", native: "RockResistance", unit: "ratio", scale: 1 / hardestRock, minimum: 0 },
-  scalar("continentalFraction", "CrustContinentalFraction"),
   scalar("crustAge", "CrustAge"),
   { ...scalar("sutureStrength", "CrustSutureStrength"), discrete: true },
   scalar("geothermal", "Geothermal"),
@@ -106,9 +102,27 @@ export const atlasChannels: ChannelBinding[] = [
   scalar("windEast", "WindX", true),
   scalar("windNorth", "WindY", true),
   metric("windSpeed", "WindSpeed", "metre/second"),
-  { name: "rainfall", native: "Rainfall", unit: "metre/year", scale: 1 / 1000, minimum: 0 },
-  { name: "snowfall", native: "Snowfall", unit: "metre/year", scale: 1 / 1000, minimum: 0 },
-  { name: "runoff", native: "Runoff", unit: "metre/year", scale: 1 / 1000, minimum: 0 },
+  {
+    name: "rainfall",
+    native: "Rainfall",
+    unit: "metre/year",
+    scale: MapScale.metres(1, "mm"),
+    minimum: 0,
+  },
+  {
+    name: "snowfall",
+    native: "Snowfall",
+    unit: "metre/year",
+    scale: MapScale.metres(1, "mm"),
+    minimum: 0,
+  },
+  {
+    name: "runoff",
+    native: "Runoff",
+    unit: "metre/year",
+    scale: MapScale.metres(1, "mm"),
+    minimum: 0,
+  },
   scalar("ice", "IceThickness"),
   scalar("maximumIce", "MaximumIceThickness"),
   metric("iceThickness", "IceThickness", "metre"),

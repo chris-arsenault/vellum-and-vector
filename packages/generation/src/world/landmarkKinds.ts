@@ -35,7 +35,7 @@ import { magicLandmarkKinds } from "./landmarkMagic";
 /* ---------- great mountain ---------- */
 
 function mountainCells(map: PhysicalField, placed: Placed) {
-  const radius = placed.parameters.baseRadius * 1000,
+  const radius = MapScale.metres(placed.parameters.baseRadius, "km"),
     cells: [number, number][] = [];
   for (let i = 0; i < map.mesh.count; i++) {
     const d = distance(map, i, placed.center);
@@ -112,7 +112,7 @@ function measureMountain(map: PhysicalField, placed: Placed) {
   const rise = prominence(map),
     measured = {
       summit: metres(map, map.Elevation.get(summit[0])),
-      prominence: rise.get(summit[0]) / 1024,
+      prominence: MapScale.metres(rise.get(summit[0]), "native"),
     };
   releaseWorking(map, rise);
   return measured;
@@ -123,7 +123,7 @@ function mountain(volcanic: boolean): Kind {
       const { cells } = mountainCells(map, placed);
       if (!cells.length) return;
       const height = heightSampler(map),
-        base = ring(height, placed.center, placed.parameters.baseRadius * 1000);
+        base = ring(height, placed.center, MapScale.metres(placed.parameters.baseRadius, "km"));
       const summit = unitsAbove(map, placed.parameters.summit),
         centre = nearestTriangle(map.mesh, ...placed.center),
         centreElevation = map.Elevation.get(centre);
@@ -155,7 +155,7 @@ function mountain(volcanic: boolean): Kind {
 /* ---------- great ring structure ---------- */
 
 function ringGeometry(placed: Placed) {
-  const radius = (placed.parameters.diameter * 1000) / 2,
+  const radius = MapScale.metres(placed.parameters.diameter, "km") / 2,
     count = Math.max(1, Math.round(placed.parameters.ringCount)),
     spacing = radius / count;
   return {
@@ -205,7 +205,7 @@ const domeRing: Kind = {
       up: number[] = [],
       down: number[] = [];
     for (const i of cells) (crests.has(i) ? up : down).push(map.Elevation.get(i));
-    return { ringRelief: (mean(up) - mean(down)) / 1024 };
+    return { ringRelief: MapScale.metres(mean(up) - mean(down), "native") };
   },
   maintain(map, _p, placed, shortfall) {
     // Erosion exposes the rings: the soft troughs are cut. Where base level stops the cut,
@@ -233,15 +233,15 @@ const domeRing: Kind = {
 
 /** Floor, rim and surrounding plain as cell-band means; the bands are at least a cell wide. */
 function craterBands(map: PhysicalField, placed: Placed) {
-  const radius = (placed.parameters.diameter * 1000) / 2,
-    band = Math.max(radius * 0.2, map.mesh.spacing * 0.6);
+  const radius = MapScale.metres(placed.parameters.diameter, "km") / 2,
+    band = map.scale.supported(radius * 0.2, 0.6);
   return {
     radius,
     band,
-    floor: (d: number) => d <= Math.max(radius * 0.4, map.mesh.spacing * 0.6),
+    floor: (d: number) => d <= map.scale.supported(radius * 0.4, 0.6),
     rim: (d: number) => Math.abs(d - radius) <= band,
     plain: (d: number) =>
-      d >= radius * 1.6 && d <= Math.max(radius * 2.4, radius * 1.6 + map.mesh.spacing * 1.2),
+      d >= radius * 1.6 && d <= Math.max(radius * 2.4, radius * 1.6 + map.scale.cells(1.2)),
   };
 }
 function craterMeasures(map: PhysicalField, placed: Placed) {
@@ -256,13 +256,13 @@ function craterMeasures(map: PhysicalField, placed: Placed) {
     else if (bands.plain(d)) plain.push(map.Elevation.get(i));
   }
   return {
-    floorDepth: (mean(rim) - mean(floor)) / 1024,
-    rimHeight: (mean(rim) - mean(plain)) / 1024,
+    floorDepth: MapScale.metres(mean(rim) - mean(floor), "native"),
+    rimHeight: MapScale.metres(mean(rim) - mean(plain), "native"),
   };
 }
 const impactRing: Kind = {
   emplace(map, p, placed) {
-    const radius = (placed.parameters.diameter * 1000) / 2;
+    const radius = MapScale.metres(placed.parameters.diameter, "km") / 2;
     shapeImpact(
       map,
       p,
@@ -304,7 +304,7 @@ const impactRing: Kind = {
 /** The scarp is at least a cell wide on this mesh, so both sides are read from real cells. */
 function scarpCells(map: PhysicalField, placed: Placed) {
   const metrics = pathMetrics(map, placed.path),
-    width = Math.max(placed.parameters.scarpWidth * 1000, map.mesh.spacing * 1.2),
+    width = map.scale.supported(MapScale.metres(placed.parameters.scarpWidth, "km"), 1.2),
     cells: { i: number; hit: PathHit }[] = [];
   for (let i = 0; i < map.mesh.count; i++) {
     const hit = nearestOnPath(map, metrics, map.mesh.x(i), map.mesh.y(i));
@@ -359,7 +359,7 @@ const escarpment: Kind = {
       covariance += (x[k] - mx) * (y[k] - my);
       variance += (x[k] - mx) ** 2;
     }
-    return { throw: variance > 0 ? (2 * covariance) / variance / 1024 : NaN };
+    return { throw: variance > 0 ? MapScale.metres((2 * covariance) / variance, "native") : NaN };
   },
   maintain(map, p, placed, shortfall) {
     const needed = units(shortfall.throw ?? 0);
@@ -378,3 +378,4 @@ export const landmarkKinds: Record<string, Kind> = {
   falls,
   ...magicLandmarkKinds,
 };
+import { MapScale } from "@atlas/domain";

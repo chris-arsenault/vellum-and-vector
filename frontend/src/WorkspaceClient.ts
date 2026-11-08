@@ -83,9 +83,6 @@ export class WorkspaceClient implements SpatialStore {
   importWorld(snapshot: DomainSnapshot) {
     return this.request<World>({ kind: "importWorld", worldId: snapshot.world.id, snapshot });
   }
-  openLegacyWorld(worldId: string, saved: import("./legacySave").LegacySavedWorld) {
-    return this.request<World>({ kind: "openLegacyWorld", worldId, saved });
-  }
   openSavedWorld(worldId: string, root: { name: string; path: string }) {
     return this.request<World>({ kind: "openSavedWorld", worldId, root });
   }

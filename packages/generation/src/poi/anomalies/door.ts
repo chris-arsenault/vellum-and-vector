@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import { point, type AtlasFeature } from "@atlas/domain";
 import { nativePosition } from "../../world/atlasWorkspace";
 import { units } from "../../world/math";
@@ -20,8 +22,8 @@ const ringGrass = 0.3,
 /** A house and its keepers are held in regard whatever the door's reach. */
 const houseSanctity = 0.4;
 /** The door's country, and how far from a door a traveller sickens, in metres. */
-const countryMetres = 5000,
-  sicknessMetres = 1000;
+const countryMetres = MapScale.length(0.00125),
+  sicknessMetres = MapScale.length(0.00025);
 
 const veil = (state: GenerationState) => magicFieldOf(state, "veil");
 const doorsOf = (state: GenerationState) => veil(state)?.doors ?? [];
@@ -56,7 +58,7 @@ const breaksAt = (state: GenerationState, cell: number) => {
 
 const around = countryOf(countryMetres);
 const doorDistance = (state: GenerationState) =>
-  veil(state)?.definition.parameters.doorDistance ?? 1;
+  veil(state)?.definition.parameters.doorDistance ?? mapScale(state).length(0.00000025);
 const spanOf = (state: GenerationState, place: PoiPlace) =>
   place.cells.length > 1 ? gap(state, place.cells[0], place.cells[1]) : 0;
 /** Half at the least distance a door can span; near one for a door that joins far countries. */
@@ -224,7 +226,7 @@ export const door: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "crossing sickness",
-        reach: sicknessMetres,
+        reach: mapScale(state).resolveMeasure(sicknessMetres),
         severity: reachOf(state, place) / 2,
       },
       { hazard: "rupture into wild ground", reach: around(state), severity: 0.8 },

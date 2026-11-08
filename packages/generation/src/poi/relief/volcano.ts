@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import { volcanicRelief } from "../../world/geologicalFeatures";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, stays } from "../poiCarry";
@@ -18,7 +19,7 @@ import {
 } from "./reliefShape";
 
 /** Surviving relief at which a volcano is half as great as volcanoes get: a world mountain's. */
-const typicalRelief = 1000;
+const typicalRelief = MapScale.length(0.00025, 0.5);
 
 const places = eventPlaces(
   "volcano",

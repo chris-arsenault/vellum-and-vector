@@ -62,7 +62,8 @@ const neutral = {
 export function nativeContext(state: GenerationState, context: MapProcessContext, salt: number) {
   const { settings, seed } = generationBindings(context);
   const index = context.epochIndices[0],
-    epoch = index === undefined ? null : atlasEpoch(settings.epochs[index]);
+    epoch =
+      index === undefined ? null : atlasEpoch(settings.epochs[index], state.physical!.map.scale);
   const nativeIndex = index ?? (state.physical!.map.CrustSupportInitialized ? -1 : 0);
   const definition = index === undefined ? undefined : settings.epochs[index];
   const profile = epochProfile(state.physical!.profile, definition);

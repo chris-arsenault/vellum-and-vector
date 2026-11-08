@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { MapScale } from "@atlas/domain";
 import { atlasPhysicalProfile } from "../world/atlasProfile";
 import { physicalContext } from "../world/context";
 import { physicalSchema } from "../world/field";
@@ -12,7 +13,7 @@ import "./responders";
 import { Stage } from "./stage";
 
 const field = () => createTestField(createWorldMesh([0, 0, 1_000_000, 1_000_000], 16, 0));
-const context = () => physicalContext(1, 0, atlasPhysicalProfile());
+const context = () => physicalContext(1, 0, atlasPhysicalProfile({}, {}, MapScale.reference()));
 
 it("gives every band a kind, so nothing is left behind when plates move", () => {
   const missing = physicalSchema()

@@ -1,5 +1,6 @@
 import {
   sameValue,
+  magicParameterDimensions,
   type MagicSystem,
   type MagicFeatureRule,
   type MagicCondition,
@@ -8,25 +9,15 @@ import type { GenerationSettings } from "@atlas/generation";
 import type { ConfigurationChange } from "./generationConfigurationChanges";
 
 const words = (key: string) => key.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
-const lengthParameters = new Set([
-  "sourceSpacing",
-  "iceRetention",
-  "coldRetentionDistance",
-  "featureNoiseScale",
-  "rayDistance",
-  "coastalRayDistance",
-  "wakeDistance",
-  "beamWidth",
-  "coastalSourceDistance",
-]);
 function parameterValue(key: string, value: number) {
-  if (lengthParameters.has(key)) return `${value} m`;
-  if (key === "accumulationArea") return `${value} m²`;
+  const dimension = magicParameterDimensions[key as keyof typeof magicParameterDimensions];
+  if (dimension === 1) return `${value * 100}% of map span`;
+  if (dimension) return `${value} × map span^${dimension}`;
   return String(value);
 }
 function effectValue(key: keyof MagicSystem["effects"], value: number) {
   if (key === "heat") return `${value / 10} °C per intensity unit`;
-  if (key === "iceMelt") return `${value} m per intensity unit`;
+  if (key === "iceMelt") return `${value * 100}% of map span per intensity unit`;
   if (key === "coastalForcing") return `${value}×`;
   return String(value);
 }
@@ -151,7 +142,7 @@ function ruleValue(rule: MagicFeatureRule) {
   return `priority ${rule.priority}; seed: ${alternatives(rule.seeds)}${rule.retains ? `; retain: ${alternatives(rule.retains)}` : "; retain: same as seed"}`;
 }
 function conditionValue(condition: MagicCondition) {
-  const unit = ["elevation", "ice"].includes(condition.field) ? " m" : "";
+  const unit = ["ice", "soilDepth"].includes(condition.field) ? " of map span" : "";
   const values: string[] = [condition.field];
   if (condition.min !== undefined) values.push(`≥ ${condition.min}${unit}`);
   if (condition.max !== undefined) values.push(`≤ ${condition.max}${unit}`);

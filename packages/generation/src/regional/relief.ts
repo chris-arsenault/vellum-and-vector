@@ -1,12 +1,12 @@
 import { standGround } from "../rock/groundLedger";
+import { MapScale } from "@atlas/domain";
 import { measureSlopes } from "../world/geography";
 import { units } from "../world/math";
-import { slopeSettings } from "../processes/slopeSettings";
 import { physicalGradients } from "../world/physicalMetric";
 import { releaseWorking } from "../world/physicalNumerics";
 import { applyGlaciation } from "./glacial";
 import { baseSmoothing, lakeHollows } from "./base";
-import { featureCaps, restoreFeatures } from "./causes/registry";
+import { restoreFeatures } from "./causes/registry";
 import { networkDivides } from "./divides";
 import { transportSediment, wasteHillslopes } from "./sediment";
 import { developShore } from "./shore";
@@ -33,15 +33,15 @@ const hillslopeGradient = 0.3,
   reworkedSoftening = 0.6,
   coverSoftening = 0.2;
 /** Captured lake depth where the parent published none. */
-const defaultLakeDepth = 6;
+// length-unit: fraction
+const defaultLakeDepth = 0.0000015;
 /** Calibration passes fitting the parent-span blur of the relief to the captured base. */
 const calibrationPasses = 5;
-/** Amplification bounds and the smallest macro relief treated as a plain. */
+/** Plain-land amplification and the smallest macro relief treated as a plain. */
 const minimumAmplification = 0.01,
-  maximumAmplification = 8,
-  plainRelief = 2;
+  plainRelief = 0.0000005;
 /** The least a cell rises above its receiver, keeping the derived surface drainable. */
-const monotoneRise = 0.05;
+const monotoneRise = 0.0000000125;
 /** Sideways coupling of hillslopes and the passes it is applied in. */
 const hillslopeCoupling = 0.5,
   hillslopePasses = 3;
@@ -52,6 +52,7 @@ const hillslopeCoupling = 0.5,
  */
 const knickpointGradient = 0.025;
 /** Hillslope steps from the channel over which the slope flattens toward its divide, and the floor it keeps. */
+// length-unit: count
 const convexityLength = 20,
   divideFloor = 0.25;
 /** Extra rise of a hillslope cell on the trunk of the divide network (plan G2), at full crest strength. */
@@ -94,7 +95,7 @@ export function deriveRelief(state: RegionalState) {
   for (let i = 0; i < n; i++) if (network.lake[i] >= 0 || network.bowl[i]) basin[i] = 1;
   const relief: ReliefWork = { amplification, basin, iceFlux: new Float64Array(n) };
   applyGlaciation(state, h, relief);
-  keepDrainable(network, h, basin);
+  keepDrainable(network, h, basin, map.scale);
   // Oversteepened ground fails and its rock, with the valleys' incision, settles downstream.
   const supply = new Float64Array(n);
   wasteHillslopes(state, h, supply);
@@ -102,12 +103,12 @@ export function deriveRelief(state: RegionalState) {
   // A slide or fan that dams a valley leaves a hollow deep and wide enough for a lake: it stays.
   const hollows = lakeHollows(state, h, network.sea);
   for (let i = 0; i < n; i++) basin[i] |= hollows[i];
-  keepDrainable(network, h, basin);
+  keepDrainable(network, h, basin, map.scale);
   // The sea works the shore: exposed ground is cut, the lee and the river mouths fill. Ground
   // the cut took below the datum is sea and stays there; the rest drains as before.
   const cut = developShore(state, h),
     taken = cut.map((c, j) => (c && h[j] <= 0 ? 1 : 0)) as Uint8Array;
-  keepDrainable(network, h, basin, taken);
+  keepDrainable(network, h, basin, map.scale, taken);
   writeSurface(state, h, cut);
   state.regional.relief = relief;
   // Established landmarks restore their signatures on the written relief.
@@ -123,7 +124,6 @@ function reliefIncrements(state: RegionalState, crest: Float64Array): Increments
     network = state.regional.network!,
     { receiver, order, count, base } = network,
     thresholdArea = channelCells * regionalSpan(state) ** 2,
-    cap = featureCaps(state),
     increment = new Float64Array(n),
     step = new Float64Array(n),
     steps = new Int32Array(n),
@@ -152,10 +152,10 @@ function reliefIncrements(state: RegionalState, crest: Float64Array): Increments
       gradient =
         hillslopeGradient * material * reworked * cover * convexity * (1 + crestGain * ridge);
     }
-    if (cap[j] > 0) gradient = Math.min(gradient, cap[j]);
     // A channel falls along its whole step; a hillslope rises over one hillslope's length.
     increment[j] =
-      (network.channel[j] ? length : Math.min(length, slopeSettings.HillslopeLength)) * gradient;
+      (network.channel[j] ? length : Math.min(length, state.physical.profile.HillslopeLength)) *
+      gradient;
     // A step of the captured base steeper than any profile (an escarpment, a plateau edge)
     // is macro character the path must climb where it stands: a knickpoint, not a fall
     // spread along the whole profile. It is not amplified.
@@ -194,21 +194,18 @@ function calibrate(state: RegionalState, increments: Increments) {
         amplification[i] = fitted(
           amplification[i],
           blurredBase[i] - blurredLevel[i],
-          blurred[i] - blurredLevel[i]
+          blurred[i] - blurredLevel[i],
+          state.physical.map.scale.length(plainRelief)
         );
     blurContent(state, amplification, reach / 2);
   }
   return amplification;
 }
 /** One calibration step of a cell's amplification toward the wanted relief above its root. */
-function fitted(amplification: number, wanted: number, got: number) {
-  if (wanted <= plainRelief) return minimumAmplification;
-  if (got <= plainRelief) return amplification;
-  return clamp(
-    amplification * clamp(wanted / got, 0.4, 2.5),
-    minimumAmplification,
-    maximumAmplification
-  );
+function fitted(amplification: number, wanted: number, got: number, minimumRelief: number) {
+  if (wanted <= minimumRelief) return minimumAmplification;
+  if (got <= minimumRelief) return amplification;
+  return amplification * clamp(wanted / got, 0.4, 2.5);
 }
 
 /**
@@ -224,7 +221,7 @@ function fitted(amplification: number, wanted: number, got: number) {
 function conditionOnBase(state: RegionalState, h: Float64Array) {
   const map = state.physical.map,
     n = h.length,
-    datum = map.EffectiveSeaLevel / 1024,
+    datum = MapScale.metres(map.EffectiveSeaLevel, "native"),
     { base, sea, lake, sink, receiver } = state.regional.network!,
     reach = state.regional.parentSpan * baseSmoothing,
     content = contentMask(state),
@@ -237,7 +234,10 @@ function conditionOnBase(state: RegionalState, h: Float64Array) {
     if (!content[i] || sea[i] || lake[i] >= 0) continue;
     const exit = receiver[i] < 0 && !sink[i];
     h[i] = exit
-      ? Math.max(state.regional.inheritedHeight.get(i) / 1024 - datum, 1)
+      ? Math.max(
+          MapScale.metres(state.regional.inheritedHeight.get(i), "native") - datum,
+          map.scale.length(0.00000025)
+        )
       : macro[i] + rugged[i] * (h[i] - blurred[i]);
   }
 }
@@ -260,14 +260,14 @@ function construct(
     const j = order[k],
       i = receiver[j];
     if (i < 0) {
-      h[j] = rootHeight(network, j);
+      h[j] = rootHeight(network, j, state.physical.map.scale);
       continue;
     }
     const from = lake[i] >= 0 ? level[i] : h[i];
     h[j] = from + increment[j] * amplification[j] + step[j];
   }
   for (let i = 0; i < h.length; i++) {
-    if (sea[i]) h[i] = Math.min(base[i], -1);
+    if (sea[i]) h[i] = Math.min(base[i], -state.physical.map.scale.length(0.00000025));
     else if (!isContent(mesh, i)) h[i] = base[i];
   }
 }
@@ -277,10 +277,10 @@ function construct(
  * least a few metres down; a sink or exit cell is at its level (its base); a shore cell rises
  * just above the datum.
  */
-function rootHeight(network: NetworkWork, j: number) {
+function rootHeight(network: NetworkWork, j: number, scale: MapScale) {
   const { level, base, lake } = network;
-  if (lake[j] >= 0) return level[j] - Math.max(defaultLakeDepth, level[j] - base[j]);
-  return Math.max(level[j], 1);
+  if (lake[j] >= 0) return level[j] - Math.max(scale.length(defaultLakeDepth), level[j] - base[j]);
+  return Math.max(level[j], scale.length(0.00000025));
 }
 
 /**
@@ -337,6 +337,7 @@ function keepDrainable(
   network: NetworkWork,
   h: Float64Array,
   basin: Uint8Array,
+  scale: MapScale,
   held?: Uint8Array
 ) {
   const { receiver, order, count, level, lake } = network;
@@ -344,7 +345,7 @@ function keepDrainable(
     const j = order[k],
       i = receiver[j];
     if (i < 0 || basin[j] || held?.[j]) continue;
-    const floor = (lake[i] >= 0 ? level[i] : h[i]) + monotoneRise;
+    const floor = (lake[i] >= 0 ? level[i] : h[i]) + scale.length(monotoneRise);
     if (h[j] < floor) h[j] = floor;
   }
 }
@@ -364,7 +365,12 @@ function writeSurface(state: RegionalState, h: Float64Array, cut: Uint8Array) {
     if (!isContent(mesh, i)) continue;
     if (sea[i]) {
       // The captured sea floor, unless the shore's work raised it toward a bar or delta.
-      standGround(map, i, datum + units(Math.max(h[i], Math.min(base[i], -1))), "regional");
+      standGround(
+        map,
+        i,
+        datum + units(Math.max(h[i], Math.min(base[i], -map.scale.length(0.00000025)))),
+        "regional"
+      );
       map.CumulativeFluvialErosion.set(i, 0);
     } else {
       const ground = datum + units(h[i]) + Math.round(applied.appliedTo("Elevation", i));
@@ -378,7 +384,11 @@ function writeSurface(state: RegionalState, h: Float64Array, cut: Uint8Array) {
 /** Height gradient (m/m) of the present elevation per cell, as two arrays. */
 export function heightGradients(state: RegionalState) {
   const map = state.physical.map,
-    gradients = physicalGradients(map.mesh, (i) => map.Elevation.get(i) / 1024, map.coverage),
+    gradients = physicalGradients(
+      map.mesh,
+      (i) => MapScale.metres(map.Elevation.get(i), "native"),
+      map.coverage
+    ),
     gx = new Float64Array(map.mesh.count),
     gy = new Float64Array(map.mesh.count);
   for (let i = 0; i < gx.length; i++) {

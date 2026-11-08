@@ -20,7 +20,8 @@ import {
 } from "./coverShared";
 
 /** Area at which verdant country is half as great as it gets: 20,000 square kilometres. */
-const typicalArea = 2e10;
+// length-unit: fraction
+const typicalArea = 0.00125;
 const isA = magicRule("greenwood", "verdant");
 const places = rulePlaces("verdantGround", "greenwood", "verdant");
 const factors = countryFactors(places, typicalArea, verdureAt);

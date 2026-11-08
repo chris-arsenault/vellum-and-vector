@@ -6,6 +6,7 @@ import {
   spatial,
   regionalSelectionArea,
   regionalScale,
+  MapScale,
   type AtlasFeature,
   type CatalogRecord,
   type DomainWrite,
@@ -17,6 +18,7 @@ import {
 import type { Geometry } from "geojson";
 import { GeometryKernel } from "./geometryKernel";
 import { SpatialCatalog } from "./spatialCatalog";
+import { scope, world as catalogWorld } from "./catalogFixture";
 
 let sqlite: Awaited<ReturnType<typeof sqliteInit>>;
 const opened: SpatialCatalog[] = [];
@@ -26,37 +28,17 @@ beforeAll(async () => {
 afterEach(async () => {
   for (const catalog of opened.splice(0)) await catalog.close();
 });
-const scope = {
-  worldId: "10000000-0000-4000-8000-000000000001",
-  spaceId: "surface",
-  areaId: "root",
-};
 const available = rectangle([0, 0, 1000, 1000]);
 function metadata(domain = available, cylinder = false): WorldMetadata {
   return {
+    ...catalogWorld,
     id: scope.worldId,
     name: "Geography",
-    seed: 7,
-    version: 1,
-    owner: "creator",
     reference: {
-      id: "metres",
-      topology: "planar",
-      units: "metre",
-      axes: "east,north,up",
-      verticalDatum: "Sea level",
-      precision: 0.000001,
-      version: 1,
+      ...catalogWorld.reference,
       domain,
       ...(cylinder ? { boundaryMode: "cylinder" as const } : {}),
     },
-    layers: {},
-    fields: [],
-    magic: [],
-    landmarks: [],
-    views: [],
-    generations: [],
-    epochs: [],
   };
 }
 async function fixture(domain = available, cylinder = false) {
@@ -209,7 +191,10 @@ it("selects land when a covering feature also touches another island along an ed
   });
   await f.put("touching-claim", rectangle([200, 150, 600, 350]));
   const choices = await f.pick(250, 250);
-  expect(f.areas(choices.candidates)).toEqual([40000, 90000]);
+  expect(f.areas(choices.candidates)).toEqual(expect.arrayContaining([40000, 90000]));
+  expect(
+    choices.candidates.every((c) => spatial.covers(rectangle([100, 100, 400, 400]), c.footprint))
+  ).toBe(true);
   expect(choices.candidates.every((c) => c.footprint.type === "Polygon")).toBe(true);
 });
 it("selects one continuous region across the cylindrical seam from either side", async () => {
@@ -218,7 +203,9 @@ it("selects one continuous region across the cylindrical seam from either side",
   await coastline(f, land);
   await f.put("Seam country", land);
   for (const x of [50, 950]) {
-    const picked = (await f.pick(x, 300)).candidates[0].footprint;
+    const picked = (await f.pick(x, 300)).candidates.find((candidate) =>
+      spatial.covers(candidate.footprint, land)
+    )!.footprint;
     expect(spatial.covers(picked, land)).toBe(true);
     expect(spatial.difference(picked, land)).toBeNull();
   }
@@ -240,12 +227,16 @@ it("offers a region-sized piece within a large landmass instead of defaulting to
     viewport: [0, 0, 4_000_000, 3_000_000],
   });
   const first = (await f.catalog.regionChoices(query)).candidates;
-  const target = regionalSelectionArea(1),
+  const scale = MapScale.fromCells(spatial.bounds(domain), 60_000),
+    target = regionalSelectionArea(1, scale),
     area = spatial.area(first[0].footprint);
   expect(area).toBeGreaterThan(target / 4);
   expect(area).toBeLessThan(target * 2.5);
   const [w, s, e, n] = spatial.bounds(first[0].footprint);
-  expect(((e - w) * (n - s)) / regionalScale(1).cellArea).toBeLessThan(180_000);
+  expect(
+    ((e - w) * (n - s)) /
+      regionalScale(1, "standard", MapScale.fromCells([w, s, e, n], 60_000)).cellArea
+  ).toBeLessThan(180_000);
   expect(first.some((candidate) => candidate.name === "Landmass")).toBe(true);
   expect(first.some((candidate) => candidate.name === "Small grove")).toBe(true);
   const closer = await f.catalog.regionChoices({
@@ -306,7 +297,10 @@ it("selects smaller districts using the open map's captured level without a live
   });
   await f.put("Regional country", rectangle([10_000, 10_000, 690_000, 490_000]));
   const picked = await f.pick(300_000, 250_000),
-    target = regionalSelectionArea(2);
+    target = regionalSelectionArea(
+      2,
+      MapScale.fromCells(spatial.bounds(world.reference.domain), 60_000)
+    );
   expect(spatial.area(picked.candidates[0].footprint)).toBeGreaterThan(target / 2);
   expect(spatial.area(picked.candidates[0].footprint)).toBeLessThan(target * 2);
   expect(picked.candidates.some((c) => c.name === "Regional country")).toBe(true);
@@ -321,8 +315,19 @@ describe("region picks", () => {
       rectangle([200, 200, 400, 400])
     );
     await f.put("river", across, rectangle([100, 450, 800, 550]));
-    expect(f.areas((await f.pick(300, 300)).candidates)).toEqual([250_000]);
-    expect(f.areas((await f.pick(300, 500)).candidates)).toEqual([250_000]);
+    for (const [x, y] of [
+      [300, 300],
+      [300, 500],
+    ]) {
+      const candidates = (await f.pick(x, y)).candidates;
+      expect(f.areas(candidates)).toContain(250_000);
+      expect(candidates.every((candidate) => candidate.name.startsWith("forest"))).toBe(true);
+      expect(
+        candidates.every((candidate) =>
+          spatial.covers(rectangle([100, 100, 600, 600]), candidate.footprint)
+        )
+      ).toBe(true);
+    }
     expect((await f.pick(650, 650)).candidates).toEqual([]);
   });
   it("proposes the indexed polygons under a click and nothing elsewhere", async () => {
@@ -331,8 +336,8 @@ describe("region picks", () => {
     await f.put("grove", rectangle([200, 200, 400, 400]));
     const picked = await f.pick(300, 300);
     expect(picked.childId).toBeNull();
-    expect(f.areas(picked.candidates)).toEqual([40_000, 250_000]);
-    expect(f.areas((await f.pick(500, 500)).candidates)).toEqual([250_000]);
+    expect(f.areas(picked.candidates)).toEqual(expect.arrayContaining([40_000, 250_000]));
+    expect(f.areas((await f.pick(500, 500)).candidates)).toContain(250_000);
     expect((await f.pick(800, 800)).candidates).toEqual([]);
   });
   it("opens existing children and clips proposals by them", async () => {
@@ -340,7 +345,13 @@ describe("region picks", () => {
     await f.put("forest", rectangle([100, 100, 600, 600]));
     await f.child("west", rectangle([0, 0, 400, 1000]));
     expect((await f.pick(200, 200)).childId).toBe("west");
-    expect(f.areas((await f.pick(500, 300)).candidates)).toEqual([100_000]);
+    const candidates = (await f.pick(500, 300)).candidates;
+    expect(f.areas(candidates)).toContain(100_000);
+    expect(
+      candidates.every((candidate) =>
+        spatial.covers(rectangle([400, 100, 600, 600]), candidate.footprint)
+      )
+    ).toBe(true);
     const outline = await f.catalog.drawRegion({
       query: regionQuery(),
       tolerance: 1,

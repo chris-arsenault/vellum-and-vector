@@ -5,7 +5,6 @@ import {
   registerSavedMap,
   type SavedMapSummary,
 } from "@atlas/storage-browser";
-import type { LegacySavedWorld } from "./legacySave";
 import { atlasWorkspace, readEditorWorld, rememberWorld } from "./atlasWorkspace";
 import { clearGenerationJobs, listJobs } from "./generationJobs";
 
@@ -36,19 +35,12 @@ export async function saveMap(id: string) {
 }
 
 export async function openSavedMap(id: string) {
-  const saved = await readSavedMap<LegacySavedWorld>(id);
+  const saved = await readSavedMap(id);
   requireThat(saved, "missing_saved_map", "This saved map is no longer available.");
-  requireThat(
-    saved.format === 1 || saved.format === 2,
-    "saved_map_format",
-    "This saved map uses an unsupported format."
-  );
+  requireThat(saved.format === 3, "saved_map_format", "This saved map uses an unsupported format.");
   clearGenerationJobs(id);
   const workspace = await atlasWorkspace();
-  const world =
-    saved.format === 2
-      ? await workspace.openSavedWorld(id, saved.root)
-      : await workspace.openLegacyWorld(id, saved.data);
+  const world = await workspace.openSavedWorld(id, saved.root);
   rememberWorld(world);
   return world;
 }

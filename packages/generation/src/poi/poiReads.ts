@@ -1,4 +1,4 @@
-import type { AtlasFeature } from "@atlas/domain";
+import { MapScale, type AtlasFeature } from "@atlas/domain";
 import { Landform, Water } from "../world/codes";
 import type { PhysicalField } from "../world/field";
 import { meshWindowCells } from "../world/meshWindow";
@@ -20,8 +20,8 @@ import {
  */
 export const fieldOf = (state: GenerationState): PhysicalField => state.physical!.map;
 /** Native elevation units are 1024 to the metre. */
-export const metres = (native: number) => native / 1024;
-export const toNative = (value: number) => Math.round(value * 1024);
+export const metres = (native: number) => MapScale.metres(native, "native");
+export const toNative = (value: number) => MapScale.native(value);
 /** Height above the sea, in metres. */
 export const heightAt = (state: GenerationState, cell: number) => {
   const map = fieldOf(state);
@@ -57,7 +57,7 @@ export const jointedAt = (state: GenerationState, cell: number) =>
   groundOf(fieldOf(state)).fold(cell, surfaceOpenness);
 /** Rain in metres a year. */
 export const rainfallAt = (state: GenerationState, cell: number) =>
-  fieldOf(state).Rainfall.get(cell) / 1000;
+  MapScale.metres(fieldOf(state).Rainfall.get(cell), "mm");
 /** River discharge in cubic metres a second. */
 export const dischargeAt = (state: GenerationState, cell: number) =>
   fieldOf(state).FlowAccumulation.get(cell);
@@ -96,7 +96,7 @@ export function* adjacent(state: GenerationState, cell: number) {
 export const gap = (state: GenerationState, a: number, b: number) =>
   physicalDistance(fieldOf(state).mesh, a, b);
 /** The mean distance between neighbouring cells of this map, in metres. */
-export const cellSpan = (state: GenerationState) => fieldOf(state).mesh.spacing;
+export const cellSpan = (state: GenerationState) => fieldOf(state).scale.cells(1);
 
 /** Every cell within `radius` metres of a cell, itself included. */
 export function cellsWithin(state: GenerationState, cell: number, radius: number): number[] {

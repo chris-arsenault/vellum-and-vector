@@ -14,6 +14,8 @@ import {
   type Position,
   isDescendant,
   ownsMapGeography,
+  MapScale,
+  defaultTerrainCells,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { authoredFields } from "../mapAuthored";
@@ -30,8 +32,6 @@ import { refreshWorkspaceSamples } from "./atlasSurfaceProjection";
 export { refreshWorkspaceSamples } from "./atlasSurfaceProjection";
 import { atlasPhysicalProfile, atlasQuality } from "./atlasProfile";
 import { generationResolution } from "../resolution";
-import { isWorldGeography } from "../worldSignificance";
-import { continentalWorldProfile } from "./worldScale";
 import type { PhysicalProfileOverrides } from "../physicalProfileConfiguration";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import type { PhysicalProfile } from "./profile";
@@ -58,8 +58,6 @@ export interface AtlasPhysicalWorkspace {
   interpolationKey?: string;
   fixed: { binding: ChannelBinding; values: Band }[];
   inherited: boolean;
-  /** This map's cell span over a World cell's at the same quality: 1 (or absent) on the World map. */
-  scale?: number;
 }
 export function nativePosition(work: AtlasPhysicalWorkspace, i: number): Position {
   return {
@@ -132,7 +130,7 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
   finishGroundImport(map, imported);
   map.SedimentProducedTotal = map.coverage.reduce(
     map.CumulativeDeposition,
-    (sum, deposition, i) => sum + (deposition / 1024) * map.mesh.area(i),
+    (sum, deposition, i) => sum + MapScale.metres(deposition, "native") * map.mesh.area(i),
     0
   );
   map.SedimentDepositedTotal = map.SedimentProducedTotal;
@@ -282,15 +280,18 @@ export function createAtlasWorkspace(
   parameters: Partial<AtlasParameters> = {},
   overrides: PhysicalProfileOverrides = {}
 ): AtlasPhysicalWorkspace {
-  const frame = spatial.bounds(state.domain.world.reference.domain);
-  const profile = continentalWorldProfile(atlasPhysicalProfile(parameters, overrides), frame);
+  const frame = spatial.bounds(state.domain.world.reference.domain),
+    mapFrame = spatial.bounds(state.domain.scope.footprint),
+    scale = MapScale.fromCells(mapFrame, defaultTerrainCells);
+  const profile = atlasPhysicalProfile(parameters, overrides, scale);
   profile.WorldExtentY = [frame[1], frame[3]];
   profile.WorldExtentX = [frame[0], frame[2]];
   profile.MapBoundary = mapBoundaryValue(state.domain.world.reference.boundaryMode);
   profile.WrapLongitude = Number(profile.MapBoundary === 1);
   const resolution = generationResolution(
     quality,
-    state.domain.world.areas[state.domain.scope.areaId].profile
+    state.domain.world.areas[state.domain.scope.areaId].profile,
+    scale
   );
   const cellSpan = state.domain.world.areas[state.domain.scope.areaId].parentId
       ? (state.domain.scope.resolution ?? resolution.cellSpan)
@@ -303,9 +304,6 @@ export function createAtlasWorkspace(
     grid: state.surface.coverage,
     fixed: [],
     inherited: Boolean(state.surface.channels.elevation),
-    scale: isWorldGeography(state)
-      ? 1
-      : Math.min(1, cellSpan / generationResolution(quality, "world").cellSpan),
   };
   if (work.inherited) inheritNumerical(state, work);
   refreshWorkspaceSamples(state, work);

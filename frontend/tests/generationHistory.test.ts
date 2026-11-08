@@ -191,9 +191,7 @@ test("links a coastal conflict to the actual Pressure effect and accepts zero fo
   ).toBe(0);
 });
 
-test("preserves dirty JSON across stages, applies owned values atomically and regenerates compatibility copies", async ({
-  page,
-}) => {
+test("preserves dirty JSON across stages and applies owned values atomically", async ({ page }) => {
   await installGenerationFixture(page);
   await page.goto("/");
   await page.getByLabel("World name").fill("JSON authoring");
@@ -212,14 +210,11 @@ test("preserves dirty JSON across stages, applies owned values atomically and re
   const recipe = JSON.parse(await field.inputValue());
   expect(recipe.features["physical.volcanism"].settings.volcanism).toBe(1.9);
   recipe.features["physical.volcanism"].settings.volcanism = 0.4;
-  recipe.parameters.volcanism = 3;
   await field.fill(JSON.stringify(recipe));
   await page.getByRole("button", { name: "Apply configuration", exact: true }).click();
-  await expect(page.locator(".setup-json")).toContainText(
-    "compatibility parameters were regenerated"
-  );
+  await expect(page.locator(".setup-json")).toContainText("Configuration applied");
   const normalized = JSON.parse(await field.inputValue());
-  expect(normalized.parameters.volcanism).toBe(0.4);
+  expect(normalized.features["physical.volcanism"].settings.volcanism).toBe(0.4);
   await expect.poll(() => page.evaluate(() => "generationFixtureInput" in window)).toBe(false);
   await tuneGeneration(page, "Volcanic geography");
   await expect(page.getByLabel("Volcanic construction · multiplier", { exact: true })).toHaveValue(
@@ -295,25 +290,5 @@ test("keeps cultures and politics independent and configures operative cultural 
   expect(input.features!["human.cultures"].enabled).toBe(true);
   expect(input.features!["human.politics"].enabled).toBe(true);
   expect(input.parameters).toMatchObject({ cultureCount: 2, polityCount: 3 });
-});
-
-test("imports legacy human-era capacity as an operative value", async ({ page }) => {
-  await installGenerationFixture(page);
-  await page.goto("/");
-  await page.getByLabel("World name").fill("Imported history warning");
-  await stage(page, /Review & generate/).click();
-  const field = await openRecipe(page),
-    recipe = JSON.parse(await field.inputValue());
-  recipe.settings.humanEras[0].politicalCapacity = 2;
-  await field.fill(JSON.stringify(recipe));
-  await page.getByRole("button", { name: "Apply configuration", exact: true }).click();
-  await expect(page.locator(".setup-issues")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Generate world", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Generate world", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
-  const input = await page.evaluate(
-    () =>
-      (window as unknown as { generationFixtureInput: AtlasGenerationInput }).generationFixtureInput
-  );
-  expect(input.settings!.humanEras[0].politicalCapacity).toBe(2);
+  expect(input.settings!.humanEras[1].politicalCapacity).toBe(0.6);
 });

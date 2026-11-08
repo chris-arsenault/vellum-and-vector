@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
@@ -10,13 +12,13 @@ import { areaOf, depthAt, extentOf, faunaAt, heldUnder, near } from "./seaShared
 import { showsForm, wrapOf } from "./shoreForm";
 
 /** Area at which a strait is half as great as straits get: 500 square kilometres. */
-const typicalArea = 5e8;
+const typicalArea = MapScale.area(0.00003125);
 /** A current this strong (per-mille) scours the bed instead of leaving it to silt. */
 const scouringCurrent = 300;
 /** A sill shallower than this, in metres, has closed the passage to the sea. */
-const closedDepth = 2;
+const closedDepth = MapScale.length(0.0000005, 0.5);
 /** The least water a strait with a running current, or a refined one, keeps over its sill, in metres. */
-const heldDepth = 2;
+const heldDepth = MapScale.length(0.0000005, 0.5);
 /** Extra boat cost at the full race of the narrows. */
 const race = 1.5;
 /** Roads run to a crossing; current-borne magic runs through it. */
@@ -26,7 +28,7 @@ const landingRoad = 0.85,
 const isA = showsForm("strait");
 const places = regionPlaces("strait", isA, wrapOf);
 /** The country around a strait that bears on it: 40 km. */
-const around = near(40_000);
+const around = near(0.01);
 const currentAt = (state: GenerationState, cell: number) =>
   fieldOf(state).OceanCurrentStrength.get(cell);
 const reachOf = (state: GenerationState, place: PoiPlace) =>
@@ -161,7 +163,9 @@ export const strait: PoiEntry = {
     statement:
       "Sea-level fall, uplift or a slack current's silt can raise its sill until the passage closes, and the two seas part. A rise reopens it as a new place. Water that runs hard holds it open across epochs.",
     fate: (state, place) =>
-      shallowest(state, place) < closedDepth ? { fate: "ends" } : { fate: "persists" },
+      shallowest(state, place) < mapScale(state).resolveMeasure(closedDepth)
+        ? { fate: "ends" }
+        : { fate: "persists" },
   },
   visibility: {
     statement:

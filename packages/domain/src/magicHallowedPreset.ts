@@ -8,6 +8,7 @@ import { at, covers, feature, land } from "./magicPresetHelpers";
  * its stored charge between, so an abandoned sanctuary fades.
  */
 export const hallowedPreset = magicSystemSchema.parse({
+  lengthUnits: "relative",
   id: "hallowed",
   name: "Hallowed",
   origins: [

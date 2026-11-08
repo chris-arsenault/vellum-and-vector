@@ -25,7 +25,7 @@ function fixture() {
       parentId: b.root.id,
       profile: "region" as const,
       footprint: rectangle([1000, 1000, 2000, 2000]),
-      map: { sourceAreaId: b.root.id, sourceRevision: 1 },
+      map: { sourceAreaId: b.root.id, sourceRevision: 1, refinementLevel: 1 },
     },
     world = { id: b.id, reference: b.reference, areas: { [b.root.id]: b.root, child } },
     coverage: MaterializedCoverage = {

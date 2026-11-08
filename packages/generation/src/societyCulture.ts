@@ -22,6 +22,7 @@ import { communityReach, contactCosts } from "./societyContact";
 import { namingCulture } from "./atlasNaming";
 import { evolveLanguageUse } from "./societyLanguage";
 import { profileOf } from "./societyProfile";
+import { mapScale } from "./worldSignificance";
 
 export function culturalIdentity(
   state: GenerationState,
@@ -151,7 +152,7 @@ function strongestContacts(state: GenerationState) {
     const a = byId.get(link.from)!,
       b = byId.get(link.to)!;
     if (population(communities[a]) < 1 || population(communities[b]) < 1) continue;
-    const strength = Math.exp(-cost(link) / 150000);
+    const strength = Math.exp(-cost(link) / mapScale(state).length(0.0375));
     if (strength > contacts[a].strength) contacts[a] = { index: b, strength };
     if (strength > contacts[b].strength) contacts[b] = { index: a, strength };
   }

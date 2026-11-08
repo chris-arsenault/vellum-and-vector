@@ -57,7 +57,7 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
   },
   "physical.fractures": { epochControls: [strength("tectonics", "Epoch tectonic activity")] },
   "ocean.geography": {
-    epochControls: [{ key: "seaLevel", label: "Epoch sea level offset", unit: "m" }],
+    epochControls: [{ key: "seaLevel", label: "Epoch sea level offset", unit: "of map span" }],
   },
   "physical.coastal-evolution": {
     settingConsumers: { coastalErosion: ["atlas.coastal-erosion-and-deposition"] },

@@ -1,4 +1,4 @@
-import { RecordQueue, type Band } from "@atlas/domain";
+import { MapScale, RecordQueue, type Band } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import type { PhysicalProfile } from "../world/profile";
 import { clamp } from "../world/math";
@@ -114,7 +114,7 @@ function supportFailures(map: PhysicalField, failsAt: number) {
         if (j < 0 || ground.surface(i, facet) <= map.Elevation.get(j)) continue;
         failure ??= ground.failureFrom(i, facet, failing);
         const depth = failure(j, mesh.edgeLength(i, edge), stable),
-          candidate = (depth * share * mesh.area(i)) / 1024;
+          candidate = MapScale.metres(depth, "native") * share * mesh.area(i);
         if (candidate <= volume) continue;
         target = j;
         volume = candidate;
@@ -130,11 +130,8 @@ function supportFailures(map: PhysicalField, failsAt: number) {
 /** Backward-Euler face exchange with unilateral stable slopes: ground fails until it stands. */
 export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
   const plan = faces(map);
-  const heights = workingValues(
-    map,
-    "float64",
-    "slope:heights",
-    (i) => map.Elevation.get(i) / 1024
+  const heights = workingValues(map, "float64", "slope:heights", (i) =>
+    MapScale.metres(map.Elevation.get(i), "native")
   );
   // These heights span the represented neighbor distance. An assumed subcell hillslope length
   // cannot turn a gentle regional flank into a failing cliff. Material still sets its stable angle.
@@ -190,7 +187,7 @@ function relaxFaces(
     const face = plan.get(index);
     const movement = exchange(face, heights, stable, area);
     plan.columns.volume.set(index, face.volume);
-    if (movement <= 1 / 1024) continue;
+    if (movement <= MapScale.metres(1, "native")) continue;
     enqueueCell(face.i);
     enqueueCell(face.j);
   }

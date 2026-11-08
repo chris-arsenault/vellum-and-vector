@@ -25,7 +25,8 @@ import { flowTarget } from "./waterReads";
 const salt = 0x7042;
 const salts = { height: 0x7043, width: 0x7044 };
 /** A crest this wide at the World's scale is known there, however low the fall, in metres. */
-const worldFallsWidth = 500;
+// length-unit: fraction
+const worldFallsWidth = 0.000125;
 export const dropOf = (state: GenerationState, place: PoiPlace) =>
   riverDrop(fieldOf(state), place.anchor);
 export const dischargeOf = (state: GenerationState, place: PoiPlace) =>
@@ -51,7 +52,8 @@ export function sizeAtCell(state: GenerationState, cell: number) {
       fracture: jointedAt(state, cell),
     },
     hashUnit(salts.height, cell, 0),
-    hashUnit(salts.width, cell, 0)
+    hashUnit(salts.width, cell, 0),
+    fieldOf(state).scale
   );
 }
 /** What a fall really is, settled once: the ground its own step shapes does not choose again. */
@@ -72,7 +74,7 @@ const heightOf = (state: GenerationState, place: PoiPlace) => sizeOfFall(state, 
 export function prominentFall(state: GenerationState, place: PoiPlace) {
   const { height, width } = sizeOfFall(state, place),
     scale = mapScale(state);
-  return height >= worldFallsDrop * scale.height || width >= worldFallsWidth * scale.length;
+  return height >= scale.resolveMeasure(worldFallsDrop) || width >= scale.length(worldFallsWidth);
 }
 
 export const fallVariety: PoiVariety = {
@@ -103,17 +105,17 @@ export function step(state: GenerationState, place: PoiPlace): readonly PoiField
   const target = flowTarget(state, place.anchor),
     lip = fieldOf(state).Elevation.get(place.anchor);
   if (target < 0 || !isLand(state, place.anchor) || !isLand(state, target)) return [];
-  const drop = Math.max(dropOf(state, place), waterfallLeastDrop);
+  const drop = Math.max(dropOf(state, place), waterfallLeastDrop(fieldOf(state)));
   return [
     { change: "atLeast", band: "Elevation", cell: place.anchor, value: lip },
     { change: "atMost", band: "Elevation", cell: target, value: lip - toNative(drop) },
   ];
 }
 /** The most a carried fall asks of finer ground, in metres, and how far down it may grade the bed. */
-const largestCarriedDrop = 100,
+const largestCarriedDrop = 0.000025,
   carriedGrade = 40,
   /** What the bed falls per cell along the graded reach, in metres. */
-  gradedFall = 0.5;
+  gradedFall = 0.000000125;
 /**
  * The step a carried fall needs at its place on its river, whatever the ground there. The lip
  * holds and the bed below comes down, cell by cell until it meets ground already that low, so
@@ -126,7 +128,10 @@ export function carriedStep(
 ): readonly PoiFieldChange[] {
   const map = fieldOf(state),
     lip = map.Elevation.get(cell),
-    drop = Math.min(largestCarriedDrop, Math.max(parentDrop, waterfallLeastDrop)),
+    drop = Math.min(
+      map.scale.length(largestCarriedDrop, 0.5),
+      Math.max(parentDrop, waterfallLeastDrop(map))
+    ),
     floor = lip - toNative(drop),
     below = reachBelow(
       state,
@@ -135,7 +140,7 @@ export function carriedStep(
     );
   const changes: PoiFieldChange[] = [{ change: "atLeast", band: "Elevation", cell, value: lip }];
   for (let k = 1; k < below.length; k++) {
-    const value = floor - toNative(gradedFall * (k - 1));
+    const value = floor - toNative(map.scale.length(gradedFall, 0.5) * (k - 1));
     if (map.Elevation.get(below[k]) <= value) break;
     changes.push({ change: "atMost", band: "Elevation", cell: below[k], value });
   }
@@ -162,7 +167,7 @@ function raisedBanks(state: GenerationState, place: PoiPlace) {
     reach = reachBelow(state, place, banks.length),
     map = fieldOf(state),
     lip = map.Elevation.get(place.anchor),
-    drop = toNative(Math.max(dropOf(state, place), waterfallLeastDrop));
+    drop = toNative(Math.max(dropOf(state, place), waterfallLeastDrop(map)));
   return reach.flatMap((cell, k): PoiFieldChange[] =>
     banksOf(state, cell, reach).map((near) => ({
       change: "atLeast",
@@ -187,7 +192,7 @@ function broadLip(state: GenerationState, place: PoiPlace): readonly PoiFieldCha
 function bed(state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] {
   const { banks, debris, scoured } = fallShapes[formIn(state, place)],
     below = reachBelow(state, place, banks.length).slice(1),
-    fallen = toNative(debris * Math.max(dropOf(state, place), waterfallLeastDrop));
+    fallen = toNative(debris * Math.max(dropOf(state, place), waterfallLeastDrop(fieldOf(state))));
   return below.flatMap((cell): PoiFieldChange[] => [
     ...(scoured ? [{ change: "atMost", band: "SedimentThickness", cell, value: 0 } as const] : []),
     ...(debris
@@ -205,5 +210,5 @@ export const shapedFall = (state: GenerationState, place: PoiPlace): readonly Po
 /** Nothing grows on the wet rock beside the lip. */
 export function wetRock(state: GenerationState, place: PoiPlace) {
   const walls = banksOf(state, place.anchor, [place.anchor]);
-  return [...bareOf(walls), ...thinSoilOf(walls)];
+  return [...bareOf(walls), ...thinSoilOf(state, walls)];
 }

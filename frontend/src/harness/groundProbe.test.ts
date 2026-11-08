@@ -26,7 +26,7 @@ it("records the actual held donor separately from process boundaries and detache
   setLayer(map, 1, 0, rockCatalogue.shale.code, 800, { formedMin: 1 });
   const sourceElevation = map.Elevation.get(0),
     held = holdRock(map),
-    context = physicalContext(1, 0, physicalProfile);
+    context = physicalContext(1, 0, map.scale.resolve(physicalProfile));
   try {
     probe.observe("placement", { processes: ["move"], phase: "before", substep: 0 }, map, context);
     placeCarriedGround(map, held, 1, 0, [1, 0, 0, 1]);

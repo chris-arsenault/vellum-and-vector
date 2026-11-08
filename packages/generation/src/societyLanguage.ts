@@ -7,6 +7,7 @@ import {
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import { contactCosts } from "./societyContact";
+import { mapScale } from "./worldSignificance";
 
 interface Contact {
   language: string;
@@ -22,7 +23,7 @@ function contacts(state: GenerationState) {
     const a = indices.get(link.from)!,
       b = indices.get(link.to)!;
     if (population(region.communities[a]) < 1 || population(region.communities[b]) < 1) continue;
-    const strength = Math.exp(-cost(link) / 150000);
+    const strength = Math.exp(-cost(link) / mapScale(state).length(0.0375));
     for (const [target, source] of [
       [a, b],
       [b, a],

@@ -1,16 +1,12 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { gradeSeats } from "../../regional/grading";
 import { regionalSpan } from "../../regional/lattice";
 import { scaleAround } from "../../regional/network";
 import { placesEnabled } from "../../regional/places";
-import {
-  drawChannelsToSeats,
-  knownSeats,
-  seatCaps,
-  settleSeats,
-  usableSlope,
-} from "../../regional/seats";
+import { drawChannelsToSeats, knownSeats, settleSeats, usableSlope } from "../../regional/seats";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -34,7 +30,7 @@ const coldestSite = -5;
 /** People at which a settlement is half as great as settlements get. */
 const typicalPeople = 5000;
 /** The ground a settlement's traffic wears around it, in metres, and what travel costs on it. */
-const wornReach = 2000,
+const wornReach = MapScale.length(0.0005),
   wornGround = 0.6;
 /** What people carrying stock save on the ways through a settlement. */
 const carriage = 0.8;
@@ -94,7 +90,7 @@ export const settlement: PoiEntry = {
           hasChannel(state, cell) ? 1 : 0,
           shareAround(state, cell, (next) => !isLand(state, next))
         ),
-        soil = Math.min(1, sedimentAt(state, cell));
+        soil = Math.min(1, sedimentAt(state, cell) / mapScale(state).length(0.00000025, 0.5));
       return (flat + water + soil) / 3;
     },
     places,
@@ -124,9 +120,9 @@ export const settlement: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured settlement keeps its place on the refined map; its footprint holds the relief's gradient down so usable ground develops there even in hills, a river seat draws the network to it, and after each round's water it moves to the best ground beside it.",
+      "A captured settlement keeps its place on the refined map; its footprint is graded so usable ground develops there even in hills, a river seat draws the network to it, and after each round's water it moves to the best ground beside it.",
     carry: carryWhereItLands,
-    realize: notApplicable("Its footprint's gradient caps are the schedule's caps step below."),
+    realize: notApplicable("Its footprint is graded by the schedule's restore step below."),
     counterpart: (state, carried) =>
       state.regional.evidence?.seats.find((seat) => seat.featureId === carried.feature.id)?.cell ??
       carried.cell,
@@ -140,7 +136,7 @@ export const settlement: PoiEntry = {
     /**
      * A seat is a cause in every round: read from its captured position every run, so a seat an
      * earlier refinement moved is re-sited from the same evidence. The written relief is graded
-     * under every seat, because the cap alone is undone by later steps.
+     * under every seat after the natural terrain develops.
      */
     schedule: {
       kind: "settlement",
@@ -154,7 +150,6 @@ export const settlement: PoiEntry = {
             scaleAround(state, cost, seat.cell, 2 * span, seatCorridor);
       },
       support: (state) => drawChannelsToSeats(state),
-      caps: (state, cap) => seatCaps(state, cap),
       restore: (state) => gradeSeats(state),
       respond(state: RegionalState) {
         const domains = state.regional.input.domains;

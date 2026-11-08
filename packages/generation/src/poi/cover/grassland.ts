@@ -25,7 +25,8 @@ import {
 } from "./coverShared";
 
 /** Area at which a grassland is half as great as grasslands get: 100,000 square kilometres. */
-const typicalArea = 1e11;
+// length-unit: fraction
+const typicalArea = 0.00625;
 const isA = isFamily("grassland");
 const places = landscapePlaces("grassland", "grassland", grassCoverAt);
 const factors = countryFactors(places, typicalArea, grassCoverAt);

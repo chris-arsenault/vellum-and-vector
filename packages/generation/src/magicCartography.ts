@@ -76,7 +76,7 @@ export const magicCartography: CartographicControl[] = [
       parameters: {
         sourceThreshold,
         maximumSources: [32, 96, 160][i],
-        sourceSpacing: [150_000, 90_000, 60_000][i],
+        sourceSpacing: [0.0375, 0.0225, 0.015][i],
       },
     }))
   ),
@@ -99,7 +99,7 @@ export const magicCartography: CartographicControl[] = [
     [0.09, 0.36, 0.72].map((heat, i) => ({
       effects: {
         heat,
-        iceMelt: [0.125, 0.5, 1][i],
+        iceMelt: [0.00000003125, 0.000000125, 0.00000025][i],
         quickening: [0.5, 1, 1][i],
         fire: [0.1, 0.3, 0.5][i],
       },
@@ -127,8 +127,8 @@ export const magicCartography: CartographicControl[] = [
     "Ice-capture pattern",
     "Concentration in ice reservoirs versus continued transport toward colder ground.",
     ["Local reservoirs", "Intermediate", "Continued coldward flow"],
-    [600, 1200, 1800].map((iceRetention, i) => ({
-      parameters: { iceRetention, coldRetentionDistance: [4_000, 10_000, 18_000][i] },
+    [0.00015, 0.0003, 0.00045].map((iceRetention, i) => ({
+      parameters: { iceRetention, coldRetentionDistance: [0.001, 0.0025, 0.0045][i] },
     }))
   ),
   control(
@@ -145,13 +145,13 @@ export const magicCartography: CartographicControl[] = [
     "Ocean influence extent",
     "The reach and width of Pressure paths through connected ocean, coastal impulses and wakes.",
     ["Nearby", "Basin-spanning", "Far-reaching"],
-    [1_200_000, 2_000_000, 3_600_000].map((rayDistance, i) => ({
+    [0.3, 0.5, 0.9].map((rayDistance, i) => ({
       parameters: {
         rayDistance,
         rayDecay: [12, 8, 5][i],
-        coastalRayDistance: [200_000, 300_000, 500_000][i],
-        wakeDistance: [450_000, 700_000, 1_200_000][i],
-        beamWidth: [14_000, 20_000, 26_000][i],
+        coastalRayDistance: [0.05, 0.075, 0.125][i],
+        wakeDistance: [0.1125, 0.175, 0.3][i],
+        beamWidth: [0.0035, 0.005, 0.0065][i],
       },
     }))
   ),
@@ -182,7 +182,7 @@ export const magicCartography: CartographicControl[] = [
     "pressure",
     "wakes",
     "Ancient wake prevalence",
-    "The prevalence of historical wake paths scales with ocean area; their physical travel distances stay fixed.",
+    "The prevalence of historical wake paths scales with ocean area; their travel distances follow map scale.",
     ["Sparse", "Scattered", "Frequent"],
     [8, 16, 32].map((wakeSources) => ({ parameters: { wakeSources } }))
   ),
@@ -276,7 +276,7 @@ export const magicCartography: CartographicControl[] = [
     "Sanctuary reach",
     "How wide a ring a long-kept seat wards, and how long a seat must be kept to ward one.",
     ["Close", "District", "Province"],
-    [20_000, 40_000, 80_000].map((wardReach, i) => ({
+    [0.005, 0.01, 0.02].map((wardReach, i) => ({
       parameters: { wardReach, tenureFull: [600_000_000, 300_000_000, 150_000_000][i] },
     }))
   ),
@@ -319,7 +319,7 @@ export const magicCartography: CartographicControl[] = [
     [600, 400, 250].map((doorStrain, i) => ({
       parameters: {
         doorStrain,
-        doorDistance: [600_000, 300_000, 150_000][i],
+        doorDistance: [0.15, 0.075, 0.0375][i],
         doorCount: [3, 6, 12][i],
       },
     }))
@@ -330,7 +330,7 @@ export const magicCartography: CartographicControl[] = [
     "Wild zones",
     "How far a wild zone moves its ground and its cover between surveys.",
     degree,
-    [10, 20, 40].map((wildRelief, i) => ({
+    [0.0000025, 0.000005, 0.00001].map((wildRelief, i) => ({
       parameters: { wildRelief, wildShuffle: [0.15, 0.3, 0.5][i] },
     }))
   ),

@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import { MapScale } from "@atlas/domain";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 import type { GenerationState } from "@atlas/generation";
@@ -80,7 +81,8 @@ function picture(map: PhysicalField) {
     height = Math.ceil((north - south) / step),
     rgb = new Uint8Array(3 * width * height),
     ground = physicalSampler(map.mesh, map.Elevation),
-    above = (x: number, y: number) => (ground(x, y) - map.EffectiveSeaLevel) / 1024,
+    above = (x: number, y: number) =>
+      MapScale.metres(ground(x, y) - map.EffectiveSeaLevel, "native"),
     band = (metres: number) => Math.floor(metres / contourMetres);
   const colourAt = (x: number, y: number): Colour => {
     const cell = map.mesh.cellAt(x, y);
@@ -108,7 +110,7 @@ function groundReport(map: PhysicalField) {
   for (let cell = 0; cell < mesh.count; cell++)
     if (mesh.membership(cell) === 1 && map.WaterKindCodes.get(cell) === 0) {
       slopes.push(map.Slope.get(cell));
-      heights.push((map.Elevation.get(cell) - map.EffectiveSeaLevel) / 1024);
+      heights.push(MapScale.metres(map.Elevation.get(cell) - map.EffectiveSeaLevel, "native"));
     }
   slopes.sort((a, b) => a - b);
   heights.sort((a, b) => a - b);
@@ -166,14 +168,17 @@ function lowlandRoughness(map: PhysicalField) {
   const mesh = map.mesh,
     rough: number[] = [];
   for (let cell = 0; cell < mesh.count; cell++) {
-    const height = (map.Elevation.get(cell) - map.EffectiveSeaLevel) / 1024;
+    const height = MapScale.metres(map.Elevation.get(cell) - map.EffectiveSeaLevel, "native");
     if (mesh.membership(cell) !== 1 || map.WaterKindCodes.get(cell) !== 0 || height > lowland)
       continue;
     let most = 0;
     for (let edge = 0; edge < mesh.degree(cell); edge++) {
       const next = mesh.neighbor(cell, edge);
       if (next >= 0 && map.WaterKindCodes.get(next) === 0)
-        most = Math.max(most, Math.abs(map.Elevation.get(next) - map.Elevation.get(cell)) / 1024);
+        most = Math.max(
+          most,
+          MapScale.metres(Math.abs(map.Elevation.get(next) - map.Elevation.get(cell)), "native")
+        );
     }
     rough.push(most);
   }

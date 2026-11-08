@@ -1,4 +1,6 @@
+import type { RelativeMeasure } from "@atlas/domain";
 import type { GenerationState } from "../process";
+import { mapScale } from "../worldSignificance";
 import type { PoiPlace, PoiVisibility } from "./poiContract";
 import { cellsWithin, gap, settlementsOf, featureCell } from "./poiReads";
 import { nearestPlace } from "./poiPlaces";
@@ -11,10 +13,11 @@ const unit = (value: number) => (Number.isFinite(value) ? Math.max(0, Math.min(1
  * The reference is that kind's own: nothing here counts places or fits them to a target.
  */
 export const sized =
-  (size: Factor, typical: number): Factor =>
+  (size: Factor, typical: number | RelativeMeasure): Factor =>
   (state, place) => {
-    const s = size(state, place);
-    return s > 0 ? s / (s + typical) : 0;
+    const s = size(state, place),
+      reference = typeof typical === "number" ? typical : mapScale(state).resolveMeasure(typical);
+    return s > 0 ? s / (s + reference) : 0;
   };
 
 /** Cells of a place's country read to judge how far it stands out. */

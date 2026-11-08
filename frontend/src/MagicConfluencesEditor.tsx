@@ -5,12 +5,12 @@ import { SetupDisclosure } from "./SetupDisclosure";
 const effectLabels: Record<keyof ConfluenceEffects, string> = {
   fractureConductance: "Fracture conductance opened · 0–1,000 at full coverage",
   rockResistance: "Rock resistance change at full coverage · negative weakens",
-  relief: "Relief roughening · metres at full coverage",
+  relief: "Relief roughening · fraction of map span at full coverage",
   soilRemoval: "Soil removed · share at full coverage, 0–1",
   coastalForcing: "Coastal forcing added · 0–1,000 at full coverage",
   fog: "Fog forcing · 0–1 at full coverage",
-  iceMelt: "Ice removed · metres at full coverage",
-  debris: "Collapse debris deposited · metres at full coverage",
+  iceMelt: "Ice removed · fraction of map span at full coverage",
+  debris: "Collapse debris deposited · fraction of map span at full coverage",
   toxicity: "Habitat toxicity · 0–1 at full coverage",
 };
 

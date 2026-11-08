@@ -56,7 +56,7 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       vegetation: atlasParameterDefinitions.vegetation,
       grazing: atlasParameterDefinitions.grazing,
     },
-    legacyParameters: ["vegetation", "grazing"],
+    parameterKeys: ["vegetation", "grazing"],
     processes: ["initialize", "evolve", "respond", "burial", "present"].map(
       (name) => `atlas.ecology-${name}`
     ),
@@ -124,7 +124,7 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       culturalMobility: atlasParameterDefinitions.culturalMobility,
     },
     // Shared parameters: the population processes read these through the bound atlas parameters.
-    legacyParameters: ["cultureCount", "culturalMobility"],
+    parameterKeys: ["cultureCount", "culturalMobility"],
     processes: [culturalProcess.contract.id],
     slots: ["present.people"],
     contribute: (slot) => present(culturalProcess, slot),
@@ -139,7 +139,7 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       polityCount: atlasParameterDefinitions.polityCount,
       politicalReach: atlasParameterDefinitions.politicalReach,
     },
-    legacyParameters: ["polityCount", "politicalReach"],
+    parameterKeys: ["polityCount", "politicalReach"],
     processes: [politicalProcess.contract.id],
     slots: ["present.people"],
     contribute: (slot) => present(politicalProcess, slot),
@@ -164,7 +164,7 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       marketTravel: atlasParameterDefinitions.marketTravel,
       highways: atlasParameterDefinitions.highways,
     },
-    legacyParameters: ["townThreshold", "cityReach", "roadTraffic", "marketTravel", "highways"],
+    parameterKeys: ["townThreshold", "cityReach", "roadTraffic", "marketTravel", "highways"],
     processes: [builtProcess.contract.id],
     slots: ["present.people"],
     contribute: (slot) => present(builtProcess, slot),

@@ -1,4 +1,4 @@
-import { spatial, type AtlasFeature } from "@atlas/domain";
+import { MapScale, spatial, type AtlasFeature } from "@atlas/domain";
 import type { Geometry, Position as Coordinate } from "geojson";
 import type { HarnessWorkspace } from "./harnessWorkspace";
 
@@ -96,8 +96,8 @@ function seaGapSummary(gaps: number[], cellSpan: number) {
   return {
     ends: gaps.length,
     touchingTheSea: gaps.filter((gap) => gap <= 0.001 * cellSpan).length,
-    median: median(gaps) / 1000,
-    largest: Math.max(...gaps) / 1000,
+    median: MapScale.inUnits(median(gaps), "km"),
+    largest: MapScale.inUnits(Math.max(...gaps), "km"),
   };
 }
 const seaDistance = (ocean: Geometry, end: Coordinate) =>
@@ -155,7 +155,10 @@ export function featureReport(features: MapFeature[], water: Water) {
     settlements: { count: of("settlement").length, population },
     roads: {
       count: of("road").length,
-      lengthKm: of("road").reduce((sum, f) => sum + spatial.length(f.geometry), 0) / 1000,
+      lengthKm: MapScale.inUnits(
+        of("road").reduce((sum, f) => sum + spatial.length(f.geometry), 0),
+        "km"
+      ),
     },
   };
 }

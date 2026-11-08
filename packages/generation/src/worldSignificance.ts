@@ -1,4 +1,4 @@
-import { spatial } from "@atlas/domain";
+import { MapScale, spatial } from "@atlas/domain";
 import type { GenerationState } from "./process";
 
 /** World publication is independent of mesh density and viewport zoom. */
@@ -6,25 +6,20 @@ export function isWorldGeography(state: GenerationState) {
   return state.domain.world.areas[state.domain.scope.areaId].profile === "world";
 }
 
-/**
- * The scale a map's significance is judged at (ADR 0005). Every map holds about the same
- * number of cells, so a finer map is the same kind of map of a smaller country: what is
- * significant on it is what would be significant on the World map, shrunk by the ratio of its
- * cell span to a World cell's at the same quality. Lengths and breadths scale with that ratio,
- * areas, catchments and discharges with its square, and heights, depths and drops with its
- * square root (relief grows more slowly than extent). The World's scale is exactly one, so
- * its rules are the constants below. What a map does not name stays latent there: physical
- * water, stored drainage reaches, cover and magic coverage remain as fields.
- */
-export interface MapScale {
-  length: number;
-  area: number;
-  height: number;
-}
-export const worldScale: MapScale = { length: 1, area: 1, height: 1 };
-export function mapScale(state: GenerationState): MapScale {
-  const k = state.physical?.scale ?? 1;
-  return { length: k, area: k * k, height: Math.sqrt(k) };
+/** Generation and publication judge dimensions in the same map-owned frame. */
+export function mapScale(
+  state: Pick<GenerationState, "surface" | "domain"> & Partial<Pick<GenerationState, "physical">>
+): MapScale {
+  return (
+    state.physical?.map.scale ??
+    MapScale.fromBounds(
+      spatial.bounds(state.domain.scope.footprint),
+      state.surface.scope.resolution ??
+        Math.sqrt(
+          spatial.area(state.domain.scope.footprint) / Math.max(1, state.surface.active.length)
+        )
+    )
+  );
 }
 
 export interface WorldExtent {
@@ -53,13 +48,13 @@ export const landscapeWorldShare = 0.0015;
 /** A wetland complex's hydrological identity can warrant a smaller footprint. */
 export const wetlandWorldShare = 0.0003;
 /** A ribbon of local habitat is not a broad landscape, regardless of its total length. */
-export const landscapeMinimumBreadth = 12_000;
+export const landscapeMinimumBreadth = MapScale.length(0.003);
 /** The characteristic landscape must occupy a majority of its interpreted envelope. */
 export const landscapeCoherence = 0.6;
 /** A broad landscape needs either a distinct margin or sustained interior character. */
 export const landscapeContrast = 0.15;
 /** Absolute extent prevents a small world from promoting every local habitat. */
-export const landscapeMinimumArea = 2_000_000_000;
+export const landscapeMinimumArea = MapScale.area(0.000125);
 /** Interior character can establish a landscape with a gradual outer transition. */
 export const landscapeStrongInterior = 0.75;
 export interface LandscapeEvidence {
@@ -73,11 +68,11 @@ export function landscapeSignificance(
   world: WorldExtent,
   kind: string,
   evidence: LandscapeEvidence,
-  scale = worldScale
+  scale: MapScale
 ) {
   const share = kind === "wetland" ? wetlandWorldShare : landscapeWorldShare;
-  const minimum = Math.max(landscapeMinimumArea * scale.area, world.area * share);
-  if (evidence.area < minimum || evidence.breadth < landscapeMinimumBreadth * scale.length)
+  const minimum = Math.max(scale.resolveMeasure(landscapeMinimumArea), world.area * share);
+  if (evidence.area < minimum || evidence.breadth < scale.resolveMeasure(landscapeMinimumBreadth))
     return decision(false, "local extent or narrow habitat");
   if (evidence.coherence < landscapeCoherence)
     return decision(false, "dispersed patches without a coherent landscape");
@@ -90,95 +85,95 @@ export function landscapeSignificance(
 /** Large-domain subdivision is independent of the minimum size of a named region. */
 export const largeDomainLandShare = 0.2;
 /** Continental span, not a small land-share ceiling, activates internal subdivision. */
-export const largeDomainSpan = 900_000;
+export const largeDomainSpan = MapScale.length(0.225);
 /** Absolute continental area also triggers subdivision on very large worlds. */
-export const largeDomainArea = 1.2e12;
-export function largeWorldDomain(area: number, span: number, land: number, scale = worldScale) {
+export const largeDomainArea = MapScale.area(0.075);
+export function largeWorldDomain(area: number, span: number, land: number, scale: MapScale) {
   return (
-    span >= largeDomainSpan * scale.length &&
-    (area >= land * largeDomainLandShare || area >= largeDomainArea * scale.area)
+    span >= scale.resolveMeasure(largeDomainSpan) &&
+    (area >= land * largeDomainLandShare || area >= scale.resolveMeasure(largeDomainArea))
   );
 }
 
 /** A mapped river needs substantial water, drainage and a geographically meaningful course. */
-export const worldRiverDischarge = 350;
-export const worldRiverCatchment = 20_000_000_000;
-export const worldRiverLength = 200_000;
+export const worldRiverDischarge = MapScale.volume(5.46875e-18);
+export const worldRiverCatchment = MapScale.area(0.00125);
+export const worldRiverLength = MapScale.length(0.05);
 /** A powerful shorter outlet can link a major lake or basin to the sea. */
-export const worldOutletDischarge = 1_500;
+export const worldOutletDischarge = MapScale.volume(2.34375e-17);
 export interface RiverEvidence {
   discharge: number;
   catchment: number;
   length: number;
   outlet: boolean;
 }
-export function riverSignificance(e: RiverEvidence, scale = worldScale) {
+export function riverSignificance(e: RiverEvidence, scale: MapScale) {
   const substantial =
-    e.discharge >= worldRiverDischarge * scale.area &&
-    e.catchment >= worldRiverCatchment * scale.area;
+    e.discharge >= scale.resolveMeasure(worldRiverDischarge) &&
+    e.catchment >= scale.resolveMeasure(worldRiverCatchment);
   return decision(
     substantial &&
-      (e.length >= worldRiverLength * scale.length ||
-        (e.outlet && e.discharge >= worldOutletDischarge * scale.area)),
+      (e.length >= scale.resolveMeasure(worldRiverLength) ||
+        (e.outlet && e.discharge >= scale.resolveMeasure(worldOutletDischarge))),
     "major water transport and drainage role"
   );
 }
 
 /** Which of a mapped river's tests a course fails: what a report says of a latent one. */
-export function riverShortfalls(e: RiverEvidence, scale = worldScale) {
+export function riverShortfalls(e: RiverEvidence, scale: MapScale) {
   const failed: string[] = [];
-  if (e.discharge < worldRiverDischarge * scale.area) failed.push("discharge");
-  if (e.catchment < worldRiverCatchment * scale.area) failed.push("catchment");
-  const shortOutlet = !e.outlet || e.discharge < worldOutletDischarge * scale.area;
-  if (e.length < worldRiverLength * scale.length && shortOutlet) failed.push("length");
+  if (e.discharge < scale.resolveMeasure(worldRiverDischarge)) failed.push("discharge");
+  if (e.catchment < scale.resolveMeasure(worldRiverCatchment)) failed.push("catchment");
+  const shortOutlet = !e.outlet || e.discharge < scale.resolveMeasure(worldOutletDischarge);
+  if (e.length < scale.resolveMeasure(worldRiverLength) && shortOutlet) failed.push("length");
   return failed;
 }
 
 /** How far a peak's isolation is searched, at the World's scale. */
-export const worldPeakIsolation = 60_000;
+export const worldPeakIsolation = MapScale.length(0.015);
 /** Falls require both a real drop and water; a dry cliff is not a waterfall. */
-export const worldFallsDrop = 40;
-export const worldFallsDischarge = 250;
+export const worldFallsDrop = MapScale.length(0.00001, 0.5);
+export const worldFallsDischarge = MapScale.volume(3.90625e-18);
 /**
  * Mountain systems have relief as well as a broad, connected physical footprint. Unlike a landscape
  * they may branch: a range and the spurs that join it are one system, however little of their
  * envelope they fill.
  */
-export const worldRangeArea = 8_000_000_000;
-export const worldRangeBreadth = 15_000;
-export const worldRangeSpan = 100_000;
-export const worldRangeRelief = 600;
+export const worldRangeArea = MapScale.area(0.0005);
+export const worldRangeBreadth = MapScale.length(0.00375);
+export const worldRangeSpan = MapScale.length(0.025);
+export const worldRangeRelief = MapScale.length(0.00015, 0.5);
 export function rangeSignificance(
   e: LandscapeEvidence,
   relief: number,
   span: number,
-  scale = worldScale
+  scale: MapScale
 ) {
   return decision(
-    e.area >= worldRangeArea * scale.area &&
-      e.breadth >= worldRangeBreadth * scale.length &&
-      span >= worldRangeSpan * scale.length &&
-      relief >= worldRangeRelief * scale.height,
+    e.area >= scale.resolveMeasure(worldRangeArea) &&
+      e.breadth >= scale.resolveMeasure(worldRangeBreadth) &&
+      span >= scale.resolveMeasure(worldRangeSpan) &&
+      relief >= scale.resolveMeasure(worldRangeRelief),
     "broad mountain system with substantial relief"
   );
 }
 /** Lakes remain physical water whether or not their identity belongs on the World map. */
-export const worldExceptionalLakeArea = 300_000_000;
-export const worldLakeDepth = 200;
+export const worldExceptionalLakeArea = MapScale.area(0.00001875);
+export const worldLakeDepth = MapScale.length(0.00005, 0.5);
 
 /** Candidate seas already carry coastal-constriction and sill evidence from marineRegions. */
-export const worldSeaArea = 8e9;
-export const worldOceanArea = 50e9;
-export const worldMarineBreadth = 30_000;
+export const worldSeaArea = MapScale.area(0.0005);
+export const worldOceanArea = MapScale.area(0.003125);
+export const worldMarineBreadth = MapScale.length(0.0075);
 export function marineSignificance(
   area: number,
   breadth: number,
   type: "sea" | "ocean",
-  scale = worldScale
+  scale: MapScale
 ) {
   return decision(
-    area >= (type === "sea" ? worldSeaArea : worldOceanArea) * scale.area &&
-      breadth >= worldMarineBreadth * scale.length,
+    area >= scale.resolveMeasure(type === "sea" ? worldSeaArea : worldOceanArea) &&
+      breadth >= scale.resolveMeasure(worldMarineBreadth),
     "substantial coastal basin or open ocean domain"
   );
 }

@@ -1,5 +1,7 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { exposure } from "../../world/magicStocks";
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { cellAt } from "../../regional/lattice";
 import { tappingReach } from "../../societyColdAge";
@@ -45,24 +47,26 @@ import {
 const richOre = 1000;
 /** Resistant rock under this depth of sediment can be cut for stone. */
 const stoneRock = 0.5,
-  stoneCover = 1;
+  stoneCover = 0.00000025;
 /** Share of a plain deposit against an ore body: gravel, salt crust and stone, worth working but no prize. */
 const gravelWorth = 0.4,
   stoneWorth = 0.3;
 /** Steeper ground than this cannot be worked or reached. */
 const steepestWorking = 0.3;
 /** Workings stand at least this far apart, in metres: one district's pits count as one mine. */
-const workingSpacing = 60_000;
+// length-unit: fraction
+const workingSpacing = 0.015;
 /** Dose of work at which a mine is half as great as they get; a working with no record runs at it. */
 const typicalDose = 0.5;
 /** What a full dose of work takes from the ground: metres of pit, the fracture a tap opens. */
-const pitDepth = 10,
+// length-unit: fraction
+const pitDepth = 0.0000025,
   tapOpening = 250;
 /** Tailings' toxicity at full dose in the next cell down the drainage. */
 const tailings = 0.5;
 /** A haul track's cost near the works, and how far it wears the ground, in metres. */
 const haulGoing = 0.7,
-  haulReach = 5000;
+  haulReach = MapScale.length(0.00125);
 /** A tap's cost to Fire through the rock it opened; a quarry sends charge out with its people. */
 const tappedCost = 0.7,
   quarriedCost = 0.85;
@@ -70,7 +74,8 @@ const tappedCost = 0.7,
 const abandoned = 0.1,
   benchGrade = 0.12;
 /** Distance a collapse or burst reaches from the works, in metres. */
-const collapseReach = 1000;
+// length-unit: fraction
+const collapseReach = 0.00025;
 
 const worked = new Set(["tapping", "quarrying"]);
 /** The world's located workings by place id; a World-profile demand has no site until realized. */
@@ -100,7 +105,11 @@ const tappable = (state: GenerationState, cell: number) =>
 function oreAt(state: GenerationState, cell: number) {
   const fallen = stockPerArea(state, "fire", "fallen/held", cell) / richOre,
     spent = stockPerArea(state, "fire", "vein/spent", cell) / richOre,
-    bare = exposure(fieldOf(state), cell, parameterOf(state, "fire", "buryDepth") ?? 20);
+    bare = exposure(
+      fieldOf(state),
+      cell,
+      parameterOf(state, "fire", "buryDepth") ?? mapScale(state).length(0.000005, 0.5)
+    );
   return Math.max(
     tappable(state, cell) ? magicValue(state, "fire", "intensity", cell) / 1000 : 0,
     fallen,
@@ -113,7 +122,8 @@ function saltAt(state: GenerationState, cell: number) {
   return Math.max(bed, panAt(state, cell) ? gravelWorth : 0);
 }
 const stoneAt = (state: GenerationState, cell: number) =>
-  rockAt(state, cell) >= stoneRock && sedimentAt(state, cell) < stoneCover
+  rockAt(state, cell) >= stoneRock &&
+  sedimentAt(state, cell) < mapScale(state).length(stoneCover, 0.5)
     ? stoneWorth * rockAt(state, cell)
     : 0;
 /** How rich the deposit at a cell is, in [0, 1], the richest of what lies there; 0 for no deposit. */
@@ -135,7 +145,9 @@ const peopled = (state: GenerationState) =>
     const cells = new Set<number>();
     for (const town of settlementsOf(state)) {
       const at = featureCell(state, town);
-      if (at >= 0) for (const cell of cellsWithin(state, at, tappingReach)) cells.add(cell);
+      if (at >= 0)
+        for (const cell of cellsWithin(state, at, mapScale(state).resolveMeasure(tappingReach)))
+          cells.add(cell);
     }
     return cells;
   });
@@ -144,7 +156,9 @@ const requires = (state: GenerationState, cell: number) =>
 /** The richer the deposit and the easier the ground, the better; neither makes up for the other's lack. */
 const suitability = (state: GenerationState, cell: number) =>
   Math.sqrt(depositAt(state, cell) * (1 - Math.min(1, slopeAt(state, cell) / steepestWorking)));
-const sited = sitedPlaces("mine", requires, suitability, () => workingSpacing);
+const sited = sitedPlaces("mine", requires, suitability, (state) =>
+  mapScale(state).length(workingSpacing)
+);
 /** The world's own workings, and the best-suited ground no working stands near. */
 const places = (state: GenerationState): readonly PoiPlace[] =>
   heldFor(state, "mine:places", () => {
@@ -157,7 +171,9 @@ const places = (state: GenerationState): readonly PoiPlace[] =>
     return [
       ...recorded,
       ...sited(state).filter((place) =>
-        recorded.every((work) => gap(state, place.anchor, work.anchor) >= workingSpacing)
+        recorded.every(
+          (work) => gap(state, place.anchor, work.anchor) >= mapScale(state).length(workingSpacing)
+        )
       ),
     ];
   });
@@ -238,7 +254,7 @@ export const mine: PoiEntry = {
         change: "add",
         band: "Elevation",
         cell: place.anchor,
-        amount: -toNative(pitDepth * doseOf(state, place)),
+        amount: -toNative(mapScale(state).length(pitDepth, 0.5) * doseOf(state, place)),
       },
     ]),
     water(state, place) {
@@ -262,7 +278,7 @@ export const mine: PoiEntry = {
       "A captured mine lands where its work stands. It needs a level bench to stand on, and a deposit under it on the finer ground: if the deposit's cell is not at the landing, it moves to the nearest within a parent span, and with none it goes. A round's water that floods it moves it or ends it the same way.",
     carry: carryWhereItLands,
     realize: (_state, carried) => [
-      { change: "gradientAtMost", cell: carried.cell, gradient: benchGrade },
+      { change: "gradeGround", cell: carried.cell, gradient: benchGrade },
     ],
     counterpart,
     unrealized: movesOrGoes(counterpart),
@@ -289,7 +305,12 @@ export const mine: PoiEntry = {
   others: {
     statement:
       "A mine needs people within reach and a deposit under it: a vein, a prism, a placer, a pan. What it takes goes to a forge. It stands on land, so never on a lake's water, and a town may grow up at its gate.",
-    needs: [{ kind: "settlement", holds: within(() => tappingReach) }],
+    needs: [
+      {
+        kind: "settlement",
+        holds: within((state) => mapScale(state).resolveMeasure(tappingReach)),
+      },
+    ],
     excludes: [{ kind: "lake", holds: (_state, a, b) => b.cells.includes(a.anchor) }],
     contains: notApplicable("A mine is one point of work."),
     pairsWith: [
@@ -315,7 +336,7 @@ export const mine: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: workOf(state, place) === "tapping" ? "burst along the opened fracture" : "collapse",
-        reach: collapseReach,
+        reach: mapScale(state).length(collapseReach),
         severity: factors.magnitude(state, place),
       },
     ],

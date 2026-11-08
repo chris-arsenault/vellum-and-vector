@@ -26,7 +26,9 @@ export function independentInteraction(
 }
 /** A second class shows through the first where it holds this share of the cell. */
 export const secondSurfaceFloor = 0.2;
-export function effectiveMagicRules(system: MagicField["definition"]) {
+export function effectiveMagicRules(
+  system: Pick<MagicField["definition"], "features" | "enabled" | "id">
+) {
   return system.features.filter(
     (rule) => system.enabled || independentInteraction(rule, system.id)
   );

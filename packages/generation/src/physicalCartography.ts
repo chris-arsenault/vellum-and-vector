@@ -34,23 +34,21 @@ const shoreline = (
   amplitude: number,
   coastalErosion: number,
   capture: number,
-  reach: number,
-  delta: number
+  reach: number
 ): FeatureSelection => ({
   "physical.coastal-construction": profile({
     CoastalDetailStrength: detail,
     CoastalDetailScale: scale,
     CoastalDetailWarp: warp,
-    CoastalDetailPassiveAmplitude: 62 * amplitude,
-    CoastalDetailConvergentAmplitude: 88 * amplitude,
-    CoastalDetailRiftedAmplitude: 74 * amplitude,
-    CoastalDetailTransformAmplitude: 34 * amplitude,
+    CoastalDetailPassiveAmplitude: 0.0000155 * amplitude,
+    CoastalDetailConvergentAmplitude: 0.000022 * amplitude,
+    CoastalDetailRiftedAmplitude: 0.0000185 * amplitude,
+    CoastalDetailTransformAmplitude: 0.0000085 * amplitude,
   }),
   "physical.coastal-evolution": {
     settings: { coastalErosion },
     ...profile({ CoastalDepositionFraction: capture, CoastalDepositionReach: reach }),
   },
-  "physical.deltas": profile({ DeltaMaximumRadius: delta }),
 });
 const landmarks = (volcanism: number, plumes: number, impacts: number): FeatureSelection => ({
   "physical.volcanism": { settings: { volcanism }, ...profile({ MantlePlumeCount: plumes }) },
@@ -70,9 +68,9 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
     explanation:
       "Multiple crust assemblies form compound continental regions with open oceans, broad interiors, or a dispersed island world. Final coasts follow the terrain and water.",
     choices: [
-      choice("broad", "Broad continents", land(2, 24, 0.68, -60, 0.2, 100_000, 1)),
-      choice("broken", "Broken continents", land(4, 42, 0.45, 0, 0.38, 180_000, 1)),
-      choice("islands", "Island world", land(10, 70, 0.28, 60, 0.5, 260_000, 0)),
+      choice("broad", "Broad continents", land(2, 24, 0.68, -0.000015, 0.2, 0.025, 1)),
+      choice("broken", "Broken continents", land(4, 42, 0.45, 0, 0.38, 0.045, 1)),
+      choice("islands", "Island world", land(10, 70, 0.28, 0.000015, 0.5, 0.065, 0)),
     ],
   },
   "physical.mountains": terrainCartography,
@@ -85,21 +83,13 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
     explanation:
       "Broad reworked outlines, intricate inlets, or deposited river-mouth lowlands. Sediment supply and coastal exposure still matter.",
     choices: [
-      choice(
-        "smooth",
-        "Smooth sweeps",
-        shoreline(450, 100_000, 10_000, 0.4, 1.2, 700, 25_000, 20_000)
-      ),
+      choice("smooth", "Smooth sweeps", shoreline(450, 0.025, 0.0025, 0.4, 1.2, 700, 0.00625)),
       choice(
         "inlets",
         "Inlets and headlands",
-        shoreline(1500, 45_000, 35_000, 1.3, 0.5, 500, 15_000, 30_000)
+        shoreline(1500, 0.01125, 0.00875, 1.3, 0.5, 500, 0.00375)
       ),
-      choice(
-        "flats",
-        "River-mouth flats",
-        shoreline(350, 100_000, 8_000, 0.35, 0.35, 850, 35_000, 45_000)
-      ),
+      choice("flats", "River-mouth flats", shoreline(350, 0.025, 0.002, 0.35, 0.35, 850, 0.00875)),
     ],
   },
   "physical.climate": [
@@ -141,7 +131,7 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
     initialOnly: true,
     defaultChoice: "prominent",
     explanation:
-      "The prominence of volcanic districts and crater landforms. Prevalence scales with map area; physical footprints stay in kilometres and history determines what survives.",
+      "The prominence of volcanic districts and crater landforms. Footprints scale with the map, and history determines what survives.",
     choices: [
       choice("rare", "Rare", landmarks(0.25, 1, 1)),
       choice("scattered", "Scattered", landmarks(0.7, 2, 3)),

@@ -1,4 +1,5 @@
 import { areaSpace } from "./composition";
+import { MapScale } from "./mapScale";
 import { describeFeature, type FeatureType } from "./featureCatalogue";
 import { readAtlasFeatures } from "./featureReads";
 import { spatial } from "./spatial";
@@ -169,8 +170,10 @@ function scalarAttributes(attributes: Record<string, unknown>) {
 }
 function addMeasurements(values: Record<string, Cell>, f: AtlasFeature) {
   const extent = f.footprint ?? f.geometry;
-  if (extent.type.includes("Polygon")) values.areaKm2 = spatial.area(extent) / 1e6;
-  if (f.geometry.type.includes("Line")) values.lengthKm = spatial.length(f.geometry) / 1000;
+  if (extent.type.includes("Polygon"))
+    values.areaKm2 = MapScale.areaUnits(spatial.area(extent), "m2", "km2");
+  if (f.geometry.type.includes("Line"))
+    values.lengthKm = MapScale.inUnits(spatial.length(f.geometry), "km");
 }
 function addSociety(
   values: Record<string, Cell>,

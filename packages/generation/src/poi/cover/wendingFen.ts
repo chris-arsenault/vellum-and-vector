@@ -16,7 +16,8 @@ import {
 } from "./coverShared";
 
 /** Area at which a Wending fen is half as great as they get: 500 square kilometres. */
-const typicalArea = 5e8;
+// length-unit: fraction
+const typicalArea = 0.00003125;
 const isA = isFamily("wending");
 const places = landscapePlaces("wendingFen", "wending", verdureAt);
 const factors = countryFactors(places, typicalArea, verdureAt);

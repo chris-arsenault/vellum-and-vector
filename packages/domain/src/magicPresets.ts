@@ -7,6 +7,7 @@ import { veilPreset } from "./magicVeilPreset";
 // reach and rarity below are the atlas's own (docs/adr/0004): Canonry's defaults saturate
 // a world this large, warm and oceanic.
 const firePreset = magicSystemSchema.parse({
+  lengthUnits: "relative",
   id: "fire",
   name: "Fire",
   // Vein cores: fracture-hosted ore fed while the conduit is open, held in the rock and
@@ -48,7 +49,7 @@ const firePreset = magicSystemSchema.parse({
     // Cores sit on separated heat maxima under land: about one per 10,000 km² at most.
     sourceThreshold: 300,
     maximumSources: 96,
-    sourceSpacing: 90_000,
+    sourceSpacing: 0.0225,
     // Steep through unfractured rock (under 10 km), long along a conductive vein (60-120 km).
     baseCost: 3,
     conductanceDivisor: 12,
@@ -56,7 +57,7 @@ const firePreset = magicSystemSchema.parse({
   },
   effects: {
     heat: 0.36,
-    iceMelt: 0.5,
+    iceMelt: 0.000000125,
     rockResistance: 900,
     fire: 0.3,
     quickening: 1,
@@ -151,6 +152,7 @@ const firePreset = magicSystemSchema.parse({
   ],
 });
 const auroraPreset = magicSystemSchema.parse({
+  lengthUnits: "relative",
   id: "aurora",
   name: "Aurora",
   // Charge in the ice rides the glaciers; what thaws stays in the ground and travels with
@@ -187,8 +189,8 @@ const auroraPreset = magicSystemSchema.parse({
       "field",
       "Aurora field",
       40,
-      [[at("intensity", 470), at("ice", 260)]],
-      [[at("intensity", 380), at("ice", 180)]],
+      [[at("intensity", 470), at("ice", 0.000065)]],
+      [[at("intensity", 380), at("ice", 0.000045)]],
       covers(380, 900)
     ),
     feature(
@@ -233,6 +235,7 @@ const auroraPreset = magicSystemSchema.parse({
   ],
 });
 const pressurePreset = magicSystemSchema.parse({
+  lengthUnits: "relative",
   id: "pressure",
   name: "Pressure",
   origins: [
@@ -244,15 +247,15 @@ const pressurePreset = magicSystemSchema.parse({
   parameters: {
     // Rays separate into visible spokes beyond about 200 km and fade within a basin.
     rayCount: 128,
-    rayDistance: 2_000_000,
+    rayDistance: 0.5,
     rayDecay: 8,
     rayIntensity: 110,
-    beamWidth: 20_000,
+    beamWidth: 0.005,
     coastalSources: 24,
-    coastalRayDistance: 300_000,
-    coastalSourceDistance: 100_000,
+    coastalRayDistance: 0.075,
+    coastalSourceDistance: 0.025,
     wakeSources: 16,
-    wakeDistance: 700_000,
+    wakeDistance: 0.175,
     wakeStrength: 150,
   },
   effects: {
@@ -294,6 +297,7 @@ const pressurePreset = magicSystemSchema.parse({
 // springs on soft rock below a catchment the other; it spreads through connected cover and
 // cannot cross bare rock, open water or ice. Reach and rarity are the atlas's (ADR 0004).
 const greenwoodPreset = magicSystemSchema.parse({
+  lengthUnits: "relative",
   id: "greenwood",
   name: "Greenwood",
   origins: [
@@ -354,6 +358,7 @@ const saltStocks = () => [
   { id: "dust", reservoir: "dust", carriers: ["wind"] },
 ];
 const saltPreset = magicSystemSchema.parse({
+  lengthUnits: "relative",
   id: "salt",
   name: "Salt",
   // The dead the ground records become brine where they lie; a lake that died in a closed

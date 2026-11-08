@@ -64,7 +64,7 @@ function measureStrength(map: PhysicalField, c: PhysicalContext) {
         map.mesh.x(i),
         map.mesh.y(i),
         c.Seed ^ 0x19af,
-        Math.max(200_000, map.mesh.contentRadius * 0.38),
+        map.scale.length(0.05),
         2
       ) * 250
     );

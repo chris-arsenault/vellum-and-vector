@@ -29,12 +29,17 @@ it("omits unchanged nested configuration and shows physical shifts in their disp
     baseline = prepareDraft(draft).input.settings!;
   expect(generationConfigurationChanges("physical.lifecycle", baseline, baseline)).toEqual([]);
   const changed = prepareDraft(
-    updatePhysicalEpoch(draft, "Formation", { duration: 2500, temperature: 9, seaLevel: -30 })
+    updatePhysicalEpoch(draft, "Formation", {
+      duration: 2500,
+      temperature: 9,
+      seaLevel: -0.0000075,
+    })
   ).input.settings!;
   expect(generationConfigurationChanges("physical.lifecycle", changed, baseline)).toEqual([
     {
       label: "Formation",
-      value: "duration 2500 years; temperature shift -6 °C; sea level offset -30 m",
+      value:
+        "duration 2500 years; temperature shift -6 °C; sea level offset -0.0000075 of map span",
     },
   ]);
 });
@@ -64,7 +69,7 @@ it("shows actual magical source/effect/activity values, including zero coastal f
   pressure.origins[0].source = "placed";
   pressure.origins[0].propagation = "radial";
   pressure.effects.coastalForcing = 0;
-  pressure.parameters.sourceSpacing = 12345;
+  pressure.parameters.sourceSpacing = 0.0125;
   pressure.features = [];
   draft = updateFeature(draft, "magic.configured", {
     configuration: { magicSystems: JSON.parse(JSON.stringify(systems)) },
@@ -78,7 +83,7 @@ it("shows actual magical source/effect/activity values, including zero coastal f
   const summary = changes.find((change) => change.label === pressure.name)!.value;
   expect(summary).toContain("origin locus: source placed, propagation radial");
   expect(summary).toContain("coastal forcing 0×");
-  expect(summary).toContain("source spacing 12345 m");
+  expect(summary).toContain("source spacing 1.25% of map span");
   expect(changes).toContainEqual({
     label: "Formation magical activity",
     value: `${pressure.name} 0.4×`,

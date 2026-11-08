@@ -1,5 +1,5 @@
 import { expect, test } from "./uiTest";
-import { rectangle, spatial, compactGeometryBounds, regionalScale } from "@atlas/domain";
+import { rectangle, spatial, compactGeometryBounds, regionalScale, MapScale } from "@atlas/domain";
 import {
   clickWorld,
   exportMap,
@@ -104,7 +104,6 @@ test("offers a useful subdivision and the fixed Standard scale on a default-size
   expect(area).toBeLessThan(700_000);
   await page.getByRole("button", { name: "Refine this region", exact: true }).click();
   await expect(page.getByLabel("Regional detail")).toHaveValue("standard");
-  await expect(page.locator(".regional-generation")).toContainText("2,415 m");
   const samples = page.locator("[data-cell-count]");
   await expect(samples).toBeVisible();
   const count = Number(await samples.getAttribute("data-cell-count"));
@@ -112,6 +111,6 @@ test("offers a useful subdivision and the fixed Standard scale on a default-size
   const captured = await exportMap(page),
     child = captured.areas.find((a: { parentId: string | null }) => a.parentId),
     [w, s, e, n] = compactGeometryBounds(captured.worldReference, child.footprint),
-    span = regionalScale(1).cellSpan;
+    span = regionalScale(1, "standard", MapScale.fromCells([w, s, e, n], 60_000)).cellSpan;
   expect(count).toBe((Math.ceil((e - w) / span) + 1) * (Math.ceil((n - s) / span) + 1));
 });

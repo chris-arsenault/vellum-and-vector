@@ -1,5 +1,5 @@
 import { expect, test } from "./uiTest";
-import { spatial, usefulRegionSize } from "@atlas/domain";
+import { rectangle, spatial, usefulRegionSize } from "@atlas/domain";
 import { ecologicalPolygons } from "./ecologyFixture";
 import {
   clickWorld,
@@ -73,7 +73,8 @@ test("extracted ecological polygons select, protect, export and refine @deferred
   // Select a real forest large enough for geographic refinement, independent of canvas pixels.
   const forests = features.filter(
     (feature) =>
-      feature.attributes.biome === "Temperate forest" && usefulRegionSize(feature.geometry)
+      feature.attributes.biome === "Temperate forest" &&
+      usefulRegionSize(feature.geometry, rectangle([0, 0, 4000, 1000]))
   );
   expect(forests.length).toBeGreaterThan(0);
   const forest = forests[0];

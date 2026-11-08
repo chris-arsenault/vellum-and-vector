@@ -1,5 +1,5 @@
 import { ErrorMessage } from "./ErrorMessage";
-import type { Diagnostic } from "@atlas/domain";
+import { MapScale, type Diagnostic } from "@atlas/domain";
 import {
   diagnosticFeature,
   diagnosticField,
@@ -15,7 +15,7 @@ export function GenerationSetupSummary({ flow }: { flow: GenerationWorkflow }) {
     <aside className="setup-summary" aria-label="Setup summary">
       <h3>{flow.draft.name || "New world"}</h3>
       <p>
-        {flow.draft.width / 1000} × {flow.draft.height / 1000} km
+        {MapScale.inUnits(flow.draft.width, "km")} × {MapScale.inUnits(flow.draft.height, "km")} km
       </p>
       <p>
         {flow.draft.recipe.quality} detail · seed {flow.draft.recipe.seed}

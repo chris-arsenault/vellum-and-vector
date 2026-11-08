@@ -1,6 +1,6 @@
 // Numerical invariants of the world's steps. Spatial authoring validation remains at the GIS
 // projection boundary.
-import type { PhysicalField, PhysicalIntegerName as IntegerName } from "./field";
+import type { PhysicalField, PhysicalBufferName } from "./field";
 import type { PhysicalContext } from "./context";
 import { validateLandscape } from "../rock/groundInitialization";
 import { isOpenOutlet } from "./field";
@@ -9,7 +9,7 @@ import { edgeLeadingTo } from "./mesh";
 import { isGrounded } from "./glacierSurface";
 import { releaseWorking } from "./physicalNumerics";
 
-function scalar(map: PhysicalField, name: IntegerName, low = 0, high = 1000) {
+function scalar(map: PhysicalField, name: PhysicalBufferName, low = 0, high = 1000) {
   const outside = map.coverage.reduce(
     map[name],
     (held, value) => held + (value < low || value > high ? 1 : 0),
@@ -19,11 +19,11 @@ function scalar(map: PhysicalField, name: IntegerName, low = 0, high = 1000) {
 }
 /** Bands that hold a share or a rate, whose range is checked whenever a step writes them. */
 const scalars = new Set<string>([
-  "Temperature",
   "Moisture",
   "Rainfall",
   "Snowfall",
   "Runoff",
+  "GlacialMeltwater",
   "Geothermal",
   "HeatSourceDensity",
   "FractureConductance",
@@ -39,12 +39,12 @@ const scalars = new Set<string>([
   "FloodplainIntensity",
   "DeltaIntensity",
 ]);
-/** Water rates in mm/year, bounded by the precipitation ceiling rather than per-mille. */
-const waterRates = new Set<string>(["Rainfall", "Snowfall", "Runoff"]);
+/** Water depth rates in mm/year are nonnegative, not per-mille shares. */
+const waterRates = new Set<string>(["Rainfall", "Snowfall", "Runoff", "GlacialMeltwater"]);
 function validateScalars(map: PhysicalField, c: PhysicalContext, writes: readonly string[]) {
   for (const band of writes)
     if (scalars.has(band))
-      scalar(map, band as IntegerName, 0, waterRates.has(band) ? Infinity : 1000);
+      scalar(map, band as PhysicalBufferName, 0, waterRates.has(band) ? Infinity : 1000);
 }
 export function validateDrainage(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {

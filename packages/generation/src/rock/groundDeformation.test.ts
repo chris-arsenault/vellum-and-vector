@@ -1,5 +1,8 @@
 import { expect, it } from "vitest";
 import { createTestField } from "./groundTestFixture";
+import { createField } from "../world/field";
+import { groundFixture } from "./groundStorage";
+import { shiftBedrock } from "../world/landmarkGeometry";
 import { createWorldMesh } from "../world/worldMesh";
 import { units } from "../world/math";
 import { workingValues, releaseWorking } from "../world/physicalNumerics";
@@ -15,8 +18,9 @@ import { materialLayer, readLayer, setLayer } from "./rockColumn";
 import { rockCatalogue as rocks } from "./rockCatalogue";
 import { projectGround } from "./groundShares";
 
-function supplied() {
-  const map = createTestField(createWorldMesh([0, 0, 1000, 1000], 16, 0));
+function supplied(actualScale = false) {
+  const mesh = createWorldMesh([0, 0, 1000, 1000], 16, 0),
+    map = actualScale ? groundFixture(createField(mesh)) : createTestField(mesh);
   for (let cell = 0; cell < map.mesh.count; cell++) {
     for (const column of ["land", "cut", "loose", "cutLoose"] as const)
       setLayer(
@@ -52,6 +56,28 @@ const sample = (map: ReturnType<typeof supplied>) =>
         (j) => j >= 0
       )
   )!;
+
+it("keeps zero and positive movement signed on inherited ground above the child map's scale", () => {
+  for (const move of [displaceGroundField, shiftGroundField]) {
+    const map = supplied(true),
+      cell = sample(map),
+      movement = workingValues(map, "float64", "inherited:movement", () => 0),
+      before = map.Elevation.get(cell);
+    move(map, movement, "test");
+    expect(map.Elevation.get(cell)).toBe(before);
+    movement.fill(units(20));
+    move(map, movement, "test");
+    expect(map.Elevation.get(cell)).toBe(before + units(20));
+    releaseWorking(map, movement);
+  }
+  const map = supplied(true),
+    cell = sample(map),
+    before = map.Elevation.get(cell);
+  expect(shiftBedrock(map, cell, 0)).toBe(0);
+  expect(map.Elevation.get(cell)).toBe(before);
+  expect(shiftBedrock(map, cell, units(100))).toBe(units(100));
+  expect(map.Elevation.get(cell)).toBe(before + units(100));
+});
 
 it("bends every occupied retained bed with the actual displacement while translation preserves dip", () => {
   const map = supplied(),

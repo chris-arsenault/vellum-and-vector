@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import { volcanicRelief } from "../../world/geologicalFeatures";
 import { calderaShare } from "../../world/volcanism";
 import type { GenerationState } from "../../process";
@@ -18,7 +19,7 @@ import {
 } from "./reliefShape";
 
 /** Area at which a caldera is half as great as calderas get: the generator's cut at full radius. */
-const typicalArea = 16_000_000;
+const typicalArea = MapScale.area(0.000001);
 
 const places = eventPlaces(
   "caldera",

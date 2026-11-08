@@ -50,7 +50,7 @@ test("composes geographic outcomes and sends the complete reviewed recipe to gen
     continents: 2,
     provinces: 24,
     landFraction: 0.68,
-    seaLevel: -60,
+    seaLevel: -0.000015,
     erosion: 0.25,
     temperature: 23,
     rainfall: 2,
@@ -59,13 +59,13 @@ test("composes geographic outcomes and sends the complete reviewed recipe to gen
     cultureCount: 3,
     culturalMobility: 0.5,
     townThreshold: 10000,
-    cityReach: 300,
+    cityReach: 0.075,
     roadTraffic: 1000,
   });
   expect(input.features!["physical.impacts"].enabled).toBe(true);
   expect(input.features!["physical.river-incision"].enabled).toBe(true);
   expect(input.features!["physical.foundation"].configuration!.profile).toMatchObject({
-    ContinentalWarpStrength: 100_000,
+    ContinentalWarpStrength: 0.025,
     InteriorReliefStrength: 0.06,
   });
   expect(input.resolvedFeatures!.selection["human.politics"].enabled).toBe(false);

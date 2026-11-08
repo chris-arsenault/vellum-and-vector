@@ -4,7 +4,7 @@ import { loadedPlane, resolvedLoading } from "./reactivation";
 import { createTestField } from "../rock/groundTestFixture";
 import { createWorldMesh } from "./worldMesh";
 import { units } from "./math";
-import { changeLayer, setLayer } from "../rock/rockColumn";
+import { readLayer, setLayer } from "../rock/rockColumn";
 import { groundOf } from "../rock/ground";
 import { yieldingPlane } from "../rock/groundQueries";
 import { projectGround } from "../rock/groundShares";
@@ -61,7 +61,7 @@ it("a flat strong cap preserves the buried weak bed's loading direction and faul
   expect(map.StructuralGrainX.get(0)).toBe(0);
   expect(ground.fold(0, yieldingPlane()).slopeX).toBe(0.4);
   expect(engaged.slopeX).toBe(0.4);
-  changeLayer(map, 0, 1, (layer) => ({ ...layer, grainX: 1000 }));
+  setLayer(map, 0, 1, rocks.shale.code, units(100), { ...readLayer(map, 0, 1), grainX: 1000 });
   const crossed = ground.fold(0, loadedPlane(1, 0, 0));
   expect(crossed.response).toBeLessThan(engaged.response);
   expect(ground.section(0)[0].kind).toBe(rocks.basalt.code);
@@ -70,7 +70,7 @@ it("a flat strong cap preserves the buried weak bed's loading direction and faul
 it("an unengaged weak bed does not hide a stronger bed aligned to the load", () => {
   const map = buriedSeam(),
     ground = groundOf(map);
-  changeLayer(map, 0, 1, (layer) => ({ ...layer, grainX: 1000 }));
+  setLayer(map, 0, 1, rocks.shale.code, units(100), { ...readLayer(map, 0, 1), grainX: 1000 });
   setLayer(map, 0, 2, rocks.limestone.code, units(200), {
     strength: 300,
     grainX: -1000,

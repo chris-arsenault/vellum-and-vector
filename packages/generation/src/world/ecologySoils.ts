@@ -1,12 +1,15 @@
 import type { PhysicalField } from "./field";
+import { MapScale } from "@atlas/domain";
 import { environment, approach, unit, type EcologyForcing } from "./ecologyEnvironment";
 import { livingPlantCarbon, plantGroups } from "./ecologyGroups";
 
 export const erosionHistory = (map: PhysicalField, i: number) =>
-  (map.CumulativeFluvialErosion.get(i) +
-    map.CumulativeGlacialErosion.get(i) +
-    map.CumulativeCoastalErosion.get(i)) /
-  1024;
+  MapScale.metres(
+    map.CumulativeFluvialErosion.get(i) +
+      map.CumulativeGlacialErosion.get(i) +
+      map.CumulativeCoastalErosion.get(i),
+    "native"
+  );
 
 /** Soil is a carried substrate; erosion and ice can remove centuries of ecological development. */
 export function evolveSoils(
@@ -19,7 +22,8 @@ export function evolveSoils(
       env = environment(map, i, f);
     const erosion = Math.max(0, erosionHistory(map, i) - map.EcologyErosion.get(i));
     const iceAdvance = Math.max(0, map.IceThickness.get(i) - map.EcologyIce.get(i));
-    const damage = 1 - Math.exp(-erosion / 0.2 - iceAdvance / 5);
+    const damage =
+      1 - Math.exp(-erosion / map.scale.length(5e-8) - iceAdvance / map.scale.length(1.25e-6));
     const before = livingPlantCarbon(map, i);
     for (const group of plantGroups) {
       map[group.cover].set(i, map[group.cover].get(i) * (1 - damage));
@@ -43,7 +47,11 @@ export function evolveSoils(
       i,
       approach(
         map.SoilDepth.get(i),
-        Math.min(1.5, map.SedimentThickness.get(i) / 1024 + 0.3) + f.verdure,
+        Math.min(
+          map.scale.length(3.75e-7),
+          MapScale.metres(map.SedimentThickness.get(i), "native") + map.scale.length(7.5e-8)
+        ) +
+          map.scale.length(2.5e-7) * f.verdure,
         years,
         1 / Math.max(1e-8, weathering)
       )
@@ -82,15 +90,20 @@ function soilWater(map: PhysicalField, i: number, years: number, f: EcologyForci
     map.TreeCover.get(i) + map.GrassCover.get(i) * 0.3 + map.WetlandCover.get(i) * 0.4
   );
   const capacity = map.SoilDepth.get(i) * (0.12 + unit(map.SoilCarbon.get(i) / 30) * 0.15);
-  const rain = map.Rainfall.get(i) / 1000;
+  const rain = MapScale.metres(map.Rainfall.get(i), "mm");
   const supply =
-    rain * (1 - f.seasonality * 0.6) + e.wetness * 0.3 + map.GlacialMeltwater.get(i) / 3000;
+    rain * (1 - f.seasonality * 0.6) +
+    e.wetness * map.scale.length(7.5e-8) +
+    MapScale.metres(map.GlacialMeltwater.get(i), "mm") / 3;
   // A salt crust sheds the rain it would have taken in.
   map.Infiltration.set(
     i,
-    unit((0.2 + roots * 0.45 + map.SoilDepth.get(i) * 0.15) * (1 - 0.6 * f.salting))
+    unit(
+      (0.2 + roots * 0.45 + map.SoilDepth.get(i) * map.scale.inverseLength(600_000)) *
+        (1 - 0.6 * f.salting)
+    )
   );
-  const demand = Math.max(0, e.summer + 5) * 0.012 * (0.2 + roots);
+  const demand = Math.max(0, e.summer + 5) * map.scale.length(3e-9) * (0.2 + roots);
   map.SoilWater.set(
     i,
     approach(
@@ -102,6 +115,9 @@ function soilWater(map: PhysicalField, i: number, years: number, f: EcologyForci
   );
   map.Evapotranspiration.set(
     i,
-    Math.min(rain, demand * unit(map.SoilWater.get(i) / Math.max(0.01, capacity)))
+    Math.min(
+      rain,
+      demand * unit(map.SoilWater.get(i) / Math.max(map.scale.length(2.5e-9), capacity))
+    )
   );
 }

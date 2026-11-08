@@ -4,7 +4,7 @@ import type { Geometry } from "geojson";
 export interface MapOwnership {
   sourceAreaId: string;
   sourceRevision: number;
-  refinementLevel?: number;
+  refinementLevel: number;
   /** The captured working frame stays stable across repeated refinement. */
   extent?: Geometry;
 }

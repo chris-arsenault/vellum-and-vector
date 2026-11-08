@@ -1,4 +1,12 @@
-import { CellList, SmallIntSet, spatial, point, placeMinimumCells, type Band } from "@atlas/domain";
+import {
+  CellList,
+  SmallIntSet,
+  spatial,
+  point,
+  placeMinimumCells,
+  MapScale,
+  type Band,
+} from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
@@ -17,9 +25,6 @@ import { workingValues, releaseWorking } from "./physicalNumerics";
 import { partitionWorldRegion } from "./worldRegionPartition";
 import { significantMagicArea } from "./worldMagicSignificance";
 export { extractLakes } from "./lakeFeatures";
-
-/** Largest enclosed gap, in square metres, that a landform or magic region absorbs. */
-const smallHole = 2_000_000_000;
 
 function clipRegion(state: GenerationState, shape: Geometry | null) {
   return areaGeometry(shape && spatial.intersection(shape, state.domain.scope.footprint));
@@ -122,7 +127,7 @@ function regionShape(
     clipRegion(
       state,
       outline &&
-        fillSmallHoles(state, outline, smallHole, (cell) => {
+        fillSmallHoles(state, outline, state.physical!.map.scale.area(0.000125), (cell) => {
           const held = labels.get(cell);
           return (water.get(cell) !== 0) !== wet || (held !== -1 && held !== label);
         })
@@ -203,7 +208,7 @@ function placeAttributes(
     representative: nativePosition(work, anchor),
     placeType: name,
     geometryMeaning: placement?.meaning ?? "classified geographic region",
-    elevation: (work.map.Elevation.get(anchor) - work.map.BaseSeaLevel) / 1024,
+    elevation: MapScale.metres(work.map.Elevation.get(anchor) - work.map.BaseSeaLevel, "native"),
   };
 }
 /** Where systems meet: a meeting is a process between them, not a kind of place of one. */

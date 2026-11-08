@@ -1,5 +1,6 @@
 // Ported from Canonry 0f62584c: PhysicalElevation, PhysicalCrust and PhysicalRock.
 import { hardestRock, softestRock } from "../rock/rockCatalogue";
+import { MapScale } from "@atlas/domain";
 
 export const clamp = (value: number, low: number, high: number) =>
   Math.max(low, Math.min(high, value));
@@ -12,9 +13,9 @@ export function truncate(value: number): number {
   const result = Math.trunc(value);
   return result === 0 ? 0 : result;
 }
-export const units = (value: number) => round(value * 1024);
-export const toUnits = (value: number) => round(value / 1024);
-export const scaled = (value: number, scale: number) => units(clamp(value, -2, 2) * scale);
+export const units = MapScale.native;
+export const toUnits = (value: number) => round(MapScale.metres(value, "native"));
+export const scaled = (value: number, scale: number) => units(value * scale);
 export const ratio = (value: number, numerator: number, denominator: number) =>
   truncate((value * numerator) / denominator);
 export const noWaterSurface = -(2 ** 63);
@@ -29,17 +30,14 @@ export const rockLoadResponsePerMille = 800;
  */
 export const crustPerRock = (fraction: number) =>
   (1 - rockLoadResponsePerMille / 1000) / (buoyancy(fraction) / 1000);
-// Metres of the model's crust column. Continental foundation is 4,000; buoyancy lifts each
-// metre above it by 0.7, so the ceiling bounds isostatic height at about 7,200 m (ADR 0005 plan).
-export const minimumCrustThickness = 800;
-export const maximumCrustThickness = 14_000;
-// Metres above or below the datum that bedrock, support targets and constructed surfaces may reach.
-export const elevationLimit = 14_000;
-export const thickness = (value: number) =>
-  clamp(value, minimumCrustThickness, maximumCrustThickness);
-export function crustHeight(value: number, continentalFraction: number): number {
+// Model crust dimensions share the map's scale, including reserves and newly opened crust.
+export const crustFoundation = (fraction: number, scale: MapScale) =>
+  scale.length(0.00025 + 0.00075 * clamp(fraction, 0, 1));
+export function crustHeight(value: number, continentalFraction: number, scale: MapScale): number {
   const fraction = clamp(continentalFraction, 0, 1);
-  const foundation = 1000 + 3000 * fraction;
-  return -200 + 400 * fraction + ((thickness(value) - foundation) * buoyancy(fraction)) / 1000;
+  const foundation = crustFoundation(fraction, scale);
+  return (
+    scale.length(-0.00005 + 0.0001 * fraction) + ((value - foundation) * buoyancy(fraction)) / 1000
+  );
 }
 export const rockResistance = (value: number) => clamp(value, softestRock, hardestRock);

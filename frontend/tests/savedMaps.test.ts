@@ -62,7 +62,7 @@ test("a saved map reopens its generated fields and authored edits after reload @
   await save(page);
   const id = await page.getByLabel("World", { exact: true }).inputValue();
   const before = await storedData(page, id);
-  expect(before).toMatchObject({ format: 2, name: "Review atlas" });
+  expect(before).toMatchObject({ format: 3, name: "Review atlas" });
   await placePoint(page, "Unsaved landmark", 450);
   await expect(page.locator(".header-meta")).toHaveText("Unsaved changes");
   await page.reload();

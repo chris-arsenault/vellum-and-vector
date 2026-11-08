@@ -79,7 +79,7 @@ export class GenerationModuleRegistry {
       featureContribution(feature, slot, resolved, context)
     );
   }
-  bindSettings(features: ResolvedFeatures, legacy: GenerationSettings) {
+  bindSettings(features: ResolvedFeatures, base: GenerationSettings) {
     return this.features().reduce(
       (settings, feature) =>
         bindConfiguration(
@@ -89,14 +89,14 @@ export class GenerationModuleRegistry {
           "bind",
           features.parameters
         ),
-      structuredClone(legacy)
+      structuredClone(base)
     );
   }
-  prepareSettings(selected: FeatureSelection, legacy: GenerationSettings) {
+  prepareSettings(selected: FeatureSelection, base: GenerationSettings) {
     return this.features().reduce(
       (settings, feature) =>
         bindConfiguration(feature, selected[feature.id]?.configuration, settings, "prepare"),
-      structuredClone(legacy)
+      structuredClone(base)
     );
   }
   requirements(id: string, context: FeatureContributionContext): FeatureRequirement[] {

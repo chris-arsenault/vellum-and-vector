@@ -1,6 +1,8 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { saltedGround } from "../../world/ecologyBiomes";
 import { bedDissolvesAbove } from "../../world/magicSaltStocks";
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { parentSpanOf, carryWhereItLands, costNear, counterpartOf } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
@@ -25,7 +27,7 @@ import {
 } from "./groundReads";
 
 /** An area at which a pan is half as great as pans get, in square metres. */
-const typicalArea = 2_000_000_000;
+const typicalArea = MapScale.area(0.000125);
 /** The level a pan's floor is graded to on finer ground, rise over run. */
 const panGrade = 0.001;
 /** A crust is the flattest going there is, and water is the only thing it lacks. */
@@ -33,7 +35,8 @@ const crustGoing = 0.8;
 /** The network grows toward a closed floor. */
 const drawsDrainage = 0.5;
 /** Distance a dry-basin crossing threatens over, in metres, and the salt storm off a bare pan. */
-const stormReach = 30_000;
+// length-unit: fraction
+const stormReach = 0.0075;
 
 const bareness = (state: GenerationState, cell: number) => {
   const map = fieldOf(state);
@@ -51,7 +54,7 @@ const factors = {
 };
 const greatness = (state: GenerationState, place: PoiPlace) => factors.magnitude(state, place);
 const levelled = (cell: number): PoiFieldChange => ({
-  change: "gradientAtMost",
+  change: "gradeGround",
   cell,
   gradient: panGrade,
 });
@@ -163,7 +166,13 @@ export const saltPan: PoiEntry = {
     }),
     threatens(state, place) {
       const crusted = Math.min(1, saltingAt(state, place.anchor) + greatness(state, place) / 2);
-      return [{ hazard: "salt storm and thirst", reach: stormReach, severity: crusted }];
+      return [
+        {
+          hazard: "salt storm and thirst",
+          reach: mapScale(state).length(stormReach),
+          severity: crusted,
+        },
+      ];
     },
   },
   time: {

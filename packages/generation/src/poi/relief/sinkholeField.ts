@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFate, type PoiPlace } from "../poiContract";
@@ -9,9 +10,9 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { areaOf, loweredAsCaptured, meanOf, sameSpot, spans } from "./reliefShape";
 
 /** Area at which a field is half as great as fields get. */
-const typicalArea = 400_000_000;
+const typicalArea = MapScale.area(0.000025);
 /** Metres the system's own subsidence reaches before a field is half as sunk as they get. */
-const typicalSubsidence = 5;
+const typicalSubsidence = MapScale.length(0.00000125, 0.5);
 
 const isA = magicRule("greenwood", "sinkhole");
 const subsidedAt = (state: GenerationState, cell: number) =>

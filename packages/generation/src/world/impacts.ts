@@ -1,11 +1,12 @@
 import { meshDeltaX } from "./mesh";
+import { MapScale } from "@atlas/domain";
 // ImpactCrateringLayer.cs, Canonry 0f62584c.
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { hardenRock } from "../rock/rockField";
 import { crustForming, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { clamp, elevationLimit, round, truncate, units } from "./math";
+import { clamp, round, truncate, units } from "./math";
 import { hashUnit } from "./noise";
 import { Feature } from "./codes";
 import { nearestTriangle } from "./mesh";
@@ -24,7 +25,7 @@ function impactCount(map: PhysicalField, c: PhysicalContext): number {
   return Math.max(1, round(share * c.Span));
 }
 function centers(map: PhysicalField, c: PhysicalContext): WorldCandidate[] {
-  const count = areaBudget(impactCount(map, c), mediumArea(map));
+  const count = areaBudget(impactCount(map, c), mediumArea(map), map.scale.area(0.75));
   if (count === 0) return [];
   const ranked = worldCandidates(map.mesh, c.Seed, Math.max(256, count * 256)).sort(
     (a, b) => b.priority - a.priority
@@ -49,21 +50,14 @@ function excavate(
 ): number {
   if (distance > radius) return 0;
   const requested = Math.max(1, units(depth * (1 - (distance / radius) ** 2)));
-  const cut = Math.max(
-    0,
-    Math.min(requested, map.BedrockElevation.get(i) - units(-elevationLimit))
-  );
-  const excavated = excavateRock(map, i, cut, "impacts", "space");
+  const excavated = excavateRock(map, i, requested, "impacts", "space");
   map.ImpactExcavation.add(i, excavated);
   return excavated;
 }
 function raiseRim(map: PhysicalField, i: number, distance: number, radius: number, height: number) {
   const influence = 1 - Math.abs(distance / radius - 1) / 0.34;
   if (influence <= 0) return;
-  const uplift = Math.max(
-    0,
-    Math.min(units(height * influence), units(elevationLimit) - map.BedrockElevation.get(i))
-  );
+  const uplift = Math.max(0, units(height * influence));
   displaceGround(map, i, uplift, "impacts");
   map.ImpactRimUplift.add(i, uplift);
 }
@@ -99,12 +93,12 @@ function ejecta(
   for (const [i, weight] of candidates) {
     if (remaining <= 0 || totalWeight <= 0) break;
     const area = map.mesh.area(i),
-      requested = (((remaining * weight) / totalWeight) * 1024) / area;
+      requested = MapScale.inUnits((remaining * weight) / totalWeight / area, "native");
     totalWeight -= weight;
     if (requested <= 0) continue;
     const amount = deposit(map, i, requested, "impacts", "space");
     map.ImpactEjectaThickness.add(i, amount);
-    const volume = (amount / 1024) * area;
+    const volume = MapScale.metres(amount, "native") * area;
     remaining -= volume;
     deposited += volume;
   }
@@ -141,7 +135,7 @@ export function shapeImpact(
         map.mesh.y(i) - source.y
       ),
       area = map.mesh.area(i);
-    excavation += (excavate(map, i, distance, radius, depth) / 1024) * area;
+    excavation += MapScale.metres(excavate(map, i, distance, radius, depth), "native") * area;
     raiseRim(map, i, distance, radius, rim);
     shock(map, p, i, distance, radius, share);
     if (distance >= radius && distance <= radius * 2.2)

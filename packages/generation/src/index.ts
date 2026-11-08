@@ -14,7 +14,7 @@ export { isRegionalRefinement, refinementReads, refinementResolution } from "./r
 export { prepareRegionalRefinement, refineRegionalMap } from "./regional/workflow";
 export * from "./atlasParameters";
 export * from "./atlasPresets";
-export { migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
+export { inheritMapBoundary } from "./worldBoundary";
 export * from "./processCatalogue";
 export * from "./generationSettings";
 export * from "./preflight";

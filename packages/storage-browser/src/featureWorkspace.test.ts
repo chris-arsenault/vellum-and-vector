@@ -169,7 +169,7 @@ it("prepares separate child geometry clipped to a slanted regional extent", asyn
     ...state.domain.world.areas.area,
     parentId: parent.id,
     profile: "region",
-    map: { sourceAreaId: parent.id, sourceRevision: 1 },
+    map: { sourceAreaId: parent.id, sourceRevision: 1, refinementLevel: 1 },
   };
   state.domain.scope.footprint = footprint;
   state.domain.world.areas.area.footprint = footprint;

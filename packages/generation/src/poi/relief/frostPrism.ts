@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry } from "../poiContract";
@@ -9,7 +10,7 @@ import { magicRule, magicValue } from "../poiReads";
 import { areaOf, lastsWhile, meanOf, spans, standsIn, strengthOf } from "./reliefShape";
 
 /** Area at which a prism's ground is half as great as prisms get. */
-const typicalArea = 400_000_000;
+const typicalArea = MapScale.area(0.000025);
 
 const isA = magicRule("aurora", "prism");
 const chargeAt = (state: GenerationState, cell: number) =>

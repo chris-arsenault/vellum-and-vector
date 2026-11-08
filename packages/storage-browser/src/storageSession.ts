@@ -63,7 +63,7 @@ async function collectStorage(roots: CatalogRoot[]) {
  * another tab before this tab took the lock is always visible to the collector. */
 export async function collectSavedStorage() {
   const roots = await savedRoots();
-  if (roots) await collectStorage(roots);
+  await collectStorage(roots);
 }
 
 export interface SessionLocks {

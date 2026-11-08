@@ -1,7 +1,13 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { it } from "vitest";
-import { gridSampler, resampleChannels, type DomainSnapshot, type Grid } from "@atlas/domain";
+import {
+  gridSampler,
+  MapScale,
+  resampleChannels,
+  type DomainSnapshot,
+  type Grid,
+} from "@atlas/domain";
 import { FieldWorkingSet } from "@atlas/storage-browser";
 import type { GenerationState } from "../../../packages/generation/src/process";
 import { atlasChannels } from "../../../packages/generation/src/world/atlasChannels";
@@ -79,7 +85,7 @@ function wear(work: Work, cells: readonly number[]) {
     ground = groundOf(map),
     mix = compileMix({ abrasion: 1 }),
     power = Number(process.env.HARNESS_WEAR_POWER ?? 100),
-    limit = Number(process.env.HARNESS_WEAR_METRES ?? 25) * 1024;
+    limit = MapScale.inUnits(Number(process.env.HARNESS_WEAR_METRES ?? 25), "native");
   if (!(power > 0 && limit > 0)) throw new Error("Wear power and limit must be positive.");
   return cells.map((cell) => {
     const before = section(work, cell),
@@ -89,7 +95,7 @@ function wear(work: Work, cells: readonly number[]) {
     return {
       cell,
       powerMetres: power,
-      limitMetres: limit / 1024,
+      limitMetres: MapScale.metres(limit, "native"),
       depths,
       removed,
       parcels,

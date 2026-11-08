@@ -41,6 +41,7 @@ export function defaultHumanEras(): NonNullable<World["humanEras"]> {
 }
 export const generationEpochSchema = z
   .object({
+    lengthUnits: z.literal("relative").default("relative"),
     id: z.string().trim().min(1),
     duration: z.number().finite().positive().default(1000),
     tectonicDurationMyr: z.number().finite().nonnegative().default(tectonicDefaultMyr),

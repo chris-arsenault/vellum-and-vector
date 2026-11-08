@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -17,8 +18,8 @@ import {
 } from "./reliefShape";
 
 /** Area and relief at which a cirque is half as great as they get: part of a world complex. */
-const typicalArea = 8e8,
-  typicalRelief = 300;
+const typicalArea = MapScale.area(0.00005),
+  typicalRelief = MapScale.length(0.000075, 0.5);
 /** The gradient of a head wall steep enough to shed its snow. */
 const sheddingGrade = 0.15;
 

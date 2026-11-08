@@ -115,7 +115,10 @@ export function maintainLandmark(
   if (holds) corrected += kind.capture?.(map, placed, record) ?? 0;
   const shortfall = signatureShortfall(record, kind.measure(map, placed, record, scene));
   if (holds && Object.keys(shortfall).length)
-    corrected += kind.maintain(map, p, placed, shortfall, epoch, record, scene) / 1024;
+    corrected += MapScale.metres(
+      kind.maintain(map, p, placed, shortfall, epoch, record, scene),
+      "native"
+    );
   record.maintenance += corrected;
   record.measured = kind.measure(map, placed, record, scene);
   return record;
@@ -134,3 +137,4 @@ export function remeasureLandmark(
   record.measured = kind.measure(map, placed, record, scene);
   return record;
 }
+import { MapScale } from "@atlas/domain";

@@ -156,7 +156,7 @@ it("retains the active stage and error when a worker fails", async () => {
   cancelGeneration(job.id);
 });
 
-it("starts generation with operative political capacity without a compatibility warning", async () => {
+it("starts generation with configured political capacity", async () => {
   vi.stubGlobal("Worker", TestWorker);
   const world = fixtureWorld({ name: "History warning", seed: 42, width: 10000, height: 10000 });
   world.humanEras![0].politicalCapacity = 2;

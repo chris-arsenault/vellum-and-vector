@@ -1,4 +1,5 @@
-import type { AtlasFeature, MagicSystem } from "@atlas/domain";
+import { MapScale, type AtlasFeature, type MagicSystem } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import { bareGround } from "../../world/ecologyBiomes";
 import { potentialEvaporation } from "../../world/ecologyEnvironment";
 import type { PhysicalBufferName } from "../../world/field";
@@ -103,14 +104,18 @@ export function gradientInto(state: GenerationState, cell: number) {
 }
 
 /** The least sediment, in metres, that makes a bar; thinner gravel is a bed in passing. */
-export const barDepth = 1;
+export const barDepth = MapScale.length(0.00000025, 0.5);
 /** A reach above this gradient can carry coarse heavy grains. */
 const carryingGradient = 0.001;
 /** A river loses its grip on heavy grains where its gradient falls below this share of the reach above. */
 const slackening = 0.5;
 /** Gravel against the current: the bar a river leaves where it slackens, delta silt excepted. */
 const riverBar = (state: GenerationState, cell: number) => {
-  if (!onMappedRiver(state, cell) || sedimentAt(state, cell) < barDepth) return false;
+  if (
+    !onMappedRiver(state, cell) ||
+    sedimentAt(state, cell) < mapScale(state).resolveMeasure(barDepth)
+  )
+    return false;
   if (fieldOf(state).DeltaIntensity.get(cell) > 0) return false;
   const above = gradientInto(state, cell);
   return above >= carryingGradient && flowGradient(state, cell) <= slackening * above;
@@ -135,8 +140,11 @@ export const spillDepthAt = (state: GenerationState, cell: number) => {
 /** Whether rain and snow fall short of what the air takes up by enough to keep a basin closed. */
 export const closedByAridity = (state: GenerationState, cell: number) => {
   const map = fieldOf(state),
-    falling = (map.Rainfall.get(cell) + map.Snowfall.get(cell)) / 1000;
-  return falling < closedBasinAridity * potentialEvaporation(celsiusAt(state, cell));
+    falling = MapScale.metres(map.Rainfall.get(cell) + map.Snowfall.get(cell), "mm");
+  return (
+    falling <
+    closedBasinAridity * potentialEvaporation(celsiusAt(state, cell), fieldOf(state).scale)
+  );
 };
 const saltPanRule = magicRule("salt", "pan"),
   glassRule = magicRule("salt", "flat");
@@ -157,7 +165,7 @@ export const veinAt = magicRule("fire", "vein");
 export const dustAt = magicRule("salt", "dust");
 
 /** Salt's yield per death, its killing-ground floor and its full level, where no Salt system defines them. */
-const defaultDeathYield = 5_000_000,
+const defaultDeathYield = MapScale.area(3.125e-7),
   defaultKillingFloor = 20,
   defaultFullSalt = 400;
 /** Salt's full level, per square metre. */
@@ -170,7 +178,8 @@ export const killingFloor = (state: GenerationState) =>
 /** The dead the MassDeath band still records, as the brine per square metre they will become. */
 export function recordedBrineAt(state: GenerationState, cell: number) {
   const map = fieldOf(state),
-    made = parameterOf(state, "salt", "saltPerDeath") ?? defaultDeathYield;
+    made =
+      parameterOf(state, "salt", "saltPerDeath") ?? map.scale.resolveMeasure(defaultDeathYield);
   return (map.MassDeath.get(cell) * made) / map.mesh.area(cell);
 }
 /** Dead the ground records past Salt's floor and outside its rule: before Salt has read them, or with no Salt. */
@@ -232,9 +241,11 @@ export const areaOf = (state: GenerationState, place: PoiPlace) =>
 export const lengthOf = (state: GenerationState, place: PoiPlace) =>
   place.cells.length * cellSpan(state);
 /** The country a place is judged against, in metres. */
-const countryReach = 30_000;
+// length-unit: fraction
+const countryReach = 0.0075;
 /** That country, and always some of it: a map whose cells are wider still reads its neighbours. */
-export const aroundOf = (state: GenerationState) => Math.max(countryReach, 2 * cellSpan(state));
+export const aroundOf = (state: GenerationState) =>
+  mapScale(state).supported(mapScale(state).length(countryReach), 2);
 /** A place stands on another when the other's cells include its anchor. */
 export const standsOn = (_state: GenerationState, a: PoiPlace, b: PoiPlace) =>
   b.cells.includes(a.anchor);

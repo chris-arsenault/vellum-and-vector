@@ -3,7 +3,7 @@ import { z } from "zod";
 export interface AtlasParameterDefinition {
   label: string;
   unit: string;
-  minimum: number;
+  minimum?: number;
   maximum?: number;
   default: number;
   step: number;
@@ -34,7 +34,6 @@ export const atlasParameterDefinitions = {
     label: "Continental assemblies",
     unit: "count",
     minimum: 1,
-    maximum: 30,
     default: 4,
     step: 1,
     integer: true,
@@ -44,7 +43,6 @@ export const atlasParameterDefinitions = {
     label: "Oceanic plates",
     unit: "count",
     minimum: 0,
-    maximum: 6,
     default: 1,
     step: 1,
     integer: true,
@@ -54,7 +52,6 @@ export const atlasParameterDefinitions = {
     label: "Tectonic provinces",
     unit: "count",
     minimum: 2,
-    maximum: 200,
     default: 42,
     step: 1,
     integer: true,
@@ -63,8 +60,8 @@ export const atlasParameterDefinitions = {
   landFraction: {
     label: "Continental crust fraction",
     unit: "fraction",
-    minimum: 0.05,
-    maximum: 0.95,
+    minimum: 0,
+    maximum: 1,
     default: 0.45,
     step: 0.01,
     group: "geology",
@@ -72,8 +69,6 @@ export const atlasParameterDefinitions = {
   temperature: {
     label: "Baseline temperature",
     unit: "°C",
-    minimum: -50,
-    maximum: 60,
     default: 15,
     step: 0.5,
     group: "climate",
@@ -82,7 +77,6 @@ export const atlasParameterDefinitions = {
     label: "Profile rainfall",
     unit: "multiplier",
     minimum: 0,
-    maximum: 5,
     default: 1,
     step: 0.1,
     group: "climate",
@@ -91,18 +85,15 @@ export const atlasParameterDefinitions = {
     label: "River erosion",
     unit: "multiplier",
     minimum: 0,
-    maximum: 5,
     default: 1,
     step: 0.1,
     group: "water",
   },
   seaLevel: {
     label: "Sea level adjustment",
-    unit: "m",
-    minimum: -5000,
-    maximum: 5000,
+    unit: "map fraction",
     default: 0,
-    step: 10,
+    step: 0.0000025,
     group: "climate",
   },
   southLatitude: {
@@ -137,20 +128,6 @@ export const atlasParameterDefinitions = {
     ],
     group: "climate",
   },
-  wrapLongitude: {
-    label: "East–west wrap for climate",
-    unit: "choice",
-    minimum: 0,
-    maximum: 1,
-    default: 0,
-    step: 1,
-    integer: true,
-    choices: [
-      { value: 0, label: "Edges stay open" },
-      { value: 1, label: "Air and ocean wrap" },
-    ],
-    group: "climate",
-  },
   impacts: {
     label: "Meteor impacts",
     unit: "history budget per 12 million km²",
@@ -173,7 +150,6 @@ export const atlasParameterDefinitions = {
     label: "Major landscape landmarks",
     unit: "count",
     minimum: 0,
-    maximum: 12,
     default: 4,
     step: 1,
     integer: true,
@@ -183,7 +159,6 @@ export const atlasParameterDefinitions = {
     label: "Major magic landmarks",
     unit: "count",
     minimum: 0,
-    maximum: 12,
     default: 3,
     step: 1,
     integer: true,
@@ -225,7 +200,6 @@ export const atlasParameterDefinitions = {
     label: "Vegetation productivity",
     unit: "multiplier",
     minimum: 0,
-    maximum: 5,
     default: 1,
     step: 0.1,
     group: "ecology",
@@ -234,7 +208,6 @@ export const atlasParameterDefinitions = {
     label: "Herbivore pressure",
     unit: "multiplier",
     minimum: 0,
-    maximum: 5,
     default: 1,
     step: 0.1,
     group: "ecology",
@@ -287,10 +260,10 @@ export const atlasParameterDefinitions = {
   },
   cityReach: {
     label: "City hinterland reach",
-    unit: "km",
-    minimum: 10,
-    default: 200,
-    step: 10,
+    unit: "map fraction",
+    minimum: 0.0025,
+    default: 0.05,
+    step: 0.0025,
     group: "human",
   },
   roadTraffic: {
@@ -342,62 +315,26 @@ export const latitudeFrameSettings = [
 ] as const;
 export function parameterSchema(definition: AtlasParameterDefinition) {
   let schema = z.number().finite();
-  schema = definition.exclusiveMinimum
-    ? schema.gt(definition.minimum)
-    : schema.min(definition.minimum);
+  if (definition.minimum !== undefined)
+    schema = definition.exclusiveMinimum
+      ? schema.gt(definition.minimum)
+      : schema.min(definition.minimum);
   if (definition.integer) schema = schema.int();
   if (definition.maximum !== undefined) schema = schema.max(definition.maximum);
   return schema.default(definition.default);
 }
-export const atlasParametersSchema = z.preprocess(
-  legacyMapBoundary,
-  z
-    .object(
-      Object.fromEntries(
-        Object.entries(atlasParameterDefinitions).map(([key, definition]) => [
-          key,
-          parameterSchema(definition),
-        ])
-      ) as Record<keyof AtlasParameters, z.ZodDefault<z.ZodNumber>>
-    )
-    .strict()
-    .refine((parameters) => parameters.northLatitude >= parameters.southLatitude, {
-      path: ["northLatitude"],
-      message: "The north edge cannot lie south of the south edge.",
-    })
-);
-function legacyMapBoundary(value: unknown) {
-  if (!value || typeof value !== "object" || !("wrapLongitude" in value) || "mapBoundary" in value)
-    return value;
-  return { ...value, mapBoundary: value.wrapLongitude };
-}
+export const atlasParametersSchema = z
+  .object(
+    Object.fromEntries(
+      Object.entries(atlasParameterDefinitions).map(([key, definition]) => [
+        key,
+        parameterSchema(definition),
+      ])
+    ) as Record<keyof AtlasParameters, z.ZodDefault<z.ZodNumber>>
+  )
+  .strict()
+  .refine((parameters) => parameters.northLatitude >= parameters.southLatitude, {
+    path: ["northLatitude"],
+    message: "The north edge cannot lie south of the south edge.",
+  });
 export const defaultAtlasParameters: AtlasParameters = atlasParametersSchema.parse({});
-const parameterProcesses: Partial<Record<keyof AtlasParameters, string>> = {
-  impacts: "atlas.impact-cratering",
-  impactSize: "atlas.impact-cratering",
-  volcanism: "atlas.volcanic-construction",
-  erosion: "atlas.ancestral-fluvial-erosion",
-  glaciers: "atlas.glacial-erosion",
-  coastalErosion: "atlas.coastal-erosion-and-deposition",
-  vegetation: "atlas.ecology-evolve",
-  grazing: "atlas.ecology-evolve",
-};
-export function parameterInactiveReason(
-  key: keyof AtlasParameters,
-  domains: string[],
-  processes: Record<string, boolean>,
-  inherited: boolean
-) {
-  const group = atlasParameterDefinitions[key].group;
-  if (inherited && group === "geology")
-    return "Geological construction is inherited from the parent.";
-  const humanDomains: Partial<Record<keyof AtlasParameters, string>> = {
-    cultureCount: "cultural",
-    polityCount: "political",
-  };
-  const domain = humanDomains[key] ?? "physical";
-  if (!domains.includes(domain)) return `Enable ${domain} generation to use this setting.`;
-  const process = parameterProcesses[key];
-  if (process && processes[process] === false) return "Its generation process is disabled.";
-  return null;
-}

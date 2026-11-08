@@ -1,6 +1,7 @@
 import { compileMix } from "../rock/modes";
 import { defineProcess, type ProcessWork } from "./groundProcess";
 import { creepSettings } from "./creepSettings";
+import { MapScale } from "@atlas/domain";
 
 /** Roots hold loose ground together. */
 const loosening = compileMix({ shear: 1 });
@@ -17,7 +18,7 @@ function eachFall(
   for (let edge = 0; edge < mesh.degree(i); edge++) {
     const j = mesh.neighbor(i, edge);
     if (j < 0) continue;
-    const drop = (field.Elevation.get(i) - field.Elevation.get(j)) / 1024;
+    const drop = MapScale.metres(field.Elevation.get(i) - field.Elevation.get(j), "native");
     if (drop > 0) send(j, drop, mesh.faceLength(i, edge) / mesh.faceDistance(i, edge));
   }
 }
@@ -28,7 +29,7 @@ function creepFrom(
 ) {
   const { field, settings: p, ground, span } = work,
     mesh = field.mesh,
-    mantle = (field.SedimentThickness.get(i) / 1024) * mesh.area(i);
+    mantle = MapScale.metres(field.SedimentThickness.get(i), "native") * mesh.area(i);
   if (mantle <= 0 || field.WaterKindCodes.get(i) === 1) return;
   const moves = ground.gives(i, loosening) * p.CreepPerSpan * span;
   let wanted = 0;
@@ -58,7 +59,7 @@ export const creep = defineProcess({
   ],
   settings: creepSettings,
   // A region's passes refine one stretch of the world's history; they do not add more of it.
-  atScale: (settings, { passes }) => ({ CreepPerSpan: settings.CreepPerSpan / passes }),
+  forExecution: (settings, { passes }) => ({ CreepPerSpan: settings.CreepPerSpan / passes }),
   run(work) {
     const { field, stage } = work;
     const send = (source: number, target: number, volume: number) =>

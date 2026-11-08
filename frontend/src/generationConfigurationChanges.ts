@@ -24,7 +24,7 @@ const physicalFields: {
   { key: "ice", label: "glacial activity", unit: "×" },
   { key: "coasts", label: "coastal activity", unit: "×" },
   { key: "temperature", label: "temperature shift", unit: "°C" },
-  { key: "seaLevel", label: "sea level offset", unit: "m" },
+  { key: "seaLevel", label: "sea level offset", unit: "of map span" },
   { key: "impacts", label: "impact activity", unit: "×" },
   { key: "volcanism", label: "volcanic activity", unit: "×" },
 ];

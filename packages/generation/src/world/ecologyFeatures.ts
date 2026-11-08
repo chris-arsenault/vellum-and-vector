@@ -1,4 +1,4 @@
-import { biomes } from "@atlas/domain";
+import { MapScale, biomes } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { BiomeSummary } from "./ecologyBiomes";
 import { environment } from "./ecologyEnvironment";
@@ -58,7 +58,7 @@ export function summarize(state: GenerationState, members: RegionMembers) {
     moisture: mean((i) => environment(map, i).moisture),
     wetness: mean((i) => environment(map, i).wetness),
     slope: mean((i) => map.Slope.get(i)),
-    elevation: mean((i) => (map.Elevation.get(i) - map.BaseSeaLevel) / 1024),
+    elevation: mean((i) => MapScale.metres(map.Elevation.get(i) - map.BaseSeaLevel, "native")),
     systems,
   } satisfies BiomeSummary;
 }

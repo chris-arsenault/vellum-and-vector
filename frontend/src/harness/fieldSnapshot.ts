@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { deserialize, serialize } from "node:v8";
-import type { Epoch } from "@atlas/domain";
+import { requireThat, triangleArea, type Epoch } from "@atlas/domain";
 import type { PhysicalContext } from "../../../packages/generation/src/world/context";
 import {
   createField,
@@ -14,9 +14,7 @@ import {
   importGroundBand,
   finishGroundImport,
 } from "../../../packages/generation/src/rock/groundResources";
-import { physicalProfile } from "../../../packages/generation/src/world/profile";
 import { createWorldMesh } from "../../../packages/generation/src/world/worldMesh";
-import { generationResolution } from "../../../packages/generation/src/resolution";
 import { harnessRoot } from "./harnessWorkspace";
 import { nativeWorkload } from "./nativeWorkload";
 
@@ -41,6 +39,7 @@ const heldState = [
   "ThrustSlipOwed",
 ] as const;
 interface Snapshot {
+  lengthUnits: "relative";
   epochs?: Epoch[];
   worldSize: [number, number, number, number];
   quality: string;
@@ -66,6 +65,7 @@ function capture(
     if (typeof value === "number" || typeof value === "boolean") plain[name] = value;
   for (const name of heldState) held[name] = map[name];
   return {
+    lengthUnits: "relative",
     worldSize: map.mesh.bounds as Snapshot["worldSize"],
     quality,
     seed: context.EpochStableSeed ^ salt,
@@ -102,8 +102,9 @@ export const snapshotPath = (label: string, pass: number) =>
 function latticeOf(snapshot: Snapshot) {
   const [west, south, east, north] = snapshot.worldSize,
     padding = snapshot.profile.BoundaryPadding,
-    span = generationResolution(snapshot.quality as "draft", "world").cellSpan,
-    samples = ((east - west + 2 * padding) * (north - south + 2 * padding)) / span ** 2,
+    // Recorded geometry is data: a new generation policy must not resize an old snapshot.
+    cellArea = snapshot.spacing ** 2 * triangleArea,
+    samples = ((east - west + 2 * padding) * (north - south + 2 * padding)) / cellArea,
     wraps = snapshot.profile.WrapLongitude === 1;
   return createWorldMesh(
     [west, south, east, north],
@@ -118,8 +119,13 @@ function latticeOf(snapshot: Snapshot) {
 }
 /** A field exactly as it stood when the snapshot was taken. */
 export function restoreSnapshot(path: string) {
-  const snapshot = deserialize(readFileSync(path)) as Snapshot,
-    mesh = latticeOf(snapshot);
+  const snapshot = deserialize(readFileSync(path)) as Snapshot;
+  requireThat(
+    snapshot.lengthUnits === "relative",
+    "snapshot_format",
+    "Use a current field snapshot."
+  );
+  const mesh = latticeOf(snapshot);
   if (mesh.count !== snapshot.count || mesh.spacing !== snapshot.spacing)
     throw new Error(
       `Snapshot lattice differs: ${snapshot.count} cells at ${snapshot.spacing}, rebuilt ${mesh.count} at ${mesh.spacing}.`
@@ -128,7 +134,7 @@ export function restoreSnapshot(path: string) {
   const imported = new Set<PhysicalBufferName>();
   for (const [name] of physicalBands(map)) {
     const values = snapshot.bands[name];
-    if (!values) continue;
+    requireThat(values, "snapshot_field", `Snapshot is missing ${name}.`);
     imported.add(name);
     if (isMutablePhysicalName(name))
       for (let i = 0; i < values.length; i++) map[name].set(i, values[i]);
@@ -136,11 +142,10 @@ export function restoreSnapshot(path: string) {
   }
   Object.assign(map, snapshot.plain, snapshot.held);
   finishGroundImport(map, imported);
-  // A setting newer than the snapshot takes the code's value, so old snapshots stay usable.
   return {
     map,
     seed: snapshot.seed,
-    profile: { ...physicalProfile, ...snapshot.profile },
+    profile: snapshot.profile,
     epochs: snapshot.epochs,
   };
 }

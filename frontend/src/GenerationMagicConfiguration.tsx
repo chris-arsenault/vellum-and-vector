@@ -1,5 +1,6 @@
 import {
   areaSpace,
+  MapScale,
   canonryConfluencePresets,
   point,
   spatial,
@@ -132,7 +133,7 @@ export function GenerationLocatedSources({ flow }: { flow: GenerationWorkflow })
           <tr key={source.id}>
             <th scope="row">{source.name}</th>
             <td>{locatedEffectLabel(source.effect)}</td>
-            <td>{source.radius / 1000} km</td>
+            <td>{MapScale.inUnits(source.radius, "km")} km</td>
             <td>{source.propagation}</td>
           </tr>
         ))}

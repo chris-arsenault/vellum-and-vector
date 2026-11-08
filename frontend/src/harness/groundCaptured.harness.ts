@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { it } from "vitest";
+import { MapScale } from "@atlas/domain";
 import { groundOf } from "../../../packages/generation/src/rock/ground";
 import { erodeFacets } from "../../../packages/generation/src/rock/groundLedger";
 import {
@@ -136,7 +137,7 @@ function abrasion(map: PhysicalField, cell: number, power: number, limit: number
     removed = erodeFacets(map, cell, depths, "fluvial", "load", (layer) => parcels.push(layer));
   return {
     powerMetres: power,
-    limitMetres: limit / 1024,
+    limitMetres: MapScale.metres(limit, "native"),
     depths,
     removed,
     parcels,
@@ -161,7 +162,7 @@ function behavior() {
   if (!limestone) throw new Error("Captured limestone contact was lost during insertion.");
   const toContact = ground.section(1)[0].top - limestone.top,
     exposure = [2, 3].map((cell) => abrasion(map, cell, 1_000_000, toContact)),
-    nextWear = abrasion(map, 3, 20, 100 * 1024);
+    nextWear = abrasion(map, 3, 20, MapScale.inUnits(100, "native"));
   writeGroundSection(map, `${output}-behavior`, "0,1,2,3");
   return {
     sourceRun: run,
@@ -329,7 +330,7 @@ it.runIf(process.env.HARNESS_CAPTURED_INTERVAL)(
         seed,
         0,
         profile,
-        atlasEpoch(epochs[pass]),
+        atlasEpoch(epochs[pass], map.scale),
         pass,
         epochs.length
       ),

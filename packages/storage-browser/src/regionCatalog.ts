@@ -1,13 +1,14 @@
 import type { Database } from "@sqlite.org/sqlite-wasm";
 import type { Geometry, LineString } from "geojson";
 import {
-  minimumRegionWidthMetres,
   polygonParts,
   connectedRegionParts,
   canonicalGeometry,
   polygonGeometry,
   regionalDistricts,
   regionalSelectionArea,
+  MapScale,
+  defaultTerrainCells,
   rectangle,
   regionBoundaryLines,
   requireThat,
@@ -27,7 +28,7 @@ import {
 import { decodeRecord } from "./catalogRecords";
 import type { GeometryKernel } from "./geometryKernel";
 import type { FieldGeographyCatalog } from "./fieldGeography";
-import { regionSelectionLevel } from "./regionScale";
+import { candidateScore, regionMinimumWidth, regionSelectionLevel } from "./regionScale";
 import { GeosSpatial } from "./geosSpatial";
 
 interface Context {
@@ -37,10 +38,9 @@ interface Context {
   precision: number;
   revision: number;
   targetArea: number;
+  minimumWidth: number;
 }
 type RegionSource = RegionCandidate & { district?: boolean };
-const districtPreferencePenalty = 0.2;
-const sparseFootprintPenalty = 0.75;
 function point({ x, y }: Position): Geometry {
   return { type: "Point", coordinates: [x, y] };
 }
@@ -70,7 +70,8 @@ export class RegionCatalog {
     const world = this.db.selectObject("SELECT data,revision FROM worlds WHERE id=?", [worldId]);
     requireThat(world, "missing_world", "Choose an existing world.");
     const reference: World["reference"] = JSON.parse(String(world.data)).reference,
-      precision = reference.precision ?? 1e-6;
+      precision = reference.precision ?? 1e-6,
+      scale = MapScale.fromCells(spatial.bounds(reference.domain), defaultTerrainCells);
     const parentRow = query.parentId
       ? this.db.selectObject("SELECT * FROM records WHERE world_id=? AND kind='view' AND id=?", [
           worldId,
@@ -100,7 +101,8 @@ export class RegionCatalog {
       parentArea: this.kernel.measure(parent, precision).area,
       precision,
       revision: Number(world.revision),
-      targetArea: regionalSelectionArea(regionSelectionLevel(this.db, this.kernel, query)),
+      targetArea: regionalSelectionArea(regionSelectionLevel(this.db, this.kernel, query), scale),
+      minimumWidth: regionMinimumWidth(this.db, this.kernel, query),
     };
   }
   /** The parent's other children whose indexed bounds meet `bounds`. */
@@ -194,7 +196,7 @@ export class RegionCatalog {
       for (const piece of this.split(available, query.cuts, precision))
         for (const shape of connectedRegionParts(context.reference, piece, query.position)) {
           const { area, length } = kernel.measure(shape, precision);
-          if (area >= parentArea || (2 * area) / length < minimumRegionWidthMetres) continue;
+          if (area >= parentArea || (2 * area) / length < context.minimumWidth) continue;
           if (query.position && !kernel.relation(shape, point(query.position), precision, "covers"))
             continue;
           const footprint = canonicalGeometry(context.reference, shape),
@@ -340,7 +342,7 @@ export class RegionCatalog {
       );
       const { area, length } = this.kernel.measure(clipped, context.precision);
       requireThat(
-        (2 * area) / length >= minimumRegionWidthMetres,
+        (2 * area) / length >= context.minimumWidth,
         "region_size",
         "Choose a larger outline inside the available parent region."
       );
@@ -390,13 +392,6 @@ function districtName(
   const horizontal = x < 1 / 3 ? "west" : x > 2 / 3 ? "east" : "";
   const vertical = y < 1 / 3 ? "south" : y > 2 / 3 ? "north" : "";
   return `${name} · ${vertical + horizontal || "central"}`;
-}
-function candidateScore(area: number, frameArea: number, target: number, district: boolean) {
-  return (
-    Math.abs(Math.log(frameArea / target)) +
-    Math.log(Math.max(1, frameArea / area)) * sparseFootprintPenalty +
-    (district ? districtPreferencePenalty : 0)
-  );
 }
 function localAnchors(reference: World["reference"], shape: Geometry, anchors: Position[]) {
   if (reference.boundaryMode !== "cylinder") return anchors;

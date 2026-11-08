@@ -1,11 +1,11 @@
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
+import { MapScale } from "@atlas/domain";
 
 /**
  * What a pass of mountain building had to build with and what it did with it, across the cells of
  * its belts: the crust that arrived, what the roots took, what stayed unused, and how the ground
  * stands. Observes only.
  */
-const metres = 1024;
 const round = (value: number) => Math.round(value * 10) / 10;
 
 /** Means over a belt's continental cells and its oceanic ones, by what each cell can take. */
@@ -20,11 +20,11 @@ export function beltSupply(map: PhysicalField) {
       kept.boundary++;
       kept.strain += map.TectonicStrain.get(i);
     }
-    sum.arrived += map.ConvergentCrustSurplus.get(i) / metres;
-    sum.subducted += map.OceanicSubduction.get(i) / metres;
-    sum.built += Math.max(0, map.OrogenicConstruction.get(i)) / metres;
-    sum.unused += map.CrustRootReserve.get(i) / metres;
-    sum.thickness += map.CrustThickness.get(i) / metres;
+    sum.arrived += MapScale.metres(map.ConvergentCrustSurplus.get(i), "native");
+    sum.subducted += MapScale.metres(map.OceanicSubduction.get(i), "native");
+    sum.built += MapScale.metres(Math.max(0, map.OrogenicConstruction.get(i)), "native");
+    sum.unused += MapScale.metres(map.CrustRootReserve.get(i), "native");
+    sum.thickness += MapScale.metres(map.CrustThickness.get(i), "native");
   }
   const mean = (value: number) => round(value / Math.max(1, kept.cells));
   return {
@@ -42,7 +42,12 @@ export function beltSupply(map: PhysicalField) {
 const volume = (map: PhysicalField, value: (i: number) => number) => {
   let total = 0;
   for (let i = 0; i < map.mesh.count; i++)
-    if (map.mesh.membership(i) === 1) total += (value(i) * map.mesh.area(i)) / metres / 1e9;
+    if (map.mesh.membership(i) === 1)
+      total += MapScale.volumeUnits(
+        MapScale.metres(value(i), "native") * map.mesh.area(i),
+        "m3",
+        "km3"
+      );
   return Math.round(total);
 };
 /**
@@ -53,10 +58,12 @@ export function moveBudget(map: PhysicalField) {
   let expected = 0;
   for (let i = 0; i < map.mesh.count; i++)
     if (map.mesh.membership(i) === 1 && map.TectonicBoundaryCodes.get(i) === 1)
-      expected +=
+      expected += MapScale.volumeUnits(
         ((map.mesh.spacing * map.LastPlateDriftStep * map.TectonicStrain.get(i)) / 1000) *
-        (map.CrustThickness.get(i) / metres) *
-        1e-9;
+          MapScale.metres(map.CrustThickness.get(i), "native"),
+        "m3",
+        "km3"
+      );
   return {
     expectedFromStrain: Math.round(expected),
     arrivedInRoots: volume(map, (i) => map.ConvergentCrustSurplus.get(i)),
@@ -72,7 +79,11 @@ export function stuckRootCrust(map: PhysicalField) {
   const belts = new Map<number, { reserve: number; continental: number; room: number }>();
   let outside = 0;
   for (let i = 0; i < map.mesh.count; i++) {
-    const amount = (map.CrustRootReserve.get(i) * map.mesh.area(i)) / metres / 1e9,
+    const amount = MapScale.volumeUnits(
+        MapScale.metres(map.CrustRootReserve.get(i), "native") * map.mesh.area(i),
+        "m3",
+        "km3"
+      ),
       id = map.OrogenicComponentIds.get(i);
     if (id < 0) {
       outside += amount;
@@ -83,7 +94,7 @@ export function stuckRootCrust(map: PhysicalField) {
     belt.reserve += amount;
     if (fraction >= 350) {
       belt.continental++;
-      if (map.CrustThickness.get(i) / metres < 1000 + 3 * fraction) belt.room++;
+      if (MapScale.metres(map.CrustThickness.get(i), "native") < 1000 + 3 * fraction) belt.room++;
     }
     belts.set(id, belt);
   }
@@ -120,7 +131,7 @@ export function landHeights(map: PhysicalField) {
   const heights: number[] = [];
   for (let i = 0; i < map.mesh.count; i++)
     if (map.mesh.membership(i) === 1 && map.Elevation.get(i) > map.EffectiveSeaLevel)
-      heights.push((map.Elevation.get(i) - map.EffectiveSeaLevel) / metres);
+      heights.push(MapScale.metres(map.Elevation.get(i) - map.EffectiveSeaLevel, "native"));
   heights.sort((a, b) => a - b);
   const share = (from: number) =>
     round((100 * heights.filter((height) => height >= from).length) / Math.max(1, heights.length));

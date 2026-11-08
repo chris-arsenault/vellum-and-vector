@@ -1,4 +1,5 @@
 import { flowRecord } from "../../../packages/generation/src/coupling/flows";
+import { MapScale } from "@atlas/domain";
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
 
 /** What the first epoch's ground has become by the end of a run, and who moved what to get there. */
@@ -30,7 +31,7 @@ export function epochStory(map: PhysicalField) {
     total++;
     held
       .get(classOf(map.FirstEpochHeight.get(i)))!
-      .push((map.Elevation.get(i) - map.EffectiveSeaLevel) / 1024);
+      .push(MapScale.metres(map.Elevation.get(i) - map.EffectiveSeaLevel, "native"));
   }
   return {
     firstEpochGround: Object.fromEntries(
@@ -73,7 +74,7 @@ export function firstEpochGroundNow(map: PhysicalField): Record<string, FirstEpo
         means = Object.fromEntries(
           Object.keys(parts).map((part) => [
             part,
-            Math.round(sum[part] / Math.max(1, cells) / 1024),
+            Math.round(MapScale.metres(sum[part] / Math.max(1, cells), "native")),
           ])
         );
       return [name, { ...means, cells } as FirstEpochGround];

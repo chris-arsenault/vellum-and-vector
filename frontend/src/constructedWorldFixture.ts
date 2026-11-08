@@ -1,6 +1,7 @@
 import { createGrid, generateBand, putChannel } from "@atlas/domain";
 import { atlasPublicationDefinitions, type CompletedBoundary } from "@atlas/generation";
 import { createWorldSnapshot } from "./worldCreation";
+import { groundResourceBindings } from "../../packages/generation/src/rock/groundResources";
 
 /** Known coast and upland cells, supplied directly rather than found by generating a seed. */
 export function constructedWorld() {
@@ -24,6 +25,15 @@ export function constructedWorld() {
       name,
       unit,
       generateBand(surface.coverage, "float64", name, (i) => row[i % 5])
+    );
+  for (const { name, unit } of groundResourceBindings)
+    putChannel(
+      surface,
+      name,
+      unit,
+      generateBand(surface.coverage, "float64", name, (i) =>
+        name === "bedrock" || name === "crustSupport" ? values.elevation[1][i % 5] : 0
+      )
     );
   const result: CompletedBoundary = {
     kind: "final",

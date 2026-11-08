@@ -1,4 +1,10 @@
-import { CellQueue, type Band, type MagicCondition, type MagicFeatureRule } from "@atlas/domain";
+import {
+  MapScale,
+  CellQueue,
+  type Band,
+  type MagicCondition,
+  type MagicFeatureRule,
+} from "@atlas/domain";
 import { retainedArray } from "./physicalNumerics";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
@@ -28,7 +34,8 @@ export function conditionReader(
       mesh = map.mesh;
     return (i: number) => (held ? held.get(i) / mesh.area(i) : 0);
   }
-  if (key === "elevation") return (i: number) => (map.Elevation.get(i) - map.BaseSeaLevel) / 1024;
+  if (key === "elevation")
+    return (i: number) => MapScale.metres(map.Elevation.get(i) - map.BaseSeaLevel, "native");
   if (key === "slope") return (i: number) => map.Slope.get(i);
   if (key === "noise")
     return (i: number) =>

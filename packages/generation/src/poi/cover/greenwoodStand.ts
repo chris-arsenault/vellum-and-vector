@@ -22,7 +22,8 @@ import {
 } from "./coverShared";
 
 /** Area at which a stand is half as great as stands get: 500 square kilometres. */
-const typicalArea = 5e8;
+// length-unit: fraction
+const typicalArea = 0.00003125;
 /** The mean ecological damage past which a stand's old growth is gone. */
 const lostGrowth = 0.5;
 const isA = magicRule("greenwood", "stand");

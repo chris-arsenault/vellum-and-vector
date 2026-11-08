@@ -1,5 +1,6 @@
 import {
   gridPosition,
+  MapScale,
   gridDistance,
   overlappingAdaptiveLeaves,
   type Grid,
@@ -46,7 +47,10 @@ export function nearestSocietySample(
     Math.abs(p.y - s),
     Math.abs(p.y - n)
   );
-  let radius = Math.max(1, grid.scope.resolution ?? Math.max(e - w, n - s) / 100);
+  const scale = grid.scope.resolution
+    ? MapScale.fromBounds(grid.bounds, grid.scope.resolution)
+    : MapScale.fromCells(grid.bounds, Math.max(1, grid.active.length));
+  let radius = scale.cells(1);
   for (;;) {
     let best = -1,
       distance = Infinity;

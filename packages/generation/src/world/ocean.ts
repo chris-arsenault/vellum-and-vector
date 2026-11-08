@@ -1,7 +1,8 @@
 // OceanConnectivityLayer.cs, Canonry 0f62584c.
 import { crustForming, setWaterSurface, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { noWaterSurface, units } from "./math";
+import { noWaterSurface } from "./math";
+import { MapScale } from "@atlas/domain";
 import { oceanSeeds, OceanComponents, visitConnectedOcean } from "./oceanComponents";
 
 /**
@@ -22,14 +23,15 @@ function connectedOceanLevel(map: PhysicalField, target: number): number {
       const height = map.Elevation.get(i);
       if (height !== elevation) {
         settle();
-        if (components.connected >= target) return elevation + units(1);
+        if (components.connected >= target)
+          return elevation + MapScale.native(map.scale.length(2.5e-7));
         elevation = height;
       }
       components.activate(i);
       level.push(i);
     }
     settle();
-    return elevation + units(1);
+    return elevation + MapScale.native(map.scale.length(2.5e-7));
   } finally {
     components.close();
   }
@@ -44,7 +46,7 @@ function connectCell(map: PhysicalField, components: OceanComponents, i: number)
 function connectedVolume(map: PhysicalField, level: number): number {
   let volume = 0;
   visitConnectedOcean(map, level, (i) => {
-    volume += ((level - map.Elevation.get(i)) / 1024) * map.mesh.contentArea(i);
+    volume += MapScale.metres(level - map.Elevation.get(i), "native") * map.mesh.contentArea(i);
   });
   return volume;
 }
@@ -57,7 +59,7 @@ function levelForVolume(map: PhysicalField, volume: number): number {
     low = Math.min(low, elevation);
     high = Math.max(high, elevation);
   }
-  high += units(1);
+  high += MapScale.native(map.scale.length(2.5e-7));
   while (high - low > 1) {
     const middle = low + (high - low) / 2;
     if (connectedVolume(map, middle) < volume) low = middle;
@@ -92,18 +94,19 @@ function seaLevel(map: PhysicalField, c: PhysicalContext) {
     for (let i = 0; i < map.mesh.count; i++) area += map.mesh.contentArea(i);
     const target = area * c.Profile.QualityTargets.OceanCoverage.target;
     map.BaseSeaLevel = Math.max(
-      connectedOceanLevel(map, target) + units(c.Profile.SeaLevel * c.Profile.ElevationScale),
-      lowestBoundary(map) + units(1)
+      connectedOceanLevel(map, target) +
+        MapScale.native(c.Profile.SeaLevel * c.Profile.ElevationScale),
+      lowestBoundary(map) + MapScale.native(map.scale.length(2.5e-7))
     );
     map.BaseOceanVolume = connectedVolume(map, map.BaseSeaLevel) + groundedIceWater(map);
     map.SeaLevelInitialized = true;
   } else if (map.BaseOceanVolume > 0) {
     map.BaseSeaLevel = Math.max(
       levelForVolume(map, Math.max(0, map.BaseOceanVolume - groundedIceWater(map))),
-      lowestBoundary(map) + units(1)
+      lowestBoundary(map) + MapScale.native(map.scale.length(2.5e-7))
     );
   }
-  return map.BaseSeaLevel + units(c.SeaLevelOffset);
+  return map.BaseSeaLevel + MapScale.native(c.SeaLevelOffset);
 }
 export function oceanConnectivity(map: PhysicalField, c: PhysicalContext) {
   map.WaterKindCodes.fill(0);

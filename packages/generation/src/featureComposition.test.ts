@@ -10,7 +10,6 @@ import { MapProcessRegistry, type ProcessConfiguration } from "./process";
 import { sequenceStages } from "./sequence";
 import { GenerationModuleRegistry, type GenerationModule } from "./generationModules";
 import { atlasGenerationModules } from "./atlasModules";
-import { worldGenerationSettings } from "./generationSettings";
 
 it("omits disabled mountain construction while retaining selected surface and load feedback", () => {
   const selected = resolveGenerationFeatures(physicalFeatureDefinitions, {
@@ -23,33 +22,6 @@ it("omits disabled mountain construction while retaining selected surface and lo
     "lithospheric-flexure",
   ]);
   expect(physicalFeatureSequence("material.relaxation", selected)).toHaveLength(1);
-});
-
-it("translates legacy glacier choices into one whole feature and rejects a contradictory pair", () => {
-  const disabled = resolveGenerationFeatures(
-    physicalFeatureDefinitions,
-    {},
-    {
-      "atlas.glacial-erosion": false,
-      "atlas.glacial-deposition": false,
-    },
-    {},
-    ["physical"],
-    worldGenerationSettings(source().world) as unknown as import("@atlas/domain").ParameterValues
-  );
-  expect(disabled.selection["physical.glacial-sculpting"].enabled).toBe(false);
-  expect(physicalFeatureSequence("epoch.sculpting", disabled)).toEqual([]);
-  expect(physicalFeatureSequence("present.glacial-landforms", disabled)).toEqual([]);
-  expect(() =>
-    resolveGenerationFeatures(
-      physicalFeatureDefinitions,
-      {},
-      {
-        "atlas.glacial-erosion": false,
-        "atlas.glacial-deposition": true,
-      }
-    )
-  ).toThrow("one feature");
 });
 
 function source() {
@@ -137,7 +109,7 @@ const survey: GenerationFeature = {
       : [],
 };
 
-it("registers and executes a feature-owned setting absent from the legacy parameter vocabulary", async () => {
+it("registers and executes a feature-owned setting absent from the shared parameter vocabulary", async () => {
   const resolved = resolveGenerationFeatures([survey], {
     "test.survey": { settings: { threshold: 0 } },
   });

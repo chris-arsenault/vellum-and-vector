@@ -4,7 +4,7 @@ import type { PhysicalField } from "./field";
 import { reservoirStock, type MagicField } from "./magicState";
 import type { LocateContext } from "./magicSources";
 import { siteStrength } from "./magicStocks";
-import { clamp, round } from "./math";
+import { clamp, round, units } from "./math";
 import { groundOf } from "../rock/ground";
 import { surfaceResistance } from "../rock/groundQueries";
 import { averageGroundQuery, groundFact } from "../rock/groundQuery";
@@ -113,7 +113,11 @@ const waterEntry = averageGroundQuery({
 function karst(map: PhysicalField, i: number) {
   return (
     (map.CrustContinentalFraction.get(i) / 1000) *
-    (1 - Math.min(1, map.VolcanicConstructionHistory.get(i) / (1024 * 100))) *
+    (1 -
+      Math.min(
+        1,
+        map.VolcanicConstructionHistory.get(i) / units(map.scale.length(0.000025, 0.5))
+      )) *
     (0.3 + 0.7 * groundOf(map).fold(i, waterEntry))
   );
 }

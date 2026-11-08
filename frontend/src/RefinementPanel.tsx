@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { MapScale } from "@atlas/domain";
 import { commitWorkspaceCommand } from "./workspaceAuthoring";
 import { ErrorMessage } from "./ErrorMessage";
 import { areaInput, type EditorState } from "./useEditor";
@@ -150,7 +151,9 @@ function RegionPreview({ editor }: { editor: EditorState }) {
     );
   const box = bounds(editor.selection),
     format = (value: number) =>
-      value >= 1000 ? `${(value / 1000).toFixed(1)} km` : `${value.toFixed(1)} m`;
+      MapScale.inUnits(value, "km") >= 1
+        ? `${MapScale.inUnits(value, "km").toFixed(1)} km`
+        : `${value.toFixed(1)} m`;
   return (
     <div className="callout">
       <p>

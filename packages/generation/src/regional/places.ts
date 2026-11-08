@@ -1,5 +1,6 @@
 import {
   canonicalPosition,
+  MapScale,
   fieldInterpolator,
   population,
   spatial,
@@ -35,6 +36,7 @@ export function placesEnabled(domains: string[]) {
 }
 
 /** Samples over which reach to a river, lake or shore fades out. */
+// length-unit: ratio
 const waterReach = 4;
 /** Residents an inhabited mapped village needs, by the existing occupation model, and the
  * higher bar open country away from water and sites must clear. */
@@ -43,6 +45,7 @@ const villageResidents = 80,
 /** Share of a site's support that wells and rain give away from surface water. */
 const drylandShare = 0.25;
 /** How far, in travel cost, a village's hinterland reaches, as a share of the community spacing. */
+// length-unit: ratio
 const hinterlandReach = 1.5;
 /** Most elimination rounds of the hinterland competition; it ends sooner once every place is supported. */
 const competitionRounds = 24;
@@ -166,7 +169,7 @@ function eventCandidates(
   );
   const accepted: number[] = [],
     near = (i: number, j: number) =>
-      distance(mesh, i, j) <= samePlace * (state.domain.scope.resolution ?? mesh.spacing) * 1.5;
+      distance(mesh, i, j) <= state.physical.map.scale.cells(samePlace * 1.5);
   for (const i of ranked)
     if (!seats.some((s) => near(i, s)) && !accepted.some((a) => near(i, a))) accepted.push(i);
   return accepted;
@@ -186,7 +189,8 @@ function hinterlandResidents(state: RegionalState, places: number[]) {
     if (owner[i] >= 0)
       residents.set(
         owner[i],
-        residents.get(owner[i])! + (Math.max(0, density[i]) * mesh.contentArea(i)) / 1e6
+        residents.get(owner[i])! +
+          Math.max(0, density[i]) * MapScale.areaUnits(mesh.contentArea(i), "m2", "km2")
       );
   return residents;
 }
@@ -203,7 +207,7 @@ export function hinterlandOwners(state: RegionalState, places: number[]) {
     heap = new KeyedHeap(),
     around = new Int32Array(neighborhoodCapacity),
     reach = regionalCommunitySpacing(state) * hinterlandReach,
-    height = (i: number) => map.Elevation.get(i) / 1024;
+    height = (i: number) => MapScale.metres(map.Elevation.get(i), "native");
   for (const p of places) {
     cost[p] = 0;
     owner[p] = p;

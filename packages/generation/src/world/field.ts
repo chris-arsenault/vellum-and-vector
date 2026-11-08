@@ -6,7 +6,14 @@ import { noWaterSurface } from "./math";
 import type { TectonicState } from "./tectonicState";
 import type { LandmarkLedger } from "./landmarkLedger";
 import type { CrustBudget } from "../rock/crustTransport";
-import { Band, BlockCache, Coverage, type ReadBand, type SampleType } from "@atlas/domain";
+import {
+  Band,
+  BlockCache,
+  Coverage,
+  MapScale,
+  type ReadBand,
+  type SampleType,
+} from "@atlas/domain";
 import { ownGround, groundOwnedFields, type GroundOwnedName } from "../rock/groundStorage";
 import { allColumnIntegerFields, allColumnScalarFields } from "../rock/rockLayerFields";
 import {
@@ -77,14 +84,11 @@ const integerFields = [
   // Per-mille coastal upwelling of cold, nutrient-rich water.
   "Upwelling",
   "WaveExposure",
-  "Rainfall",
-  "Snowfall",
   "SeaIceSuitability",
   "TectonicActivityHistory",
   "WaveExposureHistory",
   "GeothermalHistory",
   "ImpactHeat",
-  "GlacialMeltwater",
   "ExternalHeatForcing",
   "ExternalCoastalForcing",
   "ExternalCoastalForcingHistory",
@@ -123,7 +127,6 @@ const integerFields = [
   "DrainageGuidanceTargets",
   "FlowTargets",
   "LakeOutletTargets",
-  "Runoff",
   "Warmth",
 ] as const;
 const elevationFields = [
@@ -176,8 +179,12 @@ const metricFields = [
   "Seasonality",
   // Surface wind speed in m/s; WindX/WindY carry its direction.
   "WindSpeed",
-  // Per-mille precipitation from the downwind air columns, before the epoch
-  // multiplier and the rain/snow split.
+  // Water depth rates in mm/year retain fractional amounts when map scale changes.
+  "Rainfall",
+  "Snowfall",
+  "GlacialMeltwater",
+  "Runoff",
+  // Precipitation in mm/year from the downwind air columns before the epoch multiplier.
   "ColumnPrecipitation",
   "FlowAccumulation",
   "CatchmentArea",
@@ -279,6 +286,7 @@ export type PhysicalField = Record<MutablePhysicalBufferName, Band> &
     /** The bands' coverage: lattice, block cache, scratch and process lifetimes. */
     coverage: Coverage;
     mesh: PhysicalMesh;
+    readonly scale: MapScale;
     tectonics: TectonicState | null;
     landmarkLedger: LandmarkLedger | null;
     CrustColumnsInitialized: boolean;
@@ -334,7 +342,8 @@ export const crustForming = (map: PhysicalField) => !map.CrustFormed;
 /** A physical field over the mesh; the cache bounds resident blocks and spills the rest. */
 export function createField(
   mesh: PhysicalMesh,
-  cache: BlockCache = new BlockCache(Infinity)
+  cache: BlockCache = new BlockCache(Infinity),
+  scale: MapScale = MapScale.fromBounds(mesh.bounds, mesh.spacing)
 ): PhysicalField {
   const coverage = new Coverage(mesh, cache),
     bands = Object.fromEntries(
@@ -343,6 +352,7 @@ export function createField(
   const field = {
     ...bands,
     mesh,
+    scale,
     coverage,
     tectonics: null,
     landmarkLedger: null,

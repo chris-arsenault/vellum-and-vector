@@ -1,18 +1,18 @@
 import { writeFileSync } from "node:fs";
+import { MapScale } from "@atlas/domain";
 import { groundOf } from "../../../packages/generation/src/rock/ground";
 import { rockKindOfCode } from "../../../packages/generation/src/rock/rockCatalogue";
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
 
 type Facet = "land" | "cut";
 const facets: readonly Facet[] = ["land", "cut"];
-const metres = 1024;
 // Fixed across snapshots: clipping is visible; JSON retains every recorded interval.
 const lower = -12_000,
   upper = 12_000,
   sectionTop = 350,
   sectionHeight = 480;
 const y = (height: number) =>
-  sectionTop + ((upper - height / metres) / (upper - lower)) * sectionHeight;
+  sectionTop + ((upper - MapScale.metres(height, "native")) / (upper - lower)) * sectionHeight;
 const colour = (kind: number) => `hsl(${(kind * 137.508) % 360} 48% 66%)`;
 const escape = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
@@ -36,7 +36,7 @@ function samplesOf(map: PhysicalField, cells: number[]) {
     cell,
     x: map.mesh.x(cell) + map.mesh.origin[0],
     y: map.mesh.y(cell) + map.mesh.origin[1],
-    elevationMetres: map.Elevation.get(cell) / metres,
+    elevationMetres: MapScale.metres(map.Elevation.get(cell), "native"),
     facets: facets.map((facet) => ({
       facet,
       layers: ground.section(cell, facet).map((layer) => ({
@@ -72,7 +72,7 @@ function crop(map: PhysicalField, samples: Sample[]) {
       const height =
         cell < 0 || map.mesh.membership(cell) !== 1
           ? NaN
-          : (map.Elevation.get(cell) - map.EffectiveSeaLevel) / metres;
+          : MapScale.metres(map.Elevation.get(cell) - map.EffectiveSeaLevel, "native");
       pixels.push(
         `<rect x="${40 + col * 7.5}" y="${60 + row * 7.5}" width="7.5" height="7.5" fill="${heightColour(height)}"/>`
       );
@@ -107,7 +107,7 @@ function layerPicture(layer: Layer, x: number) {
       layer.basement ? sectionTop + sectionHeight : y(layer.bottom)
     );
   if (bottom <= top) return "";
-  const description = `${layer.kindName}; ${layer.medium}; ${layer.top / metres} to ${layer.bottom / metres} m; strength ${layer.strength}; damage ${layer.damage}; formed ${layer.formedMin}–${layer.formedMax}; altered ${layer.altered}; grain ${layer.grainX},${layer.grainY}; mixed ${layer.mixed}; secondary ${layer.secondaryKindName} share ${layer.secondaryShare}${layer.basement ? "; basement continues below recorded interval" : ""}`;
+  const description = `${layer.kindName}; ${layer.medium}; ${MapScale.metres(layer.top, "native")} to ${MapScale.metres(layer.bottom, "native")} m; strength ${layer.strength}; damage ${layer.damage}; formed ${layer.formedMin}–${layer.formedMax}; altered ${layer.altered}; grain ${layer.grainX},${layer.grainY}; mixed ${layer.mixed}; secondary ${layer.secondaryKindName} share ${layer.secondaryShare}${layer.basement ? "; basement continues below recorded interval" : ""}`;
   return `<g><title>${escape(description)}</title><rect x="${x}" y="${top}" width="54" height="${bottom - top}" fill="${colour(layer.kind)}" stroke="#444" stroke-width="0.5"/>${layer.basement ? label(x + 4, bottom - 5, "↓") : ""}</g>`;
 }
 function samplePicture(sample: Sample, index: number) {
@@ -143,8 +143,8 @@ function sectionSvg(samples: Sample[], terrain: string) {
     height = legendY + 30 + Math.ceil(kinds.length / 4) * 24,
     ticks = [-12_000, -8000, -4000, 0, 4000, 8000, 12_000].map(
       (height) =>
-        label(4, y(height * metres) + 4, String(height)) +
-        `<path d="M65 ${y(height * metres)} H${width - 20}" stroke="#ddd"/>`
+        label(4, y(MapScale.inUnits(height, "native")) + 4, String(height)) +
+        `<path d="M65 ${y(MapScale.inUnits(height, "native"))} H${width - 20}" stroke="#ddd"/>`
     ),
     legend = kinds.map(
       ([kind, name], at) =>
@@ -182,8 +182,8 @@ export function writeGroundSection(map: PhysicalField, stem: string, selection: 
     JSON.stringify(
       {
         cellSpanMetres: map.mesh.spacing,
-        verticalUnitsPerMetre: metres,
-        seaLevelMetres: map.EffectiveSeaLevel / metres,
+        verticalUnitsPerMetre: MapScale.inUnits(1, "native"),
+        seaLevelMetres: MapScale.metres(map.EffectiveSeaLevel, "native"),
         cropBounds: terrain.bounds,
         sectionViewMetres: [lower, upper],
         interpretation:

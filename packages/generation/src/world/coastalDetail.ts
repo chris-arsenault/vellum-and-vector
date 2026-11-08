@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { clamp, elevationLimit, units } from "./math";
+import { units } from "./math";
 import { meshNoise as fractalNoise } from "./noise";
 import { displaceGround } from "../rock/groundLedger";
 
@@ -30,9 +30,17 @@ function coastalNoise(
 ) {
   const x = map.mesh.x(i),
     y = map.mesh.y(i),
-    scale = Math.max(1, ch.scale * 1.7);
+    scale = Math.max(map.scale.length(2.5e-7), ch.scale * 1.7);
   const wx = fractalNoise(map.mesh, x, y, c.Seed ^ 0x51a3, scale, 3) * ch.warp;
-  const wy = fractalNoise(map.mesh, x + 917_000, y - 431_000, c.Seed ^ 0x51a3, scale, 3) * ch.warp;
+  const wy =
+    fractalNoise(
+      map.mesh,
+      x + map.scale.length(0.22925),
+      y - map.scale.length(0.10775),
+      c.Seed ^ 0x51a3,
+      scale,
+      3
+    ) * ch.warp;
   const value = fractalNoise(map.mesh, x + wx, y + wy, c.Seed ^ 0x7c4b, ch.scale, ch.octaves);
   return ch.ridged ? 2 * Math.abs(value) - 1 : value;
 }
@@ -48,15 +56,6 @@ export function coastalDetail(map: PhysicalField, c: PhysicalContext) {
     const displacement = coastalNoise(map, c, i, ch) * ch.amplitude * proximity * proximity;
     const delta = units((displacement * c.Profile.CoastalDetailStrength) / 1000);
     if (delta === 0) continue;
-    displaceGround(
-      map,
-      i,
-      clamp(
-        delta,
-        units(-elevationLimit) - map.BedrockElevation.get(i),
-        units(elevationLimit) - map.SedimentThickness.get(i) - map.BedrockElevation.get(i)
-      ),
-      "shore-detail"
-    );
+    displaceGround(map, i, delta, "shore-detail");
   }
 }

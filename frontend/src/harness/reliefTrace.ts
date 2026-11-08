@@ -6,7 +6,7 @@ import { snapshotRecorder } from "./fieldSnapshot";
 import { watchRockColumns } from "./reliefColumn";
 import { reliefProbes } from "./reliefProbes";
 import { rockTrace } from "./rockTrace";
-import type { Epoch } from "@atlas/domain";
+import { MapScale, type Epoch } from "@atlas/domain";
 
 /**
  * What each step of the world did to its relief: the height differences within a few cells after
@@ -29,7 +29,7 @@ function localRange(map: PhysicalField, values: { get(i: number): number }, cell
     if (value < low) low = value;
     if (value > high) high = value;
   }
-  return (high - low) / 1024;
+  return MapScale.metres(high - low, "native");
 }
 function quantiles(values: number[]) {
   values.sort((a, b) => a - b);
@@ -44,7 +44,9 @@ function snapshot(name: string, map: PhysicalField, context: PhysicalContext) {
     name,
     epoch: context.EpochIndex,
     land: land.length,
-    height: quantiles(land.map((i) => (map.Elevation.get(i) - map.EffectiveSeaLevel) / 1024)),
+    height: quantiles(
+      land.map((i) => MapScale.metres(map.Elevation.get(i) - map.EffectiveSeaLevel, "native"))
+    ),
     range: quantiles(land.map((i) => localRange(map, map.Elevation, i))),
     support: quantiles(land.map((i) => localRange(map, map.CrustSupportElevation, i))),
     rockLoad: quantiles(land.map((i) => localRange(map, map.SurfaceRockLoad, i))),

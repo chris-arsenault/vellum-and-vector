@@ -5,7 +5,7 @@ import {
   writeGenerationFeature,
 } from "../generationFeatures";
 import { celsius } from "./climate";
-import { cellAt, distance, isContent, neighborsOf, positionOf, regionalSpan } from "./lattice";
+import { cellAt, distance, isContent, neighborsOf, positionOf } from "./lattice";
 import { promoteChannel } from "./network";
 import { gradeSeat } from "./grading";
 import { clamp, type RegionalState, type Seat, type Situation } from "./state";
@@ -13,6 +13,7 @@ import { clamp, type RegionalState, type Seat, type Situation } from "./state";
 /** Slope above which a seat's own cell is not usable ground. */
 export const usableSlope = 0.12;
 /** Reach, as a share of the parent span, within which a seat looks for usable ground. */
+// length-unit: ratio
 const siteReach = 0.6;
 /** An established seat's footprint, as a share of the parent span, held to this hillslope gradient. */
 const seatFootprintShare = 0.12;
@@ -58,7 +59,7 @@ export function proposedSeat(state: RegionalState, featureId: string, cell: numb
 
 export function seatRadius(state: RegionalState) {
   return clamp(
-    Math.round((state.regional.parentSpan * seatFootprintShare) / regionalSpan(state)),
+    Math.round(state.physical.map.scale.cellCount(state.regional.parentSpan * seatFootprintShare)),
     1,
     3
   );
@@ -85,28 +86,6 @@ export function usableSite(state: RegionalState, i: number) {
     map.Slope.get(i) <= usableSlope &&
     celsius(state, i) >= -5
   );
-}
-
-/**
- * Each seat's footprint holds the hillslope gradient down: the valley floor widens, a shoulder
- * flattens into a bench, a col stays low. The footprint follows the network's own geometry, so
- * the shape is the seat's situation, not a disc. A proposed village counts from round three.
- */
-export function seatCaps(state: RegionalState, cap: Float64Array) {
-  const mesh = state.physical.map.mesh,
-    span = regionalSpan(state),
-    seats = (state.regional.evidence?.seats ?? []).filter(
-      (seat) => seat.strength === "established" || state.regional.round >= 3
-    );
-  for (const seat of seats) {
-    const reach = (seat.radius + 0.5) * span;
-    for (let i = 0; i < mesh.count; i++) {
-      const d = distance(mesh, seat.cell, i);
-      if (d > reach) continue;
-      const gradient = d <= 1.5 * span ? seat.gradient * 0.6 : seat.gradient;
-      cap[i] = cap[i] > 0 ? Math.min(cap[i], gradient) : gradient;
-    }
-  }
 }
 
 /** After the network is grown, every river seat stands on a channel: the stream it was built on. */

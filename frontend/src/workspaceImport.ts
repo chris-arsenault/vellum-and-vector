@@ -2,7 +2,6 @@ import {
   areaSpace,
   type DomainSnapshot,
   type ChangeSet,
-  type History,
   type BlockCache,
   sameValue,
 } from "@atlas/domain";
@@ -10,8 +9,7 @@ import { catalogChanges } from "@atlas/application";
 import type { BrowserWorkspace } from "@atlas/storage-browser";
 import { WorkspaceFields } from "./workspaceFields";
 import { openBlockCache } from "@atlas/storage-browser";
-import { LegacyFields } from "./legacyFields";
-import type { LegacySavedWorld } from "./legacySave";
+import { SnapshotFields } from "./snapshotFields";
 import { snapshotRecords } from "./snapshotRecords";
 import { worldMetadata } from "./worldMetadata";
 
@@ -19,45 +17,32 @@ function snapshotWrites(snapshot: DomainSnapshot) {
   return [...snapshotRecords(snapshot)];
 }
 export async function importWorkspace(current: BrowserWorkspace, snapshot: DomainSnapshot) {
-  await importState(current, new LegacyFields(), snapshot);
+  await importState(current, new SnapshotFields(), snapshot);
   return current.catalog.readEditor(snapshot.world.id);
-}
-export async function importLegacyWorld(current: BrowserWorkspace, saved: LegacySavedWorld) {
-  const fields = new LegacyFields(),
-    history = [...saved.history].reverse();
-  const states = [...saved.undo, saved.snapshot];
-  if (history.length !== saved.undo.length)
-    throw new Error("The saved undo history is incomplete.");
-  let previous: DomainSnapshot | undefined;
-  for (const [index, source] of states.entries())
-    previous = await importState(current, fields, source, previous, history[index - 1]);
-  current.catalog.importCauses(saved.snapshot.world.id, saved.causes);
-  return current.catalog.readEditor(saved.snapshot.world.id);
 }
 export async function importState(
   current: Pick<BrowserWorkspace, "catalog" | "resources">,
-  legacy: LegacyFields,
+  resources: SnapshotFields,
   source: DomainSnapshot,
   previous?: DomainSnapshot,
-  history?: History,
   blocks?: BlockCache
 ) {
-  const { snapshot, artifacts } = legacy.prepare(source),
+  const { snapshot, artifacts } = resources.prepare(source),
     { world } = snapshot;
   const root = Object.values(world.areas).find((area) => !area.parentId)!;
   snapshot.scope = { ...snapshot.scope, areaId: root.id, spaceId: areaSpace(world, root.id) };
   const before = previous ?? { ...snapshot, world: { ...world, features: {} }, revisions: [] };
   if (!previous)
     await current.catalog.createWorld({ ...worldMetadata(world), version: world.version - 1 });
-  const changes = importedChanges(snapshot, previous, history);
+  const changes = importedChanges(snapshot, previous);
   changes.fieldArtifacts = artifacts;
   const working = await importWorking(blocks);
   const fields = new WorkspaceFields(current.catalog, current.resources, working.cache);
   try {
     await fields.publish(changes, world.reference.precision ?? 1e-6);
-    const publication = catalogChanges(before, changes, fields.outputs, history?.kind ?? "import");
+    const publication = catalogChanges(before, changes, fields.outputs, "import");
     publication.geography = fields.geography;
-    await current.catalog.importRevision(publication, world.version, history);
+    await current.catalog.importRevision(publication, world.version);
     fields.accept();
     const revisions = new Map((previous?.revisions ?? []).map((r) => [`${r.kind}:${r.id}`, r]));
     for (const ref of publication.removes) revisions.delete(`${ref.kind}:${ref.id}`);
@@ -78,11 +63,7 @@ export async function importState(
 async function importWorking(blocks?: BlockCache) {
   return blocks ? { cache: blocks, close() {} } : openBlockCache(`import_${crypto.randomUUID()}`);
 }
-function importedChanges(
-  snapshot: DomainSnapshot,
-  previous?: DomainSnapshot,
-  history?: History
-): ChangeSet {
+function importedChanges(snapshot: DomainSnapshot, previous?: DomainSnapshot): ChangeSet {
   const writes = snapshotWrites(snapshot),
     ids = new Set(writes.map((w) => `${w.kind}:${w.value.id}`));
   const metadata = worldMetadata(snapshot.world),
@@ -102,10 +83,10 @@ function importedChanges(
       .map((key) => [key, values[key as keyof typeof values]])
   );
   return {
-    operationId: history?.operationId ?? crypto.randomUUID(),
+    operationId: crypto.randomUUID(),
     worldId: id,
     expectedVersion: previous?.world.version ?? version - 1,
-    actor: history?.actor ?? "user",
+    actor: "user",
     readSet: [],
     writes,
     removes: previous

@@ -8,7 +8,7 @@ import {
 import { clamp } from "./math";
 import { weightScale, type TransportPlan } from "./transportPlan";
 import { captureCrustColumns, transportCrustColumns } from "../rock/crustTransport";
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import {
   freshCrustValue,
@@ -58,9 +58,15 @@ function accumulate(
   }
 }
 /** What a cell holds once everything has arrived, by what its quantity answers each event. */
-function arrived(name: PhysicalBufferName, sum: number, arrival: number, boundary: number) {
+function arrived(
+  map: PhysicalField,
+  name: PhysicalBufferName,
+  sum: number,
+  arrival: number,
+  boundary: number
+) {
   const rules = answering(name),
-    fresh = rules.newCrust === "fresh" ? freshCrustValue(name) : 0;
+    fresh = rules.newCrust === "fresh" ? freshCrustValue(name, map.scale) : 0;
   if (arrival <= 0) return fresh;
   if (rules.moved === "sum") return sum / weightScale;
   if (rules.rifted === "blend" && boundary === 2 && arrival < weightScale)
@@ -79,6 +85,7 @@ function complete(
   const values = map[name];
   for (let target = 0; target < map.mesh.count; target++) {
     const value = arrived(
+      map,
       name,
       scratch.get(target),
       plan.arrivals.get(target),
@@ -142,7 +149,8 @@ function settlePick(map: PhysicalField, p: Picking, target: number) {
 function sinking(map: PhysicalField, source: number, retained: number) {
   for (const [name, pool] of Object.entries(returnPools)) {
     const lost = Math.max(0, 1 - retained) * map[name as PhysicalBufferName].get(source);
-    if (pool === "sea" && lost > 0) carryOut(map, (lost * map.mesh.area(source)) / 1024, "plates");
+    if (pool === "sea" && lost > 0)
+      carryOut(map, MapScale.metres(lost, "native") * map.mesh.area(source), "plates");
   }
 }
 function scatter(map: PhysicalField, plan: TransportPlan, picks: Picking[], areaWeights: Band) {

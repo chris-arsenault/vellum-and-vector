@@ -1,6 +1,8 @@
 import { expect, it } from "vitest";
 import { rockCatalogue } from "./rockCatalogue";
 import { bodyRank, heldLeakIn, stockLeakIn } from "./rockMagic";
+import { MapScale } from "@atlas/domain";
+const scale = MapScale.reference();
 
 const grid = (step: number, size: number) => {
   const points: [number, number][] = [];
@@ -11,7 +13,8 @@ const grid = (step: number, size: number) => {
 it("gives a body about the share of the ground asked for", () => {
   const points = grid(25_000, 8_000_000);
   for (const share of [0.1, 0.3, 0.6]) {
-    const inside = points.filter(([x, y]) => bodyRank(x, y, 77) < share).length / points.length;
+    const inside =
+      points.filter(([x, y]) => bodyRank(x, y, 77, scale) < share).length / points.length;
     expect(Math.abs(inside - share)).toBeLessThan(0.08);
   }
 });
@@ -21,7 +24,7 @@ it("forms bodies that hold together rather than static", () => {
     share = 0.3;
   let same = 0;
   for (const [x, y] of points)
-    if (bodyRank(x, y, 77) < share === bodyRank(x + step, y, 77) < share) same++;
+    if (bodyRank(x, y, 77, scale) < share === bodyRank(x + step, y, 77, scale) < share) same++;
   // Independent rolls at this share would agree 58% of the time.
   expect(same / points.length).toBeGreaterThan(0.85);
 });

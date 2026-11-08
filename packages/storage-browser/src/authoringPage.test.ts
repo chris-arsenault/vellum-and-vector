@@ -148,7 +148,7 @@ it("loads a child's outlying geometry without following links into parent geogra
           parentId: scope.areaId,
           profile: "region",
           footprint: rectangle([20, 20, 80, 80]),
-          map: { sourceAreaId: scope.areaId, sourceRevision: 1 },
+          map: { sourceAreaId: scope.areaId, sourceRevision: 1, refinementLevel: 1 },
         },
       },
     },

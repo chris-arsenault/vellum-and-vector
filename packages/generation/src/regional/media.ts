@@ -2,7 +2,7 @@ import { isMutablePhysicalName, type PhysicalBufferName, type PhysicalField } fr
 import { displaceGround, looseTo } from "../rock/groundLedger";
 import { alterRock } from "../rock/rockField";
 
-/** The bands a ledger writes keep the world's bounds: nothing below zero, the per-mille and resistance scales capped. */
+/** Material quantities stay nonnegative; covers and per-mille intensities keep their scales. */
 export const ledgerFloors: Partial<Record<PhysicalBufferName, number>> = {
   RockResistance: 0,
   FractureConductance: 0,
@@ -10,7 +10,6 @@ export const ledgerFloors: Partial<Record<PhysicalBufferName, number>> = {
   Moisture: 0,
   IceThickness: 0,
   ExternalCoastalForcing: 0,
-  Temperature: 0,
   BroadleafCover: 0,
   ConiferCover: 0,
   GrassCover: 0,
@@ -23,7 +22,6 @@ export const ledgerFloors: Partial<Record<PhysicalBufferName, number>> = {
   WaterDepths: 0,
 };
 export const ledgerCeilings: Partial<Record<PhysicalBufferName, number>> = {
-  RockResistance: 4000,
   FractureConductance: 1000,
   ExternalCoastalForcing: 1000,
   Moisture: 1000,

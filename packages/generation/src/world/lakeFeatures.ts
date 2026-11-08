@@ -1,4 +1,4 @@
-import { semanticId, spatial } from "@atlas/domain";
+import { MapScale, semanticId, spatial } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { lakeFootprint, areaGeometry } from "./geographicContours";
 import { lakeMembership } from "./lakeMembership";
@@ -26,7 +26,7 @@ export function extractLakes(state: GenerationState) {
     state.surface.lakes.push({
       id: semanticId(state.domain.world.id, `generated:${state.domain.scope.areaId}`, key),
       geometry: shape,
-      level: (level - map.BaseSeaLevel) / 1024,
+      level: MapScale.metres(level - map.BaseSeaLevel, "native"),
     });
     state.physical!.lakeOutlines.set(body, shape);
   }

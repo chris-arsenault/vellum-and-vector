@@ -1,5 +1,6 @@
 import {
   CellList,
+  MapScale,
   gridPosition,
   neighbors,
   population,
@@ -13,6 +14,7 @@ import {
 import type { GenerationState } from "./process";
 import { dryLand, societyValue } from "./societySupport";
 import { isWorldSociety } from "./societyMapScope";
+import { mapScale } from "./worldSignificance";
 
 /**
  * Society as field forcing (ADR 0005). At World a unit's works are demands it makes of its
@@ -168,7 +170,7 @@ export function siteQuality(state: GenerationState, kind: SocietyWorkKind, i: nu
     case "pass":
       return passQuality(v, ring, own);
     case "weir":
-      return sea.some((j) => v("waterDepth", j) < 30) ? 1 : 0;
+      return sea.some((j) => v("waterDepth", j) < mapScale(state).length(0.0000075, 0.5)) ? 1 : 0;
     default:
       return 0;
   }
@@ -241,7 +243,7 @@ export function realizeDemands(state: GenerationState) {
     delete work.demand;
     delete work.country;
     work.causes.push(
-      `Realized at this profile: the ${work.kind} the unit demanded (${amount.toFixed(2)} ${unit}) is located on the ${site.quality > 0 ? "best" : "nearest"} cell of its medium, ${Math.round(site.distance / 1000)} km from its seat.`
+      `Realized at this profile: the ${work.kind} the unit demanded (${amount.toFixed(2)} ${unit}) is located on the ${site.quality > 0 ? "best" : "nearest"} cell of its medium, ${Math.round(MapScale.inUnits(site.distance, "km"))} km from its seat.`
     );
   }
 }

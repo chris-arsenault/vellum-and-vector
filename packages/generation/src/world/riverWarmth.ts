@@ -3,8 +3,6 @@ import { sourceToOutletOrder } from "./flowGraph";
 import { physicalDistance } from "./physicalMetric";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
-/** Distance over which carried warmth falls to a third: a long tongue, not a whole basin. */
-const warmthLength = 60_000;
 /**
  * Thawed water runs downstream from halos and springs, so a river below a wellspring
  * stays open far beyond the heat. Magical heat forcing enters the drainage where it is
@@ -23,7 +21,8 @@ export function riverWarmth(map: PhysicalField) {
       map.RiverWarmth.set(i, warmth);
     const target = map.FlowTargets.get(i);
     if (target < 0 || map.WaterKindCodes.get(target) === 1) continue;
-    const next = warmth * Math.exp(-physicalDistance(map.mesh, i, target) / warmthLength);
+    const next =
+      warmth * Math.exp(-physicalDistance(map.mesh, i, target) / map.scale.length(0.015));
     carried.set(target, Math.max(carried.get(target), next));
   }
   releaseWorking(map, carried, order);

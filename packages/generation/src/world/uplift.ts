@@ -3,7 +3,7 @@ import { crustForming, type PhysicalField } from "./field";
 import { adjustCrustColumn } from "../rock/crustTransport";
 import { standSurface } from "../rock/groundInitialization";
 import type { PhysicalContext } from "./context";
-import { buoyancy, clamp, crustHeight, scaled, thickness, units } from "./math";
+import { buoyancy, clamp, crustFoundation, crustHeight, scaled, units } from "./math";
 import { meshNoise as fractalNoise, hashUnit } from "./noise";
 
 function interiorRelief(map: PhysicalField, context: PhysicalContext, i: number): number {
@@ -40,17 +40,23 @@ function initializeSurface(
       3
     ) * p.ElevationVariationStrength;
   const provinceOffset =
-    province < 0 ? 0 : (hashUnit(context.Seed ^ 0x3d7b, province, 0x51a9) - 0.5) * 2 * 520;
+    province < 0
+      ? 0
+      : (hashUnit(context.Seed ^ 0x3d7b, province, 0x51a9) - 0.5) * 2 * map.scale.length(0.00013);
   const relief =
     interiorRelief(map, context, i) - map.CrustAssemblySeparation.get(i) / 1000 + variation;
-  const column = thickness(
-    1000 +
-      3000 * fraction +
+  const column = Math.max(
+    0,
+    crustFoundation(fraction, map.scale) +
       provinceOffset * fraction +
       (relief * p.ElevationScale) / (buoyancy(fraction) / 1000)
   );
   adjustCrustColumn(map, i, units(column));
-  standSurface(map, i, scaled(crustHeight(column, fraction) / p.ElevationScale, p.ElevationScale));
+  standSurface(
+    map,
+    i,
+    scaled(crustHeight(column, fraction, map.scale) / p.ElevationScale, p.ElevationScale)
+  );
 }
 export function tectonicUplift(map: PhysicalField, context: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++) {

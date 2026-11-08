@@ -12,7 +12,7 @@ export const solution = defineProcess({
   moves: [["rock", "load"]],
   settings: solutionSettings,
   // A region's passes refine one stretch of the world's history; they do not add more of it.
-  atScale: (settings, { passes }) => ({
+  forExecution: (settings, { passes }) => ({
     DissolvedPerSpan: settings.DissolvedPerSpan / passes,
   }),
   run({ field, context: c, settings: p, span, ask, stage }) {

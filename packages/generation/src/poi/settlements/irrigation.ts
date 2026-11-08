@@ -1,4 +1,6 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
@@ -30,12 +32,12 @@ import {
 import { workPlaces, workRecord } from "./workRecords";
 
 /** How far, in metres, people dig for water to their fields. */
-const wantedReach = 30_000;
+const wantedReach = MapScale.length(0.0075);
 /** The least distance between two works people site, and the fields a sited work waters, in metres. */
-const irrigationSpacing = 20_000,
-  irrigationRadius = 3000;
+const irrigationSpacing = MapScale.length(0.005),
+  irrigationRadius = MapScale.length(0.00075);
 /** Flow taken at which a work is half as great as irrigation gets. */
-const typicalDiversion = 1;
+const typicalDiversion = MapScale.volume(1.5625e-20);
 /** Slope beyond which ditches cannot hold water level across fields. */
 const levelGround = 0.02;
 /** What a field of ditches costs a road, and what a canal saves water-borne stock. */
@@ -49,8 +51,8 @@ function suitability(state: GenerationState, cell: number) {
   const flow = dischargeAt(state, cell),
     dry = 1 - moistureAt(state, cell),
     level = 1 - Math.min(1, slopeAt(state, cell) / levelGround),
-    soil = Math.min(1, sedimentAt(state, cell)),
-    water = flow / (flow + typicalDiversion / diversionShare);
+    soil = Math.min(1, sedimentAt(state, cell) / mapScale(state).length(0.00000025, 0.5)),
+    water = flow / (flow + mapScale(state).resolveMeasure(typicalDiversion) / diversionShare);
   return (dry + level + soil + water) / 4;
 }
 const places = workPlaces("irrigation", "irrigation", {
@@ -64,7 +66,7 @@ const places = workPlaces("irrigation", "irrigation", {
 });
 const isA = holdsRecord("irrigation", places);
 const around = (state: GenerationState) => 6 * cellSpan(state);
-const wantedFrom = () => wantedReach;
+const wantedFrom = (state: GenerationState) => mapScale(state).resolveMeasure(wantedReach);
 /** What it takes from the channel, as `irrigateChannels` limits it. */
 const divertedBy = (state: GenerationState, place: PoiPlace) =>
   Math.min(dischargeAt(state, place.anchor) * diversionShare, strengthOf(place));
@@ -87,7 +89,7 @@ function downstream(state: GenerationState, place: PoiPlace): readonly PoiFieldC
   return changes;
 }
 const soaked = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => {
-  const water = divertedBy(state, place) * soilShare;
+  const water = divertedBy(state, place) * mapScale(state).resolveMeasure(soilShare);
   return workReach(state, place).map(({ cell, share }) => ({
     change: "add",
     band: "SoilWater",

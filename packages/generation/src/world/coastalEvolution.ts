@@ -5,7 +5,7 @@ import { carryOut, erodeFacets } from "../rock/groundLedger";
 import { depositPond } from "../rock/groundDeposition";
 import { loadOf } from "../rock/groundLoad";
 import type { MaterialLayer } from "../rock/rockColumn";
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 import type { CoastalFrame } from "./coastalFrame";
 import { metricSearch } from "./metricSearch";
 import { releaseWorking, workingArray } from "./physicalNumerics";
@@ -61,10 +61,13 @@ export function recordCoastalCut(
 ) {
   const cargo = loadOf(map),
     removed = erodeFacets(map, source, cut, "coast", "load", (material) =>
-      cargo.add(landing, { ...material, depth: (material.depth / 1024) * map.mesh.area(source) })
+      cargo.add(landing, {
+        ...material,
+        depth: MapScale.metres(material.depth, "native") * map.mesh.area(source),
+      })
     );
   map.CumulativeCoastalErosion.add(source, removed);
-  const volume = (removed / 1024) * map.mesh.area(source);
+  const volume = MapScale.metres(removed, "native") * map.mesh.area(source);
   map.SedimentProducedTotal += volume;
   return volume;
 }
@@ -84,17 +87,18 @@ function depositCoastalVolume(
       area = map.mesh.area(target);
     // What waves carry fills submerged accommodation; emergent rock receives no coating.
     const actual =
-      (depositPond(
-        map,
-        target,
-        (amount * 1024) / area,
-        map.EffectiveSeaLevel,
-        "coast",
-        "load",
-        material
-      ) /
-        1024) *
-      area;
+      MapScale.metres(
+        depositPond(
+          map,
+          target,
+          MapScale.inUnits(amount / area, "native"),
+          map.EffectiveSeaLevel,
+          "coast",
+          "load",
+          material
+        ),
+        "native"
+      ) * area;
     deposited += actual;
     remaining = Math.max(0, remaining - actual);
     weight -= share;

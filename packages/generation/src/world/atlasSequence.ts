@@ -243,7 +243,6 @@ function composition(source: DomainSnapshot, input: AtlasGenerationInput): Compo
     resolveGenerationFeatures(
       physicalFeatureDefinitions,
       input.features,
-      input.processes,
       input.parameters,
       input.domains,
       (input.settings ??

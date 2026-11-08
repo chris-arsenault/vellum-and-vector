@@ -7,6 +7,7 @@ import { at, covers, feature, land } from "./magicPresetHelpers";
  * zone; stable tears far apart pair into doors.
  */
 export const veilPreset = magicSystemSchema.parse({
+  lengthUnits: "relative",
   id: "veil",
   name: "Veil",
   origins: [

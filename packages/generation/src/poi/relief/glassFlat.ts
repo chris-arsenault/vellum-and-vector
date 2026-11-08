@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -18,7 +19,7 @@ import {
 } from "./reliefShape";
 
 /** Area at which a flat is half as great as flats get. */
-const typicalArea = 2_000_000_000;
+const typicalArea = MapScale.area(0.000125);
 
 const isA = magicRule("salt", "flat");
 const saltAt = (state: GenerationState, cell: number) =>

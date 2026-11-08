@@ -169,12 +169,12 @@ function verdantRules(
     },
   ];
 }
-function forestName(r: BiomeSummary) {
+function forestName(r: BiomeSummary, montaneElevation: number) {
   const conifer = r.conifer / Math.max(1e-9, r.conifer + r.broadleaf);
   if (conifer > 0.6)
     return r.temperature < 5
       ? "Boreal forest"
-      : r.elevation > 1500
+      : r.elevation > montaneElevation
         ? "Montane forest"
         : "Conifer forest";
   if (conifer > 0.4) return "Mixed forest";
@@ -192,9 +192,9 @@ export function wetlandName(r: Pick<BiomeSummary, "peat" | "flood" | "broadleaf"
   if (r.flood > 0.1) return "Floodplain marsh";
   return r.broadleaf + r.conifer > 0.2 ? "Swamp" : "Marsh";
 }
-function barrenName(r: BiomeSummary) {
+function barrenName(r: BiomeSummary, rockElevation: number) {
   if (r.temperature < 2) return "Polar desert";
-  if (r.slope > 0.015 || r.elevation > 2000) return "Rock barrens";
+  if (r.slope > 0.015 || r.elevation > rockElevation) return "Rock barrens";
   return r.temperature > 18 ? "Hot desert" : "Cold desert";
 }
 /** Named biomes in priority order; a region belongs to the first rule that holds. */
@@ -210,7 +210,7 @@ export function biomeRules(state: GenerationState): BiomeRule[] {
     {
       kind: "forest",
       terms: [(i) => map.BroadleafCover.get(i) + map.ConiferCover.get(i) - 0.4],
-      name: forestName,
+      name: (region) => forestName(region, map.scale.length(0.000375)),
     },
     // Open grass meets barren land near the same total cover, so the two share an edge.
     {
@@ -221,7 +221,7 @@ export function biomeRules(state: GenerationState): BiomeRule[] {
     {
       kind: "barren",
       terms: [(i) => 0.12 - cover(i)],
-      name: barrenName,
+      name: (region) => barrenName(region, map.scale.length(0.0005)),
     },
   ];
 }

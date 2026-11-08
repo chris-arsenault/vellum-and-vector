@@ -3,12 +3,16 @@ import { createTestField as createField } from "../rock/groundTestFixture";
 import { createWorldMesh } from "../world/worldMesh";
 import { materialBands, sheetFold } from "./material";
 import type { RegionalState } from "./state";
+import { MapScale } from "@atlas/domain";
 
 it("repeats fold axes across a sheet, standing as high as the sheet has tilted", () => {
-  expect(Math.abs(sheetFold(1 / 12, 800))).toBeCloseTo(1);
-  expect(sheetFold(1 / 12, 100)).toBeCloseTo(0.2);
-  expect(sheetFold(1 / 12, 400)).toBeCloseTo(0.5);
-  expect(Math.sign(sheetFold(1 / 12, 800))).not.toBe(Math.sign(sheetFold(3 / 12, 800)));
+  const scale = MapScale.reference();
+  expect(Math.abs(sheetFold(1 / 12, 800, scale))).toBeCloseTo(1);
+  expect(sheetFold(1 / 12, 100, scale)).toBeCloseTo(0.2);
+  expect(sheetFold(1 / 12, 400, scale)).toBeCloseTo(0.5);
+  expect(Math.sign(sheetFold(1 / 12, 800, scale))).not.toBe(
+    Math.sign(sheetFold(3 / 12, 800, scale))
+  );
 });
 it("takes a region's folds from the parent's sheet, with no noise along the belt", () => {
   const map = createField(createWorldMesh([-100_000, -100_000, 100_000, 100_000], 1600, 5_000));
@@ -20,7 +24,7 @@ it("takes a region's folds from the parent's sheet, with no noise along the belt
   const n = map.mesh.count,
     state = {
       domain: { scope: { resolution: 5_000 } },
-      physical: { map, scale: 1 / 8 },
+      physical: { map },
       regional: {
         input: { seed: 1 },
         parentSpan: 28_000,

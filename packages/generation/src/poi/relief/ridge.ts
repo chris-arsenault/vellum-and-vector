@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -21,8 +22,8 @@ import {
 /** Along the crest the ground falls at most this share of what it falls across it. */
 const crestShare = 0.5;
 /** Crest length and relief at which a ridge is half as great as ridges get: a world range's. */
-const typicalLength = 100_000,
-  typicalRelief = 600;
+const typicalLength = MapScale.length(0.025),
+  typicalRelief = MapScale.length(0.00015, 0.5);
 
 const isA = (state: GenerationState, cell: number) => {
   if (!isLand(state, cell) || hasChannel(state, cell)) return false;

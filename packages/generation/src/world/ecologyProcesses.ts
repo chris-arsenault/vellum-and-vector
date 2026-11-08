@@ -1,4 +1,5 @@
 import {
+  MapScale,
   areaSpace,
   biomes,
   spatial,
@@ -149,9 +150,9 @@ function initialize(state: GenerationState, seed: number) {
   const map = state.physical!.map;
   initializeEcology(map, seed, state.physical!.inherited);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.EcologySediment.set(i, map.SedimentThickness.get(i) / 1024);
-    map.EcologyVolcanic.set(i, map.VolcanicConstructionHistory.get(i) / 1024);
-    map.EcologyImpact.set(i, map.ImpactExcavation.get(i) / 1024);
+    map.EcologySediment.set(i, MapScale.metres(map.SedimentThickness.get(i), "native"));
+    map.EcologyVolcanic.set(i, MapScale.metres(map.VolcanicConstructionHistory.get(i), "native"));
+    map.EcologyImpact.set(i, MapScale.metres(map.ImpactExcavation.get(i), "native"));
     map.EcologyErosion.set(i, erosionHistory(map, i));
     map.EcologyIce.set(i, map.IceThickness.get(i));
   }
@@ -223,7 +224,11 @@ function recordEcology(state: GenerationState, context: MapProcessContext) {
     predators += map.Predators.get(i) * area;
   }
   const cover = biomes
-    .map((biome, i) => (areas[i] > 0 ? `${biome.name}: ${Math.round(areas[i] / 1e6)} km²` : ""))
+    .map((biome, i) =>
+      areas[i] > 0
+        ? `${biome.name}: ${Math.round(MapScale.areaUnits(areas[i], "m2", "km2"))} km²`
+        : ""
+    )
     .filter(Boolean)
     .join(", ");
   const duration = state.physical!.inherited ? 0 : (context.epochs.at(-1)?.duration ?? 0);
@@ -231,7 +236,7 @@ function recordEcology(state: GenerationState, context: MapProcessContext) {
     kind: "domain",
     process: "atlas.ecology",
     subjects: [],
-    description: `${duration} years of establishment, competition, cohort growth, migration and disturbance${state.physical!.inherited ? " (inherited ecology is refined without replaying its age)" : ""}. ${cover}. Fire-affected cover ${Math.round(burned / 1e6)} km². Grazers/browsers/predators ${Math.round(grazers)}/${Math.round(browsers)}/${Math.round(predators)} kg C; migrated ${Math.round(migration)} kg C through reachable habitat. Soil and seed banks carry this epoch's ecological consequences forward.`,
+    description: `${duration} years of establishment, competition, cohort growth, migration and disturbance${state.physical!.inherited ? " (inherited ecology is refined without replaying its age)" : ""}. ${cover}. Fire-affected cover ${Math.round(MapScale.areaUnits(burned, "m2", "km2"))} km². Grazers/browsers/predators ${Math.round(grazers)}/${Math.round(browsers)}/${Math.round(predators)} kg C; migrated ${Math.round(migration)} kg C through reachable habitat. Soil and seed banks carry this epoch's ecological consequences forward.`,
   });
 }
 function recordTransitions(state: GenerationState, before: Band, context: MapProcessContext) {
@@ -251,7 +256,7 @@ function recordTransitions(state: GenerationState, before: Band, context: MapPro
     process: "atlas.ecology-succession",
     subjects: [],
     description: [...changes]
-      .map(([change, area]) => `${change}: ${(area / 1e6).toFixed(1)} km²`)
+      .map(([change, area]) => `${change}: ${MapScale.areaUnits(area, "m2", "km2").toFixed(1)} km²`)
       .join("; "),
   });
 }

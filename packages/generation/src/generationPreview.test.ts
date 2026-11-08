@@ -45,7 +45,7 @@ it("uses evolved native terrain and its metre datum at epoch boundaries", () => 
   const map = createField(createWorldMesh(state.surface.bounds, 64, 0));
   map.BaseSeaLevel = 1024 * 100;
   map.Elevation.fill(1024 * 125);
-  const profile = atlasPhysicalProfile();
+  const profile = atlasPhysicalProfile({}, {}, map.scale);
   state.physical = {
     map,
     profile,

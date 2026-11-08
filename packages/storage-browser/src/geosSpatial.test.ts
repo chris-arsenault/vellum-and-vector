@@ -91,7 +91,9 @@ it("buffers crossing multipart lines into one area without counting overlap twic
 it("buffers nested collections and retains separated parts and polygon holes", async () => {
   await configure();
   const ring = rectangle([0, 0, 100, 100]);
-  ring.coordinates.push(rectangle([20, 20, 80, 80]).coordinates[0].reverse());
+  const hole = rectangle([20, 20, 80, 80]);
+  if (ring.type !== "Polygon" || hole.type !== "Polygon") throw new Error("Expected rectangles");
+  ring.coordinates.push(hole.coordinates[0].reverse());
   const area = spatial.buffer(
     {
       type: "GeometryCollection",

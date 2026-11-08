@@ -2,10 +2,13 @@ import {
   canonryConfluencePresets,
   canonryMagicPresets,
   originParameters,
+  resolveMagicSystem,
+  resolveConfluences,
   type Band,
   type MagicOrigin,
   type MagicStock,
   type MagicSystem,
+  type ResolvedMagicSystem,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
@@ -32,7 +35,7 @@ export interface LocatedSource {
 export interface MagicField extends Record<MagicChannel, Band> {
   parents?: Band;
   wakePaths?: number[][][];
-  definition: MagicSystem;
+  definition: ResolvedMagicSystem;
   located: LocatedSource[];
   /** Each origin's own source strength per cell; `source` is their maximum. */
   originSources: Record<string, Band>;
@@ -128,7 +131,7 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
     channels[channel] = allocate(channel).fill(magicFieldDefinitions[channel].initial);
   const field: MagicField = {
     ...channels,
-    definition,
+    definition: resolveMagicSystem(definition, map.scale),
     located: [],
     doors: [],
     originSources: {},
@@ -231,7 +234,10 @@ export function initializeMagic(
     fields: enabled
       ? structuredClone(definitions).map((system) => createMagicField(state, system))
       : [],
-    confluences: createConfluenceWorkspace(enabled ? structuredClone(confluences) : [], map),
+    confluences: createConfluenceWorkspace(
+      enabled ? resolveConfluences(confluences, map.scale) : [],
+      map
+    ),
     heat: allocate("heat"),
     melt: allocate("melt"),
     coastal: allocate("coastal"),

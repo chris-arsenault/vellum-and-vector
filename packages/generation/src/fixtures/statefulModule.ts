@@ -80,7 +80,7 @@ export const statefulInventoryModule: GenerationModule = {
         },
       },
       configuration: configurationSchema,
-      configurationFromLegacy: () => ({ initialDensity: 1, epochRates: {} }),
+      configurationFromSettings: () => ({ initialDensity: 1, epochRates: {} }),
       processes: ["test.inventory.initialize", "test.inventory.advance", "test.inventory.extract"],
       slots: ["initialize.influences", "epoch.storage", "present.products"],
       contribute(slot) {

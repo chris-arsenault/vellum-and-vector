@@ -1,6 +1,5 @@
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
-import { units } from "../world/math";
 import { workingArray, releaseWorking } from "../world/physicalNumerics";
 import { cutGround, removeLoose, removeRock } from "../rock/groundLedger";
 import { incisionDemand } from "../rock/groundIncision";
@@ -36,7 +35,7 @@ const occupies = (request: RemovalRequest, facet: GroundFacet, share: number) =>
 const baseLevel = (map: PhysicalField, request: RemovalRequest, cell: number) =>
   request.pastBaseLevel || map.WaterKindCodes.get(cell) === 1
     ? -Infinity
-    : map.EffectiveSeaLevel + units(1);
+    : map.EffectiveSeaLevel + MapScale.native(map.scale.length(2.5e-7));
 function requestedDepth(
   map: PhysicalField,
   request: RemovalRequest,
@@ -101,7 +100,9 @@ function supply(map: PhysicalField, removal: Removal, i: number) {
     return removal.from === "loose" ? cover : Infinity;
   const aboveBase = Math.max(
     0,
-    facetSurface(map, i, removal.facet) - map.EffectiveSeaLevel - units(1)
+    facetSurface(map, i, removal.facet) -
+      map.EffectiveSeaLevel -
+      MapScale.native(map.scale.length(2.5e-7))
   );
   return removal.from === "loose" ? Math.min(cover, aboveBase) : Math.max(0, aboveBase - cover);
 }

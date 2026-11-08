@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import { craterRelief } from "../../world/geologicalFeatures";
 import type { GenerationState } from "../../process";
 import { rimCost } from "../../regional/causes/landmark";
@@ -22,8 +23,8 @@ import {
 } from "./reliefShape";
 
 /** Relief and area at which a crater is half as great as craters get: a world crater's. */
-const typicalRelief = 150,
-  typicalArea = 700_000_000;
+const typicalRelief = MapScale.length(0.0000375, 0.5),
+  typicalArea = MapScale.area(0.00004375);
 const craterLake = magicRule("fire", "crater");
 const lakePlaces = rulePlaces("crater", "fire", "crater");
 const pits = eventPlaces(

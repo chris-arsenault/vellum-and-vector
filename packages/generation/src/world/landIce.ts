@@ -4,7 +4,7 @@ import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, toUnits, truncate } from "./math";
 import { canCarryIce, supportElevation } from "./glacierSurface";
-import { CellQueue, type Band } from "@atlas/domain";
+import { CellQueue, MapScale, type Band } from "@atlas/domain";
 import { metricSearch } from "./metricSearch";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
@@ -14,16 +14,18 @@ function concavity(map: PhysicalField, i: number): number {
     const j = map.mesh.neighbor(i, edge);
     if (j >= 0) {
       curvature +=
-        (((supportElevation(map, j) - supportElevation(map, i)) / 1024) *
+        (MapScale.metres(supportElevation(map, j) - supportElevation(map, i), "native") *
           map.mesh.faceLength(i, edge)) /
         map.mesh.faceDistance(i, edge);
     }
   }
-  return Math.max(0, curvature / map.mesh.area(i)) * 50_000_000;
+  return Math.max(0, curvature / map.mesh.area(i)) * map.scale.length(12.5);
 }
 function massBalance(map: PhysicalField, p: PhysicalProfile, i: number): number {
   const cold = Math.max(0, p.IceTemperatureThreshold - map.Temperature.get(i));
-  const snow = truncate((map.Snowfall.get(i) * cold) / 300);
+  const snow = truncate(
+    (map.Snowfall.get(i) * cold) / MapScale.inUnits(map.scale.length(7.5e-8), "mm")
+  );
   const altitude = truncate(
     toUnits(Math.max(0, supportElevation(map, i) - map.EffectiveSeaLevel)) * p.IceAltitudeBalance
   );
@@ -70,8 +72,8 @@ function meltedThickness(map: PhysicalField, c: PhysicalContext, i: number, defi
     held =
       map.IcePersistence.get(i) *
       Math.max(0, 1 - deficit / 600) *
-      clamp((thickness - 150) / 150, 0, 1);
-  return Math.max(0, thickness - deficit * c.Span * (1 - held));
+      clamp((thickness - map.scale.length(0.0000375)) / map.scale.length(0.0000375), 0, 1);
+  return Math.max(0, thickness - map.scale.length(0.00000025) * deficit * c.Span * (1 - held));
 }
 function dryLandBalance(map: PhysicalField, c: PhysicalContext, cutoff: number) {
   const p = c.Profile,
@@ -81,8 +83,9 @@ function dryLandBalance(map: PhysicalField, c: PhysicalContext, cutoff: number) 
     const balance = map.IceBalance.get(i),
       // Snow piles on by how far the balance is in credit, up to what ice this far from its edge
       // can stand to before it spreads away.
-      gained = ((balance - cutoff) * 2 * c.Span * c.GlaciationStrength) / 1000,
-      stands = p.IceYieldHeight * Math.sqrt(edge.get(i) + map.mesh.spacing / 2),
+      gained =
+        ((balance - cutoff) * map.scale.length(0.0000005) * c.Span * c.GlaciationStrength) / 1000,
+      stands = p.IceYieldHeight * Math.sqrt(edge.get(i) + map.scale.cells(0.5)),
       before = map.IceThickness.get(i);
     map.IceThickness.set(
       i,

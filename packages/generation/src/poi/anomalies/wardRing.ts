@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -10,10 +12,10 @@ import { countryOf, peakOf } from "./anomalyReads";
 import { hallowedAt, peakWard, wardArea, wardedCarriers } from "./wardReads";
 
 /** A ring of 20 km radius is half as great as rings get, in square metres. */
-const typicalArea = Math.PI * 20_000 ** 2;
+const typicalArea = MapScale.area(Math.PI * 0.005 ** 2);
 /** A ring's country, and how wide the dangerous rim outside it lies, in metres. */
-const countryMetres = 20_000,
-  rimMetres = 5000;
+const countryMetres = MapScale.length(0.005),
+  rimMetres = MapScale.length(0.00125);
 /** How much the ground on which nothing is harmed draws a road to it. */
 const safeRoad = 0.8;
 
@@ -116,7 +118,8 @@ export const wardRing: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "what the ward holds back, on its rim",
-        reach: Math.sqrt(wardArea(state, place) / Math.PI) + rimMetres,
+        reach:
+          Math.sqrt(wardArea(state, place) / Math.PI) + mapScale(state).resolveMeasure(rimMetres),
         severity: peakWard(state, place),
       },
     ],

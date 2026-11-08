@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { minimumRegionWidthMetres, spatial } from "@atlas/domain";
+import { MapScale, minimumRegionWidthMetres, spatial } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 import { ErrorMessage } from "./ErrorMessage";
 import "./regions.css";
@@ -65,9 +65,12 @@ function SelectedRegion({ editor }: { editor: EditorState }) {
   return (
     <>
       <p>
-        {(spatial.area(region.region.footprint) / 1e6).toLocaleString(undefined, {
-          maximumFractionDigits: 1,
-        })}{" "}
+        {MapScale.areaUnits(spatial.area(region.region.footprint), "m2", "km2").toLocaleString(
+          undefined,
+          {
+            maximumFractionDigits: 1,
+          }
+        )}{" "}
         km² · {refined ? "Regional detail generated" : "Showing existing map detail"}
       </p>
       <div className="selection-next">
@@ -155,7 +158,7 @@ function RegionDraft({ editor }: { editor: EditorState }) {
           : `This outline becomes a region within ${editor.region?.name ?? editor.area.name}. Keep it to inspect or refine it.`}
       </p>
       <p>
-        {(spatial.area(draft.footprint) / 1e6).toLocaleString(undefined, {
+        {MapScale.areaUnits(spatial.area(draft.footprint), "m2", "km2").toLocaleString(undefined, {
           maximumFractionDigits: 2,
         })}{" "}
         km²
@@ -164,7 +167,7 @@ function RegionDraft({ editor }: { editor: EditorState }) {
         {editor.tool === "regionEdit"
           ? "Drag outline vertices to adjust the boundary."
           : "Choose Adjust selected outline to move its vertices."}{" "}
-        Minimum useful width: {minimumRegionWidthMetres} m.
+        Minimum useful width: {minimumRegionWidthMetres(editor.area.footprint).toLocaleString()} m.
       </p>
       {editor.regionCandidates.length > 1 && (
         <label>
@@ -178,9 +181,12 @@ function RegionDraft({ editor }: { editor: EditorState }) {
             {editor.regionCandidates.map((c, i) => (
               <option key={i} value={i}>
                 {c.name} ·{" "}
-                {(spatial.area(c.footprint) / 1e6).toLocaleString(undefined, {
-                  maximumFractionDigits: 1,
-                })}{" "}
+                {MapScale.areaUnits(spatial.area(c.footprint), "m2", "km2").toLocaleString(
+                  undefined,
+                  {
+                    maximumFractionDigits: 1,
+                  }
+                )}{" "}
                 km²
               </option>
             ))}

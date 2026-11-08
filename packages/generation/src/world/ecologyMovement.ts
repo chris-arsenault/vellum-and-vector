@@ -1,5 +1,5 @@
 import type { PhysicalField } from "./field";
-import { KeyedHeap, type Band } from "@atlas/domain";
+import { MapScale, KeyedHeap, type Band } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
 export interface EcologicalFront {
@@ -48,8 +48,10 @@ export function migrateAnimals(
 ) {
   const admits = (i: number) =>
     aquatic
-      ? (map.WaterKindCodes.get(i) > 0 || map.RiverOrders.get(i) > 0) && map.IceThickness.get(i) < 2
-      : map.WaterKindCodes.get(i) !== 1 && map.WaterDepths.get(i) < 1.5 * 1024;
+      ? (map.WaterKindCodes.get(i) > 0 || map.RiverOrders.get(i) > 0) &&
+        map.IceThickness.get(i) < map.scale.length(5e-7)
+      : map.WaterKindCodes.get(i) !== 1 &&
+        MapScale.metres(map.WaterDepths.get(i), "native") < map.scale.length(3.75e-7);
   const starts = workingValues(map, "float64", "ecology:migration-starts", (i) =>
     capacity.get(i) > population.get(i) * 1.1 + 1e-8 ? 0 : Infinity
   );
@@ -59,7 +61,7 @@ export function migrateAnimals(
           (1 +
             map.Slope.get(j) * 8 +
             map.EcologicalToxicity.get(j) * 10 +
-            map.IceThickness.get(j) / 100)) /
+            map.IceThickness.get(j) / map.scale.length(0.000025))) /
         speed
       : Infinity
   );

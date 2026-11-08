@@ -19,7 +19,7 @@ export const tectonicDefaultMyr = 20;
 /** Maximum change in boundary driving before contacts are reconciled again. */
 export const tectonicStepMyr = 4;
 /** Boundary geometry is updated before traveling a substantial province fraction. */
-export const tectonicStepTravel = 70_000;
+export const tectonicStepTravel = (scale: MapScale) => scale.length(0.0175);
 /** Resolve moving geometry before it travels a quarter of a terrain cell. */
 export const tectonicGeometryTravelFraction = 0.25;
 /** Time for a plate to adjust toward its persistent regional driving. */
@@ -31,7 +31,7 @@ export const tectonicSubductionResistance = 0;
 /** Speed a plate of ocean gains when all its contacts are sinking on one side. */
 export const tectonicSlabPull = 1;
 /** How far from a bounded map's edge a plate's continent starts to slow against it, in metres. */
-export const tectonicEdgeReach = 300_000;
+export const tectonicEdgeReach = (scale: MapScale) => scale.length(0.075);
 /** Share of regional differential driving that contributes plate rotation. */
 export const tectonicRotationGain = 0.35;
 /** Initial mechanical plates contain several irregular provinces, independently of crust origin. */
@@ -49,12 +49,14 @@ export const tectonicSutureStrength = 0.25;
 /** How long heat gathers under a wide continent or a plume before it pushes at a plate's full speed. */
 export const tectonicInsulationMyr = 60;
 /** The radius of continent, in metres, that traps heat that fast; a smaller lid traps it slower. */
-export const tectonicLidRadius = 1_500_000;
+export const tectonicLidRadius = (scale: MapScale) => scale.length(0.375);
 /** How far a plume's spreading head reaches, as a share of the plume's own radius. */
+// length-unit: ratio
 export const tectonicPlumeHeadReach = 3;
 /** Closure, as a share of the distance between provinces, at which colliding continents lock. */
 export const tectonicCollisionLock = 0.5;
 /** How close an ocean province gets to what it sinks beneath, as a share of its own width. */
+// length-unit: ratio
 export const tectonicSinkingReach = 0.5;
 /** Shortening beyond an earlier opening needed to establish a welded contact. */
 export const tectonicWeldStrain = 0.2;
@@ -65,12 +67,13 @@ export const tectonicRiftActivation = 0.02;
 /** Thermal relaxation of thinned continental lithosphere, in million years. */
 export const tectonicRiftCoolingMyr = 30;
 /** Maximum extra subsidence at a fully extended rift, multiplied by its configured response. */
-export const tectonicRiftSubsidence = 1600;
+export const tectonicRiftSubsidence = (scale: MapScale) => scale.length(0.0004);
 /** Oceanic lithosphere approaches the mature subsidence state over this geological interval. */
 export const tectonicOceanMaturityMyr = 80;
 /** Melt supplied to the overriding arc per unit of consumed oceanic column. */
 export const tectonicArcMeltShare = 0.18;
 /** Horizontal distance from the consuming contact to the overriding volcanic front. */
-export const tectonicArcOffset = 120_000;
+export const tectonicArcOffset = (scale: MapScale) => scale.length(0.03);
 /** Width of a volcanic front's physical construction footprint. */
-export const tectonicArcRadius = 80_000;
+export const tectonicArcRadius = (scale: MapScale) => scale.length(0.02);
+import type { MapScale } from "@atlas/domain";

@@ -123,7 +123,7 @@ it.each(["world", "region", "quick-region"])(
         },
       }),
       execute = () =>
-        runNativeStep(map, physicalContext(1, 0, physicalProfile), [
+        runNativeStep(map, physicalContext(1, 0, map.scale.resolve(physicalProfile)), [
           "probe-step",
           0,
           actBy(probe),

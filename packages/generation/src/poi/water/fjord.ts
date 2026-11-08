@@ -1,5 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { Landform } from "../../world/codes";
+import { MapScale } from "@atlas/domain";
 import { worldFjordLength } from "../../world/worldSiteEvidence";
 import { regionEvidence } from "../../world/worldRegionEvidence";
 import type { GenerationState } from "../../process";
@@ -20,9 +21,10 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { spans } from "./waterReads";
 
 /** Metres of water under which a trough has filled to an ordinary bay. */
-const filled = 5;
+const filled = MapScale.length(0.00000125, 0.5);
 /** Metres a trough stands drowned, at least, to read as one. */
-const troughDepth = 30;
+// length-unit: fraction
+const troughDepth = 0.0000075;
 
 const isA = (state: GenerationState, cell: number) => landformAt(state, cell) === Landform.Fjord;
 const depthAt = (state: GenerationState, cell: number) =>
@@ -48,7 +50,9 @@ const heldTrough = (state: GenerationState, place: PoiPlace): readonly PoiFieldC
     change: "atMost",
     band: "Elevation",
     cell,
-    value: map.EffectiveSeaLevel - toNative(Math.min(depthAt(state, cell), troughDepth)),
+    value:
+      map.EffectiveSeaLevel -
+      toNative(Math.min(depthAt(state, cell), map.scale.length(troughDepth, 0.5))),
   }));
 };
 /**
@@ -56,13 +60,14 @@ const heldTrough = (state: GenerationState, place: PoiPlace): readonly PoiFieldC
  * record covers keeps the glacial erosion the refined landform test reads.
  */
 function realizedTrough(state: RegionalState, carried: PoiCarried): readonly PoiFieldChange[] {
-  const value = toNative(regionalFjordErosion);
+  const value = toNative(regionalFjordErosion(fieldOf(state).scale));
   return [
     {
       change: "atMost",
       band: "Elevation",
       cell: carried.cell,
-      value: fieldOf(state).EffectiveSeaLevel - toNative(troughDepth),
+      value:
+        fieldOf(state).EffectiveSeaLevel - toNative(fieldOf(state).scale.length(troughDepth, 0.5)),
     },
     ...carried.cells
       .filter((cell) => cell === carried.cell || isSea(state, cell))
@@ -185,7 +190,7 @@ export const fjord: PoiEntry = {
       "A fjord lasts while the sea stands in its trough. If its streams fill it, it is a bay; if the sea withdraws, it is the valley the ice cut.",
     fate(state, place) {
       if (!isSea(state, place.anchor)) return { fate: "becomes", kind: "valley" };
-      return depthAt(state, place.anchor) < filled
+      return depthAt(state, place.anchor) < fieldOf(state).scale.resolveMeasure(filled)
         ? { fate: "becomes", kind: "bay" }
         : { fate: "persists" };
     },

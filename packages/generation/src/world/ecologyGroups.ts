@@ -1,4 +1,5 @@
 import { respond } from "../coupling/answers";
+import { MapScale } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 import { environment, unit, type EcologyForcing } from "./ecologyEnvironment";
 
@@ -11,11 +12,11 @@ export const plantGroups = [
     mass: 0.9,
     maturity: 3,
     lifespan: 10,
-    spread: 400,
+    spread: MapScale.length(0.0001),
     nitrogen: 45,
     shade: 0.15,
     waterlogging: 0.65,
-    crossing: { carrier: "wind", reach: 400_000, interval: 20 },
+    crossing: { carrier: "wind", reach: MapScale.length(0.1), interval: 20 },
     floodSensitivity: 0.05,
   },
   {
@@ -26,11 +27,11 @@ export const plantGroups = [
     mass: 10,
     maturity: 45,
     lifespan: 250,
-    spread: 180,
+    spread: MapScale.length(0.000045),
     nitrogen: 90,
     shade: 0.65,
     waterlogging: 0.35,
-    crossing: { carrier: "current", reach: 250_000, interval: 20 },
+    crossing: { carrier: "current", reach: MapScale.length(0.0625), interval: 20 },
     floodSensitivity: 0.2,
   },
   {
@@ -41,11 +42,11 @@ export const plantGroups = [
     mass: 8,
     maturity: 65,
     lifespan: 350,
-    spread: 140,
+    spread: MapScale.length(0.000035),
     nitrogen: 110,
     shade: 0.5,
     waterlogging: 0.85,
-    crossing: { carrier: "current", reach: 150_000, interval: 20 },
+    crossing: { carrier: "current", reach: MapScale.length(0.0375), interval: 20 },
     floodSensitivity: 0.3,
   },
   {
@@ -56,11 +57,11 @@ export const plantGroups = [
     mass: 1.8,
     maturity: 5,
     lifespan: 8,
-    spread: 300,
+    spread: MapScale.length(0.000075),
     nitrogen: 55,
     shade: 0.5,
     waterlogging: 0,
-    crossing: { carrier: "wind", reach: 300_000, interval: 20 },
+    crossing: { carrier: "wind", reach: MapScale.length(0.075), interval: 20 },
     floodSensitivity: 0,
   },
 ] as const;
@@ -94,7 +95,7 @@ export function groupSuitability(
   const drought = unit(1 - e.drought);
   const wet = group.id === "wetland" ? e.wetness : 1 - e.wetness * group.waterlogging;
   const shade = unit(1 - canopy(map, i) * (1 - group.shade));
-  const soil = unit(map.SoilDepth.get(i) / (group.juvenile ? 0.3 : 0.06));
+  const soil = unit(map.SoilDepth.get(i) / map.scale.length(group.juvenile ? 7.5e-8 : 1.5e-8));
   const heatPreference = group.id === "conifer" ? unit((25 - e.temperature) / 12) : 1;
   const climate = warmth * frost * drought * wet * soil * heatPreference;
   // Greenwood sustains growth past the climate band: verdure is a floor under the climate's
@@ -102,7 +103,7 @@ export function groupSuitability(
   return Math.max(climate, f.verdure) * shade;
 }
 
-/** How far each kind of cover binds the ground it grows in. */
+/** Dimensionless resistance contribution of each cover; Ground uses it as a response factor. */
 const rootHold = { tree: 1.2, grass: 0.45, wetland: 0.7 };
 respond({
   key: "rootHold",

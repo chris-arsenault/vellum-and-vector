@@ -38,7 +38,7 @@ export function seaIce(map: PhysicalField, c: PhysicalContext) {
     const cold = map.SeaIceSuitability.get(i),
       temperature = map.Temperature.get(i);
     if (cold < cutoff || temperature > p.IceMarginTemperature) continue;
-    map.IceThickness.set(i, clamp(50 + (cold - cutoff) * 2, 50, 240));
+    map.IceThickness.set(i, map.scale.length(0.0000125 + (cold - cutoff) * 0.0000005));
     map.FeatureFlags.set(
       i,
       map.FeatureFlags.get(i) |

@@ -1,7 +1,7 @@
 import { coastDistances } from "../../world/magicOcean";
 import { releaseWorking } from "../../world/physicalNumerics";
 import type { GenerationState } from "../../process";
-import { cellSpan, fieldOf, heldFor, isSea, Landform, landformAt } from "../poiReads";
+import { fieldOf, heldFor, isSea, Landform, landformAt } from "../poiReads";
 
 /**
  * The coast's form, read from the water mask alone: a circle of samples around a cell, as arcs
@@ -12,8 +12,8 @@ import { cellSpan, fieldOf, heldFor, isSea, Landform, landformAt } from "../poiR
  * decides. Lakes count as not-sea: they are ground to the coast.
  */
 const samples = 24;
-/** Circle radii, in metres: from a cove to a gulf. */
-const radii = [1_500, 3_000, 6_000, 12_000, 25_000, 50_000, 100_000, 200_000, 400_000, 800_000];
+/** Relative circle radii, from a cove to a gulf. */
+const radii = [0.000375, 0.00075, 0.0015, 0.003, 0.00625, 0.0125, 0.025, 0.05, 0.1, 0.2];
 /** How far short of a circle the nearest other medium may read, along the lattice's paths. */
 const pathSlack = 1.25;
 /** A line of sight is sampled this many times, so its cost does not grow with its length. */
@@ -90,7 +90,7 @@ function runsAlong(
 ) {
   const mesh = fieldOf(state).mesh,
     angle = (sample * 2 * Math.PI) / samples,
-    step = Math.max(cellSpan(state), reach / sightSamples);
+    step = fieldOf(state).scale.supported(reach / sightSamples);
   for (let d = step; d < reach; d += step) {
     const next = mesh.cellAt(
       mesh.x(cell) + d * Math.cos(angle),
@@ -156,7 +156,7 @@ function formOnCircle(state: GenerationState, cell: number, radius: number): Rea
 const seaDistances = (state: GenerationState) =>
   heldFor(state, "shoreForm:seaDistance", () => {
     const map = fieldOf(state),
-      band = coastDistances(map, radii[radii.length - 1] * pathSlack),
+      band = coastDistances(map, map.scale.length(radii[radii.length - 1]) * pathSlack),
       kept = new Float32Array(map.mesh.count);
     for (let i = 0; i < kept.length; i++) kept[i] = band.get(i);
     releaseWorking(map, band);
@@ -170,11 +170,13 @@ function outOfReach(state: GenerationState, cell: number) {
 }
 function readForm(state: GenerationState, cell: number): Reading {
   if (outOfReach(state, cell)) return noForm;
-  const least = 2 * cellSpan(state),
+  const scale = fieldOf(state).scale,
+    least = scale.cells(2),
     distance = isSea(state, cell)
       ? seaDistances(state)[cell]
       : fieldOf(state).OceanDistance.get(cell);
-  for (const radius of radii) {
+  for (const fraction of radii) {
+    const radius = scale.length(fraction);
     // A circle short of the nearest other medium shows only the one the cell stands in.
     if (radius < least || radius * pathSlack < distance) continue;
     const reading = formOnCircle(state, cell, radius);

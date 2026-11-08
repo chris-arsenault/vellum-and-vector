@@ -1,5 +1,6 @@
 import {
   fieldInterpolator,
+  MapScale,
   gridPosition,
   putChannel,
   resolutionCells,
@@ -108,7 +109,7 @@ function refreshWater(state: GenerationState, context: MapProcessContext) {
   const work = state.physical!,
     bound = generationBindings(context);
   const c = physicalContext(bound.seed, 0, work.profile);
-  c.SeaLevelOffset = (work.map.EffectiveSeaLevel - work.map.BaseSeaLevel) / 1024;
+  c.SeaLevelOffset = MapScale.metres(work.map.EffectiveSeaLevel - work.map.BaseSeaLevel, "native");
   if (work.map.EngineeredDams) releaseWorking(work.map, work.map.EngineeredDams);
   let dams: Band | null = null;
   for (const i of engineeredDamCells(state))

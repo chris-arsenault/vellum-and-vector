@@ -19,6 +19,7 @@ import { emptySupport } from "./societySupport";
 import type { MapProcessContext } from "./process";
 import type { Polygon } from "geojson";
 import { createAtlasWorkspace } from "./world/atlasWorkspace";
+import { groundResourceBindings } from "./rock/groundResources";
 
 function fixture() {
   const state = landscape(),
@@ -58,6 +59,15 @@ function fixture() {
     "metre",
     generateChannel(state.surface, "elevation", () => 100)
   );
+  for (const { name, unit } of groundResourceBindings)
+    putChannel(
+      state.surface,
+      name,
+      unit,
+      generateChannel(state.surface, name, () =>
+        name === "bedrock" || name === "crustSupport" ? 100 : 0
+      )
+    );
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],

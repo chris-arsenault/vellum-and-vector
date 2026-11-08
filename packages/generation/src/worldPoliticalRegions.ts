@@ -14,7 +14,7 @@ export function publishPoliticalRegions(state: GenerationState, parent: AtlasFea
   const bounds = spatial.bounds(parent.geometry),
     span = Math.hypot(bounds[2] - bounds[0], bounds[3] - bounds[1]);
   const scale = mapScale(state);
-  if (span < largeDomainSpan * scale.length) return;
+  if (span < scale.resolveMeasure(largeDomainSpan)) return;
   const land = landArea(state);
   if (!largeWorldDomain(spatial.area(parent.geometry), span, land, scale)) return;
   const work = state.physical,

@@ -1,5 +1,6 @@
 import type { Database } from "@sqlite.org/sqlite-wasm";
 import {
+  MapScale,
   areaSpace,
   rectangle,
   registryRow,
@@ -224,10 +225,15 @@ export class RegistryCatalog {
     const extent = feature.footprint ?? feature.geometry;
     const measures = this.kernel.measure(extent, precision);
     const row = registryRow(world, feature, this.communities(world.id, feature), {
-      ...(extent.type.includes("Polygon") ? { areaKm2: measures.area / 1e6 } : {}),
+      ...(extent.type.includes("Polygon")
+        ? { areaKm2: MapScale.areaUnits(measures.area, "m2", "km2") }
+        : {}),
       ...(feature.geometry.type.includes("Line")
         ? {
-            lengthKm: this.kernel.measure(feature.geometry, precision).length / 1000,
+            lengthKm: MapScale.inUnits(
+              this.kernel.measure(feature.geometry, precision).length,
+              "km"
+            ),
           }
         : {}),
     });

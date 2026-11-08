@@ -5,6 +5,8 @@ import {
   regionMapFootprint,
   regionalScale,
   mapRefinementLevel,
+  MapScale,
+  defaultTerrainCells,
   spatial,
   type DomainSnapshot,
   type BlockCache,
@@ -169,19 +171,18 @@ export function refinementResolution(
   source: DomainSnapshot,
   input: Pick<AtlasGenerationInput, "areaId" | "quality">
 ) {
-  const base = regionalScale(
-    Math.max(1, mapRefinementLevel(source.world.areas, input.areaId)),
-    input.quality
-  );
-  const bounds = compactBounds(source, refinementFootprint(source, input.areaId));
-  const cellSpan = Math.min(
-    base.cellSpan,
-    Math.min(bounds[2] - bounds[0], bounds[3] - bounds[1]) / 8
-  );
+  const bounds = compactBounds(source, refinementFootprint(source, input.areaId)),
+    scale = MapScale.fromCells(bounds, defaultTerrainCells),
+    base = regionalScale(
+      Math.max(1, mapRefinementLevel(source.world.areas, input.areaId)),
+      input.quality,
+      scale
+    );
+  const { cellSpan } = base;
   const cells =
     (Math.ceil((bounds[2] - bounds[0]) / cellSpan) + 1) *
     (Math.ceil((bounds[3] - bounds[1]) / cellSpan) + 1);
-  return { cellSpan, cellArea: cellSpan ** 2, cellAreaKm2: cellSpan ** 2 / 1e6, cells };
+  return { ...base, cells };
 }
 
 /**

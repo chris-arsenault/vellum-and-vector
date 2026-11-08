@@ -51,8 +51,9 @@ function directedStep(
       (map.TectonicStrain.get(j) / 1000) * 0.12 +
       hashSigned(
         seed ^ 0x6c53,
-        branch + Math.floor(step / 10_000),
-        Math.floor(next[0] / 10_000) ^ Math.floor(next[1] / 10_000)
+        branch + Math.floor(step / map.scale.length(0.0025)),
+        Math.floor(next[0] / map.scale.length(0.0025)) ^
+          Math.floor(next[1] / map.scale.length(0.0025))
       ) *
         0.12;
     if (value > score) {
@@ -116,7 +117,8 @@ function growBranch(
   map.faults.push(fault);
   const increment = Math.min(fault.width / 2, length / 32);
   for (let step = 0; step < length; step += increment) {
-    const strength = 760 + truncate(hashUnit(c.Seed, branch, Math.floor(step / 10_000)) * 240);
+    const strength =
+      760 + truncate(hashUnit(c.Seed, branch, Math.floor(step / map.scale.length(0.0025))) * 240);
     nodes.push(point);
     fault.coordinates.push(point);
     widenFracture(map, point, fault.width, strength);
@@ -131,7 +133,9 @@ function growBranch(
     );
     if (!next) break;
     point = next.point;
-    angle = next.angle + hashSigned(c.Seed ^ 0x5ac1, branch, Math.floor(step / 10_000)) * 0.22;
+    angle =
+      next.angle +
+      hashSigned(c.Seed ^ 0x5ac1, branch, Math.floor(step / map.scale.length(0.0025))) * 0.22;
   }
   fault.coordinates.push(point);
 }
@@ -164,7 +168,11 @@ export function fractureNetwork(map: PhysicalField, c: PhysicalContext) {
   const count =
     c.TectonicStrength === 0
       ? 0
-      : areaBudget((c.Profile.FractureBranchCount * c.TectonicStrength) / 1000, mediumArea(map));
+      : areaBudget(
+          (c.Profile.FractureBranchCount * c.TectonicStrength) / 1000,
+          mediumArea(map),
+          map.scale.area(0.75)
+        );
   if (count === 0) return;
   const candidates = worldCandidates(map.mesh, c.Seed, Math.max(1024, count * 256))
     .map((source) => ({
@@ -213,7 +221,8 @@ export function applyPlannedFractures(
           point[1] - fault.coordinates[index - 1][1]
         );
       const strength =
-        760 + truncate(hashUnit(c.Seed, branch, Math.floor(distance / 10_000)) * 240);
+        760 +
+        truncate(hashUnit(c.Seed, branch, Math.floor(distance / map.scale.length(0.0025))) * 240);
       widenFracture(map, point, fault.width, strength);
     });
     map.faults.push(fault);

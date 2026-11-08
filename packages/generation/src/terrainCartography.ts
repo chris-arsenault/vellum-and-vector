@@ -11,7 +11,10 @@ function terrain(index: number): FeatureSelection {
     }),
     "physical.tectonic-history": {
       settings: { plateDrift: [0.15, 0.6, 1.2, 0.7][index] },
-      ...profile({ EpochTectonicElevationStep: [60, 160, 320, 160][index] }),
+      ...profile({
+        // length-unit: fraction — resolved by the owning map's profile.
+        EpochTectonicElevationStep: [0.000015, 0.00004, 0.00008, 0.00004][index],
+      }),
     },
     "physical.river-incision": {
       settings: { erosion: [0.25, 0.7, 1.5, 0.7][index] },
@@ -19,14 +22,15 @@ function terrain(index: number): FeatureSelection {
     },
     "material.fluvial-transport": profile({
       SedimentTransportFraction: [850, 760, 650, 760][index],
-      SedimentCarry: [60_000, 100_000, 160_000, 100_000][index],
-    }),
-    "physical.floodplains": profile({
-      FloodplainMaximumWidth: [25_000, 15_000, 8_000, 15_000][index],
+      // length-unit: fraction — compound length coefficient resolved with the profile.
+      SedimentCarry: [0.015, 0.025, 0.04, 0.025][index],
     }),
     "physical.glacial-sculpting": {
       settings: { glaciers: [0.3, 0.5, 0.7, 1.2][index] },
-      ...profile({ IceAltitudeBalance: [0, 0, 0, 0.25][index] }),
+      ...profile({
+        // length-unit: fraction — inverse-length coefficient resolved with the profile.
+        IceAltitudeBalance: [0, 0, 0, 1_000_000][index],
+      }),
     },
     "physical.lifecycle": {
       configuration: {

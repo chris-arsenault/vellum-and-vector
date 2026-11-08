@@ -1,14 +1,16 @@
 import { population, type SocietyCommunity, type SocietyRegion } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { settlementHierarchy, type SettlementHierarchy } from "./societyHierarchy";
-import { defaultSocietyProfile, profileOf } from "./societyProfile";
+import { profileOf } from "./societyProfile";
+import { atlasParameterDefinitions } from "./atlasParameters";
+import { mapScale } from "./worldSignificance";
 
 export function isWorldSociety(state: GenerationState) {
   return state.domain.world.areas[state.domain.scope.areaId].profile === "world";
 }
 
 /** Concentrated residents that make a town, or the remains of one, a World feature. */
-export const worldSettlementResidents = defaultSocietyProfile.townThreshold;
+export const worldSettlementResidents = atlasParameterDefinitions.townThreshold.default;
 /** The remains of a settlement are a World feature when the settlement once was one. */
 export function isMajorRuin(
   c: Pick<SocietyCommunity, "founded" | "settlement">,
@@ -32,7 +34,7 @@ export function isMajorSettlement(
 }
 /** The communities this map shows, and the hierarchy that chose them. */
 export function mappedSociety(state: GenerationState, region: SocietyRegion) {
-  const hierarchy = settlementHierarchy(region),
+  const hierarchy = settlementHierarchy(region, mapScale(state)),
     threshold = profileOf(state).townThreshold;
   const mapped = new Set(
     region.communities

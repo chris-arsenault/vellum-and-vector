@@ -34,7 +34,7 @@ export function landscapeSurface(state: GenerationState) {
     field: { ...state.surface, channels: { biome: codes }, overlays: [] },
     dry: dryExtents(state),
     /** A hole smaller than the least landscape at this map's scale closes unless water fills it. */
-    smallHole: landscapeMinimumArea * mapScale(state).area,
+    smallHole: mapScale(state).resolveMeasure(landscapeMinimumArea),
     wet: (i: number) => map.WaterKindCodes.get(i) !== 0,
   };
 }

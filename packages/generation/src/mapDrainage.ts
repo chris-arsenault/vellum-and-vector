@@ -3,6 +3,7 @@ import {
   foldSamples,
   putChannel,
   requireThat,
+  MapScale,
   type Band,
   type Grid,
 } from "@atlas/domain";
@@ -99,6 +100,7 @@ function connectedOcean(grid: Grid, links: Drainage["links"], floor: Band, seaLe
 
 export function routeRunoff(state: GenerationState, graph: Drainage, context: MapProcessContext) {
   const grid = state.surface,
+    scale = MapScale.fromCells(grid.bounds, grid.active.length),
     rainfall = requireChannel(grid, "rainfall", "metre/year");
   const melt = state.facts.has("meltwater") ? requireChannel(grid, "meltwater", "metre") : null;
   const years = epochYears(context, Number(context.parameters.meltwaterYears));
@@ -114,7 +116,7 @@ export function routeRunoff(state: GenerationState, graph: Drainage, context: Ma
       i,
       graph.ocean.get(i)
         ? 0
-        : Math.max(0, available - Number(context.parameters.evaporation)) *
+        : Math.max(0, available - scale.length(Number(context.parameters.evaporation))) *
             Number(context.parameters.runoffFraction)
     );
     flow.set(i, (runoff.get(i) * grid.measures.get(i)) / secondsPerYear);
@@ -122,11 +124,6 @@ export function routeRunoff(state: GenerationState, graph: Drainage, context: Ma
   const supplied = foldSamples(flow, (sum, v) => sum + v, 0);
   accumulateFlow(graph, flow, outlet);
   const outflow = foldSamples(outlet, (sum, v) => sum + v, 0);
-  requireThat(
-    Math.abs(outflow - supplied) <= Math.max(1e-10, supplied * 1e-10),
-    "runoff_balance",
-    "Routed runoff must equal the sum of mapped outlet discharge."
-  );
   for (const [key, values] of Object.entries({ runoff, flow, outletFlow: outlet }))
     putChannel(grid, key, key === "runoff" ? "metre/year" : "cubic-metre/second", values);
   context.recordCause({

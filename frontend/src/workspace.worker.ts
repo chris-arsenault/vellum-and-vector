@@ -1,4 +1,3 @@
-import { captureExistingMaps } from "./mapConversion";
 import {
   openBrowserWorkspace,
   GeometryKernel,
@@ -19,7 +18,7 @@ import type {
   WorldOperation,
 } from "./workspaceProtocol";
 import { executeWorkspaceCommand } from "./workspaceCommands";
-import { importWorkspace, importLegacyWorld } from "./workspaceImport";
+import { importWorkspace } from "./workspaceImport";
 import { workspaceRasters } from "./workspaceRasters";
 import { workspaceRasterGeography } from "./workspaceRasterGeography";
 import { generationSource } from "./workspaceGeneration";
@@ -76,25 +75,13 @@ async function close() {
 async function operateWorld(operation: WorldOperation) {
   const { worldId } = operation;
   let current = workspaces.get(worldId);
-  if (operation.kind === "openLegacyWorld") {
-    const imported = await openBrowserWorkspace(`${name}_${crypto.randomUUID()}`);
-    try {
-      const world = await importLegacyWorld(imported, operation.saved);
-      await current?.close();
-      workspaces.set(worldId, imported);
-      return captureExistingMaps(imported, world.id);
-    } catch (error) {
-      await imported.close();
-      throw error;
-    }
-  }
   if (operation.kind === "openSavedWorld") {
     if (current) await current.restore(operation.root);
     else {
       current = await openBrowserWorkspace(`${name}_${worldId}`, operation.root);
       workspaces.set(worldId, current);
     }
-    return captureExistingMaps(current, worldId);
+    return current.catalog.readEditor(worldId);
   }
   if (!current) {
     current = await openBrowserWorkspace(`${name}_${worldId}`);
@@ -116,10 +103,8 @@ async function lifecycle(current: BrowserWorkspace, operation: WorldOperation) {
     }
     case "export":
       return current.export(operation.worldId, operation.areaId);
-    case "importWorld": {
-      const world = await importWorkspace(current, operation.snapshot);
-      return captureExistingMaps(current, world.id);
-    }
+    case "importWorld":
+      return importWorkspace(current, operation.snapshot);
     case "abandonOperation":
       // The host terminated the worker: drop staged batches, then its working files.
       await current.catalog.abandonPublication(operation.operationId);

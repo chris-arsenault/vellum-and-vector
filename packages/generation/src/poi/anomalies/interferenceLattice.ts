@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -9,23 +11,25 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { countryOf, intensityOf, magicFieldOf, peakOf, weightedArea } from "./anomalyReads";
 
 /** Square metres of crossing rays at which a lattice is half as great as lattices get. */
-const typicalArea = 2e10;
+const typicalArea = MapScale.area(0.00125);
 /** What a confused sea adds to a boat's passage, per unit of intensity share. */
 const swell = 2;
 /** How much a standing pattern slows what the current carries through it. */
 const currentDrag = 1.25;
 /** The reach of Pressure's rays if the system states none. */
-const defaultRayDistance = 2_000_000;
+// length-unit: fraction
+const defaultRayDistance = 0.5;
 /** A lattice's country, and how far a confused sea troubles the water past it, in metres. */
-const countryMetres = 40_000,
-  confusedMetres = 10_000;
+const countryMetres = MapScale.length(0.01),
+  confusedMetres = MapScale.length(0.0025);
 
 const pressureAt = intensityOf("pressure");
 const isA = magicRule("pressure", "lattice");
 const places = rulePlaces("interferenceLattice", "pressure", "lattice");
 const around = countryOf(countryMetres);
 const rayReach = (state: GenerationState) =>
-  magicFieldOf(state, "pressure")?.definition.parameters.rayDistance ?? defaultRayDistance;
+  magicFieldOf(state, "pressure")?.definition.parameters.rayDistance ??
+  mapScale(state).length(defaultRayDistance);
 const area = (state: GenerationState, place: PoiPlace) => weightedArea(state, place, () => 1);
 const peakPressure = (state: GenerationState, place: PoiPlace) =>
   peakOf(state, place, pressureAt) / 1000;
@@ -122,7 +126,7 @@ export const interferenceLattice: PoiEntry = {
     threatens: (state, place) => [
       {
         hazard: "confused sea",
-        reach: confusedMetres,
+        reach: mapScale(state).resolveMeasure(confusedMetres),
         severity: Math.min(1, swell * peakPressure(state, place)),
       },
     ],

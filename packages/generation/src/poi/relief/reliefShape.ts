@@ -13,7 +13,6 @@ import type { RegionalState } from "../../regional/state";
 import { parentSpanOf } from "../poiCarry";
 import type { PoiCarried, PoiFate, PoiFieldChange, PoiPlace } from "../poiContract";
 import {
-  cellSpan,
   cellsWithin,
   fieldOf,
   gap,
@@ -29,7 +28,8 @@ type IsA = (state: GenerationState, cell: number) => boolean;
 /** What the relief entries share. Nothing here computes geography the generator does not. */
 
 /** A fixed number of this map's cell spans, as a reach. */
-export const spans = (count: number) => (state: GenerationState) => count * cellSpan(state);
+export const spans = (count: number) => (state: GenerationState) =>
+  fieldOf(state).scale.cells(count);
 
 const elevationAt = (state: GenerationState) =>
   heldFor(state, "relief:elevation", () => {
@@ -164,11 +164,19 @@ export const bareOf = (cells: readonly number[]): readonly PoiFieldChange[] =>
     bareBands.map((band): PoiFieldChange => ({ change: "atMost", band, cell, value: 0 }))
   );
 /** Metres of soil a sheet of hard rock holds on its joints. */
-const thinSoil = 0.5;
+const thinSoil = 0.000000125;
 /** A hard sheet's soil stays thin. */
-export const thinSoilOf = (cells: readonly number[]): readonly PoiFieldChange[] =>
-  cells.map((cell) => ({ change: "atMost", band: "SoilDepth", cell, value: thinSoil }));
-/** Holds the gradient these cells read now, so finer relief cannot steepen them. */
+export const thinSoilOf = (
+  state: GenerationState,
+  cells: readonly number[]
+): readonly PoiFieldChange[] =>
+  cells.map((cell) => ({
+    change: "atMost",
+    band: "SoilDepth",
+    cell,
+    value: fieldOf(state).scale.length(thinSoil, 0.5),
+  }));
+/** Grade these feature cells to their present terrain shape after finer relief develops. */
 export const holdGradient = (
   state: GenerationState,
   cells: readonly number[],
@@ -176,7 +184,7 @@ export const holdGradient = (
 ): readonly PoiFieldChange[] => {
   const map = fieldOf(state);
   return cells.map((cell) => ({
-    change: "gradientAtMost",
+    change: "gradeGround",
     cell,
     gradient: Math.min(ceiling, map.Slope.get(cell)),
   }));

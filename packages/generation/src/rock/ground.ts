@@ -1,4 +1,5 @@
 import type { PhysicalField } from "../world/field";
+import { MapScale } from "@atlas/domain";
 import { meshDeltaX } from "../world/mesh";
 import { clamp, units } from "../world/math";
 import { givenUp, materialGives, type CompiledMix } from "./modes";
@@ -26,16 +27,11 @@ import {
 } from "./groundShares";
 
 /** The depth of loose sediment that fully covers the rock beneath it, in metres. */
-const fullCover = 25;
+const fullCover = 0.00000625;
 /** The depth of soil that is all a surface shows, in metres. */
-const fullSoil = 1;
+const fullSoil = 0.00000025;
 /** How far burning undoes what roots hold. */
 const burntShare = 0.5;
-/**
- * Below this share of its ground's hold left, cover is gone: numerical, since fire at full strength
- * against a strongly held mix would otherwise divide by nothing.
- */
-const leastHold = 0.1;
 const soil = rockCatalogue.soil;
 
 /** What an action took from each layer of a cell, in metres: the last action on it. */
@@ -198,10 +194,9 @@ export class Ground {
     let bearing = Math.exp(mix.fracturesWeaken * fracture) / (1 + mix.wardHolds * ward);
     if (this.stiffen) bearing /= this.stiffen(i);
     if (mix.coverHolds <= 0 || !this.hold) return bearing;
-    const held =
-      (1 + mix.coverHolds * this.hold.get(i)) *
-      (1 - mix.coverHolds * burntShare * map.FireActivity.get(i));
-    return bearing / Math.max(leastHold, held);
+    // Burning removes root support; the material's own resistance remains when roots are gone.
+    const remaining = this.hold.get(i) * Math.max(0, 1 - burntShare * map.FireActivity.get(i));
+    return bearing / (1 + mix.coverHolds * remaining);
   }
   private rate(mix: CompiledMix, code: number, strength: number, bearing: number) {
     return Math.max(0, givenUp(mix, code, strength) * bearing);
@@ -225,7 +220,7 @@ export class Ground {
       part = facet === "cut" && cutShare(this.map, i) <= 0 ? "land" : facet;
     this.left = power;
     this.reached = 0;
-    this.limit = limit / 1024;
+    this.limit = MapScale.metres(limit, "native");
     this.start(i);
     const skin = Math.max(0, this.map.SoilDepth.get(i));
     this.at = "soil";
@@ -235,7 +230,7 @@ export class Ground {
     let masked = skin;
     for (let slot = 0; slot < columnSize(cover) && this.left > 0; slot++) {
       const layer = readLayer(this.map, i, slot, cover);
-      const depth = layer.depth / 1024,
+      const depth = MapScale.metres(layer.depth, "native"),
         exposed = Math.max(0, depth - masked);
       masked = Math.max(0, masked - depth);
       if (exposed > 0) this.take(materialGives(mix, layer, true, ...direction) * bearing, exposed);
@@ -246,7 +241,7 @@ export class Ground {
         mix,
         bearing,
         part,
-        Math.max(0, skin - columnThickness(this.map, i, cover) / 1024),
+        Math.max(0, skin - MapScale.metres(columnThickness(this.map, i, cover), "native")),
         direction
       );
     return Math.min(units(this.reached), limit);
@@ -262,7 +257,7 @@ export class Ground {
   ) {
     this.left = power;
     this.reached = 0;
-    this.limit = limit / 1024;
+    this.limit = MapScale.metres(limit, "native");
     this.start(i);
     if (facetShare(this.map, i, facet) <= 0) return 0;
     this.walkRock(i, mix, this.bearing(i, mix), facet, 0, direction);
@@ -323,7 +318,7 @@ export class Ground {
     for (let at = 0; at <= last && this.left > 0 && this.reached < this.limit; at++) {
       const layer = readLayer(this.map, i, at, facet);
       this.at = at === last ? "crust" : "rock";
-      const depth = at === last ? Infinity : layer.depth / 1024;
+      const depth = at === last ? Infinity : MapScale.metres(layer.depth, "native");
       this.take(
         materialGives(mix, layer, false, ...direction) * bearing,
         Math.max(0, depth - masked)
@@ -342,13 +337,17 @@ export class Ground {
       beneath =
         bearing *
         ((1 - share) * this.facetGives(i, mix, "land") + share * this.facetGives(i, mix, "cut")),
-      skin = clamp(map.SoilDepth.get(i) / fullSoil, 0, 1);
+      skin = clamp(map.SoilDepth.get(i) / map.scale.length(fullSoil), 0, 1);
     return beneath + (this.rate(mix, soil.code, soil.resistance, bearing) - beneath) * skin;
   }
   private facetGives(i: number, mix: CompiledMix, facet: GroundFacet) {
     const rock = materialGives(mix, readLayer(this.map, i, 0, facet)),
       cover = coverColumn(facet),
-      share = clamp(columnThickness(this.map, i, cover) / units(fullCover), 0, 1);
+      share = clamp(
+        columnThickness(this.map, i, cover) / units(this.map.scale.length(fullCover)),
+        0,
+        1
+      );
     return rock + (materialGives(mix, readLayer(this.map, i, 0, cover), true) - rock) * share;
   }
   /** Reads the ground with a query. */

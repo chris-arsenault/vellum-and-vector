@@ -1,3 +1,4 @@
+import { MapScale, type RelativeMeasure } from "@atlas/domain";
 import { keyCols, leastRise, prominence } from "../../world/landforms";
 import { hashUnit } from "../../world/noise";
 import { rangeGroups } from "../../world/rangeGroups";
@@ -7,18 +8,18 @@ import { mapScale } from "../../worldSignificance";
 import type { PoiClaim, PoiOrigin } from "../poiContract";
 import { spacedAmong, standsClear } from "../poiOrigins";
 import { carriedPlaces } from "../poiPublish";
-import { cellSpan, cellsWithin, fieldOf, heightAt, heldFor, isLand, isSea } from "../poiReads";
+import { cellsWithin, fieldOf, heightAt, heldFor, isLand, isSea } from "../poiReads";
 import { settlementPlaces } from "../settlements/communityRecords";
 import { peopleOfRecord } from "../settlements/settlementRecords";
 
 type Claimed = ReadonlyMap<number, PoiClaim>;
 
 /** Rise in metres at the World's scale that makes a top a peak within a range and alone. */
-const rangeRise = 400,
-  loneRise = 900,
-  seaMarkRise = 300,
+const rangeRise = MapScale.length(0.0001, 0.5),
+  loneRise = MapScale.length(0.000225, 0.5),
+  seaMarkRise = MapScale.length(0.000075, 0.5),
   /** How far a pass's lesser top must rise for the higher one to be known as its horn. */
-  hornRise = 1200;
+  hornRise = MapScale.length(0.0003, 0.5);
 /** The share of its range's relief a top must rise to stand among its range's peaks. */
 const rangeShare = 0.25;
 /** How far apart peaks of each sort stand, in this map's cell spans. */
@@ -28,7 +29,7 @@ const rangeApart = 3,
   hornApart = 4;
 /** How much of a town's country it looks to for its mountain, in cell spans and metres. */
 const townSpans = 3,
-  townMetres = 15_000;
+  townReach = MapScale.length(0.00375);
 /** The chance a pass names its horn, and a town of no great size its mountain. */
 const hornChance = 0.3,
   townChance = 0.1,
@@ -40,9 +41,11 @@ const salts = { horn: 0x7011, town: 0x7012 };
 
 const riseOf = (state: GenerationState) =>
   heldFor(state, "prominence", () => prominence(fieldOf(state)));
-const metresOf = (state: GenerationState, cell: number) => riseOf(state).get(cell) / 1024;
+const metresOf = (state: GenerationState, cell: number) =>
+  MapScale.metres(riseOf(state).get(cell), "native");
 /** A height at the World's scale, at this map's scale. */
-const scaled = (state: GenerationState, height: number) => height * mapScale(state).height;
+const scaled = (state: GenerationState, height: RelativeMeasure) =>
+  mapScale(state).resolveMeasure(height);
 
 /** Every land cell that tops out at least the least rise, greatest rise first. */
 const candidates = (state: GenerationState): readonly number[] =>
@@ -51,7 +54,11 @@ const candidates = (state: GenerationState): readonly number[] =>
       rise = riseOf(state),
       found: number[] = [];
     for (let cell = 0; cell < mesh.count; cell++)
-      if (mesh.membership(cell) === 1 && isLand(state, cell) && rise.get(cell) >= leastRise)
+      if (
+        mesh.membership(cell) === 1 &&
+        isLand(state, cell) &&
+        rise.get(cell) >= leastRise(fieldOf(state))
+      )
         found.push(cell);
     return found.sort((a, b) => rise.get(b) - rise.get(a) || a - b);
   });
@@ -59,7 +66,11 @@ const highestRising = (state: GenerationState, cells: readonly number[]) => {
   const rise = riseOf(state);
   let best = -1;
   for (const cell of cells)
-    if (rise.get(cell) >= leastRise && (best < 0 || rise.get(cell) > rise.get(best))) best = cell;
+    if (
+      rise.get(cell) >= leastRise(fieldOf(state)) &&
+      (best < 0 || rise.get(cell) > rise.get(best))
+    )
+      best = cell;
   return best;
 };
 /** Those of the candidates that pass, each standing clear of every peak before it. */
@@ -98,7 +109,7 @@ function high(state: GenerationState, claimed: Claimed) {
     const bar = Math.max(scaled(state, rangeRise), rangeShare * relief);
     for (const cell of members) bars.set(cell, bar);
   }
-  return spaced(state, claimed, rangeApart * cellSpan(state), (cell) => {
+  return spaced(state, claimed, mapScale(state).cells(rangeApart), (cell) => {
     const bar = bars.get(cell);
     return bar !== undefined && metresOf(state, cell) >= bar;
   });
@@ -110,33 +121,33 @@ function lone(state: GenerationState, claimed: Claimed) {
   return spaced(
     state,
     claimed,
-    loneApart * cellSpan(state),
+    mapScale(state).cells(loneApart),
     (cell) => !inRange.has(cell) && metresOf(state, cell) >= bar
   );
 }
 /** A top rising straight from the sea is what sailors steer by, though nobody would climb it. */
 function seaMarks(state: GenerationState, claimed: Claimed) {
-  const span = cellSpan(state),
+  const scale = mapScale(state),
     bar = scaled(state, seaMarkRise);
   return spaced(
     state,
     claimed,
-    seaMarkApart * span,
+    scale.cells(seaMarkApart),
     (cell) =>
       metresOf(state, cell) >= bar &&
-      cellsWithin(state, cell, 2 * span).some((near) => isSea(state, near))
+      cellsWithin(state, cell, scale.cells(2)).some((near) => isSea(state, near))
   );
 }
 /** A great crossing is known by the top above it: some passes name their horn. */
 function horns(state: GenerationState, claimed: Claimed) {
-  const span = cellSpan(state),
-    bar = scaled(state, hornRise) * 1024,
+  const reach = mapScale(state).cells(hornApart),
+    bar = MapScale.native(scaled(state, hornRise)),
     taken = new Set(claimed.keys()),
     found: { anchor: number }[] = [];
   for (const [col, rise] of keyCols(fieldOf(state))) {
     if (rise < bar || hashUnit(salts.horn, col, 0) >= hornChance) continue;
-    const top = highestRising(state, cellsWithin(state, col, hornApart * span));
-    if (top < 0 || !standsClear(state, taken, top, hornApart * span)) continue;
+    const top = highestRising(state, cellsWithin(state, col, reach));
+    if (top < 0 || !standsClear(state, taken, top, reach)) continue;
     taken.add(top);
     found.push({ anchor: top });
   }
@@ -149,7 +160,7 @@ function townChanceOf(role: unknown, people: number) {
 /** People name what they live under: a mountain town sometimes makes its nearest top a peak. */
 function towns(state: GenerationState) {
   const hills = state.physical!.profile.HillElevation,
-    reach = Math.max(townSpans * cellSpan(state), townMetres);
+    reach = mapScale(state).supported(mapScale(state).resolveMeasure(townReach), townSpans);
   return settlementPlaces(state).flatMap((town) => {
     if (town.anchor < 0 || heightAt(state, town.anchor) < hills) return [];
     const record = town.feature,

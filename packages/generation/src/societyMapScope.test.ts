@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   builtinLayers,
+  MapScale,
   residentBand,
   type SocietyCommunity,
   type SocietyRegion,
@@ -112,12 +113,12 @@ function fixture() {
 
 it("derives political and regional centers from occupation and connected hinterlands", () => {
   const { region } = fixture();
-  const hierarchy = settlementHierarchy(region);
+  const hierarchy = settlementHierarchy(region, MapScale.reference());
   expect(hierarchy.get("c0")?.settlementRole).toBe("capital");
   expect(hierarchy.get("c3")?.settlementRole).toBe("regionalCapital");
   expect(hierarchy.get("c6")?.settlementRole).toBe("settlement"); // populous but disconnected
   region.politics!.polities[0].status = "collapsed";
-  expect(settlementHierarchy(region).get("c0")?.capitalOf).toEqual([]);
+  expect(settlementHierarchy(region, MapScale.reference()).get("c0")?.capitalOf).toEqual([]);
 });
 
 it("moves a lost seat to a reachable inhabited center and preserves authored seats", () => {

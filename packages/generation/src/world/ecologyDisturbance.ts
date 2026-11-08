@@ -4,7 +4,7 @@ import { ecologicalFront } from "./ecologyMovement";
 import { plantGroups, livingPlantCarbon } from "./ecologyGroups";
 import { environment, unit, windStrength, type EcologyForcing } from "./ecologyEnvironment";
 import { meshWorldUnitNoise as unitNoise } from "./noise";
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 
 /**
@@ -18,7 +18,9 @@ export function floodEcology(map: PhysicalField, years: number) {
     const plain = Math.max(map.FloodplainIntensity.get(i), map.DeltaIntensity.get(i)) / 1000;
     const seasons = 0.3 + 0.7 * unit(map.Seasonality.get(i) / 15);
     const severity =
-      map.WaterKindCodes.get(i) === 0 ? plain * seasons * unit(map.Runoff.get(i) / 400) : 0;
+      map.WaterKindCodes.get(i) === 0
+        ? plain * seasons * unit(MapScale.metres(map.Runoff.get(i), "mm") / map.scale.length(1e-7))
+        : 0;
     map.FloodFrequency.set(i, 0.5 * severity);
     if (severity === 0 || years <= 0) continue;
     const flooded = severity * -Math.expm1(-years * map.FloodFrequency.get(i));
@@ -49,7 +51,10 @@ export function disturbEcology(
   const front = ecologicalFront(
     map,
     starts,
-    (i) => fuel.get(i) > 0.015 && map.WaterKindCodes.get(i) === 0 && map.IceThickness.get(i) < 1,
+    (i) =>
+      fuel.get(i) > 0.015 &&
+      map.WaterKindCodes.get(i) === 0 &&
+      map.IceThickness.get(i) < map.scale.length(2.5e-7),
     (i, edge, j) => fireTravel(map, fuel, i, edge, j)
   );
   for (let i = 0; i < map.mesh.count; i++) burnCell(map, i, front.time.get(i), years, forcing(i));
@@ -69,7 +74,7 @@ function ignition(
     map.mesh.x(i) + map.mesh.origin[0],
     map.mesh.y(i) + map.mesh.origin[1],
     seed,
-    45_000,
+    map.scale.length(0.01125),
     2
   );
   // Quickened groves build thick, fast fuel, so natural fire runs through them often.
@@ -84,10 +89,11 @@ function fireTravel(map: PhysicalField, fuel: Band, i: number, edge: number, j: 
   const wind =
     ((meshDeltaX(map.mesh, map.mesh.x(j) - map.mesh.x(i)) * map.WindX.get(i) +
       (map.mesh.y(j) - map.mesh.y(i)) * map.WindY.get(i)) /
-      Math.max(1, distance * 1000)) *
+      (distance * 1000)) *
     windStrength(map, i);
   return (
-    (distance / (15_000 * Math.max(0.1, fuel.get(j)) * Math.max(0.1, 1 + wind))) *
+    (distance /
+      (map.scale.length(0.00375) * Math.max(0.1, fuel.get(j)) * Math.max(0.1, 1 + wind))) *
     (1 + wetness * 20)
   );
 }
@@ -100,14 +106,19 @@ function burnCell(
 ) {
   const e = environment(map, i, f),
     before = livingPlantCarbon(map, i);
-  const spread = Number(arrival <= Math.min(years, 3)) * e.drought * 0.75;
+  const spread = Number(arrival <= years) * e.drought * 0.75;
   const construction = Math.max(
     0,
-    (map.VolcanicConstructionHistory.get(i) + map.ImpactExcavation.get(i)) / 1024 -
+    MapScale.metres(
+      map.VolcanicConstructionHistory.get(i) + map.ImpactExcavation.get(i),
+      "native"
+    ) -
       map.EcologyVolcanic.get(i) -
       map.EcologyImpact.get(i)
   );
-  const loss = unit(1 - (1 - Math.max(f.fire, spread)) * Math.exp(-construction / 5));
+  const loss = unit(
+    1 - (1 - Math.max(f.fire, spread)) * Math.exp(-construction / map.scale.length(1.25e-6))
+  );
   const fire = unit(Math.max(f.fire, spread));
   map.FireActivity.set(i, fire);
   for (const group of plantGroups) {
@@ -121,6 +132,6 @@ function burnCell(
   map.MineralNutrients.add(i, lost * fire * 0.01);
   map.CanopyAge.set(i, map.CanopyAge.get(i) * (1 - loss));
   map.EcologicalDamage.set(i, Math.max(map.EcologicalDamage.get(i), loss));
-  map.EcologyVolcanic.set(i, map.VolcanicConstructionHistory.get(i) / 1024);
-  map.EcologyImpact.set(i, map.ImpactExcavation.get(i) / 1024);
+  map.EcologyVolcanic.set(i, MapScale.metres(map.VolcanicConstructionHistory.get(i), "native"));
+  map.EcologyImpact.set(i, MapScale.metres(map.ImpactExcavation.get(i), "native"));
 }

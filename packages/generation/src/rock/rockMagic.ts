@@ -15,16 +15,18 @@ import {
 } from "./rockCatalogue";
 import { alterTop, changeLayer, readLayer, shuffleLayers } from "./rockColumn";
 import { facetShare } from "./groundShares";
+import type { MapScale } from "@atlas/domain";
 
 /**
  * What each system does to the rock, once per epoch, as a physical process of its own: not a
  * resistance added to a sum, but rock made or changed in the column, which then wears, buries and
  * carries like any other. What it makes shows on the map only as far as the processes that follow
- * leave it exposed. Rates are metres per epoch and intensities the field's own scale.
+ * leave it exposed. Depth/rate constants are map-length fractions, resolved before ground work;
+ * intensities retain the field's own scale.
  */
 /** Rock that stands proud of its surroundings by what it has made: real height and a layer. */
-function addRock(map: PhysicalField, cell: number, kind: RockKindId, metres: number) {
-  const amount = units(metres);
+function addRock(map: PhysicalField, cell: number, kind: RockKindId, fraction: number) {
+  const amount = units(map.scale.length(fraction));
   if (amount <= 0) return;
   constructRock(map, cell, amount, rockCatalogue[kind], "magic rock", "space");
 }
@@ -50,12 +52,12 @@ function alterSurface(
 /** The share of ward at which it holds the ground unchanged. */
 const wardHolds = 0.3;
 
-/** How wide a body of one system's rock runs, in metres, and how much noise spreads about its middle. */
-const bodyScale = 240_000,
+/** Body width as a map-length fraction, and noise spread about its middle. */
+const bodyScale = 0.06,
   bodySpread = 0.2;
 /** Where a point falls among all the map's ground, in [0, 1], in patches that hold together. */
-export function bodyRank(x: number, y: number, salt: number) {
-  return 1 / (1 + Math.exp(-fractalNoise(x, y, salt, bodyScale, 2) / bodySpread));
+export function bodyRank(x: number, y: number, salt: number, scale: MapScale) {
+  return 1 / (1 + Math.exp(-fractalNoise(x, y, salt, scale.length(bodyScale), 2) / bodySpread));
 }
 /**
  * A system covers a share of the ground, and on a coarse map that share is the share of cells that
@@ -65,7 +67,7 @@ export function bodyRank(x: number, y: number, salt: number) {
 function inBody(map: PhysicalField, cell: number, share: number, salt: number) {
   const x = map.mesh.origin[0] + map.mesh.x(cell),
     y = map.mesh.origin[1] + map.mesh.y(cell);
-  return bodyRank(x, y, salt) < share;
+  return bodyRank(x, y, salt, map.scale) < share;
 }
 const systemSalt = (field: MagicField, seed: number) =>
   seed ^ 0x7e20 ^ field.definition.id.length ^ (field.definition.id.charCodeAt(0) << 8);
@@ -74,8 +76,8 @@ const reaches = (map: PhysicalField, field: MagicField, cell: number, seed: numb
 /** Fire hardens the stone a vein runs through; a spent conduit seals; a fallen core throws debris. */
 const veinFrom = 450,
   veinSurfacesFrom = 750,
-  sinterMetres = 120,
-  corefallMetres = 60,
+  sinterMetres = 0.00003,
+  corefallMetres = 0.000015,
   coreFrom = 500;
 function fireInRock(
   map: PhysicalField,
@@ -103,37 +105,47 @@ function fireInRock(
 }
 /** Aurora rots rock open to the sky, ice shields what it covers, and charge grows crystal in it. */
 const rotFrom = 250,
-  rotMetres = 260,
+  rotMetres = 0.000065,
   rotOdds = 0.25,
   crystalFrom = 350,
-  crystalMetres = 150;
+  crystalMetres = 0.0000375;
 function auroraInRock(map: PhysicalField, field: MagicField, cell: number, seed: number) {
   const charge = field.stored.get(cell),
     iced = map.IceThickness.get(cell) > 0;
   // Crystal grows on the bed under charged ice, and is what the ice leaves when it goes.
   if (iced && field.source.get(cell) >= crystalFrom)
-    alterSurface(map, cell, rockCatalogue.auroraCrystal, units(crystalMetres));
+    alterSurface(map, cell, rockCatalogue.auroraCrystal, units(map.scale.length(crystalMetres)));
   if (iced || charge < rotFrom || !onLand(map, cell)) return;
   // Charge left in open ground is what Aurora has there: its share of the ground rots.
   if (inBody(map, cell, (charge / 1000) * rotOdds, systemSalt(field, seed) ^ 0x7e13))
-    alterTop(map, cell, rockCatalogue.rimerot, units((rotMetres * charge) / 1000));
+    alterTop(
+      map,
+      cell,
+      rockCatalogue.rimerot,
+      units(map.scale.length((rotMetres * charge) / 1000))
+    );
 }
 /** Pressure's rays crush the sea floor and shore they strike, and the sea then cuts what it broke. */
 const crushFrom = 300,
-  crushMetres = 180;
+  crushMetres = 0.000045;
 function pressureInRock(map: PhysicalField, field: MagicField, cell: number, seed: number) {
   const force = field.intensity.get(cell);
   if (force < crushFrom || !reaches(map, field, cell, seed)) return;
   if (onLand(map, cell) && map.ExternalCoastalForcing.get(cell) <= 0) return;
-  alterTop(map, cell, rockCatalogue.crushstone, units((crushMetres * force) / 1000));
+  alterTop(
+    map,
+    cell,
+    rockCatalogue.crushstone,
+    units(map.scale.length((crushMetres * force) / 1000))
+  );
 }
 /** Greenwood's roots open the top of the rock, its springs lay tufa, its water takes soluble rock. */
 const rootFrom = 350,
-  rootMetres = 70,
+  rootMetres = 0.0000175,
   springFrom = 300,
-  tufaMetres = 18,
+  tufaMetres = 0.0000045,
   dissolveFrom = 200,
-  dissolveMetres = 120;
+  dissolveMetres = 0.00003;
 const dissolving = compileMix({ solution: 1 });
 function greenwoodInRock(
   map: PhysicalField,
@@ -152,20 +164,25 @@ function greenwoodInRock(
       groundOf(map).surfaceAction(
         cell,
         dissolving,
-        (dissolveMetres * span * growth) / 1000,
+        map.scale.length((dissolveMetres * span * growth) / 1000),
         Infinity,
         map.EffectiveSeaLevel
       ),
       "greenwood"
     );
   if (growth >= rootFrom)
-    alterTop(map, cell, rockCatalogue.rootstone, units((rootMetres * growth) / 1000));
+    alterTop(
+      map,
+      cell,
+      rockCatalogue.rootstone,
+      units(map.scale.length((rootMetres * growth) / 1000))
+    );
   if ((field.originSources.spring?.get(cell) ?? 0) >= springFrom)
     addRock(map, cell, "tufa", tufaMetres * span);
 }
 /** Salt held in a basin is a real bed in the column: it can be buried, and uncovered again. */
 const bedFrom = 0.2,
-  bedMetres = 80;
+  bedMetres = 0.00002;
 function saltInRock(map: PhysicalField, field: MagicField, cell: number, seed: number) {
   if (!onLand(map, cell) || !reaches(map, field, cell, seed)) return;
   const full = field.definition.parameters.saltFull,
@@ -176,24 +193,25 @@ function saltInRock(map: PhysicalField, field: MagicField, cell: number, seed: n
       map,
       cell,
       rockCatalogue.saltbed,
-      units(bedMetres * Math.min(1, share)),
+      units(map.scale.length(bedMetres * Math.min(1, share))),
       rockCatalogue.saltGlass.code
     );
 }
 /** Veil shuffles the column under a tear: the only thing that puts layers out of their order. */
 const shuffleFrom = 0.25,
-  tornMetres = 90;
+  tornMetres = 0.0000225;
 function veilInRock(map: PhysicalField, field: MagicField, cell: number, seed: number) {
   const wild = field.wild.get(cell);
   if (wild < shuffleFrom || !reaches(map, field, cell, seed)) return;
   shuffleLayers(map, cell, hashUnit(seed ^ 0x7e12, cell, 0));
-  alterTop(map, cell, rockCatalogue.tornstone, units(tornMetres * wild));
+  alterTop(map, cell, rockCatalogue.tornstone, units(map.scale.length(tornMetres * wild)));
 }
 /** How thick the ground a ward holds is: enough to stand while the land around it wears. */
-const keptMetres = 300;
+const keptMetres = 0.000075;
 /** Hallowed keeps the ground it wards as it is, and it stands while the land around it wears. */
 function hallowedInRock(map: PhysicalField, cell: number) {
-  if (onLand(map, cell)) alterSurface(map, cell, rockCatalogue.keptStone, units(keptMetres));
+  if (onLand(map, cell))
+    alterSurface(map, cell, rockCatalogue.keptStone, units(map.scale.length(keptMetres)));
 }
 /**
  * Each system's stock lies in rock, and how the rock is built decides how much of it stays there on
@@ -294,7 +312,7 @@ const meetingRock: Readonly<Record<string, RockKindId>> = {
   war: "tornstone",
   "brine-shore": "saltbed",
 };
-const meetingMetres = 140;
+const meetingMetres = 0.000035;
 /** A meeting's coverage is the share of the cell it has changed, not a change to the whole of it. */
 export function meetingInRock(
   map: PhysicalField,
@@ -305,5 +323,5 @@ export function meetingInRock(
 ) {
   const made = meetingRock[id];
   if (!made || kept(map, cell) || !inBody(map, cell, coverage, salt)) return;
-  alterTop(map, cell, rockCatalogue[made], units(meetingMetres));
+  alterTop(map, cell, rockCatalogue[made], units(map.scale.length(meetingMetres)));
 }

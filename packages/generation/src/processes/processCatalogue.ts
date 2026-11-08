@@ -7,12 +7,12 @@ export { actBy, actTogether } from "./processRunner";
 export const groundProcesses: readonly GroundProcess[] = [
   ...new Set(allSteps.flatMap((step) => step[3])),
 ];
-/** The settings processes read on a map of another scale: each says how its own change. */
-export const profileAtScale = (
+/** Adjust execution cadence and reading policy without resolving geographic dimensions again. */
+export const profileForExecution = (
   profile: PhysicalProfile,
   reading: ProcessReading
 ): PhysicalProfile =>
   groundProcesses.reduce(
-    (settings, each) => ({ ...settings, ...each.atScale?.(settings, reading) }),
+    (settings, each) => ({ ...settings, ...each.forExecution?.(settings, reading) }),
     profile
   );

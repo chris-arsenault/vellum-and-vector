@@ -1,12 +1,17 @@
-import { areaSpace, spatial, type AtlasFeature, type Bounds, type Position } from "@atlas/domain";
+import {
+  MapScale,
+  areaSpace,
+  spatial,
+  type AtlasFeature,
+  type Bounds,
+  type Position,
+} from "@atlas/domain";
 import type { BrowserWorkspace } from "@atlas/storage-browser";
 import type { InspectedFeature } from "./cellInspection";
 
 /** Pages of 64 features; a point rarely meets more than a few dozen. */
 const pageLimit = 64,
   maxPages = 16,
-  /** Without a stored cell, a metre around the click still finds what covers it. */
-  minimumReach = 1,
   maxAttributes = 10;
 
 /**
@@ -20,9 +25,10 @@ export async function featuresAtCell(
   position: Position,
   reach: number
 ): Promise<InspectedFeature[]> {
-  reach = Math.max(reach, minimumReach);
-  const world = await current.catalog.readEditor(worldId),
-    extent: Bounds = [
+  const world = await current.catalog.readEditor(worldId);
+  const scale = MapScale.fromCells(spatial.bounds(world.areas[areaId].footprint), 1);
+  reach = Math.max(reach, scale.length(0.00000025));
+  const extent: Bounds = [
       position.x - reach,
       position.y - reach,
       position.x + reach,

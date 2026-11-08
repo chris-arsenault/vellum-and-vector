@@ -87,22 +87,22 @@ export type MagicCarrier = (typeof magicCarriers)[number];
 const parameterSchema = z.object({
   sourceThreshold: finite.default(300),
   maximumSources: z.number().int().nonnegative().default(900),
-  sourceSpacing: finite.nonnegative().default(45_000),
+  sourceSpacing: finite.nonnegative().default(0.01125),
   baseCost: positive.default(4),
   conductanceDivisor: positive.default(26),
   baseInput: finite.nonnegative().default(360),
   logScale: finite.nonnegative().default(66),
-  iceRetention: positive.default(1200),
-  coldRetentionDistance: positive.default(10_000),
-  accumulationArea: positive.default(100_000_000),
-  featureNoiseScale: positive.default(70_000),
+  iceRetention: positive.default(0.0003),
+  coldRetentionDistance: positive.default(0.0025),
+  accumulationArea: positive.default(0.00000625),
+  featureNoiseScale: positive.default(0.0175),
   rayCount: z.number().int().nonnegative().default(1200),
-  rayDistance: positive.default(4_400_000),
-  coastalRayDistance: positive.default(1_300_000),
-  wakeDistance: positive.default(1_900_000),
-  beamWidth: positive.default(20_000),
+  rayDistance: positive.default(1.1),
+  coastalRayDistance: positive.default(0.325),
+  wakeDistance: positive.default(0.475),
+  beamWidth: positive.default(0.005),
   coastalSources: z.number().int().nonnegative().default(200),
-  coastalSourceDistance: positive.default(100_000),
+  coastalSourceDistance: positive.default(0.025),
   wakeSources: z.number().int().nonnegative().default(260),
   coastalThreshold: finite.min(0).max(999).default(140),
   waveAmplification: finite.nonnegative().default(0.36),
@@ -118,13 +118,13 @@ const parameterSchema = z.object({
   // Stock an impact leaves per cubic metre of ejecta, in intensity·m²: a metre of ejecta
   // holds a tenth of a full source, so a fresh fan burns above the source floor at the fall
   // and the crater's own stock feeds a core for epochs at the base release.
-  fallenDensity: finite.nonnegative().default(100),
+  fallenDensity: finite.nonnegative().default(400_000_000),
   // Share of exposed held stock a finite origin releases per epoch with no cracking agent.
   fallenRelease: finite.min(0).max(1).default(0.04),
   // Release added per unit of tectonic strain, ice load (at the crack depth) and frost.
   strainCracking: finite.nonnegative().default(0.3),
   iceCracking: finite.nonnegative().default(0.5),
-  iceCrackDepth: positive.default(300),
+  iceCrackDepth: positive.default(0.000075),
   frostCracking: finite.nonnegative().default(0.05),
   // Release added in the epoch the stock arrives, from the impact's own shock.
   impactShock: finite.min(0).max(1).default(0.3),
@@ -133,7 +133,7 @@ const parameterSchema = z.object({
   // Share of a river-carried stock that moves one cell downstream per epoch.
   placerMobility: finite.min(0).max(1).default(0.15),
   // Sediment depth (metres) beneath which a stock is inert.
-  buryDepth: positive.default(20),
+  buryDepth: positive.default(0.000005),
   // Strain at which a sealed conduit reopens, and the budget share it reopens with.
   reopenStrain: finite.min(0).max(1000).default(600),
   reopenShare: finite.min(0).max(1).default(0.4),
@@ -141,7 +141,7 @@ const parameterSchema = z.object({
   exhumedRelease: finite.min(0).max(1).default(0.3),
   // Epochs an ejecta fan stays barren, and the ejecta depth (metres) that makes it so.
   fanBarrenEpochs: finite.nonnegative().default(3),
-  fanBarrenDepth: positive.default(2),
+  fanBarrenDepth: positive.default(0.0000005),
   // Strength at which held charge acts with no ice over it, as a share of its iced strength.
   relictStrength: finite.min(0).max(1).default(0.5),
   // Share of the ice reservoir that moves one cell along the ice flow per epoch.
@@ -149,10 +149,9 @@ const parameterSchema = z.object({
   // Share of the ice reservoir lost with full glacial meltwater per epoch.
   meltwaterLoss: finite.min(0).max(1).default(0.2),
   // Charge per metre of ice (intensity·m² per m³) at which the ice counts as fully charged.
-  iceChargeSaturation: positive.default(2),
-  // Ground lowered per unit of thawed charge (metres per 1,000 of stored lost) and its bound.
-  thawSubsidence: finite.nonnegative().default(3),
-  thawSubsidenceLimit: finite.nonnegative().default(6),
+  iceChargeSaturation: positive.default(8_000_000),
+  // Ground lowered per unit of thawed charge (metres per 1,000 of stored lost).
+  thawSubsidence: finite.nonnegative().default(0.00000075),
   // Shelf charge per square metre at which sea ice is fully held.
   shelfSaturation: positive.default(500),
   // Sea-surface anomaly difference between neighbours (native units, 10 per °C) that makes a
@@ -169,11 +168,11 @@ const parameterSchema = z.object({
   rootCost: positive.default(6),
   rootFloor: finite.min(0).max(1).default(0.12),
   // A spring needs this much flow accumulation on rock no harder than this.
-  springFlow: finite.nonnegative().default(40),
+  springFlow: finite.nonnegative().default(6.25e-19),
   springRock: finite.nonnegative().default(700),
   // A spring drawn past this share of its recharge in one epoch collapses its karst by this depth.
   overdrawShare: finite.min(0).max(1).default(0.5),
-  sinkDepth: finite.nonnegative().default(4),
+  sinkDepth: finite.nonnegative().default(0.000001),
   // Share of a stock herbivores carry to the cells they graze toward, per epoch at full herds.
   // At a tenth the ground beside every stand held sap enough for a grove of its own and groves
   // ringed the forest two cells deep; at this the herds seed the wood's edge below a grove's
@@ -194,8 +193,8 @@ const parameterSchema = z.object({
   // its bed), and the salt per square metre that is full intensity. At these a town's die-off
   // of tens brines the ground without a source; some hundreds dead on one hundred square
   // kilometres in a cycle are a source, and a city's fall of thousands a full one.
-  saltPerDeath: finite.nonnegative().default(5_000_000),
-  saltPerLakeMetre: finite.nonnegative().default(40),
+  saltPerDeath: finite.nonnegative().default(0.0000003125),
+  saltPerLakeMetre: finite.nonnegative().default(160_000_000),
   saltFull: positive.default(400),
   // Brine: share flushed per epoch at full air moisture on oxygenated ground, share that seeps
   // one cell down the drainage, and share that crusts to bed at a pit or a lake floor.
@@ -212,11 +211,10 @@ const parameterSchema = z.object({
   glassResistance: finite.nonnegative().default(300),
   // Share of the air's moisture salted ground removes at full salting.
   desiccation: finite.min(0).max(1).default(0.5),
-  // A buried bed under this much strain domes: metres risen per epoch, the bound, and the
+  // A buried bed under this much strain domes: metres risen per epoch and the
   // share of the bed that seeps to the ring as brine.
   domeStrain: finite.min(0).max(1000).default(600),
-  domeRise: finite.nonnegative().default(3),
-  domeLimit: finite.nonnegative().default(60),
+  domeRise: finite.nonnegative().default(0.00000075),
   domeSeep: finite.min(0).max(1).default(0.05),
   // Share of every Salt reservoir Fire at full intensity burns away per epoch.
   saltBurn: finite.min(0).max(1).default(0.8),
@@ -234,7 +232,7 @@ const parameterSchema = z.object({
   roadFull: positive.default(10_000_000),
   // The ring a full seat wards, metres, and the share of Aurora's stored charge that adds to
   // the field where the two meet.
-  wardReach: positive.default(40_000),
+  wardReach: positive.default(0.01),
   auroraReinforce: finite.min(0).max(1).default(0.3),
   // Resistance the first reach below a ward loses at full warding, per epoch.
   wardSpill: finite.nonnegative().default(200),
@@ -246,17 +244,17 @@ const parameterSchema = z.object({
   // Doors: the strength a stable tear needs, the least span between a pair's ends (metres),
   // the strength difference a pair tolerates, and the most doors a world holds.
   doorStrain: finite.min(0).max(1000).default(400),
-  doorDistance: positive.default(300_000),
+  doorDistance: positive.default(0.075),
   doorMatch: finite.nonnegative().default(150),
   doorCount: z.number().int().nonnegative().default(6),
   // A wild zone moves its ground within this relief per epoch (metres) and exchanges this
   // share of its cover; a door chills its cell (native units), sinks a pool (metres) and
   // costs this much to cross (metres of travel).
-  wildRelief: finite.nonnegative().default(20),
+  wildRelief: finite.nonnegative().default(0.000005),
   wildShuffle: finite.min(0).max(1).default(0.3),
   doorChill: finite.nonnegative().default(30),
-  doorPool: finite.nonnegative().default(3),
-  doorTravel: positive.default(5000),
+  doorPool: finite.nonnegative().default(0.00000075),
+  doorTravel: positive.default(0.00125),
   // Verdure relaxes strain by this share at full verdure; salted ground holds a tear at this
   // share of its last strength at full salting.
   knitVerdure: finite.min(0).max(1).default(0.8),
@@ -290,31 +288,12 @@ export const magicOriginSchema = z.object({
 export type MagicOrigin = z.infer<typeof magicOriginSchema>;
 export type MagicStock = z.infer<typeof magicStockSchema>;
 
-const legacyRenewal: Record<MagicSource, MagicRenewal> = {
-  geothermal: "conduit-fed",
-  cold: "accumulating",
-  "deep-ocean": "continuous",
-  placed: "kept",
-  impact: "finite",
-  verdant: "accumulating",
-  aquifer: "continuous",
-  forge: "accumulating",
-  death: "accumulating",
-  "dead-lake": "accumulating",
-  tenure: "kept",
-  "kept-line": "kept",
-  strain: "emergent",
-  pairing: "emergent",
-};
-const systemShape = z.object({
+export const magicSystemSchema = z.object({
+  lengthUnits: z.literal("relative").default("relative"),
   id: z.string().min(1),
   name: z.string().trim().min(1),
   enabled: z.boolean().default(true),
-  // A system saved before origins existed names one source and one propagation; they
-  // become its single origin and are dropped from the parsed system.
-  source: z.enum(magicSources).optional(),
-  propagation: z.enum(magicPropagations).optional(),
-  origins: z.array(magicOriginSchema).default([]),
+  origins: z.array(magicOriginSchema).min(1),
   // A society-phase system is evaluated when people have acted, each society cycle.
   phase: z.enum(["climate", "post-glacial", "society"]),
   strength: finite.nonnegative().default(1),
@@ -370,37 +349,13 @@ const systemShape = z.object({
     .prefault({}),
   features: z.array(magicFeatureSchema).default([]),
 });
-export const magicSystemSchema = systemShape
-  .superRefine((system, context) => {
-    if (!system.origins.length && !(system.source && system.propagation))
-      context.addIssue({
-        code: "custom",
-        message: "A magic system needs at least one origin.",
-        path: ["origins"],
-      });
-  })
-  .transform(({ source, propagation, ...system }) => ({
-    ...system,
-    origins: system.origins.length
-      ? system.origins
-      : [
-          {
-            id: source!,
-            source: source!,
-            propagation: propagation!,
-            renewal: legacyRenewal[source!],
-            parameters: {},
-            stocks: [],
-          },
-        ],
-  }));
 export type MagicSystem = z.infer<typeof magicSystemSchema>;
 export type MagicSystemInput = z.input<typeof magicSystemSchema>;
 export type MagicFeatureRule = z.infer<typeof magicFeatureSchema>;
 export type MagicCondition = z.infer<typeof condition>;
 
 /** The system's parameters with this origin's overrides applied. */
-export function originParameters(system: MagicSystem, origin: MagicOrigin) {
+export function originParameters(system: Pick<MagicSystem, "parameters">, origin: MagicOrigin) {
   const merged = { ...system.parameters } as MagicSystem["parameters"];
   for (const [key, value] of Object.entries(origin.parameters))
     if (value !== undefined) (merged as Record<string, number>)[key] = value;
@@ -470,7 +425,7 @@ function knownConditionField(
   return false;
 }
 /** The stock keys a system's rules may read: `<origin>/<stock>`, with `held` implied. */
-export function systemStockKeys(system: MagicSystem) {
+export function systemStockKeys(system: Pick<MagicSystem, "origins">) {
   return new Set(
     system.origins.flatMap((origin) =>
       (origin.stocks.length ? origin.stocks : [{ id: "held" }]).map(

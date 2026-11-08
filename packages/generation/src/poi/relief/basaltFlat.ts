@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import { carryWhereItLands, counterpartOf, stays, costNear } from "../poiCarry";
 import { notApplicable, type PoiEntry } from "../poiContract";
 import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";
@@ -17,7 +18,7 @@ import {
 } from "./reliefShape";
 
 /** Area at which a flat is half as great as flats get: a world landscape's least. */
-const typicalArea = 2_000_000_000;
+const typicalArea = MapScale.area(0.000125);
 
 const isA = magicRule("fire", "basalt");
 const sealed = magicRule("fire", "scar");
@@ -64,7 +65,7 @@ export const basaltFlat: PoiEntry = {
       "Jointed rock drains through; the field shows that as runoff, without a store it could hold."
     ),
     climate: notApplicable("Hot rock's local air is below what the climate field resolves."),
-    cover: (_state, place) => thinSoilOf(place.cells),
+    cover: (state, place) => thinSoilOf(state, place.cells),
     magic: notApplicable(
       "Fire's rock feedback hardens the rock and opens its conduits by intensity."
     ),

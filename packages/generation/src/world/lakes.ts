@@ -4,7 +4,7 @@ import { clearWaterSurface, setWaterSurface, type PhysicalField } from "./field"
 import type { PhysicalContext } from "./context";
 import { hashUnit } from "./noise";
 import { round } from "./math";
-import { CellList, type Band } from "@atlas/domain";
+import { CellList, MapScale, type Band } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 import {
   contributingWater,
@@ -139,7 +139,8 @@ export function lakeBasins(map: PhysicalField, c: PhysicalContext, incoming?: Ba
     mask = workingValues(map, "uint8", "lakes:mask", (i) =>
       Number(
         map.WaterKindCodes.get(i) === 0 &&
-          map.DrainageElevations.get(i) - map.Elevation.get(i) >= 1024
+          map.DrainageElevations.get(i) - map.Elevation.get(i) >=
+            MapScale.native(map.scale.length(2.5e-7))
       )
     ),
     marks = workingArray(map, "int32", "lakes:marks");

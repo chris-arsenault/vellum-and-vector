@@ -17,7 +17,8 @@ import {
 } from "./coverShared";
 
 /** Area at which a Barrow heath is half as great as they get: 500 square kilometres. */
-const typicalArea = 5e8;
+// length-unit: fraction
+const typicalArea = 0.00003125;
 /** Salting below which ground is no longer read as salted, as the biome class reads it. */
 const salted = 0.3;
 const saltingAt = (state: GenerationState, cell: number) => fieldOf(state).Salting.get(cell);

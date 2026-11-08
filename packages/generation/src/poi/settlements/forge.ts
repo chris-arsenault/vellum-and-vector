@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { fullForgeHeat, thawShare } from "../../societyMagic";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
@@ -29,14 +30,14 @@ const typicalPeople = 5000;
 /** The road cores come in by, and what people carrying them save on their way, over this many metres. */
 const coreRoad = 0.8,
   coreTrain = 0.7,
-  coreReach = 2000;
+  coreReach = MapScale.length(0.0005);
 /** How hard the heat of a forge bites into those who crack cores, against what else maims. */
 const crackingSeverity = 0.3;
 /** A forge stands at a seat: within this many metres of one. */
-const seatReach = 5000;
+const seatReach = MapScale.length(0.00125);
 /** The least distance between two forges people site, and a sited forge's heat, in metres. */
-const forgeSpacing = 100_000,
-  forgeRadius = 2000;
+const forgeSpacing = MapScale.length(0.025),
+  forgeRadius = MapScale.length(0.0005);
 
 const requires = (state: GenerationState, cell: number) =>
   isLand(state, cell) && nearTown(state, cell, seatReach);

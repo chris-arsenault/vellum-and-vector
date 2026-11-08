@@ -64,8 +64,7 @@ function disabledInteraction() {
   const active = magicSystemSchema.parse({
     id: "active",
     name: "Active",
-    source: "placed",
-    propagation: "radial",
+    origins: [{ id: "source", source: "placed", propagation: "radial" }],
     phase: "climate",
   });
   const container = magicSystemSchema.parse({

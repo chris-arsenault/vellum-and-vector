@@ -1,5 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import type { GenerationState } from "../../process";
+import { mapScale } from "../../worldSignificance";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { namingCultureNear, rulePlaces, within } from "../poiPlaces";
@@ -18,7 +19,7 @@ const counterpart = counterpartOf(isA, 1);
 /** Half its weight is the charge it runs at; the rest grows with its length of ice edge. */
 const greatness = (state: GenerationState, place: PoiPlace) =>
   (Math.min(1, chargeAt(state, place.anchor) / 1000) +
-    areaOf(state, place) / (areaOf(state, place) + 1e8)) /
+    areaOf(state, place) / (areaOf(state, place) + mapScale(state).area(0.00000625))) /
   2;
 const factors = {
   magnitude: greatness,

@@ -1,4 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
+import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
@@ -10,17 +12,17 @@ import { areaOf, depthAt, extentOf, faunaAt, heldUnder, near, shoreOf, stormAt }
 import { showsForm, wrapOf } from "./shoreForm";
 
 /** Area at which a bay is half as great as bays get: 1,000 square kilometres. */
-const typicalArea = 1e9;
+const typicalArea = MapScale.area(0.0000625);
 /** The sea bed a bay holds under its water, and the depth at which it counts as silted up. */
-const heldDepth = 1,
-  siltedDepth = 2;
+const heldDepth = MapScale.length(0.00000025, 0.5),
+  siltedDepth = MapScale.length(0.0000005, 0.5);
 /** The low, flat head where salt marsh forms, and the marsh's share of that ground. */
-const marshHeight = 2,
+const marshHeight = MapScale.length(0.0000005, 0.5),
   marshSlope = 0.01,
   marshCover = 0.3;
 /** Warm water and shallows shallower than this are worth raking for salt. */
 const saltWarmth = 15,
-  saltDepth = 10;
+  saltDepth = MapScale.length(0.0000025, 0.5);
 /** Boats' cost on sheltered water. */
 const shelteredWater = 0.8;
 /** Rivers converge on a bay's head; current-borne magic slackens in its water. */
@@ -30,7 +32,7 @@ const drawnDrainage = 0.85,
 const isA = showsForm("bay");
 const places = regionPlaces("bay", isA, wrapOf);
 /** The country around a bay that bears on it: 40 km. */
-const around = near(40_000);
+const around = near(0.01);
 const reachOf = (state: GenerationState, place: PoiPlace) =>
   Math.max(2 * cellSpan(state), extentOf(state, place));
 const counterpart = counterpartOf(isA, 2);
@@ -47,7 +49,11 @@ const factors = {
 /** Salt marsh on the low, flat ground of its shore. */
 const marsh = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
   shoreOf(state, place)
-    .filter((cell) => heightAt(state, cell) <= marshHeight && slopeAt(state, cell) <= marshSlope)
+    .filter(
+      (cell) =>
+        heightAt(state, cell) <= mapScale(state).resolveMeasure(marshHeight) &&
+        slopeAt(state, cell) <= marshSlope
+    )
     .map((cell) => ({ change: "atLeast", band: "WetlandCover", cell, value: marshCover }));
 
 export const bay: PoiEntry = {
@@ -148,7 +154,8 @@ export const bay: PoiEntry = {
       "A bay gives safe anchorage, sheltered fishing, and salt raked from warm shallows. A storm track funnels surge up it, so the shelter that serves people on calm days endangers them on the worst.",
     offers(state, place) {
       const shallowWarm =
-        celsiusAt(state, place.anchor) >= saltWarmth && depthAt(state, place.anchor) <= saltDepth;
+        celsiusAt(state, place.anchor) >= saltWarmth &&
+        depthAt(state, place.anchor) <= mapScale(state).resolveMeasure(saltDepth);
       return {
         trade: wrapOf(state, place.anchor),
         food: faunaAt(state, place.anchor),
@@ -166,7 +173,7 @@ export const bay: PoiEntry = {
     statement:
       "A bay fills with what its rivers and the sheltered drift bring. Once its heart has silted to two metres it ends as tidal flat and marsh, and a fall of sea level ends it sooner by the same test. Tectonics can reopen one as a new place.",
     fate: (state, place) =>
-      depthAt(state, place.anchor) <= siltedDepth
+      depthAt(state, place.anchor) <= mapScale(state).resolveMeasure(siltedDepth)
         ? { fate: "ends", leaves: "wetland" }
         : { fate: "persists" },
   },

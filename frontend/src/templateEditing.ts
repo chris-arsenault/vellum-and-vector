@@ -1,4 +1,5 @@
 import type { AtlasFeature, Template } from "./types";
+import { MapScale } from "@atlas/domain";
 import { frameAt, rectangle } from "./presentation";
 
 export const detached = "00000000-0000-0000-0000-000000000000";
@@ -78,7 +79,10 @@ export function buildDefinition(
     name: String(form.get("name")),
     features,
     units: drawing.units,
-    frame: { ...base.frame, metresPerUnit: drawing.units === "foot" ? 0.3048 : 1 },
+    frame: {
+      ...base.frame,
+      metresPerUnit: MapScale.metres(1, drawing.units === "foot" ? "ft" : "m"),
+    },
     sockets: managedAccess(
       mergeSockets(
         base.sockets ?? [],

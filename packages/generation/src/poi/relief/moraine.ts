@@ -1,4 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
@@ -25,8 +26,8 @@ import {
 } from "./reliefShape";
 
 /** Area and relief at which a moraine is half as great as they get: a world complex's. */
-const typicalArea = 8e9,
-  typicalRelief = 300;
+const typicalArea = MapScale.area(0.0005),
+  typicalRelief = MapScale.length(0.000075, 0.5);
 /** A wet cell beside a moraine counts where this share of it is wetland. */
 const wetShare = 0.2;
 

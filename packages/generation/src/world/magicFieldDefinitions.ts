@@ -45,9 +45,9 @@ export const magicFieldDefinitions = {
   arrival: occurrence,
   // The share of a cell's held stock the last evaluation released as source.
   releasing: { ...intensity, unit: "ratio", publish: false },
-  // Ground lowered so far by thawing charge, metres; bounded, and travels with the crust.
+  // Ground lowered so far by thawing charge, metres; travels with the crust.
   subsided: { ...intensity, unit: "metre", carried: true },
-  // Ground raised so far by a salt dome, metres; bounded, and travels with the crust.
+  // Ground raised so far by a salt dome, metres; travels with the crust.
   domed: { ...intensity, unit: "metre", carried: true },
   // The share of a tear that moved since the last epoch: a wild zone where it is high.
   wild: { ...intensity, unit: "ratio" },

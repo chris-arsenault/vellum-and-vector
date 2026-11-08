@@ -1,5 +1,5 @@
-// Canonry process semantics, with physical atlas defaults. Lengths/heights are
-// metres, areas m², water discharge m³/s, ice flux m³/year and slopes rise/run.
+// Generated dimensions are fractions resolved by the owning map's MapScale. Resolved
+// lengths are metres, areas m², discharge m³/s, ice flux m³/year and slopes rise/run.
 // Temperature remains ten native units per °C with zero °C at 300.
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { coastSettings } from "../processes/coastSettings";
@@ -11,12 +11,13 @@ import { solutionSettings } from "../processes/solutionSettings";
 import { streamSettings } from "../processes/streamSettings";
 import { lavaSettings } from "../processes/lavaSettings";
 import { marineSettings } from "../processes/marineSettings";
+import { MapScale, type ResolvedSettings } from "@atlas/domain";
 
 // Fractions/strengths explicitly named PerMille (and legacy scalar strengths)
 // remain dimensionless; iterations count numerical passes within one epoch.
-export const physicalProfile = {
-  BoundaryPadding: 100_000,
-  ElevationScale: 1000,
+export const physicalProfile = MapScale.definitions({
+  BoundaryPadding: MapScale.length(0.025),
+  ElevationScale: MapScale.length(0.00025),
   TectonicProvinceCount: 14,
   TectonicSiteCandidateMultiplier: 24,
   ContinentalAssemblyCount: 4,
@@ -32,82 +33,83 @@ export const physicalProfile = {
   OceanicPlateCount: 1,
   OceanicPlateWaterShare: 0.5,
   ContinentalCrustFraction: 0.45,
-  ContinentalTransitionWidth: 260_000,
+  ContinentalTransitionWidth: MapScale.length(0.065),
+  // length-unit: ratio — share of rift subsidence and crust potential, not a placed depth.
   ContinentalAssemblySeparationDepth: 0.38,
   ContinentalCrustPotentialFloor: 0.62,
   OceanicCrustPotentialCeiling: 0.38,
-  ContinentalWarpScale: 540_000,
-  ContinentalWarpStrength: 180_000,
-  RidgeWidth: 110_000,
+  ContinentalWarpScale: MapScale.length(0.135),
+  ContinentalWarpStrength: MapScale.length(0.045),
+  RidgeWidth: MapScale.length(0.0275),
   TectonicMotionMinimum: 0.22,
   TectonicMotionMaximum: 0.72,
   TectonicConvergenceThreshold: 0.12,
-  ContinentalSutureDetectionReach: 60_000,
+  ContinentalSutureDetectionReach: MapScale.length(0.015),
   ContinentalSutureMinimumFraction: 420,
   ContinentalSutureStrengthGain: 620,
   // How fast a plate moves at full tectonic strength, in metres per million years.
-  PlateDriftPerMyr: 100_000,
-  MarginInfluenceReach: 260_000,
-  CrustAgeSaturationDistance: 700_000,
-  OceanicSubsidenceDepth: 1200,
+  PlateDriftPerMyr: MapScale.length(0.025),
+  MarginInfluenceReach: MapScale.length(0.065),
+  CrustAgeSaturationDistance: MapScale.length(0.175),
+  OceanicSubsidenceDepth: MapScale.length(0.0003),
   // Thermal subsidence belongs to oceanic lithosphere: full at continental fraction 0, fading
   // linearly to none at this fraction, so an aged continental platform keeps its height.
   OceanicSubsidenceCompositionLimit: 0.5,
-  ConvergentTrenchDepth: 900,
+  ConvergentTrenchDepth: MapScale.length(0.000225),
   MarginEvolutionResponsePerMille: 760,
-  CoastalDetailBand: 90,
+  CoastalDetailBand: MapScale.length(0.0000225),
   CoastalDetailStrength: 1000,
-  CoastalDetailScale: 70_000,
-  CoastalDetailWarp: 26_000,
-  CoastalDetailPassiveAmplitude: 62,
-  CoastalDetailConvergentAmplitude: 88,
-  CoastalDetailRiftedAmplitude: 74,
-  CoastalDetailTransformAmplitude: 34,
+  CoastalDetailScale: MapScale.length(0.0175),
+  CoastalDetailWarp: MapScale.length(0.0065),
+  CoastalDetailPassiveAmplitude: MapScale.length(0.0000155),
+  CoastalDetailConvergentAmplitude: MapScale.length(0.000022),
+  CoastalDetailRiftedAmplitude: MapScale.length(0.0000185),
+  CoastalDetailTransformAmplitude: MapScale.length(0.0000085),
   VolcanicRockResistance: rockCatalogue.basalt.resistance,
-  FjordMinimumGlacialErosion: 2,
+  FjordMinimumGlacialErosion: MapScale.length(5e-7),
   // Metres from a fjord's axis to the land on both of its flanks.
-  FjordMaximumHalfWidth: 15_000,
+  FjordMaximumHalfWidth: MapScale.length(0.00375),
   // Hadley, Ferrel and polar cells between the equator and each pole.
   CirculationCellsPerHemisphere: 3,
   CirculationCellTurn: 700,
   CirculationWander: 550,
-  CirculationWanderScale: 420_000,
+  CirculationWanderScale: MapScale.length(0.105),
   // Surface wind: mid-cell belt speeds (m/s), falling toward calm cell
   // boundaries, then shaped by terrain smoothed over WindTerrainLength.
-  WindSpeedTrades: 7,
-  WindSpeedWesterlies: 9,
-  WindSpeedPolar: 5,
+  WindSpeedTrades: MapScale.length(0.00000175),
+  WindSpeedWesterlies: MapScale.length(0.00000225),
+  WindSpeedPolar: MapScale.length(0.00000125),
   WindLandRoughness: 0.75,
-  WindTerrainLength: 40_000,
-  WindBlockingHeight: 1500,
+  WindTerrainLength: MapScale.length(0.01),
+  WindBlockingHeight: MapScale.length(0.000375),
   WindBlockingSlope: 0.01,
   WindBlockingMaximum: 0.6,
-  WindExposureRelief: 600,
-  WindShelterHeight: 1000,
-  WindGapReach: 25_000,
-  WindGapRelief: 300,
-  ElevationVariationScale: 250_000,
+  WindExposureRelief: MapScale.length(0.00015),
+  WindShelterHeight: MapScale.length(0.00025),
+  WindGapReach: MapScale.length(0.00625),
+  WindGapRelief: MapScale.length(0.000075),
+  ElevationVariationScale: MapScale.length(0.0625),
   ElevationVariationStrength: 0.12,
   InteriorReliefStrength: 0.2,
-  InteriorReliefScale: 120_000,
-  OrogenicMinimumComponentArea: 600_000_000,
+  InteriorReliefScale: MapScale.length(0.03),
+  OrogenicMinimumComponentArea: MapScale.area(0.0000375),
   OrogenicMinimumStrain: 80,
   // Relief a child profile realizes below its parent's cell from the parent's own gradient:
   // amplitude is the gain times the parent cell's relief above the floor (metres), stretched
-  // along the ridge direction by the anisotropy. Parent-cell means are conserved.
+  // along the ridge direction by the anisotropy.
   ReliefSynthesisGain: 2,
-  ReliefSynthesisFloor: 60,
+  ReliefSynthesisFloor: MapScale.length(0.000015),
   ReliefSynthesisAnisotropy: 3,
   // Independent maps resolve rolling lowland relief as well as inherited mountain slopes.
   RegionalReliefMinimumSlope: 0.008,
-  OrogenicAlongStrikeScale: 420_000,
+  OrogenicAlongStrikeScale: MapScale.length(0.105),
   // The width of a thrust sheet in rock of baseline stiffness, and a fault segment's length.
-  OrogenicSheetSpacing: 100_000,
-  OrogenicSegmentLength: 260_000,
+  OrogenicSheetSpacing: MapScale.length(0.025),
+  OrogenicSegmentLength: MapScale.length(0.065),
   // How far a belt has already shortened when the world first forms, standing in for the drift
   // of later passes; how far its front advances per metre of shortening; and how high a sheet's
   // leading edge climbs where it comes fully over the next sheet.
-  OrogenicInitialShortening: 600_000,
+  OrogenicInitialShortening: MapScale.length(0.15),
   OrogenicAccretionRatio: 1,
   // How far a sheet's beds rise through the surface, and how far its leading edge climbs, per metre
   // of slip: the dip of a thrust's ramp.
@@ -116,26 +118,26 @@ export const physicalProfile = {
   OrogenicRockShare: 0.5,
   // Metres of crust above its normal thickness that a column bears before the rest starts to flow,
   // the excess at which half of what is over goes, and how far a pass's flow reaches.
-  CrustFlowYield: 3000,
-  CrustFlowEase: 2000,
-  CrustFlowLength: 200_000,
+  CrustFlowYield: MapScale.length(0.00075),
+  CrustFlowEase: MapScale.length(0.0005),
+  CrustFlowLength: MapScale.length(0.05),
   // What a full-strength seam rises per unit of span at full tectonic strength, under strain of one.
   // Hard collisions reach about a third of that strain.
-  SutureReactivationPerSpan: 8000,
+  SutureReactivationPerSpan: MapScale.length(0.002),
   // How far out from a seam the crust is broken enough to take up that stress.
-  SutureReactivationZone: 200_000,
+  SutureReactivationZone: MapScale.length(0.05),
   OrogenicCoreRockResistance: rockCatalogue.gneiss.resistance,
-  ImpactOceanShockDepth: 600,
+  ImpactOceanShockDepth: MapScale.length(0.00015),
   ImpactPrimordialShare: 620,
-  PlumeLobeScale: 90_000,
+  PlumeLobeScale: MapScale.length(0.0225),
   PlumeLobeStrength: 620,
   InteriorBasinDepthShare: 260,
-  EpochTectonicElevationStep: 240,
+  EpochTectonicElevationStep: MapScale.length(0.00006),
   // Porous bulk sediment, not grain density; saturation/compaction do not yet vary this load.
   SedimentLoadResponsePerMille: 360,
   // Ice/asthenosphere density ratio: Le Meur & Huybrechts, doi:10.3189/S0260305500013586.
   IceLoadResponsePerMille: (1000 * 910) / 3300,
-  LithosphericFlexureLength: 100_000,
+  LithosphericFlexureLength: MapScale.length(0.025),
   ...streamSettings,
   ...lavaSettings,
   ...marineSettings,
@@ -146,101 +148,98 @@ export const physicalProfile = {
   ...creepSettings,
   ...coastSettings,
   SedimentTransportFraction: 760,
-  SedimentDepositionLength: 10_000,
+  SedimentDepositionLength: MapScale.length(0.0025),
   // What flowing water can carry, in cubic metres per square metre of catchment per unit of slope,
   // per unit of span. Past this it drops what it cannot carry.
-  SedimentCarry: 100_000,
+  SedimentCarry: MapScale.length(0.025),
   ImpactCraterCount: 6,
-  ImpactMinimumRadius: 50_000,
-  ImpactMaximumRadius: 180_000,
-  ImpactMinimumSpacing: 220_000,
+  ImpactMinimumRadius: MapScale.length(0.0125),
+  ImpactMaximumRadius: MapScale.length(0.045),
+  ImpactMinimumSpacing: MapScale.length(0.055),
   // Per mille of ElevationScale at the largest radius; smaller craters keep (r/max)^0.3 of it,
   // the complex-crater depth/diameter scaling.
   ImpactDepthRatio: 1200,
   ImpactRimHeightRatio: 450,
   // Metres a crater's rim must still stand above its floor and surroundings to be mapped.
-  ImpactVisibleRelief: 100,
+  ImpactVisibleRelief: MapScale.length(0.000025),
   ImpactEjectaFraction: 520,
   ImpactFractureStrength: 760,
-  ImpactThermalRadiusThreshold: 120_000,
+  ImpactThermalRadiusThreshold: MapScale.length(0.03),
   // Ice-balance units gained per metre of height above the sea, on top of the lapse rate the
   // temperature field already carries. Zero lets climate alone decide; the reference value of
   // 0.25 glaciated every plateau above about 3,000 m in any climate and is kept for the
   // Glacier-carved terrain choice.
-  IceAltitudeBalance: 0,
-  IceAblationStep: 260,
+  IceAltitudeBalance: MapScale.inverseLength(0),
+  IceAblationStep: MapScale.length(0.000065),
   FrozenLakeIceAdvanceGradient: 0.004,
   GlacierGroundingFraction: 900,
   GlacialMeltTemperatureFloor: 170,
   GlacialAblationRunoffStrength: 460,
   BasalMeltRunoffStrength: 180,
   GlacialRetreatRunoffStrength: 260,
-  AncestralValleyMinimumErosion: 5,
-  OutwashMinimumGlacialDeposition: 6,
+  AncestralValleyMinimumErosion: MapScale.length(0.00000125),
+  OutwashMinimumGlacialDeposition: MapScale.length(0.0000015),
   // Metres of terminus till that build a moraine under a flowing glacier's margin.
-  MoraineMinimumGlacialDeposition: 10,
+  MoraineMinimumGlacialDeposition: MapScale.length(0.0000025),
   // Metres of glacial erosion that carve a drainage line into a U-shaped trough.
-  UValleyMinimumGlacialErosion: 8,
-  ImpactLandformMinimumExcavation: 18,
-  ImpactLandformMinimumRimUplift: 8,
+  UValleyMinimumGlacialErosion: MapScale.length(0.000002),
+  ImpactLandformMinimumExcavation: MapScale.length(0.0000045),
+  ImpactLandformMinimumRimUplift: MapScale.length(0.000002),
   InheritedRidgeActivityThreshold: 60,
   CoastalErosionStrength: 180,
-  CoastalActiveWidth: 10_000,
-  CoastalDepositionReach: 20_000,
+  CoastalActiveWidth: MapScale.length(0.0025),
+  CoastalDepositionReach: MapScale.length(0.005),
   CoastalDepositionFraction: 580,
-  CoastalSeaLevelChange: 0,
-  SeaLevel: 0,
-  ShelfDepth: 210,
-  ShelfBreakDepth: 430,
-  IslandAreaThreshold: 10_000_000_000,
-  LakeDepthThreshold: 45,
-  MinimumLakeArea: 50_000_000,
+  CoastalSeaLevelChange: MapScale.length(0),
+  SeaLevel: MapScale.length(0),
+  ShelfDepth: MapScale.length(0.0000525),
+  ShelfBreakDepth: MapScale.length(0.0001075),
+  IslandAreaThreshold: MapScale.area(0.000625),
+  LakeDepthThreshold: MapScale.length(0.00001125),
+  MinimumLakeArea: MapScale.area(0.000003125),
   LakeCompactnessShare: 560,
   RunoffMinimumLossPerMille: 160,
   RunoffTemperatureLossPerMille: 420,
-  LakeEvaporationMinimum: 180,
-  LakeEvaporationTemperatureStrength: 520,
-  LakeInfiltrationLoss: 140,
-  DrainageGuidanceLookaheadDistance: 120_000,
+  LakeEvaporationMinimum: MapScale.length(4.5e-8, 1, "mm"),
+  LakeEvaporationTemperatureStrength: MapScale.length(1.3e-7, 1, "mm"),
+  LakeInfiltrationLoss: MapScale.length(3.5e-8, 1, "mm"),
+  DrainageGuidanceLookaheadDistance: MapScale.length(0.03),
   DrainageFloorGradientWeight: 1000,
   DrainageConditionedGradientWeight: 450,
   DrainageOutletAlignmentWeight: 300,
   DrainageCaptureWeight: 900,
   DrainageInheritedValleyWeight: 450,
-  RiverAccumulationThreshold: 40,
-  RiverMinimumAccumulationThreshold: 3,
+  RiverAccumulationThreshold: MapScale.volume(6.25e-19),
+  RiverMinimumAccumulationThreshold: MapScale.volume(4.6875e-20),
   RiverBasinHeadwaterFraction: 80,
-  RiverMinimumBasinDischarge: 25,
+  RiverMinimumBasinDischarge: MapScale.volume(3.90625e-19),
   // World river vectors require a substantial basin, in annual mean m³/s.
   // Smaller physical channels still drive erosion, waterfalls and local landforms.
-  WorldRiverMinimumBasinDischarge: 350,
+  WorldRiverMinimumBasinDischarge: MapScale.volume(5.46875e-18),
   ChannelReferenceSlope: 0.004,
   ChannelSlopeFloor: 350,
   ChannelSlopeCeiling: 2600,
-  MinimumRiverReachLength: 30_000,
+  MinimumRiverReachLength: MapScale.length(0.0075),
   RiverChannelBaseStrength: 260,
   RiverChannelOrderStrength: 145,
   RiverChannelDischargeStrength: 55,
   RiverChannelWidthDecay: 330,
   RiverChannelWideningOrder: 2,
   RiverChannelWideningDischargeMultiplier: 5,
-  RiverChannelMaximumWidth: 20_000,
   RiverChannelMaximumLongitudinalAlignment: 560,
-  RiverChannelMaximumBankRelief: 70,
+  RiverChannelMaximumBankRelief: MapScale.length(0.0000175),
   FloodplainMinimumRiverOrder: 2,
   FloodplainMaximumSlope: 0.0042,
-  FloodplainMaximumRelief: 34,
+  FloodplainMaximumRelief: MapScale.length(0.0000085),
   FloodplainMaximumLongitudinalAlignment: 720,
   FloodplainIntensityDecay: 280,
-  FloodplainMaximumWidth: 15_000,
   DeltaMinimumRiverOrder: 2,
   DeltaDischargeMultiplier: 3,
-  DeltaMinimumSedimentDelivery: 100_000_000,
+  DeltaMinimumSedimentDelivery: MapScale.volume(1.5625e-12),
   DeltaMaximumWaveEnergy: 760,
   DeltaMaximumCurrentStrength: 900,
   DeltaIntensityDecay: 240,
   DeltaMinimumForwardAlignment: 80,
-  DeltaMaximumRadius: 30_000,
   // Degrees at the world's south and north edges. WorldExtentY is the world
   // frame's [south, north] in metres; null places the map at the mid latitude.
   // Projection 1 is equal-area (sin latitude linear in northing), 0 is linear.
@@ -262,39 +261,36 @@ export const physicalProfile = {
   SeasonalityEquator: 1.5,
   SeasonalityPolar: 22,
   MaritimeSeasonality: 0.35,
-  ContinentalityDistance: 1_000_000,
+  ContinentalityDistance: MapScale.length(0.25),
   WarmthPocketCount: 15,
-  WarmthPocketMinRadius: 100_000,
-  WarmthPocketMaxRadius: 280_000,
+  WarmthPocketMinRadius: MapScale.length(0.025),
+  WarmthPocketMaxRadius: MapScale.length(0.07),
   WarmthPocketMinStrength: 170,
   WarmthPocketMaxStrength: 390,
-  HeartWarmthRadius: 280_000,
+  HeartWarmthRadius: MapScale.length(0.07),
   HeartWarmthStrength: 310,
   // Geothermal intensity above the threshold warms the surface at this rate.
   GeothermalSurfaceThreshold: 0,
   GeothermalTemperatureStrength: 310,
-  OceanCurrentSmoothingLength: 25_000,
+  OceanCurrentSmoothingLength: MapScale.length(0.00625),
   // Boundary currents act within a few multiples of this distance from the
   // coast; western boundaries strengthen by up to the given share.
-  GyreCoastalLength: 200_000,
+  GyreCoastalLength: MapScale.length(0.05),
   GyreBoundaryStrength: 0.8,
   // Surface water carries its source temperature, relaxing toward the local
   // equilibrium over this distance; full upwelling cools by UpwellingCooling.
-  SeaSurfaceRelaxation: 1_200_000,
+  SeaSurfaceRelaxation: MapScale.length(0.3),
   UpwellingCooling: 60,
-  // Eddy mixing length where opposing drifts meet, turning steps into fronts;
-  // never more than SeaSurfaceMixingDegrees of latitude on a compressed map.
-  SeaSurfaceMixing: 250_000,
-  SeaSurfaceMixingDegrees: 6,
-  OceanCurrentHeatDistance: 100_000,
+  // Eddy mixing length where opposing drifts meet, turning steps into fronts.
+  SeaSurfaceMixing: MapScale.length(0.0625),
+  OceanCurrentHeatDistance: MapScale.length(0.025),
   // Scalar heat-intensity units lost over the configured transport interval.
   OceanCurrentHeatCooling: 50,
-  OceanCurrentFetchDistance: 180_000,
+  OceanCurrentFetchDistance: MapScale.length(0.045),
   OceanCurrentMinimumStrength: 110,
   OceanCurrentTemperatureStrength: 150,
   OceanCurrentWarmthStrength: 120,
-  PrecipitationBaseline: 40,
-  // Precipitation and runoff are millimetres per year, up to this ceiling.
+  PrecipitationBaseline: MapScale.length(1e-8, 1, "mm"),
   // Downwind air columns (precipitation in mm/year). Over the
   // sea a column approaches OceanColumnHumidity of saturation, which grows by
   // ColumnSaturationGrowth per °C from ColumnSaturation at 20 °C. Over land it
@@ -302,20 +298,20 @@ export const physicalProfile = {
   // to uplift; heat, maritime character and magical heat decay over their lengths.
   // Air relaxes toward MagicHeatAirShare of the magical forcing beneath it and
   // spreads that heat across the wind over MagicHeatAirSpread.
-  ColumnSaturation: 1650,
+  ColumnSaturation: MapScale.length(4.125e-7, 1, "mm"),
   ColumnSaturationGrowth: 0.045,
   OceanColumnHumidity: 0.85,
   BoundaryColumnHumidity: 0.5,
-  SeaEvaporationLength: 400_000,
-  SeaExchangeLength: 300_000,
-  ColumnRainLength: 1_000_000,
+  SeaEvaporationLength: MapScale.length(0.1),
+  SeaExchangeLength: MapScale.length(0.075),
+  ColumnRainLength: MapScale.length(0.25),
   ColumnRainEfficiency: 0.8,
-  OrographicLiftHeight: 4000,
-  AirHeatLength: 1_000_000,
-  MaritimeLength: 800_000,
-  MagicHeatAirLength: 300_000,
+  OrographicLiftHeight: MapScale.length(0.001),
+  AirHeatLength: MapScale.length(0.25),
+  MaritimeLength: MapScale.length(0.2),
+  MagicHeatAirLength: MapScale.length(0.075),
   MagicHeatAirShare: 0.5,
-  MagicHeatAirSpread: 60_000,
+  MagicHeatAirSpread: MapScale.length(0.015),
   // Hot ground is a moisture source and lifts the air over it: a column over strong
   // magical heat gains up to MagicSteamShare of its saturation deficit and wrings out
   // 1 − exp(−forcing/MagicLiftHeat) of its water, so the rain falls on the lee side.
@@ -324,7 +320,7 @@ export const physicalProfile = {
   // A storm pulse raised at sea relaxes over StormLength as the column travels, faster by
   // StormPinning where Aurora stills the air; it pushes the column toward saturation by
   // StormMoistureShare of the deficit and wrings out 1 − exp(−pulse/StormLift) of its water.
-  StormLength: 400_000,
+  StormLength: MapScale.length(0.1),
   StormPinning: 0.8,
   StormMoistureShare: 0.8,
   StormLift: 0.5,
@@ -340,16 +336,18 @@ export const physicalProfile = {
   WarmRiverEvaporation: 0.3,
   // Fog over an upwelling band drips onto the coast it faces (mm/year at full share)
   // and cools it (native units at full share).
-  FogDrip: 300,
+  FogDrip: MapScale.length(7.5e-8, 1, "mm"),
   FogCooling: 20,
   // Pressure belts scale column rainout: convergence and the storm track raise
   // it, subtropical and polar subsidence lower it, never below MinimumRainout.
   // The equatorial convergence spreads over EquatorialConvergenceWidth degrees,
   // standing in for the seasonal migration of the rain belt.
   EquatorialConvergence: 1.2,
+  // length-unit: degrees — latitude width of the atmospheric belt.
   EquatorialConvergenceWidth: 15,
   StormTrackStrength: 1.2,
   SubtropicalSubsidence: 1.1,
+  // length-unit: degrees — latitude width of the atmospheric belt.
   SubtropicalSubsidenceWidth: 10,
   PolarSubsidence: 0.7,
   MinimumRainout: 0.08,
@@ -361,46 +359,46 @@ export const physicalProfile = {
   SeaIceCurrentResistance: 220,
   SeaIceWaveResistance: 180,
   SeaIceSuitabilityVariation: 150,
-  SeaIceVariationScale: 260_000,
-  RidgeElevationThreshold: 1000,
+  SeaIceVariationScale: MapScale.length(0.065),
+  RidgeElevationThreshold: MapScale.length(0.00025),
   RidgeSlopeThreshold: 0.0038,
-  PeakElevationThreshold: 1250,
-  LandformNeighborhoodRadius: 10_000,
+  PeakElevationThreshold: MapScale.length(0.0003125),
+  LandformNeighborhoodRadius: MapScale.length(0.0025),
   GorgeMinimumSlope: 0.009,
-  GorgeMinimumIncision: 12,
+  GorgeMinimumIncision: MapScale.length(0.000003),
   // Mountain land: above the first height, or above the second with this much local relief.
-  MountainElevation: 1000,
-  HillElevation: 500,
-  MountainLocalRelief: 300,
+  MountainElevation: MapScale.length(0.00025),
+  HillElevation: MapScale.length(0.000125),
+  MountainLocalRelief: MapScale.length(0.000075),
   // Metres from a cell to the terrain that measures its local relief and valley flanks.
-  ReliefRadius: 15_000,
+  ReliefRadius: MapScale.length(0.00375),
   // Square metres of mountain land below which a range is left unnamed.
-  RangeMinimumArea: 2_000_000_000,
+  RangeMinimumArea: MapScale.area(0.000125),
   CliffSlopeThreshold: 0.012,
   PlainSlopeThreshold: 0.003,
   IceTemperatureThreshold: 285,
   PermanentSeaIceTemperature: 205,
   IceMarginTemperature: 300,
-  GlacierThicknessThreshold: 250,
+  GlacierThicknessThreshold: MapScale.length(0.0000625),
   IceTransportYears: 1000,
   // Extra erosive power of sliding ice at full Aurora charge, per mille.
   ChargedIceErosion: 600,
   MinimumIceBalance: 80,
   GeothermalVentThreshold: 720,
   MantlePlumeCount: 3,
-  MantlePlumeRadius: 110_000,
-  MantlePlumeMinimumSpacing: 360_000,
+  MantlePlumeRadius: MapScale.length(0.0275),
+  MantlePlumeMinimumSpacing: MapScale.length(0.09),
   MantlePlumeStrength: 940,
   MantlePlumeMinimumShare: 260,
   MantlePlumeStrengthExponent: 1700,
   // Reference dimensions determine plume supply volume; terrain and cooling determine its shape.
-  VolcanicConeRadius: 60_000,
-  VolcanicConeHeight: 5_000,
+  VolcanicConeRadius: MapScale.length(0.015),
+  VolcanicConeHeight: MapScale.length(0.00125),
   FractureBranchCount: 24,
-  FractureMinimumLength: 180_000,
-  FractureMaximumLength: 1_200_000,
-  FractureMinimumSpacing: 180_000,
-  FractureWidth: 10_000,
+  FractureMinimumLength: MapScale.length(0.045),
+  FractureMaximumLength: MapScale.length(0.3),
+  FractureMinimumSpacing: MapScale.length(0.045),
+  FractureWidth: MapScale.length(0.0025),
   FractureConductanceFloor: 25,
   // Share of conductance above the floor that survives each later epoch.
   FractureRetentionPerSpan: 400,
@@ -408,5 +406,5 @@ export const physicalProfile = {
     OceanCoverage: { target: 0.55, minimum: 0.38, maximum: 0.66 },
     InlandLakeBodyCount: { minimum: 2, maximum: 80 },
   },
-};
-export type PhysicalProfile = typeof physicalProfile;
+});
+export type PhysicalProfile = ResolvedSettings<typeof physicalProfile.values>;

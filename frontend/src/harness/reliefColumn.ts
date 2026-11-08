@@ -1,4 +1,5 @@
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
+import { MapScale } from "@atlas/domain";
 import {
   layerDepth,
   rockLayers,
@@ -6,7 +7,7 @@ import {
 } from "../../../packages/generation/src/rock/rockColumn";
 import { rockKindOfCode } from "../../../packages/generation/src/rock/rockCatalogue";
 
-const metres = (units: number) => units / 1024;
+const metres = (units: number) => MapScale.metres(units, "native");
 function quantiles(values: number[]) {
   values.sort((a, b) => a - b);
   const at = (q: number) => Math.round(values[Math.floor(q * (values.length - 1))] ?? 0);

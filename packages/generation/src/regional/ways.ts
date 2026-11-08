@@ -1,4 +1,4 @@
-import { KeyedHeap } from "@atlas/domain";
+import { KeyedHeap, MapScale } from "@atlas/domain";
 import { distance, isContent, neighborhood, neighborhoodCapacity } from "./lattice";
 import type { RegionalState } from "./state";
 
@@ -69,7 +69,7 @@ export function regionalPath(
     s = pathSearch(state),
     around = new Int32Array(neighborhoodCapacity),
     known = (j: number) => (s.stamp[j] === s.search ? s.cost[j] : Infinity),
-    height = (i: number) => map.Elevation.get(i) / 1024,
+    height = (i: number) => MapScale.metres(map.Elevation.get(i), "native"),
     relax = (i: number, j: number, next: number) => {
       if (next >= known(j)) return;
       s.stamp[j] = s.search;

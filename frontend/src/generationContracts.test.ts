@@ -170,7 +170,7 @@ it("uses a registered nested participant through real draft rename, removal and 
         slots: [],
         contribute: () => [],
         configuration: valueRecordSchema,
-        configurationFromLegacy: (settings) => ({
+        configurationFromSettings: (settings) => ({
           regimes: Object.fromEntries(
             (settings.epochs as unknown as { id: string }[]).map((epoch) => [
               epoch.id,

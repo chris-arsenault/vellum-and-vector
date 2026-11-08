@@ -26,7 +26,7 @@ it("reads every published channel at the stored cell and leaves the catalog unch
     unit: "metre",
   });
   expect(new Set(values.map((value) => value.channel))).toEqual(
-    new Set(["elevation", "temperature", "water", "impactExcavation"])
+    new Set(Object.keys(f.result.state.surface.channels))
   );
   expect(values.every((value) => value.fieldId && value.resourceId)).toBe(true);
   // The constructed coast has fields only: no mapped feature explains the cell.

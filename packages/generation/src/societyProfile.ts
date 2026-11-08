@@ -1,3 +1,5 @@
+import type { MapScale } from "@atlas/domain";
+import { mapScale } from "./worldSignificance";
 import type { GenerationState, MapProcessContext } from "./process";
 import { atlasParameterDefinitions } from "./atlasParameters";
 
@@ -33,37 +35,40 @@ const keys = [
   "marketTravel",
   "highways",
 ] as const;
-export const defaultSocietyProfile: SocietyProfile = {
+export const defaultSocietyProfile = (scale: MapScale): SocietyProfile => ({
   culturalMobility: atlasParameterDefinitions.culturalMobility.default,
   politicalReach: atlasParameterDefinitions.politicalReach.default,
   townThreshold: atlasParameterDefinitions.townThreshold.default,
-  cityReach: atlasParameterDefinitions.cityReach.default * 1000,
+  cityReach: scale.length(atlasParameterDefinitions.cityReach.default),
   roadTraffic: atlasParameterDefinitions.roadTraffic.default,
   marketTravel: atlasParameterDefinitions.marketTravel.default,
   highways: atlasParameterDefinitions.highways.default,
-};
+});
 /** The profile a process context carries: its own parameters first, the bound atlas parameters next. */
-export function societyProfile(context: MapProcessContext | undefined): SocietyProfile {
+export function societyProfile(
+  context: MapProcessContext | undefined,
+  scale: MapScale
+): SocietyProfile {
   const bound = (context?.inputs as { parameters?: Record<string, unknown> } | undefined)
     ?.parameters;
   const read = (key: (typeof keys)[number]) => {
     const value = context?.parameters?.[key] ?? bound?.[key];
     return typeof value === "number" && Number.isFinite(value) ? value : undefined;
   };
-  const profile = { ...defaultSocietyProfile };
+  const profile = defaultSocietyProfile(scale);
   for (const key of keys) {
     const value = read(key);
-    if (value !== undefined) profile[key] = key === "cityReach" ? value * 1000 : value;
+    if (value !== undefined) profile[key] = key === "cityReach" ? scale.length(value) : value;
   }
   return profile;
 }
 /** Bind the context's profile to the workspace so the cycle's processes read one set. */
 export function bindSocietyProfile(state: GenerationState, context: MapProcessContext | undefined) {
-  const profile = societyProfile(context);
+  const profile = societyProfile(context, mapScale(state));
   if (state.society) state.society.profile = profile;
   return profile;
 }
 /** The workspace's profile, or the defaults where no human process has bound one. */
 export function profileOf(state: GenerationState): SocietyProfile {
-  return state.society?.profile ?? defaultSocietyProfile;
+  return state.society?.profile ?? defaultSocietyProfile(mapScale(state));
 }

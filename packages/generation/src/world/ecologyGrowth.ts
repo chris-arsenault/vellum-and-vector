@@ -168,7 +168,7 @@ export function growCommunities(
         // Salted soil is infertile.
         (1 - 0.8 * f.salting)
     );
-    const light = Math.exp(-e.depth / 100),
+    const light = Math.exp(-e.depth / map.scale.length(0.000025)),
       wet = e.water > 0 || e.wetness > 0.5;
     // Upwelling returns deep nutrients to the sunlit surface.
     const nutrients = 1 + (1.5 * map.Upwelling.get(i)) / 1000;

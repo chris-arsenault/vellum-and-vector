@@ -1,6 +1,7 @@
 import {
   gridPosition,
   population,
+  MapScale,
   type SocietyCommunity,
   type SocietyMagicPractice,
 } from "@atlas/domain";
@@ -10,6 +11,7 @@ import { nearestSample } from "./societySpatial";
 import { societyValue } from "./societySupport";
 import { peopleTrait } from "./societyTraits";
 import { practiceSkill } from "./societySkill";
+import { mapScale } from "./worldSignificance";
 import {
   accessibleDive,
   depositAt,
@@ -25,16 +27,16 @@ export { magicAt } from "./societyMagicAccess";
 export const fullForgeHeat = 8,
   thawShare = 0.02;
 /** Ice and cold that hold a memory in full, in metres and degrees of frost. */
-export const memoryIce = 10,
+export const memoryIce = MapScale.length(0.0000025),
   memoryCold = 10;
 /** Stock amount (intensity·m²) one core-equivalent of the practice ledger stands for. */
-const stockPerCore = 1e7;
+const stockPerCore = MapScale.area(6.25e-7);
 /**
  * Share of the sap under a seat a community gathers per year, and the most per head. At this
  * a market two centuries down the road from a full Deepwood seat has planted sap enough for
  * a grove past the source floor.
  */
-const seedGathering = { share: 0.004, perHead: 5e4 };
+const seedGathering = { share: 0.004, perHead: MapScale.area(3.125e-9) };
 /** Share of carried seed a community plants at its seat per year. */
 const seedPlanting = 0.05;
 /** The held stock of the system that quickens, read at a sample from its published channels. */
@@ -51,30 +53,40 @@ function heldStockAt(state: GenerationState, i: number) {
 /** Live material is authoritative; society-only inputs retain their finite deposit ledger. */
 function drawHeldStock(state: GenerationState, sample: number, cores: number) {
   if (!magicFieldForRole(state, "quickens")) return cores;
-  return drawAt(state, "quickens", "held", sample, cores * stockPerCore) / stockPerCore;
+  const stock = mapScale(state).resolveMeasure(stockPerCore);
+  return drawAt(state, "quickens", "held", sample, cores * stock) / stock;
 }
 /**
  * Cores cracked in the forge release where they are cracked: the stock moves from the ledger
  * people carried to the forge reservoir on the mesh, and the forge origin finds it there.
  */
 function crackCores(state: GenerationState, sample: number, used: number) {
-  depositAt(state, "quickens", "forge", sample, used * stockPerCore);
+  depositAt(
+    state,
+    "quickens",
+    "forge",
+    sample,
+    used * mapScale(state).resolveMeasure(stockPerCore)
+  );
 }
 function initialPractice(state: GenerationState, c: SocietyCommunity): SocietyMagicPractice {
   const i = nearestSample(state, c.position),
-    ice = societyValue(state, "iceThickness", i);
+    ice = societyValue(state, "iceThickness", i),
+    scale = mapScale(state);
   // The deposit is the held stock under the seat (vein cores and fallen cores alike) plus a
   // mineral estimate from the field; extraction draws the stock down on the mesh.
   const deposit =
-    Math.max(0, magicAt(state, "quickens", i)) * Math.min(c.areaKm2, 100) * 100 +
-    heldStockAt(state, i) / stockPerCore;
+    Math.max(0, magicAt(state, "quickens", i)) *
+      Math.min(MapScale.areaUnits(c.areaKm2, "km2", "m2") / scale.area(6.25e-8), 100) *
+      100 +
+    heldStockAt(state, i) / scale.resolveMeasure(stockPerCore);
   return {
     communityId: c.id,
     coreDeposit: deposit,
     coreSupply: 0,
     coreUsed: 0,
     heatApplied: 0,
-    crystals: magicAt(state, "stills", i) * Math.min(1000, ice),
+    crystals: magicAt(state, "stills", i) * Math.min(1000, ice / scale.length(2.5e-7)),
     charge: 0,
     readers: 0,
     memoryAccess: 0,
@@ -82,7 +94,7 @@ function initialPractice(state: GenerationState, c: SocietyCommunity): SocietyMa
     pressureUsed: 0,
     maritimeContact: 0,
     divers: 0,
-    depthLimit: peopleTrait(state, c, "divingDepth", 200),
+    depthLimit: peopleTrait(state, c, "divingDepth", scale.length(0.00005)),
     injuries: 0,
     strain: 0,
   };
@@ -142,7 +154,11 @@ function auroraUse(
   const i = nearestSample(state, c.position),
     intensity = magicAt(state, "stills", i);
   const cold = Math.max(0, Math.min(1, -societyValue(state, "temperature", i) / memoryCold));
-  const retained = Math.min(1, societyValue(state, "iceThickness", i) / memoryIce) * cold;
+  const retained =
+    Math.min(
+      1,
+      societyValue(state, "iceThickness", i) / mapScale(state).resolveMeasure(memoryIce)
+    ) * cold;
   p.crystals *= Math.exp((-years * (1 - retained)) / 200);
   p.charge = Math.min(p.crystals, p.charge + (intensity * p.crystals * years) / 50);
   p.readers = (population(c) * 0.005 * skill("aurora-archive")) / (1 + p.strain);
@@ -177,7 +193,7 @@ function pressureUse(
   }
   const depth = societyValue(state, "waterDepth", at);
   const ocean = societyValue(state, "water", at) === 1;
-  const enabled = ocean && depth >= 50 && depth <= p.depthLimit;
+  const enabled = ocean && depth >= mapScale(state).length(0.0000125) && depth <= p.depthLimit;
   const intensity = enabled ? magicAt(state, "moves-water", at) : 0;
   p.divers =
     intensity > 0 ? (population(c) * 0.002 * skill("pressure-diving")) / (1 + p.strain) : 0;
@@ -221,7 +237,7 @@ function greenwoodUse(
   if (sap > 0) {
     const wanted = Math.min(
       sap * seedGathering.share * years,
-      population(c) * years * seedGathering.perHead
+      population(c) * years * mapScale(state).resolveMeasure(seedGathering.perHead)
     );
     p.seed += drawAt(state, "greens", "sap", i, wanted);
   }
@@ -244,7 +260,10 @@ function saltUse(
     bed = reservoirAt(state, "salts", "bed", i);
   p.salt ??= 0;
   if (bed > 0) {
-    const wanted = Math.min(bed * raking.share * years, population(c) * years * raking.perHead);
+    const wanted = Math.min(
+      bed * raking.share * years,
+      population(c) * years * mapScale(state).resolveMeasure(raking.perHead)
+    );
     p.salt += drawAt(state, "salts", "bed", i, wanted);
   }
   const laid = p.salt * (1 - Math.exp(-saltLaying * years));
@@ -252,11 +271,13 @@ function saltUse(
   p.salt -= depositAt(state, "salts", "bed", i, laid);
 }
 /** Share of the bed under a seat raked per year, and the most per head; share of carried salt laid per year. */
-const raking = { share: 0.002, perHead: 2e4 };
+const raking = { share: 0.002, perHead: MapScale.area(1.25e-9) };
 const saltLaying = 0.05;
 /** What a way carries in a year relative to the base: distance decay, more on a worn road. */
-function wayFlow(link: { travelCost: number; wear?: number }) {
-  return Math.exp(-link.travelCost / 200000) * (1 + Math.min(1, (link.wear ?? 0) / 1000));
+function wayFlow(scale: MapScale, link: { travelCost: number; wear?: number }) {
+  return (
+    Math.exp(-link.travelCost / scale.length(0.05)) * (1 + Math.min(1, (link.wear ?? 0) / 1000))
+  );
 }
 const tradedLedgers = ["coreSupply", "seed", "salt"] as const;
 /** Years over which a unit-flow way exchanges stock in response to its two ends' difference. */
@@ -275,7 +296,8 @@ function tradeStocks(state: GenerationState, years: number) {
     if (!a || !b) continue;
     // Both ends change as stock moves: integrate their difference's decay toward equal shares.
     // Faster ways change the rate, so a long cycle cannot overshoot or overdraw either end.
-    const share = -Math.expm1((-2 * years * wayFlow(link)) / tradeResponseYears) / 2;
+    const share =
+      -Math.expm1((-2 * years * wayFlow(mapScale(state), link)) / tradeResponseYears) / 2;
     for (const ledger of tradedLedgers) {
       const surplus = ((a[ledger] ?? 0) - (b[ledger] ?? 0)) * share;
       a[ledger] = (a[ledger] ?? 0) - surplus;

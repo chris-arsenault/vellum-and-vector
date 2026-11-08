@@ -1,7 +1,7 @@
 import { mappedRiverCells } from "../../area/riverCourses";
 import type { GenerationState } from "../../process";
 import type { PoiPlace } from "../poiContract";
-import { adjacent, cellSpan, cellsWithin, fieldOf, moistureAt } from "../poiReads";
+import { adjacent, cellsWithin, fieldOf, moistureAt } from "../poiReads";
 
 /** What the water group's entries read in common. Nothing here computes geography or writes. */
 
@@ -25,7 +25,8 @@ export const areaOf = (state: GenerationState, place: PoiPlace) => {
 };
 
 /** A reach of this many of the map's cell spans. */
-export const spans = (count: number) => (state: GenerationState) => count * cellSpan(state);
+export const spans = (count: number) => (state: GenerationState) =>
+  fieldOf(state).scale.cells(count);
 
 /** How dry the country around a place is, in [0, 1]: a water source counts for more there. */
 export const drynessAround = (radius: (state: GenerationState) => number) => {

@@ -43,6 +43,7 @@ export const confluenceHazardSchema = z.object({
  * to the strain between them and acts on the physical fields with its own effects.
  */
 export const magicConfluenceSchema = z.object({
+  lengthUnits: z.literal("relative").default("relative"),
   id: z.string().min(1),
   name: z.string().trim().min(1),
   enabled: z.boolean().default(true),
@@ -89,7 +90,10 @@ const ownChannels = new Set([
   "wild",
 ]);
 /** Whether every system a confluence reads is present and enabled. */
-export function confluenceEffective(confluence: MagicConfluence, systems: MagicSystem[]) {
+export function confluenceEffective(
+  confluence: Pick<MagicConfluence, "enabled" | "systems">,
+  systems: Pick<MagicSystem, "id" | "enabled">[]
+) {
   return (
     confluence.enabled &&
     confluence.systems.every((id) => systems.some((system) => system.id === id && system.enabled))
@@ -109,6 +113,7 @@ function saltMeetings(): MagicConfluence[] {
   return [
     magicConfluenceSchema.parse({
       id: "preserved",
+      lengthUnits: "relative",
       name: "Preserved barrow",
       systems: ["aurora", "salt"],
       priority: 96,
@@ -121,12 +126,13 @@ function saltMeetings(): MagicConfluence[] {
         kind: "undead",
         rate: 0.001,
         severity: 0.3,
-        radius: 2000,
+        radius: 0.0005,
         cause: "Aurora held a Salt barrow still and its dead did not rest.",
       },
     }),
     magicConfluenceSchema.parse({
       id: "fired",
+      lengthUnits: "relative",
       name: "Fired crust",
       systems: ["fire", "salt"],
       priority: 97,
@@ -137,6 +143,7 @@ function saltMeetings(): MagicConfluence[] {
     }),
     magicConfluenceSchema.parse({
       id: "standing-dead",
+      lengthUnits: "relative",
       name: "Standing-dead front",
       systems: ["greenwood", "salt"],
       priority: 93,
@@ -149,6 +156,7 @@ function saltMeetings(): MagicConfluence[] {
     }),
     magicConfluenceSchema.parse({
       id: "brine-shore",
+      lengthUnits: "relative",
       name: "Brine shore",
       systems: ["pressure", "salt"],
       priority: 94,
@@ -166,6 +174,7 @@ function elementalMeetings(): MagicConfluence[] {
   return [
     magicConfluenceSchema.parse({
       id: "war",
+      lengthUnits: "relative",
       name: "Shatter rim",
       systems: ["fire", "aurora"],
       cartography: "area",
@@ -175,7 +184,7 @@ function elementalMeetings(): MagicConfluence[] {
       effects: {
         fractureConductance: 220,
         rockResistance: -320,
-        relief: 40,
+        relief: 0.00001,
         soilRemoval: 0.8,
         toxicity: 0.2,
       },
@@ -183,12 +192,13 @@ function elementalMeetings(): MagicConfluence[] {
         kind: "thermal-fracture",
         rate: 0.001,
         severity: 0.3,
-        radius: 2000,
+        radius: 0.0005,
         cause: "Fire heat met Aurora-bearing ice and the ground shattered between them.",
       },
     }),
     magicConfluenceSchema.parse({
       id: "steam",
+      lengthUnits: "relative",
       name: "Boiling shore",
       systems: ["fire", "pressure"],
       priority: 110,
@@ -200,12 +210,13 @@ function elementalMeetings(): MagicConfluence[] {
         kind: "steam-fracture",
         rate: 0.002,
         severity: 0.4,
-        radius: 3000,
+        radius: 0.00075,
         cause: "Ocean Pressure entered conductive Fire fractures and the shore boiled.",
       },
     }),
     magicConfluenceSchema.parse({
       id: "breach",
+      lengthUnits: "relative",
       name: "Breach",
       systems: ["pressure", "aurora"],
       priority: 120,
@@ -215,16 +226,16 @@ function elementalMeetings(): MagicConfluence[] {
           at("system:pressure", 390),
           at("system:aurora", 430),
           { field: "water", values: [1] },
-          at("ice", 220),
+          at("ice", 0.000055),
         ],
       ],
       // A front punches an ice coast: the ice goes, collapse debris spreads, cold fog sits.
-      effects: { iceMelt: 60, debris: 3, fog: 0.5, coastalForcing: 240 },
+      effects: { iceMelt: 0.000015, debris: 0.00000075, fog: 0.5, coastalForcing: 240 },
       hazard: {
         kind: "pressure-ice-breach",
         rate: 0.002,
         severity: 0.4,
-        radius: 5000,
+        radius: 0.00125,
         cause: "Pressure reached charged coastal ice and breached it.",
       },
     }),
@@ -235,6 +246,7 @@ function greenwoodMeetings(): MagicConfluence[] {
   return [
     magicConfluenceSchema.parse({
       id: "rot",
+      lengthUnits: "relative",
       name: "Overgrowth rot",
       systems: ["fire", "greenwood"],
       priority: 95,
@@ -249,23 +261,25 @@ function greenwoodMeetings(): MagicConfluence[] {
         kind: "rot-fever",
         rate: 0.0015,
         severity: 0.25,
-        radius: 2500,
+        radius: 0.000625,
         cause: "Fire quickened a Greenwood until it rotted and its springs boiled.",
       },
     }),
     magicConfluenceSchema.parse({
       id: "frozen",
+      lengthUnits: "relative",
       name: "Frozen Deepwood",
       systems: ["aurora", "greenwood"],
       priority: 90,
       cartography: "area",
-      seeds: [[at("system:aurora", 400), at("system:greenwood", 300), at("ice", 50)]],
+      seeds: [[at("system:aurora", 400), at("system:greenwood", 300), at("ice", 0.0000125)]],
       // Forest preserved standing under held charge: canopy without growth or decay. The
       // stillness already holds it; the meeting marks and keeps the front where the ice is.
       effects: { iceMelt: 0 },
     }),
     magicConfluenceSchema.parse({
       id: "brackish",
+      lengthUnits: "relative",
       name: "Brackish wending",
       systems: ["pressure", "greenwood"],
       priority: 92,

@@ -2,7 +2,7 @@ import type { Band } from "@atlas/domain";
 import type { PhysicalContext } from "./context";
 import { adjustCrustColumn } from "../rock/crustTransport";
 import type { PhysicalField } from "./field";
-import { buoyancy, clamp, crustPerRock, thickness, toUnits, units } from "./math";
+import { buoyancy, clamp, crustPerRock, toUnits, units } from "./math";
 import { metricSearch } from "./metricSearch";
 import { addRoot } from "./orogenicRoots";
 import { releaseWorking, workingArray } from "./physicalNumerics";
@@ -239,7 +239,7 @@ function plateMaterial(map: PhysicalField, rise: Band, slots: number) {
     roots = new Float64Array(slots);
   for (let i = 0; i < map.mesh.count; i++) {
     const plate = plateSlot(map, i);
-    roots[plate] += (unspentThisPass(map, i) * map.mesh.area(i)) / 1024;
+    roots[plate] += MapScale.metres(unspentThisPass(map, i), "native") * map.mesh.area(i);
     if (rise.get(i) > 0) wanted[plate] += rootVolume(map, i, riseTakes(map, i, rise.get(i)));
   }
   return { wanted, roots };
@@ -268,7 +268,7 @@ function moveSeam(map: PhysicalField, i: number, metres: number) {
   const rock = units(metres * surfaceShare),
     crust = crustFor(map, i, metres);
   if (metres > 0) addRoot(map, i, rootVolume(map, i, crust));
-  else adjustCrustColumn(map, i, units(thickness(toUnits(map.CrustThickness.get(i)) + crust)));
+  else adjustCrustColumn(map, i, units(Math.max(0, toUnits(map.CrustThickness.get(i)) + crust)));
   if (rock > 0) {
     // Thickening drives burial and heat; uplift alone does not uncover the deeper beds.
     map.OrogenicConstruction.set(i, Math.max(map.OrogenicConstruction.get(i), rock));
@@ -334,3 +334,4 @@ export function sutureReactivation(map: PhysicalField, context: PhysicalContext)
     raised
   );
 }
+import { MapScale } from "@atlas/domain";

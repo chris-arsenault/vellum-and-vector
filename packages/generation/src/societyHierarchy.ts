@@ -1,5 +1,6 @@
 import {
   population,
+  type MapScale,
   type SocietyCommunity,
   type SocietyRegion,
   type SocietyPolity,
@@ -62,7 +63,10 @@ export interface SettlementHierarchy {
   capitalOf: string[];
 }
 /** Market prominence follows inhabited neighbors over traversable travel distance. */
-export function settlementHierarchy(region: SocietyRegion): Map<string, SettlementHierarchy> {
+export function settlementHierarchy(
+  region: SocietyRegion,
+  scale: MapScale
+): Map<string, SettlementHierarchy> {
   const result = new Map<string, SettlementHierarchy>();
   const politics = region.politics;
   for (const c of region.communities)
@@ -72,7 +76,7 @@ export function settlementHierarchy(region: SocietyRegion): Map<string, Settleme
       capitalOf: [],
     });
   markCapitals(region, result);
-  markRegionalCenters(region, result);
+  markRegionalCenters(region, result, scale);
   return result;
 }
 function markCapitals(region: SocietyRegion, result: Map<string, SettlementHierarchy>) {
@@ -91,7 +95,11 @@ function markCapitals(region: SocietyRegion, result: Map<string, SettlementHiera
     role.capitalOf.push(polity.id);
   }
 }
-function markRegionalCenters(region: SocietyRegion, result: Map<string, SettlementHierarchy>) {
+function markRegionalCenters(
+  region: SocietyRegion,
+  result: Map<string, SettlementHierarchy>,
+  scale: MapScale
+) {
   const politics = region.politics;
   const distances = communityDistances(region);
   const occupiedIndices = region.communities.flatMap((c, i) => (occupied(c) ? [i] : []));
@@ -103,7 +111,7 @@ function markRegionalCenters(region: SocietyRegion, result: Map<string, Settleme
     const neighbors = occupiedIndices.filter(
       (j) =>
         j !== i &&
-        distance[j] <= 150000 &&
+        distance[j] <= scale.length(0.0375) &&
         (politics?.control[region.communities[j].id] ?? null) === role.polityId
     );
     // A center serves other settlements; isolated outposts are not regional capitals.

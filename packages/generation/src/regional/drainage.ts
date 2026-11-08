@@ -1,4 +1,4 @@
-import { KeyedHeap } from "@atlas/domain";
+import { KeyedHeap, MapScale } from "@atlas/domain";
 import { potentialEvaporation } from "../world/ecologyEnvironment";
 import { clearWaterSurface } from "../world/field";
 import { groundOf } from "../rock/ground";
@@ -22,8 +22,8 @@ import { lakeCells, poolDepth } from "./base";
 import { riversIntoLakes, roundLakes } from "./lakeShores";
 
 /** Annual seepage through intact ground and the additional loss through open fractures. */
-const intactSeepage = 0.05;
-const fracturedSeepage = 1.5;
+const intactSeepage = 0.0000000125;
+const fracturedSeepage = 0.000000375;
 
 /**
  * Transport and access on the present surface: the spill graph, discharge, mapped streams,
@@ -210,7 +210,9 @@ function accumulate(state: RegionalState) {
     map.CatchmentArea.set(i, mesh.contentArea(i) + beyond);
     map.FlowAccumulation.set(
       i,
-      (Math.max(0, map.Runoff.get(i) / 1000) * mesh.contentArea(i)) / secondsPerYear + entering
+      (Math.max(0, MapScale.metres(map.Runoff.get(i), "mm")) * mesh.contentArea(i)) /
+        secondsPerYear +
+        entering
     );
     map.FlowTargets.set(i, receiver[i]);
     map.DrainageBasinIds.set(i, receiver[i] < 0 ? i + 1 : map.DrainageBasinIds.get(receiver[i]));
@@ -227,8 +229,10 @@ function accumulate(state: RegionalState) {
   orderChannels(state);
 }
 
-/** Channel belt half-width per square root of discharge (m), the ground a flow wets as it passes. */
-const beltWidth = 80;
+/** Channel belt width as a span share per square root of relative discharge. */
+// length-unit: fraction
+const beltWidth = 0.00002;
+const dischargeUnit = 1.5625e-20;
 /**
  * Channel persistence (plan W1): the water a flow loses crossing a cell to seepage through
  * the bed (intact and fractured ground) and to evaporation where the climate takes more than
@@ -239,10 +243,14 @@ function transmissionLoss(state: RegionalState, i: number, j: number, flow: numb
   if (flow <= 0) return 0;
   const map = state.physical.map,
     mesh = map.mesh,
-    wetted = Math.min(regionalSpan(state), beltWidth * Math.sqrt(flow)) * distance(mesh, i, j),
+    wetted =
+      Math.min(
+        map.scale.cells(1),
+        map.scale.length(beltWidth) * Math.sqrt(flow / map.scale.volume(dischargeUnit))
+      ) * distance(mesh, i, j),
     evaporation = Math.max(
       0,
-      potentialEvaporation(celsius(state, i)) - regionalPrecipitation(state, i)
+      potentialEvaporation(celsius(state, i), map.scale) - regionalPrecipitation(state, i)
     ),
     rate = seepageRate(state, i) + evaporation;
   return Math.min(flow, (wetted * rate) / secondsPerYear);
@@ -262,7 +270,7 @@ function fillLakes(state: RegionalState, filled: Float64Array) {
       seen[i] ||
       !isContent(mesh, i) ||
       map.WaterKindCodes.get(i) === 1 ||
-      filled[i] - map.Elevation.get(i) <= units(poolDepth)
+      filled[i] - map.Elevation.get(i) <= units(poolDepth(map.scale))
     )
       continue;
     const cells = pool(state, i, filled, seen);
@@ -271,7 +279,7 @@ function fillLakes(state: RegionalState, filled: Float64Array) {
     const stage = waterStage(state, cells, filled[i]);
     for (const cell of cells) {
       const depth = stage - map.Elevation.get(cell);
-      if (depth <= units(poolDepth)) continue;
+      if (depth <= units(poolDepth(map.scale))) continue;
       setLake(state, cell, stage, body);
     }
     body++;
@@ -316,7 +324,7 @@ function pool(state: RegionalState, start: number, filled: Float64Array, seen: U
         seen[j] ||
         !isContent(mesh, j) ||
         Math.abs(filled[j] - filled[start]) > 1 ||
-        filled[j] - map.Elevation.get(j) <= units(poolDepth)
+        filled[j] - map.Elevation.get(j) <= units(poolDepth(map.scale))
       )
         continue;
       seen[j] = 1;
@@ -335,8 +343,8 @@ function waterStage(state: RegionalState, cells: number[], spill: number) {
     mesh = map.mesh,
     { inflow, area, temperature, seepage, precipitation } = poolSupply(state, cells);
   const loss = Math.max(
-      0.01,
-      potentialEvaporation(temperature / area) + seepage / area - precipitation / area
+      map.scale.length(0.0000000025),
+      potentialEvaporation(temperature / area, map.scale) + seepage / area - precipitation / area
     ),
     supportedArea = inflow / loss;
   if (supportedArea >= area) return spill;
@@ -362,7 +370,7 @@ function poolSupply(state: RegionalState, cells: number[]) {
   for (const i of cells) {
     const measure = mesh.contentArea(i);
     area += measure;
-    inflow += Math.max(0, map.Runoff.get(i) / 1000) * measure;
+    inflow += Math.max(0, MapScale.metres(map.Runoff.get(i), "mm")) * measure;
     precipitation += regionalPrecipitation(state, i) * measure;
     temperature += celsius(state, i) * measure;
     seepage += measure * seepageRate(state, i);
@@ -378,5 +386,7 @@ function poolSupply(state: RegionalState, cells: number[]) {
 function seepageRate(state: RegionalState, i: number) {
   const map = state.physical.map,
     rock = groundOf(map).fold(i, surfaceStanding);
-  return intactSeepage + (fracturedSeepage * clamp(map.FractureConductance.get(i) / 1000)) / rock;
+  return map.scale.length(
+    intactSeepage + (fracturedSeepage * clamp(map.FractureConductance.get(i) / 1000)) / rock
+  );
 }

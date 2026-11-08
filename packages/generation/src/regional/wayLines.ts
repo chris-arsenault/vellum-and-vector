@@ -1,4 +1,5 @@
 import { cellAt, positionOf } from "./lattice";
+import { MapScale } from "@atlas/domain";
 import type { RegionalState } from "./state";
 import { rulingGrade } from "./ways";
 
@@ -42,7 +43,7 @@ function clear(state: RegionalState, a: number, b: number, on: Set<number>) {
     pa = positionOf(mesh, a),
     pb = positionOf(mesh, b),
     length = Math.hypot(pb.x - pa.x, pb.y - pa.y),
-    steps = Math.max(1, Math.ceil((2 * length) / mesh.spacing));
+    steps = Math.max(1, Math.ceil(map.scale.cellCount(2 * length)));
   let previous = a;
   for (let s = 1; s <= steps; s++) {
     const t = s / steps,
@@ -50,7 +51,10 @@ function clear(state: RegionalState, a: number, b: number, on: Set<number>) {
     if (c < 0 || map.WaterKindCodes.get(c) !== 0) return false;
     if (map.RiverOrders.get(c) > 0 && !on.has(c)) return false;
     if (c !== previous) {
-      const rise = Math.abs(map.Elevation.get(c) - map.Elevation.get(previous)) / 1024,
+      const rise = MapScale.metres(
+          Math.abs(map.Elevation.get(c) - map.Elevation.get(previous)),
+          "native"
+        ),
         run = Math.hypot(mesh.x(c) - mesh.x(previous), mesh.y(c) - mesh.y(previous));
       if (run > 0 && rise / run > rulingGrade) return false;
       previous = c;

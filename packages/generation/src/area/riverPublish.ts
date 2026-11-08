@@ -1,4 +1,4 @@
-import { chartCopies, interpolateProfile, spatial } from "@atlas/domain";
+import { chartCopies, interpolateProfile, MapScale, spatial } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { nativePosition } from "../world/atlasWorkspace";
 import { releaseWorking } from "../world/physicalNumerics";
@@ -103,7 +103,7 @@ function publishReachCopy(
     const feature = generatedFeature(
       state,
       `river:${coordinateKey(source.x, source.y)}:${coordinateKey(outlet.x, outlet.y)}:${part + offset}`,
-      `River ${Math.round(source.x / 1000)} ${Math.round(source.y / 1000)}`,
+      `River ${Math.round(MapScale.inUnits(source.x, "km"))} ${Math.round(MapScale.inUnits(source.y, "km"))}`,
       "river",
       "rivers",
       reach,

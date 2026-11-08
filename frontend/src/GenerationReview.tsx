@@ -9,7 +9,7 @@ import { useWorkflowFields } from "./workflowFieldState";
 import { GenerationConfigurationSummary } from "./GenerationConfigurationSummary";
 import { GenerationRecipeEditor } from "./GenerationRecipeEditor";
 import { SetupDisclosure } from "./SetupDisclosure";
-import type { MagicSystem } from "@atlas/domain";
+import { MapScale, type MagicSystem } from "@atlas/domain";
 
 export function GenerationReview({ flow }: { flow: GenerationWorkflow }) {
   const changed =
@@ -21,9 +21,9 @@ export function GenerationReview({ flow }: { flow: GenerationWorkflow }) {
   return (
     <>
       <p>
-        <strong>{flow.draft.name || "Untitled world"}</strong> · {flow.draft.width / 1000} ×{" "}
-        {flow.draft.height / 1000} km · {flow.draft.recipe.quality} detail · seed{" "}
-        {flow.draft.recipe.seed}
+        <strong>{flow.draft.name || "Untitled world"}</strong> ·{" "}
+        {MapScale.inUnits(flow.draft.width, "km")} × {MapScale.inUnits(flow.draft.height, "km")} km
+        · {flow.draft.recipe.quality} detail · seed {flow.draft.recipe.seed}
       </p>
       <ReviewDecisions flow={flow} />
       <ReviewContext flow={flow} />

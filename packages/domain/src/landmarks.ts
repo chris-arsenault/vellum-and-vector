@@ -2,6 +2,7 @@ import type { Geometry } from "geojson";
 import type { AtlasFeature, World } from "./model";
 import { requireThat } from "./errors";
 import { spatial } from "./spatial";
+import { MapScale, type RelativeMeasure } from "./mapScale";
 
 /** One defining measure of a landmark kind, entered and stored in the declared unit. */
 export interface LandmarkParameter {
@@ -11,6 +12,8 @@ export interface LandmarkParameter {
   min: number;
   max: number;
   default: number;
+  /** Procedural bounds resolve for a new map; recorded and authored measures keep their units. */
+  generated?: { min: RelativeMeasure; max: RelativeMeasure; default: RelativeMeasure };
   /** Advisory measures inform generation without being guaranteed. */
   advisory?: boolean;
 }
@@ -50,29 +53,50 @@ export interface Landmark {
   spaceId?: string;
 }
 
-const metres = (key: string, label: string, min: number, max: number, value: number) => ({
+const generatedLength = ([min, max, value]: readonly [number, number, number]) => ({
+  min: MapScale.length(min),
+  max: MapScale.length(max),
+  default: MapScale.length(value),
+});
+const metres = (
+  key: string,
+  label: string,
+  min: number,
+  max: number,
+  value: number,
+  generated: readonly [number, number, number]
+) => ({
   key,
   label,
   unit: "m",
   min,
   max,
   default: value,
+  generated: generatedLength(generated),
 });
-const kilometres = (key: string, label: string, min: number, max: number, value: number) => ({
+const kilometres = (
+  key: string,
+  label: string,
+  min: number,
+  max: number,
+  value: number,
+  generated: readonly [number, number, number]
+) => ({
   key,
   label,
   unit: "km",
   min,
   max,
   default: value,
+  generated: generatedLength(generated),
 });
 const mountain = [
-  metres("summit", "Summit elevation", 500, 9000, 5900),
-  metres("prominence", "Prominence", 300, 9000, 4000),
-  kilometres("baseRadius", "Base radius", 5, 200, 30),
+  metres("summit", "Summit elevation", 500, 9000, 5900, [0.000125, 0.00225, 0.001475]),
+  metres("prominence", "Prominence", 300, 9000, 4000, [0.000075, 0.00225, 0.001]),
+  kilometres("baseRadius", "Base radius", 5, 200, 30, [0.00125, 0.05, 0.0075]),
 ];
-const capture = (value: number) =>
-  kilometres("captureDistance", "River capture distance", 0, 1000, value);
+const capture = (value: number, fraction: number) =>
+  kilometres("captureDistance", "River capture distance", 0, 1000, value, [0, 0.25, fraction]);
 
 export const landmarkKinds: LandmarkKind[] = [
   {
@@ -83,7 +107,7 @@ export const landmarkKinds: LandmarkKind[] = [
     description:
       "A plume-fed cone built every active epoch, with heat and fractures beneath it. Kilimanjaro, Fuji.",
     parameters: mountain,
-    reach: (p) => p.baseRadius * 1000,
+    reach: (p) => MapScale.metres(p.baseRadius, "km"),
   },
   {
     id: "resistant-mountain",
@@ -93,11 +117,11 @@ export const landmarkKinds: LandmarkKind[] = [
     description:
       "A hard bedrock dome that erosion leaves standing as the surroundings lower. Uluru, Ben Nevis.",
     parameters: [
-      metres("summit", "Summit elevation", 300, 9000, 2000),
-      metres("prominence", "Prominence", 200, 9000, 1500),
-      kilometres("baseRadius", "Base radius", 2, 200, 15),
+      metres("summit", "Summit elevation", 300, 9000, 2000, [0.000075, 0.00225, 0.0005]),
+      metres("prominence", "Prominence", 200, 9000, 1500, [0.00005, 0.00225, 0.000375]),
+      kilometres("baseRadius", "Base radius", 2, 200, 15, [0.0005, 0.05, 0.00375]),
     ],
-    reach: (p) => p.baseRadius * 1000,
+    reach: (p) => MapScale.metres(p.baseRadius, "km"),
   },
   {
     id: "canyon",
@@ -107,11 +131,11 @@ export const landmarkKinds: LandmarkKind[] = [
     description:
       "An uplifted corridor with resistant caprock that a captured river incises along the drawn path. Grand Canyon.",
     parameters: [
-      metres("depth", "Depth below rim", 100, 3000, 1500),
-      kilometres("rimWidth", "Rim-to-rim width", 1, 30, 15),
-      capture(150),
+      metres("depth", "Depth below rim", 100, 3000, 1500, [0.000025, 0.00075, 0.000375]),
+      kilometres("rimWidth", "Rim-to-rim width", 1, 30, 15, [0.00025, 0.0075, 0.00375]),
+      capture(150, 0.0375),
     ],
-    reach: (p) => Math.max(p.rimWidth / 2, p.captureDistance) * 1000,
+    reach: (p) => MapScale.metres(Math.max(p.rimWidth / 2, p.captureDistance), "km"),
   },
   {
     id: "dome-ring",
@@ -121,11 +145,11 @@ export const landmarkKinds: LandmarkKind[] = [
     description:
       "A bedrock dome of alternating resistant rings that erosion exposes as concentric ridges. The Richat structure.",
     parameters: [
-      kilometres("diameter", "Diameter", 5, 200, 45),
+      kilometres("diameter", "Diameter", 5, 200, 45, [0.00125, 0.05, 0.01125]),
       { key: "ringCount", label: "Ring count", unit: "rings", min: 1, max: 6, default: 3 },
-      metres("ringRelief", "Ring relief", 20, 1000, 150),
+      metres("ringRelief", "Ring relief", 20, 1000, 150, [0.000005, 0.00025, 0.0000375]),
     ],
-    reach: (p) => (p.diameter * 1000) / 2,
+    reach: (p) => MapScale.metres(p.diameter, "km") / 2,
   },
   {
     id: "impact-ring",
@@ -135,11 +159,11 @@ export const landmarkKinds: LandmarkKind[] = [
     description:
       "An authored impact at the chosen epoch with a maintained rim and floor. Vredefort, Chicxulub.",
     parameters: [
-      kilometres("diameter", "Diameter", 5, 300, 45),
-      metres("rimHeight", "Rim height", 50, 3000, 400),
-      metres("floorDepth", "Floor depth below rim", 50, 5000, 600),
+      kilometres("diameter", "Diameter", 5, 300, 45, [0.00125, 0.075, 0.01125]),
+      metres("rimHeight", "Rim height", 50, 3000, 400, [0.0000125, 0.00075, 0.0001]),
+      metres("floorDepth", "Floor depth below rim", 50, 5000, 600, [0.0000125, 0.00125, 0.00015]),
     ],
-    reach: (p) => (p.diameter * 1000) / 2,
+    reach: (p) => MapScale.metres(p.diameter, "km") / 2,
   },
   {
     id: "escarpment",
@@ -149,10 +173,10 @@ export const landmarkKinds: LandmarkKind[] = [
     description:
       "A fault along the drawn line; the right-hand side drops by the throw. Drakensberg, the East African Rift.",
     parameters: [
-      metres("throw", "Throw", 100, 4000, 1000),
-      kilometres("scarpWidth", "Scarp width", 1, 50, 10),
+      metres("throw", "Throw", 100, 4000, 1000, [0.000025, 0.001, 0.00025]),
+      kilometres("scarpWidth", "Scarp width", 1, 50, 10, [0.00025, 0.0125, 0.0025]),
     ],
-    reach: (p) => p.scarpWidth * 1000,
+    reach: (p) => MapScale.metres(p.scarpWidth, "km"),
   },
   {
     id: "falls",
@@ -162,7 +186,7 @@ export const landmarkKinds: LandmarkKind[] = [
     description:
       "A caprock step across a captured river. Below the World mesh; latent until a Region realizes it. Niagara, Victoria.",
     parameters: [
-      metres("drop", "Drop", 10, 1000, 50),
+      metres("drop", "Drop", 10, 1000, 50, [0.0000025, 0.00025, 0.0000125]),
       {
         key: "discharge",
         label: "Desired discharge",
@@ -170,11 +194,16 @@ export const landmarkKinds: LandmarkKind[] = [
         min: 0,
         max: 300000,
         default: 2400,
+        generated: {
+          min: MapScale.volume(0),
+          max: MapScale.volume(4.6875e-15),
+          default: MapScale.volume(3.75e-17),
+        },
         advisory: true,
       },
-      capture(50),
+      capture(50, 0.0125),
     ],
-    reach: (p) => Math.max(1, p.captureDistance) * 1000,
+    reach: (p) => MapScale.metres(p.captureDistance, "km"),
   },
   ...magicLandmarkKinds(),
 ];
@@ -194,7 +223,7 @@ function magicLandmarkKinds(): LandmarkKind[] {
       max: 1000,
       default: 900,
     },
-    kilometres("reach", "Source reach", 10, 300, 60),
+    kilometres("reach", "Source reach", 10, 300, 60, [0.0025, 0.075, 0.015]),
   ];
   const kind = (
     id: string,
@@ -210,7 +239,7 @@ function magicLandmarkKinds(): LandmarkKind[] {
     geometry: "Point",
     description,
     parameters: source(measure),
-    reach: (p) => p.reach * 1000,
+    reach: (p) => MapScale.metres(p.reach, "km"),
     system,
     term,
   });
@@ -263,6 +292,21 @@ export function landmarkKind(id: string): LandmarkKind | undefined {
 }
 export function defaultLandmarkParameters(kind: LandmarkKind): Record<string, number> {
   return Object.fromEntries(kind.parameters.map((p) => [p.key, p.default]));
+}
+/** Newly generated measures, converted back to the catalogue's recorded units after resolution. */
+export function generatedLandmarkMeasures(kind: LandmarkKind, scale: MapScale) {
+  return kind.parameters.map((parameter) => {
+    if (!parameter.generated) return parameter;
+    const values = scale.resolve(MapScale.definitions(parameter.generated)),
+      recorded = (value: number) =>
+        parameter.unit === "km" ? MapScale.inUnits(value, "km") : value;
+    return {
+      ...parameter,
+      min: recorded(values.min),
+      max: recorded(values.max),
+      default: recorded(values.default),
+    };
+  });
 }
 /** Every declared measure present and within range, nothing undeclared; diagnostics name the measure. */
 export function validateLandmarkParameters(kind: LandmarkKind, parameters: Record<string, number>) {

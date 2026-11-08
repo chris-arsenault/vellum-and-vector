@@ -57,7 +57,7 @@ export function beginRegional(state: GenerationState, input: AtlasGenerationInpu
     parentSpan = parentSampleSpan(state.domain, input.areaId, physical),
     inheritedHeight = map.coverage.copyBand(map.Elevation);
   inheritedHeight.retain();
-  regionalProfile(work.profile, parentSpan, state.domain.scope.resolution ?? map.mesh.spacing);
+  regionalProfile(work.profile, parentSpan, map.scale);
   inheritDerived(state);
   const regional: RegionalState["regional"] = {
     input: {
@@ -237,7 +237,6 @@ export function prepareRegionalRefinement(source: DomainSnapshot, input: AtlasGe
   const resolved = resolveInput(source, {
     ...input,
     parameters: atlasParametersSchema.parse(input.parameters ?? {}),
-    processes: input.processes ?? {},
   });
   // A refinement reads a completed world: its settings (epochs, eras, systems) stay as they
   // are recorded; the resolved settings travel with the input, never back into the world.

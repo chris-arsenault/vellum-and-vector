@@ -92,7 +92,8 @@ export function wardPropagation(state: GenerationState, field: MagicField) {
         i,
         Math.max(
           field.intensity.get(i),
-          seat.strength * Math.max(0, 1 - distance / Math.max(1, seat.radius))
+          seat.strength *
+            Math.max(0, 1 - distance / Math.max(map.scale.length(0.00000025), seat.radius))
         )
       );
     }

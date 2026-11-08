@@ -17,7 +17,8 @@ import {
 } from "./coverShared";
 
 /** Area at which a Deepwood is half as great as they get: 2,000 square kilometres. */
-const typicalArea = 2e9;
+// length-unit: fraction
+const typicalArea = 0.000125;
 const isA = isFamily("deepwood");
 const places = landscapePlaces("deepwood", "deepwood", verdureAt);
 const factors = countryFactors(places, typicalArea, verdureAt);

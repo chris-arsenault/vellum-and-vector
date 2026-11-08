@@ -38,11 +38,10 @@ function seedFloodplains(
     for (let edge = 0; edge < map.mesh.degree(i); edge++) {
       const j = map.mesh.neighbor(i, edge),
         distance = map.mesh.edgeLength(i, edge);
-      if (distance > c.Profile.FloodplainMaximumWidth || !canFlood(map, c, upstream, i, j))
-        continue;
+      if (!canFlood(map, c, upstream, i, j)) continue;
       const intensity = clamp(
         map.RiverChannelStrength.get(i) +
-          toUnits(map.CumulativeDeposition.get(j)) -
+          toUnits(map.CumulativeDeposition.get(j)) / map.scale.length(2.5e-7) -
           map.Slope.get(j) * 60_000,
         1,
         1000
@@ -76,12 +75,12 @@ function expandFloodplains(
       const j = map.mesh.neighbor(i, edge),
         length = map.mesh.edgeLength(i, edge);
       const next = distance + length;
-      if (next > c.Profile.FloodplainMaximumWidth || !canFlood(map, c, upstream, i, j)) continue;
+      if (!canFlood(map, c, upstream, i, j)) continue;
       const relief = toUnits(Math.abs(map.Elevation.get(i) - map.Elevation.get(j)));
       const intensity =
         map.FloodplainIntensity.get(i) -
-        (c.Profile.FloodplainIntensityDecay * length) / 10_000 -
-        relief;
+        (c.Profile.FloodplainIntensityDecay * length) / map.scale.length(0.0025) -
+        relief / map.scale.length(2.5e-7);
       if (intensity <= map.FloodplainIntensity.get(j)) continue;
       map.FloodplainIntensity.set(j, intensity);
       frontier.push(j, next);

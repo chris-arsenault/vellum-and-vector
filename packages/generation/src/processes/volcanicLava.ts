@@ -1,4 +1,4 @@
-import { CellQueue, type Band } from "@atlas/domain";
+import { CellQueue, MapScale, type Band } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import type { PhysicalContext } from "../world/context";
 import { workingArray, releaseWorking } from "../world/physicalNumerics";
@@ -48,7 +48,9 @@ export class VolcanicLava {
   erupt(source: number, freshVolume: number): Eruption {
     const result: Eruption = { source, volume: 0, pending: 0, radius: 0 };
     if (source < 0 || freshVolume <= 0) return result;
-    const stored = (this.map.VolcanicMeltSupply.get(source) * this.map.mesh.area(source)) / 1024;
+    const stored =
+      MapScale.metres(this.map.VolcanicMeltSupply.get(source), "native") *
+      this.map.mesh.area(source);
     this.map.VolcanicMeltSupply.set(source, 0);
     this.solidify(source, stored, result);
     this.add(source, freshVolume, this.context.Profile.LavaCoolingDistance);
@@ -71,9 +73,9 @@ export class VolcanicLava {
   }
   private level(cell: number, volume: number) {
     return pondLevel(
-      this.ground.surface(cell, "land") / 1024,
+      MapScale.metres(this.ground.surface(cell, "land"), "native"),
       this.ground.share(cell, "land"),
-      this.ground.surface(cell, "cut") / 1024,
+      MapScale.metres(this.ground.surface(cell, "cut"), "native"),
       this.ground.share(cell, "cut"),
       volume / this.map.mesh.area(cell)
     );
@@ -134,7 +136,10 @@ export class VolcanicLava {
     let accepted = 0;
     for (const facet of ["land", "cut"] as const) {
       if (this.ground.share(cell, facet) <= 0) continue;
-      const depth = Math.max(0, level * 1024 - this.ground.surface(cell, facet));
+      const depth = Math.max(
+        0,
+        MapScale.inUnits(level, "native") - this.ground.surface(cell, facet)
+      );
       if (depth <= 0) continue;
       accepted += constructMaterial(
         this.map,
@@ -145,9 +150,12 @@ export class VolcanicLava {
         facet
       );
     }
-    const landed = (accepted / 1024) * this.map.mesh.area(cell),
+    const landed = MapScale.metres(accepted, "native") * this.map.mesh.area(cell),
       pending = Math.max(0, volume - landed);
-    this.map.VolcanicMeltSupply.add(cell, (pending * 1024) / this.map.mesh.area(cell));
+    this.map.VolcanicMeltSupply.add(
+      cell,
+      MapScale.inUnits(pending / this.map.mesh.area(cell), "native")
+    );
     result.pending += pending;
     result.volume += landed;
     if (landed <= 0) return;
@@ -155,12 +163,12 @@ export class VolcanicLava {
   }
   private mark(cell: number, accepted: number, result: Eruption) {
     const map = this.map,
-      activity = clamp(accepted / 1024, 0, 1000),
+      activity = clamp(MapScale.metres(accepted, "native") / map.scale.length(0.00000025), 0, 1000),
       distance = Math.hypot(
         meshDeltaX(map.mesh, map.mesh.x(cell) - map.mesh.x(result.source)),
         map.mesh.y(cell) - map.mesh.y(result.source)
       );
-    result.radius = Math.max(result.radius, distance + map.mesh.spacing / 2);
+    result.radius = Math.max(result.radius, distance + map.scale.cells(0.5));
     map.VolcanicConstructionHistory.add(cell, accepted);
     map.VolcanicActivity.set(cell, Math.max(map.VolcanicActivity.get(cell), activity));
     map.VolcanicLastActiveEpoch.set(cell, Math.max(0, this.context.EpochIndex));

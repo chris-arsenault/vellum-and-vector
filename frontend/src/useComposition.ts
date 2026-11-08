@@ -11,7 +11,8 @@ import { defaultStyles } from "./presentation";
 import { initialSubjectFields } from "./drawnFields";
 import { readEditorWorld } from "./atlasWorkspace";
 
-const legacyPresentation = defaultCartographicPresentation();
+// Region views may define only a footprint; presentation is optional on current views.
+const defaultPresentation = defaultCartographicPresentation();
 type CompositionDraft = World["views"][number] & { cartography: CartographicPresentation };
 
 interface Scope {
@@ -58,7 +59,7 @@ function currentPresentation(
   current: World["views"][number] | undefined,
   draft: CartographicPresentation
 ) {
-  return current ? (current.cartography ?? legacyPresentation) : draft;
+  return current ? (current.cartography ?? defaultPresentation) : draft;
 }
 export function useComposition(world: World, scope: Scope) {
   const {
