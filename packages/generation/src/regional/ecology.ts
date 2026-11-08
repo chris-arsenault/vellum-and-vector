@@ -209,7 +209,8 @@ function regionalAuthority(state: RegionalState) {
   return (i: number) => {
     for (const { binding, values } of fixed) {
       const value = values.get(i);
-      if (Number.isFinite(value)) map[binding.native].set(i, value);
+      if (Number.isFinite(value) && isMutablePhysicalName(binding.native))
+        map[binding.native].set(i, value);
     }
     if (woodland[i]) authoritativeCanopy(map, i, Math.max(0.7, map.TreeCover.get(i)));
     else updateTreeCover(map, i);
@@ -278,3 +279,4 @@ function drown(map: RegionalState["physical"]["map"], i: number) {
   }
   map.SoilCarbon.add(i, before);
 }
+import { isMutablePhysicalName } from "../world/field";

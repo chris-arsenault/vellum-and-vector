@@ -6,6 +6,7 @@ import { projectPhysicalMaterial } from "./physicalMaterial";
 import type { AtlasPhysicalWorkspace } from "./atlasWorkspace";
 import { projectedValues } from "./atlasSampling";
 import { ecologyBindings } from "./ecologyState";
+import { groundResourceArea } from "../rock/groundResources";
 
 const forcingChannels = new Set([
   "elevation",
@@ -35,10 +36,11 @@ function projectChannel(state: GenerationState, binding: ChannelBinding) {
   const work = state.physical!,
     map = work.map,
     grid = state.surface;
-  const values = projectedValues(
+  const source = channelSource(work, binding),
+    values = projectedValues(
       work,
-      map[binding.native],
-      binding.unit === "category" || binding.unit === "cell-index",
+      source,
+      binding.discrete || binding.unit === "category" || binding.unit === "cell-index",
       grid.channels[binding.name]
     ),
     datum = binding.datum ? map.BaseSeaLevel : 0;
@@ -52,6 +54,18 @@ function projectChannel(state: GenerationState, binding: ChannelBinding) {
     );
   }
   putChannel(grid, binding.name, binding.unit, values);
+}
+function channelSource(work: AtlasPhysicalWorkspace, binding: ChannelBinding) {
+  const map = work.map,
+    band = map[binding.native];
+  if (binding.global) {
+    const area = binding.areaDensity ? groundResourceArea(map) : 1,
+      value = area > 0 ? band.get(0) / area : 0;
+    return () => value;
+  }
+  return binding.areaDensity
+    ? (cell: number) => (map.mesh.area(cell) > 0 ? band.get(cell) / map.mesh.area(cell) : 0)
+    : band;
 }
 function projectChannels(
   state: GenerationState,

@@ -30,6 +30,8 @@ export interface PhysicalContext {
   Products?: Pick<ProductLedger, "status">;
   /** What else rides the crust and moves whenever the plates do. */
   AfterPlateStep?: () => void;
+  /** Selected deformation processes act before this interval's contacts weld or split. */
+  DuringPlateStep?: (interval: PhysicalContext) => void;
   /** Optional live inspection; simultaneous effects are observed after their joint settlement. */
   ObserveProcess?: (
     event: ProcessObservation,

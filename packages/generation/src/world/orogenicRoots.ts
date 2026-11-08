@@ -1,4 +1,5 @@
 import type { PhysicalField } from "./field";
+import { accrueRootReserve, spendRootReserve, retainRootReserve } from "../rock/groundWorld";
 import type { PhysicalContext } from "./context";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
 import {
@@ -6,9 +7,16 @@ import {
   adjustCrustColumn,
   arcCrustYield,
   initializeCrustColumns,
-} from "./crustTransport";
+} from "../rock/crustTransport";
 import { constructionWeight, crossSection } from "./orogenicShape";
-import { crustHeight, maximumCrustThickness, thickness, units } from "./math";
+import {
+  crustHeight,
+  crustPerRock,
+  maximumCrustThickness,
+  minimumCrustThickness,
+  thickness,
+  units,
+} from "./math";
 import { smoothMetric } from "./metricSmoothing";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 export function addRoot(map: PhysicalField, cell: number, volume: number) {
@@ -17,7 +25,6 @@ export function addRoot(map: PhysicalField, cell: number, volume: number) {
     column = (volume * 1024) / map.mesh.area(cell);
   addContinentalRoot(map, cell, column);
   const nextFraction = map.CrustContinentalColumn.get(cell) / map.CrustThickness.get(cell);
-  map.CrustContinentalFraction.set(cell, Math.round(nextFraction * 1000));
   return units(crustHeight(before + column / 1024, nextFraction) - crustHeight(before, fraction));
 }
 /** How much more crust a column can hold. Each pass's crust adds to what earlier passes left. */
@@ -83,8 +90,7 @@ export function distributeOrogenicRoots(
   }
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds.get(i);
-    if (id >= 0 && reserves[id] > 0)
-      map.CrustRootReserve.set(i, (map.CrustRootReserve.get(i) * remaining[id]) / reserves[id]);
+    if (id >= 0 && reserves[id] > 0) retainRootReserve(map, i, remaining[id] / reserves[id]);
   }
   settleStrandedRoots(map, components, context.Span);
   releaseWorking(map, weights, capacities, ratios);
@@ -102,7 +108,8 @@ export function pileUpEarlierShortening(map: PhysicalField, context: PhysicalCon
     if (map.TectonicBoundaryCodes.get(i) !== 1) continue;
     const continent = map.CrustContinentalFraction.get(i) / 1000,
       returned = continent + (1 - continent) * arcCrustYield;
-    map.CrustRootReserve.add(
+    accrueRootReserve(
+      map,
       i,
       (map.TectonicStrain.get(i) / 1000) * (drift / width) * map.CrustThickness.get(i) * returned
     );
@@ -127,11 +134,30 @@ function settleStrandedRoots(map: PhysicalField, components: BoundaryComponent[]
     );
     if (column <= 0) continue;
     addRoot(map, i, (column * map.mesh.area(i)) / 1024);
-    map.CrustRootReserve.set(i, held - column);
+    spendRootReserve(map, i, column);
   }
 }
 /** Below this much continent a column is ocean crust, too stiff and thin for crust to flow through. */
 const flowingFraction = 350;
+/** Excess load in equivalent crust metres; surface rock can drive flow through a thin root. */
+export function mobileCrust(
+  column: number,
+  surfaceRock: number,
+  fraction: number,
+  supported: number,
+  ease: number,
+  span: number
+) {
+  const over =
+    column +
+    Math.max(0, surfaceRock) * crustPerRock(fraction) -
+    (1000 + 3000 * fraction + supported);
+  if (over <= 0 || span <= 0) return 0;
+  return Math.min(
+    Math.max(0, column - minimumCrustThickness),
+    over * (1 - (ease / (over + ease)) ** span)
+  );
+}
 /**
  * Crust too thick to hold itself up flows outward under its own weight, so a long collision builds a
  * thick core and a high region that widens around it, and later ranges rise on that ground. Only the
@@ -149,12 +175,15 @@ export function crustFlow(
       map.CrustContinentalFraction.get(i) >= flowingFraction ? 1 : 0
     ),
     flowing = workingValues(map, "float64", "flow:flowing", (i) => {
-      const fraction = map.CrustContinentalFraction.get(i) / 1000,
-        over =
-          map.CrustThickness.get(i) / 1024 - (1000 + 3000 * fraction + (squeezed(i) ? bears : 0));
-      // The thicker it stands the faster it goes, and what stays after one span flows again in the next.
-      return continent.get(i) && over > 0
-        ? over * (1 - (1 - over / (over + ease)) ** context.Span)
+      return continent.get(i)
+        ? mobileCrust(
+            map.CrustThickness.get(i) / 1024,
+            map.SurfaceRockLoad.get(i) / 1024,
+            map.CrustContinentalFraction.get(i) / 1000,
+            squeezed(i) ? bears : 0,
+            ease,
+            context.Span
+          )
         : 0;
     }),
     // How far it spreads grows with the square root of how long it has, as anything spreading does.

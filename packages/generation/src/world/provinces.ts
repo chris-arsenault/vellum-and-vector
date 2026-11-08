@@ -1,5 +1,6 @@
 // TectonicProvinceLayer assignment and boundary stress, Canonry 0f62584c.
 import type { PhysicalContext } from "./context";
+import { initializeContinentalAffinity } from "../rock/groundWorld";
 import { crustForming, type PhysicalField } from "./field";
 import { clamp, round } from "./math";
 import { meshNoise as fractalNoise } from "./noise";
@@ -259,7 +260,7 @@ function assignTriangle(
     unit(clamp(map.CrustRiftStrain.get(i), 0, 1) * p.ContinentalAssemblySeparationDepth)
   );
   map.CrustBasePotential.set(i, unit(potential));
-  if (forming) map.CrustContinentalFraction.set(i, unit(affinity));
+  if (forming) initializeContinentalAffinity(map, i, unit(affinity));
   map.CrustTypeCodes.set(i, map.CrustContinentalFraction.get(i) >= 500 ? 2 : 1);
   assignBoundary(map, i, sites, s, context, held);
 }

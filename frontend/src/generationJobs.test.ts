@@ -69,7 +69,7 @@ it.each(["completed", "failed"])(
   async (status) => {
     vi.stubGlobal("Worker", TestWorker);
     const world = fixtureWorld({
-      name: "Recoverable errors",
+      name: "Generation diagnostics",
       seed: 42,
       width: 10000,
       height: 10000,
@@ -87,15 +87,15 @@ it.each(["completed", "failed"])(
       operationId: crypto.randomUUID(),
     });
     const diagnostic: GenerationDiagnostic = {
-      code: "process_failed",
-      message: "Contour omitted",
-      severity: "error",
+      code: status === "failed" ? "process_failed" : "approximate",
+      message: status === "failed" ? "Contour failed" : "Approximate contour",
+      severity: status === "failed" ? "error" : "warning",
       invocation: "atlas.features",
       resource: null,
       process: "atlas.features",
       epochs: [],
-      outcome: "omitted",
-      stack: "Error: Contour omitted",
+      outcome: status === "failed" ? "failed" : "retained",
+      stack: status === "failed" ? "Error: Contour failed" : undefined,
     };
     const worker = TestWorker.latest;
     worker.onmessage!({ data: { kind: "diagnostic", diagnostic } });
@@ -113,7 +113,7 @@ it.each(["completed", "failed"])(
     const job = listJobs(world.id)[0];
     expect(job.status).toBe(status);
     expect(job.error).toBe(status === "completed" ? null : "Unrecoverable failure");
-    expect(job.diagnostics?.filter((entry) => entry.code === "process_failed")).toEqual([
+    expect(job.diagnostics?.filter((entry) => entry.code === diagnostic.code)).toEqual([
       diagnostic,
     ]);
   }

@@ -4,7 +4,7 @@ import { tectonicEpoch, tectonicMargins } from "../world/margins";
 import { mantlePlumeRoots } from "../world/plumes";
 import { continentalDomains, tectonicProvinces } from "../world/provinces";
 import { crustalSupport } from "../world/support";
-import { initializeLandscape } from "../world/surface";
+import { initializeLandscape } from "../rock/groundInitialization";
 import { continentalSutures } from "../world/sutures";
 import { epochHistory, validatePhysical } from "../world/validation";
 import { initializeRock, metamorphism } from "../rock/rockHistory";

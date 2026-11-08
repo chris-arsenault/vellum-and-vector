@@ -113,9 +113,8 @@ exterior as an outlet at its own height. Calibration and conditioning blurs are 
 over the frame's cells only.
 
 The captured country's character enters as the world's structural grain, strain, glacial
-reworking and volcanic construction. The world's columns interfinger across their parent cells,
-and the belt's folds, continuous along the grain, strip the column on their axes: deep rock crops out
-there, troughs keep what lay on top, and each round's cuts uncover more. The drainage network is a geodesic tree over the land
+reworking and volcanic construction. Captured columns retain their material packages as they are
+conditioned to the child's terrain; later removal exposes their buried beds. The drainage network is a geodesic tree over the land
 rooted at the established waters (the connected sea, open frame edges starting with their
 remaining fall to the sea, captured lakes at their level, the floors of the parent's closed
 basins) and descending a cost field of process terms: climbing the captured base, crossing
@@ -504,19 +503,18 @@ interface GenerationProcess<Parameters> {
 
 The runner resolves settings, checks required facts, applies the process,
 validates its result and updates produced/invalidated facts. If execution or
-output validation fails, it records diagnostics, invalidates the process's
-affected facts and continues when the working map still satisfies its existing
-invariants. Processes with unavailable prerequisites are skipped without
-consuming stale buffers. Completed work remains in place; failed processes do
-not establish fresh output facts.
+output validation fails, it records diagnostics and fails the job before final
+publication. Processes mutate shared working state, so an exception cannot be
+treated as an omitted product while retaining its partial changes. Processes
+with unavailable prerequisites are skipped without consuming stale buffers.
 
 The result retains structured diagnostics with the process, invocation, epoch
 ancestry, error code, message, stack where available and whether output was
-omitted, skipped or retained with a warning. The worker streams these diagnostics
+failed, skipped or retained with a warning. The worker streams these diagnostics
 to the job inspector while running; they remain inspectable after completion or
-failure. Recoverable errors do not open an error dialog or discard valid results.
-Invalid configuration or inherited geography, cancellation, worker termination
-and failures that leave the working map unsafe to publish still stop the run.
+failure. Warnings may accompany successful generation; execution errors cannot.
+Invalid configuration or inherited geography, cancellation and worker termination
+also stop the run.
 A long numerical process can split work internally to report progress and
 observe cancellation; when it does not, the host terminates the worker after a
 short grace period and discards its unpublished staging.
@@ -673,28 +671,46 @@ present may have no active Aurora while preserving its glacial activity history.
 
 ### Rock and relief
 
-Every cell holds a short column of rock on the field's own bands: the top layer is what the
-surface is, the lowest is a basement that never runs out. Erosion strips from the top, deposition
-and eruption add to it, and the surface's resistance follows whatever is exposed while keeping what
-has been done to it. Each kind and its facts come from one catalogue
-(`packages/generation/src/rock/rockCatalogue.ts`), and a lint rule keeps other generation code from reading
-or writing the rock bands. Buried sediment turns to rock by its setting. A bed too thin to be what a
-cell's ground is only adds to the rock already there, so a film of ash does not change the map's rock.
+Ground owns the field's geological material and placement. Each cell retains intact and incised
+area shares, each with rock beds and finite loose cover above an unbounded basement. Layers keep
+composition, strength, damage, directional fabric and formation/alteration ages. Erosion visits
+the material it removes; deposition carries that material into its destination. Thin deposits
+remain beds. Burial acts on each share's actual overburden and retained constituents, while
+overlying construction initially entombs loose material as a weak substrate.
+
+Ground queries expose the retained material snapshot. Numeric readers combine constituent facts
+and average responses over occupied shares; classification can still ask for the dominant kind.
+Runoff, slope stability and material resistance use those shared queries, so deposited or exposed
+material affects their next read without a connection to the process that put it there.
+Weathering spends captured climate forcing on the remaining substrate at settlement, attenuated
+by each share's actual cover. Converted rock becomes loose material beneath that cover in bed order.
+
+Elevation, mean sediment depth and exposed-rock summaries are read-only projections. Solvers
+use owning operations for construction, displacement, wear and deformation. Live field and
+Coverage readers provide bulk copies without writable aliases. Published and imported material
+properties select one donor package together; placement may interpolate independently. Legacy
+inputs without geological history keep that history unknown.
+
+Columns have bounded capacity. Coarsening preserves the surface cap and rock basement but loses
+fine internal ordering; only the largest two constituent identities remain in a mixed bed.
+Intact and incised shares do not locate subcell contacts in three dimensions. Neighbor-face
+queries use their overlapping exposed intervals, allowing existing slope failure to read weak
+support beneath a resistant cap.
 
 What a map shows is where the worn surface cuts through the rock beneath. Continental platforms start with
 kilometres of alternating beds. Rock under a belt or along a suture turns to its next form by how deep and
 how hot it lies, never by chance, so neighbours with one history stay alike and nothing bakes at the surface.
-A belt's crests bring up far more rock than they stand high, by its structure and not by each summit's
-height, so exposed rock falls into zones along the belt: the deepest and highest grade in its core, younger
-beds toward its front. Melt in an arc cools as a batholith below a volcanic shell and shows only once
+Uplift translates existing columns; exposure changes through removal, transported packages or alteration.
+Melt in an arc cools as a batholith below a volcanic shell and shows only once
 erosion has taken the shell.
 
-Plates move in many small steps. Each cell follows where its material has come from across the
-whole move and takes the height and rock of that place when the move ends, so a move carries relief
-instead of averaging it away. Ground with too little arriving is new crust and keeps the shared
+Plates move in deformation intervals. Each interval carries the existing relief and then builds
+mountains at its active contacts before those contacts can weld shut. The next interval carries
+the newly built rock along with the older terrain. Ground with too little arriving is new crust and keeps the shared
 value. Where plates converge, some crust ends up under other crust and no cell takes up the rock that
 stood on it. That rock rides to where its crust went and stacks there across a thrust sheet's width,
-so a collision piles rock up, and only part of what rode on a sinking slab comes back. Continent
+carrying its represented beds and thinning the package as it spreads. A collision piles rock up,
+and only part of what rode on a sinking slab comes back. Continent
 floats: where it rides up on ocean, the ocean goes down under it and the continent keeps its area, and
 only continent meeting continent is shortened. Sinking ocean pulls its plate after it, so an ocean keeps
 closing until no ocean is left at the contact. An ocean province that reaches what it sinks beneath is
@@ -703,8 +719,7 @@ they lock and weld into one plate along a seam weaker than either; what drove th
 A continent's interior is hard to break, so when later pull from sinking ocean tears a welded plate it
 tears along the seam, and the pieces and their shares of the old belt leave with whatever pulls them. Ocean-bearing parts of a plate
 can tear under the same pull, so a merged plate gains new edges around its land and the old edges end up
-inside it. Plates travel furthest in the first epoch and less in each later one, far enough early on for
-oceans to close, separately from how strongly an epoch builds. On a bounded map a plate slows as
+inside it. Epoch duration and tectonic strength jointly determine travel. On a bounded map a plate slows as
 its continent reaches the edge, so continents stay on the map while oceans can still pass off it.
 
 Rock piled on the crust sinks by about its density over the mantle's, but a strong plate carries a
@@ -717,13 +732,14 @@ it, and keeps its sheet, fault segment, place across the sheet and dip, all carr
 Each pass of shortening advances the front and closes the sheets up: the one at the boundary holds
 its place and each beyond is drawn in under the leading edge of the one behind, younger rock beneath
 older, up to what a thrust can carry before it locks. Leading edges climb in the same rock each pass,
-so ridges rise where they stand. As a sheet climbs its beds tilt and the surface planes across them,
-which exposes rock in bands along the belt. Rifts keep their tilted, alternately dropped fault blocks
+so ridges rise where they stand. Sheet movement carries retained beds and transforms their axial fabric.
+Stored sheet dip does not represent a full three-dimensional bedding plane. Rifts keep their tilted, alternately dropped fault blocks
 from pass to pass in the same way. Crust that subducting ocean returns as arc crust feeds a belt's
 roots, as continental crust piled up in a collision does; a belt with no continent builds an arc on
 its ocean crust, and root crust the plates carry away from any convergent belt settles where it lies.
-Each pass's crust adds to what earlier passes left, and crust too thick to hold itself up flows outward
-through the continent under its own weight, more of it the thicker the column stands. Crust holds that
+Each interval's crust adds to what earlier intervals left. A separate relaxation process lets
+continental crust spread under its own thickness and the load of rock standing on it. It runs even
+when mountain construction is inactive. Crust holds extra
 thickness only while being squeezed: once a collision ends, the old belt's root settles out under the
 land around it, and wear that cuts past the rock on a belt thins the root itself, so old belts sink to
 broad raised ground while their deep rock comes to the surface. The rock a belt raises comes out of its
@@ -733,16 +749,18 @@ and epochs wear more than dry ones. They drop what they cannot carry only up to 
 needs, and ice drops its load up to what a slope can hold. Waves wear coasts back to a platform below the
 sea. Each process is declared with what it reads, asks and moves, as
 [ADR 0011](adr/0011-processes-couple-through-keys-and-a-ledger.md) sets out. Each epoch is data: strength,
-travel, span and forcing. The first epoch's height is carried with the crust, so a report can tell what
-old ground became. A world's first
+travel, span and forcing. The first epoch's height is carried as an area average; thresholding that
+average cannot identify the fate of individual old mountains. A world's first
 forming stands in for the drift before it, so its belts begin with crust already shortened by their
 strain and go through the same roots and flow, which leaves older high ground for later ranges to stand on.
 Interior stress reaches a plate's old sutures and province seams and works a zone of crust around
 them. Seams are properties of the crust and travel with it, so each pass works the same ones. A plate's
-strongest push, from convergence at its edges or more gently from an ocean ridge, carries through its
-whole interior, and thickens and raises older rock along its seams, spending root crust the plate's belts
-have left and otherwise the zone's own shortening. Close to a rift through a continent, extension takes
-over from that squeeze, and the seams there thin and sag.
+strongest push, from continent meeting continent at its edges, or more gently from ocean going down at
+its margin or from an ocean ridge, carries through its whole interior, and thickens and raises older rock along its seams, spending the root crust that this
+pass's shortening brought and the plate's belts did not take up: once that is spent a seam rises no
+further, since a plate does not thin its whole body to feed one. Close to a rift through a continent, extension takes over from that squeeze, and the
+seams there thin and sag. Crust holds a belt's extra thickness only on the sheets a live belt is
+shortening; an older belt's root within a live boundary's reach, but not yet on its sheets, settles.
 
 Processes and materials meet through a shared vocabulary of modes: abrasion, plucking, shear and solution.
 A material holds facts, a mode says how facts answer its attack, and a process says how it acts, as a mix of
@@ -766,12 +784,13 @@ captured shared inputs and current answer explanations, without retaining a full
 
 Rock decides erosion. A river grinds, so strength is what resists it, and ice plucks along joints, so columnar
 basalt goes before massive gneiss of lesser strength. A cell's height is the mean of its ground, so a valley
-in a coarse cell lowers that mean and exposes deeper rock only in proportion to the share of the cell it
-covers, while the valley's own depth stays on record as incision.
+in a coarse cell lowers that mean over its incised share while the intact cap survives beside it.
+Later valley deposition remains on the cut floor. Widening pays for the additional intact material
+removed before spending remaining work on deepening; merged valley profiles lose their horizontal alignment.
 Streams too small to map wear every sloping cell, without a valley on record, so land falls toward its
-rivers. Weak rock lets valleys widen and takes more of a cell; strong rock keeps them narrow. Land that
-has relief to wear therefore leaves hard rock standing, while hard rock on ground already worn to grade
-stays low, as a shield does.
+rivers. A valley's share of a cell follows its catchment; what the water gets down through is the
+ground's answer alone, so strength counts once. Land that has relief to wear therefore leaves hard rock
+standing, while hard rock on ground already worn to grade stays low, as a shield does.
 
 Slopes fail on the same terms at every scale: the step between two cells climbs one hillslope, however
 wide the cells are, so a coarse map's steep flanks shed as a fine map's do. Hard rock holds a steeper

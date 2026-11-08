@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
-import { arcCrustYield, captureCrustColumns, transportCrustColumns } from "./crustTransport";
-import { createField, type PhysicalField } from "./field";
+import { arcCrustYield, captureCrustColumns, transportCrustColumns } from "../rock/crustTransport";
+import type { PhysicalField } from "./field";
+import { createTestField as createField } from "../rock/groundTestFixture";
 import { units } from "./math";
 import { createMesh } from "./mesh";
 import { workingArray } from "./physicalNumerics";

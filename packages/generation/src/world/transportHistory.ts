@@ -1,7 +1,13 @@
-import { physicalSchema, type PhysicalBufferName, type PhysicalField } from "./field";
+import {
+  physicalSchema,
+  isMutablePhysicalName,
+  type MutablePhysicalBufferName,
+  type PhysicalBufferName,
+  type PhysicalField,
+} from "./field";
 import { clamp } from "./math";
 import { weightScale, type TransportPlan } from "./transportPlan";
-import { captureCrustColumns, transportCrustColumns } from "./crustTransport";
+import { captureCrustColumns, transportCrustColumns } from "../rock/crustTransport";
 import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import {
@@ -14,6 +20,7 @@ import {
   type IdentityRule,
 } from "../coupling/quantities";
 import { carryOut } from "../rock/groundLedger";
+import { transportGroundLoad } from "../rock/groundTransport";
 
 /**
  * A plate move is one history event for every quantity at once, and each answers it by its kind, as
@@ -23,10 +30,10 @@ import { carryOut } from "../rock/groundLedger";
 const schema = new Map(physicalSchema().map((entry) => [entry.name as string, entry]));
 const answering = (name: string) => transportRules[quantityKinds[name]];
 const bandsAnswering = (answer: TransportAnswer) =>
-  Object.keys(quantityKinds).filter(
-    (name) => answering(name).moved === answer
-  ) as PhysicalBufferName[];
-const ruled = Object.keys(identityRules) as PhysicalBufferName[];
+  (Object.keys(quantityKinds) as PhysicalBufferName[])
+    .filter(isMutablePhysicalName)
+    .filter((name) => answering(name).moved === answer);
+const ruled = (Object.keys(identityRules) as PhysicalBufferName[]).filter(isMutablePhysicalName);
 const dominant = bandsAnswering("dominant").filter((name) => !identityRules[name]);
 
 /** Each source's scatter, accumulated over its targets: summed by area, or the largest arriving. */
@@ -66,7 +73,7 @@ const stored = (name: PhysicalBufferName, value: number) =>
 function complete(
   map: PhysicalField,
   plan: TransportPlan,
-  name: PhysicalBufferName,
+  name: MutablePhysicalBufferName,
   scratch: Band
 ) {
   const values = map[name];
@@ -81,7 +88,7 @@ function complete(
   }
 }
 interface Picking {
-  name: PhysicalBufferName;
+  name: MutablePhysicalBufferName;
   rule: IdentityRule;
   value: Band;
   held: Band;
@@ -154,6 +161,7 @@ function scatter(map: PhysicalField, plan: TransportPlan, picks: Picking[], area
   }
 }
 export function transportHistory(map: PhysicalField, plan: TransportPlan) {
+  transportGroundLoad(map, plan);
   const crust = captureCrustColumns(map),
     picks = picking(map),
     scratch = workingArray(map, "float64", "transport:channel"),

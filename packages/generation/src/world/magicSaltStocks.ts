@@ -1,14 +1,12 @@
 import type { Band, MagicOrigin } from "@atlas/domain";
-import { layerKind, rockLayers, stripRock } from "../rock/rockColumn";
+import { groundOf } from "../rock/ground";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
-import { exposure } from "./magicStocks";
 import { alignedNeighbor } from "./atmosphere";
 import { clamp, units } from "./math";
 import { displaceGround } from "../rock/groundLedger";
-import { rebuild } from "./surface";
 
 /**
  * Brine between evaluations: flushed by the air's moisture where the ground has oxygen
@@ -59,20 +57,30 @@ export function weatherBed(map: PhysicalField, field: MagicField, bed: Band, ori
       bed.set(i, 0);
       continue;
     }
-    const exposed = rockOverBed(map, i) ? 0 : exposure(map, i, p.buryDepth);
+    const exposed = saltExposure(map, i, p.buryDepth);
     if (exposed > 0) weatherExposed(map, field, i, bed, brine, exposed, moved);
     else if (map.TectonicStrain.get(i) >= p.domeStrain) dome(map, field, i, bed, brine);
   }
   if (dust) for (let i = 0; i < bed.length; i++) dust.add(i, moved.get(i));
   releaseWorking(map, moved);
 }
-/** Rock has been laid over the salt: it waits in the column until something strips down to it. */
-function rockOverBed(map: PhysicalField, i: number) {
-  const salt = rockCatalogue.saltbed.code;
-  if (layerKind(map, i, 0) === salt) return false;
-  for (let layer = 1; layer < rockLayers; layer++)
-    if (layerKind(map, i, layer) === salt) return true;
-  return false;
+/** Salt waits beneath rock; each occupied column exposes only its own share of the stock. */
+function saltExposure(map: PhysicalField, i: number, buryDepth: number) {
+  const ground = groundOf(map),
+    salt = rockCatalogue.saltbed.code;
+  let exposed = 0;
+  for (const facet of ["land", "cut"] as const) {
+    const section = ground.section(i, facet),
+      rocks = section.filter((layer) => layer.medium === "rock"),
+      hasSalt = (layer: (typeof rocks)[number]) =>
+        layer.kind === salt || (layer.secondaryShare > 0 && layer.secondaryKind === salt);
+    if (!rocks.length || (!hasSalt(rocks[0]) && rocks.slice(1).some(hasSalt))) continue;
+    const cover = section
+      .filter((layer) => layer.medium === "loose")
+      .reduce((sum, layer) => sum + layer.depth, 0);
+    exposed += rocks[0].share * clamp(1 - cover / units(buryDepth), 0, 1);
+  }
+  return exposed;
 }
 /** Moisture past which an exposed bed dissolves. */
 export const bedDissolvesAbove = 500;
@@ -126,8 +134,6 @@ function dissolve(
   if (drop <= 0) return;
   field.subsided.add(i, drop);
   displaceGround(map, i, -units(drop), "salt");
-  stripRock(map, i, units(drop));
-  rebuild(map, i);
 }
 /**
  * A buried bed under strain rises as a dome: the ground over it lifts by a bounded amount

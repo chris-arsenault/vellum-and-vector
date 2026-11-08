@@ -15,6 +15,7 @@ export const generationSlots = [
   "epoch.impacts",
   "epoch.landmarks",
   "material.hillslopes",
+  "material.relaxation",
   "material.support.before-margins",
   "material.ocean.before-margins",
   "material.margins",

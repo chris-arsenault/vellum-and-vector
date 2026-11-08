@@ -1,22 +1,13 @@
 import type { Band } from "@atlas/domain";
 import type { PhysicalContext } from "./context";
-import { adjustCrustColumn } from "./crustTransport";
+import { adjustCrustColumn } from "../rock/crustTransport";
 import type { PhysicalField } from "./field";
-import {
-  buoyancy,
-  clamp,
-  crustPerRock,
-  minimumCrustThickness,
-  thickness,
-  toUnits,
-  units,
-} from "./math";
+import { buoyancy, clamp, crustPerRock, thickness, toUnits, units } from "./math";
 import { metricSearch } from "./metricSearch";
 import { addRoot } from "./orogenicRoots";
 import { releaseWorking, workingArray } from "./physicalNumerics";
-import { raiseRock } from "../rock/groundLedger";
-import { stripRock } from "../rock/rockColumn";
-import { rebuild } from "./surface";
+import { displaceGround } from "../rock/groundLedger";
+import { markGroundSeam, spendRootReserve } from "../rock/groundWorld";
 
 /**
  * A plate squeezed at its edge breaks where it is already weak. Old sutures and the seams between
@@ -36,21 +27,26 @@ const interiorFraction = 500;
  * seam's zone is about as narrow as flexure smooths away, so what lifts it is mostly its own rock.
  */
 const surfaceShare = 0.7;
-/** How hard an ocean ridge squeezes a plate, next to a converging edge of the same strain. */
-const ridgePush = 0.5;
-/** How much older rock comes up, for each metre a seam's rock rises. */
-const exhumation = 1.5;
+/**
+ * How gently a plate is squeezed from an edge that is not a collision: an ocean ridge, or ocean going
+ * down at its margin, next to continent meeting continent at the same strain.
+ */
+const gentlePush = 0.5;
 
 /**
- * What an edge cell pushes its plate with: a converging edge by its strain, whether a collision or
- * ocean going down at a margin, and an ocean ridge more gently. A rift through a continent pulls.
+ * What an edge cell pushes its plate with. Continent meeting continent loads the whole plate by its
+ * strain, as the Himalaya does Asia; ocean going down at a margin, or an ocean ridge, squeezes it more
+ * gently, since a slab mostly pulls on its own plate. A rift through a continent pulls.
  */
 function edgePush(map: PhysicalField, i: number) {
   const code = map.TectonicBoundaryCodes.get(i),
     strain = map.TectonicStrain.get(i) / 1000;
-  if (code === 1) return strain;
+  if (code === 1) {
+    const collision = map.CrustCollisionIntensity.get(i) / 1000;
+    return strain * Math.max(gentlePush, collision);
+  }
   return code === 2 && map.CrustContinentalFraction.get(i) < interiorFraction
-    ? strain * ridgePush
+    ? strain * gentlePush
     : 0;
 }
 /**
@@ -133,7 +129,7 @@ function markProvinceSeams(map: PhysicalField) {
   if (map.ProvinceSeamsMarked) return;
   map.ProvinceSeamsMarked = true;
   for (let i = 0; i < map.mesh.count; i++)
-    if (inInterior(map, i) && atProvinceSeam(map, i)) map.CrustProvinceSeam.set(i, 1);
+    if (inInterior(map, i) && atProvinceSeam(map, i)) markGroundSeam(map, i);
 }
 function weakness(map: PhysicalField, i: number) {
   const suture = map.CrustSutureStrength.get(i) / 1000;
@@ -169,50 +165,40 @@ const rootVolume = (map: PhysicalField, i: number, column: number) => column * m
 const riseTakes = (map: PhysicalField, i: number, metres: number) =>
   crustFor(map, i, metres) +
   metres * surfaceShare * crustPerRock(map.CrustContinentalFraction.get(i) / 1000);
-/** Crust a cell can give up to a shortening plate: all its column above the thinnest crust can be. */
-const givenToShortening = (map: PhysicalField, i: number) =>
-  Math.max(0, map.CrustThickness.get(i) - units(minimumCrustThickness));
-/** What each plate has to thicken its seams with: root reserves, then the crust across it. */
+/**
+ * The root crust at a cell that a seam may draw on: what this pass's shortening brought and the
+ * belt did not take up. Reserve left from earlier passes is the belt's, stuck where it is full.
+ */
+const unspentThisPass = (map: PhysicalField, i: number) =>
+  Math.max(0, Math.min(map.CrustRootReserve.get(i), map.ConvergentCrustSurplus.get(i)));
+/** What each plate has to thicken its seams with: this pass's shortening that its belts left. */
 function plateMaterial(map: PhysicalField, rise: Band, slots: number) {
   const wanted = new Float64Array(slots),
-    roots = new Float64Array(slots),
-    body = new Float64Array(slots);
+    roots = new Float64Array(slots);
   for (let i = 0; i < map.mesh.count; i++) {
     const plate = plateSlot(map, i);
-    roots[plate] += (map.CrustRootReserve.get(i) * map.mesh.area(i)) / 1024;
-    body[plate] += (givenToShortening(map, i) * map.mesh.area(i)) / 1024;
+    roots[plate] += (unspentThisPass(map, i) * map.mesh.area(i)) / 1024;
     if (rise.get(i) > 0) wanted[plate] += rootVolume(map, i, riseTakes(map, i, rise.get(i)));
   }
-  return { wanted, roots, body };
+  return { wanted, roots };
 }
 /**
- * What share of its seams' rise each plate has the material for, and that material spent. A squeezed
- * plate shortens, so a seam's crust comes in from across it: the root its belts piled up and have not
- * used, then a little of the crust of the whole plate, which a map whose cells do not move shows as
- * a slight thinning rather than as the plate's edge drawing in.
+ * What share of its seams' rise each plate has the material for, and that material spent. A seam
+ * thickens with the shortening its plate's edge did not take up this pass: the root crust that
+ * arrived and the belts could not use. Once that is spent the seam rises no further, since a plate
+ * does not thin itself across its whole body to feed a seam.
  */
 function spendPlateCrust(map: PhysicalField, rise: Band, slots: number) {
-  const { wanted, roots, body } = plateMaterial(map, rise, slots),
+  const { wanted, roots } = plateMaterial(map, rise, slots),
     paid = new Float64Array(slots),
-    fromRoots = new Float64Array(slots),
-    fromBody = new Float64Array(slots);
+    fromRoots = new Float64Array(slots);
   for (let plate = 0; plate < slots; plate++) {
     if (wanted[plate] <= 0) continue;
-    paid[plate] = Math.min(1, (roots[plate] + body[plate]) / wanted[plate]);
-    const spent = paid[plate] * wanted[plate];
-    fromRoots[plate] = roots[plate] > 0 ? Math.min(spent, roots[plate]) / roots[plate] : 0;
-    fromBody[plate] = body[plate] > 0 ? Math.max(0, spent - roots[plate]) / body[plate] : 0;
+    paid[plate] = Math.min(1, roots[plate] / wanted[plate]);
+    fromRoots[plate] = roots[plate] > 0 ? (paid[plate] * wanted[plate]) / roots[plate] : 0;
   }
-  for (let i = 0; i < map.mesh.count; i++) {
-    const plate = plateSlot(map, i);
-    map.CrustRootReserve.set(i, map.CrustRootReserve.get(i) * (1 - fromRoots[plate]));
-    if (fromBody[plate] > 0)
-      adjustCrustColumn(
-        map,
-        i,
-        map.CrustThickness.get(i) - givenToShortening(map, i) * fromBody[plate]
-      );
-  }
+  for (let i = 0; i < map.mesh.count; i++)
+    spendRootReserve(map, i, unspentThisPass(map, i) * fromRoots[plateSlot(map, i)]);
   return paid;
 }
 /** A seam's zone moves: its crust thickens or thins, and its rock rises or sags on top of that. */
@@ -221,13 +207,11 @@ function moveSeam(map: PhysicalField, i: number, metres: number) {
     crust = crustFor(map, i, metres);
   if (metres > 0) addRoot(map, i, rootVolume(map, i, crust));
   else adjustCrustColumn(map, i, units(thickness(toUnits(map.CrustThickness.get(i)) + crust)));
-  raiseRock(map, i, rock, "mountains", "crust");
+  displaceGround(map, i, rock, "mountains");
   if (rock > 0) {
-    // What a seam builds is buried and baked as what any belt builds is, and brings up older rock.
+    // Thickening drives burial and heat; uplift alone does not uncover the deeper beds.
     map.OrogenicConstruction.set(i, Math.max(map.OrogenicConstruction.get(i), rock));
-    stripRock(map, i, Math.round(rock * exhumation));
   }
-  rebuild(map, i);
 }
 export function sutureReactivation(map: PhysicalField, context: PhysicalContext) {
   const p = context.Profile,

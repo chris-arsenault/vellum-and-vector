@@ -5,7 +5,7 @@ import { resolveGenerationFeatures, type FeatureSelection } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
 import { atlasPublicationDefinitions, selectedAtlasChannels } from "./atlasPublications";
 import { projectNative } from "./atlasProjection";
-import { createField } from "./field";
+import { createTestField as createField } from "../rock/groundTestFixture";
 import { createMesh } from "./mesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { Landform } from "./codes";

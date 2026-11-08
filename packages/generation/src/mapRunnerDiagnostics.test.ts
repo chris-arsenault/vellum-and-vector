@@ -1,4 +1,4 @@
-import { DomainError, readRange } from "@atlas/domain";
+import { DomainError } from "@atlas/domain";
 import { expect, it, vi } from "vitest";
 import { configuration, epoch, invoke, landscape, options } from "./mapFixtures";
 import { MapRunner } from "./mapRunner";
@@ -39,7 +39,7 @@ it.each([
 });
 
 it.each([false, true])(
-  "records async=%s failures and continues without restoring working state",
+  "records async=%s failures and stops before subsequent work or publication",
   async (asyncFailure) => {
     const initial = landscape();
     const good = process("good", (state) => {
@@ -54,29 +54,30 @@ it.each([false, true])(
     const consume = vi.fn();
     const dependent = process("dependent", consume);
     dependent.contract.requires = ["bad"];
-    const independent = process("independent", (state) => {
-      state.surface.channels.elevation.set(2, 31);
-    });
+    const proceed = vi.fn(),
+      independent = process("independent", proceed);
     const registry = new MapProcessRegistry();
     for (const entry of [good, bad, dependent, independent]) registry.register(entry);
-    const diagnostic = vi.fn();
-    const { state } = await new MapRunner(
-      configuration([good, bad, dependent, independent].map((entry) => invoke(entry))),
-      registry
-    ).run(initial, { ...options, diagnostic });
-    expect([...readRange(state.surface.channels.elevation, 0, 3)]).toEqual([17, 23, 31]);
-    expect(state.facts).toEqual(new Set(["elevation", "good", "independent"]));
-    expect(state.diagnostics).toMatchObject([
-      {
+    const diagnostic = vi.fn(),
+      saveBoundary = vi.fn();
+    await expect(
+      new MapRunner(
+        configuration([good, bad, dependent, independent].map((entry) => invoke(entry))),
+        registry
+      ).run(initial, { ...options, diagnostic, saveBoundary })
+    ).rejects.toThrow("Failed output");
+    expect(diagnostic).toHaveBeenCalledWith(
+      expect.objectContaining({
         code: "process_failed",
         invocation: "bad",
-        outcome: "omitted",
+        outcome: "failed",
         stack: expect.stringContaining("Failed output"),
-      },
-      { code: "stale_fact", invocation: "dependent", resource: "bad", outcome: "skipped" },
-    ]);
-    expect(diagnostic).toHaveBeenCalledTimes(2);
+      })
+    );
+    expect(diagnostic).toHaveBeenCalledOnce();
     expect(consume).not.toHaveBeenCalled();
+    expect(proceed).not.toHaveBeenCalled();
+    expect(saveBoundary).not.toHaveBeenCalled();
   }
 );
 
@@ -93,18 +94,20 @@ it("retains validator warnings and original error details without establishing f
   const bad = process("bad", () => {});
   bad.validate = () => [{ ...warning, severity: "error", code: "invalid_elevation" }];
   const registry = new MapProcessRegistry().register(good).register(bad);
-  const { state } = await new MapRunner(configuration([invoke(good), invoke(bad)]), registry).run(
-    landscape(),
-    options
-  );
-  expect(state.facts.has("bad")).toBe(false);
-  expect(state.diagnostics).toMatchObject([
+  const diagnostic = vi.fn();
+  await expect(
+    new MapRunner(configuration([invoke(good), invoke(bad)]), registry).run(landscape(), {
+      ...options,
+      diagnostic,
+    })
+  ).rejects.toMatchObject({ code: "process_output_invalid" });
+  expect(diagnostic.mock.calls.map(([entry]) => entry)).toMatchObject([
     { code: "approximate", outcome: "retained", resource: "elevation" },
-    { code: "invalid_elevation", outcome: "omitted", resource: "elevation" },
+    { code: "invalid_elevation", outcome: "failed", resource: "elevation" },
   ]);
 });
 
-it("invalidates affected facts on failure and permits a later epoch to produce them", async () => {
+it("stops at a failed epoch without reporting it or later epochs complete", async () => {
   const run = process("response", (_state, context) => {
     if (context.epochs[0].id === "first") throw new Error("failed epoch");
   });
@@ -115,22 +118,25 @@ it("invalidates affected facts on failure and permits a later epoch to produce t
   const registry = new MapProcessRegistry().register(run).register(consumer);
   const initial = landscape();
   initial.facts.add("prior-response");
-  const { state } = await new MapRunner(
-    configuration([
-      {
-        kind: "epochs",
-        id: "history",
-        resetFacts: ["response"],
-        epochs: [epoch("first", 1), epoch("second", 1)],
-        body: [invoke(run), invoke(consumer)],
-      },
-    ]),
-    registry
-  ).run(initial, options);
-  expect(consume).toHaveBeenCalledOnce();
-  expect(state.facts.has("response")).toBe(true);
-  expect(state.facts.has("prior-response")).toBe(false);
-  expect(state.diagnostics?.map((entry) => entry.epochs[0].id)).toEqual(["first", "first"]);
+  const diagnostic = vi.fn(),
+    saveBoundary = vi.fn();
+  await expect(
+    new MapRunner(
+      configuration([
+        {
+          kind: "epochs",
+          id: "history",
+          resetFacts: ["response"],
+          epochs: [epoch("first", 1), epoch("second", 1)],
+          body: [invoke(run), invoke(consumer)],
+        },
+      ]),
+      registry
+    ).run(initial, { ...options, diagnostic, saveBoundary })
+  ).rejects.toThrow("failed epoch");
+  expect(consume).not.toHaveBeenCalled();
+  expect(saveBoundary).not.toHaveBeenCalled();
+  expect(diagnostic.mock.calls.map(([entry]) => entry.epochs[0].id)).toEqual(["first"]);
 });
 
 it("propagates cancellation and invalid inherited geography", async () => {

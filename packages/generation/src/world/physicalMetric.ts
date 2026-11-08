@@ -1,5 +1,5 @@
 import type { PhysicalMesh } from "./mesh";
-import { Band, type Coverage } from "@atlas/domain";
+import type { ReadBand, Coverage } from "@atlas/domain";
 import { triangleSampler } from "./triangleSampling";
 import { meshDeltaX, edgeLeadingTo } from "./mesh";
 
@@ -74,12 +74,12 @@ export function cellTravel(mesh: PhysicalMesh, i: number, dx: number, dy: number
 /** A point sampler over cell values given as a band, an array or a reader. */
 export function physicalSampler(
   mesh: PhysicalMesh,
-  values: Band | ArrayLike<number> | ((i: number) => number)
+  values: ReadBand | ArrayLike<number> | ((i: number) => number)
 ) {
   const read =
     typeof values === "function"
       ? values
-      : values instanceof Band
+      : "get" in values
         ? (i: number) => values.get(i)
         : (i: number) => values[i];
   return triangleSampler(mesh, read);

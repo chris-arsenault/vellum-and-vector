@@ -1,5 +1,6 @@
-import { rockCatalogue } from "../rock/rockCatalogue";
 import { setRockStrength } from "../rock/rockField";
+import { finishGroundImport, groundResourceArea, importGroundBand } from "../rock/groundResources";
+import { looseTo, standGround } from "../rock/groundLedger";
 import {
   gridSampler,
   interpolateSample,
@@ -16,7 +17,12 @@ import {
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { authoredFields } from "../mapAuthored";
-import { createField, type PhysicalField } from "./field";
+import {
+  createField,
+  isMutablePhysicalName,
+  type PhysicalBufferName,
+  type PhysicalField,
+} from "./field";
 import { nearestTriangle } from "./mesh";
 import { createWorldMesh } from "./worldMesh";
 import type { ProjectionInterpolation } from "./atlasSampling";
@@ -108,21 +114,6 @@ function inputOwner(
 function makesTerrain(state: GenerationState) {
   return !state.facts.has("terrain:present");
 }
-function initializeInheritedMaterial(map: PhysicalField, surface: Grid) {
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (!surface.channels.bedrock)
-      map.BedrockElevation.set(i, map.Elevation.get(i) - map.SedimentThickness.get(i));
-    if (!surface.channels.crustSupport) map.CrustSupportElevation.set(i, map.Elevation.get(i));
-    if (!surface.channels.continentalFraction)
-      map.CrustContinentalFraction.set(i, map.Elevation.get(i) >= map.BaseSeaLevel ? 1000 : 0);
-    if (!surface.channels.rock) setRockStrength(map, i, rockCatalogue.strata.resistance);
-    if (map.CrustThickness.get(i) <= 0)
-      map.CrustThickness.set(i, units(1000 + 3 * map.CrustContinentalFraction.get(i)));
-    map.Elevation.set(i, map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
-    map.CrustTypeCodes.set(i, map.CrustContinentalFraction.get(i) >= 500 ? 2 : 1);
-  }
-  if (!surface.channels.geothermal) map.Geothermal.fill(0);
-}
 function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) {
   // A map's own captured inputs are its parent channels: they carry the country beyond the
   // frame, so the exterior halo is the parent's ground and not the frame edge clamped outward.
@@ -134,11 +125,11 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
   map.BaseSeaLevel = units(datum);
   map.EffectiveSeaLevel = map.BaseSeaLevel;
   map.SeaLevelInitialized = true;
-  inheritChannels(surface, work, parent, datum);
+  const imported = inheritChannels(surface, work, parent, datum);
   map.CrustSupportInitialized = true;
   // The parent formed this crust; here it is only carried on.
   map.CrustFormed = true;
-  initializeInheritedMaterial(map, surface);
+  finishGroundImport(map, imported);
   map.SedimentProducedTotal = map.coverage.reduce(
     map.CumulativeDeposition,
     (sum, deposition, i) => sum + (deposition / 1024) * map.mesh.area(i),
@@ -152,25 +143,53 @@ function inheritChannels(
   parent: Map<string, Grid>,
   datum: number
 ) {
-  const map = work.map;
+  const map = work.map,
+    imported = new Set<PhysicalBufferName>(),
+    area = groundResourceArea(map);
   for (const binding of atlasChannels) {
     const grid = parent.get(binding.name) ?? surface;
     if (!grid.channels[binding.name]) continue;
-    const valueAt = fieldInterpolator(
-        grid,
-        binding.name,
-        binding.unit === "category",
-        undefined,
-        sweepBudget(grid)
-      ),
-      band = map[binding.native],
-      integer = band.type === "int32";
-    for (let i = 0; i < map.mesh.count; i++) {
-      const value = inheritedValue(valueAt(nativePosition(work, i)), binding);
-      const native = (value - (binding.offset ?? 0) + (binding.datum ? datum : 0)) / binding.scale;
-      band.set(i, integer ? Math.round(native) : native);
-    }
+    imported.add(binding.native);
+    if (binding.global) inheritGlobal(map, grid, binding, area);
+    else inheritLocal(work, grid, binding, datum);
   }
+  return imported;
+}
+function inheritGlobal(map: PhysicalField, grid: Grid, binding: ChannelBinding, area: number) {
+  let sample = 0;
+  while (sample < grid.active.length && !grid.active.get(sample)) sample++;
+  if (sample === grid.active.length) return;
+  const value = inheritedValue(grid.channels[binding.name].get(sample), binding),
+    amount = (value / binding.scale) * (binding.areaDensity ? area : 1);
+  if (isMutablePhysicalName(binding.native)) map[binding.native].set(0, amount);
+  else importGroundBand(map, binding.native, (cell) => (cell === 0 ? amount : 0));
+}
+function inheritLocal(
+  work: AtlasPhysicalWorkspace,
+  grid: Grid,
+  binding: ChannelBinding,
+  datum: number
+) {
+  const map = work.map,
+    valueAt = fieldInterpolator(
+      grid,
+      binding.name,
+      binding.unit === "category" || binding.discrete === true,
+      undefined,
+      sweepBudget(grid)
+    ),
+    band = map[binding.native],
+    integer = band.type === "int32";
+  const sample = (i: number) => {
+    const value = inheritedValue(valueAt(nativePosition(work, i)), binding),
+      native =
+        ((value - (binding.offset ?? 0) + (binding.datum ? datum : 0)) / binding.scale) *
+        (binding.areaDensity ? map.mesh.area(i) : 1);
+    return integer ? Math.round(native) : native;
+  };
+  if (isMutablePhysicalName(binding.native))
+    for (let i = 0; i < map.mesh.count; i++) map[binding.native].set(i, sample(i));
+  else importGroundBand(map, binding.native, sample);
 }
 /** Reconstructed field edges can overshoot; imported stocks/fractions retain their meaning. */
 function inheritedValue(value: number, binding: ChannelBinding) {
@@ -197,7 +216,11 @@ function fixedSamples(
   const values = retainedArray(work.map, "float64", `authored:${binding.name}`).fill(NaN);
   const covers = spatial.pointCoverage(footprint),
     sourceCovers = spatial.pointCoverage(source.scope.footprint),
-    valueAt = gridSampler(source, binding.name, binding.unit === "category"),
+    valueAt = gridSampler(
+      source,
+      binding.name,
+      binding.unit === "category" || binding.discrete === true
+    ),
     integer = work.map[binding.native].type === "int32";
   for (let i = 0; i < values.length; i++) {
     const position = nativePosition(work, i);
@@ -304,16 +327,17 @@ export function refreshWorkspaceProtection(state: GenerationState, work: AtlasPh
 export function composeNativeAuthoring(work: AtlasPhysicalWorkspace) {
   const map = work.map;
   for (const { binding, values } of work.fixed) {
-    const band = map[binding.native];
     for (let i = 0; i < values.length; i++) {
       const fixed = values.get(i);
       if (!Number.isFinite(fixed)) continue;
       const value = fixed + (binding.datum ? map.BaseSeaLevel : 0);
-      band.set(i, value);
-      if (binding.native === "Elevation") {
-        map.BedrockElevation.set(i, value - map.SedimentThickness.get(i));
-        map.Elevation.set(i, map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
-      }
+      if (binding.native === "Elevation") standGround(map, i, value, "authored");
+      else if (binding.native === "BedrockElevation")
+        standGround(map, i, value + map.SedimentThickness.get(i), "authored");
+      else if (binding.native === "RockResistance") setRockStrength(map, i, value);
+      else if (binding.native === "SedimentThickness") looseTo(map, i, value, "authored");
+      else if (isMutablePhysicalName(binding.native)) map[binding.native].set(i, value);
+      else throw new Error(`Authored ground field ${binding.name} needs a material operation.`);
     }
   }
 }

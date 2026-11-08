@@ -90,7 +90,7 @@ it("does not publish changed-path-only products into the conservative branch joi
   );
 });
 
-it("omits a parent with false guarantees without revalidating stale inputs", async () => {
+it("rejects a parent with false guarantees without publishing its outputs", async () => {
   const { parent, child, registry } = fixture();
   child.contract.produces = [];
   parent.contract.produces = ["finished"];
@@ -99,16 +99,10 @@ it("omits a parent with false guarantees without revalidating stale inputs", asy
   state.facts = new Set(["terrain", "routing"]);
   const commit = vi.spyOn(ProductLedger.prototype, "commit");
   try {
-    const result = await new MapRunner(config, registry).run(state, options);
-    expect(result.state.diagnostics).toContainEqual(
-      expect.objectContaining({
-        code: "reconciliation_guarantee",
-        outcome: "omitted",
-        message: expect.stringContaining("retain fresh routing"),
-      })
-    );
-    expect(result.state.facts.has("finished")).toBe(false);
-    expect(result.state.facts.has("routing")).toBe(false);
+    await expect(new MapRunner(config, registry).run(state, options)).rejects.toMatchObject({
+      code: "reconciliation_guarantee",
+      message: expect.stringContaining("retain fresh routing"),
+    });
     expect(commit.mock.calls.some(([contract]) => contract.id === parent.contract.id)).toBe(false);
   } finally {
     commit.mockRestore();
@@ -126,7 +120,7 @@ it("pins reviewed branch metadata and rejects runtime registry changes", () => {
   expect(() => new MapRunner(config, registry)).toThrow("reviewed recipe");
 });
 
-it("retains usable nested work and records child and parent failures", async () => {
+it("propagates a nested failure and does not publish partial work", async () => {
   const { parent, child, registry } = fixture();
   child.behavior = {
     kind: "model-pass",
@@ -151,16 +145,19 @@ it("retains usable nested work and records child and parent failures", async () 
   const state = landscape();
   state.facts = new Set(["terrain", "routing"]);
   const config = reviewed(configuration([invoke(parent)]), registry);
-  const result = await new MapRunner(config, registry).run(state, options);
-  expect(result.state.domain.world.name).toBe("In-progress map");
-  expect(Array.from(result.state.surface.channels.elevation).every((value) => value === 999)).toBe(
-    true
-  );
-  expect(result.state.facts.has("routing")).toBe(false);
-  expect(result.state.causes).toMatchObject([{ process: "routing" }]);
-  expect(result.state.diagnostics).toMatchObject([
-    { code: "process_failed", invocation: "remesh/reconciliation/routing", outcome: "omitted" },
-    { code: "reconciliation_failed", invocation: "remesh", outcome: "omitted" },
+  const diagnostic = vi.fn(),
+    saveBoundary = vi.fn();
+  await expect(
+    new MapRunner(config, registry).run(state, {
+      ...options,
+      diagnostic,
+      saveBoundary,
+    })
+  ).rejects.toThrow("Routing failed");
+  expect(saveBoundary).not.toHaveBeenCalled();
+  expect(diagnostic.mock.calls.map(([entry]) => entry)).toMatchObject([
+    { code: "process_failed", invocation: "remesh/reconciliation/routing", outcome: "failed" },
+    { code: "process_failed", invocation: "remesh", outcome: "failed" },
   ]);
 });
 

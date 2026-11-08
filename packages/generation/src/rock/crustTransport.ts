@@ -1,8 +1,9 @@
-import type { PhysicalField } from "./field";
+import type { PhysicalField } from "../world/field";
 import type { Band } from "@atlas/domain";
-import { clamp, maximumCrustThickness, minimumCrustThickness, units } from "./math";
-import { weightScale, type TransportPlan } from "./transportPlan";
-import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import { clamp, maximumCrustThickness, minimumCrustThickness, units } from "../world/math";
+import { weightScale, type TransportPlan } from "../world/transportPlan";
+import { workingArray, workingValues, releaseWorking } from "../world/physicalNumerics";
+import { groundStorage } from "./groundStorage";
 
 export interface CrustBudget {
   oceanCreated: number;
@@ -24,7 +25,7 @@ interface Arrived extends Columns {
 export function initializeCrustColumns(map: PhysicalField) {
   if (map.CrustColumnsInitialized) return;
   for (let i = 0; i < map.mesh.count; i++)
-    map.CrustContinentalColumn.set(
+    groundStorage(map).CrustContinentalColumn.set(
       i,
       (map.CrustThickness.get(i) * map.CrustContinentalFraction.get(i)) / 1000
     );
@@ -121,14 +122,14 @@ function retainColumn(map: PhysicalField, plan: TransportPlan, columns: Arrived,
   map.crustBudget.continentalAdjustment += arc * area;
   map.OceanicSubduction.add(i, consumed);
   map.OceanicSubductionHistory.add(i, consumed);
-  map.CrustRootReserve.set(i, columns.reserve.get(i) + reserve);
+  groundStorage(map).CrustRootReserve.set(i, columns.reserve.get(i) + reserve);
   map.ConvergentCrustSurplus.set(i, reserve);
   const basal = Math.max(0, units(minimumCrustThickness) - continental - oceanic);
   oceanic += basal;
   map.crustBudget.oceanCreated += basal * area;
-  map.CrustContinentalColumn.set(i, continental);
-  map.CrustThickness.set(i, continental + oceanic);
-  map.CrustContinentalFraction.set(i, Math.round((continental / map.CrustThickness.get(i)) * 1000));
+  groundStorage(map).CrustContinentalColumn.set(i, continental);
+  groundStorage(map).CrustThickness.set(i, continental + oceanic);
+  refreshFraction(map, i);
 }
 /** Continental material is conserved in columns and root reserves; oceanic sinks are explicit. */
 export function transportCrustColumns(map: PhysicalField, plan: TransportPlan, old: Columns) {
@@ -144,25 +145,43 @@ export function transportCrustColumns(map: PhysicalField, plan: TransportPlan, o
  */
 export function keepCrustInBounds(map: PhysicalField, i: number) {
   const over = map.CrustThickness.get(i) - units(maximumCrustThickness);
-  if (over > 0) map.CrustRootReserve.add(i, over);
-  map.CrustThickness.set(
+  if (over > 0) {
+    groundStorage(map).CrustRootReserve.add(i, over);
+    groundStorage(map).CrustContinentalColumn.add(
+      i,
+      (-over * map.CrustContinentalFraction.get(i)) / 1000
+    );
+  }
+  groundStorage(map).CrustThickness.set(
     i,
     clamp(map.CrustThickness.get(i), units(minimumCrustThickness), units(maximumCrustThickness))
   );
+  refreshFraction(map, i);
 }
 /** Continental crust joins the bottom of a column as root, all of it continental. */
 export function addContinentalRoot(map: PhysicalField, i: number, column: number) {
-  map.CrustThickness.add(i, column);
-  map.CrustContinentalColumn.add(i, column);
+  groundStorage(map).CrustThickness.add(i, column);
+  groundStorage(map).CrustContinentalColumn.add(i, column);
+  refreshFraction(map, i);
 }
 export function adjustCrustColumn(map: PhysicalField, i: number, next: number) {
   if (map.CrustColumnsInitialized) {
     const delta = next - map.CrustThickness.get(i),
       continental = (delta * map.CrustContinentalFraction.get(i)) / 1000,
       area = map.mesh.area(i) / 1024;
-    map.CrustContinentalColumn.add(i, continental);
+    groundStorage(map).CrustContinentalColumn.add(i, continental);
     map.crustBudget.continentalAdjustment += continental * area;
     map.crustBudget.oceanAdjustment += (delta - continental) * area;
   }
-  map.CrustThickness.set(i, next);
+  groundStorage(map).CrustThickness.set(i, next);
+  if (map.CrustColumnsInitialized) refreshFraction(map, i);
+}
+function refreshFraction(map: PhysicalField, cell: number) {
+  const thickness = map.CrustThickness.get(cell);
+  groundStorage(map).CrustContinentalFraction.set(
+    cell,
+    thickness > 0
+      ? Math.round(clamp(map.CrustContinentalColumn.get(cell) / thickness, 0, 1) * 1000)
+      : 0
+  );
 }

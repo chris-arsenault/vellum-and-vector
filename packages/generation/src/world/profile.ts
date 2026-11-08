@@ -43,8 +43,6 @@ export const physicalProfile = {
   ContinentalSutureDetectionReach: 60_000,
   ContinentalSutureMinimumFraction: 420,
   ContinentalSutureStrengthGain: 620,
-  // How far a full-speed plate travels in the first epoch: far enough to cross an ocean basin, so
-  // oceans close and continents meet. Each later epoch travels this share of the one before.
   // How fast a plate moves at full tectonic strength, in metres per million years.
   PlateDriftPerMyr: 100_000,
   MarginInfluenceReach: 260_000,

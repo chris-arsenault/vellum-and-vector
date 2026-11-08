@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createField } from "./field";
+import { createTestField as createField } from "../rock/groundTestFixture";
 import { OceanComponents, visitConnectedOcean } from "./oceanComponents";
 import { createWorldMesh } from "./worldMesh";
 

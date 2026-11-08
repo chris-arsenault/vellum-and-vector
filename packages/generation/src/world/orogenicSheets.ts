@@ -1,21 +1,19 @@
 import type { Band } from "@atlas/domain";
-import { headroom, raiseRock, shiftRock, spareCrust } from "../rock/groundLedger";
-import { overthrust, stripRock } from "../rock/rockColumn";
+import { headroom, shiftRock, spareCrust } from "../rock/groundLedger";
+import {
+  moveHeldSheet,
+  superposeHeldSheets,
+  recordSheetTilt,
+  joinGroundSheet,
+  leaveGroundSheet,
+} from "../rock/groundTransport";
 import type { PhysicalContext } from "./context";
-import { adjustCrustColumn } from "./crustTransport";
+import { adjustCrustColumn } from "../rock/crustTransport";
 import { crustForming, type PhysicalField } from "./field";
-import { clamp, crustPerRock, elevationLimit, units } from "./math";
+import { clamp, crustPerRock, units } from "./math";
 import { meshPoint } from "./mesh";
 import { releaseWorking, workingArray } from "./physicalNumerics";
-import {
-  heldLayers,
-  holdRock,
-  releaseHeldRock,
-  takeHeldRock,
-  takeHeldSheet,
-  type HeldRock,
-} from "./reliefCarry";
-import { rebuild } from "./surface";
+import { holdRock, releaseHeldRock, type HeldRock } from "./reliefCarry";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
 import { acrossStrike } from "./orogenicComponents";
 import { segmentScale, sheetAt, sheetReach } from "./orogenicShape";
@@ -64,7 +62,11 @@ function shorteningOf(map: PhysicalField, context: PhysicalContext, c: BoundaryC
   return c.strain * moved;
 }
 const pairKey = (c: BoundaryComponent) => c.pair + 1;
-const inBelt = (map: PhysicalField, c: BoundaryComponent, i: number) =>
+/**
+ * Whether a cell's sheets are this belt's: the ground a live belt is shortening now. Ground within
+ * a belt's reach but on another pair's sheets is an older belt's, and nothing squeezes it.
+ */
+export const inBelt = (map: PhysicalField, c: BoundaryComponent, i: number) =>
   map.ThrustPairIds.get(i) === pairKey(c);
 
 /** How far out each belt's sheets reach now, and which is the outermost. */
@@ -104,10 +106,7 @@ function joinSheet(
       Math.max(0, frame.reach.get(i) - stood) * narrowing
     ),
     numbered = firstNew + sheet;
-  map.ThrustPairIds.set(i, pairKey(c));
-  map.ThrustSheetIndex.set(i, numbered + 1);
-  map.ThrustSegmentIds.set(i, segment);
-  map.ThrustAcross.set(i, Math.round(across * 1000));
+  joinGroundSheet(map, i, pairKey(c), numbered + 1, segment, across);
   if (numbered > c.frontSheet) c.frontSheet = numbered;
 }
 /** A cell the belt reaches for the first time joins a sheet; one it reached before keeps its own. */
@@ -278,25 +277,6 @@ function rampRise(map: PhysicalField, context: PhysicalContext, i: number, slip:
   const continental = map.CrustContinentalFraction.get(i) / 1000;
   return units(context.Profile.ThrustRampGradient * slip * (0.4 + 0.6 * continental));
 }
-function placeLoad(map: PhysicalField, i: number, was: Band, moved: MovedRock) {
-  const origin = moved.origin.get(i),
-    wanted =
-      map.BedrockElevation.get(i) + was.get(origin >= 0 ? origin : i) - map.SurfaceRockLoad.get(i),
-    bedrock = clamp(
-      wanted,
-      units(-elevationLimit),
-      units(elevationLimit) - map.SedimentThickness.get(i)
-    );
-  shiftRock(map, i, bedrock - map.BedrockElevation.get(i), "mountains");
-  // What a sheet brings that will not stand here goes down into the crust instead of vanishing.
-  if (wanted > bedrock)
-    adjustCrustColumn(
-      map,
-      i,
-      map.CrustThickness.get(i) +
-        (wanted - bedrock) * crustPerRock(map.CrustContinentalFraction.get(i) / 1000)
-    );
-}
 /** How high this pass would raise a cell's leading edge, as far as the height limit leaves room. */
 function rampWanted(map: PhysicalField, context: PhysicalContext, i: number, climb: number) {
   return Math.min(rampRise(map, context, i, climb), headroom(map, i));
@@ -338,8 +318,7 @@ export function climbThrustRamps(
       spent = (paid[id] * wanted[id]) / held[id];
     adjustCrustColumn(map, i, map.CrustThickness.get(i) - spareCrust(map, i) * spent);
     if (rise <= 0) continue;
-    raiseRock(map, i, rise, "mountains", "crust");
-    rebuild(map, i);
+    shiftRock(map, i, rise, "mountains");
   }
   releaseWorking(map, climb);
 }
@@ -348,13 +327,11 @@ function placeRock(map: PhysicalField, i: number, held: HeldRock, moved: MovedRo
     under = moved.under.get(i),
     top = origin >= 0 ? origin : i;
   if (under < 0) {
-    if (origin >= 0) takeHeldRock(map, held, i, origin);
+    if (origin >= 0) moveHeldSheet(map, held, i, origin);
     return;
   }
   // What was drawn in lies beneath; the sheet above it keeps the surface and the cell.
-  takeHeldRock(map, held, i, under);
-  overthrust(map, i, heldLayers(held, top));
-  takeHeldSheet(map, held, i, top);
+  superposeHeldSheets(map, held, i, under, top);
 }
 function movedRock(map: PhysicalField): MovedRock {
   return {
@@ -372,8 +349,7 @@ const riding = (map: PhysicalField, components: BoundaryComponent[], i: number) 
 };
 /** A cell its sheet has left is outside the belt again, until the front takes it in once more. */
 function leaveBelt(map: PhysicalField, i: number) {
-  map.ThrustPairIds.set(i, 0);
-  map.ThrustSheetIndex.set(i, 0);
+  leaveGroundSheet(map, i);
 }
 /** How much of the climb at a thrust's edge the rock just behind it takes. */
 const backLimbShare = 0.6;
@@ -420,24 +396,20 @@ export function slipThrustSheets(
     if (c) planCell(map, c, frame, moved, moves, slip, i);
   }
   addBackLimbs(map, frame, moved);
-  const held = holdRock(map),
-    was = map.coverage.copyBand(map.SurfaceRockLoad);
+  const held = holdRock(map);
   for (let i = 0; i < map.mesh.count; i++) {
     if (moved.left.get(i)) leaveBelt(map, i);
     if (moved.origin.get(i) < 0 && moved.under.get(i) < 0 && moved.climb.get(i) <= 0) continue;
-    placeLoad(map, i, was, moved);
     placeRock(map, i, held, moved);
-    rebuild(map, i);
   }
   releaseHeldRock(map, held);
-  releaseWorking(map, was, moved.origin, moved.under, moved.left);
+  releaseWorking(map, moved.origin, moved.under, moved.left);
   tiltSheets(map, components, slip, p.ThrustTiltGradient);
   return moved.climb;
 }
 /**
- * A sheet's beds tilt as it climbs, rising toward its leading edge, and the surface planes across
- * them: deeper rock comes up the further forward in the sheet a cell lies. So what is exposed runs
- * in bands along the belt, and the tilt each cell has taken stays with it as its dip.
+ * A sheet records the tilt acquired as it climbs. The separate ramp operation moves its
+ * placement; tilting alone removes no material and cannot paint a different exposed bed.
  */
 function tiltSheets(
   map: PhysicalField,
@@ -452,7 +424,6 @@ function tiltSheets(
       taken = thrustSlip(slip.shortening(c), sheet, c.frontSheet, slip.most),
       rise = tiltGradient * taken * (map.ThrustAcross.get(i) / 1000);
     if (rise <= 0) continue;
-    map.ThrustDip.add(i, Math.round(rise));
-    stripRock(map, i, units(rise));
+    recordSheetTilt(map, i, rise);
   }
 }

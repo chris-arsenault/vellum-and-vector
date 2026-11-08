@@ -64,6 +64,7 @@ function drainage(occurrence: string, context: Composition, meltwater = false): 
 }
 function materialGeology(occurrence: string, context: Composition, initial: boolean) {
   return [
+    "material.relaxation",
     "material.hillslopes",
     "material.support.before-margins",
     "material.ocean.before-margins",
@@ -81,7 +82,9 @@ function geology(context: Composition, initial: boolean): ProcessSequence {
         "epoch.crust.provinces",
         "epoch.crust.activity",
         "epoch.crust.structure",
-        "epoch.mountains",
+        ...(context.resolved.selection["physical.tectonic-history"]?.enabled
+          ? []
+          : ["epoch.mountains"]),
         "epoch.volcanism",
         "epoch.impacts",
         "epoch.landmarks",

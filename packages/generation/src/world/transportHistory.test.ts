@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { residentBand, type Band } from "@atlas/domain";
-import { createField } from "./field";
+import { createTestField as createField } from "../rock/groundTestFixture";
 import { createMesh } from "./mesh";
 import { units } from "./math";
 import { workingValues } from "./physicalNumerics";
@@ -75,16 +75,16 @@ function fixture() {
   return { map, plan, cells, read };
 }
 
-it("carries area-weighted material, fractional ecology, labels and maxima without losing source state", () => {
+it("carries fractional ecology, labels and maxima while leaving ground packages to their owner", () => {
   const { map, plan, read } = fixture();
   transportHistory(map, plan);
-  expect(read(map.SedimentThickness)).toEqual([0, 0, 25, 7]);
+  expect(read(map.SedimentThickness)).toEqual([10, 30, 0, 0]);
   expect(read(map.TreeCover)[2]).toBeCloseTo(0.65);
   expect(read(map.TreeCover)[3]).toBeCloseTo(0.17);
   expect(read(map.PeatCarbon)[2]).toBeCloseTo(10);
   expect(read(map.PeatCarbon)[3]).toBeCloseTo(2.5);
   expect(read(map.CrustAssemblyIds)).toEqual([0, 0, 3, 7]);
-  expect(read(map.CrustSuturePairIds)).toEqual([0, 0, 34, 34]);
+  expect(read(map.CrustSuturePairIds)).toEqual([12, 34, 0, 0]);
   expect(read(map.BiomeCodes)).toEqual([0, 0, 14, 10]);
   expect(read(map.MaximumIceThickness)).toEqual([0, 0, 9, 9]);
   expect(read(map.VolcanicLastActiveEpoch)).toEqual([-1, -1, 3, 3]);

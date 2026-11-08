@@ -2,6 +2,7 @@ import {
   foldSamples,
   languageUse,
   population,
+  rectangle,
   spatial,
   type AtlasFeature,
   type Bounds,
@@ -82,15 +83,17 @@ export function namePolity(
   Object.assign(entity.attributes, nameMetadata(named));
 }
 
-function namingFootprint(state: GenerationState, feature: AtlasFeature): Geometry {
+function namingRadius(feature: AtlasFeature, width: number) {
   const line = feature.geometry.type.includes("LineString");
-  if (!line && !["ocean", "lake", "river"].includes(feature.kind)) return feature.geometry;
-  const grid = state.surface;
-  const area = foldSamples(grid.measures, (sum, value) => sum + value, 0);
-  const width = Math.sqrt(area / Math.max(1, grid.active.length)) / 2;
   // Water names sample their banks/coasts, where the speakers live, at the map's own resolution.
-  return spatial.buffer(feature.geometry, width) ?? feature.geometry;
+  return line || ["ocean", "lake", "river"].includes(feature.kind) ? width : 0;
 }
+const expanded = ([x0, y0, x1, y1]: Bounds, width: number): Bounds => [
+  x0 - width,
+  y0 - width,
+  x1 + width,
+  y1 + width,
+];
 function namingPopulation(state: GenerationState) {
   return (state.society?.region.communities ?? []).flatMap((c) => {
     if (!c.footprint || population(c) <= 0) return [];
@@ -98,7 +101,9 @@ function namingPopulation(state: GenerationState) {
       {
         footprint: c.footprint,
         area: Math.max(1, spatial.area(c.footprint)),
+        bounds: spatial.bounds(c.footprint),
         covers: spatial.pointCoverage(c.footprint),
+        measure: spatial.intersectionArea(c.footprint),
         speakers: Object.entries(languageUse(c.groups)).map(
           ([language, share]) => [language, share * population(c)] as const
         ),
@@ -107,22 +112,35 @@ function namingPopulation(state: GenerationState) {
   });
 }
 type Residents = (bounds: Bounds) => ReturnType<typeof namingPopulation>;
-function influence(state: GenerationState, feature: AtlasFeature, residents: Residents) {
-  const shape = namingFootprint(state, feature),
-    bounds = spatial.bounds(shape);
-  const measure = shape.type === "Point" ? null : spatial.intersectionArea(shape);
+/** Only geography within the naming radius of these speakers can contribute to their overlap. */
+function residentShare(shape: Geometry, radius: number, resident: ReturnType<Residents>[number]) {
+  if (shape.type === "Point")
+    return Number(
+      resident.covers({
+        x: shape.coordinates[0],
+        y: shape.coordinates[1],
+        z: shape.coordinates[2] ?? 0,
+      })
+    );
+  if (radius === 0) return resident.measure(shape) / resident.area;
+  // Buffering a whole river or ridge network can exhaust native memory. Clip before buffering,
+  // including the radius outside the community so lines just beyond its boundary still count.
+  const bounds = expanded(resident.bounds, radius + spatial.precision),
+    // Rectangle clipping keeps line crossings unnoded; overlay would split them into many pieces.
+    local = shape.type.includes("LineString")
+      ? spatial.clipByRect(shape, bounds)
+      : spatial.intersection(shape, rectangle(bounds));
+  if (!local) return 0;
+  const nearby = spatial.buffer(local, radius);
+  return nearby ? resident.measure(nearby) / resident.area : 0;
+}
+function influence(feature: AtlasFeature, residents: Residents, width: number) {
+  const shape = feature.geometry,
+    radius = namingRadius(feature, width),
+    bounds = expanded(spatial.bounds(shape), radius);
   const result: Record<string, number> = {};
   for (const c of residents(bounds)) {
-    const fraction =
-      shape.type === "Point"
-        ? Number(
-            c.covers({
-              x: shape.coordinates[0],
-              y: shape.coordinates[1],
-              z: shape.coordinates[2] ?? 0,
-            })
-          )
-        : measure!(c.footprint) / c.area;
+    const fraction = residentShare(shape, radius, c);
     if (fraction <= 0) continue;
     for (const [language, speakers] of c.speakers)
       result[language] = (result[language] ?? 0) + speakers * fraction;
@@ -147,11 +165,12 @@ function resolveGeographicName(
   state: GenerationState,
   feature: AtlasFeature,
   era: string,
-  residents: Residents
+  residents: Residents,
+  width: number
 ) {
   const world = state.domain.world;
   const language = state.society
-    ? selectLanguage(world, influence(state, feature, residents), feature.id)
+    ? selectLanguage(world, influence(feature, residents, width), feature.id)
     : null;
   const named = nameGeographicFeature(
     world,
@@ -172,7 +191,10 @@ function resolveGeographicName(
 function finalizeGeography(state: GenerationState, original: DomainSnapshot) {
   const era = state.society?.region.history.at(-1)?.id ?? "Before societies";
   finalizePolities(state, original, era);
-  const residents = namingPopulation(state);
+  const residents = namingPopulation(state),
+    grid = state.surface,
+    area = foldSamples(grid.measures, (sum, value) => sum + value, 0),
+    width = Math.sqrt(area / Math.max(1, grid.active.length)) / 2;
   // Communities whose footprint envelopes meet a feature's naming footprint, from a native index.
   spatial.withIndex(
     residents.map((c) => c.footprint),
@@ -180,7 +202,7 @@ function finalizeGeography(state: GenerationState, original: DomainSnapshot) {
       const near: Residents = (bounds) => index.query(bounds).map((i) => residents[i]);
       for (const feature of generationFeatures(state))
         if (newGeographicName(state, original, feature)) {
-          resolveGeographicName(state, feature, era, near);
+          resolveGeographicName(state, feature, era, near, width);
           writeGenerationFeature(state, feature);
         }
     }

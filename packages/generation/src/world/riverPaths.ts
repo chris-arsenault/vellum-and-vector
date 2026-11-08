@@ -1,6 +1,6 @@
 import type { PhysicalField } from "./field";
 import { physicalSampler } from "./physicalMetric";
-import { spatial, type Band } from "@atlas/domain";
+import { spatial, type Band, type ReadBand } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { meshDeltaX, meshPointX } from "./mesh";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
@@ -182,7 +182,7 @@ function appendCurve(
     pending.push({ points: [a, ab, abc, center], start, end: middle });
   }
 }
-function profile(members: number[], stations: Station[], values: Band, scale = 1, offset = 0) {
+function profile(members: number[], stations: Station[], values: ReadBand, scale = 1, offset = 0) {
   return stations.map(
     ({ segment, fraction }) =>
       (values.get(members[segment]) * (1 - fraction) +

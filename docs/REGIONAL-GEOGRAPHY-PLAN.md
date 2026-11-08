@@ -4,6 +4,12 @@ Working copy for Sulion plan `ea1eabd9-8a17-4e96-8b90-81b487c7d677` (owner revie
 regions, 2026-11-03). Durable mechanisms move to the generation guide and ADR 0008 when the
 plan closes; this file is then deleted.
 
+Ground ownership and process interaction are described in
+[ADR 0010](adr/0010-processes-and-materials-meet-through-modes.md) and
+[ADR 0011](adr/0011-processes-couple-through-keys-and-a-ledger.md).
+Existing world-relief phases retain the remaining geological algorithms and outcomes;
+the ground architecture does not establish their completion.
+
 ## Rivers — diagnosis (phase 2)
 
 Evidence: one generated draft world (seed 73), the coastal region M2 refined at standard

@@ -81,8 +81,8 @@ export function grainAt(character: RegionalCharacter, i: number) {
  * The axial organization of a height field at the parent sample scale: the structure tensor
  * of the height gradient, averaged over a parent span, gives the across-relief direction;
  * the grain is perpendicular to it and its coherence is the tensor's anisotropy, weighted by
- * how much relief there is to organize. Used where a map was captured before the world
- * published a grain, and to publish the child's own developed grain.
+ * how much relief there is to organize. This supplies regional context when captured material
+ * has no usable fabric; it does not overwrite the material's structural history.
  */
 export function measureGrain(
   state: RegionalState,

@@ -4,6 +4,7 @@ import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp } from "./math";
 import { deposit } from "../rock/groundLedger";
+import { seaLoadOf } from "../rock/groundLoad";
 import { KeyedHeap } from "@atlas/domain";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 
@@ -97,7 +98,8 @@ function capacity(map: PhysicalField, p: PhysicalProfile, i: number): number {
   return accommodation * influence * (margin === 3 ? 0.72 : 1);
 }
 export function marineSedimentation(map: PhysicalField, c: PhysicalContext) {
-  if (map.SedimentExportedTotal <= 0) return;
+  const cargo = seaLoadOf(map);
+  if (cargo.amount(0) <= 0) return;
   const capacities = workingValues(
     map,
     "float64",
@@ -106,7 +108,7 @@ export function marineSedimentation(map: PhysicalField, c: PhysicalContext) {
   );
   let remainingCapacity = map.coverage.reduce(capacities, (sum, value) => sum + value, 0);
   const exported = map.SedimentExportedTotal;
-  const initialBudget = Math.min(exported, remainingCapacity);
+  const initialBudget = Math.min(exported, cargo.amount(0), remainingCapacity);
   let budget = initialBudget;
   for (let i = 0; i < map.mesh.count; i++) {
     const available = capacities.get(i);
@@ -120,7 +122,9 @@ export function marineSedimentation(map: PhysicalField, c: PhysicalContext) {
         : Math.min(available, budget, (budget * available) / remainingCapacity);
     if (amount > 0) {
       const area = map.mesh.area(i);
-      const deposited = (deposit(map, i, (amount * 1024) / area, "sea-floor", "sea") / 1024) * area;
+      const deposited =
+        (deposit(map, i, (amount * 1024) / area, "sea-floor", "sea", cargo.get(0)) / 1024) * area;
+      cargo.take(0, deposited);
       budget -= Math.min(budget, deposited);
     }
     remainingCapacity -= available;

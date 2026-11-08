@@ -26,6 +26,7 @@ export interface DiagnosticEntry {
   severity: string;
   outcome: string;
   message: string;
+  stack?: string;
 }
 
 /**
@@ -81,6 +82,7 @@ export function stageRecorder() {
         severity: item.severity,
         outcome: item.outcome,
         message: item.message,
+        stack: item.stack,
       });
     },
     message(message) {

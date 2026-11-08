@@ -6,7 +6,8 @@ import type { LocateContext } from "./magicSources";
 import { siteStrength } from "./magicStocks";
 import { clamp, round } from "./math";
 import { groundOf } from "../rock/ground";
-import { surfaceKind, surfaceResistance } from "../rock/groundQueries";
+import { surfaceResistance } from "../rock/groundQueries";
+import { averageGroundQuery, groundFact } from "../rock/groundQuery";
 
 /**
  * Greenwood's stands: old growth (a canopy past the stand age with cover past the floor) and
@@ -104,13 +105,16 @@ function springRises(map: PhysicalField, i: number, springFlow: number, springRo
   }
   return true;
 }
+const waterEntry = averageGroundQuery({
+  start: 0,
+  rock: (_, layer) => Math.max(groundFact(layer, "solubility"), groundFact(layer, "porosity")),
+});
 /** Water finds its way through continental crust as far as the rock there dissolves or lets it. */
 function karst(map: PhysicalField, i: number) {
-  const rock = groundOf(map).fold(i, surfaceKind);
   return (
     (map.CrustContinentalFraction.get(i) / 1000) *
     (1 - Math.min(1, map.VolcanicConstructionHistory.get(i) / (1024 * 100))) *
-    (0.3 + 0.7 * Math.max(rock.solubility, rock.porosity))
+    (0.3 + 0.7 * groundOf(map).fold(i, waterEntry))
   );
 }
 // What Greenwood's springs feed keeps wet the ground its verdure reaches, so rivers, slopes and soil

@@ -1,6 +1,6 @@
 import type { GenerationState } from "../process";
 import { respond } from "../coupling/answers";
-import { spoilSoil } from "../rock/groundLedger";
+import { spoilSoil } from "../rock/groundSurfaceMedia";
 import { fuseRock } from "../rock/rockField";
 import type { PhysicalField } from "./field";
 import { reservoirAmount, type MagicField } from "./magicState";

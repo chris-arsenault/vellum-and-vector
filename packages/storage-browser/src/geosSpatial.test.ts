@@ -74,6 +74,47 @@ it("validates geometry entering an overlay but never a read-only query rectangle
   expect(validations).toBe(2);
   native.GEOSisValid = isValid;
 });
+it("buffers crossing multipart lines into one area without counting overlap twice", async () => {
+  await configure();
+  const lines = Array.from({ length: 80 }, (_, i) => [
+      [-100, i - 40],
+      [100, 40 - i],
+    ]),
+    area = spatial.buffer({ type: "MultiLineString", coordinates: lines }, 10)!;
+  expect(area.type).toBe("Polygon");
+  const covers = spatial.pointCoverage(area);
+  expect(covers({ x: 0, y: 0, z: 0 })).toBe(true);
+  expect(covers({ x: 100, y: 40, z: 0 })).toBe(true);
+  expect(covers({ x: 0, y: 70, z: 0 })).toBe(false);
+  expect(spatial.area(area)).toBeLessThan(220 * 100);
+});
+it("buffers nested collections and retains separated parts and polygon holes", async () => {
+  await configure();
+  const ring = rectangle([0, 0, 100, 100]);
+  ring.coordinates.push(rectangle([20, 20, 80, 80]).coordinates[0].reverse());
+  const area = spatial.buffer(
+    {
+      type: "GeometryCollection",
+      geometries: [
+        ring,
+        {
+          type: "MultiPoint",
+          coordinates: [
+            [200, 0],
+            [300, 0],
+          ],
+        },
+      ],
+    },
+    5
+  )!;
+  const covers = spatial.pointCoverage(area);
+  expect(covers({ x: 50, y: 50, z: 0 })).toBe(false);
+  expect(covers({ x: 17, y: 50, z: 0 })).toBe(true);
+  expect(covers({ x: 200, y: 0, z: 0 })).toBe(true);
+  expect(covers({ x: 300, y: 0, z: 0 })).toBe(true);
+  expect(covers({ x: 250, y: 0, z: 0 })).toBe(false);
+});
 it("nodes the reported nearly coincident lines and preserves directed crossings", async () => {
   await configure();
   const a = {

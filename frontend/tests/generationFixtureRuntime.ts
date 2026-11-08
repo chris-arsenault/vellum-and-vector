@@ -161,6 +161,9 @@ export function installGenerationFixtureRuntime({
           const snapshot = structuredClone(source);
           const original = structuredClone(snapshot);
           const publications = fixturePublications(message.input, snapshot.world);
+          const outputFeatures = snapshot.world.areas[snapshot.scope.areaId].parentId
+            ? (regionalFeatures ?? ecologicalFeatures)
+            : ecologicalFeatures;
           const fieldPublications = new Map(
             publications.flatMap((definition) =>
               definition.kind === "field" ? [[definition.channel, definition] as const] : []
@@ -169,11 +172,18 @@ export function installGenerationFixtureRuntime({
           complete = async () => {
             if (complete) pending.delete(complete);
             if (stopped) return;
+            const failure = diagnostics.find((entry) => entry.severity === "error");
+            if (failure) {
+              worker.onmessage?.(
+                new MessageEvent("message", {
+                  data: { kind: "failed", error: failure.message, diagnostics },
+                })
+              );
+              return;
+            }
             seedFixtureWorld(snapshot, {
               society,
-              ecologicalFeatures: snapshot.world.areas[snapshot.scope.areaId].parentId
-                ? (regionalFeatures ?? ecologicalFeatures)
-                : ecologicalFeatures,
+              ecologicalFeatures: outputFeatures,
               landmarks,
             });
             const footprint = snapshot.scope.footprint;

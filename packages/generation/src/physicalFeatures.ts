@@ -27,11 +27,11 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
       ],
       "epoch.crust.provinces": [nativeSteps.tectonicProvinces],
       "epoch.crust.structure": [
-        nativeSteps.continentalSutures,
         nativeSteps.tectonicMargins,
         nativeSteps.continentalDomains,
         nativeSteps.tectonicUplift,
       ],
+      "epoch.mountains": [nativeSteps.continentalSutures],
     },
     {
       settings: ["continents", "oceanicPlates", "provinces", "landFraction", "mapBoundary"],
@@ -107,6 +107,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     "material.load-response",
     "Crust and material load response",
     {
+      "material.relaxation": [nativeSteps.crustalRelaxation],
       "material.support.before-margins": [
         nativeSteps.crustalSupport,
         nativeSteps.lithosphericFlexure,

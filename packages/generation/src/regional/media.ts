@@ -1,4 +1,6 @@
-import type { PhysicalBufferName, PhysicalField } from "../world/field";
+import { isMutablePhysicalName, type PhysicalBufferName, type PhysicalField } from "../world/field";
+import { displaceGround, looseTo } from "../rock/groundLedger";
+import { alterRock } from "../rock/rockField";
 
 /** The bands a ledger writes keep the world's bounds: nothing below zero, the per-mille and resistance scales capped. */
 export const ledgerFloors: Partial<Record<PhysicalBufferName, number>> = {
@@ -45,6 +47,22 @@ function bounded(minimum: number | undefined, maximum: number | undefined, integ
     if (maximum !== undefined) next = Math.min(maximum, next);
     return integer ? Math.round(next) : next;
   };
+}
+
+/** Ground changes land through its owner; external ecology and ice retain their own bands. */
+function applyContribution(
+  map: PhysicalField,
+  name: PhysicalBufferName,
+  cell: number,
+  next: number
+) {
+  const delta = next - map[name].get(cell);
+  if (name === "Elevation" || name === "BedrockElevation")
+    displaceGround(map, cell, delta, "contributions");
+  else if (name === "RockResistance") alterRock(map, cell, delta);
+  else if (name === "SedimentThickness") looseTo(map, cell, next, "contributions");
+  else if (isMutablePhysicalName(name)) map[name].set(cell, next);
+  else throw new Error(`Ground contribution requires an owner operation: ${name}`);
 }
 
 export class Contributions {
@@ -98,9 +116,9 @@ export class Contributions {
         changed.set(name, Math.max(changed.get(name) ?? 0, Math.abs(delta)));
         const before = target.get(i),
           next = bound(before + delta);
-        target.set(i, next);
+        applyContribution(map, name, i, next);
         // What the band could take is what was applied; a bound keeps the ledger honest.
-        previous[i] += next - before;
+        previous[i] += target.get(i) - before;
       }
     }
     return changed;

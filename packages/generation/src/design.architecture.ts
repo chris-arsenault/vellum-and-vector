@@ -10,10 +10,13 @@ import { groundProcesses } from "./processes/processCatalogue";
 import { groundOf } from "./rock/ground";
 import { rockCatalogue } from "./rock/rockCatalogue";
 import { setLayer } from "./rock/rockColumn";
-import { createField, type PhysicalField } from "./world/field";
+import {
+  createTestField as createField,
+  type TestPhysicalField as PhysicalField,
+} from "./rock/groundTestFixture";
 import { units } from "./world/math";
 import { allSteps } from "./world/physicalSteps";
-import { rebuild } from "./world/surface";
+import { projectGround as rebuild } from "./rock/groundShares";
 import { createWorldMesh } from "./world/worldMesh";
 import { compileMix } from "./rock/modes";
 
@@ -116,7 +119,7 @@ describe("4.3 a process acts down through the cell's stack", () => {
       order: string[] = [],
       i = 0;
     map.SoilDepth.set(i, 1);
-    map.SedimentThickness.set(i, units(2));
+    setLayer(map, i, 0, rockCatalogue.alluvium.code, units(2), {}, "loose");
     rebuild(map, i);
     const note = (layer: string) => (sofar: number) => (order.push(layer), sofar);
     ground.fold(i, {
@@ -163,7 +166,7 @@ describe("4.4 processes demand transfers and one ledger applies them", () => {
   it("shares out what a pool holds when a simultaneous stage asks for more than it holds", () => {
     const map = smallField(),
       i = 0;
-    map.SedimentThickness.set(i, units(10));
+    setLayer(map, i, 0, rockCatalogue.alluvium.code, units(10), {}, "loose");
     rebuild(map, i);
     const stage = new Stage(map, { simultaneous: true });
     stage.demand("loose", "load", i, units(15), "streams");
@@ -175,7 +178,7 @@ describe("4.4 processes demand transfers and one ledger applies them", () => {
   it("lands a sequential stage's demands in order, the first taking what it asks", () => {
     const map = smallField(),
       i = 0;
-    map.SedimentThickness.set(i, units(10));
+    setLayer(map, i, 0, rockCatalogue.alluvium.code, units(10), {}, "loose");
     rebuild(map, i);
     const stage = new Stage(map, { simultaneous: false });
     stage.demand("loose", "load", i, units(8), "streams");
@@ -193,18 +196,15 @@ describe("4.4 processes demand transfers and one ledger applies them", () => {
     );
     expect(shared.map((step) => step[0])).not.toEqual([]);
   });
-  it("changes the land's height, rock and sediment only through the ledger", () => {
+  it("changes ground storage only inside its owner or explicit supplied fixtures", () => {
     const land =
       /\.(BedrockElevation|SurfaceRockLoad|SedimentThickness|Elevation|CrustThickness)\.(set|add|fill)\(/;
     const owners = new Set([
-      "rock/groundLedger.ts", // The ledger.
-      "world/surface.ts", // Rebuilding the surface from what the ledger holds.
-      "world/crustTransport.ts", // Plates carrying whole columns, which the history events move.
-      "world/atlasWorkspace.ts", // Setting up a world from what was saved or drawn.
-      "societyEnvironment.ts", // Reading a saved surface back.
       "world/worldGeographyFixtures.ts", // A flat fixture world for tests, set up whole.
     ]);
-    const stray = files().filter((file) => !owners.has(file) && land.test(text(file)));
+    const stray = files().filter(
+      (file) => !file.startsWith("rock/") && !owners.has(file) && land.test(text(file))
+    );
     expect(stray).toEqual([]);
   });
 });

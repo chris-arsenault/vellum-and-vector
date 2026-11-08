@@ -132,7 +132,7 @@ export function defaultEpochs(): World["epochs"] {
       coasts: 1,
       temperature: -3,
       seaLevel: 0,
-      tectonicDurationMyr: 40,
+      tectonicDurationMyr: 20,
     },
     {
       id: "Present",
@@ -142,7 +142,7 @@ export function defaultEpochs(): World["epochs"] {
       coasts: 1,
       temperature: 15,
       seaLevel: 0,
-      tectonicDurationMyr: 40,
+      tectonicDurationMyr: 20,
     },
   ];
 }

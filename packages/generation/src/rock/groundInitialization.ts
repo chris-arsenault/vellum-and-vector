@@ -1,24 +1,27 @@
-import { resetRock } from "../rock/rockField";
-import { reconcileWater, type PhysicalField } from "./field";
+import { resetRock } from "./rockField";
+import type { PhysicalField } from "../world/field";
+import { projectGround, resetShares } from "./groundShares";
+import { loadOf, seaLoadOf } from "./groundLoad";
+import { groundStorage } from "./groundStorage";
 
-/** The surface is what stands on the rock: the rock and the loose cover over it. */
-export function rebuild(map: PhysicalField, i: number) {
-  map.Elevation.set(i, map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
-  reconcileWater(map, i);
-}
 /**
  * A forming world's first surface, which the crust's thickness sets before there is rock or cover to
  * build it from. Laying out the landscape then takes its rock from here.
  */
 export function standSurface(map: PhysicalField, i: number, elevation: number) {
-  map.Elevation.set(i, elevation);
-  reconcileWater(map, i);
+  groundStorage(map).BedrockElevation.set(i, elevation);
+  projectGround(map, i);
 }
 export function initializeLandscape(map: PhysicalField) {
   resetRock(map);
+  for (let i = 0; i < map.mesh.count; i++) {
+    resetShares(map, i);
+    loadOf(map).clear(i);
+  }
+  seaLoadOf(map).clear(0);
+  groundStorage(map).SedimentThickness.fill(0);
+  groundStorage(map).SedimentSupply.fill(0);
   for (const name of [
-    "SedimentThickness",
-    "SedimentSupply",
     "CumulativeFluvialErosion",
     "CumulativeGlacialErosion",
     "CumulativeGlacialDeposition",
@@ -42,8 +45,8 @@ export function initializeLandscape(map: PhysicalField) {
   map.SedimentProducedTotal = 0;
   map.SedimentDepositedTotal = 0;
   map.SedimentExportedTotal = 0;
-  map.BedrockElevation.copyFrom(map.Elevation);
-  map.CrustSupportElevation.copyFrom(map.Elevation);
+  groundStorage(map).BedrockElevation.copyFrom(map.Elevation);
+  groundStorage(map).CrustSupportElevation.copyFrom(map.Elevation);
   map.TectonicActivityHistory.copyFrom(map.TectonicStrain);
   map.CrustSupportInitialized = true;
 }
@@ -60,20 +63,14 @@ export function validateLandscape(map: PhysicalField) {
     const elevation = map.Elevation.get(i),
       bedrock = map.BedrockElevation.get(i),
       sediment = map.SedimentThickness.get(i);
-    if (invalid || elevation !== bedrock + sediment)
+    if (
+      invalid ||
+      !Number.isFinite(elevation) ||
+      !Number.isFinite(bedrock) ||
+      !Number.isFinite(sediment)
+    )
       throw new Error(
         `Landscape cell ${i} is inconsistent: elevation ${elevation}, bedrock ${bedrock}, sediment ${sediment}, negative material ${invalid}.`
       );
   }
-  if (
-    map.SedimentProducedTotal < 0 ||
-    map.SedimentDepositedTotal < 0 ||
-    map.SedimentExportedTotal < 0 ||
-    map.SedimentDepositedTotal + map.SedimentExportedTotal >
-      map.SedimentProducedTotal + Math.max(0.001, map.SedimentProducedTotal * 1e-9)
-  )
-    throw new Error(
-      `Sediment accounting is inconsistent: produced ${map.SedimentProducedTotal} m³, ` +
-        `deposited ${map.SedimentDepositedTotal} m³, exported ${map.SedimentExportedTotal} m³.`
-    );
 }

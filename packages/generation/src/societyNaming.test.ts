@@ -179,6 +179,28 @@ it("names seas from coastal speakers and leaves empty regions without fictional 
   expect(ocean.attributes.namingCulture).toBe("costa");
   expect(empty.attributes.namingLanguage).toBeNull();
 });
+it("names a multipart river from speakers beside its banks even outside their footprints", async () => {
+  const { state, world, communities, context } = fixture(),
+    original = structuredClone(state.domain);
+  communities[1].groups = [];
+  const river = generatedFeature(state, "long-river", "River", "river", "rivers", {
+    type: "MultiLineString",
+    coordinates: [
+      [
+        [-100_000, 1200],
+        [100_000, 1200],
+      ],
+      [
+        [-100_000, 9000],
+        [100_000, 9000],
+      ],
+    ],
+  });
+  world.features[river.id] = river;
+  await executeProcessBehavior(finalizeNamesProcess(original), state, context);
+  expect(river.attributes.namingLanguage).toBe("B");
+  expect(river.attributes.namedInEra).toBeTruthy();
+});
 it("gives a polity its seat's naming language without replacing other communities' languages", () => {
   const { world, communities } = fixture();
   const polity: Entity = {

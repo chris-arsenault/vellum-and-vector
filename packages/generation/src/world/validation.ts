@@ -4,7 +4,7 @@ import type { PhysicalContext } from "./context";
 import { noWaterSurface } from "./math";
 import { sourceToOutletOrder } from "./flowGraph";
 import { isGrounded } from "./glacierSurface";
-import { validateLandscape } from "./surface";
+import { validateLandscape } from "../rock/groundInitialization";
 import { allowsBoundaryDrainage, isOpenOutlet } from "./field";
 import { releaseWorking } from "./physicalNumerics";
 

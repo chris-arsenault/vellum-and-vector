@@ -32,7 +32,7 @@ export const ice = defineProcess({
     refreshGrounding: (settings: PhysicalProfile) => refreshGrounding(map, settings),
   }),
   settlesItself: true,
-  run({ field, context: c, settings: p, ground, span, ask, stage, tools }) {
+  run({ field, context: c, settings: p, span, ask, stage, tools }) {
     const bite = ask("iceBite");
     for (let i = 0; i < field.mesh.count; i++) {
       if (c.GlaciationStrength === 0 || field.GroundedIce.get(i) === 0) continue;
@@ -41,7 +41,7 @@ export const ice = defineProcess({
       if (speed <= p.GlacierFrozenSpeed) continue;
       const moved =
         ((speed * p.GlacialCutPerSpeed * span * c.GlaciationStrength) / 1000) * bite.get(i);
-      stage.wear(scouring, i, ground.actOn(i, glacial, moved, tools.iceCanCut(i, p)));
+      stage.attack(scouring, i, glacial, moved, tools.iceCanCut(i, p));
     }
     stage.settle();
     tools.refreshGrounding(p);

@@ -6,10 +6,12 @@ import { physicalProfile } from "../../../packages/generation/src/world/profile"
 import { defineProcess } from "../../../packages/generation/src/processes/groundProcess";
 import { actBy } from "../../../packages/generation/src/processes/processRunner";
 import { runNativeStep } from "../../../packages/generation/src/world/physicalSteps";
-import { harnessOptions, runHarness } from "./harness";
+import { harnessOptions, runHarness, write as writeReport } from "./harness";
 
 const io = vi.hoisted(() => ({
   write: vi.fn(),
+  opened: [] as { path: string; chunks: string[] }[],
+  closeFile: vi.fn(),
   closed: [] as ReturnType<typeof vi.fn>[],
   generate: vi.fn(),
   refine: vi.fn(),
@@ -19,6 +21,16 @@ vi.mock("node:fs", async (original) => ({
   ...(await original<typeof import("node:fs")>()),
   mkdirSync: vi.fn(),
   writeFileSync: io.write,
+  openSync: (path: string) => io.opened.push({ path, chunks: [] }) - 1,
+  writeSync: (file: number, bytes: Buffer, offset: number, length: number) => {
+    io.opened[file].chunks.push(bytes.subarray(offset, offset + length).toString());
+    return length;
+  },
+  closeSync: (file: number) => {
+    io.closeFile(file);
+    const output = io.opened[file];
+    io.write(output.path, output.chunks.join(""));
+  },
 }));
 vi.mock("./harnessWorkspace", () => ({
   harnessRoot: "/probe-output",
@@ -69,6 +81,29 @@ beforeEach(() => {
   io.generate.mockReset();
   io.refine.mockReset();
   io.closed.length = 0;
+  io.opened.length = 0;
+});
+
+it("writes ordered observations without serializing the enclosing array", () => {
+  const observations = [
+    { event: "before", material: "shale" },
+    { event: "after", material: "basalt" },
+  ];
+  Object.defineProperty(observations, "toJSON", {
+    value: () => {
+      throw new Error("whole history serialization");
+    },
+  });
+  writeReport("/probe-output", "ground", observations);
+  expect(JSON.parse(io.write.mock.calls[0][1])).toEqual(observations);
+  expect(io.closeFile).toHaveBeenCalledOnce();
+});
+
+it("closes an observation file if an individual record cannot serialize", () => {
+  const circular: { self?: unknown } = {};
+  circular.self = circular;
+  expect(() => writeReport("/probe-output", "ground", [circular])).toThrow();
+  expect(io.closeFile).toHaveBeenCalledOnce();
 });
 
 it.each(["world", "region", "quick-region"])(

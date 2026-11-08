@@ -18,12 +18,7 @@ import { composeAuthoredSamples } from "./mapAuthored";
 import { invocationParameters } from "./preflight";
 import { ProductLedger } from "./productLedger";
 import { executeProcessBehavior } from "./processTraits";
-import {
-  processDiagnostics,
-  processFailureDiagnostics,
-  stageEnabled,
-  unrecoverableProcessFailure,
-} from "./processRecovery";
+import { processDiagnostics, processFailureDiagnostics, stageEnabled } from "./processRecovery";
 import { prepareWorkingState, numericalProcessLifetime } from "./generationWorkingState";
 
 export interface MapRunnerOptions {
@@ -194,14 +189,10 @@ export class MapRunner {
       options.inspect?.(stage.path, process.contract.id, state);
     } catch (error) {
       this.checkCancelled(options);
-      if (unrecoverableProcessFailure(error)) throw error;
-      record(processFailureDiagnostics(error), "omitted", error);
-      [...process.contract.produces, ...process.contract.invalidates].forEach((product) =>
-        products.invalidate(product, stage.path.join("/"))
-      );
-      validate();
-      options.progress?.(stage.path, 1, `Skipped ${process.contract.id}`);
-      return false;
+      record(processFailureDiagnostics(error), "failed", error);
+      // Processes mutate shared state. Continuing after an exception would publish a partial
+      // process result as completed geography, even if its declared products were invalidated.
+      throw error;
     } finally {
       releaseNumerical();
     }

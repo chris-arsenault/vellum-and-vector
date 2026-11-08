@@ -309,6 +309,7 @@ published region in seconds. Each run writes a report directory under
 
 The report states what was made; it checks nothing. Environment variables choose
 the run: `HARNESS_WORLD` and `HARNESS_REGION` name the checkpoints,
+`HARNESS_SEED` selects a new world's seed and `HARNESS_WORLD_ONLY=1` skips refinement,
 `HARNESS_WORLD_QUALITY` and `HARNESS_REGION_QUALITY` choose draft, standard or fine,
 `HARNESS_REGION_AT=x,y` picks the region under a point (default: the world's highest
 land), and `HARNESS_FRESH=world` or `HARNESS_FRESH=region` makes a checkpoint again.
@@ -324,6 +325,25 @@ Samples are written to `world-processes.json`, `region-processes.json` or
 `quick-region-processes.json`, including when the run fails. Reused checkpoints do not
 execute processes and produce no new process samples. Band selection lets a new process
 be inspected without adding process-specific probe code.
+
+A world run with `HARNESS_SNAPSHOTS=<name>` saves physical state and epoch settings
+at each pass boundary. `HARNESS_STAGES=<name> HARNESS_PASS=1 HARNESS_PASSES=2 pnpm
+--dir frontend harness stageReplay` runs those passes through the current physical
+steps and writes `replay.json` under `.artifacts/harness`. Magic and ecology do not
+run in this replay. The report includes effective profile and epoch inputs, land
+heights and belt supply. Its old-ground classes use transported average heights;
+they do not track individual parcels of the first epoch.
+
+`HARNESS_PASSES=0` reports a snapshot as it stands. Replay uses the saved profile;
+`HARNESS_PROFILE_SOURCE=current` selects the current base profile, and
+`HARNESS_PROFILE='{"Name": 0}'` overrides named settings. `HARNESS_EPOCHS` supplies
+an explicit epoch array. Legacy snapshots without epochs use current defaults
+and say so. Judge complete histories with the world harness.
+
+`HARNESS_NAMING=1 HARNESS_WORLD=<checkpoint> pnpm --dir frontend harness naming`
+exercises final naming against a saved map and its completed society without
+regeneration or changes to the checkpoint. A failed native buffer writes its
+input to `.artifacts/harness/naming-buffer.json` for diagnosis.
 
 Map → Appearance → Rendering diagnostics shows the same kind of record live in the
 app: tile workers, tiles waiting, drawn, cancelled and reloaded, and what a tile costs.

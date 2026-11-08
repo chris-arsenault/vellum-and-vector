@@ -1,6 +1,5 @@
 import { meshDeltaX } from "./mesh";
 // ImpactCrateringLayer.cs, Canonry 0f62584c.
-import { stripRock } from "../rock/rockColumn";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { hardenRock } from "../rock/rockField";
 import { crustForming, type PhysicalField } from "./field";
@@ -11,8 +10,7 @@ import { hashUnit } from "./noise";
 import { Feature } from "./codes";
 import { nearestTriangle } from "./mesh";
 import { worldCandidates, separatedCandidates, type WorldCandidate } from "./worldSources";
-import { deposit, raiseRock } from "../rock/groundLedger";
-import { rebuild } from "./surface";
+import { deposit, displaceGround, excavateRock } from "../rock/groundLedger";
 import { areaBudget, mediumArea } from "./worldScale";
 
 function impactCount(map: PhysicalField, c: PhysicalContext): number {
@@ -55,11 +53,9 @@ function excavate(
     0,
     Math.min(requested, map.BedrockElevation.get(i) - units(-elevationLimit))
   );
-  raiseRock(map, i, -cut, "impacts", "space");
-  map.ImpactExcavation.add(i, cut);
-  stripRock(map, i, cut);
-  if (cut > 0) rebuild(map, i);
-  return cut;
+  const excavated = excavateRock(map, i, cut, "impacts", "space");
+  map.ImpactExcavation.add(i, excavated);
+  return excavated;
 }
 function raiseRim(map: PhysicalField, i: number, distance: number, radius: number, height: number) {
   const influence = 1 - Math.abs(distance / radius - 1) / 0.34;
@@ -68,9 +64,8 @@ function raiseRim(map: PhysicalField, i: number, distance: number, radius: numbe
     0,
     Math.min(units(height * influence), units(elevationLimit) - map.BedrockElevation.get(i))
   );
-  raiseRock(map, i, uplift, "impacts", "space");
+  displaceGround(map, i, uplift, "impacts");
   map.ImpactRimUplift.add(i, uplift);
-  if (uplift > 0) rebuild(map, i);
 }
 function shock(
   map: PhysicalField,

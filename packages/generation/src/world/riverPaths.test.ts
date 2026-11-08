@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
-import { Band, interpolateProfile, lineParts, rectangle, spatial } from "@atlas/domain";
+import { interpolateProfile, lineParts, rectangle, spatial } from "@atlas/domain";
 import { createWorldMesh } from "./worldMesh";
-import { createField } from "./field";
+import { createField, physicalBands } from "./field";
 import { nearestTriangle, type TriangularLattice } from "./mesh";
 import { createRiverPaths, riverPath } from "./riverPaths";
 
@@ -141,9 +141,9 @@ it("carries finite dimensional station profiles without changing the drainage si
 });
 function physicalData(map: import("./field").PhysicalField) {
   const data: Record<string, unknown> = {};
+  for (const [name, band] of physicalBands(map)) data[name] = Array.from(band);
   for (const [name, value] of Object.entries(map)) {
-    if (value instanceof Band) data[name] = Array.from(value);
-    else if (name !== "coverage" && name !== "mesh" && typeof value !== "function")
+    if (!(name in data) && name !== "coverage" && name !== "mesh" && typeof value !== "function")
       data[name] = structuredClone(value);
   }
   return data;

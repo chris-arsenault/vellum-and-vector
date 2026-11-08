@@ -1,6 +1,6 @@
 import type { Band } from "@atlas/domain";
 import type { PhysicalContext } from "../world/context";
-import type { PhysicalBufferName, PhysicalField } from "../world/field";
+import type { MutablePhysicalBufferName, PhysicalBufferName, PhysicalField } from "../world/field";
 import type { PhysicalProfile } from "../world/profile";
 import type { AnswerKey } from "../coupling/answers";
 import type { Pool } from "../coupling/flows";
@@ -18,7 +18,10 @@ export interface ProcessReading {
 /** A band as a process may see it when it only declared reading it. */
 export type ReadOnlyBand = Pick<Band, "get" | "length">;
 /** The field as a process declared it: read only what it reads, and writable what it keeps itself. */
-export type DeclaredField<R extends PhysicalBufferName, W extends PhysicalBufferName = never> = {
+export type DeclaredField<
+  R extends PhysicalBufferName,
+  W extends MutablePhysicalBufferName = never,
+> = {
   readonly [K in R]: ReadOnlyBand;
 } & { readonly [K in W]: Band } & Pick<PhysicalField, "mesh" | "EffectiveSeaLevel">;
 /**
@@ -27,7 +30,7 @@ export type DeclaredField<R extends PhysicalBufferName, W extends PhysicalBuffer
  */
 export interface ProcessWork<
   R extends PhysicalBufferName = never,
-  W extends PhysicalBufferName = never,
+  W extends MutablePhysicalBufferName = never,
   Operations = object,
 > {
   readonly field: DeclaredField<R, W>;
@@ -86,7 +89,7 @@ interface ProcessDeclaration {
  */
 export interface GroundProcess<
   R extends PhysicalBufferName = PhysicalBufferName,
-  W extends PhysicalBufferName = PhysicalBufferName,
+  W extends MutablePhysicalBufferName = MutablePhysicalBufferName,
 > extends ProcessDeclaration {
   /** What it reads from the field. */
   readonly reads: readonly R[];
@@ -105,7 +108,7 @@ export interface GroundProcess<
 /** A process with its reads and writes kept exact. Every view-holding process is declared this way. */
 export const defineProcess = <
   const R extends PhysicalBufferName,
-  const W extends PhysicalBufferName = never,
+  const W extends MutablePhysicalBufferName = never,
   Operations extends object = object,
 >(
   process: ProcessDeclaration & {

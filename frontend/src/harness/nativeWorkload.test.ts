@@ -13,6 +13,13 @@ it("derives physical workload order and invocation flags from the default atlas 
   );
   expect(loadedSupport?.invocation.parameters).toEqual(expect.objectContaining({ iceLoad: true }));
   expect(epochs.some(({ step }) => step[0] === "ancestral-fluvial-erosion")).toBe(true);
+  expect(epochs.some(({ step }) => step[0] === "orogenic-construction")).toBe(false);
+  const moving = epochs.find(({ step }) => step[0] === "plate-advection")!;
+  expect(moving.deformation.map(([name]) => name)).toEqual([
+    "continental-sutures",
+    "orogenic-construction",
+  ]);
+  expect(epochs.some(({ step }) => step[0] === "crustal-relaxation")).toBe(true);
   expect(entries.every(({ step, invocation }) => invocation.process === `atlas.${step[0]}`)).toBe(
     true
   );

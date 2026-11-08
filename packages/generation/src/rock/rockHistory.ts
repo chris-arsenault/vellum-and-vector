@@ -3,10 +3,11 @@ import type { PhysicalContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
 import { units } from "../world/math";
 import { hashUnit, meshNoise } from "../world/noise";
-import { rebuild } from "../world/surface";
-import { lithify, raiseRock } from "./groundLedger";
-import { changeLayer, deepestLayer, layBed, layerDepth, layerKind, setLayer } from "./rockColumn";
-import { rockCatalogue, rockKindOfCode, type RockKindId } from "./rockCatalogue";
+import { constructRock, lithifyBuried } from "./groundLedger";
+import { deepestLayer, layerDepth, readLayer, setLayer } from "./rockColumn";
+import { heatedMaterial } from "./modes";
+import { coverColumn, columnThickness, facetShare, projectGround } from "./groundShares";
+import { rockCatalogue, type RockKindId } from "./rockCatalogue";
 
 /**
  * What lies buried deeper than this, in metres, is under enough weight to turn to rock; what is above it
@@ -14,9 +15,6 @@ import { rockCatalogue, rockKindOfCode, type RockKindId } from "./rockCatalogue"
  */
 const lithifyFrom = 1000,
   stillLoosePerSpan = 0.5;
-/** Water shallow and warm enough to build limestone, in metres and native temperature. */
-const reefDepth = 200,
-  reefWarmth = 480;
 /** The rain below which a closed basin dries to salt, in native units. */
 const dryBasin = 400;
 /** The salt a closed basin lays down as it dries and refills, in metres per unit of span. */
@@ -51,7 +49,6 @@ function continentalColumn(map: PhysicalField, c: PhysicalContext, i: number) {
     shield = hashUnit(c.Seed ^ salts.shield, province, 0) < 0.3,
     basement = hashUnit(c.Seed ^ salts.shield, province, 1) < 0.5 ? "gneiss" : "granite";
   if (shield) {
-    map.RockKindCodes.set(i, rockCatalogue[basement].code);
     setLayer(map, i, 0, rockCatalogue[basement].code, units(30_000));
     return;
   }
@@ -71,22 +68,10 @@ export function initializeRock(map: PhysicalField, c: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.CrustContinentalFraction.get(i) >= 500) continentalColumn(map, c, i);
     else oceanicColumn(map, i);
-    const exposed = rockKindOfCode(map.RockLayerKind0.get(i));
-    map.RockKindCodes.set(i, exposed.code);
-    map.RockResistance.set(i, exposed.resistance);
+    projectGround(map, i);
   }
 }
 
-/** What loose sediment becomes where it lies: the water and the weather decide. */
-function sedimentKind(map: PhysicalField, i: number): RockKindId {
-  const water = map.WaterKindCodes.get(i);
-  if (water === 1)
-    return map.WaterDepths.get(i) < units(reefDepth) && map.Temperature.get(i) > reefWarmth
-      ? "limestone"
-      : "shale";
-  if (water === 2) return map.Rainfall.get(i) < dryBasin ? "saltbed" : "shale";
-  return "sandstone";
-}
 /**
  * Water with no way out and little rain to replace it dries, and what it held stays as salt. A sea cut
  * off when its ocean closes lays down a bed this way with no river bringing anything to it, and the
@@ -98,38 +83,31 @@ function dryClosedWater(map: PhysicalField, span: number) {
     if (map.Rainfall.get(i) >= dryBasin) continue;
     const salt = Math.min(units(saltPerSpan * span), map.WaterDepths.get(i));
     if (salt <= 0) continue;
-    raiseRock(map, i, salt, "burial", "sea");
-    layBed(map, i, rockCatalogue.saltbed, salt);
-    rebuild(map, i);
+    constructRock(map, i, salt, rockCatalogue.saltbed, "burial", "sea");
   }
 }
-/** Sediment buried under more of itself turns to rock of the kind its setting makes. */
+/** Buried sediment hardens from the material retained when it was deposited. */
 export function lithification(map: PhysicalField, span: number) {
   dryClosedWater(map, span);
   const from = units(lithifyFrom),
     hardened = 1 - stillLoosePerSpan ** span;
-  for (let i = 0; i < map.mesh.count; i++) {
-    const sediment = map.SedimentThickness.get(i);
-    if (sediment <= from) continue;
-    const amount = Math.round((sediment - from) * hardened);
-    if (amount <= 0) continue;
-    lithify(map, i, amount, "burial");
-    layBed(map, i, rockCatalogue[sedimentKind(map, i)], amount);
-    rebuild(map, i);
-  }
+  for (let i = 0; i < map.mesh.count; i++) lithifyBuried(map, i, from, hardened, "burial");
 }
 /** Rock this far down turns to its next form under the fullest heat, and deeper under less. */
 function bake(map: PhysicalField, i: number, heat: number) {
-  const deepest = deepestLayer(map, i),
-    reaches = units(bakingDepth) / heat;
-  let above = 0;
-  for (let layer = 0; layer <= deepest; layer++) {
-    if (above >= reaches) {
-      const next = rockKindOfCode(layerKind(map, i, layer)).underHeat;
-      if (next) changeLayer(map, i, layer, rockCatalogue[next]);
+  const reaches = units(bakingDepth) / heat;
+  for (const facet of ["land", "cut"] as const) {
+    if (facetShare(map, i, facet) <= 0) continue;
+    let above = columnThickness(map, i, coverColumn(facet));
+    for (let layer = 0; layer <= deepestLayer(map, i, facet); layer++) {
+      if (above >= reaches) {
+        const material = heatedMaterial(readLayer(map, i, layer, facet), map.CompletedEpochCount);
+        setLayer(map, i, layer, material.kind, material.depth, material, facet);
+      }
+      above += layerDepth(map, i, layer, facet);
     }
-    above += layerDepth(map, i, layer);
   }
+  projectGround(map, i);
 }
 /**
  * Burial and heat: rock deep under a range or an old suture turns to its next form, whatever its

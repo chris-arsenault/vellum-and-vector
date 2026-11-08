@@ -247,10 +247,10 @@ const heightColours: readonly (readonly [number, readonly [number, number, numbe
   [Infinity, [245, 245, 245]],
 ];
 /** Land by height, in bands, with active convergent boundaries black. */
-export function drawHeights(map: PhysicalField, out: string, name: string) {
+export function drawHeights(map: PhysicalField, out: string, name: string, contacts = true) {
   drawCells(map, out, name, (i) => {
-    if (!isLand(map, i)) return map.TectonicBoundaryCodes.get(i) === 1 ? [0, 0, 0] : [35, 45, 70];
-    if (map.TectonicBoundaryCodes.get(i) === 1) return [0, 0, 0];
+    if (contacts && map.TectonicBoundaryCodes.get(i) === 1) return [0, 0, 0];
+    if (!isLand(map, i)) return [35, 45, 70];
     return heightColours.find(([below]) => height(map, i) < below)![1];
   });
 }

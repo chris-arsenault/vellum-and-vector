@@ -14,6 +14,7 @@ import { initializeMagic } from "./magicState";
 import { projectMagic } from "./magicFeatures";
 import { membershipContour, membershipSampler } from "./geographicContours";
 import { nearestTriangle } from "./mesh";
+import { looseTo, standGround } from "../rock/groundLedger";
 
 it("publishes a fixed triangle world as continuous metre channels and discrete material/magic fields", () => {
   const state = landscape();
@@ -22,9 +23,8 @@ it("publishes a fixed triangle world as continuous metre channels and discrete m
   const work = state.physical!,
     mesh = work.map.mesh;
   for (let i = 0; i < mesh.count; i++) {
-    work.map.Elevation.set(i, (500 + mesh.x(i) * 0.002) * 1024);
-    work.map.BedrockElevation.set(i, work.map.Elevation.get(i) - 10 * 1024);
-    work.map.SedimentThickness.set(i, 10 * 1024);
+    looseTo(work.map, i, 10 * 1024, "fixture");
+    standGround(work.map, i, (500 + mesh.x(i) * 0.002) * 1024, "fixture");
     work.map.CrustProvinceIds.set(i, i % 5);
   }
   initializeMagic(state);

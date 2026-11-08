@@ -15,17 +15,17 @@ export const solution = defineProcess({
   atScale: (settings, { passes }) => ({
     DissolvedPerSpan: settings.DissolvedPerSpan / passes,
   }),
-  run({ field, context: c, settings: p, ground, span, ask, stage }) {
+  run({ field, context: c, settings: p, span, ask, stage }) {
     const wetness = ask("wetness");
     for (let i = 0; i < field.mesh.count; i++) {
       if (field.WaterKindCodes.get(i) === 1) continue;
-      const cut = ground.actOn(
+      stage.attack(
+        dissolved,
         i,
         dissolving,
         (p.DissolvedPerSpan * span * wetness.get(i) * c.HydrologyStrength) / 1000,
         Infinity
       );
-      stage.wear(dissolved, i, cut);
     }
   },
 });

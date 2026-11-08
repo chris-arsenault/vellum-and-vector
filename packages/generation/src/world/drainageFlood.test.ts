@@ -3,7 +3,7 @@ import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
 import { depthRateToDischarge } from "./dimensions";
 import { drainageConditioning } from "./drainageFlood";
-import { createField } from "./field";
+import { createTestField as createField } from "../rock/groundTestFixture";
 import { contributingWater } from "./lakeStage";
 import { createWorldMesh } from "./worldMesh";
 

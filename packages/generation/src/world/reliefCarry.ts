@@ -1,47 +1,32 @@
-import type { Band } from "@atlas/domain";
+import { CellList, type Band } from "@atlas/domain";
 import {
-  columnKindOffset,
-  kindBands,
-  layBedOfCode,
-  layerDepth,
-  rockDepthFields,
-  rockLayers,
-} from "../rock/rockColumn";
-import { shiftRock } from "../rock/groundLedger";
-import { newBasaltSurface } from "../rock/rockField";
-import { oceanicColumn } from "../rock/rockHistory";
-import { adjustCrustColumn, arcCrustYield } from "./crustTransport";
+  landCollisionPackage,
+  deformGround,
+  formTransportOpening,
+  heldCoverDepth,
+  heldPlacement,
+  holdRock,
+  placeCarriedGround,
+  releaseHeldRock,
+  type Deformation,
+  type HeldRock,
+} from "../rock/groundTransport";
+export { heldLayers, holdRock, releaseHeldRock, type HeldRock } from "../rock/groundTransport";
+import { arcCrustYield } from "../rock/crustTransport";
 import type { PhysicalField } from "./field";
-import { clamp, crustPerRock, elevationLimit, units } from "./math";
 import { meshDeltaX, meshPoint } from "./mesh";
 import { metricSearch } from "./metricSearch";
-import { smoothMetric } from "./metricSmoothing";
 import { physicalSampler } from "./physicalMetric";
 import { releaseWorking, workingArray, workingValues } from "./physicalNumerics";
 import type { TransportPlan } from "./transportPlan";
 import { weightScale } from "./transportPlan";
 
 /**
- * Crust moves whole. A plate's move is made of many small steps, and sharing height out over the
- * cells each step touches would plane the land down every time the plates move; taking each step's
- * largest arrival instead would leave the ground behind, since a small step's largest arrival is
- * the cell itself. So each cell follows where its material has come from across the whole move, and
- * when the move ends it takes the height and rock of that place as they stood when it began.
+ * A deformation interval carries existing relief before construction changes it. Each cell follows
+ * the source coordinates of arriving material and samples the height and rock there. The next
+ * interval begins from the changed ground, so newly built mountains travel with their plates.
  */
-const heights = ["BedrockElevation", "CrustSupportElevation", "SurfaceRockLoad"] as const;
-/** Properties of the rock itself, which have no meaning halfway between two rocks. */
-const rockProperties = [
-  "RockResistance",
-  "CrustSutureStrength",
-  "CrustProvinceSeam",
-  "StructuralGrainX",
-  "StructuralGrainY",
-  ...rockDepthFields,
-] as const;
-export interface ReliefCarry {
-  before: Band[];
-  properties: Band[];
-  kinds: Band[];
+export interface ReliefCarry extends HeldRock {
   fromX: Band;
   fromY: Band;
   /** How much of a cell is crust that was there when the move began, and not new ground. */
@@ -56,12 +41,10 @@ export interface ReliefCarry {
 }
 export function beginReliefCarry(map: PhysicalField): ReliefCarry {
   return {
+    ...holdRock(map),
     toX: workingValues(map, "float64", "carry:toX", (i) => map.mesh.x(i)),
     toY: workingValues(map, "float64", "carry:toY", (i) => map.mesh.y(i)),
     fraction: map.coverage.copyBand(map.CrustContinentalFraction),
-    before: heights.map((name) => map.coverage.copyBand(map[name])),
-    properties: rockProperties.map((name) => map.coverage.copyBand(map[name])),
-    kinds: kindBands(map).map((band) => map.coverage.copyBand(band)),
     fromX: workingArray(map, "float64", "carry:fromX").fill(0),
     fromY: workingArray(map, "float64", "carry:fromY").fill(0),
     old: workingArray(map, "float64", "carry:old").fill(1),
@@ -130,193 +113,148 @@ export function stepReliefCarry(map: PhysicalField, plan: TransportPlan, carry: 
     );
   }
 }
-/** A copy of every cell's rock as it stands, for rock moved within a single process. */
-export interface HeldRock {
-  properties: Band[];
-  kinds: Band[];
-}
-export const holdRock = (map: PhysicalField): HeldRock => ({
-  properties: rockProperties.map((name) => map.coverage.copyBand(map[name])),
-  kinds: kindBands(map).map((band) => map.coverage.copyBand(band)),
-});
-export function releaseHeldRock(map: PhysicalField, held: HeldRock) {
-  releaseWorking(map, ...held.properties, ...held.kinds);
-}
-export function takeHeldRock(map: PhysicalField, held: HeldRock, cell: number, origin: number) {
-  rockProperties.forEach((name, n) => map[name].set(cell, held.properties[n].get(origin)));
-  kindBands(map).forEach((band, n) => band.set(cell, held.kinds[n].get(origin)));
-}
-/** A cell's place in a belt, from a held cell, leaving its rock as it is. */
-export function takeHeldSheet(map: PhysicalField, held: HeldRock, cell: number, origin: number) {
-  const bands = kindBands(map);
-  for (let n = columnKindOffset + rockLayers; n < bands.length; n++)
-    bands[n].set(cell, held.kinds[n].get(origin));
-}
-/** The layers of a held column from the top down. */
-export function heldLayers(held: HeldRock, cell: number) {
-  return rockDepthFields.map((name, layer) => ({
-    kind: held.kinds[columnKindOffset + layer].get(cell),
-    depth: held.properties[rockProperties.indexOf(name)].get(cell),
-  }));
-}
-function sampleHeights(map: PhysicalField, carry: ReliefCarry) {
-  heights.forEach((name, n) => {
-    const sample = physicalSampler(map.mesh, carry.before[n]);
-    for (let cell = 0; cell < map.mesh.count; cell++) {
-      const old = carry.old.get(cell),
-        shared = map[name].get(cell);
-      if (old <= 0) continue;
-      const [x, y] = meshPoint(
-        map.mesh,
-        map.mesh.x(cell) + carry.fromX.get(cell),
-        map.mesh.y(cell) + carry.fromY.get(cell)
-      );
-      const origin = sample(x, y);
-      // Material from beyond the map's edge has no height to bring.
-      if (Number.isFinite(origin)) map[name].set(cell, shared + (origin - shared) * old);
-    }
-  });
-}
-function takeRock(map: PhysicalField, carry: ReliefCarry, kinds: readonly Band[], cell: number) {
-  const [x, y] = meshPoint(
-      map.mesh,
-      map.mesh.x(cell) + carry.fromX.get(cell),
-      map.mesh.y(cell) + carry.fromY.get(cell)
-    ),
-    origin = map.mesh.cellAt(x, y);
-  if (origin >= 0 && carry.old.get(cell) >= 0.5) {
-    rockProperties.forEach((name, n) => map[name].set(cell, carry.properties[n].get(origin)));
-    kinds.forEach((band, n) => band.set(cell, carry.kinds[n].get(origin)));
+/** Least-squares local deformation of the material coordinates, rather than a rotation by speed. */
+export function carriedDeformation(
+  map: PhysicalField,
+  carry: Pick<ReliefCarry, "toX" | "toY">,
+  source: number
+): Deformation {
+  let xx = 0,
+    xy = 0,
+    yy = 0,
+    ax = 0,
+    ay = 0,
+    bx = 0,
+    by = 0;
+  for (let edge = 0; edge < map.mesh.degree(source); edge++) {
+    const j = map.mesh.neighbor(source, edge);
+    if (j < 0 || !Number.isFinite(carry.toX.get(j))) continue;
+    const x = meshDeltaX(map.mesh, map.mesh.x(j) - map.mesh.x(source)),
+      y = map.mesh.y(j) - map.mesh.y(source),
+      dx = meshDeltaX(map.mesh, carry.toX.get(j) - carry.toX.get(source)),
+      dy = carry.toY.get(j) - carry.toY.get(source),
+      w = 1 / Math.max(1, x * x + y * y);
+    xx += x * x * w;
+    xy += x * y * w;
+    yy += y * y * w;
+    ax += dx * x * w;
+    ay += dx * y * w;
+    bx += dy * x * w;
+    by += dy * y * w;
   }
-  // Crust the plates' parting opened has no column until now: it is new sea floor.
-  if (layerDepth(map, cell, 0) <= 0 && layerDepth(map, cell, 1) <= 0) newSeaFloor(map, cell);
+  const determinant = xx * yy - xy * xy;
+  return determinant > 1e-12
+    ? [
+        (ax * yy - ay * xy) / determinant,
+        (ay * xx - ax * xy) / determinant,
+        (bx * yy - by * xy) / determinant,
+        (by * xx - bx * xy) / determinant,
+      ]
+    : [1, 0, 0, 1];
 }
-function newSeaFloor(map: PhysicalField, cell: number) {
-  oceanicColumn(map, cell);
-  newBasaltSurface(map, cell);
-}
-const rockBefore = (carry: ReliefCarry) => carry.before[heights.indexOf("SurfaceRockLoad")];
-/** The volume of a height band over the whole mesh. */
-function volumeOf(map: PhysicalField, band: Band) {
-  let total = 0;
-  for (let i = 0; i < map.mesh.count; i++) total += band.get(i) * map.mesh.area(i);
-  return total;
-}
-/** The source cells no cell took its rock from. */
-function untaken(map: PhysicalField, carry: ReliefCarry) {
-  const taken = workingArray(map, "int32", "carry:taken").fill(0);
+function placeArrivals(map: PhysicalField, carry: ReliefCarry, taken: Band) {
+  const samples = carry.before.map((band) => physicalSampler(map.mesh, band));
   for (let cell = 0; cell < map.mesh.count; cell++) {
-    if (carry.old.get(cell) <= 0) continue;
     const [x, y] = meshPoint(
         map.mesh,
         map.mesh.x(cell) + carry.fromX.get(cell),
         map.mesh.y(cell) + carry.fromY.get(cell)
       ),
       origin = map.mesh.cellAt(x, y);
-    if (origin >= 0) taken.set(origin, 1);
+    if (origin < 0 || carry.old.get(cell) < 0.5) {
+      formTransportOpening(map, cell);
+      continue;
+    }
+    taken.set(origin, 1);
+    placeCarriedGround(
+      map,
+      carry,
+      cell,
+      origin,
+      samples.map((sample, n) => {
+        const value = sample(x, y);
+        return Number.isFinite(value) ? value : carry.before[n].get(origin);
+      })
+    );
+    deformGround(map, cell, carriedDeformation(map, carry, origin));
   }
-  return taken;
 }
-/** Works out where a source's rock lands and how much of it comes back; returns all it held. */
-function sendRock(
+interface Footprint {
+  distance: Band;
+  marked: Band;
+  cells: CellList;
+}
+function landingFootprint(map: PhysicalField, at: number, width: number, work: Footprint) {
+  const { distance, marked, cells } = work;
+  cells.clear();
+  cells.push(at);
+  marked.set(at, 1);
+  distance.set(at, 0);
+  metricSearch(map.mesh, [at], distance, width * 3, (target) => {
+    if (!marked.get(target)) {
+      marked.set(target, 1);
+      cells.push(target);
+    }
+  });
+  let weight = 0;
+  for (let n = 0; n < cells.length; n++)
+    weight +=
+      Math.exp(-distance.get(cells.at(n)) / Math.max(1, width)) * map.mesh.area(cells.at(n));
+  return weight;
+}
+function stackDonor(
   map: PhysicalField,
   carry: ReliefCarry,
   source: number,
-  landing: Band,
-  volume: Band
+  width: number,
+  work: Footprint
 ) {
-  const mesh = map.mesh,
-    rock = rockBefore(carry).get(source);
-  if (rock <= 0 || !Number.isFinite(carry.toX.get(source))) return 0;
-  const [x, y] = meshPoint(mesh, carry.toX.get(source), carry.toY.get(source)),
-    cell = mesh.cellAt(x, y),
-    continent = carry.fraction.get(source) / 1000;
-  if (cell < 0 || mesh.area(cell) <= 0) return 0;
-  const lost = rock * mesh.area(source);
-  landing.set(source, cell);
-  volume.set(source, lost * (continent + (1 - continent) * arcCrustYield));
-  return lost;
-}
-/**
- * Where plates converge some crust ends up under other crust and no cell takes up what stood on it.
- * That rock stays in the world: it rides to where its crust went and stacks on what stands there, as
- * crust squeezed out of a column goes to the belt's roots. What rode on a slab going down comes back
- * in the share a slab's crust does. Rock only moves here, so no more stacks than the move lost. A
- * stack is a thrust sheet wide, not one cell: rock rides on as sheets, so it lies across their width.
- */
-function stackLostRock(map: PhysicalField, carry: ReliefCarry, lost: number, sheetWidth: number) {
-  const mesh = map.mesh,
-    taken = untaken(map, carry),
-    landing = workingArray(map, "int32", "carry:landing").fill(-1),
-    volume = workingArray(map, "float64", "carry:volume").fill(0);
-  let wanted = 0;
-  for (let source = 0; source < mesh.count; source++)
-    if (!taken.get(source)) wanted += sendRock(map, carry, source, landing, volume);
-  const share = wanted > 0 ? clamp(lost / wanted, 0, 1) : 0;
-  if (share > 0) layStacks(map, carry, { landing, volume, share, sheetWidth });
-  releaseWorking(map, taken, landing, volume);
-}
-interface Stacks {
-  landing: Band;
-  volume: Band;
-  share: number;
-  sheetWidth: number;
-}
-/** Each stack spreads over a sheet's width, in the rock of whatever most of it landed from. */
-function layStacks(map: PhysicalField, carry: ReliefCarry, stacks: Stacks) {
-  const mesh = map.mesh,
-    { landing, volume, share, sheetWidth } = stacks,
-    surface = carry.kinds[columnKindOffset],
-    height = workingArray(map, "float64", "carry:stack").fill(0),
-    largest = workingArray(map, "float64", "carry:largest").fill(0),
-    top = kindBands(map)[columnKindOffset],
-    kind = workingValues(map, "int32", "carry:kind", (i) => top.get(i)),
-    distance = workingArray(map, "float64", "carry:distance").fill(Infinity);
-  for (let source = 0; source < mesh.count; source++) {
-    const cell = landing.get(source);
-    if (cell < 0) continue;
-    height.add(cell, (volume.get(source) * share) / mesh.area(cell));
-    if (volume.get(source) <= largest.get(cell)) continue;
-    largest.set(cell, volume.get(source));
-    kind.set(cell, surface.get(source));
+  const rock = Math.max(0, heldPlacement(carry, "SurfaceRockLoad", source));
+  if (rock <= 0 && heldCoverDepth(carry, source) <= 0) return;
+  if (!Number.isFinite(carry.toX.get(source))) return;
+  const [x, y] = meshPoint(map.mesh, carry.toX.get(source), carry.toY.get(source)),
+    at = map.mesh.cellAt(x, y);
+  if (at < 0) return;
+  const weight = landingFootprint(map, at, width, work),
+    continent = carry.fraction.get(source) / 1000,
+    arrivedArea = map.mesh.area(source) * (continent + (1 - continent) * arcCrustYield),
+    f = carriedDeformation(map, carry, source);
+  for (let n = 0; n < work.cells.length; n++) {
+    const target = work.cells.at(n),
+      ratio = (arrivedArea * Math.exp(-work.distance.get(target) / Math.max(1, width))) / weight;
+    landCollisionPackage(map, carry, target, source, ratio, f);
+    work.distance.set(target, Infinity);
+    work.marked.set(target, 0);
   }
-  function* landed() {
-    for (let cell = 0; cell < mesh.count; cell++) {
-      if (largest.get(cell) <= 0) continue;
-      distance.set(cell, 0);
-      yield cell;
-    }
-  }
-  metricSearch(mesh, landed(), distance, sheetWidth * 3, (target, from) =>
-    kind.set(target, kind.get(from))
-  );
-  const spread = smoothMetric(map, height, sheetWidth);
-  for (let cell = 0; cell < mesh.count; cell++)
-    if (spread.get(cell) > 0) stackRock(map, cell, kind.get(cell), spread.get(cell));
-  releaseWorking(map, height, largest, kind, distance, spread);
 }
-function stackRock(map: PhysicalField, cell: number, kind: number, metres: number) {
-  const room =
-      units(elevationLimit) - map.SedimentThickness.get(cell) - map.BedrockElevation.get(cell),
-    rock = Math.round(Math.min(metres, Math.max(0, room)));
-  shiftRock(map, cell, rock, "plates");
-  layBedOfCode(map, cell, kind, rock);
-  // What will not stand here goes down into the crust instead of vanishing.
-  if (metres > rock)
-    adjustCrustColumn(
-      map,
-      cell,
-      map.CrustThickness.get(cell) +
-        (metres - rock) * crustPerRock(map.CrustContinentalFraction.get(cell) / 1000)
-    );
+/** Each displaced donor carries its own beds through spreading; donors are never painted as one kind. */
+function stackLostRock(map: PhysicalField, carry: ReliefCarry, taken: Band, width: number) {
+  const work: Footprint = {
+    distance: workingArray(map, "float64", "carry:distance").fill(Infinity),
+    marked: workingArray(map, "uint8", "carry:marked").fill(0),
+    cells: new CellList(),
+  };
+  for (let source = 0; source < map.mesh.count; source++)
+    if (!taken.get(source)) stackDonor(map, carry, source, width, work);
+  releaseWorking(map, work.distance, work.marked);
 }
-/** The move is over: every cell takes what stood where its material came from. */
+/** Settle placement and complete material packages before another process sees the moved ground. */
 export function finishReliefCarry(map: PhysicalField, carry: ReliefCarry, sheetWidth: number) {
-  sampleHeights(map, carry);
-  const kinds = kindBands(map),
-    lost = volumeOf(map, rockBefore(carry)) - volumeOf(map, map.SurfaceRockLoad);
-  for (let cell = 0; cell < map.mesh.count; cell++) takeRock(map, carry, kinds, cell);
-  stackLostRock(map, carry, lost, sheetWidth);
-  const { before, properties, kinds: held, ...bands } = carry;
-  releaseWorking(map, ...before, ...properties, ...held, ...Object.values(bands));
+  const taken = workingArray(map, "uint8", "carry:taken").fill(0);
+  placeArrivals(map, carry, taken);
+  stackLostRock(map, carry, taken, sheetWidth);
+  releaseHeldRock(map, carry);
+  releaseWorking(
+    map,
+    taken,
+    carry.fromX,
+    carry.fromY,
+    carry.old,
+    carry.nextX,
+    carry.nextY,
+    carry.nextOld,
+    carry.toX,
+    carry.toY,
+    carry.fraction
+  );
 }

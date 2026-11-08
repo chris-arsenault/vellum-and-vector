@@ -75,6 +75,28 @@ export function runNativeStep(map: PhysicalField, context: PhysicalContext, step
       : context
   );
 }
+/** Plate motion has salt zero; each embedded operation keeps its own seed and interval. */
+export function withPlateDeformation(
+  map: PhysicalField,
+  context: PhysicalContext,
+  steps: readonly NativeStep[]
+): PhysicalContext {
+  return {
+    ...context,
+    DuringPlateStep: (interval) => {
+      for (const step of steps)
+        applyNativeStep(
+          map,
+          {
+            ...interval,
+            Seed: interval.Seed ^ step[1],
+            EpochStableSeed: interval.EpochStableSeed ^ step[1],
+          },
+          step
+        );
+    },
+  };
+}
 /** Runs a step, then checks what it left within the physical ranges its bands must hold. */
 export function applyNativeStep(map: PhysicalField, context: PhysicalContext, step: NativeStep) {
   const [name] = step;

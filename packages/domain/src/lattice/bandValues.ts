@@ -5,6 +5,7 @@ import { newBlock, type BlockArray } from "./blockScratch";
 import { Coverage, sampleLayout } from "./coverage";
 import { blockMask, blockShift } from "./lattice";
 import { requireThat } from "../errors";
+import type { ReadBand } from "./readBand";
 
 /** A coverage of `count` samples with no geometry of its own: a grid's or a topology's. */
 export function sampleCoverage(count: number, cache: BlockCache = new BlockCache(Infinity)) {
@@ -57,7 +58,7 @@ export function residentBand(
 }
 /** Copy a run of samples out of a band into `into` at `at`, one block at a time. */
 export function readRange(
-  band: Band,
+  band: ReadBand,
   start: number,
   count: number,
   into: BlockArray = newBlock(band.type, count),
@@ -97,17 +98,21 @@ export function writeRange(band: Band, start: number, values: ArrayLike<number>)
   }
 }
 /** Whether every sample satisfies the predicate, stopping at the first that fails. */
-export function everySample(band: Band, test: (value: number, i: number) => boolean) {
+export function everySample(band: ReadBand, test: (value: number, i: number) => boolean) {
   for (let i = 0; i < band.length; i++) if (!test(band.get(i), i)) return false;
   return true;
 }
 /** Whether any sample satisfies the predicate, stopping at the first that does. */
-export function someSample(band: Band, test: (value: number, i: number) => boolean) {
+export function someSample(band: ReadBand, test: (value: number, i: number) => boolean) {
   for (let i = 0; i < band.length; i++) if (test(band.get(i), i)) return true;
   return false;
 }
 /** Fold every sample in index order. */
-export function foldSamples<T>(band: Band, fold: (sum: T, value: number, i: number) => T, seed: T) {
+export function foldSamples<T>(
+  band: ReadBand,
+  fold: (sum: T, value: number, i: number) => T,
+  seed: T
+) {
   let result = seed;
   for (let i = 0; i < band.length; i++) result = fold(result, band.get(i), i);
   return result;

@@ -5,7 +5,9 @@ import {
   rockCatalogue,
   type ModeId,
   type RockFacts,
+  rockKindOfCode,
 } from "./rockCatalogue";
+import type { MaterialLayer } from "./rockColumn";
 
 /**
  * The vocabulary between processes and materials: each mode is one way of attacking material. A
@@ -68,6 +70,7 @@ export const modeIds = Object.keys(modes) as ModeId[];
 export type ModeMix = Readonly<Partial<Record<ModeId, number>>>;
 /** A mix resolved for every kind at load, so a cell reads two numbers and no rule runs per cell. */
 export interface CompiledMix {
+  readonly fabricResponse: number;
   /** What a kind gives up whatever its strength. */
   readonly flat: Float64Array;
   /** What it gives up in proportion to ordinary rock's strength over its own. */
@@ -92,6 +95,7 @@ export function compileMix(mix: ModeMix): CompiledMix {
     }
   }
   return {
+    fabricResponse: (mix.shear ?? 0) + 0.5 * (mix.plucking ?? 0),
     flat,
     byStrength,
     coverHolds: weighted((mode) => mode.coverHolds),
@@ -102,3 +106,62 @@ export function compileMix(mix: ModeMix): CompiledMix {
 /** What a kind of this code at this strength gives up to a mix, against ordinary rock's 1. */
 export const givenUp = (mix: CompiledMix, code: number, strength: number) =>
   mix.flat[code] + (mix.byStrength[code] * baselineRock) / Math.max(1, strength);
+
+/** Both retained constituents answer the action; damage belongs to this bed, not the next outcrop. */
+export function materialGives(mix: CompiledMix, layer: MaterialLayer, loose = false, x = 0, y = 0) {
+  const strength = loose
+      ? Math.min(layer.strength, rockCatalogue.alluvium.resistance)
+      : layer.strength,
+    first = givenUp(mix, layer.kind, strength),
+    second = givenUp(mix, layer.secondaryKind, strength);
+  const length = x * x + y * y,
+    alignment =
+      length > 0
+        ? ((x * x - y * y) * layer.grainX + 2 * x * y * layer.grainY) / (1000 * length)
+        : 0,
+    bedding =
+      rockKindOfCode(layer.kind).bedding * (1 - layer.secondaryShare) +
+      rockKindOfCode(layer.secondaryKind).bedding * layer.secondaryShare;
+  return (
+    (1 + 0.5 * mix.fabricResponse * bedding * alignment) *
+    ((first + (second - first) * layer.secondaryShare) *
+      Math.exp(mix.fracturesWeaken * layer.damage))
+  );
+}
+/** Burial consolidates the deposited components; it does not choose rock from today's climate. */
+export function burialResponse(layer: MaterialLayer, epoch: number): MaterialLayer {
+  const consolidate = (code: number) => {
+      const kind = rockKindOfCode(code);
+      return kind.family === "loose" ? rockCatalogue.sandstone : kind;
+    },
+    first = consolidate(layer.kind),
+    second = consolidate(layer.secondaryKind);
+  return {
+    ...layer,
+    kind: first.code,
+    secondaryKind: second.code,
+    strength:
+      first.resistance * (1 - layer.secondaryShare) + second.resistance * layer.secondaryShare,
+    damage: layer.damage * 0.5,
+    altered: epoch,
+  };
+}
+/** Heat transforms retained constituents independently; unrelated later beds inherit no alteration. */
+export function heatedMaterial(layer: MaterialLayer, epoch: number): MaterialLayer {
+  const heat = (code: number) => {
+      const kind = rockKindOfCode(code);
+      return kind.underHeat ? rockCatalogue[kind.underHeat] : kind;
+    },
+    first = heat(layer.kind),
+    second = heat(layer.secondaryKind);
+  if (first.code === layer.kind && second.code === layer.secondaryKind) return layer;
+  return {
+    ...layer,
+    kind: first.code,
+    secondaryKind: second.code,
+    strength:
+      first.resistance * (1 - layer.secondaryShare) + second.resistance * layer.secondaryShare,
+    damage: layer.damage * 0.5,
+    altered: epoch,
+  };
+}

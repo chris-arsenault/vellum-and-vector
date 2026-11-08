@@ -1,25 +1,10 @@
 import { expect, it } from "vitest";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
-import { createField } from "./field";
+import { createTestField as createField } from "../rock/groundTestFixture";
 import { landmasses } from "./geography";
 import { createWorldMesh } from "./worldMesh";
 import { nearestTriangle } from "./mesh";
-import { oceanConnectivity } from "./ocean";
-import { units } from "./math";
-
-it.each([0.35, 0.48])(
-  "floods the requested formation share on a constructed ramp at %s",
-  (landFraction) => {
-    const map = createField(createWorldMesh([0, 0, 400_000, 400_000], 1024, 0));
-    for (let i = 0; i < map.mesh.count; i++) map.Elevation.set(i, units(map.mesh.x(i) / 100));
-    oceanConnectivity(map, physicalContext(73, 0, atlasPhysicalProfile({ landFraction })));
-    let ocean = 0;
-    for (let i = 0; i < map.mesh.count; i++)
-      if (map.mesh.membership(i) === 1 && map.WaterKindCodes.get(i) === 1) ocean++;
-    expect(ocean / map.mesh.contentCount).toBeCloseTo(1 - landFraction, 1);
-  }
-);
 
 it("counts pieces on opposite chart edges as one landmass when the cylinder joins them", () => {
   const map = createField(

@@ -58,7 +58,7 @@ export interface GenerationState {
 export interface GenerationDiagnostic extends Diagnostic {
   process: string;
   epochs: GenerationEpoch[];
-  outcome: "omitted" | "skipped" | "retained";
+  outcome: "failed" | "omitted" | "skipped" | "retained";
   stack?: string;
 }
 export type { FieldSummary, GenerationCause, EpochHistory, GenerationEpoch } from "@atlas/domain";

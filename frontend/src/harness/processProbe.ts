@@ -11,6 +11,7 @@ import {
   observeNativeProcesses,
   type NativeProcessObserver,
 } from "../../../packages/generation/src/world/physicalSteps";
+import { groundProbe } from "./groundProbe";
 
 const defaultBands: readonly PhysicalBufferName[] = [
   "Elevation",
@@ -61,16 +62,23 @@ export function processProbe(
 export function startProcessProbe(
   at: readonly [number, number] | undefined,
   bands: readonly PhysicalBufferName[] | undefined,
-  publish: (samples: object[]) => void
+  publish: (samples: object[]) => void,
+  ground?: { cells: readonly number[]; publish: (samples: object[]) => void }
 ) {
-  if (!at) return () => {};
-  const probe = processProbe(at, bands);
-  observeNativeProcesses(probe.observe);
+  if (!at && !ground?.cells.length) return () => {};
+  const probe = at && processProbe(at, bands),
+    material = ground?.cells.length ? groundProbe(ground.cells) : undefined;
+  observeNativeProcesses((...args) => {
+    probe?.observe(...args);
+    material?.observe(...args);
+  });
   let stopped = false;
   return () => {
     if (stopped) return;
     stopped = true;
     observeNativeProcesses(null);
-    publish(probe.read());
+    material?.stop();
+    if (probe) publish(probe.read());
+    if (material) ground!.publish(material.read());
   };
 }

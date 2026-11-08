@@ -1,8 +1,27 @@
 import type { PhysicalField } from "../world/field";
+import { meshDeltaX } from "../world/mesh";
 import { clamp, units } from "../world/math";
-import { givenUp, type CompiledMix } from "./modes";
-import { layerDepth, layerKind, rockLayers } from "./rockColumn";
+import { givenUp, materialGives, type CompiledMix } from "./modes";
+import {
+  columnSize,
+  deepestLayer,
+  layerDepth,
+  materialLayer,
+  readLayer,
+  rockLayers,
+} from "./rockColumn";
 import { rockCatalogue, rockKindOfCode, type RockKind } from "./rockCatalogue";
+import type { GroundHere, GroundLayer, GroundQuery } from "./groundQuery";
+export type { GroundHere, GroundLayer, GroundQuery } from "./groundQuery";
+import {
+  coverColumn,
+  columnThickness,
+  cutShare,
+  facetShare,
+  facetSurface,
+  groundSection,
+  type GroundFacet,
+} from "./groundShares";
 
 /** The depth of loose sediment that fully covers the rock beneath it, in metres. */
 const fullCover = 25;
@@ -15,17 +34,8 @@ const burntShare = 0.5;
  * against a strongly held mix would otherwise divide by nothing.
  */
 const leastHold = 0.1;
-const loose = rockCatalogue.alluvium,
-  soil = rockCatalogue.soil;
+const soil = rockCatalogue.soil;
 
-/** One layer as a query passes it. Reused between layers and cells: read it, do not keep it. */
-export interface GroundLayer {
-  kind: RockKind;
-  /** Its strength where it lies: the surface carries what has been done to it. */
-  strength: number;
-  /** Its thickness, in the field's height units; the deepest layer's is its record, not its end. */
-  thickness: number;
-}
 /** What an action took from each layer of a cell, in metres: the last action on it. */
 export interface GroundTaken {
   soil: number;
@@ -33,33 +43,6 @@ export interface GroundTaken {
   ice: number;
   rock: number;
   crust: number;
-}
-/** What lies over and through a cell. */
-export interface GroundHere {
-  tree: number;
-  grass: number;
-  wetland: number;
-  fire: number;
-  /** Open fractures and warding, in [0, 1]. */
-  fracture: number;
-  ward: number;
-  /** How far anything else stiffens this ground, such as a cone's apron on a region. */
-  stiffening: number;
-}
-type Visit<T> = (sofar: T, layer: GroundLayer, here: GroundHere) => T;
-/**
- * A read of the ground, written by whoever needs it and unknown to `Ground`: a visitor over what lies
- * in the cell, top down: soil, loose sediment, ice, the rock column and the crust beneath it. Rock is
- * visited at the surface alone unless `throughColumn`, and the crust only through the column.
- */
-export interface GroundQuery<T> {
-  readonly start: T;
-  readonly soil?: Visit<T>;
-  readonly loose?: Visit<T>;
-  readonly ice?: Visit<T>;
-  readonly rock?: Visit<T>;
-  readonly crust?: Visit<T>;
-  readonly throughColumn?: boolean;
 }
 const grounds = new WeakMap<PhysicalField, Ground>();
 
@@ -76,6 +59,7 @@ export class Ground {
   /** An action's power not yet spent, and how deep it has reached, in metres. */
   private left = 0;
   private reached = 0;
+  private limit = Infinity;
   private at: keyof GroundTaken = "rock";
   private readonly took: GroundTaken = { soil: 0, loose: 0, ice: 0, rock: 0, crust: 0 };
   private tookAt = -1;
@@ -88,8 +72,61 @@ export class Ground {
     ward: 0,
     stiffening: 1,
   };
-  private readonly layer: GroundLayer = { kind: rockCatalogue.strata, strength: 0, thickness: 0 };
+  private readonly layer: GroundLayer = {
+    kind: rockCatalogue.strata,
+    strength: 0,
+    thickness: 0,
+    material: materialLayer(rockCatalogue.strata.code, 0),
+  };
   constructor(private readonly map: PhysicalField) {}
+  /** Ordered retained material and its absolute contacts, including the surviving cell shares. */
+  section(i: number, facet: GroundFacet = "land") {
+    return groundSection(this.map, i, facet);
+  }
+  /** Loose overburden in height units, without constructing an inspection section. */
+  coverDepth(i: number, facet: GroundFacet) {
+    return columnThickness(this.map, i, coverColumn(facet));
+  }
+  /** Supported read surface contains no mutable Band alias, including through retained views. */
+  view(name: "Elevation" | "BedrockElevation" | "SedimentThickness" | "RockResistance") {
+    const band = this.map[name];
+    return Object.freeze({ length: band.length, get: (i: number) => band.get(i) });
+  }
+  /** Exposed neighbor contacts, area-weighted; no subcell edge position is asserted. */
+  face(i: number, neighbor: number) {
+    const exposed = [] as ReturnType<Ground["section"]>;
+    for (const facet of ["land", "cut"] as const)
+      for (const beside of ["land", "cut"] as const) {
+        const share = facetShare(this.map, neighbor, beside);
+        if (share <= 0) continue;
+        const floor = facetSurface(this.map, neighbor, beside);
+        for (const layer of this.section(i, facet)) {
+          const bottom = Math.max(floor, layer.basement ? -Infinity : layer.bottom);
+          if (layer.top > bottom)
+            exposed.push({
+              ...layer,
+              bottom,
+              depth: layer.top - bottom,
+              share: layer.share * share,
+            });
+        }
+      }
+    return exposed;
+  }
+  /** Existing slope failure reads exposed support rather than pretending a face is all cap rock. */
+  faceGives(i: number, neighbor: number, mix: CompiledMix) {
+    let response = 0,
+      extent = 0;
+    const mesh = this.map.mesh,
+      x = meshDeltaX(mesh, mesh.x(neighbor) - mesh.x(i)),
+      y = mesh.y(neighbor) - mesh.y(i);
+    for (const layer of this.face(i, neighbor)) {
+      const weight = layer.depth * layer.share;
+      response += materialGives(mix, layer, layer.medium === "loose", x, y) * weight;
+      extent += weight;
+    }
+    return extent > 0 ? (response / extent) * this.bearing(i, mix) : this.gives(i, mix);
+  }
   /** Something only this map knows stiffens its ground: a region's cones, for one. */
   stiffenBy(stiffen: ((i: number) => number) | null) {
     this.stiffen = stiffen;
@@ -116,65 +153,107 @@ export class Ground {
   }
   /**
    * An action goes down through the cell with the power to move `power` metres of ordinary rock. Each
-   * layer gives up what it does and passes on what is left, and a layer that gives nothing lets it
-   * through: soil, then loose sediment, past any ice, then the rock column, then the crust beneath,
+   * layer gives up what it does and passes on what is left only after removal. Unresponsive material
+   * blocks this top-down action: soil, then loose sediment, past any ice, then rock and the crust,
    * which never runs out. The answer is how deep it reached, in height units, up to `limit`; the
    * process then lands that through the ledger, as the share of the cell it worked.
    */
-  actOn(i: number, mix: CompiledMix, power: number, limit: number) {
-    const map = this.map,
-      bearing = this.bearing(i, mix),
-      sediment = map.SedimentThickness.get(i) / 1024,
-      skin = map.SoilDepth.get(i);
+  actOn(
+    i: number,
+    mix: CompiledMix,
+    power: number,
+    limit: number,
+    facet: GroundFacet = cutShare(this.map, i) > 0.5 ? "cut" : "land"
+  ) {
+    const bearing = this.bearing(i, mix),
+      part = facet === "cut" && cutShare(this.map, i) <= 0 ? "land" : facet;
     this.left = power;
     this.reached = 0;
+    this.limit = limit / 1024;
     this.start(i);
+    const skin = Math.max(0, this.map.SoilDepth.get(i));
     this.at = "soil";
-    if (skin > 0) this.take(this.rate(mix, soil.code, soil.resistance, bearing), skin);
+    this.take(this.rate(mix, soil.code, soil.resistance, bearing), skin);
     this.at = "loose";
-    if (sediment > skin)
-      this.take(this.rate(mix, loose.code, loose.resistance, bearing), sediment - skin);
-    if (this.left > 0) this.walkRock(i, mix, bearing, Math.max(0, skin - sediment));
+    const cover = coverColumn(part);
+    let masked = skin;
+    for (let slot = 0; slot < columnSize(cover) && this.left > 0; slot++) {
+      const layer = readLayer(this.map, i, slot, cover);
+      const depth = layer.depth / 1024,
+        exposed = Math.max(0, depth - masked);
+      masked = Math.max(0, masked - depth);
+      if (exposed > 0) this.take(materialGives(mix, layer, true) * bearing, exposed);
+    }
+    if (this.left > 0)
+      this.walkRock(
+        i,
+        mix,
+        bearing,
+        part,
+        Math.max(0, skin - columnThickness(this.map, i, cover) / 1024)
+      );
     return Math.min(units(this.reached), limit);
+  }
+  /** Forcing reaching rock beneath cover; the caller supplies attenuation through that cover. */
+  rockAction(i: number, mix: CompiledMix, power: number, limit: number, facet: GroundFacet) {
+    this.left = power;
+    this.reached = 0;
+    this.limit = limit / 1024;
+    this.start(i);
+    if (facetShare(this.map, i, facet) <= 0) return 0;
+    this.walkRock(i, mix, this.bearing(i, mix), facet);
+    return Math.min(units(this.reached), limit);
+  }
+  /** Each occupied surface answers the same forcing before either material stack is changed. */
+  surfaceAction(
+    i: number,
+    mix: CompiledMix,
+    power: number,
+    limit: number,
+    minimumSurface = -Infinity
+  ): readonly [number, number] {
+    const depth = (facet: GroundFacet) =>
+      facetShare(this.map, i, facet) > 0
+        ? this.actOn(
+            i,
+            mix,
+            power,
+            Math.min(limit, Math.max(0, facetSurface(this.map, i, facet) - minimumSurface)),
+            facet
+          )
+        : 0;
+    return [depth("land"), depth("cut")];
   }
   /** What the last action on this cell took from each layer, in metres. */
   taken(i: number): Readonly<GroundTaken> {
     if (this.tookAt !== i) this.start(i);
-    return this.took;
+    return { ...this.took };
   }
   private start(i: number) {
     this.tookAt = i;
     this.took.soil = this.took.loose = this.took.ice = this.took.rock = this.took.crust = 0;
   }
   private take(rate: number, thickness: number) {
-    if (rate <= 0 || thickness <= 0) return;
-    const taken = Math.min(thickness, this.left * rate);
+    if (thickness <= 0) return;
+    if (rate <= 0) {
+      this.left = 0;
+      return;
+    }
+    const taken = Math.max(0, Math.min(thickness, this.left * rate, this.limit - this.reached));
     this.reached += taken;
     this.took[this.at] += taken;
     this.left -= taken / rate;
   }
   /** Down through the column, less what soil has made of its top, and on into the crust. */
-  private walkRock(i: number, mix: CompiledMix, bearing: number, soiled: number) {
-    const map = this.map;
-    this.at = "rock";
-    this.take(
-      this.rate(mix, map.RockKindCodes.get(i), map.RockResistance.get(i), bearing),
-      this.layerReach(i, 0) - soiled
-    );
-    let deepest = map.RockKindCodes.get(i);
-    for (let at = 1; at < rockLayers && this.left > 1e-9 && layerDepth(map, i, at) > 0; at++) {
-      const kind = rockKindOfCode(layerKind(map, i, at));
-      deepest = kind.code;
-      this.take(this.rate(mix, kind.code, kind.resistance, bearing), this.layerReach(i, at));
+  private walkRock(i: number, mix: CompiledMix, bearing: number, facet: GroundFacet, masked = 0) {
+    const last = deepestLayer(this.map, i, facet);
+    for (let at = 0; at <= last && this.left > 0 && this.reached < this.limit; at++) {
+      const layer = readLayer(this.map, i, at, facet);
+      this.at = at === last ? "crust" : "rock";
+      const depth = at === last ? Infinity : layer.depth / 1024;
+      this.take(materialGives(mix, layer) * bearing, Math.max(0, depth - masked));
+      masked = Math.max(0, masked - depth);
     }
-    if (this.left <= 1e-9) return;
-    const basement = rockKindOfCode(deepest);
-    this.at = "crust";
-    this.take(this.rate(mix, basement.code, basement.resistance, bearing), Infinity);
-  }
-  /** How far down a recorded layer goes, in metres. */
-  private layerReach(i: number, at: number) {
-    return layerDepth(this.map, i, at) / 1024;
   }
   /**
    * What this cell's surface gives up to a mix, against ordinary rock's 1, without acting on it:
@@ -183,14 +262,26 @@ export class Ground {
   gives(i: number, mix: CompiledMix) {
     const map = this.map,
       bearing = this.bearing(i, mix),
-      rock = this.rate(mix, map.RockKindCodes.get(i), map.RockResistance.get(i), bearing),
-      cover = clamp(map.SedimentThickness.get(i) / units(fullCover), 0, 1),
-      beneath = rock + (this.rate(mix, loose.code, loose.resistance, bearing) - rock) * cover,
+      share = cutShare(map, i),
+      beneath =
+        bearing *
+        ((1 - share) * this.facetGives(i, mix, "land") + share * this.facetGives(i, mix, "cut")),
       skin = clamp(map.SoilDepth.get(i) / fullSoil, 0, 1);
     return beneath + (this.rate(mix, soil.code, soil.resistance, bearing) - beneath) * skin;
   }
+  private facetGives(i: number, mix: CompiledMix, facet: GroundFacet) {
+    const rock = materialGives(mix, readLayer(this.map, i, 0, facet)),
+      cover = coverColumn(facet),
+      share = clamp(columnThickness(this.map, i, cover) / units(fullCover), 0, 1);
+    return rock + (materialGives(mix, readLayer(this.map, i, 0, cover), true) - rock) * share;
+  }
   /** Reads the ground with a query. */
-  fold<T>(i: number, query: GroundQuery<T>): T {
+  fold<T>(i: number, query: GroundQuery<T>, facet?: GroundFacet): T {
+    const share = cutShare(this.map, i);
+    if (facet === undefined && query.acrossFacets && share > 0 && share < 1)
+      return query.acrossFacets(this.fold(i, query, "land"), this.fold(i, query, "cut"), share);
+    facet ??= share > 0.5 ? "cut" : "land";
+    if (facetShare(this.map, i, facet) <= 0) return query.start;
     const map = this.map,
       here = this.here,
       layer = this.layer;
@@ -201,46 +292,61 @@ export class Ground {
     here.fracture = clamp(map.FractureConductance.get(i) / 1000, 0, 1);
     here.ward = clamp(map.Warding.get(i), 0, 1);
     here.stiffening = this.stiffen ? this.stiffen(i) : 1;
-    const sofar = this.foldCover(i, query);
+    const sofar = this.foldCover(i, query, facet);
     if (!query.rock) return sofar;
-    layer.kind = rockKindOfCode(map.RockKindCodes.get(i));
-    layer.strength = map.RockResistance.get(i);
-    layer.thickness = layerDepth(map, i, 0);
-    return this.foldColumn(i, query, query.rock(sofar, layer, here));
+    const material = readLayer(map, i, 0, facet);
+    layer.kind = rockKindOfCode(material.kind);
+    layer.material = material;
+    layer.strength = material.strength;
+    layer.thickness = material.depth;
+    return this.foldColumn(i, query, query.rock(sofar, layer, here), facet);
   }
   /** What lies over the rock: soil, loose sediment and ice, each where there is any. */
-  private foldCover<T>(i: number, query: GroundQuery<T>) {
+  private foldCover<T>(i: number, query: GroundQuery<T>, facet: GroundFacet) {
     const map = this.map,
       here = this.here,
-      sediment = map.SedimentThickness.get(i),
       skin = map.SoilDepth.get(i),
       ice = map.IceThickness.get(i);
     let sofar = query.start;
     if (query.soil && skin > 0) sofar = query.soil(sofar, this.as(soil, units(skin)), here);
-    if (query.loose && sediment > 0) sofar = query.loose(sofar, this.as(loose, sediment), here);
+    const cover = coverColumn(facet),
+      count = query.throughColumn ? columnSize(cover) : 1;
+    for (let slot = 0; query.loose && slot < count; slot++) {
+      const material = readLayer(map, i, slot, cover);
+      if (material.depth <= 0) continue;
+      const layer = this.as(
+        rockKindOfCode(material.kind),
+        query.throughColumn ? material.depth : columnThickness(map, i, cover)
+      );
+      layer.strength = Math.min(material.strength, rockCatalogue.alluvium.resistance);
+      layer.material = material;
+      sofar = query.loose(sofar, layer, here);
+    }
     if (query.ice && ice > 0)
       sofar = query.ice(sofar, this.as(rockCatalogue.glacierIce, units(ice)), here);
     return sofar;
   }
   /** Down the column beneath the surface rock, and on to the crust under its deepest layer. */
-  private foldColumn<T>(i: number, query: GroundQuery<T>, from: T) {
+  private foldColumn<T>(i: number, query: GroundQuery<T>, from: T, facet: GroundFacet) {
     const map = this.map,
       layer = this.layer;
     let sofar = from;
     if (!query.throughColumn) return sofar;
-    for (let at = 1; at < rockLayers && layerDepth(map, i, at) > 0; at++) {
-      layer.kind = rockKindOfCode(layerKind(map, i, at));
-      layer.strength = layer.kind.resistance;
-      layer.thickness = layerDepth(map, i, at);
+    for (let at = 1; at < rockLayers && layerDepth(map, i, at, facet) > 0; at++) {
+      const material = readLayer(map, i, at, facet);
+      layer.kind = rockKindOfCode(material.kind);
+      layer.material = material;
+      layer.strength = material.strength;
+      layer.thickness = material.depth;
       sofar = query.rock!(sofar, layer, this.here);
     }
     if (!query.crust) return sofar;
-    layer.strength = layer.kind.resistance;
     layer.thickness = map.CrustThickness.get(i);
     return query.crust(sofar, layer, this.here);
   }
   private as(kind: RockKind, thickness: number) {
     this.layer.kind = kind;
+    this.layer.material = materialLayer(kind.code, thickness);
     this.layer.strength = kind.resistance;
     this.layer.thickness = thickness;
     return this.layer;

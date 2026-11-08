@@ -13,8 +13,26 @@ import { executeProcessBehavior } from "./processTraits";
 import { worldGenerationSettings } from "./generationSettings";
 import { atlasConfiguration } from "./atlasWorkflow";
 import { sequenceStages } from "./sequence";
-import { allSteps, physicalSteps } from "./world/physicalSteps";
+import { allSteps, physicalSteps, withPlateDeformation } from "./world/physicalSteps";
+import { physicalContext } from "./world/context";
 import { respondersTo, type AnswerKey } from "./coupling/answers";
+
+it("passes the movement interval and operation salt to embedded deformation", () => {
+  const run = vi.fn(),
+    map = createField(createWorldMesh([0, 0, 1000, 1000], 16, 0)),
+    context = physicalContext(73, 0, physicalProfile),
+    moving = withPlateDeformation(map, context, [["probe", 7, run, []]]);
+  moving.DuringPlateStep!({ ...context, Span: 0.125, TectonicDurationMyr: 2.5 });
+  expect(run).toHaveBeenCalledWith(
+    map,
+    expect.objectContaining({
+      Span: 0.125,
+      TectonicDurationMyr: 2.5,
+      Seed: context.Seed ^ 7,
+      EpochStableSeed: context.EpochStableSeed ^ 7,
+    })
+  );
+});
 
 it("has each key's base answer written before the first step that asks it", () => {
   // A band no land step writes comes from another domain's previous pass, such as plant cover.

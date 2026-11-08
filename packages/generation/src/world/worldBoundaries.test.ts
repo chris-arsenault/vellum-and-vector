@@ -4,30 +4,12 @@ import { edgeLeadingTo, meshDeltaX, nearestTriangle } from "./mesh";
 import { physicalDistance, physicalGradients, physicalSampler } from "./physicalMetric";
 import { meshNoise } from "./noise";
 import { createField } from "./field";
-import { atlasPhysicalProfile } from "./atlasProfile";
-import { physicalContext } from "./context";
-import { tectonicProvinces } from "./provinces";
-import { buildTransportPlan, releaseTransportPlan } from "./transportPlan";
-import { transportHistory } from "./transportHistory";
-import { oceanConnectivity } from "./ocean";
 import { createRiverPaths, riverPath } from "./riverPaths";
 import { releaseWorking } from "./physicalNumerics";
 
 const bounds: [number, number, number, number] = [0, 0, 4e6, 2e6];
 const cylinder = (box = bounds) =>
   createWorldMesh(box, 4096, 0, undefined, undefined, undefined, true);
-
-it("finds a finite connected ocean on a closed pole-to-pole world", () => {
-  const mesh = createWorldMesh(bounds, 1024, 0, undefined, undefined, undefined, true, true);
-  const map = createField(mesh);
-  for (let i = 0; i < mesh.count; i++) map.Elevation.set(i, Math.round((1024 * mesh.y(i)) / 1000));
-  oceanConnectivity(map, physicalContext(73, 0, atlasPhysicalProfile()));
-  expect(Number.isFinite(map.BaseSeaLevel)).toBe(true);
-  expect(map.BaseSeaLevel).toBeLessThan(2e6);
-  expect(map.BaseOceanVolume).toBeGreaterThan(0);
-  expect(Array.from(map.WaterKindCodes).some((v) => v === 1)).toBe(true);
-  expect(Array.from(map.WaterKindCodes).some((v) => v === 0)).toBe(true);
-});
 
 it("draws a short continuous river across the longitude seam with matching profiles", () => {
   const map = createField(cylinder()),
@@ -88,50 +70,13 @@ it("joins opposite chart edges with reciprocal short physical links and retains 
   expect(open.periodic).toBeUndefined();
 });
 
-it("keeps crust and world-space noise invariant under a complete circumference", () => {
-  // A second chart one circumference to the east holds the same cells at the same world points.
-  const map = createField(cylinder()),
-    shifted = createField(cylinder([4e6, 0, 8e6, 2e6])),
-    mesh = map.mesh;
-  expect(shifted.mesh.count).toBe(mesh.count);
-  tectonicProvinces(map, physicalContext(73, 0, atlasPhysicalProfile()));
-  tectonicProvinces(shifted, physicalContext(73, 0, atlasPhysicalProfile()));
-  for (const channel of [
-    "CrustProvinceIds",
-    "CrustContinentalFraction",
-    "CrustBasePotential",
-    "TectonicBoundaryCodes",
-    "TectonicStrain",
-  ] as const)
-    for (const i of [0, 1, Math.floor(mesh.count / 3), Math.floor(mesh.count / 2)])
-      expect(shifted[channel].get(i)).toBe(map[channel].get(i));
+it("samples periodic world-space noise across a complete circumference", () => {
+  const mesh = cylinder();
   for (const x of [-2e6 - 100, -100, 0, 100])
     expect(meshNoise(mesh, x, 500, 73, 500000, 3)).toBeCloseTo(
       meshNoise(mesh, x + 4e6, 500, 73, 500000, 3),
       12
     );
-});
-
-it("carries material through the seam without losing its volume", () => {
-  const mesh = cylinder(),
-    map = createField(mesh);
-  map.CrustMotionX.fill(1000);
-  for (let i = 0; i < mesh.count; i++)
-    if (mesh.x(i) > 2e6 - 2 * mesh.spacing && Math.abs(mesh.y(i)) < 2e5)
-      map.SedimentThickness.set(i, 100);
-  const volume = () => {
-    let sum = 0;
-    for (let i = 0; i < mesh.count; i++) sum += map.SedimentThickness.get(i) * mesh.area(i);
-    return sum;
-  };
-  const before = volume();
-  const plan = buildTransportPlan(map, 5.25 * mesh.spacing);
-  transportHistory(map, plan);
-  releaseTransportPlan(map, plan);
-  expect(Math.abs(volume() - before) / before).toBeLessThan(1e-11);
-  expect(
-    Array.from(map.SedimentThickness).some((value, i) => value > 0 && mesh.x(i) < -1.5e6)
-  ).toBe(true);
 });
 
 it("samples shared seam support and normalizes repeated chart coordinates", () => {

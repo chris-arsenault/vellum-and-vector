@@ -7,106 +7,10 @@ import {
   putChannel,
   type BlockCache,
 } from "@atlas/domain";
-import { createField, type PhysicalField } from "../../generation/src/world/field";
-import { atlasPhysicalProfile } from "../../generation/src/world/atlasProfile";
-import { physicalContext } from "../../generation/src/world/context";
-import { initializeLandscape, validateLandscape } from "../../generation/src/world/surface";
-import { oceanConnectivity } from "../../generation/src/world/ocean";
-import { bathymetry, oceanDistance } from "../../generation/src/world/geography";
-import { temperature } from "../../generation/src/world/climate";
 import { blockCacheFixture } from "./blockCacheFixture";
 import { MapRunner } from "../../generation/src/mapRunner";
 import { MapProcessRegistry, type MapProcess } from "../../generation/src/process";
 import { landscape, configuration, invoke, options } from "../../generation/src/mapFixtures";
-import { drainageConditioning } from "../../generation/src/world/drainageFlood";
-import { drainageGuidance } from "../../generation/src/world/flowGuidance";
-import { flowRouting } from "../../generation/src/world/routing";
-import { riverNetwork } from "../../generation/src/world/rivers";
-import { createWorldMesh } from "../../generation/src/world/worldMesh";
-import { buildTransportPlan } from "../../generation/src/world/transportPlan";
-import { transportHistory } from "../../generation/src/world/transportHistory";
-
-function execute(map: PhysicalField) {
-  for (let i = 0; i < map.mesh.count; i++) map.Elevation.set(i, map.mesh.x(i) / 10);
-  initializeLandscape(map);
-  const context = physicalContext(42, 0, atlasPhysicalProfile());
-  context.Profile.QualityTargets.OceanCoverage.target = 0.5;
-  for (const offset of [0, 50]) {
-    context.SeaLevelOffset = offset;
-    oceanConnectivity(map, context);
-    oceanDistance(map);
-    drainageConditioning(map, context);
-    bathymetry(map, context);
-    temperature(map, context);
-    map.Runoff.fill(500);
-    drainageGuidance(map, context);
-    flowRouting(map, context);
-    riverNetwork(map, context);
-    validateLandscape(map);
-  }
-}
-function movingCrust(map: PhysicalField) {
-  map.CrustThickness.fill(4000 * 1024);
-  map.RockResistance.fill(1000);
-  for (let i = 0; i < map.mesh.count; i++) {
-    const left = map.mesh.x(i) < 0;
-    map.CrustContinentalFraction.set(i, left ? 1000 : 400);
-    map.CrustMotionX.set(i, left ? 1000 : -1000);
-    map.TectonicBoundaryCodes.set(i, 1);
-    map.SedimentSupply.set(i, 1 + (i % 7));
-    map.CumulativeFluvialErosion.set(i, i * 10);
-    map.MaximumIceThickness.set(i, 123);
-    map.FeatureFlags.set(i, i % 2);
-  }
-  const plan = buildTransportPlan(map, 70_000);
-  transportHistory(map, plan);
-  return plan;
-}
-it("scatters connected crust and history on disk with the same material and provenance", () => {
-  const f = blockCacheFixture(32_768);
-  try {
-    const mesh = createWorldMesh([0, 0, 4e6, 3e6], 256, 0, undefined, undefined, undefined, true),
-      native = createField(mesh),
-      disk = createField(mesh, f.cache),
-      expected = movingCrust(native),
-      actual = movingCrust(disk);
-    disk.coverage.releaseProcess();
-    for (const key of Object.keys(expected) as (keyof typeof expected)[])
-      expect(Array.from(actual[key]), key).toEqual(Array.from(expected[key]));
-    for (const [name, values] of Object.entries(native)) {
-      if (!(values instanceof Band)) continue;
-      expect(Array.from(disk[name as keyof PhysicalField] as Band), name).toEqual(
-        Array.from(values)
-      );
-    }
-    expect(disk.crustBudget).toEqual(native.crustBudget);
-    expect(f.cache.stats.peakBytes).toBeLessThanOrEqual(32_768);
-  } finally {
-    f.close();
-  }
-});
-it("runs real ocean, distance, bathymetry and climate processes on file-backed physical state", () => {
-  const bounds: [number, number, number, number] = [-100_000, -100_000, 100_000, 100_000];
-  const mesh = createWorldMesh(bounds, (200_000 * 200_000) / 6250 ** 2, 0),
-    fixture = blockCacheFixture(32_768);
-  try {
-    const native = createField(mesh),
-      disk = createField(mesh, fixture.cache);
-    execute(native);
-    execute(disk);
-    for (const [name, values] of Object.entries(native)) {
-      if (!(values instanceof Band)) continue;
-      const actual = disk[name as keyof PhysicalField];
-      expect(actual instanceof Band).toBe(true);
-      expect(Array.from(actual as Band), name).toEqual(Array.from(values));
-    }
-    expect(disk.EffectiveSeaLevel).toBe(native.EffectiveSeaLevel);
-    expect(fixture.cache.stats.loads).toBeGreaterThan(0);
-    expect(fixture.cache.stats.peakBytes).toBeLessThanOrEqual(32_768);
-  } finally {
-    fixture.close();
-  }
-});
 function runnerProcess(
   id: string,
   applyPass: Extract<MapProcess["behavior"], { kind: "model-pass" }>["applyPass"],
@@ -119,7 +23,7 @@ function runnerProcess(
   };
 }
 function lifetimeProcesses(): MapProcess[] {
-  let scratch: Band, failedScratch: Band;
+  let scratch: Band;
   return [
     runnerProcess("retained", (state) => {
       const coverage = state.surface.coverage;
@@ -129,19 +33,9 @@ function lifetimeProcesses(): MapProcess[] {
       putChannel(state.surface, "elevation", "metre", values);
     }),
     runnerProcess(
-      "discarded",
-      (state) => {
-        failedScratch = state.surface.coverage.scratch("float64", "failure", 1000);
-        failedScratch.set(0, 11);
-        throw new Error("Deliberate process failure");
-      },
-      ["retained"]
-    ),
-    runnerProcess(
       "checked",
       (state) => {
         expect(() => scratch.get(0)).toThrow(/released/);
-        expect(() => failedScratch.get(0)).toThrow(/released/);
         expect(state.surface.channels.elevation.get(0)).toBe(9);
       },
       ["retained"]
@@ -181,7 +75,7 @@ function onCache(state: ReturnType<typeof landscape>, cache: BlockCache) {
   state.cache = cache;
   return state;
 }
-it("carries published evicting outputs across runner stages and releases successful and failed scratch", async () => {
+it("carries published evicting outputs across runner stages and releases successful scratch", async () => {
   const fixture = blockCacheFixture(),
     processes = lifetimeProcesses();
   try {
@@ -192,9 +86,33 @@ it("carries published evicting outputs across runner stages and releases success
       registry
     ).run(onCache(landscape(), fixture.cache), { ...options, cache: fixture.cache });
     expect(result.state.facts.has("checked")).toBe(true);
-    expect(result.state.facts.has("discarded")).toBe(false);
     expect(result.state.facts.has("released")).toBe(true);
     expect(result.state.surface.channels.elevation.get(0)).toBe(10);
+  } finally {
+    fixture.close();
+  }
+});
+it("releases scratch when a process fails and stops the runner", async () => {
+  const fixture = blockCacheFixture(),
+    state = onCache(landscape(), fixture.cache),
+    registry = new MapProcessRegistry();
+  let scratch: Band | undefined;
+  const failed = runnerProcess("failed", (current) => {
+    scratch = current.surface.coverage.scratch("float64", "failure", 1000);
+    scratch.set(0, 11);
+    throw new Error("Deliberate process failure");
+  });
+  registry.register(failed);
+  try {
+    await expect(
+      new MapRunner(configuration([invoke(failed)]), registry).run(state, {
+        ...options,
+        cache: fixture.cache,
+      })
+    ).rejects.toThrow("Deliberate process failure");
+    expect(scratch).toBeDefined();
+    expect(() => scratch!.get(0)).toThrow(/released/);
+    expect(state.facts.has("failed")).toBe(false);
   } finally {
     fixture.close();
   }

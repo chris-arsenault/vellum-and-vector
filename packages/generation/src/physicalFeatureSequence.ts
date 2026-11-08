@@ -6,6 +6,21 @@ import {
 import type { ProcessSequence } from "./process";
 import { atlasGenerationModules } from "./generationModules";
 import { physicalFeatureDefinitions } from "./physicalFeatures";
+import { nativeStepsOf } from "./physicalFeature";
+
+/** Selected mountain operations run while contacts still exist, inside the plate move. */
+export function plateDeformationSteps(
+  resolved: ResolvedFeatures,
+  context?: FeatureContributionContext
+) {
+  const operations = physicalFeatureSequence("epoch.mountains", resolved, context),
+    steps = nativeStepsOf(physicalFeatureDefinitions);
+  return operations.flatMap((operation) => {
+    if (operation.kind !== "process") return [];
+    const step = steps.find(([name]) => `atlas.${name}` === operation.process);
+    return step ? [step] : [];
+  });
+}
 
 /** Support identity is the profile slot, independent of requesting features. */
 export function physicalFeatureSequence(

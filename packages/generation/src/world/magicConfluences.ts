@@ -14,7 +14,8 @@ import { growRegion } from "./magicRegions";
 import { alterRock } from "../rock/rockField";
 import { clamp, round, units } from "./math";
 import { hashUnit } from "./noise";
-import { deposit, displaceGround, meltIce, raiseRock, spoilSoil } from "../rock/groundLedger";
+import { displaceGround, weatherRock } from "../rock/groundLedger";
+import { meltIce, spoilSoil } from "../rock/groundSurfaceMedia";
 import { retainedArray, releaseWorking } from "./physicalNumerics";
 
 /** A confluence's hold on the mesh this evaluation: where it holds and how much of each cell. */
@@ -179,8 +180,7 @@ function actOnWaterAndLife(map: PhysicalField, i: number, c: number, e: Confluen
  */
 function collapseDebris(map: PhysicalField, i: number, depth: number) {
   if (depth <= 0) return;
-  raiseRock(map, i, -depth, "confluences", "loose");
+  weatherRock(map, i, depth, "confluences");
   map.SedimentProducedTotal += (depth / 1024) * map.mesh.area(i);
-  deposit(map, i, depth, "confluences", "rock");
 }
 export type ConfluenceSystems = Pick<MagicSystem, "id" | "enabled">[];

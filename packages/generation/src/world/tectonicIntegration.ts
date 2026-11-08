@@ -15,11 +15,17 @@ export function tectonicInterval(map: PhysicalField, remaining: number, rate: nu
 }
 export function prepareTectonicMotion(map: PhysicalField, myr: number) {
   refreshTectonicContacts(map, map.tectonics!);
-  deformTectonicBonds(map, map.tectonics!, myr);
   updatePlateMotion(map, map.tectonics!, myr);
 }
-export function completeTectonicMotion(map: PhysicalField, myr: number, distance: number) {
+export function completeTectonicMotion(
+  map: PhysicalField,
+  myr: number,
+  distance: number,
+  moved?: () => void
+) {
   moveTectonicSites(map, distance);
+  moved?.();
+  deformTectonicBonds(map, map.tectonics!, myr);
   map.tectonics!.elapsedMyr += myr;
 }
 
@@ -99,8 +105,9 @@ function forecastFrames(map: PhysicalField, distances: number[]) {
         step = myr * rate;
       prepareTectonicMotion(forecast, myr);
       const plates = structuredClone(forecast.tectonics.plates);
-      completeTectonicMotion(forecast, myr, step);
-      frames.push({ plates, sites: structuredClone(forecast.tectonics.sites), distance: step });
+      completeTectonicMotion(forecast, myr, step, () =>
+        frames.push({ plates, sites: structuredClone(forecast.tectonics.sites), distance: step })
+      );
       remaining -= myr;
     }
   }

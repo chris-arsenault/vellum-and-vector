@@ -1,5 +1,5 @@
 import type { PhysicalField } from "./field";
-import type { Band } from "@atlas/domain";
+import type { Band, ReadBand } from "@atlas/domain";
 import {
   metricArray,
   metricOperator,
@@ -10,13 +10,13 @@ import {
 import { prepareMultigrid } from "./metricMultigrid";
 import { releaseWorking } from "./physicalNumerics";
 
-function dot(a: Band, b: Band) {
+function dot(a: ReadBand, b: ReadBand) {
   let sum = 0;
   for (let i = 0; i < a.length; i++) sum += a.get(i) * b.get(i);
   return sum;
 }
 /** Restore each connected component's total; the visit queue and marks are working bands. */
-function conserveComponents(matrix: MetricOperator, input: Band, result: Band) {
+function conserveComponents(matrix: MetricOperator, input: ReadBand, result: Band) {
   const n = input.length,
     visited = metricArray(matrix.map, "component-visited", n, "uint8"),
     queue = metricArray(matrix.map, "component-queue", n, "int32");
@@ -46,7 +46,7 @@ function conserveComponents(matrix: MetricOperator, input: Band, result: Band) {
 }
 function solve(
   matrix: MetricOperator,
-  input: Band,
+  input: ReadBand,
   condition: ReturnType<typeof prepareMultigrid>
 ) {
   const map = matrix.map,
@@ -91,10 +91,10 @@ function solve(
   return result;
 }
 /** Solve only participating cells; excluded basins/land never enter the matrix. */
-export function prepareMetricSmoother(map: PhysicalField, length: number, active?: Band) {
+export function prepareMetricSmoother(map: PhysicalField, length: number, active?: ReadBand) {
   const matrix = metricOperator(map, length, active),
     condition = prepareMultigrid(matrix);
-  const apply = (input: Band) => {
+  const apply = (input: ReadBand) => {
     const cells = matrix.cells!,
       local = metricArray(map, "local-input", matrix.count),
       result = metricArray(map, "full-result", input.length);
@@ -113,7 +113,12 @@ export function prepareMetricSmoother(map: PhysicalField, length: number, active
   });
 }
 /** Finite-volume screened diffusion with physical reach and no flux through excluded faces. */
-export function smoothMetric(map: PhysicalField, input: Band, length: number, active?: Band) {
+export function smoothMetric(
+  map: PhysicalField,
+  input: ReadBand,
+  length: number,
+  active?: ReadBand
+) {
   const smooth = prepareMetricSmoother(map, length, active);
   try {
     return smooth(input);

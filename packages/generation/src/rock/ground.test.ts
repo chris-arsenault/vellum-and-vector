@@ -1,12 +1,17 @@
 import { expect, it } from "vitest";
-import { createField, type PhysicalField } from "../world/field";
+import {
+  createTestField as createField,
+  type TestPhysicalField as PhysicalField,
+} from "./groundTestFixture";
 import { units } from "../world/math";
-import { rebuild } from "../world/surface";
+import { projectGround as rebuild } from "./groundShares";
 import { createWorldMesh } from "../world/worldMesh";
 import { groundOf, type GroundQuery } from "./ground";
 import { compileMix } from "./modes";
 import { setLayer } from "./rockColumn";
 import { rockCatalogue } from "./rockCatalogue";
+import { deposit } from "./groundLedger";
+import { setRockStrength } from "./rockField";
 
 const { shale, quartzite, gneiss } = rockCatalogue,
   grinding = compileMix({ abrasion: 1 });
@@ -21,7 +26,7 @@ function column(prepare: (map: PhysicalField) => void) {
 }
 it("spends an action on sediment, then rock, by what each gives up", () => {
   const bare = column(() => {}),
-    covered = column((map) => map.SedimentThickness.set(0, units(1)));
+    covered = column((map) => deposit(map, 0, units(1), "test"));
   const bareDepth = groundOf(bare).actOn(0, grinding, 1, Infinity) / 1024,
     coveredDepth = groundOf(covered).actOn(0, grinding, 1, Infinity) / 1024;
   // Alluvium gives 1000/300 and takes 0.3 of the power for its metre; shale takes the rest at 1000/600.
@@ -41,7 +46,7 @@ it("stops at the limit it is given", () => {
   expect(groundOf(column(() => {})).actOn(0, grinding, 100, units(3))).toBe(units(3));
 });
 it("carries what has been done to the surface, not only what kind it is", () => {
-  const hardened = column((map) => map.RockResistance.set(0, 2000));
+  const hardened = column((map) => setRockStrength(map, 0, 2000));
   expect(groundOf(hardened).gives(0, grinding)).toBeCloseTo(0.5);
 });
 it("lets a map stiffen its own ground for everything that acts on it", () => {

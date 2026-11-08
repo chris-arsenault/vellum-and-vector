@@ -2,6 +2,18 @@ import type { PhysicalBufferName } from "../world/field";
 import { ecologyCarbon, ecologyMemory, ecologyRatios, ecologyScalars } from "../world/ecologyState";
 import { units } from "../world/math";
 import { rockLayerDepths, rockLayerKinds } from "../rock/rockLayerFields";
+import {
+  groundMaterialFields,
+  groundPlacementFields,
+  groundProjectionFields,
+  groundSheetFields,
+} from "../rock/groundTransport";
+import {
+  loadIntegerFields,
+  loadScalarFields,
+  seaLoadIntegerFields,
+  seaLoadScalarFields,
+} from "../rock/groundLoad";
 
 /**
  * What a quantity is decides what history does to it, so a new band moves with the crust because of
@@ -14,7 +26,8 @@ import { rockLayerDepths, rockLayerKinds } from "../rock/rockLayerFields";
  * - `crust`: conserved crust columns, moved by crust transport with their own budget.
  * - `derived`: worked out afresh from other quantities; plates do not carry it.
  */
-export type QuantityKind = "share" | "amount" | "peak" | "identity" | "crust" | "derived";
+export type QuantityKind =
+  "share" | "amount" | "peak" | "identity" | "crust" | "ground" | "derived";
 
 const each = (kind: QuantityKind, names: readonly string[]) =>
   Object.fromEntries(names.map((name) => [name, kind]));
@@ -222,12 +235,28 @@ for (const name of [
 ])
   quantityKinds[name] = "derived";
 
+// These travel as complete ground packages. Independently averaging a layer's thickness,
+// strength or fabric while selecting its kind from another donor invents material history.
+for (const name of [
+  ...groundMaterialFields,
+  ...groundPlacementFields,
+  ...groundProjectionFields,
+  ...groundSheetFields,
+  ...loadIntegerFields,
+  ...loadScalarFields,
+  ...seaLoadIntegerFields,
+  ...seaLoadScalarFields,
+  "SedimentSupply",
+])
+  quantityKinds[name] = "ground";
+
 export const quantitiesOfKind = (kind: QuantityKind) =>
   Object.keys(quantityKinds).filter((name) => quantityKinds[name] === kind) as PhysicalBufferName[];
 
 /** Policies actually used when a plate transports quantities. Derived bands are recomputed by
  * their scheduled processes; crust columns have their own transport operation. */
-export type TransportAnswer = "mean" | "sum" | "largest" | "dominant" | "conserved" | "recompute";
+export type TransportAnswer =
+  "mean" | "sum" | "largest" | "dominant" | "conserved" | "package" | "recompute";
 export const transportRules: Readonly<
   Record<
     QuantityKind,
@@ -243,6 +272,7 @@ export const transportRules: Readonly<
   peak: { moved: "largest", newCrust: "zero", rifted: "carry" },
   identity: { moved: "dominant", newCrust: "zero", rifted: "carry" },
   crust: { moved: "conserved", newCrust: "zero", rifted: "carry" },
+  ground: { moved: "package", newCrust: "fresh", rifted: "carry" },
   derived: { moved: "recompute", newCrust: "zero", rifted: "carry" },
 };
 
@@ -292,6 +322,4 @@ export const identityRules: Readonly<Partial<Record<PhysicalBufferName, Identity
   },
 };
 /** Amounts that are material on its way somewhere: what sinks with the crust goes to their pool. */
-export const returnPools: Readonly<Partial<Record<PhysicalBufferName, "sea">>> = {
-  SedimentSupply: "sea",
-};
+export const returnPools: Readonly<Partial<Record<PhysicalBufferName, "sea">>> = {};

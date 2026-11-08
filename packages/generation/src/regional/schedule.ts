@@ -2,7 +2,7 @@ import type { MapProcessContext } from "../process";
 import { physicalContext } from "../world/context";
 import { landformClassification } from "../world/landforms";
 import { conjoinFeatures, readEvidence, respondFeatures, supportFeatures } from "./causes/index";
-import { deriveCharacter, measureGrain } from "./character";
+import { deriveCharacter } from "./character";
 import { respondClimate } from "./climate";
 import { divides } from "./divides";
 import { routeWater } from "./drainage";
@@ -21,7 +21,7 @@ import {
 } from "./places";
 import { stiffenAroundCones } from "./material";
 import { deriveRelief, updateSlopes } from "./relief";
-import { foldTheColumn, uncoverCuts } from "./rockStructure";
+import { foldTheColumn } from "./rockStructure";
 import { deriveMedia, openFractures } from "./sharedMedia";
 import { declareFields } from "./society";
 import { ledgerCeilings, ledgerFloors } from "./media";
@@ -94,12 +94,6 @@ export function regionalSchedule(domains: string[]): ScheduledStep[] {
       classifyLandforms(state);
     },
   });
-  if (d.physical)
-    steps.push({
-      id: "descendant-context",
-      message: "Recording this map's organization for its own refinement",
-      run: publishDescendantContext,
-    });
   return steps;
 }
 
@@ -168,7 +162,6 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
           state.regional.round = round;
           if (d.physical) {
             deriveRelief(state);
-            uncoverCuts(state);
           }
           // The last round's ground is worked by the world's erosion at this map's scale.
           if (d.physical && round === rounds) erodeRegion(state);
@@ -236,26 +229,4 @@ function classifyLandforms(state: RegionalState) {
   for (let i = 0; i < divide.length; i++) work.map.RidgeInfluence.set(i, divide[i]);
   landformClassification(work.map, physicalContext(state.regional.input.seed, 0, work.profile));
   markPoiLandforms(state);
-}
-
-/**
- * The child's compact context for its descendants (spec 8.3): the developed grain, measured
- * from the realized relief and carrying the inherited organization where it still holds,
- * written to the field's grain bands so the projection publishes it.
- */
-function publishDescendantContext(state: RegionalState) {
-  const map = state.physical.map,
-    n = map.mesh.count,
-    measuredX = new Float64Array(n),
-    measuredY = new Float64Array(n),
-    character = state.regional.character!;
-  measureGrain(state, (i) => map.Elevation.get(i) / 1024, measuredX, measuredY);
-  for (let i = 0; i < n; i++) {
-    const x = 0.5 * character.grainX[i] + 0.5 * measuredX[i],
-      y = 0.5 * character.grainY[i] + 0.5 * measuredY[i],
-      coherence = Math.hypot(x, y),
-      scale = coherence > 1 ? 1 / coherence : 1;
-    map.StructuralGrainX.set(i, Math.round(x * scale * 1000));
-    map.StructuralGrainY.set(i, Math.round(y * scale * 1000));
-  }
 }

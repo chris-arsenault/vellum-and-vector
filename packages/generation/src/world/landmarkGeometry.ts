@@ -5,8 +5,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { clamp, elevationLimit, units } from "./math";
 import { meshDeltaX, meshPoint, nearestTriangle } from "./mesh";
-import { rebuild } from "./surface";
-import { raiseRock, recordCut } from "../rock/groundLedger";
+import { displaceGround, excavateRock, recordCut } from "../rock/groundLedger";
 import { physicalSampler } from "./physicalMetric";
 import { advanceTectonicPoint, backtrackTectonicPoint } from "./tectonicIntegration";
 import { plateTravel, tectonicDefaultMyr } from "./tectonicControls";
@@ -230,8 +229,7 @@ export function shiftBedrock(map: PhysicalField, i: number, requested: number) {
   );
   const applied = next - old;
   if (applied === 0) return 0;
-  raiseRock(map, i, applied, "landmarks", "space");
-  rebuild(map, i);
+  displaceGround(map, i, applied, "landmarks");
   return applied;
 }
 /** A cut booked as river incision down to base level; the sediment leaves through transport. */
@@ -246,9 +244,8 @@ export function cut(map: PhysicalField, i: number, requested: number) {
 export function excavate(map: PhysicalField, i: number, requested: number) {
   const amount = Math.max(0, Math.min(requested, map.BedrockElevation.get(i) - units(-3800)));
   if (amount <= 0) return 0;
-  raiseRock(map, i, -amount, "landmarks", "space");
+  excavateRock(map, i, amount, "landmarks", "space");
   map.ImpactExcavation.add(i, amount);
-  rebuild(map, i);
   const volume = (amount / 1024) * map.mesh.area(i);
   map.SedimentProducedTotal += volume;
   map.SedimentExportedTotal += volume;

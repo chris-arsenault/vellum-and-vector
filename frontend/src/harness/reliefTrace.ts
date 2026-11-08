@@ -6,6 +6,7 @@ import { snapshotRecorder } from "./fieldSnapshot";
 import { watchRockColumns } from "./reliefColumn";
 import { reliefProbes } from "./reliefProbes";
 import { rockTrace } from "./rockTrace";
+import type { Epoch } from "@atlas/domain";
 
 /**
  * What each step of the world did to its relief: the height differences within a few cells after
@@ -50,10 +51,10 @@ function snapshot(name: string, map: PhysicalField, context: PhysicalContext) {
   };
 }
 /** Starts recording; the returned function stops and hands back what was seen. */
-export function traceRelief(snapshots?: { label: string; quality: string }) {
+export function traceRelief(snapshots?: { label: string; quality: string; epochs?: Epoch[] }) {
   const steps: ReturnType<typeof snapshot>[] = [],
     probes = reliefProbes(),
-    record = snapshots && snapshotRecorder(snapshots.label, snapshots.quality),
+    record = snapshots && snapshotRecorder(snapshots.label, snapshots.quality, snapshots.epochs),
     stopColumns = watchRockColumns(),
     rock = rockTrace();
   let last: PhysicalField | null = null;

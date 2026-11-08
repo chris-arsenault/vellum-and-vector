@@ -2,7 +2,10 @@ import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { alignedNeighbor } from "./atmosphere";
 import { clamp } from "./math";
-import { carryOut, settle, shed, spoilSoil } from "../rock/groundLedger";
+import { carryOut, deposit, removeLoose } from "../rock/groundLedger";
+import { spoilSoil } from "../rock/groundSurfaceMedia";
+import { loadOf } from "../rock/groundLoad";
+import { mergeMaterial, type MaterialLayer } from "../rock/rockColumn";
 
 /**
  * What a storm track does to the ground it crosses, once per epoch after the climate pass:
@@ -28,16 +31,24 @@ const bare = (map: PhysicalField, i: number) =>
   map.TreeCover.get(i) + map.GrassCover.get(i) + map.WetlandCover.get(i) < 0.12;
 /**
  * Sand leaves a bare cell for its downwind neighbour; the sea swallows what reaches it. The
- * sand is sediment the budget already counted when it was first laid down, so the move
- * changes thicknesses and nothing in the produced, deposited and exported totals.
+ * sand keeps the material and alteration of the loose beds it leaves.
  */
 function driveDunes(map: PhysicalField, i: number, share: number) {
   const moving = map.SedimentThickness.get(i) * share;
   if (moving <= 0) return;
   const target = alignedNeighbor(map, i, map.WindX.get(i) / 1000, map.WindY.get(i) / 1000);
   if (target < 0) return;
-  const volume = (moving * map.mesh.area(i)) / 1024;
-  shed(map, i, volume, "pressure");
-  if (map.WaterKindCodes.get(target) === 1) carryOut(map, volume, "pressure");
-  else settle(map, target, volume);
+  let carried: MaterialLayer | undefined;
+  removeLoose(map, i, moving, "pressure", (material) => {
+    const volume = { ...material, depth: (material.depth * map.mesh.area(i)) / 1024 };
+    carried = carried ? mergeMaterial(carried, volume) : volume;
+  });
+  if (!carried || carried.depth <= 0) return;
+  if (map.WaterKindCodes.get(target) === 1) carryOut(map, carried.depth, "pressure", carried);
+  else {
+    const area = map.mesh.area(target),
+      deposited = deposit(map, target, (carried.depth * 1024) / area, "pressure", "load", carried),
+      remaining = carried.depth - (deposited * area) / 1024;
+    if (remaining > 0) loadOf(map).add(target, { ...carried, depth: remaining });
+  }
 }

@@ -2,7 +2,14 @@ import { requireThat, type DomainSnapshot } from "@atlas/domain";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { markPoiLandforms } from "../poi/poiLandforms";
-import { allSteps, applyNativeStep, fieldProduct, describeNativeStep } from "./physicalSteps";
+import {
+  allSteps,
+  applyNativeStep,
+  fieldProduct,
+  describeNativeStep,
+  withPlateDeformation,
+} from "./physicalSteps";
+import { plateDeformationSteps } from "../physicalFeatureSequence";
 import { nativeContext } from "./context";
 import { atlasQuality } from "./atlasProfile";
 import { configuredPhysicalProfile } from "../physicalProfileConfiguration";
@@ -71,7 +78,10 @@ const afterStep: Readonly<
       description: `Epoch ${epoch + 1}: the selected geological, river, ice and coastal processes retained their material histories. Omitted processes added no new events.`,
     }),
 };
-export function nativeProcess(step: NativeStep): MapProcess {
+export function nativeProcess(
+  step: NativeStep,
+  deformation: readonly NativeStep[] = []
+): MapProcess {
   const [name, salt] = step,
     declared = describeNativeStep(step);
   return {
@@ -97,7 +107,11 @@ export function nativeProcess(step: NativeStep): MapProcess {
       }
       restoreAuthoring(work);
       if (context.parameters.unforced) work.map.ExternalHeatForcing.fill(0);
-      applyNativeStep(work.map, c, step);
+      applyNativeStep(
+        work.map,
+        name === "plate-advection" ? withPlateDeformation(work.map, c, deformation) : c,
+        step
+      );
       restoreAuthoring(work);
       afterStep[name]?.(state, context, c.EpochIndex);
     }),
@@ -113,6 +127,11 @@ export function atlasNativeProcesses(
     input.areaId,
     input.domains.includes("physical")
   );
+  const deformation = plateDeformationSteps(input.resolvedFeatures!, {
+    source: original,
+    input,
+    resolved: input.resolvedFeatures!,
+  });
   return [
     initializeProcess(),
     absenceInitialization(input.resolvedFeatures!, channels),
@@ -124,7 +143,7 @@ export function atlasNativeProcesses(
     finishProcess(original),
     magicPlacesProcess(original),
     ...(original.world.areas[input.areaId].profile === "world" ? [] : [adaptiveReliefProcess()]),
-    ...allSteps.map(nativeProcess),
+    ...allSteps.map((step) => nativeProcess(step, deformation)),
   ];
 }
 function initializeProcess(): MapProcess {

@@ -1,7 +1,7 @@
 import type { GenerationState, MapProcess } from "../process";
 import type { ResolvedFeatures } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
-import type { PhysicalField, PhysicalBufferName as BufferName } from "./field";
+import type { PhysicalField, MutablePhysicalBufferName as BufferName } from "./field";
 import { absentInheritedHistories } from "./inheritedFacts";
 
 /** What a process that did not run would have left, as nothing having happened: not a claim it ran. */

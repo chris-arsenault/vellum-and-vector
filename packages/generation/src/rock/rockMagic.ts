@@ -2,8 +2,9 @@ import type { GenerationState } from "../process";
 import { type PhysicalField } from "../world/field";
 import { reservoirAmount, type MagicField } from "../world/magicState";
 import { units } from "../world/math";
-import { rebuild } from "../world/surface";
-import { erode, raiseRock } from "./groundLedger";
+import { constructRock, erodeFacets } from "./groundLedger";
+import { groundOf } from "./ground";
+import { compileMix } from "./modes";
 import { fractalNoise, hashUnit } from "../world/noise";
 import {
   hardnessOf,
@@ -12,7 +13,8 @@ import {
   type RockKind,
   type RockKindId,
 } from "./rockCatalogue";
-import { alterTop, changeLayer, layDownRock, layerKind, shuffleLayers } from "./rockColumn";
+import { alterTop, changeLayer, readLayer, shuffleLayers } from "./rockColumn";
+import { facetShare } from "./groundShares";
 
 /**
  * What each system does to the rock, once per epoch, as a physical process of its own: not a
@@ -24,13 +26,26 @@ import { alterTop, changeLayer, layDownRock, layerKind, shuffleLayers } from "./
 function addRock(map: PhysicalField, cell: number, kind: RockKindId, metres: number) {
   const amount = units(metres);
   if (amount <= 0) return;
-  raiseRock(map, cell, amount, "magic rock", "space");
-  layDownRock(map, cell, rockCatalogue[kind], amount);
-  rebuild(map, cell);
+  constructRock(map, cell, amount, rockCatalogue[kind], "magic rock", "space");
 }
 const onLand = (map: PhysicalField, cell: number) => map.WaterKindCodes.get(cell) === 0;
 /** A ward holds the rock under it: nothing below alters kept ground. */
 const kept = (map: PhysicalField, cell: number) => map.Warding.get(cell) >= wardHolds;
+const occupied = (map: PhysicalField, cell: number) =>
+  (["land", "cut"] as const).filter((facet) => facetShare(map, cell, facet) > 0);
+function alterSurface(
+  map: PhysicalField,
+  cell: number,
+  kind: RockKind,
+  depth: number,
+  protectedKind = -1
+) {
+  for (const facet of occupied(map, cell)) {
+    const top = readLayer(map, cell, 0, facet);
+    if (top.kind !== kind.code && top.kind !== protectedKind)
+      alterTop(map, cell, kind, depth, facet);
+  }
+}
 
 /** The share of ward at which it holds the ground unchanged. */
 const wardHolds = 0.3;
@@ -70,7 +85,12 @@ function fireInRock(
   span: number
 ) {
   // A sealed conduit is a place, not a share of the ground: it sinters wherever it is.
-  if (field.sealed.get(cell) > 0 && layerKind(map, cell, 0) !== rockCatalogue.sinter.code)
+  if (
+    field.sealed.get(cell) > 0 &&
+    occupied(map, cell).some(
+      (facet) => readLayer(map, cell, 0, facet).kind !== rockCatalogue.sinter.code
+    )
+  )
     addRock(map, cell, "sinter", sinterMetres * span);
   if (!reaches(map, field, cell, seed)) return;
   const heat = field.intensity.get(cell);
@@ -91,12 +111,8 @@ function auroraInRock(map: PhysicalField, field: MagicField, cell: number, seed:
   const charge = field.stored.get(cell),
     iced = map.IceThickness.get(cell) > 0;
   // Crystal grows on the bed under charged ice, and is what the ice leaves when it goes.
-  if (
-    iced &&
-    field.source.get(cell) >= crystalFrom &&
-    layerKind(map, cell, 0) !== rockCatalogue.auroraCrystal.code
-  )
-    alterTop(map, cell, rockCatalogue.auroraCrystal, units(crystalMetres));
+  if (iced && field.source.get(cell) >= crystalFrom)
+    alterSurface(map, cell, rockCatalogue.auroraCrystal, units(crystalMetres));
   if (iced || charge < rotFrom || !onLand(map, cell)) return;
   // Charge left in open ground is what Aurora has there: its share of the ground rots.
   if (inBody(map, cell, (charge / 1000) * rotOdds, systemSalt(field, seed) ^ 0x7e13))
@@ -118,6 +134,7 @@ const rootFrom = 350,
   tufaMetres = 18,
   dissolveFrom = 200,
   dissolveMetres = 120;
+const dissolving = compileMix({ solution: 1 });
 function greenwoodInRock(
   map: PhysicalField,
   field: MagicField,
@@ -126,15 +143,19 @@ function greenwoodInRock(
   span: number
 ) {
   if (!onLand(map, cell) || !reaches(map, field, cell, seed)) return;
-  const growth = field.intensity.get(cell),
-    solubility = rockKindOfCode(layerKind(map, cell, 0)).solubility,
-    above = Math.max(0, map.Elevation.get(cell) - map.EffectiveSeaLevel);
+  const growth = field.intensity.get(cell);
   // What water dissolves goes down to where the water does, and no further.
-  if (growth >= dissolveFrom && solubility > 0)
-    erode(
+  if (growth >= dissolveFrom)
+    erodeFacets(
       map,
       cell,
-      Math.min(above, units((dissolveMetres * span * solubility * growth) / 1000)),
+      groundOf(map).surfaceAction(
+        cell,
+        dissolving,
+        (dissolveMetres * span * growth) / 1000,
+        Infinity,
+        map.EffectiveSeaLevel
+      ),
       "greenwood"
     );
   if (growth >= rootFrom)
@@ -148,15 +169,16 @@ const bedFrom = 0.2,
 function saltInRock(map: PhysicalField, field: MagicField, cell: number, seed: number) {
   if (!onLand(map, cell) || !reaches(map, field, cell, seed)) return;
   const full = field.definition.parameters.saltFull,
-    share = reservoirAmount(field, "bed", cell) / (map.mesh.area(cell) * full),
-    top = layerKind(map, cell, 0);
+    share = reservoirAmount(field, "bed", cell) / (map.mesh.area(cell) * full);
   // The stock is the salt's amount; the layer only says where it lies, and adds no ground of its own.
-  if (
-    share >= bedFrom &&
-    top !== rockCatalogue.saltGlass.code &&
-    top !== rockCatalogue.saltbed.code
-  )
-    alterTop(map, cell, rockCatalogue.saltbed, units(bedMetres * Math.min(1, share)));
+  if (share >= bedFrom)
+    alterSurface(
+      map,
+      cell,
+      rockCatalogue.saltbed,
+      units(bedMetres * Math.min(1, share)),
+      rockCatalogue.saltGlass.code
+    );
 }
 /** Veil shuffles the column under a tear: the only thing that puts layers out of their order. */
 const shuffleFrom = 0.25,
@@ -171,8 +193,7 @@ function veilInRock(map: PhysicalField, field: MagicField, cell: number, seed: n
 const keptMetres = 300;
 /** Hallowed keeps the ground it wards as it is, and it stands while the land around it wears. */
 function hallowedInRock(map: PhysicalField, cell: number) {
-  if (onLand(map, cell) && layerKind(map, cell, 0) !== rockCatalogue.keptStone.code)
-    alterTop(map, cell, rockCatalogue.keptStone, units(keptMetres));
+  if (onLand(map, cell)) alterSurface(map, cell, rockCatalogue.keptStone, units(keptMetres));
 }
 /**
  * Each system's stock lies in rock, and how the rock is built decides how much of it stays there on
@@ -204,16 +225,28 @@ const heldFor: Readonly<Record<string, (rock: RockKind) => number>> = {
 export const heldLeakIn = (system: string, rock: RockKind) =>
   stockLeak * (heldFor[system]?.(rock) ?? rock.jointing);
 function leakFromColumn(map: PhysicalField, field: MagicField, cell: number) {
-  const rock = rockKindOfCode(layerKind(map, cell, 0));
   for (const [key, stock] of Object.entries(field.stocks)) {
     const reservoir = key.slice(key.lastIndexOf("/") + 1),
-      share =
-        reservoir === "held" ? heldLeakIn(field.definition.id, rock) : stockLeakIn(reservoir, rock),
+      share = leakage(map, cell, (rock) =>
+        reservoir === "held" ? heldLeakIn(field.definition.id, rock) : stockLeakIn(reservoir, rock)
+      ),
       held = stock.get(cell);
     if (share <= 0 || held <= 0) continue;
     stock.set(cell, held * (1 - share));
     field.lost += held * share;
   }
+}
+function leakage(map: PhysicalField, cell: number, response: (rock: RockKind) => number) {
+  let value = 0;
+  for (const facet of occupied(map, cell)) {
+    const layer = readLayer(map, cell, 0, facet),
+      first = response({ ...rockKindOfCode(layer.kind), resistance: layer.strength }),
+      second = response({ ...rockKindOfCode(layer.secondaryKind), resistance: layer.strength });
+    value +=
+      facetShare(map, cell, facet) *
+      (first * (1 - layer.secondaryShare) + second * layer.secondaryShare);
+  }
+  return value;
 }
 const systemsOf = (state: GenerationState) => {
   const fields = state.physical!.magic!.fields.filter((field) => field.definition.enabled),

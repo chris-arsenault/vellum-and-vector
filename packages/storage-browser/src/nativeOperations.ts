@@ -2,6 +2,37 @@ import type { Geometry, Point } from "geojson";
 import { requireThat, type Bounds } from "@atlas/domain";
 import type { GeometryKernel } from "./geometryKernel";
 
+/**
+ * Buffer multipart geometry before dissolving its pieces. GEOSBuffer on a dense line collection
+ * nodes all overlapping offset curves together, which can exhaust WASM memory. Polygon union uses
+ * GEOS's cascaded overlay instead; no input part or geographic detail is discarded.
+ */
+export function bufferGeometry(kernel: GeometryKernel, geometry: number, distance: number): number {
+  const g = kernel.native;
+  // Inward buffers do not distribute over union; retain GEOS's collection semantics for them.
+  if (distance <= 0 || g.GEOSGeomTypeId(geometry) < 4) return g.GEOSBuffer(geometry, distance, 8);
+  const count = g.GEOSGetNumGeometries(geometry),
+    pointers = g.Module._malloc(count * 4),
+    pieces: number[] = [];
+  let collection = 0;
+  try {
+    for (let i = 0; i < count; i++) {
+      const part = bufferGeometry(kernel, g.GEOSGetGeometryN(geometry, i), distance);
+      requireThat(part, "geometry_buffer", "Could not buffer a geographic part.");
+      pieces.push(part);
+      g.Module.HEAPU32[pointers / 4 + i] = part;
+    }
+    collection = g.GEOSGeom_createCollection(7, pointers, count);
+    requireThat(collection, "geometry_buffer", "Could not assemble buffered geography.");
+    return g.GEOSUnaryUnion(collection);
+  } finally {
+    // A successful collection takes ownership of its parts.
+    if (collection) g.GEOSGeom_destroy(collection);
+    else for (const part of pieces) g.GEOSGeom_destroy(part);
+    g.Module._free(pointers);
+  }
+}
+
 /** GEOS window, linear-referencing, Voronoi and STRtree operations over kernel handles. */
 export function clipByRect(
   kernel: GeometryKernel,

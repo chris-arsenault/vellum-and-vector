@@ -3,7 +3,7 @@ import { canonryMagicPresets, generateChannel, putChannel, valueRecordSchema } f
 import { atlasConfiguration, prepareAtlasGeneration } from "./atlasWorkflow";
 import { featureContribution, resolveGenerationFeatures, type GenerationFeature } from "./features";
 import { physicalFeatureDefinitions } from "./physicalFeatures";
-import { physicalFeatureSequence } from "./physicalFeatureSequence";
+import { physicalFeatureSequence, plateDeformationSteps } from "./physicalFeatureSequence";
 import { landscape } from "./mapFixtures";
 import { MapRunner } from "./mapRunner";
 import { MapProcessRegistry, type ProcessConfiguration } from "./process";
@@ -11,6 +11,14 @@ import { sequenceStages } from "./sequence";
 import { GenerationModuleRegistry, type GenerationModule } from "./generationModules";
 import { atlasGenerationModules } from "./atlasModules";
 import { worldGenerationSettings } from "./generationSettings";
+
+it("omits mountain construction inside plate motion when that feature is disabled", () => {
+  const selected = resolveGenerationFeatures(physicalFeatureDefinitions, {
+    "physical.mountains": { enabled: false },
+  });
+  expect(plateDeformationSteps(selected).map(([name]) => name)).toEqual(["continental-sutures"]);
+  expect(physicalFeatureSequence("material.relaxation", selected)).toHaveLength(1);
+});
 
 it("translates legacy glacier choices into one whole feature and rejects a contradictory pair", () => {
   const disabled = resolveGenerationFeatures(

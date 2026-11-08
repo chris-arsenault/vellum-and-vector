@@ -5,13 +5,11 @@ import type { PhysicalContext } from "./context";
 import { clamp, elevationLimit, round, units } from "./math";
 import { hashUnit } from "./noise";
 import { Feature } from "./codes";
-import { rebuild } from "./surface";
 import { releaseWorking, workingArray } from "./physicalNumerics";
 import { subductionArcs } from "./volcanicArcs";
 import type { Band } from "@atlas/domain";
 import { rockCatalogue } from "../rock/rockCatalogue";
-import { raiseRock } from "../rock/groundLedger";
-import { layBed, stripRock } from "../rock/rockColumn";
+import { constructRock, excavateRock } from "../rock/groundLedger";
 
 /** A caldera's radius as a share of its cone's. */
 export const calderaShare = 0.28;
@@ -109,16 +107,9 @@ function constructTriangle(
     caldera && distance < radius
       ? units(p.VolcanicCalderaDepth * (1 - (distance / radius) ** 2))
       : 0;
-  const next = clamp(
-    map.BedrockElevation.get(i) + uplift - cut,
-    units(-elevationLimit),
-    units(elevationLimit) - map.SedimentThickness.get(i)
-  );
-  raiseRock(map, i, next - map.BedrockElevation.get(i), "volcanoes", "melt");
-  map.VolcanicConstructionHistory.add(i, uplift);
-  stripRock(map, i, cut);
-  layBed(map, i, rockCatalogue.basalt, uplift);
-  rebuild(map, i);
+  excavateRock(map, i, cut, "volcanoes", "melt");
+  const built = constructRock(map, i, uplift, rockCatalogue.basalt, "volcanoes", "melt");
+  map.VolcanicConstructionHistory.add(i, built);
   const activity = round(strength * apron);
   map.VolcanicActivity.set(i, Math.max(map.VolcanicActivity.get(i), activity));
   if (activity >= Math.trunc(strength / 4)) map.VolcanicLastActiveEpoch.set(i, recordedEpoch);

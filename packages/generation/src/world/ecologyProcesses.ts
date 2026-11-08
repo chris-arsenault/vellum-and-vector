@@ -27,7 +27,7 @@ import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters"
 import type { Epoch } from "@atlas/domain";
 import type { ProcessBehavior } from "../processTraits";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import type { PhysicalField } from "./field";
+import { isMutablePhysicalName, type PhysicalField } from "./field";
 
 interface EcologyInput {
   seed: number;
@@ -126,7 +126,8 @@ function coverAuthority(state: GenerationState) {
     }
     for (const { binding, values } of fixed) {
       const value = values.get(i);
-      if (Number.isFinite(value)) map[binding.native].set(i, value);
+      if (Number.isFinite(value) && isMutablePhysicalName(binding.native))
+        map[binding.native].set(i, value);
     }
     if (
       woodland.get(i) ||

@@ -5,7 +5,7 @@ import {
   refreshWorkspaceSamples,
   type AtlasPhysicalWorkspace,
 } from "../../packages/generation/src/world/atlasWorkspace";
-import { createField } from "../../packages/generation/src/world/field";
+import { createTestField as createField } from "../../packages/generation/src/rock/groundTestFixture";
 import { atlasPhysicalProfile } from "../../packages/generation/src/world/atlasProfile";
 import { publishKinds } from "../../packages/generation/src/poi/poiPublish";
 

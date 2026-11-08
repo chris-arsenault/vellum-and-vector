@@ -10,7 +10,7 @@ import { physicalFeatureDefinitions } from "../physicalFeatures";
 import { domainFeatureDefinitions } from "../domainFeatures";
 import { atlasNativeProcesses } from "./atlasProcesses";
 import { atlasPublicationDefinitions } from "./atlasPublications";
-import { createField } from "./field";
+import { createTestField as createField } from "../rock/groundTestFixture";
 import { createMesh } from "./mesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
 

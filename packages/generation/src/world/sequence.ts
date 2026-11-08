@@ -3,6 +3,7 @@ import type { PhysicalContext } from "./context";
 import {
   burial,
   crustUplift,
+  crustalRelaxation,
   impacts,
   margins,
   moraines,
@@ -100,6 +101,7 @@ export const stage = (name: string, salt: number, ...processes: GroundProcess[])
 /** Executable definitions. Feature operations choose their occurrences and order. */
 export const nativeSteps = {
   crustalSupport: step("crustal-support", 0, support),
+  crustalRelaxation: step("crustal-relaxation", 0, crustalRelaxation),
   lithosphericFlexure: step("lithospheric-flexure", 0, settling),
   oceanConnectivity: step("ocean-connectivity", 0, oceanFill),
   massWasting: step("mass-wasting", 0, slopes),

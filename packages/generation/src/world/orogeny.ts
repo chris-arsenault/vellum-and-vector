@@ -19,26 +19,19 @@ import {
   clamp,
   crustHeight,
   crustPerRock,
-  round,
   thickness,
   toUnits,
   units,
 } from "./math";
-import { rebuild } from "./surface";
 import { raiseFromCrust } from "../rock/groundLedger";
-import { stripRock } from "../rock/rockColumn";
-import { adjustCrustColumn } from "./crustTransport";
+import { deformGround } from "../rock/groundDeformation";
+import { adjustCrustColumn } from "../rock/crustTransport";
 import { crustFlow, distributeOrogenicRoots, pileUpEarlierShortening } from "./orogenicRoots";
-import { advanceThrustFronts, climbThrustRamps, slipThrustSheets } from "./orogenicSheets";
+import { advanceThrustFronts, climbThrustRamps, inBelt, slipThrustSheets } from "./orogenicSheets";
 import { sutureReactivation } from "./reactivation";
 import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
-/**
- * How much rock a crest's rise brings up, for each metre it stands higher. Ranges lose far more rock
- * than they keep as height, so the deep rock of a belt's core reaches the surface.
- */
-const thrustExhumation = 4;
 function changeThickness(
   map: PhysicalField,
   context: PhysicalContext,
@@ -85,11 +78,7 @@ function constructSurface(
   const requested = units(structural * summitVariation(map, context, c, i, source));
   if (requested <= 0) return;
   // What stands up was the crust's: a belt builds height by moving what it has, not from nothing.
-  if (raiseFromCrust(map, i, requested, "mountains") <= 0) return;
-  // A sheet's leading edge brings up what it was cut from, so a belt's core shows older rock. How
-  // much follows the belt's structure, not the height of one summit, so rock lines up along it.
-  stripRock(map, i, units(structural * crest * thrustExhumation));
-  rebuild(map, i);
+  raiseFromCrust(map, i, requested, "mountains");
 }
 function constructTriangle(
   map: PhysicalField,
@@ -114,10 +103,9 @@ function constructTriangle(
   constructSurface(map, context, c, i, source, section, admitted);
 }
 /**
- * Constructed relief remembers the strike that organized it. The grain is the boundary's
- * tangent as a doubled-angle axis, weighted by how much of the belt's cross-section built
- * this cell; a stronger later construction replaces a weaker earlier one, and the crust
- * carries the result away from the boundary.
+ * Construction strains the surviving beds toward the boundary's doubled-angle tangent.
+ * Earlier and later fabric mix according to the strain reaching each bed; transport carries
+ * the resulting material structure away from the boundary.
  */
 function recordGrain(
   map: PhysicalField,
@@ -132,13 +120,8 @@ function recordGrain(
     ty = map.TectonicTangentY.get(source) / 1000,
     length = Math.hypot(tx, ty);
   if (length < 0.01) return;
-  const coherence = clamp(section / 0.9, 0, 1) * clamp(c.prominence / 1500, 0.4, 1),
-    existing = Math.hypot(map.StructuralGrainX.get(i), map.StructuralGrainY.get(i)) / 1000;
-  if (coherence <= existing) return;
-  const ux = tx / length,
-    uy = ty / length;
-  map.StructuralGrainX.set(i, round((ux * ux - uy * uy) * coherence * 1000));
-  map.StructuralGrainY.set(i, round(2 * ux * uy * coherence * 1000));
+  const coherence = clamp(section / 0.9, 0, 1) * clamp(c.prominence / 1500, 0.4, 1);
+  deformGround(map, i, tx, ty, coherence, admitted);
 }
 export function orogenicConstruction(map: PhysicalField, context: PhysicalContext) {
   map.OrogenicComponentIds.fill(-1);
@@ -169,9 +152,24 @@ export function orogenicConstruction(map: PhysicalField, context: PhysicalContex
     if (id >= 0) constructTriangle(map, context, components[id], frame, i, step, roots);
   }
   if (!forming) sutureReactivation(map, context);
+  releaseWorking(map, ids, ...frameBands, roots);
+}
+/** Relax against the contacts that remain after the move, even if no mountains were built. */
+export function relaxOrogenicCrust(map: PhysicalField, context: PhysicalContext) {
+  map.OrogenicComponentIds.fill(-1);
+  map.OrogenicSystemProminence.fill(0);
+  const ids = workingArray(map, "int32", "relaxation:components").fill(-1),
+    components = discoverComponents(map, context, ids);
+  rankComponents(components, context);
+  const frame = propagateInfluence(map, context, components, ids);
   crustFlow(map, context, (i) => {
     const id = map.OrogenicComponentIds.get(i);
-    return id >= 0 && components[id].code === 1;
+    return (
+      context.TectonicStrength > 0 &&
+      id >= 0 &&
+      components[id].code === 1 &&
+      inBelt(map, components[id], i)
+    );
   });
-  releaseWorking(map, ids, ...frameBands, roots);
+  releaseWorking(map, ids, frame.distance, frame.source, frame.side, frame.reach, frame.overlap);
 }

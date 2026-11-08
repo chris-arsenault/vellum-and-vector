@@ -1,0 +1,60 @@
+export const loadFields = {
+  kind: "GroundLoadKind",
+  depth: "GroundLoadVolume",
+  secondaryKind: "GroundLoadSecondaryKind",
+  secondaryShare: "GroundLoadSecondaryShare",
+  strength: "GroundLoadStrength",
+  damage: "GroundLoadDamage",
+  grainX: "GroundLoadGrainX",
+  grainY: "GroundLoadGrainY",
+  formedMin: "GroundLoadFormedMin",
+  formedMax: "GroundLoadFormedMax",
+  altered: "GroundLoadAltered",
+  mixed: "GroundLoadMixed",
+} as const;
+export const loadIntegerFields = [
+  loadFields.kind,
+  loadFields.secondaryKind,
+  loadFields.mixed,
+] as const;
+export const loadScalarFields = [
+  loadFields.depth,
+  loadFields.secondaryShare,
+  loadFields.strength,
+  loadFields.damage,
+  loadFields.grainX,
+  loadFields.grainY,
+  loadFields.formedMin,
+  loadFields.formedMax,
+  loadFields.altered,
+] as const;
+export const seaLoadFields = {
+  kind: "SeaLoadKind",
+  depth: "SeaLoadVolume",
+  secondaryKind: "SeaLoadSecondaryKind",
+  secondaryShare: "SeaLoadSecondaryShare",
+  strength: "SeaLoadStrength",
+  damage: "SeaLoadDamage",
+  grainX: "SeaLoadGrainX",
+  grainY: "SeaLoadGrainY",
+  formedMin: "SeaLoadFormedMin",
+  formedMax: "SeaLoadFormedMax",
+  altered: "SeaLoadAltered",
+  mixed: "SeaLoadMixed",
+} as const;
+export const seaLoadIntegerFields = [
+  seaLoadFields.kind,
+  seaLoadFields.secondaryKind,
+  seaLoadFields.mixed,
+] as const;
+export const seaLoadScalarFields = [
+  seaLoadFields.depth,
+  seaLoadFields.secondaryShare,
+  seaLoadFields.strength,
+  seaLoadFields.damage,
+  seaLoadFields.grainX,
+  seaLoadFields.grainY,
+  seaLoadFields.formedMin,
+  seaLoadFields.formedMax,
+  seaLoadFields.altered,
+] as const;

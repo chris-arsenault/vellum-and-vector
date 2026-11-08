@@ -1,6 +1,6 @@
 import type { AtlasPhysicalWorkspace } from "./atlasWorkspace";
 import type { PhysicalMesh } from "./mesh";
-import { Band, readRange, writeRange, type Coverage } from "@atlas/domain";
+import { readRange, writeRange, type Band, type ReadBand, type Coverage } from "@atlas/domain";
 import { triangleSample } from "./triangleSampling";
 
 const interpolationBlockSamples = 4096;
@@ -102,14 +102,14 @@ export function releaseProjection(projection: ProjectionInterpolation) {
  */
 export function projectedValues(
   work: AtlasPhysicalWorkspace,
-  values: Band | ArrayLike<number> | ((index: number) => number),
+  values: ReadBand | ArrayLike<number> | ((index: number) => number),
   discrete = false,
   output: Band = work.grid.scratch("float64", "projected", work.samples.length)
 ) {
   const valueAt =
     typeof values === "function"
       ? values
-      : values instanceof Band
+      : "get" in values
         ? (index: number) => values.get(index)
         : (index: number) => values[index];
   if (!discrete && work.interpolation) return interpolate(work.interpolation, valueAt, output);

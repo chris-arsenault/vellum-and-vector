@@ -1,4 +1,4 @@
-import type { Band } from "@atlas/domain";
+import type { Band, ReadBand } from "@atlas/domain";
 import type { PhysicalContext } from "../../../packages/generation/src/world/context";
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import { meshDeltaX } from "../../../packages/generation/src/world/mesh";
@@ -111,7 +111,7 @@ function perfectRidges(map: PhysicalField, spacing: number) {
   releaseWorking(map, ridges);
   return read;
 }
-function shortPart(map: PhysicalField, values: Band, length: number) {
+function shortPart(map: PhysicalField, values: ReadBand, length: number) {
   const smooth = smoothMetric(map, values, length);
   for (let i = 0; i < smooth.length; i++) smooth.set(i, values.get(i) - smooth.get(i));
   return smooth;
@@ -138,7 +138,7 @@ function correlation(map: PhysicalField, a: Values, b: Values) {
   return spread > 0 ? round((ab - (sa * sb) / n) / Math.sqrt(spread), 3) : null;
 }
 /** Relief by size: the root-mean-square height held between each smoothing and the next. */
-function reliefBySize(map: PhysicalField, field: Band) {
+function reliefBySize(map: PhysicalField, field: ReadBand) {
   const smoothed = scales.map((length) => smoothMetric(map, field, length)),
     levels: Values[] = [field, ...smoothed],
     held = new Array<number>(scales.length + 1).fill(0);

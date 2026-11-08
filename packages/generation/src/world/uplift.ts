@@ -1,7 +1,7 @@
 // Crustal thickness owns height.
 import { crustForming, type PhysicalField } from "./field";
-import { adjustCrustColumn } from "./crustTransport";
-import { standSurface } from "./surface";
+import { adjustCrustColumn } from "../rock/crustTransport";
+import { standSurface } from "../rock/groundInitialization";
 import type { PhysicalContext } from "./context";
 import { buoyancy, clamp, crustHeight, scaled, thickness, units } from "./math";
 import { meshNoise as fractalNoise, hashUnit } from "./noise";

@@ -142,7 +142,7 @@ it("awaits asynchronous material balance before validating or exposing products"
   expect(result.state.facts.has("balanced")).toBe(true);
 });
 
-it("omits failed asynchronous balance before validation and delivers the retained map", async () => {
+it("rejects failed asynchronous balance before validation or delivery", async () => {
   let validated = false;
   let delivered = false;
   const process = definition({
@@ -157,22 +157,17 @@ it("omits failed asynchronous balance before validation and delivers the retaine
     validated = true;
     return [];
   };
-  const result = await new MapRunner(
-    configuration([invoke(process)]),
-    new MapProcessRegistry().register(process)
-  ).run(landscape(), {
-    ...options,
-    async saveBoundary() {
-      delivered = true;
-    },
-  });
-  expect(result.state.diagnostics).toContainEqual(
-    expect.objectContaining({
-      code: "process_failed",
-      outcome: "omitted",
-      message: "Unbalanced transported material",
-    })
-  );
+  await expect(
+    new MapRunner(configuration([invoke(process)]), new MapProcessRegistry().register(process)).run(
+      landscape(),
+      {
+        ...options,
+        async saveBoundary() {
+          delivered = true;
+        },
+      }
+    )
+  ).rejects.toThrow("Unbalanced transported material");
   expect(validated).toBe(false);
-  expect(delivered).toBe(true);
+  expect(delivered).toBe(false);
 });

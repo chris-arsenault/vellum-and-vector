@@ -2,13 +2,12 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { nearestTriangle, meshDeltaX, meshPoint } from "./mesh";
 import { clamp, elevationLimit, units } from "./math";
-import { rebuild } from "./surface";
 import { Feature } from "./codes";
 import { tectonicArcMeltShare, tectonicArcOffset, tectonicArcRadius } from "./tectonicControls";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { rockCatalogue } from "../rock/rockCatalogue";
-import { raiseRock } from "../rock/groundLedger";
-import { intrudeBasement, layBed } from "../rock/rockColumn";
+import { constructRock } from "../rock/groundLedger";
+import { intrudeBasement } from "../rock/rockColumn";
 
 /** Metres an eruption adds at a cell before it is lava rather than ash. */
 const arcLava = 40;
@@ -64,10 +63,16 @@ function erupt(map: PhysicalField, context: PhysicalContext, i: number, height: 
       units(elevationLimit) - map.SedimentThickness.get(i) - map.BedrockElevation.get(i)
     )
   );
-  raiseRock(map, i, uplift, "volcanoes", "melt");
-  map.VolcanicConstructionHistory.add(i, uplift);
   // An arc's flanks are ash, its cones lava, and melt that never rose cools below as granite.
-  layBed(map, i, uplift >= units(arcLava) ? rockCatalogue.basalt : rockCatalogue.tuff, uplift);
+  const built = constructRock(
+    map,
+    i,
+    uplift,
+    uplift >= units(arcLava) ? rockCatalogue.basalt : rockCatalogue.tuff,
+    "volcanoes",
+    "melt"
+  );
+  map.VolcanicConstructionHistory.add(i, built);
   intrudeBasement(map, i, rockCatalogue.granite, units(arcShell));
   map.VolcanicActivity.set(i, Math.max(map.VolcanicActivity.get(i), clamp(uplift / 1024, 0, 1000)));
   map.VolcanicLastActiveEpoch.set(i, Math.max(0, context.EpochIndex));
@@ -76,7 +81,6 @@ function erupt(map: PhysicalField, context: PhysicalContext, i: number, height: 
     Math.max(map.FractureConductance.get(i), map.VolcanicActivity.get(i))
   );
   map.FeatureFlags.set(i, map.FeatureFlags.get(i) | Feature.VolcanicCone);
-  rebuild(map, i);
 }
 /** Melt follows actual oceanic consumption, on the overriding side, independently of plumes. */
 export function subductionArcs(map: PhysicalField, context: PhysicalContext) {

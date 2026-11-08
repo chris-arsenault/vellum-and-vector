@@ -1,9 +1,9 @@
-import type { Band, Grid } from "@atlas/domain";
+import type { ReadBand, Grid } from "@atlas/domain";
 
 /** Height above the highest joining col on a path to higher ground. */
 export function topographicProminence(
   coverage: Grid["coverage"],
-  elevation: Band,
+  elevation: ReadBand,
   adjacent: (cell: number) => Iterable<number>,
   datum: number
 ) {

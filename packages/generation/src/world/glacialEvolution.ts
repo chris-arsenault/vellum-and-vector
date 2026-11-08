@@ -3,9 +3,21 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, truncate } from "./math";
 import { carryOut, deposit } from "../rock/groundLedger";
+import { loadOf, MaterialLoad } from "../rock/groundLoad";
 import { isGrounded } from "./glacierSurface";
 import { targetOrder } from "./flowGraph";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import { releaseWorking } from "./physicalNumerics";
+
+const carriesIceLoad = (map: PhysicalField, cell: number) =>
+  map.GroundedIce.get(cell) !== 0 && map.IceThickness.get(cell) > 0;
+
+/** Sediment leaving its ice carrier stays on dry ground for the next carrier, or reaches the sea. */
+function releaseIceLoad(map: PhysicalField, moving: MaterialLoad, cell: number) {
+  const material = moving.take(cell, moving.amount(cell));
+  if (material.depth <= 0) return;
+  if (map.WaterKindCodes.get(cell) === 1) carryOut(map, material.depth, "moraines", material);
+  else loadOf(map).add(cell, material);
+}
 
 function isTerminus(map: PhysicalField, c: PhysicalContext, i: number, target: number): boolean {
   return (
@@ -20,27 +32,41 @@ function moraineRoom(map: PhysicalField, c: PhysicalContext, i: number, target: 
   return Math.max(0, ahead + holds * 1024 - map.Elevation.get(i));
 }
 export function glacialDeposition(map: PhysicalField, c: PhysicalContext) {
-  const moving = workingArray(map, "float64", "glacier:sediment"),
+  const moving = new MaterialLoad(map, "glacier:sediment"),
+    supply = loadOf(map),
     order = targetOrder(map, map.IceFlowTargets);
   for (let n = 0; n < order.length; n++) {
     const i = order.get(n),
       area = map.mesh.area(i);
-    const load = moving.get(i) + (map.SedimentSupply.get(i) / 1024) * area;
-    map.SedimentSupply.set(i, 0);
+    if (!carriesIceLoad(map, i)) {
+      releaseIceLoad(map, moving, i);
+      continue;
+    }
+    moving.add(i, supply.take(i, supply.amount(i)));
+    const load = moving.amount(i);
     if (load <= 0) continue;
     const target = map.IceFlowTargets.get(i);
     // Ice drops what it carries where it ends, which is what a moraine is. A moraine stands no higher
     // above the ground ahead of it than a slope can hold; what will not fit carries on down.
     const deposited = isTerminus(map, c, i, target)
-      ? deposit(map, i, Math.min((load * 1024) / area, moraineRoom(map, c, i, target)), "moraines")
+      ? deposit(
+          map,
+          i,
+          Math.min((load * 1024) / area, moraineRoom(map, c, i, target)),
+          "moraines",
+          "load",
+          moving.get(i)
+        )
       : 0;
     if (deposited > 0) map.GroundedIce.set(i, isGrounded(map, i, c.Profile) ? 1 : 0);
     map.CumulativeGlacialDeposition.add(i, deposited);
     const volume = (deposited / 1024) * area;
-    if (target >= 0) moving.add(target, load - volume);
-    else carryOut(map, load - volume, "moraines");
+    moving.take(i, volume);
+    if (target >= 0) moving.add(target, moving.take(i, moving.amount(i)));
+    else releaseIceLoad(map, moving, i);
   }
-  releaseWorking(map, moving, order);
+  moving.release();
+  releaseWorking(map, order);
 }
 export function glacialMeltwater(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile;

@@ -8,7 +8,7 @@ import {
   spatial,
 } from "@atlas/domain";
 import { landscape } from "../../packages/generation/src/mapFixtures";
-import { createField } from "../../packages/generation/src/world/field";
+import { createTestField as createField } from "../../packages/generation/src/rock/groundTestFixture";
 import { createWorldMesh } from "../../packages/generation/src/world/worldMesh";
 import { atlasPhysicalProfile } from "../../packages/generation/src/world/atlasProfile";
 import { refreshWorkspaceSamples } from "../../packages/generation/src/world/atlasWorkspace";

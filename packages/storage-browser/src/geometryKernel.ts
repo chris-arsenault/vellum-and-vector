@@ -2,6 +2,7 @@ import initGeos from "geos-wasm";
 import type { Geometry } from "geojson";
 import { requireThat, type Bounds } from "@atlas/domain";
 import { ByteCache } from "./byteCache";
+import { bufferGeometry } from "./nativeOperations";
 
 type Geos = Awaited<ReturnType<typeof initGeos>>;
 let geosReady: ReturnType<typeof initGeos> | undefined;
@@ -108,7 +109,7 @@ export class GeometryKernel {
     requireThat(Number.isFinite(distance), "invalid_distance", "Buffer distance must be finite.");
     const g = this.geos;
     return this.withGeometry(value, precision, (geometry) => {
-      const result = g.GEOSBuffer(geometry, distance, 8);
+      const result = bufferGeometry(this, geometry, distance);
       requireThat(result, "geometry_buffer", "Could not construct the geographic buffer.");
       try {
         return g.GEOSisEmpty(result) ? null : this.json(result);

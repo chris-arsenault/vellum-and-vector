@@ -5,7 +5,7 @@ import { MapRunner } from "./mapRunner";
 import { preflight } from "./preflight";
 import { configuration, epoch, invoke, landscape, options } from "./mapFixtures";
 import { MapProcessRegistry, type MapProcess, type GenerationState } from "./process";
-import { createField } from "./world/field";
+import { createTestField as createField } from "./rock/groundTestFixture";
 import { createMesh } from "./world/mesh";
 import { atlasPhysicalProfile } from "./world/atlasProfile";
 

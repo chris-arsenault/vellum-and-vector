@@ -11,7 +11,8 @@ import { depositShoreLoads, recordCoastalCut } from "../world/coastalEvolution";
 const prepare = (map: PhysicalField) => ({
   shoreFrame: (width: number, waves: Pick<Band, "get">, forcing?: Band) =>
     coastalFrame(map, width, waves, forcing),
-  coastCut: (i: number, cut: number) => recordCoastalCut(map, i, cut),
+  coastCut: (i: number, cut: readonly [number, number], landing = i) =>
+    recordCoastalCut(map, i, cut, landing),
   depositShoreLoads: (
     context: PhysicalContext,
     frame: CoastalFrame,
@@ -57,10 +58,10 @@ export const coast = defineProcess({
         energy = (wave * p.CoastalErosionStrength) / 1000,
         forcing = energy + steep / 18 + Math.abs(p.CoastalSeaLevelChange),
         power = (forcing * p.CoastalWearRate * span * c.CoastalStrength * coverage) / 1000,
-        platform =
-          field.Elevation.get(i) - (field.EffectiveSeaLevel - units(p.CoastalPlatformDepth)),
-        cut = ground.actOn(i, pounding, power, Math.max(0, platform));
-      if (cut > 0) loads.add(frame.source.get(i), tools.coastCut(i, cut));
+        platform = field.EffectiveSeaLevel - units(p.CoastalPlatformDepth),
+        cut = ground.surfaceAction(i, pounding, power, Infinity, platform);
+      if (cut[0] > 0 || cut[1] > 0)
+        loads.add(frame.source.get(i), tools.coastCut(i, cut, frame.source.get(i)));
     }
     tools.depositShoreLoads(c, frame, loads, false);
     tools.release(loads, frame.strength, frame.coverage, frame.source);
@@ -103,10 +104,10 @@ export const outsideWaves = defineProcess({
         Math.max(field.ExternalCoastalForcingHistory.get(i), forcing)
       );
       const power = (forcing * p.CoastalWearRate * span * c.CoastalStrength * coverage) / 1000,
-        platform =
-          field.Elevation.get(i) - (field.EffectiveSeaLevel - units(p.CoastalPlatformDepth)),
-        cut = ground.actOn(i, pounding, power, Math.max(0, platform));
-      if (cut > 0) loads.add(frame.source.get(i), tools.coastCut(i, cut));
+        platform = field.EffectiveSeaLevel - units(p.CoastalPlatformDepth),
+        cut = ground.surfaceAction(i, pounding, power, Infinity, platform);
+      if (cut[0] > 0 || cut[1] > 0)
+        loads.add(frame.source.get(i), tools.coastCut(i, cut, frame.source.get(i)));
     }
     tools.depositShoreLoads(c, frame, loads, true);
     tools.release(loads, frame.strength, frame.coverage, frame.source);

@@ -93,6 +93,13 @@ it("keeps a committed input read-only, reloads it without spilling and copies it
   expect(() => input.set(0, 1)).toThrow(/Immutable/);
   expect(() => input.add(0, 1)).toThrow(/Immutable/);
   expect(() => input.fill(1)).toThrow(/Immutable/);
+  const exposed = input.block(0);
+  exposed[0] = -10;
+  input.unpin(0);
+  expect(input.get(0)).toBe(100);
+  expect(Reflect.set(input.schema, "immutable", false)).toBe(false);
+  expect(Reflect.set(input, "schema", { ...input.schema, immutable: false })).toBe(false);
+  expect(() => input.block(0, true)).toThrow(/Immutable/);
   const copy = input.snapshot();
   copy.set(0, 1);
   expect(copy.get(0)).toBe(1);

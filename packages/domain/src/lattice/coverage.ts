@@ -5,6 +5,7 @@ import { radixOrder } from "../hpc/radixOrder";
 import { Band, type BandSchema, type BlockSource } from "./band";
 import { BlockCache } from "./blockCache";
 import type { BlockArray } from "./blockScratch";
+import { ReadBandView, type ReadBand } from "./readBand";
 import {
   blockCells,
   blockCount,
@@ -40,7 +41,7 @@ export function sampleLayout(count: number): CoverageLayout {
  * streams. Process-lifetime bands are released at process boundaries.
  */
 export class Coverage {
-  private readonly bands = new Map<string, Band>();
+  private readonly bands = new Map<string, ReadBand>();
   private readonly allocated: Band[] = [];
   private sequence = 0;
   constructor(
@@ -58,6 +59,13 @@ export class Coverage {
   }
   names() {
     return [...this.bands.keys()];
+  }
+  /** Stop named access from granting write authority; existing owner allocations stay private. */
+  protect(names: Iterable<string>) {
+    for (const name of names) {
+      const band = this.band(name);
+      if (band instanceof Band) this.bands.set(name, new ReadBandView(band));
+    }
   }
   /** Allocate a named band from its schema; the name is unique in the coverage. */
   allocate(schema: BandSchema, length = this.lattice.count, source: BlockSource | null = null) {
@@ -120,7 +128,7 @@ export class Coverage {
    * the block's first cell id and sample count. Pass `write` for the bands the body writes.
    */
   forEachBlock(
-    bands: Band[],
+    bands: ReadBand[],
     visit: (arrays: BlockArray[], start: number, count: number, block: number) => void,
     write: Band[] = []
   ) {
@@ -129,7 +137,9 @@ export class Coverage {
       written = new Set(write);
     for (let block = 0; block < blocks; block++) {
       if (!this.blockLive(block, length)) continue;
-      const arrays = bands.map((band) => band.block(block, written.has(band)));
+      const arrays = bands.map((band) =>
+        band instanceof Band && written.has(band) ? band.block(block, true) : band.block(block)
+      );
       try {
         visit(
           arrays,
@@ -157,7 +167,7 @@ export class Coverage {
   }
   /** Fold a band over the live cells, streaming block by block. */
   reduce(
-    band: Band,
+    band: ReadBand,
     fold: (accumulator: number, value: number, cell: number) => number,
     seed: number
   ) {
@@ -175,7 +185,7 @@ export class Coverage {
    * cursors. Ties keep ascending cell order. Resident state is one cursor per block; the
    * runs page with the cache like any band and are released when the stream ends.
    */
-  *order(key: Band, descending = false): Generator<number> {
+  *order(key: ReadBand, descending = false): Generator<number> {
     const runCells = this.scratch("int32", "order:cells", key.length),
       runKeys = this.scratch("float64", "order:keys", key.length);
     try {
@@ -195,7 +205,7 @@ export class Coverage {
     }
   }
   /** Radix-order each block's live keys into its run; returns the live count per block. */
-  private sortRuns(key: Band, descending: boolean, runCells: Band, runKeys: Band) {
+  private sortRuns(key: ReadBand, descending: boolean, runCells: Band, runKeys: Band) {
     const lattice = this.lattice,
       lengths = new Int32Array(blockCount(key.length));
     // One band block is pinned at a time; the block's keys and cells sort in locals.
@@ -229,14 +239,14 @@ export class Coverage {
     return lengths;
   }
   /** A coverage sharing this one's lattice and bands copy-on-write. */
-  snapshot(copies = new Map<Band, Band>()): Coverage {
+  snapshot(copies = new Map<ReadBand, Band>()): Coverage {
     const copy = new Coverage(this.lattice, this.cache);
     for (const [name, band] of this.bands)
       if (!band.released) copies.set(band, copy.adopt(name, band.snapshot({}, ++copy.sequence)));
     return copy;
   }
   /** Snapshot an unnamed band (retained or scratch) into this coverage's accounting. */
-  copyBand(band: Band) {
+  copyBand(band: ReadBand) {
     const copy = band.snapshot({}, ++this.sequence);
     this.allocated.push(copy);
     return copy;

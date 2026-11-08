@@ -1,10 +1,9 @@
 // PlateAdvectionLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { keepCrustInBounds } from "./crustTransport";
+import { keepCrustInBounds } from "../rock/crustTransport";
 import { buildTransportPlan, releaseTransportPlan } from "./transportPlan";
 import { transportHistory } from "./transportHistory";
-import { rebuild } from "./surface";
 import { physicalSampler } from "./physicalMetric";
 import { meshLineDelta, meshPoint } from "./mesh";
 import {
@@ -64,12 +63,30 @@ function transportStep(map: PhysicalField, step: number) {
   for (let i = 0; i < map.mesh.count; i++) {
     keepCrustInBounds(map, i);
     map.AdvectionSourceIndex.set(i, plan.dominant.get(i));
-    rebuild(map, i);
   }
 }
 function finishMove(map: PhysicalField, context: PhysicalContext, carry: ReliefCarry) {
   finishReliefCarry(map, carry, context.Profile.OrogenicSheetSpacing);
-  for (let i = 0; i < map.mesh.count; i++) rebuild(map, i);
+}
+/** Land this interval before building on it; the next move carries the newly made rock. */
+function deformInterval(
+  map: PhysicalField,
+  context: PhysicalContext,
+  myr: number,
+  distance: number
+) {
+  const carry = beginReliefCarry(map);
+  transportStep(map, distance);
+  stepReliefCarry(map, map.transportPlan!, carry);
+  finishMove(map, context, carry);
+  context.AfterPlateStep?.();
+  const interval = {
+    ...context,
+    TectonicDurationMyr: myr,
+    Span: (context.Span * myr) / context.TectonicDurationMyr,
+  };
+  map.LastPlateDriftStep = distance;
+  context.DuringPlateStep?.(interval);
 }
 export function plateAdvection(
   map: PhysicalField,
@@ -82,15 +99,17 @@ export function plateAdvection(
   map.CrustFormed = true;
   map.AdvectionSourceIndex.fill(-1);
   map.ConvergentCrustSurplus.fill(0);
+  map.OrogenicConstruction.fill(0);
   map.LastPlateDriftStep = total;
   map.OceanicSubduction.fill(0);
   if (total <= 0) return;
-  const carry = beginReliefCarry(map);
   if (!map.tectonics) {
-    transportStep(map, total);
-    stepReliefCarry(map, map.transportPlan!, carry);
-    finishMove(map, context, carry);
-    afterStep();
+    deformInterval(
+      map,
+      { ...context, AfterPlateStep: afterStep },
+      context.TectonicDurationMyr,
+      total
+    );
     map.AccumulatedPlateDrift += total;
     return;
   }
@@ -102,16 +121,14 @@ export function plateAdvection(
       step = rate * myr;
     prepareTectonicMotion(map, myr);
     tectonicProvinces(map, context);
-    transportStep(map, step);
-    stepReliefCarry(map, map.transportPlan!, carry);
-    afterStep();
+    deformInterval(map, { ...context, AfterPlateStep: afterStep }, myr, step);
     for (let i = 0; i < surplus.length; i++) surplus.add(i, map.ConvergentCrustSurplus.get(i));
     completeTectonicMotion(map, myr, step);
     for (let i = 0; i < map.mesh.count; i++)
       if (map.CrustRiftStrain.get(i) > 0) map.CrustRiftAgeMyr.add(i, myr);
     remaining -= myr;
   }
-  finishMove(map, context, carry);
+  map.LastPlateDriftStep = total;
   map.ConvergentCrustSurplus.copyFrom(surplus);
   releaseWorking(map, surplus);
   tectonicProvinces(map, context);

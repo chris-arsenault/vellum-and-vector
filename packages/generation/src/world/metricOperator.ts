@@ -1,5 +1,5 @@
 import type { PhysicalField } from "./field";
-import type { Band, SampleType } from "@atlas/domain";
+import type { Band, ReadBand, SampleType } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 /**
@@ -38,7 +38,7 @@ export function releaseMetric(matrix: MetricOperator) {
     ...(matrix.cells ? [matrix.cells] : [])
   );
 }
-function metricCells(map: PhysicalField, active?: Band) {
+function metricCells(map: PhysicalField, active?: ReadBand) {
   const mesh = map.mesh;
   let count = 0;
   for (let i = 0; i < mesh.count; i++) if (!active || active.get(i)) count++;
@@ -69,7 +69,11 @@ function visitFaces(
     );
   }
 }
-export function metricOperator(map: PhysicalField, length: number, active?: Band): MetricOperator {
+export function metricOperator(
+  map: PhysicalField,
+  length: number,
+  active?: ReadBand
+): MetricOperator {
   const { cells, local } = metricCells(map, active),
     count = cells.length,
     offsets = metricArray(map, "offsets", count + 1, "int32");
@@ -101,7 +105,7 @@ export function metricOperator(map: PhysicalField, length: number, active?: Band
   return { map, count, cells, areas, diagonal, offsets, neighbors, weights };
 }
 /** result = A · values over the local numbering. */
-export function metricProduct(matrix: MetricOperator, values: Band, result: Band) {
+export function metricProduct(matrix: MetricOperator, values: ReadBand, result: Band) {
   const { count, neighbors, weights, offsets, areas } = matrix;
   for (let i = 0; i < count; i++) {
     const value = values.get(i),

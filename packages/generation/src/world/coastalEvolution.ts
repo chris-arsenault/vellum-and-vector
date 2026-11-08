@@ -2,7 +2,9 @@ import { meshDeltaX } from "./mesh";
 // CoastalErosionLayer.cs and ExternalCoastalForcingLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { carryOut, deposit, erode } from "../rock/groundLedger";
+import { carryOut, deposit, erodeFacets } from "../rock/groundLedger";
+import { loadOf } from "../rock/groundLoad";
+import type { MaterialLayer } from "../rock/rockColumn";
 import type { Band } from "@atlas/domain";
 import type { CoastalFrame } from "./coastalFrame";
 
@@ -38,8 +40,16 @@ function depositionTargets(
   }
   return targets;
 }
-export function recordCoastalCut(map: PhysicalField, source: number, cut: number) {
-  const removed = erode(map, source, cut, "coast");
+export function recordCoastalCut(
+  map: PhysicalField,
+  source: number,
+  cut: readonly [number, number],
+  landing = source
+) {
+  const cargo = loadOf(map),
+    removed = erodeFacets(map, source, cut, "coast", "load", (material) =>
+      cargo.add(landing, { ...material, depth: (material.depth / 1024) * map.mesh.area(source) })
+    );
   map.CumulativeCoastalErosion.add(source, removed);
   const volume = (removed / 1024) * map.mesh.area(source);
   map.SedimentProducedTotal += volume;
@@ -49,8 +59,9 @@ function depositCoastalVolume(
   map: PhysicalField,
   c: PhysicalContext,
   targets: [number, number][],
-  volume: number
+  material: MaterialLayer
 ) {
+  const volume = material.depth;
   let remaining = (volume * c.Profile.CoastalDepositionFraction) / 1000,
     weight = targets.reduce((sum, [, value]) => sum + value, 0),
     deposited = 0;
@@ -60,12 +71,14 @@ function depositCoastalVolume(
       // What waves carry fills the sea up to its surface and no higher; the rest goes out to sea.
       room = Math.max(0, map.EffectiveSeaLevel - map.Elevation.get(target));
     const actual =
-      (deposit(map, target, Math.min((amount * 1024) / area, room), "coast") / 1024) * area;
+      (deposit(map, target, Math.min((amount * 1024) / area, room), "coast", "load", material) /
+        1024) *
+      area;
     deposited += actual;
     remaining = Math.max(0, remaining - actual);
     weight -= share;
   }
-  carryOut(map, volume - deposited, "coast");
+  carryOut(map, volume - deposited, "coast", { ...material, depth: volume - deposited });
 }
 export function depositShoreLoads(
   map: PhysicalField,
@@ -81,7 +94,7 @@ export function depositShoreLoads(
       map,
       c,
       depositionTargets(map, frame, i, c.Profile.CoastalDepositionReach * c.Span, oceanOnly),
-      load
+      loadOf(map).take(i, load)
     );
   }
 }

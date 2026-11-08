@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { newGenerationDraft } from "../generationDraft";
 import { rasterOverview, rasterRelief } from "../testSupport/regionalOverview";
@@ -20,10 +20,12 @@ import { featureReport, mapFeatures } from "./featureReport";
 import { reliefReport } from "./reliefReport";
 import { traceRelief } from "./reliefTrace";
 import { processProbeBands, startProcessProbe } from "./processProbe";
+import { groundProbeCells } from "./groundProbe";
 import type { PhysicalBufferName } from "../../../packages/generation/src/world/field";
 
 /** What one harness run does; read from the environment of `pnpm harness`. */
 export interface HarnessOptions {
+  seed: number;
   world: string;
   worldQuality: string;
   region: string;
@@ -41,6 +43,7 @@ export interface HarnessOptions {
   /** Optional map coordinate sampled before/after each process and settlement. */
   processAt?: [number, number];
   processBands?: readonly PhysicalBufferName[];
+  groundCells?: readonly number[];
 }
 /** The world the harness judges, so a result is not fitted to the app's default seed. */
 const harnessSeed = 271_828;
@@ -57,6 +60,8 @@ const defaults = {
   HARNESS_SNAPSHOTS: "",
   HARNESS_PROCESS_AT: "",
   HARNESS_PROCESS_BANDS: "",
+  HARNESS_GROUND_CELLS: "",
+  HARNESS_SEED: String(harnessSeed),
 };
 function position(text: string): [number, number] | undefined {
   const at = text.split(",").map(Number);
@@ -67,6 +72,7 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
   const fresh = new Set(read("HARNESS_FRESH").split(",").filter(Boolean));
   if (fresh.has("world")) fresh.add("region");
   return {
+    seed: Number(read("HARNESS_SEED")),
     world: read("HARNESS_WORLD"),
     worldQuality: read("HARNESS_WORLD_QUALITY"),
     region: read("HARNESS_REGION"),
@@ -78,22 +84,39 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
     snapshots: read("HARNESS_SNAPSHOTS"),
     processAt: position(read("HARNESS_PROCESS_AT")),
     processBands: processProbeBands(read("HARNESS_PROCESS_BANDS")),
+    groundCells: groundProbeCells(read("HARNESS_GROUND_CELLS")),
   };
 }
 
-const write = (directory: string, name: string, value: unknown) =>
-  writeFileSync(join(directory, `${name}.json`), JSON.stringify(value, null, 2));
+/** Arrays can contain a whole history; serialize one observation at a time, never one huge string. */
+export function write(directory: string, name: string, value: unknown) {
+  const path = join(directory, `${name}.json`);
+  if (!Array.isArray(value)) return writeFileSync(path, JSON.stringify(value, null, 2));
+  const file = openSync(path, "w");
+  try {
+    writeFragment(file, "[");
+    for (let index = 0; index < value.length; index++) {
+      writeFragment(file, index === 0 ? "\n" : ",\n");
+      writeFragment(file, JSON.stringify(value[index], null, 2) ?? "null");
+    }
+    writeFragment(file, "\n]\n");
+  } finally {
+    closeSync(file);
+  }
+}
+function writeFragment(file: number, text: string) {
+  const bytes = Buffer.from(text);
+  for (let offset = 0; offset < bytes.length;)
+    offset += writeSync(file, bytes, offset, bytes.length - offset);
+}
 
 const recordProcesses = (options: HarnessOptions, out: string, map: string) =>
-  startProcessProbe(options.processAt, options.processBands, (samples) =>
-    write(out, `${map}-processes`, samples)
+  startProcessProbe(
+    options.processAt,
+    options.processBands,
+    (samples) => write(out, `${map}-processes`, samples),
+    { cells: options.groundCells ?? [], publish: (samples) => write(out, `${map}-ground`, samples) }
   );
-
-/** A failed step does not stop a run, it skips what depends on it: say so where it will be seen. */
-function sayFailures(map: string, diagnostics: { severity: string; message: string }[]) {
-  for (const { severity, message } of diagnostics)
-    if (severity === "error") process.stdout.write(`\n${map} step failed: ${message}\n`);
-}
 
 /** A real generated world from the app's default draft, at the chosen quality. */
 async function ensureWorld(options: HarnessOptions, out: string): Promise<CheckpointRecord> {
@@ -105,11 +128,17 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
     draft = newGenerationDraft(),
     started = performance.now(),
     stopTrace = traceRelief(
-      options.snapshots ? { label: options.snapshots, quality: options.worldQuality } : undefined
+      options.snapshots
+        ? {
+            label: options.snapshots,
+            quality: options.worldQuality,
+            epochs: draft.recipe.settings.epochs,
+          }
+        : undefined
     ),
     stopProcesses = recordProcesses(options, out, "world");
   draft.recipe.quality = options.worldQuality as typeof draft.recipe.quality;
-  draft.recipe.seed = harnessSeed;
+  draft.recipe.seed = options.seed;
   let traceStopped = false;
   try {
     const { worldId, root } = await generateWorld(ws, draft, recorder.observers);
@@ -135,7 +164,6 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
     write(out, "world-probes", probes);
     write(out, "world-columns", columns);
     write(out, "world-rock", rock);
-    sayFailures("world", recorder.diagnostics);
     return record;
   } finally {
     try {
@@ -182,7 +210,6 @@ async function ensureRegion(options: HarnessOptions, world: CheckpointRecord, ou
     };
     await ws.save(record);
     write(out, "region-run", { ...recorder, seconds: (performance.now() - started) / 1000 });
-    sayFailures("region", recorder.diagnostics);
     return record;
   } finally {
     try {

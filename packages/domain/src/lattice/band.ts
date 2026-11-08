@@ -3,6 +3,7 @@ import type { SampleType } from "../workspaceResources";
 import type { BlockCache, BlockOwner } from "./blockCache";
 import { bytesPerSample, newBlock, type BlockArray } from "./blockScratch";
 import { blockCells, blockCount, blockMask, blockShift } from "./lattice";
+import type { ReadBand } from "./readBand";
 
 // Module-local copies for the per-sample paths: a module runner (Vitest) turns imported
 // bindings into namespace getters, which would sit on every read.
@@ -34,6 +35,7 @@ export type BlockSource = (block: number, into: BlockArray) => void;
  * memory and shares spill slots, which are then never overwritten.
  */
 export class Band implements BlockOwner {
+  readonly schema: Readonly<BandSchema>;
   readonly blockCount: number;
   private readonly blocks: (BlockArray | null)[];
   private readonly dirty: Uint8Array;
@@ -45,12 +47,14 @@ export class Band implements BlockOwner {
   released = false;
   lifetime: "run" | "process";
   constructor(
-    readonly schema: BandSchema,
+    schema: BandSchema,
     readonly length: number,
     private readonly cache: BlockCache,
     private readonly source: BlockSource | null = null,
     readonly sequence = 0
   ) {
+    this.schema = Object.freeze({ ...schema });
+    Object.defineProperty(this, "schema", { writable: false, configurable: false });
     requireThat(
       Number.isSafeInteger(length) && length >= 0,
       "band_length",
@@ -99,12 +103,12 @@ export class Band implements BlockOwner {
     if (this.dirty[block] === 0) this.markDirty(block);
     values[i & mask] += delta;
   }
-  /** The native block, pinned until `unpin`; pass `write` when the body writes it. */
+  /** A working native block, pinned until `unpin`; immutable inputs return an independent copy. */
   block(b: number, write = false): BlockArray {
     const values = this.blocks[b] ?? this.load(b);
     if (write && this.dirty[b] === 0) this.markDirty(b);
     this.cache.pin(this, b);
-    return values;
+    return this.schema.immutable ? (values.slice() as BlockArray) : values;
   }
   /** A committed input is shared by every reader; it is never written in place. */
   private markDirty(b: number) {
@@ -186,7 +190,7 @@ export class Band implements BlockOwner {
     return copy;
   }
   /** Replace the band's contents with another band of the same length. */
-  copyFrom(other: Band) {
+  copyFrom(other: ReadBand) {
     requireThat(other.length === this.length, "band_length", "Copy bands of equal length.");
     for (let b = 0; b < this.blockCount; b++) {
       const from = other.block(b),
@@ -218,7 +222,9 @@ export class Band implements BlockOwner {
   toArray(): BlockArray {
     const result = newBlock(this.schema.type, this.length);
     for (let b = 0; b < this.blockCount; b++) {
-      result.set(this.block(b), b << blockShift);
+      const values = this.blocks[b] ?? this.load(b);
+      this.cache.pin(this, b);
+      result.set(values, b << blockShift);
       this.unpin(b);
     }
     return result;

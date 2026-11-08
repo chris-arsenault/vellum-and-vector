@@ -1,6 +1,6 @@
 // Explicit projection from Canonry's fixed-point numerical state into GIS channels.
 import { hardestRock } from "../rock/rockCatalogue";
-import { rockLayerDepths, rockLayerKinds, rockLayers } from "../rock/rockLayerFields";
+import { groundResourceBindings } from "../rock/groundResources";
 import type { PhysicalBufferName } from "./field";
 import { ecologyBindings, ecologyRatios } from "./ecologyState";
 
@@ -14,11 +14,16 @@ export interface ChannelBinding {
   offset?: number;
   minimum?: number;
   maximum?: number;
+  /** A map-wide pool lives at native cell zero; its resource channel is spatially constant. */
+  global?: boolean;
+  /** Publish volume per represented area, then restore against the importing map's area. */
+  areaDensity?: boolean;
+  /** Sample one donor for every material fact so interpolation cannot detach a bed from its history. */
+  discrete?: boolean;
 }
 /** The rock column and the belt it lies in, which a child map continues from its parent's. */
 export const structureChannels = [
-  ...Array.from({ length: rockLayers }, (_, layer) => `rockLayer${layer}`),
-  ...Array.from({ length: rockLayers }, (_, layer) => `rockDepth${layer}`),
+  ...groundResourceBindings.map(({ name }) => name),
   "thrustPair",
   "thrustSheet",
   "thrustSegment",
@@ -86,13 +91,13 @@ export const atlasChannels: ChannelBinding[] = [
   { name: "rock", native: "RockResistance", unit: "ratio", scale: 1 / hardestRock, minimum: 0 },
   scalar("continentalFraction", "CrustContinentalFraction"),
   scalar("crustAge", "CrustAge"),
-  scalar("sutureStrength", "CrustSutureStrength"),
+  { ...scalar("sutureStrength", "CrustSutureStrength"), discrete: true },
   scalar("geothermal", "Geothermal"),
   scalar("tectonicStrain", "TectonicStrain"),
-  scalar("structuralGrainX", "StructuralGrainX", true),
-  scalar("structuralGrainY", "StructuralGrainY", true),
-  scalar("thrustAcross", "ThrustAcross"),
-  { name: "thrustDip", native: "ThrustDip", unit: "metre", scale: 1, minimum: 0 },
+  { ...scalar("structuralGrainX", "StructuralGrainX", true), discrete: true },
+  { ...scalar("structuralGrainY", "StructuralGrainY", true), discrete: true },
+  { ...scalar("thrustAcross", "ThrustAcross"), discrete: true },
+  { name: "thrustDip", native: "ThrustDip", unit: "metre", scale: 1, minimum: 0, discrete: true },
   scalar("crustMotionX", "CrustMotionX", true),
   scalar("crustMotionY", "CrustMotionY", true),
   scalar("moisture", "Moisture"),
@@ -147,8 +152,7 @@ export const atlasChannels: ChannelBinding[] = [
   category("thrustPair", "ThrustPairIds"),
   category("thrustSheet", "ThrustSheetIndex"),
   category("thrustSegment", "ThrustSegmentIds"),
-  ...rockLayerKinds.map((band, layer) => category(`rockLayer${layer}`, band)),
-  ...rockLayerDepths.map((band, layer) => amount(`rockDepth${layer}`, band)),
+  ...groundResourceBindings,
   category("water", "WaterKindCodes"),
   category("waterBody", "WaterBodyIds"),
   category("basin", "DrainageBasinIds"),

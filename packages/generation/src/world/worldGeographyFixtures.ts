@@ -7,7 +7,7 @@ import {
   type Bounds,
 } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
-import { createField } from "./field";
+import { createTestField as createField } from "../rock/groundTestFixture";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { refreshWorkspaceSamples, type AtlasPhysicalWorkspace } from "./atlasWorkspace";
 import { createWorldMesh } from "./worldMesh";
@@ -36,14 +36,14 @@ export function worldGeographyFixture(
       (x, y) => covers({ x, y, z: 0 })
     ),
     map = createField(mesh),
-    work: AtlasPhysicalWorkspace = {
+    work = {
       map,
       profile: atlasPhysicalProfile(),
       fixed: [],
       inherited: false,
       samples: state.surface.coverage.scratch("int32", "physical:samples", 0),
       grid: state.surface.coverage,
-    };
+    } satisfies AtlasPhysicalWorkspace;
   refreshWorkspaceSamples(state, work);
   state.physical = work;
   map.Elevation.fill(100 * 1024);
@@ -52,5 +52,5 @@ export function worldGeographyFixture(
   map.Rainfall.fill(800);
   map.Slope.fill(0.005);
   map.FlowTargets.fill(-1);
-  return state;
+  return Object.assign(state, { physical: work });
 }

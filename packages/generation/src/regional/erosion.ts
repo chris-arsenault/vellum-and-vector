@@ -1,8 +1,6 @@
-import type { Band } from "@atlas/domain";
 import { standGround } from "../rock/groundLedger";
 import { physicalContext } from "../world/context";
-import { releaseWorking } from "../world/physicalNumerics";
-import { rockColumnFields } from "../rock/rockColumn";
+import { holdRock, restoreGround, releaseHeldRock, type HeldRock } from "../rock/groundTransport";
 import { drainageSteps, incisionSteps, sedimentStep } from "../world/sequence";
 import { runNativeStep } from "../world/physicalSteps";
 import { profileAtScale } from "../processes/processCatalogue";
@@ -35,7 +33,7 @@ export function erodeRegion(state: RegionalState) {
     before = Float64Array.from({ length: work.map.mesh.count }, (_, i) =>
       work.map.Elevation.get(i)
     ),
-    column = keptRock.map((name) => work.map.coverage.copyBand(work.map[name]));
+    column = holdRock(work.map);
   for (let epoch = 0; epoch < erosionEpochs; epoch++)
     for (const step of steps)
       runNativeStep(
@@ -44,12 +42,10 @@ export function erodeRegion(state: RegionalState) {
         step
       );
   keepPlains(state, before, column);
-  releaseWorking(work.map, ...column);
+  releaseHeldRock(work.map, column);
   restoreFeatures(state);
   updateSlopes(state);
 }
-/** A cell's rock, which goes back with its height where erosion's cut does not stand. */
-const keptRock = [...rockColumnFields, "RockKindCodes", "RockResistance"] as const;
 /** The ruggedness below which most of a cell's cut is undone, so its rock stays as it was. */
 const plainFrom = 0.5;
 
@@ -58,13 +54,13 @@ const plainFrom = 0.5;
  * The world's process would otherwise dissect every plain and wear the parent's heights away
  * beneath it.
  */
-function keepPlains(state: RegionalState, before: Float64Array, column: readonly Band[]) {
+function keepPlains(state: RegionalState, before: Float64Array, column: HeldRock) {
   const map = state.physical.map,
     rugged = ruggedness(state, state.regional.network!.base);
   for (let i = 0; i < before.length; i++) {
     if (map.mesh.membership(i) !== 1) continue;
     const kept = Math.round(before[i] + rugged[i] * (map.Elevation.get(i) - before[i]));
-    standGround(map, i, kept, "regional");
-    if (rugged[i] < plainFrom) keptRock.forEach((name, n) => map[name].set(i, column[n].get(i)));
+    if (rugged[i] < plainFrom) restoreGround(map, column, i, i, kept);
+    else standGround(map, i, kept, "regional");
   }
 }

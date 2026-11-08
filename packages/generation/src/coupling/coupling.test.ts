@@ -1,7 +1,8 @@
 import { expect, it } from "vitest";
 import { atlasPhysicalProfile } from "../world/atlasProfile";
 import { physicalContext } from "../world/context";
-import { createField, physicalSchema } from "../world/field";
+import { physicalSchema } from "../world/field";
+import { createTestField } from "../rock/groundTestFixture";
 import { units } from "../world/math";
 import { createWorldMesh } from "../world/worldMesh";
 import { ask, explainAnswer, worldMoved } from "./answers";
@@ -10,7 +11,7 @@ import { quantityKinds } from "./quantities";
 import "./responders";
 import { Stage } from "./stage";
 
-const field = () => createField(createWorldMesh([0, 0, 1_000_000, 1_000_000], 16, 0));
+const field = () => createTestField(createWorldMesh([0, 0, 1_000_000, 1_000_000], 16, 0));
 const context = () => physicalContext(1, 0, atlasPhysicalProfile());
 
 it("gives every band a kind, so nothing is left behind when plates move", () => {

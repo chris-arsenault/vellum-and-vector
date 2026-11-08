@@ -135,14 +135,23 @@ it("shares immutable input bands across readers and releases them after the last
     first = new FieldWorkingSet(f.resources, f.blocks.cache, inputs),
     second = new FieldWorkingSet(f.resources, f.blocks.cache, inputs);
   const a = await first.load("height", ["height"], shared.geography),
-    b = await second.load("water", ["water"], shared.geography);
+    b = await second.load("water", ["water"], shared.geography),
+    sameHeight = await second.load("height", ["height"], shared.geography);
   expect(a.active).toBe(b.active);
   expect(a.measures).toBe(b.measures);
+  expect(a.channels.height).toBe(sameHeight.channels.height);
+  const exposed = a.channels.height.block(0);
+  exposed[12] = 999;
+  a.channels.height.unpin(0);
+  expect(Reflect.set(a.channels.height.schema, "immutable", false)).toBe(false);
+  expect(() => a.channels.height.set(12, 999)).toThrow(/Immutable/);
+  expect(sameHeight.channels.height.get(12)).toBe(grid.channels.height.get(12));
   first.close();
   expect(b.active.get(0)).toBe(1);
   expect(b.channels.water.get(12)).toBe(grid.channels.water.get(12));
-  expect(() => a.channels.height.get(0)).toThrow(/released/);
+  expect(sameHeight.channels.height.get(12)).toBe(grid.channels.height.get(12));
   second.close();
+  expect(() => a.channels.height.get(0)).toThrow(/released/);
   expect(() => b.active.get(0)).toThrow(/released/);
 });
 it("preserves immutable authored input bands through snapshot copies without sample reads", async () => {

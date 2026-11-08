@@ -1,6 +1,5 @@
 import type { Band } from "@atlas/domain";
-import type { PhysicalBufferName, PhysicalField } from "../world/field";
-import { standGround } from "../rock/groundLedger";
+import type { PhysicalBufferName } from "../world/field";
 import type { GenerationState } from "../process";
 import { Contributions, ledgerCeilings, ledgerFloors } from "../regional/media";
 import type { RegionalState } from "../regional/state";
@@ -122,8 +121,6 @@ export function declarePlaceEffects(state: GenerationState, ledger: Contribution
     for (const [cell, change] of cells) {
       const total = totalOver(map[band].get(cell) - ledger.appliedTo(band, cell), change);
       ledger.add(band, cell, total);
-      // Sediment lies on the ground: more of it raises the surface, less of it lowers it.
-      if (band === "SedimentThickness") ledger.add("Elevation", cell, total);
     }
   writeMagic(state, declared);
   const magic = state.physical?.magic;
@@ -177,16 +174,4 @@ export function applyPlaceEffects(state: GenerationState) {
   for (const band of recomputedBands) ledger.forget(band);
   declarePlaceEffects(state, ledger);
   ledger.commit(map, ledgerFloors, ledgerCeilings);
-  holdLandscape(map);
-}
-/**
- * The world's surface is its bedrock and the sediment on it, exactly. A place that moved the
- * surface moved the rock beneath, so the processes that rebuild the surface keep the change.
- */
-function holdLandscape(map: PhysicalField) {
-  for (let cell = 0; cell < map.mesh.count; cell++) {
-    const sediment = map.SedimentThickness.get(cell);
-    if (map.Elevation.get(cell) === map.BedrockElevation.get(cell) + sediment) continue;
-    standGround(map, cell, map.Elevation.get(cell), "landmarks");
-  }
 }

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createField } from "../world/field";
+import { createTestField as createField } from "../rock/groundTestFixture";
 import { createWorldMesh } from "../world/worldMesh";
 import { units } from "../world/math";
 import { recordCut } from "../rock/groundLedger";

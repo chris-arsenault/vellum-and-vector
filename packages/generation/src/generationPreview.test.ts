@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { generationPreview } from "./generationPreview";
 import { landscape } from "./mapFixtures";
-import { createField } from "./world/field";
+import { createTestField as createField } from "./rock/groundTestFixture";
 import { createWorldMesh } from "./world/worldMesh";
 import { atlasPhysicalProfile } from "./world/atlasProfile";
 import { residentBand, rectangle, createGrid, putChannel, generateBand } from "@atlas/domain";

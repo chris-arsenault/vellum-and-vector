@@ -4,7 +4,8 @@ import type { PhysicalProfile } from "../world/profile";
 import { clamp } from "../world/math";
 import { edgeLeadingTo } from "../world/mesh";
 import { workingArray, workingValues, releaseWorking } from "../world/physicalNumerics";
-import { groundOf, type GroundQuery } from "../rock/ground";
+import { groundOf } from "../rock/ground";
+import { averageGroundQuery, groundFact } from "../rock/groundQuery";
 import { compileMix } from "../rock/modes";
 import { rockCatalogue } from "../rock/rockCatalogue";
 
@@ -13,13 +14,13 @@ const failing = compileMix({ shear: 1 });
  * How far this ground steepens or lowers the angle a slope holds: stronger rock stands steeper, open
  * joints stand gentler, and roots hold what would slide.
  */
-const angleHeld: GroundQuery<number> = {
+const angleHeld = averageGroundQuery({
   start: 1,
-  rock: (_, { kind, strength }, { tree, grass }) =>
-    clamp(0.55 + (strength / rockCatalogue.strata.resistance) * 0.45, 0.55, 1.45) *
-    (1.2 - 0.5 * kind.jointing) *
+  rock: (_, layer, { tree, grass }) =>
+    clamp(0.55 + (layer.strength / rockCatalogue.strata.resistance) * 0.45, 0.55, 1.45) *
+    (1.2 - 0.5 * groundFact(layer, "jointing")) *
     (1 + tree * 0.2 + grass * 0.1),
-};
+});
 interface Face {
   i: number;
   j: number;
@@ -55,7 +56,9 @@ function faces(map: PhysicalField) {
       columns.diffusion.set(
         index++,
         // Ground that gives up easily goes in fewer rounds; what holds together comes away slowly.
-        Math.min(ground.gives(i, failing), ground.gives(j, failing))
+        map.Elevation.get(i) >= map.Elevation.get(j)
+          ? ground.faceGives(i, j, failing)
+          : ground.faceGives(j, i, failing)
       );
     }
   return {

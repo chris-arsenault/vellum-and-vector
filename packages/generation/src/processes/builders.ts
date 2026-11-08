@@ -5,7 +5,7 @@ import { coastalDetail } from "../world/coastalDetail";
 import { tectonicUplift } from "../world/uplift";
 import { impactCratering } from "../world/impacts";
 import { validateBudget } from "../world/layerValidation";
-import { orogenicConstruction } from "../world/orogeny";
+import { orogenicConstruction, relaxOrogenicCrust } from "../world/orogeny";
 import { sedimentTransport } from "../world/fluvial";
 import { lithosphericFlexure } from "../world/support";
 import { volcanicConstruction } from "../world/volcanism";
@@ -34,6 +34,14 @@ export const mountains = builder({
   provides: [ground, bedrock, "CrustThickness", "OrogenicConstruction"],
   moves: [["crust", "rock"]],
   build: (map, context) => orogenicConstruction(map, context),
+});
+export const crustalRelaxation = builder({
+  id: "crustal-relaxation",
+  statement: "Thick and heavily loaded continental crust spreads after compression releases it.",
+  needs: ["CrustThickness", provinces],
+  provides: ["CrustThickness"],
+  moves: [["crust", "crust"]],
+  build: relaxOrogenicCrust,
 });
 export const volcanoes = builder({
   id: "volcanoes",

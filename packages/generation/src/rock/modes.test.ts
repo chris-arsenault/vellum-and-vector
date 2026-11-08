@@ -1,6 +1,14 @@
 import { expect, it } from "vitest";
-import { compileMix, givenUp, modeIds } from "./modes";
+import {
+  burialResponse,
+  compileMix,
+  givenUp,
+  heatedMaterial,
+  materialGives,
+  modeIds,
+} from "./modes";
 import { rockCatalogue, rockCodeCount, rockKindIds } from "./rockCatalogue";
+import { materialLayer } from "./rockColumn";
 
 it("gives every code one kind", () => {
   const codes = rockKindIds.map((id) => rockCatalogue[id].code);
@@ -38,4 +46,27 @@ it("lets a material state what it gives up, whatever its strength", () => {
   const mix = compileMix({ abrasion: 1 }),
     { keptStone } = rockCatalogue;
   expect(givenUp(mix, keptStone.code, 500)).toBe(givenUp(mix, keptStone.code, 3000));
+});
+it("consolidates deposited material and heats both constituents while retaining formation ages", () => {
+  const { alluvium, limestone, sandstone, quartzite, marble } = rockCatalogue,
+    loose = materialLayer(alluvium.code, 20, {
+      secondaryKind: limestone.code,
+      secondaryShare: 0.4,
+      strength: 200,
+      damage: 0.8,
+      formedMin: 2,
+      formedMax: 3,
+    }),
+    buried = burialResponse(loose, 7),
+    heated = heatedMaterial(buried, 9),
+    abrasion = compileMix({ abrasion: 1 });
+  expect(buried.kind).toBe(sandstone.code);
+  expect(buried.secondaryKind).toBe(limestone.code);
+  expect(materialGives(abrasion, buried)).toBeLessThan(materialGives(abrasion, loose, true));
+  expect(heated.kind).toBe(quartzite.code);
+  expect(heated.secondaryKind).toBe(marble.code);
+  expect(heated.formedMin).toBe(2);
+  expect(heated.formedMax).toBe(3);
+  expect(heated.altered).toBe(9);
+  expect(loose.altered).not.toBe(9);
 });

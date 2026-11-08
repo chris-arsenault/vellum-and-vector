@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round } from "./math";
 import { KeyedHeap, type Band } from "@atlas/domain";
+import { recordGroundSuture } from "../rock/groundWorld";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 interface Contact {
@@ -92,15 +93,14 @@ function recordCollision(
   const matches = pair === contact.pair;
   if (pair === 0 || matches || collision >= strength) {
     const retained = matches ? strength : 0;
-    const gain = Math.trunc(
-      ((1000 - retained) *
-        context.Profile.ContinentalSutureStrengthGain *
-        collision *
-        context.TectonicStrength) /
-        1_000_000_000
+    const rate = clamp(
+      (context.Profile.ContinentalSutureStrengthGain * collision * context.TectonicStrength) /
+        1_000_000_000,
+      0,
+      1
     );
-    map.CrustSuturePairIds.set(i, contact.pair);
-    map.CrustSutureStrength.set(i, clamp(retained + Math.max(1, gain), 1, 1000));
+    const gain = (1000 - retained) * (1 - (1 - rate) ** context.Span);
+    recordGroundSuture(map, i, contact.pair, clamp(retained + gain, 0, 1000));
   }
   const inherited =
     map.CrustSuturePairIds.get(i) === contact.pair

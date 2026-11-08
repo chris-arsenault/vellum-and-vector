@@ -2,7 +2,7 @@
 // projection boundary.
 import type { PhysicalField, PhysicalIntegerName as IntegerName } from "./field";
 import type { PhysicalContext } from "./context";
-import { validateLandscape } from "./surface";
+import { validateLandscape } from "../rock/groundInitialization";
 import { isOpenOutlet } from "./field";
 import { sourceToOutletOrder } from "./flowGraph";
 import { edgeLeadingTo } from "./mesh";

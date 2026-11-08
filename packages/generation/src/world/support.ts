@@ -10,7 +10,7 @@ import {
   toUnits,
   units,
 } from "./math";
-import { displaceGround } from "../rock/groundLedger";
+import { setSupportTarget, supportedAt } from "../rock/groundDeformation";
 import { smoothMetric } from "./metricSmoothing";
 import { releaseWorking, workingValues } from "./physicalNumerics";
 import {
@@ -39,7 +39,8 @@ export function crustalSupport(map: PhysicalField, context: PhysicalContext, inc
       ratio(map.SedimentThickness.get(i), p.SedimentLoadResponsePerMille, 1000);
     if (includeIce && map.GroundedIce.get(i) !== 0)
       load += ratio(units(map.IceThickness.get(i)), p.IceLoadResponsePerMille, 1000);
-    map.CrustSupportTarget.set(
+    setSupportTarget(
+      map,
       i,
       clamp(
         airy - subsidence - riftCooling - trenchSupport(map, context, i) - load,
@@ -75,7 +76,7 @@ export function lithosphericFlexure(map: PhysicalField, context: PhysicalContext
   for (let i = 0; i < current.length; i++) {
     const value = current.get(i);
     if (!map.CrustSupportInitialized) {
-      map.CrustSupportElevation.set(i, value);
+      supportedAt(map, i, value, 0);
       continue;
     }
     const old = map.CrustSupportElevation.get(i),
@@ -86,8 +87,7 @@ export function lithosphericFlexure(map: PhysicalField, context: PhysicalContext
       units(-elevationLimit),
       units(elevationLimit) - map.SedimentThickness.get(i)
     );
-    map.CrustSupportElevation.set(i, old + bedrock - before);
-    displaceGround(map, i, bedrock - before, "settling");
+    supportedAt(map, i, old + bedrock - before, bedrock - before);
   }
   map.CrustSupportInitialized = true;
   releaseWorking(map, current);

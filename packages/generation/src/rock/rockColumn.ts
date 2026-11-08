@@ -1,22 +1,50 @@
 import type { PhysicalField } from "../world/field";
-import { rockKindOfCode, softestRock, hardestRock, type RockKind } from "./rockCatalogue";
-import { rockLayerDepths, rockLayerKinds, rockLayers } from "./rockLayerFields";
+import { rockKindOfCode, type RockKind } from "./rockCatalogue";
+import { projectGround } from "./groundShares";
+import { groundStorage } from "./groundStorage";
+import {
+  allColumnFields,
+  blendLayers,
+  columnFields,
+  materialLayer,
+  materialProperties,
+  rockLayerDepths,
+  rockLayerKinds,
+  rockLayers,
+  type Column,
+  type MaterialProperty,
+  type MaterialLayer,
+  type MaterialState,
+} from "./rockLayerFields";
 
 /**
- * Each cell's rock as a short stack on the field's own bands: the top layer is what the surface is,
- * and everything below waits to be uncovered. Erosion strips from the top, deposition and eruption
- * add to it, and the bottom layer is the basement, which never runs out. The field's rock resistance
- * follows whatever is exposed, keeping whatever magic has done to that surface.
+ * Bounded strata on the field's own bands. Material state travels with each bed. Land and cut
+ * columns have an unbounded basement; their loose covers are finite. Placement belongs to Ground.
  */
-export { rockLayers };
+export { rockLayers, allColumnFields, columnFields, type Column };
+export {
+  materialLayer,
+  blendLayers,
+  mergeMaterial,
+  type MaterialLayer,
+  type MaterialState,
+} from "./rockLayerFields";
 const kinds = rockLayerKinds,
   depths = rockLayerDepths;
 export const rockColumnFields = [...kinds, ...depths] as const;
+export const finiteColumn = (column: Column) => column === "loose" || column === "cutLoose";
+export const columnSize = (column: Column) => columnFields[column].kind.length;
+function eachRockFacet(map: PhysicalField, cell: number, act: (column: Column) => void) {
+  const cut = map.GroundCutShare.get(cell);
+  if (cut < 1) act("land");
+  if (cut > 0) act("cut");
+}
 /** Sees rock lost to a full column, and rock stripped off the top, for a run's report. */
 export interface ColumnWatcher {
   /** A layer folded into the one below, `above` beneath the surface; `into` is what it became. */
   fold(cell: number, kind: number, into: number, thickness: number, above: number): void;
   strip(cell: number, amount: number): void;
+  merge?(cell: number, column: Column, layer: number, result: MaterialLayer): void;
 }
 const watchers = new Set<ColumnWatcher>();
 /** Starts watching; the returned function stops. */
@@ -24,177 +52,330 @@ export function watchColumn(watcher: ColumnWatcher) {
   watchers.add(watcher);
   return () => watchers.delete(watcher);
 }
-function reportFold(map: PhysicalField, cell: number) {
-  const thickness = layerDepth(map, cell, rockLayers - 2);
-  if (!watchers.size || thickness <= 0) return;
-  let above = 0;
-  for (let layer = 0; layer < rockLayers - 2; layer++) above += layerDepth(map, cell, layer);
-  const kind = layerKind(map, cell, rockLayers - 2),
-    into = layerDepth(map, cell, rockLayers - 1) > 0 ? layerKind(map, cell, rockLayers - 1) : kind;
-  for (const watcher of watchers) watcher.fold(cell, kind, into, thickness, above);
+export const layerValue = (
+  map: PhysicalField,
+  cell: number,
+  layer: number,
+  property: MaterialProperty,
+  column: Column = "land"
+) => map[columnFields[column][property][layer]].get(cell);
+export const layerKind = (
+  map: PhysicalField,
+  cell: number,
+  layer: number,
+  column: Column = "land"
+) => layerValue(map, cell, layer, "kind", column);
+export const layerDepth = (
+  map: PhysicalField,
+  cell: number,
+  layer: number,
+  column: Column = "land"
+) => layerValue(map, cell, layer, "depth", column);
+/** A scalar snapshot: later column writes cannot change a retained query result. */
+export function readLayer(
+  map: PhysicalField,
+  cell: number,
+  layer: number,
+  column: Column = "land"
+): MaterialLayer {
+  const fields = columnFields[column],
+    value = (property: MaterialProperty) => map[fields[property][layer]].get(cell),
+    kind = value("kind");
+  return {
+    kind,
+    depth: value("depth"),
+    secondaryKind: value("secondaryKind"),
+    secondaryShare: value("secondaryShare"),
+    strength: value("strength") || rockKindOfCode(kind).resistance,
+    damage: value("damage"),
+    grainX: value("grainX"),
+    grainY: value("grainY"),
+    formedMin: value("formedMin"),
+    formedMax: value("formedMax"),
+    altered: value("altered"),
+    mixed: value("mixed"),
+  };
 }
-
-export const layerKind = (map: PhysicalField, cell: number, layer: number) =>
-  map[kinds[layer]].get(cell);
-export const layerDepth = (map: PhysicalField, cell: number, layer: number) =>
-  map[depths[layer]].get(cell);
-export const setLayer = (
+export function setLayer(
   map: PhysicalField,
   cell: number,
   layer: number,
   kind: number,
-  depth: number
-) => {
-  map[kinds[layer]].set(cell, kind);
-  map[depths[layer]].set(cell, depth);
-};
+  depth: number,
+  state: MaterialState = {},
+  column: Column = "land"
+) {
+  const material = materialLayer(kind, depth, state, map.CompletedEpochCount),
+    stored = groundStorage(map),
+    fields = columnFields[column];
+  for (const property of materialProperties)
+    stored[fields[property][layer]].set(cell, material[property]);
+}
+/** Copy every fact, including alteration and age, without reconstructing it from the kind. */
+export function copyLayer(
+  map: PhysicalField,
+  cell: number,
+  to: number,
+  from: number,
+  column: Column = "land",
+  fromColumn: Column = column
+) {
+  const stored = groundStorage(map),
+    target = columnFields[column],
+    source = columnFields[fromColumn];
+  for (const property of materialProperties)
+    stored[target[property][to]].set(cell, stored[source[property][from]].get(cell));
+}
 
 /** A column's layers fill from the top with none empty between, so this is its basement. */
-export function deepestLayer(map: PhysicalField, cell: number) {
+export function deepestLayer(map: PhysicalField, cell: number, column: Column = "land") {
   let layer = 0;
-  while (layer < rockLayers - 1 && layerDepth(map, cell, layer + 1) > 0) layer++;
+  while (layer < columnSize(column) - 1 && layerDepth(map, cell, layer + 1, column) > 0) layer++;
   return layer;
 }
-const alterationCarried = 1000;
-/** The surface takes on a new rock: its own resistance, plus what had been done to the old one. */
-function expose(map: PhysicalField, cell: number, was: RockKind) {
-  const now = rockKindOfCode(map.RockLayerKind0.get(cell)),
-    // What was done to a surface is bounded: a thin alteration does not reach far down the column.
-    altered = Math.max(
-      -alterationCarried,
-      Math.min(alterationCarried, map.RockResistance.get(cell) - was.resistance)
-    );
-  map.RockKindCodes.set(cell, now.code);
-  map.RockResistance.set(
-    cell,
-    Math.max(softestRock, Math.min(hardestRock, now.resistance + altered))
-  );
-}
 /** Strips rock from the top of a column, uncovering what lies beneath. */
-export function stripRock(map: PhysicalField, cell: number, amount: number) {
-  for (const watcher of watchers) watcher.strip(cell, amount);
-  let left = amount,
-    uncovered = false;
-  const was = rockKindOfCode(map.RockLayerKind0.get(cell));
+export function stripRock(
+  map: PhysicalField,
+  cell: number,
+  amount: number,
+  column: Column = "land"
+) {
+  let left = Math.max(0, amount);
   while (left > 0) {
-    const top = map.RockLayerDepth0.get(cell);
-    if (top > left || map.RockLayerDepth1.get(cell) <= 0) {
-      map.RockLayerDepth0.set(cell, Math.max(0, top - left));
+    const top = layerDepth(map, cell, 0, column);
+    if (top > left || layerDepth(map, cell, 1, column) <= 0) {
+      // A positive marker keeps an exhausted basement beneath a future deposited bed. Its
+      // recorded thickness never limits withdrawal; zero is reserved for an empty stack slot.
+      const floor = finiteColumn(column) || layerDepth(map, cell, 1, column) > 0 ? 0 : 1,
+        remaining = Math.max(floor, top - left);
+      groundStorage(map)[columnFields[column].depth[0]].set(cell, remaining);
+      left = finiteColumn(column) ? Math.max(0, left - top) : 0;
       break;
     }
     left -= top;
-    for (let layer = 0; layer < rockLayers - 1; layer++)
-      setLayer(map, cell, layer, layerKind(map, cell, layer + 1), layerDepth(map, cell, layer + 1));
-    map[depths[rockLayers - 1]].set(cell, 0);
-    uncovered = true;
+    for (let layer = 0; layer < columnSize(column) - 1; layer++)
+      copyLayer(map, cell, layer, layer + 1, column);
+    groundStorage(map)[columnFields[column].depth[columnSize(column) - 1]].set(cell, 0);
   }
-  if (uncovered) expose(map, cell, was);
+  projectGround(map, cell);
+  const removed = Math.max(0, amount) - left;
+  for (const watcher of watchers) watcher.strip(cell, removed);
+  return removed;
 }
-/** A new layer on top. A full column folds its two deepest layers into one. */
-export function layDownRock(map: PhysicalField, cell: number, kind: RockKind, amount: number) {
+/** Actual material intersected by a depth; finite cover can return less than requested. */
+export function materialThrough(
+  map: PhysicalField,
+  cell: number,
+  amount: number,
+  column: Column = "land"
+) {
+  let left = Math.max(0, amount),
+    result: MaterialLayer | undefined;
+  const bottom = deepestLayer(map, cell, column);
+  for (let at = 0; at <= bottom && left > 0; at++) {
+    const layer = readLayer(map, cell, at, column),
+      available = at === bottom && !finiteColumn(column) ? left : layer.depth,
+      taken = Math.min(left, available);
+    if (taken <= 0) continue;
+    const part = { ...layer, depth: taken };
+    result = result ? blendLayers(result, part) : part;
+    left -= taken;
+  }
+  return result;
+}
+/** Owner-only capacity reduction for a temporary package, including combined incision profiles. */
+export function coarsenColumn(layers: MaterialLayer[], cell: number, column: Column) {
+  const upper = coarseningContact(layers, column),
+    a = layers[upper],
+    b = layers[upper + 1],
+    combined = blendLayers(a, b);
+  let above = 0;
+  for (let layer = 0; layer < upper; layer++) above += layers[layer].depth;
+  for (const watcher of watchers) {
+    watcher.fold(cell, a.kind, combined.kind, a.depth, above);
+    watcher.merge?.(cell, column, upper, { ...combined });
+  }
+  layers.splice(upper, 2, combined);
+}
+/** Prefer an equivalent contact, then the least represented depth; ties retain shallower detail. */
+function coarseningContact(layers: MaterialLayer[], column: Column) {
+  // The incoming cap is already at zero. Finite cover has no basement to exclude.
+  let best = layers.length - (finiteColumn(column) ? 2 : 3),
+    equivalent = sameMaterial(layers[best], layers[best + 1]),
+    thickness = layers[best].depth + layers[best + 1].depth;
+  for (let at = best - 1; at >= 1; at--) {
+    const candidate = sameMaterial(layers[at], layers[at + 1]),
+      depth = layers[at].depth + layers[at + 1].depth;
+    if ((candidate && !equivalent) || (candidate === equivalent && depth < thickness)) {
+      best = at;
+      equivalent = candidate;
+      thickness = depth;
+    }
+  }
+  return best;
+}
+function sameMaterial(a: MaterialLayer, b: MaterialLayer) {
+  return (
+    a.kind === b.kind &&
+    a.secondaryKind === b.secondaryKind &&
+    a.secondaryShare === b.secondaryShare &&
+    a.strength === b.strength &&
+    a.damage === b.damage &&
+    a.grainX === b.grainX &&
+    a.grainY === b.grainY &&
+    a.altered === b.altered &&
+    a.mixed === b.mixed
+  );
+}
+/** Every nonempty deposit arrives as material; capacity may coarsen buried contacts, never discard it. */
+export function layDownRock(
+  map: PhysicalField,
+  cell: number,
+  kind: RockKind,
+  amount: number,
+  state: MaterialState = {},
+  column: Column = "land"
+) {
   if (amount <= 0) return;
-  const was = rockKindOfCode(map.RockLayerKind0.get(cell));
-  if (was.code === kind.code) {
-    map.RockLayerDepth0.add(cell, amount);
-    return;
-  }
-  reportFold(map, cell);
-  // A deepest layer still empty takes on the kind folded into it: the basement stays what it was.
-  if (layerDepth(map, cell, rockLayers - 1) <= 0)
-    map[kinds[rockLayers - 1]].set(cell, layerKind(map, cell, rockLayers - 2));
-  map[depths[rockLayers - 1]].add(cell, layerDepth(map, cell, rockLayers - 2));
-  for (let layer = rockLayers - 2; layer > 0; layer--)
-    setLayer(map, cell, layer, layerKind(map, cell, layer - 1), layerDepth(map, cell, layer - 1));
-  setLayer(map, cell, 0, kind.code, amount);
-  expose(map, cell, was);
+  layDownPackage(map, cell, column, [
+    materialLayer(kind.code, amount, state, map.CompletedEpochCount),
+  ]);
 }
-/** The thinnest bed a cell's mean can hold as a rock of its own, in the field's height units. */
-const thinnestBed = 20 * 1024;
 /**
- * New rock a process lays over a cell. Spread too thin to be what the cell's ground is, it only adds
- * to the height of what is already there; otherwise a film of ash would be the surface of a whole
- * cell until the next rain.
+ * Top-first incoming beds; coarsen after each burial, then commit surviving slots once. This bounded
+ * representation can lose a thin buried barrier, even though its material and age remain in a mixture.
  */
-export function layBed(map: PhysicalField, cell: number, kind: RockKind, amount: number) {
-  if (amount >= thinnestBed) layDownRock(map, cell, kind, amount);
-  else if (amount > 0) map.RockLayerDepth0.add(cell, amount);
+export function layDownPackage(
+  map: PhysicalField,
+  cell: number,
+  column: Column,
+  incoming: readonly MaterialLayer[]
+) {
+  const size = columnSize(column),
+    stored = groundStorage(map),
+    fields = columnFields[column],
+    // hpc-exempt: at most nine transient bed snapshots before coarsening, never per-cell storage.
+    layers: MaterialLayer[] = [];
+  for (let slot = 0; slot < size && stored[fields.depth[slot]].get(cell) > 0; slot++)
+    layers.push(readLayer(map, cell, slot, column));
+  for (let at = incoming.length - 1; at >= 0; at--) {
+    const bed = incoming[at];
+    if (bed.depth <= 0) continue;
+    const top = layers[0];
+    if (top && sameMaterial(top, bed))
+      layers[0] = {
+        ...bed,
+        depth: top.depth + bed.depth,
+        formedMin: Math.min(top.formedMin, bed.formedMin),
+        formedMax: Math.max(top.formedMax, bed.formedMax),
+      };
+    else {
+      layers.unshift(bed);
+      if (layers.length > size) coarsenColumn(layers, cell, column);
+    }
+  }
+  writeColumn(map, cell, column, layers);
+  projectGround(map, cell);
 }
-/** The same, for rock moved from another column, which holds its kind as a code. */
-export function layBedOfCode(map: PhysicalField, cell: number, code: number, amount: number) {
-  layBed(map, cell, rockKindOfCode(code), amount);
+function writeColumn(map: PhysicalField, cell: number, column: Column, layers: MaterialLayer[]) {
+  const stored = groundStorage(map),
+    fields = columnFields[column];
+  for (const property of materialProperties)
+    for (let slot = 0; slot < layers.length; slot++)
+      stored[fields[property][slot]].set(cell, layers[slot][property]);
+  for (let slot = layers.length; slot < columnSize(column); slot++)
+    stored[fields.depth[slot]].set(cell, 0);
 }
 /**
  * Melt that never rose cools as new rock below: a column's basement becomes it, and a column that is
  * all one rock keeps a shell of that rock over it, since melt does not reach the surface unseen.
  */
-export function intrudeBasement(map: PhysicalField, cell: number, kind: RockKind, shell: number) {
-  const deepest = deepestLayer(map, cell);
-  if (deepest > 0) {
-    map[kinds[deepest]].set(cell, kind.code);
-    return;
-  }
-  const whole = layerDepth(map, cell, 0);
-  if (whole <= shell) return;
-  map[depths[0]].set(cell, shell);
-  setLayer(map, cell, 1, kind.code, whole - shell);
-}
-/** Rock changed where it lies, in any layer. */
-export function changeLayer(map: PhysicalField, cell: number, layer: number, kind: RockKind) {
-  const was = rockKindOfCode(map.RockLayerKind0.get(cell));
-  map[kinds[layer]].set(cell, kind.code);
-  if (layer === 0) expose(map, cell, was);
-}
-/** The top of the rock changes where it lies: no height moves, the column just holds new rock. */
-export function alterTop(map: PhysicalField, cell: number, kind: RockKind, depth: number) {
-  if (depth <= 0) return;
-  stripRock(map, cell, depth);
-  layDownRock(map, cell, kind, depth);
-}
-/** A column's two top layers trade places, or its second and third, as a share picks. */
-export function shuffleLayers(map: PhysicalField, cell: number, share: number) {
-  const was = rockKindOfCode(map.RockLayerKind0.get(cell)),
-    upper = share < 0.5 ? 0 : 1,
-    kind = layerKind(map, cell, upper),
-    depth = layerDepth(map, cell, upper);
-  if (layerDepth(map, cell, upper + 1) <= 0) return;
-  setLayer(map, cell, upper, layerKind(map, cell, upper + 1), layerDepth(map, cell, upper + 1));
-  setLayer(map, cell, upper + 1, kind, depth);
-  expose(map, cell, was);
-}
-/** How deep a thrust sheet's rock goes: what rides over the next sheet, down to the sheet's floor. */
-const sheetFloor = 6000 * 1024;
-/**
- * A sheet rides over this column, older rock over younger: what it brings lies on top, its deepest
- * first, from the top of its own column down to its floor. Layers come top first.
- */
-export function overthrust(
+export function intrudeBasement(
   map: PhysicalField,
   cell: number,
-  layers: readonly { kind: number; depth: number }[]
+  kind: RockKind,
+  shell: number,
+  column?: Column
 ) {
-  const riding: { kind: number; depth: number }[] = [];
-  let left = sheetFloor;
-  for (const { kind, depth } of layers) {
-    if (left <= 0 || depth <= 0) continue;
-    riding.push({ kind, depth: Math.min(depth, left) });
-    left -= depth;
+  if (column === undefined)
+    return eachRockFacet(map, cell, (facet) => intrudeBasement(map, cell, kind, shell, facet));
+  const deepest = deepestLayer(map, cell, column);
+  if (deepest > 0) {
+    changeLayer(map, cell, deepest, kind, column);
+    return;
   }
-  for (let n = riding.length - 1; n >= 0; n--)
-    layDownRock(map, cell, rockKindOfCode(riding[n].kind), riding[n].depth);
+  const whole = layerDepth(map, cell, 0, column);
+  if (whole <= shell) return;
+  groundStorage(map)[columnFields[column].depth[0]].set(cell, shell);
+  setLayer(map, cell, 1, kind.code, whole - shell, {}, column);
 }
-/**
- * What a column moves by copying and never by mixing, for a move's dominant source: what the
- * exposed rock and its layers are, and the cell's place in the belt that first reached it.
- */
-export const kindBands = (map: PhysicalField) => [
-  map.RockKindCodes,
-  ...kinds.map((k) => map[k]),
-  map.ThrustPairIds,
-  map.ThrustSheetIndex,
-  map.ThrustSegmentIds,
-  map.ThrustAcross,
-  map.ThrustDip,
-];
-/** Where in `kindBands` the column's own layers begin. */
-export const columnKindOffset = 1;
-export const rockDepthFields = depths;
+/** Rock changed where it lies, in any layer. */
+export function changeLayer(
+  map: PhysicalField,
+  cell: number,
+  layer: number,
+  kind: RockKind,
+  column?: Column
+) {
+  if (column === undefined)
+    return eachRockFacet(map, cell, (facet) => changeLayer(map, cell, layer, kind, facet));
+  const was = readLayer(map, cell, layer, column);
+  setLayer(
+    map,
+    cell,
+    layer,
+    kind.code,
+    was.depth,
+    {
+      ...was,
+      secondaryKind: kind.code,
+      secondaryShare: 0,
+      strength: kind.resistance,
+      mixed: 0,
+      altered: map.CompletedEpochCount,
+    },
+    column
+  );
+  if (layer === 0) projectGround(map, cell);
+}
+/** The top of the rock changes where it lies: no height moves, the column just holds new rock. */
+export function alterTop(
+  map: PhysicalField,
+  cell: number,
+  kind: RockKind,
+  depth: number,
+  column?: Column
+) {
+  if (column === undefined)
+    return eachRockFacet(map, cell, (facet) => alterTop(map, cell, kind, depth, facet));
+  if (depth <= 0) return;
+  const was = materialThrough(map, cell, depth, column);
+  if (!was) return;
+  const amount = stripRock(map, cell, depth, column);
+  layDownRock(
+    map,
+    cell,
+    kind,
+    amount,
+    {
+      formedMin: was.formedMin,
+      formedMax: was.formedMax,
+      grainX: was.grainX,
+      grainY: was.grainY,
+      damage: was.damage,
+      altered: map.CompletedEpochCount,
+    },
+    column
+  );
+}
+/** A column's two top layers trade places, or its second and third, as a share picks. */
+export function shuffleLayers(map: PhysicalField, cell: number, share: number, column?: Column) {
+  if (column === undefined)
+    return eachRockFacet(map, cell, (facet) => shuffleLayers(map, cell, share, facet));
+  const upper = share < 0.5 ? 0 : 1,
+    was = readLayer(map, cell, upper, column);
+  if (layerDepth(map, cell, upper + 1, column) <= 0) return;
+  copyLayer(map, cell, upper, upper + 1, column);
+  setLayer(map, cell, upper + 1, was.kind, was.depth, was, column);
+  projectGround(map, cell);
+}

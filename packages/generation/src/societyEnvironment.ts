@@ -9,7 +9,7 @@ import {
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import { generationNetworks, removeGenerationReach } from "./generationNetworks";
-import type { PhysicalField } from "./world/field";
+import { isMutablePhysicalName, type PhysicalField } from "./world/field";
 import { releaseWorking, retainedArray } from "./world/physicalNumerics";
 import { generationBindings } from "./generationBindings";
 import { atlasChannels, type ChannelBinding } from "./world/atlasChannels";
@@ -45,6 +45,8 @@ import { workSamples } from "./societyWorks";
 import { damCandidateCell } from "./societyDemand";
 import { isWorldSociety } from "./societyMapScope";
 import { generationFeatures, removeGenerationFeature } from "./generationFeatures";
+import { standGround, looseTo } from "./rock/groundLedger";
+import { alterRock } from "./rock/rockField";
 
 function synchronizeNative(state: GenerationState) {
   for (const name of state.society!.changed) {
@@ -67,19 +69,26 @@ function synchronizeChannel(state: GenerationState, binding: ChannelBinding) {
   for (let i = 0; i < map.mesh.count; i++) {
     const sample = at(nativePosition(work, i));
     if (before && sample === 0) continue;
-    const value = before ? values.get(i) + sample / scale : (sample - offset) / scale;
-    values.set(i, integer ? Math.round(value) : value);
-    if (name === "elevation") rebuildElevation(map, i, !before);
+    const value = before
+      ? values.get(i) + sample / scale
+      : (sample - offset) / scale + (binding.datum ? map.BaseSeaLevel : 0);
+    synchronizeValue(map, binding.native, i, integer ? Math.round(value) : value);
   }
   if (surface !== state.surface) state.surface.coverage.release(surface.channels[name]);
 }
-function rebuildElevation(map: PhysicalField, i: number, datum: boolean) {
-  if (datum) map.Elevation.add(i, map.BaseSeaLevel);
-  const sediment = map.SedimentThickness.get(i),
-    bedrock = map.Elevation.get(i) - sediment;
-  map.BedrockElevation.set(i, bedrock);
-  // The landscape invariant is exact equality; rebuild the surface from its parts.
-  map.Elevation.set(i, bedrock + sediment);
+function synchronizeValue(
+  map: PhysicalField,
+  name: ChannelBinding["native"],
+  i: number,
+  value: number
+) {
+  if (name === "Elevation") standGround(map, i, value, "society");
+  else if (name === "BedrockElevation")
+    standGround(map, i, value + map.SedimentThickness.get(i), "society");
+  else if (name === "RockResistance") alterRock(map, i, value - map[name].get(i));
+  else if (name === "SedimentThickness") looseTo(map, i, value, "society");
+  else if (isMutablePhysicalName(name)) map[name].set(i, value);
+  else throw new Error(`Society ground change requires an owner operation: ${name}`);
 }
 function changedSurface(state: GenerationState, name: string, before?: Band) {
   if (!before) return state.surface;

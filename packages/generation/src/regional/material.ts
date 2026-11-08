@@ -1,5 +1,6 @@
 import { hashUnit } from "../world/noise";
-import { groundOf, type GroundQuery } from "../rock/ground";
+import { groundOf } from "../rock/ground";
+import { averageGroundQuery } from "../rock/groundQuery";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { grainAt } from "./character";
 import { distance, regionalSpan } from "./lattice";
@@ -97,7 +98,7 @@ function integrateAlong(
 }
 
 /** Hard rock resists, open fractures yield, a ward keeps its beds and banks; soft shale to hard quartzite differ by an order of magnitude. */
-const cutting: GroundQuery<number> = {
+const cutting = averageGroundQuery({
   start: 1,
   rock: (_, { strength }, { fracture, ward, stiffening }) =>
     clamp(
@@ -108,7 +109,7 @@ const cutting: GroundQuery<number> = {
       0.35,
       3.5
     ),
-};
+});
 /**
  * Resistance of the material at a cell to being cut, for anything on a region that weighs the country
  * without wearing it. Magic's rock and fracture contributions are read from the present bands, so a
