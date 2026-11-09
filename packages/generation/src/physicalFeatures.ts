@@ -34,7 +34,14 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
       "epoch.mountains": [nativeSteps.continentalSutures],
     },
     {
-      settings: ["continents", "oceanicPlates", "provinces", "landFraction", "mapBoundary"],
+      settings: [
+        "continents",
+        "oceanicPlates",
+        "provinces",
+        "continentalCrustFraction",
+        "landFraction",
+        "mapBoundary",
+      ],
       inherited: true,
       requires: ["physical.lifecycle"],
       when: (slot, context) =>

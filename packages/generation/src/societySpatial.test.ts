@@ -1,13 +1,18 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import {
   createGrid,
   createAdaptiveField,
   createAdaptiveTopology,
   gridPosition,
+  neighbors,
+  spatial,
+  putChannel,
+  residentBand,
 } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
-import { nearestSocietySample } from "./societySpatial";
+import { coastalNeighbors, nearestSocietySample, SocietyNeighbors } from "./societySpatial";
 import { workSamples } from "./societyWorks";
+import { coastalFishery } from "./societySupport";
 
 it.each([false, true])(
   "matches exhaustive nearest and work influence queries (adaptive=%s)",
@@ -73,3 +78,106 @@ it.each([false, true])(
     expect(nearestSocietySample(grid, { x: 0, y: 0 })).toBe(-1);
   }
 );
+
+it.each([false, true])("retains covered and wrapped neighbor links (adaptive=%s)", (adaptive) => {
+  const state = landscape(),
+    scope = { ...state.domain.scope };
+  scope.footprint = {
+    type: "Polygon",
+    coordinates: [
+      [
+        [0, 0],
+        [4000, 0],
+        [4000, 1000],
+        [0, 1000],
+        [0, 0],
+      ],
+      [
+        [1500, 250],
+        [1500, 750],
+        [2500, 750],
+        [2500, 250],
+        [1500, 250],
+      ],
+    ],
+  };
+  const grid = adaptive
+    ? createAdaptiveField(
+        "links",
+        scope,
+        createAdaptiveTopology([0, 0, 4000, 1000], {
+          maximumSize: 500,
+          minimumSize: 250,
+          refine: ([x]) => x < 1500,
+        })
+      )
+    : createGrid("links", scope, 5, 3);
+  grid.periodicWidth = 4000;
+  const read = new SocietyNeighbors(grid),
+    covers = spatial.geometryCoverage(scope.footprint);
+  for (let i = 0; i < grid.active.length; i++)
+    expect([...read.at(i)]).toEqual(neighbors(grid, i, true, covers));
+  if (!adaptive) {
+    expect([...read.at(5)]).toContain(9);
+    expect([...read.at(6)]).not.toContain(7);
+    const cardinal = new SocietyNeighbors(grid, false);
+    expect([...cardinal.at(0)]).toEqual([1, 5, 4]);
+    expect([...read.at(0)]).toContain(6);
+  }
+});
+
+it("reuses geometry queries while fishery reads changed sea and livelihood fields", () => {
+  const state = landscape(),
+    grid = state.surface,
+    count = grid.active.length;
+  for (const name of ["water", "aquaticFauna", "upwelling", "magic:pressure:intensity"])
+    putChannel(grid, name, "ratio", residentBand("float64", new Float64Array(count)));
+  state.society = {
+    region: {
+      areaId: "area",
+      spaceId: "surface",
+      communities: [],
+      connections: [],
+      history: [],
+      works: [],
+      events: [],
+      magic: [],
+    },
+    owner: residentBand("int32", new Int32Array(count)),
+    river: residentBand("float64", new Float64Array(count)),
+    coast: residentBand("float64", new Float64Array(count)),
+    inherited: false,
+    changed: new Set(),
+    mediumChanged: new Set(),
+    cycle: { index: 0, elapsed: 1, final: false },
+  };
+  const coverage = spatial.geometryCoverage.bind(spatial),
+    queries = vi.fn(coverage(grid.scope.footprint)),
+    prepared = vi.spyOn(spatial, "geometryCoverage").mockReturnValue(queries);
+  try {
+    grid.channels.water.set(1, 1);
+    const first = coastalFishery(state),
+      calls = queries.mock.calls.length,
+      topology = coastalNeighbors(state);
+    expect(first.get(0)).toBe(0.5);
+    expect(calls).toBeGreaterThan(0);
+    grid.channels.aquaticFauna.set(1, 2);
+    grid.channels.upwelling.set(1, 0.5);
+    grid.channels["magic:pressure:intensity"].set(1, 400);
+    const second = coastalFishery(state);
+    expect(second.get(0)).toBeCloseTo(2.85);
+    expect(queries.mock.calls.length).toBe(calls);
+    expect(coastalNeighbors(state)).toBe(topology);
+    grid.channels.water.set(1, 0);
+    const third = coastalFishery(state);
+    expect(third.get(0)).toBe(0);
+    state.surface = createGrid("replacement", grid.scope, 5, 2);
+    expect(coastalNeighbors(state)).not.toBe(topology);
+    delete state.society.cycle;
+    const outsideEra = coastalNeighbors(state);
+    expect(coastalNeighbors(state)).not.toBe(outsideEra);
+    for (const band of [first, second, third]) grid.coverage.release(band);
+  } finally {
+    prepared.mockRestore();
+  }
+});

@@ -40,16 +40,36 @@ export function clipByRect(
   bounds: Bounds,
   precision: number
 ) {
-  const g = kernel.native;
+  return withClipByRect(kernel, value, precision, (clip) => clip(bounds));
+}
+/** The native input is borrowed only until the callback returns; each result is detached GeoJSON. */
+export function withClipByRect<T>(
+  kernel: GeometryKernel,
+  value: Geometry,
+  precision: number,
+  work: (clip: (bounds: Bounds) => Geometry | null) => T
+): T {
   return kernel.withShape(value, precision, (geometry) => {
-    const result = g.GEOSClipByRect(geometry, ...bounds);
-    requireThat(result, "geometry_clip", "Could not clip geography to the window.");
+    let active = true;
     try {
-      return g.GEOSisEmpty(result) ? null : kernel.json(result);
+      return work((bounds) => {
+        requireThat(active, "geometry_lifetime", "The clipping scope has ended.");
+        return clipNativeByRect(kernel, geometry, bounds);
+      });
     } finally {
-      g.GEOSGeom_destroy(result);
+      active = false;
     }
   });
+}
+function clipNativeByRect(kernel: GeometryKernel, geometry: number, bounds: Bounds) {
+  const g = kernel.native;
+  const result = g.GEOSClipByRect(geometry, ...bounds);
+  requireThat(result, "geometry_clip", "Could not clip geography to the window.");
+  try {
+    return g.GEOSisEmpty(result) ? null : kernel.json(result);
+  } finally {
+    g.GEOSGeom_destroy(result);
+  }
 }
 /** The closest pair of points, first on `a`, then on `b`. */
 export function nearestPoints(

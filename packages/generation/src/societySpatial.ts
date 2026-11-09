@@ -3,10 +3,51 @@ import {
   MapScale,
   gridDistance,
   overlappingAdaptiveLeaves,
+  CellList,
+  neighbors,
+  spatial,
   type Grid,
   type Bounds,
   type Position,
 } from "@atlas/domain";
+import type { GenerationState } from "./process";
+
+/** Immutable geometry during one society era; water and livelihood values stay live. */
+export class SocietyNeighbors {
+  private readonly starts: Int32Array;
+  private readonly counts: Int32Array;
+  private readonly links = new CellList();
+  private readonly covers: ReturnType<typeof spatial.geometryCoverage>;
+  constructor(
+    readonly grid: Grid,
+    private readonly diagonal = true
+  ) {
+    this.starts = new Int32Array(grid.active.length).fill(-1);
+    this.counts = new Int32Array(grid.active.length);
+    this.covers = spatial.geometryCoverage(grid.scope.footprint);
+  }
+  *at(i: number): Iterable<number> {
+    if (this.starts[i] < 0) {
+      const row = neighbors(this.grid, i, this.diagonal, this.covers);
+      this.starts[i] = this.links.length;
+      this.counts[i] = row.length;
+      for (const j of row) this.links.push(j);
+    }
+    const start = this.starts[i],
+      end = start + this.counts[i];
+    for (let at = start; at < end; at++) yield this.links.at(at);
+  }
+}
+
+/** Sharing stops with the cycle sequence; an authored refresh gets its own geometry read. */
+export function coastalNeighbors(state: GenerationState): SocietyNeighbors {
+  const work = state.society,
+    previous = work?.coastalNeighbors;
+  if (work?.cycle && previous?.grid === state.surface) return previous;
+  const current = new SocietyNeighbors(state.surface);
+  if (work?.cycle) work.coastalNeighbors = current;
+  return current;
+}
 
 /** Query the existing sampling topology rather than scanning the world for each local work. */
 export function* samplesInBox(grid: Grid, box: Bounds) {

@@ -14,7 +14,6 @@ import {
 } from "../../../packages/generation/src/world/physicalSteps";
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import { physicalProfile } from "../../../packages/generation/src/world/profile";
-import { defaultEpochs } from "../worldCreation";
 import { firstEpochGroundChange, firstEpochGroundNow, firstEpochGroundSetting } from "./epochStory";
 import { restoreSnapshot, snapshotPath } from "./fieldSnapshot";
 import { harnessRoot } from "./harnessWorkspace";
@@ -24,10 +23,12 @@ import { reliefProbes } from "./reliefProbes";
 import { beltSupply, landHeights, moveBudget, stuckRootCrust } from "./reliefSupply";
 import {
   drawHeights,
+  drawShade,
   drawSystems,
   highGroundAtEdge,
   landSlopes,
   mountainSystems,
+  reliefThresholds,
   widthsAbove,
 } from "./reliefSystems";
 
@@ -43,12 +44,10 @@ import {
 const out = join(harnessRoot, process.env.HARNESS_OUT ?? "replay.json");
 
 /** The world's epochs, the last repeated as often as a run of more passes needs. */
-function epochsFor(passes: number, saved?: Epoch[]) {
+function epochsFor(passes: number, saved: Epoch[]) {
   // A trial of other tectonic strengths, one per epoch: HARNESS_TECTONICS="1,0.4,0.1".
   const trial = process.env.HARNESS_TECTONICS?.split(",").map(Number),
-    supplied: Epoch[] = process.env.HARNESS_EPOCHS
-      ? JSON.parse(process.env.HARNESS_EPOCHS)
-      : (saved ?? defaultEpochs()),
+    supplied: Epoch[] = process.env.HARNESS_EPOCHS ? JSON.parse(process.env.HARNESS_EPOCHS) : saved,
     epochs = supplied.map((epoch, n) => ({
       ...epoch,
       tectonics: trial?.[n] ?? epoch.tectonics,
@@ -114,21 +113,24 @@ function saveReport(map: PhysicalField, result: { seconds: number }) {
   drawSystems(map, harnessRoot, `${imageName}-systems.png`);
   drawHeights(map, harnessRoot, `${imageName}-heights.png`, false);
   drawHeights(map, harnessRoot, `${imageName}-contacts.png`);
+  drawShade(map, harnessRoot, `${imageName}-shade.png`);
   writeGroundSection(map, join(harnessRoot, imageName), process.env.HARNESS_SECTION_CELLS ?? "");
   process.stdout.write(`\nreplay: ${out} in ${result.seconds} s\n`);
+}
+function selectedSnapshot() {
+  const label = process.env.HARNESS_STAGES!,
+    selection =
+      process.env.HARNESS_PASS === "failure" ? "failure" : Number(process.env.HARNESS_PASS ?? 1),
+    count = Number(process.env.HARNESS_PASSES ?? 1),
+    saved = restoreSnapshot(snapshotPath(label, selection), count === 0),
+    pass = selection === "failure" ? saved.failure!.lastObservedEpoch : selection;
+  return { ...saved, pass, count };
 }
 it.runIf(process.env.HARNESS_STAGES)(
   "replays a pass of the world from a snapshot",
   () => {
-    const label = process.env.HARNESS_STAGES!,
-      pass = Number(process.env.HARNESS_PASS ?? 1),
-      until = process.env.HARNESS_UNTIL ?? "",
-      {
-        map,
-        seed,
-        profile: saved,
-        epochs: savedEpochs,
-      } = restoreSnapshot(snapshotPath(label, pass)),
+    const until = process.env.HARNESS_UNTIL ?? "",
+      { map, seed, profile: saved, epochs: savedEpochs, failure, pass, count } = selectedSnapshot(),
       profileSource = process.env.HARNESS_PROFILE_SOURCE ?? "snapshot",
       profile = {
         ...(profileSource === "current" ? physicalProfile : saved),
@@ -155,13 +157,8 @@ it.runIf(process.env.HARNESS_STAGES)(
           land: landHeights(field),
         });
     });
-    const count = Number(process.env.HARNESS_PASSES ?? 1),
-      epochs = epochsFor(pass + count, savedEpochs),
+    const epochs = epochsFor(pass + count, savedEpochs),
       everyPass: object[] = [];
-    if (!savedEpochs && !process.env.HARNESS_EPOCHS)
-      process.stdout.write(
-        "\nLegacy snapshot has no epochs; using current defaults. This is a physical-only workload.\n"
-      );
     try {
       for (let at = pass; at < pass + count; at++) {
         runPass(map, seed, profile, at, until, epochs);
@@ -175,11 +172,12 @@ it.runIf(process.env.HARNESS_STAGES)(
       observeNativeSteps(null);
     }
     const result = {
-      workload: { physicalOnly: true, profileSource, profile, epochs },
+      workload: { physicalOnly: true, profileSource, profile, epochs, failure },
       pass,
       seconds: Math.round((performance.now() - started) / 1000),
       startLand: landAtStart,
       endLand: landHeights(map),
+      classificationThresholdsMetres: reliefThresholds(map.scale),
       systems: mountainSystems(map),
       edge: highGroundAtEdge(map),
       widths: widthsAbove(map),

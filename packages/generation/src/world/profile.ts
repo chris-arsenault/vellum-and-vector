@@ -20,7 +20,7 @@ export const physicalProfile = MapScale.definitions({
   ElevationScale: MapScale.length(0.00025),
   TectonicProvinceCount: 14,
   TectonicSiteCandidateMultiplier: 24,
-  ContinentalAssemblyCount: 4,
+  ContinentalAssemblyCount: 3,
   // Cohesion of assembly seeds within compound continental regions; zero disperses them.
   ContinentalAssemblyClustering: 1,
   // Relative variation in initial assembly area budgets; motion stays coherent within each.
@@ -30,9 +30,9 @@ export const physicalProfile = MapScale.definitions({
   ContinentalMajorAssemblies: 2,
   ContinentalMajorGrowth: 2,
   // Plates of ocean crust alone, holding this share of the world's water between them.
-  OceanicPlateCount: 1,
+  OceanicPlateCount: 2,
   OceanicPlateWaterShare: 0.5,
-  ContinentalCrustFraction: 0.45,
+  ContinentalCrustFraction: 0.48,
   ContinentalTransitionWidth: MapScale.length(0.065),
   // length-unit: ratio — share of rift subsidence and crust potential, not a placed depth.
   ContinentalAssemblySeparationDepth: 0.38,

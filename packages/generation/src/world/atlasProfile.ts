@@ -17,9 +17,9 @@ export function atlasPhysicalProfile(
   profile.ContinentalAssemblyCount = settings.continents;
   profile.OceanicPlateCount = settings.oceanicPlates;
   profile.TectonicProvinceCount = settings.provinces;
-  profile.ContinentalCrustFraction = settings.landFraction;
-  // The water budget covers what is not continental crust, so the land fraction a cartographer
-  // asks for is the land share the first flood leaves, not only the share of continental sites.
+  profile.ContinentalCrustFraction = settings.continentalCrustFraction;
+  // Crust composition and exposed land are independent: continental shelves can be submerged.
+  // The first flood establishes the water budget; later history moves the ground beneath it.
   profile.QualityTargets.OceanCoverage.target = 1 - settings.landFraction;
   profile.TemperatureBaseline = 300 + settings.temperature * 10;
   profile.LatitudeSouth = settings.southLatitude;

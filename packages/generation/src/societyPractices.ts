@@ -3,11 +3,9 @@ import {
   isLivelihood,
   livelihoodShares,
   magicPracticeChannels,
-  neighbors,
   population,
   practiceShares,
   relaxShares,
-  spatial,
   withPracticeShares,
   type PracticeShares,
   type SocietyCommunity,
@@ -16,6 +14,7 @@ import {
 import type { GenerationState, MapProcessContext } from "./process";
 import { changeSample, editableSamples } from "./societyWorks";
 import { societyValue } from "./societySupport";
+import { coastalNeighbors } from "./societySpatial";
 
 export { practiceSkill, practiceYieldGain } from "./societySkill";
 
@@ -54,7 +53,7 @@ function fishedWaters(state: GenerationState) {
   const work = state.society!,
     grid = state.surface,
     water = grid.channels.water,
-    covers = spatial.geometryCoverage(grid.scope.footprint),
+    adjacent = coastalNeighbors(state),
     loads = fishingLoads(state),
     taken = new Map<number, number>();
   const take = (j: number, load: number) => taken.set(j, Math.max(taken.get(j) ?? 0, load));
@@ -63,7 +62,7 @@ function fishedWaters(state: GenerationState) {
     if (load <= 0) continue;
     if (work.river.get(i) > 0.2) take(i, load);
     if (work.coast.get(i) > 0 && water)
-      for (const j of neighbors(grid, i, true, covers)) if (water.get(j) === 1) take(j, load);
+      for (const j of adjacent.at(i)) if (water.get(j) === 1) take(j, load);
   }
   return taken;
 }

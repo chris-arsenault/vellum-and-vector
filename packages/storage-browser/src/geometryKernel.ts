@@ -222,7 +222,7 @@ export class GeometryKernel {
       this.withGeometry(b, precision, (right) => {
         const result =
           predicate === "covers"
-            ? g.GEOSCovers(left, right)
+            ? this.covers(left, right)
             : predicate === "contains"
               ? g.GEOSContains(left, right)
               : g.GEOSIntersects(left, right);
@@ -230,6 +230,17 @@ export class GeometryKernel {
         return result === 1;
       })
     );
+  }
+  /** Prepared coverage lets GEOS use its rectangle shortcut without noding a whole trace. */
+  private covers(left: number, right: number) {
+    const g = this.geos,
+      prepared = g.GEOSPrepare(left);
+    requireThat(prepared, "geometry_predicate", "Could not prepare geometry coverage.");
+    try {
+      return g.GEOSPreparedCovers(prepared, right);
+    } finally {
+      g.GEOSPreparedGeom_destroy(prepared);
+    }
   }
   measure(value: Geometry, precision: number) {
     const g = this.geos,

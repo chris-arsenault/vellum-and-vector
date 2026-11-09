@@ -1,4 +1,4 @@
-import { seasonality, snowShare } from "../world/climate";
+import { partitionPrecipitation, seasonality, snowShare } from "../world/climate";
 import { potentialEvaporation } from "../world/ecologyEnvironment";
 import { latitudeAt } from "../world/latitude";
 import { releaseWorking } from "../world/physicalNumerics";
@@ -159,9 +159,12 @@ function splitPrecipitation(state: RegionalState, i: number, rainFactor: number)
         : distance / profile.ContinentalityDistance,
     halfRange = seasonality(profile, latitudeAt(profile, map, i), continentality);
   map.Seasonality.set(i, halfRange);
-  const snow = (total * snowShare(profile, map.Temperature.get(i), halfRange * 10)) / 1000;
-  map.Snowfall.set(i, snow);
-  map.Rainfall.set(i, total - snow);
+  const { snowfall, rainfall } = partitionPrecipitation(
+    total,
+    snowShare(profile, map.Temperature.get(i), halfRange * 10)
+  );
+  map.Snowfall.set(i, snowfall);
+  map.Rainfall.set(i, rainfall);
 }
 
 /** Present temperature in °C. */

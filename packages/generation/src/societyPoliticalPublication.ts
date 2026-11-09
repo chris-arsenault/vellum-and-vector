@@ -7,6 +7,7 @@ import { isWorldSociety } from "./societyMapScope";
 import { polityCharacter } from "./societyCharacter";
 import { worldTerritories } from "./worldTerritoryGeography";
 import { publishPoliticalRegions } from "./worldPoliticalRegions";
+import { SocietyNeighbors } from "./societySpatial";
 
 const oceanMasks = new WeakMap<Geometry, (geometry: Geometry) => Geometry | null>();
 function excludeOcean(shape: Geometry, ocean: Geometry) {
@@ -105,10 +106,12 @@ function publishTerritory(
 }
 function politicalFrontiers(state: GenerationState) {
   if (!isWorldSociety(state)) return {};
+  // All political meanings traverse one fixed footprint; terrain costs stay live per expansion.
+  const adjacent = new SocietyNeighbors(state.surface, false);
   return {
-    held: worldTerritories(state),
-    effective: worldTerritories(state, "control"),
-    claims: worldTerritories(state, "claim"),
+    held: worldTerritories(state, "sovereignty", adjacent),
+    effective: worldTerritories(state, "control", adjacent),
+    claims: worldTerritories(state, "claim", adjacent),
   };
 }
 export function publishPolitics(state: GenerationState) {

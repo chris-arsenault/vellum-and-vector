@@ -352,7 +352,8 @@ export function communityRecord(state: GenerationState, place: PoiPlace): AtlasF
   const kept = putGeneratedDetail(
     state,
     { ...feature, attributes: { ...feature.attributes, poi: place.kind } },
-    (f) => f.kind === "settlement" && f.attributes.communityId === id
+    (f) => f.kind === "settlement" && f.attributes.communityId === id,
+    { kind: "settlement" }
   );
   return kept ? null : feature;
 }

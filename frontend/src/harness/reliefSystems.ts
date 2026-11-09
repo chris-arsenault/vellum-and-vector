@@ -3,26 +3,30 @@ import { MapScale } from "@atlas/domain";
 import { join } from "node:path";
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import { png } from "./quickTerrain";
+import { physicalGradients } from "../../../packages/generation/src/world/physicalMetric";
+import { releaseWorking } from "../../../packages/generation/src/world/physicalNumerics";
 
 /**
- * The owner's test of a world's relief: can one continent hold different kinds of mountains, young
- * and high beside old and worn, with broad plains between them? Finds each body of raised ground,
- * says what built it and how it stands, and measures the lowland interior of each landmass.
- * Observes only.
+ * Connected raised ground, current construction and structural signals, and interior plains.
+ * These geometric classifications do not establish material age or the origin of a range.
  */
-/** Ground this high counts as raised, in metres: low enough to catch old, worn ranges. */
-const raisedFrom = 600;
+/** Classification lengths as fractions of map span; values retain the 4,000 km reference. */
+const classification = MapScale.definitions({
+  raisedFrom: MapScale.length(0.00015), // 600 m
+  highFrom: MapScale.length(0.000625), // 2,500 m
+  volcanicFrom: MapScale.length(0.000025), // 100 m
+  plainBelow: MapScale.length(0.000375), // 1,500 m
+  plainRelief: MapScale.length(0.00005), // 200 m between neighbours
+  plainInland: MapScale.length(0.0375), // 150 km from the sea
+  edgeReach: MapScale.length(0.075), // 300 km from the map edge
+  edgeHigh: MapScale.length(0.0005), // 2,000 m
+  widthBands: [0.00025, 0.0005, 0.00075, 0.001].map((fraction) => MapScale.length(fraction)),
+});
+/** Resolved classification thresholds in metres, recorded beside diagnostic reports. */
+export const reliefThresholds = (scale: MapScale) => scale.resolve(classification);
+type ReliefThresholds = ReturnType<typeof reliefThresholds>;
 /** A body smaller than this many cells is a hill or a cone, not a range. */
 const rangeFrom = 6;
-/** A young range stands at least this high; an old one has worn below it. */
-const youngFrom = 2500;
-/**
- * A plain is level ground, not low ground: below this height, with its neighbours within this many
- * metres of it, and this far from the sea. The Great Plains climb past a kilometre and are plains.
- */
-const plainBelow = 1500,
-  plainRelief = 200,
-  plainInland = 150_000;
 
 const height = (map: PhysicalField, i: number) =>
   MapScale.metres(map.Elevation.get(i) - map.EffectiveSeaLevel, "native");
@@ -57,8 +61,8 @@ function bodiesWhere(map: PhysicalField, keep: (i: number) => boolean) {
   }
   return bodies;
 }
-/** What a range is: built by a belt working now, or left by one that has stopped. */
-function describeRange(map: PhysicalField, cells: readonly number[]) {
+/** Height and observed activity of a connected body; neither measures its age. */
+function describeRange(map: PhysicalField, cells: readonly number[], thresholds: ReliefThresholds) {
   const heights = cells.map((i) => height(map, i)),
     share = (test: (i: number) => boolean) => cells.filter(test).length / cells.length,
     highest = Math.max(...heights),
@@ -66,7 +70,8 @@ function describeRange(map: PhysicalField, cells: readonly number[]) {
     sheeted = share((i) => map.ThrustSheetIndex.get(i) > 0),
     sutured = share((i) => map.CrustSutureStrength.get(i) > 100),
     volcanic = share(
-      (i) => map.VolcanicConstructionHistory.get(i) > MapScale.inUnits(100, "native")
+      (i) =>
+        map.VolcanicConstructionHistory.get(i) > MapScale.inUnits(thresholds.volcanicFrom, "native")
     );
   return {
     cells: cells.length,
@@ -76,29 +81,32 @@ function describeRange(map: PhysicalField, cells: readonly number[]) {
     sheeted: +sheeted.toFixed(2),
     sutured: +sutured.toFixed(2),
     volcanic: +volcanic.toFixed(2),
-    kind: rangeKind(highest, active, sheeted + sutured),
+    kind: rangeKind(highest, active, sheeted + sutured, thresholds.highFrom),
     ...rangeWidth(map, cells),
     landmass: map.LandmassIds.get(cells[0]),
   };
 }
-function rangeKind(highest: number, active: number, structure: number) {
-  if (highest >= youngFrom && active >= 0.2) return "young";
-  if (highest < youngFrom && active < 0.2 && structure >= 0.2) return "old";
-  return highest >= youngFrom ? "high, belt quiet" : "low, no structure or still active";
+function rangeKind(highest: number, active: number, structure: number, highFrom: number) {
+  if (active >= 0.2) return highest >= highFrom ? "active-high" : "active-low";
+  if (highest >= highFrom) return "quiet-high";
+  return structure >= 0.2 ? "quiet-low-structured" : "quiet-low-unstructured";
 }
-function plainsOf(map: PhysicalField) {
+function plainsOf(map: PhysicalField, thresholds: ReliefThresholds) {
   return bodiesWhere(
     map,
     (i) =>
       isLand(map, i) &&
-      height(map, i) < plainBelow &&
-      map.OceanDistance.get(i) >= plainInland &&
-      around(map, i).every((j) => Math.abs(height(map, j) - height(map, i)) <= plainRelief)
+      height(map, i) < thresholds.plainBelow &&
+      map.OceanDistance.get(i) >= thresholds.plainInland &&
+      around(map, i).every(
+        (j) => Math.abs(height(map, j) - height(map, i)) <= thresholds.plainRelief
+      )
   );
 }
 /** Whether high ground crowds a bounded map's edge: its share there beside the land's own share. */
-export function highGroundAtEdge(map: PhysicalField, reach = 300_000, high = 2000) {
-  const [west, south, east, north] = map.mesh.bounds,
+export function highGroundAtEdge(map: PhysicalField) {
+  const { edgeReach: reach, edgeHigh: high } = reliefThresholds(map.scale),
+    [west, south, east, north] = map.mesh.bounds,
     [originX, originY] = map.mesh.origin,
     atEdge = (i: number) => {
       const x = map.mesh.x(i) + originX,
@@ -118,6 +126,7 @@ export function highGroundAtEdge(map: PhysicalField, reach = 300_000, high = 200
     if (atEdge(i)) raisedEdge++;
   }
   return {
+    thresholdsMetres: { reach, high },
     landNearEdge: +(landEdge / Math.max(1, land)).toFixed(2),
     highGroundNearEdge: +(raisedEdge / Math.max(1, raised)).toFixed(2),
   };
@@ -131,9 +140,11 @@ function deepestInland(map: PhysicalField, id: number) {
   return Math.round(MapScale.inUnits(deepest, "km"));
 }
 /** How wide the land above each height runs, across the long way of each connected body of it. */
-export function widthsAbove(map: PhysicalField, thresholds = [1000, 2000, 3000, 4000]) {
-  const span = MapScale.inUnits(Math.sqrt(map.mesh.area(map.mesh.cellAt(0, 0))), "km");
+export function widthsAbove(map: PhysicalField) {
+  const thresholds = reliefThresholds(map.scale).widthBands,
+    span = MapScale.inUnits(Math.sqrt(map.mesh.area(map.mesh.cellAt(0, 0))), "km");
   return {
+    thresholdsMetres: thresholds,
     cellKm: Math.round(span),
     bands: thresholds.map((from) => {
       const bodies = bodiesWhere(map, (i) => isLand(map, i) && height(map, i) >= from),
@@ -153,10 +164,11 @@ export function widthsAbove(map: PhysicalField, thresholds = [1000, 2000, 3000, 
 }
 /** Each landmass's ranges and plains: the kinds of mountain it holds and the room between them. */
 export function mountainSystems(map: PhysicalField) {
-  const ranges = bodiesWhere(map, (i) => isLand(map, i) && height(map, i) >= raisedFrom)
+  const thresholds = reliefThresholds(map.scale),
+    ranges = bodiesWhere(map, (i) => isLand(map, i) && height(map, i) >= thresholds.raisedFrom)
       .filter((cells) => cells.length >= rangeFrom)
-      .map((cells) => describeRange(map, cells)),
-    plains = plainsOf(map),
+      .map((cells) => describeRange(map, cells, thresholds)),
+    plains = plainsOf(map, thresholds),
     landmasses = new Map<number, number>(),
     cellKm2 = MapScale.areaUnits(map.mesh.spacing * map.mesh.spacing * 0.433, "m2", "km2");
   for (let i = 0; i < map.mesh.count; i++)
@@ -186,19 +198,25 @@ export function mountainSystems(map: PhysicalField) {
     });
 }
 const kindColour: Record<string, [number, number, number]> = {
-  young: [220, 60, 50],
-  old: [60, 120, 220],
-  "high, belt quiet": [230, 170, 40],
-  "low, no structure or still active": [150, 150, 150],
+  "active-high": [220, 60, 50],
+  "quiet-low-structured": [60, 120, 220],
+  "quiet-high": [230, 170, 40],
+  "active-low": [150, 150, 150],
+  "quiet-low-unstructured": [150, 150, 150],
 };
 function colourOfLand(map: PhysicalField) {
-  const colours = new Map<number, [number, number, number]>();
-  for (const cells of bodiesWhere(map, (i) => isLand(map, i) && height(map, i) >= raisedFrom)) {
+  const colours = new Map<number, [number, number, number]>(),
+    thresholds = reliefThresholds(map.scale);
+  for (const cells of bodiesWhere(
+    map,
+    (i) => isLand(map, i) && height(map, i) >= thresholds.raisedFrom
+  )) {
     if (cells.length < rangeFrom) continue;
-    const colour = kindColour[describeRange(map, cells).kind];
+    const colour = kindColour[describeRange(map, cells, thresholds).kind];
     for (const i of cells) colours.set(i, colour);
   }
-  for (const body of plainsOf(map)) for (const i of body) colours.set(i, [190, 225, 170]);
+  for (const body of plainsOf(map, thresholds))
+    for (const i of body) colours.set(i, [190, 225, 170]);
   return colours;
 }
 /** How steep the land is between neighbouring cells, in metres of height per kilometre. */
@@ -255,6 +273,30 @@ export function drawHeights(map: PhysicalField, out: string, name: string, conta
     if (!isLand(map, i)) return [35, 45, 70];
     return heightColours.find(([below]) => height(map, i) < below)![1];
   });
+}
+/**
+ * Native cell gradients in metres per metre, without vertical exaggeration or smoothing.
+ * Lambertian hillshade: fixed north-west light (azimuth 315°, elevation 45°), no cast shadows.
+ * Light vector in east/north/up coordinates is (-0.5, 0.5, sqrt(0.5)); sea stays dark blue.
+ */
+export function drawShade(map: PhysicalField, out: string, name: string) {
+  const gradient = physicalGradients(
+    map.mesh,
+    (i) => MapScale.metres(map.Elevation.get(i), "native"),
+    map.coverage
+  );
+  try {
+    drawCells(map, out, name, (i) => {
+      if (!isLand(map, i)) return [35, 45, 70];
+      const x = gradient.x.get(i),
+        y = gradient.y.get(i),
+        light = (0.5 * x - 0.5 * y + Math.SQRT1_2) / Math.hypot(x, y, 1),
+        grey = Math.round(255 * Math.max(0, Math.min(1, light)));
+      return [grey, grey, grey];
+    });
+  } finally {
+    releaseWorking(map, gradient.x, gradient.y);
+  }
 }
 /** Land by what it is: each range by kind, plains pale green, other land grey-green, sea dark. */
 export function drawSystems(map: PhysicalField, out: string, name: string) {

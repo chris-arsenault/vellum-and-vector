@@ -1,6 +1,7 @@
-import { neighbors, spatial, MapScale, type SocietySupport } from "@atlas/domain";
+import { MapScale, type SocietySupport } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { mapScale } from "./worldSignificance";
+import { coastalNeighbors } from "./societySpatial";
 export { channelAccess } from "./societyChannelAccess";
 
 export const emptySupport = (): SocietySupport => ({
@@ -81,21 +82,27 @@ export function supportAt(
  */
 export function coastalFishery(state: GenerationState) {
   const grid = state.surface,
-    covers = spatial.geometryCoverage(grid.scope.footprint),
     result = grid.coverage.scratch("float64", "society-coastal-fishery", grid.active.length);
   result.retain();
   const water = grid.channels.water;
   if (!water) return result;
+  const adjacent = coastalNeighbors(state);
   for (let i = 0; i < result.length; i++) {
     if (!dryLand(state, i)) continue;
-    const sea = neighbors(grid, i, true, covers).filter((j) => water.get(j) === 1);
-    if (!sea.length) continue;
-    const fauna = sea.reduce((s, j) => s + societyValue(state, "aquaticFauna", j), 0) / sea.length,
-      upwelling = Math.max(...sea.map((j) => societyValue(state, "upwelling", j))),
-      crushed =
-        Math.max(...sea.map((j) => societyValue(state, "magic:pressure:intensity", j))) >= 360;
+    let count = 0,
+      fauna = 0,
+      upwelling = -Infinity,
+      pressure = -Infinity;
+    for (const j of adjacent.at(i)) {
+      if (water.get(j) !== 1) continue;
+      count++;
+      fauna += societyValue(state, "aquaticFauna", j);
+      upwelling = Math.max(upwelling, societyValue(state, "upwelling", j));
+      pressure = Math.max(pressure, societyValue(state, "magic:pressure:intensity", j));
+    }
+    if (!count) continue;
     // Upwelling is a 0..1 ratio on the surface: a full front doubles the catch.
-    result.set(i, (0.5 + 4 * fauna + 2 * upwelling) * (crushed ? 0.3 : 1));
+    result.set(i, (0.5 + (4 * fauna) / count + 2 * upwelling) * (pressure >= 360 ? 0.3 : 1));
   }
   return result;
 }

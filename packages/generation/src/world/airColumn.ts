@@ -11,6 +11,10 @@ import { linkDistance, wrappedEdges } from "./longitudeWrap";
 export function saturation(p: PhysicalProfile, temperature: number) {
   return p.ColumnSaturation * Math.exp(p.ColumnSaturationGrowth * ((temperature - 300) / 10 - 20));
 }
+/** Pressure belts govern background rainout, not water already condensed by local uplift. */
+export function columnRainfall(efficiency: number, belt: number, moisture: number, lifted: number) {
+  return efficiency * (belt * moisture + lifted);
+}
 /**
  * Cells ordered so that each follows its single source (upwind air or
  * upstream water). A closed loop is broken at the cell that entered it last,
@@ -110,9 +114,9 @@ export function marchAirColumns(
     carried.set(i, carriedHeat);
     const q = Math.max(0, air.q);
     moisture.set(i, q);
-    // Subsiding air under the subtropical and polar highs also caps uplift rain.
-    const belt = rainout(i);
-    precipitation.set(i, p.ColumnRainEfficiency * (belt * q + Math.min(1, belt) * air.orographic));
+    // Mountains, storms and thermal lift have already removed this water from the column.
+    // Suppressing it again by latitude erases wet slopes and storm tracks inside dry belts.
+    precipitation.set(i, columnRainfall(p.ColumnRainEfficiency, rainout(i), q, air.orographic));
     marine.set(i, air.heat);
     airHeat.set(i, air.heat);
     maritime.set(i, air.sea);

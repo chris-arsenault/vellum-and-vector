@@ -3,8 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { buildTransportPlan, releaseTransportPlan } from "./transportPlan";
 import { transportHistory } from "./transportHistory";
-import { physicalSampler } from "./physicalMetric";
-import { meshLineDelta, meshPoint } from "./mesh";
+import { triangleVectorSampler } from "./triangleSampling";
 import {
   completeTectonicMotion,
   prepareTectonicMotion,
@@ -13,37 +12,22 @@ import {
 import { tectonicProvinces } from "./provinces";
 import { plateTravel } from "./tectonicControls";
 import { advectLandmarkDrainage } from "./landmarkTransport";
-import { geologicalPointMotion } from "./geologicalPointMotion";
+import { advectGeologicalTrace, geologicalPointMotion } from "./geologicalPointMotion";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { beginReliefCarry, finishReliefCarry } from "./reliefCarry";
 
 function advectGeometry(map: PhysicalField, distance: number) {
-  const vx = physicalSampler(map.mesh, map.CrustMotionX),
-    vy = physicalSampler(map.mesh, map.CrustMotionY);
-  let maximumSpeed = 0;
-  for (let i = 0; i < map.mesh.count; i++)
-    maximumSpeed = Math.max(
-      maximumSpeed,
-      Math.hypot(map.CrustMotionX.get(i), map.CrustMotionY.get(i))
-    );
-  const move = geologicalPointMotion(map.mesh, vx, vy, distance, maximumSpeed);
+  const velocity = triangleVectorSampler(
+    map.mesh,
+    (i) => map.CrustMotionX.get(i),
+    (i) => map.CrustMotionY.get(i),
+    { fixed: true }
+  );
+  const move = geologicalPointMotion(map.mesh, velocity, distance);
   for (const event of map.events)
     if (event.kind !== "plume") [event.x, event.y] = move(event.x, event.y);
-  for (const fault of map.faults) {
-    const result: [number, number][] = [];
-    fault.coordinates.forEach((b, index) => {
-      if (index === 0) return;
-      const a = fault.coordinates[index - 1],
-        [dx, dy] = meshLineDelta(map.mesh, a, b),
-        count = Math.ceil(Math.hypot(dx, dy) / (map.mesh.spacing / 4));
-      for (let station = 0; station < count; station++) {
-        const fraction = station / count;
-        result.push(move(...meshPoint(map.mesh, a[0] + dx * fraction, a[1] + dy * fraction)));
-      }
-    });
-    if (fault.coordinates.length) result.push(move(...fault.coordinates.at(-1)!));
-    fault.coordinates = result;
-  }
+  for (const fault of map.faults)
+    fault.coordinates = advectGeologicalTrace(map.mesh, fault.coordinates, move);
 }
 
 function transportStep(map: PhysicalField, step: number) {

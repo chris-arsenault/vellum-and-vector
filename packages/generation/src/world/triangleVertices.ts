@@ -37,3 +37,20 @@ export function triangleVertex(mesh: PhysicalMesh, cell: number, corner: number)
     ],
   };
 }
+
+/** Sampler-owned topology only: each triangle corner has at most six incident cells. */
+export function triangleVertexMembership(mesh: PhysicalMesh) {
+  const degree = new Uint8Array(mesh.count * 3),
+    cells = new Int32Array(mesh.count * 3 * 6);
+  return (cell: number, corner: number): ArrayLike<number> => {
+    const row = cell * 3 + corner,
+      offset = row * 6;
+    if (degree[row] === 0) {
+      const members = triangleVertex(mesh, cell, corner).members;
+      cells.set(members, offset);
+      // Zero means unvisited; an empty clipped neighborhood is still a cached result.
+      degree[row] = members.length + 1;
+    }
+    return cells.subarray(offset, offset + degree[row] - 1);
+  };
+}

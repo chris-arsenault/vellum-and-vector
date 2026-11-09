@@ -11,6 +11,7 @@ import { roundCycle, societyStep } from "./societyTempo";
 import { isMajorRuin } from "./societyMapScope";
 import { profileOf } from "./societyProfile";
 import { mapScale } from "./worldSignificance";
+import { withNumericalLifetime } from "./generationWorkingState";
 
 type Era = GenerationSettings["humanEras"][number];
 /**
@@ -117,18 +118,28 @@ async function runEra(
   // A band's generation is the shortest cycle: coarser than the settled decade, and a round
   // costs a fraction of a physical epoch instead of doubling it.
   let elapsed = 0;
-  for (let index = 0; elapsed < era.years - 1e-9; index++) {
-    const dt = societyStep(state, era.years - elapsed, roundCycle);
-    elapsed += dt;
-    const final = elapsed >= era.years - 1e-9;
-    societyCycle(state, inEra, dt, { index, elapsed, final });
-    context.progress(elapsed / era.years, `${era.id}: year ${Math.round(elapsed)} of ${era.years}`);
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  try {
+    for (let index = 0; elapsed < era.years - 1e-9; index++) {
+      const dt = societyStep(state, era.years - elapsed, roundCycle);
+      elapsed += dt;
+      const final = elapsed >= era.years - 1e-9;
+      societyCycle(state, inEra, dt, { index, elapsed, final });
+      context.progress(
+        elapsed / era.years,
+        `${era.id}: year ${Math.round(elapsed)} of ${era.years}`
+      );
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
+  } finally {
+    delete work.coastalNeighbors;
+    delete work.cycle;
   }
-  delete work.cycle;
-  const round = endRound(state, era.id, epoch);
-  (state.rounds ??= []).push(round);
-  delete state.society;
+  const round = withNumericalLifetime(state, () => {
+    const completed = endRound(state, era.id, epoch);
+    (state.rounds ??= []).push(completed);
+    delete state.society;
+    return completed;
+  });
   context.recordCause({
     kind: "domain",
     process: "human.round",

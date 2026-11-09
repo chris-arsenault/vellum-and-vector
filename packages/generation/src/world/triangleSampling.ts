@@ -1,6 +1,6 @@
 import type { PhysicalMesh } from "./mesh";
 import { nearestTriangle, meshDeltaX, meshPoint } from "./mesh";
-import { triangleVertex } from "./triangleVertices";
+import { triangleVertex, triangleVertexMembership } from "./triangleVertices";
 import { CellList, SmallIntSet } from "@atlas/domain";
 
 export interface TriangleSample {
@@ -10,21 +10,30 @@ export interface TriangleSample {
 }
 const rootThree = Math.sqrt(3);
 /** Piecewise linear fans share vertex averages across faces. Centre samples are exact. */
-function locate(mesh: PhysicalMesh, x: number, y: number) {
-  [x, y] = meshPoint(mesh, x, y);
-  const cell = nearestTriangle(mesh, x, y);
-  if (cell < 0) return { cell, barycentric: [0, 0, 0], minimum: 0 };
+function barycentricAt(mesh: PhysicalMesh, cell: number, x: number, y: number) {
   const sign = mesh.inverted(cell) ? -1 : 1,
     dx = (meshDeltaX(mesh, x - mesh.x(cell)) / mesh.spacing) * sign,
     dy = (y - mesh.y(cell)) / (mesh.periodic?.poles?.spacingY ?? mesh.spacing);
-  const barycentric = [
-    (1 - 2 * dx) / 3,
-    (1 + dx) / 3 - dy / rootThree,
-    (1 + dx) / 3 + dy / rootThree,
-  ];
+  return [(1 - 2 * dx) / 3, (1 + dx) / 3 - dy / rootThree, (1 + dx) / 3 + dy / rootThree];
+}
+function locate(mesh: PhysicalMesh, x: number, y: number, hint = -1) {
+  [x, y] = meshPoint(mesh, x, y);
+  // In an equilateral mesh, the triangle is also its centroid's nearest-cell region.
+  // Distorted pole rows retain the lattice owner's location rule.
+  if (hint >= 0 && !mesh.periodic?.poles) {
+    const barycentric = barycentricAt(mesh, hint, x, y),
+      minimum = Math.min(...barycentric);
+    if (minimum >= 0) return { cell: hint, barycentric, minimum };
+    const neighbor = faceNeighbor(mesh, hint, barycentric.indexOf(minimum)),
+      adjacent = barycentricAt(mesh, neighbor, x, y),
+      inside = Math.min(...adjacent);
+    if (inside >= 0) return { cell: neighbor, barycentric: adjacent, minimum: inside };
+  }
+  const cell = nearestTriangle(mesh, x, y);
+  if (cell < 0) return { cell, barycentric: [0, 0, 0], minimum: 0 };
+  const barycentric = barycentricAt(mesh, cell, x, y);
   // Clamp only at the outer numerical boundary where a full triangle may be absent.
-  const minimum = Math.max(0, Math.min(...barycentric));
-  return { cell, barycentric, minimum };
+  return { cell, barycentric, minimum: Math.max(0, Math.min(...barycentric)) };
 }
 function fanWeights(barycentric: number[], minimum: number) {
   const maximum = Math.max(...barycentric),
@@ -65,9 +74,11 @@ export function triangleValue(sample: TriangleSample, values: ArrayLike<number>)
   return base + value;
 }
 /** Average differences so a constant field remains constant, including at contour thresholds. */
-function vertexMean(members: number[], read: (i: number) => number) {
+function vertexMean(members: ArrayLike<number>, read: (i: number) => number) {
   const base = read(members[0]);
-  return base + members.reduce((sum, i) => sum + (read(i) - base), 0) / members.length;
+  let sum = 0;
+  for (let i = 0; i < members.length; i++) sum += read(members[i]) - base;
+  return base + sum / members.length;
 }
 /** Every live cell of the mesh. */
 function* liveCells(mesh: PhysicalMesh) {
@@ -186,16 +197,89 @@ export function triangleSampler(
 ) {
   const read = typeof values === "function" ? values : (i: number) => values[i];
   return (x: number, y: number) => {
-    const { cell, barycentric, minimum } = locate(mesh, x, y);
-    if (cell < 0) return 0;
-    const fan = fanWeights(barycentric, minimum),
-      neighbor = faceNeighbor(mesh, cell, fan.opposite);
-    const base = read(cell);
-    return (
-      base +
-      (fan.vertex * (vertexMean(triangleVertex(mesh, cell, fan.corner).members, read) - base) +
-        (fan.face * (read(neighbor) - base)) / 2) /
-        (fan.center + fan.vertex + fan.face)
-    );
+    const sample = interpolationAt(mesh, x, y);
+    return sample ? interpolateFan(sample, read) : 0;
+  };
+}
+
+function interpolationAt(
+  mesh: PhysicalMesh,
+  x: number,
+  y: number,
+  membership?: ReturnType<typeof triangleVertexMembership>,
+  hint = -1,
+  adjacent?: (cell: number, opposite: number) => number
+) {
+  const { cell, barycentric, minimum } = locate(mesh, x, y, hint);
+  if (cell < 0) return null;
+  const fan = fanWeights(barycentric, minimum);
+  return {
+    cell,
+    fan,
+    neighbor: adjacent ? adjacent(cell, fan.opposite) : faceNeighbor(mesh, cell, fan.opposite),
+    members: membership
+      ? membership(cell, fan.corner)
+      : triangleVertex(mesh, cell, fan.corner).members,
+  };
+}
+function interpolateFan(
+  sample: NonNullable<ReturnType<typeof interpolationAt>>,
+  read: (i: number) => number,
+  mean = vertexMean(sample.members, read)
+) {
+  const { cell, fan, neighbor } = sample,
+    base = read(cell);
+  return (
+    base +
+    (fan.vertex * (mean - base) + (fan.face * (read(neighbor) - base)) / 2) /
+      (fan.center + fan.vertex + fan.face)
+  );
+}
+
+/** Values and derived vertex means belong to this one immutable sampling interval. */
+function fixedVector(
+  mesh: PhysicalMesh,
+  readX: (i: number) => number,
+  readY: (i: number) => number
+) {
+  const xs = Float64Array.from({ length: mesh.count }, (_, i) => readX(i)),
+    ys = Float64Array.from({ length: mesh.count }, (_, i) => readY(i)),
+    vertexX = new Float64Array(mesh.count * 3),
+    vertexY = new Float64Array(mesh.count * 3),
+    ready = new Uint8Array(mesh.count * 3),
+    x = (i: number) => xs[i],
+    y = (i: number) => ys[i];
+  return (sample: NonNullable<ReturnType<typeof interpolationAt>>): [number, number] => {
+    const row = sample.cell * 3 + sample.fan.corner;
+    if (!ready[row]) {
+      vertexX[row] = vertexMean(sample.members, x);
+      vertexY[row] = vertexMean(sample.members, y);
+      ready[row] = 1;
+    }
+    return [interpolateFan(sample, x, vertexX[row]), interpolateFan(sample, y, vertexY[row])];
+  };
+}
+
+/** Both vector components share the same location, fan and vertex neighborhood. */
+export function triangleVectorSampler(
+  mesh: PhysicalMesh,
+  readX: (i: number) => number,
+  readY: (i: number) => number,
+  options: { fixed?: boolean } = {}
+) {
+  const membership = triangleVertexMembership(mesh),
+    facing = new Int32Array(mesh.count * 3).fill(-1),
+    adjacent = (cell: number, opposite: number) => {
+      const row = cell * 3 + opposite;
+      if (facing[row] < 0) facing[row] = faceNeighbor(mesh, cell, opposite);
+      return facing[row];
+    },
+    fixed = options.fixed ? fixedVector(mesh, readX, readY) : null;
+  let hint = -1;
+  return (x: number, y: number): [number, number] => {
+    const sample = interpolationAt(mesh, x, y, membership, hint, adjacent);
+    hint = sample?.cell ?? -1;
+    if (!sample) return [0, 0];
+    return fixed ? fixed(sample) : [interpolateFan(sample, readX), interpolateFan(sample, readY)];
   };
 }

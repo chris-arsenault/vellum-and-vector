@@ -25,12 +25,12 @@ import {
 
 type Values = { get(i: number): number };
 const units = (value: number) => MapScale.inUnits(value, "native");
-/** How long the smoothing is that splits relief into sizes, smallest first, in metres. */
-const scales = [50_000, 100_000, 200_000];
+/** Smoothing spans: 50, 100 and 200 km on the reference map. */
+const smoothingSpans = [0.0125, 0.025, 0.05];
 /** Below this a cell's structural grain is too faint to measure against. */
 const faintGrain = 0.3;
-/** How deep to read the column for what cutting will uncover next, in metres. */
-const bodiesDeep = 200;
+/** Depth of the exposed-next material probe: 200 m on the reference map. */
+const bodyDepthSpan = 0.00005;
 const softBelow = 800,
   hardFrom = 1600;
 const round = (value: number, places = 0) => {
@@ -138,7 +138,8 @@ function correlation(map: PhysicalField, a: Values, b: Values) {
 }
 /** Relief by size: the root-mean-square height held between each smoothing and the next. */
 function reliefBySize(map: PhysicalField, field: ReadBand) {
-  const smoothed = scales.map((length) => smoothMetric(map, field, length)),
+  const scales = smoothingSpans.map((span) => map.scale.length(span)),
+    smoothed = scales.map((length) => smoothMetric(map, field, length)),
     levels: Values[] = [field, ...smoothed],
     held = new Array<number>(scales.length + 1).fill(0);
   let count = 0,
@@ -243,6 +244,7 @@ function bodyGround(map: PhysicalField): BodyGround {
 /** Bodies of connected rock: by kind and by family, on the surface and where cutting will reach. */
 function rockBodiesOf(map: PhysicalField) {
   const ground = bodyGround(map),
+    bodiesDeep = map.scale.length(bodyDepthSpan),
     deep = units(bodiesDeep),
     surface = (i: number) => map.RockKindCodes.get(i),
     below = (i: number) => rockAtDepth(map, i, deep),
@@ -403,8 +405,8 @@ export function reliefProbes() {
         change.set(i, map.Elevation.get(i) - held.height.get(i));
       const step = stepChange(name, map, context.EpochIndex, change);
       if (step) steps.push(step);
-      if (name === "orogenic-construction")
-        passes.push(passInStep(map, context.EpochIndex, change, held.height, spacing));
+      if (name === "orogenic-construction" || name === "plate-advection")
+        passes.push({ name, ...passInStep(map, context.EpochIndex, change, held.height, spacing) });
       if (name === "ancestral-fluvial-erosion")
         cuts.push(cutsByRock(map, context.EpochIndex, held.cut));
       if (name === "physical-structural-validation") final = finalState(map, spacing);

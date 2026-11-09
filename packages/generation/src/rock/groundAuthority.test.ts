@@ -5,7 +5,7 @@ import { units } from "../world/math";
 import { Stage } from "../coupling/stage";
 import { groundOf } from "./ground";
 import { cutGround, deposit, displaceGround, lithify, standGround } from "./groundLedger";
-import { setLayer, materialLayer } from "./rockColumn";
+import { setLayer, materialLayer, readLayer } from "./rockColumn";
 import { rockCatalogue as rocks } from "./rockCatalogue";
 import { projectGround } from "./groundShares";
 import { compileMix } from "./modes";
@@ -74,6 +74,67 @@ it("exposes a weak face below a cap without granting top access through the cap"
   expect(face.map((bed) => bed.kind)).toContain(rocks.shale.code);
   expect(owner.section(0)[0].kind).toBe(rocks.quartzite.code);
   expect(owner.faceGives(0, 1, shear)).toBeGreaterThan(owner.gives(0, shear));
+});
+it("reads different exposed beds from one prepared source across its neighboring heights", () => {
+  const map = ground(),
+    owner = groundOf(map),
+    shear = compileMix({ shear: 1 });
+  displaceGround(map, 1, -units(60), "supplied deep face");
+  displaceGround(map, 2, -units(5), "supplied cap face");
+  const gives = owner.faceGivesFrom(0, shear);
+  expect(gives(1)).toBeGreaterThan(gives(2));
+  expect(gives(3)).toBe(owner.gives(0, shear));
+  expect(owner.section(0)[0]).toMatchObject({ kind: rocks.quartzite.code, formedMin: 1 });
+});
+it("prepares new material after settlement instead of retaining a source cache", () => {
+  const map = ground(),
+    owner = groundOf(map),
+    shear = compileMix({ shear: 1 });
+  displaceGround(map, 1, -units(5), "supplied face");
+  const before = owner.faceGivesFrom(0, shear)(1);
+  setLayer(map, 0, 0, rocks.shale.code, units(10));
+  projectGround(map, 0);
+  expect(owner.faceGivesFrom(0, shear)(1)).toBeGreaterThan(before);
+});
+it("omits coincident finite contacts without losing their material or the basement", () => {
+  const map = ground(),
+    owner = groundOf(map),
+    tiny = 1e-12;
+  setLayer(map, 0, 0, rocks.basalt.code, tiny, { formedMin: 3, formedMax: 4, altered: 5 });
+  setLayer(map, 0, 1, rocks.quartzite.code, units(10));
+  setLayer(map, 0, 2, rocks.shale.code, units(20));
+  setLayer(map, 0, 3, rocks.granite.code, tiny);
+  setLayer(map, 0, 0, rocks.limestone.code, tiny, { formedMin: 2 }, "loose");
+  projectGround(map, 0);
+  standGround(map, 1, units(460), "supplied exposed support");
+  const section = owner.section(0);
+  expect(section.map((layer) => layer.kind)).toEqual([
+    rocks.quartzite.code,
+    rocks.shale.code,
+    rocks.granite.code,
+  ]);
+  expect(section.at(-1)).toMatchObject({ basement: true, depth: tiny });
+  expect(readLayer(map, 0, 0)).toMatchObject({
+    depth: tiny,
+    formedMin: 3,
+    formedMax: 4,
+    altered: 5,
+  });
+  expect(readLayer(map, 0, 0, "loose")).toMatchObject({ depth: tiny, formedMin: 2 });
+  expect(owner.failureFrom(0, "land", compileMix({ shear: 1 }))(1, 50, 1)).toBeGreaterThan(0);
+});
+it("retains a microscopic finite interval when its contacts remain representable", () => {
+  const map = ground(),
+    tiny = 1e-12;
+  setLayer(map, 0, 0, rocks.basalt.code, tiny);
+  standGround(map, 0, 0, "supplied zero datum");
+  expect(groundOf(map).section(0)[0]).toMatchObject({
+    kind: rocks.basalt.code,
+    depth: tiny,
+    top: 0,
+    bottom: -tiny,
+    basement: false,
+  });
 });
 it("retains independent source material through competing routed withdrawals", () => {
   const map = ground();

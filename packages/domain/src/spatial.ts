@@ -1,4 +1,4 @@
-import type { Geometry, Position as Coordinate } from "geojson";
+import type { Geometry, LineString, MultiLineString, Position as Coordinate } from "geojson";
 import type { Frame, Position } from "./model";
 import { frameSchema } from "./schemas";
 import { requireThat } from "./errors";
@@ -31,6 +31,9 @@ export type SpatialOperations = Pick<
   | "interiorPosition"
   | "crossings"
   | "clipByRect"
+  | "withClipByRect"
+  | "clipTrace"
+  | "resampleTrace"
   | "nearestPoints"
   | "lineFraction"
   | "lineAt"
@@ -84,6 +87,10 @@ export class Spatial {
   }
   geometryCoverage(value: Geometry): (geometry: Geometry) => boolean {
     return operations(this.precision).geometryCoverage(value);
+  }
+  /** Reduce sub-resolution bends, optionally spacing stations for a sampled field; endpoints remain. */
+  resampleTrace(value: LineString, deviation: number, spacing?: number): LineString {
+    return operations(this.precision).resampleTrace(value, deviation, spacing);
   }
   pointCoverage(value: Geometry): (position: Position) => boolean {
     return operations(this.precision).pointCoverage(value);
@@ -151,6 +158,14 @@ export class Spatial {
   }
   clipByRect(value: Geometry, bounds: Bounds): Geometry | null {
     return operations(this.precision).clipByRect(value, bounds);
+  }
+  /** Parse once for repeated windows; the clip function is valid only during the synchronous callback. */
+  withClipByRect<T>(value: Geometry, work: (clip: (bounds: Bounds) => Geometry | null) => T): T {
+    return operations(this.precision).withClipByRect(value, work);
+  }
+  /** Clip an ordered trace, preserving revisits and boundary contacts without noding crossings. */
+  clipTrace(value: LineString | MultiLineString, mask: Geometry): Geometry | null {
+    return operations(this.precision).clipTrace(value, mask);
   }
   /** The closest pair of points, first on `a`, then on `b`. */
   nearestPoints(a: Geometry, b: Geometry): [Position, Position] {

@@ -3,6 +3,7 @@ import type { GenerationState } from "./process";
 import { RouteHeap } from "./mapRouting";
 import { dryLand } from "./societySupport";
 import { mapScale } from "./worldSignificance";
+import type { SocietyNeighbors } from "./societySpatial";
 
 export interface SocietyEdge {
   a: number;
@@ -17,15 +18,16 @@ const riverTravel = 0.5;
 const seaTravel = 0.5;
 
 /** The numerical topology already owns adjacency; travel reads its local edges on demand. */
-function localEdges(state: GenerationState, marine: boolean) {
+function localEdges(state: GenerationState, marine: boolean, adjacent?: SocietyNeighbors) {
   const grid = state.surface,
     seaLaunch = mapScale(state).length(0.0025),
-    covers = spatial.geometryCoverage(grid.scope.footprint);
+    covers = adjacent ? undefined : spatial.geometryCoverage(grid.scope.footprint),
+    links = (i: number) => adjacent?.at(i) ?? neighbors(grid, i, false, covers);
   const sea = (i: number) => Boolean(grid.active.get(i)) && grid.channels.water?.get(i) === 1;
   return function* (i: number): Iterable<SocietyEdge> {
     if (marine ? !sea(i) : !dryLand(state, i)) return;
     const a = gridPosition(grid, i);
-    for (const j of neighbors(grid, i, false, covers)) {
+    for (const j of links(i)) {
       const distance = gridDistance(grid, a, gridPosition(grid, j));
       if (marine) {
         if (!sea(j) && !dryLand(state, j)) continue;
@@ -78,14 +80,15 @@ export class SocietySpread {
   constructor(
     state: GenerationState,
     private marine = false,
-    unreached = Infinity
+    unreached = Infinity,
+    adjacent?: SocietyNeighbors
   ) {
     const allocate = (type: "int32" | "float64", name: string, initial: number) =>
       state.surface.coverage.scratch(type, name, state.surface.active.length, initial);
     this.owner = allocate("int32", "society-owner", -1);
     this.distances = allocate("float64", "society-distance", unreached);
     this.queue = new RouteHeap();
-    this.edges = localEdges(state, marine);
+    this.edges = localEdges(state, marine, adjacent);
   }
   seed(cell: number, owner: number, cost = 0) {
     if (cost >= this.distances.get(cell)) return;

@@ -9,7 +9,7 @@ import {
 } from "../rock/groundTransport";
 export { heldLayers, holdRock, releaseHeldRock, type HeldRock } from "../rock/groundTransport";
 import { arcCrustYield, collisionAreaShares } from "../rock/crustTransport";
-import { remapHeldGround } from "../rock/groundRemap";
+import { GroundRemapper } from "../rock/groundRemap";
 import type { PhysicalField } from "./field";
 import { releaseWorking, workingArray, workingValues } from "./physicalNumerics";
 import { weightScale, type TransportPlan } from "./transportPlan";
@@ -113,12 +113,18 @@ function placeArrivals(
   carry: ReliefCarry,
   work: Arrivals
 ) {
-  const ground = retainedGround(map, plan, carry, work);
-  for (let cell = 0; cell < map.mesh.count; cell++) {
-    if (ground.offsets.get(cell) === ground.offsets.get(cell + 1)) formTransportOpening(map, cell);
-    else remapHeldGround(map, carry, cell, ground, plan);
+  const ground = retainedGround(map, plan, carry, work),
+    remap = new GroundRemapper(map, carry, plan);
+  try {
+    for (let cell = 0; cell < map.mesh.count; cell++) {
+      if (ground.offsets.get(cell) === ground.offsets.get(cell + 1))
+        formTransportOpening(map, cell);
+      else remap.place(cell, ground);
+    }
+  } finally {
+    remap.close();
+    releaseWorking(map, ground.offsets, ground.sources, ground.weights);
   }
-  releaseWorking(map, ground.offsets, ground.sources, ground.weights);
 }
 /** Only physical overlap stacks material, at the cell where its area actually arrived. */
 function stackOverlap(map: PhysicalField, plan: TransportPlan, carry: ReliefCarry, work: Arrivals) {
@@ -146,8 +152,11 @@ function stackOverlap(map: PhysicalField, plan: TransportPlan, carry: ReliefCarr
 /** Settle the interval's retained placement and local collisions before another process sees it. */
 export function finishReliefCarry(map: PhysicalField, carry: ReliefCarry, plan: TransportPlan) {
   const work = arrivals(map, plan, carry);
-  placeArrivals(map, plan, carry, work);
-  stackOverlap(map, plan, carry, work);
-  releaseHeldRock(map, carry);
-  releaseWorking(map, carry.continental, work.continentalRetained, work.oceanicRetained);
+  try {
+    placeArrivals(map, plan, carry, work);
+    stackOverlap(map, plan, carry, work);
+  } finally {
+    releaseHeldRock(map, carry);
+    releaseWorking(map, carry.continental, work.continentalRetained, work.oceanicRetained);
+  }
 }

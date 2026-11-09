@@ -13,6 +13,7 @@ import {
   layDownPackage,
   layerDepth,
   layerKind,
+  layerValue,
   materialLayer,
   mergeMaterial,
   rockColumnFields,
@@ -65,6 +66,50 @@ it("keeps alteration on its own bed rather than giving it to the newly exposed b
   expect(map.RockResistance.get(0)).toBe(sandstone.resistance);
   expect(readLayer(map, 0, 0).altered).toBe(0);
   expect(before.strength).toBe(shale.resistance + 300);
+});
+
+it("reads current material in each column without changing earlier scalar snapshots", () => {
+  const map = column(),
+    retained = {
+      strength: 1500,
+      secondaryKind: shale.code,
+      secondaryShare: 0.3,
+      grainX: 0.4,
+      grainY: 0.6,
+      bedSlopeX: -0.2,
+      bedSlopeY: 0.1,
+      formedMin: 1,
+      formedMax: 3,
+      deposited: 4,
+      altered: 5,
+      consolidation: 0.7,
+      damage: 0.2,
+      mixed: 1,
+    };
+  map.CompletedEpochCount = 7;
+  for (const facet of ["land", "cut", "loose", "cutLoose"] as const) {
+    setLayer(map, 1, 2, limestone.code, 17, retained, facet);
+    const captured = readLayer(map, 1, 2, facet);
+    expect(layerValue(map, 1, 2, "depth", facet)).toBe(17);
+    setLayer(map, 1, 2, shale.code, 9, { altered: 6 }, facet);
+    expect(layerValue(map, 1, 2, "depth", facet)).toBe(9);
+    expect(layerValue(map, 1, 2, "altered", facet)).toBe(6);
+    expect(readLayer(map, 1, 2, facet)).toMatchObject({
+      kind: shale.code,
+      depth: 9,
+      strength: shale.resistance,
+      secondaryKind: shale.code,
+      secondaryShare: 0,
+      formedMin: 7,
+      formedMax: 7,
+      deposited: 7,
+      altered: 6,
+      consolidation: 1,
+      damage: 0,
+      mixed: 0,
+    });
+    expect(captured).toMatchObject({ kind: limestone.code, depth: 17, ...retained });
+  }
 });
 
 it("never runs out of basement", () => {

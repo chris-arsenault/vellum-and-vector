@@ -707,8 +707,7 @@ by each share's actual cover. Converted rock becomes loose material beneath that
 Elevation, mean sediment depth and exposed-rock summaries are read-only projections. Solvers
 use owning operations for construction, displacement, wear and deformation. Live field and
 Coverage readers provide bulk copies without writable aliases. Published and imported material
-properties select one donor package together; placement may interpolate independently. Legacy
-inputs without geological history keep that history unknown.
+properties select one donor package together; placement may interpolate independently.
 
 Columns have bounded capacity. Coarsening preserves the surface cap and rock basement but loses
 fine internal ordering; only the largest two constituent identities remain in a mixed bed.
@@ -795,9 +794,6 @@ Plumes and subduction arcs supply the same connected lava routing. Mobile head, 
 and cooling determine where a pulse reaches; its solid deposits change subsequent routes. Lava
 can fill a cut before coating intact ground. Random caldera carving is absent: this model does not
 represent the reservoir withdrawal and failure needed to explain collapse.
-Supply rejected by the ground's height limit remains unemplaced. Its thermal history is unresolved;
-it retries locally with a later eruption, receives no inherited routing mobility, and acquires a
-rock formation age only when solid emplacement succeeds.
 
 Processes and materials meet through a shared vocabulary of modes: abrasion, plucking, shear and solution.
 A material holds facts, a mode says how facts answer its attack, and a process says how it acts, as a mix of
@@ -939,10 +935,17 @@ Plate advection transports carried fields one at a time through reusable scratch
 space. It resolves category provenance before updating source fractions and
 strengths, retaining historical maxima and new-crust rules. Ground reconstructs placement and
 complete material sections from the same retained areas, with finite cover and occupied-facet weights.
+Each transfer reuses donor orientation calculations in temporary typed scratch.
+Contact-aligned mixtures collect all contributing materials before projecting into
+the column's constituent slots; they retain weighted properties and history.
 Continental shortening and oceanic subduction use the same area-retention rule for
 crust and surface material. Only convergent excess stacks at its receiving footprint.
 Bed orientation follows each donor's continuous motion, rather than differences
 between independently moving neighboring plates.
+Fault traces are simplified and sampled at the terrain resolution before motion,
+then simplified again where motion compresses their stations. Their identities
+and histories remain attached. Motion reuses the interval's velocity field and
+resolves travel against local speed.
 
 World-to-display interpolation builds compact typed weights in batches rather
 than retaining JavaScript sample objects for every display cell. Repeated physical
@@ -1034,9 +1037,8 @@ validation is consolidated in `layerValidation.ts`.
   continental contacts can weld without merging their material origins. Geological
   intervals have their own units, independently of ecological and societal years.
   Motion and boundary geometry update throughout each interval.
-- Formation sets the water budget: each formation flood covers the share of the
-  world that is not continental crust, so the land fraction a cartographer asks
-  for is the land the first flood leaves. Once history begins, the inventory stays
+- Formation sets the water budget from the requested initial exposed land share,
+  independently of continental crust allocation. Once history begins, the inventory stays
   fixed through the final present pass. Grounded ice removes its water-equivalent
   volume from the ocean and melting returns it; floating sea ice does not. Explicit
   epoch water-level offsets apply separately. The eventual exposed land fraction
@@ -1071,12 +1073,10 @@ remain measured data, with unit encoding handled by that same utility. Climate
 coverage remains an explicit latitude-frame choice.
 
 Initial province sites are independently distributed, allowing unequal blocks
-and locally clustered boundaries. Continental assemblies grow from anchors with
-unequal area budgets, starting away from each other, with the largest few favoured
-so a world tends towards a few main continents and smaller ones. Correlated growth
-follows province adjacency, without prescribed regional centers. An oceanic plate
-takes its share of the world's water before continents grow, so the land sits
-together around open ocean. Plates form around continents: each assembly starts on
+and locally clustered boundaries. Continental assemblies grow around separated
+nuclei with unequal area budgets. Cohesive growth follows adjacent provinces near
+each nucleus; dispersed growth permits isolated fragments. Oceanic plates occupy
+the remaining dense crust without favoring a map edge. Plates form around continents: each assembly starts on
 one plate with the ocean around it, so plate edges mostly run through ocean and a
 continent moves as one until it collides or rifts.
 Province contacts
@@ -1084,6 +1084,11 @@ come from their Voronoi topology, including neighbors across the cylindrical sea
 so a narrow shared boundary does not disappear between area samples. The crust
 budget can still bring regions into contact, and later history can join or divide
 landmasses; assembly totals are not a count of separate continents.
+Terrain selection changes inherited shortening and the processes that wear and
+deposit material. It does not flatten the final height field. Continental motion
+sets later plate drift and tectonic activity separately; moving plates still
+reshape shores and build collision ranges. Continental organization and initial
+ocean coverage are separate creator controls.
 Uniform world-space samples estimate the
 unwarped territory areas independently of terrain sampling; whole-block selection,
 warping and crust transitions make the resulting continental fraction approximate.
@@ -1132,7 +1137,9 @@ declared in code.
 - `precipitation`: column precipitation with the epoch multiplier, in fractional
   mm/year, split into rain and snow by the share of a sinusoidal year below freezing.
   The equatorial convergence spreads to stand in for the rain belt's seasonal
-  migration; subtropical subsidence dries the subtropics and caps uplift rain there.
+  migration; subtropical subsidence suppresses background rainout. Water already
+  condensed by mountains, storms or thermal lift still falls, interrupting dry belts
+  where moist air encounters those regional influences.
 - `land-ice-mass-balance` and `sea-ice`: ice extent follows mass balance and cold
   rather than a coverage quota. Epoch glaciation scales growth and melting scales with
   the deficit. Current, wave exposure and local variation move the sea-ice edge only

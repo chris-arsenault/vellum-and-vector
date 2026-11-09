@@ -20,8 +20,8 @@ interface Entry {
  */
 export class BlockCache {
   private readonly entries = new Map<BlockOwner, Map<number, Entry>>();
-  private readonly ring: Entry[] = [];
-  private head = 0;
+  private readonly clock = new Set<Entry>();
+  private cursor: SetIterator<Entry> | null = null;
   private held = 0;
   readonly stats = { loads: 0, evictions: 0, peakBytes: 0 };
   constructor(
@@ -33,6 +33,12 @@ export class BlockCache {
   get bytes() {
     return this.held;
   }
+  get trackedBlocks() {
+    return this.clock.size;
+  }
+  get trackedOwners() {
+    return this.entries.size;
+  }
   /** Account for a block that was just loaded, evicting others to make room. */
   admit(owner: BlockOwner, block: number, bytes: number) {
     this.stats.loads++;
@@ -43,7 +49,7 @@ export class BlockCache {
     if (!blocks) this.entries.set(owner, (blocks = new Map()));
     const entry: Entry = { owner, block, bytes, pins: 0, used: false };
     blocks.set(block, entry);
-    this.ring.push(entry);
+    this.clock.add(entry);
     this.held += bytes;
     this.stats.peakBytes = Math.max(this.stats.peakBytes, this.held);
   }
@@ -67,43 +73,31 @@ export class BlockCache {
     if (!blocks) return;
     if (block === undefined) {
       for (const entry of blocks.values()) this.drop(entry);
-      this.entries.delete(owner);
       return;
     }
     const entry = blocks.get(block);
     if (entry) this.drop(entry);
-    if (!blocks.size) this.entries.delete(owner);
   }
   private drop(entry: Entry) {
     const blocks = this.entries.get(entry.owner);
     if (blocks?.get(entry.block) !== entry) return;
     blocks.delete(entry.block);
+    if (!blocks.size) this.entries.delete(entry.owner);
+    this.clock.delete(entry);
+    if (!this.clock.size) this.cursor = null;
     this.held -= entry.bytes;
-    entry.bytes = 0;
   }
   private evictOne() {
-    const total = this.ring.length;
-    for (let scanned = 0; scanned < total * 2 && this.ring.length; scanned++) {
-      if (this.head >= this.ring.length) {
-        this.compact();
-        if (!this.ring.length) return false;
-      }
-      const entry = this.ring[this.head];
-      if (entry.bytes === 0) {
-        this.head++;
-        continue;
-      }
-      if (entry.pins > 0) {
-        this.head++;
-        continue;
-      }
+    // Two turns give every unpinned block its second chance; an all-pinned
+    // inventory cannot make room, so the caller admits the required working block.
+    const visits = this.clock.size * 2;
+    for (let scanned = 0; scanned < visits && this.clock.size; scanned++) {
+      const entry = this.nextEntry();
+      if (entry.bytes === 0 || entry.pins > 0) continue;
       if (entry.used) {
         entry.used = false;
-        this.ring.push(entry);
-        this.head++;
         continue;
       }
-      this.head++;
       this.stats.evictions++;
       entry.owner.evict(entry.block);
       this.drop(entry);
@@ -111,15 +105,13 @@ export class BlockCache {
     }
     return false;
   }
-  private compact() {
-    const live = this.ring.filter((entry) => entry.bytes > 0),
-      seen = new Set<Entry>();
-    this.ring.length = 0;
-    for (const entry of live)
-      if (!seen.has(entry)) {
-        seen.add(entry);
-        this.ring.push(entry);
-      }
-    this.head = 0;
+  private nextEntry() {
+    this.cursor ??= this.clock.values();
+    let next = this.cursor.next();
+    if (next.done) {
+      this.cursor = this.clock.values();
+      next = this.cursor.next();
+    }
+    return next.value!;
   }
 }

@@ -1,14 +1,14 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { residentBand } from "@atlas/domain";
 import { createTestField } from "./groundTestFixture";
 import { createMesh } from "../world/mesh";
 import { units } from "../world/math";
 import { buildTransportPlan, releaseTransportPlan } from "../world/transportPlan";
 import { rockCatalogue } from "./rockCatalogue";
-import { readLayer, setLayer, type MaterialLayer } from "./rockColumn";
+import { readLayer, setLayer, watchColumn, type MaterialLayer } from "./rockColumn";
 import { projectGround, rockSurface, columnThickness } from "./groundShares";
 import { holdRock, releaseHeldRock } from "./groundTransport";
-import { remapHeldGround } from "./groundRemap";
+import { GroundRemapper } from "./groundRemap";
 import { withdrawColumn } from "./groundMaterial";
 import { cutGround } from "./groundLedger";
 
@@ -26,6 +26,7 @@ function arrival(map: ReturnType<typeof ground>, weights = [0.5, 0.5]) {
   for (const cell of [0, 1]) projectGround(map, cell);
   const held = holdRock(map),
     plan = buildTransportPlan(map, 0),
+    remap = new GroundRemapper(map, held, plan),
     arrivals = {
       offsets: residentBand("int32", [0, 0, 0, 2]),
       sources: residentBand("int32", [0, 1]),
@@ -33,13 +34,42 @@ function arrival(map: ReturnType<typeof ground>, weights = [0.5, 0.5]) {
     };
   return {
     plan,
-    commit: () => remapHeldGround(map, held, 2, arrivals, plan),
+    commit: () => remap.place(2, arrivals),
     release: () => {
+      remap.close();
       releaseHeldRock(map, held);
       releaseTransportPlan(map, plan);
     },
   };
 }
+it.each([
+  { weights: [0.5, 0.5], reconstructs: true },
+  { weights: [1, 0], reconstructs: false },
+])(
+  "observes reconstructed packages but not direct donor placement: $reconstructs",
+  ({ weights, reconstructs }) => {
+    const map = ground(),
+      remap = arrival(map, weights),
+      remapPackage = vi.fn(),
+      stop = watchColumn({ fold() {}, strip() {}, remapPackage });
+    try {
+      remap.commit();
+      expect(remapPackage.mock.calls).toEqual(
+        reconstructs
+          ? [
+              ["land", 1, 1],
+              ["cut", 0, 0],
+              ["loose", 0, 0],
+              ["cutLoose", 0, 0],
+            ]
+          : []
+      );
+    } finally {
+      stop();
+      remap.release();
+    }
+  }
+);
 it("remaps a contrasting elevated cap and its inherited beds with placement, without lateral stacking", () => {
   const map = ground();
   setLayer(map, 0, 0, basalt.code, units(10), { formedMin: 2, formedMax: 2, altered: 3 });
@@ -162,9 +192,19 @@ it("keeps finite buried contacts when differently layered arrivals exhaust the b
       );
     setLayer(map, cell, 7, granite.code, units(30_000));
   }
-  const remap = arrival(map);
-  remap.commit();
-  remap.release();
+  const remap = arrival(map),
+    remapPackage = vi.fn(),
+    stop = watchColumn({ fold() {}, strip() {}, remapPackage });
+  try {
+    remap.commit();
+    const [, initial, final] = remapPackage.mock.calls.find(([column]) => column === "land")!;
+    expect(initial).toBeGreaterThan(final);
+    expect(final).toBe(8);
+    expect(remapPackage).toHaveBeenCalledTimes(4);
+  } finally {
+    stop();
+    remap.release();
+  }
   expect(readLayer(map, 2, 0)).toMatchObject({
     kind: basalt.code,
     depth: units(100),

@@ -98,6 +98,11 @@ export function snowShare(p: PhysicalProfile, mean: number, halfRange: number) {
   const x = (mean - p.SnowTemperatureThreshold) / amplitude;
   return x >= 1 ? 0 : x <= -1 ? 1000 : round((Math.acos(x) / Math.PI) * 1000);
 }
+/** Convert the share before multiplying so fully snowy precipitation leaves no negative rain. */
+export function partitionPrecipitation(total: number, snowPerMille: number) {
+  const snowfall = total * (snowPerMille / 1000);
+  return { snowfall, rainfall: total - snowfall };
+}
 export function precipitation(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
@@ -109,9 +114,9 @@ export function precipitation(map: PhysicalField, c: PhysicalContext) {
         map.FogForcing.get(i) * p.FogDrip
     );
     const snow = snowShare(p, map.Temperature.get(i), map.Seasonality.get(i) * 10);
-    const snowfall = (total * snow) / 1000;
+    const { snowfall, rainfall } = partitionPrecipitation(total, snow);
     map.Snowfall.set(i, snowfall);
-    map.Rainfall.set(i, total - snowfall);
+    map.Rainfall.set(i, rainfall);
   }
 }
 /** How much of the water on fully porous rock goes into the ground instead of running off. */

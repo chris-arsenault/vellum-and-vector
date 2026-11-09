@@ -1,4 +1,11 @@
-import { MapScale, canonicalGeometry, unwrapCoordinates, point, spatial } from "@atlas/domain";
+import {
+  MapScale,
+  canonicalGeometry,
+  combineGeometry,
+  unwrapCoordinates,
+  point,
+  spatial,
+} from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
 import { physicalSampler } from "./physicalMetric";
@@ -73,14 +80,6 @@ export function extractFaults(state: GenerationState) {
   for (const fault of map.faults) {
     // A landmark's own fault trace publishes as the landmark, not as a second fault row.
     if (fault.coordinates.length < 2 || fault.id.startsWith("landmark:")) continue;
-    const length = fault.coordinates
-      .slice(1)
-      .reduce(
-        (sum, p, i) =>
-          sum + Math.hypot(p[0] - fault.coordinates[i][0], p[1] - fault.coordinates[i][1]),
-        0
-      );
-    if (length < mapScale(state).length(worldFaultLength)) continue;
     const line = {
       type: "LineString" as const,
       coordinates: unwrapCoordinates(
@@ -88,10 +87,22 @@ export function extractFaults(state: GenerationState) {
         map.mesh.periodic?.width
       ),
     };
-    const shape = spatial.intersection(
-      canonicalGeometry(state.domain.world.reference, line),
-      state.domain.scope.footprint
-    );
+    // A chart seam is not a long physical segment of the fault.
+    const length = line.coordinates
+      .slice(1)
+      .reduce(
+        (sum, p, i) =>
+          sum + Math.hypot(p[0] - line.coordinates[i][0], p[1] - line.coordinates[i][1]),
+        0
+      );
+    if (length < mapScale(state).length(worldFaultLength)) continue;
+    const canonical = canonicalGeometry(state.domain.world.reference, line),
+      clipped =
+        canonical.type === "LineString" || canonical.type === "MultiLineString"
+          ? spatial.clipTrace(canonical, state.domain.scope.footprint)
+          : spatial.intersection(canonical, state.domain.scope.footprint),
+      // A boundary tangency is not a fault reach; keep every surviving line part.
+      shape = clipped && combineGeometry([clipped], 1);
     if (shape)
       putGenerated(
         state,

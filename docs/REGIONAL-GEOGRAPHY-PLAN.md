@@ -7,8 +7,11 @@ plan closes; this file is then deleted.
 Ground ownership and process interaction are described in
 [ADR 0010](adr/0010-processes-and-materials-meet-through-modes.md) and
 [ADR 0011](adr/0011-processes-couple-through-keys-and-a-ledger.md).
-Existing world-relief phases retain the remaining geological algorithms and outcomes;
-the ground architecture does not establish their completion.
+The current world maps are accepted as a useful baseline, and the completed repair
+batch is ready to publish. This does not complete the broader world-relief plan:
+magic-rock interactions, regional inheritance of geological structure, regional
+use of shared ground processes and remnant morphology assessment remain open in
+its existing phases. Further cosmetic tuning is not the next priority.
 
 ## Rivers — diagnosis (phase 2)
 

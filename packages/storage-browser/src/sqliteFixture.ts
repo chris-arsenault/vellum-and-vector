@@ -5,6 +5,24 @@ const reopeners = new WeakMap<Database, (path: string) => Database>();
 /** Each initialization is its own WASM instance; a database's pointers belong to its own. */
 const instances = new WeakMap<Database, Sqlite3Static>();
 
+/** Instance capacity differs from SQLite's live allocations after a temporary workload. */
+export function sqliteFixtureMemory(db: Database) {
+  const sqlite = instances.get(db);
+  if (!sqlite || !db.pointer) throw new Error("Inspect an open database the SQLite fixture owns.");
+  const { wasm, capi } = sqlite,
+    output = wasm.alloc(16);
+  try {
+    db.checkRc(capi.sqlite3_status64(capi.SQLITE_STATUS_MEMORY_USED, output, output + 8, 0));
+    return {
+      wasmBytes: wasm.heap8u().byteLength,
+      allocatedBytes: Number(wasm.peek64(output)),
+      peakAllocatedBytes: Number(wasm.peek64(output + 8)),
+    };
+  } finally {
+    wasm.dealloc(output);
+  }
+}
+
 export async function sqliteFixture() {
   const sqlite = await sqliteInit();
   const db = new sqlite.oo1.DB(":memory:");

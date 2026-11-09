@@ -41,9 +41,11 @@ export const fieldProduct = (band: PhysicalBufferName) => `field:${band}`;
 export type NativeStepObserver = (
   name: string,
   map: PhysicalField,
-  context: PhysicalContext
+  context: PhysicalContext,
+  observation: { readonly depth: number }
 ) => void;
 let stepObserver: NativeStepObserver | null = null;
+let stepDepth = 0;
 export function observeNativeSteps(observer: NativeStepObserver | null) {
   stepObserver = observer;
 }
@@ -99,13 +101,16 @@ export function withPlateDeformation(
 }
 /** Runs a step, then checks what it left within the physical ranges its bands must hold. */
 export function applyNativeStep(map: PhysicalField, context: PhysicalContext, step: NativeStep) {
-  const [name] = step;
+  const [name] = step,
+    depth = stepDepth++;
   try {
     runNativeStep(map, context, step);
     validateNativeLayer(map, context, describeNativeStep(step).writes);
-    stepObserver?.(name, map, context);
+    stepObserver?.(name, map, context, { depth });
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause);
     throw new Error(`${name} failed in epoch ${context.EpochIndex + 1}: ${detail}`, { cause });
+  } finally {
+    stepDepth--;
   }
 }

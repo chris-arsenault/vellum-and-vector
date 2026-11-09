@@ -65,6 +65,16 @@ export function numericalProcessLifetime(state: GenerationState) {
   };
 }
 
+/** A synchronous feedback cycle owns temporary values just as an outer process does. */
+export function withNumericalLifetime<T>(state: GenerationState, operation: () => T): T {
+  const release = numericalProcessLifetime(state);
+  try {
+    return operation();
+  } finally {
+    release();
+  }
+}
+
 export function generationWorkingState(
   initial: GenerationState,
   cache?: BlockCache

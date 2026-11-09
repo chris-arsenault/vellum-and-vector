@@ -110,7 +110,10 @@ function clipGeometry(reference: Reference, geometry: Geometry): Geometry {
       ? "line"
       : "point";
   const shapes = chartCopies(reference, geometry).flatMap((copy) => {
-    const clipped = spatial.intersection(copy, reference.domain);
+    const clipped =
+      copy.type === "LineString" || copy.type === "MultiLineString"
+        ? spatial.clipTrace(copy, reference.domain)
+        : spatial.intersection(copy, reference.domain);
     return clipped ? parts(clipped, dimension) : [];
   });
   if (!shapes.length) return geometry;

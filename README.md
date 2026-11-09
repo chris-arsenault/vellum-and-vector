@@ -307,10 +307,34 @@ published region in seconds. Each run writes a report directory under
 - `*-channels.json`: each channel's range and invalid count;
 - `*-overview.png`, `*-relief.png`: the terrain painter with published features.
 
+The report path is printed before work begins. Fresh worlds persist their effective
+draft in `world-input.json` and append timestamped progress, diagnostics, memory and
+CPU observations to `world-progress.jsonl`. Ordinary failures retain partial traces
+and `failure.json`; abrupt termination still leaves the streamed progress and any
+completed snapshots. `world-monitoring.json` separates completed-step probe and
+snapshot costs. Expensive probes observe outer native steps; embedded deformation
+is included in its enclosing plate operation, while material event observers remain
+active throughout. These timings include diagnostic work, not just generation.
+
+`HARNESS_CPU_PROFILE=1` records a V8 CPU profile across generation, publication and
+reporting as `run.cpuprofile`. It finishes on success or an ordinary exception;
+external termination cannot finalize the profile. `invocation.json` and progress
+events include the worker PID for external CPU and resident-memory sampling.
+Progress records separate GEOS and SQLite WASM capacity from SQLite's live and
+peak allocations. Column diagnostics group reconstructed remap packages by size,
+so repeated coarsening can be assessed without retaining individual material events.
+
+With snapshots enabled, an ordinary failure also retains `failure.bin`, marked as
+an incomplete diagnostic field. Inspect it through `stageReplay` with
+`HARNESS_PASS=failure HARNESS_PASSES=0`; it cannot advance a history.
+
 The report states what was made; it checks nothing. Environment variables choose
 the run: `HARNESS_WORLD` and `HARNESS_REGION` name the checkpoints,
 `HARNESS_SEED` selects a new world's seed and `HARNESS_WORLD_ONLY=1` skips refinement,
 `HARNESS_WORLD_QUALITY` and `HARNESS_REGION_QUALITY` choose draft, standard or fine,
+`HARNESS_TERRAIN` applies a curated terrain choice from setup,
+`HARNESS_DOMAINS` selects comma-separated recipe domains for scoped inspection,
+`HARNESS_PLACES=1` adds the exhaustive POI catalogue audit when inspecting place rules,
 `HARNESS_REGION_AT=x,y` picks the region under a point (default: the world's highest
 land), and `HARNESS_FRESH=world` or `HARNESS_FRESH=region` makes a checkpoint again.
 

@@ -12,7 +12,7 @@ import type { Geometry } from "geojson";
 import type { GenerationState } from "./process";
 import { SocietySpread } from "./societyTraversal";
 import { dryLand } from "./societySupport";
-import { nearestSocietySample } from "./societySpatial";
+import { nearestSocietySample, SocietyNeighbors } from "./societySpatial";
 import { profileOf } from "./societyProfile";
 import { areaGeometry } from "./world/geographicContours";
 
@@ -53,7 +53,12 @@ function territoryGroups(state: GenerationState, meaning: Meaning) {
   return [...groups].map(([id, communities]) => ({ id, communities }));
 }
 /** A bounded cost expansion visits a territory and its interpolation collar, not the world per polygon. */
-function costDomain(state: GenerationState, communities: SocietyCommunity[], control: boolean) {
+function costDomain(
+  state: GenerationState,
+  communities: SocietyCommunity[],
+  control: boolean,
+  adjacent: SocietyNeighbors
+) {
   const grid = state.surface,
     seeds = communities
       .map((c) => ({ c, cell: nearestSocietySample(grid, c.position, (i) => dryLand(state, i)) }))
@@ -63,7 +68,7 @@ function costDomain(state: GenerationState, communities: SocietyCommunity[], con
       return Math.max(size, b[2] - b[0], b[3] - b[1]);
     }, 1),
     collar = spacing * 3,
-    spread = new SocietySpread(state, false, collar * 10),
+    spread = new SocietySpread(state, false, collar * 10, adjacent),
     cells: number[] = [],
     bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
   for (const { c, cell } of seeds) {
@@ -92,11 +97,15 @@ function costDomain(state: GenerationState, communities: SocietyCommunity[], con
   };
 }
 /** Continuous cost differences locate shared frontiers; zero support leaves country unclaimed. */
-export function worldTerritories(state: GenerationState, meaning: Meaning = "sovereignty") {
+export function worldTerritories(
+  state: GenerationState,
+  meaning: Meaning = "sovereignty",
+  adjacent = new SocietyNeighbors(state.surface, false)
+) {
   const grid = state.surface,
     domains = territoryGroups(state, meaning).map((group) => ({
       id: group.id,
-      ...costDomain(state, group.communities, meaning === "control"),
+      ...costDomain(state, group.communities, meaning === "control", adjacent),
     }));
   return {
     shape(id: string) {

@@ -3,10 +3,9 @@ import type { PhysicalField } from "../world/field";
 import { releaseWorking } from "../world/physicalNumerics";
 import { crustHeight, units } from "../world/math";
 import { recordFlow } from "../coupling/flows";
-import { allColumnFields, columnFields, materialProperties, type Column } from "./rockLayerFields";
-import { materialLayer, type MaterialLayer } from "./rockColumn";
+import { allColumnFields, columnFields, type Column } from "./rockLayerFields";
+import { bindMaterialReader, type MaterialLayer, type MaterialReader } from "./rockColumn";
 import { buryUnderPackage } from "./groundBurial";
-import { rockKindOfCode } from "./rockCatalogue";
 import { carryOut, depositPackage, shiftRock, standGround } from "./groundLedger";
 import { projectGround, resetShares } from "./groundShares";
 import { oceanicColumn } from "./rockHistory";
@@ -56,17 +55,22 @@ export interface HeldRock {
   properties: Band[];
   kinds: Band[];
   before: Band[];
+  read: MaterialReader;
 }
 // hpc-exempt: one bounded latest-donor cache per operation snapshot, never per-cell retained objects.
 const donorColumns = new WeakMap<
   HeldRock,
   { cell: number; columns: Partial<Record<Column, MaterialLayer[]>> }
 >();
-export const holdRock = (map: PhysicalField): HeldRock => ({
-  properties: groundMaterialFields.map((name) => map.coverage.copyBand(map[name])),
-  kinds: groundSheetFields.map((name) => map.coverage.copyBand(map[name])),
-  before: groundPlacementFields.map((name) => map.coverage.copyBand(map[name])),
-});
+export function holdRock(map: PhysicalField): HeldRock {
+  const properties = groundMaterialFields.map((name) => map.coverage.copyBand(map[name]));
+  return {
+    properties,
+    kinds: groundSheetFields.map((name) => map.coverage.copyBand(map[name])),
+    before: groundPlacementFields.map((name) => map.coverage.copyBand(map[name])),
+    read: bindMaterialReader((name) => properties[propertyOffsets[name]]),
+  };
+}
 export function releaseHeldRock(map: PhysicalField, held: HeldRock) {
   donorColumns.delete(held);
   releaseWorking(map, ...held.properties, ...held.kinds, ...held.before);
@@ -88,25 +92,7 @@ export function heldLayer(
   slot: number,
   column: Column = "land"
 ): MaterialLayer {
-  const value = (property: (typeof materialProperties)[number]) =>
-      heldProperty(held, columnFields[column][property][slot], cell),
-    kind = value("kind");
-  return materialLayer(kind, value("depth"), {
-    secondaryKind: value("secondaryKind"),
-    secondaryShare: value("secondaryShare"),
-    strength: value("strength") || rockKindOfCode(kind).resistance,
-    damage: value("damage"),
-    grainX: value("grainX"),
-    grainY: value("grainY"),
-    bedSlopeX: value("bedSlopeX"),
-    bedSlopeY: value("bedSlopeY"),
-    formedMin: value("formedMin"),
-    formedMax: value("formedMax"),
-    altered: value("altered"),
-    deposited: value("deposited"),
-    consolidation: value("consolidation"),
-    mixed: value("mixed"),
-  });
+  return held.read(cell, slot, column);
 }
 export const heldLayers = (held: HeldRock, cell: number, column: Column = "land") =>
   columnFields[column].kind.map((_, slot) => heldLayer(held, cell, slot, column));

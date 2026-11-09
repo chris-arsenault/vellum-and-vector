@@ -14,9 +14,31 @@ import { wearWays } from "./societyWays";
 import { raiseHighways } from "./societyHighways";
 import { bindSocietyProfile } from "./societyProfile";
 import { recordSocietyOnMesh } from "./societyRecord";
+import { withNumericalLifetime } from "./generationWorkingState";
 
 /** One decadal cycle of feedback: people, works, magic use, learned practices, environment, hazards, settlements. */
 export function societyCycle(
+  state: GenerationState,
+  context: MapProcessContext,
+  dt: number,
+  cycle: { index: number; elapsed: number; final: boolean }
+) {
+  // An era can run many cycles inside one process. Release each cycle's replaced
+  // projections while the state still identifies the previous and current owners.
+  const work = state.society!;
+  if (cycle.index === 0) delete work.coastalNeighbors;
+  let completed = false;
+  try {
+    withNumericalLifetime(state, () => advanceSocietyCycle(state, context, dt, cycle));
+    completed = true;
+  } finally {
+    if (cycle.final || !completed) {
+      delete work.coastalNeighbors;
+      delete work.cycle;
+    }
+  }
+}
+function advanceSocietyCycle(
   state: GenerationState,
   context: MapProcessContext,
   dt: number,
@@ -59,17 +81,21 @@ export async function evolveSociety(
   const work = state.society!;
   if (work.inherited || years <= 0) return;
   let elapsed = 0;
-  for (let index = 0; elapsed < years - 1e-9; index++) {
-    requireThat(!context.cancelled(), "generation_cancelled", "Generation was cancelled.");
-    const dt = societyStep(state, years - elapsed, settledCycle);
-    elapsed += dt;
-    const final = elapsed >= years - 1e-9;
-    societyCycle(state, context, dt, { index, elapsed, final });
-    context.progress(elapsed / years, `Societies: year ${Math.round(elapsed)} of ${years}`);
-    // Yield to worker cancellation messages between complete, unpublished steps.
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  try {
+    for (let index = 0; elapsed < years - 1e-9; index++) {
+      requireThat(!context.cancelled(), "generation_cancelled", "Generation was cancelled.");
+      const dt = societyStep(state, years - elapsed, settledCycle);
+      elapsed += dt;
+      const final = elapsed >= years - 1e-9;
+      societyCycle(state, context, dt, { index, elapsed, final });
+      context.progress(elapsed / years, `Societies: year ${Math.round(elapsed)} of ${years}`);
+      // Yield to worker cancellation messages between complete, unpublished steps.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
+  } finally {
+    delete work.coastalNeighbors;
+    delete work.cycle;
   }
-  delete work.cycle;
 }
 
 export const societyEvolution: MapProcess = {

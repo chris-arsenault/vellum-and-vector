@@ -4,6 +4,7 @@ import {
   layerDepth,
   rockLayers,
   watchColumn,
+  type Column,
 } from "../../../packages/generation/src/rock/rockColumn";
 import { rockKindOfCode } from "../../../packages/generation/src/rock/rockCatalogue";
 
@@ -35,7 +36,13 @@ function columnFill(map: PhysicalField) {
 export function watchRockColumns() {
   const lost = new Map<string, number>(),
     depths: number[] = [],
-    stripped = new Map<number, number>();
+    stripped = new Map<number, number>(),
+    remapPackages: Record<Column, Record<number, { count: number; folds: number }>> = {
+      land: {},
+      cut: {},
+      loose: {},
+      cutLoose: {},
+    };
   let folds = 0,
     distinct = 0,
     thick = 0;
@@ -52,6 +59,11 @@ export function watchRockColumns() {
     strip(cell, amount) {
       stripped.set(cell, (stripped.get(cell) ?? 0) + metres(amount));
     },
+    remapPackage(column, initial, final) {
+      const bucket = (remapPackages[column][initial] ??= { count: 0, folds: 0 });
+      bucket.count++;
+      bucket.folds += initial - final;
+    },
   });
   return (map: PhysicalField | null) => {
     stop();
@@ -61,6 +73,7 @@ export function watchRockColumns() {
         if (isLand(map, i)) reached.push(stripped.get(i) ?? 0);
     return {
       folds,
+      remapPackages,
       foldsOfDistinctRock: distinct,
       metresOfDistinctRockLost: Math.round(thick),
       lostAtDepth: quantiles(depths),

@@ -1,6 +1,6 @@
 import { choice, type CartographicControl } from "./cartographicControls";
 import type { FeatureSelection } from "./features";
-import { terrainCartography } from "./terrainCartography";
+import { continentalMotionCartography, terrainCartography } from "./terrainCartography";
 
 const profile = (values: Record<string, number>) => ({ configuration: { profile: values } });
 const frame = (southLatitude: number, northLatitude: number) => ({
@@ -11,21 +11,23 @@ const frame = (southLatitude: number, northLatitude: number) => ({
 const land = (
   continents: number,
   provinces: number,
-  landFraction: number,
-  seaLevel: number,
   separation: number,
   warp: number,
-  clustering: number
+  clustering: number,
+  majorGrowth: number,
+  variation: number
 ): FeatureSelection => ({
   "physical.foundation": {
-    settings: { continents, provinces, landFraction },
+    settings: { continents, provinces },
     ...profile({
       ContinentalAssemblySeparationDepth: separation,
       ContinentalWarpStrength: warp,
       ContinentalAssemblyClustering: clustering,
+      ContinentalMajorAssemblies: 2,
+      ContinentalMajorGrowth: majorGrowth,
+      ContinentalAssemblyGrowthVariation: variation,
     }),
   },
-  "physical.climate": { settings: { seaLevel } },
 });
 const shoreline = (
   detail: number,
@@ -59,27 +61,50 @@ const landmarks = (volcanism: number, plumes: number, impacts: number): FeatureS
 });
 
 export const physicalCartography: Record<string, CartographicControl | CartographicControl[]> = {
-  "physical.foundation": {
-    id: "land-and-sea",
-    label: "Land and sea",
-    section: "land",
-    initialOnly: true,
-    defaultChoice: "broken",
-    explanation:
-      "Multiple crust assemblies form compound continental regions with open oceans, broad interiors, or a dispersed island world. Final coasts follow the terrain and water.",
-    choices: [
-      choice("broad", "Broad continents", land(2, 24, 0.68, -0.000015, 0.2, 0.025, 1)),
-      choice("broken", "Broken continents", land(4, 42, 0.45, 0, 0.38, 0.045, 1)),
-      choice("islands", "Island world", land(10, 70, 0.28, 0.000015, 0.5, 0.065, 0)),
-    ],
-  },
+  "physical.foundation": [
+    {
+      id: "land-and-sea",
+      label: "Continental organization",
+      section: "land",
+      initialOnly: true,
+      defaultChoice: "broad",
+      explanation:
+        "Choose coherent continental interiors or dispersed crust assemblies. Ocean coverage is independent; motion and the water budget determine which landmasses remain separate.",
+      choices: [
+        choice("broad", "Broad continents", land(3, 42, 0.2, 0.025, 1, 3, 0.5)),
+        choice("broken", "Broken continents", land(5, 56, 0.38, 0.045, 0.7, 1.5, 0.8)),
+        choice("islands", "Island world", land(10, 70, 0.5, 0.065, 0, 1, 0.8)),
+      ],
+    },
+    {
+      id: "ocean-coverage",
+      label: "Ocean coverage",
+      section: "land",
+      initialOnly: true,
+      defaultChoice: "wide",
+      explanation:
+        "Set the initial exposed land share without changing the amount or organization of continental crust. Later history changes the shores.",
+      choices: [
+        choice("oceanic", "Ocean-dominated", {
+          "physical.foundation": { settings: { landFraction: 0.25 } },
+        }),
+        choice("wide", "Wide oceans", {
+          "physical.foundation": { settings: { landFraction: 0.38 } },
+        }),
+        choice("land", "Land-dominated", {
+          "physical.foundation": { settings: { landFraction: 0.6 } },
+        }),
+      ],
+    },
+  ],
   "physical.mountains": terrainCartography,
+  "physical.tectonic-history": continentalMotionCartography,
   "physical.coastal-construction": {
     id: "shoreline",
     label: "Shoreline",
     section: "land",
     initialOnly: true,
-    defaultChoice: "inlets",
+    defaultChoice: "smooth",
     explanation:
       "Broad reworked outlines, intricate inlets, or deposited river-mouth lowlands. Sediment supply and coastal exposure still matter.",
     choices: [
@@ -129,7 +154,7 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
     label: "Distinctive landmarks",
     section: "land",
     initialOnly: true,
-    defaultChoice: "prominent",
+    defaultChoice: "scattered",
     explanation:
       "The prominence of volcanic districts and crater landforms. Footprints scale with the map, and history determines what survives.",
     choices: [

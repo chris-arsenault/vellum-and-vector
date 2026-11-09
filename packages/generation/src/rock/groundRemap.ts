@@ -2,26 +2,27 @@ import type { ReadBand } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import type { TransportPlan } from "../world/transportPlan";
 import {
-  coarsenColumn,
+  coarsenPackage,
   columnSize,
-  mergeMaterial,
+  observeRemapPackage,
   setLayer,
   type MaterialLayer,
 } from "./rockColumn";
 import { columnFields, materialProperties, type Column } from "./rockLayerFields";
 import { facetSurface, projectGround, type GroundFacet } from "./groundShares";
 import { groundStorage } from "./groundStorage";
-import { deformFabric, deformSlope, type Deformation } from "./groundTransform";
+import type { Deformation } from "./groundTransform";
 import {
   groundPlacementFields,
   groundSheetFields,
-  heldLayers,
   heldPlacement,
   heldProperty,
   placeCarriedGround,
   type HeldRock,
 } from "./groundTransport";
 import { observeRemap } from "./groundTransferObservation";
+import { MaterialMixture } from "./materialMixture";
+import { RemapSource } from "./groundRemapSource";
 
 /** Target-indexed surviving physical overlap. Weights share the target's area unit. */
 export interface GroundArrivals {
@@ -65,25 +66,23 @@ function incoming(held: HeldRock, cell: number, arrivals: GroundArrivals, plan: 
   for (const donor of donors) donor.weight /= area;
   return donors;
 }
-function transformed(layer: MaterialLayer, f: Deformation): MaterialLayer {
-  const [grainX, grainY] = deformFabric(layer.grainX, layer.grainY, f),
-    [bedSlopeX, bedSlopeY] = deformSlope(layer.bedSlopeX, layer.bedSlopeY, f);
-  return { ...layer, grainX, grainY, bedSlopeX, bedSlopeY };
-}
 const share = (donor: Arrival, column: Column) =>
   column === "cut" || column === "cutLoose" ? donor.cut : 1 - donor.cut;
 const rockHeight = (held: HeldRock, donor: Arrival, cut: boolean) =>
   heldPlacement(held, "BedrockElevation", donor.source) +
   (donor.cut - (cut ? 1 : 0)) * heldProperty(held, "GroundCutDepth", donor.source);
-function sections(held: HeldRock, donors: Arrival[], column: Column): Section[] {
+function sections(
+  held: HeldRock,
+  source: RemapSource,
+  donors: Arrival[],
+  column: Column
+): Section[] {
   let area = 0;
   const result: Section[] = [];
   for (const donor of donors) {
     const weight = donor.weight * share(donor, column);
     if (weight <= 0) continue;
-    const layers = heldLayers(held, donor.source, column)
-        .filter((layer) => layer.depth > 0)
-        .map((layer) => transformed(layer, donor.deformation)),
+    const layers = source.layers(donor.source, column),
       cover = column === "loose" || column === "cutLoose",
       top =
         rockHeight(held, donor, column === "cut" || column === "cutLoose") +
@@ -115,26 +114,25 @@ function nextContact(
   return next;
 }
 function slab(
+  mixture: MaterialMixture,
   sections: Section[],
   indices: Uint8Array,
   tops: Float64Array,
   above: number,
   thickness: number
 ) {
-  let mixture: MaterialLayer | null = null,
-    occupied = 0,
+  mixture.reset();
+  let occupied = 0,
     marker = 0;
   for (let i = 0; i < sections.length; i++) {
     const { layers, weight } = sections[i],
       layer = layers[indices[i]];
     if (!layer || above < tops[i]) continue;
-    const part = { ...layer, depth: weight };
-    mixture = mixture ? mergeMaterial(mixture, part) : part;
+    mixture.add(layer, weight);
     occupied += weight;
     marker += weight * layer.depth;
   }
-  if (!mixture) return null;
-  return { ...mixture, depth: thickness === Infinity ? marker / occupied : thickness * occupied };
+  return mixture.material(thickness === Infinity ? marker / occupied : thickness * occupied);
 }
 function append(layers: MaterialLayer[], layer: MaterialLayer) {
   const previous = layers.at(-1);
@@ -165,7 +163,7 @@ function advance(
  * Space above each donor and empty finite cover contribute absence, removed from each slab.
  * Solid basements continue beneath their last finite contact. Lateral arrivals never stack.
  */
-function sweep(sections: Section[], finite: boolean) {
+function sweep(sections: Section[], finite: boolean, mixture: MaterialMixture) {
   const highest = sections.reduce((height, section) => Math.max(height, section.top), -Infinity),
     indices = new Uint8Array(sections.length),
     tops = Float64Array.from(sections, (section) => highest - section.top),
@@ -177,7 +175,7 @@ function sweep(sections: Section[], finite: boolean) {
   let above = 0;
   for (;;) {
     const next = nextContact(sections, indices, tops, bottoms, finite, above),
-      layer = slab(sections, indices, tops, above, next - above);
+      layer = slab(mixture, sections, indices, tops, above, next - above);
     if (layer && (next < Infinity || !finite)) {
       if (next < Infinity) append(layers, layer);
       else layers.push(layer); // The unbounded basement remains distinct from the finite beds.
@@ -191,13 +189,17 @@ function sweep(sections: Section[], finite: boolean) {
 function install(
   map: PhysicalField,
   held: HeldRock,
+  source: RemapSource,
+  mixture: MaterialMixture,
   cell: number,
   donors: Arrival[],
   column: Column
 ) {
   const finite = column === "loose" || column === "cutLoose",
-    layers = sweep(sections(held, donors, column), finite);
-  while (layers.length > columnSize(column)) coarsenColumn(layers, cell, column);
+    layers = sweep(sections(held, source, donors, column), finite, mixture),
+    initial = layers.length;
+  coarsenPackage(layers, cell, column);
+  observeRemapPackage(column, initial, layers.length);
   for (let slot = 0; slot < columnSize(column); slot++) {
     const layer = layers[slot];
     if (layer) setLayer(map, cell, slot, layer.kind, layer.depth, layer, column);
@@ -269,24 +271,33 @@ function orderedDonor(held: HeldRock, donor: Arrival) {
   );
 }
 /** Reconstruct placement and every material interval from the same retained areas, then publish once. */
-export function remapHeldGround(
-  map: PhysicalField,
-  held: HeldRock,
-  cell: number,
-  arrivals: GroundArrivals,
-  plan: TransportPlan
-) {
-  const donors = incoming(held, cell, arrivals, plan);
-  if (donors.length === 0) return;
-  if (donors.length === 1 && orderedDonor(held, donors[0])) {
-    placeCarriedGround(map, held, cell, donors[0].source, donors[0].deformation);
-    return;
+export class GroundRemapper {
+  private readonly source;
+  private readonly mixture = new MaterialMixture();
+  constructor(
+    private readonly map: PhysicalField,
+    private readonly held: HeldRock,
+    private readonly plan: TransportPlan
+  ) {
+    this.source = new RemapSource(map, held, plan);
   }
-  const observed = observeRemap(map, held, cell, donors);
-  for (const column of ["land", "cut", "loose", "cutLoose"] as const)
-    install(map, held, cell, donors, column);
-  place(map, held, cell, donors);
-  orderFacets(map, cell);
-  projectGround(map, cell);
-  observed();
+  place(cell: number, arrivals: GroundArrivals) {
+    const { map, held, plan } = this,
+      donors = incoming(held, cell, arrivals, plan);
+    if (donors.length === 0) return;
+    if (donors.length === 1 && orderedDonor(held, donors[0])) {
+      placeCarriedGround(map, held, cell, donors[0].source, donors[0].deformation);
+      return;
+    }
+    const observed = observeRemap(map, held, cell, donors);
+    for (const column of ["land", "cut", "loose", "cutLoose"] as const)
+      install(map, held, this.source, this.mixture, cell, donors, column);
+    place(map, held, cell, donors);
+    orderFacets(map, cell);
+    projectGround(map, cell);
+    observed();
+  }
+  close() {
+    this.source.close();
+  }
 }

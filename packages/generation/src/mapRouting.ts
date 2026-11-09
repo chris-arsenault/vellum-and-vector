@@ -1,14 +1,17 @@
 import {
   gridPosition,
   gridDistance,
+  fieldPosition,
   neighbors,
   requireThat,
   spatial,
+  CellList,
   KeyedHeap,
   MapScale,
   type Band,
   type Grid,
   type Position,
+  type SpatialIndex,
 } from "@atlas/domain";
 
 /** Cheapest-first cell frontier; `pop()` returns the cell or -1 and `cost()` its key. */
@@ -24,7 +27,7 @@ export class RouteHeap {
     return this.items.poppedKey();
   }
 }
-function nearest(grid: Grid, point: Position) {
+function nearest(grid: Grid, point: Position, index: SpatialIndex, cells: Int32Array) {
   requireThat(
     spatial.covers(grid.scope.footprint, { type: "Point", coordinates: [point.x, point.y] }),
     "route_extent",
@@ -32,9 +35,13 @@ function nearest(grid: Grid, point: Position) {
   );
   let best = -1,
     distance = Infinity;
-  for (let i = 0; i < grid.active.length; i++) {
-    if (!grid.active.get(i)) continue;
-    const p = gridPosition(grid, i),
+  const located = fieldPosition(grid, point),
+    shifts = grid.periodicWidth ? [0, -grid.periodicWidth, grid.periodicWidth] : [0];
+  for (const shift of shifts) {
+    const found = index.nearest({ ...located, x: located.x + shift });
+    if (found < 0) continue;
+    const i = cells[found],
+      p = gridPosition(grid, i),
       candidate = gridDistance(grid, p, point);
     if (candidate < distance) {
       best = i;
@@ -44,14 +51,71 @@ function nearest(grid: Grid, point: Position) {
   requireThat(best >= 0, "route_samples", "This extent has no active routing samples.");
   return best;
 }
+export type RouteFinder = (from: Position, to: Position, kind: string) => Position[];
+/** Cache only GEOS-checked adjacency; each cell's first query uses the shared neighbor contract. */
+function routeNeighbors(grid: Grid) {
+  const cells = new CellList(),
+    offsets = new Int32Array(grid.active.length).fill(-1),
+    counts = new Int32Array(grid.active.length),
+    covers = spatial.geometryCoverage(grid.scope.footprint);
+  return {
+    cells,
+    counts,
+    offset(cell: number) {
+      if (offsets[cell] < 0) {
+        const adjacent = neighbors(grid, cell, true, covers);
+        offsets[cell] = cells.length;
+        counts[cell] = adjacent.length;
+        for (const next of adjacent) cells.push(next);
+      }
+      return offsets[cell];
+    },
+  };
+}
+/**
+ * Topology, active samples and footprint stay fixed throughout this synchronous batch.
+ * Its sample index and checked adjacency are scoped; terrain costs remain live for each route.
+ */
+export function withRouteFinder<T>(grid: Grid, work: (find: RouteFinder) => T): T {
+  const cells = Int32Array.from({ length: grid.active.length }, (_, i) => i).filter((i) =>
+    Boolean(grid.active.get(i))
+  );
+  const points = Array.from(cells, (i) => {
+    const p = gridPosition(grid, i);
+    return { type: "Point" as const, coordinates: [p.x, p.y] };
+  });
+  return spatial.withIndex(points, (index) => {
+    const adjacent = routeNeighbors(grid);
+    let active = true;
+    try {
+      return work((from, to, kind) => {
+        requireThat(active, "route_lifetime", "The routing scope has ended.");
+        const locate = (point: Position) => nearest(grid, point, index, cells);
+        return routeBetween(grid, from, to, kind, locate, adjacent);
+      });
+    } finally {
+      active = false;
+    }
+  });
+}
 export function findRoute(grid: Grid, from: Position, to: Position, kind: string): Position[] {
+  return withRouteFinder(grid, (find) => find(from, to, kind));
+}
+function routeBetween(
+  grid: Grid,
+  from: Position,
+  to: Position,
+  kind: string,
+  locate: (point: Position) => number,
+  adjacent: ReturnType<typeof routeNeighbors>
+): Position[] {
   const allocate = (type: "float64" | "int32", name: string) =>
     grid.coverage.scratch(type, name, grid.active.length);
   const costs = allocate("float64", "route-cost").fill(Infinity),
     previous = allocate("int32", "route-previous").fill(-1),
     queue = new RouteHeap();
   try {
-    return searchRoute(grid, from, to, kind, { costs, previous, queue });
+    return searchRoute(grid, from, to, kind, { costs, previous, queue }, locate, adjacent);
   } finally {
     grid.coverage.releaseUnused([costs, previous], []);
   }
@@ -61,14 +125,13 @@ function searchRoute(
   from: Position,
   to: Position,
   kind: string,
-  { costs, previous, queue }: { costs: Band; previous: Band; queue: RouteHeap }
+  { costs, previous, queue }: { costs: Band; previous: Band; queue: RouteHeap },
+  locate: (point: Position) => number,
+  adjacent: ReturnType<typeof routeNeighbors>
 ) {
-  const start = nearest(grid, from),
-    end = nearest(grid, to),
+  const start = locate(from),
+    end = locate(to),
     scale = MapScale.fromCells(grid.bounds, grid.active.length);
-  // Every edge uses the same footprint. Read its topology once per route
-  // while retaining exact segment checks at concavities and holes.
-  const covers = spatial.geometryCoverage(grid.scope.footprint);
   // A*: no step costs less than its distance times the cheapest land factor, so the straight
   // distance to the end, so scaled, never overestimates and the search stays near the way.
   const goal = gridPosition(grid, end),
@@ -83,7 +146,8 @@ function searchRoute(
     const here = costs.get(cell);
     if (queue.cost() !== here + remaining(cell)) continue;
     if (cell === end) return routePoints(grid, previous, start, end, from, to);
-    for (const next of neighbors(grid, cell, true, covers)) {
+    for (let at = adjacent.offset(cell), end = at + adjacent.counts[cell]; at < end; at++) {
+      const next = adjacent.cells.at(at);
       const step = routeCost(grid, cell, next, kind, scale);
       const cost = here + step;
       if (cost >= costs.get(next)) continue;

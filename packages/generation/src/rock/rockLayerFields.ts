@@ -1,4 +1,5 @@
 import { rockCatalogue, rockKindOfCode } from "./rockCatalogue";
+import type { Band, ReadBand } from "@atlas/domain";
 
 export interface MaterialLayer {
   readonly kind: number;
@@ -125,6 +126,71 @@ export const allColumnScalarFields = columns.flatMap((column) =>
 );
 export const allColumnFields = [...allColumnIntegerFields, ...allColumnScalarFields];
 
+export type MaterialReader = (cell: number, layer: number, column?: Column) => MaterialLayer;
+export type LayerBands<B extends ReadBand = ReadBand> = Record<MaterialProperty, B>;
+/** Bind the fixed column schema once; only detached scalar snapshots leave the reader. */
+export function bindMaterialReader(
+  source: (name: (typeof allColumnFields)[number]) => ReadBand
+): MaterialReader {
+  const bound = bindColumnBands(source);
+  return (cell, layer, column = "land") => materialSnapshot(bound[column][layer], cell);
+}
+export function bindColumnBands<B extends ReadBand>(
+  source: (name: (typeof allColumnFields)[number]) => B
+) {
+  // hpc-exempt: fixed schema band references, not per-cell material objects or copied values.
+  return Object.fromEntries(
+    Object.entries(columnFields).map(([column, fields]) => [
+      column,
+      fields.kind.map((_, layer) =>
+        Object.fromEntries(
+          materialProperties.map((property) => [property, source(fields[property][layer])])
+        )
+      ),
+    ])
+  ) as Record<Column, LayerBands<B>[]>;
+}
+export function materialSnapshot(bands: LayerBands, cell: number): MaterialLayer {
+  const kind = bands.kind.get(cell);
+  return {
+    kind,
+    depth: bands.depth.get(cell),
+    secondaryKind: bands.secondaryKind.get(cell),
+    secondaryShare: bands.secondaryShare.get(cell),
+    strength: bands.strength.get(cell) || rockKindOfCode(kind).resistance,
+    damage: bands.damage.get(cell),
+    grainX: bands.grainX.get(cell),
+    grainY: bands.grainY.get(cell),
+    bedSlopeX: bands.bedSlopeX.get(cell),
+    bedSlopeY: bands.bedSlopeY.get(cell),
+    deposited: bands.deposited.get(cell),
+    consolidation: bands.consolidation.get(cell),
+    formedMin: bands.formedMin.get(cell),
+    formedMax: bands.formedMax.get(cell),
+    altered: bands.altered.get(cell),
+    mixed: bands.mixed.get(cell),
+  };
+}
+/** Write an already normalized material through band capabilities supplied by its owner. */
+export function writeMaterial(bands: LayerBands<Band>, cell: number, material: MaterialLayer) {
+  bands.kind.set(cell, material.kind);
+  bands.depth.set(cell, material.depth);
+  bands.secondaryKind.set(cell, material.secondaryKind);
+  bands.secondaryShare.set(cell, material.secondaryShare);
+  bands.strength.set(cell, material.strength);
+  bands.damage.set(cell, material.damage);
+  bands.grainX.set(cell, material.grainX);
+  bands.grainY.set(cell, material.grainY);
+  bands.bedSlopeX.set(cell, material.bedSlopeX);
+  bands.bedSlopeY.set(cell, material.bedSlopeY);
+  bands.deposited.set(cell, material.deposited);
+  bands.consolidation.set(cell, material.consolidation);
+  bands.formedMin.set(cell, material.formedMin);
+  bands.formedMax.set(cell, material.formedMax);
+  bands.altered.set(cell, material.altered);
+  bands.mixed.set(cell, material.mixed);
+}
+
 export function materialLayer(
   kind: number,
   depth: number,
@@ -160,13 +226,13 @@ function combineRepeated(codes: readonly number[], weights: number[]) {
       }
 }
 /** Largest two constituents; smaller identities are explicitly lost when a buried contact coarsens. */
-function components(a: MaterialLayer, b: MaterialLayer) {
+function components(a: MaterialLayer, b: MaterialLayer, aDepth: number, bDepth: number) {
   const codes = [a.kind, a.secondaryKind, b.kind, b.secondaryKind],
     weights = [
-      a.depth * (1 - a.secondaryShare),
-      a.depth * a.secondaryShare,
-      b.depth * (1 - b.secondaryShare),
-      b.depth * b.secondaryShare,
+      aDepth * (1 - a.secondaryShare),
+      aDepth * a.secondaryShare,
+      bDepth * (1 - b.secondaryShare),
+      bDepth * b.secondaryShare,
     ];
   combineRepeated(codes, weights);
   let first = 0,
@@ -181,23 +247,28 @@ function components(a: MaterialLayer, b: MaterialLayer) {
     secondaryShare: kept > 0 ? weights[second] / kept : 0,
   };
 }
-export function blendLayers(a: MaterialLayer, b: MaterialLayer): MaterialLayer {
-  const depth = a.depth + b.depth,
-    share = depth > 0 ? b.depth / depth : 0,
-    mean = (
-      property:
-        "strength" | "damage" | "grainX" | "grainY" | "bedSlopeX" | "bedSlopeY" | "consolidation"
-    ) => a[property] + (b[property] - a[property]) * share;
+/** Explicit contribution depths avoid copying a material merely to change its mixing weight. */
+export function blendLayers(
+  a: MaterialLayer,
+  b: MaterialLayer,
+  aDepth = a.depth,
+  bDepth = b.depth
+): MaterialLayer {
+  const depth = aDepth + bDepth,
+    share = depth > 0 ? bDepth / depth : 0,
+    constituents = components(a, b, aDepth, bDepth);
   return {
-    ...components(a, b),
+    kind: constituents.kind,
+    secondaryKind: constituents.secondaryKind,
+    secondaryShare: constituents.secondaryShare,
     depth,
-    strength: mean("strength"),
-    damage: mean("damage"),
-    grainX: mean("grainX"),
-    grainY: mean("grainY"),
-    bedSlopeX: mean("bedSlopeX"),
-    bedSlopeY: mean("bedSlopeY"),
-    consolidation: mean("consolidation"),
+    strength: a.strength + (b.strength - a.strength) * share,
+    damage: a.damage + (b.damage - a.damage) * share,
+    grainX: a.grainX + (b.grainX - a.grainX) * share,
+    grainY: a.grainY + (b.grainY - a.grainY) * share,
+    bedSlopeX: a.bedSlopeX + (b.bedSlopeX - a.bedSlopeX) * share,
+    bedSlopeY: a.bedSlopeY + (b.bedSlopeY - a.bedSlopeY) * share,
+    consolidation: a.consolidation + (b.consolidation - a.consolidation) * share,
     deposited: Math.max(a.deposited, b.deposited),
     formedMin: Math.min(a.formedMin, b.formedMin),
     formedMax: Math.max(a.formedMax, b.formedMax),

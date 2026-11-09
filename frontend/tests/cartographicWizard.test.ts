@@ -12,8 +12,11 @@ test("composes geographic outcomes and sends the complete reviewed recipe to gen
   await page.getByLabel("World name", { exact: true }).fill("River country");
   await page.getByLabel("Detail level").selectOption("draft");
   await setupStep(page, /Land$/).click();
-  await page.getByLabel("Land and sea", { exact: true }).selectOption("broad");
+  await page.getByLabel("Continental organization", { exact: true }).selectOption("broad");
+  await page.getByLabel("Ocean coverage", { exact: true }).selectOption("oceanic");
+  await page.getByLabel("Continental motion", { exact: true }).selectOption("restless");
   await page.getByLabel("Terrain", { exact: true }).selectOption("plains");
+  await expect(page.getByLabel("Continental motion", { exact: true })).toHaveValue("restless");
   await page.getByLabel("Shoreline", { exact: true }).selectOption("flats");
   await page.getByLabel("Distinctive landmarks", { exact: true }).selectOption("prominent");
   await expect(page.getByRole("checkbox")).toHaveCount(0);
@@ -37,7 +40,8 @@ test("composes geographic outcomes and sends the complete reviewed recipe to gen
   await page.getByLabel("Towns and cities", { exact: true }).selectOption("great");
   await expect(page.getByLabel("Roads and travel", { exact: true })).toHaveValue("markets");
   await setupStep(page, /Review & generate/).click();
-  await expect(page.locator(".cartographic-review")).toContainText("Wide plains");
+  await expect(page.locator(".cartographic-review")).toContainText("Mostly plains");
+  await expect(page.locator(".cartographic-review")).toContainText("Ocean-dominated");
   await expect(page.locator(".cartographic-review")).toContainText("Humid woodland");
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await expect(page.getByRole("application", { name: "World map canvas" })).toBeVisible();
@@ -47,11 +51,13 @@ test("composes geographic outcomes and sends the complete reviewed recipe to gen
       (window as unknown as { generationFixtureInput: AtlasGenerationInput }).generationFixtureInput
   );
   expect(input.parameters).toMatchObject({
-    continents: 2,
-    provinces: 24,
-    landFraction: 0.68,
-    seaLevel: -0.000015,
-    erosion: 0.25,
+    continents: 3,
+    provinces: 42,
+    continentalCrustFraction: 0.48,
+    landFraction: 0.25,
+    seaLevel: 0,
+    erosion: 1,
+    plateDrift: 1.2,
     temperature: 23,
     rainfall: 2,
     vegetation: 2.5,
@@ -66,9 +72,10 @@ test("composes geographic outcomes and sends the complete reviewed recipe to gen
   expect(input.features!["physical.river-incision"].enabled).toBe(true);
   expect(input.features!["physical.foundation"].configuration!.profile).toMatchObject({
     ContinentalWarpStrength: 0.025,
-    InteriorReliefStrength: 0.06,
+    InteriorReliefStrength: 0.025,
   });
   expect(input.resolvedFeatures!.selection["human.politics"].enabled).toBe(false);
+  expect(input.settings!.epochs.map((epoch) => epoch.tectonics)).toEqual([1, 0.65, 0.25]);
 });
 
 test("accepts the curated reference through keyboard navigation without raw configuration", async ({
@@ -80,7 +87,10 @@ test("accepts the curated reference through keyboard navigation without raw conf
   await setupStep(page, /Land$/).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Land", exact: true })).toBeFocused();
-  await expect(page.getByLabel("Terrain", { exact: true })).toHaveValue("ranges");
+  await expect(page.getByLabel("Terrain", { exact: true })).toHaveValue("balanced");
+  await expect(page.getByLabel("Continental motion", { exact: true })).toHaveValue("drifting");
+  await expect(page.getByLabel("Continental organization", { exact: true })).toHaveValue("broad");
+  await expect(page.getByLabel("Ocean coverage", { exact: true })).toHaveValue("wide");
   await setupStep(page, /Review & generate/).click();
   await expect(page.getByLabel("Generation configuration", { exact: true })).toHaveCount(0);
   await expect(page.locator(".setup-tuning")).toHaveCount(0);
@@ -180,13 +190,13 @@ test("keeps distinct magic outcomes and independent inclusion while retaining au
   });
   expect(after.magicSystems[0].effects).toMatchObject({
     heat: 0.72,
-    iceMelt: 1,
+    iceMelt: 0.00000025,
     quickening: 1,
     fire: 0.5,
   });
   expect(after.magicSystems[1].parameters).toMatchObject({
-    iceRetention: 600,
-    coldRetentionDistance: 4_000,
+    iceRetention: 0.00015,
+    coldRetentionDistance: 0.001,
   });
   expect(after.magicSystems[2]).toEqual({ ...before.magicSystems[2], enabled: false });
   expect(after.activity).toEqual(before.activity);

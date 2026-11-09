@@ -31,8 +31,13 @@ export function* generationFeatures(state: State, selection: FeatureSelection = 
 export function generationFeature(state: State, id: string) {
   return state.features ? state.features.get(id) : state.domain.world.features[id];
 }
-export function findGenerationFeature(state: State, predicate: (feature: AtlasFeature) => boolean) {
-  for (const feature of generationFeatures(state)) if (predicate(feature)) return feature;
+export function findGenerationFeature(
+  state: State,
+  predicate: (feature: AtlasFeature) => boolean,
+  selection: FeatureSelection = {}
+) {
+  for (const feature of generationFeatures(state, selection))
+    if (predicate(feature)) return feature;
 }
 export function writeGenerationFeature(state: State, feature: AtlasFeature) {
   if (state.features) state.features.put(feature);

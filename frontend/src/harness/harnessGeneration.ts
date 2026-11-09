@@ -17,7 +17,10 @@ import {
   type BrowserWorkspace,
 } from "@atlas/storage-browser";
 import { blockCacheFixture } from "../../../packages/storage-browser/src/blockCacheFixture";
-import { sqliteFixture } from "../../../packages/storage-browser/src/sqliteFixture";
+import {
+  sqliteFixture,
+  sqliteFixtureMemory,
+} from "../../../packages/storage-browser/src/sqliteFixture";
 import { executeGeneration, type GenerationExecution } from "../generationExecution";
 import type { GenerationWorkspaceMessage } from "../generationWorkspaceProtocol";
 import { generationSource } from "../workspaceGeneration";
@@ -31,9 +34,16 @@ import { inheritedGeneration } from "../generationJobs";
 import type { WorkspaceClient } from "../WorkspaceClient";
 import type { HarnessWorkspace } from "./harnessWorkspace";
 
+export interface NativeMemory {
+  geosWasmBytes: number;
+  scratchSqlite: ReturnType<typeof sqliteFixtureMemory>;
+  catalogSqlite: ReturnType<typeof sqliteFixtureMemory>;
+}
 /** What a run reports while it goes: the runner's own observers plus the worker's messages. */
 export type RunObservers = Pick<MapRunnerOptions, "diagnostic" | "progress" | "inspect"> & {
   message?(message: GenerationWorkspaceMessage): void;
+  /** The reader is installed only while generation's scratch resources remain open. */
+  nativeMemory?(read: (() => NativeMemory) | undefined): void;
   /** Ends the run at its next step: the observer has what it came for. */
   stop?(): boolean;
 };
@@ -77,6 +87,11 @@ export async function runGeneration(
     send: (message) => observers.message?.(message),
   };
   try {
+    observers.nativeMemory?.(() => ({
+      geosWasmBytes: ws.kernel.native.Module.HEAPU8.byteLength,
+      scratchSqlite: sqliteFixtureMemory(scratch),
+      catalogSqlite: sqliteFixtureMemory(ws.db),
+    }));
     await executeGeneration(
       {
         worldId,
@@ -89,9 +104,13 @@ export async function runGeneration(
       observers
     );
   } finally {
-    await fields.close();
-    blocks.close();
-    scratch.close();
+    try {
+      observers.nativeMemory?.(undefined);
+    } finally {
+      await fields.close();
+      blocks.close();
+      scratch.close();
+    }
   }
 }
 

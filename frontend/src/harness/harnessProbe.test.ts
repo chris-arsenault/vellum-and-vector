@@ -15,6 +15,16 @@ const io = vi.hoisted(() => ({
   closed: [] as ReturnType<typeof vi.fn>[],
   generate: vi.fn(),
   refine: vi.fn(),
+  startProfile: vi.fn(),
+  stopProfile: vi.fn(),
+  stopTrace: vi.fn(() => ({
+    steps: [],
+    probes: [],
+    columns: [],
+    rock: [],
+    story: null,
+    failedSnapshot: undefined,
+  })),
   world: { kind: "world", name: "world", worldId: "w", root: "root", position: [0, 0] },
 }));
 vi.mock("node:fs", async (original) => ({
@@ -46,6 +56,7 @@ vi.mock("./harnessWorkspace", () => ({
   },
 }));
 vi.mock("./harnessGeneration", () => ({ generateWorld: io.generate, refineRegion: io.refine }));
+vi.mock("./cpuProfile", () => ({ startCpuProfile: io.startProfile }));
 vi.mock("../generationDraft", () => ({
   newGenerationDraft: () => ({ recipe: {}, width: 100, height: 100 }),
 }));
@@ -53,7 +64,7 @@ vi.mock("./stageRecord", () => ({
   stageRecorder: () => ({ diagnostics: [], observers: {}, highestLand: () => [0, 0] }),
 }));
 vi.mock("./reliefTrace", () => ({
-  traceRelief: () => () => ({ steps: [], probes: [], columns: [], rock: [], story: null }),
+  traceRelief: () => io.stopTrace,
 }));
 vi.mock("./mapReport", () => ({
   openTerrain: async () => ({
@@ -63,13 +74,13 @@ vi.mock("./mapReport", () => ({
     geography: {},
     close: vi.fn(),
   }),
-  channelRanges: vi.fn(),
+  channelRanges: vi.fn(() => ({})),
   fieldInventory: vi.fn(),
   scaleReport: vi.fn(),
   tileTiming: vi.fn(),
 }));
 vi.mock("./featureReport", () => ({ mapFeatures: vi.fn(), featureReport: vi.fn() }));
-vi.mock("./reliefReport", () => ({ reliefReport: vi.fn() }));
+vi.mock("./reliefReport", () => ({ reliefReport: vi.fn(() => ({})) }));
 vi.mock("../testSupport/regionalOverview", () => ({
   rasterOverview: vi.fn(),
   rasterRelief: vi.fn(),
@@ -80,6 +91,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   io.generate.mockReset();
   io.refine.mockReset();
+  io.startProfile.mockResolvedValue(io.stopProfile);
   io.closed.length = 0;
   io.opened.length = 0;
 });
@@ -104,6 +116,23 @@ it("closes an observation file if an individual record cannot serialize", () => 
   circular.self = circular;
   expect(() => writeReport("/probe-output", "ground", [circular])).toThrow();
   expect(io.closeFile).toHaveBeenCalledOnce();
+});
+
+it("writes successful world observations without serializing an absent failure snapshot", async () => {
+  io.generate.mockResolvedValue({ worldId: "w", root: "root" });
+  await runHarness(
+    harnessOptions({ HARNESS_FRESH: "world", HARNESS_WORLD_ONLY: "1", HARNESS_CPU_PROFILE: "1" })
+  );
+  expect(io.startProfile).toHaveBeenCalledWith(expect.stringMatching(/run\.cpuprofile$/), true);
+  expect(io.stopProfile).toHaveBeenCalledOnce();
+  expect(io.stopTrace).toHaveBeenCalledWith(undefined);
+  expect(io.write.mock.calls.some(([path]) => String(path).endsWith("/world-trace.json"))).toBe(
+    true
+  );
+  expect(
+    io.write.mock.calls.some(([path]) => String(path).endsWith("/world-failedSnapshot.json"))
+  ).toBe(false);
+  expect(io.write.mock.calls.every(([, contents]) => contents !== undefined)).toBe(true);
 });
 
 it.each(["world", "region", "quick-region"])(
@@ -138,10 +167,20 @@ it.each(["world", "region", "quick-region"])(
       HARNESS_WORLD_ONLY: kind === "world" ? "1" : "",
       HARNESS_WORLD_SIZE: "2000000,1500000",
       HARNESS_QUICK: kind === "quick-region" ? "1" : "",
+      HARNESS_CPU_PROFILE: "1",
     });
     await expect(runHarness(options)).rejects.toThrow("generation operation failed");
-    if (kind === "world")
+    expect(io.stopProfile).toHaveBeenCalledOnce();
+    if (kind === "world") expect(io.stopTrace).toHaveBeenCalledWith("generation operation failed");
+    if (kind === "world") {
       expect(io.generate.mock.calls[0][1]).toMatchObject({ width: 2_000_000, height: 1_500_000 });
+      for (const artifact of ["world-input", "world-run", "world-trace", "world-columns"])
+        expect(
+          io.write.mock.calls.some(([name]) => String(name).endsWith(`/${artifact}.json`))
+        ).toBe(true);
+    }
+    const failure = io.write.mock.calls.find(([name]) => String(name).endsWith("/failure.json"));
+    expect(JSON.parse(failure![1])).toMatchObject({ message: "generation operation failed" });
     const written = io.write.mock.calls.find(([name]) =>
       String(name).endsWith(`/${kind}-processes.json`)
     );

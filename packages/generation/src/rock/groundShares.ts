@@ -90,10 +90,13 @@ export function groundSection(map: PhysicalField, cell: number, facet: GroundFac
       medium = column === facet ? "rock" : "loose";
     for (let slot = 0; slot <= last; slot++) {
       const layer = readLayer(map, cell, slot, column),
-        basement = medium === "rock" && slot === last;
+        basement = medium === "rock" && slot === last,
+        bottom = top - layer.depth;
       if (layer.depth <= 0 && !basement) continue;
-      result.push({ ...layer, top, bottom: top - layer.depth, share, medium, basement });
-      top -= layer.depth;
+      // Stored material survives even when its finite contacts coincide at this elevation.
+      if (top === bottom && !basement) continue;
+      result.push({ ...layer, top, bottom, share, medium, basement });
+      top = bottom;
     }
   }
   return result;

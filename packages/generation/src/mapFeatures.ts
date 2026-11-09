@@ -8,6 +8,7 @@ import {
   representationId,
   ownsMapGeography,
   type AtlasFeature,
+  type FeatureSelection,
   type RegularGrid,
 } from "@atlas/domain";
 import type { GenerationState, MapProcess } from "./process";
@@ -106,16 +107,19 @@ export function putGenerated(state: GenerationState, feature: AtlasFeature) {
 export function putGeneratedDetail(
   state: GenerationState,
   feature: AtlasFeature,
-  matches: (existing: AtlasFeature) => boolean
+  matches: (existing: AtlasFeature) => boolean,
+  selection: FeatureSelection = {}
 ) {
   const world = state.domain.world;
-  if (ownsMapGeography(world, feature.areaId)) return putMapPlace(state, feature, matches);
+  if (ownsMapGeography(world, feature.areaId))
+    return putMapPlace(state, feature, matches, selection);
   const previous = findGenerationFeature(
     state,
     (candidate) =>
       candidate.areaId !== feature.areaId &&
       isDescendant(world.areas, feature.areaId, candidate.areaId) &&
-      matches(candidate)
+      matches(candidate),
+    selection
   );
   if (!previous) return false;
   const detail = previous.detail[feature.areaId];
@@ -142,12 +146,10 @@ export function putGeneratedDetail(
 function putMapPlace(
   state: GenerationState,
   feature: AtlasFeature,
-  matches: (candidate: AtlasFeature) => boolean
+  matches: (candidate: AtlasFeature) => boolean,
+  selection: FeatureSelection
 ) {
-  const local = findGenerationFeature(
-    state,
-    (candidate) => candidate.areaId === feature.areaId && matches(candidate)
-  );
+  const local = findGenerationFeature(state, matches, { ...selection, areaId: feature.areaId });
   if (!local) return false;
   if (local.protected || local.state === "authored") return true;
   writeGenerationFeature(state, {

@@ -31,14 +31,18 @@ export function exportFeaturePage(
       AND s.id=r.id AND s.kind IN ('landmark','magic'))) ORDER BY id LIMIT ?`,
     [worldId, after ?? "", owner, owner, limit]
   );
-  const features = rows.flatMap((row) => {
-    const world = projection.context(
+  if (!rows.length) return { features: [], next: null };
+  // A page shares its metadata, bindings and area lineage. Complete projection includes
+  // every selected feature's area when an export spans independently located maps.
+  const world = projection.context(
       worldId,
-      areaId ?? String(row.area_id),
-      [String(row.id)],
+      areaId ?? String(rows[0].area_id),
+      rows.map((row) => String(row.id)),
       areaId === undefined
-    ).world;
-    const source = canonicalFeatures(world).find((feature) => feature.id === String(row.id));
+    ).world,
+    sources = new Map(canonicalFeatures(world).map((feature) => [feature.id, feature]));
+  const features = rows.flatMap((row) => {
+    const source = sources.get(String(row.id));
     if (!source) return [];
     const feature = areaId ? presentAtlasFeature(world, source, areaId) : source;
     if (!feature) return [];

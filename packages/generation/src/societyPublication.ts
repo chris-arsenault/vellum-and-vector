@@ -9,7 +9,7 @@ import type { GenerationState, MapProcessContext } from "./process";
 import type { PublicationDefinition } from "./publication";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
 import { generatedFeature, putGeneratedNetwork, putGeneratedDetail } from "./mapFeatures";
-import { findRoute } from "./mapRouting";
+import { withRouteFinder } from "./mapRouting";
 import { publishKinds, publishLatePlaces } from "./poi/poiPublish";
 import { communityRoutes } from "./societyContact";
 import { profileOf } from "./societyProfile";
@@ -123,45 +123,49 @@ function publishRoutes(
   const region = state.society!.region;
   const communities = new Map(region.communities.map((c) => [c.id, c]));
   const realized = realizedWays(state, mapped, hierarchy);
+  if (!realized.size) return;
   let done = 0;
-  for (const [i, cls] of realized) {
-    const link = region.connections[i],
-      a = communities.get(link.from)!,
-      b = communities.get(link.to)!;
-    context.progress(done++ / Math.max(1, realized.size), "Laying the roads people made");
-    // A door is a crossing, not a way over the land between its ends: its doors are the places.
-    if (link.kind === "door") continue;
-    const kind = link.kind === "sea" ? "lane" : "road";
-    // A highway is the straight shot its builders surveyed; every other way follows the land.
-    const path = link.highway
-      ? [a.position, b.position]
-      : findRoute(state.surface, a.position, b.position, link.kind === "sea" ? "sea" : "road");
-    if (path.length < 2) continue;
-    const feature = generatedFeature(
-      state,
-      `${kind}:${a.id}:${b.id}`,
-      link.highway?.name ?? `${a.name}–${b.name}`,
-      kind,
-      "roads",
-      canonicalGeometry(state.domain.world.reference, {
-        type: "LineString",
-        coordinates: unwrapCoordinates(
-          path.map((p) => [p.x, p.y]),
-          state.surface.periodicWidth
-        ),
-      }),
-      wayAttributes(link, cls, [a, b], hierarchy)
-    );
-    const retained = putGeneratedDetail(
-      state,
-      feature,
-      (f) =>
-        f.kind === kind &&
-        ((f.attributes.fromCommunity === a.id && f.attributes.toCommunity === b.id) ||
-          (f.attributes.fromCommunity === b.id && f.attributes.toCommunity === a.id))
-    );
-    if (!retained) putGeneratedNetwork(state, feature);
-  }
+  withRouteFinder(state.surface, (findRoute) => {
+    for (const [i, cls] of realized) {
+      const link = region.connections[i],
+        a = communities.get(link.from)!,
+        b = communities.get(link.to)!;
+      context.progress(done++ / Math.max(1, realized.size), "Laying the roads people made");
+      // A door is a crossing, not a way over the land between its ends: its doors are the places.
+      if (link.kind === "door") continue;
+      const kind = link.kind === "sea" ? "lane" : "road";
+      // A highway is the straight shot its builders surveyed; every other way follows the land.
+      const path = link.highway
+        ? [a.position, b.position]
+        : findRoute(a.position, b.position, link.kind === "sea" ? "sea" : "road");
+      if (path.length < 2) continue;
+      const feature = generatedFeature(
+        state,
+        `${kind}:${a.id}:${b.id}`,
+        link.highway?.name ?? `${a.name}–${b.name}`,
+        kind,
+        "roads",
+        canonicalGeometry(state.domain.world.reference, {
+          type: "LineString",
+          coordinates: unwrapCoordinates(
+            path.map((p) => [p.x, p.y]),
+            state.surface.periodicWidth
+          ),
+        }),
+        wayAttributes(link, cls, [a, b], hierarchy)
+      );
+      const retained = putGeneratedDetail(
+        state,
+        feature,
+        (f) =>
+          f.kind === kind &&
+          ((f.attributes.fromCommunity === a.id && f.attributes.toCommunity === b.id) ||
+            (f.attributes.fromCommunity === b.id && f.attributes.toCommunity === a.id)),
+        { kind }
+      );
+      if (!retained) putGeneratedNetwork(state, feature);
+    }
+  });
 }
 function wayAttributes(
   link: SocietyRegion["connections"][number],

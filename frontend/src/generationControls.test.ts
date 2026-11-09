@@ -9,6 +9,7 @@ it("maps creator controls to native physics with declared units", async () => {
     {
       continents: 7,
       provinces: 30,
+      continentalCrustFraction: 0.6,
       landFraction: 0.3,
       temperature: -5,
       rainfall: 2,
@@ -20,7 +21,8 @@ it("maps creator controls to native physics with declared units", async () => {
   );
   expect(profile.ContinentalAssemblyCount).toBe(7);
   expect(profile.TectonicProvinceCount).toBe(30);
-  expect(profile.ContinentalCrustFraction).toBe(0.3);
+  expect(profile.ContinentalCrustFraction).toBe(0.6);
+  expect(profile.QualityTargets.OceanCoverage.target).toBe(0.7);
   expect(profile.TemperatureBaseline).toBe(250);
   expect(profile.PrecipitationBaseline).toBe(80);
   expect(profile.FluvialErosionRate).toBe(2.08);

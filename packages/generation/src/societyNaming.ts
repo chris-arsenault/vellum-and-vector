@@ -112,8 +112,15 @@ function namingPopulation(state: GenerationState) {
   });
 }
 type Residents = (bounds: Bounds) => ReturnType<typeof namingPopulation>;
+type WindowClip = (bounds: Bounds) => Geometry | null;
 /** Only geography within the naming radius of these speakers can contribute to their overlap. */
-function residentShare(shape: Geometry, radius: number, resident: ReturnType<Residents>[number]) {
+function residentShare(
+  shape: Geometry,
+  radius: number,
+  resident: ReturnType<Residents>[number],
+  clip?: WindowClip,
+  measure?: (geometry: Geometry) => number
+) {
   if (shape.type === "Point")
     return Number(
       resident.covers({
@@ -122,14 +129,12 @@ function residentShare(shape: Geometry, radius: number, resident: ReturnType<Res
         z: shape.coordinates[2] ?? 0,
       })
     );
-  if (radius === 0) return resident.measure(shape) / resident.area;
+  if (radius === 0) return measure!(resident.footprint) / resident.area;
   // Buffering a whole river or ridge network can exhaust native memory. Clip before buffering,
   // including the radius outside the community so lines just beyond its boundary still count.
   const bounds = expanded(resident.bounds, radius + spatial.precision),
     // Rectangle clipping keeps line crossings unnoded; overlay would split them into many pieces.
-    local = shape.type.includes("LineString")
-      ? spatial.clipByRect(shape, bounds)
-      : spatial.intersection(shape, rectangle(bounds));
+    local = clip ? clip(bounds) : spatial.intersection(shape, rectangle(bounds));
   if (!local) return 0;
   const nearby = spatial.buffer(local, radius);
   return nearby ? resident.measure(nearby) / resident.area : 0;
@@ -137,15 +142,26 @@ function residentShare(shape: Geometry, radius: number, resident: ReturnType<Res
 function influence(feature: AtlasFeature, residents: Residents, width: number) {
   const shape = feature.geometry,
     radius = namingRadius(feature, width),
-    bounds = expanded(spatial.bounds(shape), radius);
-  const result: Record<string, number> = {};
-  for (const c of residents(bounds)) {
-    const fraction = residentShare(shape, radius, c);
-    if (fraction <= 0) continue;
-    for (const [language, speakers] of c.speakers)
-      result[language] = (result[language] ?? 0) + speakers * fraction;
-  }
-  return result;
+    bounds = expanded(spatial.bounds(shape), radius),
+    candidates = residents(bounds);
+  if (!candidates.length) return {};
+  // Prepare the large feature once; each overlap then parses only a community footprint.
+  const measure =
+    radius === 0 && shape.type !== "Point" ? spatial.intersectionArea(shape) : undefined;
+  const collect = (clip?: WindowClip) => {
+    const result: Record<string, number> = {};
+    for (const c of candidates) {
+      const fraction = residentShare(shape, radius, c, clip, measure);
+      if (fraction <= 0) continue;
+      for (const [language, speakers] of c.speakers)
+        result[language] = (result[language] ?? 0) + speakers * fraction;
+    }
+    return result;
+  };
+  if (shape.type.includes("LineString")) return spatial.withClipByRect(shape, collect);
+  if (radius === 0 || shape.type === "Point") return collect();
+  const intersect = spatial.intersectionWith(shape);
+  return collect((window) => intersect(rectangle(window)));
 }
 function newGeographicName(
   state: GenerationState,

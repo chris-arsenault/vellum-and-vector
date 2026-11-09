@@ -17,6 +17,7 @@ import { projectGenerationSetup } from "./setupProjection";
 import type { FeatureSelection } from "./features";
 import type { GenerationModule } from "./generationModules";
 import { z } from "zod";
+import { physicalProfileConfiguration } from "./physicalProfileConfiguration";
 
 function world() {
   const state = landscape();
@@ -121,6 +122,34 @@ it("places the shared sea-level control with its scheduled ocean consumer while 
   expect(
     feature(view, "ocean.geography").settings.some((setting) => setting.key === "seaLevel")
   ).toBe(false);
+});
+
+it("binds crust allocation and exposed-land controls to their separate scheduled consumers", () => {
+  const resolved = prepared({
+    "physical.foundation": {
+      settings: { continentalCrustFraction: 0.6, landFraction: 0.25 },
+    },
+    "ocean.geography": { enabled: false },
+  });
+  const foundation = feature(projectGenerationSetup(resolved), "physical.foundation");
+  expect(
+    foundation.settings.find((setting) => setting.key === "continentalCrustFraction")
+  ).toMatchObject({ controlFeature: "physical.foundation", active: true, value: 0.6 });
+  expect(foundation.settings.find((setting) => setting.key === "landFraction")).toMatchObject({
+    controlFeature: "ocean.geography",
+    active: false,
+    value: 0.25,
+  });
+});
+
+it("requires a positive major-assembly size ratio while allowing no favored assemblies", () => {
+  const schema = physicalProfileConfiguration("physical.foundation").configuration!;
+  expect(schema.safeParse({ profile: { ContinentalMajorGrowth: 0 } }).success).toBe(false);
+  expect(
+    schema.safeParse({
+      profile: { ContinentalMajorGrowth: 0.1, ContinentalMajorAssemblies: 0 },
+    }).success
+  ).toBe(true);
 });
 
 /** A region is an independent captured map: its inputs are the parent's present channels, pinned. */

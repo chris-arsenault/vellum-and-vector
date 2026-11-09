@@ -1,6 +1,8 @@
-import { closeSync, mkdirSync, openSync, writeFileSync, writeSync } from "node:fs";
+import { appendFileSync, closeSync, mkdirSync, openSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { newGenerationDraft } from "../generationDraft";
+import { applyCartographicChoice, cartographicControls } from "../cartographicDraft";
+import { generationRecipeSchema, type GenerationRecipe } from "@atlas/generation";
 import { rasterOverview, rasterRelief } from "../testSupport/regionalOverview";
 import { generateWorld, refineRegion } from "./harnessGeneration";
 import {
@@ -21,6 +23,7 @@ import { reliefReport } from "./reliefReport";
 import { traceRelief } from "./reliefTrace";
 import { processProbeBands, startProcessProbe } from "./processProbe";
 import { groundProbeCells } from "./groundProbe";
+import { startCpuProfile } from "./cpuProfile";
 import type { PhysicalBufferName } from "../../../packages/generation/src/world/field";
 
 /** What one harness run does; read from the environment of `pnpm harness`. */
@@ -28,6 +31,10 @@ export interface HarnessOptions {
   seed: number;
   world: string;
   worldQuality: string;
+  /** Optional curated terrain choice, applied through the same operation as setup. */
+  terrain: string;
+  /** Optional ordinary domain selection for geography-only inspection. */
+  domains?: GenerationRecipe["domains"];
   /** Optional ordinary world dimensions in metres; cell span still follows quality. */
   worldSize?: [number, number];
   region: string;
@@ -46,6 +53,10 @@ export interface HarnessOptions {
   processAt?: [number, number];
   processBands?: readonly PhysicalBufferName[];
   groundCells?: readonly number[];
+  /** Capture a V8 CPU profile for the complete harness invocation. */
+  cpuProfile: boolean;
+  /** Explicit POI catalogue audit; ordinary geography runs do not exercise every place rule. */
+  places: boolean;
 }
 /** The world the harness judges, so a result is not fitted to the app's default seed. */
 const harnessSeed = 271_828;
@@ -53,6 +64,8 @@ const harnessSeed = 271_828;
 const defaults = {
   HARNESS_WORLD: "world",
   HARNESS_WORLD_QUALITY: "standard",
+  HARNESS_TERRAIN: "",
+  HARNESS_DOMAINS: "",
   HARNESS_WORLD_SIZE: "",
   HARNESS_REGION: "region",
   HARNESS_REGION_QUALITY: "standard",
@@ -65,6 +78,8 @@ const defaults = {
   HARNESS_PROCESS_BANDS: "",
   HARNESS_GROUND_CELLS: "",
   HARNESS_SEED: String(harnessSeed),
+  HARNESS_CPU_PROFILE: "",
+  HARNESS_PLACES: "",
 };
 function position(text: string): [number, number] | undefined {
   const at = text.split(",").map(Number);
@@ -82,6 +97,10 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
     seed: Number(read("HARNESS_SEED")),
     world: read("HARNESS_WORLD"),
     worldQuality: read("HARNESS_WORLD_QUALITY"),
+    terrain: read("HARNESS_TERRAIN"),
+    domains: read("HARNESS_DOMAINS")
+      ? generationRecipeSchema.shape.domains.parse(read("HARNESS_DOMAINS").split(","))
+      : undefined,
     worldSize,
     region: read("HARNESS_REGION"),
     regionQuality: read("HARNESS_REGION_QUALITY"),
@@ -93,6 +112,8 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
     processAt: position(read("HARNESS_PROCESS_AT")),
     processBands: processProbeBands(read("HARNESS_PROCESS_BANDS")),
     groundCells: groundProbeCells(read("HARNESS_GROUND_CELLS")),
+    cpuProfile: Boolean(read("HARNESS_CPU_PROFILE")),
+    places: Boolean(read("HARNESS_PLACES")),
   };
 }
 
@@ -126,20 +147,44 @@ const recordProcesses = (options: HarnessOptions, out: string, map: string) =>
     { cells: options.groundCells ?? [], publish: (samples) => write(out, `${map}-ground`, samples) }
   );
 
+/** Persist boundaries immediately, including when a process later crashes. */
+function liveRecorder(out: string, map: string, places: boolean) {
+  return stageRecorder((event) => {
+    appendFileSync(join(out, `${map}-progress.jsonl`), `${JSON.stringify(event)}\n`);
+    if (event.kind === "start" || event.kind === "diagnostic")
+      process.stdout.write(`${JSON.stringify(event)}\n`);
+  }, places);
+}
+
+function saveTrace(out: string, stop: ReturnType<typeof traceRelief>, failure?: string) {
+  const trace = stop(failure);
+  for (const [key, value] of Object.entries(trace))
+    if (value !== undefined) write(out, `world-${key === "steps" ? "trace" : key}`, value);
+}
+
+function worldDraft(options: HarnessOptions) {
+  const draft = newGenerationDraft();
+  if (options.domains) draft.recipe.domains = options.domains;
+  if (!options.terrain) return draft;
+  const terrain = cartographicControls().find((control) => control.id === "terrain")!;
+  return applyCartographicChoice(draft, terrain, options.terrain);
+}
+
 /** A real generated world from the app's default draft, at the chosen quality. */
 async function ensureWorld(options: HarnessOptions, out: string): Promise<CheckpointRecord> {
   const reused = !options.fresh.has("world") && readCheckpoint(options.world);
   if (reused) return reused;
   removeCheckpoint(options.world);
   const ws = await openHarnessWorkspace(checkpointDirectory(options.world)),
-    recorder = stageRecorder(),
-    draft = newGenerationDraft(),
+    recorder = liveRecorder(out, "world", options.places),
+    draft = worldDraft(options),
     started = performance.now(),
     stopTrace = traceRelief(
       options.snapshots
         ? {
             label: options.snapshots,
             quality: options.worldQuality,
+            seed: options.seed,
             epochs: draft.recipe.settings.epochs,
           }
         : undefined
@@ -148,7 +193,8 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
   draft.recipe.quality = options.worldQuality as typeof draft.recipe.quality;
   draft.recipe.seed = options.seed;
   if (options.worldSize) [draft.width, draft.height] = options.worldSize;
-  let traceStopped = false;
+  write(out, "world-input", { draft, options: { ...options, fresh: [...options.fresh] } });
+  let failure: string | undefined;
   try {
     const { worldId, root } = await generateWorld(ws, draft, recorder.observers);
     const record: CheckpointRecord = {
@@ -165,21 +211,22 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
       createdAt: new Date().toISOString(),
     };
     await ws.save(record);
-    write(out, "world-run", { ...recorder, seconds: (performance.now() - started) / 1000 });
-    const { steps, probes, columns, rock, story } = stopTrace();
-    traceStopped = true;
-    write(out, "world-story", story);
-    write(out, "world-trace", steps);
-    write(out, "world-probes", probes);
-    write(out, "world-columns", columns);
-    write(out, "world-rock", rock);
     return record;
+  } catch (error) {
+    failure = error instanceof Error ? error.message : String(error);
+    throw error;
   } finally {
     try {
+      write(out, "world-run", {
+        ...recorder,
+        seconds: (performance.now() - started) / 1000,
+        memory: process.memoryUsage(),
+        resourceUsage: process.resourceUsage(),
+      });
       stopProcesses();
     } finally {
       try {
-        if (!traceStopped) stopTrace();
+        saveTrace(out, stopTrace, failure);
       } finally {
         await ws.close();
       }
@@ -195,7 +242,7 @@ async function ensureRegion(options: HarnessOptions, world: CheckpointRecord, ou
   if (!at) throw new Error("Give HARNESS_REGION_AT=x,y: the world records no highest land.");
   copyCheckpoint(world.name, options.region);
   const ws = await openHarnessWorkspace(checkpointDirectory(options.region)),
-    recorder = stageRecorder(),
+    recorder = stageRecorder(undefined, options.places),
     started = performance.now(),
     stopProcesses = recordProcesses(options, out, "region");
   try {
@@ -326,12 +373,33 @@ async function describeMap(record: CheckpointRecord, out: string) {
 export async function runHarness(options: HarnessOptions) {
   const out = join(harnessRoot, "reports", new Date().toISOString().replace(/[:.]/g, "-"));
   mkdirSync(out, { recursive: true });
-  if (options.quick) {
-    await quickRegion(options, out);
+  process.stdout.write(`Harness report: ${out}\n`);
+  write(out, "invocation", {
+    ...options,
+    fresh: [...options.fresh],
+    commit: currentCommit(),
+    pid: process.pid,
+  });
+  const stopProfile = await startCpuProfile(join(out, "run.cpuprofile"), options.cpuProfile);
+  try {
+    if (options.quick) {
+      await quickRegion(options, out);
+      return out;
+    }
+    const world = await ensureWorld(options, out);
+    await describeMap(world, out);
+    if (!options.worldOnly) await describeMap(await ensureRegion(options, world, out), out);
     return out;
+  } catch (error) {
+    write(out, "failure", {
+      timestamp: new Date().toISOString(),
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      memory: process.memoryUsage(),
+      resourceUsage: process.resourceUsage(),
+    });
+    throw error;
+  } finally {
+    await stopProfile();
   }
-  const world = await ensureWorld(options, out);
-  await describeMap(world, out);
-  if (!options.worldOnly) await describeMap(await ensureRegion(options, world, out), out);
-  return out;
 }

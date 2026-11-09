@@ -66,3 +66,41 @@ it("unwraps short seam links before clipping, rather than drawing across the wor
   expect(shape.type).toBe("MultiLineString");
   expect(spatial.length(shape)).toBeCloseTo(60, 6);
 });
+
+it("clips crossing traces at the seam without turning their crossings into network nodes", () => {
+  const shape = canonicalGeometry(reference, {
+    type: "LineString",
+    coordinates: [
+      [-100, 100],
+      [900, 400],
+      [-100, 400],
+      [900, 100],
+    ],
+  });
+  expect(shape.type).toBe("MultiLineString");
+  if (shape.type !== "MultiLineString") throw new Error("Expected chart pieces.");
+  const stations = shape.coordinates.flat();
+  expect(stations).toContainEqual([900, 400]);
+  expect(stations).not.toContainEqual([400, 250]);
+  expect(spatial.covers(reference.domain, shape)).toBe(true);
+});
+
+it("retains a trace lying along the chart boundary while clipping its overhang", () => {
+  const shape = canonicalGeometry(reference, {
+    type: "LineString",
+    coordinates: [
+      [0, -50],
+      [0, 250],
+      [100, 550],
+    ],
+  });
+  const lines =
+    shape.type === "LineString"
+      ? [shape.coordinates]
+      : shape.type === "MultiLineString"
+        ? shape.coordinates
+        : [];
+  expect(lines.flat()).toContainEqual([0, 0]);
+  expect(lines.flat()).toContainEqual([0, 250]);
+  expect(spatial.covers(reference.domain, shape)).toBe(true);
+});

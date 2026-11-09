@@ -1,4 +1,4 @@
-import type { Geometry, Position as Coordinate } from "geojson";
+import type { Geometry, LineString, MultiLineString, Position as Coordinate } from "geojson";
 import {
   requireThat,
   type Bounds,
@@ -9,6 +9,7 @@ import {
 import type { GeometryKernel } from "./geometryKernel";
 import { contourArea } from "./contourArea";
 import * as native from "./nativeOperations";
+import { clipTrace, resampleTrace } from "./nativeTrace";
 
 let sequence = 0;
 /** Native spatial adapter shared by domain commands, generation and worker rendering. */
@@ -28,6 +29,9 @@ export class GeosSpatial implements SpatialOperations {
   }
   geometryCoverage(value: Geometry) {
     return this.predicate(value, "covers");
+  }
+  resampleTrace(value: LineString, deviation: number, spacing?: number) {
+    return resampleTrace(this.kernel, value, deviation, spacing, this.precision);
   }
   intersectionPredicate(value: Geometry) {
     return this.predicate(value, "intersects");
@@ -181,6 +185,12 @@ export class GeosSpatial implements SpatialOperations {
   }
   clipByRect(value: Geometry, bounds: Bounds) {
     return native.clipByRect(this.kernel, value, bounds, this.precision);
+  }
+  withClipByRect<T>(value: Geometry, work: (clip: (bounds: Bounds) => Geometry | null) => T): T {
+    return native.withClipByRect(this.kernel, value, this.precision, work);
+  }
+  clipTrace(value: LineString | MultiLineString, mask: Geometry) {
+    return clipTrace(this.kernel, value, mask, this.precision);
   }
   nearestPoints(a: Geometry, b: Geometry): [Position, Position] {
     const [p, q] = native.nearestPoints(this.kernel, a, b, this.precision);

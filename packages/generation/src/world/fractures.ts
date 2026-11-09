@@ -9,6 +9,12 @@ import { nearestTriangle } from "./mesh";
 import { worldCandidates } from "./worldSources";
 
 type Coordinate = [number, number];
+/** Occurrences belong to retained map history, not the random stream that shaped them. */
+export function nextFaultId(faults: readonly { readonly id: string }[]) {
+  let ordinal = faults.length;
+  while (faults.some((fault) => fault.id === `fault:${ordinal}`)) ordinal++;
+  return `fault:${ordinal}`;
+}
 const cellAt = (map: PhysicalField, [x, y]: Coordinate) => nearestTriangle(map.mesh, x, y);
 function separatedRoot(
   candidates: Coordinate[],
@@ -110,7 +116,7 @@ function growBranch(
     (c.Profile.FractureMaximumLength - c.Profile.FractureMinimumLength) *
       hashUnit(c.Seed ^ 0x4f39, branch, 1);
   const fault = {
-    id: `fault:${c.Seed}:${branch}`,
+    id: nextFaultId(map.faults),
     coordinates: [] as Coordinate[],
     width: c.Profile.FractureWidth,
   };
@@ -197,11 +203,17 @@ export function fractureNetwork(map: PhysicalField, c: PhysicalContext) {
 
 /** Plan against the current terrain; refining support must not choose a different network. */
 export function plannedFractures(map: PhysicalField, c: PhysicalContext) {
-  const conductance = map.coverage.copyBand(map.FractureConductance);
-  const scratch: PhysicalField = { ...map, FractureConductance: conductance, faults: [] };
+  const conductance = map.coverage.copyBand(map.FractureConductance),
+    retained = map.faults.length;
+  // Planning only appends faults; existing records and coordinates remain untouched.
+  const scratch: PhysicalField = {
+    ...map,
+    FractureConductance: conductance,
+    faults: [...map.faults],
+  };
   try {
     fractureNetwork(scratch, c);
-    return scratch.faults;
+    return scratch.faults.slice(retained);
   } finally {
     map.coverage.release(conductance);
   }

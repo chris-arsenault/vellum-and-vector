@@ -60,17 +60,69 @@ it("defaults to compound continents and keeps island-world assemblies dispersed"
     );
   };
   expect(configured(newGenerationDraft())).toMatchObject({
-    ContinentalAssemblyCount: 4,
+    ContinentalAssemblyCount: 3,
     TectonicProvinceCount: 42,
-    ContinentalCrustFraction: 0.45,
+    ContinentalCrustFraction: 0.48,
     ContinentalAssemblyClustering: 1,
-    QualityTargets: { OceanCoverage: { target: 0.55 } },
+    QualityTargets: { OceanCoverage: { target: 0.62 } },
   });
   expect(prepareDraft(newGenerationDraft()).input.parameters!.mapBoundary).toBe(1);
   expect(configured(choose(newGenerationDraft(), "land-and-sea", "islands"))).toMatchObject({
     ContinentalAssemblyCount: 10,
     ContinentalAssemblyClustering: 0,
   });
+});
+
+it("changes ocean coverage without changing continental organization or relief", () => {
+  const base = newGenerationDraft(),
+    changed = choose(base, "ocean-coverage", "oceanic"),
+    before = prepareDraft(base).input,
+    after = prepareDraft(changed).input;
+  expect(after.parameters!.landFraction).toBe(0.25);
+  expect(after.parameters!.continentalCrustFraction).toBe(
+    before.parameters!.continentalCrustFraction
+  );
+  expect(after.parameters!.continents).toBe(before.parameters!.continents);
+  expect(after.features!["physical.foundation"].configuration).toEqual(
+    before.features!["physical.foundation"].configuration
+  );
+  expect(cartographicValue(changed, control("terrain"))).toBe("balanced");
+  expect(cartographicValue(changed, control("land-and-sea"))).toBe("broad");
+  expect(
+    prepareDraft(choose(changed, "land-and-sea", "islands")).input.parameters!.landFraction
+  ).toBe(0.25);
+});
+
+it("changes inherited relief without changing continental motion or disabling mountains", () => {
+  const profiles = ["plains", "balanced", "ranges"].map((terrain) => {
+    const prepared = prepareDraft(choose(newGenerationDraft(), "terrain", terrain)).input;
+    expect(prepared.resolvedFeatures!.selection["physical.mountains"].enabled).toBe(true);
+    return atlasPhysicalProfile(
+      prepared.parameters!,
+      configuredPhysicalProfile(prepared.resolvedFeatures!),
+      MapScale.reference()
+    );
+  });
+  expect(profiles[0].OrogenicInitialShortening).toBeLessThan(profiles[1].OrogenicInitialShortening);
+  expect(profiles[1].OrogenicInitialShortening).toBeLessThan(profiles[2].OrogenicInitialShortening);
+  expect(profiles.map((profile) => profile.PlateDriftPerMyr)).toEqual([45_000, 45_000, 45_000]);
+});
+
+it("composes plains and restless continents without overwriting authored tectonic history", () => {
+  const base = choose(newGenerationDraft(), "continental-motion", "restless"),
+    authored = updatePhysicalEpoch(base, "Cold age", { tectonics: 0.37 }),
+    changed = choose(authored, "terrain", "plains"),
+    prepared = prepareDraft(changed).input;
+  expect(prepared.parameters!.plateDrift).toBe(1.2);
+  expect(prepared.settings!.epochs[1].tectonics).toBe(0.37);
+  expect(cartographicValue(changed, control("continental-motion"))).toBe("custom");
+  const first = choose(base, "terrain", "plains"),
+    second = choose(
+      choose(newGenerationDraft(), "terrain", "plains"),
+      "continental-motion",
+      "restless"
+    );
+  expect(normalizeGenerationRecipe(first.recipe)).toEqual(normalizeGenerationRecipe(second.recipe));
 });
 
 it("rejects unowned coefficients and invalid physical coefficient dimensions at the recipe boundary", () => {
@@ -92,6 +144,7 @@ it("composes terrain, shore, climate and ecological history independently of sel
   const choices = [
     ["land-and-sea", "islands"],
     ["terrain", "glacial"],
+    ["continental-motion", "restless"],
     ["shoreline", "inlets"],
     ["warmth", "warmer"],
     ["living-landscape", "humid"],
@@ -123,7 +176,7 @@ it("composes terrain, shore, climate and ecological history independently of sel
   });
   expect(first.parameters).toMatchObject({
     temperature: 23,
-    seaLevel: 0.000015,
+    seaLevel: 0,
     rainfall: 2,
     vegetation: 2.5,
   });
@@ -139,7 +192,7 @@ it("keeps authored climate, ice, geological duration and water forcing when terr
     ice: 0.7,
     seaLevel: 25,
   });
-  for (const terrain of ["plains", "hills", "ranges", "glacial"]) {
+  for (const terrain of ["plains", "balanced", "ranges", "glacial"]) {
     const prepared = prepareDraft(choose(draft, "terrain", terrain));
     expect(prepared.input.settings!.epochs[1]).toMatchObject({
       duration: 220,
@@ -168,7 +221,7 @@ it("passes all owned native coefficients into the actual physical profile, prese
     ContinentalAssemblyCount: 10,
     ContinentalWarpStrength: 260_000,
     InteriorReliefStrength: 0.25,
-    PlateDriftPerMyr: 120_000,
+    PlateDriftPerMyr: 45_000,
     FluvialEquilibriumGradient: 0.0004,
     CoastalDepositionReach: 35_000,
     CoastalDetailPassiveAmplitude: 62 * 0.35,

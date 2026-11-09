@@ -22,6 +22,7 @@ const angleHeld = averageGroundQuery({
     (1 + tree * 0.2 + grass * 0.1),
 });
 interface Face {
+  index: number;
   i: number;
   j: number;
   distance: number;
@@ -30,7 +31,6 @@ interface Face {
 }
 function faces(map: PhysicalField) {
   const mesh = map.mesh;
-  const ground = groundOf(map);
   let count = 0;
   for (let i = 0; i < mesh.count; i++)
     for (let edge = 0; edge < mesh.degree(i); edge++) if (mesh.neighbor(i, edge) > i) count++;
@@ -38,7 +38,7 @@ function faces(map: PhysicalField) {
     i: workingArray(map, "int32", "slope:from", count),
     j: workingArray(map, "int32", "slope:to", count),
     distance: workingArray(map, "float64", "slope:distance", count),
-    diffusion: workingArray(map, "float64", "slope:diffusion", count),
+    diffusion: workingArray(map, "float64", "slope:diffusion", count).fill(NaN),
     volume: workingArray(map, "float64", "slope:volume", count),
   };
   // One slot per directed edge, addressed as cell × stride + edge.
@@ -52,14 +52,7 @@ function faces(map: PhysicalField) {
       slots.set(j * mesh.stride + edgeLeadingTo(mesh, j, i), index);
       columns.i.set(index, i);
       columns.j.set(index, j);
-      columns.distance.set(index, mesh.edgeLength(i, edge));
-      columns.diffusion.set(
-        index++,
-        // Ground that gives up easily goes in fewer rounds; what holds together comes away slowly.
-        map.Elevation.get(i) >= map.Elevation.get(j)
-          ? ground.faceGives(i, j, failing)
-          : ground.faceGives(j, i, failing)
-      );
+      columns.distance.set(index++, mesh.edgeLength(i, edge));
     }
   return {
     columns,
@@ -67,6 +60,7 @@ function faces(map: PhysicalField) {
     slots,
     get(at: number): Face {
       return {
+        index: at,
         i: columns.i.get(at),
         j: columns.j.get(at),
         distance: columns.distance.get(at),
@@ -76,7 +70,36 @@ function faces(map: PhysicalField) {
     },
   };
 }
-function exchange(face: Face, heights: Band, stable: Band, area: (i: number) => number) {
+/** Group reads by the higher source without changing the face order used by settlement. */
+function faceResponses(map: PhysicalField, slots: Band, diffusion: Band, i: number) {
+  const mesh = map.mesh,
+    ground = groundOf(map),
+    height = map.Elevation.get(i);
+  let gives: ReturnType<typeof ground.faceGivesFrom> | undefined;
+  for (let edge = 0; edge < mesh.degree(i); edge++) {
+    const j = mesh.neighbor(i, edge);
+    if (j < 0 || j === i) continue;
+    const beside = map.Elevation.get(j);
+    if (height < beside || (height === beside && j < i)) continue;
+    gives ??= ground.faceGivesFrom(i, failing);
+    diffusion.set(slots.get(i * mesh.stride + edge), gives(j));
+  }
+}
+/** Ground is unchanged during relaxation; query a source only when one of its faces can move. */
+function diffusionAt(map: PhysicalField, plan: ReturnType<typeof faces>, face: Face) {
+  if (!Number.isNaN(face.diffusion)) return face.diffusion;
+  // The original higher endpoint owns the material query, even if relaxed heights reverse.
+  const source = map.Elevation.get(face.i) >= map.Elevation.get(face.j) ? face.i : face.j;
+  faceResponses(map, plan.slots, plan.columns.diffusion, source);
+  return plan.columns.diffusion.get(face.index);
+}
+function exchange(
+  face: Face,
+  heights: Band,
+  stable: Band,
+  area: (i: number) => number,
+  response: (face: Face) => number
+) {
   const { i, j, volume: old } = face,
     areaI = area(i),
     areaJ = area(j);
@@ -87,7 +110,8 @@ function exchange(face: Face, heights: Band, stable: Band, area: (i: number) => 
       ? Math.max(0, head - stable.get(i) * face.distance)
       : Math.min(0, head + stable.get(j) * face.distance);
   // What would level the step, less by how much the ground holds together: the same at any cell size.
-  const volume = face.diffusion > 0 ? driving / (inverse * (1 + 1 / face.diffusion)) : 0;
+  const diffusion = driving === 0 ? 0 : response(face),
+    volume = diffusion > 0 ? driving / (inverse * (1 + 1 / diffusion)) : 0;
   const change = volume - old;
   heights.add(i, -change / areaI);
   heights.add(j, change / areaJ);
@@ -107,11 +131,12 @@ function supportFailures(map: PhysicalField, failsAt: number) {
     for (const [part, facet] of (["land", "cut"] as const).entries()) {
       const share = ground.share(i, facet);
       if (share <= 0) continue;
-      const stable = failsAt * ground.fold(i, angleHeld, facet);
+      const stable = failsAt * ground.fold(i, angleHeld, facet),
+        surface = ground.surface(i, facet);
       let failure: ReturnType<typeof ground.failureFrom> | undefined;
       for (let edge = 0; edge < mesh.degree(i); edge++) {
         const j = mesh.neighbor(i, edge);
-        if (j < 0 || ground.surface(i, facet) <= map.Elevation.get(j)) continue;
+        if (j < 0 || surface <= map.Elevation.get(j)) continue;
         failure ??= ground.failureFrom(i, facet, failing);
         const depth = failure(j, mesh.edgeLength(i, edge), stable),
           candidate = MapScale.metres(depth, "native") * share * mesh.area(i);
@@ -166,6 +191,7 @@ function relaxFaces(
 ) {
   const mesh = map.mesh,
     area = (i: number) => mesh.area(i),
+    response = (face: Face) => diffusionAt(map, plan, face),
     queue = workingArray(map, "int32", "slope:queue", plan.count + 1),
     queued = workingArray(map, "uint8", "slope:queued", plan.count).fill(1);
   for (let i = 0; i < plan.count; i++) queue.set(i, i);
@@ -185,7 +211,7 @@ function relaxFaces(
     head = (head + 1) % queue.length;
     queued.set(index, 0);
     const face = plan.get(index);
-    const movement = exchange(face, heights, stable, area);
+    const movement = exchange(face, heights, stable, area, response);
     plan.columns.volume.set(index, face.volume);
     if (movement <= MapScale.metres(1, "native")) continue;
     enqueueCell(face.i);

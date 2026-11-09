@@ -43,6 +43,8 @@ export interface SocietyWorkspace {
   /** Elevation before local earthworks, for transferring only their terrain changes. */
   elevationBefore?: Band;
   cycle?: { index: number; elapsed: number; final: boolean };
+  /** Geometry-only neighbor rows shared within one era, released at its final cycle. */
+  coastalNeighbors?: import("./societySpatial").SocietyNeighbors;
   /** This cycle's central-place allocation of town-dwellers, read by settlements. */
   urban?: import("./societyCentres").UrbanAllocation;
   /** People who travelled each connection this cycle, by index into `region.connections`. */

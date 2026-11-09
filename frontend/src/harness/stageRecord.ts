@@ -1,6 +1,6 @@
 import { foldSamples, attachGrid, gridPosition, type GridArrays } from "@atlas/domain";
 import { auditPlaces, exerciseCatalogue, type KindExercise } from "@atlas/generation";
-import type { RunObservers } from "./harnessGeneration";
+import type { NativeMemory, RunObservers } from "./harnessGeneration";
 
 /** The last process of every generation sequence. */
 const lastStep = "atlas.names";
@@ -29,23 +29,72 @@ export interface DiagnosticEntry {
   stack?: string;
 }
 
+type StageEventData =
+  | { kind: "start" | "progress" | "skipped"; path: string; fraction: number; message: string }
+  | { kind: "complete"; stage: StageEntry }
+  | { kind: "diagnostic"; diagnostic: DiagnosticEntry };
+/** Boundary observations; memory is in bytes and CPU use is cumulative since recording began. */
+export type StageEvent = StageEventData & {
+  pid: number;
+  timestamp: string;
+  elapsedMilliseconds: number;
+  memory: NodeJS.MemoryUsage;
+  nativeMemory?: NativeMemory;
+  cpuMicroseconds: NodeJS.CpuUsage;
+};
+
+function eventPublisher(
+  onEvent: ((event: StageEvent) => void) | undefined,
+  nativeMemory: () => NativeMemory | undefined
+) {
+  const started = performance.now(),
+    cpu = onEvent && process.cpuUsage();
+  return (event: StageEventData) => {
+    if (!onEvent) return;
+    onEvent({
+      ...event,
+      pid: process.pid,
+      timestamp: new Date().toISOString(),
+      elapsedMilliseconds: performance.now() - started,
+      memory: process.memoryUsage(),
+      nativeMemory: nativeMemory(),
+      cpuMicroseconds: process.cpuUsage(cpu),
+    });
+  };
+}
+
 /**
  * Records a run step by step: what each process added to or dropped from the surface, the
  * cells it worked on, how long it took, which steps were skipped and every diagnostic. The
  * final preview grid locates the world's highest land for a default region.
  */
-export function stageRecorder() {
+export function stageRecorder(onEvent?: (event: StageEvent) => void, inspectPlaces = false) {
+  let readNativeMemory: (() => NativeMemory) | undefined;
   const stages: StageEntry[] = [],
     diagnostics: DiagnosticEntry[] = [],
     catalogue: Record<string, KindExercise> = {},
-    placeAudit: Record<string, unknown> = {};
+    placeAudit: Record<string, unknown> = {},
+    publish = eventPublisher(onEvent, () => readNativeMemory?.());
   let started = performance.now(),
     channels = new Set<string>(),
     preview: GridArrays | undefined;
   const observers: RunObservers = {
+    nativeMemory(read) {
+      readNativeMemory = read;
+    },
     progress(path, fraction, message) {
       // Nested sequences scale their fractions, so a step's start is known by its message.
       if (message.startsWith("Starting")) started = performance.now();
+      publish({
+        kind: message.startsWith("Starting")
+          ? "start"
+          : message.startsWith("Skipped")
+            ? "skipped"
+            : "progress",
+        path: path.join("/"),
+        fraction,
+        message,
+      });
       if (message.startsWith("Skipped"))
         stages.push({
           path: path.join("/"),
@@ -57,12 +106,12 @@ export function stageRecorder() {
     inspect(path, process, state) {
       const milliseconds = Math.round(performance.now() - started);
       // The run's last step: the map is complete, so the POI catalogue's rules can read it.
-      if (process === lastStep) {
+      if (inspectPlaces && process === lastStep) {
         Object.assign(catalogue, exerciseCatalogue(state));
         Object.assign(placeAudit, auditPlaces(state));
       }
       const now = new Set(Object.keys(state.surface.channels));
-      stages.push({
+      const stage: StageEntry = {
         path: path.join("/"),
         process,
         outcome: "completed",
@@ -72,18 +121,16 @@ export function stageRecorder() {
         latticeCells: state.physical?.map.mesh.count,
         added: [...now].filter((name) => !channels.has(name)),
         removed: [...channels].filter((name) => !now.has(name)),
-      });
+      };
+      stages.push(stage);
+      publish({ kind: "complete", stage });
       channels = now;
     },
     diagnostic(item) {
-      diagnostics.push({
-        process: item.process,
-        code: item.code,
-        severity: item.severity,
-        outcome: item.outcome,
-        message: item.message,
-        stack: item.stack,
-      });
+      const { process, code, severity, outcome, message, stack } = item,
+        diagnostic = { process, code, severity, outcome, message, stack };
+      diagnostics.push(diagnostic);
+      publish({ kind: "diagnostic", diagnostic });
     },
     message(message) {
       if (message.kind === "preview") preview = message.grid;

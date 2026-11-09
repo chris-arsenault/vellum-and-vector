@@ -6,12 +6,16 @@ import { physicalProfile } from "./world/profile";
 const owners = {
   "physical.foundation": [
     "ContinentalAssemblyClustering",
+    "ContinentalAssemblyGrowthVariation",
+    "ContinentalMajorAssemblies",
+    "ContinentalMajorGrowth",
     "ContinentalAssemblySeparationDepth",
     "ContinentalWarpStrength",
     "InteriorReliefStrength",
     "ElevationVariationStrength",
   ],
   "physical.tectonic-history": ["EpochTectonicElevationStep"],
+  "physical.mountains": ["OrogenicInitialShortening"],
   "physical.river-incision": ["FluvialEquilibriumGradient"],
   "material.fluvial-transport": ["SedimentTransportFraction", "SedimentCarry"],
   "physical.coastal-construction": [
@@ -33,6 +37,9 @@ type ProfileCoefficient = (typeof owners)[keyof typeof owners][number];
 export type PhysicalProfileOverrides = Partial<Record<ProfileCoefficient, number>>;
 const coefficientSchemas: Partial<Record<ProfileCoefficient, z.ZodNumber>> = {
   ContinentalAssemblyClustering: z.number().min(0).max(1),
+  ContinentalAssemblyGrowthVariation: z.number().min(0).max(1),
+  ContinentalMajorAssemblies: z.number().int().nonnegative(),
+  ContinentalMajorGrowth: z.number().finite().positive(),
   CoastalDetailScale: z.number().finite().positive(),
   MantlePlumeCount: z.number().int().nonnegative(),
   ContinentalAssemblySeparationDepth: z.number().min(0).max(1),

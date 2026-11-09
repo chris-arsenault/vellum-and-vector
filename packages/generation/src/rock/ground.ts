@@ -123,17 +123,26 @@ export class Ground {
   }
   /** Existing slope failure reads exposed support rather than pretending a face is all cap rock. */
   faceGives(i: number, neighbor: number, mix: CompiledMix) {
-    let response = 0,
-      extent = 0;
+    return this.faceGivesFrom(i, mix)(neighbor);
+  }
+  /** Read one unchanged source against its neighbors; discard before material settlement. */
+  faceGivesFrom(i: number, mix: CompiledMix) {
     const mesh = this.map.mesh,
-      x = meshDeltaX(mesh, mesh.x(neighbor) - mesh.x(i)),
-      y = mesh.y(neighbor) - mesh.y(i),
-      landShare = this.share(neighbor, "land"),
-      cutShare = this.share(neighbor, "cut"),
-      landFloor = this.surface(neighbor, "land"),
-      cutFloor = this.surface(neighbor, "cut");
-    for (const facet of ["land", "cut"] as const)
-      for (const layer of this.section(i, facet)) {
+      sourceX = mesh.x(i),
+      sourceY = mesh.y(i),
+      layers = [...this.section(i, "land"), ...this.section(i, "cut")],
+      bearing = this.bearing(i, mix);
+    let unexposed: number | undefined;
+    return (neighbor: number) => {
+      let response = 0,
+        extent = 0;
+      const x = meshDeltaX(mesh, mesh.x(neighbor) - sourceX),
+        y = mesh.y(neighbor) - sourceY,
+        landShare = this.share(neighbor, "land"),
+        cutShare = this.share(neighbor, "cut"),
+        landFloor = this.surface(neighbor, "land"),
+        cutFloor = this.surface(neighbor, "cut");
+      for (const layer of layers) {
         const bottom = layer.basement ? -Infinity : layer.bottom,
           weight =
             layer.share *
@@ -143,7 +152,8 @@ export class Ground {
         response += materialGives(mix, layer, layer.medium === "loose", x, y) * weight;
         extent += weight;
       }
-    return extent > 0 ? (response / extent) * this.bearing(i, mix) : this.gives(i, mix);
+      return extent > 0 ? (response / extent) * bearing : (unexposed ??= this.gives(i, mix));
+    };
   }
   /** A finite slab can fail above an exposed weak foundation, independently on each surface. */
   failureDepth(

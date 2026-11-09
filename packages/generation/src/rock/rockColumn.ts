@@ -1,18 +1,24 @@
+import type { Band } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
-import { rockKindOfCode, type RockKind } from "./rockCatalogue";
+import type { RockKind } from "./rockCatalogue";
 import { projectGround } from "./groundShares";
 import { groundStorage } from "./groundStorage";
+import { coarsenAt, coarsenBulk, sameMaterial } from "./rockCoarsening";
 import {
   allColumnFields,
+  bindColumnBands,
   blendLayers,
   columnFields,
   materialLayer,
   materialProperties,
+  materialSnapshot,
   rockLayerDepths,
   rockLayerKinds,
   rockLayers,
+  writeMaterial,
   type Column,
   type MaterialProperty,
+  type LayerBands,
   type MaterialLayer,
   type MaterialState,
 } from "./rockLayerFields";
@@ -23,11 +29,13 @@ import {
  */
 export { rockLayers, allColumnFields, columnFields, type Column };
 export {
+  bindMaterialReader,
   materialLayer,
   blendLayers,
   mergeMaterial,
   materialStrength,
   type MaterialLayer,
+  type MaterialReader,
   type MaterialState,
 } from "./rockLayerFields";
 const kinds = rockLayerKinds,
@@ -46,6 +54,7 @@ export interface ColumnWatcher {
   fold(cell: number, kind: number, into: number, thickness: number, above: number): void;
   strip(cell: number, amount: number): void;
   merge?(cell: number, column: Column, layer: number, result: MaterialLayer): void;
+  remapPackage?(column: Column, initial: number, final: number): void;
 }
 const watchers = new Set<ColumnWatcher>();
 /** Starts watching; the returned function stops. */
@@ -53,13 +62,17 @@ export function watchColumn(watcher: ColumnWatcher) {
   watchers.add(watcher);
   return () => watchers.delete(watcher);
 }
+/** One remap package after its contacts settle into the column's available slots. */
+export function observeRemapPackage(column: Column, initial: number, final: number) {
+  for (const watcher of watchers) watcher.remapPackage?.(column, initial, final);
+}
 export const layerValue = (
   map: PhysicalField,
   cell: number,
   layer: number,
   property: MaterialProperty,
   column: Column = "land"
-) => groundStorage(map)[columnFields[column][property][layer]].get(cell);
+) => ownedLayers(map)[column][layer][property].get(cell);
 export const layerKind = (
   map: PhysicalField,
   cell: number,
@@ -72,6 +85,17 @@ export const layerDepth = (
   layer: number,
   column: Column = "land"
 ) => layerValue(map, cell, layer, "depth", column);
+// hpc-exempt: fixed references to the owner's bands per map; no per-cell values are cached.
+const materialBands = new WeakMap<PhysicalField, Record<Column, LayerBands<Band>[]>>();
+function ownedLayers(map: PhysicalField) {
+  let bound = materialBands.get(map);
+  if (!bound) {
+    const stored = groundStorage(map);
+    bound = bindColumnBands((name) => stored[name]);
+    materialBands.set(map, bound);
+  }
+  return bound;
+}
 /** A scalar snapshot: later column writes cannot change a retained query result. */
 export function readLayer(
   map: PhysicalField,
@@ -79,28 +103,7 @@ export function readLayer(
   layer: number,
   column: Column = "land"
 ): MaterialLayer {
-  const fields = columnFields[column],
-    stored = groundStorage(map),
-    value = (property: MaterialProperty) => stored[fields[property][layer]].get(cell),
-    kind = value("kind");
-  return {
-    kind,
-    depth: value("depth"),
-    secondaryKind: value("secondaryKind"),
-    secondaryShare: value("secondaryShare"),
-    strength: value("strength") || rockKindOfCode(kind).resistance,
-    damage: value("damage"),
-    grainX: value("grainX"),
-    grainY: value("grainY"),
-    bedSlopeX: value("bedSlopeX"),
-    bedSlopeY: value("bedSlopeY"),
-    deposited: value("deposited"),
-    consolidation: value("consolidation"),
-    formedMin: value("formedMin"),
-    formedMax: value("formedMax"),
-    altered: value("altered"),
-    mixed: value("mixed"),
-  };
+  return materialSnapshot(ownedLayers(map)[column][layer], cell);
 }
 export function setLayer(
   map: PhysicalField,
@@ -111,11 +114,11 @@ export function setLayer(
   state: MaterialState = {},
   column: Column = "land"
 ) {
-  const material = materialLayer(kind, depth, state, map.CompletedEpochCount),
-    stored = groundStorage(map),
-    fields = columnFields[column];
-  for (const property of materialProperties)
-    stored[fields[property][layer]].set(cell, material[property]);
+  writeMaterial(
+    ownedLayers(map)[column][layer],
+    cell,
+    materialLayer(kind, depth, state, map.CompletedEpochCount)
+  );
 }
 /** Copy every fact, including alteration and age, without reconstructing it from the kind. */
 export function copyLayer(
@@ -191,17 +194,16 @@ export function materialThrough(
 }
 /** Owner-only capacity reduction for a temporary package, including combined incision profiles. */
 export function coarsenColumn(layers: MaterialLayer[], cell: number, column: Column) {
-  const upper = coarseningContact(layers, column),
-    a = layers[upper],
-    b = layers[upper + 1],
-    combined = blendLayers(a, b);
-  let above = 0;
-  for (let layer = 0; layer < upper; layer++) above += layers[layer].depth;
-  for (const watcher of watchers) {
-    watcher.fold(cell, a.kind, combined.kind, a.depth, above);
-    watcher.merge?.(cell, column, upper, { ...combined });
+  coarsenAt(layers, cell, column, coarseningContact(layers, column), watchers);
+}
+/** Reduce a remap package; ordinary single-layer burial keeps its small contact scan. */
+export function coarsenPackage(layers: MaterialLayer[], cell: number, column: Column) {
+  // Short packages cost less to scan than to index; this only selects the reduction algorithm.
+  if (layers.length < 24) {
+    while (layers.length > columnSize(column)) coarsenColumn(layers, cell, column);
+    return;
   }
-  layers.splice(upper, 2, combined);
+  coarsenBulk(layers, cell, column, columnSize(column), !finiteColumn(column), watchers);
 }
 /** Prefer an equivalent contact, then the least represented depth; ties retain shallower detail. */
 function coarseningContact(layers: MaterialLayer[], column: Column) {
@@ -220,25 +222,6 @@ function coarseningContact(layers: MaterialLayer[], column: Column) {
   }
   return best;
 }
-function sameMaterial(a: MaterialLayer, b: MaterialLayer) {
-  return (
-    a.kind === b.kind &&
-    a.secondaryKind === b.secondaryKind &&
-    a.secondaryShare === b.secondaryShare &&
-    a.strength === b.strength &&
-    a.damage === b.damage &&
-    a.grainX === b.grainX &&
-    a.grainY === b.grainY &&
-    sameBed(a, b) &&
-    a.altered === b.altered &&
-    a.mixed === b.mixed
-  );
-}
-const sameBed = (a: MaterialLayer, b: MaterialLayer) =>
-  a.bedSlopeX === b.bedSlopeX &&
-  a.bedSlopeY === b.bedSlopeY &&
-  a.deposited === b.deposited &&
-  a.consolidation === b.consolidation;
 /** Every nonempty deposit arrives as material; capacity may coarsen buried contacts, never discard it. */
 export function layDownRock(
   map: PhysicalField,

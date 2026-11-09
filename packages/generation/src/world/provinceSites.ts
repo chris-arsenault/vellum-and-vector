@@ -1,4 +1,3 @@
-// TectonicProvinceLayer.CreateSites and continental assembly growth, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { lerp } from "./math";
@@ -22,9 +21,18 @@ interface MaterialGrowth {
   seed: number;
   cohesion: number;
   adjacent: Uint8Array;
-  /** Provinces no continent may grow into, by the ocean plate that holds them. */
-  oceanPlates: Int32Array;
 }
+type ProvinceLayout = Pick<
+  PhysicalContext["Profile"],
+  | "ContinentalAssemblyCount"
+  | "ContinentalCrustFraction"
+  | "ContinentalAssemblyClustering"
+  | "ContinentalAssemblyGrowthVariation"
+  | "ContinentalMajorAssemblies"
+  | "ContinentalMajorGrowth"
+  | "OceanicPlateCount"
+  | "OceanicPlateWaterShare"
+>;
 const deltaX = (dx: number, width = 0) => (width ? dx - Math.round(dx / width) * width : dx);
 const distance2 = (a: Candidate, b: Candidate, width = 0) =>
   deltaX(a.x - b.x, width) ** 2 + (a.y - b.y) ** 2;
@@ -69,48 +77,51 @@ function anchors(
   const smaller = open.filter((i) => areas[i] <= target / count);
   const candidates = smaller.length >= count ? smaller : open;
   const chosen: number[] = [];
+  let occupied = 0;
   while (chosen.length < Math.min(count, candidates.length)) {
-    const options = candidates.filter((i) => !chosen.includes(i));
+    const options = candidates.filter(
+      (i) =>
+        !chosen.includes(i) && Math.abs(occupied + areas[i] - target) < Math.abs(occupied - target)
+    );
+    if (!options.length) break;
     const next = bestIndex(options, (i) => {
       const chance = hashUnit(seed ^ 0x41da3, i, chosen.length);
-      return chosen.length ? Math.sqrt(minimumDistance(sites, i, chosen, width)) * chance : chance;
+      return chosen.length
+        ? Math.sqrt(minimumDistance(sites, i, chosen, width)) * lerp(0.5, 1, chance)
+        : chance;
     });
     chosen.push(next);
+    occupied += areas[next];
   }
   return chosen;
 }
-/** Grows each ocean plate as one compact block of provinces from its own start. */
+/** Ocean plates occupy only the remaining dense crust; exposure to water does not allocate it. */
 function oceanPlates(
   sites: Candidate[],
   territory: ProvinceTerritories,
-  profile: PhysicalContext["Profile"],
+  profile: ProvinceLayout,
   seed: number,
   width: number,
-  [west, south, east, north]: readonly number[]
+  continents: Int32Array
 ) {
-  // The first ocean tends to open across the map's seam, with the land between its shores in view.
-  const seamward = ({ x, y }: Candidate) =>
-    ((2 * x - west - east) / (east - west)) ** 2 *
-    (1 - ((2 * y - south - north) / (north - south)) ** 2);
   const { areas, adjacent } = territory,
     result = new Int32Array(sites.length),
     count = profile.OceanicPlateCount,
-    world = areas.reduce((sum, area) => sum + area, 0),
-    water = world * (1 - profile.ContinentalCrustFraction) * profile.OceanicPlateWaterShare;
-  const open = () => sites.map((_, i) => i).filter((i) => result[i] === 0);
+    ocean = areas.reduce((sum, area, i) => sum + (continents[i] === 0 ? area : 0), 0),
+    target = ocean * profile.OceanicPlateWaterShare;
+  if (target <= 0) return result;
+  const open = () => sites.map((_, i) => i).filter((i) => continents[i] === 0 && result[i] === 0);
   for (let plate = 1; plate <= count; plate++) {
     const starts = open();
     if (!starts.length) break;
     const start = bestIndex(starts, (i) => {
       const held = sites.map((_, j) => j).filter((j) => result[j] > 0),
-        place = held.length
-          ? Math.sqrt(minimumDistance(sites, i, held, width))
-          : seamward(sites[i]);
+        place = held.length ? Math.sqrt(minimumDistance(sites, i, held, width)) : 1;
       return place * hashUnit(seed ^ 0x37b1, i, plate);
     });
     result[start] = plate;
     let area = areas[start];
-    while (area < water / count) {
+    while (area < target / count) {
       const edge = open().filter((i) =>
         result.some((id, j) => id === plate && adjacent[i * sites.length + j])
       );
@@ -122,21 +133,6 @@ function oceanPlates(
   }
   return result;
 }
-function assemblyDistance(
-  sites: Candidate[],
-  selected: Int32Array,
-  candidate: number,
-  assembly: number,
-  competing = false,
-  width = 0
-): number {
-  const indices = sites
-    .map((_, i) => i)
-    .filter((i) =>
-      competing ? selected[i] !== 0 && selected[i] !== assembly : selected[i] === assembly
-    );
-  return minimumDistance(sites, candidate, indices, width);
-}
 const touches = (
   count: number,
   selected: Int32Array,
@@ -144,71 +140,62 @@ const touches = (
   site: number,
   test: (assembly: number) => boolean
 ) => selected.some((id, j) => test(id) && material.adjacent[site * count + j] === 1);
-function frontierSite(
+/** Compact accretion follows existing contacts; the dispersed mode permits isolated fragments. */
+export function nextContinentalProvince(
   sites: Candidate[],
   selected: Int32Array,
   assembly: number,
   anchor: number,
-  direction: [number, number],
   width: number,
-  material: MaterialGrowth
+  material: MaterialGrowth,
+  eligible: (site: number) => boolean = () => true
 ): number {
   let best = -1,
     bestCost = Infinity;
-  const remaining = sites
-    .map((_, i) => i)
-    .filter((i) => selected[i] === 0 && material.oceanPlates[i] === 0);
+  const remaining = sites.map((_, i) => i).filter((i) => selected[i] === 0 && eligible(i));
   const contiguous = remaining.filter((i) =>
     touches(sites.length, selected, material, i, (id) => id === assembly)
   );
-  const candidates = material.cohesion > 0 && contiguous.length ? contiguous : remaining;
+  const candidates = material.cohesion > 0 ? contiguous : remaining;
   for (const candidate of candidates) {
-    const frontier = assemblyDistance(sites, selected, candidate, assembly, false, width);
-    if (assemblyDistance(sites, selected, candidate, assembly, true, width) < frontier * 0.62)
-      continue;
-    const dx = deltaX(sites[candidate].x - sites[anchor].x, width),
-      dy = sites[candidate].y - sites[anchor].y;
-    const length = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
-    const alignment = Math.abs((dx / length) * direction[0] + (dy / length) * direction[1]);
-    const distance = Math.sqrt(frontier);
+    // Accretion stays around its cratonic nucleus instead of extending the nearest branch.
+    const distance = Math.sqrt(distance2(sites[candidate], sites[anchor], width));
     const heterogeneity =
       1 + material.cohesion * hashUnit(material.seed ^ 0x6173, candidate, assembly) * 0.7;
     const cost =
-      distance * (1.12 - alignment * 0.48) * heterogeneity -
-      sites[candidate].priority * distance * 0.1;
+      material.cohesion > 0
+        ? distance * heterogeneity - sites[candidate].priority * distance * 0.1
+        : -hashUnit(material.seed ^ 0x6173, candidate, assembly);
     if (cost < bestCost) {
       best = candidate;
       bestCost = cost;
     }
   }
-  if (best >= 0) return best;
-  return candidates.length
-    ? bestIndex(candidates, (i) => -assemblyDistance(sites, selected, i, assembly, false, width))
-    : -1;
+  return best;
 }
 /** Each assembly's share of the land: varied by chance, with the largest few favoured. */
-function growthWeights(count: number, profile: PhysicalContext["Profile"], seed: number) {
+function growthWeights(count: number, profile: ProvinceLayout, seed: number) {
   const weights = Array.from(
     { length: count },
     (_, i) =>
       1 + (hashUnit(seed ^ 0x4b19, i, 0) * 2 - 1) * profile.ContinentalAssemblyGrowthVariation
   );
-  // hpc-exempt: a handful of assembly weights, sorted once.
-  const threshold = [...weights].sort((a, b) => b - a)[profile.ContinentalMajorAssemblies - 1];
-  return weights.map((w) => (w >= threshold ? w * profile.ContinentalMajorGrowth : w));
+  // hpc-exempt: initial assembly weights, sorted once; ties still select only the requested majors.
+  const order = weights.map((_, i) => i).sort((a, b) => weights[b] - weights[a]),
+    major = new Uint8Array(count);
+  for (const i of order.slice(0, profile.ContinentalMajorAssemblies)) major[i] = 1;
+  return weights.map((w, i) => (major[i] ? w * profile.ContinentalMajorGrowth : w));
 }
 function assemblies(
   sites: Candidate[],
   territory: ProvinceTerritories,
-  context: PhysicalContext,
-  width: number,
-  held: Int32Array
+  profile: ProvinceLayout,
+  seed: number,
+  width: number
 ): Int32Array {
-  const profile = context.Profile,
-    seed = context.EpochStableSeed;
   const { areas } = territory;
   const target = areas.reduce((sum, area) => sum + area, 0) * profile.ContinentalCrustFraction;
-  const open = sites.map((_, i) => i).filter((i) => held[i] === 0);
+  const open = sites.map((_, i) => i).filter((i) => areas[i] > 0);
   const result = new Int32Array(sites.length),
     chosen = anchors(sites, profile.ContinentalAssemblyCount, territory, target, seed, open, width);
   chosen.forEach((i, n) => {
@@ -218,26 +205,27 @@ function assemblies(
     seed,
     cohesion: profile.ContinentalAssemblyClustering,
     adjacent: territory.adjacent,
-    oceanPlates: held,
   };
-  const directions = chosen.map((_, i): [number, number] => {
-    const angle = hashUnit(seed ^ 0x67d3, i, 0) * Math.PI * 2;
-    return [Math.cos(angle), Math.sin(angle)];
-  });
   const weights = growthWeights(chosen.length, profile, seed);
   const weight = weights.reduce((sum, value) => sum + value, 0);
   const occupied = Float64Array.from(chosen, (i) => areas[i]);
   let total = occupied.reduce((sum, area) => sum + area, 0);
   let selected = chosen.length;
-  while (selected < sites.length - 1) {
+  while (selected < sites.length) {
     const options = chosen
       .map((anchor, n) => ({
         n,
-        next: frontierSite(sites, result, n + 1, anchor, directions[n], width, material),
+        next: nextContinentalProvince(
+          sites,
+          result,
+          n + 1,
+          anchor,
+          width,
+          material,
+          (i) => Math.abs(total + areas[i] - target) < Math.abs(total - target)
+        ),
       }))
-      .filter(
-        ({ next }) => next >= 0 && Math.abs(total + areas[next] - target) < Math.abs(total - target)
-      );
+      .filter(({ next }) => next >= 0);
     if (!options.length) break;
     const pick = bestIndex(
       options.map((_, i) => i),
@@ -253,6 +241,18 @@ function assemblies(
     selected++;
   }
   return result;
+}
+/** Initial buoyant assemblies accrete first; unclaimed provinces remain oceanic crust. */
+export function allocateProvinceCrust(
+  sites: Candidate[],
+  territory: ProvinceTerritories,
+  profile: ProvinceLayout,
+  seed: number,
+  width: number
+) {
+  const continents = assemblies(sites, territory, profile, seed, width),
+    oceans = oceanPlates(sites, territory, profile, seed, width, continents);
+  return { continents, oceans };
 }
 export function createProvinceSites(map: PhysicalField, context: PhysicalContext): ProvinceSite[] {
   const p = context.Profile,
@@ -270,8 +270,7 @@ export function createProvinceSites(map: PhysicalField, context: PhysicalContext
     .slice(0, p.TectonicProvinceCount);
   const width = map.mesh.periodic?.width ?? 0,
     territory = provinceTerritories(selected, map.mesh.bounds, width),
-    held = oceanPlates(selected, territory, p, seed, width, map.mesh.bounds),
-    groups = assemblies(selected, territory, context, width, held);
+    { oceans, continents } = allocateProvinceCrust(selected, territory, p, seed, width);
   const motionOf = (salt: number, key: number): [number, number] => {
     const angle = hashUnit(seed ^ salt, key, 0) * Math.PI * 2;
     const speed = lerp(
@@ -285,8 +284,8 @@ export function createProvinceSites(map: PhysicalField, context: PhysicalContext
     const [motionX, motionY] = motionOf(0x5c27, i);
     return {
       ...site,
-      assembly: groups[i],
-      oceanPlate: held[i],
+      assembly: continents[i],
+      oceanPlate: oceans[i],
       motionX,
       motionY,
     };
