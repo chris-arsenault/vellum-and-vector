@@ -23,6 +23,8 @@ import {
 import { observeRemap } from "./groundTransferObservation";
 import { MaterialMixture } from "./materialMixture";
 import { RemapSource } from "./groundRemapSource";
+import { sameCargo } from "./materialCargo";
+import { readCargo, writeCargo } from "./groundCargo";
 
 /** Target-indexed surviving physical overlap. Weights share the target's area unit. */
 export interface GroundArrivals {
@@ -82,8 +84,8 @@ function sections(
   for (const donor of donors) {
     const weight = donor.weight * share(donor, column);
     if (weight <= 0) continue;
-    const layers = source.layers(donor.source, column),
-      cover = column === "loose" || column === "cutLoose",
+    const cover = column === "loose" || column === "cutLoose",
+      layers = finiteCargoBasement(source.layers(donor.source, column), cover),
       top =
         rockHeight(held, donor, column === "cut" || column === "cutLoose") +
         (cover ? layers.reduce((depth, layer) => depth + layer.depth, 0) : 0);
@@ -95,6 +97,15 @@ function sections(
     area += weight;
   }
   for (const section of result) section.weight /= area;
+  return result;
+}
+/** A retained charged prefix ends before the unbounded ordinary basement begins. */
+function finiteCargoBasement(layers: MaterialLayer[], finite: boolean) {
+  const last = layers.at(-1);
+  if (finite || !last?.cargo) return layers;
+  const result = layers.slice(0, -1);
+  if (last.depth > 1) result.push({ ...last, depth: last.depth - 1 });
+  result.push({ ...last, depth: 1, cargo: undefined });
   return result;
 }
 function nextContact(
@@ -138,6 +149,7 @@ function append(layers: MaterialLayer[], layer: MaterialLayer) {
   const previous = layers.at(-1);
   if (
     previous &&
+    sameCargo(previous.cargo, layer.cargo) &&
     materialProperties.every(
       (property) => property === "depth" || previous[property] === layer[property]
     )
@@ -246,7 +258,13 @@ function orderFacets(map: PhysicalField, cell: number) {
   for (const [land, valley] of [
     ["land", "cut"],
     ["loose", "cutLoose"],
-  ] as const)
+  ] as const) {
+    for (let slot = 0; slot < columnSize(land); slot++) {
+      const a = readCargo(map, cell, slot, land),
+        b = readCargo(map, cell, slot, valley);
+      writeCargo(map, cell, slot, land, b);
+      writeCargo(map, cell, slot, valley, a);
+    }
     for (const property of materialProperties)
       for (let slot = 0; slot < columnSize(land); slot++) {
         const a = stored[columnFields[land][property][slot]],
@@ -255,6 +273,7 @@ function orderFacets(map: PhysicalField, cell: number) {
         a.set(cell, b.get(cell));
         b.set(cell, value);
       }
+  }
   stored.GroundCutShare.set(cell, 1 - cut);
   stored.GroundCutDepth.set(cell, -map.GroundCutDepth.get(cell));
 }

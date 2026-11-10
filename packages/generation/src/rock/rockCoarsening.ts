@@ -1,5 +1,6 @@
 import { blendLayers, type Column, type MaterialLayer } from "./rockLayerFields";
 import type { ColumnWatcher } from "./rockColumn";
+import { sameCargo } from "./materialCargo";
 
 export function sameMaterial(a: MaterialLayer, b: MaterialLayer) {
   return (
@@ -11,10 +12,11 @@ export function sameMaterial(a: MaterialLayer, b: MaterialLayer) {
     a.grainX === b.grainX &&
     a.grainY === b.grainY &&
     sameBed(a, b) &&
-    a.altered === b.altered &&
-    a.mixed === b.mixed
+    sameAlteration(a, b)
   );
 }
+const sameAlteration = (a: MaterialLayer, b: MaterialLayer) =>
+  a.altered === b.altered && a.mixed === b.mixed && sameCargo(a.cargo, b.cargo);
 const sameBed = (a: MaterialLayer, b: MaterialLayer) =>
   a.bedSlopeX === b.bedSlopeX &&
   a.bedSlopeY === b.bedSlopeY &&

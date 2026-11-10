@@ -11,6 +11,7 @@ import { holdRock, releaseHeldRock } from "./groundTransport";
 import { GroundRemapper } from "./groundRemap";
 import { withdrawColumn } from "./groundMaterial";
 import { cutGround } from "./groundLedger";
+import { GroundInventory } from "./groundInventory";
 
 const { basalt, granite, limestone, shale } = rockCatalogue;
 function ground() {
@@ -42,6 +43,33 @@ function arrival(map: ReturnType<typeof ground>, weights = [0.5, 0.5]) {
     },
   };
 }
+it("multi-donor geological mixing releases custodians into the shared original host", () => {
+  const map = ground(),
+    original = new GroundInventory(map, "salt:bed"),
+    a = new GroundInventory(map, "custodian-a", original.name),
+    b = new GroundInventory(map, "custodian-b", original.name);
+  for (const [cell, stock] of [a, b].entries())
+    setLayer(
+      map,
+      cell,
+      0,
+      rockCatalogue.saltbed.code,
+      units(2),
+      {
+        formedMin: 3,
+        cargo: new Float64Array([stock.key, rockCatalogue.saltbed.code, 5]),
+      },
+      "loose"
+    );
+  const remap = arrival(map);
+  remap.commit();
+  remap.release();
+  expect(a.get(2)).toBe(0);
+  expect(b.get(2)).toBe(0);
+  expect(original.get(2)).toBeCloseTo(map.mesh.area(2) * 10);
+  expect(readLayer(map, 2, 0, "loose").cargo).toHaveLength(3);
+  expect(readLayer(map, 2, 0, "loose").formedMin).toBe(3);
+});
 it.each([
   { weights: [0.5, 0.5], reconstructs: true },
   { weights: [1, 0], reconstructs: false },

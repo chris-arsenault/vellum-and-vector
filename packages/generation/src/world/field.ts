@@ -24,6 +24,7 @@ import {
 } from "../rock/groundLoad";
 
 const integerFields = [
+  "GroundwaterTargets",
   "BiomeCodes",
   "CrustBasePotential",
   "CrustAssemblyIds",
@@ -183,6 +184,15 @@ const metricFields = [
   "Rainfall",
   "Snowfall",
   "GlacialMeltwater",
+  // Actual ice removed by external heat this epoch; included by every later runoff refresh.
+  "ExternalMeltwater",
+  "GroundwaterStorage",
+  "GroundwaterExchangeVolume",
+  "GroundwaterRecharge",
+  "GroundwaterOutflow",
+  "GroundwaterReturn",
+  "OrganicBurialInput",
+  "OrganicBurialThickness",
   "Runoff",
   // Precipitation in mm/year from the downwind air columns before the epoch multiplier.
   "ColumnPrecipitation",
@@ -324,6 +334,7 @@ export type PhysicalField = Record<MutablePhysicalBufferName, Band> &
     SedimentDepositedTotal: number;
     SedimentExportedTotal: number;
     CompletedEpochCount: number;
+    SeaIceEvolvedEpoch: number;
     EcologyInitialized: boolean;
     AccumulatedPlateDrift: number;
     LastPlateDriftStep: number;
@@ -381,6 +392,7 @@ export function createField(
     SedimentDepositedTotal: 0,
     SedimentExportedTotal: 0,
     CompletedEpochCount: 0,
+    SeaIceEvolvedEpoch: -1,
     EcologyInitialized: false,
     AccumulatedPlateDrift: 0,
     LastPlateDriftStep: 0,

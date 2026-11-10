@@ -45,6 +45,62 @@ test("the registry browses, sorts and filters named features into read-only insp
   await expect(panel(page).getByRole("textbox")).toHaveCount(0);
 });
 
+test("wild-zone inspection compares recorded footprints with current geography @rendering", async ({
+  page,
+}) => {
+  const zone = {
+    ...pointFeature("Wandering ground", "veil:wild", "magic"),
+    geometry: rectangle([450, 350, 750, 650]),
+  };
+  const unsurveyed = {
+    ...pointFeature("New wild ground", "veil:wild", "magic"),
+    geometry: rectangle([50, 50, 150, 150]),
+  };
+  await openFixtureMap(page, "Wild-zone surveys", {
+    features: [zone, unsurveyed],
+    history: [100, 300].map((west, index) => ({
+      path: ["history"],
+      ancestry: [{ id: `Epoch ${index + 1}`, duration: 100, parentEpoch: null, variables: {} }],
+      causes: [
+        {
+          kind: "geography",
+          process: "atlas.magic-history",
+          featureKind: "veil:wild",
+          observations: [
+            { id: zone.id, name: zone.name, geometry: rectangle([west, 350, west + 300, 650]) },
+          ],
+        },
+      ],
+    })),
+  });
+  await openRegistry(page);
+  await page.getByLabel(`Show ${zone.name} on map`).click();
+  await page.getByText("Wild-zone displacement", { exact: true }).click();
+  const comparison = page.getByRole("img", {
+    name: "Earlier surveyed and current wild-zone footprints",
+  });
+  await expect(comparison).toBeVisible();
+  const earlier = comparison.locator('[aria-label="Earlier surveyed footprint"]');
+  const current = comparison.locator('[aria-label="Current footprint"]');
+  await expect
+    .poll(() => earlier.evaluate((path) => (path as SVGGraphicsElement).getBBox().x))
+    .toBe(100);
+  expect(await current.evaluate((path) => (path as SVGGraphicsElement).getBBox().x)).toBe(450);
+  await page.getByRole("combobox", { name: "Earlier survey", exact: true }).selectOption("1");
+  await expect
+    .poll(() => earlier.evaluate((path) => (path as SVGGraphicsElement).getBBox().x))
+    .toBe(300);
+  await expect(panel(page)).toContainText(
+    "Dashed amber: earlier survey (Epoch 2). Solid purple: current footprint."
+  );
+  expect(await current.evaluate((path) => (path as SVGGraphicsElement).getBBox().width)).toBe(300);
+  await comparison.screenshot({ path: "test-results/artifacts/wild-zone-comparison.png" });
+  await page.getByLabel(`Show ${unsurveyed.name} on map`).click();
+  await page.getByText("Wild-zone displacement", { exact: true }).click();
+  await expect(panel(page)).toContainText("No earlier footprint was recorded for this zone.");
+  await expect(comparison).toHaveCount(0);
+});
+
 test("the registry browses, sorts, filters and edits named features @deferred-authoring", async ({
   page,
 }) => {

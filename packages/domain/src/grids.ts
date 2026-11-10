@@ -16,6 +16,7 @@ import type { Band } from "./lattice/band";
 import type { BlockCache } from "./lattice/blockCache";
 import type { Coverage } from "./lattice/coverage";
 import { generateBand, sampleCoverage, someSample } from "./lattice/bandValues";
+import type { MaterialCargoSamples } from "./materialSamples";
 
 /**
  * Samples of a located field. The samples are the cells of the grid's coverage; every value
@@ -38,6 +39,8 @@ export interface FieldSamples {
   /** Physical ocean extent; resampling elevation must not move its shoreline. */
   ocean?: Geometry | null;
   quantities?: Record<string, "intensive" | "extensive" | "category">;
+  /** Sparse charge belongs to the complete material donor, never an interpolated channel. */
+  materialCargo?: MaterialCargoSamples;
 }
 export interface RegularGrid extends FieldSamples {
   width: number;

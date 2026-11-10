@@ -21,6 +21,7 @@ import {
   type GroundFacet,
 } from "./groundShares";
 import { groundStorage } from "./groundStorage";
+import { writeCargo } from "./groundCargo";
 
 /** Loose cover buried deep enough becomes rock where it lies, and the ground stays where it is. */
 export function lithify(map: PhysicalField, i: number, amount: number, cause: FlowCause) {
@@ -137,6 +138,7 @@ export function buryUnderPackage(
       layers.push(entombed(layer, map.CompletedEpochCount));
       depth += layer.depth;
       stored[depths[slot]].set(i, 0);
+      writeCargo(map, i, slot, cover);
     }
     // Both inputs are top-first: reverse insertion visits buried cover before incoming rock.
     insertColumnPackage(map, i, facet, [...incoming, ...layers]);

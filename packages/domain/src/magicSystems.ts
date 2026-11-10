@@ -86,7 +86,6 @@ export type MagicCarrier = (typeof magicCarriers)[number];
 
 const parameterSchema = z.object({
   sourceThreshold: finite.default(300),
-  maximumSources: z.number().int().nonnegative().default(900),
   sourceSpacing: finite.nonnegative().default(0.01125),
   baseCost: positive.default(4),
   conductanceDivisor: positive.default(26),
@@ -167,8 +166,11 @@ const parameterSchema = z.object({
   // showed 2 covering three quarters of the land and 4 still two thirds.
   rootCost: positive.default(6),
   rootFloor: finite.min(0).max(1).default(0.12),
-  // A spring needs this much flow accumulation on rock no harder than this.
+  // Discharge at half spring response, in cubic map spans per second.
   springFlow: finite.nonnegative().default(6.25e-19),
+  // Dissolved charge concentration at half response, intensity per map span.
+  springChargeSaturation: positive.default(4_000_000),
+  // Springs emerge through rock no harder than this.
   springRock: finite.nonnegative().default(700),
   // A spring drawn past this share of its recharge in one epoch collapses its karst by this depth.
   overdrawShare: finite.min(0).max(1).default(0.5),
@@ -180,6 +182,8 @@ const parameterSchema = z.object({
   animalCarry: finite.min(0).max(1).default(0.02),
   // Share of buried peat carbon that becomes stratum stock per epoch.
   strataShare: finite.nonnegative().default(0.02),
+  // Charge bound per kg of organic carbon: litter and burial carry only what their material holds.
+  organicChargeAffinity: positive.default(4),
   // Planted sap per square metre that counts as a full grove, and the share of sap a cell
   // without a stand loses per epoch.
   groveSap: positive.default(600),
@@ -196,6 +200,9 @@ const parameterSchema = z.object({
   saltPerDeath: finite.nonnegative().default(0.0000003125),
   saltPerLakeMetre: finite.nonnegative().default(160_000_000),
   saltFull: positive.default(400),
+  // Stock per material volume, resolved as inverse length. Default compact residue is 2% of
+  // the vanished lake volume; intensity saturation does not set the thickness of that residue.
+  saltMaterialDensity: positive.default(8_000_000_000),
   // Brine: share flushed per epoch at full air moisture on oxygenated ground, share that seeps
   // one cell down the drainage, and share that crusts to bed at a pit or a lake floor.
   brineFlush: finite.min(0).max(1).default(0.6),
@@ -241,12 +248,11 @@ const parameterSchema = z.object({
   tearFloor: finite.min(0).max(1).default(0.05),
   tearFull: finite.min(0).max(1).default(0.4),
   wildShift: finite.min(0).max(1).default(0.3),
-  // Doors: the strength a stable tear needs, the least span between a pair's ends (metres),
-  // the strength difference a pair tolerates, and the most doors a world holds.
+  // Doors: the strength a stable tear needs, the relative span between paired ends,
+  // and the strength difference a pair tolerates.
   doorStrain: finite.min(0).max(1000).default(400),
   doorDistance: positive.default(0.075),
   doorMatch: finite.nonnegative().default(150),
-  doorCount: z.number().int().nonnegative().default(6),
   // A wild zone moves its ground within this relief per epoch (metres) and exchanges this
   // share of its cover; a door chills its cell (native units), sinks a pool (metres) and
   // costs this much to cross (metres of travel).

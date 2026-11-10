@@ -12,6 +12,7 @@ import { isMajorRuin } from "./societyMapScope";
 import { profileOf } from "./societyProfile";
 import { mapScale } from "./worldSignificance";
 import { withNumericalLifetime } from "./generationWorkingState";
+import { evaluateSocietyMagic } from "./world/magicProcesses";
 
 type Era = GenerationSettings["humanEras"][number];
 /**
@@ -138,6 +139,7 @@ async function runEra(
     const completed = endRound(state, era.id, epoch);
     (state.rounds ??= []).push(completed);
     delete state.society;
+    if (state.physical?.magic) evaluateSocietyMagic(state, context);
     return completed;
   });
   context.recordCause({

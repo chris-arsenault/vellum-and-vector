@@ -115,6 +115,8 @@ export class FieldWorkingSet {
       "Requested field channels must exist."
     );
     const selected = ["active", "measures", ...names.map((name) => field.channels[name])];
+    if (field.materialCargo)
+      selected.push(field.materialCargo.offsets, field.materialCargo.records);
     if (resource.layout === "adaptive") selected.push(...topologyCells);
     const bands = await this.openBands(resource, selected);
     const common = {
@@ -126,6 +128,17 @@ export class FieldWorkingSet {
       active: bands.active,
       measures: bands.measures,
       ...fieldChannels(resource, bands, names),
+      ...(field.materialCargo
+        ? {
+            materialCargo: {
+              keys: [...field.materialCargo.keys],
+              releasedTo: [...field.materialCargo.releasedTo],
+              slots: [...field.materialCargo.slots],
+              offsets: bands[field.materialCargo.offsets],
+              records: bands[field.materialCargo.records],
+            },
+          }
+        : {}),
       ocean: geography.ocean,
       waterBodies: geography.waterBodies,
       lakes: geography.lakes,

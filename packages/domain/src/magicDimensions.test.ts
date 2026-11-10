@@ -17,7 +17,9 @@ it("resolves relative dimensions against the owning map", () => {
       sourceSpacing: 0.02,
       accumulationArea: 0.00001,
       fallenDensity: 400_000_000,
+      saltMaterialDensity: 8_000_000_000,
       springFlow: 6.25e-19,
+      springChargeSaturation: 4_000_000,
     },
     effects: { iceMelt: 0.0000005 },
     features: [{ id: "soil", name: "Soil", seeds: [[{ field: "soilDepth", min: 0.0000005 }]] }],
@@ -30,7 +32,9 @@ it("resolves relative dimensions against the owning map", () => {
   expect(resolved.parameters.sourceSpacing).toBe(40_000);
   expect(resolved.parameters.accumulationArea).toBe(40_000_000);
   expect(resolved.parameters.fallenDensity).toBe(200);
+  expect(resolved.parameters.saltMaterialDensity).toBe(4000);
   expect(resolved.parameters.springFlow).toBe(5);
+  expect(resolved.parameters.springChargeSaturation).toBe(2);
   expect(resolved.effects.iceMelt).toBe(1);
   expect(resolved.features[0].seeds[0][0].min).toBe(1);
 });

@@ -4,6 +4,7 @@ import { releaseWorking, workingArray } from "../world/physicalNumerics";
 import { columnFields, columns, type Column, type MaterialLayer } from "./rockLayerFields";
 import { deformFabric, deformSlope, type Deformation } from "./groundTransform";
 import { heldProperty, type HeldRock } from "./groundTransport";
+import { releaseCargoCustody } from "./groundCargoIdentity";
 
 const slots = columns.reduce((count, column) => count + columnFields[column].depth.length, 0);
 let offset = 0;
@@ -79,6 +80,7 @@ export class RemapSource {
       if (!(mask & (1 << slot))) continue;
       const at = (source * slots + starts[column] + slot) * 4,
         layer: WritableLayer = this.held.read(source, slot, column);
+      layer.cargo = releaseCargoCustody(this.map, layer.cargo);
       layer.grainX = this.orientation.get(at);
       layer.grainY = this.orientation.get(at + 1);
       layer.bedSlopeX = this.orientation.get(at + 2);

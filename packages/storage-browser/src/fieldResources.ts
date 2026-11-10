@@ -17,6 +17,7 @@ import {
 } from "./fieldLayout";
 import { arraySelection, readBandPartition } from "./resourceVectors";
 import { summarizeField } from "./fieldSummaries";
+import { appendFieldCargo } from "./fieldCargo";
 
 function layoutVectors(grid: Grid): LayoutVector[] {
   const vectors = [
@@ -71,6 +72,7 @@ async function writeVectors(
       const arrays: import("@atlas/domain").ResourcePartition["arrays"] = {};
       for (const vector of vectors) {
         const spec = arraySelection(vector.array, reference);
+        if (spec.shape.some((length) => length === 0)) continue;
         arrays[vector.array.name] = vector.read
           ? vector.read(spec.offset[0], spec.shape[0])
           : readBandPartition(vector.values, vector.array, reference);
@@ -179,6 +181,7 @@ export async function writeFieldChannels(
       partition.arraySlices![array.name] = structuredClone(partition.arraySlices!.active);
   }
   Object.assign(resource.field, summarizeField(grid, resource));
+  channelVectors.push(...appendFieldCargo(grid, resource));
   return writeVectors(store, resource, channelVectors, check);
 }
 function validateLayout(grid: Grid, layout: NumericalResource) {

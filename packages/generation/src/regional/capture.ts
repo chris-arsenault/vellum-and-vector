@@ -54,6 +54,7 @@ const presentChannels = new Set([
   "windNorth",
   "soilDepth",
   "soilWater",
+  "groundwaterStorage",
   "floodplain",
   "delta",
   "populationDensity",

@@ -125,7 +125,6 @@ function regionalStrategies(work: MagicWork, field: MagicField) {
   for (const source of budgeted)
     table[source] = {
       ...magicSourceStrategies[source],
-      managesStock: true,
       locate(_state, located, _seed, context) {
         const kept = captured.get(context.origin.id);
         if (kept) located.source.copyFrom(kept);

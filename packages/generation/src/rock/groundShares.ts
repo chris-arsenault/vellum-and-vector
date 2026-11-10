@@ -2,6 +2,7 @@ import type { PhysicalField } from "../world/field";
 import { reconcileWater } from "../world/field";
 import { clamp } from "../world/math";
 import { columnFields, columns, materialProperties, type Column } from "./rockLayerFields";
+import { writeCargo, touchCargo } from "./groundCargo";
 import {
   copyLayer,
   deepestLayer,
@@ -53,6 +54,7 @@ export function moveFacet(map: PhysicalField, cell: number, facet: GroundFacet, 
 }
 /** Refresh read projections after an owner operation, never as a process author's repair step. */
 export function projectGround(map: PhysicalField, cell: number) {
+  touchCargo(map, cell);
   const share = cutShare(map, cell),
     landCover = columnThickness(map, cell, "loose"),
     valleyCover = share > 0 ? columnThickness(map, cell, "cutLoose") : 0,
@@ -107,7 +109,10 @@ export function resetShares(map: PhysicalField, cell: number) {
   owned.GroundCutShare.set(cell, 0);
   owned.GroundCutDepth.set(cell, 0);
   owned.GroundCutCover.set(cell, 0);
-  for (const column of columns.filter((column) => column !== "land"))
+  for (const column of columns.filter((column) => column !== "land")) {
+    for (let slot = 0; slot < columnFields[column].depth.length; slot++)
+      writeCargo(map, cell, slot, column);
     for (const property of materialProperties)
       for (const name of columnFields[column][property]) owned[name].set(cell, 0);
+  }
 }

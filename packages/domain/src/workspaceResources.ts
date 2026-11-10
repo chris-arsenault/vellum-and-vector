@@ -24,6 +24,7 @@ export interface PartitionReference {
   cellStart: number;
   cellCount: number;
   neighbors: string[];
+  /** Only named arrays occupy this partition; omitted arrays have no samples. */
   arraySlices?: Record<string, { offset: number[]; shape: number[] }>;
 }
 export interface ChannelSummary {
@@ -48,6 +49,13 @@ export interface NumericalResource {
     treeResourceId?: string;
     geographyId: string;
     channels: Record<string, string>;
+    materialCargo?: {
+      keys: readonly string[];
+      releasedTo: readonly string[];
+      slots: readonly string[];
+      offsets: string;
+      records: string;
+    };
     summaries?: Record<string, ChannelSummary>;
     /** Exact sample summaries let scoped legends skip fully covered partitions. */
     partitionSummaries?: Record<string, Record<string, ChannelSummary>>;

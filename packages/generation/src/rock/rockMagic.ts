@@ -1,25 +1,18 @@
 import type { GenerationState } from "../process";
 import { type PhysicalField } from "../world/field";
-import { reservoirAmount, type MagicField } from "../world/magicState";
-import { units } from "../world/math";
-import { constructRock, erodeFacets } from "./groundLedger";
+import { type MagicField } from "../world/magicState";
+import { clamp, units } from "../world/math";
+import { alterGround, constructRock, erodeFacets } from "./groundLedger";
 import { groundOf } from "./ground";
 import { compileMix } from "./modes";
-import { fractalNoise, hashUnit } from "../world/noise";
-import {
-  hardnessOf,
-  rockCatalogue,
-  rockKindOfCode,
-  type RockKind,
-  type RockKindId,
-} from "./rockCatalogue";
-import { alterTop, changeLayer, readLayer, shuffleLayers } from "./rockColumn";
-import { facetShare } from "./groundShares";
+import { fractalNoise } from "../world/noise";
+import { rockCatalogue, type RockKind, type RockKindId } from "./rockCatalogue";
+import type { MaterialLayer } from "./rockColumn";
+import { leakFromColumn } from "./rockMagicStock";
 import type { MapScale } from "@atlas/domain";
 
 /**
- * What each system does to the rock, once per epoch, as a physical process of its own: not a
- * resistance added to a sum, but rock made or changed in the column, which then wears, buries and
+ * Each system makes or changes material through its own medium. The retained column then wears, buries and
  * carries like any other. What it makes shows on the map only as far as the processes that follow
  * leave it exposed. Depth/rate constants are map-length fractions, resolved before ground work;
  * intensities retain the field's own scale.
@@ -31,26 +24,37 @@ function addRock(map: PhysicalField, cell: number, kind: RockKindId, fraction: n
   constructRock(map, cell, amount, rockCatalogue[kind], "magic rock", "space");
 }
 const onLand = (map: PhysicalField, cell: number) => map.WaterKindCodes.get(cell) === 0;
-/** A ward holds the rock under it: nothing below alters kept ground. */
-const kept = (map: PhysicalField, cell: number) => map.Warding.get(cell) >= wardHolds;
-const occupied = (map: PhysicalField, cell: number) =>
-  (["land", "cut"] as const).filter((facet) => facetShare(map, cell, facet) > 0);
+/** Active protection limits reach; altered stone survives independently of this forcing. */
+const unwarded = (map: PhysicalField, cell: number) => 1 - clamp(map.Warding.get(cell), 0, 1);
+/** Alteration preserves the substrate's formation and fabric, and records when it changed. */
+export function magicMaterial(was: MaterialLayer, kind: RockKind, epoch: number): MaterialLayer {
+  if (was.kind === kind.code && was.secondaryShare === 0) return was;
+  return {
+    ...was,
+    kind: kind.code,
+    secondaryKind: kind.code,
+    secondaryShare: 0,
+    strength: kind.resistance,
+    altered: epoch,
+  };
+}
 function alterSurface(
   map: PhysicalField,
   cell: number,
   kind: RockKind,
   depth: number,
-  protectedKind = -1
+  protectedKind = -1,
+  from: "surface" | "rock" = "surface",
+  offset = 0
 ) {
-  for (const facet of occupied(map, cell)) {
-    const top = readLayer(map, cell, 0, facet);
-    if (top.kind !== kind.code && top.kind !== protectedKind)
-      alterTop(map, cell, kind, depth, facet);
-  }
+  alterGround(map, cell, {
+    depth,
+    from,
+    offset,
+    transform: (was) =>
+      was.kind === protectedKind ? was : magicMaterial(was, kind, map.CompletedEpochCount),
+  });
 }
-
-/** The share of ward at which it holds the ground unchanged. */
-const wardHolds = 0.3;
 
 /** Body width as a map-length fraction, and noise spread about its middle. */
 const bodyScale = 0.06,
@@ -75,10 +79,15 @@ const reaches = (map: PhysicalField, field: MagicField, cell: number, seed: numb
   inBody(map, cell, field.systemCoverage.get(cell), systemSalt(field, seed));
 /** Fire hardens the stone a vein runs through; a spent conduit seals; a fallen core throws debris. */
 const veinFrom = 450,
-  veinSurfacesFrom = 750,
-  sinterMetres = 0.00003,
-  corefallMetres = 0.000015,
-  coreFrom = 500;
+  veinSurfacesFrom = 750;
+// length-unit: fraction
+const veinDepth = 0.00015,
+  veinRoof = 0.00002,
+  sinterMetres = 0.00003;
+/** Mineral emplacement belongs to the sealing event, not every later visit to a spent conduit. */
+export function sealConduitRock(map: PhysicalField, cell: number) {
+  addRock(map, cell, "sinter", sinterMetres * unwarded(map, cell));
+}
 function fireInRock(
   map: PhysicalField,
   field: MagicField,
@@ -86,22 +95,26 @@ function fireInRock(
   seed: number,
   span: number
 ) {
-  // A sealed conduit is a place, not a share of the ground: it sinters wherever it is.
-  if (
-    field.sealed.get(cell) > 0 &&
-    occupied(map, cell).some(
-      (facet) => readLayer(map, cell, 0, facet).kind !== rockCatalogue.sinter.code
-    )
-  )
-    addRock(map, cell, "sinter", sinterMetres * span);
   if (!reaches(map, field, cell, seed)) return;
   const heat = field.intensity.get(cell);
   if (heat >= veinFrom && map.FractureConductance.get(cell) > 0) {
-    changeLayer(map, cell, 1, rockCatalogue.veinrock);
-    if (heat >= veinSurfacesFrom) changeLayer(map, cell, 0, rockCatalogue.veinrock);
+    alterSurface(
+      map,
+      cell,
+      rockCatalogue.veinrock,
+      units(
+        map.scale.length(
+          (((veinDepth * span * heat) / 1000) *
+            unwarded(map, cell) *
+            Math.max(0, field.definition.effects.rockResistance)) /
+            900
+        )
+      ),
+      -1,
+      "rock",
+      heat >= veinSurfacesFrom ? 0 : units(map.scale.length(veinRoof))
+    );
   }
-  const fallen = field.originSources.fallen?.get(cell) ?? 0;
-  if (fallen >= coreFrom) addRock(map, cell, "corefall", (corefallMetres * span * fallen) / 1000);
 }
 /** Aurora rots rock open to the sky, ice shields what it covers, and charge grows crystal in it. */
 const rotFrom = 250,
@@ -113,30 +126,51 @@ function auroraInRock(map: PhysicalField, field: MagicField, cell: number, seed:
   const charge = field.stored.get(cell),
     iced = map.IceThickness.get(cell) > 0;
   // Crystal grows on the bed under charged ice, and is what the ice leaves when it goes.
-  if (iced && field.source.get(cell) >= crystalFrom)
-    alterSurface(map, cell, rockCatalogue.auroraCrystal, units(map.scale.length(crystalMetres)));
+  if (iced && Math.max(field.source.get(cell), charge) >= crystalFrom)
+    alterSurface(
+      map,
+      cell,
+      rockCatalogue.auroraCrystal,
+      units(map.scale.length(crystalMetres * unwarded(map, cell)))
+    );
   if (iced || charge < rotFrom || !onLand(map, cell)) return;
   // Charge left in open ground is what Aurora has there: its share of the ground rots.
   if (inBody(map, cell, (charge / 1000) * rotOdds, systemSalt(field, seed) ^ 0x7e13))
-    alterTop(
+    alterSurface(
       map,
       cell,
       rockCatalogue.rimerot,
-      units(map.scale.length((rotMetres * charge) / 1000))
+      units(
+        map.scale.length(
+          (((rotMetres * charge * unwarded(map, cell)) / 1000) *
+            Math.max(0, -field.definition.effects.rockResistance)) /
+            520
+        )
+      )
     );
 }
 /** Pressure's rays crush the sea floor and shore they strike, and the sea then cuts what it broke. */
 const crushFrom = 300,
   crushMetres = 0.000045;
+/** Rays act on the seabed and on the rock face immediately beside the water they occupy. */
+function pressureAtRock(map: PhysicalField, field: MagicField, cell: number) {
+  if (!onLand(map, cell)) return field.intensity.get(cell);
+  let force = 0;
+  for (let edge = 0; edge < map.mesh.degree(cell); edge++) {
+    const neighbor = map.mesh.neighbor(cell, edge);
+    if (neighbor >= 0 && map.WaterKindCodes.get(neighbor) === 1)
+      force = Math.max(force, field.intensity.get(neighbor));
+  }
+  return force * field.definition.effects.coastalForcing;
+}
 function pressureInRock(map: PhysicalField, field: MagicField, cell: number, seed: number) {
-  const force = field.intensity.get(cell);
-  if (force < crushFrom || !reaches(map, field, cell, seed)) return;
-  if (onLand(map, cell) && map.ExternalCoastalForcing.get(cell) <= 0) return;
-  alterTop(
+  const force = pressureAtRock(map, field, cell);
+  if (force < crushFrom || (!onLand(map, cell) && !reaches(map, field, cell, seed))) return;
+  alterSurface(
     map,
     cell,
     rockCatalogue.crushstone,
-    units(map.scale.length((crushMetres * force) / 1000))
+    units(map.scale.length((crushMetres * force * unwarded(map, cell)) / 1000))
   );
 }
 /** Greenwood's roots open the top of the rock, its springs lay tufa, its water takes soluble rock. */
@@ -171,100 +205,49 @@ function greenwoodInRock(
       "greenwood"
     );
   if (growth >= rootFrom)
-    alterTop(
-      map,
-      cell,
-      rockCatalogue.rootstone,
-      units(map.scale.length((rootMetres * growth) / 1000))
-    );
-  if ((field.originSources.spring?.get(cell) ?? 0) >= springFrom)
-    addRock(map, cell, "tufa", tufaMetres * span);
-}
-/** Salt held in a basin is a real bed in the column: it can be buried, and uncovered again. */
-const bedFrom = 0.2,
-  bedMetres = 0.00002;
-function saltInRock(map: PhysicalField, field: MagicField, cell: number, seed: number) {
-  if (!onLand(map, cell) || !reaches(map, field, cell, seed)) return;
-  const full = field.definition.parameters.saltFull,
-    share = reservoirAmount(field, "bed", cell) / (map.mesh.area(cell) * full);
-  // The stock is the salt's amount; the layer only says where it lies, and adds no ground of its own.
-  if (share >= bedFrom)
     alterSurface(
       map,
       cell,
-      rockCatalogue.saltbed,
-      units(map.scale.length(bedMetres * Math.min(1, share))),
-      rockCatalogue.saltGlass.code
+      rockCatalogue.rootstone,
+      units(map.scale.length((rootMetres * growth * unwarded(map, cell)) / 1000))
     );
+  if ((field.originSources.spring?.get(cell) ?? 0) >= springFrom)
+    addRock(map, cell, "tufa", tufaMetres * span * unwarded(map, cell));
 }
-/** Veil shuffles the column under a tear: the only thing that puts layers out of their order. */
+/** Veil damages the reached body; its coherent displacement is owned by veilWrites. */
 const shuffleFrom = 0.25,
   tornMetres = 0.0000225;
 function veilInRock(map: PhysicalField, field: MagicField, cell: number, seed: number) {
   const wild = field.wild.get(cell);
   if (wild < shuffleFrom || !reaches(map, field, cell, seed)) return;
-  shuffleLayers(map, cell, hashUnit(seed ^ 0x7e12, cell, 0));
-  alterTop(map, cell, rockCatalogue.tornstone, units(map.scale.length(tornMetres * wild)));
+  alterSurface(
+    map,
+    cell,
+    rockCatalogue.tornstone,
+    units(map.scale.length(tornMetres * wild * unwarded(map, cell)))
+  );
 }
 /** How thick the ground a ward holds is: enough to stand while the land around it wears. */
 const keptMetres = 0.000075;
 /** Hallowed keeps the ground it wards as it is, and it stands while the land around it wears. */
-function hallowedInRock(map: PhysicalField, cell: number) {
+function hallowedInRock(map: PhysicalField, cell: number, hardening: number) {
   if (onLand(map, cell))
-    alterSurface(map, cell, rockCatalogue.keptStone, units(map.scale.length(keptMetres)));
+    alterSurface(
+      map,
+      cell,
+      rockCatalogue.keptStone,
+      units(map.scale.length(keptMetres * clamp(map.Warding.get(cell), 0, 1) * hardening))
+    );
 }
-/**
- * Each system's stock lies in rock, and how the rock is built decides how much of it stays there on
- * a pass. What leaves is lost to the system. These are what the rock's own properties say, so the
- * same rock holds or spills each system differently, and it changes as the column does.
- */
-const stockLeak = 0.12;
-const leaks: Readonly<Record<string, (rock: RockKind) => number>> = {
-  // Fire held in a vein gets out through open joints.
-  held: (rock) => rock.jointing,
-  // Aurora's charge in the ground drains out of porous rock.
-  ground: (rock) => rock.porosity,
-  // An aquifer holds in porous rock and is lost from tight rock.
-  aquifer: (rock) => 1 - rock.porosity,
-  // Roots' buried stratum dissolves away with the rock it lies in.
-  stratum: (rock) => rock.solubility,
-};
-/** The share of a stock that leaks from a rock on a pass. */
-export const stockLeakIn = (reservoir: string, rock: RockKind) =>
-  stockLeak * (leaks[reservoir]?.(rock) ?? 0);
-/**
- * Hallowed holds its charge where the rock is hard, and Veil's tears stay open where it is broken,
- * so those two read the opposite way from a vein in the same reservoir.
- */
-const heldFor: Readonly<Record<string, (rock: RockKind) => number>> = {
-  hallowed: (rock) => 1 - hardnessOf(rock.resistance),
-  veil: (rock) => 1 - rock.jointing,
-};
-export const heldLeakIn = (system: string, rock: RockKind) =>
-  stockLeak * (heldFor[system]?.(rock) ?? rock.jointing);
-function leakFromColumn(map: PhysicalField, field: MagicField, cell: number) {
-  for (const [key, stock] of Object.entries(field.stocks)) {
-    const reservoir = key.slice(key.lastIndexOf("/") + 1),
-      share = leakage(map, cell, (rock) =>
-        reservoir === "held" ? heldLeakIn(field.definition.id, rock) : stockLeakIn(reservoir, rock)
-      ),
-      held = stock.get(cell);
-    if (share <= 0 || held <= 0) continue;
-    stock.set(cell, held * (1 - share));
-    field.lost += held * share;
+/** Society can establish lasting kept ground after the geological epoch sequence. */
+export function hallowedOnTheColumn(state: GenerationState) {
+  const map = state.physical!.map;
+  for (const field of state.physical!.magic!.fields) {
+    if (!field.definition.enabled || field.definition.effects.warding <= 0) continue;
+    const hardening = Math.max(0, field.definition.effects.rockResistance) / 300;
+    for (let cell = 0; cell < map.mesh.count; cell++)
+      if (map.Warding.get(cell) > 0) hallowedInRock(map, cell, hardening);
   }
-}
-function leakage(map: PhysicalField, cell: number, response: (rock: RockKind) => number) {
-  let value = 0;
-  for (const facet of occupied(map, cell)) {
-    const layer = readLayer(map, cell, 0, facet),
-      first = response({ ...rockKindOfCode(layer.kind), resistance: layer.strength }),
-      second = response({ ...rockKindOfCode(layer.secondaryKind), resistance: layer.strength });
-    value +=
-      facetShare(map, cell, facet) *
-      (first * (1 - layer.secondaryShare) + second * layer.secondaryShare);
-  }
-  return value;
 }
 const systemsOf = (state: GenerationState) => {
   const fields = state.physical!.magic!.fields.filter((field) => field.definition.enabled),
@@ -276,7 +259,6 @@ const systemsOf = (state: GenerationState) => {
     aurora: having("stillness"),
     pressure: having("coastalForcing"),
     greenwood: having("verdure"),
-    salt: having("salting"),
     tearing,
   };
 };
@@ -289,39 +271,28 @@ export function magicOnTheColumn(state: GenerationState, seed: number, span: num
     );
   for (let cell = 0; cell < map.mesh.count; cell++) {
     for (const field of leaking) leakFromColumn(map, field, cell);
-    if (kept(map, cell)) {
-      hallowedInRock(map, cell);
-      continue;
-    }
     for (const field of systems.fire) fireInRock(map, field, cell, seed, span);
     for (const field of systems.aurora) auroraInRock(map, field, cell, seed);
     for (const field of systems.pressure) pressureInRock(map, field, cell, seed);
     for (const field of systems.greenwood) greenwoodInRock(map, field, cell, seed, span);
-    for (const field of systems.salt) saltInRock(map, field, cell, seed);
     for (const field of systems.tearing) veilInRock(map, field, cell, seed);
   }
+  hallowedOnTheColumn(state);
 }
-/** What each meeting between systems makes of the rock it covers, and how much. */
-const meetingRock: Readonly<Record<string, RockKindId>> = {
-  steam: "sinter",
-  breach: "crushstone",
-  rot: "rootstone",
-  frozen: "rimerot",
-  brackish: "tufa",
-  fired: "saltGlass",
-  war: "tornstone",
-  "brine-shore": "saltbed",
-};
 const meetingMetres = 0.000035;
 /** A meeting's coverage is the share of the cell it has changed, not a change to the whole of it. */
 export function meetingInRock(
   map: PhysicalField,
-  id: string,
+  made: RockKindId | undefined,
   cell: number,
   coverage: number,
   salt: number
 ) {
-  const made = meetingRock[id];
-  if (!made || kept(map, cell) || !inBody(map, cell, coverage, salt)) return;
-  alterTop(map, cell, rockCatalogue[made], units(map.scale.length(meetingMetres)));
+  if (!made || !inBody(map, cell, coverage, salt)) return;
+  alterSurface(
+    map,
+    cell,
+    rockCatalogue[made],
+    units(map.scale.length(meetingMetres * unwarded(map, cell)))
+  );
 }

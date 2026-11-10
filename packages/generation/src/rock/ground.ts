@@ -7,14 +7,15 @@ import {
   columnSize,
   deepestLayer,
   layerDepth,
-  materialLayer,
   materialStrength,
   readLayer,
   rockLayers,
 } from "./rockColumn";
 import { rockCatalogue, rockKindOfCode, type RockKind } from "./rockCatalogue";
-import type { GroundHere, GroundLayer, GroundQuery } from "./groundQuery";
+import { createGroundLayer, resetGroundLayer } from "./groundQuery";
+import type { GroundHere, GroundQuery } from "./groundQuery";
 import { supportFailureDepth } from "./groundFailure";
+import { extractableDepth } from "./groundExtraction";
 export type { GroundHere, GroundLayer, GroundQuery } from "./groundQuery";
 import {
   coverColumn,
@@ -72,12 +73,7 @@ export class Ground {
     ward: 0,
     stiffening: 1,
   };
-  private readonly layer: GroundLayer = {
-    kind: rockCatalogue.strata,
-    strength: 0,
-    thickness: 0,
-    material: materialLayer(rockCatalogue.strata.code, 0),
-  };
+  private readonly layer = createGroundLayer(rockCatalogue.strata, 0);
   constructor(private readonly map: PhysicalField) {}
   /** Ordered retained material and its absolute contacts, including the surviving cell shares. */
   section(i: number, facet: GroundFacet = "land") {
@@ -92,6 +88,10 @@ export class Ground {
   }
   share(i: number, facet: GroundFacet) {
     return facetShare(this.map, i, facet);
+  }
+  /** The existing soil skin's represented share, independent of the material beneath it. */
+  soilShare(i: number) {
+    return clamp(this.map.SoilDepth.get(i) / this.map.scale.length(fullSoil), 0, 1);
   }
   /** Supported read surface contains no mutable Band alias, including through retained views. */
   view(name: "Elevation" | "BedrockElevation" | "SedimentThickness" | "RockResistance") {
@@ -347,7 +347,7 @@ export class Ground {
       beneath =
         bearing *
         ((1 - share) * this.facetGives(i, mix, "land") + share * this.facetGives(i, mix, "cut")),
-      skin = clamp(map.SoilDepth.get(i) / map.scale.length(fullSoil), 0, 1);
+      skin = this.soilShare(i);
     return beneath + (this.rate(mix, soil.code, soil.resistance, bearing) - beneath) * skin;
   }
   private facetGives(i: number, mix: CompiledMix, facet: GroundFacet) {
@@ -384,6 +384,7 @@ export class Ground {
     layer.material = material;
     layer.strength = materialStrength(material);
     layer.thickness = material.depth;
+    layer.retainedThickness = extractableDepth(material, layerDepth(map, i, 1, facet) <= 0);
     return this.foldColumn(i, query, query.rock(sofar, layer, here), facet);
   }
   /** What lies over the rock: soil, loose sediment and ice, each where there is any. */
@@ -423,18 +424,19 @@ export class Ground {
       layer.material = material;
       layer.strength = materialStrength(material);
       layer.thickness = material.depth;
+      layer.retainedThickness = extractableDepth(
+        material,
+        at + 1 === rockLayers || layerDepth(map, i, at + 1, facet) <= 0
+      );
       sofar = query.rock!(sofar, layer, this.here);
     }
     if (!query.crust) return sofar;
     layer.thickness = map.CrustThickness.get(i);
+    layer.retainedThickness = 0;
     return query.crust(sofar, layer, this.here);
   }
   private as(kind: RockKind, thickness: number) {
-    this.layer.kind = kind;
-    this.layer.material = materialLayer(kind.code, thickness);
-    this.layer.strength = kind.resistance;
-    this.layer.thickness = thickness;
-    return this.layer;
+    return resetGroundLayer(this.layer, kind, thickness);
   }
 }
 /** The ground of a map. */

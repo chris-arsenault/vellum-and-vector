@@ -10,17 +10,20 @@ import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
 import { meshUnitNoise as unitNoise, hashUnit } from "./noise";
+import { stockSurfaceReader } from "../rock/rockMagicStock";
 
 /** The per-cell reader for one condition: a system's own channel, another system, or a physical field. */
 export function conditionReader(
   state: GenerationState,
   field: MagicField,
   test: MagicCondition,
-  seed: number
+  seed: number,
+  systemRead?: (id: string, cell: number) => number
 ) {
   const { map, magic } = state.physical!;
   const key = test.field;
   if (key.startsWith("system:")) {
+    if (systemRead) return (i: number) => systemRead(key.slice(7), i);
     const participant = magic!.fields.find((candidate) => candidate.definition.id === key.slice(7));
     return (i: number) => (participant?.definition.enabled ? participant.intensity.get(i) : NaN);
   }
@@ -28,11 +31,11 @@ export function conditionReader(
     const own = field.originSources[key.slice(7)];
     return (i: number) => own?.get(i) ?? 0;
   }
-  // A stock is an amount; a rule reads it as strength per unit area, like a source.
+  // A surface rule reads accessible stock per area; a buried bed is not a surface feature.
   if (key.startsWith("stock:")) {
-    const held = field.stocks[key.slice(6)],
+    const read = stockSurfaceReader(map, field, key.slice(6)),
       mesh = map.mesh;
-    return (i: number) => (held ? held.get(i) / mesh.area(i) : 0);
+    return (i: number) => read(i) / mesh.area(i);
   }
   if (key === "elevation")
     return (i: number) => MapScale.metres(map.Elevation.get(i) - map.BaseSeaLevel, "native");
@@ -101,11 +104,12 @@ function matcher(
   state: GenerationState,
   field: MagicField,
   groups: MagicCondition[][],
-  seed: number
+  seed: number,
+  systemRead?: (id: string, cell: number) => number
 ) {
   const conditions = groups.map((group) =>
     group.map((test) => {
-      const read = conditionReader(state, field, test, seed);
+      const read = conditionReader(state, field, test, seed, systemRead);
       return (i: number) => {
         const value = read(i);
         return (
@@ -123,13 +127,14 @@ export function growRegion(
   state: GenerationState,
   field: MagicField,
   rule: Pick<MagicFeatureRule, "seeds" | "retains">,
-  seed: number
+  seed: number,
+  systemRead?: (id: string, cell: number) => number
 ) {
   const map = state.physical!.map;
   const included = retainedArray(map, "uint8", "magic:region-members"),
     queue = new CellQueue();
-  const isSeed = matcher(state, field, rule.seeds, seed),
-    retains = matcher(state, field, rule.retains ?? rule.seeds, seed);
+  const isSeed = matcher(state, field, rule.seeds, seed, systemRead),
+    retains = matcher(state, field, rule.retains ?? rule.seeds, seed, systemRead);
   for (let i = 0; i < map.mesh.count; i++)
     if (isSeed(i)) {
       included.set(i, 1);

@@ -5,6 +5,7 @@ import { physicalContext } from "../../../packages/generation/src/world/context"
 import { physicalProfile } from "../../../packages/generation/src/world/profile";
 import { setLayer } from "../../../packages/generation/src/rock/rockColumn";
 import { rockCatalogue } from "../../../packages/generation/src/rock/rockCatalogue";
+import { groundFixture } from "../../../packages/generation/src/rock/groundStorage";
 import {
   holdRock,
   placeCarriedGround,
@@ -24,6 +25,8 @@ it("records the actual held donor separately from process boundaries and detache
     probe = groundProbe([1]);
   setLayer(map, 0, 0, rockCatalogue.sandstone.code, 600, { formedMin: 2, altered: 3 });
   setLayer(map, 1, 0, rockCatalogue.shale.code, 800, { formedMin: 1 });
+  groundFixture(map).ThrustPairIds.set(1, 7);
+  groundFixture(map).ThrustSheetIndex.set(1, 3);
   const sourceElevation = map.Elevation.get(0),
     held = holdRock(map),
     context = physicalContext(1, 0, map.scale.resolve(physicalProfile));
@@ -32,7 +35,22 @@ it("records the actual held donor separately from process boundaries and detache
     placeCarriedGround(map, held, 1, 0, [1, 0, 0, 1]);
     probe.observe("wear", { processes: ["cut"], phase: "before", substep: 0 }, map, context);
     expect(probe.read()).toMatchObject([
-      { kind: "process", step: "placement", ground: { cell: 1 } },
+      {
+        kind: "process",
+        step: "placement",
+        ground: {
+          cell: 1,
+          deformation: {
+            detachment: 0,
+            thrustPair: 7,
+            thrustSheet: 3,
+            facets: [
+              { facet: "land", share: 1, plane: { thickness: 0 } },
+              { facet: "cut", share: 0 },
+            ],
+          },
+        },
+      },
       {
         kind: "transfer",
         phase: "before",

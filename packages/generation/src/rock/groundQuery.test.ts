@@ -4,11 +4,18 @@ import { createWorldMesh } from "../world/worldMesh";
 import { units } from "../world/math";
 import { groundOf } from "./ground";
 import { averageGroundQuery, groundFact, materialFact, type GroundQuery } from "./groundQuery";
-import { surfaceKind, surfacePorosity, surfaceResistance } from "./groundQueries";
+import {
+  sectionExposure,
+  sectionResponse,
+  surfaceKind,
+  surfacePorosity,
+  surfaceResistance,
+} from "./groundQueries";
 import { rockCatalogue as rocks } from "./rockCatalogue";
 import { setLayer } from "./rockColumn";
 import { openCut, projectGround } from "./groundShares";
 import { removeRock } from "./groundLedger";
+import { containsHost, stockExposure } from "./rockMagicStock";
 
 function mixedGround() {
   const map = createTestField(createWorldMesh([0, 0, 1000, 1000], 16, 0));
@@ -110,4 +117,36 @@ it("distinguishes loose effective strength from its intact source and preserves 
     crust: (_, layer) => groundFact(layer, "resistance"),
   };
   expect(ground.fold(0, crust, "land")).toBe(1200);
+});
+
+it("resolves exposure through loose cover and solid overburden to either retained constituent", () => {
+  const map = mixedGround(),
+    ground = groundOf(map),
+    shale = (layer: ReturnType<typeof ground.section>[number]) =>
+      containsHost(layer, [rocks.shale.code]);
+  setLayer(map, 0, 0, rocks.alluvium.code, units(2), undefined, "loose");
+  projectGround(map, 0);
+  const section = ground.section(0);
+  expect(sectionExposure(section, units(4), shale)).toBe(0.5);
+  expect(sectionExposure(section, units(2), shale)).toBe(0);
+  expect(
+    sectionExposure(section, units(20), (layer) => containsHost(layer, [rocks.granite.code]))
+  ).toBeCloseTo(0.7);
+  expect(
+    sectionExposure(section, units(20), (layer) => containsHost(layer, [rocks.saltbed.code]))
+  ).toBe(0);
+  expect(stockExposure(map, 0, 4, [rocks.shale.code])).toBeCloseTo(0.5);
+});
+
+it("weights the actual reached intervals and extends the basement without reading deeper beds", () => {
+  const map = mixedGround(),
+    section = groundOf(map).section(0),
+    porosity = (layer: (typeof section)[number]) => materialFact(layer, "porosity");
+  expect(sectionResponse(section, units(2), porosity)).toBeCloseTo(0.5);
+  expect(sectionResponse(section, units(8), porosity)).toBeCloseTo(
+    (0.5 + rocks.granite.porosity) / 2
+  );
+  expect(sectionResponse(section, units(100_000), () => 1)).toBe(1);
+  expect(sectionResponse([], units(2), porosity)).toBe(0);
+  expect(sectionResponse(section, 0, porosity)).toBe(0);
 });

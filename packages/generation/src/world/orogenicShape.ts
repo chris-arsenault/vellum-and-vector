@@ -6,6 +6,7 @@ import { units } from "./math";
 import { hashUnit, unitNoise } from "./noise";
 import { groundOf } from "../rock/ground";
 import { surfaceStanding, yieldingPlane } from "../rock/groundQueries";
+import { inheritedDetachment } from "../rock/groundWeakLayers";
 import { releaseWorking, workingArray } from "./physicalNumerics";
 import { displaceGroundField } from "../rock/groundDeformation";
 
@@ -33,7 +34,7 @@ export function sheetAt(
     along = map.mesh.x(i) * tx + map.mesh.y(i) * ty,
     segment = Math.floor(along / p.OrogenicSegmentLength),
     stiffness = groundOf(map).fold(i, surfaceStanding),
-    spacing = p.OrogenicSheetSpacing * stiffness,
+    spacing = p.OrogenicSheetSpacing * stiffness * (1 + inheritedDetachment(map, i)),
     offset = hashUnit(c.salt ^ 0x51e3, segment, 0) * spacing,
     position = (reach + offset) / spacing,
     sheet = Math.floor(position);

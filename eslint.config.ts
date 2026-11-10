@@ -22,7 +22,9 @@ const ownerImports = [
       "layDownRock",
       "layDownPackage",
       "insertColumnPackage",
+      "writeColumn",
       "coarsenColumn",
+      "coarsenPackage",
       "layBed",
       "layBedOfCode",
       "overthrust",
@@ -30,6 +32,17 @@ const ownerImports = [
     ],
     message:
       "Column edits are internal to rock/. Use the complete placement, wear or alteration operation.",
+  },
+  {
+    group: ["**/groundExtraction", "**/groundExtraction.ts"],
+    importNames: ["extractColumn"],
+    message:
+      "Selective column withdrawal belongs to rock/. Use extractGround to settle the ground.",
+  },
+  {
+    group: ["**/groundWithdrawal", "**/groundWithdrawal.ts"],
+    importNames: ["lowerRock", "settleWithdrawal", "withdrawalReceiver"],
+    message: "Withdrawal settlement belongs to rock/. Use a complete Ground operation.",
   },
   {
     group: ["**/groundShares", "**/groundShares.ts"],

@@ -29,10 +29,10 @@ existing code.
       rules; a painted border or land clipped at the map edge is not an ocean
       boundary.
 
-- [ ] **4. Let buried Salt beds shape the fold belt above them.** A thick Salt bed
-      carried under a collision acts as a detachment, so the belt above it folds
-      broad and low. Add that response to mountain building when a concrete
-      requirement reaches into that module
+- [x] **4. Let inherited weak beds affect later deformation.** Ground supplies
+      finite seam thickness, continuity and cap geometry to collision and
+      reactivation. Salt and ordinary weak beds use the same response; erosion
+      and disruption can remove it. No fixed broad, low belt template is imposed
       ([ADR 0007](adr/0007-magic-systems-are-materials.md)).
 
 - [ ] **5. Support true spherical worlds.** Generate a complete planet with
@@ -60,26 +60,46 @@ existing code.
 
 ## Magic
 
-- [ ] **6. Hold sea ice with Aurora shelf charge.** Shelf charge already writes
-      ice persistence on ocean cells; let sea ice read it as land ice does.
-- [ ] **7. Drift stocks with ocean currents.** Move the stocks that declare a
-      current carrier during the stock advance, alongside river, ice, animal and
-      crust carriers.
-- [ ] **8. Green river mouths.** Carry Greenwood litter with river sediment to
-      floodplains and deltas.
-- [ ] **9. Raise brine under clearance.** Let Salt stocks read soil water, so
-      clearance that lifts the water table brings brine up.
-- [ ] **10. Dry closed lagoons into Salt sources.** A closed warm lagoon behind a
-      Pressure coast dries to a sabkha that becomes a Salt source, and storm
-      tracks lift its dust.
-- [ ] **11. Mark Veil wild zones as unreliable on the map,** publishing the
-      previous epoch's feature positions beside the current ones.
+Shared physical magic interactions are implemented in the
+[generation guide](generation-workflows.md): items 4 and 6–11, existing
+source/access/maintenance boundaries within item 12, and shared producers for
+14–19. Regional execution remains open in those regional items. New society
+designs and deferred authoring retain their separate scope.
+
+The [society and economy follow-up](SOCIETY-ECONOMY-INTERACTIONS-PLAN.md) owns
+the later design and implementation of items 2, 12 and 19, plus social uses of
+landmarks in 14/18. It includes ordinary livelihoods, exchange, works, institutions
+and POIs alongside all seven systems. Item 13 remains deferred authoring.
+
+- [x] **6. Hold sea ice with Aurora shelf charge.** Marine ice reads retained
+      persistence; melting and transport act on its actual carrier.
+- [x] **7. Drift stocks with ocean currents.** Declared marine carriers follow
+      currents and water-connected recipients alongside the other shared carriers.
+- [x] **8. Carry Greenwood litter into receiving ground.** River sediment moves
+      charged organic material into deposits and retained beds; groundwater can
+      leach it and return charge at suitable ground. Braided-channel morphology
+      remains shared river work.
+- [x] **9. Mobilise existing brine under clearance.** Reduced root uptake returns
+      actual stored groundwater and its dissolved charge. Water volume per area
+      is not treated as a water-table elevation; clearance cannot create Salt.
+- [x] **10. Develop isolated basins and move their residue.** Shared coastal
+      contact, sediment movement, connectivity and drying support Salt formation;
+      storms carry actual grains. Available material and water determine whether
+      the sequence completes, and later deposits can cover its residue.
+- [x] **11. Show actual Veil displacement.** Completed surveys retain overlapping
+      wild-zone identities; inspection compares earlier and current footprints.
+      Disjoint or ended patches do not acquire invented trajectories.
 - [ ] **12. Society practices for every system.** Add Greenwood tending (with a
       lumber taboo as a clearance cost), Hallowed vows, Veil door-keeping,
       Pressure sky-reading, temple cities, pilgrim economies, fortresses at doors,
       mirages and detour routes, each with a field behind it.
 - [ ] **13. Author ward lines and paired doors.** Let an authored magic source be a
       line for a ward and two linked ends for a door.
+
+Explicit preserved organisms, resurrection and new biological mass-death models
+remain undecided ecology/society proposals. Current meetings use existing material,
+vegetation, mortality and hazard mechanisms; their names do not imply those added
+simulations.
 
 ## Regional refinement
 

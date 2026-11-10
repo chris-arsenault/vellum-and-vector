@@ -49,6 +49,10 @@ export interface SocietyWorkspace {
   urban?: import("./societyCentres").UrbanAllocation;
   /** People who travelled each connection this cycle, by index into `region.connections`. */
   traffic?: Float64Array;
+  /** Current yearly traffic, including market travel; distinct from a way's accumulated wear. */
+  travelled?: Float64Array;
+  /** Present access changed, for example a paired door closed during the current cycle. */
+  connectionsDirty?: boolean;
   /** The coefficients the recipe's outcome choices set, bound each cycle from the context. */
   profile?: import("./societyProfile").SocietyProfile;
   /** Systems whose stocks people drew or deposited this cycle; the refresh re-evaluates them. */
@@ -297,6 +301,7 @@ export function refreshSocietyConnections(state: GenerationState) {
   const work = state.society!,
     communities = work.region.communities,
     previous = work.region.connections;
+  work.connectionsDirty = false;
   const seeds = communities.map((c) =>
     nearestSocietySample(state.surface, c.position, (i) => dryLand(state, i))
   );

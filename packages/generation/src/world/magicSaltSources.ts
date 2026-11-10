@@ -1,9 +1,8 @@
-import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../process";
-import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
-import type { LocateContext } from "./magicSources";
+import type { LocateContext, SupplyContext } from "./magicSources";
 import { siteStrength } from "./magicStocks";
+import { depositSaltBed } from "../rock/rockMagicStock";
 
 /**
  * Salt's death origin: the dead the ground records become brine where they lie. The record
@@ -11,11 +10,11 @@ import { siteStrength } from "./magicStocks";
  * evaluation per area, so a rule can mark the killing in the epoch it happened. A town's
  * ordinary dead make brine but no source: only a killing past the source floor is a site.
  */
-export function deathSources(
+export function supplyDeathSalt(
   state: GenerationState,
   field: MagicField,
   _seed: number,
-  { origin }: LocateContext
+  { origin, activity }: SupplyContext
 ) {
   const map = state.physical!.map,
     p = field.definition.parameters,
@@ -24,22 +23,21 @@ export function deathSources(
   for (let i = 0; i < map.mesh.count; i++) {
     const dead = map.MassDeath.get(i);
     if (dead <= 0) continue;
-    const made = dead * p.saltPerDeath;
+    const made = dead * p.saltPerDeath * activity;
     map.MassDeath.set(i, 0);
     if (made <= 0) continue;
     brine.add(i, made);
-    field.source.set(i, siteStrength((1000 * made) / map.mesh.area(i) / p.saltFull));
   }
 }
 /**
  * Salt's dead-lake origin: a cell that was a lake and is dry ground in a depression now
  * leaves its bed, by the depth of water it held. The memory is consumed with the lake.
  */
-export function deadLakeSources(
+export function supplyLakeSalt(
   state: GenerationState,
   field: MagicField,
   _seed: number,
-  { origin }: LocateContext
+  { origin, activity }: SupplyContext
 ) {
   const map = state.physical!.map,
     p = field.definition.parameters,
@@ -50,19 +48,26 @@ export function deadLakeSources(
     if (memory <= 0 || map.WaterKindCodes.get(i) !== 0 || map.IceThickness.get(i) > 0) continue;
     // Still a basin: the floor lies below the spill its drainage fills to.
     if (map.DrainageElevations.get(i) <= map.Elevation.get(i)) continue;
-    const made = memory * map.mesh.area(i) * p.saltPerLakeMetre;
+    const made = memory * map.mesh.area(i) * p.saltPerLakeMetre * activity;
     map.LakeMemory.set(i, 0);
     if (made <= 0) continue;
-    bed.add(i, made);
-    field.source.set(i, siteStrength((1000 * made) / map.mesh.area(i) / p.saltFull));
+    depositSaltBed(map, bed, i, made, p.saltMaterialDensity);
   }
 }
-/** While a cell is a lake it remembers its depth; the memory outlives the water for Salt to read. */
-export function rememberLakes(map: PhysicalField) {
+/** Location reads the residue that remains; it never consumes another death or lake. */
+export function saltSources(
+  state: GenerationState,
+  field: MagicField,
+  _seed: number,
+  { origin }: LocateContext
+) {
+  const map = state.physical!.map,
+    reservoir = origin.source === "death" ? "brine" : "bed",
+    values = field.stocks[`${origin.id}/${reservoir}`];
+  if (!values) return;
   for (let i = 0; i < map.mesh.count; i++)
-    if (map.WaterKindCodes.get(i) === 2)
-      map.LakeMemory.set(
-        i,
-        Math.max(map.LakeMemory.get(i), MapScale.metres(map.WaterDepths.get(i), "native"))
-      );
+    field.source.set(
+      i,
+      siteStrength((1000 * values.get(i)) / map.mesh.area(i) / field.definition.parameters.saltFull)
+    );
 }

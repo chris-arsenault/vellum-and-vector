@@ -1,17 +1,18 @@
 import type { GenerationState, MapProcessContext } from "../process";
+import { sealConduitRock } from "../rock/rockMagic";
 import type { PhysicalField } from "./field";
-import { alterRock } from "../rock/rockField";
 import { clamp, round, units } from "./math";
 import { Feature } from "./codes";
 import { displaceGround } from "../rock/groundLedger";
 import { meltIce } from "../rock/groundSurfaceMedia";
-import { generationBindings } from "../generationBindings";
 import { magicBudget, originStocks, reservoirStock } from "./magicState";
-import { advanceStocks } from "./magicStocks";
-import { rememberLakes } from "./magicSaltSources";
+import { advanceStocks, retainGroundCharge, rememberStrain } from "./magicStocks";
+import { rememberLakes } from "./lakes";
 import { markRim, wardCoasts } from "./magicHallowed";
 import { MapScale, type Band, type MagicSystem } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
+import type { MagicInventory } from "./magicInventory";
+import { GroundInventory } from "../rock/groundInventory";
 
 export const coastalMagicParameters: (keyof MagicSystem["parameters"])[] = [
   "coastalThreshold",
@@ -39,16 +40,16 @@ export function heldCharge(map: PhysicalField, field: Field, i: number) {
     Math.max(unit(map.IceThickness.get(i) / map.scale.length(0.0000125, 0.5)), relict)
   );
 }
-export function magicThermalFeedback(state: GenerationState) {
+export function magicThermalFeedback(state: GenerationState, elapsed = false) {
   const work = state.physical!,
     magic = work.magic!,
-    map = work.map;
+    map = work.map,
+    fields = magic.fields.filter((field) => field.definition.enabled);
   for (let i = 0; i < map.mesh.count; i++) {
     let flags = map.FeatureFlags.get(i) & ~(Feature.FireCore | Feature.MagmaChamber);
     let heat = 0,
       melt = 0;
-    for (const field of magic.fields) {
-      if (!field.definition.enabled) continue;
+    for (const field of fields) {
       const effects = field.definition.effects,
         intensity = field.intensity.get(i);
       heat += intensity * effects.heat * (effects.heat < 0 ? heldCharge(map, field, i) : 1);
@@ -70,16 +71,20 @@ export function magicThermalFeedback(state: GenerationState) {
     // melt any evaluation asked for, so the climate and post-glacial passes do not both melt.
     // Ice melted from below pools under the glacier, and the runoff pass cuts its outburst
     // channels below the margin.
-    const owed = Math.max(0, round(melt) - magic.melt.get(i));
-    magic.melt.set(i, Math.max(magic.melt.get(i), round(melt)));
-    meltIce(map, i, owed, "fire", true);
+    if (elapsed) applyThermalMelt(state, i, melt);
   }
+}
+function applyThermalMelt(state: GenerationState, cell: number, melt: number) {
+  const { map, magic } = state.physical!,
+    owed = Math.max(0, round(melt) - magic!.melt.get(cell));
+  const melted = meltIce(map, cell, owed, "fire", true);
+  magic!.melt.add(cell, melted);
 }
 /**
  * Living forcings the ecology consumes as its own terms: Fire quickens, Aurora stills.
  * Both stay with the field; neither travels in air or water.
  */
-export function magicLivingFeedback(state: GenerationState) {
+export function magicLivingFeedback(state: GenerationState, elapsed = false) {
   const work = state.physical!,
     map = work.map,
     fields = work.magic!.fields.filter((field) => field.definition.enabled);
@@ -107,7 +112,7 @@ export function magicLivingFeedback(state: GenerationState) {
     map.Tearing.set(i, unit(tearing));
     // Greenwood divides the river that crosses it into wetland channels: the braided reach.
     const green = unit(verdure);
-    if (green > 0.3 && map.RiverOrders.get(i) >= 1 && map.WaterKindCodes.get(i) === 0) {
+    if (elapsed && green > 0.3 && map.RiverOrders.get(i) >= 1 && map.WaterKindCodes.get(i) === 0) {
       map.WetlandCover.set(i, Math.max(map.WetlandCover.get(i), 0.5 * green));
       map.FloodplainIntensity.set(i, Math.max(map.FloodplainIntensity.get(i), round(600 * green)));
     }
@@ -257,9 +262,9 @@ export function magicOceanFeedback(state: GenerationState) {
   releaseWorking(map, ...Object.values(moved), fog);
 }
 /**
- * Rock hardening and softening (existing), then the conduits: flowing Fire keeps its vein
+ * Flowing Fire keeps its vein
  * open, so conductance rises each epoch it is active; a conduit that has carried its
- * budget seals with sinter and basalt, so conductance collapses and the vein beyond it
+ * budget seals with sinter, so conductance collapses and the vein beyond it
  * goes cold in the next epoch.
  */
 export function magicRockFeedback(state: GenerationState) {
@@ -269,10 +274,6 @@ export function magicRockFeedback(state: GenerationState) {
     fields = work.magic!.fields.filter((field) => field.definition.enabled),
     conduits = fields.filter((field) => field.definition.effects.conduitOpening > 0);
   for (let i = 0; i < map.mesh.count; i++) {
-    let delta = 0;
-    for (const field of fields)
-      delta += (field.intensity.get(i) / 1000) * field.definition.effects.rockResistance;
-    alterRock(map, i, round(delta));
     if (map.WaterKindCodes.get(i) !== 1)
       for (const field of conduits) evolveConduit(map, field, i, floor);
   }
@@ -287,14 +288,19 @@ function evolveConduit(map: PhysicalField, field: Field, i: number, floor: numbe
   if (intensity < 230) return;
   if (field.history.get(i) + intensity >= field.definition.parameters.conduitBudget) {
     field.sealed.set(i, 1);
+    sealConduitRock(map, i);
     map.FractureConductance.set(i, floor);
     // The conduit's cores stay in the rock as hardened ore.
     const origin = field.definition.origins.find((entry) => entry.renewal === "conduit-fed"),
       spent = origin && field.stocks[`${origin.id}/spent`],
       held = origin && field.stocks[`${origin.id}/${originStocks(origin)[0].id}`];
     if (spent && held) {
-      spent.add(i, held.get(i));
-      held.set(i, 0);
+      if (held instanceof GroundInventory && spent instanceof GroundInventory)
+        held.transfer(i, held.get(i), spent);
+      else {
+        spent.add(i, held.get(i));
+        held.set(i, 0);
+      }
     }
     return;
   }
@@ -334,15 +340,11 @@ function shoreForcing(map: PhysicalField, field: Field, i: number) {
     1000
   );
 }
-function coastalEpoch(context?: MapProcessContext) {
-  const count = context?.inputs?.features ? generationBindings(context).settings.epochs.length : 1;
-  return context?.epochIndices[0] ?? Math.max(0, count - 1);
-}
 export function magicCoastalFeedback(state: GenerationState, context?: MapProcessContext) {
   const work = state.physical!,
     magic = work.magic!,
     map = work.map;
-  const epoch = coastalEpoch(context);
+  const epoch = context?.epochIndices[0];
   const fields = magic.fields.filter((field) => field.definition.enabled),
     totals = workingArray(map, "float64", "magic:coastal-forcing");
   for (let i = 0; i < map.mesh.count; i++) {
@@ -352,8 +354,7 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
         const forcing = shoreForcing(map, field, i);
         if (forcing <= 0) continue;
         total += forcing;
-        field.coastalHistory.add(i, forcing);
-        if (field.coastalFirstEpoch.get(i) < 0) field.coastalFirstEpoch.set(i, epoch);
+        if (epoch !== undefined) rememberCoastalForcing(field, i, forcing, epoch);
       }
     totals.set(i, clamp(total, 0, 1000));
   }
@@ -368,6 +369,10 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
     magic.coastal.set(i, total);
   }
   releaseWorking(map, totals);
+}
+function rememberCoastalForcing(field: Field, cell: number, forcing: number, epoch: number) {
+  field.coastalHistory.add(cell, forcing);
+  if (field.coastalFirstEpoch.get(cell) < 0) field.coastalFirstEpoch.set(cell, epoch);
 }
 /**
  * Thawing ground charge on bare land lets the ground settle, like thermokarst,
@@ -391,7 +396,7 @@ function holdIce(
   field: Field,
   i: number,
   persistence: number,
-  shelf: Band | undefined
+  shelf: MagicInventory | undefined
 ) {
   const held = unit((field.stored.get(i) - 300) / 150),
     shelved =
@@ -409,37 +414,27 @@ function holdIce(
  * that will be present when that ice model runs.
  */
 export function retainMagicHistory(state: GenerationState, context: MapProcessContext) {
+  // Present-only publication carries completed history; it does not elapse another epoch.
+  if (context.epochIndices[0] === undefined) return;
   const map = state.physical!.map,
-    index = coastalEpoch(context);
+    index = context.epochIndices[0];
   map.IcePersistence.fill(0);
   // The next epoch's ice is new ice; its melt starts from nothing.
   state.physical!.magic!.melt.fill(0);
   // The lakes of this epoch are remembered, so one that dies by the next is found by Salt.
   rememberLakes(map);
   for (const field of state.physical!.magic!.fields) {
-    if (!field.definition.enabled) continue;
     advanceStocks(state, field, index);
-    const retention = field.definition.history,
-      persistence = field.definition.effects.icePersistence;
     let active = 0,
       maximum = 0;
-    const shelf = reservoirStock(field, "shelf"),
-      p = field.definition.parameters;
     for (let i = 0; i < map.mesh.count; i++) {
-      const value = field.intensity.get(i),
-        before = field.stored.get(i);
-      field.history.add(i, value);
-      // Only this epoch's own activity is stored; the charge carried in from earlier
-      // epochs decays by retention instead of being stored again.
-      const stored = before * retention.retention + Math.max(0, value - before) * retention.storage;
-      field.stored.set(i, stored);
-      if (value > 0 && field.firstEpoch.get(i) < 0) field.firstEpoch.set(i, index);
-      if (p.thawSubsidence > 0) thawSubsidence(map, field, i, before - stored);
-      if (persistence > 0) holdIce(map, field, i, persistence, shelf);
+      const value = field.intensity.get(i);
+      retainAt(map, field, i, index);
       if (map.mesh.membership(i) !== 1) continue;
       active += value > 0 ? map.mesh.area(i) : 0;
       maximum = Math.max(maximum, value);
     }
+    rememberStrain(map, field);
     const budget = magicBudget(field, map),
       km2 = (value: number) => Math.round(MapScale.areaUnits(value, "m2", "km2"));
     context.recordCause({
@@ -449,4 +444,20 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
       description: `${field.definition.name}: epoch ${index + 1}, ${km2(active)} affected km², peak intensity ${maximum}; budget created ${km2(budget.created)}, in reservoirs ${km2(budget.carried)}, stored ${km2(budget.stored)}, released ${km2(budget.released)}, lost ${km2(budget.lost)} intensity·km²; accumulated activity, first occurrence and reservoirs travel with the crust.`,
     });
   }
+}
+function retainAt(map: PhysicalField, field: Field, i: number, index: number) {
+  const ground = reservoirStock(field, "ground"),
+    before = ground ? ground.get(i) / map.mesh.area(i) : field.stored.get(i),
+    value = field.intensity.get(i),
+    retention = field.definition.history,
+    stored = retainedCharge(before, field.fresh.get(i), retention.retention, retention.storage);
+  field.history.add(i, value);
+  retainGroundCharge(map, field, i, ground, before, stored);
+  if (value > 0 && field.firstEpoch.get(i) < 0) field.firstEpoch.set(i, index);
+  thawSubsidence(map, field, i, before - stored);
+  holdIce(map, field, i, field.definition.effects.icePersistence, reservoirStock(field, "shelf"));
+}
+/** Only actual current inventory survives decay; new input was separated before later erosion or carriage. */
+export function retainedCharge(before: number, fresh: number, retention: number, storage: number) {
+  return Math.max(0, before) * retention + Math.max(0, fresh) * storage;
 }

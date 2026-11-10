@@ -33,6 +33,18 @@ function copyGridSamples<T extends GridSurface>(
       Object.entries(source.channels).map(([name, values]) => [name, sampleCopy(values)])
     ),
     units: { ...source.units },
+    ...(source.materialCargo
+      ? {
+          materialCargo: {
+            ...source.materialCargo,
+            keys: [...source.materialCargo.keys],
+            releasedTo: [...source.materialCargo.releasedTo],
+            slots: [...source.materialCargo.slots],
+            offsets: sampleCopy(source.materialCargo.offsets),
+            records: sampleCopy(source.materialCargo.records),
+          },
+        }
+      : {}),
     ...(source.quantities ? { quantities: { ...source.quantities } } : {}),
     ...(Object.hasOwn(source, "ocean") ? { ocean: structuredClone(source.ocean) } : {}),
     ...(source.lakes ? { lakes: structuredClone(source.lakes) } : {}),

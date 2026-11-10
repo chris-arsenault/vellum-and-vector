@@ -699,12 +699,19 @@ trope that acts only on characters, such as illusion or mind control, has no
 geographic footprint and is no system.
 
 Every system is a material: stocks in named reservoirs that the world's own
-transports carry (crust, ice, rivers, groundwater, wind, animals and people),
+transports carry (crust, ice, rivers, groundwater, ocean currents, wind, animals and people),
 with origins that make it, a medium it propagates through and a forcing
 it writes into the shared physical fields the ordinary processes consume. Each
 cell carries shares of every class rather than one winner, and the meetings
 between systems are processes of their own, never a blend or a net of their
 parents.
+
+Solid charge belongs to its actual ground material, including its depth and host.
+Later cover does not inherit buried charge merely by sharing a mineral name.
+Supply, current activity and retained material have separate lifecycles: an early
+process can stop while ordinary processes move, bury, expose and wear its visible
+remnants. This must be judged on later maps, not established by stock totals or
+history inspection alone.
 
 - **Fire:** vein cores on fracture-fed geothermal maxima, fallen cores in the
   crust and gravels around impact craters, and forge cores where people crack
@@ -720,8 +727,8 @@ parents.
   runoff cuts with, and river warmth raises evaporation, so a Fire country's closed
   lakes die sooner and become Salt sources.
 - **Aurora:** charge accumulating toward colder terrain and held in ice, ground,
-  moraine and shelf; ice carries it and dumps it where it ends, meltwater takes a
-  share. Stored charge keeps ice from ablating, casts a cold shadow, stills the
+  moraine and shelf; ice carries it and dumps it where it ends, while meltwater
+  removes charge. Stored charge keeps ice from ablating, casts a cold shadow, stills the
   life within and cuts deeper under charged sliding ice; thawing ground settles,
   within a bound each cell carries. Held ground charge acts without ice at a
   reduced relict strength, so a deglaciated valley stays cold and still.
@@ -736,8 +743,9 @@ parents.
   springs on soft rock below a catchment its wells; it travels between roots
   through connected cover, rides in the gut of grazing herds, is gathered and
   planted by trade, is buried as peat into a stratum the crust carries and an
-  aquifer leaches. Verdure grows forest past its climate, deepens soil and
-  braids the rivers that cross it; springs drawn past their recharge collapse.
+  aquifer leaches. Dissolved charge follows actual groundwater exchange and
+  emergence. Verdure supports vegetation and soil moisture; springs drawn past
+  their recharge collapse. Braided river morphology remains shared river work.
 - **Salt:** brine, bed and dust. Made where the ground records mass death and
   where a lake died in a closed basin; brine seeps down the drainage, is flushed
   by moisture and kept by peat, crusts to bed at pits; bed dissolves on wet
@@ -747,11 +755,12 @@ parents.
   so Salt never re-makes itself from the same dead each epoch.
 - **Hallowed:** made by people. Kept seats ward rings that reach with their
   tenure; kept frontiers, works and pilgrim roads are lines. Inside a ward every
-  other system is scaled down and what is removed lands on the rim; fractures,
+  other system is scaled down where its rim has a valid receiving medium; fractures,
   brine, storms and coasts are turned and their burden displaced; rivers and
   coasts hold inside. Each connected patch of warding is one ring and pays its
   own rim. Fractures do not enter warded ground, so a sealed conduit keeps its
-  budget and opens at once when the ward lapses. An abandoned seat fades.
+  budget and opens at once when the ward lapses. Abandoned seats stop supplying
+  protection, routes fade through elapsed time, and kept stone can remain.
 - **Veil:** derived from the strain between every other system. Strain above a
   floor is a tear; a tear that shifts is a wild zone whose ground and cover move
   within a bound; stable tears far apart pair into doors that join distant
@@ -767,7 +776,8 @@ parents.
   salt along the ways; extraction, hunting, clearance and burning act on the
   stocks and their media; tenure, walked routes, kept lines and the dead are
   recorded on the ground for the society-phase systems to read.
-- **History:** every stock and record rides the crust where geology moves it.
+- **History:** solid inventories and retained ground records move with their
+  geological material; water and living stocks use their declared carriers.
   Numerical activity history is distinct from the lore's readable ice-memory.
 
 Creators place and shape sources, works and conditions of these systems and

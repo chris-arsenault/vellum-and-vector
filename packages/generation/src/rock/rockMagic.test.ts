@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import { rockCatalogue } from "./rockCatalogue";
-import { bodyRank, heldLeakIn, stockLeakIn } from "./rockMagic";
+import { bodyRank } from "./rockMagic";
+import { heldLeakIn, stockLeakIn } from "./rockMagicStock";
 import { MapScale } from "@atlas/domain";
 const scale = MapScale.reference();
 

@@ -46,9 +46,8 @@ const firePreset = magicSystemSchema.parse({
   ],
   phase: "climate",
   parameters: {
-    // Cores sit on separated heat maxima under land: about one per 10,000 km² at most.
+    // Cores sit on eligible, separated heat maxima under land.
     sourceThreshold: 300,
-    maximumSources: 96,
     sourceSpacing: 0.0225,
     // Steep through unfractured rock (under 10 km), long along a conductive vein (60-120 km).
     baseCost: 3,
@@ -307,7 +306,7 @@ const greenwoodPreset = magicSystemSchema.parse({
       propagation: "roots",
       renewal: "accumulating",
       stocks: [
-        { id: "sap", reservoir: "sap", carriers: ["animal", "people"] },
+        { id: "sap", reservoir: "sap", carriers: ["animal", "people", "river"] },
         { id: "stratum", reservoir: "stratum", carriers: ["crust"] },
       ],
     },
@@ -316,7 +315,10 @@ const greenwoodPreset = magicSystemSchema.parse({
       source: "aquifer",
       propagation: "local",
       renewal: "continuous",
-      stocks: [{ id: "aquifer", reservoir: "aquifer", carriers: ["groundwater"] }],
+      stocks: [
+        { id: "aquifer", reservoir: "aquifer", carriers: ["groundwater"] },
+        { id: "springwater", reservoir: "springwater", carriers: [] },
+      ],
     },
   ],
   phase: "post-glacial",
@@ -353,7 +355,8 @@ const greenwoodPreset = magicSystemSchema.parse({
 });
 /** Brine, bed and dust: the one material of Salt, in each origin's own reservoirs. */
 const saltStocks = () => [
-  { id: "brine", reservoir: "brine", carriers: ["crust"] },
+  { id: "brine", reservoir: "brine", carriers: [] },
+  { id: "aquifer", reservoir: "aquifer", carriers: ["groundwater"] },
   { id: "bed", reservoir: "bed", carriers: ["crust", "wind", "people"] },
   { id: "dust", reservoir: "dust", carriers: ["wind"] },
 ];
@@ -374,8 +377,8 @@ const saltPreset = magicSystemSchema.parse({
   parameters: {},
   // Salt acts on the living through salting alone: thinning, infertility, avoidance, drying.
   effects: { salting: 1 },
-  // Salt does not decay; what is not flushed or burned is still there next epoch.
-  history: { retention: 1, storage: 0.2 },
+  // Reservoirs preserve Salt until it is flushed or burned. Activity is not a second residue stock.
+  history: { retention: 0, storage: 0 },
   features: [
     // Where the dead lie: the brine of the killing per square metre, from the salt that makes
     // a death source (ADR 0007) to the salt of full intensity, so a town's ordinary die-offs

@@ -4,6 +4,7 @@ import type { PhysicalContext } from "./context";
 import { noWaterSurface } from "./math";
 import { MapScale } from "@atlas/domain";
 import { oceanSeeds, OceanComponents, visitConnectedOcean } from "./oceanComponents";
+import { workingValues, releaseWorking } from "./physicalNumerics";
 
 /**
  * Lowest cells first, streamed from the coverage in runs of equal elevation: each level
@@ -108,7 +109,29 @@ function seaLevel(map: PhysicalField, c: PhysicalContext) {
   }
   return map.BaseSeaLevel + MapScale.native(c.SeaLevelOffset);
 }
+/** Native depth of existing marine water trapped below an inlet that no longer reaches the sea. */
+export function enclosedWaterDepth(
+  previousDepth: number,
+  previousSurface: number,
+  ground: number,
+  seaLevel: number,
+  connected: boolean,
+  marine = true
+) {
+  // Ordinary retreat exposes the shore; it does not leave a lake wherever the sea once lay.
+  if (connected || (marine && ground >= seaLevel)) return 0;
+  return Math.max(0, Math.min(previousDepth, previousSurface - ground));
+}
 export function oceanConnectivity(map: PhysicalField, c: PhysicalContext) {
+  const previousSurface = workingValues(map, "float64", "ocean:previous-surface", (i) =>
+      map.WaterSurfaceElevations.get(i)
+    ),
+    marine = workingValues(map, "uint8", "ocean:previous-marine", (i) =>
+      Number(map.WaterKindCodes.get(i) === 1)
+    ),
+    previous = workingValues(map, "float64", "ocean:previous-water", (i) =>
+      map.WaterKindCodes.get(i) > 0 ? map.WaterDepths.get(i) : 0
+    );
   map.WaterKindCodes.fill(0);
   map.WaterBodyIds.fill(0);
   map.WaterDepths.fill(0);
@@ -117,6 +140,24 @@ export function oceanConnectivity(map: PhysicalField, c: PhysicalContext) {
   visitConnectedOcean(map, map.EffectiveSeaLevel, (i) => {
     map.WaterKindCodes.set(i, 1);
     map.WaterBodyIds.set(i, 1);
+    // Reconnection washes out the pending isolated-water source; a later basin starts anew.
+    map.LakeMemory.set(i, 0);
     setWaterSurface(map, i, map.EffectiveSeaLevel);
   });
+  // The ordinary lake solver owns the next stage adjustment. Connectivity cannot evaporate
+  // enclosed water before that solver observes its finite supply and climate losses.
+  for (let i = 0; i < map.mesh.count; i++) {
+    const depth = enclosedWaterDepth(
+      previous.get(i),
+      previousSurface.get(i),
+      map.Elevation.get(i),
+      map.EffectiveSeaLevel,
+      map.WaterKindCodes.get(i) === 1,
+      marine.get(i) > 0
+    );
+    if (depth <= 0) continue;
+    map.WaterKindCodes.set(i, 2);
+    setWaterSurface(map, i, map.Elevation.get(i) + depth);
+  }
+  releaseWorking(map, previous, previousSurface, marine);
 }

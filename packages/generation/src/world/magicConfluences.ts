@@ -18,6 +18,7 @@ import { hashUnit } from "./noise";
 import { displaceGround, weatherRock } from "../rock/groundLedger";
 import { meltIce, spoilSoil } from "../rock/groundSurfaceMedia";
 import { retainedArray, releaseWorking } from "./physicalNumerics";
+import { contactView, receiveCoastalAction } from "./magicContact";
 
 /** A confluence's hold on the mesh this evaluation: where it holds and how much of each cell. */
 export interface ConfluenceState {
@@ -66,10 +67,20 @@ export function strainAt(map: PhysicalField, a: MagicField, b: MagicField, i: nu
   for (let edge = 0; edge < map.mesh.degree(i); edge++) {
     const j = map.mesh.neighbor(i, edge);
     if (j < 0) continue;
-    front = Math.max(front, Math.abs(gap - (a.intensity.get(j) - b.intensity.get(j)) / 1000));
+    front = Math.max(
+      front,
+      frontStrain(
+        gap - (a.intensity.get(j) - b.intensity.get(j)) / 1000,
+        map.mesh.edgeLength(i, edge),
+        map.scale.length(0.0025)
+      )
+    );
   }
   return (ai / 1000) * (bi / 1000) * front;
 }
+/** A field difference has meaning per geographic distance, independently of sampling density. */
+export const frontStrain = (difference: number, distance: number, reach: number) =>
+  distance > 0 ? Math.min(1, (Math.abs(difference) * reach) / distance) : 0;
 /**
  * Evaluate every active confluence from the systems' current fields and coverage: grow its
  * region from its conditions, take coverage from the parents where each reaches the floor,
@@ -87,23 +98,27 @@ export function evaluateConfluences(state: GenerationState, seed: number, apply:
   magic.confluences.strain.fill(0);
   for (const confluence of activeConfluences(state)) {
     const fields = participants(state, confluence),
+      contacts = fields.map((field) => contactView(map, field)),
+      read = (id: string, cell: number) =>
+        contacts[fields.findIndex((field) => field.definition.id === id)]?.intensity(cell) ?? 0,
       rule = confluence as unknown as MagicFeatureRule,
-      members = growRegion(state, fields[0], rule, seed),
+      members = growRegion(state, fields[0], rule, seed, read),
       coverage = retainedArray(map, "float64", `confluence:${confluence.id}:coverage`);
     for (let i = 0; i < count; i++) {
       if (!members.get(i)) continue;
-      if (fields.some((field) => field.systemCoverage.get(i) < confluence.floor)) {
+      if (contacts.some((contact) => contact.coverage(i) < confluence.floor)) {
         members.set(i, 0);
         continue;
       }
       const strain = strainAt(map, fields[0], fields[1], i);
       magic.confluences.strain.set(i, Math.max(magic.confluences.strain.get(i), strain));
-      const parents = Math.min(...fields.map((field) => field.systemCoverage.get(i)));
+      const parents = Math.min(...contacts.map((contact) => contact.coverage(i)));
       const taken = parents * clamp(0.25 + strain * confluence.strainScale, 0, 1);
       coverage.set(i, taken);
       for (const field of fields) displace(field, i, taken);
     }
     magic.confluences.states[confluence.id] = { definition: confluence, members, coverage };
+    contacts.forEach((contact) => contact.close());
   }
   boundCoverage(magic.fields, Object.values(magic.confluences.states), count);
   if (apply)
@@ -139,9 +154,10 @@ function applyConfluence(state: GenerationState, held: ConfluenceState, seed: nu
     const c = held.coverage.get(i);
     if (c <= 0) continue;
     actOnRock(map, i, c, e, salt);
-    meetingInRock(map, held.definition.id, i, c, salt);
+    meetingInRock(map, held.definition.groundMaterial, i, c, salt);
     actOnWaterAndLife(map, i, c, e);
   }
+  receiveCoastalAction(map, held.coverage, e.coastalForcing, map.scale.length(0.001));
 }
 /** Fractures, rock, bedrock relief and soil: the meeting's geology. */
 function actOnRock(map: PhysicalField, i: number, c: number, e: ConfluenceEffects, salt: number) {
@@ -169,7 +185,7 @@ function actOnWaterAndLife(map: PhysicalField, i: number, c: number, e: Confluen
       clamp(map.ExternalCoastalForcing.get(i) + round(e.coastalForcing * c), 0, 1000)
     );
   if (e.fog) map.FogForcing.set(i, Math.max(map.FogForcing.get(i), e.fog * c));
-  if (e.iceMelt) meltIce(map, i, e.iceMelt * c, "confluences");
+  if (e.iceMelt) meltIce(map, i, e.iceMelt * c, "confluences", true);
   if (e.debris) collapseDebris(map, i, units(e.debris * c));
   if (e.toxicity)
     map.EcologicalToxicity.set(i, Math.max(map.EcologicalToxicity.get(i), e.toxicity * c));

@@ -1,6 +1,6 @@
 import type { PhysicalField } from "../world/field";
 import { adjustCrustColumn } from "./crustTransport";
-import { clamp, crustPerRock, rockLoadResponsePerMille, units } from "../world/math";
+import { clamp, crustPerRock, units } from "../world/math";
 import { recordFlow, type FlowCause, type Pool } from "../coupling/flows";
 import { layDownPackage, materialLayer, type MaterialLayer } from "./rockColumn";
 import { rockCatalogue, type RockKind } from "./rockCatalogue";
@@ -20,7 +20,17 @@ import { groundStorage } from "./groundStorage";
 import { groundOf } from "./ground";
 import type { CompiledMix } from "./modes";
 import { constructMaterial, depositedMaterial } from "./groundConstruction";
+import { extractColumn, type GroundExtraction } from "./groundExtraction";
+import { releasedMaterial } from "./groundCargoIdentity";
+import {
+  availableCrust,
+  lowerRock,
+  settleWithdrawal,
+  withdrawalReceiver,
+} from "./groundWithdrawal";
+export { availableCrust } from "./groundWithdrawal";
 export { constructMaterial } from "./groundConstruction";
+export { alterGround, type GroundAlteration } from "./groundAlteration";
 
 /**
  * The one writer of what comes off and lands on the ground: height, sediment, the rock column and
@@ -107,31 +117,65 @@ function removeFacet(
   const share = facetShare(map, i, facet),
     covered = columnThickness(map, i, coverColumn(facet)),
     exposedSoil = Math.max(0, units(skin) - (source === "rock" ? covered : 0)),
-    accept = (material: MaterialLayer) => {
-      const parcel = { ...material, depth: material.depth * share };
-      if (receive) receive(parcel);
-      else if (to === "load")
-        loadOf(map).add(i, { ...parcel, depth: volumeOf(map, i, parcel.depth) });
-    },
+    accept = withdrawalReceiver(map, i, share, to, receive),
     loose = source === "rock" ? 0 : withdrawColumn(map, i, coverColumn(facet), requested, accept),
     rock =
       source === "loose"
         ? 0
         : withdrawColumn(map, i, facet, Math.max(0, requested - loose), accept);
-  if (rock > 0) {
-    lowerRock(map, i, rock * share);
-    groundStorage(map).GroundCutDepth.add(i, facet === "cut" ? rock : -rock);
-  }
-  map.SoilDepth.set(
-    i,
-    Math.max(
-      0,
-      map.SoilDepth.get(i) - MapScale.metres(Math.min(loose + rock, exposedSoil) * share, "native")
-    )
-  );
-  recordFlow(map, cause, "loose", to, volumeOf(map, i, loose * share));
-  recordFlow(map, cause, "rock", to, volumeOf(map, i, rock * share));
+  settleWithdrawal(map, i, facet, loose, rock, Math.min(loose + rock, exposedSoil), cause, to);
   return (loose + rock) * share;
+}
+/** A soluble or separable constituent leaves its finite bed; retained caps settle above it. */
+export function extractGround(
+  map: PhysicalField,
+  cell: number,
+  action: GroundExtraction,
+  cause: FlowCause,
+  to: Pool = "load",
+  receive?: MaterialReceiver
+) {
+  const skin = units(map.SoilDepth.get(cell));
+  let removed = 0;
+  for (const facet of ["land", "cut"] as const) {
+    const share = facetShare(map, cell, facet);
+    if (share <= 0) continue;
+    const accept = withdrawalReceiver(map, cell, share, to, receive, true),
+      cover = coverColumn(facet),
+      covered = columnThickness(map, cell, cover),
+      surface = groundOf(map).section(cell, facet)[0],
+      reach = action.surfaceOnly ? Math.min(action.reach, surface?.depth ?? 0) : action.reach,
+      loose = extractColumn(map, cell, cover, { ...action, reach }, skin, accept, share),
+      rock = extractColumn(
+        map,
+        cell,
+        facet,
+        {
+          ...action,
+          amount: Math.max(0, action.amount - loose.removed),
+          reach:
+            action.looseOnly || (action.surfaceOnly && covered > 0)
+              ? 0
+              : Math.max(0, reach - covered),
+        },
+        Math.max(0, skin - covered),
+        accept,
+        share
+      );
+    settleWithdrawal(
+      map,
+      cell,
+      facet,
+      loose.removed,
+      rock.removed,
+      loose.soil + rock.soil,
+      cause,
+      to
+    );
+    removed += (loose.removed + rock.removed) * share;
+  }
+  projectGround(map, cell);
+  return removed;
 }
 export function excavateRock(
   map: PhysicalField,
@@ -158,29 +202,6 @@ export function excavateRock(
       );
   projectGround(map, i);
   return removed;
-}
-/** The finite crust column available beneath the ground. */
-export function availableCrust(map: PhysicalField, i: number) {
-  return Math.max(0, map.CrustThickness.get(i));
-}
-/**
- * Rock comes off the top of a cell: first what was piled on the crust, then the crust's own column,
- * so an old belt's root goes with it. Either way the ground rises back by the same share, since a metre
- * of crust's rock weighs what a metre of piled rock does: the crust's buoyancy gives up part of that,
- * and the load gives the rest. Once the crust is exhausted nothing rises back: the cut stays a hole.
- */
-function lowerRock(map: PhysicalField, i: number, amount: number) {
-  const pile = Math.max(0, map.SurfaceRockLoad.get(i)),
-    below = Math.max(0, amount - pile),
-    perRock = crustPerRock(map.CrustContinentalFraction.get(i) / 1000),
-    crust = Math.min(availableCrust(map, i), below * perRock),
-    rootRock = crust / perRock;
-  groundStorage(map).BedrockElevation.add(i, -amount);
-  groundStorage(map).SurfaceRockLoad.add(
-    i,
-    -(amount - below) - rootRock / (rockLoadResponsePerMille / 1000)
-  );
-  if (crust > 0) adjustCrustColumn(map, i, map.CrustThickness.get(i) - crust);
 }
 /**
  * Lays the supplied loose material on the receiving cell or occupied facet.
@@ -260,7 +281,8 @@ export function cutGround(
 ) {
   if (depth <= 0 || share <= 0) return { amount: 0, depth: 0 };
   const budget = depth * clamp(share, 0, 1),
-    accept = (material: MaterialLayer) => {
+    accept = (taken: MaterialLayer) => {
+      const material = releasedMaterial(map, taken);
       if (receive) receive(material);
       else loadOf(map).add(i, { ...material, depth: volumeOf(map, i, material.depth) });
     },

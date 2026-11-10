@@ -56,6 +56,19 @@ export const magicConfluenceSchema = z.object({
   seeds: magicFeatureSchema.shape.seeds,
   retains: magicFeatureSchema.shape.retains,
   effects: confluenceEffectsSchema.prefault({}),
+  /** Retained material made by this meeting; owned alongside its other actions. */
+  groundMaterial: z
+    .enum([
+      "sinter",
+      "crushstone",
+      "rootstone",
+      "rimerot",
+      "tufa",
+      "saltGlass",
+      "tornstone",
+      "saltbed",
+    ])
+    .optional(),
   hazard: confluenceHazardSchema.optional(),
 });
 export type MagicConfluence = z.infer<typeof magicConfluenceSchema>;
@@ -132,6 +145,7 @@ function saltMeetings(): MagicConfluence[] {
     }),
     magicConfluenceSchema.parse({
       id: "fired",
+      groundMaterial: "saltGlass",
       lengthUnits: "relative",
       name: "Fired crust",
       systems: ["fire", "salt"],
@@ -156,6 +170,7 @@ function saltMeetings(): MagicConfluence[] {
     }),
     magicConfluenceSchema.parse({
       id: "brine-shore",
+      groundMaterial: "saltbed",
       lengthUnits: "relative",
       name: "Brine shore",
       systems: ["pressure", "salt"],
@@ -174,6 +189,7 @@ function elementalMeetings(): MagicConfluence[] {
   return [
     magicConfluenceSchema.parse({
       id: "war",
+      groundMaterial: "tornstone",
       lengthUnits: "relative",
       name: "Shatter rim",
       systems: ["fire", "aurora"],
@@ -198,6 +214,7 @@ function elementalMeetings(): MagicConfluence[] {
     }),
     magicConfluenceSchema.parse({
       id: "steam",
+      groundMaterial: "sinter",
       lengthUnits: "relative",
       name: "Boiling shore",
       systems: ["fire", "pressure"],
@@ -216,6 +233,7 @@ function elementalMeetings(): MagicConfluence[] {
     }),
     magicConfluenceSchema.parse({
       id: "breach",
+      groundMaterial: "crushstone",
       lengthUnits: "relative",
       name: "Breach",
       systems: ["pressure", "aurora"],
@@ -246,6 +264,7 @@ function greenwoodMeetings(): MagicConfluence[] {
   return [
     magicConfluenceSchema.parse({
       id: "rot",
+      groundMaterial: "rootstone",
       lengthUnits: "relative",
       name: "Overgrowth rot",
       systems: ["fire", "greenwood"],
@@ -267,6 +286,7 @@ function greenwoodMeetings(): MagicConfluence[] {
     }),
     magicConfluenceSchema.parse({
       id: "frozen",
+      groundMaterial: "rimerot",
       lengthUnits: "relative",
       name: "Frozen Deepwood",
       systems: ["aurora", "greenwood"],
@@ -279,6 +299,7 @@ function greenwoodMeetings(): MagicConfluence[] {
     }),
     magicConfluenceSchema.parse({
       id: "brackish",
+      groundMaterial: "tufa",
       lengthUnits: "relative",
       name: "Brackish wending",
       systems: ["pressure", "greenwood"],

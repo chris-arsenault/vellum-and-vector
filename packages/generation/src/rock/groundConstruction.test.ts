@@ -3,7 +3,7 @@ import { createTestField } from "./groundTestFixture";
 import { createWorldMesh } from "../world/worldMesh";
 import { units } from "../world/math";
 import { constructMaterial, depositedMaterial } from "./groundConstruction";
-import { materialLayer, materialStrength, readLayer, setLayer } from "./rockColumn";
+import { materialLayer, materialStrength, readLayer, setLayer, watchColumn } from "./rockColumn";
 import { burialResponse } from "./modes";
 import { rockCatalogue as rocks } from "./rockCatalogue";
 import { openCut, projectGround, facetSurface } from "./groundShares";
@@ -69,4 +69,36 @@ it("solid emplacement buries only the covered facet and commits its placement an
     consolidation: 0,
   });
   expect(readLayer(map, 0, 0, "loose")).toMatchObject({ kind: rocks.shale.code, depth: units(2) });
+});
+
+it("observes accepted construction with its actual cause and detaches without affecting emplacement", () => {
+  const map = createTestField(createWorldMesh([0, 0, 1000, 1000], 16, 0)),
+    material = materialLayer(rocks.saltbed.code, units(2), {}, 3),
+    seen: object[] = [],
+    stop = watchColumn({
+      fold() {},
+      strip() {},
+      construct(field, cell, bed, cause, depth) {
+        expect(field).toBe(map);
+        seen.push({ cell, kind: bed.kind, cause, depth, surface: readLayer(field, cell, 0).kind });
+      },
+    });
+  try {
+    constructMaterial(map, 0, material, "salt", "space");
+    expect(seen).toEqual([
+      {
+        cell: 0,
+        kind: rocks.saltbed.code,
+        cause: "salt",
+        depth: units(2),
+        surface: rocks.saltbed.code,
+      },
+    ]);
+    stop();
+    constructMaterial(map, 0, material, "salt", "space");
+    expect(seen).toHaveLength(1);
+    expect(readLayer(map, 0, 0).depth).toBe(units(4));
+  } finally {
+    stop();
+  }
 });

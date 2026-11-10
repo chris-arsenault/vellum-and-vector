@@ -124,7 +124,7 @@ export function projectMagic(state: GenerationState) {
   const project = (
     key: string,
     unit: string,
-    values: Band,
+    values: Pick<Band, "get">,
     quantity: "intensive" | "extensive" | "category"
   ) =>
     putChannel(state.surface, key, unit, projectedMagicValues(state, values, quantity), quantity);
@@ -171,12 +171,12 @@ export function projectMagic(state: GenerationState) {
 }
 function projectedMagicValues(
   state: GenerationState,
-  values: Band,
+  values: Pick<Band, "get">,
   quantity: "intensive" | "extensive" | "category"
 ) {
   const work = state.physical!;
   if (quantity !== "extensive" || !work.interpolation)
-    return projectedValues(work, values, quantity === "category");
+    return projectedValues(work, (cell) => values.get(cell), quantity === "category");
   const density = workingValues(
     work.map,
     "float64",

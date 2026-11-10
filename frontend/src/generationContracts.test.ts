@@ -112,7 +112,7 @@ it("registers an owned nested summary and field adapter without central dispatch
 
 it("clears only parameter buffers that stop applying after a source or feedback change", () => {
   const system = prepareDraft(newGenerationDraft()).input.settings!.magicSystems[0];
-  // The vein origin's cores are placed by hand: its geothermal budget no longer applies.
+  // The vein origin's cores are placed by hand: geothermal eligibility no longer applies.
   const next = {
     ...system,
     origins: system.origins.map((origin, index) =>
@@ -120,7 +120,7 @@ it("clears only parameter buffers that stop applying after a source or feedback 
     ),
   };
   expect(removedMagicParameterFields(system, next)).toContain(
-    `magic.${system.id}.parameters.maximumSources`
+    `magic.${system.id}.parameters.sourceThreshold`
   );
   expect(removedMagicParameterFields(system, next)).not.toContain(
     `magic.${system.id}.parameters.baseCost`

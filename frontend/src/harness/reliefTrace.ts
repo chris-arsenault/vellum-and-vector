@@ -2,7 +2,7 @@ import type { PhysicalField } from "../../../packages/generation/src/world/field
 import type { PhysicalContext } from "../../../packages/generation/src/world/context";
 import { observeNativeSteps } from "../../../packages/generation/src/world/physicalSteps";
 import { epochStory } from "./epochStory";
-import { captureFailedField, snapshotRecorder } from "./fieldSnapshot";
+import { captureFailedField, captureFinalField, snapshotRecorder } from "./fieldSnapshot";
 import { watchRockColumns } from "./reliefColumn";
 import { reliefProbes } from "./reliefProbes";
 import { rockTrace } from "./rockTrace";
@@ -61,13 +61,31 @@ function snapshot(name: string, map: PhysicalField, context: PhysicalContext) {
   };
 }
 type ObservedField = { map: PhysicalField; context: PhysicalContext; name: string };
-/** Starts recording; the returned function stops and hands back what was seen. */
-export function traceRelief(snapshots?: {
+type SnapshotInput = {
   label: string;
   quality: string;
   seed: number;
   epochs: Epoch[];
-}) {
+};
+function finishSnapshot(
+  input: SnapshotInput | undefined,
+  last: ObservedField | null,
+  failure?: string
+) {
+  if (!input || !last) return {};
+  if (failure === undefined)
+    return { finalSnapshot: captureFinalField(input, last.map, last.context) };
+  return {
+    failedSnapshot: captureFailedField(input, last.map, last.context, {
+      status: "failed",
+      message: failure,
+      lastObservedStep: last.name,
+      lastObservedEpoch: last.context.EpochIndex,
+    }),
+  };
+}
+/** Starts recording; the returned function stops and hands back what was seen. */
+export function traceRelief(snapshots?: SnapshotInput) {
   const steps: ReturnType<typeof snapshot>[] = [],
     probes = reliefProbes(),
     record = snapshots && snapshotRecorder(snapshots.label, snapshots.quality, snapshots.epochs),
@@ -110,20 +128,10 @@ export function traceRelief(snapshots?: {
   });
   return (failure?: string) => {
     observeNativeSteps(null);
-    let failedSnapshot: string | undefined;
-    if (failure !== undefined && snapshots && last) {
-      const captured = performance.now();
-      try {
-        failedSnapshot = captureFailedField(snapshots, last.map, last.context, {
-          status: "failed",
-          message: failure,
-          lastObservedStep: last.name,
-          lastObservedEpoch: last.context.EpochIndex,
-        });
-      } finally {
-        monitoring.snapshotMilliseconds += performance.now() - captured;
-      }
-    }
+    const captured = performance.now(),
+      completedSnapshot = finishSnapshot(snapshots, last, failure);
+    monitoring.snapshotMilliseconds += performance.now() - captured;
+    if (completedSnapshot.finalSnapshot) monitoring.snapshotsWritten++;
     const started = performance.now(),
       result = {
         steps,
@@ -133,6 +141,6 @@ export function traceRelief(snapshots?: {
         story: last ? epochStory(last.map) : null,
       };
     monitoring.finalizationMilliseconds += performance.now() - started;
-    return { ...result, monitoring, failedSnapshot };
+    return { ...result, monitoring, ...completedSnapshot };
   };
 }

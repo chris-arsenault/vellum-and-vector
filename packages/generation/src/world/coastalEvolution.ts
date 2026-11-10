@@ -76,7 +76,8 @@ function depositCoastalVolume(
   c: PhysicalContext,
   source: number,
   targets: [number, number][],
-  material: MaterialLayer
+  material: MaterialLayer,
+  wave: number
 ) {
   const volume = material.depth;
   let remaining = (volume * c.Profile.CoastalDepositionFraction) / 1000,
@@ -85,14 +86,15 @@ function depositCoastalVolume(
   for (const [target, share] of targets) {
     const amount = Math.min(remaining, (remaining * share) / weight),
       area = map.mesh.area(target);
-    // What waves carry fills submerged accommodation; emergent rock receives no coating.
+    // Wave run-up gives transported sediment room above still water, allowing an inlet bar
+    // to emerge when actual supply exceeds submerged accommodation.
     const actual =
       MapScale.metres(
         depositPond(
           map,
           target,
           MapScale.inUnits(amount / area, "native"),
-          map.EffectiveSeaLevel,
+          map.EffectiveSeaLevel + MapScale.native((map.scale.length(0.000005) * wave) / 1000),
           "coast",
           "load",
           material
@@ -127,7 +129,8 @@ export function depositShoreLoads(
       c,
       i,
       depositionTargets(map, frame, i, c.Profile.CoastalDepositionReach * c.Span, oceanOnly),
-      loadOf(map).take(i, load)
+      loadOf(map).take(i, load),
+      Math.max(frame.strength.get(i), map.WaveExposure.get(i))
     );
   }
 }

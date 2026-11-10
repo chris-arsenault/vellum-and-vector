@@ -15,34 +15,31 @@ feedback and interference. The
 [product contract](../product-spec.md#103-magical-generation--the-seven-systems)
 their mechanisms.
 
-**A system is a material.** Each system holds stocks in named reservoirs, and
-each stock declares the world's own transports that carry it: the crust (plate
-drift carries every solid reservoir by the transport plan, conserving the
-amount), ice (charge rides the flow and is dumped at the terminus and on the
-shelf), rivers (placers and brine move one cell down the drainage), groundwater
-(aquifers leach a buried stratum to a spring), wind (dust and sand lift and
-settle), animals (sap in the gut of grazing herds) and people (trade ledgers
-along the ways). Ocean currents can be declared as a carrier, but no stock is
-moved by them yet. Intensity is derived from stock and medium at evaluation, and
-a budget of created, carried, stored, released and lost closes per system. Sinks
-are physical: flushing to the sea, burning, extraction.
+**A system is a material.** Each system holds stocks in named reservoirs and
+uses the world's own carriers: Ground, ice, rivers, groundwater, wind, animals,
+ocean currents and people. Solid stocks belong to their actual Ground material;
+erosion, burial, geological movement and extraction carry that association.
+Fresh cover does not acquire the charge of an older bed of the same mineral.
+Dissolved and living stocks retain their water and ecological carriers. Intensity
+depends on the present stock and medium. Spent material can remain visible after
+its magical activity ends. The [generation guide](../generation-workflows.md)
+describes these shared ownership boundaries.
 
-Every stock changes in one stock advance per epoch, run from the history pass;
-locating sources only reads stocks, so re-evaluating a system within an epoch
-never counts a stock twice. An origin that feeds on a record consumes it: Salt's
+Births and renewal belong to elapsed operations; locating existing sources does
+not repeat them. An origin that feeds on a record consumes it: Salt's
 death origin uses up the mass-death record and its dead-lake origin the lake
 memory, so Salt never re-makes itself from the same dead each epoch. Some
 carriers are excluded by what the medium is: meltwater is Aurora's sink, not its
 carrier; grazers avoid Salt, so Salt has no animal carrier; Pressure charge sits
-in water, not crust; Veil carries nothing itself. Crust drift decays the stocks
-it carries, so crust-borne tracks (spent Fire behind a drifting hotspot, a
-displaced Salt bed) are features of an early world.
+in water, not crust; Veil carries nothing itself. Ordinary transport and wear
+continue after supply ends, leaving spent Fire, displaced Salt beds and other
+altered material available to later epochs.
 
 **Origins on the schema.** A system holds several origins, each with its own
 source, propagation, renewal and parameter overrides; a system's effects and
 rules stay one set. Renewal names the mechanism (conduit-fed, accumulating,
-continuous, finite, kept, emergent); no generic renewal engine. A system saved
-before origins existed is parsed into one origin.
+continuous, finite, kept, emergent); no generic renewal engine. Only current
+map and configuration formats are supported.
 
 **Cells carry shares.** A class covers a fraction of a cell, derived from the
 rule's own continuous quantity through a declared mapping, never from sub-cell
@@ -53,25 +50,22 @@ coverage passes a declared floor. Magic is
 never netted on a shared scalar: Fire is not a warming term that cancels
 Aurora's cold.
 
-**Sources are sites; places are coherent.** A located source has a declared
-least strength: a release, a tenure, a killing or a cracking below it is still
-stock, which moves, accumulates and feeds the field, but it is no source and
-seeds no site, so a trace a river or a trade road carried is never a labelled
-core. A class component is published as a named place only past a minimum of
-cells declared with its cartography (one for a site, more for a course or an
-area) and significant at the map's scale
+**Sources are sites; places are coherent.** Physical activity can remain below
+the significance of a named site. A trace carried by a river or trade road need
+not become a labelled core. A class component is published as a named place
+when significant at the map's scale
 ([ADR 0005](0005-scale-contract.md)); below that the class stays on the map as
 coverage, and only a domain large relative to the map's land is subdivided. Density
 is lowered by locating sites and keeping places whole, never by thinning stocks
-or intensities, and the seven systems are judged against each other: no one of
-them may own the map's places.
+or intensities.
 
 **Meetings are processes.** A confluence names the systems it reads, the
 coverage floor each must reach, its own writes to the physical fields, its own
 hazard and class. Its coverage is the smaller parent's scaled by the strain
 between them, and it displaces the parents, so a meeting is never the mean of
 what made it. Hallowed and Veil are the any-system meetings: warding scales
-every other system inside a ring and lays what it removed on the rim; tearing
+other systems inside a ring and displaces activity to a rim in its receiving
+medium; without a valid receiver the activity stays at its source. Tearing
 reads the strain of every pair plus the meetings' coverage, so a triple meeting
 tears more than its pairs. Each connected patch of warding is one ring and pays
 its own rim. Veil answers Fire's release at a cell, not Fire's presence, because a
@@ -81,15 +75,17 @@ Fire and Aurora front always has Fire under its tears.
 along the ways; cores cracked at a forge are a Fire source; extraction, hunting,
 clearance and burning act on the stocks and their media. The society recorder
 writes tenure, walked routes, kept lines and the dead onto the mesh as amounts
-the crust carries. A society-phase system is evaluated inside the environmental
-refresh while people act and lapses to its stored charge between, so an
-abandoned sanctuary fades; systems whose stocks people touched in a cycle are
-re-evaluated in that refresh.
+the crust carries. Solid trade moves the extracted grains; deliberate custody
+ends when ordinary geological transport returns them to their natural reservoir.
+Current refresh updates dependent fields and doors without replaying supply or
+history. Seats cease supplying protection when their society ends, while routes
+and kept lines fade through elapsed time. Retained ground can outlast protection.
 
 **Doors are edges.** Stable tears pair into doors; a door is an edge of kind
 `door` between the surface cells under its ends, added when connections are
 built and never when territories are assigned, unworn and never a highway, not
-drawn as a way.
+drawn as a way. Current stability and access govern pairing; closure removes the
+travel edge.
 
 ## Alternatives
 
@@ -120,6 +116,5 @@ Each system's reach, rarity and signature are tuned in its preset and curated
 controls (`packages/generation/src/magicCartography.ts`); documents describe
 mechanisms and leave the values to code. Fields and couplings come first;
 classes, names and drawing follow from them. A world with no human era has no
-Hallowed and no forge, and its other systems are unchanged. The Salt detachment
-effect on orogeny, mirages, detour routes, vow practice and door-keeper economies
-are open work in the [backlog](../backlog.md).
+Hallowed or forge sources. New social practices and presentation proposals remain
+separate design work in the [backlog](../backlog.md).

@@ -85,6 +85,7 @@ export const atlasChannels: ChannelBinding[] = [
   amount("impactRim", "ImpactRimUplift"),
   amount("impactEjecta", "ImpactEjectaThickness"),
   amount("waterDepth", "WaterDepths"),
+  { name: "groundwaterStorage", native: "GroundwaterStorage", unit: "metre", scale: 1, minimum: 0 },
   scalar("fracture", "FractureConductance"),
   { name: "rock", native: "RockResistance", unit: "ratio", scale: 1 / hardestRock, minimum: 0 },
   scalar("crustAge", "CrustAge"),

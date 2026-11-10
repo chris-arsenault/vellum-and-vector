@@ -36,11 +36,9 @@ import { advanceHumanEcology } from "./world/ecologyProcesses";
 import { refreshSocietySupport, refreshSocietyConnections } from "./societyGeography";
 import { channelAccess, coastalFishery } from "./societySupport";
 import { initializeMagic } from "./world/magicState";
-import { propagateMagic } from "./world/magicPropagation";
 import { classifyMagicFeatures, projectMagic } from "./world/magicFeatures";
 import { magicChannels } from "./world/magicFieldDefinitions";
 import { evaluateSocietyMagic } from "./world/magicProcesses";
-import { systemHasRole } from "./societyMagicAccess";
 import { irrigateChannels } from "./societyWaterUse";
 import { workSamples } from "./societyWorks";
 import { damCandidateCell } from "./societyDemand";
@@ -155,7 +153,8 @@ export function refreshSocietyEnvironment(
     society.river = channelAccess(state);
     society.coast = coastalFishery(state);
   }
-  if (society.mediumChanged.has("elevation")) refreshSocietyConnections(state);
+  if (society.mediumChanged.has("elevation") || society.connectionsDirty)
+    refreshSocietyConnections(state);
   refreshSocietySupport(state);
   society.changed.clear();
   society.mediumChanged.clear();
@@ -176,7 +175,7 @@ function refreshNative(
   synchronizeNative(state);
   const water = refreshWaterWhenCaused(state, context, available, publish);
   if (available.has("flow")) irrigateChannels(state);
-  refreshMagicPathways(state, context, water.oceanChanged);
+  refreshMagicPathways(state, context);
   if (available.has("productivity")) advanceHumanEcology(state, context, years);
   projectNative(
     state,
@@ -358,11 +357,7 @@ function publishEnvironmentalChanges(
   );
   if (!available.has("riverOrder") && drainage) world.drainage![area] = drainage;
 }
-function refreshMagicPathways(
-  state: GenerationState,
-  context: MapProcessContext,
-  oceanChanged: boolean
-) {
+function refreshMagicPathways(state: GenerationState, context: MapProcessContext) {
   const work = state.physical!;
   const bound = generationBindings(context);
   if (!work.magic) {
@@ -372,7 +367,6 @@ function refreshMagicPathways(
     else restorePresentMagic(state);
   }
   const seed = bound.seed;
-  repropagateMovedMedia(state, seed, oceanChanged);
   // The society phase: systems made of what people did, and systems whose stocks people
   // drew or deposited this cycle (cracked cores at a forge, planted seed, cleared sap).
   const touched = state.society!.magicTouched;
@@ -382,22 +376,6 @@ function refreshMagicPathways(
   classifyMagicFeatures(state, seed);
   if (Object.keys(state.surface.channels).some((name) => name.startsWith("magic:")))
     projectMagic(state);
-}
-/** Systems whose medium a work moved this cycle propagate again through the moved medium. */
-function repropagateMovedMedia(state: GenerationState, seed: number, oceanChanged: boolean) {
-  const changed = state.society!.mediumChanged;
-  for (const field of state.physical!.magic!.fields) {
-    if (!field.definition.enabled) continue;
-    // Aurora follows cold and ice: it re-propagates when a work changed that medium, not
-    // when a forge warmed the one cell at its seat.
-    const cold =
-      systemHasRole(field.definition, "stills") &&
-      (changed.has("iceThickness") || changed.has("temperature"));
-    // Pressure rays trace connected ocean cells. Inland relief does not alter that path;
-    // a newly closed or opened coast still requires propagation.
-    const coast = systemHasRole(field.definition, "moves-water") && oceanChanged;
-    if (cold || coast) propagateMagic(state, field, seed, field.definition.strength);
-  }
 }
 function restorePresentMagic(state: GenerationState) {
   initializeMagic(state);

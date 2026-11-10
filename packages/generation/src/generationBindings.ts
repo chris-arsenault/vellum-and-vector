@@ -1,4 +1,4 @@
-import type { ParameterValues } from "@atlas/domain";
+import type { Epoch, GenerationEpoch, ParameterValues } from "@atlas/domain";
 import { requireThat } from "@atlas/domain";
 import type { MapProcessContext, ProcessReconciliation } from "./process";
 import type { AtlasParameters } from "./atlasParameters";
@@ -24,6 +24,17 @@ export function generationBindings(context: MapProcessContext): GenerationBindin
     "Resolve feature settings before executing atlas generation."
   );
   return context.inputs as unknown as GenerationBindings;
+}
+/** An era's loop index is not a physical epoch; ancestry declares that binding explicitly. */
+export function physicalEpochIndex(
+  epochs: readonly Pick<Epoch, "id">[],
+  ancestry: readonly Pick<GenerationEpoch, "parentEpoch">[]
+) {
+  const parent = ancestry.find((epoch) => epoch.parentEpoch !== null)?.parentEpoch;
+  if (parent === undefined) return epochs.length - 1;
+  const index = epochs.findIndex((epoch) => epoch.id === parent);
+  requireThat(index >= 0, "physical_epoch", "The era's physical epoch must be in its history.");
+  return index;
 }
 export function serializableBindings(bindings: GenerationBindings): ParameterValues {
   return JSON.parse(JSON.stringify(bindings)) as ParameterValues;

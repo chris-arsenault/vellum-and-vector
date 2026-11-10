@@ -6,8 +6,10 @@ import { edgeLeadingTo, triangleIdentity } from "./mesh";
 import { oceanPropagation } from "./magicOcean";
 import { KeyedHeap, type Band, type MagicPropagation, type MagicSystem } from "@atlas/domain";
 import { retainedArray, workingArray, workingValues, releaseWorking } from "./physicalNumerics";
-import { reservoirAmount, reservoirStock, withOrigin } from "./magicState";
+import { reservoirStock, withOrigin } from "./magicState";
 import { applyWarding, wardPropagation, wardSeals } from "./magicHallowed";
+import { exposedReservoirAmount } from "../rock/rockMagicStock";
+import { sourcePropagationActivity } from "./magicSources";
 
 /** What places do to a carrier's cost at a cell: nothing until they have acted. */
 function placedCost(state: GenerationState, carrier: "crust" | "roots" | "ice") {
@@ -114,7 +116,12 @@ function coldTarget(state: GenerationState, i: number, seed: number) {
   }
   return target;
 }
-function coldPropagation(state: GenerationState, field: MagicField, seed: number) {
+function coldPropagation(
+  state: GenerationState,
+  field: MagicField,
+  seed: number,
+  activity: number
+) {
   const map = state.physical!.map,
     p = field.definition.parameters,
     placed = placedCost(state, "ice");
@@ -125,7 +132,7 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
     map,
     "float64",
     "magic:cold-accumulation",
-    (i) => field.source.get(i) * map.mesh.area(i)
+    (i) => field.source.get(i) * activity * map.mesh.area(i)
   );
   // Equal temperatures cannot exchange charge: coldTarget requires a strictly colder cell.
   // Warmest first, streamed over the blocks.
@@ -133,7 +140,7 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
     const target = coldTarget(state, i, seed),
       capacity = Math.max(0, map.IceThickness.get(i)),
       area = map.mesh.area(i),
-      source = field.source.get(i);
+      source = field.source.get(i) * activity;
     const edge = edgeLeadingTo(map.mesh, i, target);
     const travel = edge >= 0 ? map.mesh.edgeLength(i, edge) : Math.sqrt(area);
     const capture =
@@ -148,7 +155,13 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
     const concentration = source + localIce / area + incoming / p.accumulationArea;
     field.intensity.set(
       i,
-      clamp(round(Math.log2(concentration + 1) * p.logScale) + Math.trunc(capacity / 4), 0, 1000)
+      concentration > 0
+        ? clamp(
+            round(Math.log2(concentration + 1) * p.logScale) + Math.trunc(capacity / 4),
+            0,
+            1000
+          )
+        : 0
     );
     field.retained.set(i, retained);
     // A place that hinders the ice's carriage lets less of the charge reach the next cell.
@@ -192,7 +205,7 @@ export const magicPropagationStrategies: Record<MagicPropagation, PropagationStr
     label: "Toward colder neighbors, retained in ice",
     requires: ["field:Temperature", "field:IceThickness"],
     parameters: ["logScale", "iceRetention", "coldRetentionDistance", "accumulationArea"],
-    scaleResult: true,
+    scaleResult: false,
     propagate: coldPropagation,
   },
   "ocean-rays": {
@@ -271,11 +284,13 @@ export const magicPropagationStrategies: Record<MagicPropagation, PropagationStr
   },
 };
 function brinePropagation(state: GenerationState, field: MagicField) {
-  const mesh = state.physical!.map.mesh,
+  const map = state.physical!.map,
+    mesh = map.mesh,
     full = field.definition.parameters.saltFull;
   for (let i = 0; i < field.intensity.length; i++) {
     let salt = 0;
-    for (const reservoir of ["brine", "bed", "dust"]) salt += reservoirAmount(field, reservoir, i);
+    for (const reservoir of ["brine", "bed", "dust"])
+      salt += exposedReservoirAmount(map, field, reservoir, i);
     field.intensity.set(i, clamp(round((1000 * salt) / mesh.area(i) / full), 0, 1000));
   }
 }
@@ -290,20 +305,15 @@ export function propagateMagic(
   field.wake.fill(0);
   field.rogue.fill(0);
   field.retained.fill(0);
+  field.fresh.fill(0);
   if (field.parents) releaseWorking(map, field.parents);
   delete field.parents;
   field.wakePaths = [];
   if (!field.definition.enabled) {
     field.source.fill(0);
-    field.stored.fill(0);
     field.radii.fill(0);
     field.located = [];
     return;
-  }
-  if (activity <= 0) {
-    field.source.fill(0);
-    field.located = [];
-    field.radii.fill(0);
   }
   const count = field.intensity.length,
     merged: MergedRun = {
@@ -317,25 +327,45 @@ export function propagateMagic(
   // Each origin propagates from its own sources with its own strategy; the field is the
   // maximum of their intensities, wakes and rogues and the sum of what they retained. A
   // source channel set directly, without locating, belongs to the first origin.
-  if (activity > 0) {
-    const external = sourceSetDirectly(field);
-    field.definition.origins.forEach((origin, index) =>
-      propagateOrigin(state, field, origin, seed, activity, merged, external && index === 0)
-    );
-  }
+  const external = sourceSetDirectly(field);
+  field.definition.origins.forEach((origin, index) =>
+    propagateOrigin(
+      state,
+      field,
+      origin,
+      seed,
+      sourcePropagationActivity(origin, activity),
+      merged,
+      external && index === 0
+    )
+  );
   field.wake.copyFrom(merged.wake);
   field.rogue.copyFrom(merged.rogue);
   field.retained.copyFrom(merged.retained);
   if (merged.parents) field.parents = merged.parents;
   else delete field.parents;
   field.wakePaths = merged.wakePaths;
+  const ground = reservoirStock(field, "ground");
   for (let i = 0; i < count; i++) {
-    const intensity = clamp(round(merged.intensity.get(i) + field.stored.get(i)), 0, 1000);
+    if (ground) field.stored.set(i, ground.get(i) / map.mesh.area(i));
+    const intensity = clamp(merged.intensity.get(i) + field.stored.get(i), 0, 1000);
     field.intensity.set(i, intensity);
+    field.fresh.set(i, Math.max(0, intensity - field.stored.get(i)));
     field.wake.set(i, field.wake.get(i) * Number(intensity > 0));
   }
   applyWarding(state, field);
+  wardFreshActivity(state, field);
   releaseWorking(map, merged.intensity, merged.wake, merged.rogue, merged.retained);
+}
+/** Apply the same medium-aware displacement without mistaking displaced old charge for new input. */
+function wardFreshActivity(state: GenerationState, field: MagicField) {
+  const intensity = field.intensity;
+  field.intensity = field.fresh;
+  try {
+    applyWarding(state, field);
+  } finally {
+    field.intensity = intensity;
+  }
 }
 interface MergedRun {
   intensity: Band;
@@ -389,7 +419,7 @@ function propagateOrigin(
     merged.intensity.set(i, Math.max(merged.intensity.get(i), field.intensity.get(i) * scalar));
     merged.wake.set(i, Math.max(merged.wake.get(i), field.wake.get(i)));
     merged.rogue.set(i, Math.max(merged.rogue.get(i), field.rogue.get(i)));
-    merged.retained.add(i, field.retained.get(i));
+    merged.retained.add(i, field.retained.get(i) * scalar);
   }
   merged.parents ??= field.parents;
   if (field.parents && field.parents !== merged.parents)

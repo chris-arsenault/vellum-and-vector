@@ -8,6 +8,8 @@ import { alterRock } from "../rock/rockField";
 import { clamp, round } from "./math";
 import { CellQueue, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
+import { metricSearch } from "./metricSearch";
+import { meshDeltaX } from "./mesh";
 
 const wards = (field: MagicField) =>
   field.definition.enabled && field.definition.effects.warding > 0;
@@ -87,7 +89,10 @@ export function wardPropagation(state: GenerationState, field: MagicField) {
   field.intensity.copyFrom(field.source);
   for (const seat of field.located)
     for (let i = 0; i < map.mesh.count; i++) {
-      const distance = Math.hypot(map.mesh.x(i) - seat.x, map.mesh.y(i) - seat.y);
+      const distance = Math.hypot(
+        meshDeltaX(map.mesh, map.mesh.x(i) - seat.x),
+        map.mesh.y(i) - seat.y
+      );
       field.intensity.set(
         i,
         Math.max(
@@ -119,13 +124,32 @@ export function applyWarding(state: GenerationState, field: MagicField) {
     magic = state.physical!.magic;
   if (!magic || wards(field) || !magic.fields.some(wards)) return;
   const displaced = removeInside(map, magic, (i) => field.intensity.get(i) * map.Warding.get(i));
-  for (let i = 0; i < map.mesh.count; i++) {
-    const warding = map.Warding.get(i);
-    if (warding > 0) field.intensity.set(i, round(field.intensity.get(i) * (1 - warding)));
-  }
-  landOnRim(map, magic, displaced, (i, added) => {
-    field.intensity.set(i, clamp(round(field.intensity.get(i) + added), 0, 1000));
-  });
+  landOnRim(
+    map,
+    magic,
+    displaced,
+    (i, added) => {
+      field.intensity.set(i, clamp(round(field.intensity.get(i) + added), 0, 1000));
+    },
+    (i) => acceptsRim(map, field, i),
+    (i, area) =>
+      field.intensity.set(i, wardedIntensity(field.intensity.get(i), map.Warding.get(i), area))
+  );
+}
+/** A ward redirects activity only when its ring has a receiver in the correct medium. */
+export const wardedIntensity = (value: number, warding: number, receiverArea: number) =>
+  receiverArea > 0 ? round(value * (1 - warding)) : value;
+/** Displacement preserves the receiving medium of the system's actual propagation. */
+function acceptsRim(map: PhysicalField, field: MagicField, i: number) {
+  if (field.definition.origins.some((origin) => origin.propagation === "ocean-rays"))
+    return map.WaterKindCodes.get(i) === 1;
+  if (field.definition.origins.some((origin) => origin.propagation === "roots"))
+    return (
+      map.WaterKindCodes.get(i) === 0 &&
+      map.IceThickness.get(i) <= 0 &&
+      map.TreeCover.get(i) + map.GrassCover.get(i) + map.WetlandCover.get(i) > 0
+    );
+  return map.WaterKindCodes.get(i) !== 1;
 }
 /** What each ring removes, as an amount per ring: the removed value times the cell's area. */
 function removeInside(map: PhysicalField, magic: MagicWorkspace, removed: (i: number) => number) {
@@ -142,26 +166,38 @@ function landOnRim(
   map: PhysicalField,
   magic: MagicWorkspace,
   displaced: Band,
-  land: (i: number, added: number) => void
+  land: (i: number, added: number) => void,
+  accepts: (i: number) => boolean = () => true,
+  withdraw?: (i: number, receiverArea: number) => void
 ) {
-  const rimArea = workingArray(map, "float64", "magic:ward-rim-area");
+  const rimArea = receivingRimArea(map, magic, accepts);
   for (let i = 0; i < map.mesh.count; i++) {
+    const sourceRing = magic.wardLabel.get(i);
+    if (sourceRing >= 0) withdraw?.(i, rimArea.get(sourceRing));
     const ring = magic.rimLabel.get(i);
-    if (ring >= 0) rimArea.add(ring, map.mesh.area(i));
-  }
-  for (let i = 0; i < map.mesh.count; i++) {
-    const ring = magic.rimLabel.get(i);
-    if (ring < 0) continue;
+    if (ring < 0 || !accepts(i)) continue;
     const amount = displaced.get(ring),
       area = rimArea.get(ring);
-    if (amount > 0 && area > 0) land(i, amount / area);
+    if (amount > 0 && area > 0) land(i, (amount / area) * magic.wardRim.get(i));
   }
   releaseWorking(map, displaced, rimArea);
 }
+function receivingRimArea(
+  map: PhysicalField,
+  magic: MagicWorkspace,
+  accepts: (i: number) => boolean
+) {
+  const area = workingArray(map, "float64", "magic:ward-rim-area");
+  for (let i = 0; i < map.mesh.count; i++) {
+    const ring = magic.rimLabel.get(i);
+    if (ring >= 0 && accepts(i)) area.add(ring, map.mesh.area(i) * magic.wardRim.get(i));
+  }
+  return area;
+}
 /**
  * The rings and their rims: every connected patch of warding is one ring, and a cell with
- * no warding that touches a ring is that ring's rim, so what a ring holds back lands beside
- * it and not on a sanctuary across the world.
+ * no warding within the geographic rim width receives its displaced activity. Partial
+ * cells represent a narrow rim at coarse resolution; refining does not change its width.
  */
 export function markRim(map: PhysicalField, magic: MagicWorkspace) {
   const { mesh } = map;
@@ -175,7 +211,33 @@ export function markRim(map: PhysicalField, magic: MagicWorkspace) {
     labelRing(map, magic, start, rings, queue);
     rings++;
   }
+  spreadRims(map, magic);
 }
+/** Rim width follows the map's geographic scale, while overlap uses each sample's footprint. */
+function spreadRims(map: PhysicalField, magic: MagicWorkspace) {
+  const distance = workingArray(map, "float64", "magic:rim-distance").fill(Infinity),
+    width = map.scale.length(0.00125);
+  function* seeds() {
+    for (let i = 0; i < map.mesh.count; i++)
+      if (magic.wardLabel.get(i) >= 0) {
+        distance.set(i, 0);
+        magic.rimLabel.set(i, magic.wardLabel.get(i));
+        yield i;
+      }
+  }
+  metricSearch(map.mesh, seeds(), distance, width + map.mesh.spacing, (j, i) =>
+    magic.rimLabel.set(j, magic.rimLabel.get(i))
+  );
+  for (let i = 0; i < map.mesh.count; i++) {
+    const fraction =
+      map.Warding.get(i) > 0 ? 0 : rimFraction(distance.get(i), width, Math.sqrt(map.mesh.area(i)));
+    magic.wardRim.set(i, fraction);
+    if (fraction <= 0) magic.rimLabel.set(i, -1);
+  }
+  releaseWorking(map, distance);
+}
+export const rimFraction = (distance: number, width: number, sampleSpan: number) =>
+  clamp((width + sampleSpan - distance) / sampleSpan, 0, Math.min(1, width / sampleSpan));
 /** Flood one ring from a warded cell, marking its cells and the rim cells around it. */
 function labelRing(
   map: PhysicalField,
@@ -195,9 +257,6 @@ function labelRing(
       if (map.Warding.get(j) > 0 && magic.wardLabel.get(j) < 0) {
         magic.wardLabel.set(j, ring);
         queue.push(j);
-      } else if (map.Warding.get(j) <= 0 && magic.rimLabel.get(j) < 0) {
-        magic.rimLabel.set(j, ring);
-        magic.wardRim.set(j, 1);
       }
     }
   }
@@ -240,9 +299,11 @@ export function wardCoasts(map: PhysicalField, magic: MagicWorkspace, totals: Ba
       total = totals.get(i);
     if (w <= 0 || map.WaterKindCodes.get(i) !== 0 || total <= 0) continue;
     const taken = round(total * w);
-    totals.set(i, total - taken);
     const target = downdrift(map, i);
-    if (target >= 0) moved.add(target, taken);
+    if (target >= 0) {
+      totals.set(i, total - taken);
+      moved.add(target, taken);
+    }
   }
   for (let i = 0; i < map.mesh.count; i++) {
     const added = moved.get(i);
@@ -270,9 +331,17 @@ function downdrift(map: PhysicalField, i: number) {
     score = 0;
   for (let edge = 0; edge < map.mesh.degree(i); edge++) {
     const j = map.mesh.neighbor(i, edge);
-    if (j < 0 || map.WaterKindCodes.get(j) !== 0) continue;
+    if (!openShore(map, j)) continue;
     const alignment = map.mesh.edgeX(i, edge) * dx + map.mesh.edgeY(i, edge) * dy;
     if (alignment > score) [best, score] = [j, alignment];
   }
   return best;
 }
+const openShore = (map: PhysicalField, i: number) => {
+  if (i < 0 || map.WaterKindCodes.get(i) !== 0 || map.Warding.get(i) > 0) return false;
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0 && map.WaterKindCodes.get(j) === 1) return true;
+  }
+  return false;
+};

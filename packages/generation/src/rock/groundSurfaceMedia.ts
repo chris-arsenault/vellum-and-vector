@@ -1,7 +1,23 @@
 import type { PhysicalField } from "../world/field";
 import { recordFlow, type FlowCause } from "../coupling/flows";
 import { units } from "../world/math";
-import { MapScale } from "@atlas/domain";
+import { MapScale, type ReadBand } from "@atlas/domain";
+
+/** A carrier moves an available ice volume; its passenger uses the admitted fraction. */
+export function transferIce(map: PhysicalField, from: number, to: number, volume: number) {
+  const moved = Math.min(Math.max(0, volume), map.IceThickness.get(from) * map.mesh.area(from));
+  map.IceThickness.add(from, -moved / map.mesh.area(from));
+  map.IceThickness.add(to, moved / map.mesh.area(to));
+  return moved;
+}
+/** Simultaneous signed volume transfers avoid moving this pass's arrivals a second time. */
+export function redistributeIce(map: PhysicalField, volumes: ReadBand) {
+  for (let i = 0; i < map.mesh.count; i++)
+    map.IceThickness.set(
+      i,
+      Math.max(0, map.IceThickness.get(i) + volumes.get(i) / map.mesh.area(i))
+    );
+}
 
 /** Ice melts by metres; basal melt remains available to the later runoff pass. */
 export function meltIce(
@@ -15,7 +31,11 @@ export function meltIce(
   if (melted <= 0) return 0;
   map.IceThickness.set(i, map.IceThickness.get(i) - melted);
   recordFlow(map, cause, "ice", "melt", melted * map.mesh.area(i));
-  if (beneath) map.GlacialMeltwater.add(i, MapScale.inUnits(melted, "mm"));
+  if (beneath) {
+    const water = MapScale.inUnits(melted, "mm");
+    map.ExternalMeltwater.add(i, water);
+    map.GlacialMeltwater.add(i, water);
+  }
   return melted;
 }
 

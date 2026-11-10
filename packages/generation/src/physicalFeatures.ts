@@ -206,6 +206,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       "water.runoff": [runoffStep],
       "water.routing": routingSteps,
+      "water.groundwater": [nativeSteps.groundwater],
     },
     {
       requires: ["physical.climate", "ocean.geography"],
@@ -265,6 +266,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     "physical.sea-ice",
     "Sea ice",
     {
+      "ice.model": [nativeSteps.seaIce],
       "present.sea-ice": [nativeSteps.seaIce],
     },
     { requires: ["physical.climate", "ocean.geography"], absent: ["SeaIce"], inherited: true }

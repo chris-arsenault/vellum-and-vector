@@ -5,11 +5,17 @@ import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { clamp } from "./math";
 import type { WorldCandidate } from "./worldSources";
-import { areaBudget, mediumArea } from "./worldScale";
 import type { PhysicalField } from "./field";
 import { hashUnit } from "./noise";
 import { MultiKeyHeap, SmallIntSet, type MagicOrigin } from "@atlas/domain";
 import { exposure, siteStrength } from "./magicStocks";
+import { stockGroundHosts } from "../rock/rockMagicStock";
+import type { LocateContext, SupplyContext } from "./magicSources";
+import { GroundInventory } from "../rock/groundInventory";
+import { alterGround } from "../rock/groundAlteration";
+import { magicMaterial } from "../rock/rockMagic";
+import { rockCatalogue } from "../rock/rockCatalogue";
+import { units } from "./math";
 
 function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   const { mesh, HeatSourceDensity: density } = map,
@@ -40,18 +46,12 @@ export function geothermalSources(
   state: GenerationState,
   field: MagicField,
   seed: number,
-  context?: { origin: MagicOrigin }
+  context?: LocateContext
 ) {
   const map = state.physical!.map,
     p = field.definition.parameters;
   if (context) exhumedSpent(map, field, context.origin);
-  if (p.maximumSources === 0) return;
-  const budget = areaBudget(
-    p.maximumSources,
-    mediumArea(map, (i) => map.WaterKindCodes.get(i) !== 1),
-    map.scale.area(0.36)
-  );
-  if (budget === 0) return;
+  if (context && context.activity <= 0) return;
   const candidates = geothermalCandidates(state, field, seed);
   const selected: (WorldCandidate & { i: number })[] = [];
   for (const source of candidates) {
@@ -65,15 +65,14 @@ export function geothermalSources(
     )
       continue;
     selected.push(source);
-    if (selected.length >= budget) break;
-  }
-  if (!selected.length) {
-    const i = strongestHeatSource(map);
-    selected.push({ i, id: -1, x: map.mesh.x(i), y: map.mesh.y(i), priority: 0 });
   }
   for (const source of selected) {
     const i = source.i,
-      strength = clamp(720 + Math.trunc(map.HeatSourceDensity.get(i) / 3), 1, 1000);
+      strength = clamp(
+        (720 + Math.trunc(map.HeatSourceDensity.get(i) / 3)) * (context?.activity ?? 1),
+        1,
+        1000
+      );
     field.source.set(i, strength);
     field.located.push({
       origin: "",
@@ -98,7 +97,11 @@ function exhumedSpent(map: PhysicalField, field: MagicField, origin: MagicOrigin
     const ore = spent.get(i);
     if (ore <= 0 || map.WaterKindCodes.get(i) === 1) continue;
     const strength = siteStrength(
-      (exposure(map, i, p.buryDepth) * ore * p.exhumedRelease) / map.mesh.area(i)
+      ((spent instanceof GroundInventory
+        ? spent.reached(i, units(p.buryDepth))
+        : exposure(map, i, p.buryDepth, stockGroundHosts(field.definition.id, "spent")) * ore) *
+        p.exhumedRelease) /
+        map.mesh.area(i)
     );
     if (strength > 0) field.source.set(i, Math.max(field.source.get(i), strength));
   }
@@ -123,11 +126,7 @@ function* geothermalCandidates(state: GenerationState, field: MagicField, seed: 
     if (map.WaterKindCodes.get(i) === 1) continue;
     // A conduit that sealed after carrying its budget no longer feeds a core, unless new
     // strain across it has cracked the seal: then it reopens with part of its budget left.
-    if (field.sealed.get(i) > 0) {
-      if (map.TectonicStrain.get(i) < p.reopenStrain) continue;
-      field.sealed.set(i, 0);
-      field.history.set(i, Math.min(field.history.get(i), p.conduitBudget * (1 - p.reopenShare)));
-    }
+    if (field.sealed.get(i) > 0) continue;
     if (density !== maximum && !isHeatMaximum(map, i, radius)) continue;
     const x = map.mesh.x(i),
       y = map.mesh.y(i);
@@ -145,12 +144,42 @@ function* geothermalCandidates(state: GenerationState, field: MagicField, seed: 
     };
   }
 }
-function strongestHeatSource(map: PhysicalField) {
-  const values = map.HeatSourceDensity;
-  let strongest = -1;
+export function reopenConduits(
+  state: GenerationState,
+  field: MagicField,
+  seed: number,
+  context: SupplyContext
+) {
+  const { activity, origin } = context;
+  if (activity <= 0) return;
+  const map = state.physical!.map,
+    p = field.definition.parameters;
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.mesh.membership(i) !== 1) continue;
-    if (strongest < 0 || values.get(i) > values.get(strongest)) strongest = i;
+    if (field.sealed.get(i) <= 0 || map.TectonicStrain.get(i) < p.reopenStrain) continue;
+    field.sealed.set(i, 0);
+    field.history.set(i, Math.min(field.history.get(i), p.conduitBudget * (1 - p.reopenShare)));
   }
-  return Math.max(0, strongest);
+  // New conduit supply mineralizes a finite interval before adding charge to that body.
+  field.source.fill(0);
+  field.located = [];
+  geothermalSources(state, field, seed, context);
+  const held = field.stocks[`${origin.id}/held`];
+  if (!(held instanceof GroundInventory)) return;
+  for (const source of field.located) {
+    const cell = map.mesh.cellAt(source.x, source.y);
+    if (cell < 0) continue;
+    const depth = units((map.scale.length(0.00015) * source.strength) / 1000);
+    alterGround(map, cell, {
+      depth,
+      from: "rock",
+      transform: (layer) => magicMaterial(layer, rockCatalogue.veinrock, map.CompletedEpochCount),
+    });
+    held.charge(
+      cell,
+      source.strength * map.mesh.area(cell),
+      depth,
+      [rockCatalogue.veinrock.code],
+      "rock"
+    );
+  }
 }

@@ -1,4 +1,6 @@
 import { groundOf } from "../../../packages/generation/src/rock/ground";
+import { yieldingPlane } from "../../../packages/generation/src/rock/groundQueries";
+import { inheritedDetachment } from "../../../packages/generation/src/rock/groundWeakLayers";
 import { columns } from "../../../packages/generation/src/rock/rockLayerFields";
 import {
   groundPlacementFields,
@@ -23,6 +25,27 @@ export function groundProbeCells(text: string) {
     throw new Error("HARNESS_GROUND_CELLS must contain nonnegative integer cell indices.");
   return [...new Set(cells)];
 }
+const detachmentPlane = yieldingPlane(undefined, "detachment");
+/** Current inputs and retained structural state; process boundaries establish what changed. */
+function deformationContext(map: PhysicalField, cell: number) {
+  const ground = groundOf(map);
+  return {
+    detachment: inheritedDetachment(map, cell),
+    facets: (["land", "cut"] as const).map((facet) => ({
+      facet,
+      share: ground.share(cell, facet),
+      surface: ground.surface(cell, facet),
+      plane: ground.fold(cell, detachmentPlane, facet),
+    })),
+    thrustPair: map.ThrustPairIds.get(cell),
+    thrustSheet: map.ThrustSheetIndex.get(cell),
+    thrustSegment: map.ThrustSegmentIds.get(cell),
+    orogenicConstruction: map.OrogenicConstruction.get(cell),
+    sutureStrength: map.CrustSutureStrength.get(cell),
+    tectonicBoundary: map.TectonicBoundaryCodes.get(cell),
+    crustMotion: [map.CrustMotionX.get(cell), map.CrustMotionY.get(cell)],
+  };
+}
 function cellGround(map: PhysicalField, cell: number) {
   const ground = groundOf(map),
     neighbors: number[] = [];
@@ -41,6 +64,7 @@ function cellGround(map: PhysicalField, cell: number) {
     flow: map.FlowAccumulation.get(cell),
     fluvialCut: map.CumulativeFluvialErosion.get(cell),
     deposition: map.CumulativeDeposition.get(cell),
+    deformation: deformationContext(map, cell),
     capturedAnswers: capturedAnswersAt(map, cell),
   };
 }

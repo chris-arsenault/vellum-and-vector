@@ -1,11 +1,19 @@
-import { MapScale, type Band, type MagicOrigin, type MagicStock } from "@atlas/domain";
+import { MapScale, type MagicOrigin, type MagicStock } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
-import { originStocks, stockKey, type MagicField } from "./magicState";
+import { originStocks, stockKey, withOrigin, type MagicField } from "./magicState";
 import { clamp, round, units } from "./math";
 import { displaceGround } from "../rock/groundLedger";
 import { seepBrine, settleDust, weatherBed } from "./magicSaltStocks";
+import { stockExposure, stockGroundHosts } from "../rock/rockMagicStock";
+import type { MagicInventory } from "./magicInventory";
+import { GroundInventory } from "../rock/groundInventory";
+import { carryShelf } from "./magicCurrentStocks";
+import { rockCatalogue } from "../rock/rockCatalogue";
+import { buryLivingCharge, carryLitter } from "./magicGroundwater";
+import { carrierPassage } from "./magicCarriers";
+import { transferIce } from "../rock/groundSurfaceMedia";
 
 /**
  * The least strength a located source has, a twentieth of full. A source is a site: the
@@ -21,12 +29,10 @@ export function siteStrength(strength: number) {
   return rounded < sourceFloor ? 0 : Math.min(1000, rounded);
 }
 /**
- * How much of a cell's stock the ground still exposes: whole on bare rock, none once the
- * sediment over it is deeper than the burial depth.
+ * How much of a cell's stock the ground exposes, resolving its host beneath loose and solid cover
+ * on each occupied facet. Stocks without a named host use the depth to the first rock.
  */
-export function exposure(map: PhysicalField, i: number, buryDepth: number) {
-  return clamp(1 - map.SedimentThickness.get(i) / units(buryDepth), 0, 1);
-}
+export const exposure = stockExposure;
 /**
  * The share of exposed held stock an evaluation releases: a base share plus the cracking
  * agents at work in the cell, tectonic strain, the load of ice, frost on exposed ground and
@@ -37,7 +43,7 @@ export function releaseShare(map: PhysicalField, field: MagicField, i: number, e
     ice = map.IceThickness.get(i);
   let share = p.fallenRelease + (p.strainCracking * map.TectonicStrain.get(i)) / 1000;
   share += p.iceCracking * clamp(ice / p.iceCrackDepth, 0, 1);
-  if (map.Temperature.get(i) < 273 && ice <= 0) share += p.frostCracking;
+  if (map.Temperature.get(i) < 300 && ice <= 0) share += p.frostCracking;
   if (field.arrival.get(i) === epochIndex) share += p.impactShock;
   return clamp(share, 0, 1);
 }
@@ -49,20 +55,23 @@ export function releaseShare(map: PhysicalField, field: MagicField, i: number, e
 export function advanceStocks(state: GenerationState, field: MagicField, epochIndex: number) {
   const map = state.physical!.map;
   for (const origin of field.definition.origins) {
-    for (const stock of originStocks(origin)) advanceStock(map, field, origin, stock);
-    if (origin.source === "impact") barrenFan(map, field, epochIndex);
-    if (origin.source === "aquifer") collapseOverdrawn(map, field, origin);
+    withOrigin(field, origin, () => {
+      for (const stock of originStocks(origin)) advanceStock(map, field, origin, stock);
+      if (origin.source === "impact") barrenFan(map, field, epochIndex);
+      if (origin.source === "aquifer") collapseOverdrawn(map, field, origin);
+    });
   }
   field.drawn.fill(0);
 }
 /** What a reservoir does in the advance, then what its carriers do. */
 const reservoirAdvances: Record<
   string,
-  (map: PhysicalField, field: MagicField, values: Band, origin: MagicOrigin) => void
+  (map: PhysicalField, field: MagicField, values: MagicInventory, origin: MagicOrigin) => void
 > = {
   ice: (_map, field, values) => gatherIntoIce(field, values),
-  ground: mirrorGround,
-  stratum: buryPeat,
+  stratum: (map, field, values, origin) => {
+    buryLivingCharge(map, field, values, origin);
+  },
   sap: decaySap,
   forge: coolForge,
   brine: seepBrine,
@@ -78,18 +87,40 @@ function advanceStock(
   const values = field.stocks[stockKey(origin, stock)];
   if (origin.renewal === "finite" && stock === originStocks(origin)[0]) consume(field, values);
   reservoirAdvances[stock.reservoir]?.(map, field, values, origin);
-  if (stock.carriers.includes("river")) field.lost += carryDownstream(map, field, values);
+  carryStock(map, field, origin, stock, values);
+}
+function carryStock(
+  map: PhysicalField,
+  field: MagicField,
+  origin: MagicOrigin,
+  stock: MagicStock,
+  values: MagicInventory
+) {
+  if (stock.carriers.includes("river") && stock.reservoir === "sap")
+    carryLitter(map, field, values, origin);
+  else if (stock.carriers.includes("river") && !(values instanceof GroundInventory))
+    field.lost += carryDownstream(map, field, values);
   if (stock.carriers.includes("ice")) field.lost += carryWithIce(map, field, origin, values);
+  if (stock.carriers.includes("current")) carryShelf(map, field, values);
   if (stock.carriers.includes("animal")) carryInTheGut(map, field, values);
 }
 /** Sap a cell holds without a stand of its own is spent by the share declared, per epoch. */
-function decaySap(_map: PhysicalField, field: MagicField, sap: Band, origin: MagicOrigin) {
-  const own = field.originSources[origin.id],
-    keep = 1 - field.definition.parameters.sapLoss;
-  for (let i = 0; i < sap.length; i++) if (own.get(i) <= 0) sap.set(i, sap.get(i) * keep);
+function decaySap(map: PhysicalField, field: MagicField, sap: MagicInventory) {
+  const loss = field.definition.parameters.sapLoss;
+  for (let i = 0; i < sap.length; i++) {
+    const spent = sap.get(i) * loss;
+    sap.add(i, -spent);
+    if (map.WaterKindCodes.get(i) !== 0 || map.IceThickness.get(i) > 0) continue;
+    const suitable =
+        clamp(map.SoilDepth.get(i) / map.scale.length(1.25e-7), 0, 1) *
+        clamp(map.SoilWater.get(i) / map.scale.length(2.5e-8), 0, 1),
+      seeds = (suitable * spent) / (map.mesh.area(i) * field.definition.parameters.groveSap);
+    map.BroadleafSeed.set(i, clamp(map.BroadleafSeed.get(i) + seeds, 0, 1));
+    map.ConiferSeed.set(i, clamp(map.ConiferSeed.get(i) + seeds, 0, 1));
+  }
 }
 /** Cracked cores cool: a share of the forge stock is gone each epoch. */
-function coolForge(_map: PhysicalField, field: MagicField, cracked: Band) {
+function coolForge(_map: PhysicalField, field: MagicField, cracked: MagicInventory) {
   const keep = 1 - field.definition.parameters.forgeCooling;
   for (let i = 0; i < cracked.length; i++) {
     const value = cracked.get(i);
@@ -97,20 +128,11 @@ function coolForge(_map: PhysicalField, field: MagicField, cracked: Band) {
     cracked.set(i, value * keep);
   }
 }
-/** Peat under sediment becomes a stratum the crust carries and an aquifer can leach. */
-function buryPeat(map: PhysicalField, field: MagicField, stratum: Band) {
-  const p = field.definition.parameters;
-  for (let i = 0; i < stratum.length; i++) {
-    const buried = 1 - exposure(map, i, p.buryDepth),
-      peat = map.PeatCarbon.get(i);
-    if (buried > 0 && peat > 0) stratum.add(i, peat * map.mesh.area(i) * p.strataShare * buried);
-  }
-}
 /**
  * Herbivores carry a stock in the gut: a share of a grazed cell's stock goes to the
  * neighbours in proportion to the herds there, so a herd road seeds the ground ahead of it.
  */
-function carryInTheGut(map: PhysicalField, field: MagicField, values: Band) {
+function carryInTheGut(map: PhysicalField, field: MagicField, values: MagicInventory) {
   const p = field.definition.parameters,
     herds = (i: number) => map.Grazers.get(i) + map.Browsers.get(i),
     moved = workingArray(map, "float64", "magic:animal-carriage", values.length);
@@ -149,24 +171,26 @@ function collapseOverdrawn(map: PhysicalField, field: MagicField, origin: MagicO
     const drop = p.sinkDepth;
     if (drop <= 0) continue;
     field.subsided.add(i, drop);
-    displaceGround(map, i, -units(drop), "fire");
+    displaceGround(map, i, -units(drop), "greenwood");
   }
 }
 /** The charge this epoch's propagation captured in the ice joins the ice reservoir. */
-function gatherIntoIce(field: MagicField, ice: Band) {
+function gatherIntoIce(field: MagicField, ice: MagicInventory) {
   for (let i = 0; i < ice.length; i++) ice.add(i, field.retained.get(i));
 }
 /** The ground reservoir is the stored charge as an amount; the history pass keeps `stored`. */
-function mirrorGround(map: PhysicalField, field: MagicField, ground: Band) {
-  for (let i = 0; i < ground.length; i++) ground.set(i, field.stored.get(i) * map.mesh.area(i));
-}
 /**
  * Charge in ice is englacial debris: it rides the ice flow one cell per epoch by the carriage
  * share, is dumped into the moraine where the ice ends on land and onto the shelf where it
  * reaches the sea, and a share leaves with the meltwater. Ice that has gone drops its charge
  * where it stood. The concentration left in the ice is written as `IceCharge`.
  */
-function carryWithIce(map: PhysicalField, field: MagicField, origin: MagicOrigin, ice: Band) {
+function carryWithIce(
+  map: PhysicalField,
+  field: MagicField,
+  origin: MagicOrigin,
+  ice: MagicInventory
+) {
   const p = field.definition.parameters,
     moraine = field.stocks[`${origin.id}/moraine`],
     shelf = field.stocks[`${origin.id}/shelf`],
@@ -185,7 +209,7 @@ function carryWithIce(map: PhysicalField, field: MagicField, origin: MagicOrigin
       );
     held -= melt;
     lost += melt;
-    if (map.IceThickness.get(i) <= 0) {
+    if (map.IceThickness.get(i) <= 0 || map.WaterKindCodes.get(i) === 1) {
       const amount = held;
       drop(map, i, amount, moraine, shelf, () => (lost += amount));
       ice.set(i, 0);
@@ -196,12 +220,15 @@ function carryWithIce(map: PhysicalField, field: MagicField, origin: MagicOrigin
       ice.set(i, held);
       continue;
     }
-    const share = held * p.iceCarry;
+    const share = held * p.iceCarry * carrierPassage(map, "ice", target);
     held -= share;
     ice.set(i, held);
     if (map.IceThickness.get(target) > 0 && map.WaterKindCodes.get(target) !== 1)
       moved.add(target, share);
-    else drop(map, target, share, moraine, shelf, () => (lost += share));
+    else {
+      calveIce(map, i, target, share / (held + share));
+      drop(map, target, share, moraine, shelf, () => (lost += share));
+    }
   }
   for (let i = 0; i < ice.length; i++) {
     const held = ice.get(i) + moved.get(i),
@@ -209,41 +236,61 @@ function carryWithIce(map: PhysicalField, field: MagicField, origin: MagicOrigin
     ice.set(i, held);
     map.IceCharge.set(
       i,
-      held > 0 && thickness > 0
-        ? clamp(held / (map.mesh.area(i) * thickness * p.iceChargeSaturation), 0, 1)
-        : 0
+      iceConcentration(held, map.mesh.area(i) * thickness * p.iceChargeSaturation)
     );
   }
   releaseWorking(map, moved);
   return lost;
+}
+function iceConcentration(held: number, capacity: number) {
+  return held > 0 && capacity > 0 ? clamp(held / capacity, 0, 1) : 0;
+}
+function calveIce(map: PhysicalField, source: number, target: number, share: number) {
+  if (map.WaterKindCodes.get(target) !== 1) return;
+  const calved = map.IceThickness.get(source) * share;
+  transferIce(map, source, target, calved * map.mesh.area(source));
 }
 /** Where ice lets its charge go: the shelf at sea, the moraine on land, or out of the budget. */
 function drop(
   map: PhysicalField,
   i: number,
   amount: number,
-  moraine: Band | undefined,
-  shelf: Band | undefined,
+  moraine: MagicInventory | undefined,
+  shelf: MagicInventory | undefined,
   lose: () => void
 ) {
   const sink = map.WaterKindCodes.get(i) === 1 ? shelf : moraine;
-  if (sink) sink.add(i, amount);
+  if (sink instanceof GroundInventory)
+    sink.construct(
+      i,
+      amount,
+      units(amount / (map.mesh.area(i) * 500)),
+      rockCatalogue.auroraCrystal.code,
+      "ice debris"
+    );
+  else if (sink) sink.add(i, amount);
   else lose();
 }
-function consume(field: MagicField, values: Band) {
+function consume(field: MagicField, values: MagicInventory) {
   for (let i = 0; i < values.length; i++)
     values.set(i, values.get(i) * (1 - field.releasing.get(i)));
 }
 /** Placers: a share of the stock on a river cell moves to the cell the river flows to. */
-function carryDownstream(map: PhysicalField, field: MagicField, values: Band) {
+function carryDownstream(map: PhysicalField, field: MagicField, values: MagicInventory) {
   const mobility = field.definition.parameters.placerMobility,
     moved = workingArray(map, "float64", "magic:river-carriage", values.length);
   let lost = 0;
   for (let i = 0; i < values.length; i++) {
     const value = values.get(i);
     if (value <= 0 || map.WaterKindCodes.get(i) === 1) continue;
-    const share = value * mobility * (map.RiverOrders.get(i) > 0 ? 1 : 0.25),
-      target = map.FlowTargets.get(i);
+    const exposed = exposure(map, i, field.definition.parameters.buryDepth),
+      target = map.FlowTargets.get(i),
+      share =
+        value *
+        exposed *
+        mobility *
+        (map.RiverOrders.get(i) > 0 ? 1 : 0.25) *
+        carrierPassage(map, "river", target);
     if (share <= 0 || target < 0) continue;
     values.add(i, -share);
     if (map.WaterKindCodes.get(target) === 1) lost += share;
@@ -271,4 +318,34 @@ function barrenFan(map: PhysicalField, field: MagicField, epochIndex: number) {
 /** The first declared stock of an origin: where its held cores sit. */
 export function heldStock(field: MagicField, origin: MagicOrigin) {
   return field.stocks[stockKey(origin, originStocks(origin)[0])];
+}
+/** Ground charge is retained in its reached material; stored is its read projection. */
+export function retainGroundCharge(
+  map: PhysicalField,
+  field: MagicField,
+  i: number,
+  ground: MagicInventory | undefined,
+  before: number,
+  stored: number
+) {
+  if (ground instanceof GroundInventory) {
+    const retained = before * field.definition.history.retention;
+    ground.set(i, retained * map.mesh.area(i));
+    ground.charge(
+      i,
+      Math.max(0, stored - retained) * map.mesh.area(i),
+      units(field.definition.parameters.buryDepth),
+      stockGroundHosts(field.definition.id, "ground") ?? []
+    );
+    field.stored.set(i, ground.get(i) / map.mesh.area(i));
+  } else field.stored.set(i, stored);
+}
+/** Strain memory advances with time, never with inspection. */
+export function rememberStrain(map: PhysicalField, field: MagicField) {
+  for (const origin of field.definition.origins) {
+    if (origin.source !== "strain") continue;
+    const previous = field.stocks[`${origin.id}/held`];
+    for (let i = 0; i < map.mesh.count; i++)
+      previous.set(i, field.originSources[origin.id].get(i) * map.mesh.area(i));
+  }
 }

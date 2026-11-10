@@ -1,4 +1,5 @@
 import {
+  MapScale,
   canonryConfluencePresets,
   canonryMagicPresets,
   originParameters,
@@ -15,6 +16,12 @@ import type { PhysicalField } from "./field";
 import { weightScale } from "./transportPlan";
 import { createConfluenceWorkspace, type ConfluenceWorkspace } from "./magicConfluences";
 import { inheritMagicChannel } from "./magicInheritance";
+import { depositSaltBed } from "../rock/rockMagicStock";
+import { stockGroundHosts } from "../rock/rockMagicStock";
+import { GroundInventory } from "../rock/groundInventory";
+import type { MagicInventory } from "./magicInventory";
+import { bindCarrierCosts } from "./magicCarriers";
+import { bindMagicGroundwater } from "./magicGroundwater";
 import { retainedArray, workingArray, releaseWorking } from "./physicalNumerics";
 import {
   carriedMagicChannels,
@@ -40,13 +47,17 @@ export interface MagicField extends Record<MagicChannel, Band> {
   /** Each origin's own source strength per cell; `source` is their maximum. */
   originSources: Record<string, Band>;
   /** Amount of the system per cell in each origin reservoir, keyed by `stockKey`. */
-  stocks: Record<string, Band>;
+  stocks: Record<string, MagicInventory>;
   /** Impact events whose fall has already seeded a finite stock. */
   seeded: Set<string>;
+  /** Last elapsed epoch supplied; a present-field refresh cannot repeat a birth. */
+  suppliedEpoch: number;
   /** Stock that left the budget: washed to the sea, extracted, released and spent. */
   lost: number;
   /** Stock people drew from each cell since the last advance; an overdrawn spring collapses. */
   drawn: Band;
+  /** Current activity excluding the retained-ground projection; never published or inherited. */
+  fresh: Band;
   /** Veil's doors: pairs of stable tears, as the cells at their two ends. */
   doors: { a: number; b: number }[];
   features: Record<string, Band>;
@@ -58,7 +69,7 @@ export interface MagicField extends Record<MagicChannel, Band> {
 /** Applied contributions are remembered so a re-evaluation replaces them instead of adding. */
 export interface MagicWorkspace {
   /** What places did last to each carrier's cost, per cell; absent until they have acted. */
-  carrierCost?: { crust: Float64Array; roots: Float64Array; ice: Float64Array };
+  carrierCost?: import("./magicCarriers").CarrierCosts;
   fields: MagicField[];
   heat: Band;
   /** Ice removed in the current epoch, so a second evaluation melts only what is owed. */
@@ -107,18 +118,31 @@ export function reservoirAmount(field: MagicField, reservoir: string, cell: numb
       if (stock.reservoir === reservoir) total += field.stocks[stockKey(origin, stock)].get(cell);
   return total;
 }
-/**
- * Run a strategy with this origin's parameter overrides in place of the system's. Strategies
- * read `field.definition.parameters`; an origin without overrides costs nothing here.
- */
-export function withOrigin<T>(field: MagicField, origin: MagicOrigin, run: () => T): T {
-  const definition = field.definition;
-  if (!Object.keys(origin.parameters).length) return run();
-  field.definition = { ...definition, parameters: originParameters(definition, origin) };
+// hpc-exempt: temporary parameter scope metadata per field; no numerical state or saved representation.
+const originScopes = new WeakMap<object, ResolvedMagicSystem>();
+/** All-origin readers need the system defaults even while one strategy runs with overrides. */
+export const unscopedDefinition = (field: Pick<MagicField, "definition">) =>
+  originScopes.get(field) ?? field.definition;
+/** Run with this origin's overrides, restoring the enclosing scope even when a strategy throws. */
+export function withOrigin<T>(
+  field: Pick<MagicField, "definition">,
+  origin: MagicOrigin,
+  run: () => T
+): T {
+  const previous = field.definition,
+    definition = unscopedDefinition(field),
+    overrides = Object.keys(origin.parameters).length > 0,
+    nested = originScopes.has(field);
+  if (!overrides && previous === definition) return run();
+  if (!nested) originScopes.set(field, definition);
+  field.definition = overrides
+    ? { ...definition, parameters: originParameters(definition, origin) }
+    : definition;
   try {
     return run();
   } finally {
-    field.definition = definition;
+    field.definition = previous;
+    if (!nested) originScopes.delete(field);
   }
 }
 
@@ -137,8 +161,10 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
     originSources: {},
     stocks: {},
     seeded: new Set(),
+    suppliedEpoch: -1,
     lost: 0,
     drawn: allocate("drawn"),
+    fresh: allocate("fresh"),
     features: {},
     coverage: {},
     systemCoverage: allocate("system-coverage"),
@@ -146,7 +172,11 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
   for (const origin of definition.origins) {
     field.originSources[origin.id] = allocate(`origin:${origin.id}`);
     for (const stock of originStocks(origin))
-      field.stocks[stockKey(origin, stock)] = allocate(`stock:${stockKey(origin, stock)}`);
+      field.stocks[stockKey(origin, stock)] =
+        !["strain", "pairing", "tenure", "kept-line"].includes(origin.source) &&
+        stockGroundHosts(definition.id, stock.reservoir)
+          ? new GroundInventory(map, `${definition.id}:${stockKey(origin, stock)}`)
+          : allocate(`stock:${stockKey(origin, stock)}`);
   }
   if (!definition.enabled || !state.physical!.inherited) return field;
   inheritMagicField(state, field);
@@ -166,10 +196,13 @@ function inheritMagicField(state: GenerationState, field: MagicField) {
   for (const origin of field.definition.origins)
     for (const stock of originStocks(origin)) {
       const key = stockKey(origin, stock);
+      const values = field.stocks[key];
+      // Hosted inventories arrive only with captured material, never from a scalar total.
+      if (values instanceof GroundInventory) continue;
       inheritMagicChannel(
         state,
         magicKey(field, `stock:${key}`),
-        field.stocks[key],
+        values as Band,
         stock.reservoir === "forge" ? "site-amount" : "extensive"
       );
     }
@@ -200,10 +233,21 @@ export function drawReservoir(field: MagicField, reservoir: string, cell: number
   const available = held.reduce((sum, values) => sum + values.get(cell), 0);
   if (available <= 0 || amount <= 0) return 0;
   const drawn = Math.min(amount, available);
-  for (const values of held) values.add(cell, -(drawn * values.get(cell)) / available);
-  field.lost += drawn;
-  field.drawn.add(cell, drawn);
-  return drawn;
+  let removed = 0;
+  for (const values of held) {
+    const request = (drawn * values.get(cell)) / available;
+    if (values instanceof GroundInventory)
+      removed += values.extract(cell, request, {
+        reach: MapScale.native(field.definition.parameters.buryDepth),
+      });
+    else {
+      values.add(cell, -request);
+      removed += request;
+    }
+  }
+  field.lost += removed;
+  if (reservoir === "aquifer") field.drawn.add(cell, removed);
+  return removed;
 }
 /** Mining and panning take held cores; a forge's cracked stock and a spring are not ore. */
 export function drawStock(field: MagicField, cell: number, amount: number) {
@@ -211,6 +255,7 @@ export function drawStock(field: MagicField, cell: number, amount: number) {
 }
 /** Put an amount of a system back into one reservoir at a cell, as planting or cracking does. */
 export function depositReservoir(
+  map: PhysicalField,
   field: MagicField,
   reservoir: string,
   cell: number,
@@ -218,7 +263,9 @@ export function depositReservoir(
 ) {
   const values = reservoirStock(field, reservoir);
   if (!values || amount <= 0) return 0;
-  values.add(cell, amount);
+  if (reservoir === "bed" && field.definition.effects.salting > 0)
+    depositSaltBed(map, values, cell, amount, field.definition.parameters.saltMaterialDensity);
+  else values.add(cell, amount);
   field.lost -= amount;
   return amount;
 }
@@ -247,20 +294,21 @@ export function initializeMagic(
     naturalSurface: allocate("natural-surface"),
     finalSurface: allocate("final-surface"),
     secondSurface: allocate("second-surface").fill(-1),
-    wardRim: retainedArray(map, "uint8", "magic:ward-rim"),
+    wardRim: retainedArray(map, "float64", "magic:ward-rim"),
     wardLabel: retainedArray(map, "int32", "magic:ward-label").fill(-1),
     rimLabel: retainedArray(map, "int32", "magic:rim-label").fill(-1),
   };
+  bindCarrierCosts(map, () => state.physical?.magic?.carrierCost);
+  bindMagicGroundwater(state);
 }
 /**
  * Move what the crust carries. History channels follow the dominant source of each cell;
- * a stock on the crust carrier is an amount, so it is scattered by the transport plan's
- * weights and its total is conserved.
+ * a stock in crust or pore water is an amount scattered by the transport plan's weights.
  */
 export function advectMagic(state: GenerationState) {
   const work = state.physical!;
   for (const field of work.magic?.fields ?? []) {
-    if (!field.definition.enabled || !field.definition.history.advect) continue;
+    if (!field.definition.history.advect) continue;
     carryHistory(field, work.map);
     carryStocks(field, work.map);
   }
@@ -280,19 +328,22 @@ function carryHistory(field: MagicField, map: PhysicalField) {
 function carryStocks(field: MagicField, map: PhysicalField) {
   for (const origin of field.definition.origins)
     for (const stock of originStocks(origin)) {
-      if (!stock.carriers.includes("crust")) continue;
+      // Pore water travels with its aquifer; hydraulic exchange moves it again after advection.
+      if (!stock.carriers.some((carrier) => carrier === "crust" || carrier === "groundwater"))
+        continue;
       const values = field.stocks[stockKey(origin, stock)];
+      if (values instanceof GroundInventory) continue;
       const moved = carryAmount(map, values);
-      values.copyFrom(moved);
+      for (let i = 0; i < values.length; i++) values.set(i, moved.get(i));
       releaseWorking(map, moved);
     }
 }
 /** Scatter an amount per cell along the last plate drift; without a plan the amount stays. */
-export function carryAmount(map: PhysicalField, values: Band) {
+export function carryAmount(map: PhysicalField, values: MagicInventory) {
   const plan = map.transportPlan;
   const moved = workingArray(map, "float64", "magic:carried-amount", values.length);
   if (!plan) {
-    moved.copyFrom(values);
+    for (let i = 0; i < values.length; i++) moved.set(i, values.get(i));
     return moved;
   }
   for (let source = 0; source < values.length; source++) {
@@ -309,7 +360,7 @@ export function carryAmount(map: PhysicalField, values: Band) {
 /**
  * The system's budget as totals over the mesh: what its origins created (source strength
  * times area), what its reservoirs hold, what it stored across epochs and what its field
- * releases now. A test closes it; the history record carries it.
+ * releases now. These observations describe the history, not a numerical acceptance gate.
  */
 export function magicBudget(field: MagicField, map: PhysicalField) {
   const totals = { created: 0, carried: 0, stored: 0, released: 0, lost: field.lost };

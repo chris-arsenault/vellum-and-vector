@@ -2,15 +2,20 @@ import type { Epoch } from "@atlas/domain";
 import { sequenceStages } from "../../../packages/generation/src/sequence";
 import { atlasConfiguration } from "../../../packages/generation/src/atlasWorkflow";
 import { allSteps } from "../../../packages/generation/src/world/physicalSteps";
-import { draftWorldSnapshot, newGenerationDraft } from "../generationDraft";
+import {
+  draftWorldSnapshot,
+  newGenerationDraft,
+  normalizeGenerationDraft,
+} from "../generationDraft";
+import { replaceDraftEpochs } from "../generationDraftEpochs";
 import { plateDeformationSteps } from "../../../packages/generation/src/physicalFeatureSequence";
 import { resolveGenerationFeatures } from "../../../packages/generation/src/features";
 import { physicalFeatureDefinitions } from "../../../packages/generation/src/physicalFeatures";
 
 /** Physical-only saved workloads follow the selected atlas operations, including their flags. */
 export function nativeWorkload(epochs?: Epoch[]) {
-  const draft = newGenerationDraft();
-  if (epochs) draft.recipe.settings.epochs = epochs;
+  const initial = newGenerationDraft(),
+    draft = epochs ? normalizeGenerationDraft(replaceDraftEpochs(initial, epochs)) : initial;
   const source = draftWorldSnapshot(draft),
     steps = new Map(allSteps.map((step) => [`atlas.${step[0]}`, step])),
     resolved = resolveGenerationFeatures(physicalFeatureDefinitions, undefined, undefined, [

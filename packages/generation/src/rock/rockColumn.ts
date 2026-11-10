@@ -1,9 +1,14 @@
 import type { Band } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
-import type { RockKind } from "./rockCatalogue";
+import type { FlowCause } from "../coupling/flows";
+import { rockCatalogue, type RockKind } from "./rockCatalogue";
 import { projectGround } from "./groundShares";
 import { groundStorage } from "./groundStorage";
 import { coarsenAt, coarsenBulk, sameMaterial } from "./rockCoarsening";
+import { readCargo, writeCargo } from "./groundCargo";
+import { finiteSlice } from "./materialCargo";
+import { aggregateCargo } from "./materialCargo";
+export { finiteSlice } from "./materialCargo";
 import {
   allColumnFields,
   bindColumnBands,
@@ -55,6 +60,13 @@ export interface ColumnWatcher {
   strip(cell: number, amount: number): void;
   merge?(cell: number, column: Column, layer: number, result: MaterialLayer): void;
   remapPackage?(column: Column, initial: number, final: number): void;
+  construct?(
+    map: PhysicalField,
+    cell: number,
+    material: MaterialLayer,
+    cause: FlowCause,
+    depth: number
+  ): void;
 }
 const watchers = new Set<ColumnWatcher>();
 /** Starts watching; the returned function stops. */
@@ -65,6 +77,16 @@ export function watchColumn(watcher: ColumnWatcher) {
 /** One remap package after its contacts settle into the column's available slots. */
 export function observeRemapPackage(column: Column, initial: number, final: number) {
   for (const watcher of watchers) watcher.remapPackage?.(column, initial, final);
+}
+/** Observe the accepted emplacement without keeping provenance in the product field. */
+export function observeConstruction(
+  map: PhysicalField,
+  cell: number,
+  material: MaterialLayer,
+  cause: FlowCause,
+  depth: number
+) {
+  for (const watcher of watchers) watcher.construct?.(map, cell, material, cause, depth);
 }
 export const layerValue = (
   map: PhysicalField,
@@ -103,7 +125,10 @@ export function readLayer(
   layer: number,
   column: Column = "land"
 ): MaterialLayer {
-  return materialSnapshot(ownedLayers(map)[column][layer], cell);
+  return {
+    ...materialSnapshot(ownedLayers(map)[column][layer], cell),
+    cargo: readCargo(map, cell, layer, column),
+  };
 }
 export function setLayer(
   map: PhysicalField,
@@ -114,11 +139,9 @@ export function setLayer(
   state: MaterialState = {},
   column: Column = "land"
 ) {
-  writeMaterial(
-    ownedLayers(map)[column][layer],
-    cell,
-    materialLayer(kind, depth, state, map.CompletedEpochCount)
-  );
+  const material = materialLayer(kind, depth, state, map.CompletedEpochCount);
+  writeMaterial(ownedLayers(map)[column][layer], cell, material);
+  writeCargo(map, cell, layer, column, depth > 0 ? material.cargo : undefined);
 }
 /** Copy every fact, including alteration and age, without reconstructing it from the kind. */
 export function copyLayer(
@@ -134,6 +157,7 @@ export function copyLayer(
     source = columnFields[fromColumn];
   for (const property of materialProperties)
     stored[target[property][to]].set(cell, stored[source[property][from]].get(cell));
+  writeCargo(map, cell, to, column, readCargo(map, cell, from, fromColumn));
 }
 
 /** A column's layers fill from the top with none empty between, so this is its basement. */
@@ -158,6 +182,7 @@ export function stripRock(
       const floor = finiteColumn(column) || layerDepth(map, cell, 1, column) > 0 ? 0 : 1,
         remaining = Math.max(floor, top - left);
       groundStorage(map)[columnFields[column].depth[0]].set(cell, remaining);
+      clearExhaustedCargo(map, cell, column, remaining, floor);
       left = finiteColumn(column) ? Math.max(0, left - top) : 0;
       break;
     }
@@ -165,11 +190,21 @@ export function stripRock(
     for (let layer = 0; layer < columnSize(column) - 1; layer++)
       copyLayer(map, cell, layer, layer + 1, column);
     groundStorage(map)[columnFields[column].depth[columnSize(column) - 1]].set(cell, 0);
+    writeCargo(map, cell, columnSize(column) - 1, column);
   }
   projectGround(map, cell);
   const removed = Math.max(0, amount) - left;
   for (const watcher of watchers) watcher.strip(cell, removed);
   return removed;
+}
+function clearExhaustedCargo(
+  map: PhysicalField,
+  cell: number,
+  column: Column,
+  remaining: number,
+  floor: number
+) {
+  if (remaining <= floor) writeCargo(map, cell, 0, column);
 }
 /** Actual material intersected by a depth; finite cover can return less than requested. */
 export function materialThrough(
@@ -186,7 +221,7 @@ export function materialThrough(
       available = at === bottom && !finiteColumn(column) ? left : layer.depth,
       taken = Math.min(left, available);
     if (taken <= 0) continue;
-    const part = { ...layer, depth: taken };
+    const part = finiteSlice(layer, taken, at === bottom && !finiteColumn(column));
     result = result ? blendLayers(result, part) : part;
     left -= taken;
   }
@@ -263,6 +298,8 @@ export function insertColumnPackage(
     layers: MaterialLayer[] = [];
   for (let slot = 0; slot < size && stored[fields.depth[slot]].get(cell) > 0; slot++)
     layers.push(readLayer(map, cell, slot, column));
+  if (!layers.length && !finiteColumn(column))
+    layers.push(materialLayer(rockCatalogue.strata.code, 1, {}, map.CompletedEpochCount));
   for (let at = incoming.length - 1; at >= 0; at--) {
     const bed = incoming[at];
     if (bed.depth <= 0) continue;
@@ -281,7 +318,13 @@ export function insertColumnPackage(
   }
   writeColumn(map, cell, column, layers);
 }
-function writeColumn(map: PhysicalField, cell: number, column: Column, layers: MaterialLayer[]) {
+/** Owner-only replacement after interval changes and capacity reduction have settled. */
+export function writeColumn(
+  map: PhysicalField,
+  cell: number,
+  column: Column,
+  layers: MaterialLayer[]
+) {
   const stored = groundStorage(map),
     fields = columnFields[column];
   for (const property of materialProperties)
@@ -289,6 +332,15 @@ function writeColumn(map: PhysicalField, cell: number, column: Column, layers: M
       stored[fields[property][slot]].set(cell, layers[slot][property]);
   for (let slot = layers.length; slot < columnSize(column); slot++)
     stored[fields.depth[slot]].set(cell, 0);
+  for (let slot = 0; slot < columnSize(column); slot++)
+    writeCargo(
+      map,
+      cell,
+      slot,
+      column,
+      layers[slot] &&
+        aggregateCargo(layers[slot].cargo, layers[slot].kind, layers[slot].secondaryKind)
+    );
 }
 /**
  * Melt that never rose cools as new rock below: a column's basement becomes it, and a column that is
@@ -308,10 +360,12 @@ export function intrudeBasement(
     changeLayer(map, cell, deepest, kind, column);
     return;
   }
-  const whole = layerDepth(map, cell, 0, column);
+  const was = readLayer(map, cell, 0, column),
+    whole = was.depth;
   if (whole <= shell) return;
   groundStorage(map)[columnFields[column].depth[0]].set(cell, shell);
-  setLayer(map, cell, 1, kind.code, whole - shell, {}, column);
+  setLayer(map, cell, 1, was.kind, whole - shell, was, column);
+  changeLayer(map, cell, 1, kind, column);
 }
 /** Rock changed where it lies, in any layer. */
 export function changeLayer(
@@ -362,15 +416,11 @@ export function alterTop(
     kind,
     amount,
     {
-      formedMin: was.formedMin,
-      formedMax: was.formedMax,
-      grainX: was.grainX,
-      grainY: was.grainY,
-      bedSlopeX: was.bedSlopeX,
-      bedSlopeY: was.bedSlopeY,
-      deposited: was.deposited,
-      consolidation: was.consolidation,
-      damage: was.damage,
+      ...was,
+      secondaryKind: kind.code,
+      secondaryShare: 0,
+      strength: kind.resistance,
+      mixed: 0,
       altered: map.CompletedEpochCount,
     },
     column

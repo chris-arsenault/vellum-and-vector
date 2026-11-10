@@ -24,6 +24,12 @@ class TypedList<T extends Int32Array | Float64Array> {
   clear() {
     this.length = 0;
   }
+  /** Replace the written prefix by one bulk copy; snapshots never share mutable storage. */
+  copyFrom(values: ArrayLike<number>) {
+    if (values.length > this.values.length) this.values = grown(this.values, values.length);
+    this.values.set(values);
+    this.length = values.length;
+  }
 }
 export class CellList extends TypedList<Int32Array> {
   constructor(capacity = 64) {

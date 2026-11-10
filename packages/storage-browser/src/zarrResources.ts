@@ -30,11 +30,10 @@ const constructors = {
   uint8: Uint8Array,
   int8: Int8Array,
 };
+const occupied = (array: ResourceArray, partition: PartitionReference) =>
+  arraySelection(array, partition).shape.every((length) => length > 0);
 function selection(array: ResourceArray, partition: PartitionReference) {
-  const spec = partition.arraySlices?.[array.name] ?? {
-    offset: [partition.cellStart],
-    shape: [partition.cellCount],
-  };
+  const spec = arraySelection(array, partition);
   requireThat(
     spec.offset.length === array.shape.length && spec.shape.length === array.shape.length,
     "resource_partition",
@@ -206,7 +205,9 @@ export class ZarrResources implements ResourceStore {
           `${prefix(resourceId)}/written/${encodeURIComponent(partitionId)}.json`
         )) ?? [];
       requireThat(
-        specs.every((spec) => spec.source || written.includes(spec.name)),
+        specs.every(
+          (spec) => spec.source || !occupied(spec, reference) || written.includes(spec.name)
+        ),
         "incomplete_resource",
         "Requested partition arrays have not been written."
       );
@@ -292,7 +293,7 @@ export class ZarrResources implements ResourceStore {
         (await this.json<string[]>(`${path}/written/${encodeURIComponent(partition.id)}.json`)) ??
         [];
       requireThat(
-        local.every((a) => written.includes(a.name)),
+        local.every((a) => !occupied(a, partition) || written.includes(a.name)),
         "incomplete_resource",
         "Finish every declared partition and array before publication."
       );

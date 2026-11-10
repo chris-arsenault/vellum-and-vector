@@ -39,6 +39,9 @@ import { units } from "./math";
 import type { AtlasParameters } from "../atlasParameters";
 import { mapBoundaryValue } from "../atlasParameters";
 import { releaseWorking, retainedArray } from "./physicalNumerics";
+import { groundResourceBindings } from "../rock/groundResources";
+import { importMaterialCargo } from "../rock/groundCargoResources";
+import { fieldSampleIndex } from "@atlas/domain";
 
 export interface AtlasPhysicalWorkspace {
   /** Physical lake shores used while tracing mouths, independent of named publication. */
@@ -128,6 +131,11 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
   // The parent formed this crust; here it is only carried on.
   map.CrustFormed = true;
   finishGroundImport(map, imported);
+  const material = parent.get("rockLayer0") ?? surface;
+  if (material.materialCargo)
+    importMaterialCargo(map, material.materialCargo, (cell) =>
+      fieldSampleIndex(material, nativePosition(work, cell))
+    );
   map.SedimentProducedTotal = map.coverage.reduce(
     map.CumulativeDeposition,
     (sum, deposition, i) => sum + MapScale.metres(deposition, "native") * map.mesh.area(i),
@@ -143,9 +151,11 @@ function inheritChannels(
 ) {
   const map = work.map,
     imported = new Set<PhysicalBufferName>(),
-    area = groundResourceArea(map);
+    area = groundResourceArea(map),
+    material = parent.get("rockLayer0") ?? surface,
+    materialNames = new Set(groundResourceBindings.map((binding) => binding.name));
   for (const binding of atlasChannels) {
-    const grid = parent.get(binding.name) ?? surface;
+    const grid = materialNames.has(binding.name) ? material : (parent.get(binding.name) ?? surface);
     if (!grid.channels[binding.name]) continue;
     imported.add(binding.native);
     if (binding.global) inheritGlobal(map, grid, binding, area);

@@ -167,10 +167,8 @@ export function landIce(map: PhysicalField, c: PhysicalContext) {
   map.IceBalance.fill(0);
   let land = 0;
   for (let i = 0; i < map.mesh.count; i++) {
-    if (!canCarryIce(map, i)) {
-      map.IceThickness.set(i, 0);
-      continue;
-    }
+    // Marine ice belongs to sea freezing and shelf transport, including inherited shelves.
+    if (!canCarryIce(map, i)) continue;
     map.IceBalance.set(i, massBalance(map, c.Profile, i));
     if (map.WaterKindCodes.get(i) === 0 && map.mesh.membership(i) === 1) land++;
   }

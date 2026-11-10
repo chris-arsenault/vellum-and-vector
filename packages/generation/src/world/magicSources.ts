@@ -5,18 +5,12 @@ import { clamp, round } from "./math";
 import { worldCandidates, separatedCandidates } from "./worldSources";
 import { areaBudget, mediumArea } from "./worldScale";
 import type { PhysicalField } from "./field";
-import {
-  MapScale,
-  type Band,
-  type MagicOrigin,
-  type MagicSource,
-  type MagicSystem,
-} from "@atlas/domain";
-import { originStocks, stockKey, systemSeed, withOrigin } from "./magicState";
-import { geothermalSources } from "./magicGeothermalSources";
-import { impactSources } from "./magicFallenSources";
-import { aquiferSources, forgeSources, verdantSources } from "./magicGreenwoodSources";
-import { deadLakeSources, deathSources } from "./magicSaltSources";
+import { MapScale, type MagicOrigin, type MagicSource, type MagicSystem } from "@atlas/domain";
+import { systemSeed, withOrigin } from "./magicState";
+import { geothermalSources, reopenConduits } from "./magicGeothermalSources";
+import { impactSources, supplyFallenCores } from "./magicFallenSources";
+import { aquiferSources, forgeSources, verdantSources, supplySap } from "./magicGreenwoodSources";
+import { saltSources, supplyDeathSalt, supplyLakeSalt } from "./magicSaltSources";
 import { keptLineSources, tenureSources } from "./magicHallowed";
 import { pairingSources, strainSources } from "./magicVeil";
 import { workingArray, releaseWorking } from "./physicalNumerics";
@@ -58,31 +52,68 @@ function oceanSource(state: GenerationState, field: MagicField, seed: number) {
     map.mesh
   );
   for (const source of selected) {
-    const i = nearestTriangle(map.mesh, source.x, source.y);
-    field.source.set(i, 1000);
+    const i = nearestTriangle(map.mesh, source.x, source.y),
+      strength = pressureAtDepth(
+        MapScale.metres(map.WaterDepths.get(i), "native"),
+        map.scale.length(0.0005)
+      );
+    field.source.set(i, strength);
     field.located.push({
       origin: "",
       id: `deep-ocean:${source.id}`,
       x: source.x,
       y: source.y,
       radius: field.definition.parameters.beamWidth,
-      strength: 1000,
+      strength,
     });
   }
 }
-function placedSources(state: GenerationState, field: MagicField, epochIndex: number) {
+/** Greater water load gives a stronger locus, approaching full response without a depth cutoff. */
+export const pressureAtDepth = (depth: number, referenceDepth: number) =>
+  1000 * -Math.expm1(-Math.max(0, depth) / referenceDepth);
+/** Material release and emergent responses are already effective; other supply scales in propagation. */
+export function sourcePropagationActivity(origin: MagicOrigin, activity: number) {
+  return [
+    "impact",
+    "forge",
+    "verdant",
+    "aquifer",
+    "death",
+    "dead-lake",
+    "geothermal",
+    "strain",
+    "pairing",
+  ].includes(origin.source)
+    ? 1
+    : activity;
+}
+/** Placed supply follows the same scaling boundary as its owning origin, without scaling twice. */
+export function placedSourceStrength(strength: number, origin: MagicOrigin, activity: number) {
+  if (activity <= 0) return 0;
+  const scale = sourcePropagationActivity(origin, activity) === 1 ? activity : 1;
+  return clamp(round(strength * scale), 0, 1000);
+}
+function placedSources(
+  state: GenerationState,
+  field: MagicField,
+  epochIndex: number,
+  activity: number,
+  origin: MagicOrigin
+) {
   const work = state.physical!;
   for (const source of state.domain.world.magic) {
     if (source.systemId !== field.definition.id) continue;
     if (source.spaceId && source.spaceId !== state.domain.scope.spaceId) continue;
     if (source.startsAtEpoch > epochIndex) continue;
+    const strength = placedSourceStrength(source.strength, origin, activity);
+    if (strength <= 0) continue;
     const i = nearestTriangle(
       work.map.mesh,
       source.source.x - work.map.mesh.origin[0],
       source.source.y - work.map.mesh.origin[1]
     );
     if (i >= 0) {
-      field.source.set(i, clamp(round(source.strength), 0, 1000));
+      field.source.set(i, Math.max(field.source.get(i), strength));
       field.radii.set(i, source.radius);
       field.located.push({
         origin: "",
@@ -90,7 +121,7 @@ function placedSources(state: GenerationState, field: MagicField, epochIndex: nu
         x: source.source.x - work.map.mesh.origin[0],
         y: source.source.y - work.map.mesh.origin[1],
         radius: source.radius,
-        strength: source.strength,
+        strength,
       });
     }
   }
@@ -112,14 +143,16 @@ function coldSources(state: GenerationState, field: MagicField) {
 export interface LocateContext {
   origin: MagicOrigin;
   epochIndex: number;
+  activity: number;
 }
+export type SupplyContext = LocateContext;
 export interface SourceStrategy {
   label: string;
   requires: string[];
   parameters: (keyof MagicSystem["parameters"])[];
   radiusParameter?: keyof MagicSystem["parameters"];
-  /** The strategy seeds and draws its own stock; the locate step must not mirror over it. */
-  managesStock?: boolean;
+  /** New material and renewal happen only in an elapsed epoch, never during location. */
+  supply?(state: GenerationState, field: MagicField, seed: number, context: SupplyContext): void;
   locate(state: GenerationState, field: MagicField, seed: number, context: LocateContext): void;
 }
 /** The operation and its contract/applicability share one strategy declaration. */
@@ -127,16 +160,16 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
   geothermal: {
     label: "Geothermal maxima & placed cores",
     requires: ["field:Geothermal"],
-    parameters: ["maximumSources", "sourceThreshold", "sourceSpacing"],
+    parameters: ["sourceThreshold", "sourceSpacing"],
     radiusParameter: "sourceSpacing",
     locate: geothermalSources,
+    supply: reopenConduits,
   },
   cold: {
     label: "Cold terrain & high ground",
     requires: ["field:Temperature", "field:Elevation"],
     parameters: ["baseInput"],
     // Its stocks are the charge in ice, ground, moraine and shelf, kept by the stock advance.
-    managesStock: true,
     locate: coldSources,
   },
   "deep-ocean": {
@@ -155,15 +188,28 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
   verdant: {
     label: "Old stands, deep peat and planted sap",
     requires: ["ecology"],
-    parameters: ["standAge", "standCover", "peatDepth", "groveSap", "sapLoss"],
+    parameters: [
+      "standAge",
+      "standCover",
+      "peatDepth",
+      "groveSap",
+      "sapLoss",
+      "organicChargeAffinity",
+    ],
     // Its sap is refilled by stands and added to by herds and people; the advance decays it.
-    managesStock: true,
     locate: verdantSources,
+    supply: supplySap,
   },
   aquifer: {
     label: "Springs on soft rock below a catchment",
     requires: ["field:FlowTargets", "field:Elevation"],
-    parameters: ["springFlow", "springRock", "overdrawShare", "sinkDepth"],
+    parameters: [
+      "springFlow",
+      "springChargeSaturation",
+      "springRock",
+      "overdrawShare",
+      "sinkDepth",
+    ],
     locate: aquiferSources,
   },
   impact: {
@@ -171,7 +217,6 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
     // Reads the impact events and the wind the workspace already holds; a world without
     // impacts or an un-run wind simply seeds nothing, so Fire's pass needs no producer here.
     requires: [],
-    managesStock: true,
     parameters: [
       "fallenDensity",
       "fallenRelease",
@@ -187,27 +232,27 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
       "fanBarrenDepth",
     ],
     locate: impactSources,
+    supply: supplyFallenCores,
   },
   forge: {
     label: "Forges where people crack carried cores",
     requires: [],
     parameters: ["forgeStrength", "forgeCooling"],
-    managesStock: true,
     locate: forgeSources,
   },
   death: {
     label: "The dead the ground records",
     requires: [],
     parameters: ["saltPerDeath", "saltFull"],
-    managesStock: true,
-    locate: deathSources,
+    locate: saltSources,
+    supply: supplyDeathSalt,
   },
   "dead-lake": {
     label: "Lakes that died in a closed basin",
     requires: ["field:LakeOutletTargets", "field:Elevation"],
     parameters: ["saltPerLakeMetre", "saltFull"],
-    managesStock: true,
-    locate: deadLakeSources,
+    locate: saltSources,
+    supply: supplyLakeSalt,
   },
   tenure: {
     label: "Seats people have kept, by their tenure",
@@ -230,7 +275,7 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
   pairing: {
     label: "Stable tears paired into doors",
     requires: [],
-    parameters: ["doorStrain", "doorDistance", "doorMatch", "doorCount"],
+    parameters: ["doorStrain", "doorDistance", "doorMatch"],
     locate: pairingSources,
   },
 };
@@ -246,7 +291,8 @@ export function locateMagicSources(
   field: MagicField,
   seed: number,
   epochIndex = 0,
-  strategies: Record<MagicSource, SourceStrategy> = magicSourceStrategies
+  strategies: Record<MagicSource, SourceStrategy> = magicSourceStrategies,
+  activity = 1
 ) {
   const count = field.source.length;
   field.source.fill(0);
@@ -266,9 +312,9 @@ export function locateMagicSources(
         state,
         field,
         index === 0 ? seed : systemSeed(seed, origin.id),
-        { origin, epochIndex }
+        { origin, epochIndex, activity }
       );
-      if (index === 0) placedSources(state, field, epochIndex);
+      if (index === 0) placedSources(state, field, epochIndex, activity, origin);
     });
     for (let n = before; n < field.located.length; n++) field.located[n].origin = origin.id;
     field.originSources[origin.id].copyFrom(field.source);
@@ -283,21 +329,46 @@ export function locateMagicSources(
   field.source.copyFrom(merged);
   field.radii.copyFrom(radii);
   releaseWorking(map, merged, radii);
-  // An origin whose strategy does not keep a stock of its own holds its located strength as
-  // an amount in its first reservoir: strength times the cell's area, so the stock can be
-  // carried and its budget closed. A finite origin's stock is the source, not the mirror.
-  mirrorHeldStocks(map, field, count, strategies);
 }
-function mirrorHeldStocks(
-  map: PhysicalField,
+/** Run birth/renewal once at the field's elapsed phase, including zero-supply event consumption. */
+export function supplyMagicSources(
+  state: GenerationState,
   field: MagicField,
-  count: number,
-  strategies: Record<MagicSource, SourceStrategy>
+  seed: number,
+  epochIndex: number,
+  activity: number,
+  strategies: Record<MagicSource, SourceStrategy> = magicSourceStrategies
+) {
+  if (field.suppliedEpoch === epochIndex) return;
+  field.suppliedEpoch = epochIndex;
+  const local = systemSeed(seed, field.definition.id);
+  for (const [index, origin] of field.definition.origins.entries()) {
+    withOrigin(field, origin, () =>
+      strategies[origin.source].supply?.(
+        state,
+        field,
+        index === 0 ? local : systemSeed(local, origin.id),
+        {
+          origin,
+          epochIndex,
+          activity,
+        }
+      )
+    );
+  }
+}
+/** New society events may arrive after geological supply; consumed records make this event action idempotent. */
+export function supplySocietyEvents(
+  state: GenerationState,
+  field: MagicField,
+  seed: number,
+  epochIndex: number,
+  activity: number
 ) {
   for (const origin of field.definition.origins) {
-    if (strategies[origin.source].managesStock) continue;
-    const own: Band = field.originSources[origin.id],
-      held = field.stocks[stockKey(origin, originStocks(origin)[0])];
-    for (let i = 0; i < count; i++) held.set(i, own.get(i) * map.mesh.area(i));
+    if (origin.source !== "death") continue;
+    withOrigin(field, origin, () =>
+      magicSourceStrategies.death.supply?.(state, field, seed, { origin, epochIndex, activity })
+    );
   }
 }

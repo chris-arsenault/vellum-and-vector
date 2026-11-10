@@ -24,6 +24,7 @@ import { anchorRiverWork } from "./societyWaterUse";
 import { nearestSample, samplesInBox } from "./societySpatial";
 import { societyWorkName } from "./societyNaming";
 import { mapScale } from "./worldSignificance";
+import { returnGroundwater } from "./world/groundwater";
 
 export function makeWork(
   state: GenerationState,
@@ -381,7 +382,7 @@ function irrigate(
 /**
  * Clearing and burning take the trees and what lives in them: the Greenwood's sap under the
  * cleared ground goes with the cover, and with no canopy to draw it the soil's water rises
- * toward what the soil can hold, the water table a Salt brine climbs.
+ * toward what the soil can hold through return from the retained groundwater store.
  */
 function clearLand(
   state: GenerationState,
@@ -401,10 +402,12 @@ function clearLand(
     edit(channel, societyValue(state, channel, i) * (1 - fraction));
   edit("grassCover", Math.min(1, societyValue(state, "grassCover", i) + fraction * 0.3));
   const capacity = soilWaterCapacity(state, i);
-  edit(
-    "soilWater",
-    Math.min(capacity, societyValue(state, "soilWater", i) + fraction * 0.3 * capacity)
-  );
+  const stored = societyValue(state, "soilWater", i),
+    work = state.physical,
+    returned = work
+      ? returnGroundwater(work.map, work.samples.get(i), fraction, capacity - stored)
+      : 0;
+  edit("soilWater", stored + returned);
   drawShareAt(state, "greens", "sap", i, fraction);
 }
 function conserve(

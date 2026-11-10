@@ -362,3 +362,33 @@ it("keeps native water and incision groups ordered in the actual selected sequen
   expect(sediment).toBeGreaterThan(incision);
   expect(ids.slice(incision, sediment)).toContain("atlas.flow-routing");
 });
+
+it("evolves selected marine ice after climate and before magical stock evolution", () => {
+  const domain = source();
+  domain.world.magicSystems = canonryMagicPresets();
+  const selected = (enabled: boolean) =>
+    sequenceStages(
+      atlasConfiguration(domain, {
+        areaId: domain.scope.areaId,
+        seed: 73,
+        quality: "draft",
+        domains: ["physical", "magic"],
+        features: { "physical.sea-ice": { enabled } },
+      }).sequence
+    );
+  const stages = selected(true),
+    epoch = stages
+      .filter((stage) => stage.epochs.length)
+      .flatMap(({ invocation }) => (invocation ? [invocation.process] : [])),
+    sea = epoch.indexOf("atlas.sea-ice");
+  expect(sea).toBeGreaterThan(epoch.indexOf("atlas.land-ice-mass-balance"));
+  expect(epoch.slice(epoch.indexOf("atlas.magic-climate"), sea)).toContain("atlas.temperature");
+  expect(sea).toBeLessThan(epoch.indexOf("atlas.magic-post-glacial"));
+  expect(sea).toBeLessThan(epoch.indexOf("atlas.magic-history"));
+  expect(
+    stages.some((stage) => !stage.epochs.length && stage.invocation?.process === "atlas.sea-ice")
+  ).toBe(true);
+  expect(selected(false).some((stage) => stage.invocation?.process === "atlas.sea-ice")).toBe(
+    false
+  );
+});

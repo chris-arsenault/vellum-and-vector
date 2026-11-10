@@ -16,6 +16,7 @@ import {
 } from "./lakeStage";
 
 function clearLakes(map: PhysicalField) {
+  rememberLakes(map);
   map.LakeOutletTargets.fill(-1);
   map.LakeOverflow.fill(0);
   for (let i = 0; i < map.mesh.count; i++)
@@ -24,6 +25,15 @@ function clearLakes(map: PhysicalField) {
       map.WaterBodyIds.set(i, 0);
       clearWaterSurface(map, i);
     }
+}
+/** Retain water present before the next equilibrium adjustment can dry a basin. */
+export function rememberLakes(map: PhysicalField) {
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.WaterKindCodes.get(i) === 2)
+      map.LakeMemory.set(
+        i,
+        Math.max(map.LakeMemory.get(i), MapScale.metres(map.WaterDepths.get(i), "native"))
+      );
 }
 function collectDepressions(
   map: PhysicalField,

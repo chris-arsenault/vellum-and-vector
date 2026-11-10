@@ -100,7 +100,7 @@ export function depositAt(
   const field = magicFieldForRole(state, role),
     cell = cellOf(state, sample);
   if (!field || cell < 0 || amount <= 0) return 0;
-  const deposited = depositReservoir(field, reservoir, cell, amount);
+  const deposited = depositReservoir(state.physical!.map, field, reservoir, cell, amount);
   if (deposited > 0) touch(state, field.definition.id);
   return deposited;
 }

@@ -138,8 +138,8 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     ...nativeGroup("ice.flow", "epoch.post-glacial", context),
     ...nativeGroup("ice.meltwater", "epoch.post-glacial", context),
     ...drainage("epoch.meltwater", context, true),
+    ...nativeGroup("water.groundwater", "epoch", context),
     ...contributions("epoch.post-glacial-forcing", context),
-    ...contributions("epoch.influence-history", context),
     ...contributions("epoch.ecology-respond", context),
     ...drainage("epoch.after-response-water", context, true),
     // One human round inside an epoch with a bound era: people settle, use and exploit
@@ -148,6 +148,7 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     ...contributions("epoch.coastal-forcing", context),
     ...nativeGroup("epoch.coasts", "epoch", context),
     ...contributions("epoch.ecology-burial", context),
+    ...contributions("epoch.influence-history", context),
     ...contributions("epoch.storage", context),
     // What each place does to the field, once the epoch's processes have made its places.
     {

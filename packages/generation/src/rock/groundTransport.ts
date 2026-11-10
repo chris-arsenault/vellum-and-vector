@@ -3,8 +3,14 @@ import type { PhysicalField } from "../world/field";
 import { releaseWorking } from "../world/physicalNumerics";
 import { crustHeight, units } from "../world/math";
 import { recordFlow } from "../coupling/flows";
-import { allColumnFields, columnFields, type Column } from "./rockLayerFields";
-import { bindMaterialReader, type MaterialLayer, type MaterialReader } from "./rockColumn";
+import { allColumnFields, columnFields, columns, type Column } from "./rockLayerFields";
+import {
+  bindMaterialReader,
+  finiteSlice,
+  type MaterialLayer,
+  type MaterialReader,
+} from "./rockColumn";
+import { holdCargo, cargoSlot, clearCellCargo, writeCargo, type CargoStore } from "./groundCargo";
 import { buryUnderPackage } from "./groundBurial";
 import { carryOut, depositPackage, shiftRock, standGround } from "./groundLedger";
 import { projectGround, resetShares } from "./groundShares";
@@ -14,6 +20,7 @@ import { deformFabric, deformSlope, deformGround, type Deformation } from "./gro
 export { deformFabric, deformSlope, deformGround, type Deformation } from "./groundTransform";
 import { weightScale, type TransportPlan } from "../world/transportPlan";
 import { groundStorage } from "./groundStorage";
+import { releaseCargoCustody, releasedMaterial } from "./groundCargoIdentity";
 import { observeTransfer } from "./groundTransferObservation";
 export { watchGroundTransfers, type GroundTransferObservation } from "./groundTransferObservation";
 
@@ -56,6 +63,7 @@ export interface HeldRock {
   kinds: Band[];
   before: Band[];
   read: MaterialReader;
+  cargo?: CargoStore;
 }
 // hpc-exempt: one bounded latest-donor cache per operation snapshot, never per-cell retained objects.
 const donorColumns = new WeakMap<
@@ -63,16 +71,23 @@ const donorColumns = new WeakMap<
   { cell: number; columns: Partial<Record<Column, MaterialLayer[]>> }
 >();
 export function holdRock(map: PhysicalField): HeldRock {
-  const properties = groundMaterialFields.map((name) => map.coverage.copyBand(map[name]));
+  const properties = groundMaterialFields.map((name) => map.coverage.copyBand(map[name])),
+    read = bindMaterialReader((name) => properties[propertyOffsets[name]]),
+    cargo = holdCargo(map);
   return {
     properties,
     kinds: groundSheetFields.map((name) => map.coverage.copyBand(map[name])),
     before: groundPlacementFields.map((name) => map.coverage.copyBand(map[name])),
-    read: bindMaterialReader((name) => properties[propertyOffsets[name]]),
+    cargo,
+    read: (cell, slot, column = "land") => ({
+      ...read(cell, slot, column),
+      cargo: cargo?.get(cargoSlot(map.mesh.count, cell, slot, column)),
+    }),
   };
 }
 export function releaseHeldRock(map: PhysicalField, held: HeldRock) {
   donorColumns.delete(held);
+  held.cargo?.release(map);
   releaseWorking(map, ...held.properties, ...held.kinds, ...held.before);
 }
 export const heldPlacement = (
@@ -110,12 +125,34 @@ function takeHeldSheet(map: PhysicalField, held: HeldRock, cell: number, origin:
     groundStorage(map)[groundSheetFields[n]].set(cell, held.kinds[n].get(origin));
 }
 /** One donor supplies every material fact. Placement may move independently without making rock. */
-function takeHeldRock(map: PhysicalField, held: HeldRock, cell: number, origin: number) {
+function takeHeldRock(
+  map: PhysicalField,
+  held: HeldRock,
+  cell: number,
+  origin: number,
+  natural = false
+) {
   groundMaterialFields.forEach((name, n) =>
     groundStorage(map)[name].set(cell, held.properties[n].get(origin))
   );
+  clearCellCargo(map, cell);
+  if (held.cargo)
+    for (const column of columns)
+      for (let slot = 0; slot < columnFields[column].depth.length; slot++)
+        writeCargo(map, cell, slot, column, carriedCargo(map, held, origin, slot, column, natural));
   takeHeldSheet(map, held, cell, origin);
   projectGround(map, cell);
+}
+function carriedCargo(
+  map: PhysicalField,
+  held: HeldRock,
+  origin: number,
+  slot: number,
+  column: Column,
+  natural: boolean
+) {
+  const cargo = held.cargo?.get(cargoSlot(map.mesh.count, origin, slot, column));
+  return natural ? releaseCargoCustody(map, cargo) : cargo;
 }
 /** A captured geological column conditioned to a chosen placement, settled as one operation. */
 export function restoreGround(
@@ -146,7 +183,7 @@ export function placeCarriedGround(
   f: Deformation
 ) {
   const observed = observeTransfer(map, held, origin, cell, "plate-placement");
-  takeHeldRock(map, held, cell, origin);
+  takeHeldRock(map, held, cell, origin, true);
   groundPlacementFields.forEach((name, n) =>
     groundStorage(map)[name].set(cell, held.before[n].get(origin))
   );
@@ -157,6 +194,7 @@ export function placeCarriedGround(
 export function formTransportOpening(map: PhysicalField, cell: number) {
   const stored = groundStorage(map);
   for (const name of groundMaterialFields) stored[name].set(cell, 0);
+  clearCellCargo(map, cell);
   resetShares(map, cell);
   for (const name of groundSheetFields) stored[name].set(cell, 0);
   stored.SurfaceRockLoad.set(cell, 0);
@@ -184,7 +222,7 @@ function sliceLayers(held: HeldRock, source: number, column: Column, amount: num
   for (let slot = 0; slot <= last && left > 0; slot++) {
     const layer = layers[slot],
       depth = Math.min(left, slot === last ? left : layer.depth);
-    if (depth > 0) result.push({ ...layer, depth });
+    if (depth > 0) result.push(finiteSlice(layer, depth, slot === last));
     left -= depth;
   }
   return result;
@@ -233,7 +271,9 @@ export function accreteHeldGround(
     observed(0);
     return 0;
   }
-  const layers = collisionBeds(held, source, sourceDepth ?? admitted, admitted, f);
+  const layers = collisionBeds(held, source, sourceDepth ?? admitted, admitted, f).map((layer) =>
+    releasedMaterial(map, layer)
+  );
   // Colliding donor shares stack vertically; unresolved horizontal parcel alignment is lost.
   buryUnderPackage(map, target, layers);
   groundStorage(map).BedrockElevation.add(target, admitted);
@@ -294,7 +334,14 @@ export function accreteHeldCover(
       if (depth <= 0) continue;
       const [grainX, grainY] = deformFabric(layer.grainX, layer.grainY, f),
         [bedSlopeX, bedSlopeY] = deformSlope(layer.bedSlopeX, layer.bedSlopeY, f);
-      arriving.push({ ...layer, depth, grainX, grainY, bedSlopeX, bedSlopeY });
+      arriving.push({
+        ...releasedMaterial(map, layer),
+        depth,
+        grainX,
+        grainY,
+        bedSlopeX,
+        bedSlopeY,
+      });
     }
   }
   observed(depositPackage(map, target, arriving, "plates", "loose"));
@@ -307,7 +354,7 @@ function transportLoad(
 ) {
   const arriving = new MaterialLoad(map, key);
   for (let source = 0; source < map.mesh.count; source++) {
-    const material = current.get(source);
+    const material = releasedMaterial(map, current.get(source));
     if (material.depth <= 0) continue;
     let retained = 0;
     for (let offset = plan.offsets.get(source); offset < plan.offsets.get(source + 1); offset++) {
@@ -335,7 +382,7 @@ export function transportGroundLoad(map: PhysicalField, plan: TransportPlan) {
 export function moveHeldSheet(map: PhysicalField, held: HeldRock, cell: number, source: number) {
   const observed = observeTransfer(map, held, source, cell, "sheet-move"),
     wanted = heldPlacement(held, "SurfaceRockLoad", source) - map.SurfaceRockLoad.get(cell);
-  takeHeldRock(map, held, cell, source);
+  takeHeldRock(map, held, cell, source, true);
   shiftRock(map, cell, wanted, "mountains");
   observed(wanted);
 }

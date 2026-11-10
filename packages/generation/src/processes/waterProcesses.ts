@@ -14,6 +14,7 @@ import { lakeBasins } from "../world/lakes";
 import { riverNetwork } from "../world/rivers";
 import { flowRouting } from "../world/routing";
 import { builder } from "./builder";
+import { advanceGroundwater } from "../world/groundwater";
 
 /** Where water and ice go, and the landforms read from what they did. They move no material. */
 const ground = "Elevation",
@@ -109,6 +110,21 @@ export const meltwater = builder({
   needs: [sea, "Temperature", "IceThickness"],
   provides: ["GlacialMeltwater"],
   build: glacialMeltwater,
+});
+export const groundwater = builder({
+  id: "groundwater",
+  statement:
+    "Recharge enters permeable ground, follows hydraulic head and returns through springs.",
+  needs: ["Rainfall", "Elevation", "WaterKindCodes"],
+  provides: [
+    "GroundwaterStorage",
+    "GroundwaterExchangeVolume",
+    "GroundwaterRecharge",
+    "GroundwaterReturn",
+    "GroundwaterOutflow",
+    "GroundwaterTargets",
+  ],
+  build: advanceGroundwater,
 });
 export const meltRunoff = builder({
   id: "glacial-runoff",

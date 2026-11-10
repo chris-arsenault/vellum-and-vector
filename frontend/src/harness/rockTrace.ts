@@ -1,7 +1,8 @@
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import { MapScale } from "@atlas/domain";
 import { rockKindOfCode } from "../../../packages/generation/src/rock/rockCatalogue";
-import { watchColumn } from "../../../packages/generation/src/rock/rockColumn";
+import { watchColumn, type MaterialLayer } from "../../../packages/generation/src/rock/rockColumn";
+import type { FlowCause } from "../../../packages/generation/src/coupling/flows";
 
 /**
  * Why a world's rock is where it is. Step by step: how much rock each stripped, how many surfaces it
@@ -146,15 +147,39 @@ function bands(map: PhysicalField) {
     metamorphic: share(metamorphic, cells),
   };
 }
+function constructionRecord(
+  map: PhysicalField,
+  cell: number,
+  material: MaterialLayer,
+  cause: FlowCause,
+  depth: number
+) {
+  return {
+    cell,
+    at: [map.mesh.x(cell) + map.mesh.origin[0], map.mesh.y(cell) + map.mesh.origin[1]],
+    epoch: map.CompletedEpochCount,
+    cause,
+    material: { ...material },
+    acceptedMetres: MapScale.metres(depth, "native"),
+  };
+}
 /** Starts watching; call `observe` after every step, and `read` at the end. */
 export function rockTrace() {
-  const records = new Map<string, StepRecord>();
+  const records = new Map<string, StepRecord>(),
+    constructionCauses = new Set(
+      (process.env.HARNESS_CONSTRUCTION_CAUSES ?? "").split(",").filter(Boolean)
+    ),
+    constructions: object[] = [];
   let stripped: Float64Array | null = null,
     previous: Float64Array | null = null,
     agreement = 0,
     strippedNow = 0;
   const stop = watchColumn({
     fold() {},
+    construct(map, cell, material, cause, depth) {
+      if (!constructionCauses.has(cause)) return;
+      constructions.push(constructionRecord(map, cell, material, cause, depth));
+    },
     strip(cell, amount) {
       strippedNow += MapScale.metres(amount, "native");
       if (stripped && cell < stripped.length) stripped[cell] += amount;
@@ -203,6 +228,7 @@ export function rockTrace() {
         }));
       return {
         steps,
+        constructions,
         agreement: Math.round(agreement * 1000) / 1000,
         zones: map && stripped ? zones(map, stripped) : [],
         bands: map ? bands(map) : null,

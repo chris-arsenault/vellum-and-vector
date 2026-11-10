@@ -6,9 +6,11 @@ import {
   layDownRock,
   readLayer,
   stripRock,
+  finiteSlice,
   type MaterialLayer,
 } from "./rockColumn";
 import type { Column } from "./rockLayerFields";
+import { releasedMaterial } from "./groundCargoIdentity";
 
 /** A withdrawal visits the actual layers before they disappear; callbacks must consume snapshots. */
 export type MaterialReceiver = (material: MaterialLayer) => void;
@@ -25,7 +27,8 @@ export function withdrawColumn(
   for (let slot = 0; slot <= last && left > 0; slot++) {
     const layer = readLayer(map, cell, slot, column),
       taken = Math.min(left, solid && slot === last ? Infinity : layer.depth);
-    if (taken > 0) receive?.({ ...layer, depth: taken });
+    if (taken > 0)
+      receive?.(releasedMaterial(map, finiteSlice(layer, taken, solid && slot === last)));
     left -= taken;
   }
   const removed = amount - left;
@@ -55,9 +58,12 @@ export function withdrawBuried(
     if (taken <= 0) continue;
     receive({ ...layer, depth: taken });
     groundStorage(map)[columnFields[column].depth[slot]].add(cell, -taken);
+    if (taken >= layer.depth) writeCargo(map, cell, slot, column);
+    else touchCargo(map, cell);
     left -= taken;
   }
   return amount - left;
 }
 import { columnFields } from "./rockLayerFields";
 import { groundStorage } from "./groundStorage";
+import { writeCargo, touchCargo } from "./groundCargo";

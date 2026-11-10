@@ -1,19 +1,34 @@
-import type { Band, MagicOrigin } from "@atlas/domain";
-import { groundOf } from "../rock/ground";
+import { MapScale, type MagicOrigin } from "@atlas/domain";
 import { rockCatalogue } from "../rock/rockCatalogue";
+import {
+  depositSaltBed,
+  retainedHostDepth,
+  stockExposure,
+  withdrawSaltBed,
+} from "../rock/rockMagicStock";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
 import { alignedNeighbor } from "./atmosphere";
 import { clamp, units } from "./math";
-import { displaceGround } from "../rock/groundLedger";
+import { deposit, displaceGround } from "../rock/groundLedger";
+import { MaterialLoad, seaLoadOf } from "../rock/groundLoad";
+import type { MagicInventory } from "./magicInventory";
+import { GroundInventory } from "../rock/groundInventory";
+import { rekeyCargo, withoutCargo } from "../rock/materialCargo";
+import { carrierPassage } from "./magicCarriers";
 
 /**
  * Brine between evaluations: flushed by the air's moisture where the ground has oxygen
  * (wetland and peat keep it), seeping one cell down the drainage, lost where the drainage
  * reaches the sea, and crusting to bed at a pit or on a lake floor.
  */
-export function seepBrine(map: PhysicalField, field: MagicField, brine: Band, origin: MagicOrigin) {
+export function seepBrine(
+  map: PhysicalField,
+  field: MagicField,
+  brine: MagicInventory,
+  origin: MagicOrigin
+) {
   const p = field.definition.parameters,
     bed = field.stocks[`${origin.id}/bed`],
     moved = workingArray(map, "float64", "magic:seep-brine", brine.length);
@@ -28,10 +43,10 @@ export function seepBrine(map: PhysicalField, field: MagicField, brine: Band, or
     if (target < 0 || map.WaterKindCodes.get(i) === 2 || map.Warding.get(target) >= 0.5) {
       const crust = brine.get(i) * p.crustShare;
       brine.add(i, -crust);
-      if (bed) bed.add(i, crust);
+      if (bed) depositSaltBed(map, bed, i, crust, p.saltMaterialDensity);
       continue;
     }
-    const share = brine.get(i) * p.seepShare;
+    const share = brine.get(i) * p.seepShare * carrierPassage(map, "river", target);
     brine.add(i, -share);
     if (map.WaterKindCodes.get(target) === 1) field.lost += share;
     else moved.add(target, share);
@@ -45,42 +60,33 @@ export function seepBrine(map: PhysicalField, field: MagicField, brine: Band, or
  * ground sinks; on bare dry ground the wind lifts a share to the downwind
  * cell as dust.
  */
-export function weatherBed(map: PhysicalField, field: MagicField, bed: Band, origin: MagicOrigin) {
+export function weatherBed(
+  map: PhysicalField,
+  field: MagicField,
+  bed: MagicInventory,
+  origin: MagicOrigin
+) {
   const p = field.definition.parameters,
     brine = field.stocks[`${origin.id}/brine`],
     dust = field.stocks[`${origin.id}/dust`],
-    moved = workingArray(map, "float64", "magic:weather-bed", bed.length);
+    cargo = new MaterialLoad(map, "salt:wind-bed");
   for (let i = 0; i < bed.length; i++) {
     if (bed.get(i) <= 0) continue;
+    const exposed =
+      bed instanceof GroundInventory
+        ? bed.reached(i, units(p.buryDepth)) / bed.get(i)
+        : stockExposure(map, i, p.buryDepth, [rockCatalogue.saltbed.code]);
     if (map.WaterKindCodes.get(i) === 1) {
-      field.lost += bed.get(i);
-      bed.set(i, 0);
+      const dissolved = withdrawSaltBed(bed, i, bed.get(i) * exposed * p.dissolveShare, {
+        reach: units(p.buryDepth),
+      });
+      field.lost += dissolved;
       continue;
     }
-    const exposed = saltExposure(map, i, p.buryDepth);
-    if (exposed > 0) weatherExposed(map, field, i, bed, brine, exposed, moved);
+    if (exposed > 0) weatherExposed(map, field, i, bed, brine, exposed, cargo, dust);
     else if (map.TectonicStrain.get(i) >= p.domeStrain) dome(map, field, i, bed, brine);
   }
-  if (dust) for (let i = 0; i < bed.length; i++) dust.add(i, moved.get(i));
-  releaseWorking(map, moved);
-}
-/** Salt waits beneath rock; each occupied column exposes only its own share of the stock. */
-function saltExposure(map: PhysicalField, i: number, buryDepth: number) {
-  const ground = groundOf(map),
-    salt = rockCatalogue.saltbed.code;
-  let exposed = 0;
-  for (const facet of ["land", "cut"] as const) {
-    const section = ground.section(i, facet),
-      rocks = section.filter((layer) => layer.medium === "rock"),
-      hasSalt = (layer: (typeof rocks)[number]) =>
-        layer.kind === salt || (layer.secondaryShare > 0 && layer.secondaryKind === salt);
-    if (!rocks.length || (!hasSalt(rocks[0]) && rocks.slice(1).some(hasSalt))) continue;
-    const cover = section
-      .filter((layer) => layer.medium === "loose")
-      .reduce((sum, layer) => sum + layer.depth, 0);
-    exposed += rocks[0].share * clamp(1 - cover / units(buryDepth), 0, 1);
-  }
-  return exposed;
+  depositGrains(map, cargo);
 }
 /** Moisture past which an exposed bed dissolves. */
 export const bedDissolvesAbove = 500;
@@ -89,10 +95,11 @@ function weatherExposed(
   map: PhysicalField,
   field: MagicField,
   i: number,
-  bed: Band,
-  brine: Band | undefined,
+  bed: MagicInventory,
+  brine: MagicInventory | undefined,
   exposed: number,
-  moved: Band
+  cargo: MaterialLoad,
+  dust: MagicInventory | undefined
 ) {
   if (map.Moisture.get(i) > bedDissolvesAbove && map.WaterKindCodes.get(i) === 0 && brine)
     dissolve(map, field, i, bed, brine, exposed);
@@ -100,9 +107,7 @@ function weatherExposed(
   if (lifted <= 0) return;
   const target = alignedNeighbor(map, i, map.WindX.get(i) / 1000, map.WindY.get(i) / 1000);
   if (target < 0) return;
-  bed.add(i, -lifted);
-  if (map.WaterKindCodes.get(target) === 1) field.lost += lifted;
-  else moved.add(target, lifted);
+  moveGrains(map, field, bed, i, target, lifted, cargo, dust);
 }
 function liftedDust(
   map: PhysicalField,
@@ -120,19 +125,21 @@ function dissolve(
   map: PhysicalField,
   field: MagicField,
   i: number,
-  bed: Band,
-  brine: Band,
+  bed: MagicInventory,
+  brine: MagicInventory,
   exposed: number
 ) {
   const p = field.definition.parameters,
-    dissolved = bed.get(i) * exposed * p.dissolveShare * (map.Moisture.get(i) / 1000);
+    dissolved = withdrawSaltBed(
+      bed,
+      i,
+      bed.get(i) * exposed * p.dissolveShare * (map.Moisture.get(i) / 1000),
+      { reach: units(p.buryDepth) }
+    );
   if (dissolved <= 0) return;
-  bed.add(i, -dissolved);
   brine.add(i, dissolved);
-  const drop = p.sinkDepth * Math.min(1, dissolved / (map.mesh.area(i) * p.saltFull));
-  if (drop <= 0) return;
+  const drop = dissolved / (map.mesh.area(i) * p.saltMaterialDensity);
   field.subsided.add(i, drop);
-  displaceGround(map, i, -units(drop), "salt");
 }
 /**
  * A buried bed under strain rises as a dome: the ground over it lifts according to the stock
@@ -143,11 +150,18 @@ function dome(
   map: PhysicalField,
   field: MagicField,
   i: number,
-  bed: Band,
-  brine: Band | undefined
+  bed: MagicInventory,
+  brine: MagicInventory | undefined
 ) {
   const p = field.definition.parameters,
-    rise = p.domeRise * Math.min(1, bed.get(i) / (map.mesh.area(i) * p.saltFull));
+    retained =
+      MapScale.metres(retainedHostDepth(map, i, [rockCatalogue.saltbed.code]), "native") *
+      map.mesh.area(i) *
+      p.saltMaterialDensity;
+  // A depleted or eroded seam cannot dome merely because its cell still holds a charge record.
+  if (retained <= 0) return;
+  const rise =
+    p.domeRise * Math.min(1, Math.min(bed.get(i), retained) / (map.mesh.area(i) * p.saltFull));
   if (rise > 0) {
     field.domed.add(i, rise);
     displaceGround(map, i, units(rise), "salt");
@@ -159,27 +173,76 @@ function dome(
     if (j >= 0 && map.WaterKindCodes.get(j) === 0) ring.push(j);
   }
   if (!ring.length) return;
-  const seep = bed.get(i) * p.domeSeep;
-  bed.add(i, -seep);
+  const seep = withdrawSaltBed(bed, i, bed.get(i) * p.domeSeep, {
+    reach: Infinity,
+  });
   for (const j of ring) brine.add(j, seep / ring.length);
 }
-/** Dust settles to bed by its share each epoch; the rest blows one cell on, or out to sea. */
-export function settleDust(map: PhysicalField, field: MagicField, dust: Band, origin: MagicOrigin) {
+/** Dust grains rest in loose ground between hops; settling changes their reservoir, not their age. */
+export function settleDust(
+  map: PhysicalField,
+  field: MagicField,
+  dust: MagicInventory,
+  origin: MagicOrigin
+) {
   const p = field.definition.parameters,
     bed = field.stocks[`${origin.id}/bed`],
-    moved = workingArray(map, "float64", "magic:settle-dust", dust.length);
+    cargo = new MaterialLoad(map, "salt:wind-dust");
   for (let i = 0; i < dust.length; i++) {
     if (dust.get(i) <= 0) continue;
     const settled = dust.get(i) * p.dustSettle;
-    dust.add(i, -settled);
-    if (bed) bed.add(i, settled);
+    if (dust instanceof GroundInventory && bed instanceof GroundInventory)
+      dust.transfer(i, settled, bed);
     const target = alignedNeighbor(map, i, map.WindX.get(i) / 1000, map.WindY.get(i) / 1000);
     if (target < 0) continue;
     const blown = dust.get(i);
-    dust.set(i, 0);
-    if (map.WaterKindCodes.get(target) === 1) field.lost += blown;
-    else moved.add(target, blown);
+    moveGrains(map, field, dust, i, target, blown, cargo, dust, true);
   }
-  for (let i = 0; i < dust.length; i++) dust.add(i, moved.get(i));
-  releaseWorking(map, moved);
+  depositGrains(map, cargo);
+}
+
+/** A hop transports actual constituent parcels; sea export retains grains while losing magic. */
+function moveGrains(
+  map: PhysicalField,
+  field: MagicField,
+  stock: MagicInventory,
+  cell: number,
+  target: number,
+  amount: number,
+  cargo: MaterialLoad,
+  destination: MagicInventory | undefined,
+  looseOnly = false
+) {
+  const sea = map.WaterKindCodes.get(target) === 1,
+    carried = withdrawSaltBed(
+      stock,
+      cell,
+      amount * carrierPassage(map, "wind", target),
+      { reach: Infinity, surfaceOnly: true, looseOnly },
+      (material) => {
+        const payload =
+          stock instanceof GroundInventory && destination instanceof GroundInventory
+            ? rekeyCargo(material.cargo, stock.key, destination.key)
+            : material.cargo;
+        (sea ? seaLoadOf(map) : cargo).add(target, {
+          ...material,
+          cargo:
+            sea && stock instanceof GroundInventory
+              ? withoutCargo(material.cargo, stock.key)
+              : payload,
+          depth: MapScale.metres(material.depth, "native") * map.mesh.area(cell),
+        });
+      }
+    );
+  if (sea) field.lost += carried;
+}
+
+function depositGrains(map: PhysicalField, cargo: MaterialLoad) {
+  for (let cell = 0; cell < map.mesh.count; cell++) {
+    const material = cargo.get(cell);
+    if (material.depth <= 0) continue;
+    const depth = MapScale.inUnits(material.depth / map.mesh.area(cell), "native");
+    deposit(map, cell, depth, "salt", "load", { ...material, depth });
+  }
+  cargo.release();
 }

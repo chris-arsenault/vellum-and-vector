@@ -1,5 +1,6 @@
 import { MapScale, spatial } from "@atlas/domain";
 import { SettlementSurface } from "./SettlementSurface";
+import { WildZoneHistory } from "./WildZoneHistory";
 import type { EditorState } from "./useEditor";
 import type { AtlasFeature, World } from "./types";
 
@@ -51,6 +52,7 @@ export function FeatureInformation({ world, editor }: { world: World; editor: Ed
         />
       )}
       <FeatureProperties feature={feature} />
+      <WildZoneHistory key={feature.id} world={world} feature={feature} />
       <FeatureOrigin feature={feature} world={world} />
     </section>
   );

@@ -1,8 +1,22 @@
-import { appendFileSync, closeSync, mkdirSync, openSync, writeFileSync, writeSync } from "node:fs";
+import {
+  appendFileSync,
+  closeSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  writeFileSync,
+  writeSync,
+} from "node:fs";
 import { join } from "node:path";
-import { newGenerationDraft } from "../generationDraft";
+import { newGenerationDraft, normalizeGenerationDraft } from "../generationDraft";
 import { applyCartographicChoice, cartographicControls } from "../cartographicDraft";
-import { generationRecipeSchema, type GenerationRecipe } from "@atlas/generation";
+import {
+  generationRecipeSchema,
+  generationEpochSchema,
+  type GenerationRecipe,
+} from "@atlas/generation";
+import type { Epoch } from "@atlas/domain";
+import { replaceDraftEpochs } from "../generationDraftEpochs";
 import { rasterOverview, rasterRelief } from "../testSupport/regionalOverview";
 import { generateWorld, refineRegion } from "./harnessGeneration";
 import {
@@ -24,6 +38,7 @@ import { traceRelief } from "./reliefTrace";
 import { processProbeBands, startProcessProbe } from "./processProbe";
 import { groundProbeCells } from "./groundProbe";
 import { startCpuProfile } from "./cpuProfile";
+import { recordMagicInspection } from "./magicInspection";
 import type { PhysicalBufferName } from "../../../packages/generation/src/world/field";
 
 /** What one harness run does; read from the environment of `pnpm harness`. */
@@ -33,8 +48,12 @@ export interface HarnessOptions {
   worldQuality: string;
   /** Optional curated terrain choice, applied through the same operation as setup. */
   terrain: string;
+  /** An ordinary current GenerationDraft JSON file, normalized through the app's bindings. */
+  draftPath: string;
   /** Optional ordinary domain selection for geography-only inspection. */
   domains?: GenerationRecipe["domains"];
+  /** Explicit ordinary epoch settings for continued-history semantic workloads. */
+  epochs?: Epoch[];
   /** Optional ordinary world dimensions in metres; cell span still follows quality. */
   worldSize?: [number, number];
   region: string;
@@ -65,7 +84,9 @@ const defaults = {
   HARNESS_WORLD: "world",
   HARNESS_WORLD_QUALITY: "standard",
   HARNESS_TERRAIN: "",
+  HARNESS_DRAFT: "",
   HARNESS_DOMAINS: "",
+  HARNESS_EPOCHS: "",
   HARNESS_WORLD_SIZE: "",
   HARNESS_REGION: "region",
   HARNESS_REGION_QUALITY: "standard",
@@ -98,6 +119,13 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
     world: read("HARNESS_WORLD"),
     worldQuality: read("HARNESS_WORLD_QUALITY"),
     terrain: read("HARNESS_TERRAIN"),
+    draftPath: read("HARNESS_DRAFT"),
+    epochs: read("HARNESS_EPOCHS")
+      ? generationEpochSchema
+          .array()
+          .min(1)
+          .parse(JSON.parse(read("HARNESS_EPOCHS")))
+      : undefined,
     domains: read("HARNESS_DOMAINS")
       ? generationRecipeSchema.shape.domains.parse(read("HARNESS_DOMAINS").split(","))
       : undefined,
@@ -149,11 +177,13 @@ const recordProcesses = (options: HarnessOptions, out: string, map: string) =>
 
 /** Persist boundaries immediately, including when a process later crashes. */
 function liveRecorder(out: string, map: string, places: boolean) {
-  return stageRecorder((event) => {
+  const recorder = stageRecorder((event) => {
     appendFileSync(join(out, `${map}-progress.jsonl`), `${JSON.stringify(event)}\n`);
     if (event.kind === "start" || event.kind === "diagnostic")
       process.stdout.write(`${JSON.stringify(event)}\n`);
   }, places);
+  recordMagicInspection(recorder.observers, out, map);
+  return recorder;
 }
 
 function saveTrace(out: string, stop: ReturnType<typeof traceRelief>, failure?: string) {
@@ -163,7 +193,10 @@ function saveTrace(out: string, stop: ReturnType<typeof traceRelief>, failure?: 
 }
 
 function worldDraft(options: HarnessOptions) {
-  const draft = newGenerationDraft();
+  let draft = options.draftPath
+    ? normalizeGenerationDraft(JSON.parse(readFileSync(options.draftPath, "utf8")))
+    : newGenerationDraft();
+  if (options.epochs) draft = normalizeGenerationDraft(replaceDraftEpochs(draft, options.epochs));
   if (options.domains) draft.recipe.domains = options.domains;
   if (!options.terrain) return draft;
   const terrain = cartographicControls().find((control) => control.id === "terrain")!;

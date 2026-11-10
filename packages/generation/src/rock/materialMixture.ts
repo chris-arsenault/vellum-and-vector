@@ -1,8 +1,10 @@
 import { rockCodeCount } from "./rockCatalogue";
 import type { MaterialLayer } from "./rockLayerFields";
+import { CargoMixture, aggregateCargo } from "./materialCargo";
 
 /** One transient contact slab. Keep every constituent until the column's two-kind projection. */
 export class MaterialMixture {
+  private readonly cargo = new CargoMixture();
   private readonly weights = new Float64Array(rockCodeCount);
   private readonly kinds = new Int32Array(rockCodeCount);
   private kindsUsed = 0;
@@ -22,6 +24,7 @@ export class MaterialMixture {
   private mixed = 0;
 
   reset() {
+    this.cargo.clear();
     for (let i = 0; i < this.kindsUsed; i++) this.weights[this.kinds[i]] = 0;
     this.kindsUsed = this.count = this.weight = 0;
     this.strength = this.damage = this.grainX = this.grainY = 0;
@@ -40,6 +43,7 @@ export class MaterialMixture {
     this.constituent(layer.secondaryKind, weight * layer.secondaryShare);
     this.count++;
     this.weight += weight;
+    this.cargo.add(layer.cargo, weight);
     this.strength += layer.strength * weight;
     this.damage += layer.damage * weight;
     this.grainX += layer.grainX * weight;
@@ -91,6 +95,7 @@ export class MaterialMixture {
       formedMax: this.formedMax,
       altered: this.altered,
       mixed: this.count > 1 ? 1 : this.mixed,
+      cargo: aggregateCargo(this.cargo.finish(this.weight), kind, secondaryKind),
     };
   }
 }

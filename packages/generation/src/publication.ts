@@ -354,6 +354,7 @@ function publishField(
   ];
   snapshot.numerical[fieldId] = {
     ...grid,
+    materialCargo: channels.includes("rockLayer0") ? grid.materialCargo : undefined,
     id: resourceId,
     channels: Object.fromEntries(channels.map((channel) => [channel, grid.channels[channel]])),
     units: Object.fromEntries(channels.map((channel) => [channel, grid.units[channel]])),

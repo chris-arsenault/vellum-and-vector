@@ -89,6 +89,7 @@ test("base maps switch and field styles compose into a restorable view @renderin
   await page.getByRole("radio", { name: "Relief", exact: true }).click();
   await expect(page.getByRole("radio", { name: "Relief", exact: true })).toBeChecked();
   await openLayers(page);
+  await checkSurfaceMaterial(page);
   await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
   await page.getByRole("checkbox", { name: "Add Temperature", exact: true }).check();
   await page.getByRole("checkbox", { name: "Add River flow", exact: true }).check();
@@ -137,6 +138,20 @@ test("base maps switch and field styles compose into a restorable view @renderin
   await expect(opacity).toHaveValue("64");
   expect(errors).toEqual([]);
 });
+async function checkSurfaceMaterial(page: Page) {
+  const before = await mapImage(page);
+  await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Add Surface material", exact: true }).check();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect.poll(() => mapImage(page)).not.toBe(before);
+  const row = page.locator(".overlay-row").filter({
+    has: page.getByRole("checkbox", { name: "Show Surface material", exact: true }),
+  });
+  await row.locator("summary").click({ position: { x: 4, y: 12 } });
+  await expect(row.locator(".categorical-legend")).toContainText("Crushstone");
+  await expect(row.locator(".categorical-legend")).toContainText("Rootstone");
+  await page.getByRole("button", { name: "Remove Surface material", exact: true }).click();
+}
 async function checkFaultControl(page: Page) {
   await page.getByLabel("Show empty layers").check();
   await page.getByLabel("Search features").fill("Fault");

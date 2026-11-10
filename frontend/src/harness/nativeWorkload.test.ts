@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { nativeWorkload } from "./nativeWorkload";
+import { newGenerationDraft } from "../generationDraft";
 
 it("derives physical workload order and invocation flags from the default atlas composition", () => {
   const entries = nativeWorkload(),
@@ -47,4 +48,24 @@ it("advances ice mass once per epoch, then refreshes its load, water and flow wi
   const outsideEpochs = entries.filter(({ epochIndices }) => epochIndices.length === 0);
   expect(outsideEpochs.some(({ step }) => step[0] === "land-ice-mass-balance")).toBe(false);
   expect(outsideEpochs.some(({ step }) => step[0] === "ice-flow")).toBe(true);
+});
+
+it("binds supplied continuation epochs through the same feature configuration as the app", () => {
+  const original = newGenerationDraft().recipe.settings.epochs,
+    present = original.at(-1)!,
+    epochs = [
+      ...original,
+      { ...present, id: "After magic", tectonics: 0.03 },
+      { ...present, id: "Later wear", tectonics: 0 },
+    ],
+    entries = nativeWorkload(epochs);
+  expect([...new Set(entries.flatMap((entry) => entry.epochIndices))]).toEqual([0, 1, 2, 3, 4]);
+  for (const index of [3, 4]) {
+    const steps = entries
+      .filter((entry) => entry.epochIndices[0] === index)
+      .map((entry) => entry.step[0]);
+    expect(steps).toContain("ancestral-fluvial-erosion");
+    expect(steps).toContain("physical-epoch-history");
+    expect(steps.some((name) => name.startsWith("magic"))).toBe(false);
+  }
 });

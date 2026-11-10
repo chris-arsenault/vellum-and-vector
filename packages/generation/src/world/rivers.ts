@@ -7,7 +7,7 @@ import { contributingArea, sourceToOutletOrder } from "./flowGraph";
 import { depthRateToDischarge } from "./dimensions";
 import { edgeLeadingTo } from "./mesh";
 import { physicalDistance } from "./physicalMetric";
-import type { Band } from "@atlas/domain";
+import { MapScale, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 function completeChannels(map: PhysicalField, order: Band, channels: Band) {
@@ -164,7 +164,10 @@ export function riverNetwork(map: PhysicalField, c: PhysicalContext, incoming?: 
   for (let i = 0; i < map.mesh.count; i++)
     map.FlowAccumulation.set(
       i,
-      depthRateToDischarge(map.Runoff.get(i), map.mesh.area(i)) + (incoming?.get(i) ?? 0)
+      depthRateToDischarge(
+        map.Runoff.get(i) + MapScale.inUnits(map.GroundwaterReturn.get(i), "mm"),
+        map.mesh.area(i)
+      ) + (incoming?.get(i) ?? 0)
     );
   const area = contributingArea(map, map.FlowTargets);
   map.CatchmentArea.copyFrom(area);

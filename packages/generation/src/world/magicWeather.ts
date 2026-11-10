@@ -7,6 +7,7 @@ import { carryOut, deposit, removeLoose } from "../rock/groundLedger";
 import { spoilSoil } from "../rock/groundSurfaceMedia";
 import { loadOf } from "../rock/groundLoad";
 import { mergeMaterial, type MaterialLayer } from "../rock/rockColumn";
+import { carrierPassage } from "./magicCarriers";
 
 /**
  * What a storm track does to the ground it crosses, once per epoch after the climate pass:
@@ -35,10 +36,11 @@ const bare = (map: PhysicalField, i: number) =>
  * sand keeps the material and alteration of the loose beds it leaves.
  */
 function driveDunes(map: PhysicalField, i: number, share: number) {
-  const moving = map.SedimentThickness.get(i) * share;
-  if (moving <= 0) return;
+  const available = map.SedimentThickness.get(i) * share;
+  if (available <= 0) return;
   const target = alignedNeighbor(map, i, map.WindX.get(i) / 1000, map.WindY.get(i) / 1000);
-  if (target < 0) return;
+  const moving = available * carrierPassage(map, "wind", target);
+  if (moving <= 0) return;
   let carried: MaterialLayer | undefined;
   removeLoose(map, i, moving, "pressure", (material) => {
     const volume = {

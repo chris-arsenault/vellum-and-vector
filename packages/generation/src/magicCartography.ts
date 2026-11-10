@@ -75,7 +75,6 @@ export const magicCartography: CartographicControl[] = [
     [450, 300, 250].map((sourceThreshold, i) => ({
       parameters: {
         sourceThreshold,
-        maximumSources: [32, 96, 160][i],
         sourceSpacing: [0.0375, 0.0225, 0.015][i],
       },
     }))
@@ -320,7 +319,6 @@ export const magicCartography: CartographicControl[] = [
       parameters: {
         doorStrain,
         doorDistance: [0.15, 0.075, 0.0375][i],
-        doorCount: [3, 6, 12][i],
       },
     }))
   ),

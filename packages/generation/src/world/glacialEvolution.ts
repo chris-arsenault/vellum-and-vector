@@ -88,7 +88,10 @@ export function glacialMeltwater(map: PhysicalField, c: PhysicalContext) {
     const surface = (ice * thaw * p.GlacialAblationRunoffStrength) / 1_000_000;
     const basal = (ice * map.Geothermal.get(i) * p.BasalMeltRunoffStrength) / 1_000_000;
     const retreat = (map.IceRetreat.get(i) * p.GlacialRetreatRunoffStrength) / 1000;
-    map.GlacialMeltwater.set(i, MapScale.inUnits(surface + basal + retreat, "mm"));
+    map.GlacialMeltwater.set(
+      i,
+      MapScale.inUnits(surface + basal + retreat, "mm") + map.ExternalMeltwater.get(i)
+    );
   }
 }
 export function glacialRunoff(map: PhysicalField, c: PhysicalContext) {

@@ -59,6 +59,8 @@ function burial(map: PhysicalField, i: number) {
   map.PeatCarbon.set(i, map.PeatCarbon.get(i) * (1 - fraction));
   map.AquaticCarbon.set(i, map.AquaticCarbon.get(i) * (1 - fraction));
   map.BuriedPlantCarbon.add(i, plant);
+  map.OrganicBurialInput.add(i, plant);
+  map.OrganicBurialThickness.add(i, Math.max(0, delta));
   map.BuriedAquaticCarbon.add(i, aquatic);
   const retained = existing * (1 - exposed),
     total = retained + plant + aquatic;

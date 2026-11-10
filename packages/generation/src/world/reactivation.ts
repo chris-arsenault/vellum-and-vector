@@ -9,6 +9,7 @@ import { releaseWorking, workingArray } from "./physicalNumerics";
 import { deformGround, displaceGroundField, shiftGroundField } from "../rock/groundDeformation";
 import { groundOf } from "../rock/ground";
 import { yieldingPlane } from "../rock/groundQueries";
+import { inheritedDetachment } from "../rock/groundWeakLayers";
 import { markGroundSeam, spendRootReserve } from "../rock/groundWorld";
 
 /**
@@ -302,7 +303,7 @@ export function sutureReactivation(map: PhysicalField, context: PhysicalContext)
   for (let i = 0; i < map.mesh.count; i++) {
     if (!inInterior(map, i) || weak.get(i) <= 0) continue;
     const { response, mobility } = stressAt(map, i, squeeze, rift, reach),
-      width = reach * Math.sqrt(mobility),
+      width = reach * Math.sqrt(mobility) * (1 + inheritedDetachment(map, i)),
       fading = width > 0 ? Math.max(0, 1 - distance.get(i) / width) ** 2 : 0;
     moves.set(i, step * clamp(response, -1, 1) * weak.get(i) * fading);
   }

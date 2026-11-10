@@ -1,4 +1,11 @@
-import { gridPosition, putChannel, MapScale, type Band } from "@atlas/domain";
+import {
+  gridPosition,
+  putChannel,
+  MapScale,
+  type Band,
+  type Grid,
+  type MaterialCargoSamples,
+} from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
@@ -6,7 +13,13 @@ import { projectPhysicalMaterial } from "./physicalMaterial";
 import type { AtlasPhysicalWorkspace } from "./atlasWorkspace";
 import { projectedValues } from "./atlasSampling";
 import { ecologyBindings } from "./ecologyState";
-import { groundResourceArea } from "../rock/groundResources";
+import { groundResourceArea, groundResourceBindings } from "../rock/groundResources";
+import { surfaceMaterialCode } from "../rock/groundPresentation";
+import { captureMaterialCargo } from "../rock/groundCargoResources";
+
+// hpc-exempt: one output allocation owner per projection grid; no per-cell state.
+const ownedCargo = new WeakMap<Grid, MaterialCargoSamples>();
+const materialChannels = groundResourceBindings.map(({ name }) => name);
 
 const forcingChannels = new Set([
   "elevation",
@@ -86,7 +99,13 @@ export function projectNative(
   bindings = atlasChannels,
   selectedChannels?: ReadonlySet<string>
 ) {
-  const grid = state.surface;
+  const grid = state.surface,
+    selectedBindings = new Set(bindings.map(({ name }) => name));
+  const refreshCargo =
+    !forcingOnly &&
+    materialChannels.every(
+      (name) => selectedBindings.has(name) && !preserveChannel(state, name, preserveTerrain)
+    );
   projectChannels(state, forcingOnly, preserveTerrain, bindings);
   if (forcingOnly) {
     putChannel(
@@ -110,6 +129,21 @@ export function projectNative(
   projectWaterLevels(state.physical!, emit);
   projectDerivedClimate(state, emit);
   projectDerivedMaterial(state, emit, selectedChannels);
+  if (refreshCargo) projectCargo(state);
+}
+function projectCargo(state: GenerationState) {
+  const grid = state.surface,
+    work = state.physical!,
+    previous = ownedCargo.get(grid),
+    cargo = captureMaterialCargo(work.map, grid.coverage, work.samples.length, (cell) =>
+      work.samples.get(cell)
+    );
+  grid.materialCargo = cargo;
+  ownedCargo.set(grid, cargo);
+  if (previous) {
+    grid.coverage.release(previous.offsets);
+    grid.coverage.release(previous.records);
+  }
 }
 type DerivedEmitter = (
   name: string,
@@ -144,6 +178,12 @@ function projectDerivedMaterial(
 ) {
   const work = state.physical!,
     map = work.map;
+  emit(
+    "surfaceMaterial",
+    "category",
+    () => projectedValues(work, (i) => surfaceMaterialCode(map, i), true),
+    "category"
+  );
   emit("erosion", "metre", () =>
     projectedValues(work, (i) =>
       MapScale.metres(

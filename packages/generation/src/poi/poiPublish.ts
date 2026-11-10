@@ -18,6 +18,7 @@ import { originsOf } from "./poiOrigins";
 import { forgetSettlements, heldFor, releaseHeld } from "./poiReads";
 import { realized } from "./poiRealized";
 import { varietyOfEntry } from "./poiVariety";
+import { retainWildZoneIdentities } from "../world/wildZoneHistory";
 
 interface Published {
   entry: PoiEntry;
@@ -96,9 +97,16 @@ function publishKind(
   const record = called<(s: GenerationState, p: PoiPlace) => AtlasFeature | null>(
     entry.publication.record
   );
-  for (const place of placesOf(state, entry)) {
+  const records = placesOf(state, entry).flatMap((place) => {
     const feature = wanted(place) ? record?.(state, place) : null;
-    if (!feature) continue;
+    return feature ? [{ place, feature }] : [];
+  });
+  if (entry.id === "wildZone")
+    retainWildZoneIdentities(
+      state,
+      records.map(({ feature }) => feature)
+    );
+  for (const { place, feature } of records) {
     feature.attributes = { ...feature.attributes, ...placeAttributes(state, entry, place) };
     applyNameTerm(state, entry, place, feature);
     if (putGenerated(state, feature)) written.push({ entry, place, featureId: feature.id });

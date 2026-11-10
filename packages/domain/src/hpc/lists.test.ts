@@ -17,6 +17,16 @@ it("lists grow, finish as views and sort natively", () => {
   floats.clear();
   expect(floats.length).toBe(0);
 });
+it("bulk list replacement grows independently and resets the written prefix", () => {
+  const source = Int32Array.from({ length: 300 }, (_, i) => i + 1),
+    cells = new CellList();
+  cells.copyFrom(source);
+  source[299] = -1;
+  expect(cells.at(299)).toBe(300);
+  cells.copyFrom(new Int32Array([7, 9]));
+  cells.push(11);
+  expect(Array.from(cells.finish())).toEqual([7, 9, 11]);
+});
 
 it("KeyedHeap pops in key order with index tie rules", () => {
   const heap = new KeyedHeap("min", "lower-first", 4);

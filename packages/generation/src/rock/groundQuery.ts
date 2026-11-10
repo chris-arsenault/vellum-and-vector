@@ -1,5 +1,5 @@
 import { rockKindOfCode, type RockFacts, type RockKind } from "./rockCatalogue";
-import type { MaterialLayer } from "./rockColumn";
+import { materialLayer, type MaterialLayer } from "./rockColumn";
 
 /** A reused visitor view; retain material, a scalar snapshot, when a later comparison needs it. */
 export interface GroundLayer {
@@ -9,8 +9,28 @@ export interface GroundLayer {
   strength: number;
   /** Visited interval, which may include the whole loose cover or underlying crust. */
   thickness: number;
+  /** Actual retained interval, excluding the deepest rock's unbounded basement marker. */
+  retainedThickness: number;
   /** Both constituents, damage, fabric and surviving ages at this depth. */
   material: Readonly<MaterialLayer>;
+}
+/** A reusable visitor view; this contains no field ownership or retained material state. */
+export function createGroundLayer(kind: RockKind, thickness: number): GroundLayer {
+  return {
+    kind,
+    strength: kind.resistance,
+    thickness,
+    retainedThickness: thickness,
+    material: materialLayer(kind.code, thickness),
+  };
+}
+export function resetGroundLayer(layer: GroundLayer, kind: RockKind, thickness: number) {
+  layer.kind = kind;
+  layer.material = materialLayer(kind.code, thickness);
+  layer.strength = kind.resistance;
+  layer.thickness = thickness;
+  layer.retainedThickness = thickness;
+  return layer;
 }
 export interface GroundHere {
   tree: number;

@@ -1,4 +1,5 @@
 import { requireThat, type DomainSnapshot } from "@atlas/domain";
+import { decayMaintainedGround } from "../societyRecord";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { markPoiLandforms } from "../poi/poiLandforms";
@@ -240,9 +241,17 @@ function epochStartProcess(): MapProcess {
     contract: contract("atlas.begin-epoch", ["atlas:workspace"]),
     behavior: {
       kind: "initialize",
-      initialize(state) {
+      initialize(state, context) {
         const map = state.physical!.map;
+        decayMaintainedGround(
+          map,
+          state.physical!.inherited ? 0 : (context.epochs[0]?.duration ?? 0)
+        );
         map.ExternalHeatForcing.fill(0);
+        map.ExternalMeltwater.fill(0);
+        map.GroundwaterReturn.fill(0);
+        map.OrganicBurialInput.fill(0);
+        map.OrganicBurialThickness.fill(0);
         map.ExternalCoastalForcing.fill(0);
         state.physical!.magic?.heat.fill(0);
         state.physical!.magic?.melt.fill(0);

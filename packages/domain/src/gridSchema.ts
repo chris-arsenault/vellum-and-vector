@@ -12,6 +12,7 @@ import { adaptiveTopologySchema } from "./adaptiveSchema";
 import { numericalSchema } from "./numericalSchema";
 import { Coverage } from "./lattice/coverage";
 import { everySample } from "./lattice/bandValues";
+import { validMaterialShape } from "./materialSamples";
 
 const channel = numericalSchema("float64").refine(
   (values) => everySample(values, Number.isFinite),
@@ -49,6 +50,15 @@ const fieldSchema = z
     channels: z.record(identifier, channel),
     units: z.record(identifier, identifier),
     quantities: z.record(identifier, z.enum(["intensive", "extensive", "category"])).optional(),
+    materialCargo: z
+      .object({
+        keys: z.array(identifier),
+        releasedTo: z.array(identifier),
+        slots: z.array(identifier),
+        offsets: numericalSchema("uint32"),
+        records: numericalSchema("float64"),
+      })
+      .optional(),
     waterBodies: z.array(bodySchema).nullable().optional(),
     lakes: z
       .array(z.object({ id: identifier, geometry: geometrySchema, level: finite }))
@@ -69,6 +79,11 @@ export const gridSchema: z.ZodType<Grid> = z
       context.addIssue({
         code: "custom",
         message: "Grid masks and measures must match dimensions.",
+      });
+    if (!validMaterialShape(grid.materialCargo, count))
+      context.addIssue({
+        code: "custom",
+        message: "Material cargo needs cell offsets and four-value records.",
       });
     for (const [name, values] of Object.entries(grid.channels)) {
       if (values.length !== count)

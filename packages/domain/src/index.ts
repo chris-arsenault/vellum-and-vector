@@ -17,6 +17,7 @@ export * from "./errors";
 export * from "./schemas";
 export * from "./spatial";
 export * from "./grids";
+export * from "./materialSamples";
 export * from "./gridWindow";
 export * from "./brush";
 export * from "./gridResampling";

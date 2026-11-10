@@ -16,6 +16,7 @@ import {
   type SurfaceCategory,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
+import { surfaceMaterialCategories } from "@atlas/generation";
 
 export const palettes = {
   viridis: ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"],
@@ -38,6 +39,7 @@ export function defaultRasterPresentation(): RasterPresentation {
 }
 /** Class colours for categorical channels; null for continuous ones. */
 export function categoryPalette(world: World, channel: string): SurfaceCategory[] | null {
+  if (channel === "surfaceMaterial") return surfaceMaterialCategories;
   if (channel === "biome")
     return biomes.map((biome, code) => ({
       code,
@@ -75,6 +77,7 @@ export function fieldLabel(world: World, channel: string) {
     finalSurface: "Land cover",
     secondSurface: "Land cover · second class",
     naturalSurface: "Natural land cover",
+    surfaceMaterial: "Surface material",
   };
   if (!id) return names[channel] ?? readable(channel);
   return identityFieldLabel(world, kind, id, rest, readable);

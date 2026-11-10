@@ -72,6 +72,7 @@ self.onmessage = async ({ data }: MessageEvent<MapCustomization>) => {
         resources: [],
         metadata: { name: data.name },
       });
+      workspace.catalog.importCauses(world.id, surveyHistory(root.id, data));
       const current = await workspace.catalog.readWorld(world.id);
       await registerSavedMap({ ...data.summary, name: data.name, version: current.version });
       reply = { id: world.id };
@@ -85,3 +86,7 @@ self.onmessage = async ({ data }: MessageEvent<MapCustomization>) => {
   }
   self.postMessage(reply);
 };
+
+function surveyHistory(areaId: string, data: MapCustomization) {
+  return data.fixture.history ? { [areaId]: data.fixture.history } : {};
+}

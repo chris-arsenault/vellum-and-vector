@@ -82,7 +82,11 @@ const nativeOwnership: Ownership[] = [
       "stormTrack",
     ],
   ],
-  ["water.routing", "rivers", ["runoff", "waterBody", "basin", "catchmentArea", "riverWarmth"]],
+  [
+    "water.routing",
+    "rivers",
+    ["runoff", "waterBody", "basin", "catchmentArea", "riverWarmth", "groundwaterStorage"],
+  ],
   ["ocean.geography", "rivers", ["water", "waterDepth", "oceanDistance"]],
   ["ocean.geography", "geology", ["bathymetry"]],
   [
@@ -183,6 +187,7 @@ const derived: readonly [channel: string, unit: string, layer: string, owners: s
   ],
   ["carbonate", "ratio", "geology", ["physical.foundation"]],
   ["physicalMaterial", "category", "geology", ["physical.landforms"]],
+  ["surfaceMaterial", "category", "geology", ["physical.foundation"]],
   ["naturalTemperature", "celsius", "climate", ["physical.climate"]],
   ["naturalRock", "ratio", "geology", ["physical.foundation"]],
   ["naturalSurface", "category", "geology", ["physical.landforms", "magic.configured"]],

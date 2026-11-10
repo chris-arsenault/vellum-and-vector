@@ -71,6 +71,7 @@ export function wearWays(state: GenerationState, years: number) {
       ? work.traffic
       : new Float64Array(connections.length);
   const keep = Math.exp(-years / wearMemory);
+  work.travelled = new Float64Array(connections.length);
   const towns = new Map(work.region.communities.map((c) => [c.id, c.settlement?.population ?? 0]));
   for (const [i, link] of connections.entries()) {
     const a = towns.get(link.from) ?? 0,
@@ -80,6 +81,7 @@ export function wearWays(state: GenerationState, years: number) {
         ? Math.sqrt(a * b) * travel * Math.exp(-link.distance / mapScale(state).length(marketReach))
         : 0;
     const yearly = traffic[i] / Math.max(1e-9, years) + market;
+    work.travelled[i] = yearly;
     link.wear = (link.wear ?? 0) * keep + yearly * (1 - keep);
     link.travelCost = wornCost(link, classes);
   }

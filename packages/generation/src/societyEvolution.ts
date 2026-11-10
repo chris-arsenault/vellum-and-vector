@@ -15,6 +15,8 @@ import { raiseHighways } from "./societyHighways";
 import { bindSocietyProfile } from "./societyProfile";
 import { recordSocietyOnMesh } from "./societyRecord";
 import { withNumericalLifetime } from "./generationWorkingState";
+import { advanceSocietyMagic } from "./world/magicProcesses";
+import { refreshSocietyConnections } from "./societyGeography";
 
 /** One decadal cycle of feedback: people, works, magic use, learned practices, environment, hazards, settlements. */
 export function societyCycle(
@@ -67,6 +69,8 @@ function advanceSocietyCycle(
   }
   // What the cycle's people left on the ground: tenure, walked ways and the dead.
   recordSocietyOnMesh(state, dt);
+  if (dt > 0) advanceSocietyMagic(state, context);
+  if (work.connectionsDirty) refreshSocietyConnections(state);
 }
 /**
  * Cycles resolve feedback, not annual actors or a cap on elapsed history. Each cycle's

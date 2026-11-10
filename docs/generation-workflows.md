@@ -834,18 +834,109 @@ Directional shear and plucking also read signed bed inclination. An exposed weak
 release its overlying cap as a finite slab; both enter the downslope material route. This approximates
 bulk retreat without hidden cavities or unresolved overhang geometry.
 
-Each magic system changes the column once per epoch through its own medium. A system's share of the
-ground picks fixed patches of it, so its rock forms bodies that hold the share and build on the same
-ground each pass. Fire hardens rock along veins, seals spent conduits and throws core debris; Aurora
-rots rock open to the sky, and charge grows crystal on the bed under ice; Pressure crushes shore and
-sea floor; Greenwood's roots open rock, its springs lay tufa and its water takes soluble rock; Salt
-lays beds that can be buried and uncovered; Hallowed turns warded ground to kept stone that nothing
-else alters; Veil shuffles the column under a tear. Meetings make their own rock. Each system's stock
-is held or lost according to the rock it lies in. What each makes shows only as far as later processes
-leave it exposed, and it erodes, fails and holds water by its own properties.
+Magic alters reached material through the ground owner. Surface reactions spend their reach through
+actual cover; subsurface Fire follows a finite interval beneath it. Changed intervals retain their
+formation ages and fabric, and untouched beds remain in place. Each system uses its own medium and
+material response rather than adding opposing effects to one resistance value. Fire hardens veins
+and seals a conduit when its supply ends; Aurora weakens exposed ground and grows crystal beneath
+charged ice; Pressure crushes seabed and the adjacent shore; Greenwood opens ground and lays spring
+deposits. Salt beds form when new stock deposits, so buried old stock cannot repaint the surface.
+Hallowed leaves kept stone, including after society establishes a ward. Active protection limits
+other reactions' reach; its disappearance does not remove the stone. Veil displaces coherent ground
+and bends its retained beds. Meetings alter material through the same owning operations.
 
-A region continues all of this: where the parent thrust the ground, its folds come from the parent's
-sheets, place across them and dip.
+Altered material travels, buries and wears through ordinary geological operations after magic stops.
+Finite solid charge belongs to its actual material package. Sparse cargo records identify the
+origin/reservoir, host constituent and concentration; Ground splits, mixes, extracts and carries
+them with the material. Fresh cover of the same mineral acquires no buried charge. The unbounded
+basement marker cannot supply finite inventory. Dissolved and living stocks keep their own water
+and ecological carriers. Depleted rock remains rock after its charge is spent.
+Worked stockpiles retain custody during deliberate extraction and trade. Ordinary erosion and
+geological movement release that custody to the declared natural reservoir on the same material;
+an abandoned stockpile does not become an inaccessible mineral identity. Ground owns this receipt
+behavior without interpreting society or magic names.
+
+Birth and renewal advance through elapsed source operations. Current-field refresh locates existing
+sources, applies wards, updates the other fields and their meetings, then evaluates strain and
+doors. It does not repeat births, melting, material reactions or history. Retention distinguishes
+fresh activity from the existing Ground inventory, including inventory moved or extracted since
+the field was evaluated. Disabling supply leaves ordinary material transport and decay available.
+Society reads physical forcing through its declared epoch ancestry; an unbound present era uses
+the last physical epoch. Its own era index does not select a different physical history.
+
+Groundwater retains water volume per area, receives recharge, routes by hydraulic head and returns
+to soil and streams. Declared dissolved stocks follow those actual exchanges; discharge to the sea
+removes freshwater charge with its carrier rather than leaving an orphaned aquifer stock.
+Newly buried organic
+matter can carry a share of sap into its retained bed; leaching transfers finite charge into water.
+River litter carries carbon and magical cargo together, within the actual organic carrier's
+charge capacity, so later decomposition can feed soil. Springs respond to dissolved concentration
+and discharge; the significance of a named spring does not suppress weaker physical activity.
+Clearance can release existing water and brine without creating either. Transported sap needs
+suitable soil, water and subsequent growth to establish a living source.
+
+Shelf charge rides marine ice with ocean currents. Ordinary sea ice reads its persistence, and
+warm-water ablation can remove the carrier. Fire melt joins later runoff through the shared ice
+operation. Marine contact supplies a receiving-shore view for meetings without extending Pressure's
+ocean field across land. Coastal deposition spends available transported sediment; connectivity and
+water loss determine whether an isolated basin dries.
+
+Kept ground reads present maintenance and actual travelled routes, which fade when use ends.
+Elapsed physical history ages that maintenance even between inhabited rounds. Ending a round
+refreshes its protection and dependent fields without advancing material or inventing another year.
+Ward rims use geographic width and partial sample coverage, and displaced fields require a suitable
+receiving medium. River, wind and ice carriage read declared barriers. Doors require present stable
+strain and usable endpoints; warding, stored charge or rupture can close them and invalidate travel
+connections. Interference strain is a gradient over physical distance. Completed history records
+actual significant wild-zone footprints; inspection distinguishes earlier surveys from the current
+feature. Positive spatial overlap can carry identity forward, while disjoint or ended zones do not
+acquire an invented trajectory.
+
+Salt transfers consume reached host material before moving its stock. Dissolution can remove a
+buried soluble seam while its cap settles; brine then precipitates new material. Wind instead moves
+existing grains through surface saltation, retaining their material record. Its dust reservoir marks
+mobile grains on the ground: settling changes their reservoir, and another hop moves actual loose
+material. It does not create a fresh bed each time the same stock moves.
+
+The Surface material field displays the dominant present exposed material through the existing
+categorical map overlays. Loose cover, the represented soil skin, water and ice hide underlying
+rock. Its colours depend on current material rather than magical activity or history records.
+
+Magic-rock acceptance is semantic: for each of the seven systems, an early magical process must
+be capable of leaving a visible trace in later epochs after that process stops running. Judge the
+later map's terrain or material presentation without history inspection or an active magic overlay.
+Later processes may move, bury, expose, reshape or destroy a remnant; neither permanent survival nor
+every system appearing in one world is required. An inland Pressure crush zone or Greenwood remains
+in a desert illustrates the question, not a prescribed landform to construct.
+
+Reviewers must identify the visible remnant, explain its formation and subsequent reworking, and
+establish that continued magical forcing is not sustaining it. History and numerical diagnostics may
+help explain the cause, but cannot supply the missing visible evidence. Unit tests verify supporting
+contracts and operations; passing tests, nonzero stocks, material counts or changed scalar values do
+not satisfy this acceptance criterion. A system without demonstrated visible persistence remains
+unverified.
+
+### Regional interaction boundary
+
+Captured Ground resources include sparse material cargo, persistent ground and offshore loads,
+and named reservoir keys with custody-release identities. Import takes complete material records and cargo from the same donor,
+remaps keys by name and owns independent mutable copies. Groundwater storage keeps its water-volume
+meaning; transient flows regenerate. Resource references remain pinned to the captured parent state.
+Material publication rejects unrepresentable cargo before it becomes a saved resource.
+
+Shared-process regional execution remains open work. The existing regional scalar resistance,
+roughening, captured intensity floors and reinstated doors must yield to the owners below when that
+integration resumes. A named door retains its identity even when it cannot currently be traversed;
+an endpoint outside the child remains outside it. Child geography may change independently.
+
+| Regional consumer                               | Shared producer or contract                                                                                                                                                                                       |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Terrain, escarpment springs and inherited folds | Ground intervals, finite extraction, groundwater emergence, yielding-plane geometry and continuity. Regional calderas, retreat and landmark conjunctions remain their terrain/POI work.                           |
+| Coasts and changed-shore drainage               | Ordinary coastal sediment transport and connectivity; marine contact and receiving-shore forcing. Regional drainage rerooting and depth presentation remain open.                                                 |
+| Climate and storm medium                        | Current Pressure ocean/weather forcing and captured atmospheric inputs; regional execution must use the shared circulation and carrier owners.                                                                    |
+| Ecology, peat and moraines                      | Organic burial, carbon-bearing sediment, groundwater return and actual ice debris; regional landscape realization remains open.                                                                                   |
+| Magic and named sources                         | Captured host cargo and fluid stores, source supply/location separation, coastal rays, geographic ward rims, distance-based strain and present door eligibility. No captured intensity floor may renew inventory. |
+| Society and existing works                      | Actual material gathering, consumption and trade receipts; maintained route state and present door access. New social generation and magic practices require the separate design session.                         |
 
 ### Named relief
 

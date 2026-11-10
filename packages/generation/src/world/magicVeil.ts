@@ -3,11 +3,13 @@ import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
 import type { LocateContext } from "./magicSources";
 import { strainAt } from "./magicConfluences";
-import { hashUnit } from "./noise";
+import { fractalNoise } from "./noise";
 import { clamp, round, units } from "./math";
-import { displaceGround } from "../rock/groundLedger";
+import { displaceGroundField } from "../rock/groundDeformation";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 import { wardSeals } from "./magicHallowed";
-import { CellList, FloatList, radixOrder, SmallIntSet, type Band } from "@atlas/domain";
+import { CellList, FloatList, radixOrder, type Band } from "@atlas/domain";
+import { triangleIdentity, meshDeltaX } from "./mesh";
 
 const tears = (field: MagicField) =>
   field.definition.enabled && field.definition.effects.tearing > 0;
@@ -23,7 +25,7 @@ export function strainSources(
   state: GenerationState,
   field: MagicField,
   _seed: number,
-  { origin }: LocateContext
+  { origin, activity }: LocateContext
 ) {
   const map = state.physical!.map,
     magic = state.physical!.magic!,
@@ -37,10 +39,8 @@ export function strainSources(
     const strain = cellStrain(map, others, meetings, i) * (1 - p.knitVerdure * map.Verdure.get(i)),
       before = previous ? previous.get(i) / map.mesh.area(i) : 0,
       salting = map.Salting.get(i);
-    let strength = tearStrength(p, strain);
-    if (salting > 0) strength = Math.max(strength, round(before * p.holdSalting * salting));
-    if (strength > 0 || before > 0)
-      field.wild.set(i, clamp(Math.abs(strength - before) / 1000 / p.wildShift, 0, 1));
+    const { strength, wild } = tearResponse(strain, before, salting, activity, p);
+    field.wild.set(i, wild);
     if (strength > 0) field.source.set(i, strength);
   }
 }
@@ -58,13 +58,33 @@ function cellStrain(
   return strain;
 }
 /** A tear's strength: the strain above the floor, full at the declared strain. */
-function tearStrength(p: MagicField["definition"]["parameters"], strain: number) {
+type TearParameters = Pick<
+  MagicField["definition"]["parameters"],
+  "tearFloor" | "tearFull" | "holdSalting" | "wildShift"
+>;
+function tearStrength(p: TearParameters, strain: number) {
   if (strain < p.tearFloor) return 0;
   return clamp(round((1000 * (strain - p.tearFloor)) / (p.tearFull - p.tearFloor)), 1, 1000);
 }
+/** Previous strain is memory, not a charge that can power an inactive system. */
+export function tearResponse(
+  strain: number,
+  previous: number,
+  salting: number,
+  activity: number,
+  p: TearParameters
+) {
+  if (activity <= 0) return { strength: 0, wild: 0 };
+  const strength = clamp(
+    round(Math.max(tearStrength(p, strain) * activity, previous * p.holdSalting * salting)),
+    0,
+    1000
+  );
+  return { strength, wild: clamp(Math.abs(strength - previous) / 1000 / p.wildShift, 0, 1) };
+}
 /**
  * Veil's doors: stable tears, strong enough and not wild, paired by nearest strength at a
- * distance at least the span, up to the count; last epoch's pairs hold while both ends
+ * distance at least the span; last epoch's pairs hold while both ends
  * still qualify. Aurora's stored charge closes a cell, a ward seals it, and an open or hot
  * Fire ruptures it and makes it wild.
  */
@@ -72,40 +92,41 @@ export function pairingSources(
   state: GenerationState,
   field: MagicField,
   _seed: number,
-  { origin }: LocateContext
+  { origin, activity }: LocateContext
 ) {
   const map = state.physical!.map,
     p = field.definition.parameters,
     strength = field.originSources.tear;
-  if (!strength) return;
+  if (!strength || activity <= 0) {
+    field.doors = [];
+    return;
+  }
   const eligible = doorEligibility(state, field, strength);
-  // Door ends only: twice the door count, never the mesh.
-  const used = new SmallIntSet(2 * p.doorCount);
+  const used = new Uint8Array(map.mesh.count);
   field.doors = field.doors.filter((door) => eligible(door.a) && eligible(door.b));
   for (const door of field.doors) {
-    used.add(door.a);
-    used.add(door.b);
+    used[door.a] = 1;
+    used[door.b] = 1;
   }
   // Only the eligible cells are candidates; they are few, ordered strongest first.
   const cells = new CellList(),
     scores = new FloatList();
   for (let i = 0; i < map.mesh.count; i++)
-    if (!used.has(i) && eligible(i)) {
+    if (!used[i] && eligible(i)) {
       cells.push(i);
       scores.push(strength.get(i));
     }
   const order = radixOrder(scores.finish(), true),
     candidates = Int32Array.from(order, (k) => cells.at(k));
   for (const a of candidates) {
-    if (field.doors.length >= p.doorCount) break;
-    if (used.has(a)) continue;
+    if (used[a]) continue;
     const b = partner(map, strength, candidates, used, a, p.doorDistance, p.doorMatch);
     if (b < 0) continue;
-    used.add(a);
-    used.add(b);
+    used[a] = 1;
+    used[b] = 1;
     field.doors.push({ a, b });
   }
-  field.doors.forEach((door, index) => {
+  field.doors.forEach((door) => {
     for (const [end, cell] of [
       ["a", door.a],
       ["b", door.b],
@@ -113,7 +134,7 @@ export function pairingSources(
       field.source.set(cell, strength.get(cell));
       field.located.push({
         origin: origin.id,
-        id: `door:${index}:${end}`,
+        id: `door:${triangleIdentity(map.mesh, door.a)}:${triangleIdentity(map.mesh, door.b)}:${end}`,
         x: map.mesh.x(cell),
         y: map.mesh.y(cell),
         radius: Math.sqrt(map.mesh.area(cell)),
@@ -163,7 +184,7 @@ function partner(
   map: PhysicalField,
   strength: Band,
   candidates: Int32Array,
-  used: SmallIntSet,
+  used: Uint8Array,
   a: number,
   span: number,
   match: number
@@ -172,17 +193,23 @@ function partner(
     gap = match + 1;
   const here = strength.get(a);
   for (const b of candidates) {
-    if (b === a || used.has(b)) continue;
+    if (b === a || used[b]) continue;
     const difference = Math.abs(here - strength.get(b));
     if (difference > match || difference >= gap) continue;
-    if (Math.hypot(map.mesh.x(a) - map.mesh.x(b), map.mesh.y(a) - map.mesh.y(b)) < span) continue;
+    if (
+      Math.hypot(
+        meshDeltaX(map.mesh, map.mesh.x(a) - map.mesh.x(b)),
+        map.mesh.y(a) - map.mesh.y(b)
+      ) < span
+    )
+      continue;
     [best, gap] = [b, difference];
   }
   return best;
 }
 /**
- * What Veil does to the ground once per epoch: a wild zone moves its bedrock by a hashed
- * amount within the bound and exchanges a share of its tree and grass cover, so streams
+ * What Veil does to the ground once per epoch: a wild zone displaces coherent ground and
+ * exchanges a share of its tree and grass cover, so streams
  * change course and a forest edge moves without flood or fire. A door's own marks on the
  * ground are the door entry's.
  */
@@ -190,15 +217,24 @@ export function veilWrites(state: GenerationState, epoch: number) {
   const map = state.physical!.map,
     fields = state.physical!.magic!.fields.filter(tears);
   for (const field of fields) {
+    const movement = workingArray(map, "float64", "veil:displacement");
     for (let i = 0; i < map.mesh.count; i++)
-      if (field.wild.get(i) > 0 && map.WaterKindCodes.get(i) === 0) unsettle(map, field, i, epoch);
+      if (field.wild.get(i) > 0 && map.WaterKindCodes.get(i) === 0)
+        movement.set(i, unsettle(map, field, i, epoch));
+    displaceGroundField(map, movement, "veil");
+    releaseWorking(map, movement);
   }
 }
 function unsettle(map: PhysicalField, field: MagicField, i: number, epoch: number) {
   const p = field.definition.parameters,
     w = field.wild.get(i),
-    h = hashUnit(epoch ^ 0x7e11, i, 0) - 0.5;
-  displaceGround(map, i, units(p.wildRelief * w * 2 * h), "veil");
+    h = fractalNoise(
+      map.mesh.origin[0] + map.mesh.x(i),
+      map.mesh.origin[1] + map.mesh.y(i),
+      epoch ^ 0x7e11,
+      map.scale.length(0.025),
+      2
+    );
   const share = p.wildShuffle * w;
   if (h > 0) {
     const moved = map.GrassCover.get(i) * share;
@@ -216,4 +252,5 @@ function unsettle(map: PhysicalField, field: MagicField, i: number, epoch: numbe
     map.GrassCover.add(i, moved);
   }
   map.TreeCover.set(i, map.BroadleafCover.get(i) + map.ConiferCover.get(i));
+  return units(p.wildRelief * w * h);
 }

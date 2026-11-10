@@ -213,6 +213,7 @@ export function installGenerationFixtureRuntime({
                   "water",
                   "naturalSurface",
                   "finalSurface",
+                  "surfaceMaterial",
                   "bedrock",
                   "sediment",
                   "rock",
@@ -238,6 +239,7 @@ export function installGenerationFixtureRuntime({
               channels[name] = Float64Array.from({ length: size * size }, (_, i) => {
                 const physical = physicalFixtureValue(name, i, size);
                 if (physical !== undefined) return physical;
+                if (name === "surfaceMaterial") return i % size < size / 2 ? 19 : 20;
                 if (name === "biome") return biomeAt(i);
                 if (name === "treeCover") return 0.7;
                 if (name === "broadleafSaplings") return 0.1;

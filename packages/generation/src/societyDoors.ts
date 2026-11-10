@@ -4,6 +4,7 @@ import type { SocietyEdge } from "./societyGeography";
 import { nativePosition } from "./world/atlasWorkspace";
 import { nearestSocietySample } from "./societySpatial";
 import { dryLand } from "./societySupport";
+import { doorHoldsOpen } from "./world/magicVeil";
 
 /**
  * Veil's doors: an edge between the dry cells under a door's two ends at the crossing cost,
@@ -13,14 +14,16 @@ import { dryLand } from "./societySupport";
  */
 export function doorEdges(state: GenerationState): SocietyEdge[] {
   const work = state.physical,
-    field = work?.magic?.fields.find(
-      (candidate) => candidate.definition.enabled && candidate.definition.effects.tearing > 0
-    );
+    field = doorField(state);
   if (!work || !field) return [];
-  const cost = field.definition.parameters.doorTravel,
+  const strength = field.originSources.tear;
+  if (!strength) return [];
+  const open = doorHoldsOpen(state, field, strength),
+    cost = field.definition.parameters.doorTravel,
     covers = spatial.pointCoverage(state.domain.scope.footprint),
     edges: SocietyEdge[] = [];
   for (const door of field.doors) {
+    if (!open(door.a) || !open(door.b)) continue;
     const ends = [door.a, door.b].map((cell) => {
       const p = nativePosition(work, cell);
       return covers(p) ? nearestSocietySample(state.surface, p, (i) => dryLand(state, i)) : -1;
@@ -30,3 +33,7 @@ export function doorEdges(state: GenerationState): SocietyEdge[] {
   }
   return edges;
 }
+const doorField = (state: GenerationState) =>
+  state.physical?.magic?.fields.find(
+    (candidate) => candidate.definition.enabled && candidate.definition.effects.tearing > 0
+  );

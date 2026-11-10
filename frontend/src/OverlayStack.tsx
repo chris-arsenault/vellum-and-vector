@@ -1,8 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { biomes } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
-import type { FieldStyle } from "./types";
-import { fieldLabel, palettes } from "./rasterPresentation";
+import type { FieldStyle, World } from "./types";
+import { categoryPalette, fieldLabel, palettes } from "./rasterPresentation";
 import { FieldLegend, RasterPanel } from "./RasterPanel";
 
 export interface OverlayActions {
@@ -55,7 +54,7 @@ function OverlayRow(props: RowProps) {
             checked={field.visible}
             onChange={(e) => actions.update(field.channel, { visible: e.target.checked })}
           />
-          <OverlaySwatch field={field} />
+          <OverlaySwatch field={field} world={editor.world} />
           <span title={name}>{name}</span>
         </label>
         <small className="overlay-unit" title={unit}>
@@ -168,9 +167,10 @@ function OverlayButtons({
     </>
   );
 }
-function OverlaySwatch({ field }: { field: FieldStyle }) {
+function OverlaySwatch({ field, world }: { field: FieldStyle; world: World }) {
   const id = useId();
-  const colors = field.channel === "biome" ? biomes.map((b) => b.color) : palettes[field.palette];
+  const classes = categoryPalette(world, field.channel),
+    colors = classes ? classes.map((item) => item.color) : palettes[field.palette];
   return (
     <svg
       className="overlay-swatch"
@@ -178,10 +178,10 @@ function OverlaySwatch({ field }: { field: FieldStyle }) {
       aria-hidden="true"
       preserveAspectRatio="none"
     >
-      {field.channel === "biome" ? (
+      {classes ? (
         colors.map((color, i) => (
           <rect
-            key={color}
+            key={i}
             x={(i * 24) / colors.length}
             width={24 / colors.length}
             height="8"

@@ -17,6 +17,11 @@ import {
 import { createWorldMesh } from "../../../packages/generation/src/world/worldMesh";
 import { harnessRoot } from "./harnessWorkspace";
 import { nativeWorkload } from "./nativeWorkload";
+import {
+  captureMaterialCargo,
+  importMaterialCargo,
+} from "../../../packages/generation/src/rock/groundCargoResources";
+import { writeRange } from "@atlas/domain";
 
 /**
  * The world's whole physical state at the start of a pass, saved so a stage can be run again in
@@ -43,6 +48,7 @@ interface Snapshot {
   failure?: FailedField;
   epochs: Epoch[];
   worldSize: [number, number, number, number];
+  worldOrigin: [number, number];
   quality: string;
   seed: number;
   profile: PhysicalContext["Profile"];
@@ -51,6 +57,13 @@ interface Snapshot {
   bands: Record<string, Float64Array>;
   plain: Record<string, number | boolean>;
   held: Record<string, unknown>;
+  materialCargo: {
+    keys: readonly string[];
+    releasedTo: readonly string[];
+    slots: readonly string[];
+    offsets: Uint32Array;
+    records: Float64Array;
+  };
 }
 /** A failed field is diagnostic evidence, never a completed epoch or resumable workload. */
 export interface FailedField {
@@ -77,6 +90,7 @@ function capture(
     lengthUnits: "relative",
     epochs,
     worldSize: map.mesh.bounds as Snapshot["worldSize"],
+    worldOrigin: [...map.mesh.origin],
     quality,
     seed: context.EpochStableSeed ^ salt,
     profile: context.Profile,
@@ -85,7 +99,36 @@ function capture(
     bands,
     plain,
     held,
+    materialCargo: captureCargo(map),
   };
+}
+function captureCargo(map: PhysicalField): Snapshot["materialCargo"] {
+  const cargo = captureMaterialCargo(map);
+  try {
+    return {
+      keys: cargo.keys,
+      releasedTo: cargo.releasedTo,
+      slots: cargo.slots,
+      offsets: Uint32Array.from(cargo.offsets),
+      records: Float64Array.from(cargo.records),
+    };
+  } finally {
+    map.coverage.release(cargo.offsets);
+    map.coverage.release(cargo.records);
+  }
+}
+function restoreCargo(map: PhysicalField, captured: Snapshot["materialCargo"]) {
+  requireThat(captured, "snapshot_material", "Snapshot is missing its material cargo.");
+  const offsets = map.coverage.scratch("uint32", "snapshot:cargo-offsets", captured.offsets.length),
+    records = map.coverage.scratch("float64", "snapshot:cargo-records", captured.records.length);
+  try {
+    writeRange(offsets, 0, captured.offsets);
+    writeRange(records, 0, captured.records);
+    importMaterialCargo(map, { ...captured, offsets, records });
+  } finally {
+    map.coverage.release(offsets);
+    map.coverage.release(records);
+  }
 }
 /** Saves the state at each pass's start, into a named set of snapshots. */
 export function snapshotRecorder(label: string, quality: string, epochs: Epoch[]) {
@@ -107,8 +150,22 @@ export function snapshotRecorder(label: string, quality: string, epochs: Epoch[]
     return true;
   };
 }
-export const snapshotPath = (label: string, pass: number | "failure") =>
-  join(snapshotRoot, label, pass === "failure" ? "failure.bin" : `pass-${pass}.bin`);
+export const snapshotPath = (label: string, pass: number | "failure" | "final") =>
+  join(snapshotRoot, label, typeof pass === "string" ? `${pass}.bin` : `pass-${pass}.bin`);
+/** The completed map includes society's final ground changes after the last physical epoch. */
+export function captureFinalField(
+  input: { label: string; quality: string; seed: number; epochs: Epoch[] },
+  map: PhysicalField,
+  context: PhysicalContext
+) {
+  const path = snapshotPath(input.label, "final");
+  mkdirSync(join(snapshotRoot, input.label), { recursive: true });
+  writeFileSync(
+    path,
+    serialize({ ...capture(map, context, input.quality, 0, input.epochs), seed: input.seed })
+  );
+  return path;
+}
 /** Capture the mutated field, while identifying the context as the last observed boundary. */
 export function captureFailedField(
   input: { label: string; quality: string; seed: number; epochs: Epoch[] },
@@ -130,19 +187,27 @@ export function captureFailedField(
 }
 /** The same lattice the world ran on, from what the snapshot recorded about it. */
 function latticeOf(snapshot: Snapshot) {
+  requireThat(
+    Array.isArray(snapshot.worldOrigin) &&
+      snapshot.worldOrigin.length === 2 &&
+      snapshot.worldOrigin.every(Number.isFinite),
+    "snapshot_origin",
+    "Snapshot is missing its world origin."
+  );
   const [west, south, east, north] = snapshot.worldSize,
+    [originX, originY] = snapshot.worldOrigin,
     padding = snapshot.profile.BoundaryPadding,
     // Recorded geometry is data: a new generation policy must not resize an old snapshot.
     cellArea = snapshot.spacing ** 2 * triangleArea,
     samples = ((east - west + 2 * padding) * (north - south + 2 * padding)) / cellArea,
     wraps = snapshot.profile.WrapLongitude === 1;
   return createWorldMesh(
-    [west, south, east, north],
+    [west + originX, south + originY, east + originX, north + originY],
     samples,
     padding,
     () => true,
     (east - west) * (north - south),
-    [(west + east) / 2, (south + north) / 2],
+    snapshot.worldOrigin,
     wraps,
     wraps && snapshot.profile.LatitudeSouth === -90 && snapshot.profile.LatitudeNorth === 90
   );
@@ -178,6 +243,7 @@ export function restoreSnapshot(path: string, allowFailedInspection = false) {
   }
   Object.assign(map, snapshot.plain, snapshot.held);
   finishGroundImport(map, imported);
+  restoreCargo(map, snapshot.materialCargo);
   return {
     map,
     seed: snapshot.seed,

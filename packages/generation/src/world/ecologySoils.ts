@@ -2,6 +2,7 @@ import type { PhysicalField } from "./field";
 import { MapScale } from "@atlas/domain";
 import { environment, approach, unit, type EcologyForcing } from "./ecologyEnvironment";
 import { livingPlantCarbon, plantGroups } from "./ecologyGroups";
+import { recycleOrganicMaterial } from "../rock/organicMaterial";
 
 export const erosionHistory = (map: PhysicalField, i: number) =>
   MapScale.metres(
@@ -20,6 +21,7 @@ export function evolveSoils(
   for (let i = 0; i < map.mesh.count; i++) {
     const f = forcing(i),
       env = environment(map, i, f);
+    recycleOrganicMaterial(map, i, years, f.stillness);
     const erosion = Math.max(0, erosionHistory(map, i) - map.EcologyErosion.get(i));
     const iceAdvance = Math.max(0, map.IceThickness.get(i) - map.EcologyIce.get(i));
     const damage =
@@ -108,7 +110,10 @@ function soilWater(map: PhysicalField, i: number, years: number, f: EcologyForci
     i,
     approach(
       map.SoilWater.get(i),
-      Math.min(capacity, Math.max(0, supply * map.Infiltration.get(i) - demand * 0.3)),
+      Math.min(
+        capacity,
+        Math.max(0, supply * map.Infiltration.get(i) + map.GroundwaterReturn.get(i) - demand * 0.3)
+      ),
       years,
       1
     )

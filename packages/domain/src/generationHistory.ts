@@ -1,4 +1,12 @@
 import type { ParameterValues } from "./schemas";
+import type { Geometry } from "geojson";
+
+/** A surveyed feature footprint, not a replacement for present geography. */
+export interface GeographicObservation {
+  id: string;
+  name: string;
+  geometry: Geometry;
+}
 
 export interface FieldSummary {
   unit: string;
@@ -7,6 +15,12 @@ export interface FieldSummary {
   mean: number;
 }
 export type GenerationCause =
+  | {
+      kind: "geography";
+      process: string;
+      featureKind: string;
+      observations: GeographicObservation[];
+    }
   | { kind: "climate"; process: string; fields: Record<string, FieldSummary> }
   | {
       kind: "material";

@@ -107,10 +107,9 @@ function plainsOf(map: PhysicalField, thresholds: ReliefThresholds) {
 export function highGroundAtEdge(map: PhysicalField) {
   const { edgeReach: reach, edgeHigh: high } = reliefThresholds(map.scale),
     [west, south, east, north] = map.mesh.bounds,
-    [originX, originY] = map.mesh.origin,
     atEdge = (i: number) => {
-      const x = map.mesh.x(i) + originX,
-        y = map.mesh.y(i) + originY;
+      const x = map.mesh.x(i),
+        y = map.mesh.y(i);
       return Math.min(x - west, east - x, y - south, north - y) < reach;
     };
   let land = 0,
@@ -275,11 +274,13 @@ export function drawHeights(map: PhysicalField, out: string, name: string, conta
   });
 }
 /**
- * Native cell gradients in metres per metre, without vertical exaggeration or smoothing.
+ * Native cell gradients in metres per metre; optional vertical exaggeration affects lighting only.
  * Lambertian hillshade: fixed north-west light (azimuth 315°, elevation 45°), no cast shadows.
  * Light vector in east/north/up coordinates is (-0.5, 0.5, sqrt(0.5)); sea stays dark blue.
  */
-export function drawShade(map: PhysicalField, out: string, name: string) {
+export function drawShade(map: PhysicalField, out: string, name: string, reliefGain = 1) {
+  if (!Number.isFinite(reliefGain) || reliefGain <= 0)
+    throw new Error("Hillshade relief gain must be a finite positive number");
   const gradient = physicalGradients(
     map.mesh,
     (i) => MapScale.metres(map.Elevation.get(i), "native"),
@@ -288,8 +289,8 @@ export function drawShade(map: PhysicalField, out: string, name: string) {
   try {
     drawCells(map, out, name, (i) => {
       if (!isLand(map, i)) return [35, 45, 70];
-      const x = gradient.x.get(i),
-        y = gradient.y.get(i),
+      const x = gradient.x.get(i) * reliefGain,
+        y = gradient.y.get(i) * reliefGain,
         light = (0.5 * x - 0.5 * y + Math.SQRT1_2) / Math.hypot(x, y, 1),
         grey = Math.round(255 * Math.max(0, Math.min(1, light)));
       return [grey, grey, grey];
@@ -305,24 +306,20 @@ export function drawSystems(map: PhysicalField, out: string, name: string) {
     isLand(map, i) ? (colours.get(i) ?? [120, 140, 110]) : [35, 45, 70]
   );
 }
-function drawCells(
+export function drawCells(
   map: PhysicalField,
   out: string,
   name: string,
   colourAt: (i: number) => readonly number[]
 ) {
   const [west, south, east, north] = map.mesh.bounds,
-    [originX, originY] = map.mesh.origin,
     width = 900,
     tall = Math.ceil((width * (north - south)) / (east - west)),
     span = (east - west) / width,
     rgb = new Uint8Array(3 * width * tall);
   for (let row = 0; row < tall; row++)
     for (let col = 0; col < width; col++) {
-      const i = map.mesh.cellAt(
-          west - originX + (col + 0.5) * span,
-          north - originY - (row + 0.5) * span
-        ),
+      const i = map.mesh.cellAt(west + (col + 0.5) * span, north - (row + 0.5) * span),
         colour = i < 0 ? [35, 45, 70] : colourAt(i);
       rgb.set(colour, 3 * (row * width + col));
     }

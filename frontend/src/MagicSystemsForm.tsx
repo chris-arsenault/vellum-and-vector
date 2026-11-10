@@ -331,9 +331,7 @@ function PropagationSettings({
       label={parameterLabels[key]}
       value={system.parameters[key]}
       min={0}
-      step={
-        ["maximumSources", "rayCount", "coastalSources", "wakeSources"].includes(key) ? 1 : "any"
-      }
+      step={["rayCount", "coastalSources", "wakeSources"].includes(key) ? 1 : "any"}
       change={(value) => change({ ...system, parameters: { ...system.parameters, [key]: value } })}
     />
   ));

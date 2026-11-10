@@ -1,6 +1,30 @@
 import { expect, it } from "vitest";
 import { wayClass, wayClasses, wornCost } from "./societyWays";
 import { compactGroups } from "./societyGroups";
+import { retainRegionalConnections } from "./regionalSociety";
+import type { SocietyConnection } from "@atlas/domain";
+
+it("drops a closed door while retaining the worn land alternative", () => {
+  const land: SocietyConnection = {
+    from: "a",
+    to: "b",
+    kind: "land",
+    distance: 1000,
+    travelCost: 800,
+    wear: 200,
+  };
+  const door: SocietyConnection = { ...land, kind: "door", distance: 10, travelCost: 10 };
+  const ids = new Set(["a", "b"]);
+  expect(retainRegionalConnections([land], [land, door], ids)).toEqual([
+    { ...land, travelCost: wornCost(land) },
+  ]);
+  const reopened = { ...door, distance: 30, travelCost: 30 };
+  expect(retainRegionalConnections([land, reopened], [land, door], ids)).toContainEqual({
+    ...door,
+    distance: 30,
+    travelCost: 30,
+  });
+});
 
 it("classes a way by its yearly travellers", () => {
   expect(wayClass({ wear: 0 })).toBeNull();

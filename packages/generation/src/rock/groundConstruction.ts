@@ -4,7 +4,7 @@ import { recordFlow, type FlowCause, type Pool } from "../coupling/flows";
 import { buryCover } from "./groundBurial";
 import { placeMaterial } from "./groundMaterial";
 import { facetShare, moveFacet, projectGround, type GroundFacet } from "./groundShares";
-import type { MaterialLayer } from "./rockColumn";
+import { observeConstruction, type MaterialLayer } from "./rockColumn";
 import { groundStorage } from "./groundStorage";
 
 /** Solid emplacement. A selected facet receives local depth; the result is mean cell height. */
@@ -30,6 +30,7 @@ export function constructMaterial(
   groundStorage(map).SurfaceRockLoad.add(cell, built);
   recordFlow(map, cause, from, "rock", MapScale.metres(built, "native") * map.mesh.area(cell));
   projectGround(map, cell);
+  observeConstruction(map, cell, material, cause, built);
   return built;
 }
 

@@ -20,6 +20,10 @@ import { harnessRoot } from "./harnessWorkspace";
 import { writeGroundSection } from "./groundSection";
 import { nativeWorkload } from "./nativeWorkload";
 import { reliefProbes } from "./reliefProbes";
+import { clearLiveMagic, liveMagicForcing } from "./extinctMagic";
+import { drawMaterials } from "./materialPicture";
+import { rockTrace } from "./rockTrace";
+import { inspectWeakLayers } from "./weakLayerInspection";
 import { beltSupply, landHeights, moveBudget, stuckRootCrust } from "./reliefSupply";
 import {
   drawHeights,
@@ -40,6 +44,10 @@ import {
  * `oldGround` holds the means at the start and end and where that ground now sits in the plates'
  * work, and `oldGroundSteps` each step that moved a part of its column by a metre or more, by what
  * that ground was in the first epoch. `HARNESS_PASSES=0` reports a snapshot as it stands.
+ * `HARNESS_PASS=final HARNESS_EXTINCT_MAGIC=1 HARNESS_PASSES=2` continues the completed world
+ * after clearing live magical forcing. Material images use the app's present substrate projection,
+ * never historical labels; inspect them and the terrain to judge surviving remnants.
+ * `HARNESS_RELIEF_GAIN=15` exaggerates only hillshade gradients, recorded in the report and filename.
  */
 const out = join(harnessRoot, process.env.HARNESS_OUT ?? "replay.json");
 
@@ -65,6 +73,8 @@ function runPass(
   epochs: Epoch[]
 ) {
   const schedule = nativeWorkload(epochs).filter((entry) => entry.epochIndices[0] === pass);
+  if (!schedule.length)
+    throw new Error(`No physical operations selected for continuation epoch ${pass}.`);
   for (const { step, invocation, deformation } of schedule) {
     const context = physicalContext(
       seed,
@@ -108,23 +118,52 @@ function oldGroundWatch(map: PhysicalField) {
   };
 }
 function saveReport(map: PhysicalField, result: { seconds: number }) {
-  writeFileSync(out, JSON.stringify(result, null, 1));
-  const imageName = basename(out, extname(out));
+  const imageName = basename(out, extname(out)),
+    reliefGain = Number(process.env.HARNESS_RELIEF_GAIN ?? 1),
+    shadeName = `${imageName}-shade${reliefGain === 1 ? "" : `-relief-${reliefGain}x`}.png`;
+  writeFileSync(
+    out,
+    JSON.stringify(
+      {
+        ...result,
+        presentation: { hillshade: { verticalExaggeration: reliefGain, image: shadeName } },
+      },
+      null,
+      1
+    )
+  );
   drawSystems(map, harnessRoot, `${imageName}-systems.png`);
   drawHeights(map, harnessRoot, `${imageName}-heights.png`, false);
   drawHeights(map, harnessRoot, `${imageName}-contacts.png`);
-  drawShade(map, harnessRoot, `${imageName}-shade.png`);
+  drawShade(map, harnessRoot, shadeName, reliefGain);
+  drawMaterials(map, harnessRoot, imageName);
   writeGroundSection(map, join(harnessRoot, imageName), process.env.HARNESS_SECTION_CELLS ?? "");
   process.stdout.write(`\nreplay: ${out} in ${result.seconds} s\n`);
 }
 function selectedSnapshot() {
   const label = process.env.HARNESS_STAGES!,
+    requested = process.env.HARNESS_PASS,
     selection =
-      process.env.HARNESS_PASS === "failure" ? "failure" : Number(process.env.HARNESS_PASS ?? 1),
+      requested === "failure" || requested === "final" ? requested : Number(requested ?? 1),
     count = Number(process.env.HARNESS_PASSES ?? 1),
     saved = restoreSnapshot(snapshotPath(label, selection), count === 0),
-    pass = selection === "failure" ? saved.failure!.lastObservedEpoch : selection;
+    pass =
+      selection === "failure"
+        ? saved.failure!.lastObservedEpoch
+        : selection === "final"
+          ? saved.epochs.length
+          : selection;
   return { ...saved, pass, count };
+}
+function weakLayerSamples(map: PhysicalField) {
+  return process.env.HARNESS_WEAK_LAYERS
+    ? {
+        weakLayers: inspectWeakLayers(
+          map,
+          process.env.HARNESS_SECTION_CELLS?.split(",").map(Number)
+        ),
+      }
+    : {};
 }
 it.runIf(process.env.HARNESS_STAGES)(
   "replays a pass of the world from a snapshot",
@@ -140,7 +179,10 @@ it.runIf(process.env.HARNESS_STAGES)(
       stages: object[] = [],
       slopes: object[] = [],
       oldGround = oldGroundWatch(map),
+      rock = rockTrace(),
       started = performance.now();
+    const extinctMagic = Boolean(process.env.HARNESS_EXTINCT_MAGIC);
+    if (extinctMagic) clearLiveMagic(map);
     const landAtStart = landHeights(map),
       before = moveBudget(map);
     observeNativeSteps((name, field, context) => {
@@ -172,7 +214,15 @@ it.runIf(process.env.HARNESS_STAGES)(
       observeNativeSteps(null);
     }
     const result = {
-      workload: { physicalOnly: true, profileSource, profile, epochs, failure },
+      workload: {
+        physicalOnly: true,
+        clearedLiveMagic: extinctMagic ? liveMagicForcing : [],
+        profileSource,
+        profile,
+        epochs,
+        failure,
+      },
+      monitoring: { memory: process.memoryUsage(), resourceUsage: process.resourceUsage() },
       pass,
       seconds: Math.round((performance.now() - started) / 1000),
       startLand: landAtStart,
@@ -184,6 +234,8 @@ it.runIf(process.env.HARNESS_STAGES)(
       slopes,
       everyPass,
       stages,
+      rock: rock.read(map),
+      ...weakLayerSamples(map),
       ...oldGround.read(),
       ...probes.read(),
     };

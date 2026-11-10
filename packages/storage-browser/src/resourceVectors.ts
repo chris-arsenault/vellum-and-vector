@@ -11,8 +11,8 @@ import {
 export function arraySelection(array: ResourceArray, partition: PartitionReference) {
   return (
     partition.arraySlices?.[array.name] ?? {
-      offset: [partition.cellStart],
-      shape: [partition.cellCount],
+      offset: array.shape.map(() => 0),
+      shape: array.shape.map(() => 0),
     }
   );
 }

@@ -21,6 +21,7 @@ const observed = vi.hoisted(() => ({
   failed: vi.fn<
     (input: unknown, map: PhysicalField, context: PhysicalContext, failure: unknown) => string
   >(() => "failure.bin"),
+  final: vi.fn(() => "final.bin"),
 }));
 vi.mock("../../../packages/generation/src/world/physicalSteps", () => ({
   observeNativeSteps: (observer: NativeStepObserver | null) => {
@@ -48,6 +49,7 @@ vi.mock("./epochStory", () => ({
 }));
 vi.mock("./fieldSnapshot", () => ({
   captureFailedField: observed.failed,
+  captureFinalField: observed.final,
   snapshotRecorder: () => (name: string) => {
     if (name !== "physical-epoch-history") return false;
     observed.now += 11;
@@ -85,7 +87,7 @@ it("skips embedded scans, retains outer observations and separates snapshot cost
     granularity: "outer-native-steps",
     observedSteps: 2,
     embeddedStepsSkipped: 1,
-    snapshotsWritten: 1,
+    snapshotsWritten: 2,
     observerMilliseconds: 10,
     snapshotMilliseconds: 11,
     finalizationMilliseconds: 15,
@@ -94,6 +96,12 @@ it("skips embedded scans, retains outer observations and separates snapshot cost
   expect(observed.observer).toBeNull();
   expect(observed.failed).not.toHaveBeenCalled();
   expect(result.failedSnapshot).toBeUndefined();
+  expect(result.finalSnapshot).toBe("final.bin");
+  expect(observed.final).toHaveBeenCalledWith(
+    { label: "supplied", quality: "Standard", seed: 42, epochs: [] },
+    map,
+    context
+  );
 });
 
 it("captures the last field after failed-step mutations with explicitly last-known context", () => {
@@ -118,5 +126,6 @@ it("captures the last field after failed-step mutations with explicitly last-kno
   expect(observed.failed.mock.calls[0][1]).toMatchObject({ rainfall: { value: -3 } });
   expect(result.failedSnapshot).toBe("failure.bin");
   expect(result.monitoring.snapshotMilliseconds).toBe(13);
+  expect(observed.final).not.toHaveBeenCalled();
   expect(observed.observer).toBeNull();
 });

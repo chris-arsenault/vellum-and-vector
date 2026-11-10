@@ -12,12 +12,12 @@ import { societyValue } from "./societySupport";
 import { peopleTrait } from "./societyTraits";
 import { practiceSkill } from "./societySkill";
 import { mapScale } from "./worldSignificance";
+import { gatherSolid, useSolid, tradeSolid, carriedSolid } from "./societyMaterials";
 import {
   accessibleDive,
   depositAt,
   drawAt,
   magicAt,
-  magicFieldForRole,
   magicSystemForRole,
   reservoirAt,
 } from "./societyMagicAccess";
@@ -31,6 +31,8 @@ export const memoryIce = MapScale.length(0.0000025),
   memoryCold = 10;
 /** Stock amount (intensity·m²) one core-equivalent of the practice ledger stands for. */
 const stockPerCore = MapScale.area(6.25e-7);
+/** Charge represented by one crystal-equivalent in the existing practice display. */
+const stockPerCrystal = MapScale.area(6.25e-10);
 /**
  * Share of the sap under a seat a community gathers per year, and the most per head. At this
  * a market two centuries down the road from a full Deepwood seat has planted sap enough for
@@ -50,11 +52,10 @@ function heldStockAt(state: GenerationState, i: number) {
         total += societyValue(state, `magic:${system.id}:stock:${origin.id}/${stock.id}`, i);
   return total;
 }
-/** Live material is authoritative; society-only inputs retain their finite deposit ledger. */
-function drawHeldStock(state: GenerationState, sample: number, cores: number) {
-  if (!magicFieldForRole(state, "quickens")) return cores;
+/** Live material is authoritative, including when society works on captured geography. */
+function drawHeldStock(state: GenerationState, community: string, sample: number, cores: number) {
   const stock = mapScale(state).resolveMeasure(stockPerCore);
-  return drawAt(state, "quickens", "held", sample, cores * stock) / stock;
+  return gatherSolid(state, "quickens", "held", community, sample, cores * stock) / stock;
 }
 /**
  * Cores cracked in the forge release where they are cracked: the stock moves from the ledger
@@ -71,22 +72,15 @@ function crackCores(state: GenerationState, sample: number, used: number) {
 }
 function initialPractice(state: GenerationState, c: SocietyCommunity): SocietyMagicPractice {
   const i = nearestSample(state, c.position),
-    ice = societyValue(state, "iceThickness", i),
-    scale = mapScale(state);
-  // The deposit is the held stock under the seat (vein cores and fallen cores alike) plus a
-  // mineral estimate from the field; extraction draws the stock down on the mesh.
-  const deposit =
-    Math.max(0, magicAt(state, "quickens", i)) *
-      Math.min(MapScale.areaUnits(c.areaKm2, "km2", "m2") / scale.area(6.25e-8), 100) *
-      100 +
-    heldStockAt(state, i) / scale.resolveMeasure(stockPerCore);
+    scale = mapScale(state),
+    deposit = heldStockAt(state, i) / scale.resolveMeasure(stockPerCore);
   return {
     communityId: c.id,
     coreDeposit: deposit,
     coreSupply: 0,
     coreUsed: 0,
     heatApplied: 0,
-    crystals: magicAt(state, "stills", i) * Math.min(1000, ice / scale.length(2.5e-7)),
+    crystals: 0,
     charge: 0,
     readers: 0,
     memoryAccess: 0,
@@ -121,15 +115,24 @@ function fireUse(
   years: number,
   skill: Skill
 ) {
-  const requested = Math.min(
-    practice.coreDeposit,
-    population(c) * years * 0.002 * skill("fire-forge")
-  );
-  const extracted = drawHeldStock(state, nearestSample(state, c.position), requested);
-  practice.coreDeposit -= extracted;
-  practice.coreSupply += extracted;
+  const requested = population(c) * years * 0.002 * skill("fire-forge");
+  const sample = nearestSample(state, c.position);
+  drawHeldStock(state, c.id, sample, requested);
+  practice.coreDeposit =
+    reservoirAt(state, "quickens", "held", sample) / mapScale(state).resolveMeasure(stockPerCore);
+  practice.coreSupply =
+    carriedSolid(state, "quickens", c.id, sample) / mapScale(state).resolveMeasure(stockPerCore);
   const demand = population(c) * years * 0.0005,
-    used = Math.min(practice.coreSupply, demand);
+    stock = mapScale(state).resolveMeasure(stockPerCore),
+    used =
+      useSolid(
+        state,
+        "quickens",
+        c.id,
+        sample,
+        Math.min(practice.coreSupply, demand) * stock,
+        true
+      ) / stock;
   practice.coreSupply -= used;
   practice.coreUsed += used;
   crackCores(state, nearestSample(state, c.position), used);
@@ -150,20 +153,34 @@ function auroraUse(
   years: number,
   skill: Skill
 ) {
-  if (p.crystals <= 0) return;
   const i = nearestSample(state, c.position),
-    intensity = magicAt(state, "stills", i);
+    stock = mapScale(state).resolveMeasure(stockPerCrystal),
+    demand = population(c) * years * 0.002 * skill("aurora-archive");
+  gatherSolid(state, "stills", "ground", c.id, i, demand * stock);
+  gatherSolid(state, "stills", "moraine", c.id, i, demand * stock, true);
+  p.crystals = carriedSolid(state, "stills", c.id, i) / stock;
+  if (p.crystals <= 0) return;
   const cold = Math.max(0, Math.min(1, -societyValue(state, "temperature", i) / memoryCold));
   const retained =
     Math.min(
       1,
       societyValue(state, "iceThickness", i) / mapScale(state).resolveMeasure(memoryIce)
     ) * cold;
-  p.crystals *= Math.exp((-years * (1 - retained)) / 200);
-  p.charge = Math.min(p.crystals, p.charge + (intensity * p.crystals * years) / 50);
+  useSolid(
+    state,
+    "stills",
+    c.id,
+    i,
+    p.crystals * stock * (1 - Math.exp((-years * (1 - retained)) / 200)),
+    true
+  );
+  p.charge = carriedSolid(state, "stills", c.id, i) / stock;
   p.readers = (population(c) * 0.005 * skill("aurora-archive")) / (1 + p.strain);
-  const use = Math.min(p.charge, p.readers * years * 0.02);
-  p.charge -= use;
+  const use =
+    useSolid(state, "stills", c.id, i, Math.min(p.charge, p.readers * years * 0.02) * stock, true) /
+    stock;
+  p.crystals = carriedSolid(state, "stills", c.id, i) / stock;
+  p.charge = p.crystals;
   p.strain = p.strain * Math.exp(-years / 20) + use / Math.max(1, p.readers * 100);
   p.memoryAccess = Math.min(
     1,
@@ -258,17 +275,17 @@ function saltUse(
 ) {
   const i = nearestSample(state, c.position),
     bed = reservoirAt(state, "salts", "bed", i);
-  p.salt ??= 0;
+  p.salt = carriedSolid(state, "salts", c.id, i);
   if (bed > 0) {
     const wanted = Math.min(
       bed * raking.share * years,
       population(c) * years * mapScale(state).resolveMeasure(raking.perHead)
     );
-    p.salt += drawAt(state, "salts", "bed", i, wanted);
+    p.salt += gatherSolid(state, "salts", "bed", c.id, i, wanted, true);
   }
   const laid = p.salt * (1 - Math.exp(-saltLaying * years));
   if (laid <= 0) return;
-  p.salt -= depositAt(state, "salts", "bed", i, laid);
+  p.salt -= useSolid(state, "salts", c.id, i, laid);
 }
 /** Share of the bed under a seat raked per year, and the most per head; share of carried salt laid per year. */
 const raking = { share: 0.002, perHead: MapScale.area(1.25e-9) };
@@ -299,11 +316,41 @@ function tradeStocks(state: GenerationState, years: number) {
     const share =
       -Math.expm1((-2 * years * wayFlow(mapScale(state), link)) / tradeResponseYears) / 2;
     for (const ledger of tradedLedgers) {
-      const surplus = ((a[ledger] ?? 0) - (b[ledger] ?? 0)) * share;
+      const requested = ((a[ledger] ?? 0) - (b[ledger] ?? 0)) * share,
+        surplus =
+          ledger === "seed"
+            ? requested
+            : tradeParcels(state, ledger, a.communityId, b.communityId, requested);
       a[ledger] = (a[ledger] ?? 0) - surplus;
       b[ledger] = (b[ledger] ?? 0) + surplus;
     }
   }
+}
+function tradeParcels(
+  state: GenerationState,
+  ledger: "salt" | "coreSupply",
+  a: string,
+  b: string,
+  amount: number
+) {
+  const communities = state.society!.region.communities,
+    source = communities.find((c) => c.id === (amount >= 0 ? a : b)),
+    target = communities.find((c) => c.id === (amount >= 0 ? b : a));
+  if (!source || !target) return 0;
+  const unit = ledger === "coreSupply" ? mapScale(state).resolveMeasure(stockPerCore) : 1;
+  return (
+    (Math.sign(amount) *
+      tradeSolid(
+        state,
+        ledger === "salt" ? "salts" : "quickens",
+        source.id,
+        target.id,
+        nearestSample(state, source.position),
+        nearestSample(state, target.position),
+        Math.abs(amount) * unit
+      )) /
+    unit
+  );
 }
 export function useSocietyMagic(state: GenerationState, context: MapProcessContext, years: number) {
   const region = state.society!.region;

@@ -41,6 +41,8 @@ function immutableSamples(grid: GridSurface): boolean {
     immutable(grid.active) &&
     immutable(grid.measures) &&
     Object.values(grid.channels).every(immutable) &&
+    (!grid.materialCargo ||
+      (immutable(grid.materialCargo.offsets) && immutable(grid.materialCargo.records))) &&
     Object.values(grid.topology ?? {})
       .filter((value): value is Band => value instanceof Band)
       .every(immutable) &&
@@ -58,6 +60,16 @@ function shareInputs(grid: GridSurface): GridSurface {
     bounds: [...grid.bounds],
     channels: { ...grid.channels },
     units: { ...grid.units },
+    ...(grid.materialCargo
+      ? {
+          materialCargo: {
+            ...grid.materialCargo,
+            keys: [...grid.materialCargo.keys],
+            releasedTo: [...grid.materialCargo.releasedTo],
+            slots: [...grid.materialCargo.slots],
+          },
+        }
+      : {}),
     ...(grid.quantities ? { quantities: { ...grid.quantities } } : {}),
     ...(grid.overlays
       ? {

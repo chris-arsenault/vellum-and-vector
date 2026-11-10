@@ -6,6 +6,9 @@ import { materialProperties, type MaterialProperty } from "./rockLayerFields";
 
 import { loadFields, seaLoadFields } from "./groundLoadFields";
 import { groundStorage } from "./groundStorage";
+import { CargoStore } from "./groundCargo";
+import { retainedArray } from "../world/physicalNumerics";
+import type { MaterialCargo } from "./materialCargo";
 export {
   loadIntegerFields,
   loadScalarFields,
@@ -18,6 +21,7 @@ const integerProperty = (property: MaterialProperty) =>
 /** Disaggregated material in cubic metres; its depth field is volume until it lands on ground. */
 export class MaterialLoad {
   private readonly bands: readonly Band[];
+  private cargo?: CargoStore;
   constructor(
     private readonly map: PhysicalField,
     key: string,
@@ -32,6 +36,15 @@ export class MaterialLoad {
   }
   amount(cell: number) {
     return this.bands[1].get(cell);
+  }
+  /** Resource import restores charge only after its complete material body has been imported. */
+  importCargo(cell: number, cargo?: MaterialCargo) {
+    if (cargo && !this.cargo)
+      this.cargo = new CargoStore(retainedArray(this.map, "int32", "load:cargo-heads"));
+    this.cargo?.set(cell, this.amount(cell) > 0 ? cargo : undefined);
+  }
+  readCargo(cell: number) {
+    return this.amount(cell) > 0 ? this.cargo?.get(cell) : undefined;
   }
   /** Independent scalar snapshot; subsequent routing cannot change an earlier receipt. */
   get(cell: number): MaterialLayer {
@@ -54,27 +67,36 @@ export class MaterialLoad {
       formedMax: value("formedMax"),
       altered: value("altered"),
       mixed: value("mixed"),
+      cargo: this.cargo?.get(cell),
     };
   }
   add(cell: number, material: MaterialLayer) {
     if (material.depth <= 0) return;
     const next = this.amount(cell) > 0 ? mergeMaterial(this.get(cell), material) : material;
     materialProperties.forEach((property, index) => this.bands[index].set(cell, next[property]));
+    if (next.cargo && !this.cargo)
+      this.cargo = new CargoStore(retainedArray(this.map, "int32", "load:cargo-heads"));
+    this.cargo?.set(cell, next.cargo);
     this.project(cell);
   }
   take(cell: number, volume: number): MaterialLayer {
     const held = this.get(cell),
       taken = Math.min(held.depth, Math.max(0, volume));
     this.bands[1].set(cell, held.depth - taken);
+    if (taken >= held.depth) this.cargo?.clear(cell);
     this.project(cell);
     return { ...held, depth: taken };
   }
   clear(cell: number) {
     for (const band of this.bands) band.set(cell, 0);
+    this.cargo?.clear(cell);
     this.project(cell);
   }
   release() {
-    if (!this.persistent) releaseWorking(this.map, ...this.bands);
+    if (!this.persistent) {
+      releaseWorking(this.map, ...this.bands);
+      this.cargo?.release(this.map);
+    }
   }
   private project(cell: number) {
     if (this.persistent !== "ground") return;

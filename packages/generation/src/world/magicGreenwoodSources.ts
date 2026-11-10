@@ -1,13 +1,14 @@
 import type { GenerationState } from "../process";
 import { respond } from "../coupling/answers";
 import type { PhysicalField } from "./field";
-import { reservoirStock, type MagicField } from "./magicState";
-import type { LocateContext } from "./magicSources";
+import type { MagicField } from "./magicState";
+import type { LocateContext, SupplyContext } from "./magicSources";
 import { siteStrength } from "./magicStocks";
-import { clamp, round, units } from "./math";
+import { clamp } from "./math";
 import { groundOf } from "../rock/ground";
 import { surfaceResistance } from "../rock/groundQueries";
 import { averageGroundQuery, groundFact } from "../rock/groundQuery";
+import { secondsPerYear } from "./dimensions";
 
 /**
  * Greenwood's stands: old growth (a canopy past the stand age with cover past the floor) and
@@ -39,15 +40,34 @@ export function verdantSources(
         strength,
         400 + 300 * clamp(peat / Math.max(1e-9, p.peatDepth) - 1, 0, 1)
       );
-    if (sap) {
+    strength *= context.activity;
+    if (sap && livingStand(canopy, age, p.standCover)) {
       const grove = clamp(sap.get(i) / area / p.groveSap, 0, 1);
       strength = Math.max(strength, 500 * grove);
     }
     const site = siteStrength(strength);
     if (site === 0) continue;
     field.source.set(i, site);
-    // A stand refills its own sap; a planting below the floor is only what was carried there.
-    if (sap) sap.set(i, Math.max(sap.get(i), site * area));
+  }
+}
+const livingStand = (cover: number, age: number, floor: number) => cover >= floor && age > 0;
+/** Only established vegetation renews sap. Carried sap cannot refill itself. */
+export function supplySap(
+  state: GenerationState,
+  field: MagicField,
+  _seed: number,
+  { origin, activity }: SupplyContext
+) {
+  const map = state.physical!.map,
+    p = field.definition.parameters,
+    sap = field.stocks[`${origin.id}/sap`];
+  if (!sap || activity <= 0) return;
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.WaterKindCodes.get(i) !== 0 || map.IceThickness.get(i) > 0) continue;
+    const canopy = map.BroadleafCover.get(i) + map.ConiferCover.get(i),
+      mature = canopy >= p.standCover && map.CanopyAge.get(i) >= p.standAge,
+      peat = map.PeatCarbon.get(i) >= p.peatDepth;
+    if (mature || peat) sap.add(i, activity * map.mesh.area(i) * 500 * p.sapLoss);
   }
 }
 /**
@@ -82,43 +102,36 @@ export function forgeSources(
     });
   }
 }
-/** Open, unfrozen ground on soft karst at a slope break with the spring flow through it. */
-function springGround(map: PhysicalField, i: number, springFlow: number, springRock: number) {
+/** Groundwater emergence supplies its own discharge, independently of an existing river. */
+function springGround(map: PhysicalField, i: number, springRock: number) {
   if (map.WaterKindCodes.get(i) !== 0 || map.IceThickness.get(i) > 0) return false;
-  if (
-    map.FlowAccumulation.get(i) < springFlow ||
-    groundOf(map).fold(i, surfaceResistance) > springRock
-  )
-    return false;
-  return map.Slope.get(i) <= 0.01 && karst(map, i) >= 0.35;
+  if (groundOf(map).fold(i, surfaceResistance) > springRock) return false;
+  return map.GroundwaterReturn.get(i) > 0 && karst(map, i) >= 0.35;
 }
-/**
- * The spring is where the river comes onto spring ground: the first such cell along its
- * course, not every reach it then runs along the karst.
- */
-function springRises(map: PhysicalField, i: number, springFlow: number, springRock: number) {
-  if (!springGround(map, i, springFlow, springRock)) return false;
-  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
-    const j = map.mesh.neighbor(i, edge);
-    if (j >= 0 && map.FlowTargets.get(j) === i && springGround(map, j, springFlow, springRock))
-      return false;
-  }
-  return true;
+/** Water concentration and actual discharge determine response; site naming has its own floor. */
+export function springResponse(
+  charge: number,
+  waterVolume: number,
+  discharge: number,
+  concentrationScale: number,
+  dischargeScale: number
+) {
+  if (charge <= 0 || waterVolume <= 0 || discharge <= 0) return 0;
+  const concentration = charge / waterVolume;
+  return 1000 / (1 + concentrationScale / concentration) / (1 + dischargeScale / discharge);
 }
 const waterEntry = averageGroundQuery({
   start: 0,
   rock: (_, layer) => Math.max(groundFact(layer, "solubility"), groundFact(layer, "porosity")),
 });
-/** Water finds its way through continental crust as far as the rock there dissolves or lets it. */
+/** Current hydraulic material decides entry; earlier volcanism cannot veto replacement sediment. */
+export const springSubstrate = (continentalShare: number, entry: number) =>
+  continentalShare * (0.3 + 0.7 * entry);
+/** Water finds its way through continental crust as far as the present rock allows. */
 function karst(map: PhysicalField, i: number) {
-  return (
-    (map.CrustContinentalFraction.get(i) / 1000) *
-    (1 -
-      Math.min(
-        1,
-        map.VolcanicConstructionHistory.get(i) / units(map.scale.length(0.000025, 0.5))
-      )) *
-    (0.3 + 0.7 * groundOf(map).fold(i, waterEntry))
+  return springSubstrate(
+    map.CrustContinentalFraction.get(i) / 1000,
+    groundOf(map).fold(i, waterEntry)
   );
 }
 // What Greenwood's springs feed keeps wet the ground its verdure reaches, so rivers, slopes and soil
@@ -130,10 +143,9 @@ respond({
   add: (map, i) => map.Verdure.get(i) * 0.5,
 });
 /**
- * Greenwood's springs: where a catchment's recharge reaches the surface through soft, soluble
- * rock on a slope break, stronger where a buried peat stratum lies beneath. The spring is
- * where the river comes onto that ground, not every reach it then runs along it. A spring
- * whose karst has fallen in (sealed) rises no more.
+ * Greenwood's springs: dissolved charge returns with groundwater through soft, soluble rock.
+ * The water and retained charge determine emergence, even away from existing surface drainage.
+ * A spring whose karst has fallen in (sealed) rises no more.
  */
 export function aquiferSources(
   state: GenerationState,
@@ -143,13 +155,22 @@ export function aquiferSources(
 ) {
   const map = state.physical!.map,
     p = field.definition.parameters,
-    stratum = reservoirStock(field, "stratum");
+    aquifer = field.stocks[`${origin.id}/springwater`];
+  if (!aquifer) return;
   for (let i = 0; i < map.mesh.count; i++) {
-    if (field.sealed.get(i) > 0 || !springRises(map, i, p.springFlow, p.springRock)) continue;
+    if (field.sealed.get(i) > 0 || !springGround(map, i, p.springRock)) continue;
     const area = map.mesh.area(i),
-      buried = stratum ? Math.min(300, stratum.get(i) / area) : 0,
-      strength = clamp(round(600 + buried), 1, 1000);
+      volume = map.GroundwaterReturn.get(i) * area,
+      strength = springResponse(
+        aquifer.get(i),
+        volume,
+        volume / secondsPerYear,
+        p.springChargeSaturation,
+        p.springFlow
+      );
+    if (strength <= 0) continue;
     field.source.set(i, strength);
+    if (siteStrength(strength) === 0) continue;
     field.located.push({
       origin: origin.id,
       id: `spring:${i}`,

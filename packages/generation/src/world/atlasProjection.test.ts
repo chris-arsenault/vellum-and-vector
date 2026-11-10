@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { residentBand, type GridSurface } from "@atlas/domain";
+import { cloneFieldInput, residentBand, type GridSurface } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { resolveGenerationFeatures, type FeatureSelection } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
@@ -11,6 +11,9 @@ import { atlasPhysicalProfile } from "./atlasProfile";
 import { Landform } from "./codes";
 import { groundResourceBindings } from "../rock/groundResources";
 import { refinementChannel } from "../regional/capture";
+import { setLayer } from "../rock/rockColumn";
+import { rockCatalogue } from "../rock/rockCatalogue";
+import { GroundInventory } from "../rock/groundInventory";
 
 it("publishes complete ground for refinement without requiring load response", () => {
   const features = resolveGenerationFeatures(
@@ -102,6 +105,16 @@ it("does not classify physical material when the landform feature is disabled", 
   expect(state.surface.channels.elevation.get(0)).toBe(100);
 });
 
+it("publishes present surface material as a category independently of active magic", () => {
+  const { state, map, channels, bindings } = fixture();
+  setLayer(map, 0, 0, rockCatalogue.keptStone.code, 100);
+  setLayer(map, 0, 0, rockCatalogue.alluvium.code, 10, {}, "loose");
+  projectNative(state, false, false, bindings, channels);
+  expect(state.surface.channels.surfaceMaterial.get(0)).toBe(rockCatalogue.alluvium.code);
+  expect(state.surface.units.surfaceMaterial).toBe("category");
+  expect(state.surface.quantities?.surfaceMaterial).toBe("category");
+});
+
 it("does not compute a composite erosion product when all its owners are disabled", () => {
   const { state, map, channels, bindings } = fixture({
     "physical.river-incision": { enabled: false },
@@ -172,4 +185,60 @@ it("updates existing projection buffers as the shared physical workspace advance
   expect(state.surface.channels.temperature).toBe(temperature);
   expect(Array.from(elevation).every((v) => v === 200)).toBe(true);
   expect(Array.from(temperature).every((v) => v === 5)).toBe(true);
+});
+function chargedFixture() {
+  const result = fixture(),
+    key = new GroundInventory(result.map, "salt:sea/bed").key;
+  setLayer(result.map, 0, 0, rockCatalogue.saltbed.code, 100, {
+    cargo: new Float64Array([key, rockCatalogue.saltbed.code, 4]),
+  });
+  return result;
+}
+it("releases replaced cargo buffers while a separately captured input remains readable", () => {
+  const { state, channels, bindings } = chargedFixture();
+  projectNative(state, false, false, bindings, channels);
+  const previous = state.surface.materialCargo!,
+    pinned = cloneFieldInput(state.surface);
+  projectNative(state, false, false, bindings, channels);
+  expect(previous.offsets.released).toBe(true);
+  expect(previous.records.released).toBe(true);
+  expect(pinned.materialCargo!.records.get(3)).toBe(4);
+  expect(state.surface.materialCargo!.records.get(3)).toBe(4);
+});
+it("retains cargo when preservation or selected bindings leave material channels unchanged", () => {
+  const { state, map, channels, bindings } = chargedFixture();
+  projectNative(state, false, false, bindings, channels);
+  const previous = state.surface.materialCargo!;
+  setLayer(map, 0, 0, rockCatalogue.granite.code, 100);
+  projectNative(state, false, true, bindings, channels);
+  expect(state.surface.materialCargo).toBe(previous);
+  projectNative(
+    state,
+    false,
+    false,
+    bindings.filter(({ name }) => name === "temperature"),
+    channels
+  );
+  expect(state.surface.materialCargo).toBe(previous);
+  expect(previous.offsets.released).toBe(false);
+  expect(state.surface.channels.rockLayer0.get(0)).toBe(rockCatalogue.saltbed.code);
+  projectNative(state, false, false, bindings, channels);
+  expect(previous.records.released).toBe(true);
+  expect(state.surface.materialCargo!.records.length).toBe(0);
+});
+it("does not release borrowed immutable resource cargo when producing a working projection", () => {
+  const source = chargedFixture();
+  projectNative(source.state, false, false, source.bindings, source.channels);
+  const original = source.state.surface.materialCargo!,
+    borrowed = {
+      ...original,
+      offsets: original.offsets.snapshot({ immutable: true }),
+      records: original.records.snapshot({ immutable: true }),
+    },
+    target = fixture();
+  target.state.surface.materialCargo = borrowed;
+  projectNative(target.state, false, false, target.bindings, target.channels);
+  expect(borrowed.offsets.released).toBe(false);
+  expect(borrowed.records.get(3)).toBe(4);
+  expect(original.records.get(3)).toBe(4);
 });

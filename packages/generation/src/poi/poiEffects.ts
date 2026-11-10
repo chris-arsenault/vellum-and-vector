@@ -93,7 +93,10 @@ function totalOver(base: number, change: CellChange) {
 
 /** What magic bands have had applied, by band, so a change is a total and never compounds. */
 const appliedMagic = new WeakMap<GenerationState, Map<string, Map<number, number>>>();
-function bandOf(state: GenerationState, target: PoiMagicBand): Band | undefined {
+function bandOf(
+  state: GenerationState,
+  target: PoiMagicBand
+): Pick<Band, "get" | "set"> | undefined {
   const field = state.physical?.magic?.fields.find((f) => f.definition.id === target.system);
   if (!field) return undefined;
   return "stock" in target ? field.stocks[target.stock] : field[target.channel];
@@ -134,6 +137,8 @@ export function declarePlaceEffects(state: GenerationState, ledger: Contribution
       crust: carrierFactors(state, "crust"),
       roots: carrierFactors(state, "roots"),
       ice: carrierFactors(state, "ice"),
+      river: carrierFactors(state, "river"),
+      wind: carrierFactors(state, "wind"),
     };
   releaseHeld(state);
 }

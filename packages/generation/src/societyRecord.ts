@@ -1,6 +1,9 @@
-import { population, type Position } from "@atlas/domain";
+import { population, type Position, type SocietyConnection } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { nativeIndexAtSurface } from "./world/atlasWorkspace";
+import { withRouteFinder, type RouteFinder } from "./mapRouting";
+import { meshDeltaX } from "./world/mesh";
+import type { PhysicalField } from "./world/field";
 
 /**
  * What people leave on the ground, written to the mesh at the end of every society cycle as
@@ -11,6 +14,7 @@ import { nativeIndexAtSurface } from "./world/atlasWorkspace";
  */
 export function recordSocietyOnMesh(state: GenerationState, years: number) {
   if (!state.physical || !state.society || years <= 0) return;
+  decayMaintainedGround(state.physical.map, years);
   const deaths = recordSeats(state, years) + recordEvents(state);
   walkRoutes(state, years);
   keepLines(state, years);
@@ -60,18 +64,66 @@ function recordEvents(state: GenerationState) {
 function walkRoutes(state: GenerationState, years: number) {
   const map = state.physical!.map,
     region = state.society!.region,
-    positions = new Map(region.communities.map((c) => [c.id, c.position]));
-  for (const link of region.connections) {
-    const wear = link.wear ?? 0,
-      a = positions.get(link.from),
-      b = positions.get(link.to);
-    if (wear <= 0 || !a || !b) continue;
-    for (const cell of cellsAlong(state, a, b, map.mesh.spacing / 2))
-      map.WalkedRoute.add(cell, wear * years);
-  }
+    positions = new Map(region.communities.map((c) => [c.id, c.position])),
+    travelled = state.society!.travelled ?? new Float64Array(region.connections.length);
+  const record = (route: RouteFinder) => {
+    for (const [index, link] of region.connections.entries()) {
+      const traffic = travelled[index],
+        a = positions.get(link.from),
+        b = positions.get(link.to);
+      if (!a || !b || !walkableTraffic(traffic, link.kind)) continue;
+      for (const cell of walkedCells(state, link, a, b, route))
+        map.WalkedRoute.add(cell, traffic * years);
+    }
+  };
+  if (
+    region.connections.some(
+      (link, i) => walkableTraffic(travelled[i], link.kind) && !walks.has(link)
+    )
+  )
+    withRouteFinder(state.surface, record);
+  else record(() => []);
 }
+// hpc-exempt: one typed route per connection; rebuilding the connection graph invalidates its path.
+const walks = new WeakMap<SocietyConnection, Int32Array>();
+function walkedCells(
+  state: GenerationState,
+  link: SocietyConnection,
+  a: Position,
+  b: Position,
+  route: RouteFinder
+) {
+  let cells = walks.get(link);
+  if (!cells) {
+    const path = route(a, b, "road"),
+      found = new Set<number>();
+    for (let n = 1; n < path.length; n++)
+      for (const cell of cellsAlong(
+        state,
+        path[n - 1],
+        path[n],
+        state.physical!.map.mesh.spacing / 2
+      ))
+        found.add(cell);
+    cells = Int32Array.from(found);
+    walks.set(link, cells);
+  }
+  return cells;
+}
+const walkableTraffic = (traffic: number, kind: string) =>
+  traffic > 0 && kind !== "sea" && kind !== "door";
 /** Years over which an unkept line is forgotten. */
 export const lineMemory = 150;
+export const maintenanceRetention = (years: number) => Math.exp(-Math.max(0, years) / lineMemory);
+/** Both elapsed-time owners age the same records; source refreshes never age them. */
+export function decayMaintainedGround(
+  map: Pick<PhysicalField, "WalkedRoute" | "KeptLine">,
+  years: number
+) {
+  const keep = maintenanceRetention(years);
+  for (const values of [map.WalkedRoute, map.KeptLine])
+    for (let i = 0; i < values.length; i++) values.set(i, values.get(i) * keep);
+}
 /** The condition above which a work keeps its line. */
 export const keptCondition = 0.5;
 /** Works with no catalogue entry of their own; a dam, irrigation or harbour declares its line. */
@@ -82,9 +134,7 @@ const keptWorkKinds = new Set(["pass", "weir"]);
  * Every line forgets over the memory, so one nobody walks fades from the ground.
  */
 function keepLines(state: GenerationState, years: number) {
-  const map = state.physical!.map,
-    keep = Math.exp(-years / lineMemory);
-  for (let i = 0; i < map.mesh.count; i++) map.KeptLine.set(i, map.KeptLine.get(i) * keep);
+  const map = state.physical!.map;
   const keptAt = (p: Pick<Position, "x" | "y">) => {
     const cell = cellAt(state, p);
     if (cell >= 0) map.KeptLine.add(cell, years);
@@ -117,11 +167,12 @@ function cellsAlong(
   b: Pick<Position, "x" | "y">,
   step: number
 ) {
-  const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / Math.max(1, step))),
+  const dx = meshDeltaX(state.physical!.map.mesh, b.x - a.x),
+    steps = Math.max(1, Math.ceil(Math.hypot(dx, b.y - a.y) / step)),
     cells = new Set<number>();
   for (let n = 0; n <= steps; n++) {
     const t = n / steps,
-      cell = cellAt(state, { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      cell = cellAt(state, { x: a.x + dx * t, y: a.y + (b.y - a.y) * t });
     if (cell >= 0) cells.add(cell);
   }
   return cells;

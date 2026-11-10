@@ -1,7 +1,9 @@
 import { rockCatalogue, rockKindOfCode } from "./rockCatalogue";
 import type { Band, ReadBand } from "@atlas/domain";
+import { blendCargo, aggregateCargo, type MaterialCargo } from "./materialCargo";
 
 export interface MaterialLayer {
+  readonly cargo?: MaterialCargo;
   readonly kind: number;
   readonly depth: number;
   readonly secondaryKind: number;
@@ -215,6 +217,7 @@ export function materialLayer(
     ...state,
     kind,
     depth,
+    cargo: aggregateCargo(state.cargo, kind, state.secondaryKind ?? kind),
   };
 }
 function combineRepeated(codes: readonly number[], weights: number[]) {
@@ -274,6 +277,11 @@ export function blendLayers(
     formedMax: Math.max(a.formedMax, b.formedMax),
     altered: Math.max(a.altered, b.altered),
     mixed: 1,
+    cargo: aggregateCargo(
+      blendCargo(a.cargo, b.cargo, aDepth, bDepth),
+      constituents.kind,
+      constituents.secondaryKind
+    ),
   };
 }
 export const mergeMaterial = blendLayers;

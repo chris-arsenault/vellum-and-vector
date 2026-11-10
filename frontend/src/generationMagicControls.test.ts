@@ -15,9 +15,7 @@ it.each(sources.flatMap((source) => propagation.map((mode) => [source, mode] as 
       keys = magicControlKeys(system);
     expect(new Set(keys).size).toBe(keys.length);
     if (source === "geothermal")
-      expect(keys).toEqual(
-        expect.arrayContaining(["sourceSpacing", "sourceThreshold", "maximumSources"])
-      );
+      expect(keys).toEqual(expect.arrayContaining(["sourceSpacing", "sourceThreshold"]));
     if (source === "cold") expect(keys).toContain("baseInput");
     if (mode === "fracture")
       expect(keys).toEqual(expect.arrayContaining(["baseCost", "conductanceDivisor"]));

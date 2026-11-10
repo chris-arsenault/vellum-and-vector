@@ -23,6 +23,7 @@ const common = new Set([
   "herbivores",
   "naturalSurface",
   "finalSurface",
+  "surfaceMaterial",
 ]);
 export function commonOverlay(channel: string) {
   return common.has(channel) || channel.endsWith(":intensity");

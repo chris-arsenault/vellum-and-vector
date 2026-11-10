@@ -50,7 +50,7 @@ export function localTownAllocations(
   return new Map(communities.map((c) => [c.id, unresolvedTownResidents(c, contacts.get(c.id))]));
 }
 
-/** Keep historically meaningful alternatives, including sea and door links beside a land way. */
+/** Keep worn alternatives; a door remains traversable only while its present edge exists. */
 export function retainRegionalConnections(
   current: SocietyConnection[],
   previous: SocietyConnection[],
@@ -61,6 +61,7 @@ export function retainRegionalConnections(
   for (const old of previous) {
     if (!ids.has(old.from) || !ids.has(old.to)) continue;
     const candidate = links.get(key(old));
+    if (old.kind === "door" && !candidate) continue;
     const link = { ...structuredClone(old), distance: candidate?.distance ?? old.distance };
     link.travelCost = wornCost(link);
     links.set(key(old), link);

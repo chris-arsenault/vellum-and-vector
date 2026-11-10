@@ -1,7 +1,7 @@
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
-import type { AtlasFeature, Landmark, SocietyRegion } from "@atlas/domain";
+import type { AtlasFeature, EpochHistory, Landmark, SocietyRegion } from "@atlas/domain";
 import type { GenerationDiagnostic } from "@atlas/generation";
 
 const fixtureBundle = build({
@@ -45,6 +45,8 @@ export interface GenerationFixtureOptions {
   landmarks?: Landmark[];
   society?: SocietyRegion;
   diagnostics?: GenerationDiagnostic[];
+  /** Completed geographic observations supplied to an independent copied catalog. */
+  history?: EpochHistory[];
 }
 
 /** UI journeys use a 16×16 fixture grid; the fixture shares the real worker output adapter. */
