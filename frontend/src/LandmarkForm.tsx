@@ -27,7 +27,7 @@ export function LandmarkForm({ editor }: { editor: EditorState }) {
       ) : null}
       <LandmarkList editor={editor} />
       <p className="hint">
-        Saving changes the landmark record. Regenerate the physical domain to re-form it; drainage,
+        Saving changes the landmark record. Generate the world again to re-form it; drainage,
         climate and ice respond in the same generation.
       </p>
       <ErrorMessage error={editor.commit.error} />
@@ -41,7 +41,7 @@ function LandmarkList({ editor }: { editor: EditorState }) {
       <h3>Landmarks</h3>
       {!landmarks.length && (
         <p className="hint">
-          None yet. Generate the physical domain; the generator sites the configured number.
+          None yet. Generate the world; the generator sites the configured number.
         </p>
       )}
       {landmarks.map((landmark) => (

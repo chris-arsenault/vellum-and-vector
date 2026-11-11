@@ -129,7 +129,6 @@ export function respondClimate(state: RegionalState) {
     mesh = map.mesh,
     moisture = naturalBand(state, "Moisture"),
     applied = state.regional.contributions;
-  if (!state.regional.input.domains.includes("physical")) return;
   deflectCapturedWind(state);
   const { gx, gy } = heightGradients(state);
   for (let i = 0; i < mesh.count; i++) {

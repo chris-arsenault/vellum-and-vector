@@ -20,7 +20,7 @@ import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { initializeEcology } from "./ecologyEstablishment";
 import { authoritativeCanopy, updateTreeCover, normalizeCommunities } from "./ecologyGrowth";
 import { plantGroups, livingPlantCarbon } from "./ecologyGroups";
-import { applyToxicity, ecologicalForcing } from "./ecologyMagic";
+import { ecologicalForcing } from "./ecologyMagic";
 import { erosionHistory } from "./ecologySoils";
 import { generationBindings, physicalEpochIndex } from "../generationBindings";
 import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
@@ -40,7 +40,6 @@ interface EcologyInput {
   seed: number;
   parameters: AtlasParameters;
   epochs: Epoch[];
-  physical: boolean;
 }
 function ecologyInput(input: AtlasGenerationInput, context: MapProcessContext): EcologyInput {
   if (context.inputs?.features) {
@@ -49,14 +48,12 @@ function ecologyInput(input: AtlasGenerationInput, context: MapProcessContext): 
       seed: bound.seed,
       parameters: bound.parameters,
       epochs: bound.settings.epochs,
-      physical: bound.domains.includes("physical"),
     };
   }
   return {
     seed: input.seed,
     parameters: atlasParametersSchema.parse(input.parameters ?? {}),
     epochs: input.settings?.epochs ?? [],
-    physical: input.domains.includes("physical"),
   };
 }
 
@@ -124,24 +121,15 @@ function initialize(state: GenerationState, seed: number) {
   }
   applyWoodlands(state);
 }
-function present(
-  state: GenerationState,
-  context: MapProcessContext,
-  seed: number,
-  input?: EcologyInput
-) {
+function present(state: GenerationState, context: MapProcessContext, seed: number) {
   const map = state.physical!.map;
   readEcologyEnvironment(map, nativeContext(state, context, 0));
   initializeEcology(map, seed, true);
   const restore = coverAuthority(state);
-  const magic = input ? forcing(state, input, context) : null;
-  if (magic) applyToxicity(map, 0, magic);
   for (let i = 0; i < map.mesh.count; i++) {
     const env = environment(map, i);
-    const fire = magic ? unit(magic(i).fire) : 0;
     const stress = presentStress(env);
-    if (fire > 0) map.FireActivity.set(i, fire);
-    if (stress > 0 || fire > 0) presentMortality(map, i, stress, fire, restore);
+    if (stress > 0) presentMortality(map, i, stress, restore);
     normalizeCommunities(map, i);
     updateTreeCover(map, i);
   }
@@ -156,18 +144,17 @@ function presentMortality(
   map: PhysicalField,
   i: number,
   stress: number,
-  fire: number,
   restore: (i: number) => void
 ) {
   const previous = livingPlantCarbon(map, i),
-    survival = (1 - stress) * (1 - fire);
+    survival = 1 - stress;
   for (const group of plantGroups) {
     map[group.cover].set(i, map[group.cover].get(i) * survival);
     if (group.juvenile) map[group.juvenile].set(i, map[group.juvenile].get(i) * survival);
   }
   updateTreeCover(map, i);
   restore(i);
-  map.SoilCarbon.add(i, Math.max(0, previous - livingPlantCarbon(map, i)) * (1 - fire));
+  map.SoilCarbon.add(i, Math.max(0, previous - livingPlantCarbon(map, i)));
   for (const name of ["Productivity", "Herbivores", "Predators", "Grazers", "Browsers"] as const)
     map[name].set(i, map[name].get(i) * survival);
 }
@@ -303,8 +290,8 @@ function ecologyOperation(name: string, input: AtlasGenerationInput): MapOperati
       id,
       "event",
       (state, context) => {
-        const bound = ecologyInput(input, context);
-        present(state, context, bound.seed, bound.physical ? undefined : bound);
+        const { seed } = ecologyInput(input, context);
+        present(state, context, seed);
       },
       []
     );
@@ -378,7 +365,6 @@ export const advanceHumanEcology = defineCommand(
         seed: bound.seed,
         parameters: bound.parameters,
         epochs: bound.settings.epochs,
-        physical: false,
       },
       years,
       true

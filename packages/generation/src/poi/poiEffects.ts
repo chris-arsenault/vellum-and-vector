@@ -26,6 +26,7 @@ import { respond } from "../coupling/answers";
 import { bindOperation, defineQuery } from "../processOperation";
 import type { PhysicalInput } from "../processes/groundProcess";
 import { retainedArray } from "../world/physicalNumerics";
+import { runMemory } from "../runMemory";
 
 interface CellChange {
   add: number;
@@ -200,7 +201,8 @@ function totalOver(base: number, change: CellChange) {
 }
 
 /** What magic bands have had applied, by band, so a change is a total and never compounds. */
-const appliedMagic = new WeakMap<GenerationState, Map<string, Map<number, number>>>();
+const appliedMagic = (state: GenerationState) =>
+  runMemory(state, "places.applied-magic", () => new Map<string, Map<number, number>>());
 function bandOf(
   state: GenerationState,
   target: PoiMagicBand
@@ -210,8 +212,7 @@ function bandOf(
   return "stock" in target ? field.stocks[target.stock] : field[target.channel];
 }
 function writeMagic(state: GenerationState, declared: Declared) {
-  const applied = appliedMagic.get(state) ?? new Map<string, Map<number, number>>();
-  appliedMagic.set(state, applied);
+  const applied = appliedMagic(state);
   for (const [key, { target, cells }] of declared.magic) {
     const band = bandOf(state, target);
     if (!band) continue;
@@ -300,12 +301,15 @@ const recomputedBands: readonly MutablePhysicalBufferName[] = [
   "WaterDepths",
   "WaterSurfaceElevations",
 ];
-const worldLedgers = new WeakMap<GenerationState, Contributions>();
 /** The world's cycle, once per epoch: declared totals replace the last epoch's, so nothing compounds. */
 export function applyPlaceEffects(state: GenerationState) {
   const map = fieldOf(state);
-  let ledger = worldLedgers.get(state);
-  if (!ledger) worldLedgers.set(state, (ledger = new Contributions(map.mesh.count)));
+  const applied = runMemory(
+    state,
+    "places.applied-effects",
+    () => new Map<MutablePhysicalBufferName, Float64Array>()
+  );
+  const ledger = new Contributions(map.mesh.count, applied);
   ledger.begin();
   for (const band of recomputedBands) ledger.forget(band);
   declarePlaceEffects(state, ledger);

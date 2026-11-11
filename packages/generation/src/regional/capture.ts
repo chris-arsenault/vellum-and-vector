@@ -22,22 +22,22 @@ export function isRegionalRefinement(source: DomainSnapshot, areaId: string) {
   return !!source.world.areas[areaId]?.map;
 }
 /** Only pinned inputs on this map; neither live ancestors nor sibling products are candidates. */
-export function refinementInputFields(source: DomainSnapshot, areaId: string, physical = true) {
-  return source.world.fields.filter((f) => f.areaId === areaId && (!physical || f.input));
+export function refinementInputFields(source: DomainSnapshot, areaId: string) {
+  return source.world.fields.filter((f) => f.areaId === areaId && f.input);
 }
 /** Material written at the captured present follows that run's completed epochs. */
-export function capturedEpochCount(source: DomainSnapshot, areaId: string, physical: boolean) {
-  const field = refinementInputFields(source, areaId, physical).find((f) =>
+export function capturedEpochCount(source: DomainSnapshot, areaId: string) {
+  const field = refinementInputFields(source, areaId).find((f) =>
     f.channels?.includes("Elevation")
   );
   return (
     source.world.generations.find((run) => run.id === field?.source.id)?.physicalEpochs?.length ?? 0
   );
 }
-export function refinementReads(source: DomainSnapshot, areaId: string, physical = true) {
+export function refinementReads(source: DomainSnapshot, areaId: string) {
   // Publication owners already selected these durable facts. Capture their resource mapping
   // as a whole; a second channel list would silently drop newly supported retained inputs.
-  return refinementInputFields(source, areaId, physical)
+  return refinementInputFields(source, areaId)
     .map((field) => ({
       fieldId: field.id,
       names: [...(field.channels ?? [])],
@@ -53,8 +53,8 @@ export function sampleSpan(grid: Grid) {
   return grid.scope.resolution ?? 0;
 }
 /** The pinned parent's sample span: the scale of the captured macro character. */
-export function parentSampleSpan(source: DomainSnapshot, areaId: string, physical: boolean) {
-  const grids = refinementInputFields(source, areaId, physical)
+export function parentSampleSpan(source: DomainSnapshot, areaId: string) {
+  const grids = refinementInputFields(source, areaId)
     .filter((f) => f.channels?.includes("Elevation") && source.numerical[f.id])
     .map((f) => source.numerical[f.id])
     .sort((a, b) => sampleSpan(b) - sampleSpan(a));
@@ -62,27 +62,24 @@ export function parentSampleSpan(source: DomainSnapshot, areaId: string, physica
 }
 
 /** Use the pinned selection, so rerunning a map does not repeatedly expand its frame. */
-export function refinementFootprint(source: DomainSnapshot, areaId: string, physical = true) {
-  if (physical && source.world.areas[areaId].map?.extent)
-    return source.world.areas[areaId].map!.extent!;
+export function refinementFootprint(source: DomainSnapshot, areaId: string) {
+  if (source.world.areas[areaId].map?.extent) return source.world.areas[areaId].map!.extent!;
   const fields = source.world.fields.filter(
     (f) => f.areaId === areaId && f.channels?.includes("Elevation")
   );
   return (
-    fields.find((f) => f.input === physical && f.footprint)?.footprint ??
-    source.world.areas[areaId].footprint
+    fields.find((f) => f.input && f.footprint)?.footprint ?? source.world.areas[areaId].footprint
   );
 }
 /** A region crossing the cylindrical seam uses one short, continuous local chart. */
 export function compactBounds(source: DomainSnapshot, footprint: Geometry): Bounds {
   return compactGeometryBounds(source.world.reference, footprint);
 }
-export function refinementFrame(source: DomainSnapshot, areaId: string, physical: boolean) {
-  const input = refinementFootprint(source, areaId, physical),
-    frame =
-      physical && !source.world.areas[areaId].map?.extent
-        ? regionMapFootprint(source.world, input)
-        : input,
+export function refinementFrame(source: DomainSnapshot, areaId: string) {
+  const input = refinementFootprint(source, areaId),
+    frame = source.world.areas[areaId].map?.extent
+      ? input
+      : regionMapFootprint(source.world, input),
     bounds = compactBounds(source, frame);
   const reference = source.world.reference,
     [w, s, e, n] = spatial.bounds(reference.domain);
@@ -127,9 +124,8 @@ export function regionalInitialState(
   cache?: BlockCache
 ): GenerationState {
   const area = source.world.areas[input.areaId],
-    physical = input.domains.includes("physical"),
     { cellSpan } = refinementResolution(source, input),
-    { footprint } = refinementFrame(source, area.id, physical),
+    { footprint } = refinementFrame(source, area.id),
     framed: DomainSnapshot = {
       ...source,
       world: {

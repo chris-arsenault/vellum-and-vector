@@ -75,7 +75,7 @@ it("divides a continental territory into geographic parts without creating sover
     areaId: "area",
     seed: 42,
     quality: "draft",
-    domains: ["political"],
+    domains: ["physical", "political"],
   });
   expect(() => publishGenerationProducts(state, "continental-parts")).not.toThrow();
 });

@@ -135,10 +135,10 @@ export function inheritedGeneration(
   world: World,
   areaId: string
 ): World["generations"][number] | undefined {
+  // A building interior has no terrain of its own; its geography is its parent's.
   for (let current: string | null = areaId; current; current = world.areas[current].parentId) {
-    const previous = world.generations
-      .filter((run) => run.areaId === current && run.domains.includes("physical"))
-      .at(-1);
+    if (world.areas[current].profile === "interior") continue;
+    const previous = world.generations.filter((run) => run.areaId === current).at(-1);
     if (previous) return previous;
   }
   return undefined;

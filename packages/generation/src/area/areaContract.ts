@@ -18,7 +18,7 @@ export interface AreaEdge {
   readonly id: string;
   readonly cells: readonly number[];
 }
-/** Where an area is. Cells are optional: a run without the physical domain has no lattice. */
+/** Where an area is. Cells are optional: a building interior has no lattice. */
 export interface AreaExtent {
   readonly form: AreaForm;
   /** Its cells; ordered from head to end for a course. */

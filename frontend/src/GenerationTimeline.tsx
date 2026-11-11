@@ -1,5 +1,5 @@
 import { useContext, useState } from "react";
-import type { Epoch } from "@atlas/domain";
+import { hasGeneratedGeography, type Epoch } from "@atlas/domain";
 import type { GenerationDraft } from "./generationDraft";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { WorkflowFieldsContext, useWorkflowFields } from "./workflowFieldState";
@@ -63,7 +63,7 @@ export function GenerationTimeline({ flow }: { flow: GenerationWorkflow }) {
       ) : (
         <p className="hint">
           {flow.setup?.context.inherited ||
-          flow.options.source?.world.generations.some((run) => run.domains.includes("physical"))
+          (flow.options.source && hasGeneratedGeography(flow.options.source.world))
             ? "Completed history is inherited. Its epoch definitions stay fixed."
             : "Enable the shared generation lifecycle to edit epoch definitions."}
         </p>

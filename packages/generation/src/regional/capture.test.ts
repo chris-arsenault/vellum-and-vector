@@ -41,7 +41,7 @@ it("dates local material against its pinned run rather than a later parent gener
     source: { kind: "run", id: run.id },
     channels: ["Elevation"],
   });
-  expect(capturedEpochCount(domain, domain.scope.areaId, true)).toBe(1);
+  expect(capturedEpochCount(domain, domain.scope.areaId)).toBe(1);
 });
 
 it("reads every owner-published input without another regional channel list", () => {

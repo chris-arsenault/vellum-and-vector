@@ -152,8 +152,7 @@ export function atlasPhysicalSequence(
   source: DomainSnapshot,
   input: AtlasGenerationInput
 ): ProcessSequence {
-  const physical = input.domains.includes("physical"),
-    inherited = inheritsPhysical(source, input);
+  const inherited = inheritsPhysical(source, input);
   const context = composition(source, input);
   const result: ProcessSequence = [
     invoke("atlas.initialize"),
@@ -169,27 +168,25 @@ export function atlasPhysicalSequence(
   if (!inherited) result.push(...geology(context, true));
   else result.push(...named(contributions("terrain.refinement", context), "refinement"));
   result.push(...contributions("initialize.ecology", context));
-  if (physical)
-    result.push({
-      kind: "epochs",
-      id: "physical-history",
-      resetFacts: [],
-      epochs: source.world.epochs.map((epoch) => ({
-        id: epoch.id,
-        duration: epoch.duration ?? 1000,
-        parentEpoch: epoch.id,
-        variables: {
-          temperature: epoch.temperature,
-          seaLevel: epoch.seaLevel,
-          activity: epoch.tectonics,
-        },
-      })),
-      body: epochBody(context, inherited),
-    });
+  result.push({
+    kind: "epochs",
+    id: "physical-history",
+    resetFacts: [],
+    epochs: source.world.epochs.map((epoch) => ({
+      id: epoch.id,
+      duration: epoch.duration ?? 1000,
+      parentEpoch: epoch.id,
+      variables: {
+        temperature: epoch.temperature,
+        seaLevel: epoch.seaLevel,
+        activity: epoch.tectonics,
+      },
+    })),
+    body: epochBody(context, inherited),
+  });
   result.push(
-    ...climate("present.climate", context, !physical),
+    ...climate("present.climate", context),
     ...contributions("present.climate-forcing", context),
-    ...(!physical ? contributions("present.material-forcing", context) : []),
     ...drainage("present.initial-water", context),
     ...nativeGroup("ice.flow", "present.initial-ice", context),
     ...nativeGroup("ice.meltwater", "present", context),
@@ -197,20 +194,17 @@ export function atlasPhysicalSequence(
     ...nativeGroup("ice.flow", "present.final-ice", context),
     ...presentExtraction(context),
     ...contributions("present.post-glacial-forcing", context),
-    ...(!physical ? contributions("present.influence-history", context) : []),
     ...contributions("present.ecology", context),
     ...contributions("present.classify", context),
     invoke("atlas.project"),
-    ...contributions("present.project", context)
+    ...contributions("present.project", context),
+    invoke("atlas.features")
   );
-  if (physical || input.domains.includes("magic")) result.push(invoke("atlas.features"));
   return result;
 }
+/** A child inherits its parent's geology; a root map makes its own. */
 function inheritsPhysical(source: DomainSnapshot, input: AtlasGenerationInput) {
-  return (
-    !input.domains.includes("physical") ||
-    Boolean(source.world.areas[input.areaId].parentId && source.world.fields.length)
-  );
+  return Boolean(source.world.areas[input.areaId].parentId && source.world.fields.length);
 }
 function presentExtraction(context: Composition): ProcessSequence {
   return [

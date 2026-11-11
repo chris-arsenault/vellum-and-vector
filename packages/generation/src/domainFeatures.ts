@@ -57,7 +57,7 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       },
       initialOnlySettings: ["vegetation", "grazing"],
     },
-    domains: ["physical", "magic"],
+    domains: ["physical"],
     defaultEnabled: true,
     settings: {
       vegetation: atlasParameterDefinitions.vegetation,
@@ -124,10 +124,7 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
           ? [operation(`atlas.magic-${configuredMagicOperations[slot as GenerationSlot]}`)]
           : [],
     conditionalRequires: (_configuration, context) =>
-      configuredMagicRequirements(
-        context.input.settings?.magicSystems ?? [],
-        context.input.domains.includes("physical")
-      ),
+      configuredMagicRequirements(context.input.settings?.magicSystems ?? []),
   },
   {
     id: "magic.local",

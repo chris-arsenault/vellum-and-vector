@@ -37,7 +37,7 @@ it("publishes constructed numerical geography with its units, request and author
 
 it("publishes a system's quickening in its magic field rather than attributing it to ecology", () => {
   const { source, input, result } = constructedWorld();
-  const magicInput = { ...input, domains: ["magic"] };
+  const magicInput = { ...input, domains: ["physical", "magic"] };
   result.state.publications = atlasPublicationDefinitions(magicInput, source.world);
   putChannel(
     result.state.surface,

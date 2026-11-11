@@ -9,7 +9,6 @@ import {
 } from "@atlas/generation";
 import { planHash } from "../../packages/generation/src/planHash";
 import { mapCommand } from "../../packages/generation/src/processTraits";
-import { createGrid, generateBand, putChannel } from "@atlas/domain";
 
 function request() {
   const world = fixtureWorld({
@@ -98,31 +97,9 @@ it("explains omitted feature dependencies", async () => {
   ).toBe(true);
 });
 
-it("accepts authored elevation with initialized absent histories and rejects mismatched units", async () => {
+it("rejects a world request that leaves out land, climate and water", () => {
   const { source, input } = request();
-  const id = crypto.randomUUID();
-  const grid = createGrid(id, source.scope, 4, 4);
-  putChannel(
-    grid,
-    "Elevation",
-    "native-length",
-    generateBand(grid.coverage, "float64", "Elevation", () => 100)
-  );
-  source.numerical[id] = grid;
-  source.world.fields.push({
-    id,
-    areaId: source.scope.areaId,
-    spaceId: source.scope.spaceId,
-    layerId: "terrain",
-    algorithm: "authored",
-    source: { kind: "operation", id: crypto.randomUUID() },
-    samples: 16,
-    channels: ["Elevation"],
-  });
-  const prepared = prepareAtlasGeneration(source, { ...input, domains: ["magic"] });
-  expect(prepared.diagnostics).toEqual([]);
-  grid.units.Elevation = "ratio";
   expect(() => prepareAtlasGeneration(source, { ...input, domains: ["magic"] })).toThrow(
-    "Inherited Elevation requires native-length"
+    "Land, climate and water always generate"
   );
 });

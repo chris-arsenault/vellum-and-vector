@@ -40,7 +40,10 @@ export interface NativeMemory {
   catalogSqlite: ReturnType<typeof sqliteFixtureMemory>;
 }
 /** What a run reports while it goes: the runner's own observers plus the worker's messages. */
-export type RunObservers = Pick<MapRunnerOptions, "diagnostic" | "progress" | "inspect"> & {
+export type RunObservers = Pick<
+  MapRunnerOptions,
+  "diagnostic" | "progress" | "inspect" | "boundary" | "resume"
+> & {
   message?(message: GenerationWorkspaceMessage): void;
   /** The reader is installed only while generation's scratch resources remain open. */
   nativeMemory?(read: (() => NativeMemory) | undefined): void;
@@ -114,13 +117,16 @@ export async function runGeneration(
   }
 }
 
-/** A new world from a generation draft: installed as the app installs it, then generated. */
+/**
+ * A new world from a generation draft: installed as the app installs it, then generated. A
+ * resumed run installs the same world again, so its identities match the saved state.
+ */
 export async function generateWorld(
   ws: HarnessWorkspace,
   draft: GenerationDraft,
-  observers?: RunObservers
+  observers?: RunObservers,
+  snapshot = draftWorldSnapshot(draft)
 ) {
-  const snapshot = draftWorldSnapshot(draft);
   // The app's import (importWorkspace), with the harness's block cache in place of OPFS.
   await importState(asWorkspace(ws), new SnapshotFields(), snapshot, undefined, ws.working.cache);
   await runGeneration(ws, snapshot.world.id, prepareDraft(draft).input, observers);

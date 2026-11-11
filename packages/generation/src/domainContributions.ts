@@ -37,9 +37,7 @@ export const configuredMagicOperations: Partial<Record<GenerationSlot, string>> 
   "epoch.influence-history": "history",
   "epoch.coastal-forcing": "coast",
   "present.climate-forcing": "climate",
-  "present.material-forcing": "rocks",
   "present.post-glacial-forcing": "post-glacial",
-  "present.influence-history": "history",
   "present.classify": "classify",
   "present.project": "project",
 };

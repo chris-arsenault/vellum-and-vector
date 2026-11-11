@@ -101,7 +101,7 @@ export function atlasInitialState(
   return {
     domain,
     surface,
-    facts: initialFacts(surface, input),
+    facts: initialFacts(surface),
     history: [],
     causes: [],
     publications: atlasGenerationModules.publications(input, domain.world),
@@ -140,25 +140,13 @@ function initialTopology(
   );
 }
 function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenerationInput) {
-  const world = source.world;
-  const channels = regionalInputChannels(
-    regionalInputFields(source, input.areaId, input.domains.includes("physical"))
-  );
+  const channels = regionalInputChannels(regionalInputFields(source, input.areaId));
   for (const [name, grid] of channels)
     resampleChannels({ ...grid, periodicWidth: target.periodicWidth }, target, [name]);
-  requireThat(
-    input.domains.includes("physical") ||
-      target.channels.Elevation ||
-      world.areas[input.areaId].profile === "interior",
-    "generation_prerequisite",
-    "Generate physical geography first, or include it in this request."
-  );
 }
-function initialFacts(surface: Grid, input: AtlasGenerationInput) {
+function initialFacts(surface: Grid) {
   const facts = new Set(Object.keys(surface.channels));
   if (surface.channels.BedrockElevation) facts.add("geology");
   if (surface.channels.FlowTargets) facts.add("drainage");
-  // A run without the physical domain reads the terrain already made instead of making it.
-  if (!input.domains.includes("physical")) facts.add("terrain:present");
   return facts;
 }

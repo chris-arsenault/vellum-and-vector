@@ -129,7 +129,7 @@ it.runIf(process.env.HARNESS_GROUND_REOPEN)(
           domain,
           surface: terrain.raster.field,
           cache: ws.working.cache,
-          facts: new Set(["terrain:present"]),
+          facts: new Set(["geography:reopened"]),
           history: [],
         };
         const work = createAtlasWorkspace(state, record.quality as "draft"),

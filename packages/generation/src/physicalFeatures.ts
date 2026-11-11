@@ -43,7 +43,6 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
         "mapBoundary",
       ],
       regional: { kind: "captured" },
-      inherited: true,
       requires: ["physical.lifecycle"],
       when: (slot, context) =>
         !slot.startsWith("epoch.crust.") ||
@@ -136,7 +135,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
       ],
       "epoch.ice-load": [nativeSteps.crustalSupport, nativeSteps.lithosphericFlexure],
     },
-    { requires: ["physical.foundation"], inherited: true }
+    { requires: ["physical.foundation"] }
   ),
   physicalFeature(
     "physical.continental-margins",
@@ -171,7 +170,6 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       requires: ["physical.foundation"],
       absent: ["Geothermal"],
-      inherited: true,
       regional: { kind: "captured" },
     }
   ),
@@ -191,7 +189,6 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     },
     {
       requires: ["physical.foundation"],
-      inherited: true,
       regional: {
         kind: "specialized",
         operations: {
@@ -212,7 +209,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       "climate.circulation": [nativeSteps.oceanCurrents, nativeSteps.warmthSources],
     },
-    { requires: ["ocean.geography"], absent: ["OceanCurrents", "Warmth"], inherited: true }
+    { requires: ["ocean.geography"], absent: ["OceanCurrents", "Warmth"] }
   ),
   physicalFeature(
     "physical.climate",
@@ -227,7 +224,6 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
         operations: { "climate.atmosphere": ["refinement.climate"] },
       },
       requires: ["ocean.geography"],
-      inherited: true,
     }
   ),
   physicalFeature(
@@ -241,7 +237,6 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       regional: { kind: "specialized", operations: { "water.routing": ["refinement.water"] } },
       requires: ["physical.climate", "ocean.geography"],
-      inherited: true,
     }
   ),
   physicalFeature(
@@ -261,7 +256,6 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       requires: ["water.routing", "ocean.geography"],
       absent: ["SedimentTransport"],
-      inherited: true,
     }
   ),
   physicalFeature(
@@ -275,7 +269,6 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       requires: ["physical.climate", "water.routing", "material.load-response"],
       absent: ["LandIce", "IceFlow", "GlacialMeltwater"],
-      inherited: true,
     }
   ),
   physicalFeature(
@@ -289,7 +282,6 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
       settings: ["glaciers"],
       requires: ["physical.land-ice"],
       absent: ["GlacialEvolution", "GlacialRelief"],
-      inherited: true,
     }
   ),
   physicalFeature(
@@ -299,7 +291,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
       "ice.model": [nativeSteps.seaIce],
       "present.sea-ice": [nativeSteps.seaIce],
     },
-    { requires: ["physical.climate", "ocean.geography"], absent: ["SeaIce"], inherited: true }
+    { requires: ["physical.climate", "ocean.geography"], absent: ["SeaIce"] }
   ),
   physicalFeature(
     "physical.coastal-evolution",
@@ -319,7 +311,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       "present.river-geometry": [nativeSteps.riverChannelGeometry],
     },
-    { requires: ["water.routing"], absent: ["RiverGeometry"], inherited: true }
+    { requires: ["water.routing"], absent: ["RiverGeometry"] }
   ),
   physicalFeature(
     "physical.floodplains",
@@ -327,7 +319,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       "present.floodplains": [nativeSteps.riverFloodplains],
     },
-    { requires: ["physical.river-networks"], absent: ["Floodplains"], inherited: true }
+    { requires: ["physical.river-networks"], absent: ["Floodplains"] }
   ),
   physicalFeature(
     "physical.deltas",
@@ -338,7 +330,6 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       requires: ["physical.floodplains", "material.fluvial-transport"],
       absent: ["Deltas"],
-      inherited: true,
     }
   ),
   physicalFeature(
@@ -350,7 +341,6 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       requires: ["water.routing", "ocean.geography"],
       absent: ["Landforms"],
-      inherited: true,
       regional: {
         kind: "specialized",
         operations: { "present.landforms": ["refinement.landforms"] },
@@ -368,7 +358,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
       ],
       "present.validation": [nativeSteps.physicalStructuralValidation],
     },
-    { inherited: true, configuration: clockConfiguration, regional: { kind: "captured" } }
+    { configuration: clockConfiguration, regional: { kind: "captured" } }
   ),
 ];
 

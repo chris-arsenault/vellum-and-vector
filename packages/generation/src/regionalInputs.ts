@@ -11,7 +11,7 @@ import {
 import { generationResolution } from "./resolution";
 
 /** Ancestors only: a neighboring or descendant map cannot become its own procedural input. */
-export function regionalInputFields(source: DomainSnapshot, areaId: string, omitSelf = true) {
+export function regionalInputFields(source: DomainSnapshot, areaId: string) {
   const area = source.world.areas[areaId],
     space = areaSpace(source.world, areaId);
   return source.world.fields
@@ -21,9 +21,8 @@ export function regionalInputFields(source: DomainSnapshot, areaId: string, omit
         grid &&
         grid.scope.spaceId === space &&
         (ownsMapGeography(source.world, areaId)
-          ? field.areaId === areaId && (!omitSelf || !!field.input)
-          : (!omitSelf || field.areaId !== areaId) &&
-            isDescendant(source.world.areas, areaId, field.areaId)) &&
+          ? field.areaId === areaId && !!field.input
+          : field.areaId !== areaId && isDescendant(source.world.areas, areaId, field.areaId)) &&
         spatial.covers(grid.scope.footprint, area.footprint)
       );
     })

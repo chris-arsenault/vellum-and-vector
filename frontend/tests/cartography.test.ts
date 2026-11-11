@@ -197,6 +197,6 @@ test("magical sources are drawn, edited, moved and applied @deferred-authoring",
   await page.getByRole("button", { name: "Move source on map", exact: true }).click();
   await drag(page, [330, 320], [350, 360]);
   await expect(status(page)).toContainText("Revision 5");
-  await page.getByRole("button", { name: "Apply magic to geography", exact: true }).click();
+  await page.getByRole("button", { name: "Generate land and magic", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
 });

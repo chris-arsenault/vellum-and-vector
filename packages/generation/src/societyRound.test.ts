@@ -33,20 +33,16 @@ it("runs every era bound to an earlier epoch inside it and the rest with the pre
   expect(hasHumanRound({ ...settings, humanEras: [era("Settlement", null)] })).toBe(false);
 });
 
-it("keeps bound eras in the present sequence when no physical epoch is replayed", () => {
-  const input = (domains: string[]) =>
-    ({ settings, domains, resolvedFeatures: { selection: {} } }) as unknown as AtlasGenerationInput;
-  const eras = (sequence: ReturnType<typeof societySequence>) =>
-    sequence.flatMap((step) =>
-      step.kind === "epochs" ? step.epochs.map((e) => [e.id, e.parentEpoch]) : []
-    );
-  expect(eras(societySequence(input(["physical", "society"])))).toEqual([
-    ["Settlement", null],
-    ["Lost", null],
-  ]);
-  expect(eras(societySequence(input(["society"])))).toEqual([
-    ["Ice age", null],
-    ["Late ice age", null],
+it("runs only the eras not bound to an earlier epoch in the present sequence", () => {
+  const input = {
+    settings,
+    domains: ["physical", "cultural"],
+    resolvedFeatures: { selection: {} },
+  } as unknown as AtlasGenerationInput;
+  const eras = societySequence(input).flatMap((step) =>
+    step.kind === "epochs" ? step.epochs.map((e) => [e.id, e.parentEpoch]) : []
+  );
+  expect(eras).toEqual([
     ["Settlement", null],
     ["Lost", null],
   ]);

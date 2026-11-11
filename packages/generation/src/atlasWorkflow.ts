@@ -8,7 +8,9 @@ import {
   proceduralSnapshot,
   mappedGenerationDiagnostics,
   type FeatureReader,
+  hasGeneratedGeography,
 } from "@atlas/domain";
+import { requireGeography } from "./geographyRequired";
 import { MapRunner, type MapRunnerOptions } from "./mapRunner";
 import {
   MapProcessRegistry,
@@ -168,18 +170,10 @@ function checkRunInputs(source: DomainSnapshot, input: AtlasGenerationInput) {
     "generation_quality",
     "Choose draft, standard or fine."
   );
-  if (
-    !input.domains.includes("physical") &&
-    source.world.areas[input.areaId].profile !== "interior"
-  )
-    requireThat(
-      inheritedChannelNames(source, input.areaId, false).has("Elevation"),
-      "generation_prerequisite",
-      "Generate physical geography first, or include Land, climate and water in this request."
-    );
+  requireGeography(source, input);
 }
 function inheritedFactsForRun(source: DomainSnapshot, input: AtlasGenerationInput) {
-  const channels = inheritedChannelNames(source, input.areaId, input.domains.includes("physical"));
+  const channels = inheritedChannelNames(source, input.areaId);
   return [...channels, ...inheritedProducts(channels)];
 }
 function configuredSource(source: DomainSnapshot, input: AtlasGenerationInput) {
@@ -188,14 +182,13 @@ function configuredSource(source: DomainSnapshot, input: AtlasGenerationInput) {
   );
   const area = source.world.areas[input.areaId];
   requireThat(area, "generation_area", "Choose an existing mapped area.");
-  if (area.parentId || source.world.generations.some((run) => run.domains.includes("physical")))
+  const stable = Boolean(area.parentId) || hasGeneratedGeography(source.world);
+  if (stable)
     requireThat(
       sameValue(settings, worldGenerationSettings(source.world)),
       "completed_history",
       "Inherited and completed history stays fixed. Configure the new world before its first generation."
     );
-  const stable =
-    area.parentId || source.world.generations.some((run) => run.domains.includes("physical"));
   const boundaryMode = stable
     ? (source.world.reference.boundaryMode ?? "none")
     : mapBoundaryName(atlasParametersSchema.parse(input.parameters ?? {}).mapBoundary);
@@ -220,10 +213,7 @@ function checkReviewedConfiguration(
     );
 }
 function usesInheritedInputs(source: DomainSnapshot, input: AtlasGenerationInput) {
-  return (
-    Boolean(source.world.areas[input.areaId].parentId) ||
-    (!input.domains.includes("physical") && source.world.fields.length > 0)
-  );
+  return Boolean(source.world.areas[input.areaId].parentId);
 }
 function checkNewSelection(source: DomainSnapshot, input: AtlasGenerationInput) {
   if (Object.values(input.features ?? {}).some((feature) => feature.enabled === false))
@@ -270,11 +260,8 @@ export function atlasConfiguration(
 }
 function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput): ProcessSequence {
   const sequence: ProcessSequence = [invoke(prepareGeneratedProcess(input.domains))];
-  const area = source.world.areas[input.areaId],
-    physical = input.domains.includes("physical");
-  if (area.profile !== "interior" && (physical || input.domains.includes("magic"))) {
-    sequence.push(...atlasPhysicalSequence(source, input));
-  }
+  const area = source.world.areas[input.areaId];
+  if (area.profile !== "interior") sequence.push(...atlasPhysicalSequence(source, input));
   for (const slot of ["present.products", "present.people", "present.after-people"]) {
     if (
       slot === "present.people" &&

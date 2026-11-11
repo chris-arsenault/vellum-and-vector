@@ -128,10 +128,10 @@ function GenerationForm({ world, editor }: { world: World; editor: EditorState }
   );
 }
 export function DomainChoices({ profile }: { profile: string }) {
-  const domains =
-    profile === "interior" ? ["built"] : ["physical", "magic", "cultural", "political", "built"];
+  // Land, climate, water and life always generate; only a building interior has none.
+  const interior = profile === "interior",
+    domains = interior ? ["built"] : ["magic", "cultural", "political", "built"];
   const labels: Record<string, string> = {
-    physical: "Land, climate, water & life",
     magic: "Magical effects",
     cultural: "Communities & distributions",
     political: "Territory & claims",
@@ -140,13 +140,14 @@ export function DomainChoices({ profile }: { profile: string }) {
   return (
     <fieldset>
       <legend>Develop these systems</legend>
+      {!interior && <input type="hidden" name="domains" value="physical" />}
       {domains.map((domain) => (
         <label key={domain} className="check">
           <input
             type="checkbox"
             name="domains"
             value={domain}
-            defaultChecked={domain === "physical" || domain === "magic" || domain === "built"}
+            defaultChecked={domain === "magic" || domain === "built"}
           />
           {labels[domain]}
         </label>

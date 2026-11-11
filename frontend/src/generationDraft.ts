@@ -128,10 +128,6 @@ export function setFeatureSetting(draft: GenerationDraft, id: string, key: strin
   return updateFeature(draft, id, { settings: { [key]: value } });
 }
 
-export function updateDraftDomains(draft: GenerationDraft, domains: GenerationRecipe["domains"]) {
-  return normalizeGenerationDraft({ ...draft, recipe: { ...draft.recipe, domains } });
-}
-
 export function prepareDraft(draft: GenerationDraft, source?: DomainSnapshot, areaId?: string) {
   const recipe = normalizeGenerationRecipe(draft.recipe);
   requireThat(

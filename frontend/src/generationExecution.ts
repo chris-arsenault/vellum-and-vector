@@ -52,7 +52,7 @@ const yieldControl = () => new Promise<void>((resolve) => setTimeout(resolve, 0)
 export async function executeGeneration(
   start: GenerationWorkspaceStart,
   execution: GenerationExecution,
-  observers: Pick<MapRunnerOptions, "diagnostic" | "progress" | "inspect">
+  observers: Pick<MapRunnerOptions, "diagnostic" | "progress" | "inspect" | "boundary" | "resume">
 ) {
   const { worldId, input, expectedVersion } = start;
   const source = await execution.workspace.generationSource(worldId, input.areaId);
@@ -75,7 +75,7 @@ export async function executeGeneration(
     parentHistory: [],
     dependencies: false,
     channels: isRegionalRefinement(source, input.areaId)
-      ? refinementReads(source, input.areaId, input.domains.includes("physical"))
+      ? refinementReads(source, input.areaId)
       : source.world.fields
           .filter((field) => field.resourceId)
           .map((field) => ({ fieldId: field.id, names: field.channels ?? [] })),

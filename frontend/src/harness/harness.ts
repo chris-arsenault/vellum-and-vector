@@ -1,14 +1,9 @@
-import {
-  appendFileSync,
-  closeSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  writeFileSync,
-  writeSync,
-} from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { newGenerationDraft, normalizeGenerationDraft } from "../generationDraft";
+import { write } from "./harnessWrite";
+import { recordResumePoints } from "./resumePoint";
+import { resumeWorld } from "./harnessResume";
 import { applyCartographicChoice, cartographicControls } from "../cartographicDraft";
 import {
   generationRecipeSchema,
@@ -68,6 +63,14 @@ export interface HarnessOptions {
   worldOnly: boolean;
   /** Saves the world's state at the start of each pass under this name, for `stageReplay`. */
   snapshots: string;
+  /** Saves the whole run's state as each epoch completes under this name, for `resume`. */
+  resumePoints: string;
+  /** Continues the named saved run after `resumeAfter` instead of generating a world. */
+  resume: string;
+  /** The completed epoch to continue after: its ancestry ids joined by "/". */
+  resumeAfter: string;
+  /** Stops a continued run after this many seconds, so its first minutes can be profiled. */
+  stopSeconds: number;
   /** Optional map coordinate sampled before/after each process and settlement. */
   processAt?: [number, number];
   processBands?: readonly PhysicalBufferName[];
@@ -95,6 +98,10 @@ const defaults = {
   HARNESS_QUICK: "",
   HARNESS_WORLD_ONLY: "",
   HARNESS_SNAPSHOTS: "",
+  HARNESS_RESUME_POINTS: "",
+  HARNESS_RESUME: "",
+  HARNESS_AFTER: "",
+  HARNESS_STOP_SECONDS: "",
   HARNESS_PROCESS_AT: "",
   HARNESS_PROCESS_BANDS: "",
   HARNESS_GROUND_CELLS: "",
@@ -137,6 +144,10 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
     quick: Boolean(read("HARNESS_QUICK")),
     worldOnly: Boolean(read("HARNESS_WORLD_ONLY")),
     snapshots: read("HARNESS_SNAPSHOTS"),
+    resumePoints: read("HARNESS_RESUME_POINTS"),
+    resume: read("HARNESS_RESUME"),
+    resumeAfter: read("HARNESS_AFTER"),
+    stopSeconds: Number(read("HARNESS_STOP_SECONDS")) || 0,
     processAt: position(read("HARNESS_PROCESS_AT")),
     processBands: processProbeBands(read("HARNESS_PROCESS_BANDS")),
     groundCells: groundProbeCells(read("HARNESS_GROUND_CELLS")),
@@ -145,27 +156,7 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
   };
 }
 
-/** Arrays can contain a whole history; serialize one observation at a time, never one huge string. */
-export function write(directory: string, name: string, value: unknown) {
-  const path = join(directory, `${name}.json`);
-  if (!Array.isArray(value)) return writeFileSync(path, JSON.stringify(value, null, 2));
-  const file = openSync(path, "w");
-  try {
-    writeFragment(file, "[");
-    for (let index = 0; index < value.length; index++) {
-      writeFragment(file, index === 0 ? "\n" : ",\n");
-      writeFragment(file, JSON.stringify(value[index], null, 2) ?? "null");
-    }
-    writeFragment(file, "\n]\n");
-  } finally {
-    closeSync(file);
-  }
-}
-function writeFragment(file: number, text: string) {
-  const bytes = Buffer.from(text);
-  for (let offset = 0; offset < bytes.length;)
-    offset += writeSync(file, bytes, offset, bytes.length - offset);
-}
+export { write };
 
 const recordProcesses = (options: HarnessOptions, out: string, map: string) =>
   startProcessProbe(
@@ -230,7 +221,8 @@ async function ensureWorld(options: HarnessOptions, out: string): Promise<Checkp
   write(out, "world-input", { draft, options: { ...options, fresh: [...options.fresh] } });
   let failure: string | undefined;
   try {
-    const { worldId, root } = await generateWorld(ws, draft, recorder.observers);
+    const snapshot = recordResumePoints(options.resumePoints, draft, recorder.observers);
+    const { worldId, root } = await generateWorld(ws, draft, recorder.observers, snapshot);
     const record: CheckpointRecord = {
       kind: "world",
       name: options.world,
@@ -419,6 +411,11 @@ export async function runHarness(options: HarnessOptions) {
   try {
     if (options.quick) {
       await quickRegion(options, out);
+      return out;
+    }
+    if (options.resume) {
+      const recorder = liveRecorder(out, "world", options.places);
+      await describeMap(await resumeWorld({ options, out, recorder, write }), out);
       return out;
     }
     const world = await ensureWorld(options, out);

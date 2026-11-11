@@ -4,7 +4,7 @@ import {
   type FeatureSelection,
   type GenerationSetup,
 } from "@atlas/generation";
-import type { DomainSnapshot } from "@atlas/domain";
+import { hasGeneratedGeography, type DomainSnapshot } from "@atlas/domain";
 import { projectInvalidDraft } from "./generationInvalidDraft";
 import { cartographicFeatureStage } from "./cartographicDraft";
 import {
@@ -43,7 +43,7 @@ function resolveDraft(
     // Keep the editors reachable while an invalid nested configuration is repaired.
     const historyFixed =
       Boolean(previous?.context.inherited) ||
-      Boolean(options.source?.world.generations.some((run) => run.domains.includes("physical")));
+      Boolean(options.source && hasGeneratedGeography(options.source.world));
     return {
       draft,
       prepared: null,

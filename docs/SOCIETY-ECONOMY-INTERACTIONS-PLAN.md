@@ -222,7 +222,300 @@ outside; protected pilgrim routes whose doors close. All ten existing meetings
 need their applicable hazard/opportunity consumers reviewed. A meeting without
 a distinctive social use need not acquire one just to fill a table.
 
-## Milestones and semantic exits
+## Agreed model: human layers on the land (2026-11-11)
+
+The owner agreed this working model on 2026-11-11. The owner directions listed
+under Tracking are requirements; the mechanisms below are agent decisions and
+can be revised when evidence supports a simpler complete solution.
+
+**What is wrong today.** People live in catchment records made by a spacing draw.
+Each catchment holds one population number spread evenly over its area, picks one
+settlement site from a fixed ranking of site kinds, and carries its town as a
+count on that point. A town has no extent, the land around it does not know it
+is there, and earlier-epoch societies are deleted when their epoch ends.
+
+**The model.** Every cell of the land's own mesh carries human layers as shares
+of its area and amounts on it, beside the ground stack:
+
+- scattered population, farmland and pasture, built-up area, and standing (the
+  accumulated wealth and works that make a place resist wear and erosion);
+- an identity column riding in the population: a bounded stack of layers, each
+  holding tongue, faith, custom and allegiance, with a thickness, a hardness and
+  an age. Older layers lie under newer ones and can be re-exposed. This is the
+  memetic column.
+
+A small set of area operations works the layers, run as repeated passes:
+
+1. **Grow** — population thickens where the land feeds it.
+2. **Gather** — people drain along the cheapest travel toward where routes
+   converge, so dense zones take the terrain's shape.
+3. **Harden** — sustained density becomes built-up area; sustained built-up area
+   gains standing.
+4. **Feed** — a dense zone converts suitable surrounding land to farmland and
+   pasture, out to where travel costs too much.
+5. **Spread and overlay** — identity moves with people and along routes; a new
+   layer is laid over an old one.
+6. **Bury, wear and carry** — floods, ash, ice, sea and the moving crust act on
+   the layers through the same vocabulary they use on ground cover.
+
+Settlements, ruins, farm country, cultural regions and territories are
+classified afterwards from the layers and published by the existing catalogue.
+A named place keeps its identity while its dense zone grows, shrinks or moves.
+
+**Mechanism decisions.**
+
+- The layers are bands on the physical mesh, declared with a transport kind so
+  they ride the crust, as the existing tenure, walked-route, mass-death and
+  kept-line records do. Society stops working on the separate display raster and
+  syncing back. World and region then share one lattice class and one set of
+  operations.
+- A human-layer owner holds the bands and the only operations that change them.
+  Processes ask shared questions (support, travel cost, standing) and submit
+  operations, following ADR 0010 and ADR 0011. The layers are a neighbour of the
+  rock column, not stored inside it.
+- Physical processes meet the layers the way they meet plant cover and wards: a
+  holding term a built place contributes to what passes through it, and removal
+  or burial read from the land's cumulative histories. No physical process names
+  a human layer.
+- Catchments stop being the unit that holds people. A hinterland is derived from
+  a classified centre and the travel surface. Routes are where gathering and
+  exchange traffic accumulates on the land.
+- A pass applies each operation as one aggregate act sized by the pass's
+  exposure, with explicit feedback between passes. Decade-by-decade ledgers and
+  pairwise trading along links are not carried over.
+- Coarse maps keep the same operations. A world cell holds a few percent of
+  built-up share and classifies as a point; a regional map gives it a shape.
+
+## Architecture patterns
+
+The method in `MATERIALS-AND-PROCESSES-ARCHITECTURE.md` was applied. Three pairs
+of things grow independently, so each interaction gets a representation instead
+of an owner:
+
+- kinds of human layer × the processes that act on them (physical, magical and
+  human);
+- magic systems × the layer operations they change;
+- classified kinds of place × the layers they are read from.
+
+| Paradigm                          | Where it is used                                                                                                                                                                                                                     |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Aggregate with a single writer    | The human-layer owner holds the bands and the identity column. Nothing else writes them.                                                                                                                                             |
+| Command                           | Lay, move, convert, overlay, wear, bury and re-expose are registered opaque operations, like every other generation operation.                                                                                                       |
+| Command–Query Separation          | Support, travel cost, density, standing and every classifier are queries. A query cannot change a layer or advance a pass.                                                                                                           |
+| Bridge through a mode vocabulary  | Layer kinds and acting processes meet through a small vocabulary of how a layer is acted on. A process states its action as a mix of modes; a layer kind answers from its facts. Adding a kind or a process edits neither the other. |
+| Type Object, compiled at load     | Layer kinds and their facts are catalogue entries compiled to typed arrays for the passes. Traditions are entities referenced by code.                                                                                               |
+| Dependency Inversion through keys | Support, travel cost and holding are shared questions with responders registered beside the system that supplies them. Physical processes receive what built places hold through the existing key and never name a human layer.      |
+| Chain of Responsibility           | A physical action passing down a cell meets the human layers before the ground, each changing what passes.                                                                                                                           |
+| Read model                        | Places, hinterlands, routes, regions and territories are derived by classifiers from the layers. The catalogue stays the single publisher; a record is never the source of truth for where people are.                               |
+| Transport by quantity kind        | Each band declares how the crust carries it; plate transport names no human band.                                                                                                                                                    |
+| Strategy bound per map            | Only where a world and a region need a different algorithm for the same question. Operations and layers are shared.                                                                                                                  |
+
+Kept out, as decisions: an entity-component rebuild; rebuilding state by
+replaying a history log (history explains, layers are authoritative); a generic
+social-effects engine; a recipe table per pair of system and layer; Strategy
+used to pick an owner for a rule that depends on two sides.
+
+## Architecture tests
+
+These are compiler-derived checks in `*.architecture.ts` files, run by
+`make test-architecture` as part of CI. They prove structure and adoption, not
+generated outcomes. Each lands in the milestone that creates what it checks.
+
+| Check                                                                                                                                                                                                                                                                       | Lands |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| No run without geology: no reference to whether the physical domain is selected, or whether an earlier run included it, outside the feature registry.                                                                                                                       | M0    |
+| Refactor guard: a deliberately failing test that names this plan, removed at the end of M5.                                                                                                                                                                                 | M1    |
+| Single writer: human-layer bands and the identity column are written only inside the owner.                                                                                                                                                                                 | M1    |
+| Every human band has a quantity kind and a canonical unit (the existing transport and canonical-field checks must inventory them).                                                                                                                                          | M1    |
+| Every layer operation is a registered opaque operation with no raw callbacks or cross-owner calls (the existing lifecycle check must inventory them).                                                                                                                       | M1    |
+| Queries are pure: query and classifier modules reference no layer command.                                                                                                                                                                                                  | M1    |
+| One lattice: the new namespace reads and writes the mesh and never the display raster.                                                                                                                                                                                      | M1    |
+| No physical process names a human band, and no human-layer module writes ground, water, ice or temperature except through their owners' operations and keys.                                                                                                                | M2    |
+| Layer code names no layer kind outside the catalogue: no branch on a kind in an operation.                                                                                                                                                                                  | M2    |
+| Single publisher: settlement, ruin and working-land features are created only by catalogue entries whose origin is a classifier.                                                                                                                                            | M3    |
+| Adoption inventory: every compiler-resolved reference to the catchment record, its cell-owner band, its per-catchment ledgers and its link list, across generation, domain, application, storage and frontend. The allowed list starts as the survey's and may only shrink. | M3    |
+| Adoption complete: that allowed list is empty and the old types no longer exist.                                                                                                                                                                                            | M5    |
+| Layer operations name no magic system, and magic modules reach layers only through the mode vocabulary and keys.                                                                                                                                                            | M6    |
+| One set of operations: the regional namespace defines no population, settlement, field or way logic of its own and invokes the same registered operations and classifiers as the world.                                                                                     | M7    |
+
+The adoption inventory is the check that all callers have moved. It fails when
+a new reference to the old structure appears and when a file leaves the old
+structure without being removed from the list, so the list is always the true
+remaining work.
+
+## Implementation milestones
+
+The change replaces the organizing structure, so it is built in a new namespace
+behind a failing guard test, entry points switch at M3, and the old society
+modules and their fixture-outcome tests are deleted at M5. Suites are not kept
+green in between. Each milestone ends with touched unit tests, lint, typecheck, a
+short read-only review against this text, and a commit; one push at plan end.
+Unit tests cover the operations and classifiers on small explicit fields. Maps
+judge the result.
+
+### M0 — Geology always runs; resume saved worlds in the harness
+
+Owner decision 2026-11-11. Every world has generated geology, so remove world
+generation with the physical domain unselected: the branches that test whether
+physical is selected or whether an earlier run included it, the terrain-preserving
+projection, the lazily built physical workspace for people-only runs, the
+all-eras-in-the-present branch, the unreachable regional branches for the same
+case, the unmounted workflow panel tree that offers the choice, and the tests
+that exercise it. Update the product contract and generation guide to say that
+geology always runs and magic and people remain selectable. Keep the inheritance
+of a parent's terrain by a child map, which is keyed on inherited state.
+
+Extend the existing harness so a saved draft world can be resumed at the pass
+where people first appear and continued through the remaining passes with
+ecology, magic and people running. Record in the checkpoint what it holds. This
+is the development loop for M1–M7; no fresh world is generated to check a change.
+
+Exit: no code path distinguishes a world run without geology, proved by an
+architecture test that finds no reference to the physical domain's selection
+outside the feature registry; the harness resumes a saved world before people
+and reaches a published map, and a report states which checkpoint it used.
+
+### M1 — Human layers and their operations
+
+Declare the layer bands and identity column on the mesh with transport kinds,
+publication to maps and inheritance to children. Build the owner with its
+operations (lay, move, convert, overlay, wear, bury, re-expose) and queries.
+Move the per-cell support and travel-cost reads onto the mesh, with travel cost
+reading slope, water, cover and worn routes. Add the guard test.
+
+Exit: each operation does what its name says on a small field, the bands survive
+a plate step and reach a child map, and no generation path uses them yet.
+
+### M2 — One pass on the land, through every epoch
+
+Grow, gather, harden and feed as land operations. A loose hunter-gatherer layer
+starts in the earlier epochs, rides the crust, and continues into the present;
+epoch end deletes nothing. Sea, ice, deposition, volcanism and impacts reach the
+layers through the holding term and the cumulative histories, leaving buried
+layers where ground covered them.
+
+Exit: on a generated world, dense zones sit where routes converge and follow
+valleys, shores and passes; farmland surrounds them; a drowned or buried zone is
+gone from the surface and present in the buried record; early people are still
+there after the last geological epoch. Removing gather leaves an even spread;
+removing feed leaves towns without farm country.
+
+### M3 — Classify, name and publish
+
+Classify settlements, ruins, farm country and working land from the layers, as
+peaks and waterfalls are classified from terrain. Catalogue entries take their
+origins from the classifiers; identities persist across passes by overlap.
+Derive hinterlands and routes. Publish density, built-up and farmland layers.
+Switch the world entry points to the new namespace.
+
+Exit: a world map shows settlements whose size, extent and position follow their
+surroundings, with lowland sprawl and compact mountain or pass towns arising
+from the same rule. A settlement record states the land it stands on and the
+hinterland that feeds it. No second publisher creates a place.
+
+### M4 — The identity column
+
+Found, spread, overlay, harden and re-expose identity layers. Languages, faiths
+and customs mix from every contact a place has, not only the strongest, and can
+diverge repeatedly. Allegiance is a layer: territories and frontiers are
+classified from it, with seats at classified centres. Names read the column, so
+a place can keep a name from a layer beneath its present people.
+
+Exit: maps show overlapping cultural, language and faith regions that do not
+follow territory borders; a conquered or resettled place shows the older layer
+beneath; a hardened place keeps its identity under pressure that changes its
+neighbours. Removing overlay leaves one layer everywhere.
+
+### M5 — Carry over the remaining behaviour and delete the old structure
+
+Work through the dependents checklist below: practices and seeking, works,
+hazards and events, sieges, highways, magic custody, inspection, editing,
+storage index, inventory. Each row is rebuilt on the layers, replaced by a
+classifier, or dropped with a reason recorded here. Delete the old society
+modules and the fixture-outcome tests, then remove the guard test.
+
+Exit: every checklist row has a verdict and its behaviour exists on maps or is
+recorded as dropped. The settlement inspector explains a place from its land.
+
+### M6 — Aggregate magic use, all seven systems
+
+A people's collective practice over a pass acts on the land as one force through
+that system's own material and carriers, and changes how the layers behave.
+Agree the product behaviour per system with the owner at the start of this
+milestone; the earlier pairing table is a proposal. Hallowed and Veil gain a use
+path. Costs stay in each system's own medium.
+
+Exit: for each system, a region where it is practised differs visibly in land,
+settlement and identity from one where it is not, and losing access leaves
+altered ground and places behind. No system is reduced to a traded stock.
+
+### M7 — Regions run the same operations
+
+A child map inherits the captured layers and named places and runs the same
+operations and classifiers on its own lattice as development, without replaying
+eras and without changing the parent. This replaces the separate regional
+village proposals, field declarations and seat settling.
+
+Exit: a regional map gives a world settlement a shape, an old quarter, farm
+country and smaller places around it that agree with the parent's layers; named
+places resolve; the parent is unchanged.
+
+### M8 — Review and durable documentation
+
+Read full histories on world and child maps against every exit and the coverage
+inventory. Record the model in an ADR, update the generation guide and product
+contract, move open items (music, and any dropped rows worth keeping) to the
+backlog, delete this plan and its references, and push.
+
+## Dependents checklist
+
+Everything that reads today's catchment records, from the 2026-11-11 survey.
+Add a row before porting anything not listed.
+
+| Behaviour today                                                         | Home          |
+| ----------------------------------------------------------------------- | ------------- |
+| Per-cell livelihood yields and coastal fishery                          | M1            |
+| Travel cost over land, river, sea and doors                             | M1            |
+| Ground records of tenure, walked routes, mass death and kept lines      | M1            |
+| Spacing draw, catchment ownership, ranked site choice, fortress spur    | M2            |
+| Growth on capacity and migration along the capacity gradient            | M2            |
+| Town-dwellers, central-place draw, food bound                           | M2            |
+| Inundation, ice loss of capacity, cold-age mobile round                 | M2            |
+| Founding, status lifecycle, recovery, occupation history                | M3            |
+| Settlement and ruin records, hierarchy roles, world town threshold      | M3            |
+| Way wear, track and road classes, connectivity between major places     | M3            |
+| Density and capacity channels, footprints                               | M3            |
+| Founding identities, contact adoption, isolation divergence             | M4            |
+| Language knowledge and use, forgetting                                  | M4            |
+| Culture, language and faith channels; origin markers; institutions      | M4            |
+| Polities, reach, control, contests, tenure, successors, seat moves      | M4            |
+| Territory, frontier and administration publication                      | M4            |
+| Naming of places, works, polities and geography by speakers             | M4            |
+| Practice learning, skill, seeking, fishing pressure                     | M5            |
+| Works: clearance, hunting, irrigation, pass, dam, harbour, authored     | M5            |
+| World demands realized at finer profiles                                | M5            |
+| Hazards, events, casualties, displacement, damaged works, sieges        | M5            |
+| Highways                                                                | M5            |
+| Work, battlefield, disaster-site, shrine and crossing catalogue entries | M5            |
+| Other catalogue kinds that read nearby towns                            | M5            |
+| Domain editing of settlements, works and territories                    | M5            |
+| Storage community index and single-settlement read                      | M5            |
+| Settlement inspector, people and ties panels, work form                 | M5            |
+| Society inventory script                                                | M5            |
+| Carried magic stock custody, forge, archive, dive, seed, salt use       | M6            |
+| Trade of carried stock along links                                      | M6 (replaced) |
+| Hallowed sources from tenure and converging ways                        | M6            |
+| Parent-to-child split of people, works and politics                     | M7            |
+| Regional occupation, village proposals, fields and pasture, ways        | M7            |
+| Fixture-outcome tests on the three-community society fixture            | M5 (deleted)  |
+
+## Earlier provisional milestones — coverage inventory only
+
+S1 closed on 2026-11-11 with the agreed model above. S2–S8 below are no longer a
+work sequence. Their exits remain coverage obligations, carried by: S2 → M1 and
+M2; S3 → M2 and M3; S4 → M3 and M5; S5 → M6; S6 → M2 and M5; S7 → M3 and M5;
+S8 → M7 and M8. Where an S-exit names machinery the agreed model does not use
+(ledgers, link trading, catchments), the outcome it describes still applies.
 
 S0 is publication of this plan. Future phases are pending. Implementation exits
 are behavioral obligations; unit checks explain operations and UI checks verify
@@ -454,17 +747,11 @@ Physical contracts: [generation guide](generation-workflows.md).
 POI foundation: `cc3b3834-15e6-40e3-9abe-97ce00bc6c96`.
 Regional physical owner: `b870430e-af54-438e-b9c5-09c1c9b6e0ea` phases 10/19.
 
-| Milestone         | Sulion phase ID                        |
-| ----------------- | -------------------------------------- |
-| S0 plan           | `8a60055c-03e6-4133-a761-1ade313828ad` |
-| S1 design         | `d5c9b6de-7601-43e0-b6bf-968ae0dbb178` |
-| S2 operations     | `b1fdf595-5f95-4e59-9a60-70fff5fba6c4` |
-| S3 livelihoods    | `8b5f5fd6-41f3-4840-9484-8d3104dae041` |
-| S4 exchange       | `23405774-cff0-4cfd-8b9b-df0bece97145` |
-| S5 practices      | `a2a13026-4ce6-4672-9076-29f01fd51a16` |
-| S6 history        | `2c0737d9-828f-4163-8c56-c84e1564ae99` |
-| S7 POIs           | `863af4ed-294e-4c07-b13b-ee3f83927083` |
-| S8 regions/review | `f5416fb5-f7ca-4298-99dd-513e39c19747` |
+Sulion phases 1–2 are S0 and S1; phases 3–11 are M0–M8 in order.
+
+Open owner decisions: the per-system product behaviour of aggregate magic (start
+of M6); music (tabled). Decided 2026-11-11: runs without geology are removed and
+the harness resumes saved worlds, as M0.
 
 2026-11-10: follow-up contract written from current source bodies, prior owner
 directions and existing plan bodies. No runtime implementation or generations.
@@ -477,3 +764,25 @@ simulation; tentative rock-column-like society concept; aggregate magic use
 beyond material trade; music as cultural influence. S1 now explicitly requires
 a lengthy design session. S2–S8 are provisional and must be revised from its
 outcome. No runtime changes or design choices were made by this amendment.
+
+2026-11-11 owner direction from the S1 design session (requirements, not agent
+proposals):
+
+- Geology always runs. Do not design for a world without it; consider removing
+  code branches that exist only to support that case.
+- Societies survive geological epochs. Only a loose hunter-gatherer society runs
+  before the final geological epoch, and it carries on into the present.
+- Society is land-area based. Population and cultural density are layers on the
+  land, worked by the same kind of area operations other systems use: a
+  countryside starts with a layer of population; a process gathers that stock
+  into a denser zone shaped by terrain; dense zones grow urban area and farmland
+  around them, which are their own kinds of layers; some zones become rich and
+  resist cultural erosion; a flood can bury a zone for a while.
+- Cities and settlements are classified afterwards from density, as peaks and
+  waterfalls are classified from terrain. A city must not be a point placed
+  without regard to its surroundings.
+- Keep the algorithms the same at every map scale, accepting that coarse draft
+  cities look alike.
+- The column is close to the buried-city reading and is also metaphysical or
+  memetic: ideas are layers too.
+- Music is tabled as a follow-up once the rest works.

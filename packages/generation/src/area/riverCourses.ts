@@ -15,6 +15,7 @@ import { heldFor } from "../poi/poiReads";
 import type { GenerationState } from "../process";
 import { isWorldGeography, mapScale } from "../worldSignificance";
 import { continuingRivers, followWater, isRefinedMap } from "./riverLineage";
+import { runMemory } from "../runMemory";
 
 /**
  * What a river is on this map, read by the river's area entry. The channel field holds all the
@@ -116,16 +117,16 @@ export function riverIdOf(reaches: readonly DrainageReach[]) {
   return `river:${coordinateKey(end[0], end[1])}:${coordinateKey(from[0], from[1])}`;
 }
 /** The rivers this map has published. Once a river, always a river: nothing wears one off the map. */
-const established = new WeakMap<GenerationState, Set<string>>();
+const established = (state: GenerationState) =>
+  runMemory(state, "rivers.established", () => new Set<string>());
 export function establishRivers(state: GenerationState, reaches: DrainageReach[]) {
-  const known = established.get(state) ?? new Set<string>();
-  established.set(state, known);
+  const known = established(state);
   for (const course of mappedCourses(state, reaches))
     known.add(riverIdOf(course.map((index) => reaches[index])));
 }
 /** The courses this map draws, as lists of reaches: those significant, and those already rivers. */
 export function mappedCourses(state: GenerationState, reaches: DrainageReach[]) {
-  const known = established.get(state);
+  const known = established(state);
   return riverCourseJudgments(reaches, mapScale(state))
     .filter(
       ({ publish, course }) =>
@@ -165,7 +166,7 @@ function continuedRivers(state: GenerationState, claimed: Set<number>): River[] 
  */
 export const riversOf = (state: GenerationState): readonly River[] =>
   heldFor(state, "rivers:mapped", () => {
-    // A run without the physical domain has no water of its own to read.
+    // A building interior has no water of its own to read.
     if (!state.physical) return [];
     const map = state.physical.map,
       { incoming, basinDischarge } = riverInputs(map),

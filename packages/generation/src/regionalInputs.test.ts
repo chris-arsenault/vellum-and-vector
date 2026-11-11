@@ -63,9 +63,6 @@ it("selects finest ancestor inputs regardless of field order, excluding overlapp
   add("self", "child", 33, 888);
   const channels = regionalInputChannels(regionalInputFields(domain, "child"));
   expect(channels.get("Elevation")!.id).toBe("fine");
-  expect(
-    regionalInputChannels(regionalInputFields(domain, "child", false)).get("Elevation")!.id
-  ).toBe("self");
 });
 it("transfers amounts by physical area and resolves recursively within the same map profile", () => {
   const { domain, add } = fixture(),

@@ -1353,9 +1353,10 @@ toxicity by configured system intensity, independently of the system's name. Tox
 habitat changes forage and animal passage. Magical feature conditions can inspect
 living cover, soil water, toxicity and animal biomass.
 
-A magic-only generation refreshes living fields and ecological polygons while
-retaining existing terrain and completed epochs. Obsolete generated ecological
-regions are replaced; authored/protected features stay authoritative. The shared
+Land, climate, water and life generate on every map; magic and people are the
+selectable domains, and only a building interior has no geography. When a map is
+generated again, obsolete generated ecological regions are replaced and
+authored/protected features stay authoritative. The shared
 geographic identity matcher associates ecological polygons after resampling, so
 matching regions retain their names and relationships when contours move.
 Protected biome samples also govern polygon classification.

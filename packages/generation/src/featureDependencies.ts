@@ -21,20 +21,13 @@ function requirement(
 }
 
 /** Use the same effective rules as classification, including independent disabled containers. */
-export function configuredMagicRequirements(
-  systems: MagicSystem[],
-  physical = true
-): FeatureRequirement[] {
+export function configuredMagicRequirements(systems: MagicSystem[]): FeatureRequirement[] {
   return systems.flatMap((system, index) => [
-    ...effectRequirements(system, index, physical),
+    ...effectRequirements(system, index),
     ...ruleRequirements(system, index),
   ]);
 }
-function effectRequirements(
-  system: MagicSystem,
-  index: number,
-  physical: boolean
-): FeatureRequirement[] {
+function effectRequirements(system: MagicSystem, index: number): FeatureRequirement[] {
   if (!system.enabled) return [];
   const path = ["magicSystems", index, "effects"];
   const requirements = ecologicalMagicEffects
@@ -46,7 +39,7 @@ function effectRequirements(
         `${system.name}'s ${effect} effect requires Living ecology. Enable it or remove that effect.`
       )
     );
-  if (physical && system.effects.coastalForcing !== 0)
+  if (system.effects.coastalForcing !== 0)
     requirements.push(
       requirement(
         "physical.coastal-evolution",
@@ -107,11 +100,7 @@ export function locatedMagicRequirements(
   source: DomainSnapshot,
   input: AtlasGenerationInput
 ): FeatureRequirement[] {
-  if (
-    !input.domains.includes("physical") ||
-    !activeLocatedSources(source, input).some((magic) => magic.effect === "pressure")
-  )
-    return [];
+  if (!activeLocatedSources(source, input).some((magic) => magic.effect === "pressure")) return [];
   return [
     {
       feature: "physical.coastal-evolution",

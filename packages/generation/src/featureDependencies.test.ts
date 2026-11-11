@@ -164,12 +164,6 @@ it("points coastal and ecological effect requirements at their precise owned con
   );
 });
 
-it("does not require coastal execution when physical epochs are absent", () => {
-  const system = disabledInteraction().world.magicSystems![0];
-  system.effects.coastalForcing = 1;
-  expect(configuredMagicRequirements([system], false)).toEqual([]);
-});
-
 it.each(["uplift", "gravity", "fertility", "luminous"])(
   "keeps intensity-only %s valid and explains the absent physical feedback",
   (effect) => {

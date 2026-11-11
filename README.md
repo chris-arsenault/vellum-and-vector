@@ -358,6 +358,20 @@ run in this replay. The report includes effective profile and epoch inputs, land
 heights and belt supply. Its old-ground classes use transported average heights;
 they do not track individual parcels of the first epoch.
 
+A world run with `HARNESS_RESUME_POINTS=<name>` saves the whole run as each epoch
+completes: the land, its magic and landmarks, and the recorded history.
+`HARNESS_RESUME=<name> HARNESS_AFTER=<epoch id> pnpm --dir frontend harness regional`
+installs the same world and continues the same generation after that epoch, with
+ecology, magic and people running through every later epoch and the present. Stages
+before the resume point do not run again, except initializers, which build the working
+state the saved epoch then fills. The continued world is saved as `<world>-resumed`,
+and its report's `resumed-from.json` names the saved run and the commit that saved it.
+Use this to work on later epochs and the present without generating geology again.
+A resume point holds the land and what the run recorded, not the working state of the
+people, so continue from a physical epoch rather than from a human era.
+`HARNESS_STOP_SECONDS=<n>` cancels a continued run after that long, which with
+`HARNESS_CPU_PROFILE=1` profiles its first minutes.
+
 `HARNESS_PASSES=0` reports a snapshot as it stands. Replay uses the saved profile;
 `HARNESS_PROFILE_SOURCE=current` selects the current base profile, and
 `HARNESS_PROFILE='{"Name": 0}'` overrides named settings. `HARNESS_EPOCHS` supplies

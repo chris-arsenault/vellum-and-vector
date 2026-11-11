@@ -1,5 +1,6 @@
 import type { Database, SqlValue } from "@sqlite.org/sqlite-wasm";
 import {
+  DomainError,
   requireThat,
   point,
   landmarkFootprint,
@@ -97,10 +98,21 @@ export function encodeRecordGeometry(
   precision: number
 ): RecordGeometry {
   const shape = shapes(record, kernel, precision);
+  // A shape that cannot be stored names the record that holds it.
+  const stored = (geometry: Geometry | null) => {
+    if (!geometry) return null;
+    try {
+      return kernel.encode(geometry, precision);
+    } catch (error) {
+      const value = record.data.value as { id?: string; kind?: string; name?: string };
+      const label = [record.data.kind, value.kind, value.name, value.id].filter(Boolean).join(" ");
+      throw new DomainError("invalid_geometry", `${label}: ${(error as Error).message}`, geometry);
+    }
+  };
   return {
     precision,
-    geometry: shape.geometry ? kernel.encode(shape.geometry, precision) : null,
-    footprint: shape.footprint ? kernel.encode(shape.footprint, precision) : null,
+    geometry: stored(shape.geometry),
+    footprint: stored(shape.footprint),
     geometryType: shape.geometry?.type ?? null,
     detailBounds: representationBounds(record, kernel, precision),
   };

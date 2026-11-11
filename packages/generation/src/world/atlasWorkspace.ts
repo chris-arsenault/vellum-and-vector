@@ -82,8 +82,8 @@ function preferInput(candidate: Grid, previous: Grid | undefined): boolean {
 }
 /**
  * Ancestor grids that cover this surface, keyed by channel, finest resolution preferred. An
- * independent map's own fields are its ancestors: its captured inputs when this run makes
- * the physical geography, otherwise its present fields (the terrain already made) first.
+ * independent map's own fields are its ancestors: its captured inputs, or the fields it
+ * published when a saved map is reopened to continue from them.
  */
 export function parentChannels(state: GenerationState) {
   const chosen = new Map<string, { grid: Grid; present: boolean }>(),
@@ -115,12 +115,15 @@ function inputOwner(
 ) {
   const id = state.surface.scope.areaId;
   return ownsMapGeography(state.domain.world, id)
-    ? field.areaId === id && (!!field.input || !makesTerrain(state))
+    ? field.areaId === id && (!!field.input || reopensGeography(state))
     : field.areaId !== id && isDescendant(state.domain.world.areas, id, field.areaId);
 }
-/** The physical geography is being made in this run, not read from the terrain already made. */
-function makesTerrain(state: GenerationState) {
-  return !state.facts.has("terrain:present");
+/**
+ * A saved map reopened to continue from its completed geography reads the fields it published
+ * as its inputs. Generation never sets this fact: a run makes or refines its own terrain.
+ */
+function reopensGeography(state: GenerationState) {
+  return state.facts.has("geography:reopened");
 }
 function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) {
   // A map's own captured inputs are its parent channels: they carry the country beyond the

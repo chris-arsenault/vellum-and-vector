@@ -5,7 +5,6 @@ import {
   type Band,
   type Grid,
   type MaterialCargoSamples,
-  ecologyFields,
   requireChannel,
   type FieldChannelName,
 } from "@atlas/domain";
@@ -34,21 +33,6 @@ const forcingChannels = new Set([
   "WaterKindCodes",
   "Temperature",
 ]);
-const weatherAndEcologyChannels = new Set([
-  "Temperature",
-  "ExternalHeatForcing",
-  "Moisture",
-  "Rainfall",
-  "Snowfall",
-  "Runoff",
-  "IceThickness",
-  ...ecologyFields.map(({ name }) => name),
-]);
-function preserveChannel(state: GenerationState, name: FieldChannelName, preserveTerrain: boolean) {
-  return (
-    preserveTerrain && Boolean(state.surface.channels[name]) && !weatherAndEcologyChannels.has(name)
-  );
-}
 function publishChannel(state: GenerationState, channel: PhysicalChannel) {
   const work = state.physical!,
     grid = state.surface;
@@ -58,7 +42,6 @@ function publishChannel(state: GenerationState, channel: PhysicalChannel) {
 export interface NativeProjection {
   state: GenerationState;
   forcingOnly?: boolean;
-  preserveTerrain?: boolean;
   channels?: PhysicalChannel[];
   selectedChannels?: ReadonlySet<FieldChannelName>;
 }
@@ -69,14 +52,13 @@ export const projectNative = defineCommand(
   ({
     state,
     forcingOnly = false,
-    preserveTerrain = false,
     channels = physicalChannels,
     selectedChannels,
   }: NativeProjection) => {
     const grid = state.surface,
       selected = new Set(channels.map(({ name }) => name)),
-      refreshCargo = !forcingOnly && replacesMaterial(state, selected, preserveTerrain);
-    publishPhysicalChannels(state, channels, forcingOnly, preserveTerrain);
+      refreshCargo = !forcingOnly && materialChannels.every((name) => selected.has(name));
+    publishPhysicalChannels(state, channels, forcingOnly);
     if (forcingOnly) {
       publishSeaLevels(state.physical!, derivedEmitter(grid));
       preserveNaturalForcing(grid);
@@ -99,7 +81,6 @@ export function selectedNativeProjection(
   return {
     state,
     forcingOnly,
-    preserveTerrain: !bound.domains.includes("physical"),
     channels: forcingOnly ? undefined : selectedAtlasChannels(bound.features),
     selectedChannels: new Set(
       (state.publications ?? []).flatMap((definition) =>
@@ -111,22 +92,12 @@ export function selectedNativeProjection(
 function publishPhysicalChannels(
   state: GenerationState,
   channels: PhysicalChannel[],
-  forcingOnly: boolean,
-  preserveTerrain: boolean
+  forcingOnly: boolean
 ) {
   for (const channel of channels) {
     if (forcingOnly && !forcingChannels.has(channel.name)) continue;
-    if (!preserveChannel(state, channel.name, preserveTerrain)) publishChannel(state, channel);
+    publishChannel(state, channel);
   }
-}
-function replacesMaterial(
-  state: GenerationState,
-  selected: ReadonlySet<string>,
-  preserveTerrain: boolean
-) {
-  return materialChannels.every(
-    (name) => selected.has(name) && !preserveChannel(state, name, preserveTerrain)
-  );
 }
 function preserveNaturalForcing(grid: Grid) {
   putChannel(

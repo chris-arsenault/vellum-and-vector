@@ -5,6 +5,7 @@ import {
   type IntentContext,
   type Epoch,
   ecologyEpochSchema,
+  hasGeneratedGeography,
 } from "@atlas/domain";
 
 export function setPhysicalHistory(
@@ -39,7 +40,7 @@ export function setPhysicalHistory(
 }
 export function physicalHistoryFixed(world: DomainSnapshot["world"]) {
   return (
-    world.generations.some((run) => run.domains.includes("physical")) ||
+    hasGeneratedGeography(world) ||
     Object.values(world.areas).some((area) => area.parentId !== null)
   );
 }

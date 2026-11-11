@@ -34,7 +34,6 @@ type FeatureOptions = {
   settings?: (keyof AtlasParameters)[];
   requires?: string[];
   absent?: string[];
-  inherited?: boolean;
   configuration?: Partial<GenerationFeature>;
   when?(slot: string, context?: FeatureContributionContext): boolean;
 };
@@ -73,7 +72,7 @@ export function physicalFeature(
     nativeSteps: [...new Set(entries.flatMap(({ step }) => (step ? [step] : [])))],
     applicability: physicalApplicability[id],
     cartography: [physicalCartography[id] ?? []].flat(),
-    domains: options.inherited ? ["physical", "magic"] : ["physical"],
+    domains: ["physical"],
     defaultEnabled: true,
     settings: Object.fromEntries(
       (options.settings ?? []).map((key) => [key, atlasParameterDefinitions[key]])

@@ -1,4 +1,4 @@
-import type { DomainSnapshot } from "@atlas/domain";
+import { hasGeneratedGeography, type DomainSnapshot } from "@atlas/domain";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
 import { mapBoundaryValue } from "./atlasParameters";
 import type { Diagnostic } from "@atlas/domain";
@@ -23,12 +23,7 @@ export function inheritMapBoundary(
   existing = false
 ): AtlasGenerationInput {
   const area = source.world.areas[input.areaId];
-  if (
-    !existing &&
-    !area?.parentId &&
-    !source.world.generations.some((run) => run.domains.includes("physical"))
-  )
-    return input;
+  if (!existing && !area?.parentId && !hasGeneratedGeography(source.world)) return input;
   const mapBoundary = mapBoundaryValue(source.world.reference.boundaryMode);
   const foundation = input.features?.["physical.foundation"];
   return {

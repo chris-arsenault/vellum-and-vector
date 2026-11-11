@@ -15,11 +15,7 @@ import { isMutablePhysicalName, type PhysicalField } from "./world/field";
 import { releaseWorking, retainedArray } from "./world/physicalNumerics";
 import { generationBindings } from "./generationBindings";
 import { physicalChannels, type PhysicalChannel } from "./world/atlasChannels";
-import {
-  composeNativeAuthoring,
-  createAtlasWorkspace,
-  nativePosition,
-} from "./world/atlasWorkspace";
+import { composeNativeAuthoring, nativePosition } from "./world/atlasWorkspace";
 import { projectNative } from "./world/atlasProjection";
 import { extractNativeGeography } from "./world/atlasFeatures";
 import { refreshOceans } from "./world/oceanFeatures";
@@ -149,10 +145,7 @@ function settleEnvironment(
   const society = state.society!;
   if ((society.inherited && !society.changed.size) || !context.inputs?.features) return;
   const available = new Set(Object.keys(state.surface.channels).map(fieldChannelName));
-  ensureEnvironmentalWorkspace(state, context, available);
-  const waterChanged = state.physical
-    ? refreshNative(state, context, years, available, publish)
-    : true;
+  const waterChanged = refreshNative(state, context, years, available, publish);
   registerChangedUnits(state);
   // Channel access and the coast are consequences of the water; they change when it does.
   if (waterChanged) {
@@ -293,19 +286,6 @@ function impoundmentCells(map: PhysicalField, cell: number) {
   }
   return count;
 }
-function ensureEnvironmentalWorkspace(
-  state: GenerationState,
-  context: MapProcessContext,
-  available: Set<string>
-) {
-  if (state.physical || !(available.has("Productivity") || available.has("WaterKindCodes"))) return;
-  const bound = generationBindings(context);
-  state.physical = createAtlasWorkspace(
-    state,
-    bound.quality as "draft" | "standard" | "fine",
-    bound.parameters
-  );
-}
 /**
  * The generated river, lake, ecology and magic features of this area that nothing else
  * holds onto are dropped before the surface is extracted again after people acted.
@@ -347,8 +327,6 @@ function publishEnvironmentalChanges(
 ) {
   const world = state.domain.world,
     area = state.domain.scope.areaId;
-  const physical = generationBindings(context).domains.includes("physical");
-  const has = (layer: string) => world.fields.some((f) => f.layerId === layer) || physical;
   dropReplaceableFeatures(state);
   const drainage = world.drainage?.[area];
   const ocean = state.surface.ocean;
@@ -360,9 +338,9 @@ function publishEnvironmentalChanges(
       impacts: false,
       volcanism: false,
       fractures: false,
-      lakes: available.has("WaterKindCodes") && has("rivers"),
+      lakes: available.has("WaterKindCodes"),
       landforms: false,
-      ecology: available.has("Productivity") && has("ecology"),
+      ecology: available.has("Productivity"),
       rivers: available.has("RiverOrders"),
       landmarks: false,
     },

@@ -21,6 +21,7 @@ import { executeMapOperation, processOwner } from "./processTraits";
 import { selectOperation } from "./processOperation";
 import { processDiagnostics, processFailureDiagnostics, stageEnabled } from "./processRecovery";
 import { prepareWorkingState, numericalProcessLifetime } from "./generationWorkingState";
+import { replayCompletedStage, resumeStageIndex, type ReplayedRun } from "./mapRunnerResume";
 
 export interface MapRunnerOptions {
   seed: string;
@@ -48,6 +49,21 @@ export interface MapRunnerOptions {
   // Optional completed-epoch/final observation. Serialize before resolving:
   // numerical workspace is shared and the following epoch mutates it.
   saveBoundary?(boundary: CompletedBoundary): Promise<void>;
+  /**
+   * A monitoring harness's observation of each completed epoch and the final state, before
+   * `saveBoundary`. It may copy what it needs to continue the run later; it must not mutate.
+   */
+  boundary?(boundary: CompletedBoundary): void | Promise<void>;
+  /**
+   * Continue a run from the saved state of a completed epoch instead of making its history
+   * again. Stages up to that epoch's end are not executed, except initializers, which build
+   * the working state the restore then fills. Every later stage runs as usual.
+   */
+  resume?: {
+    /** The ids of the completed epoch's ancestry, outermost first. */
+    after: string[];
+    restore(state: GenerationState): void | Promise<void>;
+  };
 }
 function activeCauses(state: GenerationState, nested: GenerationCause[][]): GenerationCause[] {
   return nested.at(-1) ?? (state.causes ??= []);
@@ -81,6 +97,7 @@ export class MapRunner {
     composeAuthoredSamples(state, initial.domain);
     options.progress?.(["prepare"], 0, "Validating inherited geography");
     validate();
+    const resumed = resumeStageIndex(this.stages, options);
     for (const [stageIndex, stage] of this.stages.entries()) {
       await options.yieldControl?.();
       this.checkCancelled(options);
@@ -88,6 +105,11 @@ export class MapRunner {
         causes.push([]);
         products.enterEpoch(stage.path.join("/"));
         for (const fact of stage.resetFacts!) products.invalidate(fact, "epoch reset");
+        continue;
+      }
+      if (stageIndex <= resumed) {
+        const run = { state, causes, products, validate, original: initial.domain };
+        await this.replay(stage, stageIndex === resumed, options, run);
         continue;
       }
       if (stage.kind === "epochEnd") {
@@ -99,7 +121,7 @@ export class MapRunner {
         this.checkCancelled(options);
         products.enterEpoch(stage.path.join("/"));
         validate();
-        await options.saveBoundary?.({
+        await this.completed(options, {
           configurationHash,
           kind: "epoch",
           ancestry: structuredClone(stage.epochs),
@@ -129,8 +151,27 @@ export class MapRunner {
     options.progress?.(["finalize"], 0.99, "Validating completed geography");
     validate();
     const result: CompletedBoundary = { configurationHash, kind: "final", ancestry: [], state };
-    await options.saveBoundary?.(result);
+    await this.completed(options, result);
     return result;
+  }
+  private replay(
+    stage: SequenceStage,
+    last: boolean,
+    options: MapRunnerOptions,
+    run: Omit<ReplayedRun, "process" | "execute"> & { original: GenerationState["domain"] }
+  ) {
+    const call = stage.invocation,
+      active = activeCauses(run.state, run.causes),
+      { state, original: from, validate, products } = run;
+    return replayCompletedStage(stage, last, options, {
+      ...run,
+      process: call && this.registry.get(call.process, call.version),
+      execute: () => this.runProcess(state, stage, options, active, from, validate, products),
+    });
+  }
+  private async completed(options: MapRunnerOptions, boundary: CompletedBoundary) {
+    await options.boundary?.(boundary);
+    await options.saveBoundary?.(boundary);
   }
   private configurationHash(initial: GenerationState, options: MapRunnerOptions) {
     return planHash({

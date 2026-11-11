@@ -162,7 +162,6 @@ export const dam: PoiEntry = {
     schedule: {
       kind: "dam",
       respond(state) {
-        if (!state.regional.input.domains.includes("physical")) return;
         releaseHeld(state);
         const children = upstreamIndex(state);
         let body = nextBody(state);

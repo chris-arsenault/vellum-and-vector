@@ -1,16 +1,17 @@
 import type { GenerationState } from "../process";
 import type { PoiEntry, PoiPlace, PoiVariety } from "./poiContract";
+import { runMemory } from "../runMemory";
 
 /**
  * What each place was chosen to be. It outlives what a state keeps until its fields change: the
  * ground a place's own variety shapes must not choose its variety again.
  */
-const chosen = new WeakMap<GenerationState, Map<string, string>>();
+const chosen = (state: GenerationState) =>
+  runMemory(state, "places.variety", () => new Map<string, string>());
 
 /** A place's variety, chosen the first time it is asked for and kept for the run. */
 export function varietyOf(state: GenerationState, variety: PoiVariety, place: PoiPlace) {
-  let kept = chosen.get(state);
-  if (!kept) chosen.set(state, (kept = new Map()));
+  const kept = chosen(state);
   let value = kept.get(place.id);
   if (value === undefined) kept.set(place.id, (value = variety.of(state, place)));
   return value;

@@ -34,6 +34,8 @@ export interface CheckpointRecord {
   position?: [number, number];
   commit: string;
   createdAt: string;
+  /** The saved epoch this world was continued from, and the commit that saved it. */
+  resumedFrom?: { label: string; after: string[]; commit: string };
 }
 
 export type HarnessWorkspace = Awaited<ReturnType<typeof openHarnessWorkspace>>;

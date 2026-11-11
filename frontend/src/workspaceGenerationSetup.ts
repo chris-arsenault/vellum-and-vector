@@ -46,15 +46,9 @@ export async function workspaceGenerationSetup(
       parentHistory: [],
       dependencies: false,
       channels: regional
-        ? refinementReads(source, input.areaId, input.domains.includes("physical"))
+        ? refinementReads(source, input.areaId)
         : source.world.fields
-            .filter(
-              (field) =>
-                field.resourceId &&
-                (!input.domains.includes("physical") ||
-                  field.areaId !== input.areaId ||
-                  field.input)
-            )
+            .filter((field) => field.resourceId && (field.areaId !== input.areaId || field.input))
             .map((field) => ({ fieldId: field.id, names: field.channels ?? [] })),
     });
     const prepared = regional

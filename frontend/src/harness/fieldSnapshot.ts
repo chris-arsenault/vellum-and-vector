@@ -72,13 +72,9 @@ export interface FailedField {
   lastObservedStep: string;
   lastObservedEpoch: number;
 }
-function capture(
-  map: PhysicalField,
-  context: PhysicalContext,
-  quality: string,
-  salt: number,
-  epochs: Epoch[]
-): Snapshot {
+/** A field's own contents, without the lattice and run settings a whole snapshot records. */
+export type FieldState = Pick<Snapshot, "bands" | "plain" | "held" | "materialCargo">;
+export function captureFieldState(map: PhysicalField): FieldState {
   const bands: Snapshot["bands"] = {},
     plain: Snapshot["plain"] = {},
     held: Snapshot["held"] = {};
@@ -86,6 +82,30 @@ function capture(
   for (const [name, value] of Object.entries(map))
     if (typeof value === "number" || typeof value === "boolean") plain[name] = value;
   for (const name of heldState) held[name] = map[name];
+  return { bands, plain, held, materialCargo: captureCargo(map) };
+}
+/** Writes saved contents into a field on the same lattice, through the ground owner's import. */
+export function restoreFieldState(map: PhysicalField, saved: FieldState) {
+  const imported = new Set<PhysicalBufferName>();
+  for (const [name] of physicalBands(map)) {
+    const values = saved.bands[name];
+    requireThat(values, "snapshot_field", `Snapshot is missing ${name}.`);
+    imported.add(name);
+    if (isMutablePhysicalName(name))
+      for (let i = 0; i < values.length; i++) map[name].set(i, values[i]);
+    else importGroundBand(map, name, values);
+  }
+  Object.assign(map, saved.plain, saved.held);
+  finishGroundImport(map, imported);
+  restoreCargo(map, saved.materialCargo);
+}
+function capture(
+  map: PhysicalField,
+  context: PhysicalContext,
+  quality: string,
+  salt: number,
+  epochs: Epoch[]
+): Snapshot {
   return {
     lengthUnits: "relative",
     epochs,
@@ -96,10 +116,7 @@ function capture(
     profile: context.Profile,
     spacing: map.mesh.spacing,
     count: map.mesh.count,
-    bands,
-    plain,
-    held,
-    materialCargo: captureCargo(map),
+    ...captureFieldState(map),
   };
 }
 function captureCargo(map: PhysicalField): Snapshot["materialCargo"] {
@@ -232,18 +249,7 @@ export function restoreSnapshot(path: string, allowFailedInspection = false) {
       `Snapshot lattice differs: ${snapshot.count} cells at ${snapshot.spacing}, rebuilt ${mesh.count} at ${mesh.spacing}.`
     );
   const map = createField(mesh);
-  const imported = new Set<PhysicalBufferName>();
-  for (const [name] of physicalBands(map)) {
-    const values = snapshot.bands[name];
-    requireThat(values, "snapshot_field", `Snapshot is missing ${name}.`);
-    imported.add(name);
-    if (isMutablePhysicalName(name))
-      for (let i = 0; i < values.length; i++) map[name].set(i, values[i]);
-    else importGroundBand(map, name, values);
-  }
-  Object.assign(map, snapshot.plain, snapshot.held);
-  finishGroundImport(map, imported);
-  restoreCargo(map, snapshot.materialCargo);
+  restoreFieldState(map, snapshot);
   return {
     map,
     seed: snapshot.seed,

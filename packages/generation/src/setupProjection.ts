@@ -1,4 +1,4 @@
-import { type Profile } from "@atlas/domain";
+import { hasGeneratedGeography, type Profile } from "@atlas/domain";
 import { atlasFeatureDefinitions, type prepareAtlasGeneration } from "./atlasWorkflow";
 import { activeLocatedSources } from "./featureDependencies";
 import { landmarksInExtent } from "./landmarkSelection";
@@ -25,10 +25,9 @@ export function projectGenerationSetup(
 ): GenerationSetup {
   const { source, input } = prepared,
     area = source.world.areas[input.areaId];
-  const channels = [...inheritedChannelNames(source, area.id, input.domains.includes("physical"))];
+  const channels = [...inheritedChannelNames(source, area.id)];
   const context = {
-    inherited:
-      Boolean(area.parentId) || (!input.domains.includes("physical") && channels.length > 0),
+    inherited: Boolean(area.parentId),
     channels,
     locatedSources: activeLocatedSources(source, input).length,
     landmarks: landmarksInExtent(source, input).length,
@@ -121,9 +120,7 @@ function projectFeature(
       )
   );
   const status = featureStatus(feature, bound.enabled, context, invocations, publications);
-  const historyFixed =
-    context.inherited ||
-    prepared.source.world.generations.some((run) => run.domains.includes("physical"));
+  const historyFixed = context.inherited || hasGeneratedGeography(prepared.source.world);
   return {
     id: feature.id,
     label: feature.label,

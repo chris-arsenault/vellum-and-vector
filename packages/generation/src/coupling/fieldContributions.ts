@@ -44,9 +44,12 @@ function bounded(minimum: number | undefined, maximum: number | undefined, integ
 }
 
 export class Contributions {
-  private readonly applied = new Map<MutablePhysicalBufferName, Float64Array>();
   private readonly desired = new Map<MutablePhysicalBufferName, Float64Array>();
-  constructor(private readonly length: number) {}
+  /** `applied` is what earlier evaluations wrote: supply the run's own table to carry it on. */
+  constructor(
+    private readonly length: number,
+    private readonly applied = new Map<MutablePhysicalBufferName, Float64Array>()
+  ) {}
 
   /** Begin declaring this evaluation's totals; every band starts from zero. */
   begin() {

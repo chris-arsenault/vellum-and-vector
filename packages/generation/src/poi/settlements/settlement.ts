@@ -152,8 +152,7 @@ export const settlement: PoiEntry = {
       support: (state) => drawChannelsToSeats(state),
       restore: (state) => gradeSeats(state),
       respond(state: RegionalState) {
-        const domains = state.regional.input.domains;
-        if (domains.includes("physical") && placesEnabled(domains)) settleSeats(state);
+        if (placesEnabled(state.regional.input.domains)) settleSeats(state);
       },
     },
   },

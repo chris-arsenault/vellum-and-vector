@@ -241,7 +241,7 @@ it("releases replaced cargo buffers while a separately captured input remains re
   expect(pinned.materialCargo!.records.get(3)).toBe(4);
   expect(state.surface.materialCargo!.records.get(3)).toBe(4);
 });
-it("retains cargo when preservation or selected bindings leave material channels unchanged", () => {
+it("retains cargo when selected bindings leave material channels unchanged", () => {
   const { state, map, channels, bindings } = chargedFixture();
   runOperation(processOwner(state), projectNative, {
     state,
@@ -250,13 +250,6 @@ it("retains cargo when preservation or selected bindings leave material channels
   });
   const previous = state.surface.materialCargo!;
   setLayer(map, 0, 0, rockCatalogue.granite.code, 100);
-  runOperation(processOwner(state), projectNative, {
-    state,
-    preserveTerrain: true,
-    channels: bindings,
-    selectedChannels: channels,
-  });
-  expect(state.surface.materialCargo).toBe(previous);
   runOperation(processOwner(state), projectNative, {
     state,
     channels: bindings.filter(({ name }) => name === "Temperature"),

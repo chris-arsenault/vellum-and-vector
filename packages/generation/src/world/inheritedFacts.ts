@@ -43,15 +43,13 @@ export function absentInheritedHistories(channels: Iterable<string>) {
       carriers[history].length === 0 || !carriers[history].every((name) => names.has(name))
   );
 }
-export function inheritedChannelNames(source: DomainSnapshot, areaId: string, physical: boolean) {
+export function inheritedChannelNames(source: DomainSnapshot, areaId: string) {
   const area = source.world.areas[areaId],
     space = areaSpace(source.world, areaId);
   const channels = new Set<string>(),
     owned = ownsMapGeography(source.world, areaId),
     fields = source.world.fields.filter(
-      (field) =>
-        !(physical && field.areaId === areaId && !field.input) &&
-        (!owned || field.areaId === areaId)
+      (field) => !(field.areaId === areaId && !field.input) && (!owned || field.areaId === areaId)
     );
   for (const field of fields) {
     const grid = source.numerical[field.id];

@@ -21,6 +21,7 @@ import { bareOf, thinSoilOf } from "../relief/reliefShape";
 import { fallForm, fallShapes, type FallForm } from "./waterfallForms";
 import { trueFallSize, type TrueFallSize } from "./waterfallSize";
 import { flowTarget } from "./waterReads";
+import { runMemory } from "../../runMemory";
 
 const salt = 0x7042;
 const salts = { height: 0x7043, width: 0x7044 };
@@ -32,7 +33,8 @@ export const dropOf = (state: GenerationState, place: PoiPlace) =>
 export const dischargeOf = (state: GenerationState, place: PoiPlace) =>
   fieldOf(state).FlowAccumulation.get(place.anchor);
 
-const sizes = new WeakMap<GenerationState, Map<string, TrueFallSize>>();
+const sizes = (state: GenerationState) =>
+  runMemory(state, "falls.true-size", () => new Map<string, TrueFallSize>());
 /** What a parent's record says a carried fall at this cell really is. */
 function carriedSize(state: GenerationState, cell: number): TrueFallSize | null {
   if (!("regional" in state)) return null;
@@ -58,8 +60,7 @@ export function sizeAtCell(state: GenerationState, cell: number) {
 }
 /** What a fall really is, settled once: the ground its own step shapes does not choose again. */
 export function sizeOfFall(state: GenerationState, place: PoiPlace) {
-  let kept = sizes.get(state);
-  if (!kept) sizes.set(state, (kept = new Map()));
+  const kept = sizes(state);
   let size = kept.get(place.id);
   if (!size) {
     size =

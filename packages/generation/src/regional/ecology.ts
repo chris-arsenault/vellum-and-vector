@@ -32,7 +32,6 @@ const fireHeat = 3,
  * Soil water, organic recycling, toxicity, competition and animals use the shared owners.
  */
 export function respondEcology(state: RegionalState, exposure: number, context: MapProcessContext) {
-  if (!state.regional.input.domains.some((id) => id === "physical" || id === "magic")) return;
   if (exposure <= 0) return;
   const map = state.physical.map;
   readEcologyEnvironment(map, nativeContext(state, context, 0));

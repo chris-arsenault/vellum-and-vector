@@ -13,7 +13,6 @@ import {
   normalizeGenerationDraft,
   prepareDraft,
   setFeatureSetting,
-  updateDraftDomains,
   updateFeature,
 } from "./generationDraft";
 import { updateEcologyEpoch } from "./generationDraftEpochs";
@@ -69,7 +68,11 @@ it("starts a new world with cultural, political and built geography included", a
 });
 
 it("preserves feature intent across domain gates and explicitly enables a new feature's domain", async () => {
-  let draft = updateDraftDomains(newGenerationDraft(), ["physical"]);
+  const base = newGenerationDraft();
+  let draft = normalizeGenerationDraft({
+    ...base,
+    recipe: { ...base.recipe, domains: ["physical"] },
+  });
   expect(prepareDraft(draft).input.resolvedFeatures!.selection["human.cultures"].enabled).toBe(
     false
   );

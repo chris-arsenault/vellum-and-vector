@@ -125,11 +125,7 @@ export function atlasNativeProcesses(
   input: AtlasGenerationInput,
   original: DomainSnapshot
 ): MapProcess[] {
-  const channels = inheritedChannelNames(
-    original,
-    input.areaId,
-    input.domains.includes("physical")
-  );
+  const channels = inheritedChannelNames(original, input.areaId);
   const deformation = plateDeformationSteps(input.resolvedFeatures!, {
     source: original,
     input,

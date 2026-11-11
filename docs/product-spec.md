@@ -637,7 +637,7 @@ No whole-region freeze or inverse simulation follows from a local edit.
 
 A generator declares: supported creation profiles; inputs and prerequisites; causal facts read/produced/invalidated; spatial extent and required halo; history/epoch assumptions; deterministic seed inputs; configurable quality/cost; result feature types; validation checks; and which outputs may be protected or selectively regenerated.
 
-The product supports both **full creation** and **selected-domain generation**. Running the cultural generator must not inherently rerun geology; running a building layout generator must not inherently recalculate continental tectonics. However, generators may require recomputing specifically affected derived data or fail when their input state is inconsistent.
+Physical geography generates on every map: a world runs its full geological history, and a child map refines the terrain it inherits. Magic and human domains are selectable on top of it. A building interior has no geography of its own, so a layout generator runs there alone and never recalculates continental tectonics. Generators may require recomputing specifically affected derived data or fail when their input state is inconsistent.
 
 ### 10.2 Physical geography — Canonry reuse target
 

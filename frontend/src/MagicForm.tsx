@@ -45,13 +45,14 @@ export function MagicForm({ editor }: { editor: EditorState }) {
       <button
         className="secondary"
         disabled={generate.isPending}
-        onClick={() => generate.mutate({ domains: ["magic"], quality, seed: editor.world.seed })}
+        onClick={() =>
+          generate.mutate({ domains: ["physical", "magic"], quality, seed: editor.world.seed })
+        }
       >
-        Apply magic to geography
+        Generate land and magic
       </button>
       <p className="hint">
-        Saving changes the source. Apply magic to update climate and water from the current
-        geography; generate land and magic together to evolve geological history.
+        Saving changes the source. Magic acts through the land, so land and magic generate together.
       </p>
       <ErrorMessage error={generate.error} />
     </section>

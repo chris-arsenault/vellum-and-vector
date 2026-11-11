@@ -29,6 +29,7 @@ import {
   refinementResolution,
   regionalInitialState,
 } from "./capture";
+import { requireGeography } from "../geographyRequired";
 import "./causes/index";
 import { prepareMagic } from "./magic/index";
 import { Contributions } from "../coupling/fieldContributions";
@@ -59,11 +60,10 @@ export function beginRegional(
   requireThat(state.physical, "physical_workspace", "Initialize the physical mesh first.");
   const work = state.physical,
     map = work.map,
-    physical = input.domains.includes("physical"),
-    parentSpan = parentSampleSpan(state.domain, input.areaId, physical),
+    parentSpan = parentSampleSpan(state.domain, input.areaId),
     inheritedHeight = map.coverage.copyBand(map.Elevation);
   inheritedHeight.retain();
-  map.CompletedEpochCount = capturedEpochCount(state.domain, input.areaId, physical);
+  map.CompletedEpochCount = capturedEpochCount(state.domain, input.areaId);
   regionalProfile(work.profile, parentSpan, map.scale);
   // Native invocation workSpan apportions local exposure; do not divide the rates again.
   work.profile = profileForExecution(work.profile, { refined: true, passes: 1 });
@@ -160,7 +160,7 @@ export function regionalRegistry(
   return registry;
 }
 function initialFacts(source: DomainSnapshot, input: AtlasGenerationInput) {
-  const channels = inheritedChannelNames(source, input.areaId, input.domains.includes("physical"));
+  const channels = inheritedChannelNames(source, input.areaId);
   return [...channels, ...inheritedProducts(channels)];
 }
 
@@ -168,6 +168,7 @@ export function prepareRegionalRefinement(source: DomainSnapshot, input: AtlasGe
   const diagnostics: Diagnostic[] = [],
     area = source.world.areas[input.areaId];
   requireThat(area?.map, "regional_map", "Refinement needs an independent captured map.");
+  requireGeography(source, input);
   refinementResolution(source, input);
   // A drawing edited on this map or its space must survive: the same rule as the world's.
   diagnostics.push(...mappedGenerationDiagnostics(source, input.areaId));
