@@ -1,7 +1,7 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import type { GenerationState } from "../../process";
 import { MapScale } from "@atlas/domain";
-import { bridgeFlow, fordCost, roadTravellers } from "../../regional/societyWays";
+import { bridgeFlow, fordCost, roadTravellers } from "./workRecords";
 import type { RegionalState } from "../../regional/state";
 import { rulingGrade, wetGroundCost } from "../../regional/ways";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";

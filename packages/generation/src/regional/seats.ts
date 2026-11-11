@@ -18,8 +18,6 @@ const siteReach = 0.6;
 /** An established seat's footprint, as a share of the parent span, held to this hillslope gradient. */
 const seatFootprintShare = 0.12;
 const seatGradient = 0.03;
-/** A proposed village holds only its own cell and the ring around it, more gently. */
-const proposedGradient = 0.04;
 
 /**
  * The seat operations (spec 6.3); the settlement entry's schedule calls them.
@@ -40,21 +38,9 @@ export function knownSeats(state: RegionalState): Seat[] {
       situation: situationAt(state, cell),
       radius: seatRadius(state),
       gradient: seatGradient,
-      strength: "established",
     });
   }
   return seats;
-}
-
-export function proposedSeat(state: RegionalState, featureId: string, cell: number): Seat {
-  return {
-    featureId,
-    cell,
-    situation: situationAt(state, cell),
-    radius: 1,
-    gradient: proposedGradient,
-    strength: "proposed",
-  };
 }
 
 export function seatRadius(state: RegionalState) {
@@ -117,14 +103,13 @@ function channelAround(state: RegionalState, cell: number) {
 }
 
 /**
- * Settle every established seat on the derived surface. Its footprint already held the relief
+ * Settle every seat on the derived surface. Its footprint already held the relief
  * down; if the ground under it is still not usable it moves to the best usable ground within
  * reach that keeps its broad situation, and its footprint follows. The captured position is
  * remembered for later runs.
  */
 export function settleSeats(state: RegionalState) {
   for (const seat of state.regional.evidence?.seats ?? []) {
-    if (seat.strength !== "established") continue;
     const feature = generationFeature(state, seat.featureId);
     if (!feature || feature.geometry.type !== "Point") continue;
     const held = usableSite(state, seat.cell),

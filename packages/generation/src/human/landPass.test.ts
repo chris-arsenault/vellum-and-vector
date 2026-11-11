@@ -40,6 +40,15 @@ it("grows people into what feeds them and loses those it cannot feed", () => {
   expect(map.Population.get(2)).toBe(0);
   expect(map.MassDeath.get(1)).toBeGreaterThan(0);
 });
+it("leaves the number of people alone in a pass that does not grow them", () => {
+  const map = fertileLand(),
+    fed = ask(map, "support", landContext()).get(0);
+  settle(map, { 0: fed / 10, 1: fed * 3 });
+  withWork(map, { years: 1000, grows: false }, (work) => runOperation(map, growPeople, work));
+  expect(map.Population.get(0)).toBeCloseTo(fed / 10);
+  expect(map.Population.get(1)).toBeCloseTo(fed * 3);
+  expect(map.MassDeath.get(1)).toBe(0);
+});
 it("spills people from full land onto land with room", () => {
   const map = fertileLand(),
     fed = ask(map, "support", landContext()).get(0);

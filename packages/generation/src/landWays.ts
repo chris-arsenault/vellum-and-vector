@@ -1,11 +1,15 @@
-import { canonicalGeometry, unwrapCoordinates } from "@atlas/domain";
+import { canonicalGeometry, lineParts, unwrapCoordinates, type AtlasFeature } from "@atlas/domain";
 import { generationBindings } from "./generationBindings";
-import { generationFeature } from "./generationFeatures";
+import { generationFeature, writeGenerationFeature } from "./generationFeatures";
 import { knownTraditions } from "./human/traditions";
 import { knownWays, type KnownWay } from "./human/placeCountry";
-import { knownPlaces, townSize } from "./human/placeRegistry";
-import { generatedFeature, generatedId, putGeneratedNetwork } from "./mapFeatures";
+import { knownPlaces, rankedSize, type KnownPlace } from "./human/placeRegistry";
+import { generatedFeature, putGeneratedNetwork } from "./mapFeatures";
+import { publishKinds, publishLatePlaces } from "./poi/poiPublish";
+import { placeRecordId } from "./poi/settlements/landPlaces";
 import type { GenerationState, MapProcessContext } from "./process";
+import { putRegionalNetwork, regionalFeature } from "./regional/extraction/features";
+import type { RegionalState } from "./regional/state";
 import type { PhysicalField } from "./world/field";
 
 /**
@@ -89,38 +93,56 @@ function highways(state: GenerationState, shown: readonly KnownWay[], each: numb
   }
   return kept;
 }
+const refined = (state: GenerationState): state is RegionalState => "regional" in state;
+const placeRecord = placeRecordId;
 function way(state: GenerationState, known: KnownWay, highway: boolean) {
   const map = state.physical!.map,
     places = new Map(knownPlaces(state).map((place) => [place.id, place])),
     [a, b] = [places.get(known.from)!, places.get(known.to)!],
-    name = (id: string) => generationFeature(state, generatedId(state, id))?.name ?? "",
+    name = (place: KnownPlace) => generationFeature(state, placeRecord(state, place))?.name ?? "",
     kind = known.kind === "lane" ? "lane" : "road",
-    runs = stretches(map, known.cells);
-  return generatedFeature(
-    state,
-    `${kind}:${a.id}:${b.id}`,
-    `${name(a.id)}–${name(b.id)}`,
-    kind,
-    "roads",
-    canonicalGeometry(state.domain.world.reference, drawn(state, runs)),
-    {
+    runs = stretches(map, known.cells),
+    key = `${kind}:${a.id}:${b.id}`,
+    label = `${name(a)}–${name(b)}`,
+    geometry = canonicalGeometry(state.domain.world.reference, drawn(state, runs)),
+    attributes = {
       // A way that takes a step between cells that do not touch is drawn up to it and on
       // from its far end.
       ...(runs.length > 1 ? { crossings: runs.length - 1 } : {}),
-      fromPlace: generatedId(state, a.id),
-      toPlace: generatedId(state, b.id),
+      fromPlace: placeRecord(state, a),
+      toPlace: placeRecord(state, b),
       travelCost: known.cost,
       roadClass: highway ? "highway" : known.kind,
       wayKind: known.kind === "lane" ? "sea" : "land",
       travellers: Math.round(known.travellers),
       routePopulation: Math.round(Math.min(a.townPeople, b.townPeople)),
-      strategic: [a, b].some((place) => place.townPeople >= marketPeople * townSize(state)),
-    }
-  );
+      strategic: [a, b].some((place) => place.townPeople >= marketPeople * rankedSize(state)),
+    };
+  if (!refined(state))
+    return generatedFeature(state, key, label, kind, "roads", geometry, attributes);
+  // A refined map's ways are its own products, named for the places they join.
+  return regionalFeature(state, key, kind, "roads", geometry, attributes, label, true);
+}
+/** A way's record and its network, written as this map writes its own. */
+function lay(state: GenerationState, feature: AtlasFeature) {
+  if (!refined(state)) return putGeneratedNetwork(state, feature);
+  writeGenerationFeature(state, feature);
+  for (const coordinates of lineParts(feature.geometry))
+    putRegionalNetwork(state, feature, Number(feature.attributes.travellers), coordinates);
+}
+/** The places of the catalogue's society moment, and the ways between the places of the land. */
+export function publishPeoplePlaces(state: GenerationState, context: MapProcessContext) {
+  publishKinds(state, "society");
+  publishLatePlaces(state, "society");
+  publishLandWays(state, context);
 }
 export function publishLandWays(state: GenerationState, context: MapProcessContext) {
   // A way joins two places on the map: where either has no record here, there is no way to draw.
-  const recorded = (id: string) => Boolean(generationFeature(state, generatedId(state, id))),
+  const places = new Map(knownPlaces(state).map((place) => [place.id, place])),
+    recorded = (id: string) => {
+      const place = places.get(id);
+      return Boolean(place && generationFeature(state, placeRecord(state, place)));
+    },
     shown = knownWays(state).filter(
       (known) => known.kind !== "path" && recorded(known.from) && recorded(known.to)
     ),
@@ -128,6 +150,6 @@ export function publishLandWays(state: GenerationState, context: MapProcessConte
   for (const [index, known] of shown.entries()) {
     context.progress(index / shown.length, "Laying the roads people made");
     if (stretches(state.physical!.map, known.cells).length)
-      putGeneratedNetwork(state, way(state, known, kept.has(known)));
+      lay(state, way(state, known, kept.has(known)));
   }
 }

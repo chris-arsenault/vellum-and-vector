@@ -1,17 +1,11 @@
-import {
-  canonicalGeometry,
-  canonicalPosition,
-  semanticId,
-  spatial,
-  type AtlasFeature,
-} from "@atlas/domain";
+import { canonicalGeometry, canonicalPosition, semanticId, type AtlasFeature } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import {
   generationFeatures,
   writeGenerationFeature,
   removeGenerationFeature,
 } from "../../generationFeatures";
-import { atlasName, nameGeographicFeature, nameMetadata } from "../../atlasNaming";
+import { nameGeographicFeature, nameMetadata } from "../../atlasNaming";
 import type { RegionalState } from "../state";
 
 /** The identity a record of this key has on this refined map. */
@@ -25,19 +19,16 @@ export function regionalFeature(
   layerId: string,
   geometry: Geometry,
   attributes: Record<string, unknown> = {},
-  label = kind
+  label = kind,
+  // A record its maker has already named, as a place is named in its founders' tongue or a
+  // way for the places it joins, keeps that name; the rest are named for their ground.
+  given = attributes.namingVersion !== undefined
 ): AtlasFeature {
   const areaId = state.regional.input.areaId,
     id = regionalId(state, key),
-    named =
-      kind === "settlement"
-        ? atlasName(state.domain.world, {
-            key,
-            kind: "settlement",
-            subkind: "village",
-            position: spatial.interiorPosition(geometry),
-          })
-        : nameGeographicFeature(state.domain.world, key, kind, geometry, attributes),
+    named = given
+      ? null
+      : nameGeographicFeature(state.domain.world, key, kind, geometry, attributes),
     feature: AtlasFeature = {
       id,
       placeId: undefined,

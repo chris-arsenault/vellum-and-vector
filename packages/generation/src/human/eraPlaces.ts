@@ -17,6 +17,8 @@ export interface EraPlaces {
   years: number;
   /** The townsfolk that make a town on this map. */
   least: number;
+  /** The townsfolk places are ranked against, where the map shows places smaller than towns. */
+  town?: number;
   /** The travel distance over which a place is felt. */
   range: number;
   /** Travellers a year that make a road. */
@@ -35,7 +37,8 @@ export function recordEraPlaces(state: GenerationState, setting: EraPlaces) {
     state,
     denseZones(map, ask(map, "support", context), least / 2, ask(map, "presence", context)),
     era,
-    least
+    least,
+    setting.town ?? least
   );
   // Remains as large as a town's buildings, where no known place stands, are ruins too.
   recordRemains(state, ruinSites(map, least / peoplePerBuiltKm2), era);

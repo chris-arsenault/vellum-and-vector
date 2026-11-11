@@ -743,6 +743,82 @@ Exit: a regional map gives a world settlement a shape, an old quarter, farm
 country and smaller places around it that agree with the parent's layers; named
 places resolve; the parent is unchanged.
 
+Mechanisms decided (2026-11-11):
+
+- The child lives its inherited people once in each round of development, with
+  the same land pass the world runs. The pass carries one more fact, whether
+  people's number changes; on a child it does not. People farm, build and move
+  to where the finer land suits them, and how many they are stays what the
+  parent says. Before each round's pass, and before places are read, people
+  meet the land as it now stands, so nobody lives on under a lake the child's
+  own water made.
+- Tongues, faiths, customs and realms reach the child as codes in the layers.
+  The world writes each tradition's code on its entity, and the child reads
+  them back, so a child's records name the same peoples and realms.
+- The settlements and ruins the parent left are known places from the start,
+  on the ground the parent's one cell covered. The crowd found there is that
+  town and its record stays the parent's. Every other crowd the child's layers
+  hold is read by the same classifier and published by the same catalogue
+  entry, named in its founders' tongue.
+- A finer map shows smaller places: the townsfolk that make a place shrink
+  with the cell area, down to a hamlet. Rank is still judged against the
+  world's town size, so a village is not a market town for being shown.
+- Ways, country and hinterlands come from the same reading as the world's and
+  are published by the same code. A ford or bridge is where a way steps over a
+  river in one or two cells; a way that runs along a river crosses nothing.
+  Roads over sizeable rivers are bridged. Mills stand at living places.
+- Deleted: village proposals and their competition, the hinterland partition,
+  field and pasture declarations, the commuting-flow way tracer and its line
+  drawing, the site ranker and the state they kept. An architecture test keeps
+  them out of the regional namespace.
+
+Found and fixed on the way, because they stopped any region with people from
+finishing or from keeping its people:
+
+- The river check rejected a river that passes on less water below an
+  irrigation intake. It now allows exactly what the intake takes.
+- Each round carves tens of metres of finer relief, and ecology took that for
+  fresh erosion that kills plants and strips soil. A round's carving is no
+  event in the land's history: ecology's memory of erosion is set to the
+  present before it responds, and on dry ground the soil the parent left stays
+  on the surface as it is redrawn.
+
+Verdict on the saved world, region around Yamato Kurui (draft): the six
+captured towns keep their records and names; 118 smaller places of 230 to
+12,800 townsfolk appear where the layers are dense, named in their peoples'
+tongues with their realms; 98 roads and tracks, 5 lanes, 15 fords and 42 mills.
+People hold at 1.29 M of the 1.40 M inherited, the difference being ground the
+child's lakes cover. Population has gathered into towns with shapes.
+
+Not built:
+
+- Built-up ground still shows the parent's cells as squares: the inherited
+  share lies evenly over each parent cell and only new building follows the
+  crowd. A town has a shape in its people, not yet in its old quarter.
+- Farm country away from people keeps the parent's squares for the same
+  reason.
+- A child publishes no ruins of its own. Inherited remains lie evenly over each
+  parent cell, so reading them gave one ruin per square (100 on the test
+  region), which locates nothing. It shows the ruins its parent recorded.
+- Cultural and political regions on a child are the parent's captured
+  polygons, not re-read from the child's layers.
+- Craft places on a child are the parent's captured ones; the catalogue's own
+  entries add what the child's layers hold, and nothing reconciles the two.
+- A captured town's record keeps the parent's population and point; the crowd
+  the child finds may sit a few cells away.
+- Crossings where a way passes between two river cells diagonally are missed,
+  and a crossing is counted on a way even where one of its ends has no record
+  and the way is not drawn.
+- The road costs and joined cells that places declare (worn ground at a town,
+  a bridge's easier crossing, a door's two ends) were read only by the deleted
+  regional tracer. The shared reading of ways asks the land's travel answers
+  and does not yet hear them.
+- A child restores which code is which tradition, not a realm's seat or
+  whether it has ended: no place a child finds is a capital, and an ended
+  realm reads as living.
+- Ice that advances on a child, and real erosion beyond its redrawn relief, no
+  longer damage what grows there.
+
 ### M8 — Review and durable documentation
 
 Read full histories on world and child maps against every exit and the coverage

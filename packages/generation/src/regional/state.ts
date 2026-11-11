@@ -30,17 +30,6 @@ export interface Seat {
   /** Footprint radius in cells and the hillslope gradient its ground is held to. */
   radius: number;
   gradient: number;
-  /** An established seat has substantial influence; a proposed village only a local one. */
-  strength: "established" | "proposed";
-}
-
-/** A village proposed in round two, supported or rejected in round three. */
-export interface ProposedPlace {
-  cell: number;
-  population: number;
-  siteKind: string;
-  siteReason: string;
-  accepted: boolean;
 }
 
 /**
@@ -122,8 +111,6 @@ export interface RegionalWork {
   contributions: Contributions;
   /** Media the field has no band for (insolation, cold pooling, wetness), derived after each round's water. */
   media?: SharedMedia;
-  /** The settled places' land: per cell the owning place's cell (-1 none) and 1 field, 2 pasture. */
-  fields?: { place: Int32Array; kind: Uint8Array };
   /** The round being evaluated: 0 before the schedule, 1..3 inside it, 4 at the final refresh. */
   round: number;
   character?: RegionalCharacter;
@@ -132,17 +119,8 @@ export interface RegionalWork {
   network?: NetworkWork;
   relief?: ReliefWork;
   drainage?: DrainageWork;
-  proposed: ProposedPlace[];
-  /** Site classes of the developed terrain, read in round two and kept for round three. */
-  sites?: (import("../siteRanking").SiteOpportunity | null)[];
   /** Products of an earlier refinement of this map, removed before the schedule. */
   removedProducts?: Set<string>;
-  /** Captured occupation per mesh cell (people per km²), where the parent published any. */
-  populationDensity?: Float64Array;
-  /** What the traced ways left per cell, and the seats' own cells, which are no crossings. */
-  crossings?: { traffic: Float64Array; crossed: Float64Array; seatCells: Set<number> };
-  /** The places the traced ways joined. */
-  settled?: import("./societyWays").Place[];
 }
 
 /** A generation state in the regional schedule: the physical workspace and the regional work. */

@@ -3,7 +3,7 @@ import type { GenerationState } from "../../process";
 import { MapScale } from "@atlas/domain";
 import { regionalFeature, regionalId } from "../../regional/extraction/features";
 import { positionOf } from "../../regional/lattice";
-import type { Place } from "../../regional/societyWays";
+import { knownPlaces, type KnownPlace } from "../../human/placeRegistry";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
@@ -20,6 +20,7 @@ import {
 import { onMappedRiver } from "../water/waterReads";
 import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
 import { isRefined, lazyPlace, onceWritten } from "./communityRecords";
+import { placeRecordId } from "./landPlaces";
 import { isGone, seatOf, weighedPlace } from "./settlementRecords";
 
 /** A channel's fall that turns a mill and the mill's reach from its seat in cells. */
@@ -49,29 +50,29 @@ function millSite(state: RegionalState, cell: number) {
   }
   return best;
 }
-function millRecord(state: RegionalState, seat: Place, cell: number) {
+function millRecord(state: RegionalState, seat: KnownPlace, cell: number) {
   const p = positionOf(fieldOf(state).mesh, cell);
   return regionalFeature(
     state,
-    `mill:${seat.cell}`,
+    `mill:${seat.anchor}`,
     "mill",
     "waterworks",
     { type: "Point", coordinates: [p.x, p.y] },
-    { workKind: "mill", flow: dischargeAt(state, cell), seat: seat.feature?.id },
+    { workKind: "mill", flow: dischargeAt(state, cell), seat: placeRecordId(state, seat) },
     "Mill"
   );
 }
-/** Each settled place with a falling channel within reach turns a mill at its steepest reach. */
+/** Each living place with a falling channel within reach turns a mill at its steepest reach. */
 const places = (state: GenerationState): readonly PoiPlace[] =>
   heldFor(state, "places:mill", () => {
     if (!isRefined(state)) return [];
-    return (state.regional.settled ?? []).flatMap((seat) => {
-      if (!seat.settled || seat.residents <= 0) return [];
-      const cell = millSite(state, seat.cell);
+    return knownPlaces(state).flatMap((seat) => {
+      if (seat.abandoned || seat.absorbedBy || seat.townPeople <= 0) return [];
+      const cell = millSite(state, seat.anchor);
       return cell < 0
         ? []
         : [
-            lazyPlace("mill", regionalId(state, `mill:${seat.cell}`), cell, () =>
+            lazyPlace("mill", regionalId(state, `mill:${seat.anchor}`), cell, () =>
               millRecord(state, seat, cell)
             ),
           ];

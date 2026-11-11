@@ -22,6 +22,8 @@ export interface KnownPlace {
   tongue?: number;
   /** The place whose zone grew over it, which it has been part of since. */
   absorbedBy?: string;
+  /** The record this place already has on the map, where the map was made of another's. */
+  adopted?: string;
   /** Its townsfolk now, the most it ever held, and everyone on its zone's cells. */
   townPeople: number;
   peak: number;
@@ -38,11 +40,50 @@ interface Places {
   known: KnownPlace[];
   /** The townsfolk that make a town on this map, as the places were last recorded. */
   least: number;
+  /** The townsfolk that make a town wherever it is drawn: a finer map shows smaller places. */
+  town: number;
 }
 const places = (state: GenerationState) =>
-  runMemory<Places>(state, "human.places", () => ({ next: 0, known: [], least: 0 }));
+  runMemory<Places>(state, "human.places", () => ({ next: 0, known: [], least: 0, town: 0 }));
 export const knownPlaces = (state: GenerationState): readonly KnownPlace[] => places(state).known;
 export const townSize = (state: GenerationState) => places(state).least;
+/** The size places are ranked against: a village on a fine map is no market for being shown. */
+export const rankedSize = (state: GenerationState) => places(state).town;
+/**
+ * A place the map inherited: it is known from the start, at the cell its record stands on,
+ * as its record tells it, so the crowd found on its ground is that place and keeps its name.
+ */
+export function adoptPlace(
+  state: GenerationState,
+  record: {
+    id: string;
+    anchor: number;
+    /** The ground the place may be found on: what its record's one cell covered. */
+    cells: readonly number[];
+    founded: string;
+    townPeople: number;
+    peak: number;
+    abandoned?: string;
+    history: KnownPlace["history"];
+  }
+) {
+  const memory = places(state);
+  if (memory.known.some((place) => place.adopted === record.id)) return;
+  memory.known.push({
+    id: `place:${memory.next++}`,
+    adopted: record.id,
+    anchor: record.anchor,
+    cells: [...record.cells],
+    founded: record.founded,
+    ...(record.abandoned ? { abandoned: record.abandoned } : {}),
+    townPeople: record.townPeople,
+    peak: Math.max(record.peak, record.townPeople),
+    people: record.townPeople,
+    builtKm2: 0,
+    works: 0,
+    history: [...record.history],
+  });
+}
 /** The place a place is now part of: itself, or the one whose zone grew over it. */
 export function standingPlace(state: GenerationState, id: string) {
   const byId = new Map(knownPlaces(state).map((place) => [place.id, place]));
@@ -86,6 +127,9 @@ function seen(place: KnownPlace, zone: DenseZone, era: string) {
   place.builtKm2 = zone.builtKm2;
   place.works = zone.works;
   place.peak = Math.max(place.peak, zone.townPeople);
+  // An inherited ruin that people have come back to is a living place of this map's own
+  // record; the ruin's record stays what it was.
+  if (place.abandoned) delete place.adopted;
   delete place.abandoned;
 }
 function emptied(place: KnownPlace, era: string) {
@@ -124,11 +168,13 @@ export function recordPlaces(
   state: GenerationState,
   zones: readonly DenseZone[],
   era: string,
-  least: number
+  least: number,
+  town = least
 ) {
   const memory = places(state),
     taken = new Set<string>();
   memory.least = least;
+  memory.town = town;
   /** The place a zone is: the one on its ground if it lives or is resettled, or a new one. */
   const placeOf = (zone: DenseZone, first: KnownPlace | undefined) => {
     const town = zone.townPeople >= least;

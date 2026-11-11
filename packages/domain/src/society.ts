@@ -30,23 +30,6 @@ export function boundEpoch(
   if (physicalEpoch === beforePresentEpoch) return epochs.at(-2)?.id ?? null;
   return epochs.some((epoch) => epoch.id === physicalEpoch) ? physicalEpoch : null;
 }
-/** Site classes in order of reliability; a place takes the best class its ground offers. */
-export const settlementSiteKinds = [
-  "pass",
-  "fire-seat",
-  "river-node",
-  "harbour",
-  "door-house",
-  "sanctuary",
-  "melt-line",
-  "fishery-coast",
-  "halo-edge",
-  "healing-well",
-  "necropolis",
-  "plain-node",
-  "plain",
-] as const;
-export type SettlementSiteKind = (typeof settlementSiteKinds)[number];
 export type SocietyWorkKind =
   | "dam"
   | "irrigation"

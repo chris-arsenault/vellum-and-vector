@@ -140,9 +140,8 @@ describe("the land and its people meet without naming each other", () => {
 
 describe("places have one publisher", () => {
   it("makes settlement and ruin records only in the catalogue's place builders", () => {
-    // A map that lived its own people reads places from the land; a refined map still builds
-    // what its parent left and what it proposed until regions run the same operations (M7).
-    const builders = ["poi/settlements/landPlaces.ts", "poi/settlements/communityRecords.ts"];
+    // Every map reads its places from the land; a refined map also keeps what its parent left.
+    const builders = ["poi/settlements/landPlaces.ts"];
     const makes = /(generatedFeature|regionalFeature)\(\s*state,[^;]*?["'`]settlement["'`]/s;
     expect(
       files()

@@ -1,6 +1,6 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import type { GenerationState } from "../../process";
-import { bridgeFlow, fordCost, roadTravellers, trackTravellers } from "../../regional/societyWays";
+import { bridgeFlow, fordCost, roadTravellers, trackTravellers } from "./workRecords";
 import { rulingGrade } from "../../regional/ways";
 import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";

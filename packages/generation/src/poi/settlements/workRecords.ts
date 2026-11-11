@@ -1,14 +1,14 @@
-import { point, type AtlasFeature, type RelativeMeasure } from "@atlas/domain";
+import { MapScale, point, type AtlasFeature, type RelativeMeasure } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import { generationFeatures } from "../../generationFeatures";
 import { knownEvents, lastEra, type KnownEvent } from "../../human/eventRegistry";
+import { knownWays } from "../../human/placeCountry";
 import { frontierWays } from "../../human/placeFrontiers";
 import { knownPlaces, standingPlace } from "../../human/placeRegistry";
 import { entityOf } from "../../human/traditions";
 import type { GenerationState } from "../../process";
 import { regionalFeature, regionalId } from "../../regional/extraction/features";
 import { positionOf } from "../../regional/lattice";
-import { bridgeFlow, roadTravellers } from "../../regional/societyWays";
 import type { RegionalState } from "../../regional/state";
 import type { PoiPlace } from "../poiContract";
 import type { PoiKindId } from "../poiKinds";
@@ -239,9 +239,13 @@ export function frontierPlaces(state: GenerationState, kind: PoiKindId, spacing:
   return places;
 }
 
-/** Whether a way's crossing of a channel earns a bridge. */
-const earnsBridge = (travellers: number, flow: number, threshold: number) =>
-  travellers >= roadTravellers && flow >= threshold;
+/** Travellers a year that wear a track and a road on a refined map. */
+export const trackTravellers = 10,
+  roadTravellers = 100;
+/** What fording a channel costs a traveller, against open ground. */
+export const fordCost = 3;
+/** River flow above which a road crosses by a bridge. */
+export const bridgeFlow = MapScale.volume(3.125e-19);
 function crossingFeature(state: RegionalState, cell: number, travellers: number, bridge: boolean) {
   const map = state.physical.map,
     p = positionOf(map.mesh, cell),
@@ -256,10 +260,33 @@ function crossingFeature(state: RegionalState, cell: number, travellers: number,
     bridge ? "Bridge" : "Ford"
   );
 }
+/** The longest stretch of river cells a way steps over in crossing; longer, it follows the bank. */
+const crossingCells = 2;
 /**
- * Where a refined map's traced ways ford channels: a ford, or a bridge where a road meets a
- * sizeable river. A seat's own channel cell is no crossing. Nothing is crossed before the ways
- * are traced, and the World traces none.
+ * The travellers the map's land ways carry over each river cell they cross in a year, and
+ * those among them on roads. A way that runs along a river crosses nothing there.
+ */
+function wayCrossings(state: GenerationState) {
+  const count = fieldOf(state).mesh.count,
+    crossed = { all: new Float64Array(count), byRoad: new Float64Array(count) };
+  for (const way of knownWays(state)) {
+    if (way.kind !== "road" && way.kind !== "track") continue;
+    let run = 0;
+    way.cells.forEach((cell, n) => {
+      run = crossesRiver(state, cell) ? run + 1 : 0;
+      const ends = n + 1 === way.cells.length || !crossesRiver(state, way.cells[n + 1]);
+      if (!run || !ends || run > crossingCells) return;
+      const at = way.cells[n - run + 1];
+      crossed.all[at] += way.travellers;
+      if (way.kind === "road") crossed.byRoad[at] += way.travellers;
+    });
+  }
+  return crossed;
+}
+/**
+ * Where a refined map's ways cross channels: a ford, or a bridge where a road meets a
+ * sizeable river. A place's own channel cell is no crossing. Nothing is crossed before the
+ * ways are known, and a World's cells are too coarse to hold a crossing.
  */
 /** A way over a stream this map does not draw crosses nothing it shows. */
 const crossesRiver = (state: GenerationState, cell: number) =>
@@ -267,18 +294,17 @@ const crossesRiver = (state: GenerationState, cell: number) =>
 export const crossingsOf = (state: GenerationState) =>
   heldFor(state, "places:crossings", () => {
     const found = { ford: [] as PoiPlace[], bridge: [] as PoiPlace[] };
-    const crossings = isRefined(state) ? state.regional.crossings : undefined;
-    if (!isRefined(state) || !crossings) return found;
-    const map = state.physical.map;
+    if (!isRefined(state)) return found;
+    const map = state.physical.map,
+      crossed = wayCrossings(state),
+      seats = new Set(knownPlaces(state).map((place) => place.anchor));
     for (let i = 0; i < map.mesh.count; i++) {
-      if (crossings.crossed[i] <= 0 || crossings.seatCells.has(i) || !crossesRiver(state, i))
-        continue;
-      const travellers = Math.max(crossings.traffic[i], crossings.crossed[i]),
-        bridge = earnsBridge(
-          travellers,
-          map.FlowAccumulation.get(i),
-          map.scale.resolveMeasure(bridgeFlow)
-        );
+      if (crossed.all[i] <= 0 || seats.has(i)) continue;
+      const travellers = crossed.all[i],
+        // A road over a sizeable river is bridged; a track, or any way over a stream, fords.
+        bridge =
+          crossed.byRoad[i] > 0 &&
+          map.FlowAccumulation.get(i) >= map.scale.resolveMeasure(bridgeFlow);
       found[bridge ? "bridge" : "ford"].push(
         lazyPlace(bridge ? "bridge" : "ford", regionalId(state, `crossing:${i}`), i, () =>
           crossingFeature(state, i, travellers, bridge)

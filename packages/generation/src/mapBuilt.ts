@@ -2,7 +2,7 @@ import { mapCommand } from "./processTraits";
 import { spatial, rectangle } from "@atlas/domain";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
-import { publishPeoplePlaces } from "./peopleProcesses";
+import { publishPeoplePlaces } from "./landWays";
 import { generationFeatures } from "./generationFeatures";
 
 export const builtProcess: MapProcess = {

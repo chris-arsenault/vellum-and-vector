@@ -24,10 +24,9 @@ import { mapMagic, respondMagic, reactRegionalMagic, respondRegionalOrganic } fr
 import { transportRetainedMagic } from "../world/magicStocks";
 import { exchangeMagicWater } from "../world/magicGroundwater";
 import { growNetwork } from "./network";
-import { extractPlaces, preparePlaces, proposePlaces, supportProposals } from "./places";
+import { extractPlaces, livePeople, preparePeople } from "./people";
 import { deriveRelief, updateSlopes } from "./relief";
 import { deriveMedia } from "./sharedMedia";
-import { declareFields } from "./society";
 import { ledgerCeilings, ledgerFloors } from "../coupling/fieldContributions";
 import { registerCatalogueCauses } from "../poi/poiCauses";
 import { declarePlaceEffects } from "../poi/poiEffects";
@@ -203,16 +202,6 @@ export const regionalOperations: ScheduledStep[] = [
     operation: command("place-effects", "event", placeEffects, [climate, water]),
   },
   {
-    id: "propose-places",
-    message: "Locating local places",
-    operation: command("propose-places", "event", proposePlaces, [habitats, water]),
-  },
-  {
-    id: "support-places",
-    message: "Supporting local places",
-    operation: command("support-places", "event", supportProposals, [habitats, water]),
-  },
-  {
     id: "refresh",
     message: "Checking developed geography for publication",
     produces: ["atlas:validated"],
@@ -256,7 +245,7 @@ export const regionalOperations: ScheduledStep[] = [
 function prepareContext(state: RegionalState) {
   registerCatalogueCauses();
   state.regional.character = deriveCharacter(state);
-  preparePlaces(state);
+  preparePeople(state);
   readEvidence(state);
   growNetwork(state);
   supportFeatures(state);
@@ -265,7 +254,8 @@ function prepareContext(state: RegionalState) {
 function placeEffects(state: RegionalState, context: MapProcessContext) {
   const applied = state.regional.contributions;
   applied.begin();
-  if (context.parameters.people) declareFields(state);
+  // The round's people live on the ground the round developed, before places act on it.
+  if (context.parameters.people) livePeople(state, context);
   declarePlaceEffects(state, applied);
   applied.commit(state.physical.map, ledgerFloors, ledgerCeilings);
   respondFeatures(state);

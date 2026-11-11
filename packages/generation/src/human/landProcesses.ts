@@ -9,7 +9,7 @@ import { recordEraPlaces } from "./eraPlaces";
 import { meetLand, watchLand } from "./landHistory";
 import { advanceHumanLand } from "./landPass";
 import { forgetHumanGround } from "./layerOperations";
-import { loosePass, passesFor, settledPass } from "./passFacts";
+import { keptPass, loosePass, passesFor, settledPass, type PassFacts } from "./passFacts";
 
 /**
  * People's passes in a map's sequence. Inside every geological epoch the land is looked at
@@ -67,6 +67,44 @@ export const humanLandEpoch: MapProcess = {
   ),
   validate,
 };
+/** People meet the land as it now stands: what water covers and ice scours is lost to them. */
+export function meetPresentLand(state: GenerationState) {
+  const map = landOf(state);
+  runOperation(map, meetLand, { map });
+}
+function live(state: GenerationState, context: MapProcessContext, facts: PassFacts) {
+  const map = landOf(state);
+  runOperation(map, advanceHumanLand, { map, context: nativeContext(state, context, 0), facts });
+}
+/** One pass of settled people on a map's land as it stands, for the years it stands for. */
+export const liveSettledPass = (
+  state: GenerationState,
+  context: MapProcessContext,
+  years: number,
+  mobility: number
+) => live(state, context, settledPass(years, mobility));
+/** One pass of the people a map was given by a coarser one: they settle its land and stay as many. */
+export const liveKeptPass = (state: GenerationState, context: MapProcessContext, years: number) =>
+  live(state, context, keptPass(years));
+/**
+ * The places a stretch of years leaves on a map: its dense zones matched to the places
+ * already known, with the country and ways around them, by the map's own settings.
+ */
+export function recordLandPlaces(
+  state: GenerationState,
+  context: MapProcessContext,
+  stretch: { era: string; years: number; least: number; town?: number }
+) {
+  const map = landOf(state),
+    parameters = generationBindings(context).parameters;
+  recordEraPlaces(state, {
+    map,
+    context: nativeContext(state, context, 0),
+    ...stretch,
+    range: map.scale.length(Number(parameters.cityReach)),
+    roadTravellers: Number(parameters.roadTraffic),
+  });
+}
 export const humanLandEra: MapProcess = {
   contract: contract("human.land-era"),
   operation: mapElapsed(
@@ -78,11 +116,7 @@ export const humanLandEra: MapProcess = {
         mobility = Number(context.epochs.at(-1)?.variables.mobility ?? 1);
       runOperation(map, meetLand, { map });
       for (let pass = 0; pass < passes; pass++)
-        runOperation(map, advanceHumanLand, {
-          map,
-          context: nativeContext(state, context, 0),
-          facts: settledPass(years / passes, mobility),
-        });
+        liveSettledPass(state, context, years / passes, mobility);
       context.progress(1, `Crafts practised, in cells: ${craftsPractised(map)}`);
     },
     []
@@ -99,17 +133,11 @@ export const humanPlaces: MapProcess = {
     "human.places",
     "event",
     (state: GenerationState, context: MapProcessContext) => {
-      const map = landOf(state),
-        parameters = generationBindings(context).parameters,
-        era = context.epochs.at(-1);
-      recordEraPlaces(state, {
-        map,
-        context: nativeContext(state, context, 0),
+      const era = context.epochs.at(-1);
+      recordLandPlaces(state, context, {
         era: era?.id ?? "present",
         years: era?.duration ?? 0,
-        least: Number(parameters.townThreshold),
-        range: map.scale.length(Number(parameters.cityReach)),
-        roadTravellers: Number(parameters.roadTraffic),
+        least: Number(generationBindings(context).parameters.townThreshold),
       });
     },
     []

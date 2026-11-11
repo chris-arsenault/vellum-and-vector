@@ -16,8 +16,7 @@ import type { RegionalState, Seat } from "./state";
  * not moved: a town is never graded across its own river.
  */
 export function gradeSeats(state: RegionalState) {
-  for (const seat of state.regional.evidence?.seats ?? [])
-    if (seat.strength === "established" || state.regional.round >= 3) gradeSeat(state, seat);
+  for (const seat of state.regional.evidence?.seats ?? []) gradeSeat(state, seat);
 }
 
 export function gradeSeat(state: RegionalState, seat: Seat) {

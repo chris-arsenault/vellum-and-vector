@@ -5,7 +5,7 @@ import type { GenerationState } from "../../process";
 import { gradeSeats } from "../../regional/grading";
 import { regionalSpan } from "../../regional/lattice";
 import { scaleAround } from "../../regional/network";
-import { placesEnabled } from "../../regional/places";
+import { placesEnabled } from "../../regional/people";
 import { drawChannelsToSeats, knownSeats, settleSeats, usableSlope } from "../../regional/seats";
 import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
@@ -72,7 +72,7 @@ export const settlement: PoiEntry = {
   name: "Settlement",
   recognition: {
     distinct:
-      "An inhabited place: a crowd the land's layers hold, kept by name through the eras; a seat the parent left; or a village this map proposed. A ruin is the same place no longer inhabited; a village and a city are one kind at different sizes.",
+      "An inhabited place: a crowd the land's layers hold, kept by name through the eras; or a seat the parent left. A ruin is the same place no longer inhabited; a village and a city are one kind at different sizes.",
     isA,
   },
   existence: {
@@ -112,7 +112,7 @@ export const settlement: PoiEntry = {
     ),
     climate: notApplicable("A settlement's warmth is below what the climate field resolves."),
     cover: notApplicable(
-      "Clearing is the land's own farmland and pasture layers, and on a refined map regional/society's declareFields."
+      "Clearing is the land's own farmland and pasture layers, on a refined map as on the world."
     ),
     magic: notApplicable(
       "People's tenure is written by the people's layers as they dwell, which Hallowed reads; the seat declares nothing further."
@@ -158,7 +158,7 @@ export const settlement: PoiEntry = {
   },
   movement: {
     statement:
-      "Routes run between settlements and wear the ground near them, and those who carry stock travel more easily through them. A river seat's draw on the drainage is its schedule's influence step, which reaches every seat, proposed ones aside.",
+      "Routes run between settlements and wear the ground near them, and those who carry stock travel more easily through them. A river seat's draw on the drainage is its schedule's influence step, which reaches every seat the parent left.",
     roads: costNear(wornGround, wornReach),
     boats: notApplicable("Boats reach a settlement through its harbour, which is its own entry."),
     drainage: notApplicable("A river seat's corridor is its schedule's influence step."),

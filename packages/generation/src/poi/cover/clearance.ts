@@ -3,7 +3,6 @@ import { MapScale } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import { environment } from "../../world/ecologyEnvironment";
 import type { GenerationState } from "../../process";
-import { farmingValue, fieldGrass, iceOnField, steepestField } from "../../regional/society";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { namingCultureNear, recordPlaces, sitedPlaces, within } from "../poiPlaces";
@@ -42,7 +41,25 @@ const fieldLanes = 0.8;
 /** Radius in metres at which a clearance is half as great as clearances get. */
 const typicalRadius = MapScale.length(0.000625);
 
+/** The grass that takes a clearing's place. */
+const fieldGrass = 0.2;
+/** The steepest ground a clearing is made on, and the deepest ice. */
+const steepestField = 0.12,
+  iceOnField = MapScale.length(0.00000025, 0.5);
+
 const clamped = (value: number) => Math.max(0, Math.min(1, value));
+/** How well ground repays clearing, from soil depth, plant water, degrees and slope. */
+const farmingValue = (
+  soil: number,
+  moisture: number,
+  degrees: number,
+  slope: number,
+  scale: MapScale
+) =>
+  clamped(soil / scale.length(0.000000125, 0.5)) *
+  clamped(moisture / 0.5) *
+  clamped((degrees + 2) / 16) *
+  clamped(1 - slope / steepestField);
 const radiusIn = (state: GenerationState, feature: PoiPlace["feature"]) =>
   Number(feature?.attributes.radius) || mapScale(state).length(sitedRadius);
 const footprint = (state: GenerationState, cell: number, radius: number) =>

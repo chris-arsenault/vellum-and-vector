@@ -108,13 +108,56 @@ export function foundTradition(state: GenerationState, founding: Founding) {
     },
     relations: parent ? [{ targetId: parent.entity, kind: "derivedFrom" }] : [],
   };
+  const code = memory.known.length + 1;
+  // The entity says which code the land's layers name it by, so a map made of this one,
+  // which inherits the layers and not this run's memory, can tell who its people are.
+  world.entities[id].attributes = {
+    ...world.entities[id].attributes,
+    traditionCode: code,
+    traditionKind: founding.kind,
+    founded: founding.era,
+  };
   memory.known.push({
-    code: memory.known.length + 1,
+    code,
     kind: founding.kind,
     entity: id,
     parent: founding.parent,
     founded: founding.era,
     origin: founding.origin,
   });
-  return memory.known.length;
+  return code;
+}
+const kinds: readonly TraditionKind[] = ["tongue", "faith", "custom", "allegiance"];
+/**
+ * A map made of another inherits its people's layers, which name traditions by code. The
+ * world's entities say which code is which: this reads them back as the run's memory, once,
+ * where the run holds none.
+ */
+export function restoreTraditions(state: GenerationState) {
+  const memory = traditions(state);
+  if (memory.known.length) return;
+  for (const entity of Object.values(state.domain.world.entities)) {
+    const code = Number(entity.attributes.traditionCode),
+      kind = kinds.find((one) => one === entity.attributes.traditionKind);
+    if (Number.isInteger(code) && code >= 1 && kind)
+      memory.known[code - 1] = { code, kind, entity: entity.id, ...begun(entity) };
+  }
+  // A code whose entity the world no longer holds names a tradition nobody can name.
+  for (let n = 0; n < memory.known.length; n++)
+    memory.known[n] ??= {
+      code: n + 1,
+      kind: "custom",
+      entity: "",
+      founded: "",
+      origin: { x: 0, y: 0 },
+      ended: "forgotten",
+    };
+}
+/** When and where an entity says its tradition began. */
+function begun(entity: Entity) {
+  const center = entity.attributes.center as { x: number; y: number } | undefined;
+  return {
+    founded: String(entity.attributes.founded ?? ""),
+    origin: { x: center?.x ?? 0, y: center?.y ?? 0 },
+  };
 }

@@ -79,7 +79,6 @@ export function beginRegional(
     natural: {},
     contributions: new Contributions(map.mesh.count),
     round: 0,
-    proposed: [],
   };
   const begun = Object.assign(state, { physical: work, regional });
   bindRegionalStrategies(begun, input, context);

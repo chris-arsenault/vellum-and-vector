@@ -2,12 +2,14 @@ import type { AtlasFeature } from "@atlas/domain";
 import { atlasName, nameMetadata } from "../../atlasNaming";
 import { placeLand } from "../../human/placeFacts";
 import { placePeoples } from "../../human/placePeoples";
-import { knownPlaces, townSize, type KnownPlace } from "../../human/placeRegistry";
+import { knownPlaces, rankedSize, type KnownPlace } from "../../human/placeRegistry";
 import { knownTraditions, traditionOf } from "../../human/traditions";
 import { humanLayersOf } from "../../human/humanLayers";
 import { leading } from "../../human/identityReads";
 import { generatedFeature, generatedId } from "../../mapFeatures";
 import type { GenerationState } from "../../process";
+import { regionalFeature, regionalId } from "../../regional/extraction/features";
+import type { RegionalState } from "../../regional/state";
 import type { PoiPlace } from "../poiContract";
 import { fieldOf } from "../poiReads";
 
@@ -32,6 +34,26 @@ function standing(state: GenerationState, place: KnownPlace, least: number) {
     role = place.abandoned ? "settlement" : seatOf ? "capital" : roleOf(place, least);
   return { settlementRole: role, ...(realm ? { polityId: realm.entity } : {}) };
 }
+const refined = (state: GenerationState): state is RegionalState => "regional" in state;
+/** The identity a place's own record has on this map. */
+const recordId = (state: GenerationState, key: string) =>
+  refined(state) ? regionalId(state, key) : generatedId(state, key);
+/** The record a known place has on this map: the one it inherited, or the map's own. */
+export const placeRecordId = (state: GenerationState, place: KnownPlace) =>
+  place.adopted ?? recordId(state, place.id);
+/** A settlement record of this map's own making: a refined map's are its products. */
+function written(
+  state: GenerationState,
+  key: string,
+  name: string,
+  layer: string,
+  geometry: AtlasFeature["geometry"],
+  attributes: Record<string, unknown>
+) {
+  return refined(state)
+    ? regionalFeature(state, key, "settlement", layer, geometry, attributes, name)
+    : generatedFeature(state, key, name, "settlement", layer, geometry, attributes);
+}
 function record(state: GenerationState, place: KnownPlace, least: number): AtlasFeature {
   const land = placeLand(fieldOf(state), place),
     living = !place.abandoned,
@@ -44,11 +66,10 @@ function record(state: GenerationState, place: KnownPlace, least: number): Atlas
       era: place.founded,
     }),
     townsfolk = Math.round(place.townPeople);
-  const feature = generatedFeature(
+  const feature = written(
     state,
     place.id,
     named.name,
-    "settlement",
     living ? "settlements" : "ruins",
     { type: "Point", coordinates: [land.x, land.y] },
     {
@@ -103,15 +124,19 @@ function story(place: KnownPlace, siteReason: string) {
 /** The living places of a map as settlements, or its emptied places as ruins. */
 export function landPlaces(state: GenerationState, kind: "settlement" | "ruin"): PoiPlace[] {
   if (!state.physical) return [];
-  const least = townSize(state);
+  const least = rankedSize(state);
   return (
     knownPlaces(state)
-      // A place another grew over is part of that place and has no record of its own.
-      .filter((place) => !place.absorbedBy && (kind === "ruin") === Boolean(place.abandoned))
+      // A place another grew over is part of that place and has no record of its own; a
+      // place the map inherited already has its record.
+      .filter(
+        (place) =>
+          !place.absorbedBy && !place.adopted && (kind === "ruin") === Boolean(place.abandoned)
+      )
       .map((place) => {
         let built: AtlasFeature | undefined;
         return {
-          id: generatedId(state, place.id),
+          id: recordId(state, place.id),
           kind,
           anchor: place.anchor,
           cells: place.cells.length ? place.cells : [place.anchor],

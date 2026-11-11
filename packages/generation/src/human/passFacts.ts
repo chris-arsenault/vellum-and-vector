@@ -22,6 +22,8 @@ export interface PassFacts {
   readonly builds: boolean;
   /** Whether people learn to work the magic their ground holds. */
   readonly learns: boolean;
+  /** Whether their number changes: whether they fill what feeds them and starve beyond it. */
+  readonly grows: boolean;
 }
 /** People who live off the wild and move with it: thin on the ground and nowhere for long. */
 export const loosePass = (years: number): PassFacts => ({
@@ -32,6 +34,7 @@ export const loosePass = (years: number): PassFacts => ({
   farms: false,
   builds: false,
   learns: true,
+  grows: true,
 });
 /** People who farm, trade food over distance and build; an era's mobility scales their moving. */
 export const settledPass = (years: number, mobility: number): PassFacts => ({
@@ -42,7 +45,13 @@ export const settledPass = (years: number, mobility: number): PassFacts => ({
   farms: true,
   builds: true,
   learns: true,
+  grows: true,
 });
+/**
+ * The people a finer map was given by a coarser one, living on its land: they farm, build and
+ * move to where the finer land suits them, and how many they are stays the coarser map's to say.
+ */
+export const keptPass = (years: number): PassFacts => ({ ...settledPass(years, 1), grows: false });
 /** How many passes a stretch of settled years is worked in, each reading the last. */
 export const passesFor = (years: number) => Math.min(6, Math.max(2, Math.ceil(years / 100)));
 

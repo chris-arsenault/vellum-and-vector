@@ -7,10 +7,8 @@ import { humanEvents } from "./human/landEvents";
 import { humanMagicEra, humanMagicPresent, peopleMagicProcesses } from "./peopleMagic";
 import { publishIdentities, publishRealms } from "./identityRegions";
 import { publishLandPopulation } from "./landPopulation";
-import { publishLandWays } from "./landWays";
 import { humanWaterPresent, humanWaterworks, waterworksProcesses } from "./human/waterworks";
-import { publishKinds, publishLatePlaces } from "./poi/poiPublish";
-import type { GenerationState, MapProcess, MapProcessContext, ProcessSequence } from "./process";
+import type { GenerationState, MapProcess, ProcessSequence } from "./process";
 import { mapCommand } from "./processTraits";
 import type { PublicationDefinition } from "./publication";
 
@@ -72,12 +70,6 @@ export const politicalProcess: MapProcess = {
   ),
   validate: () => [],
 };
-/** The places of the catalogue's society moment, and the ways between the places of the land. */
-export function publishPeoplePlaces(state: GenerationState, context: MapProcessContext) {
-  publishKinds(state, "society");
-  publishLatePlaces(state, "society");
-  publishLandWays(state, context);
-}
 /** The eras not bound to an earlier epoch: those are lived as loose passes inside it. */
 export const presentHumanEras = (settings: GenerationSettings) => {
   const earlier = new Set(settings.epochs.slice(0, -1).map((epoch) => epoch.id));

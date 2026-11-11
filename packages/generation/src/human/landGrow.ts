@@ -30,8 +30,9 @@ export const growPeople = defineCommand(
   "human.land.grow",
   "elapsed",
   (work: LandWork) => {
-    const { map, facts } = work,
-      fed = fedBy(work),
+    const { map, facts } = work;
+    if (!facts.grows) return;
+    const fed = fedBy(work),
       harm = ask(map, "harm", work.context),
       born = working(map, "born"),
       starved = working(map, "starved"),

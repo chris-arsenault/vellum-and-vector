@@ -7,6 +7,7 @@ import { isGrounded } from "./glacierSurface";
 import { validateLandscape } from "../rock/groundInitialization";
 import { allowsBoundaryDrainage, isOpenOutlet } from "./field";
 import { releaseWorking } from "./physicalNumerics";
+import { waterPassage } from "./waterQuantity";
 import { MapScale } from "@atlas/domain";
 
 const range = (value: number, low: number, high: number) => value >= low && value <= high;
@@ -71,7 +72,9 @@ function validateWater(map: PhysicalField) {
   if (ocean === 0 && !allowsBoundaryDrainage(map))
     throw new Error("Physical geography contains no connected ocean.");
 }
-function validateRivers(map: PhysicalField) {
+function validateRivers(map: PhysicalField, c: PhysicalContext) {
+  // A cell that takes water out of its river passes on less than it received, and no more.
+  const pass = waterPassage(map, c);
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.RiverOrders.get(i) <= 0) continue;
     const target = map.FlowTargets.get(i);
@@ -79,9 +82,15 @@ function validateRivers(map: PhysicalField) {
       (target < 0 && !isOpenOutlet(map, i)) ||
       (target >= 0 &&
         map.WaterKindCodes.get(target) !== 2 &&
-        map.FlowAccumulation.get(target) + 1e-9 < map.FlowAccumulation.get(i))
+        map.FlowAccumulation.get(target) + 1e-9 < pass(target, map.FlowAccumulation.get(i)))
     )
-      throw new Error("River network does not continue toward an outlet.");
+      throw new Error(
+        `River network does not continue toward an outlet: cell ${i} (water ${map.WaterKindCodes.get(i)}, flow ${map.FlowAccumulation.get(i)}) drains to ${target}${
+          target < 0
+            ? ""
+            : ` (water ${map.WaterKindCodes.get(target)}, flow ${map.FlowAccumulation.get(target)}, river order ${map.RiverOrders.get(target)})`
+        }.`
+      );
   }
 }
 function validateIce(map: PhysicalField, c: PhysicalContext) {
@@ -99,7 +108,7 @@ export function validatePhysical(map: PhysicalField, c: PhysicalContext) {
   validateCodes(map, c.Products?.status("field:LandformCodes") !== "available");
   validateWater(map);
   releaseWorking(map, sourceToOutletOrder(map));
-  validateRivers(map);
+  validateRivers(map, c);
   validateIce(map, c);
   validateLandscape(map);
 }
