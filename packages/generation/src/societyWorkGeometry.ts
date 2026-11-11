@@ -1,4 +1,5 @@
 import {
+  canonicalPosition,
   point,
   spatial,
   societyWorkNatures,
@@ -7,11 +8,12 @@ import {
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { nearestSample } from "./societySpatial";
+import { clipGeographicArea } from "./world/geographicContours";
 
 /** Activity outlines need at least two samples across their modeled diameter. */
 const activitySamplesAcross = 2;
 export function societyWorkGeometry(state: GenerationState, work: SocietyWork) {
-  const site = point(work.position),
+  const site = point(canonicalPosition(state.domain.world.reference, work.position)),
     nature = societyWorkNatures[work.kind].nature;
   if (nature !== "intensive")
     return { geometry: site, meaning: "located work site; radius describes modeled reach" };
@@ -22,7 +24,7 @@ export function societyWorkGeometry(state: GenerationState, work: SocietyWork) {
   )
     return { geometry: site, meaning: "work site; activity extent unresolved at this profile" };
   const disk = spatial.buffer(site, work.radius);
-  const extent = disk && spatial.intersection(disk, state.domain.scope.footprint);
+  const extent = clipGeographicArea(state, disk);
   return extent
     ? { geometry: extent, meaning: "modeled activity area; not a surveyed boundary" }
     : { geometry: site, meaning: "located work site" };
@@ -34,7 +36,5 @@ export function eventFootprint(state: GenerationState, event: SocietyEvent) {
     const community = communities.find((c) => c.id === id);
     return community?.footprint ? [community.footprint] : [];
   });
-  return extents.length
-    ? spatial.intersection(spatial.unionAll(extents), state.domain.scope.footprint)
-    : null;
+  return extents.length ? clipGeographicArea(state, spatial.unionAll(extents)) : null;
 }

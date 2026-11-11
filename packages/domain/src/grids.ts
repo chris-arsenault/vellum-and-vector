@@ -5,7 +5,8 @@ import { requireThat } from "./errors";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import type { AdaptiveField } from "./adaptiveField";
-import { fieldPosition, seamNeighbors } from "./gridPeriodicity";
+import { fieldPosition, fieldChartFootprint, seamNeighbors } from "./gridPeriodicity";
+import { chartFootprint } from "./worldBoundary";
 import {
   sampleAdaptivePoint,
   adaptivePointSampler,
@@ -114,7 +115,8 @@ export function createGrid<Name extends string = FieldChannelName>(
   width: number,
   height: number,
   sampleBounds?: Bounds,
-  cache?: BlockCache
+  cache?: BlockCache,
+  periodicWidth?: number
 ): RegularGrid<Name> {
   requireThat(
     Number.isInteger(width) && Number.isInteger(height) && width >= 2 && height >= 2,
@@ -130,6 +132,7 @@ export function createGrid<Name extends string = FieldChannelName>(
     id,
     scope,
     bounds: sampleBounds ?? spatial.bounds(scope.footprint),
+    periodicWidth,
     width,
     height,
     coverage,
@@ -145,15 +148,16 @@ export function createGrid<Name extends string = FieldChannelName>(
       (grid.bounds[3] - grid.bounds[1]) / (height - 1)
     ),
   };
-  validateGridExtent(grid.bounds, scope.footprint);
-  if (spatial.covers(scope.footprint, rectangle(grid.bounds))) {
+  const footprint = chartFootprint(scope.footprint, grid.bounds, periodicWidth);
+  validateGridExtent(grid.bounds, footprint);
+  if (spatial.covers(footprint, rectangle(grid.bounds))) {
     rectangularMeasures(grid);
     return grid;
   }
   for (let i = 0; i < width * height; i++) {
     const cell = rectangle(gridCellBounds(grid, i));
-    const clipped = spatial.intersection(cell, scope.footprint);
-    grid.active.set(i, spatial.covers(scope.footprint, point(gridPosition(grid, i))) ? 1 : 0);
+    const clipped = spatial.intersection(cell, footprint);
+    grid.active.set(i, spatial.covers(footprint, point(gridPosition(grid, i))) ? 1 : 0);
     grid.measures.set(i, clipped ? spatial.area(clipped) : 0);
   }
   return grid;
@@ -193,7 +197,7 @@ export function neighbors(
   grid: Grid<string>,
   index: number,
   diagonal = false,
-  covers = (geometry: Geometry) => spatial.covers(grid.scope.footprint, geometry)
+  covers = (geometry: Geometry) => spatial.covers(fieldChartFootprint(grid), geometry)
 ): number[] {
   const seam = seamNeighbors(grid, index, covers);
   if (grid.topology) {
@@ -252,14 +256,14 @@ export function sample<Name extends string>(
   const values = grid.channels[channel];
   requireThat(values, "missing_channel", `Field channel ${channel} is unavailable.`);
   requireThat(
-    spatial.covers(grid.scope.footprint, point(p)),
+    spatial.covers(fieldChartFootprint(grid), point(fieldPosition(grid, p))),
     "outside_field",
     "Sample lies outside field coverage."
   );
   for (const overlay of [...(grid.overlays ?? [])].reverse())
     if (
       overlay.channels.includes(channel) &&
-      spatial.covers(overlay.grid.scope.footprint, point(p))
+      spatial.covers(fieldChartFootprint(overlay.grid), point(fieldPosition(overlay.grid, p)))
     )
       return sample(overlay.grid, channel, p, discrete);
   return interpolateSample(grid, channel, p, discrete);
@@ -277,10 +281,14 @@ export function gridSampler<Name extends string>(
     "missing_channel",
     `Field channel ${channel} is unavailable.`
   );
-  const covered = spatial.pointCoverage(grid.scope.footprint);
+  const covered = spatial.pointCoverage(fieldChartFootprint(grid));
   const valueAt = fieldInterpolator(grid, channel, discrete);
   return (position: Position): number => {
-    requireThat(covered(position), "outside_field", "Sample lies outside field coverage.");
+    requireThat(
+      covered(fieldPosition(grid, position)),
+      "outside_field",
+      "Sample lies outside field coverage."
+    );
     return valueAt(position);
   };
 }
@@ -348,10 +356,13 @@ export function fieldInterpolator<Name extends string>(
   const overlays = [...(grid.overlays ?? [])]
     .reverse()
     .filter((overlay) => overlay.channels.includes(channel))
-    .map((overlay) => ({
-      covered: spatial.pointCoverage(overlay.grid.scope.footprint),
-      at: fieldInterpolator(overlay.grid, channel, discrete, locate, budget),
-    }));
+    .map((overlay) => {
+      const covers = spatial.pointCoverage(fieldChartFootprint(overlay.grid));
+      return {
+        covered: (p: Position) => covers(fieldPosition(overlay.grid, p)),
+        at: fieldInterpolator(overlay.grid, channel, discrete, locate, budget),
+      };
+    });
   const base = baseInterpolator(grid, channel, discrete, locate, budget);
   return (p: Position) => {
     const overlay = overlays.find((candidate) => candidate.covered(p));

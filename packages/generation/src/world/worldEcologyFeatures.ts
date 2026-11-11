@@ -1,4 +1,4 @@
-import { classMarginInterpolator, spatial } from "@atlas/domain";
+import { canonicalGeometry, classMarginInterpolator, spatial } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { landscapeMinimumArea, mapScale } from "../worldSignificance";
 import type { BiomeRule, BiomeSummary } from "./ecologyBiomes";
@@ -24,7 +24,7 @@ function dryExtents(state: GenerationState) {
     ],
     subtract = water.length ? spatial.differenceFrom(spatial.unionAll(water)) : null;
   return (shape: Geometry) => {
-    const extent = areaGeometry(clip(shape));
+    const extent = areaGeometry(clip(canonicalGeometry(state.domain.world.reference, shape)));
     return extent && subtract ? areaGeometry(subtract(extent)) : extent;
   };
 }

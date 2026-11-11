@@ -37,6 +37,7 @@ export interface TriangularLatticeInput {
   area: number;
   padding: number;
   periodic?: PeriodicFrame;
+  coordinateWidth?: number;
   openBoundary: boolean;
   /** Overrides the rectangle-and-footprint membership of an in-frame site. */
   membership?: (cell: number, x: number, y: number) => number;
@@ -64,6 +65,7 @@ export class TriangularLattice implements Lattice {
   readonly spacingY: number;
   readonly openBoundary: boolean;
   readonly periodic?: PeriodicFrame;
+  private readonly chartWidth?: number;
   readonly contentRadius: number;
   readonly workRadius: number;
   readonly stride = 3;
@@ -93,6 +95,7 @@ export class TriangularLattice implements Lattice {
     this.frameWidth = frame.width;
     this.frameHeight = frame.height;
     this.periodic = input.periodic;
+    this.chartWidth = input.coordinateWidth;
     this.openBoundary = input.openBoundary;
     this.contentRadius = Math.sqrt(input.area / Math.PI);
     this.workRadius = Math.hypot(width / 2 + input.padding, height / 2 + input.padding);
@@ -279,11 +282,14 @@ export class TriangularLattice implements Lattice {
     return Math.imul(u, 73856093) ^ Math.imul(v, 19349663) ^ (inverted ? 83492791 : 0);
   }
   deltaX(dx: number) {
-    const width = this.periodic?.width;
+    const width = this.coordinateWidth;
     return width ? dx - Math.round(dx / width) * width : dx;
   }
+  get coordinateWidth() {
+    return this.chartWidth ?? this.periodic?.width;
+  }
   pointX(x: number) {
-    const width = this.periodic?.width;
+    const width = this.coordinateWidth;
     if (!width) return x;
     return ((((x + width / 2) % width) + width) % width) - width / 2;
   }

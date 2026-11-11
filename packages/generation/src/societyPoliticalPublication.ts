@@ -8,6 +8,7 @@ import { polityCharacter } from "./societyCharacter";
 import { worldTerritories } from "./worldTerritoryGeography";
 import { publishPoliticalRegions } from "./worldPoliticalRegions";
 import { SocietyNeighbors } from "./societySpatial";
+import { clipGeographicArea } from "./world/geographicContours";
 
 const oceanMasks = new WeakMap<Geometry, (geometry: Geometry) => Geometry | null>();
 function excludeOcean(shape: Geometry, ocean: Geometry) {
@@ -64,7 +65,7 @@ function ownershipBox(state: GenerationState, i: number): Bounds {
 function clipWater(state: GenerationState, strips: Geometry[]) {
   if (!strips.length) return null;
   const grid = state.surface;
-  let shape = spatial.intersection(spatial.unionAll(strips), grid.scope.footprint);
+  let shape = clipGeographicArea(state, spatial.unionAll(strips));
   if (shape && grid.ocean) shape = excludeOcean(shape, grid.ocean);
   for (const lake of generationFeatures(state, { kind: "lake", areaId: grid.scope.areaId }))
     if (shape && spatial.intersects(shape, lake.geometry))

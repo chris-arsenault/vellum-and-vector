@@ -1,6 +1,8 @@
 import { mapCommand, executeMapOperation, processOwner } from "./processTraits";
 import { runOperation } from "./processOperation";
 import {
+  canonicalPosition,
+  fieldChartFootprint,
   gridPosition,
   KeyedHeap,
   semanticId,
@@ -28,7 +30,7 @@ import { bindSocietyProfile } from "./societyProfile";
 import { mapScale } from "./worldSignificance";
 
 export function* landCells(state: GenerationState) {
-  const covers = spatial.pointCoverage(state.domain.scope.footprint);
+  const covers = spatial.pointCoverage(fieldChartFootprint(state.surface));
   for (let i = 0; i < state.surface.active.length; i++)
     if (dryLand(state, i) && covers(gridPosition(state.surface, i))) yield i;
 }
@@ -66,7 +68,10 @@ export function centers(
   const selected = selectCenters(state, context, count);
   return selected.map((i, index) => {
     const id = semanticId(state.domain.world.id, kind, `${state.domain.scope.areaId}:${index}`);
-    const position = gridPosition(state.surface, i);
+    const position = canonicalPosition(
+      state.domain.world.reference,
+      gridPosition(state.surface, i)
+    );
     const named = atlasName(state.domain.world, {
       key: id,
       kind: kind === "culture" ? "culture" : "polity",

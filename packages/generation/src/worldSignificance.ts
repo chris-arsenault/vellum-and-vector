@@ -1,4 +1,4 @@
-import { MapScale, spatial } from "@atlas/domain";
+import { MapScale, spatial, compactGeometryBounds } from "@atlas/domain";
 import type { GenerationState } from "./process";
 
 /** World publication is independent of mesh density and viewport zoom. */
@@ -13,7 +13,7 @@ export function mapScale(
   return (
     state.physical?.map.scale ??
     MapScale.fromBounds(
-      spatial.bounds(state.domain.scope.footprint),
+      state.surface.bounds,
       state.surface.scope.resolution ??
         Math.sqrt(
           spatial.area(state.domain.scope.footprint) / Math.max(1, state.surface.active.length)
@@ -31,7 +31,7 @@ export function worldExtent(state: GenerationState): WorldExtent {
   const shape = isWorldGeography(state)
       ? state.domain.world.reference.domain
       : state.domain.scope.footprint,
-    bounds = spatial.bounds(shape);
+    bounds = compactGeometryBounds(state.domain.world.reference, shape);
   return {
     area: spatial.area(shape),
     span: Math.hypot(bounds[2] - bounds[0], bounds[3] - bounds[1]),

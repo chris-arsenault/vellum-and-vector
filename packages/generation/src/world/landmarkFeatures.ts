@@ -1,6 +1,8 @@
 // Publication of authored landmarks: one feature per landmark identity, and no second row for
 // the detected landform that is the landmark itself.
 import {
+  canonicalGeometry,
+  canonicalPosition,
   landmarkKind,
   MapScale,
   landmarkLayer,
@@ -21,7 +23,7 @@ import { nearestTriangle } from "./mesh";
 import { canyonCells } from "./landmarkCanyon";
 import { distance, nearestOnPath, pathMetrics, placeLandmark } from "./landmarkGeometry";
 import type { LandmarkRecord } from "./landmarkLedger";
-import { intersectAreas } from "./geographicContours";
+import { clipGeographicArea } from "./geographicContours";
 
 type Work = NonNullable<GenerationState["physical"]>;
 
@@ -199,12 +201,18 @@ function magicAttributes(landmark: Landmark, record: LandmarkRecord) {
   return kind?.system ? { system: kind.system, sourceStrength: record.strength ?? null } : {};
 }
 /** The captured river in world coordinates, with the flow it brought. */
-function captureAttributes(record: LandmarkRecord, [x0, y0]: [number, number]) {
+function captureAttributes(state: GenerationState, record: LandmarkRecord) {
   if (!record.capture) return { capture: null, captureAccumulation: null };
-  return {
-    capture: {
+  const [x0, y0] = state.physical!.map.mesh.origin,
+    position = canonicalPosition(state.domain.world.reference, {
       x: Math.round(record.capture.x + x0),
       y: Math.round(record.capture.y + y0),
+      z: 0,
+    });
+  return {
+    capture: {
+      x: position.x,
+      y: position.y,
       accumulation: record.capture.accumulation,
     },
     captureAccumulation: Math.round(record.capture.accumulation),
@@ -216,10 +224,9 @@ function landmarkFeature(
   record: LandmarkRecord
 ): AtlasFeature {
   const work = state.physical!,
-    footprint = state.domain.scope.footprint,
     naming = nameLandmark(state, landmark),
     shape = spatial.buffer(landmark.geometry, footprintReach(landmark, work)),
-    clipped = intersectAreas(shape, footprint),
+    clipped = clipGeographicArea(state, shape),
     generated = landmark.origin === "generated",
     layerId = landmarkLayer(landmarkKind(landmark.kind));
   return {
@@ -228,7 +235,7 @@ function landmarkFeature(
     layerId,
     kind: "landmark",
     name: landmark.name,
-    geometry: landmark.geometry,
+    geometry: canonicalGeometry(state.domain.world.reference, landmark.geometry),
     ...(clipped ? { footprint: clipped } : {}),
     detail: {},
     attributes: {
@@ -243,7 +250,7 @@ function landmarkFeature(
       ...signatureAttributes(record),
       ...magicAttributes(landmark, record),
       maintenance: Math.round(record.maintenance * 10) / 10,
-      ...captureAttributes(record, work.map.mesh.origin),
+      ...captureAttributes(state, record),
       notes: record.notes.join(" "),
     },
     relations: [],
@@ -271,7 +278,13 @@ export function extractLandmarks(state: GenerationState) {
       activity: () => 1,
     };
   for (const [landmark, record] of landmarkPairs(state)) {
-    if (!spatial.intersects(landmark.geometry, footprint)) continue;
+    if (
+      !spatial.intersects(
+        canonicalGeometry(state.domain.world.reference, landmark.geometry),
+        footprint
+      )
+    )
+      continue;
     remeasureLandmark(work.map, landmark, work.landmarks!, scene);
     putGenerated(state, landmarkFeature(state, landmark, record));
   }

@@ -10,7 +10,15 @@ export function createWorldMesh(
   area = (bounds[2] - bounds[0]) * (bounds[3] - bounds[1]),
   anchor?: [number, number],
   wrapX = false,
-  closePoles = false
+  closePoles = false,
+  coordinateWidth?: number
 ): PhysicalMesh {
-  return createWorldLattice(bounds, samples, padding, { covers, area, anchor, wrapX, closePoles });
+  return createWorldLattice(bounds, samples, padding, {
+    covers,
+    area,
+    anchor,
+    wrapX,
+    closePoles,
+    coordinateWidth,
+  });
 }

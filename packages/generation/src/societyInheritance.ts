@@ -1,4 +1,6 @@
 import {
+  canonicalGeometry,
+  canonicalPosition,
   mergePopulation,
   MapScale,
   population,
@@ -63,11 +65,12 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
         if (!origin.footprint) continue;
         const candidates = index.query(spatial.bounds(origin.footprint)).map((i) => countries[i]);
         if (!candidates.length || spatial.area(origin.footprint) <= 0) continue;
-        const { x, y } = origin.position,
+        const position = canonicalPosition(state.domain.world.reference, origin.position),
+          { x, y } = position,
           home = index
             .query([x, y, x, y])
             .map((i) => countries[i])
-            .find((c) => spatial.pointCoverage(c.footprint!)(origin.position));
+            .find((c) => spatial.pointCoverage(c.footprint!)(position));
         heirs.set(origin.id, inheritOrigin(candidates, home, origin, local.get(origin.id) ?? 0));
       }
     }
@@ -77,7 +80,10 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
   region.events = structuredClone(
     prior.events.filter((e) =>
       spatial.intersects(
-        spatial.buffer({ type: "Point", coordinates: [e.position.x, e.position.y] }, e.radius)!,
+        canonicalGeometry(
+          state.domain.world.reference,
+          spatial.buffer({ type: "Point", coordinates: [e.position.x, e.position.y] }, e.radius)!
+        ),
         state.domain.scope.footprint
       )
     )
@@ -139,10 +145,12 @@ function inheritWorks(
   heirs: Map<string, Heir[]>
 ): SocietyWork[] {
   const covered = spatial.pointCoverage(state.domain.scope.footprint),
+    reference = state.domain.world.reference,
+    bounds = spatial.bounds(reference.domain),
     works: SocietyWork[] = [];
   for (const w of prior.works) {
     if (!w.demand) {
-      if (covered(w.position)) works.push(structuredClone(w));
+      if (covered(canonicalPosition(reference, w.position, bounds))) works.push(structuredClone(w));
       continue;
     }
     const country = (heirs.get(w.communityId) ?? []).sort((a, b) => b.share - a.share);

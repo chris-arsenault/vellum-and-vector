@@ -1,4 +1,5 @@
 import {
+  canonicalPosition,
   population,
   spatial,
   type MapScale,
@@ -71,11 +72,13 @@ export function retainRegionalConnections(
 
 /** Existing seats are fixed inputs, before unresolved new sites claim territory. */
 export function retainedSeatCells(state: GenerationState, communities: SocietyCommunity[] = []) {
-  const covered = spatial.pointCoverage(state.domain.scope.footprint);
+  const covered = spatial.pointCoverage(state.domain.scope.footprint),
+    reference = state.domain.world.reference,
+    bounds = spatial.bounds(reference.domain);
   return [
     ...new Set(
       communities.flatMap((c) => {
-        if (!c.founded || !covered(c.position)) return [];
+        if (!c.founded || !covered(canonicalPosition(reference, c.position, bounds))) return [];
         const cell = nearestSocietySample(state.surface, c.position, (i) => dryLand(state, i));
         return cell < 0 ? [] : [cell];
       })

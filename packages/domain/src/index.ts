@@ -107,6 +107,7 @@ export * from "./cartographicPresentation";
 export * from "./drainageRefinement";
 export {
   canonicalPosition,
+  chartFootprint,
   canonicalGeometry,
   compactGeometryBounds,
   chartCopies,

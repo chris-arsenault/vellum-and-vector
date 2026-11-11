@@ -14,7 +14,7 @@ import { SocietySpread } from "./societyTraversal";
 import { dryLand } from "./societySupport";
 import { nearestSocietySample, SocietyNeighbors } from "./societySpatial";
 import { profileOf } from "./societyProfile";
-import { areaGeometry } from "./world/geographicContours";
+import { areaGeometry, clipGeographicArea } from "./world/geographicContours";
 
 type Meaning = "sovereignty" | "control" | "claim";
 /** Travel budget grows with supported population, independently of ownership-cell area. */
@@ -147,7 +147,7 @@ function overlaps(a: Bounds, b: Bounds) {
   return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
 }
 function clipTerritoryWater(state: GenerationState, shape: Geometry) {
-  let clipped = spatial.intersection(shape, state.domain.scope.footprint);
+  let clipped = clipGeographicArea(state, shape);
   if (clipped && state.surface.ocean) clipped = spatial.difference(clipped, state.surface.ocean);
   for (const lake of state.surface.lakes ?? [])
     if (clipped && spatial.intersects(clipped, lake.geometry))

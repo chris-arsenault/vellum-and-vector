@@ -1,4 +1,4 @@
-import { chartCopies, interpolateProfile, MapScale, spatial } from "@atlas/domain";
+import { chartCopies, chartFootprint, interpolateProfile, MapScale, spatial } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { nativePosition } from "../world/atlasWorkspace";
 import { releaseWorking } from "../world/physicalNumerics";
@@ -122,24 +122,20 @@ function publishReachCopy(
   return ids;
 }
 function riverWater(state: GenerationState) {
-  const work = state.physical!;
-  // hpc-exempt: one feature id per published lake, read while clipping river mouths.
-  const lakes = new Map<number, string>();
+  const work = state.physical!,
+    inChart = (geometry: Geometry) =>
+      chartFootprint(geometry, state.surface.bounds, state.surface.periodicWidth);
+  // hpc-exempt: one prepared outline per published lake, read while clipping river mouths.
+  const lakes = new Map<number, Geometry>();
   for (const feature of generationFeatures(state, {
     kind: "lake",
     areaId: state.domain.scope.areaId,
   }))
-    lakes.set(Number(feature.attributes.waterBody), feature.id);
+    lakes.set(Number(feature.attributes.waterBody), inChart(feature.geometry));
+  for (const [body, geometry] of work.lakeOutlines ?? []) lakes.set(body, inChart(geometry));
   return {
-    ocean: state.surface.ocean ?? null,
-    lakes: {
-      get(id: number) {
-        const physical = work.lakeOutlines?.get(id);
-        if (physical) return physical;
-        const featureId = lakes.get(id);
-        return featureId ? generationFeature(state, featureId)?.geometry : undefined;
-      },
-    },
+    ocean: state.surface.ocean ? inChart(state.surface.ocean) : null,
+    lakes,
   };
 }
 /** A river's records say which river they draw, so what stands on it can follow it down. */

@@ -1,4 +1,4 @@
-import { gridPosition, neighbors, spatial } from "@atlas/domain";
+import { fieldChartFootprint, gridPosition, neighbors, spatial } from "@atlas/domain";
 import type { GenerationState, HumanRound } from "./process";
 import { Feature } from "./world/codes";
 import { nearestSocietySample } from "./societySpatial";
@@ -21,7 +21,7 @@ export interface RuinField {
  */
 export function ruinFields(state: GenerationState): RuinField[] {
   const grid = state.surface,
-    covers = spatial.geometryCoverage(grid.scope.footprint),
+    covers = spatial.geometryCoverage(fieldChartFootprint(grid)),
     fields: RuinField[] = [];
   for (const round of state.rounds ?? [])
     for (const ruin of round.ruins) {

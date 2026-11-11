@@ -1,4 +1,6 @@
 import {
+  canonicalGeometry,
+  canonicalPosition,
   isSocietyWork,
   point,
   societyWorkLayers,
@@ -122,9 +124,16 @@ function recordedWork(state: GenerationState, kind: PoiKindId, w: SocietyWork): 
 function recordedWorks(state: GenerationState, kind: PoiKindId, workKind: SocietyWorkKind) {
   const region = societyRegionOf(state);
   if (!region) return [];
-  const covered = isRefined(state) ? spatial.pointCoverage(state.surface.scope.footprint) : null;
+  const covered = isRefined(state) ? spatial.pointCoverage(state.surface.scope.footprint) : null,
+    reference = state.domain.world.reference,
+    bounds = spatial.bounds(reference.domain);
   return region.works
-    .filter((w) => w.kind === workKind && !w.demand && (!covered || covered(w.position)))
+    .filter(
+      (w) =>
+        w.kind === workKind &&
+        !w.demand &&
+        (!covered || covered(canonicalPosition(reference, w.position, bounds)))
+    )
     .map((w) => recordedWork(state, kind, w))
     .filter((place) => place.anchor >= 0 || !state.physical);
 }
@@ -258,7 +267,8 @@ function retainedEvents(state: RegionalState, kind: PoiKindId, events: readonly 
   const intersects = spatial.intersectionPredicate(state.surface.scope.footprint);
   return events.flatMap((event) => {
     const geometry = spatial.buffer(point(event.position), event.radius);
-    if (!geometry || !intersects(geometry)) return [];
+    if (!geometry || !intersects(canonicalGeometry(state.domain.world.reference, geometry)))
+      return [];
     const at = cellOf(state, event.position),
       anchor = at >= 0 ? at : cellOf(state, spatial.interiorPosition(geometry));
     return [

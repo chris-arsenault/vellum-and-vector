@@ -1,4 +1,12 @@
-import { gridDistance, gridPosition, neighbors, spatial, MapScale, type Band } from "@atlas/domain";
+import {
+  gridDistance,
+  gridPosition,
+  fieldChartFootprint,
+  neighbors,
+  spatial,
+  MapScale,
+  type Band,
+} from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { RouteHeap } from "./mapRouting";
 import { dryLand, societyValue } from "./societySupport";
@@ -21,7 +29,7 @@ const seaTravel = 0.5;
 function localEdges(state: GenerationState, marine: boolean, adjacent?: SocietyNeighbors) {
   const grid = state.surface,
     seaLaunch = mapScale(state).length(0.0025),
-    covers = adjacent ? undefined : spatial.geometryCoverage(grid.scope.footprint),
+    covers = adjacent ? undefined : spatial.geometryCoverage(fieldChartFootprint(grid)),
     links = (i: number) => adjacent?.at(i) ?? neighbors(grid, i, false, covers);
   const sea = (i: number) =>
     Boolean(grid.active.get(i)) && grid.channels.WaterKindCodes?.get(i) === 1;

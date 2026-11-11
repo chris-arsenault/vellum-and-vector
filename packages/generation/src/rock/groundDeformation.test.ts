@@ -119,6 +119,26 @@ it("commits support bending and its bed dip as one operation", () => {
   releaseWorking(map, target);
 });
 
+it("responds to changed support from an imported reference without resetting its elevation", () => {
+  const map = supplied(true),
+    cell = sample(map),
+    before = map.Elevation.get(cell),
+    target = workingValues(map, "float64", "support:target", () => units(-100)),
+    datum = workingValues(map, "float64", "support:datum", () => units(500));
+  map.CrustSupportInitialized = true;
+  map.SupportDatum = datum;
+  supportGroundField(map, target);
+  expect(map.Elevation.get(cell)).toBeCloseTo(before);
+  // A new load depresses the inherited column; unloading then raises it again.
+  target.fill(units(-120));
+  supportGroundField(map, target);
+  expect(map.Elevation.get(cell)).toBeCloseTo(before - units(20));
+  target.fill(units(-90));
+  supportGroundField(map, target);
+  expect(map.Elevation.get(cell)).toBeCloseTo(before + units(10));
+  releaseWorking(map, target, datum);
+});
+
 it("distinguishes raised standing rock from translation so later support can see the added load", () => {
   const map = supplied(),
     cell = sample(map),

@@ -2,7 +2,12 @@ import { CellList, SmallIntSet, spatial, type Band } from "@atlas/domain";
 import type { Geometry, Polygon } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
-import { combinedContour, areaGeometry, intersectAreas } from "./geographicContours";
+import {
+  combinedContour,
+  areaGeometry,
+  intersectAreas,
+  clipGeographicArea,
+} from "./geographicContours";
 import { marineRegions, type MarineRegion } from "./marineRegions";
 import { metricSearch } from "./metricSearch";
 import { units } from "./math";
@@ -65,7 +70,7 @@ function regionOutline(
     terms,
     ([own, ...other]) => own - Math.max(0, ...other)
   );
-  return intersectAreas(contour, ocean);
+  return intersectAreas(clipGeographicArea(state, contour), ocean);
 }
 
 function publishOcean(state: GenerationState, shape: Geometry, type: "ocean" | "sea") {

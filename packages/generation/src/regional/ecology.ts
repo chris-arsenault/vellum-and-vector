@@ -1,6 +1,6 @@
 import { accumulateOrganicMatter, buryOrganicMatter } from "../world/ecologyCarbon";
 import { classifyBiome, environment, type EcologyForcing } from "../world/ecologyEnvironment";
-import { ecologyEpochSchema, MapScale, spatial } from "@atlas/domain";
+import { canonicalPosition, ecologyEpochSchema, MapScale, spatial } from "@atlas/domain";
 import { nativePosition } from "../world/atlasWorkspace";
 import { initializeEcology } from "../world/ecologyEstablishment";
 import { livingPlantCarbon } from "../world/ecologyGroups";
@@ -106,6 +106,8 @@ function regionalForcing(
 function regionalAuthority(state: RegionalState) {
   const work = state.physical,
     map = work.map,
+    reference = state.domain.world.reference,
+    bounds = spatial.bounds(reference.domain),
     woodland = new Uint8Array(map.mesh.count),
     fixed = work.fixed.filter(({ binding }) =>
       (ecologyScalars as readonly string[]).includes(binding.name)
@@ -113,7 +115,8 @@ function regionalAuthority(state: RegionalState) {
   for (const feature of generationFeatures(state, { areaId: state.regional.input.areaId })) {
     if (feature.kind !== "forest" || feature.state === "generated") continue;
     const covers = spatial.pointCoverage(feature.geometry);
-    for (let i = 0; i < map.mesh.count; i++) if (covers(nativePosition(work, i))) woodland[i] = 1;
+    for (let i = 0; i < map.mesh.count; i++)
+      if (covers(canonicalPosition(reference, nativePosition(work, i), bounds))) woodland[i] = 1;
   }
   return (i: number) => {
     for (const { binding, values } of fixed) {

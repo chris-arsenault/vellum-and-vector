@@ -1,4 +1,11 @@
-import { point, spatial, unwrapCoordinates, type Band, type DrainageReach } from "@atlas/domain";
+import {
+  canonicalPosition,
+  point,
+  spatial,
+  unwrapCoordinates,
+  type Band,
+  type DrainageReach,
+} from "@atlas/domain";
 import { nativePosition } from "../world/atlasWorkspace";
 import type { PhysicalField } from "../world/field";
 import { releaseWorking, workingArray } from "../world/physicalNumerics";
@@ -93,7 +100,10 @@ export function riverInputs(map: PhysicalField) {
 /** Whether a finer map draws a reach: a World draws whole courses, wherever they start. */
 export const reachInFrame = (state: GenerationState, start: number) =>
   isWorldGeography(state) ||
-  spatial.covers(state.domain.scope.footprint, point(nativePosition(state.physical!, start)));
+  spatial.covers(
+    state.domain.scope.footprint,
+    point(canonicalPosition(state.domain.world.reference, nativePosition(state.physical!, start)))
+  );
 
 /**
  * A course's identity: the end it reaches and the cell it reaches it from. A river's head moves

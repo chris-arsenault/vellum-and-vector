@@ -3,6 +3,24 @@ import { triangleArea } from "./triangularLattice";
 import { createCenteredLattice, createWorldLattice } from "./worldLattice";
 import { content, forEachCell, halo, nodata } from "./lattice";
 
+it("addresses both sides of a world seam without joining a compact frame's outer edges", () => {
+  const lattice = createWorldLattice([800, 100, 1200, 300], 120, 20, { coordinateWidth: 1000 });
+  expect(lattice.periodic).toBeUndefined();
+  const eastern = lattice.cellAt(100, 0);
+  expect(lattice.membership(eastern)).toBe(content);
+  expect(lattice.cellAt(-900, 0)).toBe(eastern);
+  let edges = 0;
+  forEachCell(lattice, (cell) => {
+    if (lattice.boundary(cell)) edges++;
+    for (let edge = 0; edge < lattice.degree(); edge++) {
+      const next = lattice.neighbor(cell, edge);
+      if (next >= 0)
+        expect(Math.abs(lattice.x(next) - lattice.x(cell))).toBeLessThan(lattice.spacing * 2);
+    }
+  });
+  expect(edges).toBeGreaterThan(0);
+});
+
 function checkSymmetry(lattice: ReturnType<typeof createWorldLattice>) {
   let edges = 0;
   forEachCell(lattice, (cell) => {

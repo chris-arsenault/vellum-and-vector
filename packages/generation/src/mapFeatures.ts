@@ -1,6 +1,7 @@
 import { mapCommand } from "./processTraits";
 import {
   semanticId,
+  canonicalGeometry,
   canonicalPosition,
   isDescendant,
   representationId,
@@ -38,6 +39,9 @@ export function generatedFeature(
   geometry: AtlasFeature["geometry"],
   attributes: Record<string, unknown> = {}
 ): AtlasFeature {
+  // Line publishers split their courses together with vertex profiles before this boundary.
+  if (!geometry.type.includes("Line"))
+    geometry = canonicalGeometry(state.domain.world.reference, geometry);
   const id = generatedId(state, key);
   const naming = featureNaming(state, id, key, name, kind, geometry, attributes);
   return {

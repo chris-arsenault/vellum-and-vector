@@ -2,6 +2,7 @@ import { mapCommand } from "../processTraits";
 // Canonry MagicAdvectionLayer's dominant material-source mapping, adapted to
 // user-configured signed thermal histories on the atlas's GIS grid.
 import {
+  fieldChartFootprint,
   fieldInterpolator,
   putChannel,
   spatial,
@@ -30,7 +31,7 @@ export const advectAtlasMagic: MapProcess = {
         .map(fieldChannelName)
         .filter((name) => name.startsWith("magic:") && name.endsWith(":stored"));
       if (!histories.length) return;
-      const covered = spatial.pointCoverage(grid.scope.footprint);
+      const covered = spatial.pointCoverage(fieldChartFootprint(grid));
       for (const name of histories) {
         const previous = { ...grid, channels: { [name]: grid.channels[name] } };
         const valueAt = fieldInterpolator(previous, name);

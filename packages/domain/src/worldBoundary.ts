@@ -1,6 +1,7 @@
 import type { Geometry, Position as Coordinate } from "geojson";
 import type { Position, World } from "./model";
-import { spatial, type Bounds } from "./spatial";
+import { rectangle, spatial, type Bounds } from "./spatial";
+import { combineGeometry, geometryDimension, geometryParts } from "./composition";
 
 export interface WorldReference {
   id: string;
@@ -50,6 +51,28 @@ export function translateGeometry(geometry: Geometry, dx: number): Geometry {
       ? [(value[0] as number) + dx, ...value.slice(1)]
       : (value as Coordinate[]).map(move);
   return { ...geometry, coordinates: move(geometry.coordinates) } as Geometry;
+}
+
+/** Place canonical query or coverage pieces in a continuous working chart. */
+export function chartFootprint(footprint: Geometry, bounds: Bounds, width?: number): Geometry {
+  if (!width || spatial.covers(rectangle(bounds), footprint)) return footprint;
+  return combineGeometry(
+    geometryParts(footprint).flatMap((part) => workingCopies(part, bounds, width)),
+    geometryDimension(footprint)
+  )!;
+}
+function workingCopies(part: Geometry, bounds: Bounds, width: number) {
+  const [west, , east] = spatial.bounds(part),
+    first = Math.ceil((bounds[0] - east) / width),
+    last = Math.floor((bounds[2] - west) / width);
+  const shifts = Array.from({ length: Math.max(0, last - first + 1) }, (_, i) => first + i).filter(
+    (shift) =>
+      west === east || (east + shift * width > bounds[0] && west + shift * width < bounds[2])
+  );
+  // Keep an outside shape outside, so allocation still rejects incomplete sample bounds.
+  if (!shifts.length)
+    shifts.push(Math.round(((bounds[0] + bounds[2]) / 2 - (west + east) / 2) / width));
+  return shifts.map((shift) => (shift ? translateGeometry(part, shift * width) : part));
 }
 
 /** Copies that intersect the authoritative chart; coordinates remain continuous before clipping. */

@@ -4,7 +4,7 @@ import type { PhysicalContext } from "./context";
 import { clamp, crustHeight, ratio, rockLoadResponsePerMille, toUnits, units } from "./math";
 import { setSupportTarget, supportGroundField } from "../rock/groundDeformation";
 import { smoothMetric } from "./metricSmoothing";
-import { releaseWorking, workingValues } from "./physicalNumerics";
+import { releaseWorking, retainedArray, workingValues } from "./physicalNumerics";
 import {
   tectonicRiftCoolingMyr,
   tectonicRiftFailure,
@@ -65,4 +65,19 @@ export function lithosphericFlexure(map: PhysicalField, context: PhysicalContext
   const current = settledSupport(map, context);
   supportGroundField(map, current);
   releaseWorking(map, current);
+}
+/**
+ * Captured crust is already standing at its measured support. A different map scale changes the
+ * equation's reference level, not that crust's position. Subsequent loads act through changes in
+ * the settled target. Calibrate before development, after importing all crust, sediment and ice.
+ * Refinement does not advect plates; an advected imported state would also need to carry this datum.
+ */
+export function captureSupportDatum(map: PhysicalField, context: PhysicalContext) {
+  crustalSupport(map, context);
+  const initial = settledSupport(map, context),
+    datum = retainedArray(map, "float64", "support:datum");
+  for (let cell = 0; cell < map.mesh.count; cell++)
+    datum.set(cell, map.CrustSupportElevation.get(cell) - initial.get(cell));
+  map.SupportDatum = datum;
+  releaseWorking(map, initial);
 }

@@ -9,6 +9,9 @@ import {
   requireThat,
   cloneSnapshot,
   rectangle,
+  compactGeometryBounds,
+  chartFootprint,
+  type Bounds,
   type DomainSnapshot,
   type Grid,
   type SpatialScope,
@@ -54,10 +57,11 @@ export function atlasInitialState(
     resolution: null,
   };
   domain.scope = scope;
-  const extent = spatial.bounds(area.footprint),
+  const extent = compactGeometryBounds(domain.world.reference, area.footprint),
+    periodicWidth = coordinatePeriod(domain),
     cellSpan = options.cellSpan ?? regionalResolution(source, area.id, input.quality).cellSpan;
   scope.resolution = cellSpan;
-  // A child keeps the parent's boundary band; interior samples refine inside that interface.
+  // Boundary bands apply only to the older authored profiles, never independent regions.
   const band = Math.min(cellSpan, (extent[2] - extent[0]) / 4, (extent[3] - extent[1]) / 4);
   const interior =
     area.boundary && !["region", "local"].includes(area.profile)
@@ -74,17 +78,25 @@ export function atlasInitialState(
       ? createAdaptiveField(
           id,
           { ...scope, footprint: interior },
-          initialTopology(scope, options.surfaceSpan ?? cellSpan, cache),
-          cache
+          initialTopology(
+            chartFootprint(interior, extent, periodicWidth),
+            extent,
+            options.surfaceSpan ?? cellSpan,
+            cache
+          ),
+          cache,
+          periodicWidth
         )
       : createGrid(
           id,
           { ...scope, footprint: interior },
           Math.max(2, Math.ceil((extent[2] - extent[0]) / cellSpan) + 1),
           Math.max(2, Math.ceil((extent[3] - extent[1]) / cellSpan) + 1),
-          undefined,
-          cache
+          extent,
+          cache,
+          periodicWidth
         );
+  surface.periodicWidth = periodicWidth;
   inheritSurface(source, surface, input);
   return {
     domain,
@@ -95,6 +107,10 @@ export function atlasInitialState(
     publications: atlasGenerationModules.publications(input, domain.world),
   };
 }
+function coordinatePeriod(domain: DomainSnapshot) {
+  const [west, , east] = spatial.bounds(domain.world.reference.domain);
+  return domain.world.reference.boundaryMode === "cylinder" ? east - west : undefined;
+}
 /**
  * Cells near the map's cell span. The cells halve from the extent, so they come only in
  * the extent's width over a power of two; halving until a cell is no wider than the span
@@ -104,9 +120,13 @@ export function atlasInitialState(
 export function halvedCellWidth(widest: number, cellSpan: number) {
   return widest / 2 ** Math.max(0, Math.round(Math.log2(widest / cellSpan)));
 }
-function initialTopology(scope: SpatialScope, cellSpan: number, cache?: BlockCache) {
-  const extent = spatial.bounds(scope.footprint),
-    widest = Math.max(extent[2] - extent[0], extent[3] - extent[1]),
+function initialTopology(
+  footprint: SpatialScope["footprint"],
+  extent: Bounds,
+  cellSpan: number,
+  cache?: BlockCache
+) {
+  const widest = Math.max(extent[2] - extent[0], extent[3] - extent[1]),
     // Repeated halving carries rounding; a cell within it of the chosen width is at it.
     minimumSize = halvedCellWidth(widest, cellSpan) * (1 + 1e-9);
   return createAdaptiveTopology(
@@ -114,7 +134,7 @@ function initialTopology(scope: SpatialScope, cellSpan: number, cache?: BlockCac
     {
       maximumSize: Math.max(minimumSize, widest / 8),
       minimumSize,
-      refine: (box) => spatial.intersects(rectangle(box), scope.footprint),
+      refine: (box) => spatial.intersects(rectangle(box), footprint),
     },
     cache
   );
@@ -124,7 +144,8 @@ function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenera
   const channels = regionalInputChannels(
     regionalInputFields(source, input.areaId, input.domains.includes("physical"))
   );
-  for (const [name, grid] of channels) resampleChannels(grid, target, [name]);
+  for (const [name, grid] of channels)
+    resampleChannels({ ...grid, periodicWidth: target.periodicWidth }, target, [name]);
   requireThat(
     input.domains.includes("physical") ||
       target.channels.Elevation ||

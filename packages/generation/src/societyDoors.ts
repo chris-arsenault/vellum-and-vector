@@ -1,4 +1,4 @@
-import { spatial } from "@atlas/domain";
+import { fieldChartFootprint, spatial } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import type { SocietyEdge } from "./societyGeography";
 import { nativePosition } from "./world/atlasWorkspace";
@@ -20,7 +20,7 @@ export function doorEdges(state: GenerationState): SocietyEdge[] {
   if (!strength) return [];
   const open = doorHoldsOpen(state, field, strength),
     cost = field.definition.parameters.doorTravel,
-    covers = spatial.pointCoverage(state.domain.scope.footprint),
+    covers = spatial.pointCoverage(fieldChartFootprint(state.surface)),
     edges: SocietyEdge[] = [];
   for (const door of field.doors) {
     if (!open(door.a) || !open(door.b)) continue;

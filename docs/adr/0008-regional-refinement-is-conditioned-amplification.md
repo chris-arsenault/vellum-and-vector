@@ -18,6 +18,13 @@ resources may be shared; working numerical state and published records belong to
 the child. There is no regional material representation, unit vocabulary or recovery
 format.
 
+Field allocation and lattice geometry use the compact continuous chart of the selected
+footprint. Catalog footprints and published features stay in the world's canonical
+chart. Shared coordinate utilities place captured inputs and spatial predicates in the
+working chart, and publication splits geometry back at the world seam. Coordinate
+aliases use the world's width; they do not join a short region's outer lattice edges.
+Only a frame spanning the cylinder has periodic adjacency.
+
 ## Feature-owned execution
 
 World and regional execution resolve selected features through the same composition
@@ -55,6 +62,11 @@ material. Ground displacement moves retained contacts, and excavation exposes an
 transfers the material it reaches. This realization runs once. Subsequent rounds
 retain and work its result through shared erosion, mass wasting, sediment, coast,
 ice and groundwater owners; they do not rebuild it from a parent-height fit.
+
+Imported crust starts from its captured mechanical support. The shared flexure owner
+evaluates the imported state at the new map scale once, then responds to changes from
+that settled reference. A smaller frame does not itself lift the seabed or lower a
+plateau. New loads and changes in crust still deform ground through its owner.
 
 Local ecological response uses the shared soil, vegetation, toxicity, animal and
 organic-material kernels. Development exposure is a local relaxation control, not

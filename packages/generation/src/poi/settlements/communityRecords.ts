@@ -1,4 +1,5 @@
 import {
+  canonicalPosition,
   point,
   population,
   spatial,
@@ -187,10 +188,18 @@ function knownPlaces(
   const society = societyRegionOf(state);
   if (!society) return [];
   const covered = spatial.pointCoverage(state.surface.scope.footprint),
+    reference = state.domain.world.reference,
+    bounds = spatial.bounds(reference.domain),
     recorded = (c: SocietyCommunity) =>
       captured.some((f) => f.attributes.communityId === c.id || f.name === c.name);
   return society.communities
-    .filter((c) => c.founded && wanted(c) && covered(c.position) && !recorded(c))
+    .filter(
+      (c) =>
+        c.founded &&
+        wanted(c) &&
+        covered(canonicalPosition(reference, c.position, bounds)) &&
+        !recorded(c)
+    )
     .map((c) => {
       const id = regionalId(state, `known-seat:${c.id}`);
       return lazyPlace(

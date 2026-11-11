@@ -1,4 +1,11 @@
-import { point, spatial, geometryParts, combineGeometry, type Band } from "@atlas/domain";
+import {
+  canonicalGeometry,
+  point,
+  spatial,
+  geometryParts,
+  combineGeometry,
+  type Band,
+} from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
@@ -42,7 +49,10 @@ export function linkedCourse(
 function clippedLines(state: GenerationState, lines: number[][][]) {
   if (!lines.length) return null;
   const shape: Geometry = { type: "MultiLineString", coordinates: lines };
-  const clipped = spatial.intersection(shape, state.domain.scope.footprint);
+  const clipped = spatial.intersection(
+    canonicalGeometry(state.domain.world.reference, shape),
+    state.domain.scope.footprint
+  );
   return lineGeometry(clipped);
 }
 function lineGeometry(geometry: Geometry | null) {
@@ -111,7 +121,10 @@ function sourcePoint(
   if (!["core", "locus"].includes(ruleId)) return null;
   const [x0, y0] = state.physical!.map.mesh.origin;
   for (const source of field.located) {
-    const geometry: Geometry = { type: "Point", coordinates: [source.x + x0, source.y + y0] };
+    const geometry = canonicalGeometry(state.domain.world.reference, {
+      type: "Point",
+      coordinates: [source.x + x0, source.y + y0],
+    });
     if (
       members.includes(nearestTriangle(state.physical!.map.mesh, source.x, source.y)) &&
       spatial.intersects(state.domain.scope.footprint, geometry)

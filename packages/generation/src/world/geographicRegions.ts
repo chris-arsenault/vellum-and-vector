@@ -1,4 +1,5 @@
 import {
+  canonicalPosition,
   CellList,
   SmallIntSet,
   spatial,
@@ -16,7 +17,7 @@ import {
   combinedContour,
   fillSmallHoles,
   membershipContour,
-  intersectAreas,
+  clipGeographicArea,
 } from "./geographicContours";
 import { landArea } from "./regionPartition";
 import type { PlaceGeometry } from "./placeGeometry";
@@ -27,7 +28,7 @@ import { significantMagicArea } from "./worldMagicSignificance";
 export { extractLakes } from "./lakeFeatures";
 
 function clipRegion(state: GenerationState, shape: Geometry | null) {
-  return intersectAreas(shape, state.domain.scope.footprint);
+  return clipGeographicArea(state, shape);
 }
 function connectedMembers(
   state: GenerationState,
@@ -164,7 +165,10 @@ export function placeFeature(
   const work = state.physical!;
   const representative = placeRepresentative(state, members);
   if (representative < 0) return null;
-  const identityPosition = nativePosition(work, representative);
+  const identityPosition = canonicalPosition(
+    state.domain.world.reference,
+    nativePosition(work, representative)
+  );
   const geometry = placement?.geometry ?? extent ?? point(identityPosition);
   const identity = coordinateKey(identityPosition.x, identityPosition.y);
   const feature = generatedFeature(state, `${kind}:${identity}`, name, kind, layer, geometry, {
@@ -181,10 +185,12 @@ export function publishPlace(...args: Parameters<typeof placeFeature>) {
 }
 function placeRepresentative(state: GenerationState, members: RegionMembers) {
   const covers = spatial.pointCoverage(state.domain.scope.footprint),
-    work = state.physical!;
+    work = state.physical!,
+    reference = state.domain.world.reference,
+    bounds = spatial.bounds(reference.domain);
   let representative = -1;
   for (const i of members) {
-    if (!covers(nativePosition(work, i))) continue;
+    if (!covers(canonicalPosition(reference, nativePosition(work, i), bounds))) continue;
     if (representative < 0 || work.map.Elevation.get(i) > work.map.Elevation.get(representative))
       representative = i;
   }
@@ -205,7 +211,7 @@ function placeAttributes(
     area: extent
       ? spatial.area(extent)
       : members.reduce((sum, i) => sum + work.map.mesh.area(i), 0),
-    representative: nativePosition(work, anchor),
+    representative: canonicalPosition(state.domain.world.reference, nativePosition(work, anchor)),
     placeType: name,
     geometryMeaning: placement?.meaning ?? "classified geographic region",
     elevation: MapScale.metres(work.map.Elevation.get(anchor), "native"),

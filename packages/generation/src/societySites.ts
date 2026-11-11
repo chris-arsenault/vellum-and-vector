@@ -1,4 +1,5 @@
 import {
+  fieldChartFootprint,
   gridPosition,
   gridDisplacement,
   neighbors,
@@ -37,7 +38,7 @@ class SiteReader {
   constructor(readonly state: Pick<GenerationState, "surface">) {
     this.grid = state.surface;
     this.scale = MapScale.fromCells(this.grid.bounds, this.grid.active.length);
-    this.covers = spatial.geometryCoverage(this.grid.scope.footprint);
+    this.covers = spatial.geometryCoverage(fieldChartFootprint(this.grid));
   }
   value(name: FieldChannelName, i: number, fallback = 0) {
     return this.grid.channels[name]?.get(i) ?? fallback;

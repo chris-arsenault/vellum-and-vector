@@ -5,6 +5,8 @@ import { spatial, rectangle } from "./spatial";
 import { geometryParts } from "./composition";
 import { requireThat } from "./errors";
 import { adaptiveExtrema } from "./adaptiveExtrema";
+import { chartFootprint } from "./worldBoundary";
+import { fieldChartFootprint } from "./gridPeriodicity";
 
 export function fieldExtrema(
   grid: GridSurface<string>,
@@ -13,12 +15,18 @@ export function fieldExtrema(
 ): [number, number] | null {
   const { overlays, ...base } = grid,
     ranges: [number, number][] = [];
-  let remaining: Geometry | null = spatial.intersection(grid.scope.footprint, footprint);
+  let remaining: Geometry | null = spatial.intersection(
+    fieldChartFootprint(grid),
+    chartFootprint(footprint, grid.bounds, grid.periodicWidth)
+  );
   for (const overlay of [...(overlays ?? [])].reverse()) {
     if (!remaining || !overlay.channels.includes(channel)) continue;
     const range = rawFieldExtrema(overlay.grid, channel, remaining);
     if (range) ranges.push(range);
-    remaining = spatial.difference(remaining, overlay.grid.scope.footprint);
+    remaining = spatial.difference(
+      remaining,
+      chartFootprint(overlay.grid.scope.footprint, grid.bounds, grid.periodicWidth)
+    );
   }
   if (remaining) {
     const range = rawFieldExtrema(base, channel, remaining);
@@ -77,7 +85,10 @@ function rawFieldExtrema(
   channel: string,
   footprint: Geometry
 ): [number, number] | null {
-  const region = spatial.intersection(grid.scope.footprint, footprint);
+  const region = spatial.intersection(
+    fieldChartFootprint(grid),
+    chartFootprint(footprint, grid.bounds, grid.periodicWidth)
+  );
   if (!region) return null;
   if (grid.topology) return adaptiveExtrema(grid, channel, region);
   const [x0, y0, x1, y1] = grid.bounds,

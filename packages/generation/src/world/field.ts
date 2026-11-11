@@ -62,6 +62,8 @@ export type PhysicalField = Record<MutablePhysicalBufferName, Band> &
     SeaLevelInitialized: boolean;
     OpenBoundary: boolean;
     CrustSupportInitialized: boolean;
+    /** Imported mechanical state relative to this working map's settled support equation. */
+    SupportDatum: ReadBand | null;
     SedimentProducedTotal: number;
     SedimentDepositedTotal: number;
     SedimentExportedTotal: number;
@@ -120,6 +122,7 @@ export function createField(
     SeaLevelInitialized: false,
     OpenBoundary: false,
     CrustSupportInitialized: false,
+    SupportDatum: null,
     SedimentProducedTotal: 0,
     SedimentDepositedTotal: 0,
     SedimentExportedTotal: 0,

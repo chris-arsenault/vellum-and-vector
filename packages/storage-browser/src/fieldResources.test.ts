@@ -213,6 +213,7 @@ describe("regular resource field round trips", () => {
   it("reads categories from only the visible partitions, preserving cell overlap at the edge", async () => {
     const f = fixture(),
       grid = createGrid<string>("classes", scope(), 517, 71);
+    grid.periodicWidth = 1000;
     putChannel(
       grid,
       "cover",
@@ -236,6 +237,9 @@ describe("regular resource field round trips", () => {
     expect(f.reads).toEqual([]);
     expect(
       await resourceCategories(f.resources, resource, "cover", rectangle([990, 0, 1000, 1000]))
+    ).toEqual([2, 3]);
+    expect(
+      await resourceCategories(f.resources, resource, "cover", rectangle([-10, 0, 0, 1000]))
     ).toEqual([2, 3]);
   });
   it("round trips regular edge tiles without loading unselected channels or duplicating layout chunks", async () => {

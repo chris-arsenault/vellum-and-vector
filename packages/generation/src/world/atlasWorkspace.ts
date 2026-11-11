@@ -20,6 +20,7 @@ import {
   ownsMapGeography,
   MapScale,
   defaultTerrainCells,
+  fieldChartFootprint,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { authoredFields } from "../mapAuthored";
@@ -45,6 +46,8 @@ import { releaseWorking, retainedArray } from "./physicalNumerics";
 import { groundResourceChannels } from "../rock/groundResources";
 import { importMaterialCargo } from "../rock/groundCargoResources";
 import { fieldSampleIndex } from "@atlas/domain";
+import { captureSupportDatum } from "./support";
+import { physicalContext } from "./context";
 
 export interface AtlasPhysicalWorkspace {
   /** Physical lake shores used while tracing mouths, independent of named publication. */
@@ -86,8 +89,9 @@ export function parentChannels(state: GenerationState) {
   const chosen = new Map<string, { grid: Grid; present: boolean }>(),
     owned = ownsMapGeography(state.domain.world, state.surface.scope.areaId);
   for (const field of state.domain.world.fields) {
-    const grid = state.domain.numerical[field.id];
-    if (!grid || grid.scope.spaceId !== state.surface.scope.spaceId) continue;
+    const source = state.domain.numerical[field.id];
+    if (!source || source.scope.spaceId !== state.surface.scope.spaceId) continue;
+    const grid = { ...source, periodicWidth: state.surface.periodicWidth };
     if (!inputOwner(state, field)) continue;
     if (!spatial.covers(grid.scope.footprint, state.surface.scope.footprint)) continue;
     const candidate = { grid, present: owned && !field.input };
@@ -138,6 +142,7 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
   // The parent formed this crust; here it is only carried on.
   map.CrustFormed = true;
   finishGroundImport(map, imported);
+  captureSupportDatum(map, physicalContext(0, 0, work.profile));
   const material = parent.get("RockLayerKind0") ?? surface;
   if (material.materialCargo)
     importMaterialCargo(map, material.materialCargo, (cell) =>
@@ -265,11 +270,11 @@ const childHaloCells = 4;
  */
 function mapLattice(state: GenerationState, profile: PhysicalProfile, cellSpan: number) {
   const bounds = state.surface.bounds,
-    footprint = state.domain.scope.footprint,
+    footprint = fieldChartFootprint(state.surface),
     covers = spatial.pointCoverage(footprint),
     anchor = spatial.interiorPosition(footprint),
     world = state.domain.world.areas[state.domain.scope.areaId].profile === "world",
-    wraps = world ? profile.MapBoundary === 1 : crossesChartSeam(state),
+    wraps = world ? profile.MapBoundary === 1 : spansCylinder(state),
     padding = world ? profile.BoundaryPadding : childHaloCells * cellSpan;
   return createWorldMesh(
     bounds,
@@ -279,7 +284,8 @@ function mapLattice(state: GenerationState, profile: PhysicalProfile, cellSpan: 
     spatial.area(footprint),
     [anchor.x, anchor.y],
     wraps,
-    world && wraps && profile.LatitudeSouth === -90 && profile.LatitudeNorth === 90
+    world && wraps && profile.LatitudeSouth === -90 && profile.LatitudeNorth === 90,
+    state.surface.periodicWidth
   );
 }
 export function createAtlasWorkspace(
@@ -289,7 +295,7 @@ export function createAtlasWorkspace(
   overrides: PhysicalProfileOverrides = {}
 ): AtlasPhysicalWorkspace {
   const frame = spatial.bounds(state.domain.world.reference.domain),
-    mapFrame = spatial.bounds(state.domain.scope.footprint),
+    mapFrame = state.surface.bounds,
     scale = MapScale.fromCells(mapFrame, defaultTerrainCells);
   const profile = atlasPhysicalProfile(parameters, overrides, scale);
   profile.WorldExtentY = [frame[1], frame[3]];
@@ -318,11 +324,11 @@ export function createAtlasWorkspace(
   refreshWorkspaceProtection(state, work);
   return work;
 }
-function crossesChartSeam(state: GenerationState) {
+function spansCylinder(state: GenerationState) {
   if (state.domain.world.reference.boundaryMode !== "cylinder") return false;
   const [west, , east] = spatial.bounds(state.domain.world.reference.domain),
-    [low, , high] = spatial.bounds(state.domain.scope.footprint);
-  return Math.abs(low - west) < 1e-6 && Math.abs(high - east) < 1e-6;
+    [low, , high] = state.surface.bounds;
+  return high - low >= east - west - 1e-6;
 }
 export function refreshWorkspaceProtection(state: GenerationState, work: AtlasPhysicalWorkspace) {
   for (const fixed of work.fixed) releaseWorking(work.map, fixed.values);

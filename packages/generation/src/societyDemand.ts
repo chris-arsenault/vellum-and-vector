@@ -1,4 +1,5 @@
 import {
+  fieldChartFootprint,
   CellList,
   MapScale,
   gridPosition,
@@ -159,7 +160,7 @@ export function* demandSamples(state: GenerationState, work: SocietyWork) {
  */
 export function siteQuality(state: GenerationState, kind: SocietyWorkKind, i: number) {
   const grid = state.surface,
-    ring = neighbors(grid, i, true, spatial.geometryCoverage(grid.scope.footprint)),
+    ring = neighbors(grid, i, true, spatial.geometryCoverage(fieldChartFootprint(grid))),
     v = (name: FieldChannelName, j: number) => societyValue(state, name, j),
     own = v("Elevation", i),
     sea = ring.filter((j) => v("WaterKindCodes", j) === 1);

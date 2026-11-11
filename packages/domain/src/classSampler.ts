@@ -9,7 +9,7 @@ import {
   type AdaptivePointLocator,
 } from "./adaptivePoint";
 import { evaluatePreparedAdaptiveCell } from "./adaptiveHermite";
-import { fieldPosition } from "./gridPeriodicity";
+import { fieldPosition, fieldChartFootprint } from "./gridPeriodicity";
 
 /**
  * The class at a point, reconstructed from per-cell memberships. Each candidate class's
@@ -42,10 +42,13 @@ function classEvaluator(
   const overlays = [...(grid.overlays ?? [])]
     .reverse()
     .filter((overlay) => overlay.channels.includes(channel))
-    .map((overlay) => ({
-      covered: spatial.pointCoverage(overlay.grid.scope.footprint),
-      at: classEvaluator(overlay.grid, channel, locate, includes),
-    }));
+    .map((overlay) => {
+      const covers = spatial.pointCoverage(fieldChartFootprint(overlay.grid));
+      return {
+        covered: (p: Position) => covers(fieldPosition(overlay.grid, p)),
+        at: classEvaluator(overlay.grid, channel, locate, includes),
+      };
+    });
   const base = baseClassSampler(grid, channel, locate, includes);
   return (p: Position) => {
     const overlay = overlays.find((candidate) => candidate.covered(p));

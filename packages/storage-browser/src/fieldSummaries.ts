@@ -1,5 +1,6 @@
 import {
   rectangle,
+  chartFootprint,
   requireChannel,
   spatial,
   type Bounds,
@@ -71,6 +72,7 @@ export async function resourceCategories(
   const field = resource.field!,
     summary = field.summaries?.[channel];
   if (summary && spatial.covers(footprint, field.scope.footprint)) return summary.categories;
+  footprint = chartFootprint(footprint, resource.bounds, resource.periodicWidth);
   const categories = new Set<number>(),
     key = field.channels[channel];
   for (const partition of resource.partitions) {

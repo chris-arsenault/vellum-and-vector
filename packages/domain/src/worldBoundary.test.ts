@@ -3,6 +3,7 @@ import {
   canonicalGeometry,
   canonicalPosition,
   chartCopies,
+  chartFootprint,
   unwrapCoordinates,
 } from "./worldBoundary";
 import { rectangle, spatial } from "./spatial";
@@ -12,6 +13,17 @@ const reference = {
   boundaryMode: "cylinder",
   domain: rectangle([0, 0, 1000, 500]),
 } as World["reference"];
+it("rejoins canonical footprint pieces in a compact working chart", () => {
+  const original = rectangle([950, 100, 1050, 200]);
+  const canonical = canonicalGeometry(reference, original);
+  const continuous = chartFootprint(canonical, [950, 100, 1050, 200], 1000);
+  expect(spatial.bounds(continuous)).toEqual([950, 100, 1050, 200]);
+  expect(spatial.covers(continuous, rectangle([975, 125, 1025, 175]))).toBe(true);
+  expect(spatial.bounds(canonical)).toEqual([0, 100, 1000, 200]);
+  expect(
+    spatial.covers(chartFootprint(reference.domain, [950, 100, 1050, 200], 1000), original)
+  ).toBe(true);
+});
 it("normalizes repeated chart positions and preserves open worlds", () => {
   expect(canonicalPosition(reference, { x: 2010, y: 20, z: 5 })).toEqual({ x: 10, y: 20, z: 5 });
   expect(canonicalPosition({ ...reference, boundaryMode: "none" }, { x: -20, y: 20, z: 0 }).x).toBe(

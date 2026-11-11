@@ -33,9 +33,8 @@ function projectRegular(state: GenerationState, work: AtlasPhysicalWorkspace) {
   work.interpolationKey = key;
   work.samples = work.interpolation.samples;
 }
-/** Project the map's lattice onto its display surface; a child spanning the seam wraps it. */
+/** Project the lattice and retain its world-coordinate aliases, even on an open child frame. */
 export function refreshWorkspaceSamples(state: GenerationState, work: AtlasPhysicalWorkspace) {
   projectRegular(state, work);
-  if (state.domain.world.areas[state.domain.scope.areaId].parentId && work.map.mesh.periodic)
-    state.surface.periodicWidth = work.map.mesh.periodic.width;
+  state.surface.periodicWidth = work.map.mesh.coordinateWidth;
 }

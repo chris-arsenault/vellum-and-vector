@@ -114,7 +114,8 @@ export function supportGroundField(map: PhysicalField, support: ReadBand) {
     map,
     "float64",
     "ground:supportMovement",
-    (cell) => support.get(cell) - map.CrustSupportElevation.get(cell)
+    (cell) =>
+      support.get(cell) + (map.SupportDatum?.get(cell) ?? 0) - map.CrustSupportElevation.get(cell)
   );
   for (let cell = 0; cell < map.mesh.count; cell++)
     stored.CrustSupportElevation.add(cell, movement.get(cell));

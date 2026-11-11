@@ -1,6 +1,31 @@
 import type { Geometry } from "geojson";
 import { gridPosition, gridCellBounds, type Grid } from "./grids";
 import type { Position } from "./model";
+import { chartFootprint } from "./worldBoundary";
+import type { Bounds } from "./spatial";
+
+const footprints = new WeakMap<
+  Grid<string>,
+  { source: Geometry; bounds: Bounds; width?: number; shape: Geometry }
+>();
+/** Coverage in the same continuous chart as a field's samples. Catalog scope stays canonical. */
+export function fieldChartFootprint(grid: Grid<string>): Geometry {
+  const cached = footprints.get(grid);
+  if (
+    cached?.source === grid.scope.footprint &&
+    cached.bounds === grid.bounds &&
+    cached.width === grid.periodicWidth
+  )
+    return cached.shape;
+  const shape = chartFootprint(grid.scope.footprint, grid.bounds, grid.periodicWidth);
+  footprints.set(grid, {
+    source: grid.scope.footprint,
+    bounds: grid.bounds,
+    width: grid.periodicWidth,
+    shape,
+  });
+  return shape;
+}
 
 /** Locate a canonical coordinate in a compact field's continuous seam chart. */
 export function fieldPosition(grid: Grid<string>, p: Position): Position {

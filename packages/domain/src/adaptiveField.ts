@@ -8,6 +8,8 @@ import { adaptivePointSampler } from "./adaptivePoint";
 import type { BlockCache } from "./lattice/blockCache";
 import type { Coverage } from "./lattice/coverage";
 import { foldSamples, generateBand, sampleCoverage } from "./lattice/bandValues";
+import { chartFootprint } from "./worldBoundary";
+import { fieldPosition, fieldChartFootprint } from "./gridPeriodicity";
 
 /** Generated fields retain adaptive physical samples instead of a mandatory uniform raster. */
 export interface AdaptiveField<
@@ -48,15 +50,17 @@ export function createAdaptiveField<
   id: string,
   scope: SpatialScope,
   topology: AdaptiveTopology,
-  cache: BlockCache = topology.coverage.cache
+  cache: BlockCache = topology.coverage.cache,
+  periodicWidth?: number
 ): AdaptiveField<Name> {
+  const footprint = chartFootprint(scope.footprint, topology.bounds, periodicWidth);
   requireThat(
-    spatial.covers(rectangle(topology.bounds), scope.footprint),
+    spatial.covers(rectangle(topology.bounds), footprint),
     "adaptive_extent",
     "Adaptive topology must cover its field footprint."
   );
   const coverage = sampleCoverage(topology.leaves.length, cache),
-    measures = adaptiveMeasures(topology, scope.footprint, coverage);
+    measures = adaptiveMeasures(topology, footprint, coverage);
   return {
     id,
     scope: {
@@ -71,7 +75,8 @@ export function createAdaptiveField<
         0
       ),
     },
-    bounds: spatial.bounds(scope.footprint),
+    bounds: spatial.bounds(footprint),
+    periodicWidth,
     topology,
     coverage,
     active: generateBand(coverage, "uint8", `${id}:active`, (i) => Number(measures.get(i) > 0)),
@@ -91,13 +96,14 @@ export function adaptiveFieldSampler<Name extends string>(
     "missing_channel",
     `Adaptive channel ${channel} requires one value per leaf.`
   );
-  const covers = spatial.pointCoverage(field.scope.footprint);
+  const covers = spatial.pointCoverage(fieldChartFootprint(field));
   const categorical =
     discrete ||
     ["category", "cell-index"].includes(field.units[channel] ?? "") ||
     ["category", "extensive"].includes(field.quantities?.[channel] ?? "");
   const reconstructed = categorical ? null : adaptivePointSampler(field.topology, values);
   return (p: { x: number; y: number }): number => {
+    p = fieldPosition(field, { ...p, z: 0 });
     if (!covers({ x: p.x, y: p.y, z: 0 })) return NaN;
     const i = adaptiveLeafAt(field.topology, p.x, p.y);
     if (i < 0 || !field.active.get(i)) return NaN;

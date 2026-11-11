@@ -2,6 +2,7 @@ import {
   gridPosition,
   gridDistance,
   fieldPosition,
+  fieldChartFootprint,
   neighbors,
   requireThat,
   requireChannel,
@@ -29,8 +30,9 @@ export class RouteHeap {
   }
 }
 function nearest(grid: Grid, point: Position, index: SpatialIndex, cells: Int32Array) {
+  point = fieldPosition(grid, point);
   requireThat(
-    spatial.covers(grid.scope.footprint, { type: "Point", coordinates: [point.x, point.y] }),
+    spatial.covers(fieldChartFootprint(grid), { type: "Point", coordinates: [point.x, point.y] }),
     "route_extent",
     "Route waypoints must lie inside the sampled geography."
   );
@@ -58,7 +60,7 @@ function routeNeighbors(grid: Grid) {
   const cells = new CellList(),
     offsets = new Int32Array(grid.active.length).fill(-1),
     counts = new Int32Array(grid.active.length),
-    covers = spatial.geometryCoverage(grid.scope.footprint);
+    covers = spatial.geometryCoverage(fieldChartFootprint(grid));
   return {
     cells,
     counts,

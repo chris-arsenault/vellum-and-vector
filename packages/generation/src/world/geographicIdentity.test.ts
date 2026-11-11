@@ -1,8 +1,34 @@
 import { expect, it } from "vitest";
-import { rectangle, type AtlasFeature } from "@atlas/domain";
+import { point, rectangle, spatial, type AtlasFeature } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
 import { retainGeographicIdentities } from "./geographicIdentity";
+
+it("publishes point and area features in canonical coordinates from a continuous working chart", () => {
+  const state = landscape();
+  state.domain.world.id = "00000000-0000-4000-8000-000000000001";
+  state.domain.world.reference.domain = rectangle([0, 0, 4000, 2000]);
+  state.domain.world.reference.boundaryMode = "cylinder";
+  const place = generatedFeature(
+      state,
+      "site",
+      "Site",
+      "peak",
+      "geology",
+      point({ x: 4100, y: 1000, z: 0 })
+    ),
+    area = generatedFeature(
+      state,
+      "area",
+      "Area",
+      "forest",
+      "ecology",
+      rectangle([3800, 500, 4200, 1500])
+    );
+  expect(place.geometry).toEqual(point({ x: 100, y: 1000, z: 0 }));
+  expect(spatial.covers(area.geometry, point({ x: 3900, y: 1000, z: 0 }))).toBe(true);
+  expect(spatial.covers(area.geometry, point({ x: 100, y: 1000, z: 0 }))).toBe(true);
+});
 
 function river(state: ReturnType<typeof landscape>, key: string, coordinates: number[][]) {
   state.domain.world.id = "00000000-0000-4000-8000-000000000001";

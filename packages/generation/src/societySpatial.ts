@@ -1,5 +1,6 @@
 import {
   gridPosition,
+  fieldChartFootprint,
   MapScale,
   gridDistance,
   overlappingAdaptiveLeaves,
@@ -24,7 +25,7 @@ export class SocietyNeighbors {
   ) {
     this.starts = new Int32Array(grid.active.length).fill(-1);
     this.counts = new Int32Array(grid.active.length);
-    this.covers = spatial.geometryCoverage(grid.scope.footprint);
+    this.covers = spatial.geometryCoverage(fieldChartFootprint(grid));
   }
   *at(i: number): Iterable<number> {
     if (this.starts[i] < 0) {

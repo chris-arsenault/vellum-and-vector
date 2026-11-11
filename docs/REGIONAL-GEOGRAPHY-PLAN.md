@@ -18,20 +18,6 @@ the implementation of the current regional pipeline. Society, economy, POI categ
 and music still require the separate design session. Further cosmetic tuning is not
 the next priority.
 
-## Periodic regional working frame — pending (phase 14)
-
-A region crossing the world's horizontal seam can allocate the whole world width even
-though its compact chart is much narrower. `refinementFrame` already computes compact
-bounds; regional capture discards them, and shared initialization rebuilds bounds from
-the split footprint. A bounds-only change is insufficient: topology coverage and geometry
-operations need a consistent continuous chart with canonical periodic input and output.
-Preserve that frame through shared initialization and lattice construction, retaining
-periodic sampling and captured identities. Do not add a separate
-regional grid or freeze parent values. Exit: the child develops on a compact working frame
-and renders contiguous geography at the intended cell span. Reuse the saved parent and
-child rather than regenerating upstream history. Report framing is a separate presentation
-concern and does not repair the generator's working allocation.
-
 ## Rivers — diagnosis (phase 2)
 
 Evidence: one generated draft world (seed 73), the coastal region M2 refined at standard

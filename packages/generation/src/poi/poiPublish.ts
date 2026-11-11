@@ -1,4 +1,4 @@
-import { point, type AtlasFeature } from "@atlas/domain";
+import { canonicalPosition, point, type AtlasFeature } from "@atlas/domain";
 import {
   generationFeature,
   generationFeatures,
@@ -279,7 +279,9 @@ function followRiver(state: RegionalState, item: CarriedPlace, developedAt: Map<
     return logCarry(state, item, "follows its river: a line, not moved");
   writeGenerationFeature(state, {
     ...captured,
-    geometry: point(nativePosition(state.physical, cell)),
+    geometry: point(
+      canonicalPosition(state.domain.world.reference, nativePosition(state.physical, cell))
+    ),
     attributes: {
       ...captured.attributes,
       capturedRecord: captured.attributes.capturedRecord ?? {

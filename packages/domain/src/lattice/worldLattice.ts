@@ -27,6 +27,7 @@ export interface WorldLatticeOptions {
   anchor?: [number, number];
   wrapX?: boolean;
   closePoles?: boolean;
+  coordinateWidth?: number;
 }
 function worldFrame(
   bounds: [number, number, number, number],
@@ -73,6 +74,7 @@ export function createWorldLattice(
       area: options.area ?? (bounds[2] - bounds[0]) * (bounds[3] - bounds[1]),
       padding,
       periodic,
+      coordinateWidth: options.coordinateWidth,
       openBoundary: !closePoles,
     });
   let lattice = build();

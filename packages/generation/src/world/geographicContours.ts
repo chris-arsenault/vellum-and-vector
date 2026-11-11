@@ -1,4 +1,5 @@
 import {
+  canonicalGeometry,
   createGrid,
   fieldContour,
   rectangle,
@@ -33,6 +34,14 @@ export function intersectAreas(a: Geometry | null, b: Geometry | null): Geometry
   const left = areaGeometry(a),
     right = areaGeometry(b);
   return left && right ? areaGeometry(spatial.intersection(left, right)) : null;
+}
+
+/** Finish a continuous working contour in the map's canonical geographic footprint. */
+export function clipGeographicArea(state: GenerationState, shape: Geometry | null) {
+  return intersectAreas(
+    shape && canonicalGeometry(state.domain.world.reference, shape),
+    state.domain.scope.footprint
+  );
 }
 
 export function lakeFootprint(
@@ -84,7 +93,7 @@ export function oceanFootprint(state: GenerationState) {
     state.contours
   );
   releaseWorking(map, depths);
-  return intersectAreas(shape, state.domain.scope.footprint);
+  return clipGeographicArea(state, shape);
 }
 
 export function membershipSampler(state: GenerationState, includes: (cell: number) => number) {

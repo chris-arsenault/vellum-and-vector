@@ -1,4 +1,12 @@
-import { createGrid, point, rectangle, residentBand, spatial, type Bounds } from "@atlas/domain";
+import {
+  canonicalGeometry,
+  createGrid,
+  point,
+  rectangle,
+  residentBand,
+  spatial,
+  type Bounds,
+} from "@atlas/domain";
 import { expect, it } from "vitest";
 import { landscape } from "../mapFixtures";
 import { createField } from "./field";
@@ -6,12 +14,27 @@ import { atlasPhysicalProfile } from "./atlasProfile";
 import { createWorldMesh } from "./worldMesh";
 import {
   areaGeometry,
+  clipGeographicArea,
   intersectAreas,
   fillSmallHoles,
   combinedContour,
   membershipContour,
   membershipSampler,
 } from "./geographicContours";
+
+it("publishes both sides of a continuous regional contour crossing the world seam", () => {
+  const state = landscape(),
+    reference = state.domain.world.reference;
+  reference.domain = rectangle([0, 0, 4000, 2000]);
+  reference.boundaryMode = "cylinder";
+  state.domain.scope.footprint = canonicalGeometry(reference, rectangle([3600, 400, 4400, 1600]));
+  const shape = clipGeographicArea(state, rectangle([3800, 600, 4200, 1400]))!;
+  const covers = spatial.pointCoverage(shape);
+  expect(covers({ x: 3900, y: 1000, z: 0 })).toBe(true);
+  expect(covers({ x: 100, y: 1000, z: 0 })).toBe(true);
+  expect(covers({ x: 2000, y: 1000, z: 0 })).toBe(false);
+  expect(spatial.covers(state.domain.scope.footprint, shape)).toBe(true);
+});
 
 it("retains polygon area when chart clipping also returns isolated boundary lines", () => {
   const shape = areaGeometry({

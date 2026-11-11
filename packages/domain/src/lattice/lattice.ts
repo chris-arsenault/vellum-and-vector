@@ -33,6 +33,8 @@ export interface Lattice {
   readonly spacing: number;
   readonly openBoundary: boolean;
   readonly periodic?: PeriodicFrame;
+  /** World-coordinate aliases; independent of whether frame edges are neighbors. */
+  readonly coordinateWidth?: number;
   readonly contentRadius: number;
   readonly workRadius: number;
   /** Largest degree; edge slots are `edge < degree(i)`. */
