@@ -74,6 +74,12 @@ export const featureDefinitions: Definition[] = [
   ["conservation", "landUse", "Conservation", "Land use and extraction", "Land use"],
   ["tapping", "magicPractices", "Fire tapping", "Land use and extraction", "Extraction"],
   ["quarrying", "magicPractices", "Crystal quarrying", "Land use and extraction", "Extraction"],
+  ["hearthRing", "magicPractices", "Hearth rings", "Society and culture", "Magic practices"],
+  ["readIce", "magicPractices", "Read ice", "Society and culture", "Magic practices"],
+  ["heldShore", "magicPractices", "Held shores", "Society and culture", "Magic practices"],
+  ["boundWood", "magicPractices", "Bound woods", "Society and culture", "Magic practices"],
+  ["swornGround", "magicPractices", "Sworn ground", "Society and culture", "Magic practices"],
+  ["vowedGround", "magicPractices", "Vowed ground", "Society and culture", "Magic practices"],
   ["fire-forge", "magicPractices", "Fire forges", "Society and culture", "Magic practices"],
   ["aurora-archive", "magicPractices", "Aurora archives", "Society and culture", "Magic practices"],
   [

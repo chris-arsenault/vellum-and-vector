@@ -20,3 +20,5 @@ import "../human/landYields";
 import "../human/travel";
 import "../human/crustCarrier";
 import "../human/builtHold";
+import "../human/peopleRules";
+import "../human/craftBreaks";

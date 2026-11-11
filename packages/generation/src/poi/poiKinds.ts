@@ -84,6 +84,12 @@ export const poiKindIds = {
     "fireCore",
     "wardRing",
     "wardLine",
+    "hearthRing",
+    "readIce",
+    "heldShore",
+    "boundWood",
+    "swornGround",
+    "vowedGround",
   ],
   settlements: [
     "settlement",

@@ -1,4 +1,6 @@
 import { requireThat } from "@atlas/domain";
+import { ask } from "../coupling/answers";
+import { nativeContext } from "../world/context";
 import { generationBindings } from "../generationBindings";
 import { deadOn, recordEraEvents, recordEvent } from "./eventRegistry";
 import { landHazards, type LandHazard } from "./hazardCatalogue";
@@ -38,11 +40,13 @@ function fall(
   place: KnownPlace,
   hazard: LandHazard,
   cells: readonly number[],
-  magnitude: number
+  magnitude: number,
+  /** Per cell: the share of what strikes that lands. */
+  harm: { get(cell: number): number }
 ) {
   const before = deadOn(map, place),
     intensity = working(map, "struck");
-  for (const cell of cells) intensity.set(cell, magnitude);
+  for (const cell of cells) intensity.set(cell, magnitude * harm.get(cell));
   runOperation(map, wearHumanLayers, { map, mix: hazard.mix, intensity });
   map.coverage.release(intensity);
   return Math.round(deadOn(map, place) - before);
@@ -51,14 +55,16 @@ function strike(
   state: GenerationState,
   context: MapProcessContext,
   place: KnownPlace,
-  era: { id: string; years: number }
+  era: { id: string; years: number; harm: Float64Array }
 ) {
   const map = state.physical!.map;
   for (const hazard of landHazards) {
     const { cells, worst, yearly } = exposure(map, place, hazard);
     if (worst < 0 || context.random() >= -Math.expm1(-yearly * era.years)) continue;
     const magnitude = Math.min(1, hazard.severity * (0.5 + context.random() * 1.5)),
-      casualties = fall(map, place, hazard, cells, magnitude);
+      casualties = fall(map, place, hazard, cells, magnitude, {
+        get: (cell) => era.harm[cell],
+      });
     recordEvent(state, {
       kind: hazard.kind,
       era: era.id,
@@ -87,10 +93,14 @@ export const humanEvents: MapProcess = {
     "event",
     (state: GenerationState, context: MapProcessContext) => {
       requireThat(state.physical, "physical_workspace", "People live on generated land.");
-      const epoch = context.epochs.at(-1),
-        era = { id: epoch?.id ?? "present", years: epoch?.duration ?? 0 },
+      const map = state.physical.map,
+        epoch = context.epochs.at(-1),
+        // What a blow takes is read once, as the era left the land: one place's disaster
+        // does not change what the next place's takes.
+        asked = ask(map, "harm", nativeContext(state, context, 0)),
+        harm = Float64Array.from({ length: map.mesh.count }, (_, cell) => asked.get(cell)),
+        era = { id: epoch?.id ?? "present", years: epoch?.duration ?? 0, harm },
         town = Number(generationBindings(context).parameters.townThreshold);
-      const map = state.physical.map;
       recordEraEvents(state, { map, era: era.id, town }, (place) =>
         strike(state, context, place, era)
       );

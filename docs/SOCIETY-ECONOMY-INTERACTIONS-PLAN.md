@@ -641,6 +641,97 @@ Exit: for each system, a region where it is practised differs visibly in land,
 settlement and identity from one where it is not, and losing access leaves
 altered ground and places behind. No system is reduced to a traded stock.
 
+Agreed with the owner on 2026-11-11 (owner direction, a requirement):
+
+- Magic that people use is extraordinary. It is not people hauling a system's
+  material, not a craft that improves a yield, and not a ritual. Each practice
+  **breaks a rule an existing process obeys**, and the map shows something that
+  could not exist otherwise. What a system does is designed from the lore bible
+  and from the existing process it breaks.
+- Breaks are injected through the architecture. No process holds a special
+  case for a system.
+- What a practice leaves is laid down while it is practised, like worked land.
+  It is not what happens when the magic stops.
+
+Mechanisms decided while building (agent decisions):
+
+- A break is a third kind of answer to a shared question, beside stating,
+  adding and scaling: over the share of a cell the breaker holds, the answer
+  is the breaker's own and whatever else was said is set aside. An answer
+  can be explained cell by cell, naming who broke it and over what share.
+- A rule can be broken only if its process asks it. The rules people's passes
+  held as fixed numbers are now questions with their old behaviour as the base
+  answer: what hunger and a hazard take, who is free to move, who builds, how
+  fast things are forgotten, how readily an allegiance gives way, who counts
+  as present, how good the growing season is, how far the ground's height
+  holds against a climb, where the sea stands. Steps between cells that do not
+  touch are offered the same way and taken by the travel that reaches out from
+  a place: a realm's hold, a place's country, and the ways between places.
+  The going that feeds, gathers and brings neighbours into contact still runs
+  only between cells that touch. What the land itself does to people between
+  geological epochs (burial, ice, impacts) does not ask what a blow takes.
+- A craft is the magic system a people know how to work. It is held in the
+  identity column beside tongue, faith, custom and allegiance, learned only on
+  ground the system's medium reaches, carried wherever its holders go, and
+  practised only on the medium. How far it is practised on a cell is the share
+  of the cell's people who hold it times the share of the ground the medium
+  holds; that is the share of the cell on which its breaks apply.
+- What each craft breaks:
+  - Fire, hearth-keeping: the growing season is the hearth's, and the ground's
+    height holds nothing against a way: no climb costs and no step is too
+    steep.
+  - Aurora, reading: nothing is forgotten.
+  - Pressure, diving: the sea is held off the shallows beside the divers'
+    shore. A cell more than half held is dry; less, and it is sea as before.
+  - Greenwood, tending: the bound do not move and do not build, and hunger and
+    hurt take no one.
+  - Salt, raking: a sworn allegiance does not give way, and the remembered
+    dead of a place count as present.
+  - Hallowed, the vow: nothing is harmed inside; the ground beside it takes
+    its own share and the vow's.
+  - Veil, door-keeping: a door kept at both ends is a step between two far
+    places.
+- The share of a cell's people who hold a craft grows toward the share of
+  their ground its medium holds and no further. Two layers of a cell's
+  identity that differ only in craft are one people: when a cell holds more
+  layers than it can keep, such a pair is merged before any tongue or custom
+  is lost.
+- Each craft's ground is a place on the map where it is practised over a
+  quarter of a cell: hearth ring, read ice, bound wood, sworn ground, vowed
+  ground. A held shore is the sea bed the divers hold dry. A way that takes a
+  door is drawn up to it and on from its far end.
+- Magic is worked out again at the end of each era from the land as people
+  left it, so wards and killing grounds follow people, and published once
+  more after the eras. The water is settled whole before it is redrawn; not
+  doing so was what hid the dam lakes in M5, not the magic supply.
+
+Not built, with the reason:
+
+- Fire breaking walls in a siege: sieges are read from allegiance, and nothing
+  models a wall holding.
+- The hearth's season reaching climate and ecology: only people's yields ask
+  the season; vegetation inside a ring is still the climate's.
+- Reading hastening the ice's end, storms steered by the deep, and tongues
+  and faiths crossing a door: each needs its own rule made a question first.
+- Readers taking the tongue of the remains they read over. It was built as a
+  step inside people's pass that named Aurora, which is the special case the
+  owner ruled out, so it was removed. It needs "whose tongue the born take"
+  made a question the identity pass asks.
+- The practitioners' price beyond the bound: burned hands, lost selves, the
+  absent and the unforgetting are told in each place's record, not modelled.
+- Whether a held sea bed stays dry through the lake solver was not traced: a
+  held cell is a hollow below the sea beside it, and rain may fill it.
+- Vowed ground does not appear on the draft world. Hallowed's wards there are
+  too weak for a quarter of any cell to be under the vow; that is Hallowed's
+  own strength, not the vow's.
+- A craft is not forgotten by people who leave its medium; they hold it and
+  cannot practise it.
+- The old per-era supply of the dead and tenure to Salt and Hallowed is not
+  run and its operation is deleted. Salt and Hallowed find their sources each
+  era from the land as it stands; nothing ages or adds to their stocks during
+  the human eras.
+- Regional maps keep their parent's craft places until M7.
+
 ### M7 — Regions run the same operations
 
 A child map inherits the captured layers and named places and runs the same

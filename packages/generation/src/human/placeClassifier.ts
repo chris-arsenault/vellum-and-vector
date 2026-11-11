@@ -86,9 +86,14 @@ function gathered(tops: Int32Array) {
   return zones;
 }
 /** The dense zones of a map holding at least `least` townsfolk, greatest first. */
-export function denseZones(map: PhysicalField, support: Values, least: number): DenseZone[] {
-  const people = map[humanLayers.population],
-    town = (cell: number) => Math.max(0, people.get(cell) - support.get(cell)),
+export function denseZones(
+  map: PhysicalField,
+  support: Values,
+  least: number,
+  /** The people per square kilometre who count as being on each cell. */
+  people: Values = map[humanLayers.population]
+): DenseZone[] {
+  const town = (cell: number) => Math.max(0, people.get(cell) - support.get(cell)),
     tops = climb(
       map,
       (cell) => people.get(cell) > 0 && town(cell) > countryShare * people.get(cell),

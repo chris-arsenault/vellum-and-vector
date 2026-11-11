@@ -98,7 +98,7 @@ describe("the land and its people meet without naming each other", () => {
     // the generator may import from people's code is their processes, their read view, the
     // run's memory of places, works and events, and the catalogue of the land's hazards.
     const named = new RegExp(
-      `\\.(${bands.join("|")})\\b|["'\`](${bands.join("|")})["'\`]|(humanLayers|humanRemains|identityColumn)[.\\[]|human/(?!humanChannels|place|landProcesses|humanLayers"|identity(Reads|Processes)"|traditions"|(work|event)Registry"|hazardCatalogue")`
+      `\\.(${bands.join("|")})\\b|["'\`](${bands.join("|")})["'\`]|(humanLayers|humanRemains|identityColumn)[.\\[]|human/(?!humanChannels|place|landProcesses|humanLayers"|identity(Reads|Processes)"|traditions"|(work|event)Registry"|(hazard|craft)Catalogue")`
     );
     expect(
       lines(

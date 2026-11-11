@@ -1,5 +1,4 @@
 import { MapScale, requireThat } from "@atlas/domain";
-import { ask } from "../coupling/answers";
 import { generationBindings } from "../generationBindings";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import { runOperation } from "../processOperation";
@@ -8,7 +7,7 @@ import { nativeContext } from "../world/context";
 import { liveIdentities } from "./identityPass";
 import { liveRealms } from "./realmPass";
 import { passage } from "./reach";
-import { travelStep } from "./travel";
+import { goingOn } from "./travel";
 
 /**
  * Identity and allegiance in a map's sequence. In every human era, after people have lived
@@ -31,9 +30,11 @@ function setting(state: GenerationState, context: MapProcessContext) {
   const map = state.physical.map,
     era = context.epochs.at(-1),
     parameters = generationBindings(context).parameters,
-    step = travelStep(map, ask(map, "travelFriction", nativeContext(state, context, 0)));
+    asking = nativeContext(state, context, 0),
+    step = goingOn(map, asking);
   return {
     map,
+    asking,
     era,
     parameters,
     step,
@@ -47,12 +48,13 @@ export const humanIdentityEra: MapProcess = {
     "human.identity-era",
     { kind: "epoch", fraction: 1 },
     (state, context, years) => {
-      const { map, era, parameters, step, variable } = setting(state, context),
+      const { map, asking, era, parameters, step, variable } = setting(state, context),
         going = passage(map, step, map.scale.length(Number(parameters.cityReach)));
       try {
         runOperation(map, liveIdentities, {
           state,
           map,
+          context: asking,
           step,
           going,
           era: era?.id ?? "present",
@@ -74,10 +76,11 @@ export const humanRealmEra: MapProcess = {
     "human.realm-era",
     { kind: "epoch", fraction: 1 },
     (state, context, years) => {
-      const { map, era, parameters, step, variable } = setting(state, context);
+      const { map, asking, era, parameters, step, variable } = setting(state, context);
       runOperation(map, liveRealms, {
         state,
         map,
+        context: asking,
         step,
         era: era?.id ?? "present",
         years,

@@ -1,4 +1,3 @@
-import type { ReadBand } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { runOperation } from "../processOperation";
 import { runMemory } from "../runMemory";
@@ -7,7 +6,6 @@ import { countryOf } from "./hinterlands";
 import { travelWays } from "./layerOperations";
 import { knownPlaces } from "./placeRegistry";
 import { passedOn } from "./reach";
-import { travelStep } from "./travel";
 
 /**
  * The country around the known places as an era leaves it: each living place's hinterland,
@@ -84,8 +82,8 @@ function kept<W extends { from: number; to: number; cost: number }>(all: readonl
 }
 export interface CountrySetting {
   map: PhysicalField;
-  /** The answered cost of crossing each cell. */
-  friction: Pick<ReadBand, "get">;
+  /** The cost of a step between neighbouring cells, as the land now answers for it. */
+  step: (from: number, to: number) => number;
   /** The travel distance over which a place is felt. */
   range: number;
   /** Travellers a year that make a road. */
@@ -94,12 +92,12 @@ export interface CountrySetting {
   years: number;
 }
 export function recordCountry(state: GenerationState, setting: CountrySetting) {
-  const { map, friction, range, roadTravellers, years } = setting,
+  const { map, step, range, roadTravellers, years } = setting,
     living = knownPlaces(state).filter((place) => !place.abandoned && !place.absorbedBy),
     country = countryOf(
       map,
       living.map((place) => place.anchor),
-      travelStep(map, friction),
+      step,
       farthest * range
     ),
     worn = map.coverage.scratch("float64", "human:worn", map.mesh.count);

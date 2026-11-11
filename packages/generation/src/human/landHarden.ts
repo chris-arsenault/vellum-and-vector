@@ -1,4 +1,5 @@
 import { humanLayers } from "@atlas/domain";
+import { ask } from "../coupling/answers";
 import { defineCommand, runOperation } from "../processOperation";
 import { compileLayerMix, fullStandingPerBuiltKm2 } from "./layerCatalogue";
 import { layHumanLayer, wearHumanLayers } from "./layerOperations";
@@ -15,16 +16,17 @@ const unkept = compileLayerMix({ neglect: 1 });
 export const hardenPlaces = defineCommand(
   "human.land.harden",
   "elapsed",
-  ({ map, facts }: LandWork) => {
+  ({ map, facts, context }: LandWork) => {
     if (!facts.builds) return;
-    const built = map[humanLayers.builtUp],
+    const builders = ask(map, "building", context),
+      built = map[humanLayers.builtUp],
       works = map[humanLayers.standing],
       raised = working(map, "raised"),
       empty = working(map, "empty"),
       building = 1 - Math.exp(-facts.years / buildingYears);
     for (let cell = 0; cell < map.mesh.count; cell++) {
       if (!habitable(map, cell)) continue;
-      const needed = Math.min(1, people(map, cell) / peoplePerBuiltKm2),
+      const needed = Math.min(1, people(map, cell) / peoplePerBuiltKm2) * builders.get(cell),
         standing = built.get(cell);
       if (needed > standing) raised.set(cell, (needed - standing) * building);
       else if (standing > 0)

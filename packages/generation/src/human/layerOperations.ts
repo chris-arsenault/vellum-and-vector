@@ -30,6 +30,8 @@ export interface MoveLayer extends OnMap {
 }
 export interface Dwelling extends OnMap {
   years: number;
+  /** Per cell: how fast ways and kept lines fade, against the usual rate; the usual if absent. */
+  fading?: Values;
 }
 export interface ConvertLayer extends OnMap {
   from: HumanLayerId;
@@ -73,7 +75,7 @@ export const moveHumanLayer = defineCommand(
 export const dwellOnLand = defineCommand(
   "human.layers.dwell",
   "elapsed",
-  ({ map, years }: Dwelling) => humanLayerWriter(map).dwell(years),
+  ({ map, years, fading }: Dwelling) => humanLayerWriter(map).dwell(years, fading),
   []
 );
 /** A geological epoch passes: the ways and kept lines of whoever lived before it fade. */

@@ -7,6 +7,7 @@ import { peoplePerBuiltKm2 } from "./passFacts";
 import { denseZones, ruinSites } from "./placeClassifier";
 import { recordCountry } from "./placeCountry";
 import { knownPlaces, recordPlaces, recordRemains } from "./placeRegistry";
+import { goingOn } from "./travel";
 
 /** What recording an era's places needs to know of the map's settings. */
 export interface EraPlaces {
@@ -30,7 +31,12 @@ export interface EraPlaces {
 export function recordEraPlaces(state: GenerationState, setting: EraPlaces) {
   const { map, context, era, least } = setting;
   // A place already known lasts while half a town's people remain.
-  recordPlaces(state, denseZones(map, ask(map, "support", context), least / 2), era, least);
+  recordPlaces(
+    state,
+    denseZones(map, ask(map, "support", context), least / 2, ask(map, "presence", context)),
+    era,
+    least
+  );
   // Remains as large as a town's buildings, where no known place stands, are ruins too.
   recordRemains(state, ruinSites(map, least / peoplePerBuiltKm2), era);
   // A place is named in the tongue most of its people spoke when it was first seen.
@@ -40,7 +46,7 @@ export function recordEraPlaces(state: GenerationState, setting: EraPlaces) {
       place.tongue = tongues.code[place.anchor];
   recordCountry(state, {
     map,
-    friction: ask(map, "travelFriction", context),
+    step: goingOn(map, context),
     range: setting.range,
     roadTravellers: setting.roadTravellers,
     years: setting.years,

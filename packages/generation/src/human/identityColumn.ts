@@ -12,20 +12,26 @@ export interface IdentityLayer {
   faith: number;
   custom: number;
   allegiance: number;
+  /** The magic system its people know how to work, by the system's number; 0 is none. */
+  craft: number;
 }
 /** What a layer names, without how many hold it. */
-export type IdentityTraditions = Pick<IdentityLayer, "tongue" | "faith" | "custom" | "allegiance">;
+export type IdentityTraditions = Pick<
+  IdentityLayer,
+  "tongue" | "faith" | "custom" | "allegiance" | "craft"
+>;
 /** A cell's column, newest layer first. Older layers lie under newer ones. */
 export type IdentityColumn = IdentityLayer[];
 
-const nothing: IdentityTraditions = { tongue: 0, faith: 0, custom: 0, allegiance: 0 };
+const nothing: IdentityTraditions = { tongue: 0, faith: 0, custom: 0, allegiance: 0, craft: 0 };
 /** Fewer people than this hold nothing worth a layer. */
 const trace = 1e-6;
 const sameTraditions = (a: IdentityTraditions, b: IdentityTraditions) =>
   a.tongue === b.tongue &&
   a.faith === b.faith &&
   a.custom === b.custom &&
-  a.allegiance === b.allegiance;
+  a.allegiance === b.allegiance &&
+  a.craft === b.craft;
 /** Two holdings of the same traditions are one layer: its people add and its state is theirs. */
 function join(into: IdentityLayer, from: IdentityLayer) {
   const people = into.people + from.people;
@@ -34,15 +40,34 @@ function join(into: IdentityLayer, from: IdentityLayer) {
   into.age = (into.age * into.people + from.age * from.people) / people;
   into.people = people;
 }
+/** The layer of a column that fewest people hold. */
+function least(column: IdentityColumn) {
+  let thinnest = 0;
+  for (let n = 1; n < column.length; n++)
+    if (column[n].people < column[thinnest].people) thinnest = n;
+  return thinnest;
+}
+/** The thinnest layer that has a twin naming the same four traditions, or -1 if none has. */
+function twinned(column: IdentityColumn) {
+  let found = -1;
+  for (let a = 0; a < column.length; a++)
+    for (let b = a + 1; b < column.length; b++) {
+      if (alike(column[a], column[b]) < 4) continue;
+      const thinner = column[a].people < column[b].people ? a : b;
+      if (found < 0 || column[thinner].people < column[found].people) found = thinner;
+    }
+  return found;
+}
 /** The column without its empty layers, and no deeper than a cell can hold. */
 export function settleColumn(column: IdentityColumn) {
   for (let n = column.length - 1; n >= 0; n--) if (column[n].people <= trace) column.splice(n, 1);
   while (column.length > identitySlots) {
-    // The thinnest layer is lost into the layer most like it: the one sharing the most
-    // traditions, and of those the nearest, so a few people keep as much as they can.
-    let thinnest = 0;
-    for (let n = 1; n < column.length; n++)
-      if (column[n].people < column[thinnest].people) thinnest = n;
+    // Two layers that differ only in their craft are one people, some of whom have learned
+    // it: the thinner of such a pair goes first, so no tongue or custom is lost to a craft.
+    // Otherwise the thinnest layer is lost into the layer most like it: the one sharing the
+    // most traditions, and of those the nearest, so a few people keep as much as they can.
+    const twin = twinned(column),
+      thinnest = twin >= 0 ? twin : least(column);
     const [lost] = column.splice(thinnest, 1);
     let heir = 0;
     for (let n = 1; n < column.length; n++) {
@@ -116,6 +141,7 @@ export function overlayColumn(
       faith: changes.faith ?? layer.faith,
       custom: changes.custom ?? layer.custom,
       allegiance: changes.allegiance ?? layer.allegiance,
+      craft: changes.craft ?? layer.craft,
     }),
     giving = column.filter((layer) => !sameTraditions(layer, changed(layer))),
     without = Math.max(0, unheld);

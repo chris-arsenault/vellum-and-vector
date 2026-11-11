@@ -1,11 +1,6 @@
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import { initializeMagic, reservoirStock, systemSeed, type MagicField } from "./magicState";
-import {
-  locateMagicSources,
-  magicSourceStrategies,
-  supplyMagicSources,
-  supplySocietyEvents,
-} from "./magicSources";
+import { locateMagicSources, magicSourceStrategies, supplyMagicSources } from "./magicSources";
 import { propagateMagic, magicPropagationStrategies } from "./magicPropagation";
 import {
   magicThermalFeedback,
@@ -26,7 +21,7 @@ import { stormWrites } from "./magicWeather";
 import { saltWrites } from "./magicSalt";
 import { hallowedWrites } from "./magicHallowed";
 import { veilWrites } from "./magicVeil";
-import { hallowedOnTheColumn, magicOnTheColumn } from "../rock/rockMagic";
+import { magicOnTheColumn } from "../rock/rockMagic";
 import { nativeContext } from "./context";
 import { exchangeMagicWater } from "./magicGroundwater";
 import { recordWildZoneHistory } from "./wildZoneHistory";
@@ -213,40 +208,6 @@ function refreshFields(state: GenerationState, context: MapProcessContext, field
   for (const field of fields.filter((field) => field.definition.effects.tearing > 0))
     evaluateField(state, field, bound.seed, index, epochs[index]);
 }
-/**
- * Sources that answer to people, the dead and the ground they have kept, supplied for a span
- * people have lived. No sequence runs this yet: run in every human era as the old society
- * cycle ran it, it hides the lakes people dam and removes every killing ground, so it waits
- * for the per-system behaviour of magic use to be settled.
- */
-const supplyPeopleSources = mapCommand(
-  "magic.people-supply",
-  "event",
-  (state, context) => {
-    if (!state.physical?.magic) return;
-    const bound = generationBindings(context),
-      index = physicalEpochIndex(bound.settings.epochs, context.epochs);
-    for (const field of state.physical.magic.fields) {
-      const activity = sourceActivity(field, bound.settings.epochs[index]);
-      if (field.definition.phase === "society")
-        supplyMagicSources(state, field, bound.seed, index, activity);
-      supplySocietyEvents(state, field, bound.seed, index, activity);
-    }
-  },
-  []
-);
-export const advancePeopleMagic = mapCommand(
-  "magic.people-events",
-  "event",
-  (state, context) => {
-    if (!state.physical?.magic) return;
-    executeMapOperation(supplyPeopleSources, state, context);
-    executeMapOperation(evaluateSocietyMagic, state, context);
-    hallowedWrites(state);
-    hallowedOnTheColumn(state);
-  },
-  []
-);
 
 /** Shared material response. No source supply, stock aging or completed-history write occurs here. */
 export const reactMagicMaterial = defineCommand(

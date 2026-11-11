@@ -6,6 +6,7 @@ import { knownWays, type KnownWay } from "./human/placeCountry";
 import { knownPlaces, townSize } from "./human/placeRegistry";
 import { generatedFeature, generatedId, putGeneratedNetwork } from "./mapFeatures";
 import type { GenerationState, MapProcessContext } from "./process";
+import type { PhysicalField } from "./world/field";
 
 /**
  * The ways people made, published from the country read around the known places. A way runs
@@ -38,6 +39,37 @@ function course(points: Point[]): Point[] {
   return line;
 }
 
+/** A way's cells as unbroken runs: a new run begins wherever the next cell is not a neighbour. */
+function stretches(map: PhysicalField, cells: readonly number[]) {
+  const runs: number[][] = [];
+  cells.forEach((cell, n) => {
+    const before = cells[n - 1];
+    let touching = false;
+    for (let edge = 0; n > 0 && edge < map.mesh.degree(before); edge++)
+      touching ||= map.mesh.neighbor(before, edge) === cell;
+    if (touching) runs.at(-1)!.push(cell);
+    else runs.push([cell]);
+  });
+  return runs.filter((run) => run.length > 1);
+}
+/** The line a way is drawn as: one course, or one for each run between its crossings. */
+function drawn(state: GenerationState, runs: readonly number[][]) {
+  const map = state.physical!.map,
+    lines = runs.map((run) =>
+      course(
+        unwrapCoordinates(
+          run.map((cell) => [
+            map.mesh.origin[0] + map.mesh.x(cell),
+            map.mesh.origin[1] + map.mesh.y(cell),
+          ]),
+          state.surface.periodicWidth
+        ) as Point[]
+      )
+    );
+  return lines.length === 1
+    ? { type: "LineString" as const, coordinates: lines[0] }
+    : { type: "MultiLineString" as const, coordinates: lines };
+}
 /**
  * The ways a realm keeps up as highways: the most travelled land ways out of its seat, as
  * many as the map's setting gives a realm.
@@ -62,26 +94,19 @@ function way(state: GenerationState, known: KnownWay, highway: boolean) {
     places = new Map(knownPlaces(state).map((place) => [place.id, place])),
     [a, b] = [places.get(known.from)!, places.get(known.to)!],
     name = (id: string) => generationFeature(state, generatedId(state, id))?.name ?? "",
-    kind = known.kind === "lane" ? "lane" : "road";
+    kind = known.kind === "lane" ? "lane" : "road",
+    runs = stretches(map, known.cells);
   return generatedFeature(
     state,
     `${kind}:${a.id}:${b.id}`,
     `${name(a.id)}–${name(b.id)}`,
     kind,
     "roads",
-    canonicalGeometry(state.domain.world.reference, {
-      type: "LineString",
-      coordinates: course(
-        unwrapCoordinates(
-          known.cells.map((cell) => [
-            map.mesh.origin[0] + map.mesh.x(cell),
-            map.mesh.origin[1] + map.mesh.y(cell),
-          ]),
-          state.surface.periodicWidth
-        ) as Point[]
-      ),
-    }),
+    canonicalGeometry(state.domain.world.reference, drawn(state, runs)),
     {
+      // A way that takes a step between cells that do not touch is drawn up to it and on
+      // from its far end.
+      ...(runs.length > 1 ? { crossings: runs.length - 1 } : {}),
       fromPlace: generatedId(state, a.id),
       toPlace: generatedId(state, b.id),
       travelCost: known.cost,
@@ -102,6 +127,7 @@ export function publishLandWays(state: GenerationState, context: MapProcessConte
     kept = highways(state, shown, Number(generationBindings(context).parameters.highways));
   for (const [index, known] of shown.entries()) {
     context.progress(index / shown.length, "Laying the roads people made");
-    if (known.cells.length >= 2) putGeneratedNetwork(state, way(state, known, kept.has(known)));
+    if (stretches(state.physical!.map, known.cells).length)
+      putGeneratedNetwork(state, way(state, known, kept.has(known)));
   }
 }

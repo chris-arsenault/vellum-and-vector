@@ -40,6 +40,14 @@ function shoreCatch(map: PhysicalField, i: number) {
   return seas ? 0.5 + (4 * fauna) / seas + 2 * upwelling : 0;
 }
 
+// The season is the climate's and the ice's to give: how near the year's warmth is to the best
+// for growing, on ground the ice has left.
+respond({
+  key: "season",
+  by: "climate and ice",
+  reads: ["Temperature", "IceThickness"],
+  base: (map, i) => growing(map, i) * iceFree(map, i),
+});
 respond({
   key: "cropYield",
   by: "soil, water and season",
@@ -58,19 +66,19 @@ respond({
     "Stillness",
     "IceThickness",
   ],
-  base(map, i) {
+  answers: ["season"],
+  base(map, i, _, answer) {
     if (!dry(map, i)) return 0;
     const soil = Math.min(1, map.SoilDepth.get(i) / map.scale.length(1.25e-7)),
       water = Math.min(1, Math.max(map.Moisture.get(i) / 1000, river(map, i), storedWater(map, i)));
     return (
       35 *
-      growing(map, i) *
+      answer("season") *
       soil *
       water *
       Math.exp(-12 * map.Slope.get(i)) *
       (1 - 0.8 * map.TreeCover.get(i)) *
-      quickened(map, i, 0.8) *
-      iceFree(map, i)
+      quickened(map, i, 0.8)
     );
   },
 });
@@ -78,10 +86,9 @@ respond({
   key: "herdYield",
   by: "grass and season",
   reads: ["WaterKindCodes", "Temperature", "GrassCover", "Quickening", "Stillness", "IceThickness"],
-  base: (map, i) =>
-    dry(map, i)
-      ? 5 * map.GrassCover.get(i) * growing(map, i) * quickened(map, i, 0.5) * iceFree(map, i)
-      : 0,
+  answers: ["season"],
+  base: (map, i, _, answer) =>
+    dry(map, i) ? 5 * map.GrassCover.get(i) * answer("season") * quickened(map, i, 0.5) : 0,
 });
 respond({
   key: "wildYield",

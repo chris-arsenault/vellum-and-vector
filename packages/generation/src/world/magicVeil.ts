@@ -82,6 +82,11 @@ export function tearResponse(
   );
   return { strength, wild: clamp(Math.abs(strength - previous) / 1000 / p.wildShift, 0, 1) };
 }
+// hpc-exempt: one entry per map, holding the field whose doors are that map's.
+const pairedOn = new WeakMap<PhysicalField, MagicField>();
+/** The doors standing on a map now: the cells at the two ends of each paired tear. */
+export const doorsOn = (map: PhysicalField): readonly { a: number; b: number }[] =>
+  pairedOn.get(map)?.doors ?? [];
 /**
  * Veil's doors: stable tears, strong enough and not wild, paired by nearest strength at a
  * distance at least the span; last epoch's pairs hold while both ends
@@ -97,6 +102,7 @@ export function pairingSources(
   const map = state.physical!.map,
     p = field.definition.parameters,
     strength = field.originSources.tear;
+  pairedOn.set(map, field);
   if (!strength || activity <= 0) {
     field.doors = [];
     return;

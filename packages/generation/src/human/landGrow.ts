@@ -32,6 +32,7 @@ export const growPeople = defineCommand(
   (work: LandWork) => {
     const { map, facts } = work,
       fed = fedBy(work),
+      harm = ask(map, "harm", work.context),
       born = working(map, "born"),
       starved = working(map, "starved"),
       filling = Math.exp(-growthRate * facts.years),
@@ -44,7 +45,10 @@ export const growPeople = defineCommand(
       if (living < room) born.set(cell, room / (1 + (room / living - 1) * filling) - living);
       // What a full attack of hunger takes is sized so the unfed are gone in their time.
       else if (living > room)
-        starved.set(cell, -Math.log(1 - ((living - room) * (1 - lasting)) / living));
+        starved.set(
+          cell,
+          -Math.log(1 - ((living - room) * (1 - lasting)) / living) * harm.get(cell)
+        );
     }
     runOperation(map, layHumanLayer, { map, kind: "population", amount: born });
     runOperation(map, wearHumanLayers, { map, mix: hunger, intensity: starved });

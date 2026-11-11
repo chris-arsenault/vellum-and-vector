@@ -57,6 +57,7 @@ function facts(years: number, mobility: number): PassFacts {
     mobility: removed.has("gather") ? 0 : full.mobility,
     farms: !removed.has("feed"),
     builds: !removed.has("harden"),
+    learns: !removed.has("crafts"),
   };
 }
 function eras(): HarnessEra[] {

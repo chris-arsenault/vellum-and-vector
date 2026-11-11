@@ -4,6 +4,7 @@ import { runOperation } from "../processOperation";
 import { mapCommand, mapElapsed } from "../processTraits";
 import { nativeContext } from "../world/context";
 import { generationBindings } from "../generationBindings";
+import { craftsPractised } from "./craftCatalogue";
 import { recordEraPlaces } from "./eraPlaces";
 import { meetLand, watchLand } from "./landHistory";
 import { advanceHumanLand } from "./landPass";
@@ -82,6 +83,7 @@ export const humanLandEra: MapProcess = {
           context: nativeContext(state, context, 0),
           facts: settledPass(years / passes, mobility),
         });
+      context.progress(1, `Crafts practised, in cells: ${craftsPractised(map)}`);
     },
     []
   ),

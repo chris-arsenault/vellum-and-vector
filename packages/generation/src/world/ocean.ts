@@ -5,6 +5,10 @@ import { noWaterSurface } from "./math";
 import { MapScale } from "@atlas/domain";
 import { oceanSeeds, OceanComponents, visitConnectedOcean } from "./oceanComponents";
 import { workingValues, releaseWorking } from "./physicalNumerics";
+import { ask, respond } from "../coupling/answers";
+
+// Left alone, the sea stands at one level everywhere it reaches.
+respond({ key: "seaStand", by: "the sea", reads: [], base: (map) => map.EffectiveSeaLevel });
 
 /**
  * Lowest cells first, streamed from the coverage in runs of equal elevation: each level
@@ -141,7 +145,11 @@ export function oceanSurface(map: PhysicalField, c: PhysicalContext) {
   map.WaterDepths.fill(0);
   map.WaterSurfaceElevations.fill(noWaterSurface);
   map.EffectiveSeaLevel = seaLevel(map, c);
+  // The sea reaches what lies below its level, and stands on each cell it reaches at the
+  // height that cell's own answer gives: its level, unless something holds it elsewhere.
+  const stand = ask(map, "seaStand", c);
   visitConnectedOcean(map, map.EffectiveSeaLevel, (i) => {
+    if (map.Elevation.get(i) >= stand.get(i)) return;
     map.WaterKindCodes.set(i, 1);
     map.WaterBodyIds.set(i, 1);
     setWaterSurface(map, i, map.EffectiveSeaLevel);
@@ -153,7 +161,7 @@ export function oceanSurface(map: PhysicalField, c: PhysicalContext) {
       previous.get(i),
       previousSurface.get(i),
       map.Elevation.get(i),
-      map.EffectiveSeaLevel,
+      stand.get(i),
       map.WaterKindCodes.get(i) === 1,
       marine.get(i) > 0
     );

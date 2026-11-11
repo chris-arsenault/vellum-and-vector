@@ -1,5 +1,6 @@
 import { MapScale, type ReadBand } from "@atlas/domain";
-import { respond } from "../coupling/answers";
+import { ask, respond } from "../coupling/answers";
+import type { PhysicalContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
 import { physicalDistance } from "../world/physicalMetric";
 
@@ -41,11 +42,19 @@ respond({
       : 1,
 });
 
+// Left alone, the ground holds its whole height against whoever climbs it.
+respond({ key: "climbing", by: "the ground's height", reads: [], base: () => 1 });
+
 /**
  * The cost of one step between neighbouring cells, in metres of open level ground, given the
- * answered friction. A step too steep to walk costs Infinity.
+ * answered friction and how far the ground holds against a climb (1 where it holds in full).
+ * A step too steep to walk costs Infinity, where the ground holds against it at all.
  */
-export function travelStep(map: PhysicalField, friction: Pick<ReadBand, "get">) {
+export function travelStep(
+  map: PhysicalField,
+  friction: Pick<ReadBand, "get">,
+  climbing: Pick<ReadBand, "get"> = { get: () => 1 }
+) {
   const launch = map.scale.length(0.0025),
     water = map.WaterKindCodes,
     rivers = map.RiverOrders;
@@ -56,9 +65,13 @@ export function travelStep(map: PhysicalField, friction: Pick<ReadBand, "get">) 
       landing = water.get(to) !== 0;
     if (afloat || landing) return going + (afloat === landing ? 0 : launch);
     const rise = Math.abs(
-      MapScale.metres(map.Elevation.get(to) - map.Elevation.get(from), "native")
-    );
-    if (rivers.get(from) > 0 && rivers.get(to) > 0) return going;
-    return rise / distance > steepestStep ? Infinity : going + climbCost * rise;
+        MapScale.metres(map.Elevation.get(to) - map.Elevation.get(from), "native")
+      ),
+      held = (climbing.get(from) + climbing.get(to)) / 2;
+    if ((rivers.get(from) > 0 && rivers.get(to) > 0) || held <= 0) return going;
+    return rise / distance > steepestStep / held ? Infinity : going + climbCost * rise * held;
   };
 }
+/** The cost of a step on a land, as the land answers for its going and its heights now. */
+export const goingOn = (map: PhysicalField, context: PhysicalContext) =>
+  travelStep(map, ask(map, "travelFriction", context), ask(map, "climbing", context));

@@ -1,6 +1,8 @@
 import { humanLayers } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { defineCommand, runOperation } from "../processOperation";
+import { ask } from "../coupling/answers";
+import type { PhysicalContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
 import { meshDeltaX } from "../world/mesh";
 import { reachedBy } from "./hinterlands";
@@ -22,6 +24,8 @@ import { foundTradition, knownTraditions, type TraditionKind } from "./tradition
 export interface IdentityEra {
   state: GenerationState;
   map: PhysicalField;
+  /** How the land is asked its shared questions in this era. */
+  context: PhysicalContext;
   /** The cost of a step between neighbours, and every step's passage at the era's range. */
   step: (from: number, to: number) => number;
   going: Passage;
@@ -165,8 +169,10 @@ function felt(map: PhysicalField, going: Passage, leading: Leading, rate: number
 export const shareIdentities = defineCommand(
   "human.identity.contact",
   "elapsed",
-  ({ map, going, years, mobility }: IdentityEra) => {
+  ({ map, going, years, mobility, context }: IdentityEra) => {
     const rate = Math.min(1, contact * mobility * (years / 100)),
+      // What a people already holds gives way to its neighbours' as fast as it is forgotten.
+      fading = ask(map, "forgetting", context),
       leading = leadingAll(map),
       // Every tradition's contact is read before any is taken up.
       taken = shared.map((field) => ({ field, contacts: felt(map, going, leading[field], rate) }));
@@ -177,7 +183,9 @@ export const shareIdentities = defineCommand(
         runOperation(map, overlayIdentity, {
           map,
           traditions: { [field]: { get: (cell: number) => contacts[cell]?.[round]?.code ?? 0 } },
-          people: { get: (cell: number) => contacts[cell]?.[round]?.taking ?? 0 },
+          people: {
+            get: (cell: number) => (contacts[cell]?.[round]?.taking ?? 0) * fading.get(cell),
+          },
           hardness: 0,
         });
     }

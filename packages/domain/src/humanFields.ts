@@ -32,7 +32,8 @@ export const humanRemains = {
 /** Layers a cell's identity column can hold, newest first. */
 export const identitySlots = 4;
 /** The traditions a layer of the column names, each a code of a named tradition; 0 is none. */
-export const identityTraditions = ["Tongue", "Faith", "Custom", "Allegiance"] as const;
+// The craft is the one magic system a layer's people know how to work, by its number; 0 is none.
+export const identityTraditions = ["Tongue", "Faith", "Custom", "Allegiance", "Craft"] as const;
 export type IdentityTradition = (typeof identityTraditions)[number];
 type Slot = 0 | 1 | 2 | 3;
 const slots = Array.from({ length: identitySlots }, (_, slot) => slot as Slot);

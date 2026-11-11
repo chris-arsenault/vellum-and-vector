@@ -86,15 +86,23 @@ export function captureFieldState(map: PhysicalField): FieldState {
 }
 /** Writes saved contents into a field on the same lattice, through the ground owner's import. */
 export function restoreFieldState(map: PhysicalField, saved: FieldState) {
-  const imported = new Set<PhysicalBufferName>();
+  const imported = new Set<PhysicalBufferName>(),
+    // Bands added to the land since it was saved: they begin empty, as on any new land.
+    newer: string[] = [];
   for (const [name] of physicalBands(map)) {
     const values = saved.bands[name];
-    requireThat(values, "snapshot_field", `Snapshot is missing ${name}.`);
+    if (!values) {
+      requireThat(isMutablePhysicalName(name), "snapshot_field", `Snapshot is missing ${name}.`);
+      newer.push(name);
+      continue;
+    }
     imported.add(name);
     if (isMutablePhysicalName(name))
       for (let i = 0; i < values.length; i++) map[name].set(i, values[i]);
     else importGroundBand(map, name, values);
   }
+  if (newer.length)
+    process.stdout.write(`The saved land predates ${newer.join(", ")}: they start empty.\n`);
   Object.assign(map, saved.plain, saved.held);
   finishGroundImport(map, imported);
   restoreCargo(map, saved.materialCargo);

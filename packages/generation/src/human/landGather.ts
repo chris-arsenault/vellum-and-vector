@@ -1,4 +1,5 @@
 import type { Band } from "@atlas/domain";
+import { ask } from "../coupling/answers";
 import { defineCommand, runOperation } from "../processOperation";
 import { moveHumanLayer } from "./layerOperations";
 import { fedBy, habitable, km2, people, working, type LandWork } from "./landWork";
@@ -24,7 +25,8 @@ function choose(
   going: (from: number, to: number, passed: number) => number
 ) {
   const { map, going: passage } = work,
-    mesh = map.mesh;
+    mesh = map.mesh,
+    moving = ask(map, "moving", work.context);
   for (let cell = 0; cell < mesh.count; cell++) {
     leaving.targets.set(cell, -1);
     leaving.share.set(cell, 0);
@@ -42,7 +44,7 @@ function choose(
     }
     if (target < 0) continue;
     leaving.targets.set(cell, target);
-    leaving.share.set(cell, work.facts.mobility * going(cell, target, through));
+    leaving.share.set(cell, work.facts.mobility * moving.get(cell) * going(cell, target, through));
   }
 }
 function move(work: LandWork, leaving: Leaving) {

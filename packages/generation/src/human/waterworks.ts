@@ -214,6 +214,9 @@ function publishWater(state: GenerationState, context: MapProcessContext) {
     rivers = selected["physical.river-networks"]?.enabled === true,
     area = state.domain.scope.areaId,
     drainage = state.domain.world.drainage?.[area];
+  // Whatever ran since the dams were last settled may have left the water half worked out:
+  // settle it whole before it is drawn.
+  settleWater(state, context, dammed(state, drawnDams(state, map)));
   context.progress(0, `Drawing the water people left: ${lakeCells(map)} cells of lake`);
   runOperation(map, projectNative, selectedNativeProjection(state, context));
   releaseHeld(state);

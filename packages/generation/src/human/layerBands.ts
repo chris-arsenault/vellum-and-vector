@@ -24,6 +24,7 @@ const noLayer: IdentityLayer = {
   faith: 0,
   custom: 0,
   allegiance: 0,
+  craft: 0,
 };
 
 /**
@@ -74,6 +75,7 @@ export class LayerBands {
         faith: from[traditions.Faith[slot]].get(cell),
         custom: from[traditions.Custom[slot]].get(cell),
         allegiance: from[traditions.Allegiance[slot]].get(cell),
+        craft: from[traditions.Craft[slot]].get(cell),
       });
     }
     return column;
@@ -89,6 +91,7 @@ export class LayerBands {
       this.map[traditions.Faith[slot]].set(cell, layer.faith);
       this.map[traditions.Custom[slot]].set(cell, layer.custom);
       this.map[traditions.Allegiance[slot]].set(cell, layer.allegiance);
+      this.map[traditions.Craft[slot]].set(cell, layer.craft);
     }
   }
   /** Every layer of a cell's column keeps this share of its people. */

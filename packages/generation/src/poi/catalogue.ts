@@ -74,6 +74,14 @@ import { door } from "./anomalies/door";
 import { fireCore } from "./anomalies/fireCore";
 import { wardRing } from "./anomalies/wardRing";
 import { wardLine } from "./anomalies/wardLine";
+import {
+  boundWood,
+  hearthRing,
+  heldShore,
+  readIce,
+  swornGround,
+  vowedGround,
+} from "./anomalies/practisedGround";
 import { settlementsPage } from "./settlements/page";
 import { settlement } from "./settlements/settlement";
 import { ruin } from "./settlements/ruin";
@@ -187,6 +195,12 @@ export const poiCatalogue: Readonly<Record<PoiKindId, PoiEntry>> = opened({
   fireCore,
   wardRing,
   wardLine,
+  hearthRing,
+  readIce,
+  heldShore,
+  boundWood,
+  swornGround,
+  vowedGround,
   settlement,
   ruin,
   dam,

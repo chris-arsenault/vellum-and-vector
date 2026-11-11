@@ -1,6 +1,8 @@
 import { humanLayers } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { defineCommand, runOperation } from "../processOperation";
+import { ask } from "../coupling/answers";
+import type { PhysicalContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
 import { meshDeltaX } from "../world/mesh";
 import { reachedBy, travelFrom } from "./hinterlands";
@@ -21,6 +23,8 @@ import { foundTradition, knownTraditions, type Tradition } from "./traditions";
 export interface RealmEra {
   state: GenerationState;
   map: PhysicalField;
+  /** How the land is asked its shared questions in this era. */
+  context: PhysicalContext;
   step: (from: number, to: number) => number;
   era: string;
   years: number;
@@ -190,11 +194,14 @@ export const spreadRealms = defineCommand(
     if (!held.length) return;
     const code = falling(map, era, held),
       people = map[humanLayers.population],
+      yielding = ask(map, "yielding", era.context),
       share = Math.min(1, submission * capacity * (years / 100));
     runOperation(map, overlayIdentity, {
       map,
       traditions: { allegiance: { get: (cell) => code[cell] } },
-      people: { get: (cell) => (code[cell] ? people.get(cell) * share : 0) },
+      people: {
+        get: (cell) => (code[cell] ? people.get(cell) * share * yielding.get(cell) : 0),
+      },
       hardness: 0,
     });
   },

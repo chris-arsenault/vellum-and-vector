@@ -18,6 +18,7 @@ const layer = (people: number, tongue: number, rest: Partial<IdentityLayer> = {}
   faith: 0,
   custom: 0,
   allegiance: 0,
+  craft: 0,
   ...rest,
 });
 const held = (column: IdentityLayer[]) => column.map(({ people, tongue }) => [tongue, people]);

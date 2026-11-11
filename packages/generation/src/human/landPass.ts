@@ -1,4 +1,6 @@
+import { ask } from "../coupling/answers";
 import { defineCommand, runOperation } from "../processOperation";
+import { learnCrafts } from "./craftPass";
 import { dwellOnLand } from "./layerOperations";
 import { feedPlaces } from "./landFeed";
 import { gatherPeople } from "./landGather";
@@ -19,13 +21,19 @@ export const advanceHumanLand = defineCommand(
   (pass: LandPass) => {
     const { map, facts } = pass;
     runOperation(map, foundPeople, pass);
+    // What a people can do with the magic under them changes every step that follows.
+    if (facts.learns) runOperation(map, learnCrafts, { map, years: facts.years });
     const work = openWork(pass);
     try {
       runOperation(map, feedPlaces, work);
       runOperation(map, growPeople, work);
       runOperation(map, gatherPeople, work);
       runOperation(map, hardenPlaces, work);
-      runOperation(map, dwellOnLand, { map, years: facts.years });
+      runOperation(map, dwellOnLand, {
+        map,
+        years: facts.years,
+        fading: ask(map, "forgetting", pass.context),
+      });
     } finally {
       closeWork(work);
     }

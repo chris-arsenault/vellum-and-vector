@@ -218,7 +218,7 @@ class HumanLayers {
    * Time passes where people live: the ground keeps the years they have lived on it, and ways
    * and kept lines nobody renews are forgotten.
    */
-  dwell(years: number) {
+  dwell(years: number, fading?: Values) {
     const elapsed = positive(years),
       map = this.layers.map;
     for (const [kind, band] of Object.entries(this.layers.of)) {
@@ -228,15 +228,21 @@ class HumanLayers {
         if (band.get(cell) > 0)
           map[tenure].add(cell, band.get(cell) * this.layers.km2(cell) * elapsed);
     }
-    this.forget(elapsed);
+    this.forget(elapsed, fading);
   }
-  /** Years pass with nobody renewing them: ways and kept lines fade from the ground. */
-  forget(years: number) {
-    const keep = Math.exp(-positive(years) / wayMemoryYears),
+  /**
+   * Years pass with nobody renewing them: ways and kept lines fade from the ground, each cell
+   * at its own share of the usual rate where one is given.
+   */
+  forget(years: number, fading?: Values) {
+    const usual = positive(years) / wayMemoryYears,
       map = this.layers.map;
     for (const kept of forgottenGround)
       for (let cell = 0; cell < map[kept].length; cell++)
-        map[kept].set(cell, map[kept].get(cell) * keep);
+        map[kept].set(
+          cell,
+          map[kept].get(cell) * Math.exp(-usual * positive(fading ? fading.get(cell) : 1))
+        );
   }
 }
 export type HumanLayerWriter = HumanLayers;

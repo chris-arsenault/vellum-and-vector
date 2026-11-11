@@ -4,7 +4,7 @@ import type { PhysicalContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
 import type { PassFacts } from "./passFacts";
 import { passage, reach, type Passage } from "./reach";
-import { travelStep } from "./travel";
+import { goingOn } from "./travel";
 
 /** What every step of a pass is given: the land, how it is asked, and how this pass acts. */
 export interface LandPass {
@@ -43,8 +43,7 @@ export const working = (map: PhysicalField, name: string) =>
 
 export function openWork(pass: LandPass): LandWork {
   const { map, context, facts } = pass,
-    friction = ask(map, "travelFriction", context),
-    going = passage(map, travelStep(map, friction), map.scale.length(facts.range)),
+    going = passage(map, goingOn(map, context), map.scale.length(facts.range)),
     area = working(map, "area"),
     land = working(map, "land");
   for (let cell = 0; cell < map.mesh.count; cell++)

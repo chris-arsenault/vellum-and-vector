@@ -1,4 +1,5 @@
 import { MapScale, humanLayers } from "@atlas/domain";
+import { linksOf } from "../coupling/links";
 import type { PhysicalField } from "../world/field";
 import { metricSearch } from "../world/metricSearch";
 
@@ -78,17 +79,39 @@ function spread(
     owner[cell] = index;
     cost.set(cell, 0);
   });
-  metricSearch(
-    map.mesh,
-    centres,
-    cost,
-    reach,
-    (target, source) => {
+  const reached = (target: number, source: number) => {
       owner[target] = owner[source];
       from[target] = source;
     },
-    (source, target) => step(source, target) / (strength?.[owner[source]] ?? 1)
-  );
+    search = (seeds: readonly number[]) =>
+      metricSearch(
+        map.mesh,
+        seeds,
+        cost,
+        reach,
+        reached,
+        (source, target) => step(source, target) / (strength?.[owner[source]] ?? 1)
+      );
+  search(centres);
+  // Steps between cells that do not touch are taken like any other: wherever one shortens
+  // the travel to its far end, the going spreads on from there.
+  const links = linksOf(map);
+  for (let further = links.length > 0; further;) {
+    const opened: number[] = [];
+    for (const { a, b, cost: across } of links)
+      for (const [near, far] of [
+        [a, b],
+        [b, a],
+      ]) {
+        const through = cost.get(near) + across / (strength?.[owner[near]] ?? 1);
+        if (through > reach || through >= cost.get(far)) continue;
+        cost.set(far, through);
+        reached(far, near);
+        opened.push(far);
+      }
+    further = opened.length > 0;
+    if (further) search(opened);
+  }
   return { owner, from, cost };
 }
 /** The cells from a cell back to its centre, the cell first. */

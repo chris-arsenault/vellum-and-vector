@@ -4,7 +4,7 @@ import type { GenerationSettings } from "./generationSettings";
 import { humanIdentityEra, humanIdentityProcesses, humanRealmEra } from "./human/identityProcesses";
 import { humanLandEra, humanLandProcesses, humanPlaces } from "./human/landProcesses";
 import { humanEvents } from "./human/landEvents";
-import { humanMagicPresent } from "./peopleMagic";
+import { humanMagicEra, humanMagicPresent, peopleMagicProcesses } from "./peopleMagic";
 import { publishIdentities, publishRealms } from "./identityRegions";
 import { publishLandPopulation } from "./landPopulation";
 import { publishLandWays } from "./landWays";
@@ -113,6 +113,7 @@ export function peopleSequence(input: AtlasGenerationInput): ProcessSequence {
               invoke(humanWaterworks),
               ...(political ? [invoke(humanRealmEra)] : []),
               invoke(humanEvents),
+              invoke(humanMagicEra),
             ],
           },
           invoke(humanWaterPresent),
@@ -126,7 +127,7 @@ export const peopleProcesses = [
   ...humanLandProcesses,
   ...humanIdentityProcesses,
   ...waterworksProcesses,
-  humanMagicPresent,
+  ...peopleMagicProcesses,
   humanEvents,
   populationPublish,
 ];

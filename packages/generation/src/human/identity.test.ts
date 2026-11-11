@@ -6,7 +6,14 @@ import { runOperation } from "../processOperation";
 import { humanLayersOf } from "./humanLayers";
 import { foundIdentities, shareIdentities, type IdentityEra } from "./identityPass";
 import { leadingOf } from "./identityReads";
-import { at, farthestFrom, fertileLand, neighbourOf, type TestLand } from "./landTestFixture";
+import {
+  at,
+  farthestFrom,
+  fertileLand,
+  landContext,
+  neighbourOf,
+  type TestLand,
+} from "./landTestFixture";
 import { hardenIdentity, layHumanLayer, overlayIdentity } from "./layerOperations";
 import { recordPlaces } from "./placeRegistry";
 import { passage } from "./reach";
@@ -27,6 +34,7 @@ function era(state: GenerationState, map: TestLand, more: Partial<IdentityEra> =
   return {
     state,
     map,
+    context: landContext(),
     step,
     going: passage(map, step, 200_000),
     era: "first",
@@ -106,6 +114,7 @@ it("founds realms at towns and gives each the land it reaches most cheaply", () 
   const realms: RealmEra = {
     state,
     map,
+    context: landContext(),
     step: level(map),
     era: "first",
     years: 300,

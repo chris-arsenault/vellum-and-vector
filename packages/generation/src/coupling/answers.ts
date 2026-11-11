@@ -38,6 +38,10 @@ export const answerKeys = [
   "rootHold",
   /** How hot buried rock gets here, as a share of full metamorphic heat. */
   "heat",
+  /** The height the sea stands at over this cell, in the field's own height units. */
+  "seaStand",
+  /** How good the year is for growing on this ground, from nothing to the best there is. */
+  "season",
   /** People a square kilometre of this ground feeds under crops, under herds and left wild. */
   "cropYield",
   "herdYield",
@@ -46,6 +50,20 @@ export const answerKeys = [
   "support",
   /** The cost of crossing a metre of this ground, against a metre of open level ground. */
   "travelFriction",
+  /** How far the ground's height holds against whoever climbs it, against the usual 1. */
+  "climbing",
+  /** The share of what hunger, a hazard or an attack would take from people's layers that it takes. */
+  "harm",
+  /** The share of a cell's people who are free to follow the pull of other people. */
+  "moving",
+  /** The share of those who stay on a cell who build where they stay. */
+  "building",
+  /** How fast what people leave on the ground and in each other fades, against the usual rate. */
+  "forgetting",
+  /** How readily people who hold with one realm come to hold with another, against the usual. */
+  "yielding",
+  /** The people per square kilometre who count as being on a cell. */
+  "presence",
 ] as const;
 export type AnswerKey = (typeof answerKeys)[number];
 type CellAnswer = (key: AnswerKey) => number;
@@ -76,7 +94,22 @@ export interface AddingResponder extends ResponderBase {
 export interface ScalingResponder extends ResponderBase {
   readonly scale: Response;
 }
-export type Responder = BaseResponder | AddingResponder | ScalingResponder;
+/**
+ * A break: over the share of a cell the breaker holds, the answer is the breaker's own and
+ * everything else said about the key is set aside. The rule still holds on the rest of the
+ * cell. Breaks apply in the order their responders joined, each over what the last left.
+ */
+export interface BreakingResponder extends ResponderBase {
+  /** The share of the cell, 0 to 1, on which the rule does not hold. */
+  readonly share: Response;
+  /** The answer on that share. */
+  readonly instead: Response;
+}
+export type Responder = BaseResponder | AddingResponder | ScalingResponder | BreakingResponder;
+const unit = (value: number) => (value > 0 ? Math.min(1, value) : 0);
+/** One cell's answer after a break: the rule on the share it keeps, the breaker's on the rest. */
+const broken = (value: number, share: number, instead: number) =>
+  share > 0 ? value * (1 - share) + instead * share : value;
 
 const registered = new Map<AnswerKey, Responder[]>(answerKeys.map((key) => [key, []]));
 
@@ -103,13 +136,22 @@ export function explainAnswer(
       return { by: one.by, operation: "base" as const, value: one.base(map, i, context, answer) };
     if ("add" in one)
       return { by: one.by, operation: "add" as const, value: one.add(map, i, context, answer) };
-    return { by: one.by, operation: "scale" as const, value: one.scale(map, i, context, answer) };
+    if ("scale" in one)
+      return { by: one.by, operation: "scale" as const, value: one.scale(map, i, context, answer) };
+    return {
+      by: one.by,
+      operation: "break" as const,
+      value: one.instead(map, i, context, answer),
+      share: unit(one.share(map, i, context, answer)),
+    };
   });
   const base = contributions.find((one) => one.operation === "base");
   if (!base) throw new Error(`Nothing answers ${key}.`);
   let value = base.value;
   for (const one of contributions) if (one.operation === "add") value += one.value;
   for (const one of contributions) if (one.operation === "scale") value *= one.value;
+  for (const one of contributions)
+    if (one.operation === "break") value = broken(value, one.share, one.value);
   return { value, contributions };
 }
 
@@ -140,13 +182,18 @@ function compute(map: PhysicalField, key: AnswerKey, context: PhysicalContext, b
     base = all.find((one): one is BaseResponder => "base" in one);
   if (!base) throw new Error(`Nothing answers ${key}.`);
   const adding = all.filter((one): one is AddingResponder => "add" in one),
-    scaling = all.filter((one): one is ScalingResponder => "scale" in one);
+    scaling = all.filter((one): one is ScalingResponder => "scale" in one),
+    breaking = all.filter((one): one is BreakingResponder => "share" in one);
   let i = 0;
   const answer: CellAnswer = (dependency) => ask(map, dependency, context).get(i);
   for (; i < map.mesh.count; i++) {
     let value = base.base(map, i, context, answer);
     for (const one of adding) value += one.add(map, i, context, answer);
     for (const one of scaling) value *= one.scale(map, i, context, answer);
+    for (const one of breaking) {
+      const share = unit(one.share(map, i, context, answer));
+      if (share > 0) value = broken(value, share, one.instead(map, i, context, answer));
+    }
     band.set(i, value);
   }
 }
