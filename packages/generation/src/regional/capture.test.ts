@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { requireChannel, putChannel, residentBand } from "@atlas/domain";
 import { societyChannels } from "../world/magicFieldDefinitions";
 import { physicalChannels } from "../world/atlasChannels";
+import { humanChannels } from "../human/humanChannels";
 import { capturedEpochCount, refinementReads } from "./capture";
 import { landscape } from "../mapFixtures";
 import { createTestField as createField } from "../rock/groundTestFixture";
@@ -93,6 +94,32 @@ it("keeps scratch receipts outside publication while publishing retained environ
       physicalChannels.some((binding) => binding.name === name),
       name
     ).toBe(true);
+});
+
+it("gives a child map every human layer its parent published", () => {
+  const { surface } = landscape(),
+    map = createField(createMesh(4, 0));
+  const workspace: AtlasPhysicalWorkspace = {
+    map,
+    profile: atlasPhysicalProfile({}, {}, map.scale),
+    samples: residentBand("int32", new Int32Array(surface.active.length)),
+    grid: surface.coverage,
+    fixed: [],
+    inherited: true,
+  };
+  for (const [index, binding] of humanChannels.entries()) {
+    const type = binding.unit === "category" ? "int32" : "float64",
+      value = binding.maximum === 1 ? 0.25 : index + 1;
+    putChannel(
+      surface,
+      binding.name,
+      binding.unit,
+      surface.coverage.scratch(type, binding.name).fill(value),
+      binding.quantity
+    );
+    inheritLocalChannel(workspace, surface, binding);
+    expect(map[binding.name].get(0), binding.name).toBeCloseTo(value);
+  }
 });
 
 it("resamples retained glacial evidence and fog into independent child bands", () => {

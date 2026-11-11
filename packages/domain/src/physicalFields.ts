@@ -7,6 +7,7 @@ import {
   seaLoadIntegerFields,
   seaLoadScalarFields,
 } from "./materialLoadFields";
+import { humanIntegerFields, humanScalarFields } from "./humanFields";
 
 const integerFields = [
   "GroundwaterTargets",
@@ -114,6 +115,8 @@ const integerFields = [
   "FlowTargets",
   "LakeOutletTargets",
   "Warmth",
+  // The traditions people's identity layers name, and the tongue of whoever built a ruin.
+  ...humanIntegerFields,
 ] as const;
 const elevationFields = [
   ...allColumnScalarFields,
@@ -231,6 +234,9 @@ const metricFields = [
   "Tearing",
   // Magical heat carried down the drainage (native units): the thawed river below a wellspring.
   "RiverWarmth",
+  // People on the land: who lives on a cell, what they farm, graze and have built, what their
+  // places have left behind, and the layers of identity they hold.
+  ...humanScalarFields,
 ] as const;
 export type PhysicalIntegerName = (typeof integerFields)[number];
 export type PhysicalFieldName =

@@ -3,6 +3,7 @@ import { ecologyCarbon, ecologyMemory, ecologyRatios, ecologyScalars } from "@at
 import { units } from "../world/math";
 import type { MapScale } from "@atlas/domain";
 import { rockLayerDepths, rockLayerKinds } from "@atlas/domain";
+import { humanIntegerFields, humanScalarFields } from "@atlas/domain";
 import {
   groundMaterialFields,
   groundPlacementFields,
@@ -25,10 +26,12 @@ import {
  * - `peak`: a record of the most that happened; the largest arrival stands.
  * - `identity`: a label that cannot be averaged. Its own rule picks one arrival.
  * - `crust`: conserved crust columns, moved by crust transport with their own budget.
+ * - `carried`: state whose owner carries a cell's bands together, as one package, through a
+ *   carrier it registers; no band of it means anything moved alone.
  * - `derived`: worked out afresh from other quantities; plates do not carry it.
  */
 export type QuantityKind =
-  "share" | "amount" | "peak" | "identity" | "crust" | "ground" | "derived";
+  "share" | "amount" | "peak" | "identity" | "crust" | "ground" | "carried" | "derived";
 
 const each = (kind: QuantityKind, names: readonly string[]) =>
   Object.fromEntries(names.map((name) => [name, kind]));
@@ -74,6 +77,8 @@ export const quantityKinds = {
     "StructuralGrainX",
     "StructuralGrainY",
   ]),
+  // People's layers, their remains and the identity column of a cell go together.
+  ...each("carried", [...humanScalarFields, ...humanIntegerFields]),
   ...each("amount", [
     ...ecologyCarbon,
     ...ecologyMemory,
@@ -283,6 +288,7 @@ export const transportRules: Readonly<
   identity: { moved: "dominant", newCrust: "zero", rifted: "carry" },
   crust: { moved: "conserved", newCrust: "zero", rifted: "carry" },
   ground: { moved: "package", newCrust: "fresh", rifted: "carry" },
+  carried: { moved: "package", newCrust: "zero", rifted: "carry" },
   derived: { moved: "recompute", newCrust: "zero", rifted: "carry" },
 };
 

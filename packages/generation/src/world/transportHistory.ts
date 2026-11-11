@@ -20,6 +20,7 @@ import {
 } from "../coupling/quantities";
 import { carryOut } from "../rock/groundLedger";
 import { transportGroundLoad } from "../rock/groundTransport";
+import { carryOwned } from "../coupling/carriers";
 
 /**
  * A plate move is one history event for every quantity at once, and each answers it by its kind, as
@@ -185,6 +186,7 @@ export function transportHistory(map: PhysicalField, plan: TransportPlan) {
     map[name].copyFrom(scratch);
   }
   transportCrustColumns(map, plan, crust);
+  carryOwned(map, plan);
   for (let target = 0; target < map.mesh.count; target++) {
     for (const p of picks) settlePick(map, p, target);
     const source = plan.dominant.get(target);

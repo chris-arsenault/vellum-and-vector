@@ -118,5 +118,6 @@ export * from "./generationHistory";
 export * from "./mapOwnership";
 export * from "./physicalFields";
 export * from "./ecologyFields";
+export * from "./humanFields";
 export * from "./materialLoadFields";
 export * from "./fieldChannels";

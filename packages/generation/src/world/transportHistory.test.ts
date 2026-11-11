@@ -6,6 +6,10 @@ import { units } from "./math";
 import { workingValues } from "./physicalNumerics";
 import { transportHistory } from "./transportHistory";
 import { weightScale, type TransportPlan } from "./transportPlan";
+import { runOperation } from "../processOperation";
+import { buryHumanLayers, layHumanLayer, overlayIdentity } from "../human/layerOperations";
+import { humanLayersOf } from "../human/humanLayers";
+import "../coupling/responders";
 
 /** The four content cells of the fixture mesh, in ascending cell order. */
 function fixture() {
@@ -97,6 +101,50 @@ it("carries fractional ecology, labels and maxima while leaving ground packages 
   expect(thickness[2]).toBe(units(3500));
   expect(thickness[3]).toBe(units(1700));
   expect(thickness[0]).toBe(units(1000));
+});
+
+it("carries people, their land and their identities with the crust they stand on", () => {
+  const { map, plan, cells, read } = fixture(),
+    at = (values: number[]) => ({ get: (cell: number) => values[cells.indexOf(cell)] ?? 0 }),
+    column = (k: number) =>
+      humanLayersOf(map)
+        .column(cells[k])
+        .map((layer) => [layer.tongue, Math.round(layer.people * 1e6) / 1e6, layer.hardness]);
+  // A buried town on the first cell, before anyone lives there now.
+  runOperation(map, layHumanLayer, { map, kind: "builtUp", amount: at([0.2, 0]) });
+  runOperation(map, buryHumanLayers, { map, share: at([1, 0]) });
+  runOperation(map, layHumanLayer, { map, kind: "population", amount: at([100, 300]) });
+  runOperation(map, layHumanLayer, { map, kind: "farmland", amount: at([0.2, 0.6]) });
+  for (const [tongue, people] of [
+    [1, at([100, 0])],
+    [2, at([0, 300])],
+  ] as const)
+    runOperation(map, overlayIdentity, {
+      map,
+      traditions: { tongue, faith: 0, custom: 0, allegiance: 0 },
+      people,
+      hardness: 0.5,
+    });
+  transportHistory(map, plan);
+  // Everyone who arrives is still there: a cell of area 3 at 300 per area sends half its
+  // people onto a cell of area 2. Farmland is a share of the ground that arrived.
+  expect(read(map.Population)).toEqual([0, 0, 250, 70]);
+  expect(read(map.Farmland)[2]).toBeCloseTo(0.5);
+  expect(read(map.Farmland)[3]).toBeCloseTo(0.14);
+  // Each arrival keeps what it held: nobody is relabelled, and a layer's hardness is its
+  // people's, however much empty ground arrived beside them.
+  expect(column(2)).toEqual([
+    [2, 225, 0.5],
+    [1, 25, 0.5],
+  ]);
+  expect(column(3)).toEqual([
+    [2, 45, 0.5],
+    [1, 25, 0.5],
+  ]);
+  // Buried remains stay buried when ground without remains arrives beside them.
+  expect(read(map.RuinedBuiltUp)[2]).toBeCloseTo(0.05);
+  expect(read(map.RuinCover)[2]).toBeCloseTo(1);
+  expect(read(map.RuinCover)[3]).toBeCloseTo(1);
 });
 
 it("preserves convergent crust surplus and clears volcanic flags when transported construction is absent", () => {

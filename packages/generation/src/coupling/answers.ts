@@ -38,6 +38,14 @@ export const answerKeys = [
   "rootHold",
   /** How hot buried rock gets here, as a share of full metamorphic heat. */
   "heat",
+  /** People a square kilometre of this ground feeds under crops, under herds and left wild. */
+  "cropYield",
+  "herdYield",
+  "wildYield",
+  /** People a square kilometre of this ground feeds as its area is used now. */
+  "support",
+  /** The cost of crossing a metre of this ground, against a metre of open level ground. */
+  "travelFriction",
 ] as const;
 export type AnswerKey = (typeof answerKeys)[number];
 type CellAnswer = (key: AnswerKey) => number;

@@ -2,6 +2,7 @@ import { groundResourceChannels } from "../rock/groundResources";
 import type { PhysicalBufferName } from "./field";
 import { ecologyFields, ecologyRatios } from "@atlas/domain";
 import { magicEffectChannels } from "./magicFieldDefinitions";
+import { humanChannels, humanFeatures } from "../human/humanChannels";
 
 /** The working band's identity and meaning also govern its published samples. */
 export interface PhysicalChannel {
@@ -122,6 +123,7 @@ export const physicalChannels: PhysicalChannel[] = [
   fraction("GeothermalHistory"),
   fraction("TectonicActivityHistory"),
   fraction("ExternalCoastalForcingHistory"),
+  ...humanChannels,
 ];
 
 type Ownership = readonly [
@@ -257,4 +259,5 @@ export const physicalChannelOwnership: Ownership[] = [
   ["physical.floodplains", "rivers", ["FloodplainIntensity"]],
   ["physical.deltas", "rivers", ["DeltaIntensity"]],
   ["ecology.living", "ecology", ecologyFields.map(({ name }) => name)],
+  [humanFeatures, "cultures", humanChannels.map(({ name }) => name)],
 ];

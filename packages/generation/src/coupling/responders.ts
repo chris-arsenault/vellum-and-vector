@@ -16,3 +16,6 @@ import "../world/magicFire";
 import "../world/magicGreenwoodSources";
 import "../world/magicSalt";
 import "../rock/rockHistory";
+import "../human/landYields";
+import "../human/travel";
+import "../human/crustCarrier";

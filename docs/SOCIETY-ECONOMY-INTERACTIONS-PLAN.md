@@ -285,6 +285,24 @@ A named place keeps its identity while its dense zone grows, shrinks or moves.
   pairwise trading along links are not carried over.
 - Coarse maps keep the same operations. A world cell holds a few percent of
   built-up share and classifies as a point; a regional map gives it a shape.
+- Every layer is a value per area of ground (people and works per square
+  kilometre, shares of a cell's area), found in M1: the crust carries amounts as
+  densities, so a head-count per cell would be carried wrongly between cells of
+  different size, and a density means the same at every map scale.
+- Built places leave remains: a ruin record of area, works, the share now under
+  cover, and the builders' tongue. Burial puts remains under cover; wear leaves
+  them in the open; re-exposure uncovers them.
+- The crust carries a cell's layers, remains and identity column together, as a
+  package the layers' owner moves through a carrier it registers with plate
+  transport. Carrying the column band by band relabelled people and averaged a
+  layer's hardness against empty ground (M1 review).
+- The owner also keeps the ground's own records that magic is made of: years
+  lived on a cell, ways worn by movement, and the count of the dead. Until M5
+  deletes the old society modules, those records have two writers; they join the
+  single-writer check then.
+- A child map takes each cell's human bands from one parent cell together, so
+  people are never split from the identities they hold. M7 replaces this with
+  development on the child's own lattice.
 
 ## Architecture patterns
 
@@ -475,8 +493,10 @@ Add a row before porting anything not listed.
 | Behaviour today                                                         | Home          |
 | ----------------------------------------------------------------------- | ------------- |
 | Per-cell livelihood yields and coastal fishery                          | M1            |
-| Travel cost over land, river, sea and doors                             | M1            |
-| Ground records of tenure, walked routes, mass death and kept lines      | M1            |
+| Travel cost over land, river and sea                                    | M1            |
+| Travel through Veil doors                                               | M6            |
+| Ground records of tenure, walked routes and mass death                  | M1            |
+| Kept lines at frontiers and maintained works                            | M4, M5        |
 | Spacing draw, catchment ownership, ranked site choice, fortress spur    | M2            |
 | Growth on capacity and migration along the capacity gradient            | M2            |
 | Town-dwellers, central-place draw, food bound                           | M2            |
