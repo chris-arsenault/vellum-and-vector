@@ -98,10 +98,10 @@ and lets their running make the geography. Built:
 4. **Meander migration** (`canonry/meanders.ts`, `canonry/riverMeanders.ts`). A reach on a
    gentle floor migrates across it by its own and upstream curvature (Howard and Knutson),
    with neck and chute cutoffs; width follows discharge; confined reaches keep the valley line.
-5. **Ways** (`regional/ways.ts`, `regional/societyWays.ts`, `regional/wayLines.ts`). Travel
-   pays the square of the grade over a ruling grade and extra on floodplain ground; the
-   busiest journeys make their ways first and later traffic joins made roads; a way's line
-   runs straight wherever the ground allows and shared roads are drawn alike.
+5. **Ways** (`regional/ways.ts`, `human/hinterlands.ts`, `landWays.ts`). `regional/ways.ts`
+   holds the ruling grade and the floodplain cost that passes, fords and bridges read. Ways
+   themselves are read from the hinterlands of the places on the map, by the reading the
+   world uses.
 
 Open: lakes along unglaciated courses are rare (glaciated regions hold many); range flanks
 drain by close parallel valleys; the oxbows the migration leaves are not published.

@@ -71,15 +71,15 @@ tears more than its pairs. Each connected patch of warding is one ring and pays
 its own rim. Veil answers Fire's release at a cell, not Fire's presence, because a
 Fire and Aurora front always has Fire under its tears.
 
-**People are a carrier and a source.** Trade moves held cores, seed and salt
-along the ways; cores cracked at a forge are a Fire source; extraction, hunting,
-clearance and burning act on the stocks and their media. The society recorder
-writes tenure, walked routes, kept lines and the dead onto the mesh as amounts
-the crust carries. Solid trade moves the extracted grains; deliberate custody
+**People are a source and practitioners.** The owner of people's layers writes
+tenure, walked routes, kept lines and the dead onto the mesh as amounts the
+crust carries. Deliberate custody of extracted grains
 ends when ordinary geological transport returns them to their natural reservoir.
 Current refresh updates dependent fields and doors without replaying supply or
-history. Seats cease supplying protection when their society ends, while routes
+history. Seats cease supplying protection when their people leave, while routes
 and kept lines fade through elapsed time. Retained ground can outlast protection.
+How a people's practice of a system acts on the land is decided in
+[ADR 0012 (people live on the land's layers)](0012-people-live-on-the-lands-layers.md).
 
 **Doors are edges.** Stable tears pair into doors; a door is an edge of kind
 `door` between the surface cells under its ends, added when connections are
@@ -106,15 +106,14 @@ travel edge.
   displace part of a cell that has only one class.
 - Interference as a surface-only class. Rejected: a class with no process is a
   cosmetic mark; geography is the result of processes.
-- A separate epoch pass for society-phase systems. Rejected: the round already
-  runs inside the epoch before coasts, burial and history, and the present's
-  refresh already re-evaluates magic each cycle.
+- A separate epoch pass for society-phase systems. Rejected: people's loose pass
+  already runs inside the epoch, and magic is evaluated again at the end of each
+  human era.
 
 ## Consequences
 
 Each system's reach, rarity and signature are tuned in its preset and curated
 controls (`packages/generation/src/magicCartography.ts`); documents describe
 mechanisms and leave the values to code. Fields and couplings come first;
-classes, names and drawing follow from them. A world with no human era has no
-Hallowed or forge sources. New social practices and presentation proposals remain
+classes, names and drawing follow from them. New social practices and presentation proposals remain
 separate design work in the [backlog](../backlog.md).

@@ -80,9 +80,10 @@ preparation binds complete configuration before composing a recipe.
 Disabling a feature either omits its complete behavior or yields a dependency
 diagnostic naming the consumer and missing input. Magical coastal modification
 requires coastal evolution; a pressure field with zero coastal modification does
-not. Legacy human `physicalEpoch` and `politicalCapacity` values remain metadata;
-nondefault values produce a warning because the current human algorithms do not
-simulate their effects.
+not. People's processes join the sequence only where a cultural, political or
+built feature is selected: a loose pass inside each physical epoch and the human
+eras in the `present.people` slot. A human era's `mobility` and
+`politicalCapacity` are era variables those passes read.
 
 ## Cartographic setup
 

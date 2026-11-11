@@ -40,8 +40,9 @@ Feature choices change geography; layer visibility changes display. Coupled
 operations such as glacial sculpting appear as one choice. Rivers and incision
 remain independent. Dependency messages link to their providers and offer explicit
 repairs. One shared epoch selector connects physical, ecological and magical
-controls, and a human era can bind to a physical epoch so that it runs inside
-it. Review shows resolved choices and output layers.
+controls. Geology always runs; magic and people are selectable. People live a
+loose pass inside every physical epoch and the settled human eras after the
+last one. Review shows resolved choices and output layers.
 
 Advanced JSON configuration edits the same feature-owned recipe. Applying JSON
 regenerates compatibility fields without starting generation. Invalid field text
@@ -74,8 +75,9 @@ Boundary tools appear during outline selection. Earlier generation jobs stay
 collapsed behind a history disclosure.
 
 Click a feature to read its
-properties, origin and relationships; settlements also show their residents,
-livelihoods and retained history. **Inspect** returns to feature selection.
+properties, origin and relationships; settlements also show their residents and
+the peoples among them, their country and its use, their realm, their history
+through the eras and where their ways lead. **Inspect** returns to feature selection.
 **Atlas → Features** searches existing geography across the world.
 
 **Inspect cell** explains a clicked place: the map colour and its blended class,
@@ -282,7 +284,7 @@ pnpm --dir frontend test src/rasterTiles.test.ts
 `pnpm test:generation` is opt-in and generates a shared small Draft world using
 the SQLite/GEOS execution adapters and file-backed numerical storage.
 Independent checks reuse it for physical history, water and rivers, ecological
-publication, all seven magic systems, society, naming, and authored protection.
+publication, all seven magic systems, settlements, naming, and authored protection.
 Reuse that result across assertions; add a shared fixture only when different
 preconditions require one. There is no fixed generation quota or time limit on
 development work. Fine verification requires separate authorization.
@@ -387,7 +389,7 @@ an explicit epoch array. Legacy snapshots without epochs use current defaults
 and say so. Judge complete histories with the world harness.
 
 `HARNESS_NAMING=1 HARNESS_WORLD=<checkpoint> pnpm --dir frontend harness naming`
-exercises final naming against a saved map and its completed society without
+exercises final naming against a saved map and its people without
 regeneration or changes to the checkpoint. A failed native buffer writes its
 input to `.artifacts/harness/naming-buffer.json` for diagnosis.
 
@@ -398,7 +400,7 @@ Browser tests import `test` from `frontend/tests/uiTest.ts`. Every journey recei
 the small generation fixture automatically, and a real generation worker throws
 before it can start. Fixture grids have 256 cells; a form may display larger
 world dimensions without generating them. Raster fields are opt-in when needed
-for the UI behavior under test. Geometry, magic, ecology and society algorithms
+for the UI behavior under test. Geometry, magic, ecology and people algorithms
 belong in constructed Vitest cases. Worker publication, storage, cancellation
 and save/reopen checks also use small supplied geography and arrays.
 

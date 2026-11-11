@@ -100,8 +100,9 @@ epoch count as its present date, without adding an epoch or consulting a later p
 Established features contribute through the existing cause registry. Captured rivers
 supply context and inflow; settlements and landmarks retain their identities while
 their local geometry can develop. Existing place realization remains part of
-refinement. It does not introduce a new demographic era or redesign society,
-economy or POI categories.
+refinement. It does not introduce a new human era; how the inherited people live
+on the child is decided in
+[ADR 0012 (people live on the land's layers)](0012-people-live-on-the-lands-layers.md).
 Accepted new events dispatch one-time catalogue Commands. Captured disaster records
 do not restore sediment, reopen an ice breach or repeat damage. Maintained works instead
 declare current influences, including water withdrawals and sink losses, through shared

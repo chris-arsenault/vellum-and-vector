@@ -16,12 +16,11 @@ existing code.
       that compensate for lattice units. Keep generation deterministic and its
       causal process sequence intact.
 
-- [ ] **2. Decide what an ice-age round's bands become.** A mobile band in the
-      round grows under the same support as a settled era, so many lasting camps
-      reach the resident concentration of a present town and publish as World
-      ruins by the [ADR 0005](adr/0005-scale-contract.md) rule. Decide whether a
-      round produces towns at all, and whether its survivors seed the present
-      instead of the settled eras starting again from founders.
+- [x] **2. Decide what an ice-age round's bands become.** People inside a
+      geological epoch live a loose pass: they move with the wild and build
+      nothing, so an epoch leaves no towns. The same people go on into the
+      settled eras; nobody is founded twice
+      ([ADR 0012](adr/0012-people-live-on-the-lands-layers.md)).
 
 - [ ] **3. Ocean-surrounded worlds.** The map-boundary setting reserves this
       choice. Add a physical ocean rim that survives tectonic, erosional and
@@ -58,6 +57,16 @@ existing code.
       rock, where trellis drainage forms. Spherical worlds (item 5) are separate
       work.
 
+## People
+
+- [ ] **28. Music as a part of culture.** Decide what music stands for in a
+      generated people, how it relates to tongue, faith and custom, how it
+      travels and what a map shows because of it. No taxonomy, audio or playback
+      is chosen.
+- [ ] **29. Exchange beyond food.** A pass brings food from where it is grown to
+      where people gather. Nothing else is traded: no goods, no materials, no
+      prices, and no stock of fish or game that use can wear down.
+
 ## Magic
 
 Shared physical magic interactions are implemented in the
@@ -66,10 +75,10 @@ source/access/maintenance boundaries within item 12, and shared producers for
 14–19. Regional execution remains open in those regional items. New society
 designs and deferred authoring retain their separate scope.
 
-The [society and economy follow-up](SOCIETY-ECONOMY-INTERACTIONS-PLAN.md) owns
-the later design and implementation of items 2, 12 and 19, plus social uses of
-landmarks in 14/18. It includes ordinary livelihoods, exchange, works, institutions
-and POIs alongside all seven systems. Item 13 remains deferred authoring.
+People's use of magic follows
+[ADR 0012](adr/0012-people-live-on-the-lands-layers.md): each system's craft
+breaks a rule an existing process obeys. Item 12 lists the rules not yet broken.
+Item 13 remains deferred authoring.
 
 - [x] **6. Hold sea ice with Aurora shelf charge.** Marine ice reads retained
       persistence; melting and transport act on its actual carrier.
@@ -89,10 +98,19 @@ and POIs alongside all seven systems. Item 13 remains deferred authoring.
 - [x] **11. Show actual Veil displacement.** Completed surveys retain overlapping
       wild-zone identities; inspection compares earlier and current footprints.
       Disjoint or ended patches do not acquire invented trajectories.
-- [ ] **12. Society practices for every system.** Add Greenwood tending (with a
-      lumber taboo as a clearance cost), Hallowed vows, Veil door-keeping,
-      Pressure sky-reading, temple cities, pilgrim economies, fortresses at doors,
-      mirages and detour routes, each with a field behind it.
+- [ ] **12. Rules people's magic does not yet break.** A rule can be broken only
+      once a process asks it as a shared question. Still written inside their
+      processes: a wall holding in a siege (Fire), the season that vegetation
+      and climate feel inside a hearth ring (Fire), when the ice ends (Aurora),
+      where storms go (Pressure), tongues and faiths crossing a door (Veil), and
+      whose tongue the born take, which readers of old ice would answer
+      (Aurora). Also open: the practitioners' own price is told in a place's
+      record and not modelled; people who leave a craft's medium keep the craft
+      and never forget it; a held sea bed has not been traced through the lake
+      solver; Hallowed wards on a draft world are too weak for vowed ground to
+      appear; Salt and Hallowed stocks neither age nor grow during the human
+      eras. Temple cities, pilgrim traffic and fortresses at doors have no
+      mechanism yet.
 - [ ] **13. Author ward lines and paired doors.** Let an authored magic source be a
       line for a ward and two linked ends for a door.
 
@@ -123,15 +141,27 @@ simulations.
       strain per metre, release Fire from captured cores, base aquifer springs on
       network catchment, scale door pairing distance to the frame, and add
       magic-landmark conjunctions.
-- [ ] **19. Regional society.** Add embankments, drained marsh and breakwaters;
-      hamlets, shrines and way-stations; canals, portage pairs, and fortress gorge
-      dams sited by dam demand at narrows. Realize harbour and pass demands and site
-      forges, dive sites and archives. Publish population per hinterland, give
-      captured seats hierarchy roles and name villages in the owning community's
-      language. Add the connection graph with sea links, let hazards penalize
-      proposals, and read livelihood per cell. Decay the works of ruins, keep
-      captured highways and roads as worn ground by class, publish land-use
-      features, and merge trunk ways by their combined traffic.
+- [ ] **19. Regional people.** A regional map lives its inherited people with
+      the world's pass and reads its places, ways, fords, bridges and mills
+      from its own layers. Open:
+  - Built ground, remains and farmland far from people are inherited as an
+    even share of each parent cell and stay as squares. Gather them as people
+    are gathered, so a town has an old quarter and a region can find its own
+    ruins.
+  - Cultural regions and realms are the parent's outlines; read them from the
+    region's layers. Restore each realm's seat and whether it has ended, so a
+    region can find capitals.
+  - A town the parent recorded keeps the parent's point and population while
+    its crowd may sit a few cells away. Reconcile the record with the crowd.
+  - Craft places captured from the parent and those read from the region's
+    layers are not reconciled.
+  - Ways do not hear the road costs and joined cells that places declare
+    (worn ground at a town, a bridge, a door's two ends). A way that passes
+    between two river cells diagonally finds no crossing.
+  - Advancing ice and erosion beyond the redrawn relief do not damage what
+    grows on a region.
+  - Embankments, drained marsh, breakwaters, canals, portages and way-stations
+    have no catalogue entries.
 - [ ] **20. Let different people own and refine different regions** of one world.
 
 ## Editor and storage

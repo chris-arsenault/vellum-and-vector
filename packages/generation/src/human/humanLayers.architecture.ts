@@ -7,7 +7,7 @@ import { quantityKinds } from "../coupling/quantities";
 import { physicalChannels } from "../world/atlasChannels";
 
 /**
- * Structure of the people's layers on the land (docs/SOCIETY-ECONOMY-INTERACTIONS-PLAN.md).
+ * Structure of the people's layers on the land (docs/adr/0012-people-live-on-the-lands-layers.md).
  * These prove who may write the layers and what the new namespace may touch; they say nothing
  * about what a generated map looks like. The compiler carries the main guarantee: everyone
  * but the registered operations receives a read-only view of the owner. The source checks

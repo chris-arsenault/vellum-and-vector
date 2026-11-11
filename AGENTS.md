@@ -159,9 +159,13 @@ for the other. Extract mechanisms without importing named setting lore: gods,
 characters, peoples, factions, artifacts, places and historical events do not
 become atlas requirements. Record adaptations and proposed additions explicitly.
 
-Ground society effects in fire-core extraction/use, Aurora crystal and ice-memory
-practices, and depth-dependent Pressure use and ocean propagation. Do not replace
-them with generic abundance, mana, wards or explosions. Treat lore-derived social
+People's use of a system is its craft: a practice that breaks a rule an existing
+process obeys, registered as a breaking responder on the shared question that
+process asks
+([ADR 0012](docs/adr/0012-people-live-on-the-lands-layers.md)). Design a craft
+from the lore and from the process it breaks. No process holds a special case
+for a system. Do not replace crafts with hauled material, yield bonuses, generic
+abundance, mana, wards or explosions. Treat lore-derived social
 uses and practitioner costs as adaptation proposals, not mandatory setting canon.
 Configuration and
 shaping should expose these systems' actual behavior, not require users to invent
@@ -239,11 +243,12 @@ structure fits carries `// hpc-exempt: <reason>` on its line or the line before.
   controls, metadata, or job completion. Do not opt in to rendering to satisfy an
   unrelated fixture dependency.
   A large dimension entered to test a form is configuration, not permission to
-  generate that world. Test physical and society algorithms in Vitest.
+  generate that world. Test physical algorithms and people's operations and
+  classifiers in Vitest, on small explicit fields.
 - Start ordinary browser scenarios with `openFixtureMap` from `tests/harness.ts`.
   It reuses completed map catalogs and numerical resources across scenarios, then
   restores independent copies into their isolated browser contexts. Reuse the
-  same numerical/map configuration; add scenario-specific features, society or
+  same numerical/map configuration; add scenario-specific features, places or
   existing child maps to the copy. Do not rerun generation, resource publication,
   wizard navigation or refinement just to prepare a navigation, inspection, save
   or presentation test. Never share a mutable page/context or depend on test order.

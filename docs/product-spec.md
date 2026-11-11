@@ -285,8 +285,9 @@ regional output arrives through the existing worker and atomic publication.
 Terrain and water develop from parent context without locking inherited heights
 or shores. Refinement develops connected ridges, distinct summits, cols and
 valleys rather than adding roughness alone. Streams follow gathered runoff;
-standing water needs a basin and sufficient supply. Towns follow geographic
-opportunities using captured occupation, without another society history.
+standing water needs a basin and sufficient supply. The people the child
+inherits settle its finer land in each round, and towns appear where they
+gather, without another human era.
 The child map includes a rectangular working area around the selected
 subject, with surrounding land and sea available for independent development even
 outside the source map's footprint. Climate responds to finer relief; habitats
@@ -296,10 +297,13 @@ prior; it develops under the new relief, soil, wetness and magical media (a tree
 line, valley meadows, coastal marsh) without noise patches. Refinement runs as a
 fixed three-round schedule in which relief, water, climate, magic, habitats and
 places respond to one another through shared media; established summits, rivers
-and towns shape their own surroundings and keep their identities. Known places remain available;
-regional algorithms add smaller settlements, local ways and POIs from useful
-sites. Completed society history provides context without a population-accounting
-gate or another settlement era.
+and towns shape their own surroundings and keep their identities. Known places
+keep their records and names. Smaller settlements, local ways, fords, bridges and
+mills are read from where the inherited people live on the finer land, by the
+same rules the world uses, and other POIs come from useful sites. The inherited
+people keep the number the parent gave them, less those whose ground the child's
+own water or ice covers. The child shows the cultural and political regions,
+ruins and events its parent recorded.
 
 Finer features and fields stay on their regional map. Creation captures context
 within the child's extent and pins its numerical input resources. Replacing the
@@ -467,6 +471,8 @@ the same drawing, with no hosted renderer or new geographic data source.
 - Relevant capitals, institutions, and political relations.
 
 **Cultural geography must not be forced into exclusive polygons.** Multiple cultures, languages, traditions, and religions may coexist geographically. Support distributions/prevalence fields and optionally inferred boundaries for cartographic presentation. Store genuine institutions, communities, and important sites as entities/features.
+
+Generated cultures, languages and faiths publish as the share of each place's people who hold them, so their regions overlap and follow no border. A generated realm publishes three distinct territories: sovereignty where its allegiance is the most held, control where it is firmly held, and a claim wherever anyone still holds it. A realm that spans a continent is also drawn in its geographic parts. A settlement states the share of its people holding each tongue, faith, custom and realm.
 
 Political and cultural map content should be available at every creation level where meaningful. World and Region generators can model states, cultural distributions, and broad administrative structure; Local/Site generation can model wards, local control, groups, property, and institutions. Interior maps can display ownership, restricted areas, affiliations, and artifacts without requiring a dedicated interior nation-state generator.
 
@@ -713,9 +719,8 @@ process can stop while ordinary processes move, bury, expose and wear its visibl
 remnants. This must be judged on later maps, not established by stock totals or
 history inspection alone.
 
-- **Fire:** vein cores on fracture-fed geothermal maxima, fallen cores in the
-  crust and gravels around impact craters, and forge cores where people crack
-  what they mined and carried. Fire follows fracture conductance, heats terrain,
+- **Fire:** vein cores on fracture-fed geothermal maxima and fallen cores in the
+  crust and gravels around impact craters. Fire follows fracture conductance, heats terrain,
   melts ice and hardens rock, quickens the living, opens the conduits it flows
   through until a spent vein seals, and carries warmth down the rivers below it;
   spent ore rides the crust and is exhumed, placers wash downstream. Fallen stock
@@ -741,8 +746,7 @@ history inspection alone.
   Hallowed warding pin them. A harbour on a strong track is a seasonal harbour.
 - **Greenwood:** sap and groundwater. Old stands and deep peat are its sources,
   springs on soft rock below a catchment its wells; it travels between roots
-  through connected cover, rides in the gut of grazing herds, is gathered and
-  planted by trade, is buried as peat into a stratum the crust carries and an
+  through connected cover, rides in the gut of grazing herds, is buried as peat into a stratum the crust carries and an
   aquifer leaches. Dissolved charge follows actual groundwater exchange and
   emergence. Verdure supports vegetation and soil moisture; springs drawn past
   their recharge collapse. Braided river morphology remains shared river work.
@@ -772,10 +776,30 @@ history inspection alone.
   shore, Breach, Overgrowth rot, Frozen Deepwood, Brackish wending, Preserved
   barrow, Fired crust, Standing-dead front and Brine shore. Hallowed and Veil
   are the any-system meetings.
-- **Society:** people are a carrier and a source. Trade moves cores, seed and
-  salt along the ways; extraction, hunting, clearance and burning act on the
-  stocks and their media; tenure, walked routes, kept lines and the dead are
-  recorded on the ground for the society-phase systems to read.
+- **People:** people are a source and practitioners. The years a place is
+  lived on, walked ways, kept lines and the dead are recorded on the ground for
+  Salt and Hallowed to read, and the fields are worked out again at the end of
+  each human era from the land as people left it. A people living on ground a
+  system's medium reaches learns its craft, carries it wherever it goes and
+  practises it only on the medium. A practised craft breaks a rule the land or
+  its people otherwise obey, on the share of the ground where it is practised:
+  - Fire, hearth-keeping: the growing season is the hearth's, and the ground's
+    height costs a way nothing.
+  - Aurora, reading: ways, kept lines and what a people holds are not forgotten.
+  - Pressure, diving: the sea is held off the shallows beside the divers' shore.
+  - Greenwood, tending: the bound neither move nor build, and hunger and hurt
+    take no one.
+  - Salt, raking: a sworn allegiance does not give way, and a place's
+    remembered dead count as present.
+  - Hallowed, the vow: nothing is harmed inside, and the ground beside it takes
+    what was turned away.
+  - Veil, door-keeping: a door kept at both ends is a step between two far
+    places for a realm's hold, a place's country and the ways between places.
+
+  Ground where a craft is practised widely enough shows on the map as a place
+  of that craft. People who leave a medium keep the craft and cannot practise
+  it.
+
 - **History:** solid inventories and retained ground records move with their
   geological material; water and living stocks use their declared carriers.
   Numerical activity history is distinct from the lore's readable ice-memory.
@@ -787,11 +811,12 @@ and interactions; no universal spell editor or speculative extension framework
 is implied. Do not import the reference game's named lore or global ice age, or
 erase established mechanisms to make every system fit one generic vocabulary.
 
-Magic feeds physical processes at the correct causal stage. Society can change
-access, extraction, use and local physical conditions, and those changes feed
-back into the appropriate system. Proposed social operations are distinguished
-from implemented geographic behavior; [ADR 0004](adr/0004-coupling-through-each-systems-medium.md)
-records how the pillars couple.
+Magic feeds physical processes at the correct causal stage. People's practice
+changes how the land and its people behave where it is practised, and the
+places people keep, walk and die on change where Salt and Hallowed stand.
+[ADR 0004](adr/0004-coupling-through-each-systems-medium.md) records how the
+pillars couple and [ADR 0012](adr/0012-people-live-on-the-lands-layers.md) how
+people's practice enters.
 
 ### 10.4 Cultural generation — new independent axis
 
@@ -803,6 +828,8 @@ Culture has identity and spatial prevalence, but should not be assumed to occupy
 - Regionally refined communities and local variations informed by captured context, without requiring exact inherited population totals.
 
 Dependencies can include terrain suitability, navigable routes, water, climate, magical hazards/opportunities, existing populations, historical eras, and neighboring cultures. The cultural generator should support separate seeds/options and targeted regeneration. Historical outcomes are projected into a static present-day state.
+
+Generated identity lives in the people on the land. Founding peoples begin at separate origins; in each human era the born hold what their parents hold, neighbours take up one another's tongue, faith and custom in proportion to their numbers and the travel between them, and a people cut off from the heart of a tongue or custom begins a daughter of it. A newer identity lies over an older one, which stays beneath, and identities set hardest where a place has standing. Each tongue, faith and custom is shown as the share of each cell's people who hold it.
 
 ### 10.5 Political generation — new independent axis
 
@@ -816,11 +843,15 @@ Generate or author:
 
 Political and cultural generation must be independently selectable and must not be conflated. Culture can cross borders; a state can encompass multiple cultures; claims can overlap; borders need not follow the boundaries of generation patches.
 
+A generated realm is an allegiance with a seat at a settlement. Its hold spreads from the seat along the travel surface, and people within it take up the allegiance over what they held before. A town beyond every realm's reach can found its own, and a realm with no seat left ends. A settlement that passes from one realm's hold to another's is recorded as besieged, and a way whose two ends different realms hold is a frontier. A realm keeps up the most travelled land ways out of its seat as highways.
+
 The initial generator can use a constrained historical model rather than a complete simulation of individual political actors. At World/Region scale, establish coherent polity patterns and subdivisions; at Local/Site, optionally refine administrative areas, ownership, guilds, and institutions. Interior layers can display ownership/control without running a macro-state generator.
 
 ### 10.6 Settlement, infrastructure, and built environment
 
 Geography and human domains inform settlement and infrastructure placement. Include roads, ports, routes, settlements, structures, and their network/topological constraints as a generation domain or subdomain with explicit dependencies. At Site and Interior profiles, use specialized algorithms for layout, cave passages, parcels, building footprints, walls, rooms, and furnishings, together with direct authoring.
+
+Generated settlements are read from where people live. People are spread over the land as population, farmland, pasture and built-up ground; they grow where the land feeds them, gather along cheap travel and build where they stay. A town is where more people live than their own land feeds, and it keeps its name while its crowd grows, shrinks or moves; a town that empties is shown as its own ruin. Each settlement states the land it stands on, the hinterland that reaches it most cheaply and why it is there. Ways run between neighbouring settlements through the cheapest crossing between their hinterlands and show as roads, tracks or sea lanes by their travellers. People try dams on the rivers of their own ground, and a dam stands where it makes a lake the map can show. Famines, disasters and sieges are recorded at the settlements they befell.
 
 Do not require all content categories to be generated at every level; generators advertise where they are applicable.
 

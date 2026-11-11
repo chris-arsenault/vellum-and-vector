@@ -62,9 +62,9 @@ Raster ranges and category legends include applicable patches and finer map cove
 The UI and each worker initialize the same GEOS spatial adapter. Nearest points,
 rectangle clips, Voronoi cells, linear referencing and nearest-item lookups go
 through that adapter (GEOS, R-tree or STRtree); hand-written geometry scans are not
-added beside it. Per-record read products are stored once per record revision: the
-settlement view reads a community index stored with each society record, and field
-legends and raster references are stored per area. There is no JSTS
+added beside it. Field legends and raster references are read products stored per
+area. The settlement view reads the settlement's own record and the records that
+name it; storage keeps no society record. There is no JSTS
 fallback or snapshot-based session engine. Released snapshot saves retain a narrow
 importer so existing explicit saves remain readable.
 
@@ -84,7 +84,7 @@ follows a frontier's working set. A membership band marks each cell as content, 
 or nodata; blocks outside the halo are absent, and loops skip by per-block live
 counts rather than by cell order. A band snapshot copies only the blocks dirty in
 memory and shares spill slots with its source. Cells meet the vector catalog through
-label bands grouped by label. Grids, society and committed field inputs are
+label bands grouped by label. Grids and committed field inputs are
 coverages in the same cache; an input band
 decodes the chunks under each block on demand and reloads them instead of spilling.
 Grids cross a worker port only as detached arrays (previews, tile grids). No indirection

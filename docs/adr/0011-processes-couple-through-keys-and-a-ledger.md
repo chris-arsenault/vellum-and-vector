@@ -20,6 +20,8 @@ do not establish what an algorithm actually did.
 - **Shared questions.** Consumers ask keys such as `discharge`, `wetness` or `heat`.
   Responders register a base, additions and scales beside the system that supplies them.
   Adding a responder changes every consumer of that key without editing those consumers.
+  A fourth kind of response, the break, is decided in
+  [ADR 0012 (people live on the land's layers)](0012-people-live-on-the-lands-layers.md).
   Answers are read-only through the narrow process interface. Each narrow process or simultaneous
   substep resolves its declared questions before running; later groups see landed effects.
   Whole-field builders resolve questions where their algorithms ask them.
@@ -49,7 +51,7 @@ do not establish what an algorithm actually did.
   Internal algorithm helpers remain ordinary functions; the checks enforce
   executable boundaries rather than infer every helper's effects.
   Development and publication are separate operations: publishing cultures, polities or works
-  cannot initialize or advance society. Ocean budget initialization and marine reconnection
+  cannot initialize or advance people's layers. Ocean budget initialization and marine reconnection
   history likewise run explicitly, outside current shoreline queries.
   Coastal forcing resolves the current shoreline and currents before projecting its sources
   onto receiving land. Terrain changes invalidate that projection; an earlier shore target is

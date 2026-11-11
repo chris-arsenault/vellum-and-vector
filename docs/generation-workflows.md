@@ -6,10 +6,6 @@ Initial generation displays independent epoch previews and publishes validated
 record batches. Explicit map saves retain completed geography; execution state
 does not restart or recover. There is no backend or MCP in this product phase.
 
-When society feedback moves a map's physical shore, publication refreshes its
-named seas from that shoreline and reuses matching place identities. Other maps
-retain their captured geography.
-
 ## Geographic regional refinement
 
 Selected region subjects retain their original source and arbitrary hierarchy.
@@ -18,7 +14,7 @@ using its nearest refined ancestor as a starting point. The child is a separate
 map sharing coordinates and completed history, with independent elevation and
 coastlines. It does not preserve parent height samples or require numerical
 reconciliation. Creation captures local feature, network, drainage, landmark,
-magic and society records. Each geographic record belongs to the new map; a
+magic, place and way records. Each geographic record belongs to the new map; a
 separate place identity relates it to the source. Numerical inputs have map-owned
 descriptors pinned to immutable resource bytes. Replacing a parent's resource
 does not change those captured inputs, and creating a child does not copy scalar
@@ -159,9 +155,10 @@ Established geography enters through the cause registry. Captured courses guide
 initial organization and provide inflow; summits, lakes, settlements and landmarks
 provide local context. Their named identity persists while location and extent can
 be refined. Existing settlements and works participate in local realization through
-the shared Ground and current routing. New local places and ways use the existing
-placement rules; refinement does not run another society era or redesign society,
-economy or POI categories.
+the shared Ground and current routing. The inherited people live one pass on the
+finer land in each development round, and new local places and ways are read from
+their layers by the world's classifiers, as described under [Society](#society);
+refinement lives no human era.
 Newly accepted disaster events apply their catalogue's initialization Command once.
 Their captured material aftermath is then ordinary evolving Ground. Continuing place
 influences are current queries, so a later refresh neither erases active water withdrawals
@@ -171,8 +168,8 @@ Shared projection and extraction publish terrain, water, habitats, magical class
 places and ways at the child's scale. Smaller patches can remain field coverage
 without gaining a named outline. Regional identities relate those records to their
 captured subjects, and a descendant captures the child's result through the same
-resource contract. Regenerating physical geography uses the map's pinned inputs;
-neither this path nor society-only realization reads live parent or sibling terrain.
+resource contract. Regenerating physical geography uses the map's pinned inputs
+and does not read live parent or sibling terrain.
 
 Verification separates contracts from geographic judgment. Pure tests exercise
 input ownership, material operations and real composition/dispatch with supplied
@@ -183,7 +180,7 @@ Sample equality, aggregate budgets and matching coastlines are not acceptance ga
 
 Ordinary map authoring uses linked feature representations and surface overlays.
 Procedural inputs omit those drawings, leaving terrain, drainage, material stocks
-and society unchanged. Publication restores the independent map edits. Rendering
+and people's layers unchanged. Publication restores the independent map edits. Rendering
 and exports compose the mapped result, scoped by geographic ancestry, while
 history and undo retain the original context. Shared two-dimensional anchors stay
 attached without imposing numerical river profiles or frozen physical samples
@@ -214,12 +211,10 @@ transition bands stay areas. A label or polygon boundary does not stand in for a
 missing physical path. Existing identities and names survive anchor corrections
 where the generated identity remains the same.
 
-Located society works keep their specific kind and medium. Resolved intensive
-activity can publish its modeled extent, explicitly distinct from a surveyed
-parcel. Unresolved works and structures remain sites with modeled reach as an
-attribute. Events can retain known affected community extents without inventing
-hazard paths. World-scale demands remain unlocated aggregate forcing under
-ADR 0005; extra discovery controls do not materialize them as works.
+Works people raised keep their specific kind and medium and publish as located
+sites where a map's cells can hold them. Farm country shows as the published
+farmland, pasture and built-ground layers and has no outlined areas. Works and
+events name the place they stand at, and ways the places they join.
 
 Optional feature footprints compose separately from primary geometry. Browser
 reads, editing, measurement, spatial discovery, templates and export preserve
@@ -236,88 +231,161 @@ motivations, media, feedback and interference follow
 [product specification 10.3](product-spec.md#103-magical-generation--the-seven-systems)
 and the [magic source authority](../AGENTS.md#magic-source-authority), without importing
 named setting lore. The systems share the process structure where it serves them and use
-system-specific operations where their behavior requires it. Society's reads of magic and
-the coupling between the pillars are decided in
-[ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
+system-specific operations where their behavior requires it. The coupling between the
+pillars is decided in [ADR 0004](adr/0004-coupling-through-each-systems-medium.md), and
+people's use of magic in
+[ADR 0012](adr/0012-people-live-on-the-lands-layers.md).
 
-Magical places are extracted once after the optional human history, before final naming.
-Human history reads the numerical fields and material stocks directly. Regional refinement
-uses the same extraction process before carrying captured identities onto its geography.
+Magic fields are evaluated again at the end of each human era from the land as people
+left it, and magical places are published after the last era, before final naming.
+Regional refinement uses the same extraction process before carrying captured identities
+onto its geography.
 
 ### Society
 
-`world.societies[areaId]` retains aggregate communities, joint population groups,
-connections, completed eras, political relationships, works, events and magic practice
-resources. Registered human-era processes evolve population and migration, cultural
-contact, works/practices and political reach. Culture, language and religious membership
-remain separate from sovereignty, administration, control and claims. Settlements and
-roads consume that state.
+People are layers on the land's own mesh, beside the ground: population, farmland,
+pasture, built-up ground and standing (the works and wealth a built place has
+gathered), each a value per area of ground, with the remains that built places
+leave. An identity column rides in the population: a bounded stack of layers,
+newest first, each naming a tongue, a faith, a custom, an allegiance and a craft
+by tradition code, with the people who hold it, how hard it has set and its age.
+The map holds no society record. A run registry remembers what each tradition
+code is and which crowd is which named place; neither is the source of where
+people are or what they hold.
+[ADR 0012](adr/0012-people-live-on-the-lands-layers.md) records the model.
 
-World publication contains major centers and their routes, political territories,
-population and affiliation fields, and major historical events. World settlements
-carry their site class, reason and fortress flag and the work kinds their unit
-demands of its country. At World a work is a demand rather than an earthwork at
-a point: an intensive demand (clearance, burning, hunting, conservation,
-irrigation, tapping, quarrying) acts over the unit's cells of its medium, a
-structural demand (dam, harbour, pass, weir) carries an amount and a unit and
-does nothing until a finer profile realizes it; the natures and units are
-declared in `societyWorkNatures` and the rule in
-[ADR 0005](adr/0005-scale-contract.md). Settlements, ruins,
-waterworks, transport sites, land use, magic practice sites, institutions and
+One owner in `packages/generation/src/human` holds the bands and changes them
+only through registered operations: lay, move, convert, overlay, inherit, harden,
+wear, bury, re-expose and carry. The layer catalogue states each kind's facts:
+what drowning, scouring, shaking, burning, neglect, starving and lying fallow
+take from it, what stays on the ground as remains, and how far a place's
+standing holds it. Whatever acts on the layers states its action as a mix of
+those modes, so neither side names the other. When plates move, the owner
+carries a cell's layers, remains and identity column together.
+
+People live in passes. One pass puts land under crops and herds where hunger is
+felt, grows people into what feeds them, moves them along the travel surface
+toward room and toward the crowds they can reach, builds where they stay and
+records the years lived on the ground. Each step is one aggregate act sized by
+the years the pass stands for and reads what the step before left. Action at a
+distance uses one operator: what a cell can reach of an amount spread over the
+land, less with every costly step. A crowd's pull, a town's hunger and the
+country's spare food are all reaches, and spare food is divided among the
+hungers that reach it.
+
+The same pass runs with different facts. Inside every geological epoch the
+land's cumulative records are read before the epoch's processes and again
+after; what was laid down, stripped off or struck in between buries, bares or
+wrecks the layers, water over a cell buries it and ice scours it. People then
+live one loose pass without farming or building. Ways and kept lines are
+forgotten when an epoch begins; nothing else is deleted between epochs. After
+the last epoch each human era is lived on the finished land as several settled
+passes with farming, food carried over distance and building, scaled by the
+era's mobility. An era bound to an epoch before the last is not lived as a
+settled era.
+
+Processes and people meet through shared questions, the answer keys in
+`packages/generation/src/coupling/answers.ts`. The land answers what a cell
+feeds under crops, under herds and left wild, what it supports as used, and
+what it costs to cross. The rules of a pass are questions too: what a blow
+takes, who is free to move, who builds, how fast things are forgotten, how
+readily an allegiance gives way and who counts as present. Built ground answers
+the question physical processes already ask about what binds the ground. No
+physical process names a human band.
+
+Places are read from the layers after each era, as peaks are read from
+terrain. A town is where more people live than their own land feeds, and its
+zone is every such cell from which people thicken, cell to cell, up to the same
+densest cell. The place registry matches zones to the places already known: a
+zone on a known place's ground is that place, and a place no zone continues is
+abandoned and publishes as the ruin of itself. A place's hinterland is the land
+that reaches it most cheaply. A way runs between two neighbouring places through
+the cheapest crossing of the border between their hinterlands. Its travellers
+follow the smaller place's size and the cost of the way: enough make a road,
+fewer a track, and a way mostly over water is a lane. Travellers wear the ground
+of their way, which later travel finds cheaper. A realm keeps up the most
+travelled land ways out of its seat as highways. The place catalogue publishes
+settlements, ruins and ways; a settlement record states its site, its zone and
+hinterland with their farmed and grazed land, the reason it is there, its people
+at the end of each era and the share of them holding each tongue, faith, custom
+and realm.
+
+Identity is lived each era after the land pass. Founding peoples begin at
+separate origins. The born hold what their parents hold; neighbours take up one
+another's tongue, faith and custom in proportion to their numbers and the travel
+between them; a people cut off from the heart of a tongue or custom begins a
+daughter of it; and what people hold ages and sets, hardest where a place has
+standing. An overlay names only the traditions it changes, so a faith spreads
+without replacing a tongue, and the older layer stays beneath. A realm is an
+allegiance with a seat at a known place. Its hold spreads from the seat along
+the travel surface, people within it take the allegiance up as an overlay, a
+town beyond every realm's reach founds its own, and a realm with no seat left
+ends.
+
+Cultural regions and territories are read from the column. Each tongue, faith
+and custom publishes as the share of every cell's people who hold it, so regions
+overlap and follow no border. A realm publishes sovereignty where its allegiance
+is the most held, control where it is firmly held and a claim on every cell
+where anyone still holds it. Population density and the people the land
+supports as used publish as fields, and the layer bands publish with them.
+
+Dams, events and frontiers are read from the land and its places at the end of
+each era. Every living place without a dam tries one on the strongest river
+cell of its own ground; the water is worked out again with the dams marked, and
+a dam stands only where it makes a lake the map can show. A dam whose people
+have gone fails. A famine is recorded where a town's worth of people died on a
+place's ground within the era, a disaster where an avalanche, flood or tsunami
+struck it by the chance its ground gives, and a siege where a place passed from
+one realm's hold to another's. A hazard takes from the layers what the layer
+catalogue says they give up. A way whose two ends different realms hold is a
+frontier, and the places at its ends keep that line. Irrigation, harbours,
+forges, archives and shrines are sited by their catalogue entries from the
+ground near living places. After the last era the map's lakes and rivers are
+read again from the water as people left it.
+
+A craft is the magic system a people know how to work, held in the identity
+column beside tongue, faith, custom and allegiance. It is learned only on ground
+the system's medium reaches, carried wherever its holders go and practised only
+on the medium: the practised share of a cell is the share of its people who hold
+the craft times the share of its ground the medium holds. On that share the
+craft answers a shared question as a breaking responder: the rule the asking
+process obeys is set aside and the craft's own answer stands. Fire's
+hearth-keeping holds its own growing season and lets no climb cost a way;
+Aurora's reading lets nothing be forgotten; Pressure's diving holds the sea off
+the shallows beside the divers' shore; Greenwood's tending binds its people from
+moving and building and lets hunger and hurt take no one; Salt's raking keeps a
+sworn allegiance from giving way and counts a place's remembered dead as
+present; Hallowed's vow lets nothing be harmed inside and lays what it turned
+away on the ground beside it; Veil's door-keeping makes a door kept at both ends
+a step between two far places. No pass or process holds a case for a system.
+Ground where a craft is practised over enough of a cell publishes as a place of
+that craft. Magic fields are evaluated again at the end of each era from the
+land as people left it, without supplying or ageing any stock, and magic is
+published again after the last era.
+
+A refined map inherits its parent's layers and named places. In each development
+round its people first meet the round's water and ice, then live one pass in
+which they farm, build and move on the finer land while their number stays the
+parent's. At the end the parent's settlements and ruins are known places on the
+ground the parent's cell covered, and every other crowd is read by the world's
+classifier and published by the same catalogue entry. A finer map shows smaller
+places, down to a hamlet, while rank is still judged against the World town
+size. Ways and hinterlands come from the same reading; a ford or bridge stands
+where a way steps over a river, and mills stand at living places. The child's
+records name the same traditions as the parent's. Its cultural and political
+regions, its ruins and its events are the ones the parent recorded.
+
+A creator's edit to a settlement's groups or population is reconciled on the
+settlement's own record. A drawn territory, event or work stands as drawn; apart
+from a drawn dam, which holds water, it does not act on the land or its people
+when the map is generated again. Generation controls supply each era's duration,
+mobility and political capacity. The cross-pillar coupling decisions are recorded
+in [ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
+
+Settlements, ruins, waterworks, transport sites, magic practice sites and
 historical events have distinct layers and concrete feature kinds. A selected
 creation profile also limits scene features and detailed geometry, so
 materializing a Region does not expose its local features on the World map.
-Creator authoring can shape the refined geography.
-
-Local society queries use the existing sampling topology. Earthworks transfer
-elevation changes to the existing native mesh without resampling untouched terrain;
-Pressure pathways retrace when connected ocean cells change. This avoids both
-unrelated coast drift and needless propagation while preserving actual coastal
-changes and Aurora's temperature/ice dependencies.
-
-Specialized population and work edits synchronize their retained society records.
-Ordinary mapped geometry and surface edits do not alter those records.
-Regional refinement retains completed history and known place identities without
-subdividing population budgets or rerunning old eras. The inspector exposes population
-composition read across the groups by culture, tradition, language and livelihood,
-with the groups themselves folded into a table and edited one at a time, beside
-support and practice resources, while generation controls supply era
-duration, mobility and political capacity, and bind an era to a physical epoch:
-an era bound to an epoch before the present runs inside it as a mobile round
-whose cold-age works persist. Its camps are latent sites the present prefers;
-one publishes as a World ruin only where it met the World's own settlement rule
-or where the present finds its ground marked by a sealed vein or a drowned weir
-line (a ruin field). Existing geographic
-inputs and focused work refreshes support this subsystem. The cross-pillar
-coupling decisions are recorded in
-[ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
-
-The settled eras run as cycles whose length follows the pace of change: each
-cycle spans the years in which the world's people would change by a fixed
-share at the current logistic rates, bounded below by a settled decade and
-above by a long lifetime, with wider bounds for a mobile round. A long history
-therefore costs about as many cycles as a short one, and the end-of-history
-water, dam and geography extraction runs once, when the last settled era ends.
-The default history is one ice-age round followed by three settled eras with
-rising political capacity, enough for the land to fill and kingdoms to
-consolidate; the era form changes names, durations and variables. Towns draw
-on their hinterlands: each catchment's town-dwellers are allocated among the
-few centres within reach of it by the centre's current size, a seat, harbour
-or pass, and travel cost, with a local share kept in the catchment's own chief
-town and its latent small towns; centres draw their share as real migration,
-bounded by the food their own catchment holds, so one town in a region becomes
-the city of its hinterland. Ways are made by use: every connection remembers
-its yearly travellers, from migrants, from hinterland town-dwellers walking the
-least-cost path to their centre and from market traffic between its towns, and
-a worn way costs less to travel for every later process. At World a land or
-river way publishes as a track or a road by that wear, whatever the rank of
-its ends, with a floor that keeps every major settlement and every capital's
-regional capitals connected; a worn sea way publishes as a shipping lane that
-hugs the shallow coast; and a strong polity raises a straight, named highway
-along its seat's busiest road where the line between the two ends crosses
-open, low country. Road geometry follows river banks and valley floors, pays
-for forest, sodden ground and river crossings, and finds saddles through the
-slope term.
 
 ### Controls and module contracts
 
@@ -349,8 +417,8 @@ may change whenever the generator does.
 
 This structure governs initial world generation. Independent regional maps build the
 same physical field on their own lattice and run the regional schedule described
-above in place of the world's physical schedule, epoch runner and society working
-state, sharing the numerical and spatial primitives and publication infrastructure.
+above in place of the world's physical schedule, epoch runner and human eras,
+sharing the numerical and spatial primitives and publication infrastructure.
 
 Registered processes can perform GIS operations, initialize fields, evolve
 terrain, propagate magic, change populations or generate features. They share
@@ -378,8 +446,8 @@ profile configuration. Its private working state includes:
 
 Resource references identify committed numerical inputs, which open as immutable
 bands over their chunks. Every numerical value of a run is a band in a coverage:
-the physical world, the surface grid and its topology, society and the projection
-tables. One block cache per worker keeps blocks
+the physical world with people's layers, the surface grid and its topology and the
+projection tables. One block cache per worker keeps blocks
 resident within its budget and spills them to scratch beyond it; process lifetimes
 release bands the state no longer reaches. Processes share typed domain state directly, independently of React,
 database connections and browser messaging. Completed history retains causal
@@ -488,7 +556,7 @@ them), the political pattern (starting polities and how far a seat holds),
 towns and cities (the World town size and how far a city draws its
 hinterland) and roads and travel (the traffic that makes a road, market
 travel and a polity's highways). Each alternative sets a bundle of feature
-settings; the society coefficients those bundles move are atlas parameters
+settings; the people coefficients those bundles move are atlas parameters
 with declared defaults. Adjust opens the advanced panel on the underlying settings
 and the era schedule.
 
@@ -558,7 +626,7 @@ downstream; these fields do not by themselves implement social use or its costs.
 
 Regional maps run no epochs: refinement develops the captured present, as described
 under [Geographic regional refinement](#geographic-regional-refinement). Human eras
-can reference physical epochs and supply their own durations and variables.
+follow the last physical epoch and supply their own durations and variables.
 Ordinary present-day edits preserve completed history.
 
 ### Magic in the epoch sequence
@@ -575,12 +643,11 @@ history with the crust's source map. Climate-phase systems (Fire, Pressure)
 alter heat, moved water and rock before hydrology; post-glacial systems (Aurora,
 Greenwood, Salt, Veil) act after ice responds, Aurora through the charge its ice holds,
 carrying ice persistence into the following epoch; every evaluation re-applies the
-shared forcings. Society-phase systems (Hallowed) are made of what people did: each
-society cycle, inside a round or in the present, the environmental refresh records
-tenure, walked ways and the dead on the mesh, evaluates society-phase systems and
-re-evaluates any system whose stocks people drew or deposited (cores cracked at a
-forge, seed planted, sap cleared), then reclassifies. A world without a human era
-never runs it. Final classification retains every feature mask, natural geography and
+shared forcings. Society-phase systems (Hallowed) are made of what people did: the
+owner of people's layers records tenure, walked ways, kept lines and the dead on the
+mesh, and at the end of each human era the magic fields are evaluated again from
+those records and the land as people left it. No stock is supplied or aged during
+the human eras. Final classification retains every feature mask, natural geography and
 physical materials. The surface class of a cell is the class with the largest coverage,
 with rule priority breaking ties, and a second surface records the runner-up where it
 holds a substantial share. An inland map has no fabricated pressure locus. A warm
@@ -771,7 +838,7 @@ origin/reservoir, host constituent and concentration; Ground splits, mixes, extr
 them with the material. Fresh cover of the same mineral acquires no buried charge. The unbounded
 basement marker cannot supply finite inventory. Dissolved and living stocks keep their own water
 and ecological carriers. Depleted rock remains rock after its charge is spent.
-Worked stockpiles retain custody during deliberate extraction and trade. Ordinary erosion and
+Worked stockpiles retain custody during deliberate extraction. Ordinary erosion and
 geological movement release that custody to the declared natural reservoir on the same material;
 an abandoned stockpile does not become an inaccessible mineral identity. Ground owns this receipt
 behavior without interpreting society or magic names.
@@ -781,8 +848,8 @@ sources, applies wards, updates the other fields and their meetings, then evalua
 doors. It does not repeat births, melting, material reactions or history. Retention distinguishes
 fresh activity from the existing Ground inventory, including inventory moved or extracted since
 the field was evaluated. Disabling supply leaves ordinary material transport and decay available.
-Society reads physical forcing through its declared epoch ancestry; an unbound present era uses
-the last physical epoch. Its own era index does not select a different physical history.
+Human eras are lived on the land the last physical epoch left; an era's index does not select a
+different physical history.
 
 Groundwater retains water volume per area, receives recharge, routes by hydraulic head and returns
 to soil and streams. Declared dissolved stocks follow those actual exchanges; discharge to the sea
@@ -854,14 +921,14 @@ responses retain their world dimensional frame through `MapScale`; local terrain
 detail use the child's frame. Refresh replaces environmental contributions rather than
 repeatedly adding heat, fog or vegetation cooling to captured temperature.
 
-| Regional consumer                               | Shared producer or contract                                                                                                                                                                                       |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Terrain, escarpment springs and inherited folds | Ground intervals, finite extraction, groundwater emergence, yielding-plane geometry and continuity. Regional calderas, retreat and landmark conjunctions remain their terrain/POI work.                           |
-| Coasts and changed-shore drainage               | Shared coastal sediment transport, current ocean connectivity and receiving-shore forcing. Regional routing supplies captured incoming discharge to the shared water owners.                                      |
-| Climate and storm medium                        | Shared circulation and current environmental forcing replace captured contributions as local terrain and carriers change.                                                                                         |
-| Ecology, peat and moraines                      | Shared local vegetation development, organic burial, carbon-bearing sediment, groundwater return and actual ice debris, without historical aging.                                                                 |
-| Magic and named sources                         | Captured host cargo and fluid stores, source supply/location separation, coastal rays, geographic ward rims, distance-based strain and present door eligibility. No captured intensity floor may renew inventory. |
-| Society and existing works                      | Actual material gathering, consumption and trade receipts; maintained route state and present door access. New social generation and magic practices require the separate design session.                         |
+| Regional consumer                               | Shared producer or contract                                                                                                                                                                                          |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Terrain, escarpment springs and inherited folds | Ground intervals, finite extraction, groundwater emergence, yielding-plane geometry and continuity. Regional calderas, retreat and landmark conjunctions remain their terrain/POI work.                              |
+| Coasts and changed-shore drainage               | Shared coastal sediment transport, current ocean connectivity and receiving-shore forcing. Regional routing supplies captured incoming discharge to the shared water owners.                                         |
+| Climate and storm medium                        | Shared circulation and current environmental forcing replace captured contributions as local terrain and carriers change.                                                                                            |
+| Ecology, peat and moraines                      | Shared local vegetation development, organic burial, carbon-bearing sediment, groundwater return and actual ice debris, without historical aging.                                                                    |
+| Magic and named sources                         | Captured host cargo and fluid stores, source supply/location separation, coastal rays, geographic ward rims, distance-based strain and present door eligibility. No captured intensity floor may renew inventory.    |
+| People and existing works                       | Inherited layers lived once per development round through the world's pass with people's number kept; places, hinterlands, ways, crossings and mills read by the world's classifiers and published by the catalogue. |
 
 ### Named relief
 
@@ -983,9 +1050,7 @@ native arrays. A stencil pass reads a cell's lattice neighbours through the band
 connected pass walks the lattice through a frontier with per-cell reads and writes.
 Connected numerical passes keep frontiers resident and sized by the frontier;
 per-cell labels, ranks, marks and scratch channels are bands. Whole-world orderings
-stream over block runs held in bands. Society demands capture their eligible medium
-before applying changes, then stream the forcing across those cells. Local work
-queries traverse the sampling topology without collecting the entire surface.
+stream over block runs held in bands.
 
 Frontiers and scratch structures (`packages/domain/src/hpc/`) hold their entries in
 typed arrays only, with no per-entry objects, string keys, proxies or comparator
@@ -1227,8 +1292,8 @@ polar faces. Transport uses the planar metre chart.
 The TypeScript runner applies registered processes to one working map in a browser
 worker. The workspace publishes semantic field groups through immutable resources, retains
 completed causes by area, and uses direct shared domain validation for edits.
-The cultural, political and macro-settlement generators use the aggregate society state described above;
-site/interior layouts retain their own processes.
+The cultural, political and settlement publications read people's layers on the land, described
+above; site/interior layouts retain their own processes.
 
 ## Geographic significance at every scale
 
@@ -1261,16 +1326,14 @@ water region exists. Magical places retain each system's causal evidence and
 actual propagation courses. Configured injected landmarks keep the guarantees
 and identities in [ADR 0006](adr/0006-landmarks-are-injected-causes.md).
 
-World founding claims require reachable communities. A successor needs a viable
-population with an institutional or connected regional base. Territorial extent
-follows supported population and terrain travel costs, leaving unsupported land
-unclaimed. Competing continuous cost margins establish shared frontiers. Claims
-can survive retreating control. Continental political subdivisions retain their
-parent territory and sovereign identity and use subordinate outlines.
+A realm is founded at a known place and holds the land its seat reaches along the
+travel surface. Its territory is the land where its allegiance is the most held,
+so land nobody lives on is unclaimed, and its claim is every cell where anyone
+still holds the allegiance, so a claim survives retreating control. Continental
+political subdivisions retain their parent territory and sovereign identity and
+use subordinate outlines.
 
-Published area geometry serves drawing, indexed selection and export. Generated
-travel-cost frontiers do not receive a second display-only border relaxation.
-Site and course influence footprints remain context rather than selectable
+Published area geometry serves drawing, indexed selection and export. Site and course influence footprints remain context rather than selectable
 regions. Existing saved maps are not reclassified when opened.
 
 ## Ecology and organic geology
@@ -1401,35 +1464,30 @@ authored-protection rules apply.
 
 Names depend on the world seed and stable geographic key, using a separate random
 stream. Seeded geographic naming traditions cover physical geography even without
-society generation. Initial languages reference those same traditions. Population
-groups record per-language `languageShares`: overlapping `knowledge` and exclusive
-naming `use`, each expressed as a fraction of the group's residents. Use totals at
-most one; the remainder is unspecified. Simple authored input can still list known
-languages and one `namingLanguage`; omission defaults to the first known language,
-while explicit null means unspecified use. Explicit shares are authoritative;
-the language list and primary naming language summarize them. Migration carries
-the shares with people, and merging groups preserves weighted language counts.
-Human-era contact
-shifts usage through all occupied connections without removing multilingual
-knowledge or changing population totals. Political control does not overwrite
-resident languages. Isolation can change cultural identity while retaining language.
-Language contact updates shares without splitting groups by every language
-combination; people, culture, religious and practice affiliations distinguish
-demographic groups.
+people. A generated tongue is a tradition in the identity column, held by a share
+of each cell's people. Taking up a realm's allegiance or a faith does not replace
+the tongue a people holds, and a people cut off from the heart of its tongue
+begins a daughter tongue.
 
-The Languages layer publishes both overlapping `language:<id>` knowledge and
-exclusive `languageUse:<id>` shares. Empty communities have no language-use signal.
-The field is a projection of population groups, not an independent simulation.
-Current knowledge, use and per-cycle usage history are inspectable. Population
-authoring can select one naming language or edit individual knowledge and use
-percentages. Raising one use share beyond the available remainder proportionally
-reduces other use shares; knowledge stays at least as high as use.
+The Languages layer publishes `language:<id>` and `languageUse:<id>` as the share
+of each cell's people who hold the tongue; generation writes the same distribution
+to both, and a cell without people has no signal. The field is read from the
+identity column, not simulated separately. An authored settlement group records
+per-language `languageShares`: overlapping `knowledge` and exclusive naming `use`,
+each a fraction of the group's residents. Use totals at most one; the remainder is
+unspecified. Simple authored input can still list known languages and one
+`namingLanguage`; omission defaults to the first known language, while explicit
+null means unspecified use. Explicit shares are authoritative; the language list
+and primary naming language summarize them. Population authoring can select one
+naming language or edit individual knowledge and use percentages. Raising one use
+share beyond the available remainder proportionally reduces other use shares;
+knowledge stays at least as high as use.
 
-New settlements choose one whole naming tradition from their founding population's
-usage mixture, retaining the language and founding era. Polities use their seat's
-language. The final `atlas.names` pass names new geographic features after human
-eras, weighting language use by represented population within their extents.
-Water names sample their banks or coasts at the map's sampling resolution.
+A place is named in the tongue most of its people spoke when it was first seen
+and keeps the name and founding era. A new tradition, a realm included, is named
+in the tongue of those who found it. The final `atlas.names` pass names new
+geographic features after the human eras in a tongue spoken on their ground,
+chosen with weight by the people who speak it along the feature's shape.
 Geography without local speakers uses the seeded geographic tradition.
 Source-map, protected, authored and already established names remain unchanged;
 language shifts do not rename existing places. Refinement carries naming provenance
@@ -1443,8 +1501,5 @@ Most names use Markov chains; compounds and qualified forms supply additional
 variation. Feature kind and subkind participate in each feature's naming seed.
 Vocabulary revisions do not move the initial geographic traditions.
 
-Society works receive names at construction from the local naming-language mix,
-with several readable terms for each work kind (for example Forge, Foundry or
-Smithy). The work kind remains in the feature attributes. Work names and their
-language/era provenance survive later population changes and republication,
-and a work is labelled by its own name rather than by its kind and a town name.
+The naming config holds several readable terms for each work kind (for example
+Forge, Foundry or Smithy). The work kind remains in the feature attributes.
