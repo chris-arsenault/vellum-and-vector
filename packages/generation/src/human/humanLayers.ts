@@ -141,6 +141,17 @@ class HumanLayers {
   carry(plan: TransportPlan) {
     carryLayers(this.layers, plan);
   }
+  /** Travellers between places wear the ground they cross, in traveller-years per cell. */
+  travel(travellerYears: Values) {
+    for (const kind of Object.keys(this.layers.of) as HumanLayerId[]) {
+      const ways = layerCatalogue[kind].ground?.ways;
+      if (!ways) continue;
+      for (let cell = 0; cell < this.layers.count; cell++) {
+        const worn = positive(travellerYears.get(cell));
+        if (worn) this.layers.map[ways].add(cell, worn);
+      }
+    }
+  }
   /**
    * Time passes where people live: the ground keeps the years they have lived on it, and ways
    * and kept lines nobody renews are forgotten.

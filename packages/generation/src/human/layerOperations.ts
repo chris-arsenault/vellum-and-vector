@@ -112,6 +112,16 @@ export const reExposeRemains = defineCommand(
   ({ map, share }: CoverShare) => humanLayerWriter(map).reExpose(share),
   []
 );
+export interface Travel extends OnMap {
+  /** Per cell: the travellers who crossed it, times the years they did. */
+  travellerYears: Values;
+}
+export const travelWays = defineCommand(
+  "human.layers.travel",
+  "elapsed",
+  ({ map, travellerYears }: Travel) => humanLayerWriter(map).travel(travellerYears),
+  []
+);
 export interface CarryLayers extends OnMap {
   /** Where each cell's ground went when the plates last moved. */
   plan: TransportPlan;

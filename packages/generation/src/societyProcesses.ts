@@ -12,7 +12,7 @@ import { applyPresentWorks } from "./societyWorks";
 import { refreshSocietyEnvironment } from "./societyEnvironment";
 import { societyEvolution } from "./societyEvolution";
 import { humanRoundProcess, presentHumanEras, resolvedHumanEras } from "./societyRound";
-import { humanLandEra, humanLandProcesses } from "./human/landProcesses";
+import { humanLandEra, humanLandProcesses, humanPlaces } from "./human/landProcesses";
 
 function validatePopulation(state: GenerationState): Diagnostic[] {
   const communities = state.society?.region.communities ?? [];
@@ -165,15 +165,8 @@ export function societySequence(input: AtlasGenerationInput): ProcessSequence {
                 lastEra: i === eras.length - 1 ? 1 : 0,
               },
             })),
-            body: [
-              // People live the era on the land first; the older society model still follows
-              // until the entry points switch to the land alone.
-              invoke(humanLandEra),
-              {
-                ...invoke(societyEvolution),
-                parameters: { cultural: !!cultural, political: !!political },
-              },
-            ],
+            // People live the era on the land, and the places it leaves are recorded by name.
+            body: [invoke(humanLandEra), invoke(humanPlaces)],
           },
         ]
       : []),

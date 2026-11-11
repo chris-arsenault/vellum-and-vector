@@ -466,6 +466,31 @@ surroundings, with lowland sprawl and compact mountain or pass towns arising
 from the same rule. A settlement record states the land it stands on and the
 hinterland that feeds it. No second publisher creates a place.
 
+Mechanisms decided while building (agent decisions):
+
+- A town is where more people live than their own land feeds. Its zone is every
+  such cell from which people thicken, cell to cell, up to the same densest
+  cell. The world town size setting is the least townsfolk that found a place;
+  a known place lasts while half that many remain.
+- Known places are the run's memory, matched to zones by overlap after every
+  era: a zone on a known place's ground is that place, living or resettled; a
+  place no zone continues is abandoned and publishes as the ruin of itself.
+- A place's hinterland is the land that reaches it most cheaply. A way runs
+  between two neighbouring places through the cheapest crossing of the border
+  between their hinterlands, and is dropped when going by a third place is no
+  farther on either leg. Travellers follow the smaller place's size and the
+  cost of the way; enough make a road, fewer a track, and a way mostly over
+  water is a lane. Travellers wear the ground of their way.
+- A settlement record states its land: site, height, river, coast, zone and
+  hinterland with their farmed and grazed land, and why it is there. Names come
+  from the naming culture of its ground until M4 gives it its people's tongue.
+- The entry points switched: the old era simulation no longer runs. A draft
+  world with default eras generates in 9 minutes where the old eras alone took
+  over 100. The old society's initial and present steps still run on its
+  un-evolved state until M4 and M5 replace what reads them; four old fixture
+  tests (old road publication across the seam, old settlement editing) fail
+  until M5 deletes them.
+
 ### M4 — The identity column
 
 Found, spread, overlay, harden and re-expose identity layers. Languages, faiths
@@ -539,7 +564,8 @@ Add a row before porting anything not listed.
 | Founding, status lifecycle, recovery, occupation history                | M3            |
 | Settlement and ruin records, hierarchy roles, world town threshold      | M3            |
 | Way wear, track and road classes, connectivity between major places     | M3            |
-| Density and capacity channels, footprints                               | M3            |
+| Density and capacity channels, footprints                               | M3, M5        |
+| Farm country and working land as mapped areas                           | M5            |
 | Founding identities, contact adoption, isolation divergence             | M4            |
 | Language knowledge and use, forgetting                                  | M4            |
 | Culture, language and faith channels; origin markers; institutions      | M4            |

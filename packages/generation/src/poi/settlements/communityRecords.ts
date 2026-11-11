@@ -1,28 +1,25 @@
 import {
   canonicalPosition,
   point,
-  population,
   spatial,
   type AtlasFeature,
   type SocietyCommunity,
 } from "@atlas/domain";
 import { generationFeature, generationFeatures } from "../../generationFeatures";
 import { generatedFeature, generatedId, putGeneratedDetail } from "../../mapFeatures";
-import type { GenerationState, HumanRound } from "../../process";
+import type { GenerationState } from "../../process";
 import { regionalFeature, regionalId } from "../../regional/extraction/features";
 import { cellAt, positionOf } from "../../regional/lattice";
 import type { ProposedPlace, RegionalState } from "../../regional/state";
-import { demandedKinds } from "../../societyDemand";
-import { mappedSociety } from "../../societyMapScope";
-import { ruinFields, type RuinField } from "../../societyRuins";
 import type { PoiPlace } from "../poiContract";
 import type { PoiKindId } from "../poiKinds";
 import { featureCell, fieldOf, heldFor, inhabited } from "../poiReads";
+import { landPlaces } from "./landPlaces";
 
 /**
- * Where settlements and ruins come from: the society simulation's communities and the camps its
- * rounds left, and on a refined map what the parent left and what this map proposed. These read
- * the simulation, never the published records, and build the record each place publishes as.
+ * Where settlements and ruins come from. A map that lived its own people reads them from the
+ * land's layers (`landPlaces`); a refined map reads what its parent left and what it proposed.
+ * These build the record each place publishes as and never read the published records.
  */
 
 export const isRefined = (state: GenerationState): state is RegionalState => "regional" in state;
@@ -78,74 +75,6 @@ export function localRecord(
 export function onceWritten(state: GenerationState, place: PoiPlace) {
   const feature = place.feature;
   return !feature || (isRefined(state) && generationFeature(state, feature.id)) ? null : feature;
-}
-
-/** Why the settlement sits where it does; open plain is the absence of a site. */
-function siteAttributes(c: SocietyCommunity) {
-  return {
-    siteKind: c.site?.kind ?? "plain",
-    siteReason: c.site?.reason ?? "open country, where its people are",
-    fortress: c.site?.fortress ?? false,
-  };
-}
-function communityNameMetadata(c: SocietyCommunity) {
-  return {
-    namingLanguage: c.naming?.language ?? null,
-    namingCulture: c.naming?.culture ?? null,
-    namedInEra: c.naming?.era ?? c.founded,
-  };
-}
-const mappedOf = (state: GenerationState) =>
-  heldFor(state, "society:mapped", () => mappedSociety(state, state.society!.region));
-
-function communityFeature(state: GenerationState, c: SocietyCommunity) {
-  const region = state.society!.region,
-    people = population(c),
-    urban = Math.min(people, c.settlement?.population ?? 0);
-  const feature = generatedFeature(
-    state,
-    `community:${c.id}`,
-    c.name,
-    "settlement",
-    c.status === "inhabited" ? "settlements" : "ruins",
-    { type: "Point", coordinates: [c.position.x, c.position.y] },
-    {
-      communityId: c.id,
-      population: urban,
-      communityPopulation: people,
-      settlementPopulation: urban,
-      ruralPopulation: people - urban,
-      groups: c.groups,
-      livelihoods: c.support,
-      status: c.status,
-      founded: c.founded,
-      representedAreaKm2: c.areaKm2,
-      ...siteAttributes(c),
-      worksDemanded: demandedKinds(state, c.id),
-      ...mappedOf(state).hierarchy.get(c.id),
-      ...communityNameMetadata(c),
-    }
-  );
-  feature.causes = [...c.causes, ...region.history.map((e) => `${e.id}: ${e.causes.join(" ")}`)];
-  return feature;
-}
-/** The mapped communities of a status, on a map that ran its own society. */
-function simulatedPlaces(
-  state: GenerationState,
-  kind: PoiKindId,
-  wanted: (c: SocietyCommunity) => boolean
-): PoiPlace[] {
-  const region = state.society?.region;
-  if (!region) return [];
-  const { mapped } = mappedOf(state);
-  return region.communities
-    .filter((c) => c.founded && mapped.has(c.id) && wanted(c))
-    .map((c) =>
-      lazyPlace(kind, generatedId(state, `community:${c.id}`), cellOf(state, c.position), () =>
-        communityFeature(state, c)
-      )
-    )
-    .filter((place) => place.anchor >= 0 || !state.physical);
 }
 
 /** The settlement records the parent left on this refined map. */
@@ -234,7 +163,8 @@ const lives = (c: SocietyCommunity) => c.status === "inhabited";
 /** Every inhabited place on this map. */
 export const settlementPlaces = (state: GenerationState): readonly PoiPlace[] =>
   heldFor(state, "places:settlement", () => {
-    if (!isRefined(state)) return simulatedPlaces(state, "settlement", lives);
+    // A map that lived its own people reads its places from the land.
+    if (!isRefined(state)) return landPlaces(state, "settlement");
     const captured = capturedSeats(state);
     return [
       ...captured
@@ -254,94 +184,15 @@ export const settlementPlaces = (state: GenerationState): readonly PoiPlace[] =>
     ].filter((place) => place.anchor >= 0);
   });
 
-function roundRuin(state: GenerationState, round: HumanRound, ruin: HumanRound["ruins"][number]) {
-  const major = ruin.major!;
-  const feature = generatedFeature(
-    state,
-    `round:${round.era}:${major.communityId}`,
-    ruin.name,
-    "settlement",
-    "ruins",
-    { type: "Point", coordinates: [ruin.x, ruin.y] },
-    {
-      communityId: major.communityId,
-      era: round.era,
-      epoch: round.epoch,
-      round: true,
-      status: "ruined",
-      population: 0,
-      peakPopulation: ruin.peak,
-      communityPopulation: major.population,
-      siteKind: ruin.siteKind,
-      siteReason: ruin.siteReason,
-      founded: major.founded,
-    }
-  );
-  feature.causes = major.causes;
-  return feature;
-}
-function ruinField(state: GenerationState, { round, ruin, mark, at }: RuinField) {
-  const feature = generatedFeature(
-    state,
-    `ruin-field:${round.era}:${ruin.name}`,
-    ruin.name,
-    "settlement",
-    "ruins",
-    { type: "Point", coordinates: [at.x, at.y] },
-    {
-      era: round.era,
-      epoch: round.epoch,
-      round: true,
-      ruinField: mark,
-      status: "ruined",
-      population: 0,
-      peakPopulation: ruin.peak,
-      siteKind: ruin.siteKind,
-      siteReason: ruin.siteReason,
-    }
-  );
-  feature.causes = [
-    `${round.era} camp on ${mark}: the ground the band worked outlasted the band, and the mesh resolves it.`,
-  ];
-  return feature;
-}
-/** What earlier rounds left: their major camps, and the marks the mesh resolves of the others. */
-function roundPlaces(state: GenerationState): PoiPlace[] {
-  const camps = (state.rounds ?? []).flatMap((round) =>
-    round.ruins.flatMap((ruin) =>
-      ruin.major
-        ? [
-            lazyPlace(
-              "ruin",
-              generatedId(state, `round:${round.era}:${ruin.major.communityId}`),
-              cellOf(state, ruin),
-              () => roundRuin(state, round, ruin)
-            ),
-          ]
-        : []
-    )
-  );
-  const fields = state.society
-    ? ruinFields(state).map((field) =>
-        lazyPlace(
-          "ruin",
-          generatedId(state, `ruin-field:${field.round.era}:${field.ruin.name}`),
-          cellOf(state, field.at),
-          () => ruinField(state, field)
-        )
-      )
-    : [];
-  return [...camps, ...fields].filter((place) => place.anchor >= 0 || !state.physical);
-}
 const goneStatus = ["abandoned", "ruined"];
 const isRuinRecord = (f: AtlasFeature) =>
   f.layerId === "ruins" || goneStatus.includes(String(f.attributes.status));
 /** Every place on this map that people have left. */
 export const ruinPlaces = (state: GenerationState): readonly PoiPlace[] =>
   heldFor(state, "places:ruin", () => {
-    const gone = (c: SocietyCommunity) => !lives(c);
-    if (!isRefined(state)) return [...simulatedPlaces(state, "ruin", gone), ...roundPlaces(state)];
-    const captured = capturedSeats(state);
+    if (!isRefined(state)) return landPlaces(state, "ruin");
+    const gone = (c: SocietyCommunity) => !lives(c),
+      captured = capturedSeats(state);
     return [
       ...captured.filter(isRuinRecord).map((f) => capturedPlace(state, "ruin", f)),
       ...knownPlaces(state, "ruin", captured, gone),

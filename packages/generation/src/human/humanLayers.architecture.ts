@@ -107,7 +107,7 @@ describe("the land and its people meet without naming each other", () => {
     ];
     // A band is named by reading it off the map or by its name as a string.
     const named = new RegExp(
-      `\\.(${bands.join("|")})\\b|["'\`](${bands.join("|")})["'\`]|humanLayers|humanRemains|identityColumn|human/(?!humanChannels)`
+      `\\.(${bands.join("|")})\\b|["'\`](${bands.join("|")})["'\`]|humanLayers|humanRemains|identityColumn|human/(?!humanChannels|place|landProcesses)`
     );
     expect(
       lines(
@@ -142,6 +142,31 @@ describe("the land and its people meet without naming each other", () => {
       lines(
         namespace().filter((path) => path !== "human/layerCatalogue.ts"),
         branch
+      )
+    ).toEqual([]);
+  });
+});
+
+describe("places have one publisher", () => {
+  it("makes settlement and ruin records only in the catalogue's place builders", () => {
+    // A map that lived its own people reads places from the land; a refined map still builds
+    // what its parent left and what it proposed until regions run the same operations (M7).
+    const builders = ["poi/settlements/landPlaces.ts", "poi/settlements/communityRecords.ts"];
+    const makes = /(generatedFeature|regionalFeature)\(\s*state,[^;]*?["'`]settlement["'`]/s;
+    expect(
+      files()
+        .filter((path) => makes.test(text(path)))
+        .sort()
+    ).toEqual(builders.sort());
+  });
+  it("reads the places of a map that lived its own people from the land's layers", () => {
+    expect(text("poi/settlements/landPlaces.ts")).toMatch(/knownPlaces\(state\)/);
+    expect(text("human/placeRegistry.ts")).not.toMatch(/society/);
+    // The classifier decides nothing: it submits no operation and keeps no record.
+    expect(
+      lines(
+        ["human/placeClassifier.ts", "human/hinterlands.ts"],
+        /runOperation|runMemory|defineCommand/
       )
     ).toEqual([]);
   });
