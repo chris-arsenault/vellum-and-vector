@@ -12,6 +12,7 @@ import { applyPresentWorks } from "./societyWorks";
 import { refreshSocietyEnvironment } from "./societyEnvironment";
 import { societyEvolution } from "./societyEvolution";
 import { humanRoundProcess, presentHumanEras, resolvedHumanEras } from "./societyRound";
+import { humanLandEra, humanLandProcesses } from "./human/landProcesses";
 
 function validatePopulation(state: GenerationState): Diagnostic[] {
   const communities = state.society?.region.communities ?? [];
@@ -106,6 +107,7 @@ export const populationProcesses = [
   ...societyFeedbackProcesses,
   societyEvolution,
   humanRoundProcess,
+  ...humanLandProcesses,
 ];
 export const societyPresent: MapProcess = {
   contract: {
@@ -164,6 +166,9 @@ export function societySequence(input: AtlasGenerationInput): ProcessSequence {
               },
             })),
             body: [
+              // People live the era on the land first; the older society model still follows
+              // until the entry points switch to the land alone.
+              invoke(humanLandEra),
               {
                 ...invoke(societyEvolution),
                 parameters: { cultural: !!cultural, political: !!political },

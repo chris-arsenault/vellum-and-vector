@@ -202,8 +202,35 @@ export function captureFailedField(
   );
   return path;
 }
+/** What rebuilds the lattice a field ran on. */
+export type LatticeRecord = Pick<
+  Snapshot,
+  "worldSize" | "worldOrigin" | "spacing" | "count" | "profile"
+>;
+export const latticeRecord = (
+  map: PhysicalField,
+  profile: PhysicalContext["Profile"]
+): LatticeRecord => ({
+  worldSize: map.mesh.bounds as Snapshot["worldSize"],
+  worldOrigin: [...map.mesh.origin] as [number, number],
+  spacing: map.mesh.spacing,
+  count: map.mesh.count,
+  profile,
+});
+/** A field on its own rebuilt lattice, holding saved contents. */
+export function restoreLand(lattice: LatticeRecord, saved: FieldState) {
+  const mesh = latticeOf(lattice);
+  requireThat(
+    mesh.count === lattice.count && mesh.spacing === lattice.spacing,
+    "snapshot_lattice",
+    "The saved land's lattice cannot be rebuilt as it was."
+  );
+  const map = createField(mesh);
+  restoreFieldState(map, saved);
+  return map;
+}
 /** The same lattice the world ran on, from what the snapshot recorded about it. */
-function latticeOf(snapshot: Snapshot) {
+function latticeOf(snapshot: LatticeRecord) {
   requireThat(
     Array.isArray(snapshot.worldOrigin) &&
       snapshot.worldOrigin.length === 2 &&

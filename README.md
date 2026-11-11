@@ -372,6 +372,14 @@ people, so continue from a physical epoch rather than from a human era.
 `HARNESS_STOP_SECONDS=<n>` cancels a continued run after that long, which with
 `HARNESS_CPU_PROFILE=1` profiles its first minutes.
 
+`HARNESS_RESUME=<name> HARNESS_AFTER=<epoch id> pnpm --dir frontend harness people`
+opens the land of a resume point without running anything and lives the settled
+human eras on it, in seconds. It writes a picture of each human layer (population,
+farmland, pasture, built-up area, ruins, worn ways) and a summary of where people
+are under `.artifacts/harness/people/<run>`. `HARNESS_PEOPLE_OFF=gather` (or
+`feed`, `harden`) runs the same eras with that operation removed, and
+`HARNESS_PEOPLE_YEARS=300,500` replaces the default eras.
+
 `HARNESS_PASSES=0` reports a snapshot as it stands. Replay uses the saved profile;
 `HARNESS_PROFILE_SOURCE=current` selects the current base profile, and
 `HARNESS_PROFILE='{"Name": 0}'` overrides named settings. `HARNESS_EPOCHS` supplies

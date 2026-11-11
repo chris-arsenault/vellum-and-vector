@@ -23,6 +23,10 @@ export const layerModes = [
   "burn",
   /** Nobody keeping it up. */
   "neglect",
+  /** More mouths than there is food for. */
+  "starve",
+  /** Land nobody works. */
+  "fallow",
 ] as const;
 export type LayerModeId = (typeof layerModes)[number];
 /** How something acts on the layers: each mode's share of what it does. */
@@ -34,11 +38,11 @@ export interface LayerFacts {
   /** A share of the cell's area, competing with the other shares, or a density on the cell. */
   readonly measure: "area" | "density";
   /** The share a full attack of each mode takes. */
-  readonly yields: Readonly<Record<LayerModeId, number>>;
+  readonly yields: LayerModeMix;
   /** Where what is taken stays on the ground as remains, and how much of it each mode leaves. */
   readonly remains?: {
     readonly band: HumanScalarName;
-    readonly left: Readonly<Record<LayerModeId, number>>;
+    readonly left: LayerModeMix;
   };
   /** How far a place's full standing holds this layer against every attack. */
   readonly standingHolds: number;
@@ -61,7 +65,7 @@ export const layerCatalogue: Readonly<Record<HumanLayerId, LayerFacts>> = {
   population: {
     band: humanLayers.population,
     measure: "density",
-    yields: { drown: 1, scour: 1, shake: 0.3, burn: 0.6, neglect: 0 },
+    yields: { drown: 1, scour: 1, shake: 0.3, burn: 0.6, starve: 1 },
     standingHolds: 0.5,
     carriesIdentity: true,
     ground: { tenure: "Tenure", ways: "WalkedRoute", losses: "MassDeath" },
@@ -70,13 +74,13 @@ export const layerCatalogue: Readonly<Record<HumanLayerId, LayerFacts>> = {
   farmland: {
     band: humanLayers.farmland,
     measure: "area",
-    yields: { drown: 1, scour: 0.8, shake: 0, burn: 0.5, neglect: 0.6 },
+    yields: { drown: 1, scour: 0.8, burn: 0.5, fallow: 0.6 },
     standingHolds: 0,
   },
   pasture: {
     band: humanLayers.pasture,
     measure: "area",
-    yields: { drown: 1, scour: 0.5, shake: 0, burn: 0.3, neglect: 0.3 },
+    yields: { drown: 1, scour: 0.5, burn: 0.3, fallow: 0.3 },
     standingHolds: 0,
   },
   // Buildings outlast their people, and what brings them down mostly leaves them where they stood.
@@ -126,7 +130,7 @@ export function compileLayerMix(mix: LayerModeMix): CompiledLayerMix {
     const facts = layerCatalogue[id];
     let stays = 0;
     for (const mode of layerModes) {
-      const taken = (mix[mode] ?? 0) * facts.yields[mode];
+      const taken = (mix[mode] ?? 0) * (facts.yields[mode] ?? 0);
       yields[index] += taken;
       stays += taken * (facts.remains?.left[mode] ?? 0);
     }

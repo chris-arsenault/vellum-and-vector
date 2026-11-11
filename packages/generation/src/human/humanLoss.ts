@@ -14,11 +14,14 @@ import { positive, unit, type LayerBands } from "./layerBands";
  */
 type Values = Pick<ReadBand, "get">;
 
-/** A kind loses some of what a cell holds, and a kind whose losses are kept counts them. */
-function take(layers: LayerBands, kind: HumanLayerId, cell: number, taken: number) {
+/**
+ * A kind loses some of what a cell holds. Where it was taken by what acted on it, a kind
+ * whose losses are kept counts them; people whose ground is covered have left it, not died.
+ */
+function take(layers: LayerBands, kind: HumanLayerId, cell: number, taken: number, died: boolean) {
   layers.of[kind].add(cell, -taken);
   const counted = layerCatalogue[kind].ground?.losses;
-  if (counted) layers.map[counted].add(cell, taken * layers.km2(cell));
+  if (counted && died) layers.map[counted].add(cell, taken * layers.km2(cell));
 }
 /** Remains are left on a cell, in the open or under cover, in their builders' tongue. */
 function leave(
@@ -59,7 +62,7 @@ function lose(
     const taken = layers.of[kind].get(cell) * unit(share(kind, index)),
       remains = layerCatalogue[kind].remains;
     if (!(taken > 0)) continue;
-    take(layers, kind, cell, taken);
+    take(layers, kind, cell, taken, covered === 0);
     if (remains)
       leave(layers, cell, layers.map[remains.band], taken * left(index), covered, tongue);
   }

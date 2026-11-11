@@ -418,6 +418,41 @@ gone from the surface and present in the buried record; early people are still
 there after the last geological epoch. Removing gather leaves an even spread;
 removing feed leaves towns without farm country.
 
+Mechanisms decided while building (agent decisions):
+
+- One operator carries every action at a distance: what a cell can reach of an
+  amount spread over the land, less with every costly step of travel. A crowd's
+  pull, a town's hunger and the country's spare food are all reaches. The share
+  a step passes on falls with the square of its travel cost against a range, so
+  the fading distance is the same on a coarse mesh and a fine one.
+- Gather is two moves: people on nearly full land spill to the neighbour with
+  most room, which takes up empty country; and people drain toward the largest
+  crowd they can reach, as long as that place can feed more than it holds.
+- Feed: land goes under crops or herds where hunger is felt beyond the spare
+  food already in reach, only where people live to work it, and goes back to
+  the wild where spare food outruns hunger. Spare food is a share of what
+  worked land grows; it is divided among the hungers that reach it, and the
+  country that sends it feeds fewer of its own. That is what holds country
+  people below what their land could feed and lets towns exist.
+- A step passes the same share both ways, so food divided among the hungers
+  that reach it adds up exactly: every mouthful brought somewhere left somewhere
+  else. Felt amounts are read as densities over the land in reach, so clearing
+  and the draw of a market do not depend on cell size (M2 review).
+- People clear for the growth they are capable of over the pass, so the land's
+  limit, not a clearing lag, bounds a settled people.
+- Grow follows the usual curve into what the land and its imports feed; the
+  unfed are lost within a generation (a `starve` mode) and counted as dead.
+- Harden: buildings follow the people a cell houses; what nobody keeps falls to
+  ruin; works accumulate slowly toward what the standing buildings can hold.
+- The land's history is met without any physical process naming a layer: the
+  land's cumulative records are read before an epoch's processes and after, and
+  what was laid down, stripped or struck in between buries, bares or wrecks.
+  Water over a cell buries it and ice scours it. Built ground also answers the
+  question processes already ask about what binds the ground.
+- Early epochs each run one loose pass (no farming, no building, little
+  movement); each human era runs several settled passes. The bound "ice age"
+  era no longer runs as a separate round.
+
 ### M3 — Classify, name and publish
 
 Classify settlements, ruins, farm country and working land from the layers, as

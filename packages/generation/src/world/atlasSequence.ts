@@ -5,8 +5,8 @@ import { resolveGenerationFeatures, type FeatureContributionContext } from "../f
 import { physicalFeatureDefinitions } from "../physicalFeatures";
 import { composeFeatureSlot } from "../physicalFeatureSequence";
 import { atlasGenerationModules } from "../generationModules";
-import { worldGenerationSettings, type GenerationSettings } from "../generationSettings";
-import { hasHumanRound } from "../societyRound";
+import { worldGenerationSettings } from "../generationSettings";
+import { humanFeatures } from "../human/humanChannels";
 
 type Composition = FeatureContributionContext;
 
@@ -86,20 +86,18 @@ function geology(context: Composition, initial: boolean): ProcessSequence {
     ),
   ];
 }
-function humanRound(context: Composition): ProcessSequence {
-  const settings = context.input.settings;
-  const society = ["human.cultures", "human.politics", "built.layout"].some(
-    (id) => context.resolved.selection[id]?.enabled
-  );
-  if (!settings || !society || !hasHumanRound(settings as GenerationSettings)) return [];
-  return [
-    { kind: "process", id: "human.round", process: "human.round", version: "1", parameters: {} },
-  ];
+/** People's processes run on a map only where a feature that puts people on it is selected. */
+function peopled(context: Composition, ...ids: string[]): ProcessSequence {
+  const society = humanFeatures.some((id) => context.resolved.selection[id]?.enabled);
+  return society ? ids.map((id) => invoke(id)) : [];
 }
 function epochBody(context: Composition, inherited: boolean): ProcessSequence {
   return [
     invoke("atlas.begin-epoch"),
     ...(!inherited ? geology(context, false) : []),
+    // The land as the plates left it, before the epoch's processes work on it. A child map
+    // inherits its parent's people and does not live the epochs again.
+    ...(!inherited ? peopled(context, "human.land-watch") : []),
     ...climate("epoch.initial-climate", context, true),
     ...contributions("epoch.climate-forcing", context),
     ...contributions("epoch.material-forcing", context),
@@ -127,9 +125,6 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     ...contributions("epoch.post-glacial-forcing", context),
     ...contributions("epoch.ecology-respond", context),
     ...drainage("epoch.after-response-water", context),
-    // One human round inside an epoch with a bound era: people settle, use and exploit
-    // before the coasts are cut and the epoch's history is kept.
-    ...humanRound(context),
     ...contributions("epoch.coastal-forcing", context),
     ...nativeGroup("epoch.coasts", "epoch", context),
     ...contributions("epoch.ecology-burial", context),
@@ -145,6 +140,9 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     },
     // Landmarks hold their signatures at the World mesh before the epoch's history is kept.
     ...(!inherited ? contributions("epoch.landmark-maintenance", context) : []),
+    // People meet everything the epoch did to their ground, its coasts included, and live
+    // one loose pass on it before the epoch's history is kept.
+    ...(!inherited ? peopled(context, "human.land-epoch") : []),
     ...nativeGroup("epoch.history", "epoch", context),
   ];
 }

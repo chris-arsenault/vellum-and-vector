@@ -95,6 +95,28 @@ function part(grid: Grid, channels: Channels, name: string, bounds: Bounds) {
     Number.isNaN(pixels[k]) ? 1 : (pixels[k] - low) / Math.max(1, high - low)
   );
 }
+/** What people are on the land, and what their places left: one picture each where published. */
+const peopleLayers = ["Population", "Farmland", "Pasture", "BuiltUp", "RuinedBuiltUp"];
+/**
+ * One layer of people on the land: white where there is none, darker the more there is, on
+ * a square-root scale up to the most the map holds, so thin country still shows beside towns.
+ * Sea is flat grey.
+ */
+function layer(grid: Grid, channels: Channels, name: string, bounds: Bounds) {
+  const channel = channels[name],
+    land = (i: number) => channels.Elevation.get(i) > (channels.EffectiveSeaLevel?.get(i) ?? 0),
+    held: number[] = [];
+  for (let i = 0; i < grid.active.length; i++)
+    if (grid.active.get(i) && land(i) && channel.get(i) > 0) held.push(channel.get(i));
+  held.sort((a, b) => a - b);
+  const most = held[Math.floor(held.length * 0.995)] ?? 0;
+  const { pixels, width, height } = rasterize(grid, bounds, (i) => (land(i) ? channel.get(i) : -1));
+  return grey(width, height, (k) => {
+    if (Number.isNaN(pixels[k])) return 1;
+    if (pixels[k] < 0) return 0.75;
+    return most > 0 ? 1 - Math.sqrt(Math.min(1, pixels[k] / most)) : 1;
+  });
+}
 export function writeReliefPictures(
   grid: Grid,
   channels: Channels,
@@ -106,4 +128,7 @@ export function writeReliefPictures(
   for (const name of ["CrustSupportElevation", "SurfaceRockLoad"])
     if (channels[name])
       writeFileSync(join(out, `${kind}-${name}.png`), part(grid, channels, name, bounds));
+  for (const name of peopleLayers)
+    if (channels[name])
+      writeFileSync(join(out, `${kind}-people-${name}.png`), layer(grid, channels, name, bounds));
 }

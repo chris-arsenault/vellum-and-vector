@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
-import { humanBandNames } from "@atlas/domain";
+import { humanBandNames, humanLayerIds } from "@atlas/domain";
 import { source, sourceFiles } from "../architectureReach";
 import { quantityKinds } from "../coupling/quantities";
 import { physicalChannels } from "../world/atlasChannels";
@@ -90,6 +90,58 @@ describe("queries and the lattice", () => {
       lines(
         namespace(),
         /\.surface\b|[{,]\s*surface\s*[,}:]|putChannel|gridPosition|gridNeighbors|RegularGrid/
+      )
+    ).toEqual([]);
+  });
+});
+
+describe("the land and its people meet without naming each other", () => {
+  const physical = () => files().filter((path) => !path.startsWith("human/"));
+  it("names no human band or layer outside people's own code", () => {
+    // The declarations that list bands for the schema, the units and the crust are not
+    // processes, and the sequence of people's processes is wiring.
+    const declarations = [
+      "coupling/quantities.ts",
+      "world/atlasChannels.ts",
+      "societyProcesses.ts",
+    ];
+    // A band is named by reading it off the map or by its name as a string.
+    const named = new RegExp(
+      `\\.(${bands.join("|")})\\b|["'\`](${bands.join("|")})["'\`]|humanLayers|humanRemains|identityColumn|human/(?!humanChannels)`
+    );
+    expect(
+      lines(
+        physical().filter(
+          (path) => !declarations.includes(path) && path !== "coupling/responders.ts"
+        ),
+        named
+      )
+    ).toEqual([]);
+  });
+  it("writes no ground, water, ice or climate from people's code", () => {
+    const theirs =
+      /\b(Elevation|BedrockElevation|SedimentThickness|SurfaceRockLoad|CrustThickness|SoilDepth|SoilWater|Temperature|Moisture|Rainfall|Runoff|IceThickness|WaterDepths|WaterKindCodes|RiverOrders|FlowAccumulation|TreeCover|GrassCover)\b\s*\.(set|add|fill|copyFrom)\(/;
+    expect(
+      lines(
+        namespace().filter((path) => !/TestFixture\.ts$/.test(path)),
+        theirs
+      )
+    ).toEqual([]);
+  });
+  it("names no layer kind in the owner: every kind is handled by its catalogue facts", () => {
+    const kind = new RegExp(`["'\`](${humanLayerIds.join("|")})["'\`]`);
+    expect(lines([...owner, operations], kind)).toEqual([]);
+  });
+  // The steps of a pass are about particular layers and name them as what they submit; what
+  // they may not do is decide by a layer's kind.
+  it("branches on no layer kind outside the catalogue", () => {
+    const branch = new RegExp(
+      `(===|!==|case)\\s*["'\`](${humanLayerIds.join("|")})["'\`]|["'\`](${humanLayerIds.join("|")})["'\`]\\s*(===|!==)`
+    );
+    expect(
+      lines(
+        namespace().filter((path) => path !== "human/layerCatalogue.ts"),
+        branch
       )
     ).toEqual([]);
   });

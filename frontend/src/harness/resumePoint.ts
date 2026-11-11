@@ -13,7 +13,14 @@ import type { CompletedBoundary, GenerationState } from "../../../packages/gener
 import type { MapRunnerOptions } from "../../../packages/generation/src/mapRunner";
 import { restoreRunMemories, runMemories } from "../../../packages/generation/src/runMemory";
 import { draftWorldSnapshot, type GenerationDraft } from "../generationDraft";
-import { captureFieldState, restoreFieldState, type FieldState } from "./fieldSnapshot";
+import {
+  captureFieldState,
+  latticeRecord,
+  restoreFieldState,
+  restoreLand,
+  type FieldState,
+  type LatticeRecord,
+} from "./fieldSnapshot";
 import { currentCommit, harnessRoot } from "./harnessWorkspace";
 
 /**
@@ -47,7 +54,9 @@ export interface ResumeSource {
   createdAt: string;
 }
 export interface ResumePoint {
-  format: 1;
+  format: 2;
+  /** What rebuilds the land's lattice, so the land can be opened without running anything. */
+  lattice: LatticeRecord;
   /** The completed epoch's ancestry ids, outermost first. */
   after: string[];
   field: FieldState;
@@ -146,7 +155,8 @@ export function captureResumePoint(boundary: CompletedBoundary): ResumePoint {
     work = state.physical;
   requireThat(work, "resume_state", "A resume point needs the physical workspace.");
   return {
-    format: 1,
+    format: 2,
+    lattice: latticeRecord(work.map, work.profile),
     after: boundary.ancestry.map((epoch) => epoch.id),
     field: captureFieldState(work.map),
     workspace: detach({
@@ -232,7 +242,16 @@ export function resumeFrom(
   label: string,
   after: string[]
 ): NonNullable<MapRunnerOptions["resume"]> {
-  const point = deserialize(readFileSync(pointPath(label, after))) as ResumePoint;
-  requireThat(point.format === 1, "resume_format", "Use a current resume point.");
+  const point = readResumePoint(label, after);
   return { after: point.after, restore: (state) => restoreResumePoint(state, point) };
+}
+function readResumePoint(label: string, after: string[]) {
+  const point = deserialize(readFileSync(pointPath(label, after))) as ResumePoint;
+  requireThat(point.format === 2, "resume_format", "Use a current resume point.");
+  return point;
+}
+/** The land of a saved epoch on its own lattice, opened without running anything. */
+export function openResumeLand(label: string, after: string[]) {
+  const point = readResumePoint(label, after);
+  return { map: restoreLand(point.lattice, point.field), profile: point.lattice.profile };
 }
