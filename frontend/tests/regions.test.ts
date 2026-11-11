@@ -241,8 +241,9 @@ test("reject undersized selections without starting a job", async ({ page }) => 
   await page.getByRole("button", { name: "Trace a custom outline", exact: true }).click();
   const parent: Box = [20_000, 20_000, 70_000, 70_000];
   await clickWorld(page, 30_000, 30_000, parent);
-  await clickWorld(page, 30_010, 30_000, parent);
-  await clickWorld(page, 30_010, 30_020, parent, true);
+  // The least useful width is a share of the map's own span: under 3 m on this 100 km map.
+  await clickWorld(page, 30_001, 30_000, parent);
+  await clickWorld(page, 30_001, 30_002, parent, true);
   await expect(page.locator(".error")).toBeVisible();
   await expect(page.locator(".job-row")).toHaveCount(0);
   await page.keyboard.press("Escape");

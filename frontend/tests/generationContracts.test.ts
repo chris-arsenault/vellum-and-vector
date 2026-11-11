@@ -40,17 +40,16 @@ test("switching magic strategies removes hidden errors and preserves visible pen
 }) => {
   const fire = await magic(page);
   await fire.getByText("Propagation & source controls", { exact: true }).click();
-  const coreBudget = fire.getByLabel("Core-site budget per 5.76 million km² of land", {
-    exact: true,
-  });
-  await coreBudget.fill("");
-  await fire.getByLabel("Propagation loss per kilometre", { exact: true }).fill("");
+  const sourceDensity = fire.getByLabel("Minimum source density · 0–1,000", { exact: true }),
+    loss = "Propagation loss per 0.025% of map span";
+  await sourceDensity.fill("");
+  await fire.getByLabel(loss, { exact: true }).fill("");
   // Fire has several origins; the vein is the one whose source and propagation own these fields.
   const vein = fire.getByRole("group", { name: "Origin · vein" });
   await vein.getByRole("combobox", { name: /^Source selection/ }).selectOption("placed");
-  await expect(coreBudget).toHaveCount(0);
-  await expect(page.locator(".setup-issues")).not.toContainText("Core-site budget");
-  await expect(page.locator(".setup-issues")).toContainText("Propagation loss per kilometre");
+  await expect(sourceDensity).toHaveCount(0);
+  await expect(page.locator(".setup-issues")).not.toContainText("Minimum source density");
+  await expect(page.locator(".setup-issues")).toContainText(loss);
   await vein.getByRole("combobox", { name: /^Propagation/ }).selectOption("radial");
   await expect(page.locator(".setup-issues")).toHaveCount(0);
   await page

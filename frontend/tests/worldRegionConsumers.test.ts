@@ -30,7 +30,10 @@ test("keeps overlapping world regions distinct and carries the chosen geography 
   await expect(page.locator(".error")).toContainText("No region here");
   await clickWorld(page, 300, 300, [0, 0, 1000, 1000]);
   const choice = page.getByLabel("Boundary choice");
-  await expect(choice.locator("option")).toHaveCount(2);
+  // Both whole subjects are offered beside the smaller districts sized to this world.
+  await expect(
+    choice.locator("option", { hasText: /^(Great forest|Western country) · [\d.]+ km²$/ })
+  ).toHaveCount(2);
   await choice.selectOption({ label: "Great forest · 0.3 km²" });
   await page.getByLabel("Region name", { exact: false }).fill("Forest subject");
   await page.getByRole("button", { name: "Keep region", exact: true }).click();
@@ -65,6 +68,8 @@ test("selects canonical geography from a repeated cylindrical chart without dupl
   );
   await page.getByRole("button", { name: "Regions", exact: true }).click();
   await clickWorld(page, -30, 300, [0, 0, 1000, 1000]);
+  // The whole forest is offered beside its districts; it spans the seam.
+  await page.getByLabel("Boundary choice").selectOption({ label: "Seam forest · 0.2 km²" });
   await page.getByLabel("Region name", { exact: false }).fill("Seam subject");
   await page.getByRole("button", { name: "Keep region", exact: true }).click();
   const exported = await exportMap(page);
