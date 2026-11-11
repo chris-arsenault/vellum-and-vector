@@ -23,7 +23,7 @@ it("keeps a declared forest at the actual natural-surface tile edge as physical 
       map.BiomeCodes.set(i, classifyBiome(map, i));
     }
     classifyNaturalSurface(state);
-    putChannel(state.surface, "elevation", "metre", projectedValues(work, map.Elevation));
+    putChannel(state.surface, "Elevation", "metre", projectedValues(work, map.Elevation));
     putChannel(
       state.surface,
       "naturalSurface",
@@ -39,7 +39,7 @@ it("keeps a declared forest at the actual natural-surface tile edge as physical 
     const sample = numericTileSampler({
       id: "base",
       areaId: "area",
-      channel: "elevation",
+      channel: "Elevation",
       field: state.surface,
       surface: state.surface,
       footprint: state.domain.scope.footprint,

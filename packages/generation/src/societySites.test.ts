@@ -10,8 +10,9 @@ import type { MapProcessContext } from "./process";
  */
 function country() {
   const state = landscape();
-  state.domain.scope.footprint = rectangle([0, 0, 20000, 9000]);
-  state.domain.world.areas.area.footprint = state.domain.scope.footprint;
+  state.domain.scope.footprint = state.domain.world.areas.area.footprint = rectangle([
+    0, 0, 20000, 9000,
+  ]);
   const grid = createGrid("sites", state.domain.scope, 21, 10),
     n = grid.active.length,
     cell = (x: number, y: number) => y * 21 + x;
@@ -42,16 +43,43 @@ function country() {
   // A tributary joins at column 14 from the north, making a junction there.
   riverOrder[cell(14, 3)] = 1;
   riverOrder[cell(14, 2)] = 1;
-  putChannel(grid, "elevation", "metre", residentBand("float64", elevation));
-  putChannel(grid, "water", "category", residentBand("float64", water));
-  putChannel(grid, "riverOrder", "category", residentBand("float64", riverOrder));
-  putChannel(grid, "flow", "cubic-metre/second", residentBand("float64", flow));
-  putChannel(grid, "slope", "gradient", residentBand("float64", slope));
-  putChannel(grid, "waterDepth", "metre", residentBand("float64", waterDepth));
-  putChannel(grid, "waveExposure", "ratio", residentBand("float64", waveExposure));
+  putChannel(
+    grid,
+    "Elevation",
+    "native-length",
+    residentBand(
+      "float64",
+      elevation.map((m) => MapScale.inUnits(m, "native"))
+    )
+  );
+  putChannel(grid, "WaterKindCodes", "category", residentBand("float64", water));
+  putChannel(grid, "RiverOrders", "category", residentBand("float64", riverOrder));
+  putChannel(grid, "FlowAccumulation", "cubic-metre/second", residentBand("float64", flow));
+  putChannel(grid, "Slope", "gradient", residentBand("float64", slope));
+  putChannel(
+    grid,
+    "WaterDepths",
+    "native-length",
+    residentBand(
+      "float64",
+      waterDepth.map((m) => MapScale.inUnits(m, "native"))
+    )
+  );
+  putChannel(
+    grid,
+    "WaveExposure",
+    "per-mille",
+    residentBand(
+      "float64",
+      waveExposure.map((share) => share * 1000)
+    )
+  );
   state.surface = grid;
-  const context = {
-    scope: state.domain.scope,
+  return { state, grid, cell, context: suppliedContext(state.domain.scope) };
+}
+function suppliedContext(scope: MapProcessContext["scope"]): MapProcessContext {
+  return {
+    scope,
     invocation: [],
     parameters: {},
     epochs: [],
@@ -61,8 +89,7 @@ function country() {
     random: () => 0.5,
     cancelled: () => false,
     progress() {},
-  } as unknown as MapProcessContext;
-  return { state, grid, cell, context };
+  };
 }
 
 it("ranks passes, river nodes and sheltered harbours above the open plain", () => {
@@ -128,14 +155,17 @@ it("holds a pass from a spur only when a hazard lies below it", () => {
     coast = residentBand("float64", new Float64Array(owner.length));
   // A reachable spur beside the col at this map's relative relief, on a moderate slope.
   const scale = MapScale.fromCells(grid.bounds, grid.active.length);
-  state.surface.channels.elevation.set(cell(9, 3), 350 + scale.length(0.000075));
-  state.surface.channels.slope.set(cell(9, 3), 0.02);
+  state.surface.channels.Elevation!.set(
+    cell(9, 3),
+    MapScale.inUnits(350 + scale.length(0.000075), "native")
+  );
+  state.surface.channels.Slope!.set(cell(9, 3), 0.02);
   const quiet = chooseSettlementSites(state, context, owner, [cell(4, 7)], river, coast);
   expect(quiet[0].site?.fortress).toBe(false);
   // A Fire halo in the valley below gives a reason to hold it.
   putChannel(
     state.surface,
-    "quickening",
+    "Quickening",
     "ratio",
     residentBand(
       "float64",

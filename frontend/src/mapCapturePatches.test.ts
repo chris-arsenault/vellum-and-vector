@@ -7,6 +7,7 @@ import {
   generateChannel,
   regionRefinementInput,
   refinedRegionArea,
+  MapScale,
 } from "@atlas/domain";
 import { authoredFields } from "../../packages/generation/src/mapAuthored";
 import {
@@ -34,9 +35,9 @@ it("captures a source map's surface patch as starting context without freezing t
     );
   putChannel(
     patch,
-    "elevation",
-    "metre",
-    generateChannel(patch, "elevation", () => 350)
+    "Elevation",
+    "native-length",
+    generateChannel(patch, "Elevation", () => MapScale.native(350))
   );
   snapshot.numerical[patch.id] = patch;
   snapshot.fieldPatches.push({
@@ -45,7 +46,7 @@ it("captures a source map's surface patch as starting context without freezing t
     areaId: f.child,
     spaceId: snapshot.scope.spaceId,
     footprint: patch.scope.footprint,
-    channels: ["elevation"],
+    channels: ["Elevation"],
     actor: "user",
     resourceId: patch.id,
     protected: true,
@@ -72,10 +73,10 @@ it("captures a source map's surface patch as starting context without freezing t
       spatialLayers: [],
       parentHistory: [],
       dependencies: false,
-      channels: source.world.fields.map((entry) => ({ fieldId: entry.id, names: ["elevation"] })),
+      channels: source.world.fields.map((entry) => ({ fieldId: entry.id, names: ["Elevation"] })),
     });
-    const input = regionalInputChannels(regionalInputFields(source, child.id)).get("elevation")!;
-    expect(sample(input, "elevation", { x: 40_000, y: 40_000, z: 0 })).toBe(350);
+    const input = regionalInputChannels(regionalInputFields(source, child.id)).get("Elevation")!;
+    expect(sample(input, "Elevation", { x: 40_000, y: 40_000, z: 0 })).toBe(MapScale.native(350));
     expect(source.fieldPatches).toHaveLength(1);
     expect(source.fieldPatches[0]).toMatchObject({ input: true, protected: false });
     expect(source.fieldPatches[0].mapOnly).toBeUndefined();

@@ -6,6 +6,7 @@ import { atlasPhysicalProfile } from "./atlasProfile";
 import { createWorldMesh } from "./worldMesh";
 import {
   areaGeometry,
+  intersectAreas,
   fillSmallHoles,
   combinedContour,
   membershipContour,
@@ -28,6 +29,27 @@ it("retains polygon area when chart clipping also returns isolated boundary line
   });
   expect(shape?.type).toBe("Polygon");
   expect(spatial.area(shape!)).toBe(100);
+});
+
+it("clips intersected lake area again when another component only touches its membership boundary", () => {
+  const first = rectangle([0, 0, 4, 4]),
+    second = rectangle([6, 0, 8, 2]);
+  if (first.type !== "Polygon" || second.type !== "Polygon") throw new Error("Expected rectangles");
+  const wet: import("geojson").MultiPolygon = {
+    type: "MultiPolygon",
+    coordinates: [first.coordinates, second.coordinates],
+  };
+  const membership = rectangle([2, 0, 6, 4]);
+  // GEOS legitimately returns the overlapping area plus the other component's touching edge.
+  const contact = spatial.intersection(wet, membership)!;
+  expect(contact.type).toBe("GeometryCollection");
+  const lake = intersectAreas(wet, membership)!;
+  expect(lake.type).toBe("Polygon");
+  const clipped = intersectAreas(lake, rectangle([3, -1, 7, 5]))!;
+  expect(spatial.covers(clipped, point({ x: 3.5, y: 2, z: 0 }))).toBe(true);
+  expect(spatial.covers(clipped, point({ x: 6, y: 1, z: 0 }))).toBe(false);
+  expect(intersectAreas(contact, rectangle([3, -1, 7, 5]))).not.toBeNull();
+  expect(intersectAreas(rectangle([0, 0, 2, 2]), rectangle([2, 0, 4, 2]))).toBeNull();
 });
 
 it("unites an enclosed island after filling the surrounding region's small hole", () => {

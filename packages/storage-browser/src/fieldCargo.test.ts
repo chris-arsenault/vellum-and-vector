@@ -1,6 +1,8 @@
+import { requireChannel } from "@atlas/domain";
 import { afterEach, expect, it } from "vitest";
 import {
   cloneFieldInput,
+  Band,
   createGrid,
   generateBand,
   gridSchema,
@@ -49,7 +51,7 @@ function fixture() {
     resolution: 1,
     footprint: rectangle([0, 0, 1000, 1000]),
   };
-  return { resources, working, grid: createGrid("cargo", scope, 3, 3) };
+  return { resources, working, grid: createGrid<string>("cargo", scope, 3, 3) };
 }
 it("publishes sparse material cargo with immutable named records and independent working copies", async () => {
   const { grid, resources, working } = fixture();
@@ -158,4 +160,53 @@ it("retains an explicitly empty cargo table without manufacturing charged hosts"
   const loaded = await working.load("empty-field", ["height"], layout.geography);
   expect(loaded.materialCargo!.records.length).toBe(0);
   expect(loaded.materialCargo!.offsets.get(9)).toBe(0);
+});
+
+it("stores native physical samples without changing their units or sample types", async () => {
+  const { grid, resources, working } = fixture();
+  putChannel(
+    grid,
+    "Temperature",
+    "native-temperature",
+    generateBand(grid.coverage, "int32", "Temperature", () => 450)
+  );
+  putChannel(
+    grid,
+    "Rainfall",
+    "millimetre/year",
+    generateBand(grid.coverage, "float32", "Rainfall", () => 1200)
+  );
+  const layout = await writeFieldLayout(resources, grid, "physical-layout", 1e-6);
+  await writeFieldChannels(resources, grid, "physical-channels", layout);
+  const loaded = await working.load(
+    "physical-channels",
+    ["Temperature", "Rainfall"],
+    layout.geography
+  );
+  expect(requireChannel(loaded, "Temperature").type).toBe("int32");
+  expect(requireChannel(loaded, "Rainfall").type).toBe("float32");
+  expect(requireChannel(loaded, "Temperature").get(0)).toBe(450);
+  expect(requireChannel(loaded, "Rainfall").get(0)).toBe(1200);
+  expect(loaded.units).toEqual({ Temperature: "native-temperature", Rainfall: "millimetre/year" });
+  expect(() => gridSchema.parse(loaded)).not.toThrow();
+});
+
+it("publishes channel bands over different offsets of one source buffer", async () => {
+  const { grid, resources, working } = fixture();
+  const values = Float64Array.from({ length: 18 }, (_, i) => i + 0.5),
+    over = (start: number, end: number, name: string) =>
+      Band.over(
+        values.subarray(start, end),
+        { name, type: "float64", lifetime: "run" },
+        grid.coverage.cache
+      );
+  putChannel(grid, "first", "metre", over(0, 9, "first"));
+  putChannel(grid, "second", "metre", over(9, 18, "second"));
+  const shared = await writeFieldLayout(resources, grid, "offset-layout", 1e-6);
+  await writeFieldChannels(resources, grid, "offset-channels", shared);
+  const input = await working.load("offset-channels", ["first", "second"], shared.geography);
+  expect(Array.from(requireChannel(input, "first"))).toEqual(Array.from(values.subarray(0, 9)));
+  expect(Array.from(requireChannel(input, "second"))).toEqual(Array.from(values.subarray(9)));
+  expect(requireChannel(input, "second").get(0)).toBe(9.5);
+  expect(values.byteLength).toBe(144);
 });

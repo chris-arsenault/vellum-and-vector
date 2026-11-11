@@ -3,8 +3,10 @@ import {
   fillBand,
   gridPosition,
   sweepBudget,
+  CellList,
   type Band,
   type Grid,
+  type FieldChannelName,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { nativePosition, parentChannels } from "./atlasWorkspace";
@@ -12,6 +14,13 @@ import type { PhysicalMesh } from "./mesh";
 import { isWorldGeography } from "../worldSignificance";
 
 type Quantity = "intensive" | "extensive" | "category" | "site-amount" | "site-strength";
+
+/** Captured discrete origins retain their candidates, not their previous strength or footprint. */
+export function sourceSiteCells(values: Pick<Band, "length" | "get">) {
+  const cells = new CellList();
+  for (let cell = 0; cell < values.length; cell++) if (values.get(cell) > 0) cells.push(cell);
+  return cells.finish();
+}
 
 /**
  * Amounts cross resolutions as densities times receiving areas; histories and classes do not.
@@ -25,7 +34,7 @@ type Quantity = "intensive" | "extensive" | "category" | "site-amount" | "site-s
  */
 export function inheritMagicChannel(
   state: GenerationState,
-  key: string,
+  key: FieldChannelName,
   into: Band,
   quantity: Quantity = "intensive"
 ): boolean {
@@ -86,13 +95,13 @@ function climb(grid: Grid, values: Band, g: number) {
 function interpolate(
   state: GenerationState,
   grid: Grid,
-  key: string,
+  key: FieldChannelName,
   into: Band,
   quantity: Quantity,
   floor: (value: number) => number
 ) {
   const work = state.physical!,
-    values = grid.channels[key],
+    values = grid.channels[key]!,
     density =
       quantity === "extensive"
         ? fillBand(grid.coverage.scratch("float64", "magic:inherit-density", values.length), (i) =>

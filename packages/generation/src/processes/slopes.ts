@@ -56,7 +56,7 @@ const slopeProcess = (id: string): GroundProcess =>
     settings: slopeSettings,
     prepare,
     settlesItself: true,
-    run: (work) => failSlopes(work, id),
+    execute: (work) => failSlopes(work, id),
   });
 export const slopes = slopeProcess("slopes");
 export const slopesAfterStreams = slopeProcess("slopes-after-streams");

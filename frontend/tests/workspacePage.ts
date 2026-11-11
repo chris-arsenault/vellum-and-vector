@@ -165,7 +165,7 @@ async function fieldCommandExample(client: WorkspaceClient, scope: WorkspaceScop
   });
   const sculpted = await execute("sculptField", {
     areaId: scope.areaId,
-    channel: "elevation",
+    channel: "Elevation",
     center: { x: 500, y: 500, z: 0 },
     radius: 100,
     delta: 50,

@@ -7,6 +7,9 @@ import { evolveNetwork } from "./evolution";
 import { distance, frameEdge, isContent, neighborsOf, positionOf, regionalSpan } from "./lattice";
 import { materialResistance } from "./material";
 import { clamp, type NetworkWork, type RegionalState } from "./state";
+import { ask } from "../coupling/answers";
+import { physicalContext } from "../world/context";
+import { waterPassage } from "../world/waterQuantity";
 
 /** Resistance near a known peak or cone, so channels cut around it and it stands on a divide. */
 const peakRepulsion = 12;
@@ -95,8 +98,8 @@ function closedBasin(state: RegionalState, i: number) {
 /**
  * Roots: every land cell beside the sea or at an exit across the frame drains out; lake cells
  * receive their tributaries at the lake's level; a captured sink's floor receives its own
- * where the climate keeps the basin closed. An exit leaves at the base there, which the relief
- * holds to along the whole frame edge.
+ * where the climate keeps the basin closed. Captured exit levels seed this initial proposal;
+ * subsequent physical development can change them.
  */
 function networkRoots(state: RegionalState, network: NetworkWork) {
   const mesh = state.physical.map.mesh,
@@ -142,6 +145,9 @@ function openWetBasins(state: RegionalState, sink: Uint8Array) {
 export function gatherFlow(state: RegionalState, network: NetworkWork) {
   const map = state.physical.map,
     mesh = map.mesh,
+    context = physicalContext(state.regional.input.seed, 0, state.physical.profile),
+    supply = ask(map, "surfaceWater", context),
+    pass = waterPassage(map, context),
     { receiver, order, count, area, flow, inflow, channel } = network,
     reference = referenceDischarge(state),
     cellArea = regionalSpan(state) ** 2;
@@ -149,13 +155,14 @@ export function gatherFlow(state: RegionalState, network: NetworkWork) {
   flow.fill(0);
   for (let k = 0; k < count; k++) {
     const i = order[k],
-      runoff = Math.max(0, MapScale.metres(map.Runoff.get(i), "mm"));
+      runoff = Math.max(0, MapScale.metres(supply.get(i), "mm"));
     area[i] = mesh.contentArea(i) + (inflow[i] / reference) * cellArea;
     flow[i] = (runoff * mesh.contentArea(i)) / secondsPerYear + inflow[i];
   }
   for (let k = count - 1; k >= 0; k--) {
     const i = order[k],
       j = receiver[i];
+    flow[i] = pass(i, flow[i]);
     if (j < 0) continue;
     area[j] += area[i];
     flow[j] += flow[i];
@@ -295,10 +302,8 @@ export function scaleAround(
 /**
  * Water leaves the frame wherever the exterior is no higher: an exit is a frame-edge cell
  * that the parent's channel raster leaves through, or that has exterior ground no higher
- * than itself to run on to. Every exit is a root at the parent's own ground there, so the
- * derived relief meets the exterior along the whole edge; a valley crossing the edge still
- * gathers the country around it, because its exit is the lowest root and the cost of
- * climbing the captured base keeps the flanks' water in it.
+ * than itself to run on to. These initial roots carry contextual drainage into detail
+ * realization. They do not constrain later routing or reconcile the child's edge heights.
  */
 function edgeExits(state: RegionalState) {
   const map = state.physical.map,

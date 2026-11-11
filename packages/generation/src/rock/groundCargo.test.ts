@@ -15,6 +15,7 @@ import {
 } from "./groundTransport";
 import { units } from "../world/math";
 import { GroundInventory } from "./groundInventory";
+import { readCargoDensity, writeCargo } from "./groundCargo";
 
 function supplied() {
   const map = createTestField(createWorldMesh([0, 0, 1000, 1000], 16, 0));
@@ -31,6 +32,23 @@ function supplied() {
   constructMaterial(map, 0, materialLayer(rocks.saltbed.code, units(2)), "test", "space");
   return map;
 }
+
+it("scalar cargo reads distinguish keys and aggregate hosts and follow current owned writes", () => {
+  const map = supplied();
+  writeCargo(
+    map,
+    0,
+    1,
+    "land",
+    new Float64Array([1, 0, 2, 1, rocks.saltbed.code, 7, 2, rocks.saltbed.code, 13])
+  );
+  expect(readCargoDensity(map, 0, 1, "land", 1)).toBe(9);
+  expect(readCargoDensity(map, 0, 1, "land", 1, 0)).toBe(2);
+  expect(readCargoDensity(map, 0, 1, "land", 1, rocks.saltbed.code)).toBe(7);
+  expect(readCargoDensity(map, 0, 0, "land", 1)).toBe(0);
+  writeCargo(map, 0, 1, "land");
+  expect(readCargoDensity(map, 0, 1, "land", 1)).toBe(0);
+});
 
 it("a fresh uncharged bed of the same mineral neither exposes nor acquires buried charge", () => {
   const map = supplied(),

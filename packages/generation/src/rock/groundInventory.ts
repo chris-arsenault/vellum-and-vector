@@ -1,13 +1,13 @@
-import { MapScale, FloatList, IntPairIndex } from "@atlas/domain";
+import { MapScale, FloatList, IntPairIndex, type Column } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import type { MagicInventory } from "../world/magicInventory";
-import { materialLayer, readLayer, layerDepth, columnSize, type Column } from "./rockColumn";
+import { materialLayer, readLayer, layerDepth, columnSize, finiteColumn } from "./rockColumn";
 import { coverColumn, facetShare, columnThickness } from "./groundShares";
 import { constructMaterial } from "./groundConstruction";
 import { units } from "../world/math";
 import type { FlowCause } from "../coupling/flows";
 import type { MaterialLayer } from "./rockLayerFields";
-import { writeCargo, hasCargo, cargoRevision } from "./groundCargo";
+import { writeCargo, hasCargo, cargoRevision, readCargoDensity } from "./groundCargo";
 import { extractGround } from "./groundLedger";
 import type { GroundExtraction } from "./groundExtraction";
 import type { MaterialReceiver } from "./groundMaterial";
@@ -58,15 +58,17 @@ export class GroundInventory implements MagicInventory {
   reached(cell: number, reach: number) {
     if (!hasCargo(this.map, cell)) return 0;
     let amount = 0;
-    this.visit(cell, (layer, _slot, _column, share, top) => {
-      const depth = Math.max(0, Math.min(layer.depth, reach - top));
+    for (const facet of ["land", "cut"] as const) {
+      const share = facetShare(this.map, cell, facet);
+      if (share <= 0) continue;
+      const cover = coverColumn(facet),
+        under = reach - columnThickness(this.map, cell, cover);
       amount +=
-        cargoDensity(layer, this.key) *
-        MapScale.metres(depth, "native") *
-        this.map.mesh.area(cell) *
-        share;
-    });
-    return amount;
+        share *
+        (reachedColumn(this.map, cell, cover, reach, this.key) +
+          reachedColumn(this.map, cell, facet, under, this.key));
+    }
+    return amount * this.map.mesh.area(cell);
   }
   set(cell: number, wanted: number) {
     const held = this.get(cell);
@@ -262,6 +264,29 @@ export class GroundInventory implements MagicInventory {
         }
     }
   }
+}
+
+/** Reached charge per square metre; unbounded basement markers never carry inventory. */
+function reachedColumn(
+  map: PhysicalField,
+  cell: number,
+  column: Column,
+  reach: number,
+  key: number
+) {
+  let amount = 0,
+    remaining = reach;
+  for (let slot = 0; slot < columnSize(column) && remaining > 0; slot++) {
+    const thickness = layerDepth(map, cell, slot, column);
+    if (thickness <= 0) break;
+    const basement =
+        !finiteColumn(column) &&
+        (slot + 1 === columnSize(column) || layerDepth(map, cell, slot + 1, column) <= 0),
+      depth = Math.min(remaining, Math.max(0, thickness - Number(basement)));
+    amount += MapScale.metres(depth, "native") * readCargoDensity(map, cell, slot, column, key);
+    remaining -= thickness;
+  }
+  return amount;
 }
 import { alterGround } from "./groundAlteration";
 import { blendCargo, rekeyCargo } from "./materialCargo";

@@ -1,3 +1,4 @@
+import { requireChannel, MapScale, type FieldChannelName } from "@atlas/domain";
 import { expect, it } from "vitest";
 import {
   adaptiveGeometry,
@@ -16,7 +17,7 @@ import { categorical, tilePainter, rasterTileSource } from "./rasterTiles";
 import Projection from "ol/proj/Projection.js";
 import type { LoadedRaster as Raster } from "./types";
 
-function fixture(channel = "elevation"): Raster {
+function fixture(channel: FieldChannelName = "Elevation"): Raster {
   const topology = createAdaptiveTopology([0, 0, 1000, 1000], {
     maximumSize: 250,
     minimumSize: 31.25,
@@ -40,10 +41,14 @@ function fixture(channel = "elevation"): Raster {
   putChannel(
     field,
     channel,
-    channel === "material" ? "category" : "metre",
+    channel === "PhysicalMaterial" ? "category" : "native-length",
     generateBand(field.coverage, "float64", channel, (i) => {
       const x = geometry.x.get(i);
-      return channel === "material" ? (x < 500 ? 0 : 1) : 400 + x * 0.2 + geometry.y.get(i) * 0.1;
+      return channel === "PhysicalMaterial"
+        ? x < 500
+          ? 0
+          : 1
+        : MapScale.native(400 + x * 0.2 + geometry.y.get(i) * 0.1);
     })
   );
   return {
@@ -70,7 +75,7 @@ it("renders adjacent tiles exactly like the same pixels in one larger view, incl
 });
 
 it("keeps material samples discrete and leaves pixels outside coverage transparent", () => {
-  const raster = fixture("material"),
+  const raster = fixture("PhysicalMaterial"),
     paint = tilePainter(raster, [0, 1]);
   expect(categorical(raster)).toBe(true);
   const pixels = paint([-500, -500, 1500, 1500], 64),
@@ -86,8 +91,8 @@ it("retains an authored patch smaller than a base cell when drawing a close view
     original = tilePainter(raster, [0, 1000]);
   const patch = fixture().field;
   patch.scope = { ...patch.scope, footprint: rectangle([480, 480, 520, 520]) };
-  patch.channels.elevation.fill(900);
-  raster.field.overlays = [{ grid: patch, channels: ["elevation"] }];
+  requireChannel(patch, "Elevation").fill(MapScale.native(900));
+  raster.field.overlays = [{ grid: patch, channels: ["Elevation"] }];
   const edited = tilePainter(raster, [0, 1000]);
   expect(edited([490, 490, 510, 510], 16)).not.toEqual(original([490, 490, 510, 510], 16));
   expect(edited([100, 100, 120, 120], 16)).toEqual(original([100, 100, 120, 120], 16));
@@ -98,8 +103,8 @@ it("shades dry coastal terrain from its height rather than a nearest-cell water 
     dry = tilePainter(raster, [0, 1000]);
   raster.water = {
     ...raster.field,
-    channels: { water: generateBand(raster.field.coverage, "float64", "water", () => 1) },
-    units: { water: "category" },
+    channels: { WaterKindCodes: generateBand(raster.field.coverage, "float64", "water", () => 1) },
+    units: { WaterKindCodes: "category" },
   };
   expect(tilePainter(raster, [0, 1000])([400, 400, 600, 600], 32)).toEqual(
     dry([400, 400, 600, 600], 32)
@@ -108,12 +113,12 @@ it("shades dry coastal terrain from its height rather than a nearest-cell water 
 
 it("fills only the lake polygon below its physical stage and leaves an emergent island dry", () => {
   const raster = fixture();
-  raster.field.channels.elevation.fill(400);
+  requireChannel(raster.field, "Elevation").fill(MapScale.native(400));
   raster.lakes = [{ geometry: rectangle([200, 200, 800, 800]), level: 500 }];
   const island = fixture().field;
   island.scope = { ...island.scope, footprint: rectangle([450, 450, 550, 550]) };
-  island.channels.elevation.fill(600);
-  raster.field.overlays = [{ grid: island, channels: ["elevation"] }];
+  requireChannel(island, "Elevation").fill(MapScale.native(600));
+  raster.field.overlays = [{ grid: island, channels: ["Elevation"] }];
   const paint = tilePainter(raster, [0, 1000]);
   const wet = [73, 139, 153, 255];
   expect([...paint([290, 290, 310, 310], 1)]).toEqual(wet);
@@ -123,16 +128,20 @@ it("fills only the lake polygon below its physical stage and leaves an emergent 
 
 it("colors sea and exposed coast relative to the current sea level rather than zero datum", () => {
   const raster = fixture();
-  raster.field.channels.elevation.fill(100);
+  requireChannel(raster.field, "Elevation").fill(MapScale.native(100));
   raster.water = {
     ...raster.field,
-    channels: { seaLevel: generateBand(raster.field.coverage, "float64", "seaLevel", () => 200) },
-    units: { seaLevel: "metre" },
+    channels: {
+      EffectiveSeaLevel: generateBand(raster.field.coverage, "float64", "EffectiveSeaLevel", () =>
+        MapScale.native(200)
+      ),
+    },
+    units: { EffectiveSeaLevel: "native-length" },
   };
   const submerged = tilePainter(raster, [-1000, 1000])([400, 400, 600, 600], 1);
   expect(submerged[2]).toBeGreaterThan(submerged[0]);
-  raster.field.channels.elevation.fill(-50);
-  raster.water.channels.seaLevel.fill(-100);
+  requireChannel(raster.field, "Elevation").fill(MapScale.native(-50));
+  requireChannel(raster.water!, "EffectiveSeaLevel").fill(MapScale.native(-100));
   const exposed = tilePainter(raster, [-1000, 1000])([400, 400, 600, 600], 1);
   expect(exposed[0]).toBeGreaterThan(exposed[2]);
 });
@@ -156,14 +165,14 @@ it("requests finer existing field samples for a higher-density screen", () => {
 it("preserves natural cover contrast beneath Aurora in exported terrain", () => {
   const raster = fixture(),
     classes = surfaceCategories(canonryMagicPresets());
-  raster.field.channels.elevation.fill(400);
+  requireChannel(raster.field, "Elevation").fill(MapScale.native(400));
   raster.surface = raster.field;
   const zeros = (name: string) => generateBand(raster.field.coverage, "float64", name, () => 0);
   putChannel(raster.surface, "naturalSurface", "category", zeros("naturalSurface"), "category");
   putChannel(raster.surface, "finalSurface", "category", zeros("finalSurface"), "category");
   const color = (natural: "Boreal forest" | "Scree field", magic: boolean) => {
-    raster.surface!.channels.naturalSurface.fill(surfaceCode(natural));
-    raster.surface!.channels.finalSurface.fill(
+    requireChannel(raster.surface!, "naturalSurface").fill(surfaceCode(natural));
+    requireChannel(raster.surface!, "finalSurface").fill(
       magic ? magicSurfaceCode(canonryMagicPresets(), "aurora", "field")! : surfaceCode(natural)
     );
     return tilePainter(raster, [0, 1000], classes)([490, 490, 510, 510], 1);
@@ -178,11 +187,15 @@ it("preserves natural cover contrast beneath Aurora in exported terrain", () => 
 it("retains opposite-facing relief under completely opaque ice in exported terrain", () => {
   const raster = fixture(),
     geometry = adaptiveGeometry(raster.field.topology!);
-  fillBand(raster.field.channels.elevation, (i) => 400 + Math.abs(geometry.x.get(i) - 500) * 0.2);
+  fillBand(requireChannel(raster.field, "Elevation"), (i) =>
+    MapScale.native(400 + Math.abs(geometry.x.get(i) - 500) * 0.2)
+  );
   raster.ice = {
     ...raster.field,
-    channels: { ice: generateBand(raster.field.coverage, "float64", "ice", () => 1) },
-    units: { ice: "ratio" },
+    channels: {
+      IceThickness: generateBand(raster.field.coverage, "float64", "IceThickness", () => 1000),
+    },
+    units: { IceThickness: "metre" },
   };
   const paint = tilePainter(raster, [0, 1000]);
   const west = paint([240, 490, 260, 510], 1),
@@ -194,8 +207,10 @@ it("shows submerged relief instead of flattening every ocean feature to a depth 
   const sloped = fixture(),
     flat = fixture();
   const geometry = adaptiveGeometry(sloped.field.topology!);
-  fillBand(sloped.field.channels.elevation, (i) => -600 + geometry.x.get(i) * 0.2);
-  flat.field.channels.elevation.fill(-500);
+  fillBand(requireChannel(sloped.field, "Elevation"), (i) =>
+    MapScale.native(-600 + geometry.x.get(i) * 0.2)
+  );
+  requireChannel(flat.field, "Elevation").fill(MapScale.native(-500));
   expect(tilePainter(sloped, [-1000, 0])([490, 490, 510, 510], 1)).not.toEqual(
     tilePainter(flat, [-1000, 0])([490, 490, 510, 510], 1)
   );

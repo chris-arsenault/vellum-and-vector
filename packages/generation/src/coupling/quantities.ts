@@ -1,8 +1,8 @@
 import type { PhysicalBufferName } from "../world/field";
-import { ecologyCarbon, ecologyMemory, ecologyRatios, ecologyScalars } from "../world/ecologyState";
+import { ecologyCarbon, ecologyMemory, ecologyRatios, ecologyScalars } from "@atlas/domain";
 import { units } from "../world/math";
 import type { MapScale } from "@atlas/domain";
-import { rockLayerDepths, rockLayerKinds } from "../rock/rockLayerFields";
+import { rockLayerDepths, rockLayerKinds } from "@atlas/domain";
 import {
   groundMaterialFields,
   groundPlacementFields,
@@ -14,7 +14,7 @@ import {
   loadScalarFields,
   seaLoadIntegerFields,
   seaLoadScalarFields,
-} from "../rock/groundLoad";
+} from "@atlas/domain";
 
 /**
  * What a quantity is decides what history does to it, so a new band moves with the crust because of

@@ -82,8 +82,14 @@ function costDomain(
     for (let axis = 0; axis < 4; axis++)
       bounds[axis] = axis < 2 ? Math.min(bounds[axis], b[axis]) : Math.max(bounds[axis], b[axis]);
   });
-  const at = fieldInterpolator(
-    { ...grid, overlays: [], channels: { cost: spread.distances } },
+  const at = fieldInterpolator<"cost">(
+    {
+      ...grid,
+      overlays: [],
+      channels: { cost: spread.distances },
+      units: { cost: "metre" },
+      quantities: { cost: "intensive" },
+    },
     "cost"
   );
   return {

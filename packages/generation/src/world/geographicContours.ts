@@ -28,6 +28,13 @@ export function areaGeometry(shape: Geometry | null): Geometry | null {
   return polygons.length ? spatial.unionAll(polygons) : null;
 }
 
+/** Surface intersections retain area, not detached edge/point contacts that cannot be overlaid again. */
+export function intersectAreas(a: Geometry | null, b: Geometry | null): Geometry | null {
+  const left = areaGeometry(a),
+    right = areaGeometry(b);
+  return left && right ? areaGeometry(spatial.intersection(left, right)) : null;
+}
+
 export function lakeFootprint(
   state: GenerationState,
   members: Iterable<number>,
@@ -55,7 +62,7 @@ export function lakeFootprint(
     triangleBoundary(mesh, inBody, members),
     state.contours
   );
-  return footprint && membership && spatial.intersection(footprint, membership);
+  return intersectAreas(footprint, membership);
 }
 
 /** Only ocean-connected cells are sea; enclosed basins below sea level stay dry, as in generation. */
@@ -77,7 +84,7 @@ export function oceanFootprint(state: GenerationState) {
     state.contours
   );
   releaseWorking(map, depths);
-  return areaGeometry(shape && spatial.intersection(shape, state.domain.scope.footprint));
+  return intersectAreas(shape, state.domain.scope.footprint);
 }
 
 export function membershipSampler(state: GenerationState, includes: (cell: number) => number) {

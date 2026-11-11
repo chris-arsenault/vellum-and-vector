@@ -8,14 +8,17 @@ import {
 import type { GenerationState } from "./process";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import { isWorldSociety } from "./societyMapScope";
+import { mapCommand } from "./processTraits";
 
-export function publishCultures(state: GenerationState) {
+export const publishCultures = mapCommand("human.cultures", "publish", publish, []);
+
+function publish(state: GenerationState) {
   const work = state.society!,
     world = state.domain.world;
   const use = work.region.communities.map((c) => languageUse(c.groups));
   const knowledge = work.region.communities.map((c) => languageKnowledge(c.groups));
   for (const entity of Object.values(world.entities)) {
-    if (!["culture", "language", "religion"].includes(entity.kind)) continue;
+    if (!culturalKind(entity.kind)) continue;
     const fractions = work.region.communities.map((c, i) => {
       if (entity.kind === "language") return knowledge[i][entity.id] ?? 0;
       const members = c.groups.reduce((sum, g) => {
@@ -67,6 +70,9 @@ export function publishCultures(state: GenerationState) {
     putGenerated(state, marker);
     if (population(c) > 5000) publishInstitution(state, c.id, c.name, c.position, group);
   }
+}
+function culturalKind(kind: string): kind is "culture" | "language" | "religion" {
+  return kind === "culture" || kind === "language" || kind === "religion";
 }
 function publishInstitution(
   state: GenerationState,

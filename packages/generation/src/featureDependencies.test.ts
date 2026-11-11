@@ -60,7 +60,7 @@ it("requires the physical coastal target for active local pressure in the genera
     );
 });
 
-function disabledInteraction() {
+function disabledInteraction(field = "biome") {
   const active = magicSystemSchema.parse({
     id: "active",
     name: "Active",
@@ -79,7 +79,7 @@ function disabledInteraction() {
         seeds: [
           [
             { field: "system:active", min: 1 },
-            { field: "biome", values: [2] },
+            { field, values: [2] },
           ],
         ],
       },
@@ -102,32 +102,35 @@ function disabledInteraction() {
   return domain;
 }
 
-it("requires ecology for an effective independent rule inside a disabled container", () => {
-  const domain = disabledInteraction();
-  const prepared = prepareAtlasGeneration(domain, {
-    areaId: "area",
-    seed: 73,
-    quality: "draft",
-    domains: ["physical", "magic"],
-    features: { "ecology.living": { enabled: false } },
-  });
-  expect(prepared.diagnostics).toContainEqual(
-    expect.objectContaining({
-      severity: "error",
-      code: "feature_dependency",
-      invocation: "magic.configured",
-      resource: "ecology.living",
-      field: {
-        feature: "magic.configured",
-        path: ["magicSystems", 1, "features", 0, "seeds", 0, 1, "field"],
-      },
-    })
-  );
-  const classify = magicProcesses(domain.world.magicSystems).find(
-    (process) => process.contract.id === "atlas.magic-classify"
-  )!;
-  expect(classify.contract.requires).toContain("ecology");
-});
+it.each(["biome", "soilWater", "grazers"])(
+  "requires ecology for an effective %s rule inside a disabled container",
+  (field) => {
+    const domain = disabledInteraction(field);
+    const prepared = prepareAtlasGeneration(domain, {
+      areaId: "area",
+      seed: 73,
+      quality: "draft",
+      domains: ["physical", "magic"],
+      features: { "ecology.living": { enabled: false } },
+    });
+    expect(prepared.diagnostics).toContainEqual(
+      expect.objectContaining({
+        severity: "error",
+        code: "feature_dependency",
+        invocation: "magic.configured",
+        resource: "ecology.living",
+        field: {
+          feature: "magic.configured",
+          path: ["magicSystems", 1, "features", 0, "seeds", 0, 1, "field"],
+        },
+      })
+    );
+    const classify = magicProcesses(domain.world.magicSystems).find(
+      (process) => process.contract.id === "atlas.magic-classify"
+    )!;
+    expect(classify.contract.requires).toContain("ecology");
+  }
+);
 
 it("does not require the environment for disabled rules that cannot execute", () => {
   const domain = disabledInteraction();

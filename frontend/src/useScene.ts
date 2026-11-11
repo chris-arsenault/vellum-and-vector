@@ -37,8 +37,8 @@ export function useMapData(
   });
   const split = useMemo(
     () => ({
-      raster: fields.data?.filter((r) => r.channel !== "elevation"),
-      base: fields.data?.filter((r) => r.channel === "elevation"),
+      raster: fields.data?.filter((r) => r.channel !== "Elevation"),
+      base: fields.data?.filter((r) => r.channel === "Elevation"),
     }),
     [fields.data]
   );

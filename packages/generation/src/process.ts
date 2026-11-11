@@ -10,7 +10,7 @@ import type {
   GenerationEpoch,
 } from "@atlas/domain";
 import { requireThat, sameValue } from "@atlas/domain";
-import type { ProcessBehavior } from "./processTraits";
+import type { MapOperation } from "./processTraits";
 import type { ProductDefinition, ProductLedger } from "./productLedger";
 
 /** What a human round inside an earlier epoch left for the present society to find. */
@@ -91,7 +91,7 @@ export interface MapProcessContext {
 }
 export interface MapProcess {
   contract: MapProcessContract;
-  behavior: ProcessBehavior;
+  operation: MapOperation;
   validate(state: GenerationState, context: MapProcessContext): Diagnostic[];
 }
 export type ProcessSequence = (ProcessInvocation | EpochSequence)[];
@@ -152,7 +152,7 @@ export class MapProcessRegistry {
   register(process: MapProcess): this {
     const key = `${process.contract.id}@${process.contract.version}`;
     requireThat(!this.entries.has(key), "process_identity", `Register ${key} once.`);
-    requireThat(process.behavior, "process_behavior", `Bind an operation for ${key}.`);
+    requireThat(process.operation, "process_operation", `Bind an operation for ${key}.`);
     this.entries.set(key, process);
     return this;
   }

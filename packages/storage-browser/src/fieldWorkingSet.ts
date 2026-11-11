@@ -6,6 +6,7 @@ import {
   type BlockCache,
   type FieldGeography,
   type Grid,
+  type FieldChannelName,
   type NumericalResource,
   type ResourceStore,
 } from "@atlas/domain";
@@ -63,11 +64,15 @@ export class FieldInputCache {
     entry.input?.close();
   }
 }
-function fieldChannels(resource: NumericalResource, bands: Record<string, Band>, names: string[]) {
+function fieldChannels<Name extends string>(
+  resource: NumericalResource,
+  bands: Record<string, Band>,
+  names: Name[]
+) {
   const field = resource.field!,
-    channels: Record<string, Band> = {},
-    units: Record<string, string> = {},
-    quantities: Record<string, "category" | "intensive" | "extensive"> = {};
+    channels: Partial<Record<Name, Band>> = {},
+    units: Partial<Record<Name, string>> = {},
+    quantities: Partial<Record<Name, "category" | "intensive" | "extensive">> = {};
   for (const name of names) {
     const array = resource.arrays.find((a) => a.name === field.channels[name])!;
     requireThat(
@@ -93,7 +98,11 @@ export class FieldWorkingSet {
     blocks: BlockCache,
     private inputs = new FieldInputCache(store, blocks)
   ) {}
-  async load(id: string, names: string[], geography: FieldGeography): Promise<Grid> {
+  async load<Name extends string = FieldChannelName>(
+    id: string,
+    names: Name[],
+    geography: FieldGeography
+  ): Promise<Grid<Name>> {
     requireThat(!this.closed, "field_closed", "The numerical operation has ended.");
     const resource = await this.store.describe(id),
       field = resource.field;

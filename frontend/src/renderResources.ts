@@ -89,7 +89,7 @@ export async function openRenderResources(
     async load(raster: Raster, tiled = false): Promise<{ raster: LoadedRaster; close(): void }> {
       if (!resourceRaster(raster)) return { raster, close() {} };
       const shapes =
-        raster.channel === "elevation" && !tiled ? await read(raster.geography) : { lakes: [] };
+        raster.channel === "Elevation" && !tiled ? await read(raster.geography) : { lakes: [] };
       const loaded = await loadResourceRaster(store, raster, shapes, inputs);
       const close = () => {
         loaded.close();

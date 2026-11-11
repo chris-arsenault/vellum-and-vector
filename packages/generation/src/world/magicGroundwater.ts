@@ -15,6 +15,7 @@ import { clamp, units } from "./math";
 import type { GenerationState } from "../process";
 import { organicCargoKey, organicDensity } from "../rock/organicMaterial";
 import { receiveGroundwaterReturn, returnedCharge } from "./groundwater";
+import { defineCommand } from "../processOperation";
 
 /** Bind fluid inventory to water returns, including work performed after the epoch exchange. */
 export function bindMagicGroundwater(state: GenerationState) {
@@ -46,7 +47,8 @@ function returnOriginWater(
 }
 
 /** Once after ordinary groundwater moves and before current spring/soil response is evaluated. */
-export function exchangeMagicWater(state: GenerationState) {
+export const exchangeMagicWater = defineCommand("magic.water-exchange", "event", exchangeWater, []);
+function exchangeWater(state: GenerationState) {
   const map = state.physical!.map;
   bindMagicGroundwater(state);
   for (const field of state.physical!.magic!.fields) {
@@ -72,6 +74,22 @@ export function buriedCharge(
   return carbon > 0
     ? Math.max(0, sap) * (Math.max(0, buriedCarbon) / carbon) * clamp(share, 0, 1)
     : 0;
+}
+/** Charge follows actual new burial and river pickup; no living stock is renewed or aged. */
+export function respondOrganicMaterial(state: GenerationState) {
+  const { map, magic } = state.physical!;
+  for (const field of magic?.fields ?? [])
+    for (const origin of field.definition.origins)
+      withOrigin(field, origin, () => {
+        for (const stock of originStocks(origin)) {
+          const values = field.stocks[stockKey(origin, stock)];
+          if (stock.reservoir === "stratum") buryLivingCharge(map, field, values, origin);
+          if (stock.reservoir === "sap" && stock.carriers.includes("river"))
+            carryLitter(map, field, values, origin);
+        }
+      });
+  map.OrganicBurialInput.fill(0);
+  map.OrganicBurialThickness.fill(0);
 }
 /** Organic matter binds finite charge per mass; excess sap remains available at its source. */
 export function litterPacket(

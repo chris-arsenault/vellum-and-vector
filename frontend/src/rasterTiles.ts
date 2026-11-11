@@ -2,6 +2,8 @@ import {
   classInterpolator,
   fieldInterpolator,
   surfaceCategories,
+  MapScale,
+  type FieldChannelName,
   type Bounds,
   type GridSurface,
   type Position,
@@ -18,14 +20,14 @@ type ColorAt = (position: Position, dx: number, dy: number) => number[];
 
 export function categorical(raster: Raster): boolean {
   return (
-    ["category", "cell-index"].includes(raster.field.units[raster.channel]) ||
+    ["category", "cell-index"].includes(raster.field.units[raster.channel] ?? "") ||
     raster.field.quantities?.[raster.channel] === "category"
   );
 }
 
 export function rasterLimits(data: Raster[]): number[] {
   const limits = [Infinity, -Infinity];
-  const include = (field: GridSurface, channel: string) => {
+  const include = (field: GridSurface, channel: FieldChannelName) => {
     const values = field.channels[channel];
     for (let i = 0; values && i < values.length; i++) {
       const value = values.get(i);
@@ -59,7 +61,7 @@ export function tilePainter(
   const footprint = tileCoverage(raster.footprint);
   const valueAt = fieldInterpolator(raster.field, raster.channel);
   const colorAt: ColorAt =
-    raster.channel === "elevation"
+    raster.channel === "Elevation"
       ? terrainPainter(raster, limits[0], valueAt, classes)
       : (p) => fieldColor(valueAt(p), limits[0], limits[1]);
   return (extent, size) => {
@@ -119,7 +121,7 @@ export function rasterTileSource(
 
 const hexColor = (hex: string) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
 function surfacePainter(raster: LoadedRaster, classes: SurfaceCategory[]) {
-  const interpolator = (channel: string) =>
+  const interpolator = (channel: FieldChannelName) =>
     raster.surface?.channels[channel] ? classInterpolator(raster.surface, channel) : null;
   const surfaceAt = interpolator("finalSurface"),
     secondAt = interpolator("secondSurface"),
@@ -148,20 +150,28 @@ function terrainPainter(
   classes: SurfaceCategory[]
 ): ColorAt {
   const waterAt = terrainWater(raster);
-  const iceAt = raster.ice ? fieldInterpolator(raster.ice, "ice") : null;
+  const iceAt = raster.ice ? fieldInterpolator(raster.ice, "IceThickness") : null;
   const surfaceAt = surfacePainter(raster, classes);
   return (p, dx, dy) => {
     const value = height(p),
       { level: seaLevel, kind: water } = waterAt(p, value);
-    const relative =
-      water === 1 ? Math.min(-Number.EPSILON, value - seaLevel) : Math.max(0, value - seaLevel);
+    const heightMetres = MapScale.metres(value - seaLevel, "native"),
+      relative = water === 1 ? Math.min(-Number.EPSILON, heightMetres) : Math.max(0, heightMetres);
     let color =
-      water === 2 ? [73, 139, 153] : surfaceAt(p, terrainColor(relative, minimum - seaLevel), dx);
-    const ice = Math.min(1, (iceAt?.(p) ?? 0) * (water ? 2 : 1.5));
+      water === 2
+        ? [73, 139, 153]
+        : surfaceAt(p, terrainColor(relative, MapScale.metres(minimum - seaLevel, "native")), dx);
+    const ice = Math.min(1, ((iceAt?.(p) ?? 0) / 1000) * (water ? 2 : 1.5));
     color = color.map((channel, i) => channel + ([226, 237, 232][i] - channel) * ice);
     if (water !== 2) {
-      const east = ((height({ ...p, x: p.x + dx }) - height({ ...p, x: p.x - dx })) * 4) / dx;
-      const north = ((height({ ...p, y: p.y + dy }) - height({ ...p, y: p.y - dy })) * 4) / dy;
+      const east =
+        (MapScale.metres(height({ ...p, x: p.x + dx }) - height({ ...p, x: p.x - dx }), "native") *
+          4) /
+        dx;
+      const north =
+        (MapScale.metres(height({ ...p, y: p.y + dy }) - height({ ...p, y: p.y - dy }), "native") *
+          4) /
+        dy;
       const light = Math.max(
         0,
         (east * 0.5 - north * 0.5 + Math.SQRT1_2) / Math.sqrt(1 + east * east + north * north)

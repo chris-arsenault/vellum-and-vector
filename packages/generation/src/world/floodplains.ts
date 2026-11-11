@@ -1,10 +1,16 @@
 // FloodplainLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { clamp, toUnits, units } from "./math";
+import { clamp, round, toUnits, units } from "./math";
 import { dominantUpstream, longitudinalAlignment } from "./channelGeometry";
 import { RecordQueue, type Band } from "@atlas/domain";
 import { releaseWorking } from "./physicalNumerics";
+
+/** Living support widens a current dry river reach into wetland channels. */
+export function livingFloodplainSupport(verdure: number, riverOrder: number, water: number) {
+  const green = clamp(verdure, 0, 1);
+  return green > 0.3 && riverOrder >= 1 && water === 0 ? round(600 * green) : 0;
+}
 
 function canFlood(
   map: PhysicalField,
@@ -59,6 +65,18 @@ export function floodplains(map: PhysicalField, c: PhysicalContext) {
   try {
     seedFloodplains(map, c, upstream, frontier);
     expandFloodplains(map, c, upstream, frontier);
+    for (let i = 0; i < map.mesh.count; i++)
+      map.FloodplainIntensity.set(
+        i,
+        Math.max(
+          map.FloodplainIntensity.get(i),
+          livingFloodplainSupport(
+            map.Verdure.get(i),
+            map.RiverOrders.get(i),
+            map.WaterKindCodes.get(i)
+          )
+        )
+      );
   } finally {
     releaseWorking(map, upstream);
   }

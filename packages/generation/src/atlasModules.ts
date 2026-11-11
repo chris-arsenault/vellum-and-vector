@@ -8,8 +8,13 @@ import { magicProcesses } from "./world/magicProcesses";
 import { advectAtlasMagic } from "./world/atlasMagic";
 import { thermalMagicProcess, magicStorageProcess } from "./mapMagic";
 import { materialMagicProcess } from "./mapMagicEffects";
-import { culturalProcess, politicalProcess } from "./mapPeople";
-import { builtProcess } from "./mapBuilt";
+import {
+  culturalProcess,
+  culturalDevelopmentProcess,
+  politicalProcess,
+  politicalDevelopmentProcess,
+} from "./mapPeople";
+import { builtProcess, builtPreparation } from "./mapBuilt";
 import { atlasPublicationDefinitions } from "./world/atlasPublications";
 import { populationProcesses } from "./societyProcesses";
 import { societyPublications } from "./societyPublication";
@@ -57,15 +62,20 @@ atlasGenerationModules.register(
     advectAtlasMagic,
   ])
 );
-atlasGenerationModules.register(domainModule("human.cultures", () => [culturalProcess]));
-atlasGenerationModules.register(domainModule("human.politics", () => [politicalProcess]));
+atlasGenerationModules.register(
+  domainModule("human.cultures", () => [culturalDevelopmentProcess, culturalProcess])
+);
+atlasGenerationModules.register(
+  domainModule("human.politics", () => [politicalDevelopmentProcess, politicalProcess])
+);
 atlasGenerationModules.register(
   domainModule("built.layout", (source, input) => {
     const profile = source.world.areas[input.areaId].profile;
     return [
+      builtPreparation,
       ["site", "interior"].includes(profile)
         ? builtProcess
-        : { ...builtProcess, contract: { ...builtProcess.contract, requires: ["elevation"] } },
+        : { ...builtProcess, contract: { ...builtProcess.contract, requires: ["Elevation"] } },
     ];
   })
 );

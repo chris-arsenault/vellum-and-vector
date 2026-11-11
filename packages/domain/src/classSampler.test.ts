@@ -1,3 +1,4 @@
+import { requireChannel } from "./grids";
 import { expect, it } from "vitest";
 import { classInterpolator, classMarginInterpolator } from "./classSampler";
 import { createAdaptiveField } from "./adaptiveField";
@@ -19,7 +20,7 @@ const scope = {
 };
 function classes(bounds: [number, number, number, number], size: number) {
   const topology = createAdaptiveTopology(bounds, { maximumSize: size, minimumSize: size });
-  const field = createAdaptiveField("classes", scope, topology);
+  const field = createAdaptiveField<string>("classes", scope, topology);
   const bands = adaptiveGeometry(topology),
     geometry = { x: bands.x.toArray(), y: bands.y.toArray() };
   // A diagonal boundary between two classes, plus one island cell of a third.
@@ -42,7 +43,7 @@ it("keeps stored classes at cell centres and never invents intermediate codes", 
   const { field, geometry } = classes([0, 0, 1000, 1000], 250);
   const at = classInterpolator(field, "finalSurface");
   geometry.x.forEach((x, i) =>
-    expect(at({ x, y: geometry.y[i], z: 0 })).toBe(field.channels.finalSurface.get(i))
+    expect(at({ x, y: geometry.y[i], z: 0 })).toBe(requireChannel(field, "finalSurface").get(i))
   );
   const seen = new Set<number>();
   for (let y = 5; y < 1000; y += 10)
@@ -54,7 +55,7 @@ it("places the class boundary where interpolated membership crosses one half", (
   const at = classInterpolator(field, "finalSurface");
   const share = (code: number) =>
     adaptivePointSampler(topology, (leaf) =>
-      Number(field.channels.finalSurface.get(leaf) === code)
+      Number(requireChannel(field, "finalSurface").get(leaf) === code)
     );
   const upper = share(28),
     lower = share(3),
@@ -78,7 +79,7 @@ it("places the class boundary where interpolated membership crosses one half", (
   expect(at({ x: 600, y: 600, z: 0 })).toBe(28);
 });
 it("blends classes over a regular grid's bilinear support and rounds corners", () => {
-  const grid = createGrid("plain", { ...scope, resolution: 250 }, 4, 4);
+  const grid = createGrid<string>("plain", { ...scope, resolution: 250 }, 4, 4);
   // Columns 0-1 are class 3 and columns 2-3 class 28, except one lone 28 cell at (1, 1).
   putChannel(
     grid,
@@ -119,7 +120,7 @@ it("traces a family against competing classes without changing the raster's winn
 });
 
 it("keeps the categorical edge when continuous cover crosses its threshold elsewhere", () => {
-  const grid = createGrid("transition", scope, 2, 2);
+  const grid = createGrid<string>("transition", scope, 2, 2);
   putChannel(grid, "cover", "ratio", residentBand("float64", [0.1, 0.6, 0.1, 0.6]));
   putChannel(grid, "class", "category", residentBand("float64", [0, 1, 0, 1]));
   const raster = classInterpolator(grid, "class");
@@ -130,5 +131,5 @@ it("keeps the categorical edge when continuous cover crosses its threshold elsew
     expect(margin(p) > 0).toBe(x > 500);
     expect(raster(p)).toBe(Number(x > 500));
   }
-  expect([...grid.channels.cover]).toEqual([0.1, 0.6, 0.1, 0.6]);
+  expect([...requireChannel(grid, "cover")]).toEqual([0.1, 0.6, 0.1, 0.6]);
 });

@@ -1,16 +1,9 @@
 import type { PhysicalField } from "../world/field";
-import { MapScale } from "@atlas/domain";
+import { MapScale, rockLayers } from "@atlas/domain";
 import { meshDeltaX } from "../world/mesh";
 import { clamp, units } from "../world/math";
 import { givenUp, materialGives, type CompiledMix } from "./modes";
-import {
-  columnSize,
-  deepestLayer,
-  layerDepth,
-  materialStrength,
-  readLayer,
-  rockLayers,
-} from "./rockColumn";
+import { columnSize, deepestLayer, layerDepth, materialStrength, readLayer } from "./rockColumn";
 import { rockCatalogue, rockKindOfCode, type RockKind } from "./rockCatalogue";
 import { createGroundLayer, resetGroundLayer } from "./groundQuery";
 import type { GroundHere, GroundQuery } from "./groundQuery";

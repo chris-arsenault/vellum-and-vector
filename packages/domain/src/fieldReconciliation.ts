@@ -5,11 +5,12 @@ import { requireThat } from "./errors";
 import { areaSpace, isDescendant } from "./composition";
 import { spatial, point } from "./spatial";
 import { overlayField } from "./fieldComposition";
-import { sample, type GridSurface } from "./grids";
+import { sample, channelUnit, type GridSurface } from "./grids";
 import { fieldFact } from "./fieldValidation";
 import { upsertArea } from "./authoringBasics";
 import { sameValue } from "./values";
 import { validateFieldTraits } from "./traits";
+import { MapScale } from "./mapScale";
 
 function replacement(data: CreateField, context: IntentContext, snapshot: DomainSnapshot) {
   const field = snapshot.world.fields.find((f) => f.id === data.id),
@@ -33,10 +34,10 @@ function replacement(data: CreateField, context: IntentContext, snapshot: Domain
     "Declare the owning area's complete interface extent."
   );
   const changes = createField(data, context, snapshot, true),
-    grid: GridSurface = { ...changes.fieldArtifacts![0].grid };
+    grid: GridSurface<string> = { ...changes.fieldArtifacts![0].grid };
   requireThat(
     Object.keys(source.channels).every(
-      (c) => grid.channels[c] && grid.units[c] === source.units[c]
+      (c) => grid.channels[c] && grid.units[c] === channelUnit<string>(source, c)
     ),
     "field_channels",
     "Reconciliation retains existing channels and units."
@@ -64,7 +65,17 @@ function reconcile(data: CreateField, context: IntentContext, snapshot: DomainSn
       const values = { ...edge.values };
       for (const channel of Object.keys(grid.channels))
         values[fieldFact(layer, channel)] = sample(grid, channel, edge.point);
-      return { ...edge, values, point: { ...edge.point, z: values.elevation ?? edge.point.z } };
+      return {
+        ...edge,
+        values,
+        point: {
+          ...edge.point,
+          z:
+            values.Elevation === undefined
+              ? edge.point.z
+              : MapScale.metres(values.Elevation, "native"),
+        },
+      };
     });
     if (sameValue(samples, area.boundary.samples)) continue;
     for (const channel of Object.keys(grid.channels))

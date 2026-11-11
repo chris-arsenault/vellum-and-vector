@@ -91,7 +91,7 @@ export function landscape(): GenerationState {
           profiles: ["world", "region"],
           schema: {},
           generator: null,
-          facts: ["elevation", "temperature", "ice", "heat", "precipitation"],
+          facts: ["Elevation", "Temperature", "IceThickness", "Heat", "ColumnPrecipitation"],
         },
       },
     },
@@ -108,11 +108,11 @@ export function landscape(): GenerationState {
     surface = createGrid("landscape", scope, 5, 2);
   putChannel(
     surface,
-    "elevation",
-    "metre",
-    generateChannel(surface, "elevation", (i) => [-10, 100, 1100, 100, 100][i % 5])
+    "Elevation",
+    "native-length",
+    generateChannel(surface, "Elevation", (i) => [-10240, 102400, 1126400, 102400, 102400][i % 5])
   );
-  return { domain, surface, facts: new Set(["elevation"]), history: [] };
+  return { domain, surface, facts: new Set(["Elevation"]), history: [] };
 }
 
 export function source(overrides: Partial<World["magic"][number]> = {}): World["magic"][number] {

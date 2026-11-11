@@ -8,7 +8,7 @@ function raster(windows: [number, number, number, number][]): ResourceRaster {
   return {
     id: "field",
     areaId: "a",
-    channel: "elevation",
+    channel: "Elevation",
     footprint: { type: "Polygon", coordinates: [] },
     bounds: [0, 0, 1000, 1000],
     field: {

@@ -1,236 +1,289 @@
 import type { MapProcessContext } from "../process";
-import { MapScale } from "@atlas/domain";
-import { physicalContext } from "../world/context";
-import { landformClassification } from "../world/landforms";
+import {
+  mapCommand,
+  mapQuery,
+  mapWork,
+  processOwner,
+  type MapOperation,
+  type MapInput,
+} from "../processTraits";
+import { runOperation, readOperation, type Query } from "../processOperation";
+import { oceanMemory } from "../processes/climateProcesses";
+import { requireRegional } from "./state";
+import { nativeContext, physicalContext } from "../world/context";
+import { finalCheck, landforms as physicalLandforms } from "../processes/waterProcesses";
 import { conjoinFeatures, readEvidence, respondFeatures, supportFeatures } from "./causes/index";
 import { deriveCharacter } from "./character";
 import { respondClimate } from "./climate";
 import { divides } from "./divides";
-import { routeWater } from "./drainage";
-import { erodeRegion } from "./erosion";
+import { routeWater, refreshRegionalOcean } from "./drainage";
 import { clearRegionalProducts } from "./extraction/features";
 import { carryIdentities } from "./extraction/identity";
-import { prepareEcology, respondEcology } from "./ecology";
-import { mapMagic, respondMagic } from "./magic/index";
+import { prepareEcology, respondEcology, presentEcology } from "./ecology";
+import { mapMagic, respondMagic, reactRegionalMagic, respondRegionalOrganic } from "./magic/index";
+import { transportRetainedMagic } from "../world/magicStocks";
+import { exchangeMagicWater } from "../world/magicGroundwater";
 import { growNetwork } from "./network";
-import {
-  extractPlaces,
-  placesEnabled,
-  preparePlaces,
-  proposePlaces,
-  supportProposals,
-} from "./places";
-import { stiffenAroundCones } from "./material";
+import { extractPlaces, preparePlaces, proposePlaces, supportProposals } from "./places";
 import { deriveRelief, updateSlopes } from "./relief";
-import { foldTheColumn } from "./rockStructure";
-import { deriveMedia, openFractures } from "./sharedMedia";
+import { deriveMedia } from "./sharedMedia";
 import { declareFields } from "./society";
-import { ledgerCeilings, ledgerFloors } from "./media";
+import { ledgerCeilings, ledgerFloors } from "../coupling/fieldContributions";
 import { registerCatalogueCauses } from "../poi/poiCauses";
 import { declarePlaceEffects } from "../poi/poiEffects";
 import { carryPlaces } from "../poi/poiPublish";
 import { markPoiLandforms } from "../poi/poiLandforms";
+import { describeNativeStep, fieldProduct } from "../world/physicalSteps";
+import { routingSteps, nativeSteps } from "../world/sequence";
 import type { RegionalState } from "./state";
 
 export interface ScheduledStep {
   id: string;
   message: string;
-  /** A step that writes features rather than the workspace. */
-  publishes?: boolean;
-  run(state: RegionalState, context?: MapProcessContext): void;
+  produces?: string[];
+  operation: MapOperation;
 }
+/** Local response exposure; these rounds do not append world history. */
+export const developmentExposure = [250, 60, 20] as const;
+export const rounds = developmentExposure.length;
+type RegionalRead = (state: RegionalState, context: MapProcessContext) => void;
+const read = (id: string, apply: RegionalRead, dependencies: readonly Query<MapInput>[]) =>
+  mapQuery(
+    `refinement.${id}`,
+    (state, context) => apply(requireRegional(state), context),
+    dependencies
+  );
+const command = (
+  id: string,
+  kind: "initialize" | "event" | "publish",
+  apply: RegionalRead,
+  dependencies: readonly Query<MapInput>[]
+) =>
+  mapCommand(
+    `refinement.${id}`,
+    kind,
+    (state, context) => apply(requireRegional(state), context),
+    dependencies
+  );
 
-export const rounds = 3;
-/** Relief change (m) at any cell below which magic's follow-up reroute waits for the next round. */
-const reliefFollowUp = 0.000000125;
+const ocean = read("ocean", refreshRegionalOcean, []);
+const media = read(
+  "media",
+  (state) => {
+    updateSlopes(state);
+    deriveMedia(state);
+  },
+  [ocean]
+);
+// Magic reads the preceding atmospheric state; climate then responds to that forcing.
+// This is the existing ordered feedback, not a recursive climate/magic fixed-point solver.
+const magic = read("magic-refresh", respondMagic, [media]);
+const climate = read("climate", respondClimate, [media, magic]);
+export const regionalAtmosphere = climate;
+const water = read("water", routeWater, [climate]);
+const habitats = read("ecology-present", presentEcology, [climate, water]);
+const landforms = read("landforms", classifyLandforms, [media, water]);
 
-/** Which domains this run develops; the schedule's gates. */
-interface Domains {
-  physical: boolean;
-  magic: boolean;
-  geography: boolean;
-  society: boolean;
-}
-function domainsOf(domains: string[]): Domains {
-  const physical = domains.includes("physical"),
-    magic = domains.includes("magic");
-  return { physical, magic, geography: physical || magic, society: placesEnabled(domains) };
-}
-
-/**
- * The fixed coupled realization schedule (spec 7): context once, three rounds in a declared
- * order, one final refresh. The network is grown once in round one; every round derives the
- * relief from it through the media as they are then, routes water, evaluates climate and
- * magic, develops the living landscape and settles places. A round is not an epoch; the
- * schedule ends after round three and the refresh. Magic's relief changes trigger the one
- * declared follow-up read (routing) inside the round that made them. The world's projection
- * and extraction follow (`workflow.ts`), then the regional identity and place steps.
- */
-export function regionalSchedule(domains: string[]): ScheduledStep[] {
-  const d = domainsOf(domains),
-    steps: ScheduledStep[] = [
-      {
-        id: "clear-products",
-        message: "Removing this map's earlier products",
-        publishes: true,
-        run: clearRegionalProducts,
-      },
-      contextStep(d),
-    ];
-  for (let round = 1; round <= rounds; round++) steps.push(...roundSteps(d, round));
-  steps.push({
-    id: "refresh",
-    message: "Refreshing derived reads after the last changes",
-    run(state) {
-      state.regional.round = rounds + 1;
-      updateSlopes(state);
-      routeWater(state);
-      // The water was routed afresh: the features' responses on it (reservoirs, seats) too.
-      respondFeatures(state);
-      // A seat that settled on new ground graded it: the slopes read from here include that.
-      updateSlopes(state);
-      deriveMedia(state);
-      respondClimate(state);
-      if (d.geography) respondEcology(state);
-      classifyLandforms(state);
-    },
-  });
-  return steps;
-}
-
-/** After the world has published the field's geography: what only a refinement knows. */
-export function regionalExtraction(domains: string[]): ScheduledStep[] {
-  const d = domainsOf(domains),
-    steps: ScheduledStep[] = [
-      {
-        id: "magic-map",
-        message: "Classifying magical geography",
-        publishes: true,
-        run: mapMagic,
-      },
-      { id: "features", message: "Publishing the developed geography", publishes: true, run() {} },
-      {
-        id: "identity",
-        message: "Carrying captured identities onto the developed geography",
-        publishes: true,
-        run(state) {
-          carryIdentities(state);
-          carryPlaces(state);
-        },
-      },
-    ];
-  if (d.society)
-    steps.push({
-      id: "places",
-      message: "Placing villages and local ways",
-      publishes: true,
-      run: extractPlaces,
-    });
-  return steps;
-}
-
-function contextStep(d: Domains): ScheduledStep {
-  return {
+/** Each owner supplies an executable operation, never flags interpreted as a lifecycle. */
+export const regionalOperations: ScheduledStep[] = [
+  {
+    id: "clear-products",
+    message: "Removing earlier local products",
+    operation: command("clear-products", "publish", clearRegionalProducts, []),
+  },
+  {
     id: "context",
-    message: "Reading the captured country's character and established geography",
-    run(state) {
-      registerCatalogueCauses();
-      state.regional.character = deriveCharacter(state);
-      stiffenAroundCones(state);
-      if (d.geography) prepareEcology(state);
-      preparePlaces(state);
-      readEvidence(state);
-      if (!d.physical) {
-        updateSlopes(state);
-        return;
-      }
-      foldTheColumn(state);
-      // The fracture set steers the network's cost; the other media follow each round's water.
-      openFractures(state);
-      growNetwork(state);
-      supportFeatures(state);
-    },
-  };
+    message: "Reading captured structure and named geography",
+    operation: command("context", "initialize", prepareContext, []),
+  },
+  {
+    id: "round",
+    message: "Beginning local development",
+    operation: command(
+      "round",
+      "event",
+      (state, context) => {
+        state.regional.round = Number(context.parameters.round);
+        if (state.regional.round === 2) conjoinFeatures(state);
+      },
+      []
+    ),
+  },
+  {
+    id: "relief",
+    message: "Developing relief through retained material",
+    operation: command("relief", "initialize", deriveRelief, []),
+  },
+  {
+    id: "water",
+    message: "Routing present regional water",
+    produces: routingProducts(),
+    operation: water,
+  },
+  {
+    id: "ocean",
+    message: "Resolving the current shoreline",
+    produces: describeNativeStep(nativeSteps.oceanConnectivity).writes.map(fieldProduct),
+    operation: ocean,
+  },
+  {
+    id: "ocean-memory",
+    message: "Updating retained coastal water",
+    operation: command(
+      "ocean-memory",
+      "event",
+      (state, context) => {
+        runOperation(state.physical.map, oceanMemory.operation, {
+          map: state.physical.map,
+          context: nativeContext(state, context, 0),
+        });
+      },
+      [ocean]
+    ),
+  },
+  { id: "media", message: "Reading the current terrain", operation: media },
+  {
+    id: "climate",
+    message: "Developing captured climate on local terrain",
+    produces: (
+      ["Temperature", "Rainfall", "Snowfall", "Moisture", "WindX", "WindY", "Seasonality"] as const
+    ).map(fieldProduct),
+    operation: climate,
+  },
+  { id: "magic-refresh", message: "Reading magic through current carriers", operation: magic },
+  {
+    id: "magic-react",
+    message: "Developing inherited magical material",
+    operation: mapWork(
+      "refinement.magic-react",
+      () => 1,
+      (state, _context, exposure) => reactRegionalMagic(requireRegional(state), exposure),
+      [magic]
+    ),
+  },
+  {
+    id: "magic-transport",
+    message: "Moving retained material through current carriers",
+    operation: command("magic-transport", "event", transportRetainedMagic, [water]),
+  },
+  {
+    id: "magic-water",
+    message: "Carrying dissolved material with groundwater",
+    operation: command(
+      "magic-water",
+      "event",
+      (state) => runOperation(processOwner(state), exchangeMagicWater, state),
+      [water]
+    ),
+  },
+  {
+    id: "magic-organic",
+    message: "Carrying magic in organic material",
+    operation: command("magic-organic", "event", respondRegionalOrganic, []),
+  },
+  {
+    id: "ecology-initialize",
+    message: "Reading inherited living communities",
+    operation: command("ecology-initialize", "initialize", prepareEcology, []),
+  },
+  {
+    id: "ecology-develop",
+    message: "Developing local habitats",
+    operation: mapWork(
+      "refinement.ecology-develop",
+      (state) => developmentExposure[requireRegional(state).regional.round - 1] ?? 0,
+      (state, context, exposure) => respondEcology(requireRegional(state), exposure, context),
+      [climate, water]
+    ),
+  },
+  { id: "ecology-present", message: "Classifying current habitats", operation: habitats },
+  {
+    id: "place-effects",
+    message: "Resolving existing works on current ground",
+    operation: command("place-effects", "event", placeEffects, [climate, water]),
+  },
+  {
+    id: "propose-places",
+    message: "Locating local places",
+    operation: command("propose-places", "event", proposePlaces, [habitats, water]),
+  },
+  {
+    id: "support-places",
+    message: "Supporting local places",
+    operation: command("support-places", "event", supportProposals, [habitats, water]),
+  },
+  {
+    id: "refresh",
+    message: "Checking developed geography for publication",
+    produces: ["atlas:validated"],
+    operation: read(
+      "refresh",
+      (state, context) => {
+        readOperation(state.physical.map, finalCheck.operation, {
+          map: state.physical.map,
+          context: nativeContext(state, context, 0),
+        });
+      },
+      [landforms, habitats]
+    ),
+  },
+  { id: "landforms", message: "Reading local landforms", operation: landforms },
+  {
+    id: "magic-map",
+    message: "Classifying magical geography",
+    operation: command("magic-map", "publish", mapMagic, [magic, climate, water]),
+  },
+  {
+    id: "identity",
+    message: "Resolving captured identities",
+    operation: command(
+      "identity",
+      "publish",
+      (state) => {
+        carryIdentities(state);
+        carryPlaces(state);
+      },
+      [landforms]
+    ),
+  },
+  {
+    id: "places",
+    message: "Publishing local places and ways",
+    operation: command("places", "publish", extractPlaces, [habitats, water]),
+  },
+];
+
+function prepareContext(state: RegionalState) {
+  registerCatalogueCauses();
+  state.regional.character = deriveCharacter(state);
+  preparePlaces(state);
+  readEvidence(state);
+  growNetwork(state);
+  supportFeatures(state);
 }
 
-function roundSteps(d: Domains, round: number): ScheduledStep[] {
-  const label = ["broad organization", "coupled responses", "local consequences"][round - 1],
-    steps: ScheduledStep[] = [
-      {
-        id: `round-${round}/structure`,
-        message: `Round ${round}: deriving relief from the network (${label})`,
-        run(state) {
-          state.regional.round = round;
-          if (d.physical) {
-            deriveRelief(state);
-          }
-          // The last round's ground is worked by the world's erosion at this map's scale.
-          if (d.physical && round === rounds) erodeRegion(state);
-          if (round === 2) conjoinFeatures(state);
-        },
-      },
-      {
-        id: `round-${round}/water`,
-        message: `Round ${round}: routing water and access`,
-        run(state) {
-          routeWater(state);
-          respondFeatures(state);
-          deriveMedia(state);
-        },
-      },
-      {
-        id: `round-${round}/environment`,
-        message: `Round ${round}: evaluating climate and magic on the shared media`,
-        run(state) {
-          // One ledger cycle per round: climate, magic and society declare their totals
-          // against the captured ground; one commit writes the change since the last round.
-          const applied = state.regional.contributions;
-          applied.begin();
-          respondClimate(state);
-          if (d.magic) respondMagic(state);
-          if (d.society) declareFields(state);
-          declarePlaceEffects(state, applied);
-          const changed = applied.commit(state.physical.map, ledgerFloors, ledgerCeilings);
-          // The one declared follow-up: relief magic changed by a resolvable amount reroutes
-          // water before the living landscape and places read it.
-          if (
-            (changed.get("Elevation") ?? 0) >=
-            MapScale.native(state.physical.map.scale.length(reliefFollowUp))
-          ) {
-            updateSlopes(state);
-            routeWater(state);
-            deriveMedia(state);
-          }
-        },
-      },
-    ];
-  if (d.geography)
-    steps.push({
-      id: `round-${round}/cover`,
-      message: `Round ${round}: developing the living landscape`,
-      run: (state) => respondEcology(state),
-    });
-  if (d.society && round >= 2)
-    steps.push({
-      id: `round-${round}/places`,
-      message:
-        round === 2
-          ? "Round 2: proposing local places at the network's events"
-          : "Round 3: supporting the proposed places",
-      run: (state) => (round === 2 ? proposePlaces(state) : supportProposals(state)),
-    });
-  return steps;
+function placeEffects(state: RegionalState, context: MapProcessContext) {
+  const applied = state.regional.contributions;
+  applied.begin();
+  if (context.parameters.society) declareFields(state);
+  declarePlaceEffects(state, applied);
+  applied.commit(state.physical.map, ledgerFloors, ledgerCeilings);
+  respondFeatures(state);
 }
 
-/**
- * The world's landform classes on the developed field, read by its peak and range extraction.
- * The classifier reads ridges and passes where tectonics raised a ridge; on a region that
- * mark is the drainage divide between the routed channels.
- */
+function routingProducts() {
+  return [...new Set(routingSteps.flatMap((step) => describeNativeStep(step).writes))].map(
+    fieldProduct
+  );
+}
+
 function classifyLandforms(state: RegionalState) {
   const work = state.physical,
     divide = divides(state);
   for (let i = 0; i < divide.length; i++) work.map.RidgeInfluence.set(i, divide[i]);
-  landformClassification(work.map, physicalContext(state.regional.input.seed, 0, work.profile));
+  readOperation(work.map, physicalLandforms.operation, {
+    map: work.map,
+    context: physicalContext(state.regional.input.seed, 0, work.profile),
+  });
   markPoiLandforms(state);
 }

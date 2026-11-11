@@ -1,3 +1,4 @@
+import { mapCommand, mapElapsed } from "./processTraits";
 import {
   gridPosition,
   point,
@@ -10,7 +11,7 @@ import {
 } from "@atlas/domain";
 import { requireChannel, summarizeChannel, surfaceArray, surfaceValues } from "./mapFields";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
-import { generationBindings } from "./generationBindings";
+import { generationBindings, physicalEpochIndex } from "./generationBindings";
 
 const activityParameters: ParameterDefinitions = {
   sourceActivity: { type: "number", unit: "ratio", required: false, default: 1, minimum: 0 },
@@ -18,16 +19,16 @@ const activityParameters: ParameterDefinitions = {
   coldActivity: { type: "number", unit: "ratio", required: false, default: 1, minimum: 0 },
 };
 const invalidatedClimate = [
-  "temperature",
-  "precipitation",
-  "snowfall",
-  "rainfall",
-  "moisture",
-  "runoff",
+  "Temperature",
+  "ColumnPrecipitation",
+  "Snowfall",
+  "Rainfall",
+  "AtmosphericWaterRate",
+  "Runoff",
   "drainage",
-  "flow",
+  "FlowAccumulation",
   "lakes",
-  "ice",
+  "IceThickness",
 ];
 type Source = World["magic"][number];
 
@@ -44,13 +45,7 @@ function activity(context: MapProcessContext, source: Source): number {
   // Magical starts refer to the physical timeline. Nested occupation/cave
   // episodes do not advance it; a child can explicitly map to its parent epoch.
   const epochs = context.inputs?.features ? generationBindings(context).settings.epochs : [];
-  const physical = context.epochs[0],
-    parent = physical?.parentEpoch ?? physical?.id,
-    inheritedIndex = epochs.findIndex((epoch) => epoch.id === parent),
-    index =
-      inheritedIndex >= 0
-        ? inheritedIndex
-        : (context.epochIndices[0] ?? Math.max(0, epochs.length - 1));
+  const index = Math.max(0, physicalEpochIndex(epochs, context.epochs));
   return index >= source.startsAtEpoch
     ? Number(context.parameters.sourceActivity) *
         Number(context.parameters[source.effect === "cold" ? "coldActivity" : "heatActivity"])
@@ -79,23 +74,26 @@ function propagationWeight(state: GenerationState, source: Source, i: number, sc
   const grid = state.surface;
   switch (source.propagation) {
     case "fracture":
-      return 0.1 + 0.9 * (grid.channels.fracture?.get(i) ?? 0);
+      return 0.1 + 0.0009 * (grid.channels.FractureConductance?.get(i) ?? 0);
     case "cold":
-      return Math.max(
-        0,
-        Math.min(
-          1,
-          (20 -
-            (grid.channels.temperature?.get(i) ??
-              15 - grid.channels.elevation.get(i) * scale.inverseLength(26000))) /
-            30
-        )
-      );
+      return coldWeight(state, i, scale);
     case "ocean":
-      return grid.channels.elevation.get(i) < 0 ? 1 : 0;
+      return oceanWeight(state, i);
     default:
       return 1;
   }
+}
+function oceanWeight(state: GenerationState, i: number) {
+  const c = state.surface.channels;
+  return (c.Elevation?.get(i) ?? 0) < (c.EffectiveSeaLevel?.get(i) ?? 0) ? 1 : 0;
+}
+function coldWeight(state: GenerationState, i: number, scale: MapScale) {
+  const channels = state.surface.channels;
+  const temperature =
+    channels.Temperature?.get(i) ??
+    450 -
+      10 * MapScale.metres(channels.Elevation?.get(i) ?? 0, "native") * scale.inverseLength(26000);
+  return Math.max(0, Math.min(1, (20 - (temperature / 10 - 30)) / 30));
 }
 export function magicalForcing(
   state: GenerationState,
@@ -118,27 +116,28 @@ export const thermalMagicProcess: MapProcess = {
     id: "magic.thermal",
     version: "1",
     parameters: activityParameters,
-    requires: ["elevation"],
-    produces: ["heat"],
+    requires: ["Elevation"],
+    produces: ["Heat", "StoredHeat"],
     invalidates: invalidatedClimate,
   },
-  behavior: {
-    kind: "forcing-contributor",
-    contribute(state, context) {
+  operation: mapCommand(
+    "magic.thermal",
+    "event",
+    (state, context) => {
       const grid = state.surface,
         scale = MapScale.fromCells(grid.bounds, grid.active.length),
         heat = surfaceArray(state, "magic:heat"),
         stored = surfaceArray(state, "magic:stored");
       for (const source of sources(state, context)) {
         const multiplier = activity(context, source),
-          key = `magic:${source.id}:stored`,
+          key = `magic:${source.id}:stored` as const,
           memory = grid.channels[key]
             ? requireChannel(grid, key, "celsius")
             : surfaceArray(state, key),
           forcing = surfaceValues(state, "magic:forcing", (i) =>
             forcingAt(state, source, multiplier, i, scale)
           ),
-          forcingKey = `magic:${source.id}:forcing`;
+          forcingKey = `magic:${source.id}:forcing` as const;
         for (let i = 0; i < heat.length; i++) {
           heat.add(i, forcing.get(i) + memory.get(i));
           stored.add(i, memory.get(i));
@@ -160,13 +159,14 @@ export const thermalMagicProcess: MapProcess = {
           stored: summarizeChannel(grid, key),
         });
       }
-      putChannel(grid, "heat", "celsius", heat);
-      putChannel(grid, "storedHeat", "celsius", stored);
+      putChannel(grid, "Heat", "celsius", heat);
+      putChannel(grid, "StoredHeat", "celsius", stored);
     },
-  },
+    []
+  ),
   validate(state) {
-    requireChannel(state.surface, "heat", "celsius");
-    requireChannel(state.surface, "storedHeat", "celsius");
+    requireChannel(state.surface, "Heat", "celsius");
+    requireChannel(state.surface, "StoredHeat", "celsius");
     return [];
   },
 };
@@ -178,14 +178,14 @@ export const magicStorageProcess: MapProcess = {
     id: "magic.advanceStorage",
     version: "1",
     parameters: {},
-    requires: ["heat"],
+    requires: ["Heat"],
     produces: ["magicStorage"],
-    invalidates: ["heat", ...invalidatedClimate],
+    invalidates: ["Heat", ...invalidatedClimate],
   },
-  behavior: {
-    kind: "elapsed",
-    duration: { kind: "epoch", fraction: 1 },
-    advance(state, context, years) {
+  operation: mapElapsed(
+    "magic.advanceStorage",
+    { kind: "epoch", fraction: 1 },
+    (state, context, years) => {
       requireThat(
         context.epochs.length > 0,
         "magic_storage_epoch",
@@ -211,7 +211,7 @@ export const magicStorageProcess: MapProcess = {
                 cause.process === "magic.thermal" &&
                 cause.sourceId === source.id
             ),
-          key = `magic:${source.id}:stored`,
+          key = `magic:${source.id}:stored` as const,
           memory = grid.channels[key]
             ? requireChannel(grid, key, "celsius")
             : surfaceArray(state, key),
@@ -238,7 +238,8 @@ export const magicStorageProcess: MapProcess = {
         });
       }
     },
-  },
+    []
+  ),
   validate() {
     return [];
   },

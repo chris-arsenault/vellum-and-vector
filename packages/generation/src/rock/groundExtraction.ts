@@ -1,3 +1,4 @@
+import type { Column } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import type { MaterialReceiver } from "./groundMaterial";
 import {
@@ -6,7 +7,6 @@ import {
   finiteColumn,
   readLayer,
   writeColumn,
-  type Column,
   type MaterialLayer,
 } from "./rockColumn";
 import { partitionCargo } from "./materialCargo";

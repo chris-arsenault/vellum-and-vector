@@ -1,16 +1,22 @@
 import { expect, it } from "vitest";
-import { cloneFieldInput, residentBand, type GridSurface } from "@atlas/domain";
+import {
+  cloneFieldInput,
+  residentBand,
+  requireChannel,
+  type FieldChannelName,
+} from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { resolveGenerationFeatures, type FeatureSelection } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
 import { atlasPublicationDefinitions, selectedAtlasChannels } from "./atlasPublications";
 import { projectNative } from "./atlasProjection";
+import { runOperation } from "../processOperation";
+import { processOwner } from "../processTraits";
 import { createTestField as createField } from "../rock/groundTestFixture";
 import { createMesh } from "./mesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { Landform } from "./codes";
-import { groundResourceBindings } from "../rock/groundResources";
-import { refinementChannel } from "../regional/capture";
+import { groundResourceChannels } from "../rock/groundResources";
 import { setLayer } from "../rock/rockColumn";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { GroundInventory } from "../rock/groundInventory";
@@ -27,9 +33,8 @@ it("publishes complete ground for refinement without requiring load response", (
   );
   expect(features.diagnostics).toEqual([]);
   const selected = selectedAtlasChannels(features).map(({ name }) => name);
-  for (const { name } of groundResourceBindings) {
+  for (const { name } of groundResourceChannels) {
     expect(selected).toContain(name);
-    expect(refinementChannel(name)).toBe(true);
   }
   const publications = atlasPublicationDefinitions({
     areaId: "area",
@@ -38,7 +43,7 @@ it("publishes complete ground for refinement without requiring load response", (
     seed: 73,
     resolvedFeatures: features,
   });
-  for (const { name } of groundResourceBindings)
+  for (const { name } of groundResourceChannels)
     expect(publications).toContainEqual(
       expect.objectContaining({
         kind: "field",
@@ -47,6 +52,11 @@ it("publishes complete ground for refinement without requiring load response", (
         owners: ["physical.foundation"],
       })
     );
+  expect(
+    publications.filter(
+      (definition) => definition.kind === "field" && definition.channel === "FogForcing"
+    )
+  ).toHaveLength(1);
 });
 
 function fixture(selected: FeatureSelection = {}) {
@@ -99,20 +109,28 @@ it("does not classify physical material when the landform feature is disabled", 
       throw new Error("Disabled landform classification must not read landform codes.");
     },
   });
-  projectNative(state, false, false, bindings, channels);
-  expect(state.surface.channels.physicalMaterial).toBeUndefined();
-  expect(state.surface.channels.landform).toBeUndefined();
-  expect(state.surface.channels.elevation.get(0)).toBe(100);
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: bindings,
+    selectedChannels: channels,
+  });
+  expect(state.surface.channels.PhysicalMaterial).toBeUndefined();
+  expect(state.surface.channels.LandformCodes).toBeUndefined();
+  expect(requireChannel(state.surface, "Elevation").get(0)).toBe(110 * 1024);
 });
 
 it("publishes present surface material as a category independently of active magic", () => {
   const { state, map, channels, bindings } = fixture();
   setLayer(map, 0, 0, rockCatalogue.keptStone.code, 100);
   setLayer(map, 0, 0, rockCatalogue.alluvium.code, 10, {}, "loose");
-  projectNative(state, false, false, bindings, channels);
-  expect(state.surface.channels.surfaceMaterial.get(0)).toBe(rockCatalogue.alluvium.code);
-  expect(state.surface.units.surfaceMaterial).toBe("category");
-  expect(state.surface.quantities?.surfaceMaterial).toBe("category");
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: bindings,
+    selectedChannels: channels,
+  });
+  expect(requireChannel(state.surface, "SurfaceMaterial").get(0)).toBe(rockCatalogue.alluvium.code);
+  expect(state.surface.units.SurfaceMaterial).toBe("category");
+  expect(state.surface.quantities?.SurfaceMaterial).toBe("category");
 });
 
 it("does not compute a composite erosion product when all its owners are disabled", () => {
@@ -126,65 +144,75 @@ it("does not compute a composite erosion product when all its owners are disable
       throw new Error("Disabled composite erosion must not read erosion history.");
     },
   });
-  projectNative(state, false, false, bindings, channels);
-  expect(state.surface.channels.erosion).toBeUndefined();
-  expect(state.surface.channels.fluvialErosion).toBeUndefined();
-  expect(state.surface.channels.glacialErosion).toBeUndefined();
-  expect(state.surface.channels.coastalErosion).toBeUndefined();
-  expect(state.surface.channels.physicalMaterial.get(0)).toBe(0);
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: bindings,
+    selectedChannels: channels,
+  });
+  expect(state.surface.channels.TotalErosion).toBeUndefined();
+  expect(state.surface.channels.CumulativeFluvialErosion).toBeUndefined();
+  expect(state.surface.channels.CumulativeGlacialErosion).toBeUndefined();
+  expect(state.surface.channels.CumulativeCoastalErosion).toBeUndefined();
+  expect(requireChannel(state.surface, "PhysicalMaterial").get(0)).toBe(0);
 });
-/** A grid's channel values, units and quantities, comparable without its band storage. */
-const surfaceValues = (grid: GridSurface) => ({
-  channels: Object.fromEntries(
-    Object.entries(grid.channels).map(([name, band]) => [name, Array.from(band)])
-  ),
-  units: grid.units,
-  quantities: grid.quantities,
-  active: Array.from(grid.active),
-  measures: Array.from(grid.measures),
-});
-
-it("retains the existing numerical output and quantity semantics for selected derived products", () => {
-  // Two fixtures built alike: one projects every binding, the other the selected channels.
-  const { state, channels, bindings } = fixture(),
-    legacy = fixture().state;
-  projectNative(legacy, false, false, bindings);
-  projectNative(state, false, false, bindings, channels);
-  expect(surfaceValues(state.surface)).toEqual(surfaceValues(legacy.surface));
-  expect(state.surface.channels.erosion.get(0)).toBe(6);
-  expect(state.surface.channels.physicalMaterial.get(0)).toBe(0);
-  expect(state.surface.channels.precipitation.get(0)).toBe(4);
-  expect(state.surface.channels.waterLevel.get(0)).toBe(2);
-  expect(state.surface.quantities?.waterLevel).toBe("category");
-  expect(state.surface.units.precipitation).toBe("metre/year");
-  expect(state.domain.world.features).toEqual(legacy.domain.world.features);
+it("publishes canonical values, units and datum on supplied physical inputs", () => {
+  const { state, map, channels, bindings } = fixture();
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: bindings,
+    selectedChannels: channels,
+  });
+  for (const { name, unit } of bindings) {
+    expect(requireChannel(state.surface, name).type, name).toBe(map[name].type);
+    expect(state.surface.units[name], name).toBe(unit);
+  }
+  expect(requireChannel(state.surface, "Elevation").get(0)).toBe(110 * 1024);
+  expect(requireChannel(state.surface, "TotalErosion").get(0)).toBe(6 * 1024);
+  expect(requireChannel(state.surface, "Precipitation").get(0)).toBe(4000);
+  expect(requireChannel(state.surface, "EffectiveSeaLevel").get(0)).toBe(12 * 1024);
+  expect(state.surface.units.Elevation).toBe("native-length");
+  expect(state.surface.units.Precipitation).toBe("millimetre/year");
 });
 
 it("keeps declared internal forcing inputs available independently of final publication", () => {
   const { state } = fixture();
-  projectNative(state, true, false, undefined, new Set());
-  expect(Array.from(state.surface.channels.naturalTemperature)).toEqual(
-    Array.from(state.surface.channels.temperature)
+  runOperation(processOwner(state), projectNative, {
+    state,
+    forcingOnly: true,
+    selectedChannels: new Set<FieldChannelName>(),
+  });
+  expect(Array.from(requireChannel(state.surface, "NaturalTemperature"))).toEqual(
+    Array.from(requireChannel(state.surface, "Temperature"))
   );
-  expect(Array.from(state.surface.channels.naturalRock)).toEqual(
-    Array.from(state.surface.channels.rock)
+  expect(Array.from(requireChannel(state.surface, "NaturalRockResistance"))).toEqual(
+    Array.from(requireChannel(state.surface, "RockResistance"))
   );
-  expect(state.surface.channels.physicalMaterial).toBeUndefined();
-  expect(state.surface.channels.erosion).toBeUndefined();
+  expect(state.surface.channels.PhysicalMaterial).toBeUndefined();
+  expect(state.surface.channels.TotalErosion).toBeUndefined();
+  expect(requireChannel(state.surface, "EffectiveSeaLevel").get(0)).toBe(12 * 1024);
+  expect(state.surface.units.EffectiveSeaLevel).toBe("native-length");
 });
 
 it("updates existing projection buffers as the shared physical workspace advances", () => {
   const { state, map, channels, bindings } = fixture();
-  projectNative(state, false, false, bindings, channels);
-  const elevation = state.surface.channels.elevation,
-    temperature = state.surface.channels.temperature;
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: bindings,
+    selectedChannels: channels,
+  });
+  const elevation = requireChannel(state.surface, "Elevation"),
+    temperature = requireChannel(state.surface, "Temperature");
   map.Elevation.fill(1024 * 210);
   map.Temperature.fill(350);
-  projectNative(state, false, false, bindings, channels);
-  expect(state.surface.channels.elevation).toBe(elevation);
-  expect(state.surface.channels.temperature).toBe(temperature);
-  expect(Array.from(elevation).every((v) => v === 200)).toBe(true);
-  expect(Array.from(temperature).every((v) => v === 5)).toBe(true);
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: bindings,
+    selectedChannels: channels,
+  });
+  expect(state.surface.channels.Elevation).toBe(elevation);
+  expect(state.surface.channels.Temperature).toBe(temperature);
+  expect(Array.from(elevation).every((v) => v === 210 * 1024)).toBe(true);
+  expect(Array.from(temperature).every((v) => v === 350)).toBe(true);
 });
 function chargedFixture() {
   const result = fixture(),
@@ -196,10 +224,18 @@ function chargedFixture() {
 }
 it("releases replaced cargo buffers while a separately captured input remains readable", () => {
   const { state, channels, bindings } = chargedFixture();
-  projectNative(state, false, false, bindings, channels);
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: bindings,
+    selectedChannels: channels,
+  });
   const previous = state.surface.materialCargo!,
     pinned = cloneFieldInput(state.surface);
-  projectNative(state, false, false, bindings, channels);
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: bindings,
+    selectedChannels: channels,
+  });
   expect(previous.offsets.released).toBe(true);
   expect(previous.records.released).toBe(true);
   expect(pinned.materialCargo!.records.get(3)).toBe(4);
@@ -207,28 +243,43 @@ it("releases replaced cargo buffers while a separately captured input remains re
 });
 it("retains cargo when preservation or selected bindings leave material channels unchanged", () => {
   const { state, map, channels, bindings } = chargedFixture();
-  projectNative(state, false, false, bindings, channels);
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: bindings,
+    selectedChannels: channels,
+  });
   const previous = state.surface.materialCargo!;
   setLayer(map, 0, 0, rockCatalogue.granite.code, 100);
-  projectNative(state, false, true, bindings, channels);
-  expect(state.surface.materialCargo).toBe(previous);
-  projectNative(
+  runOperation(processOwner(state), projectNative, {
     state,
-    false,
-    false,
-    bindings.filter(({ name }) => name === "temperature"),
-    channels
-  );
+    preserveTerrain: true,
+    channels: bindings,
+    selectedChannels: channels,
+  });
+  expect(state.surface.materialCargo).toBe(previous);
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: bindings.filter(({ name }) => name === "Temperature"),
+    selectedChannels: channels,
+  });
   expect(state.surface.materialCargo).toBe(previous);
   expect(previous.offsets.released).toBe(false);
-  expect(state.surface.channels.rockLayer0.get(0)).toBe(rockCatalogue.saltbed.code);
-  projectNative(state, false, false, bindings, channels);
+  expect(requireChannel(state.surface, "RockLayerKind0").get(0)).toBe(rockCatalogue.saltbed.code);
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: bindings,
+    selectedChannels: channels,
+  });
   expect(previous.records.released).toBe(true);
   expect(state.surface.materialCargo!.records.length).toBe(0);
 });
 it("does not release borrowed immutable resource cargo when producing a working projection", () => {
   const source = chargedFixture();
-  projectNative(source.state, false, false, source.bindings, source.channels);
+  runOperation(processOwner(source.state), projectNative, {
+    state: source.state,
+    channels: source.bindings,
+    selectedChannels: source.channels,
+  });
   const original = source.state.surface.materialCargo!,
     borrowed = {
       ...original,
@@ -237,7 +288,11 @@ it("does not release borrowed immutable resource cargo when producing a working 
     },
     target = fixture();
   target.state.surface.materialCargo = borrowed;
-  projectNative(target.state, false, false, target.bindings, target.channels);
+  runOperation(processOwner(target.state), projectNative, {
+    state: target.state,
+    channels: target.bindings,
+    selectedChannels: target.channels,
+  });
   expect(borrowed.offsets.released).toBe(false);
   expect(borrowed.records.get(3)).toBe(4);
   expect(original.records.get(3)).toBe(4);

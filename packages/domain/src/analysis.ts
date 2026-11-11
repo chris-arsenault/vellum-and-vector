@@ -6,6 +6,7 @@ import { spatial } from "./spatial";
 import { composeFeature } from "./composition";
 import { lineParts } from "./lineStations";
 import { sampleFields } from "./boundaryContracts";
+import { MapScale } from "./mapScale";
 import type { Diagnostic } from "./errors";
 import type { AtlasFeature } from "./model";
 
@@ -112,7 +113,13 @@ function analyzeRoute(
     line.map((p) => {
       const point = { x: p[0], y: p[1], z: p[2] ?? 0 },
         facts = sampleFields(snapshot, point);
-      return { point, elevation: p[2] ?? facts.elevation ?? null, flow: facts.flow ?? null };
+      return {
+        point,
+        elevation:
+          p[2] ??
+          (facts.Elevation === undefined ? null : MapScale.metres(facts.Elevation, "native")),
+        flow: facts.FlowAccumulation ?? null,
+      };
     })
   );
   let length = 0,

@@ -6,6 +6,7 @@ import {
   spatial,
   MapScale,
   type Band,
+  type FieldChannelName,
   type SettlementSiteKind,
   type SocietyCommunity,
 } from "@atlas/domain";
@@ -38,7 +39,7 @@ class SiteReader {
     this.scale = MapScale.fromCells(this.grid.bounds, this.grid.active.length);
     this.covers = spatial.geometryCoverage(this.grid.scope.footprint);
   }
-  value(name: string, i: number, fallback = 0) {
+  value(name: FieldChannelName, i: number, fallback = 0) {
     return this.grid.channels[name]?.get(i) ?? fallback;
   }
   /** Eight neighbours in angular order, so a saddle shows as alternating high and low. */
@@ -60,22 +61,20 @@ class SiteReader {
     return neighbors(this.grid, i, false, this.covers);
   }
   ocean(i: number) {
-    return this.value("water", i) === 1;
+    return this.value("WaterKindCodes", i) === 1;
   }
   lake(i: number) {
-    return this.value("water", i) === 2;
+    return this.value("WaterKindCodes", i) === 2;
   }
   river(i: number) {
-    return this.value("riverOrder", i) >= 1;
+    return this.value("RiverOrders", i) >= 1;
   }
   elevation(i: number) {
-    return this.value("elevation", i);
+    return this.value("Elevation", i);
   }
-  /** Ice in metres, from whichever ice channel the surface carries. */
+  /** Ice thickness is measured in metres in the working field and resources. */
   ice(i: number) {
-    return this.grid.channels.iceThickness
-      ? this.value("iceThickness", i)
-      : MapScale.metres(this.value("ice", i), "km");
+    return this.value("IceThickness", i);
   }
   /** A class holds a site where its coverage passes a tenth; membership stands in where none is published. */
   feature(system: string, rule: string, i: number) {
@@ -102,19 +101,23 @@ function pass(r: SiteReader, i: number): SiteOpportunity | null {
   }
   const rise = highest - own,
     drop = own - lowest;
-  if (changes < 4 || rise < r.scale.length(0.0000375) || drop < r.scale.length(0.0000375))
+  if (
+    changes < 4 ||
+    rise < MapScale.inUnits(r.scale.length(0.0000375), "native") ||
+    drop < MapScale.inUnits(r.scale.length(0.0000375), "native")
+  )
     return null;
   return {
     kind: "pass",
-    score: unit(Math.min(rise, drop) / r.scale.length(0.00015)),
-    reason: `a col ${Math.round(rise)} m below the heights and ${Math.round(drop)} m above the lowlands on both sides`,
+    score: unit(Math.min(rise, drop) / MapScale.inUnits(r.scale.length(0.00015), "native")),
+    reason: `a col ${Math.round(MapScale.metres(rise, "native"))} m below the heights and ${Math.round(MapScale.metres(drop, "native"))} m above the lowlands on both sides`,
   };
 }
 /** The last habitable ground beside a Fire core: the seat of a large settlement. */
 function fireSeat(r: SiteReader, i: number): SiteOpportunity | null {
   if (r.feature("fire", "core", i) || !r.ring(i).some((j) => r.feature("fire", "core", j)))
     return null;
-  return { kind: "fire-seat", score: 1 - r.value("quickening", i), reason: "beside a Fire core" };
+  return { kind: "fire-seat", score: 1 - r.value("Quickening", i), reason: "beside a Fire core" };
 }
 function riverNode(r: SiteReader, i: number): SiteOpportunity | null {
   if (!r.river(i)) return null;
@@ -122,12 +125,13 @@ function riverNode(r: SiteReader, i: number): SiteOpportunity | null {
     riverNeighbours = r.cross(i).filter((j) => r.river(j)).length;
   const junction = riverNeighbours >= 3,
     mouth =
-      r.value("slope", i) < 0.004 && ring.some((j) => r.river(j) && r.value("slope", j) > 0.012);
+      r.value("Slope", i) < 0.004 && ring.some((j) => r.river(j) && r.value("Slope", j) > 0.012);
   if (!junction && !mouth) return null;
   return {
     kind: "river-node",
     score:
-      unit(Math.log1p(r.value("flow", i) / r.scale.volume(1.5625e-20)) / 8) + (junction ? 0.3 : 0),
+      unit(Math.log1p(r.value("FlowAccumulation", i) / r.scale.volume(1.5625e-20)) / 8) +
+      (junction ? 0.3 : 0),
     reason: junction ? "a river junction" : "where the river leaves the hills for the plain",
   };
 }
@@ -136,14 +140,16 @@ export const harbourGoodDepth = MapScale.length(0.0000025),
   harbourSurge = 400;
 /** How a stretch of sea serves a harbour: shelter, lee, depth, surge, and the storm season. */
 function harbourWaters(r: SiteReader, sea: number[]) {
-  const peak = (channel: string) => Math.max(...sea.map((j) => r.value(channel, j)));
+  const peak = (channel: FieldChannelName) => Math.max(...sea.map((j) => r.value(channel, j)));
   const shelter = sea.length <= 3 ? 1 : sea.length <= 4 ? 0.6 : 0.2,
-    // Wave exposure is published as a 0..1 ratio of the native 0..1000.
-    lee = 1 - sea.reduce((s, j) => s + r.value("waveExposure", j), 0) / sea.length,
-    depth = peak("waterDepth") >= r.scale.resolveMeasure(harbourGoodDepth) ? 1 : 0.4,
+    lee = 1 - sea.reduce((s, j) => s + r.value("WaveExposure", j), 0) / (1000 * sea.length),
+    depth =
+      peak("WaterDepths") >= MapScale.inUnits(r.scale.resolveMeasure(harbourGoodDepth), "native")
+        ? 1
+        : 0.4,
     surge = peak("magic:pressure:intensity") >= harbourSurge ? 0.3 : 1,
     // A harbour on a storm track is closed for the season the storms run.
-    seasonal = peak("stormTrack") >= 0.3;
+    seasonal = peak("StormTrack") >= 300;
   return { score: shelter * lee * depth * surge * (seasonal ? 0.6 : 1), seasonal };
 }
 function harbour(r: SiteReader, i: number): SiteOpportunity | null {
@@ -174,14 +180,13 @@ function meltLine(r: SiteReader, i: number): SiteOpportunity | null {
 function fisheryCoast(r: SiteReader, i: number): SiteOpportunity | null {
   const sea = r.ring(i).filter((j) => r.ocean(j));
   if (!sea.length) return null;
-  // Upwelling is published as a 0..1 ratio; 0.3 is the native 300 a front lifts.
-  const upwelling = Math.max(...sea.map((j) => r.value("upwelling", j)));
-  return upwelling >= 0.3
-    ? { kind: "fishery-coast", score: upwelling, reason: "facing an upwelling fishery" }
+  const upwelling = Math.max(...sea.map((j) => r.value("Upwelling", j)));
+  return upwelling >= 300
+    ? { kind: "fishery-coast", score: upwelling / 1000, reason: "facing an upwelling fishery" }
     : null;
 }
 function haloEdge(r: SiteReader, i: number): SiteOpportunity | null {
-  const q = r.value("quickening", i);
+  const q = r.value("Quickening", i);
   return q >= 0.08 && q <= 0.5
     ? { kind: "halo-edge", score: 1 - Math.abs(q - 0.3) * 2, reason: "at the edge of a Fire halo" }
     : null;
@@ -192,7 +197,7 @@ function plainNode(r: SiteReader, i: number): SiteOpportunity | null {
   if (r.feature("fire", "spring", i)) options.push([0.7, "at a hot spring"]);
   if (ring.some((j) => r.lake(j))) options.push([0.6, "on a lake shore"]);
   if (r.river(i)) options.push([0.5, "at a river crossing"]);
-  if (ring.some((j) => r.value("wetlandCover", j) >= 0.3)) options.push([0.4, "at a marsh edge"]);
+  if (ring.some((j) => r.value("WetlandCover", j) >= 0.3)) options.push([0.4, "at a marsh edge"]);
   if (!options.length) return null;
   const [score, reason] = options.sort((a, b) => b[0] - a[0])[0];
   return { kind: "plain-node", score, reason };
@@ -203,8 +208,8 @@ export const uninhabitableIce = MapScale.length(2.5e-7);
 function uninhabitable(r: SiteReader, i: number) {
   return (
     r.ice(i) > r.scale.resolveMeasure(uninhabitableIce) ||
-    r.value("quickening", i) >= 0.6 ||
-    r.value("stillness", i) >= 0.6 ||
+    r.value("Quickening", i) >= 0.6 ||
+    r.value("Stillness", i) >= 0.6 ||
     r.feature("fire", "core", i)
   );
 }
@@ -293,9 +298,9 @@ function fortress(r: SiteReader, site: number, kind: SettlementSiteKind) {
   const ring = r.ring(site);
   const route =
     kind === "pass" ||
-    (kind === "river-node" && [site, ...ring].some((j) => r.value("landform", j) === 16));
+    (kind === "river-node" && [site, ...ring].some((j) => r.value("LandformCodes", j) === 16));
   if (!route) return null;
-  const hazard = ring.some((j) => r.value("quickening", j) >= 0.15)
+  const hazard = ring.some((j) => r.value("Quickening", j) >= 0.15)
     ? "a volatile Fire halo below"
     : ring.some((j) => r.ocean(j) && r.value("magic:pressure:intensity", j) >= 300)
       ? "Pressure surge on the coast below"
@@ -304,14 +309,14 @@ function fortress(r: SiteReader, site: number, kind: SettlementSiteKind) {
   const own = r.elevation(site);
   const spur = ring.find((j) => {
     const above = r.elevation(j) - own,
-      slope = r.value("slope", j);
+      slope = r.value("Slope", j);
     return (
       dryLand(r.state, j) &&
-      above >= r.scale.length(0.000025) &&
-      above <= r.scale.length(0.000125) &&
+      above >= MapScale.inUnits(r.scale.length(0.000025), "native") &&
+      above <= MapScale.inUnits(r.scale.length(0.000125), "native") &&
       slope >= 0.008 &&
       slope <= 0.05 &&
-      r.value("landform", j) !== 6
+      r.value("LandformCodes", j) !== 6
     );
   });
   return spur === undefined ? null : { cell: spur, reason: hazard };
@@ -399,13 +404,17 @@ function passFoot(
     origin = gridPosition(r.grid, seed);
   const foot = r
     .ring(choice.cell)
-    .filter((j) => dryLand(r.state, j) && col - r.elevation(j) >= r.scale.length(0.0000125))
+    .filter(
+      (j) =>
+        dryLand(r.state, j) &&
+        col - r.elevation(j) >= MapScale.inUnits(r.scale.length(0.0000125), "native")
+    )
     .sort((a, b) => {
       const ownA = Number(owner.get(a) === unit),
         ownB = Number(owner.get(b) === unit);
       if (ownA !== ownB) return ownB - ownA;
-      const slopeA = r.value("slope", a),
-        slopeB = r.value("slope", b);
+      const slopeA = r.value("Slope", a),
+        slopeB = r.value("Slope", b);
       if (slopeA !== slopeB) return slopeA - slopeB;
       const pa = gridPosition(r.grid, a),
         pb = gridPosition(r.grid, b);

@@ -2,7 +2,14 @@ import OLMap from "ol/Map.js";
 import View from "ol/View.js";
 import Projection from "ol/proj/Projection.js";
 import WebGLTile from "ol/layer/WebGLTile.js";
-import { createGrid, generateBand, gridPosition, putChannel, rectangle } from "@atlas/domain";
+import {
+  MapScale,
+  createGrid,
+  generateBand,
+  gridPosition,
+  putChannel,
+  rectangle,
+} from "@atlas/domain";
 import { numericTileSampler, numericTileSource } from "../src/numericTiles";
 import { terrainTile } from "../src/terrainTile";
 import { terrainStyle } from "../src/rasterStyles";
@@ -41,30 +48,30 @@ function terrain(options: MountainOptions): Raster {
   );
   putChannel(
     field,
-    "elevation",
-    "metre",
-    generateBand(field.coverage, "float64", "elevation", (i) => {
+    "Elevation",
+    "native-length",
+    generateBand(field.coverage, "float64", "Elevation", (i) => {
       const { x, y } = gridPosition(field, i);
-      if (options.shape === "slope") return 1000 + x * 0.1;
+      if (options.shape === "slope") return MapScale.native(1000 + x * 0.1);
       const ridge = 50_000 + 7000 * Math.sin(y / 16_000);
-      return (
+      return MapScale.native(
         1000 +
-        6500 * Math.exp(-(((x - ridge) / 12_000) ** 2)) +
-        800 * Math.exp(-((x - 75_000) ** 2 + (y - 30_000) ** 2) / 15_000 ** 2)
+          6500 * Math.exp(-(((x - ridge) / 12_000) ** 2)) +
+          800 * Math.exp(-((x - 75_000) ** 2 + (y - 30_000) ** 2) / 15_000 ** 2)
       );
     })
   );
   putChannel(
     field,
-    "ice",
-    "ratio",
-    generateBand(field.coverage, "float64", "ice", () => options.ice ?? 0)
+    "IceThickness",
+    "metre",
+    generateBand(field.coverage, "float64", "IceThickness", () => (options.ice ?? 0) * 1000)
   );
   return {
     id: field.id,
     areaId: "area",
     field,
-    channel: "elevation",
+    channel: "Elevation",
     footprint: field.scope.footprint,
     bounds: field.bounds,
     ice: field,

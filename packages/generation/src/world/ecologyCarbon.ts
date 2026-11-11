@@ -96,10 +96,12 @@ function mature(map: PhysicalField, i: number, years: number) {
   map.CoalCarbon.add(i, -coal);
   map.GasCarbon.add(i, oil + coal);
 }
+/** Actual new cover buries organic material; exhumation exposes it without reversing maturity. */
+export function buryOrganicMatter(map: PhysicalField) {
+  for (let i = 0; i < map.mesh.count; i++) burial(map, i);
+}
 /** Sediment gain and thermal exposure are necessary; age alone cannot make oil. */
 export function evolveBuriedCarbon(map: PhysicalField, years: number) {
-  for (let i = 0; i < map.mesh.count; i++) {
-    burial(map, i);
-    mature(map, i, years);
-  }
+  buryOrganicMatter(map);
+  for (let i = 0; i < map.mesh.count; i++) mature(map, i, years);
 }

@@ -47,12 +47,9 @@ function qualifies(
     map.BathymetricZoneCodes.get(ocean) !== 4
   );
 }
-function markDelta(map: PhysicalField, i: number, intensity: number, order: number) {
-  const held = clamp(intensity, 1, 1000);
-  map.DeltaIntensity.set(i, held);
-  map.RiverChannelStrength.set(i, Math.max(map.RiverChannelStrength.get(i), held));
-  map.RiverChannelOrders.set(i, Math.max(map.RiverChannelOrders.get(i), order));
-  map.FloodplainIntensity.set(i, 0);
+function markDelta(intensities: Band, i: number, intensity: number) {
+  // A submerged sediment fan is a delta, not an unrouted river channel.
+  intensities.set(i, clamp(intensity, 1, 1000));
 }
 function receiveDelta(map: PhysicalField, mouth: number, i: number): boolean {
   const water = map.WaterKindCodes.get(i);
@@ -89,16 +86,15 @@ function buildFan(map: PhysicalField, c: PhysicalContext, mouth: number, ocean: 
     [x, y, length] = stepDirection(map, mouth, ocean),
     dx = f(x / length),
     dy = f(y / length);
-  const order = map.RiverOrders.get(mouth),
-    queue = [{ i: ocean, depth: physicalDistance(map.mesh, mouth, ocean), previous: mouth }],
+  const queue = [{ i: ocean, depth: physicalDistance(map.mesh, mouth, ocean), previous: mouth }],
     p = c.Profile;
-  markDelta(map, mouth, 1000, order);
+  markDelta(map.DeltaIntensity, mouth, 1000);
   for (let head = 0; head < queue.length; head++) {
     const front = queue[head];
     if (!receiveDelta(map, mouth, front.i)) continue;
     const intensity = 1000 - (front.depth / map.scale.length(0.0025)) * p.DeltaIntensityDecay;
     if (intensity <= map.DeltaIntensity.get(front.i)) continue;
-    markDelta(map, front.i, intensity, order);
+    markDelta(map.DeltaIntensity, front.i, intensity);
     for (let edge = 0; edge < map.mesh.degree(front.i); edge++) {
       const j = map.mesh.neighbor(front.i, edge);
       if (

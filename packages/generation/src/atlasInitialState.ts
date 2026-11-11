@@ -21,13 +21,12 @@ import { regionalInputFields, regionalInputChannels, regionalResolution } from "
 import { atlasGenerationModules } from "./atlasModules";
 
 /**
- * A refinement supplies its own cell span, the present channels it admits as inputs, and the
+ * A refinement supplies its own cell span and the
  * span of the surface that carries the inherited channels until the physical lattice exists
  * (the parent's own sample span: finer carries nothing the parent does not have).
  */
 export interface InitialStateOptions {
   cellSpan?: number;
-  channels?: (name: string) => boolean;
   surfaceSpan?: number;
 }
 export function atlasInitialState(
@@ -86,7 +85,7 @@ export function atlasInitialState(
           undefined,
           cache
         );
-  inheritSurface(source, surface, input, options.channels);
+  inheritSurface(source, surface, input);
   return {
     domain,
     surface,
@@ -120,20 +119,15 @@ function initialTopology(scope: SpatialScope, cellSpan: number, cache?: BlockCac
     cache
   );
 }
-function inheritSurface(
-  source: DomainSnapshot,
-  target: Grid,
-  input: AtlasGenerationInput,
-  admits: (name: string) => boolean = () => true
-) {
+function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenerationInput) {
   const world = source.world;
   const channels = regionalInputChannels(
     regionalInputFields(source, input.areaId, input.domains.includes("physical"))
   );
-  for (const [name, grid] of channels) if (admits(name)) resampleChannels(grid, target, [name]);
+  for (const [name, grid] of channels) resampleChannels(grid, target, [name]);
   requireThat(
     input.domains.includes("physical") ||
-      target.channels.elevation ||
+      target.channels.Elevation ||
       world.areas[input.areaId].profile === "interior",
     "generation_prerequisite",
     "Generate physical geography first, or include it in this request."
@@ -141,8 +135,8 @@ function inheritSurface(
 }
 function initialFacts(surface: Grid, input: AtlasGenerationInput) {
   const facts = new Set(Object.keys(surface.channels));
-  if (surface.channels.bedrock) facts.add("geology");
-  if (surface.channels.receiver) facts.add("drainage");
+  if (surface.channels.BedrockElevation) facts.add("geology");
+  if (surface.channels.FlowTargets) facts.add("drainage");
   // A run without the physical domain reads the terrain already made instead of making it.
   if (!input.domains.includes("physical")) facts.add("terrain:present");
   return facts;

@@ -152,7 +152,7 @@ it("clips land washes and ecological shapes to physical shores and lakes, includ
       areaId: area.id,
       footprint: area.footprint,
       bounds: field.bounds,
-      channel: "elevation",
+      channel: "Elevation",
       field,
     },
   ];

@@ -29,7 +29,7 @@ export function societyPublications(input: AtlasGenerationInput): PublicationDef
     name: "Population and livelihoods",
     facts: ["populationDensity", "populationCapacity"],
   };
-  return ["populationDensity", "populationCapacity"].map((channel) => ({
+  return (["populationDensity", "populationCapacity"] as const).map((channel) => ({
     kind: "field",
     channel,
     unit: "people/square-kilometre",

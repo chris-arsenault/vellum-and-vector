@@ -1,15 +1,18 @@
 import { afterEach, expect, it } from "vitest";
-import { residentBand } from "@atlas/domain";
+import { residentBand, putChannel, fieldChannelName } from "@atlas/domain";
 import { fileStoreFixture } from "../../../storage-browser/src/fileStoreFixture";
 import { blockCacheFixture } from "../../../storage-browser/src/blockCacheFixture";
 import { writeFieldChannels, writeFieldLayout } from "../../../storage-browser/src/fieldResources";
 import { FieldWorkingSet } from "../../../storage-browser/src/fieldWorkingSet";
 import { ZarrResources } from "../../../storage-browser/src/zarrResources";
 import { landscape } from "../mapFixtures";
-import { atlasChannels } from "../world/atlasChannels";
+import { physicalChannels } from "../world/atlasChannels";
 import { createAtlasWorkspace } from "../world/atlasWorkspace";
 import { atlasPhysicalProfile } from "../world/atlasProfile";
 import { projectNative } from "../world/atlasProjection";
+import type { FieldChannelName } from "@atlas/domain";
+import { runOperation } from "../processOperation";
+import { processOwner } from "../processTraits";
 import { createMesh } from "../world/mesh";
 import { createField } from "../world/field";
 import { materialLayer, readLayer, setLayer, type MaterialLayer } from "./rockColumn";
@@ -83,14 +86,18 @@ function source() {
 
 it("publishes and imports each supplied material package from one donor across a contact", () => {
   const state = source();
-  projectNative(state, false, false, atlasChannels, new Set());
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: physicalChannels,
+    selectedChannels: new Set<FieldChannelName>(["BaseSeaLevel", "EffectiveSeaLevel"]),
+  });
   for (let cell = 0; cell < state.surface.active.length; cell++) {
     const material = packages[cell % 2];
-    expect(state.surface.channels.rockLayer0.get(cell)).toBe(material.kind);
-    expect(state.surface.channels.rockDepth0.get(cell)).toBe(material.depth / 1024);
-    expect(state.surface.channels.RockLayerStrength0.get(cell)).toBe(material.strength);
-    expect(state.surface.channels.RockLayerFormedMin0.get(cell)).toBe(material.formedMin);
-    expect(state.surface.channels.RockLayerGrainX0.get(cell)).toBe(material.grainX);
+    expect(state.surface.channels.RockLayerKind0!.get(cell)).toBe(material.kind);
+    expect(state.surface.channels.RockLayerDepth0!.get(cell)).toBe(material.depth);
+    expect(state.surface.channels.RockLayerStrength0!.get(cell)).toBe(material.strength);
+    expect(state.surface.channels.RockLayerFormedMin0!.get(cell)).toBe(material.formedMin);
+    expect(state.surface.channels.RockLayerGrainX0!.get(cell)).toBe(material.grainX);
   }
   // A small child resource import samples between those published cells; no process is run.
   const area = state.domain.world.areas.area;
@@ -199,7 +206,11 @@ function layeredSource() {
     seaLoadOf(map).add(cell, { ...cargo, depth: map.mesh.area(cell) * 0.5 });
     projectGround(map, cell);
   }
-  projectNative(state, false, false, atlasChannels, new Set(["seaDatum"]));
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: physicalChannels,
+    selectedChannels: new Set<FieldChannelName>(["BaseSeaLevel", "EffectiveSeaLevel"]),
+  });
   return state;
 }
 
@@ -214,7 +225,7 @@ async function reopenGround() {
   );
   const layout = await writeFieldLayout(resources, state.surface, "ground-layout", 1e-6),
     resource = await writeFieldChannels(resources, state.surface, "ground-channels", layout),
-    names = Object.keys(state.surface.channels);
+    names = Object.keys(state.surface.channels).map(fieldChannelName);
   // New resource reader: reconstruction cannot reach the supplied mutable source field.
   const working = new FieldWorkingSet(new ZarrResources(files.store, 262_144), blocks.cache);
   cleanups.push(() => working.close());
@@ -239,7 +250,8 @@ async function reopenGround() {
   });
   inherited.domain.numerical[loaded.id] = loaded;
   inherited.surface.scope.areaId = "child";
-  inherited.surface.channels.seaDatum = loaded.channels.seaDatum;
+  for (const name of ["BaseSeaLevel", "EffectiveSeaLevel"] as const)
+    putChannel(inherited.surface, name, "native-length", loaded.channels[name]!);
   // Material comes through the captured parent field, not fallback channels on the child surface.
   return { loaded, map: createAtlasWorkspace(inherited, "draft").map };
 }
@@ -281,7 +293,7 @@ it("reopens serialized strata, facets, loose cover and placement before exposing
   expect(readLayer(map, cell, 0, "cut")).toMatchObject({ ...buried, depth: 28 * 1024 });
   expect(groundSection(map, cell, "cut")[0].medium).toBe("rock");
   expect(readLayer(map, cell, 0)).toMatchObject(donor);
-  expect(loaded.channels.RockCutLayerKind0.get(0)).toBe(cutCap.kind);
+  expect(loaded.channels.RockCutLayerKind0!.get(0)).toBe(cutCap.kind);
 });
 
 it("reopens mixed cargo by area and lands its retained provenance without changing captured resources", async () => {
@@ -305,7 +317,7 @@ it("reopens mixed cargo by area and lands its retained provenance without changi
     consolidation: 0,
   });
   expect(readLayer(map, cell, 1, "loose")).toMatchObject(cover[0]);
-  expect(loaded.channels.GroundLoadVolume.get(0)).toBe(2);
-  expect(loaded.channels.GroundLoadSecondaryKind.get(0)).toBe(rockCatalogue.shale.code);
-  expect(() => loaded.channels.GroundLoadVolume.set(0, 999)).toThrow(/Immutable/);
+  expect(loaded.channels.GroundLoadVolume!.get(0)).toBe(2 * loaded.measures.get(0));
+  expect(loaded.channels.GroundLoadSecondaryKind!.get(0)).toBe(rockCatalogue.shale.code);
+  expect(() => loaded.channels.GroundLoadVolume!.set(0, 999)).toThrow(/Immutable/);
 });

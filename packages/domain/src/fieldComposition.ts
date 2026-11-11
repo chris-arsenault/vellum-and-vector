@@ -3,8 +3,8 @@ import { requireThat } from "./errors";
 import { copyGrid } from "./gridCopy";
 
 export function overlayField(
-  base: GridSurface,
-  patch: Grid,
+  base: GridSurface<string>,
+  patch: Grid<string>,
   channels = Object.keys(patch.channels),
   mapOnly = false
 ): void {
@@ -31,6 +31,8 @@ export function overlayField(
   ];
 }
 /** Keep authored patches at their own resolution; consumers use the shared evaluator. */
-export function materializeField(source: GridSurface): GridSurface {
+export function materializeField<Name extends string>(
+  source: GridSurface<Name>
+): GridSurface<Name> {
   return copyGrid(source);
 }

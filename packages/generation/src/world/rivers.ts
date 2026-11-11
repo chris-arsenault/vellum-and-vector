@@ -7,8 +7,10 @@ import { contributingArea, sourceToOutletOrder } from "./flowGraph";
 import { depthRateToDischarge } from "./dimensions";
 import { edgeLeadingTo } from "./mesh";
 import { physicalDistance } from "./physicalMetric";
-import { MapScale, type Band } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
+import { ask } from "../coupling/answers";
+import { waterPassage } from "./waterQuantity";
 
 function completeChannels(map: PhysicalField, order: Band, channels: Band) {
   const downstream = map.coverage.copyBand(channels);
@@ -160,14 +162,18 @@ function spineMasks(map: PhysicalField) {
     map.RiverSpineEdgeMasks.set(target, map.RiverSpineEdgeMasks.get(target) | (1 << targetEdge));
   }
 }
-export function riverNetwork(map: PhysicalField, c: PhysicalContext, incoming?: Band) {
+export function riverNetwork(
+  map: PhysicalField,
+  c: PhysicalContext,
+  incoming?: Band,
+  continuingHeads: readonly number[] = []
+) {
+  const water = ask(map, "surfaceWater", c),
+    pass = waterPassage(map, c);
   for (let i = 0; i < map.mesh.count; i++)
     map.FlowAccumulation.set(
       i,
-      depthRateToDischarge(
-        map.Runoff.get(i) + MapScale.inUnits(map.GroundwaterReturn.get(i), "mm"),
-        map.mesh.area(i)
-      ) + (incoming?.get(i) ?? 0)
+      depthRateToDischarge(water.get(i), map.mesh.area(i)) + (incoming?.get(i) ?? 0)
     );
   const area = contributingArea(map, map.FlowTargets);
   map.CatchmentArea.copyFrom(area);
@@ -177,14 +183,26 @@ export function riverNetwork(map: PhysicalField, c: PhysicalContext, incoming?: 
   for (let n = 0; n < order.length; n++) {
     const i = order.get(n),
       target = map.FlowTargets.get(i);
+    map.FlowAccumulation.set(i, pass(i, map.FlowAccumulation.get(i)));
     if (map.LakeOutletTargets.get(i) >= 0)
       map.FlowAccumulation.set(i, Math.min(map.FlowAccumulation.get(i), map.LakeOverflow.get(i)));
     if (target >= 0) map.FlowAccumulation.add(target, map.FlowAccumulation.get(i));
   }
   const channels = buildChannels(map, c.Profile, order);
   pruneHeadwaters(map, c.Profile, channels);
+  retainChannels(map, channels, continuingHeads);
   completeChannels(map, order, channels);
   strahlerOrders(map, order, channels);
   spineMasks(map);
   releaseWorking(map, order, channels);
+}
+
+/** Captured named rivers remain channels along their actual present route. */
+function retainChannels(map: PhysicalField, channels: Band, heads: readonly number[]) {
+  for (const head of heads)
+    for (let cell = head; cell >= 0; cell = map.FlowTargets.get(cell)) {
+      const water = map.WaterKindCodes.get(cell);
+      if (water === 1 || channels.get(cell)) break;
+      if (water === 0) channels.set(cell, 1);
+    }
 }

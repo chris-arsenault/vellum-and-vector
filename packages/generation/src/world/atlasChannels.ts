@@ -1,183 +1,260 @@
-// Explicit projection from Canonry's fixed-point numerical state into GIS channels.
-import { hardestRock } from "../rock/rockCatalogue";
-import { groundResourceBindings } from "../rock/groundResources";
+import { groundResourceChannels } from "../rock/groundResources";
 import type { PhysicalBufferName } from "./field";
-import { ecologyBindings, ecologyRatios } from "./ecologyState";
-import { MapScale } from "@atlas/domain";
+import { ecologyFields, ecologyRatios } from "@atlas/domain";
+import { magicEffectChannels } from "./magicFieldDefinitions";
 
-type ArrayName = PhysicalBufferName;
-export interface ChannelBinding {
-  name: string;
-  native: ArrayName;
+/** The working band's identity and meaning also govern its published samples. */
+export interface PhysicalChannel {
+  name: PhysicalBufferName;
   unit: string;
-  scale: number;
-  datum?: boolean;
-  offset?: number;
+  quantity?: "intensive" | "extensive" | "category";
   minimum?: number;
   maximum?: number;
-  /** A map-wide pool lives at native cell zero; its resource channel is spatially constant. */
-  global?: boolean;
-  /** Publish volume per represented area, then restore against the importing map's area. */
-  areaDensity?: boolean;
-  /** Sample one donor for every material fact so interpolation cannot detach a bed from its history. */
+  /** Material facts share one donor so sampling cannot detach a bed from its history. */
   discrete?: boolean;
 }
-/** The rock column and the belt it lies in, which a child map continues from its parent's. */
-export const structureChannels = [
-  ...groundResourceBindings.map(({ name }) => name),
-  "thrustPair",
-  "thrustSheet",
-  "thrustSegment",
-  "thrustAcross",
-  "thrustDip",
+export const structureChannels: PhysicalBufferName[] = [
+  ...groundResourceChannels.map(({ name }) => name),
+  "ThrustPairIds",
+  "ThrustSheetIndex",
+  "ThrustSegmentIds",
+  "ThrustAcross",
+  "ThrustDip",
 ];
-const height = (name: string, native: ArrayName, datum = false): ChannelBinding => ({
+const channel = (name: PhysicalBufferName, unit: string): PhysicalChannel => ({ name, unit });
+const length = (name: PhysicalBufferName): PhysicalChannel => channel(name, "native-length");
+const amount = (name: PhysicalBufferName): PhysicalChannel => ({ ...length(name), minimum: 0 });
+const fraction = (name: PhysicalBufferName): PhysicalChannel => channel(name, "per-mille");
+const category = (name: PhysicalBufferName): PhysicalChannel => ({
   name,
-  native,
-  unit: "metre",
-  scale: MapScale.metres(1, "native"),
-  datum,
-});
-const amount = (name: string, native: ArrayName): ChannelBinding => ({
-  ...height(name, native),
-  minimum: 0,
-});
-const scalar = (name: string, native: ArrayName, signed = false): ChannelBinding => ({
-  name,
-  native,
-  unit: "ratio",
-  scale: 1 / 1000,
-  minimum: signed ? undefined : 0,
-});
-const category = (name: string, native: ArrayName): ChannelBinding => ({
-  name,
-  native,
   unit: "category",
-  scale: 1,
+  quantity: "category",
 });
-const metric = (name: string, native: ArrayName, unit: string): ChannelBinding => ({
-  name,
-  native,
-  unit,
-  scale: 1,
-  minimum: 0,
-});
-export const atlasChannels: ChannelBinding[] = [
-  height("elevation", "Elevation", true),
-  ...ecologyBindings.map(([name, native, unit]) => ({
-    name,
-    native,
-    unit,
-    scale: 1,
+
+/** Publication selects facts; it never renames, re-encodes or rebases their values. */
+export const physicalChannels: PhysicalChannel[] = [
+  length("Elevation"),
+  ...magicEffectChannels.map((name) => channel(name, "ratio")),
+  ...ecologyFields.map((field) => ({
+    ...field,
     minimum: 0,
-    maximum: ecologyRatios.some((ratio) => ratio === native) ? 1 : undefined,
+    maximum: ecologyRatios.some((name) => name === field.name) ? 1 : undefined,
   })),
-  amount("sediment", "SedimentThickness"),
-  amount("fluvialErosion", "CumulativeFluvialErosion"),
-  amount("glacialErosion", "CumulativeGlacialErosion"),
-  amount("coastalErosion", "CumulativeCoastalErosion"),
-  amount("deposition", "CumulativeDeposition"),
-  amount("glacialDeposition", "CumulativeGlacialDeposition"),
-  amount("volcanicConstruction", "VolcanicConstructionHistory"),
-  amount("volcanicMeltSupply", "VolcanicMeltSupply"),
-  amount("landmarkMaintenance", "LandmarkMaintenance"),
-  amount("impactExcavation", "ImpactExcavation"),
-  amount("impactRim", "ImpactRimUplift"),
-  amount("impactEjecta", "ImpactEjectaThickness"),
-  amount("waterDepth", "WaterDepths"),
-  { name: "groundwaterStorage", native: "GroundwaterStorage", unit: "metre", scale: 1, minimum: 0 },
-  scalar("fracture", "FractureConductance"),
-  { name: "rock", native: "RockResistance", unit: "ratio", scale: 1 / hardestRock, minimum: 0 },
-  scalar("crustAge", "CrustAge"),
-  { ...scalar("sutureStrength", "CrustSutureStrength"), discrete: true },
-  scalar("geothermal", "Geothermal"),
-  scalar("tectonicStrain", "TectonicStrain"),
-  { ...scalar("structuralGrainX", "StructuralGrainX", true), discrete: true },
-  { ...scalar("structuralGrainY", "StructuralGrainY", true), discrete: true },
-  { ...scalar("thrustAcross", "ThrustAcross"), discrete: true },
-  { name: "thrustDip", native: "ThrustDip", unit: "metre", scale: 1, minimum: 0, discrete: true },
-  scalar("crustMotionX", "CrustMotionX", true),
-  scalar("crustMotionY", "CrustMotionY", true),
-  scalar("moisture", "Moisture"),
-  { name: "temperature", native: "Temperature", unit: "celsius", scale: 0.1, offset: -30 },
-  scalar("windEast", "WindX", true),
-  scalar("windNorth", "WindY", true),
-  metric("windSpeed", "WindSpeed", "metre/second"),
-  {
-    name: "rainfall",
-    native: "Rainfall",
-    unit: "metre/year",
-    scale: MapScale.metres(1, "mm"),
-    minimum: 0,
-  },
-  {
-    name: "snowfall",
-    native: "Snowfall",
-    unit: "metre/year",
-    scale: MapScale.metres(1, "mm"),
-    minimum: 0,
-  },
-  {
-    name: "runoff",
-    native: "Runoff",
-    unit: "metre/year",
-    scale: MapScale.metres(1, "mm"),
-    minimum: 0,
-  },
-  scalar("ice", "IceThickness"),
-  scalar("maximumIce", "MaximumIceThickness"),
-  metric("iceThickness", "IceThickness", "metre"),
-  metric("maximumIceThickness", "MaximumIceThickness", "metre"),
-  metric("slope", "Slope", "gradient"),
-  metric("catchmentArea", "CatchmentArea", "square-metre"),
-  metric("riverWidth", "RiverWidth", "metre"),
-  metric("riverDepth", "RiverDepth", "metre"),
-  {
-    name: "maximumIceFlux",
-    native: "MaximumIceFlux",
-    unit: "cubic-metre/year",
-    scale: 1,
-    minimum: 0,
-  },
-  {
-    name: "maximumGroundedIceFlux",
-    native: "MaximumGroundedIceFlux",
-    unit: "cubic-metre/year",
-    scale: 1,
-    minimum: 0,
-  },
-  { name: "oceanDistance", native: "OceanDistance", unit: "metre", scale: 1, minimum: 0 },
-  scalar("riverChannel", "RiverChannelStrength"),
-  scalar("floodplain", "FloodplainIntensity"),
-  scalar("delta", "DeltaIntensity"),
-  scalar("waveExposure", "WaveExposure"),
-  scalar("oceanCurrent", "OceanCurrentStrength"),
-  { name: "seaSurfaceAnomaly", native: "SeaSurfaceAnomaly", unit: "celsius", scale: 0.1 },
-  scalar("upwelling", "Upwelling"),
-  scalar("stormForcing", "StormForcing"),
-  scalar("stormTrack", "StormTrack"),
-  { name: "riverWarmth", native: "RiverWarmth", unit: "celsius", scale: 0.1 },
-  category("province", "CrustProvinceIds"),
-  category("assembly", "CrustAssemblyIds"),
-  category("suturePair", "CrustSuturePairIds"),
-  category("tectonicBoundary", "TectonicBoundaryCodes"),
-  category("boundaryPair", "TectonicBoundaryPairIds"),
-  category("margin", "MarginCodes"),
-  category("landform", "LandformCodes"),
-  category("rockKind", "RockKindCodes"),
-  category("thrustPair", "ThrustPairIds"),
-  category("thrustSheet", "ThrustSheetIndex"),
-  category("thrustSegment", "ThrustSegmentIds"),
-  ...groundResourceBindings,
-  category("water", "WaterKindCodes"),
-  category("waterBody", "WaterBodyIds"),
-  category("basin", "DrainageBasinIds"),
-  category("riverOrder", "RiverOrders"),
-  category("groundedIce", "GroundedIce"),
-  category("physicalFeatures", "FeatureFlags"),
-  category("volcanicLastActiveEpoch", "VolcanicLastActiveEpoch"),
-  category("bathymetry", "BathymetricZoneCodes"),
-  scalar("geothermalHistory", "GeothermalHistory"),
-  scalar("tectonicHistory", "TectonicActivityHistory"),
-  scalar("coastalForcingHistory", "ExternalCoastalForcingHistory"),
+  amount("SedimentThickness"),
+  amount("CumulativeFluvialErosion"),
+  amount("CumulativeGlacialErosion"),
+  amount("CumulativeCoastalErosion"),
+  amount("CumulativeDeposition"),
+  amount("CumulativeGlacialDeposition"),
+  amount("VolcanicConstructionHistory"),
+  amount("VolcanicMeltSupply"),
+  amount("LandmarkMaintenance"),
+  amount("ImpactExcavation"),
+  amount("ImpactRimUplift"),
+  amount("ImpactEjectaThickness"),
+  amount("WaterDepths"),
+  length("WaterSurfaceElevations"),
+  length("DrainageElevations"),
+  channel("GroundwaterStorage", "metre"),
+  fraction("FractureConductance"),
+  channel("RockResistance", "rock-strength"),
+  fraction("CrustAge"),
+  { ...fraction("CrustSutureStrength"), discrete: true },
+  fraction("Geothermal"),
+  fraction("TectonicStrain"),
+  { ...fraction("StructuralGrainX"), discrete: true },
+  { ...fraction("StructuralGrainY"), discrete: true },
+  { ...fraction("ThrustAcross"), discrete: true },
+  { ...channel("ThrustDip", "metre"), discrete: true },
+  fraction("CrustMotionX"),
+  fraction("CrustMotionY"),
+  fraction("Moisture"),
+  channel("Temperature", "native-temperature"),
+  channel("ExternalHeatForcing", "deci-celsius"),
+  fraction("WindX"),
+  fraction("WindY"),
+  channel("WindSpeed", "metre/second"),
+  channel("Rainfall", "millimetre/year"),
+  channel("Snowfall", "millimetre/year"),
+  channel("Runoff", "millimetre/year"),
+  channel("IceThickness", "metre"),
+  channel("MaximumIceThickness", "metre"),
+  channel("Slope", "gradient"),
+  channel("CatchmentArea", "square-metre"),
+  channel("RiverWidth", "metre"),
+  channel("RiverDepth", "metre"),
+  { ...channel("MaximumIceFlux", "cubic-metre/year"), minimum: 0 },
+  { ...channel("MaximumGroundedIceFlux", "cubic-metre/year"), minimum: 0 },
+  channel("FlowAccumulation", "cubic-metre/second"),
+  channel("OceanDistance", "metre"),
+  fraction("RiverChannelStrength"),
+  fraction("FloodplainIntensity"),
+  fraction("DeltaIntensity"),
+  fraction("WaveExposure"),
+  fraction("OceanCurrentStrength"),
+  fraction("OceanCurrentHeat"),
+  channel("Warmth", "deci-celsius"),
+  channel("SeaSurfaceAnomaly", "deci-celsius"),
+  fraction("Upwelling"),
+  fraction("StormForcing"),
+  fraction("StormTrack"),
+  channel("RiverWarmth", "deci-celsius"),
+  category("CrustProvinceIds"),
+  category("CrustAssemblyIds"),
+  category("CrustSuturePairIds"),
+  category("TectonicBoundaryCodes"),
+  category("TectonicBoundaryPairIds"),
+  category("MarginCodes"),
+  category("LandformCodes"),
+  category("RockKindCodes"),
+  category("ThrustPairIds"),
+  category("ThrustSheetIndex"),
+  category("ThrustSegmentIds"),
+  ...groundResourceChannels,
+  category("WaterKindCodes"),
+  category("WaterBodyIds"),
+  category("DrainageBasinIds"),
+  category("RiverOrders"),
+  category("GroundedIce"),
+  category("FeatureFlags"),
+  category("VolcanicLastActiveEpoch"),
+  category("BathymetricZoneCodes"),
+  fraction("GeothermalHistory"),
+  fraction("TectonicActivityHistory"),
+  fraction("ExternalCoastalForcingHistory"),
+];
+
+type Ownership = readonly [
+  owner: string | readonly string[],
+  layer: string,
+  channels: readonly PhysicalBufferName[],
+];
+export const physicalChannelOwnership: Ownership[] = [
+  ["magic.configured", "magic", magicEffectChannels],
+  ["physical.foundation", "elevation", ["Elevation"]],
+  [
+    "physical.foundation",
+    "geology",
+    [
+      "SedimentThickness",
+      "RockResistance",
+      "RockKindCodes",
+      ...structureChannels,
+      "CrustProvinceIds",
+      "CrustAssemblyIds",
+      "CrustSuturePairIds",
+      "CrustSutureStrength",
+      "MarginCodes",
+      "CrustAge",
+    ],
+  ],
+  [
+    "physical.tectonic-history",
+    "geology",
+    [
+      "TectonicStrain",
+      "CrustMotionX",
+      "CrustMotionY",
+      "TectonicBoundaryCodes",
+      "TectonicBoundaryPairIds",
+      "TectonicActivityHistory",
+      "StructuralGrainX",
+      "StructuralGrainY",
+    ],
+  ],
+  [
+    ["physical.fractures", "physical.impacts", "physical.volcanism"],
+    "geology",
+    ["FractureConductance"],
+  ],
+  ["physical.geothermal", "geology", ["Geothermal", "GeothermalHistory"]],
+  ["physical.impacts", "geology", ["ImpactExcavation", "ImpactRimUplift", "ImpactEjectaThickness"]],
+  [
+    "physical.volcanism",
+    "geology",
+    ["VolcanicConstructionHistory", "VolcanicLastActiveEpoch", "VolcanicMeltSupply"],
+  ],
+  ["physical.landmarks", "geology", ["LandmarkMaintenance"]],
+  ["physical.river-incision", "geology", ["CumulativeFluvialErosion"]],
+  [
+    [
+      "material.fluvial-transport",
+      "physical.glacial-sculpting",
+      "physical.coastal-evolution",
+      "physical.hillslopes",
+    ],
+    "geology",
+    ["CumulativeDeposition"],
+  ],
+  [
+    "physical.glacial-sculpting",
+    "geology",
+    ["CumulativeGlacialErosion", "CumulativeGlacialDeposition"],
+  ],
+  [
+    "physical.coastal-evolution",
+    "geology",
+    ["CumulativeCoastalErosion", "ExternalCoastalForcingHistory"],
+  ],
+  ["physical.landforms", "geology", ["LandformCodes", "Slope", "FeatureFlags"]],
+  [
+    "physical.climate",
+    "climate",
+    [
+      "Temperature",
+      "ExternalHeatForcing",
+      "Moisture",
+      "WindX",
+      "WindY",
+      "WindSpeed",
+      "Rainfall",
+      "Snowfall",
+      "StormTrack",
+    ],
+  ],
+  [
+    "water.routing",
+    "rivers",
+    [
+      "Runoff",
+      "WaterBodyIds",
+      "DrainageBasinIds",
+      "CatchmentArea",
+      "RiverWarmth",
+      "GroundwaterStorage",
+      "FlowAccumulation",
+      "DrainageElevations",
+    ],
+  ],
+  [
+    "ocean.geography",
+    "rivers",
+    ["WaterKindCodes", "WaterDepths", "OceanDistance", "WaterSurfaceElevations"],
+  ],
+  ["ocean.geography", "geology", ["BathymetricZoneCodes"]],
+  [
+    "physical.ocean-circulation",
+    "rivers",
+    ["OceanCurrentStrength", "WaveExposure", "SeaSurfaceAnomaly", "Upwelling", "StormForcing"],
+  ],
+  ["physical.ocean-circulation", "climate", ["OceanCurrentHeat", "Warmth"]],
+  [
+    "physical.land-ice",
+    "climate",
+    [
+      "IceThickness",
+      "MaximumIceThickness",
+      "MaximumIceFlux",
+      "MaximumGroundedIceFlux",
+      "GroundedIce",
+    ],
+  ],
+  [
+    "physical.river-networks",
+    "rivers",
+    ["RiverOrders", "RiverChannelStrength", "RiverWidth", "RiverDepth"],
+  ],
+  ["physical.floodplains", "rivers", ["FloodplainIntensity"]],
+  ["physical.deltas", "rivers", ["DeltaIntensity"]],
+  ["ecology.living", "ecology", ecologyFields.map(({ name }) => name)],
 ];

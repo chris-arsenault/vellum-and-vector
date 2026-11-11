@@ -1,4 +1,11 @@
-import { magicSurfaceCode, putChannel, surfaceRuleSources, type Band } from "@atlas/domain";
+import {
+  magicSurfaceCode,
+  magicEcologyFields,
+  putChannel,
+  surfaceRuleSources,
+  type Band,
+  type MagicSystem,
+} from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { magicKey } from "./magicState";
@@ -9,8 +16,10 @@ import { activeConfluences, evaluateConfluences } from "./magicConfluences";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 import {
   magicChannels,
+  magicEffectChannels,
   magicFieldDefinitions,
   publishedMagicChannels,
+  societyChannels,
 } from "./magicFieldDefinitions";
 
 export function independentInteraction(
@@ -32,6 +41,29 @@ export function effectiveMagicRules(
   return system.features.filter(
     (rule) => system.enabled || independentInteraction(rule, system.id)
   );
+}
+/** Current classification inputs follow the rules selected by each system. */
+export function magicConditionRequirements(system: MagicSystem) {
+  const fields: Record<string, string[]> = {
+    elevation: ["field:Elevation"],
+    slope: ["field:Elevation"],
+    temperature: ["field:Temperature"],
+    ice: ["field:IceThickness"],
+    water: ["field:WaterKindCodes", "field:LakeOutletTargets"],
+    moisture: ["field:Moisture"],
+    geothermal: ["field:Geothermal"],
+    fracture: ["field:FractureConductance"],
+    landform: ["field:LandformCodes"],
+    river: ["field:RiverOrders"],
+    upwelling: ["field:OceanCurrentX"],
+  };
+  return effectiveMagicRules(system)
+    .flatMap((rule) => [...rule.seeds, ...(rule.retains ?? [])].flat())
+    .flatMap((condition) =>
+      Object.hasOwn(magicEcologyFields, condition.field)
+        ? ["ecology"]
+        : (fields[condition.field] ?? [])
+    );
 }
 /**
  * Grow every effective rule of every system and measure its coverage. A system's coverage in
@@ -117,51 +149,26 @@ export function classifyMagicFeatures(state: GenerationState, seed = state.domai
     );
   releaseWorking(map, held, priority, second);
 }
+type ChannelProjector = (
+  key: import("@atlas/domain").FieldChannelName,
+  unit: string,
+  values: Pick<Band, "get">,
+  quantity: "intensive" | "extensive" | "category"
+) => void;
+
 export function projectMagic(state: GenerationState) {
   const work = state.physical!,
     magic = work.magic;
   if (!magic) return;
-  const project = (
-    key: string,
-    unit: string,
-    values: Pick<Band, "get">,
-    quantity: "intensive" | "extensive" | "category"
-  ) =>
+  const project: ChannelProjector = (key, unit, values, quantity) =>
     putChannel(state.surface, key, unit, projectedMagicValues(state, values, quantity), quantity);
   project("naturalSurface", "category", magic.naturalSurface, "category");
   project("finalSurface", "category", magic.finalSurface, "category");
   project("secondSurface", "category", magic.secondSurface, "category");
-  project("quickening", "ratio", work.map.Quickening, "intensive");
-  project("stillness", "ratio", work.map.Stillness, "intensive");
-  project("fog", "ratio", work.map.FogForcing, "intensive");
-  project("icePersistence", "ratio", work.map.IcePersistence, "intensive");
-  project("iceCharge", "ratio", work.map.IceCharge, "intensive");
-  project("verdure", "ratio", work.map.Verdure, "intensive");
-  project("salting", "ratio", work.map.Salting, "intensive");
-  project("warding", "ratio", work.map.Warding, "intensive");
-  project("tearing", "ratio", work.map.Tearing, "intensive");
-  project("tenure", "person-year", work.map.Tenure, "extensive");
-  project("walkedRoute", "traveller-year", work.map.WalkedRoute, "extensive");
-  project("massDeath", "people", work.map.MassDeath, "extensive");
+  for (const name of magicEffectChannels) project(name, "ratio", work.map[name], "intensive");
+  for (const [name, unit] of societyChannels) project(name, unit, work.map[name], "extensive");
   project("magic:strain", "ratio", magic.confluences.strain, "intensive");
-  for (const field of magic.fields) {
-    for (const channel of publishedMagicChannels)
-      project(
-        magicKey(field, channel),
-        magicFieldDefinitions[channel].unit,
-        field[channel],
-        magicFieldDefinitions[channel].quantity
-      );
-    for (const [id, values] of Object.entries(field.originSources))
-      project(magicKey(field, `origin:${id}:source`), "relative-intensity", values, "intensive");
-    project(magicKey(field, "coverage"), "ratio", field.systemCoverage, "intensive");
-    for (const [key, values] of Object.entries(field.stocks))
-      project(magicKey(field, `stock:${key}`), "intensity-square-metre", values, "extensive");
-    for (const [id, members] of Object.entries(field.features)) {
-      project(magicKey(field, `feature:${id}`), "category", members, "category");
-      project(magicKey(field, `coverage:${id}`), "ratio", field.coverage[id], "intensive");
-    }
-  }
+  for (const field of magic.fields) projectSystem(field, project);
   for (const confluence of activeConfluences(state)) {
     const held = magic.confluences.states[confluence.id];
     if (!held) continue;
@@ -169,19 +176,35 @@ export function projectMagic(state: GenerationState) {
     project(`magic:confluence:${confluence.id}:coverage`, "ratio", held.coverage, "intensive");
   }
 }
-function projectedMagicValues(
+function projectSystem(field: MagicField, project: ChannelProjector) {
+  for (const channel of publishedMagicChannels)
+    project(
+      magicKey(field, channel),
+      magicFieldDefinitions[channel].unit,
+      field[channel],
+      magicFieldDefinitions[channel].quantity
+    );
+  for (const [id, values] of Object.entries(field.originSources))
+    project(magicKey(field, `origin:${id}:source`), "relative-intensity", values, "intensive");
+  project(magicKey(field, "coverage"), "ratio", field.systemCoverage, "intensive");
+  for (const [key, values] of Object.entries(field.stocks))
+    project(magicKey(field, `stock:${key}`), "intensity-square-metre", values, "extensive");
+  for (const [id, members] of Object.entries(field.features)) {
+    project(magicKey(field, `feature:${id}`), "category", members, "category");
+    project(magicKey(field, `coverage:${id}`), "ratio", field.coverage[id], "intensive");
+  }
+}
+/** Resample amounts by represented area; retain the owner's values for every other quantity. */
+export function projectedMagicValues(
   state: GenerationState,
   values: Pick<Band, "get">,
   quantity: "intensive" | "extensive" | "category"
 ) {
   const work = state.physical!;
-  if (quantity !== "extensive" || !work.interpolation)
+  if (quantity !== "extensive")
     return projectedValues(work, (cell) => values.get(cell), quantity === "category");
-  const density = workingValues(
-    work.map,
-    "float64",
-    "magic:project-density",
-    (i) => values.get(i) / work.map.mesh.area(i)
+  const density = workingValues(work.map, "float64", "magic:project-density", (i) =>
+    work.map.mesh.area(i) > 0 ? values.get(i) / work.map.mesh.area(i) : 0
   );
   const output = projectedValues(work, density);
   for (let i = 0; i < output.length; i++)

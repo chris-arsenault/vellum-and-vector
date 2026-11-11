@@ -71,3 +71,54 @@ it("caches queried cells without allocating a whole-map band for every local inv
   expect(stock.get(0)).toBeCloseTo(area * 15);
   expect(read).toHaveBeenCalledTimes(2);
 });
+
+it("reads reached inventory through each facet's actual cover and finite basement interval", () => {
+  const map = createTestField(createWorldMesh([0, 0, 1000, 1000], 16, 0)),
+    stock = new GroundInventory(map, "salt:bed"),
+    other = new GroundInventory(map, "unrelated:held"),
+    area = map.mesh.area(0);
+  setLayer(map, 0, 0, rocks.saltbed.code, units(2) + 1, {
+    cargo: new Float64Array([stock.key, rocks.saltbed.code, 11]),
+  });
+  openCut(map, 0, 0.25);
+  setLayer(
+    map,
+    0,
+    0,
+    rocks.saltbed.code,
+    units(3) + 1,
+    {
+      cargo: new Float64Array([stock.key, 0, 7]),
+    },
+    "cut"
+  );
+  setLayer(
+    map,
+    0,
+    0,
+    rocks.shale.code,
+    units(1),
+    {
+      cargo: new Float64Array([
+        stock.key,
+        0,
+        2,
+        stock.key,
+        rocks.saltbed.code,
+        3,
+        other.key,
+        rocks.shale.code,
+        100,
+      ]),
+    },
+    "loose"
+  );
+  setLayer(map, 0, 0, rocks.shale.code, units(2), {}, "cutLoose");
+  expect(stock.reached(0, units(1.5))).toBeCloseTo(area * 0.75 * (5 + 0.5 * 11));
+  expect(stock.reached(0, units(3))).toBeCloseTo(area * (0.75 * 27 + 0.25 * 7));
+  expect(stock.reached(0, Infinity)).toBeCloseTo(area * (0.75 * 27 + 0.25 * 21));
+  setLayer(map, 1, 0, rocks.saltbed.code, 1, {
+    cargo: new Float64Array([stock.key, 0, 99]),
+  });
+  expect(stock.reached(1, Infinity)).toBe(0);
+});

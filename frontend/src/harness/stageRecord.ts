@@ -150,7 +150,7 @@ export function stageRecorder(onEvent?: (event: StageEvent) => void, inspectPlac
 function highestLand(preview?: GridArrays): [number, number] | undefined {
   if (!preview) return undefined;
   const grid = attachGrid(preview),
-    height = grid.channels.elevation;
+    height = grid.channels.Elevation;
   if (!height) return undefined;
   let best = -1;
   for (let i = 0; i < grid.active.length; i++)

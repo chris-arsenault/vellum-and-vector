@@ -12,6 +12,7 @@ import { ask, respond } from "../coupling/answers";
 import { sourceToOutletOrder, waterGathered } from "./flowGraph";
 import { cellTravel } from "./physicalMetric";
 import { workingArray, releaseWorking } from "./physicalNumerics";
+import { referenceWaterPassage } from "./waterQuantity";
 
 function transportDistance(map: PhysicalField, i: number, previous: Band) {
   const target = map.FlowTargets.get(i),
@@ -73,7 +74,12 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
     if (target >= 0) previous.set(target, i);
   }
   const order = sourceToOutletOrder(map),
-    water = waterGathered(map, map.FlowTargets, ask(map, "discharge", c)),
+    water = waterGathered(
+      map,
+      map.FlowTargets,
+      ask(map, "discharge", c),
+      referenceWaterPassage(map, c)
+    ),
     carries = ask(map, "loadCapacity", c);
   for (let n = 0; n < order.length; n++) {
     const i = order.get(n),

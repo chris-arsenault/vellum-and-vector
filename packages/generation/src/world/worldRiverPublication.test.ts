@@ -1,6 +1,8 @@
 import { expect, it } from "vitest";
 import { worldGeographyFixture } from "./worldGeographyFixtures";
 import { extractNativeGeography } from "./atlasFeatures";
+import { runOperation } from "../processOperation";
+import { processOwner } from "../processTraits";
 import type { MapProcessContext } from "../process";
 
 function suppliedNetwork(branchFlow: number) {
@@ -38,16 +40,20 @@ function suppliedNetwork(branchFlow: number) {
     random: () => 0.5,
     cancelled: () => false,
   };
-  extractNativeGeography(state, context, {
-    oceans: false,
-    impacts: false,
-    volcanism: false,
-    fractures: false,
-    lakes: false,
-    landforms: false,
-    ecology: false,
-    rivers: true,
-    landmarks: false,
+  runOperation(processOwner(state), extractNativeGeography, {
+    state,
+    context,
+    deliveries: {
+      oceans: false,
+      impacts: false,
+      volcanism: false,
+      fractures: false,
+      lakes: false,
+      landforms: false,
+      ecology: false,
+      rivers: true,
+      landmarks: false,
+    },
   });
   return state;
 }

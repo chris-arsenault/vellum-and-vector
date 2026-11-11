@@ -6,27 +6,33 @@ import {
   requireThat,
   ecologyEpochSchema,
   type Band,
-  type MagicSystem,
 } from "@atlas/domain";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import { generationFeatures } from "../generationFeatures";
 import { composeNativeAuthoring, nativePosition } from "./atlasWorkspace";
-import { environment, classifyBiome, unit, type EcologyForcing } from "./ecologyEnvironment";
+import { environment, classifyBiome, unit } from "./ecologyEnvironment";
 import { evolveVegetation } from "./ecologyVegetation";
+import { readEcologyEnvironment } from "./ecologyEnvironmentRead";
+import { nativeContext } from "./context";
 import { accumulateOrganicMatter, evolveBuriedCarbon } from "./ecologyCarbon";
-import { ecologyRatios, ecologyScalars } from "./ecologyState";
+import { ecologyRatios, ecologyScalars } from "@atlas/domain";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { initializeEcology } from "./ecologyEstablishment";
 import { authoritativeCanopy, updateTreeCover, normalizeCommunities } from "./ecologyGrowth";
 import { plantGroups, livingPlantCarbon } from "./ecologyGroups";
-import { applyToxicity } from "./ecologyMagic";
-import { heldCharge } from "./magicFeedback";
+import { applyToxicity, ecologicalForcing } from "./ecologyMagic";
 import { erosionHistory } from "./ecologySoils";
-import { riverWarmth } from "./riverWarmth";
-import { generationBindings } from "../generationBindings";
+import { generationBindings, physicalEpochIndex } from "../generationBindings";
 import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
 import type { Epoch } from "@atlas/domain";
-import type { ProcessBehavior } from "../processTraits";
+import {
+  mapCommand,
+  mapElapsed,
+  mapQuery,
+  type MapInput,
+  type MapOperation,
+} from "../processTraits";
+import { defineCommand } from "../processOperation";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { isMutablePhysicalName, type PhysicalField } from "./field";
 
@@ -54,50 +60,10 @@ function ecologyInput(input: AtlasGenerationInput, context: MapProcessContext): 
   };
 }
 
-export const ecologicalMagicEffectBindings = {
-  vegetationGrowth: "growth",
-  fire: "fire",
-  organicPreservation: "preservation",
-  animalToxicity: "toxicity",
-  seedDispersal: "dispersal",
-} as const satisfies Partial<Record<keyof MagicSystem["effects"], keyof EcologyForcing>>;
-export const ecologicalMagicEffects = Object.keys(
-  ecologicalMagicEffectBindings
-) as (keyof typeof ecologicalMagicEffectBindings)[];
-
-function magicalEcologyForcing(state: GenerationState, i: number) {
-  const result = { growth: 0, fire: 0, preservation: 0, toxicity: 0, dispersal: 0 },
-    map = state.physical!.map;
-  for (const field of state.physical!.magic?.fields ?? []) {
-    if (!field.definition.enabled) continue;
-    // A charge-holding system acts on the living only through the charge its ice holds,
-    // the same gate its cooling and stillness pass.
-    const intensity = (field.intensity.get(i) / 1000) * heldCharge(map, field, i);
-    for (const effect of ecologicalMagicEffects)
-      result[ecologicalMagicEffectBindings[effect]] += intensity * field.definition.effects[effect];
-  }
-  return result;
-}
 function forcing(state: GenerationState, input: EcologyInput, context?: MapProcessContext) {
-  const epoch = input.epochs[context?.epochIndices[0] ?? input.epochs.length - 1];
+  const epoch = input.epochs[physicalEpochIndex(input.epochs, context?.epochs ?? [])];
   const ecology = ecologyEpochSchema.parse(epoch?.ecology ?? {});
-  const map = state.physical!.map;
-  return (i: number): EcologyForcing => {
-    return {
-      ...magicalEcologyForcing(state, i),
-      // Shared fields the magic feedback wrote; absent systems leave them at zero.
-      quickening: map.Quickening.get(i),
-      stillness: map.Stillness.get(i),
-      verdure: map.Verdure.get(i),
-      salting: map.Salting.get(i),
-      productivity: (input.parameters?.vegetation ?? 1) * ecology.productivity,
-      grazing: input.parameters?.grazing ?? 1,
-      seasonality: ecology.seasonality,
-      migration: ecology.migration,
-      recovery: ecology.recovery,
-      fireRegime: ecology.fire,
-    };
-  };
+  return ecologicalForcing(state, input.parameters, ecology);
 }
 function coverAuthority(state: GenerationState) {
   const work = state.physical!,
@@ -117,7 +83,7 @@ function coverAuthority(state: GenerationState) {
     }
   }
   const fixed = work.fixed.filter(({ binding }) =>
-    (ecologyScalars as readonly string[]).includes(binding.native)
+    (ecologyScalars as readonly string[]).includes(binding.name)
   );
   return (i: number) => {
     if (woodland.get(i)) {
@@ -127,13 +93,13 @@ function coverAuthority(state: GenerationState) {
     }
     for (const { binding, values } of fixed) {
       const value = values.get(i);
-      if (Number.isFinite(value) && isMutablePhysicalName(binding.native))
-        map[binding.native].set(i, value);
+      if (Number.isFinite(value) && isMutablePhysicalName(binding.name))
+        map[binding.name].set(i, value);
     }
     if (
       woodland.get(i) ||
       fixed.some(
-        ({ binding, values }) => binding.native === "TreeCover" && Number.isFinite(values.get(i))
+        ({ binding, values }) => binding.name === "TreeCover" && Number.isFinite(values.get(i))
       )
     )
       authoritativeCanopy(map, i, map.TreeCover.get(i));
@@ -160,13 +126,13 @@ function initialize(state: GenerationState, seed: number) {
 }
 function present(
   state: GenerationState,
+  context: MapProcessContext,
   seed: number,
-  input?: EcologyInput,
-  context?: MapProcessContext
+  input?: EcologyInput
 ) {
   const map = state.physical!.map;
+  readEcologyEnvironment(map, nativeContext(state, context, 0));
   initializeEcology(map, seed, true);
-  riverWarmth(map);
   const restore = coverAuthority(state);
   const magic = input ? forcing(state, input, context) : null;
   if (magic) applyToxicity(map, 0, magic);
@@ -285,7 +251,7 @@ function validate(state: GenerationState, context: MapProcessContext) {
   return [];
 }
 export function ecologyProcesses(input: AtlasGenerationInput): MapProcess[] {
-  return ["initialize", "evolve", "respond", "burial", "present"].map((name) => ({
+  return ["initialize", "evolve", "respond", "burial", "settle", "present"].map((name) => ({
     contract: {
       id: `atlas.ecology-${name}`,
       version: "1",
@@ -296,43 +262,60 @@ export function ecologyProcesses(input: AtlasGenerationInput): MapProcess[] {
       products: [{ id: "atlas:ecology-response", lifetime: "epoch", representation: "history" }],
       workspaceOnly: true,
     },
-    behavior: ecologyBehavior(name, input),
+    operation: ecologyOperation(name, input),
     validate,
   }));
 }
-function ecologyBehavior(name: string, input: AtlasGenerationInput): ProcessBehavior {
+function ecologyOperation(name: string, input: AtlasGenerationInput): MapOperation {
+  const id = `atlas.ecology-${name}`;
   if (name === "initialize")
-    return {
-      kind: "initialize",
-      initialize: (state, context) => initialize(state, ecologyInput(input, context).seed),
-    };
+    return mapCommand(
+      id,
+      "initialize",
+      (state, context) => initialize(state, ecologyInput(input, context).seed),
+      []
+    );
   if (["evolve", "respond"].includes(name))
-    return {
-      kind: "elapsed",
-      duration: { kind: "epoch", fraction: 0.5 },
-      advance(state, context, years) {
+    return mapElapsed(
+      id,
+      { kind: "epoch", fraction: 0.5 },
+      (state, context, years) => {
         if (name === "evolve" && !state.physical!.inherited)
           state.physical!.map.MigrationFlux.fill(0);
         advance(state, context, ecologyInput(input, context), years);
       },
-    };
+      []
+    );
   if (name === "burial")
-    return {
-      kind: "elapsed",
-      duration: { kind: "epoch", fraction: 1 },
-      advance(state, context, years) {
+    return mapElapsed(
+      id,
+      { kind: "epoch", fraction: 1 },
+      (state, context, years) => {
         evolveBuriedCarbon(state.physical!.map, state.physical!.inherited ? 0 : years);
-        present(state, ecologyInput(input, context).seed);
+        present(state, context, ecologyInput(input, context).seed);
         recordEcology(state, context);
       },
-    };
-  return {
-    kind: "model-pass",
-    applyPass(state, context) {
-      const bound = ecologyInput(input, context);
-      present(state, bound.seed, bound.physical ? undefined : bound, context);
-    },
-  };
+      []
+    );
+  if (name === "present") return mapQuery(id, classifyCurrentEcology, []);
+  if (name === "settle")
+    return mapCommand(
+      id,
+      "event",
+      (state, context) => {
+        const bound = ecologyInput(input, context);
+        present(state, context, bound.seed, bound.physical ? undefined : bound);
+      },
+      []
+    );
+  throw new Error(`Unknown ecology operation: ${name}`);
+}
+
+/** Presentation reads retained communities; mortality belongs to ecological development. */
+function classifyCurrentEcology(state: GenerationState, context: MapProcessContext) {
+  const map = state.physical!.map;
+  readEcologyEnvironment(map, nativeContext(state, context, 0));
+  for (let i = 0; i < map.mesh.count; i++) map.BiomeCodes.set(i, classifyBiome(map, i));
 }
 function ecologyRequirements(name: string) {
   if (name === "initialize") return ["atlas:workspace", "field:Elevation"];
@@ -365,14 +348,13 @@ function advance(
   const f = forcing(state, input, context);
   const map = state.physical!.map,
     before = map.coverage.copyBand(map.BiomeCodes);
-  // The epoch's drainage is routed by now; carry the wellsprings' warmth down it first.
-  riverWarmth(map);
+  readEcologyEnvironment(map, nativeContext(state, context, 0));
   evolveVegetation(
     map,
     years,
     f,
     coverAuthority(state),
-    input.seed ^ Math.imul((context.epochIndices[0] ?? 0) + 1, 16777619)
+    input.seed ^ Math.imul(physicalEpochIndex(input.epochs, context.epochs) + 1, 16777619)
   );
   applyWoodlands(state);
   accumulateOrganicMatter(map, years, f);
@@ -381,25 +363,26 @@ function advance(
 }
 
 /** New elapsed human time is distinct from spatial refinement of completed history. */
-export function advanceHumanEcology(
-  state: GenerationState,
-  context: MapProcessContext,
-  years: number
-) {
-  const bound = generationBindings(context);
-  const era = context.epochs.at(-1);
-  const named = bound.settings.epochs.findIndex((e) => e.id === era?.parentEpoch);
-  const index = named >= 0 ? named : bound.settings.epochs.length - 1;
-  advance(
-    state,
-    { ...context, epochIndices: [index] },
-    {
-      seed: bound.seed,
-      parameters: bound.parameters,
-      epochs: bound.settings.epochs,
-      physical: false,
-    },
-    years,
-    true
-  );
-}
+export const advanceHumanEcology = defineCommand(
+  "ecology.human-time",
+  "elapsed",
+  ({ state, context, years }: MapInput & { years: number }) => {
+    const bound = generationBindings(context);
+    const era = context.epochs.at(-1);
+    const named = bound.settings.epochs.findIndex((e) => e.id === era?.parentEpoch);
+    const index = named >= 0 ? named : bound.settings.epochs.length - 1;
+    advance(
+      state,
+      { ...context, epochIndices: [index] },
+      {
+        seed: bound.seed,
+        parameters: bound.parameters,
+        epochs: bound.settings.epochs,
+        physical: false,
+      },
+      years,
+      true
+    );
+  },
+  []
+);

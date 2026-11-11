@@ -11,7 +11,7 @@ export function drawnOcean(raster: Raster): Geometry | null {
   let ocean =
     raster.field.ocean === undefined ? contourSea(raster, raster.field) : raster.field.ocean;
   for (const edit of raster.field.overlays ?? []) {
-    if (!edit.channels.includes("elevation")) continue;
+    if (!edit.channels.includes("Elevation")) continue;
     const retained = ocean ? spatial.difference(ocean, edit.grid.scope.footprint) : null;
     const changed = contourSea(raster, edit.grid);
     ocean = spatial.unionAll([retained, changed].filter((g): g is Geometry => !!g));
@@ -20,9 +20,9 @@ export function drawnOcean(raster: Raster): Geometry | null {
   return ocean;
 }
 function contourSea(raster: LoadedRaster, grid: GridSurface) {
-  const height = fieldInterpolator(grid, "elevation");
-  const level = raster.water?.channels.seaLevel
-    ? fieldInterpolator(raster.water, "seaLevel")
+  const height = fieldInterpolator(grid, "Elevation");
+  const level = raster.water?.channels.EffectiveSeaLevel
+    ? fieldInterpolator(raster.water, "EffectiveSeaLevel")
     : () => 0;
   const at = (x: number, y: number) => {
     const p = { x, y, z: 0 };

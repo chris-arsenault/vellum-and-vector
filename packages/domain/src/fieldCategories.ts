@@ -4,7 +4,7 @@ import { rectangle, spatial } from "./spatial";
 
 /** Categories in the composed field; later patches replace the covered base. */
 export function fieldCategories(
-  grid: GridSurface,
+  grid: GridSurface<string>,
   channel: string,
   footprint: Geometry = grid.scope.footprint
 ): number[] {
@@ -13,7 +13,7 @@ export function fieldCategories(
   return [...result].sort((a, b) => a - b);
 }
 function collectCategories(
-  grid: GridSurface,
+  grid: GridSurface<string>,
   channel: string,
   footprint: Geometry,
   result: Set<number>
@@ -28,7 +28,7 @@ function collectCategories(
   if (remaining) collectSamples(grid, channel, remaining, result);
 }
 function collectSamples(
-  grid: GridSurface,
+  grid: GridSurface<string>,
   channel: string,
   footprint: Geometry,
   result: Set<number>
@@ -42,7 +42,7 @@ function collectSamples(
     if (whole || overlapsCell(grid, i, footprint)) result.add(code);
   }
 }
-function overlapsCell(grid: GridSurface, i: number, footprint: Geometry) {
+function overlapsCell(grid: GridSurface<string>, i: number, footprint: Geometry) {
   const clipped = spatial.intersection(rectangle(gridCellBounds(grid, i)), footprint);
   return clipped !== null && spatial.area(clipped) > 0;
 }

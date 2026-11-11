@@ -1,5 +1,6 @@
 import {
   gridSchema,
+  fieldChannelName,
   requireThat,
   sameValue,
   spatial,
@@ -136,7 +137,8 @@ function validateFeatureProtection(feature: AtlasFeature, current: AtlasFeature 
 
 function validateSurface(state: GenerationState, original: DomainSnapshot): void {
   const area = original.world.areas[original.scope.areaId];
-  for (const [channel, values] of Object.entries(state.surface.channels)) {
+  for (const [name, values] of Object.entries(state.surface.channels)) {
+    const channel = fieldChannelName(name);
     const layer = Object.values(original.world.layers).find(
       (l) => l.id === channel || l.facts?.includes(channel)
     );

@@ -23,6 +23,43 @@ do not establish what an algorithm actually did.
   Answers are read-only through the narrow process interface. Each narrow process or simultaneous
   substep resolves its declared questions before running; later groups see landed effects.
   Whole-field builders resolve questions where their algorithms ask them.
+  Composed quantities can depend on other answers. Surface-water supply combines rainfall,
+  melt and spring return; routing applies maintained withdrawals and passage losses to available
+  incoming water. Incision and lake budgets use that same composition. Providers state their own
+  contributions; consumers do not maintain lists of water producers.
+  Lake stages use routed effective catchment yield and their own evaporation/infiltration
+  losses. They do not refund terrestrial rain losses after routing, which would bypass
+  downstream withdrawals. This approximates precipitation over a newly submerged footprint.
+- **Command–Query Separation and Incremental Computation.** Opaque executable operations replace
+  optional callback shapes. Map steps, native steps and nested domain operations dispatch through
+  the same interface. A selected query owns its derived dependencies; map-owned revisions memoize
+  current reads, and completed commands invalidate them at operation boundaries. Dependencies
+  accept queries only. Query evaluation cannot schedule a material
+  command or infer elapsed work. Development receives explicit exposure, while elapsed evolution
+  retains its duration binding. Physical forcing follows explicit epoch ancestry, not a human
+  era's loop ordinal; an unbound present-day query uses neutral physical forcing.
+  Routing, channel geometry and flood environment resolve through
+  this boundary before ecological response. Query strategies are bound per map from the selected
+  feature owners; a regional implementation can replace an algorithm without changing readers.
+  This is coarse invalidation, not per-cell dependency tracking or a general workflow engine.
+  Operation handles hide their callable implementations. Compiler-derived architecture checks
+  discover registered callbacks and their callers, rejecting raw entry callbacks and direct calls
+  across operation owners. Caller checks include diagnostic harnesses and tests across the workspace;
+  supplied test doubles do not redefine ownership of production helpers.
+  Internal algorithm helpers remain ordinary functions; the checks enforce
+  executable boundaries rather than infer every helper's effects.
+  Development and publication are separate operations: publishing cultures, polities or works
+  cannot initialize or advance society. Ocean budget initialization and marine reconnection
+  history likewise run explicitly, outside current shoreline queries.
+  Coastal forcing resolves the current shoreline and currents before projecting its sources
+  onto receiving land. Terrain changes invalidate that projection; an earlier shore target is
+  not a persistent force. Coastal exposure history is recorded by the explicit epoch event.
+  A query completes the output it owns. Atmosphere composes temperature, wind, transported
+  moisture and precipitation before exposing their bands; consumers cannot cache an unfinished
+  temperature. Delta fans, floodplains and routed channel geometry retain separate outputs.
+  Classification combines those outputs without overwriting another owner's cached result.
+  Feedback that needs an earlier pass remains explicit: runoff uses preceding river heat,
+  while new heat transport follows the routes that runoff establishes.
 - **Ground operations.** Modes express how processes act on material facts. The ground reader
   walks retained material, while owner operations keep placement, columns and projections together.
   A stage queues supported transfers and lands them through the ledger. Sequential demands
@@ -73,6 +110,7 @@ still occur during execution, so observation phases name execution boundaries ra
 every change is a deferred command. Material formation and alteration remain attached to the
 accepted material operation.
 
-The sequence still determines order. Required/provided bands select runnable steps but do not prove
-that a previously written value is current. Numerical accuracy, exact replay and conservation
+The sequence still determines command order. Required/provided bands select runnable steps;
+current derived dependencies are executable queries rather than claims of freshness inferred from
+those declarations. Numerical accuracy, exact replay and conservation
 closure are not acceptance criteria; generated geography is judged on maps.

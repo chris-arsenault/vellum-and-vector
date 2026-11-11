@@ -1,125 +1,28 @@
-import { builtinLayers, requireThat, type Layer, type World } from "@atlas/domain";
+import {
+  builtinLayers,
+  requireThat,
+  fieldChannelName,
+  type Layer,
+  type World,
+} from "@atlas/domain";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { resolveGenerationFeatures, type ResolvedFeatures } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
 import { domainFeatureDefinitions } from "../domainFeatures";
 import type { FieldPublicationDefinition, PublicationDefinition } from "../publication";
-import { atlasChannels, structureChannels, type ChannelBinding } from "./atlasChannels";
-import { ecologyBindings } from "./ecologyState";
+import { physicalChannels, physicalChannelOwnership, type PhysicalChannel } from "./atlasChannels";
+import type { FieldChannelName } from "@atlas/domain";
 import { configuredMagicPublications } from "./atlasMagicPublications";
-
-type Ownership = readonly [
-  owner: string | readonly string[],
-  layer: string,
-  channels: readonly string[],
-];
-const nativeOwnership: Ownership[] = [
-  ["physical.foundation", "elevation", ["elevation"]],
-  [
-    "physical.foundation",
-    "geology",
-    [
-      "sediment",
-      "rock",
-      "rockKind",
-      ...structureChannels,
-      "province",
-      "assembly",
-      "suturePair",
-      "sutureStrength",
-      "margin",
-      "crustAge",
-    ],
-  ],
-  [
-    "physical.tectonic-history",
-    "geology",
-    [
-      "tectonicStrain",
-      "crustMotionX",
-      "crustMotionY",
-      "tectonicBoundary",
-      "boundaryPair",
-      "tectonicHistory",
-      "structuralGrainX",
-      "structuralGrainY",
-    ],
-  ],
-  [["physical.fractures", "physical.impacts", "physical.volcanism"], "geology", ["fracture"]],
-  ["physical.geothermal", "geology", ["geothermal", "geothermalHistory"]],
-  ["physical.impacts", "geology", ["impactExcavation", "impactRim", "impactEjecta"]],
-  [
-    "physical.volcanism",
-    "geology",
-    ["volcanicConstruction", "volcanicLastActiveEpoch", "volcanicMeltSupply"],
-  ],
-  ["physical.landmarks", "geology", ["landmarkMaintenance"]],
-  ["physical.river-incision", "geology", ["fluvialErosion"]],
-  [
-    [
-      "material.fluvial-transport",
-      "physical.glacial-sculpting",
-      "physical.coastal-evolution",
-      "physical.hillslopes",
-    ],
-    "geology",
-    ["deposition"],
-  ],
-  ["physical.glacial-sculpting", "geology", ["glacialErosion", "glacialDeposition"]],
-  ["physical.coastal-evolution", "geology", ["coastalErosion", "coastalForcingHistory"]],
-  ["physical.landforms", "geology", ["landform", "slope", "physicalFeatures"]],
-  [
-    "physical.climate",
-    "climate",
-    [
-      "temperature",
-      "moisture",
-      "windEast",
-      "windNorth",
-      "windSpeed",
-      "rainfall",
-      "snowfall",
-      "stormTrack",
-    ],
-  ],
-  [
-    "water.routing",
-    "rivers",
-    ["runoff", "waterBody", "basin", "catchmentArea", "riverWarmth", "groundwaterStorage"],
-  ],
-  ["ocean.geography", "rivers", ["water", "waterDepth", "oceanDistance"]],
-  ["ocean.geography", "geology", ["bathymetry"]],
-  [
-    "physical.ocean-circulation",
-    "rivers",
-    ["oceanCurrent", "waveExposure", "seaSurfaceAnomaly", "upwelling", "stormForcing"],
-  ],
-  [
-    "physical.land-ice",
-    "climate",
-    [
-      "ice",
-      "maximumIce",
-      "iceThickness",
-      "maximumIceThickness",
-      "maximumIceFlux",
-      "maximumGroundedIceFlux",
-      "groundedIce",
-    ],
-  ],
-  ["physical.river-networks", "rivers", ["riverOrder", "riverChannel", "riverWidth", "riverDepth"]],
-  ["physical.floodplains", "rivers", ["floodplain"]],
-  ["physical.deltas", "rivers", ["delta"]],
-  ["ecology.living", "ecology", ecologyBindings.map(([name]) => name)],
-];
 
 function enabled(features: ResolvedFeatures, owner: string | readonly string[]): boolean {
   return typeof owner === "string"
     ? (features.selection[owner]?.enabled ?? false)
     : owner.some((feature) => enabled(features, feature));
 }
-function ownership(binding: ChannelBinding) {
-  const registrations = nativeOwnership.filter(([, , channels]) => channels.includes(binding.name));
+function ownership(binding: PhysicalChannel) {
+  const registrations = physicalChannelOwnership.filter(([, , channels]) =>
+    channels.includes(binding.name)
+  );
   requireThat(
     registrations.length === 1,
     "publication_binding",
@@ -127,8 +30,8 @@ function ownership(binding: ChannelBinding) {
   );
   return registrations[0];
 }
-export function selectedAtlasChannels(features: ResolvedFeatures): ChannelBinding[] {
-  return atlasChannels.filter((binding) => enabled(features, ownership(binding)[0]));
+export function selectedAtlasChannels(features: ResolvedFeatures): PhysicalChannel[] {
+  return physicalChannels.filter((binding) => enabled(features, ownership(binding)[0]));
 }
 
 function layer(id: string): Layer {
@@ -143,17 +46,18 @@ function layer(id: string): Layer {
   };
 }
 function field(
-  channel: string,
+  channel: FieldChannelName,
   unit: string,
   layerId: string,
   publish = true,
-  owners: readonly string[] = []
+  owners: readonly string[] = [],
+  quantity: "intensive" | "extensive" | "category" = unit === "category" ? "category" : "intensive"
 ): FieldPublicationDefinition {
   return {
     kind: "field",
     channel,
     unit,
-    quantity: unit === "category" || channel === "waterLevel" ? "category" : "intensive",
+    quantity,
     layer: layer(layerId),
     publish,
     owners,
@@ -161,50 +65,44 @@ function field(
 }
 
 function nativePublications(features: ResolvedFeatures): PublicationDefinition[] {
-  return atlasChannels.map((binding) => {
+  return physicalChannels.map((binding) => {
     const [owner, target] = ownership(binding);
     return field(
       binding.name,
       binding.unit,
       target,
       enabled(features, owner),
-      typeof owner === "string" ? [owner] : owner
+      typeof owner === "string" ? [owner] : owner,
+      binding.quantity
     );
   });
 }
-const derived: readonly [channel: string, unit: string, layer: string, owners: string[]][] = [
-  ["flow", "cubic-metre/second", "rivers", ["water.routing"]],
-  ["drainageElevation", "metre", "rivers", ["water.routing"]],
-  ["waterLevel", "metre", "rivers", ["ocean.geography"]],
-  ["seaLevel", "metre", "rivers", ["ocean.geography"]],
-  ["seaDatum", "metre", "climate", ["ocean.geography"]],
-  ["precipitation", "metre/year", "climate", ["physical.climate"]],
+export const derived: readonly [
+  channel: FieldChannelName,
+  unit: string,
+  layer: string,
+  owners: string[],
+][] = [
+  ["EffectiveSeaLevel", "native-length", "rivers", ["physical.foundation"]],
+  ["BaseSeaLevel", "native-length", "climate", ["physical.foundation"]],
+  ["Precipitation", "millimetre/year", "climate", ["physical.climate"]],
   [
-    "erosion",
-    "metre",
+    "TotalErosion",
+    "native-length",
     "geology",
     ["physical.river-incision", "physical.glacial-sculpting", "physical.coastal-evolution"],
   ],
-  ["carbonate", "ratio", "geology", ["physical.foundation"]],
-  ["physicalMaterial", "category", "geology", ["physical.landforms"]],
-  ["surfaceMaterial", "category", "geology", ["physical.foundation"]],
-  ["naturalTemperature", "celsius", "climate", ["physical.climate"]],
-  ["naturalRock", "ratio", "geology", ["physical.foundation"]],
+  ["CarbonateFraction", "ratio", "geology", ["physical.foundation"]],
+  ["PhysicalMaterial", "category", "geology", ["physical.landforms"]],
+  ["SurfaceMaterial", "category", "geology", ["physical.foundation"]],
+  ["NaturalTemperature", "native-temperature", "climate", ["physical.climate"]],
+  ["NaturalRockResistance", "rock-strength", "geology", ["physical.foundation"]],
   ["naturalSurface", "category", "geology", ["physical.landforms", "magic.configured"]],
   ["finalSurface", "category", "geology", ["physical.landforms", "magic.configured"]],
   ["secondSurface", "category", "geology", ["physical.landforms", "magic.configured"]],
-  ["quickening", "ratio", "magic", ["magic.configured"]],
-  ["stillness", "ratio", "magic", ["magic.configured"]],
-  ["fog", "ratio", "magic", ["magic.configured"]],
-  ["icePersistence", "ratio", "magic", ["magic.configured"]],
-  ["iceCharge", "ratio", "magic", ["magic.configured"]],
-  ["verdure", "ratio", "magic", ["magic.configured"]],
-  ["salting", "ratio", "magic", ["magic.configured"]],
-  ["warding", "ratio", "magic", ["magic.configured"]],
-  ["tearing", "ratio", "magic", ["magic.configured"]],
-  ["heat", "celsius", "magic", ["magic.local"]],
-  ["storedHeat", "celsius", "magic", ["magic.local"]],
-  ["coastalPressure", "ratio", "magic", ["magic.local"]],
+  ["Heat", "celsius", "magic", ["magic.local"]],
+  ["StoredHeat", "celsius", "magic", ["magic.local"]],
+  ["CoastalPressure", "ratio", "magic", ["magic.local"]],
 ];
 
 function configuredMagic(input: AtlasGenerationInput, features: ResolvedFeatures) {
@@ -341,7 +239,9 @@ function identityPublications(world: World | undefined, features: ResolvedFeatur
     const channels = [`${entity.kind}:${entity.id}`];
     if (entity.kind === "language") channels.push(`languageUse:${entity.id}`);
     return channels.map((channel) =>
-      field(channel, "ratio", target, enabled(features, "human.cultures"), ["human.cultures"])
+      field(fieldChannelName(channel), "ratio", target, enabled(features, "human.cultures"), [
+        "human.cultures",
+      ])
     );
   });
 }

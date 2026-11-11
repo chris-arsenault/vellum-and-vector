@@ -16,7 +16,7 @@ it("reuses the OpenLayers terrain layer across map navigation and hides it while
       id: "parent",
       areaId: "parent",
       field,
-      channel: "elevation",
+      channel: "Elevation",
       bounds: field.bounds,
       footprint: field.scope.footprint,
     },

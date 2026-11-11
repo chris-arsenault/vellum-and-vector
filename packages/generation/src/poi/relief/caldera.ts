@@ -9,14 +9,7 @@ import { holds, namingCultureNear, within } from "../poiPlaces";
 import { fieldOf, geothermalAt, isLake } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import { eventPlaces, eventRecord, onPlaces } from "./reliefEvents";
-import {
-  areaOf,
-  loweredAsCaptured,
-  nearestOrFloor,
-  sameSpot,
-  spans,
-  standsIn,
-} from "./reliefShape";
+import { areaOf, nearestOrFloor, sameSpot, spans, standsIn } from "./reliefShape";
 
 /** Area at which a caldera is half as great as calderas get: the generator's cut at full radius. */
 const typicalArea = MapScale.area(0.000001);
@@ -77,9 +70,11 @@ export const caldera: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured caldera is realized as a floor no higher than the parent's. Maps below the world record no events, so its counterpart is the lowest ground near the record, and the record stays.",
+      "The captured caldera's ground develops locally. Its record stays and resolves near the local floor without repeating the collapse or restoring a parent height.",
     carry: carryWhereItLands,
-    realize: (state, carried) => loweredAsCaptured(state, carried, counterpart(state, carried)),
+    realize: notApplicable(
+      "Captured caldera ground develops locally without repeating its collapse."
+    ),
     counterpart,
     unrealized: stays,
     settle: notApplicable("A round's water fills its lake without moving the hollow."),

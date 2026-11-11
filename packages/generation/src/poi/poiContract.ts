@@ -1,4 +1,4 @@
-import type { AtlasFeature } from "@atlas/domain";
+import type { AtlasFeature, SocietyEvent } from "@atlas/domain";
 import type { AreaKindId } from "../area/areaKinds";
 import type { PhysicalBufferName } from "../world/field";
 import type { GenerationState } from "../process";
@@ -136,6 +136,14 @@ export type PoiMagicBand =
  * to one cell of one band combine: additions sum, then the bounds hold.
  */
 export type PoiFieldChange =
+  | {
+      readonly change: "waterPassage";
+      readonly cell: number;
+      /** Requested withdrawal from the current flow, in cubic metres per second. */
+      readonly withdrawal: number;
+      /** Fraction of the remaining flow that passes this place. */
+      readonly transmission: number;
+    }
   | { readonly change: "add"; readonly band: PhysicalBufferName; cell: number; amount: number }
   | { readonly change: "atMost"; readonly band: PhysicalBufferName; cell: number; value: number }
   | { readonly change: "atLeast"; readonly band: PhysicalBufferName; cell: number; value: number }
@@ -145,7 +153,14 @@ export type PoiFieldChange =
   | { readonly change: "gradeGround"; cell: number; gradient: number };
 type FieldEffect<P> = Slot<OnPlace<readonly PoiFieldChange[], P>>;
 
-/** Effect on fields: what it does to each medium while it exists: source, sink, store, barrier, a shape held. */
+/** Initialization Command strategy. The event owner invokes it only when an event occurs. */
+export interface PoiEventCommand<State = GenerationState> {
+  readonly accepts: (event: SocietyEvent) => boolean;
+  readonly changes: (state: State, event: SocietyEvent) => readonly PoiPhysicalChange[];
+}
+export type PoiPhysicalChange = Extract<PoiFieldChange, { readonly band: PhysicalBufferName }>;
+
+/** Maintained Query declarations: current influences, never initialization of a historical event. */
 export interface PoiFieldEffects<P = PoiPlace> {
   readonly statement: Must<string>;
   readonly terrain: FieldEffect<P>;
@@ -365,6 +380,8 @@ export interface PoiEntry extends PlaceRoles<PoiPlace> {
   readonly existence: PoiExistence;
   readonly publication: PoiPublication;
   readonly acrossMaps: PoiAcrossMaps;
+  /** A new event can change actual material once; retained records never invoke this command. */
+  readonly event?: PoiEventCommand;
 }
 
 /** A group page: what its members physically share and what it leaves out. */

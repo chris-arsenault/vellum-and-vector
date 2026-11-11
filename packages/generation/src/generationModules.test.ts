@@ -1,3 +1,4 @@
+import { mapCommand } from "./processTraits";
 import { expect, it } from "vitest";
 import { z } from "zod";
 import { builtinLayers, everySample, generateChannel, putChannel } from "@atlas/domain";
@@ -61,16 +62,17 @@ const survey: GenerationModule = {
         produces: ["test:survey"],
         invalidates: [],
       },
-      behavior: {
-        kind: "model-pass",
-        applyPass(state, context) {
+      operation: mapCommand(
+        "test.survey.measure",
+        "event",
+        (state, context) => {
           putChannel(
             state.surface,
-            "testSurvey",
-            "ratio",
+            "AtmosphericWaterRate",
+            "millimetre/year",
             generateChannel(
               state.surface,
-              "testSurvey",
+              "AtmosphericWaterRate",
               () => Number(context.parameters.temperature) * Number(context.parameters.multiplier)
             )
           );
@@ -81,22 +83,23 @@ const survey: GenerationModule = {
             description: "A registered survey model pass measured its requested product.",
           });
         },
-      },
+        []
+      ),
       validate: () => [],
     },
   ],
   publications: (input) => [
     {
       kind: "field",
-      channel: "testSurvey",
-      unit: "ratio",
+      channel: "AtmosphericWaterRate",
+      unit: "millimetre/year",
       quantity: "intensive",
       publish: input.resolvedFeatures!.selection["test.survey"].enabled,
       layer: {
         ...builtinLayers().find((layer) => layer.id === "climate")!,
         id: "survey",
         name: "Survey",
-        facts: ["testSurvey"],
+        facts: ["AtmosphericWaterRate"],
         schema: {},
         generator: "physical",
       },
@@ -148,7 +151,7 @@ it("extends the real atlas recipe, runtime and new-layer publication by register
     expect(prepared.input.configuration!.inputs!.publications).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          channel: "testSurvey",
+          channel: "AtmosphericWaterRate",
           layer: expect.objectContaining({ id: "survey" }),
         }),
       ])
@@ -166,7 +169,7 @@ it("extends the real atlas recipe, runtime and new-layer publication by register
     const field = snapshotOutput.world.fields.find((field) => field.layerId === "survey")!;
     expect(
       everySample(
-        snapshotOutput.numerical[field.id].channels.testSurvey,
+        snapshotOutput.numerical[field.id].channels.AtmosphericWaterRate!,
         (value) => Math.abs(value - 1.2) < 1e-12
       )
     ).toBe(true);

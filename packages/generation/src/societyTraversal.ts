@@ -1,7 +1,7 @@
-import { gridDistance, gridPosition, neighbors, spatial, type Band } from "@atlas/domain";
+import { gridDistance, gridPosition, neighbors, spatial, MapScale, type Band } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { RouteHeap } from "./mapRouting";
-import { dryLand } from "./societySupport";
+import { dryLand, societyValue } from "./societySupport";
 import { mapScale } from "./worldSignificance";
 import type { SocietyNeighbors } from "./societySpatial";
 
@@ -23,7 +23,8 @@ function localEdges(state: GenerationState, marine: boolean, adjacent?: SocietyN
     seaLaunch = mapScale(state).length(0.0025),
     covers = adjacent ? undefined : spatial.geometryCoverage(grid.scope.footprint),
     links = (i: number) => adjacent?.at(i) ?? neighbors(grid, i, false, covers);
-  const sea = (i: number) => Boolean(grid.active.get(i)) && grid.channels.water?.get(i) === 1;
+  const sea = (i: number) =>
+    Boolean(grid.active.get(i)) && grid.channels.WaterKindCodes?.get(i) === 1;
   return function* (i: number): Iterable<SocietyEdge> {
     if (marine ? !sea(i) : !dryLand(state, i)) return;
     const a = gridPosition(grid, i);
@@ -49,9 +50,14 @@ function landEdge(
 ): SocietyEdge | null {
   if (!dryLand(state, b)) return null;
   const grid = state.surface,
-    riverOrder = grid.channels.riverOrder,
+    riverOrder = grid.channels.RiverOrders,
     river = riverOrder !== undefined && riverOrder.get(a) >= 1 && riverOrder.get(b) >= 1,
-    rise = Math.abs(grid.channels.elevation.get(b) - grid.channels.elevation.get(a));
+    rise = Math.abs(
+      MapScale.metres(
+        societyValue(state, "Elevation", b) - societyValue(state, "Elevation", a),
+        "native"
+      )
+    );
   if (!river && rise / Math.max(mapScale(state).length(0.00000025), distance) > 0.6) return null;
   return {
     a,

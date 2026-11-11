@@ -1,7 +1,7 @@
 import { CellList, FloatList, type Band } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import { retainedArray, releaseWorking } from "../world/physicalNumerics";
-import { columns, columnFields, type Column } from "./rockLayerFields";
+import { columns, columnFields, type Column } from "@atlas/domain";
 import type { MaterialCargo } from "./materialCargo";
 
 /** Exclusive sparse chains per material slot. Freed records are reused, never shared by snapshots. */
@@ -12,6 +12,17 @@ export class CargoStore {
   private readonly next = new CellList();
   private free = 0;
   constructor(readonly heads: Band) {}
+  /** Read one inventory without detaching a material snapshot or copying unrelated cargo. */
+  density(slot: number, key: number, host?: number) {
+    let density = 0;
+    for (let head = this.heads.get(slot); head; head = this.next.at(head - 1))
+      if (
+        this.keys.at(head - 1) === key &&
+        (host === undefined || this.hosts.at(head - 1) === host)
+      )
+        density += this.densities.at(head - 1);
+    return density;
+  }
   get(slot: number): MaterialCargo | undefined {
     let count = 0;
     for (let head = this.heads.get(slot); head; head = this.next.at(head - 1)) count++;
@@ -119,6 +130,16 @@ export function clearCellCargo(map: PhysicalField, cell: number) {
 export function readCargo(map: PhysicalField, cell: number, layer: number, column: Column) {
   if (!hasCargo(map, cell)) return undefined;
   return stores.get(map)?.get(cargoSlot(map.mesh.count, cell, layer, column));
+}
+export function readCargoDensity(
+  map: PhysicalField,
+  cell: number,
+  layer: number,
+  column: Column,
+  key: number,
+  host?: number
+) {
+  return stores.get(map)?.density(cargoSlot(map.mesh.count, cell, layer, column), key, host) ?? 0;
 }
 export function writeCargo(
   map: PhysicalField,

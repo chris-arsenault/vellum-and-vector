@@ -1,19 +1,20 @@
 import {
   fieldInterpolator,
-  MapScale,
   gridPosition,
   putChannel,
   resolutionCells,
   fillBand,
+  fieldChannelName,
   type AtlasFeature,
   type Band,
+  type FieldChannelName,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import { generationNetworks, removeGenerationReach } from "./generationNetworks";
 import { isMutablePhysicalName, type PhysicalField } from "./world/field";
 import { releaseWorking, retainedArray } from "./world/physicalNumerics";
 import { generationBindings } from "./generationBindings";
-import { atlasChannels, type ChannelBinding } from "./world/atlasChannels";
+import { physicalChannels, type PhysicalChannel } from "./world/atlasChannels";
 import {
   composeNativeAuthoring,
   createAtlasWorkspace,
@@ -22,24 +23,23 @@ import {
 import { projectNative } from "./world/atlasProjection";
 import { extractNativeGeography } from "./world/atlasFeatures";
 import { refreshOceans } from "./world/oceanFeatures";
-import { physicalContext } from "./world/context";
-import { oceanConnectivity } from "./world/ocean";
-import { bathymetry, oceanDistance } from "./world/geography";
-import { drainageConditioning } from "./world/drainageFlood";
-import { lakeBasins } from "./world/lakes";
-import { drainageGuidance } from "./world/flowGuidance";
-import { flowRouting } from "./world/routing";
-import { riverNetwork } from "./world/rivers";
-import { riverChannelGeometry } from "./world/channelGeometry";
-import { oceanCurrents } from "./world/currents";
+import { nativeContext } from "./world/context";
+import { oceanRead, seaFloorZones, shoreDistance, currents } from "./processes/climateProcesses";
 import { advanceHumanEcology } from "./world/ecologyProcesses";
 import { refreshSocietySupport, refreshSocietyConnections } from "./societyGeography";
 import { channelAccess, coastalFishery } from "./societySupport";
-import { initializeMagic } from "./world/magicState";
-import { classifyMagicFeatures, projectMagic } from "./world/magicFeatures";
 import { magicChannels } from "./world/magicFieldDefinitions";
-import { evaluateSocietyMagic } from "./world/magicProcesses";
+import {
+  classifyCurrentMagic,
+  evaluateSocietyMagic,
+  initializeMagicWorkspace,
+  publishCurrentMagic,
+} from "./world/magicProcesses";
 import { irrigateChannels } from "./societyWaterUse";
+import { defineCommand, readOperation, runOperation } from "./processOperation";
+import { executeMapOperation, mapCommand, processOwner } from "./processTraits";
+import type { SocietyInput } from "./societyOperation";
+import { rivers, channelForm } from "./processes/waterProcesses";
 import { workSamples } from "./societyWorks";
 import { damCandidateCell } from "./societyDemand";
 import { isWorldSociety } from "./societyMapScope";
@@ -47,37 +47,35 @@ import { generationFeatures, removeGenerationFeature } from "./generationFeature
 import { standGround, looseTo } from "./rock/groundLedger";
 import { alterRock } from "./rock/rockField";
 
-function synchronizeNative(state: GenerationState) {
+const synchronizeNative = defineCommand("human.synchronize", "work", synchronize, []);
+function synchronize(state: GenerationState) {
   for (const name of state.society!.changed) {
-    const binding = atlasChannels.find((b) => b.name === name);
+    const binding = physicalChannels.find((b) => b.name === name);
     if (!binding) continue;
     synchronizeChannel(state, binding);
   }
   composeNativeAuthoring(state.physical!);
 }
-function synchronizeChannel(state: GenerationState, binding: ChannelBinding) {
-  const { offset = 0, scale } = binding;
+function synchronizeChannel(state: GenerationState, binding: PhysicalChannel) {
   const work = state.physical!,
     map = work.map,
     name = binding.name;
-  const before = name === "elevation" ? state.society!.elevationBefore : undefined;
+  const before = name === "Elevation" ? state.society!.elevationBefore : undefined;
   const surface = changedSurface(state, name, before),
     at = fieldInterpolator(surface, name),
-    values = map[binding.native],
+    values = map[name],
     integer = values.type === "int32";
   for (let i = 0; i < map.mesh.count; i++) {
     const sample = at(nativePosition(work, i));
     if (before && sample === 0) continue;
-    const value = before
-      ? values.get(i) + sample / scale
-      : (sample - offset) / scale + (binding.datum ? map.BaseSeaLevel : 0);
-    synchronizeValue(map, binding.native, i, integer ? Math.round(value) : value);
+    const value = before ? values.get(i) + sample : sample;
+    synchronizeValue(map, name, i, integer ? Math.round(value) : value);
   }
-  if (surface !== state.surface) state.surface.coverage.release(surface.channels[name]);
+  if (surface !== state.surface) state.surface.coverage.release(surface.channels[name]!);
 }
 function synchronizeValue(
   map: PhysicalField,
-  name: ChannelBinding["native"],
+  name: PhysicalChannel["name"],
   i: number,
   value: number
 ) {
@@ -89,9 +87,9 @@ function synchronizeValue(
   else if (isMutablePhysicalName(name)) map[name].set(i, value);
   else throw new Error(`Society ground change requires an owner operation: ${name}`);
 }
-function changedSurface(state: GenerationState, name: string, before?: Band) {
+function changedSurface(state: GenerationState, name: FieldChannelName, before?: Band) {
   if (!before) return state.surface;
-  const current = state.surface.channels[name];
+  const current = state.surface.channels[name]!;
   return {
     ...state.surface,
     channels: {
@@ -105,36 +103,44 @@ function changedSurface(state: GenerationState, name: string, before?: Band) {
 }
 function refreshWater(state: GenerationState, context: MapProcessContext) {
   const work = state.physical!,
-    bound = generationBindings(context);
-  const c = physicalContext(bound.seed, 0, work.profile);
-  c.SeaLevelOffset = MapScale.metres(work.map.EffectiveSeaLevel - work.map.BaseSeaLevel, "native");
-  if (work.map.EngineeredDams) releaseWorking(work.map, work.map.EngineeredDams);
-  let dams: Band | null = null;
-  for (const i of engineeredDamCells(state))
-    (dams ??= retainedArray(work.map, "uint8", "engineered-dams")).set(i, 1);
-  work.map.EngineeredDams = dams;
-  // Repair present dependencies only. No tectonic motion, incision epochs or new geological events.
-  for (const operation of [
-    oceanConnectivity,
-    bathymetry,
-    oceanDistance,
-    oceanCurrents,
-    drainageConditioning,
-    (map: PhysicalField) => lakeBasins(map, c),
-    drainageGuidance,
-    flowRouting,
-    (map: PhysicalField) => riverNetwork(map, c),
-    riverChannelGeometry,
-  ])
-    operation(work.map, c);
+    c = nativeContext(state, context, 0);
+  runOperation(processOwner(state), markEngineeredDams, state);
+  for (const process of [oceanRead, seaFloorZones, shoreDistance, currents, channelForm])
+    readOperation(work.map, process.operation, { map: work.map, context: c });
 }
+const markEngineeredDams = defineCommand(
+  "human.dam-constraints",
+  "work",
+  (state: GenerationState) => {
+    const work = state.physical!;
+    if (work.map.EngineeredDams) releaseWorking(work.map, work.map.EngineeredDams);
+    let dams: Band | null = null;
+    for (const i of engineeredDamCells(state))
+      (dams ??= retainedArray(work.map, "uint8", "engineered-dams")).set(i, 1);
+    work.map.EngineeredDams = dams;
+  },
+  []
+);
 function* engineeredDamCells(state: GenerationState) {
   for (const work of state.society!.region.works) {
     if (work.kind !== "dam" || work.condition <= 0.1) continue;
     for (const { i } of workSamples(state, work)) yield state.physical!.samples.get(i);
   }
 }
-export function refreshSocietyEnvironment(
+export const refreshSocietyEnvironment = mapCommand(
+  "human.environment-current",
+  "event",
+  (state, context) => settleEnvironment(state, context, 0),
+  []
+);
+export const advanceSocietyEnvironment = defineCommand(
+  "human.environment",
+  "elapsed",
+  ({ state, context, years, publish }: SocietyInput) =>
+    settleEnvironment(state, context, years, publish),
+  []
+);
+function settleEnvironment(
   state: GenerationState,
   context: MapProcessContext,
   years: number,
@@ -142,7 +148,7 @@ export function refreshSocietyEnvironment(
 ) {
   const society = state.society!;
   if ((society.inherited && !society.changed.size) || !context.inputs?.features) return;
-  const available = new Set(Object.keys(state.surface.channels));
+  const available = new Set(Object.keys(state.surface.channels).map(fieldChannelName));
   ensureEnvironmentalWorkspace(state, context, available);
   const waterChanged = state.physical
     ? refreshNative(state, context, years, available, publish)
@@ -153,8 +159,8 @@ export function refreshSocietyEnvironment(
     society.river = channelAccess(state);
     society.coast = coastalFishery(state);
   }
-  if (society.mediumChanged.has("elevation") || society.connectionsDirty)
-    refreshSocietyConnections(state);
+  if (society.mediumChanged.has("Elevation") || society.connectionsDirty)
+    runOperation(processOwner(state), refreshSocietyConnections, state);
   refreshSocietySupport(state);
   society.changed.clear();
   society.mediumChanged.clear();
@@ -169,34 +175,40 @@ function refreshNative(
   state: GenerationState,
   context: MapProcessContext,
   years: number,
-  available: Set<string>,
+  available: Set<FieldChannelName>,
   publish: boolean
 ) {
-  synchronizeNative(state);
-  const water = refreshWaterWhenCaused(state, context, available, publish);
-  if (available.has("flow")) irrigateChannels(state);
+  const owner = processOwner(state);
+  runOperation(owner, synchronizeNative, state);
+  const waterChanged = waterNeedsRefresh(state, available, publish);
+  if (waterChanged) runOperation(owner, refreshWaterWhenCaused, { state, context, publish });
+  if (available.has("FlowAccumulation")) {
+    runOperation(owner, irrigateChannels, state);
+    const work = state.physical!,
+      c = nativeContext(state, context, 0);
+    readOperation(work.map, rivers.operation, { map: work.map, context: c });
+  }
   refreshMagicPathways(state, context);
-  if (available.has("productivity")) advanceHumanEcology(state, context, years);
-  projectNative(
+  if (available.has("Productivity") && years > 0)
+    runOperation(processOwner(state), advanceHumanEcology, { state, context, years });
+  runOperation(owner, projectNative, {
     state,
-    false,
-    false,
-    atlasChannels.filter((b) => available.has(b.name)),
-    available
-  );
+    channels: physicalChannels.filter((b) => available.has(b.name)),
+    selectedChannels: available,
+  });
   // Numerical feedback runs every cycle; GIS extraction is only needed at publication, and a
   // round inside an earlier epoch publishes nothing: the epoch's own extraction follows.
   if (publish && !state.society!.round) publishEnvironmentalChanges(state, context, available);
-  return water.refreshed || available.has("flow");
+  return waterChanged || available.has("FlowAccumulation");
 }
 /** Keep scalar units registered when an authored work operates on an inherited field. */
 function registerChangedUnits(state: GenerationState) {
   for (const name of state.society!.changed) {
-    const values = state.surface.channels[name];
+    const values = state.surface.channels[name]!;
     putChannel(
       state.surface,
       name,
-      state.surface.units[name],
+      state.surface.units[name]!,
       values,
       state.surface.quantities?.[name]
     );
@@ -206,28 +218,29 @@ function registerChangedUnits(state: GenerationState) {
  * Water re-routes when a work changed the terrain, not when a practice warmed its seat
  * (ADR 0005). At the era's end the World also tries its dam demands against the water model.
  */
-function refreshWaterWhenCaused(
-  state: GenerationState,
-  context: MapProcessContext,
-  available: Set<string>,
-  publish: boolean
-) {
+function waterNeedsRefresh(state: GenerationState, available: Set<string>, publish: boolean) {
   const society = state.society!;
-  const terrainChanged = society.mediumChanged.has("elevation"),
+  const terrainChanged = society.mediumChanged.has("Elevation"),
     realizing = publish && !society.round && isWorldSociety(state);
-  if (!available.has("water") || !(terrainChanged || realizing))
-    return { oceanChanged: false, refreshed: false };
-  const map = state.physical!.map,
-    codes = map.WaterKindCodes,
-    wasOcean = map.coverage.copyBand(codes);
-  if (realizing) realizeWorldDams(state, context);
-  else refreshWater(state, context);
-  let oceanChanged = false;
-  for (let i = 0; i < codes.length && !oceanChanged; i++)
-    oceanChanged = (codes.get(i) === 1) !== (wasOcean.get(i) === 1);
-  map.coverage.release(wasOcean);
-  return { oceanChanged, refreshed: true };
+  return available.has("WaterKindCodes") && (terrainChanged || realizing);
 }
+const refreshWaterWhenCaused = defineCommand(
+  "human.water-current",
+  "work",
+  ({
+    state,
+    context,
+    publish,
+  }: {
+    state: GenerationState;
+    context: MapProcessContext;
+    publish: boolean;
+  }) => {
+    if (publish && !state.society!.round && isWorldSociety(state)) realizeWorldDams(state, context);
+    else refreshWater(state, context);
+  },
+  []
+);
 /**
  * The resolution rule applied to the one structure World can measure. At the era's end each
  * dam demand is tried on its unit's strongest channel cell: when the impoundment the water
@@ -285,7 +298,7 @@ function ensureEnvironmentalWorkspace(
   context: MapProcessContext,
   available: Set<string>
 ) {
-  if (state.physical || !(available.has("productivity") || available.has("water"))) return;
+  if (state.physical || !(available.has("Productivity") || available.has("WaterKindCodes"))) return;
   const bound = generationBindings(context);
   state.physical = createAtlasWorkspace(
     state,
@@ -339,50 +352,56 @@ function publishEnvironmentalChanges(
   dropReplaceableFeatures(state);
   const drainage = world.drainage?.[area];
   const ocean = state.surface.ocean;
-  extractNativeGeography(state, context, {
-    oceans: false,
-    impacts: false,
-    volcanism: false,
-    fractures: false,
-    lakes: available.has("water") && has("rivers"),
-    landforms: false,
-    ecology: available.has("productivity") && has("ecology"),
-    rivers: available.has("riverOrder"),
-    landmarks: false,
+  runOperation(processOwner(state), extractNativeGeography, {
+    state,
+    context,
+    deliveries: {
+      oceans: false,
+      impacts: false,
+      volcanism: false,
+      fractures: false,
+      lakes: available.has("WaterKindCodes") && has("rivers"),
+      landforms: false,
+      ecology: available.has("Productivity") && has("ecology"),
+      rivers: available.has("RiverOrders"),
+      landmarks: false,
+    },
   });
   refreshOceans(
     state,
     ocean,
     generationBindings(context).features.selection["ocean.geography"]?.enabled === true
   );
-  if (!available.has("riverOrder") && drainage) world.drainage![area] = drainage;
+  if (!available.has("RiverOrders") && drainage) world.drainage![area] = drainage;
 }
 function refreshMagicPathways(state: GenerationState, context: MapProcessContext) {
-  const work = state.physical!;
-  const bound = generationBindings(context);
-  if (!work.magic) {
+  if (!state.physical!.magic) executeMapOperation(preparePresentMagic, state, context);
+  // Current reads follow initialization and each independent material command.
+  const touched = state.society!.magicTouched;
+  executeMapOperation(evaluateSocietyMagic, state, context);
+  touched?.clear();
+  executeMapOperation(classifyCurrentMagic, state, context);
+  if (Object.keys(state.surface.channels).some((name) => name.startsWith("magic:")))
+    executeMapOperation(publishCurrentMagic, state, context);
+}
+const preparePresentMagic = mapCommand(
+  "human.magic-initialize",
+  "initialize",
+  (state, context) => {
+    const bound = generationBindings(context);
     const inherited = Object.keys(state.surface.channels).some((name) => name.startsWith("magic:"));
     if (bound.features.selection["magic.configured"]?.enabled === false && !inherited)
-      initializeMagic(state, false);
+      runOperation(processOwner(state), initializeMagicWorkspace, { state, enabled: false });
     else restorePresentMagic(state);
-  }
-  const seed = bound.seed;
-  // The society phase: systems made of what people did, and systems whose stocks people
-  // drew or deposited this cycle (cracked cores at a forge, planted seed, cleared sap).
-  const touched = state.society!.magicTouched;
-  evaluateSocietyMagic(state, context, touched);
-  touched?.clear();
-  // Reclassify current interaction conditions; this does not create or replay a historical event.
-  classifyMagicFeatures(state, seed);
-  if (Object.keys(state.surface.channels).some((name) => name.startsWith("magic:")))
-    projectMagic(state);
-}
+  },
+  []
+);
 function restorePresentMagic(state: GenerationState) {
-  initializeMagic(state);
+  runOperation(processOwner(state), initializeMagicWorkspace, { state });
   const work = state.physical!;
   for (const field of work.magic!.fields)
     for (const channel of magicChannels) {
-      const name = `magic:${field.definition.id}:${channel}`;
+      const name = `magic:${field.definition.id}:${channel}` as const;
       if (!state.surface.channels[name]) continue;
       const at = fieldInterpolator(state.surface, name);
       for (let i = 0; i < work.map.mesh.count; i++)

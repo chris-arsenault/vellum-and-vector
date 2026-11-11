@@ -9,19 +9,117 @@ import { createWorldMesh } from "./world/worldMesh";
 import { physicalProfile } from "./world/profile";
 import { landscape } from "./mapFixtures";
 import { MapProcessRegistry } from "./process";
-import { executeProcessBehavior } from "./processTraits";
+import { executeMapOperation } from "./processTraits";
 import { worldGenerationSettings } from "./generationSettings";
 import { atlasConfiguration } from "./atlasWorkflow";
 import { sequenceStages } from "./sequence";
 import { allSteps, physicalSteps, withPlateDeformation } from "./world/physicalSteps";
 import { physicalContext } from "./world/context";
 import { respondersTo, type AnswerKey } from "./coupling/answers";
+import type { FeatureContributionContext } from "./features";
+import { atlasGenerationModules } from "./generationModules";
+import { bindFeatureQueries } from "./physicalFeatureSequence";
+import { fieldQuery } from "./processes/builder";
+import { defineCommand, readOperation } from "./processOperation";
+import type { PhysicalInput } from "./processes/groundProcess";
+
+it("installs selected module-owned query implementations without editing built-in consumers", () => {
+  const read = vi.fn(),
+    operation = fieldQuery(
+      { id: "extension-read", statement: "Supplied module query.", execute: read },
+      []
+    );
+  const feature = physicalFeature("test.query-extension", "Extension", {
+    "present.landforms": [step("extension-read", 7, operation)],
+  });
+  atlasGenerationModules.register({ id: "test.query-extension", features: [feature] });
+  try {
+    const map = createField(createWorldMesh([0, 0, 1000, 1000], 16, 0));
+    const selected = resolveGenerationFeatures([feature], {}, {}, ["physical"]);
+    bindFeatureQueries(map, selected, 1);
+    const profile = map.scale.resolve(physicalProfile);
+    readOperation(map, operation.operation, {
+      map,
+      context: physicalContext(1, 91, profile, null, 2),
+    });
+    expect(read).toHaveBeenCalledOnce();
+    const expected = physicalContext(1, 7, profile, null, 2);
+    expect(read).toHaveBeenCalledWith({
+      map,
+      context: expect.objectContaining({
+        Seed: expected.Seed,
+        EpochStableSeed: expected.EpochStableSeed,
+        EpochIndex: 2,
+        Profile: profile,
+        Span: 0,
+      }),
+    });
+  } finally {
+    atlasGenerationModules.unregister("test.query-extension");
+  }
+});
+
+it("selects shared, specialized and captured operations through the same feature contract", () => {
+  const captured = physicalFeature(
+      "test.captured",
+      "Captured",
+      { "formation.foundation": ["formation"] },
+      { regional: { kind: "captured" } }
+    ),
+    specialized = physicalFeature(
+      "test.local",
+      "Local",
+      { "climate.atmosphere": ["climate"], "water.routing": ["routing"] },
+      {
+        regional: {
+          kind: "specialized",
+          operations: { "climate.atmosphere": ["refinement.climate"] },
+        },
+      }
+    ),
+    definitions = [captured, specialized],
+    resolved = resolveGenerationFeatures(definitions, {}, {}, ["physical"]),
+    source = landscape().domain,
+    context: FeatureContributionContext = {
+      source,
+      input: { areaId: source.scope.areaId, seed: 1, quality: "draft", domains: ["physical"] },
+      resolved,
+      execution: "regional",
+    },
+    processes = (feature: typeof captured, slot: string, selected = resolved) =>
+      featureContribution(feature, slot, selected, { ...context, resolved: selected }).map(
+        (node) => (node.kind === "process" ? node.process : "epochs")
+      );
+  expect(processes(captured, "formation.foundation")).toEqual([]);
+  expect(processes(specialized, "climate.atmosphere")).toEqual(["refinement.climate"]);
+  expect(processes(specialized, "water.routing")).toEqual(["atlas.routing"]);
+  expect(
+    featureContribution(specialized, "climate.atmosphere", resolved, {
+      ...context,
+      execution: "world",
+    })
+  ).toEqual([expect.objectContaining({ process: "atlas.climate" })]);
+  expect(
+    processes(
+      specialized,
+      "climate.atmosphere",
+      resolveGenerationFeatures(definitions, { "test.local": { enabled: false } }, {}, ["physical"])
+    )
+  ).toEqual([]);
+});
 
 it("passes the movement interval and operation salt to embedded deformation", () => {
   const run = vi.fn(),
     map = createField(createWorldMesh([0, 0, 1000, 1000], 16, 0)),
     context = physicalContext(73, 0, map.scale.resolve(physicalProfile)),
-    moving = withPlateDeformation(map, context, [["probe", 7, run, []]]);
+    moving = withPlateDeformation(map, context, [
+      [
+        "probe",
+        7,
+        defineCommand("probe", "event", ({ map, context }: PhysicalInput) => run(map, context), []),
+        [],
+      ],
+    ]);
   moving.DuringPlateStep!({ ...context, Span: 0.125, TectonicDurationMyr: 2.5 });
   expect(run).toHaveBeenCalledWith(
     map,
@@ -82,10 +180,11 @@ it("dispatches a selected native feature through the registry derived from its o
       asks: [],
       moves: [],
       settings: {},
-      run,
+      prepare: () => ({}),
+      execute: run,
     }),
     feature = physicalFeature("test.native", "Native probe", {
-      "epoch.incision": [[step("probe-step", 7, probe), { unforced: true }]],
+      "epoch.incision": [[step("probe-step", 7, probe), { initial: true }]],
     }),
     resolve = (enabled: boolean) =>
       resolveGenerationFeatures([feature], { "test.native": { enabled } }, {}, ["physical"]),
@@ -120,8 +219,7 @@ it("dispatches a selected native feature through the registry derived from its o
     fixed: [],
     inherited: false,
   };
-  map.ExternalHeatForcing.fill(1);
-  await executeProcessBehavior(registry.get(invocation.process, invocation.version), state, {
+  await executeMapOperation(registry.get(invocation.process, invocation.version).operation, state, {
     scope: state.domain.scope,
     invocation: [invocation.id],
     parameters: invocation.parameters ?? {},
@@ -144,5 +242,5 @@ it("dispatches a selected native feature through the registry derived from its o
       field: map,
     })
   );
-  expect(map.ExternalHeatForcing.get(0)).toBe(0);
+  expect(invocation.parameters).toEqual({ initial: true });
 });

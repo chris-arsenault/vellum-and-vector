@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   createGrid,
+  requireChannel,
   generateChannel,
   putChannel,
   rectangle,
@@ -29,15 +30,15 @@ function fixture() {
     );
     putChannel(
       grid,
-      "elevation",
-      "metre",
-      generateChannel(grid, "elevation", () => elevation)
+      "Elevation",
+      "native-length",
+      generateChannel(grid, "Elevation", () => elevation)
     );
     putChannel(
       grid,
-      "stock",
+      "magic:fire:retained",
       "amount",
-      generateChannel(grid, "stock", (i) => grid.measures.get(i) * 2),
+      generateChannel(grid, "magic:fire:retained", (i) => grid.measures.get(i) * 2),
       "extensive"
     );
     domain.numerical[id] = grid;
@@ -48,7 +49,7 @@ function fixture() {
       samples: grid.active.length,
       algorithm: "fixture",
       source: { kind: "operation", id: "fixture" },
-      channels: ["elevation", "stock"],
+      channels: ["Elevation", "magic:fire:retained"],
     });
     return grid;
   };
@@ -61,9 +62,9 @@ it("selects finest ancestor inputs regardless of field order, excluding overlapp
   add("neighbor", "neighbor", 33, 999);
   add("self", "child", 33, 888);
   const channels = regionalInputChannels(regionalInputFields(domain, "child"));
-  expect(channels.get("elevation")!.id).toBe("fine");
+  expect(channels.get("Elevation")!.id).toBe("fine");
   expect(
-    regionalInputChannels(regionalInputFields(domain, "child", false)).get("elevation")!.id
+    regionalInputChannels(regionalInputFields(domain, "child", false)).get("Elevation")!.id
   ).toBe("self");
 });
 it("transfers amounts by physical area and resolves recursively within the same map profile", () => {
@@ -77,12 +78,16 @@ it("transfers amounts by physical area and resolves recursively within the same 
       9
     );
   resampleChannels(source, target);
-  expect(Array.from(target.channels.stock).reduce((sum, amount) => sum + amount, 0)).toBeCloseTo(
-    4_000_000,
-    6
+  expect(
+    Array.from(requireChannel(target, "magic:fire:retained")).reduce(
+      (sum, amount) => sum + amount,
+      0
+    )
+  ).toBeCloseTo(4_000_000, 6);
+  expect(Array.from(requireChannel(target, "Elevation")).every((height) => height === 200)).toBe(
+    true
   );
-  expect(Array.from(target.channels.elevation).every((height) => height === 200)).toBe(true);
-  expect(target.quantities!.stock).toBe("extensive");
+  expect(target.quantities!["magic:fire:retained"]).toBe("extensive");
   expect(resolution.cellSpan).toBeLessThan(source.scope.resolution!);
   domain.world.areas.nested = {
     ...domain.world.areas.child,
@@ -95,5 +100,7 @@ it("transfers amounts by physical area and resolves recursively within the same 
   expect(regionalResolution(domain, "nested", "standard").cellSpan).toBeLessThan(
     resolution.cellSpan
   );
-  expect(domain.numerical.parent.channels.stock).toEqual(source.channels.stock);
+  expect(domain.numerical.parent.channels["magic:fire:retained"]).toEqual(
+    source.channels["magic:fire:retained"]
+  );
 });

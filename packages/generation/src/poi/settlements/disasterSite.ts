@@ -1,5 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { MapScale, type AtlasFeature } from "@atlas/domain";
+import { MapScale, type SocietyEvent } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import {
@@ -12,7 +12,12 @@ import {
   waveShore,
 } from "../../societyHazards";
 import { carryWhereItLands, stays } from "../poiCarry";
-import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
+import {
+  notApplicable,
+  type PoiEntry,
+  type PoiPhysicalChange,
+  type PoiPlace,
+} from "../poiContract";
 import { holdsRecord, namingCultureNear } from "../poiPlaces";
 import {
   cellSpan,
@@ -25,11 +30,10 @@ import {
   toNative,
 } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
-import { onceWritten } from "./communityRecords";
+import { cellOf, onceWritten } from "./communityRecords";
 import {
   attribute,
   avoidedGround,
-  damagedGround,
   deadAreRecorded,
   deadOf,
   eventFate,
@@ -50,7 +54,11 @@ const remembered = 1000;
 /** The dead and displaced at which a disaster is half as great as disasters get. */
 const typicalLoss = 3000;
 /** What each kind of disaster leaves on the ground, in metres, at full strength. */
-const deposit: Record<string, number> = { avalanche: 5, flood: 0.5, tsunami: 1 };
+const deposit = {
+  avalanche: MapScale.length(1.25e-6),
+  flood: MapScale.length(1.25e-7),
+  tsunami: MapScale.length(2.5e-7),
+};
 /** A fracture event leaves the rock this much more conductive, per mille, at full strength. */
 const cracked: Record<string, number> = { "thermal-fracture": 900, "steam-fracture": 900 };
 /** The share of living cover a disaster's ground loses at full strength. */
@@ -91,26 +99,24 @@ const factors = {
   isolation: aloneAmong(places, reachOf),
   cultural: attachment(reachOf),
 };
-const asPlace = (feature: AtlasFeature, cell: number): PoiPlace => ({
-  id: feature.id,
-  kind: "disasterSite",
-  cells: [cell],
-  anchor: cell,
-  feature,
-});
-/** What it left in the ground: debris, silt or a sand sheet, and cracked rock. */
-function scar(place: PoiPlace): readonly PoiFieldChange[] {
-  const kind = eventKindOf(place),
-    strength = eventMagnitude(place),
-    cell = place.anchor;
+/** A new event requests work once; subsequent queries read the ground that survives it. */
+export function disasterChanges(
+  event: Pick<SocietyEvent, "kind" | "magnitude">,
+  cell: number,
+  scale: MapScale
+): readonly PoiPhysicalChange[] {
+  if (cell < 0) return [];
+  const { kind } = event,
+    strength = Math.min(1, Math.max(0, event.magnitude)),
+    depth = deposit[kind as keyof typeof deposit];
   return [
-    ...(deposit[kind]
+    ...(depth
       ? ([
           {
             change: "atLeast",
             band: "SedimentThickness",
             cell,
-            value: toNative(deposit[kind] * strength),
+            value: toNative(scale.resolveMeasure(depth) * strength),
           },
         ] as const)
       : []),
@@ -119,6 +125,10 @@ function scar(place: PoiPlace): readonly PoiFieldChange[] {
           { change: "atLeast", band: "FractureConductance", cell, value: cracked[kind] * strength },
         ] as const)
       : []),
+    ...(kind === "pressure-ice-breach"
+      ? [{ change: "atMost", band: "IceThickness", cell, value: 0 } as const]
+      : []),
+    { change: "atLeast", band: "EcologicalDamage", cell, value: scoured * strength },
   ];
 }
 /** Wreck on the road: worst at the anchor, gone at the edge of what it struck, or where salted. */
@@ -136,6 +146,11 @@ export const disasterSite: PoiEntry = {
   id: "disasterSite",
   group: "settlements",
   name: "Disaster site",
+  event: {
+    accepts: (event) => !eventsNotDisasters.includes(event.kind),
+    changes: (state, event) =>
+      disasterChanges(event, cellOf(state, event.position), mapScale(state)),
+  },
   recognition: {
     distinct:
       "A society event that is neither siege nor collapse: avalanche, flood, tsunami, or a magical meeting's hazard such as thermal-fracture, steam-fracture, pressure-ice-breach, rot-fever or undead. A battlefield is the same record at siege; collapse is a polity's end with no ground in it. A rogue wave's impact or a crater are the field's own marks with no event record.",
@@ -161,23 +176,20 @@ export const disasterSite: PoiEntry = {
   },
   fields: {
     statement:
-      "A disaster leaves a one-time mark: debris, silt or a sand sheet in the ground, rock cracked by a fracture, ice opened by a breach, cover scoured, and its dead in the band Salt reads. The mark is held at what the event left, never added to again.",
-    terrain: (_state, place) => scar(place),
-    water: (_state, place) =>
-      eventKindOf(place) === "pressure-ice-breach"
-        ? [{ change: "atMost", band: "IceThickness", cell: place.anchor, value: 0 }]
-        : [],
+      "The event command leaves its mark once. Ground, ice and ecological state carry the aftermath; the historical place maintains no material constraints.",
+    terrain: notApplicable("The completed event's debris and fractures are retained ground."),
+    water: notApplicable("An old breach does not remove newly formed ice."),
     climate: notApplicable(
       "Each is over within a season, and the climate field carries no such short forcing."
     ),
-    cover: (_state, place) => damagedGround(place, scoured),
+    cover: notApplicable("The event damaged cover once; later ecological recovery is free."),
     magic: notApplicable(deadAreRecorded),
   },
   acrossMaps: {
     statement:
-      "A captured disaster keeps its place on the refined map, its mark and dead landing on the finer cell it reaches, whatever the ground has become there. Its affected area is not re-derived from the finer terrain.",
+      "A captured disaster keeps its historical location and affected area. Captured ground and ecological state carry its surviving mark; refinement does not repeat the event.",
     carry: carryWhereItLands,
-    realize: (_state, carried) => scar(asPlace(carried.feature, carried.cell)),
+    realize: notApplicable("The retained material already carries any surviving event mark."),
     counterpart: (_state, carried) => carried.cell,
     unrealized: stays,
     settle: notApplicable("What has happened does not move with a round's water."),
@@ -196,7 +208,10 @@ export const disasterSite: PoiEntry = {
       "It lays down dead for Salt and takes nothing from any carrier; the brine rides the crust by Salt's own rule."
     ),
     links: notApplicable("A disaster joins nothing."),
-    crosses: (_state, place) => (eventKindOf(place) === "pressure-ice-breach" ? ["ice"] : []),
+    crosses: (state, place) =>
+      eventKindOf(place) === "pressure-ice-breach" && iceAt(state, place.anchor) === 0
+        ? ["ice"]
+        : [],
   },
   others: {
     statement:

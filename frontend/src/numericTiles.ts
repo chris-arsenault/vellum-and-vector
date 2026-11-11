@@ -3,6 +3,8 @@ import {
   fieldInterpolator,
   fieldPosition,
   adaptivePointLocator,
+  MapScale,
+  type FieldChannelName,
   type AdaptivePointLocator,
   type Bounds,
   type Position,
@@ -22,7 +24,7 @@ import { polygonTileMask } from "./tileMask";
 /** On an adaptive field without terrain edits, the display height is the physical height. */
 function displayHeight(raster: LoadedRaster, locate: AdaptivePointLocator) {
   const field = raster.field,
-    edited = (field.overlays ?? []).some((overlay) => overlay.channels.includes("elevation"));
+    edited = (field.overlays ?? []).some((overlay) => overlay.channels.includes("Elevation"));
   return field.topology && !edited ? null : terrainDisplaySampler(field, locate);
 }
 /** Cells narrower than this many pixels show their stored value. */
@@ -35,7 +37,7 @@ type Reading = (p: Position) => number;
  */
 function pixelScaled(
   grid: GridSurface | undefined,
-  channel: string,
+  channel: FieldChannelName,
   locate: AdaptivePointLocator,
   smooth: Reading
 ): (pixel: number) => Reading {
@@ -61,9 +63,9 @@ function terrainAt(raster: LoadedRaster, locate: AdaptivePointLocator) {
   const water = tileWater(raster, locate);
   const ice = pixelScaled(
     raster.ice,
-    "ice",
+    "IceThickness",
     locate,
-    raster.ice ? fieldInterpolator(raster.ice, "ice", false, locate) : () => 0
+    raster.ice ? fieldInterpolator(raster.ice, "IceThickness", false, locate) : () => 0
   );
   const finalSurface = surfaceAt(raster, "finalSurface", locate),
     naturalSurface = surfaceAt(raster, "naturalSurface", locate),
@@ -76,11 +78,11 @@ function terrainAt(raster: LoadedRaster, locate: AdaptivePointLocator) {
       natural = naturalSurface(step);
     return (values: Float32Array, at: number, pixel: number, p: Position, height: number) => {
       waterAt(values, at + 2, pixel, p, height);
-      values[at + 4] = Math.min(1, iceAt(p));
+      values[at + 4] = Math.min(1, iceAt(p) / 1000);
       values[at + 5] = step;
       values[at + 6] = surface(p);
       values[at + 7] = natural(p);
-      values[at + 8] = display ? display(p) : height;
+      values[at + 8] = MapScale.metres(display ? display(p) : height, "native");
     };
   };
 }
@@ -95,7 +97,7 @@ function chartFold(wrap?: number[]): Fold | undefined {
 /** Surface class for the base map; -1 where no classification exists. */
 function surfaceAt(
   raster: LoadedRaster,
-  channel: string,
+  channel: FieldChannelName,
   locate: AdaptivePointLocator
 ): (pixel: number) => Reading {
   if (!raster.surface?.channels[channel]) return () => () => -1;
@@ -163,7 +165,7 @@ export function numericTileSampler(raster: LoadedRaster) {
       : fieldInterpolator(raster.field, raster.channel, false, locate)
   );
   const active = activeSampler(raster.field, raster.channel, locate);
-  const terrain = raster.channel === "elevation" ? terrainAt(raster, locate) : null;
+  const terrain = raster.channel === "Elevation" ? terrainAt(raster, locate) : null;
   const bands = terrain ? terrainSampleBands : 3;
   return (extent: number[], size: number, own?: TileGeography) => {
     const values = new Float32Array(size * size * bands);
@@ -208,7 +210,7 @@ export function numericTileSource(
     tileGrid,
     tileSize: 256,
     gutter: 1,
-    bandCount: raster.channel === "elevation" ? terrainSampleBands + 2 : 3,
+    bandCount: raster.channel === "Elevation" ? terrainSampleBands + 2 : 3,
     interpolate: !categorical(raster),
     transition: 0,
     wrapX: projection.canWrapX(),
@@ -226,7 +228,7 @@ export function numericTileSource(
 /** Per tile, the overlays that reach it; a covering overlay answers the whole tile. */
 function activeSampler(
   grid: GridSurface,
-  channel: string,
+  channel: FieldChannelName,
   locate: AdaptivePointLocator
 ): (extent: Bounds) => (p: Position) => boolean {
   const overlays = (grid.overlays ?? [])

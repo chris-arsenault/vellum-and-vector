@@ -5,6 +5,8 @@ import {
   foldSamples,
   type Band,
   type Grid,
+  type FieldChannelName,
+  channelUnit,
 } from "@atlas/domain";
 import type { FieldSummary, GenerationState } from "./process";
 
@@ -15,7 +17,7 @@ export function surfaceValues(state: GenerationState, name: string, at: (i: numb
   return fillBand(surfaceArray(state, name), at);
 }
 
-export function requireChannel(grid: Grid, name: string, unit: string): Band {
+export function requireChannel(grid: Grid, name: FieldChannelName, unit: string): Band {
   const values = grid.channels[name];
   requireThat(
     values &&
@@ -28,8 +30,9 @@ export function requireChannel(grid: Grid, name: string, unit: string): Band {
   return values;
 }
 
-export function summarizeChannel(grid: Grid, name: string): FieldSummary {
-  const values = requireChannel(grid, name, grid.units[name]);
+export function summarizeChannel(grid: Grid, name: FieldChannelName): FieldSummary {
+  const unit = channelUnit(grid, name);
+  const values = requireChannel(grid, name, unit);
   let minimum = Infinity,
     maximum = -Infinity,
     total = 0,
@@ -44,7 +47,7 @@ export function summarizeChannel(grid: Grid, name: string): FieldSummary {
     area += measure;
   }
   requireThat(area > 0, "physical_extent", "Physical summaries need a positive mapped area.");
-  return { unit: grid.units[name], minimum, maximum, mean: total / area };
+  return { unit, minimum, maximum, mean: total / area };
 }
 
 export function integratedDepth(grid: Grid, values: Band): number {

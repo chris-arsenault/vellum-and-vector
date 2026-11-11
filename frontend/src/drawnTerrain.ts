@@ -2,7 +2,7 @@ import Feature from "ol/Feature.js";
 import Point from "ol/geom/Point.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import { Fill, Stroke, Style } from "ol/style.js";
-import { fieldInterpolator, spatial, presentedFeatureStyle } from "@atlas/domain";
+import { fieldInterpolator, spatial, presentedFeatureStyle, MapScale } from "@atlas/domain";
 import type { Geometry, Point as GeoPoint } from "geojson";
 import type { LoadedDrawnMapInput as DrawnMapInput } from "./drawnMap";
 import { drawnIcon, type DrawnIconKind } from "./drawnSymbols";
@@ -112,7 +112,7 @@ function markAt({
     return {
       coordinate: [p.x, p.y],
       kind: "mountain",
-      size: 18 + Math.round(10 * Math.min(1, elevation / 4000)),
+      size: 18 + Math.round(10 * Math.min(1, MapScale.metres(elevation, "native") / 4000)),
     };
   const biome = forests.find((f) => f.covers(p));
   if (biome)
@@ -128,14 +128,14 @@ function mountainAt(
   elevation: number,
   step: number
 ) {
-  if (elevation < illustratedMountainHeightMetres) return false;
+  if (MapScale.metres(elevation, "native") < illustratedMountainHeightMetres) return false;
   const neighbors = [
     [-step, 0],
     [step, 0],
     [0, step],
     [0, -step],
   ].map(([dx, dy]) => height({ ...p, x: p.x + dx, y: p.y + dy }));
-  return elevation - Math.min(...neighbors) >= illustratedReliefMetres;
+  return MapScale.metres(elevation - Math.min(...neighbors), "native") >= illustratedReliefMetres;
 }
 function terrainSamplers(input: DrawnMapInput) {
   return input.base
@@ -143,13 +143,13 @@ function terrainSamplers(input: DrawnMapInput) {
     .reverse()
     .map((r) => ({
       covers: spatial.pointCoverage(r.footprint),
-      height: fieldInterpolator(r.field, "elevation"),
+      height: fieldInterpolator(r.field, "Elevation"),
       water: terrainWater(r),
       tree: treeSampler(input.rasters, r),
     }));
 }
 function treeSampler(rasters: Raster[], base: Raster) {
-  const trees = rasters.find((r) => r.areaId === base.areaId && r.channel === "treeCover");
+  const trees = rasters.find((r) => r.areaId === base.areaId && r.channel === "TreeCover");
   return trees ? fieldInterpolator(trees.field, trees.channel) : null;
 }
 function biomeCover(input: DrawnMapInput) {

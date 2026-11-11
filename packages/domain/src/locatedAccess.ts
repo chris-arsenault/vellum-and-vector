@@ -6,6 +6,7 @@ import { areaSpace } from "./composition";
 import { boundaryRings, sampleFields } from "./boundaryContracts";
 import { upsertArea } from "./authoringBasics";
 import { requireThat } from "./errors";
+import { MapScale } from "./mapScale";
 
 function entryMarker(
   id: string,
@@ -56,7 +57,10 @@ export function addLocatedAccess(
   const location = { x: (a[0] + b[0]) / 2, y: (a[1] + b[1]) / 2, z: area.frame.origin.z };
   const outside = {
     ...location,
-    z: sampleFields(snapshot, location).elevation ?? parent.frame.origin.z,
+    z: MapScale.metres(
+      sampleFields(snapshot, location).Elevation ?? MapScale.native(parent.frame.origin.z),
+      "native"
+    ),
   };
   const source = semanticId(world, "access-feature", `${area.id}:parent`),
     target = semanticId(world, "access-feature", `${area.id}:inside`);

@@ -6,7 +6,7 @@ import { releaseWorking, workingValues } from "../world/physicalNumerics";
 import type { FlowCause } from "../coupling/flows";
 import { displaceGround, raiseFromCrust, shiftRock } from "./groundLedger";
 import { columnSize, layerDepth, readLayer, setLayer } from "./rockColumn";
-import { columnFields, columns } from "./rockLayerFields";
+import { columnFields, columns } from "@atlas/domain";
 import { facetShare, projectGround } from "./groundShares";
 import { materialFact } from "./groundQuery";
 import { groundStorage } from "./groundStorage";

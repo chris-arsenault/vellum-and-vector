@@ -1,5 +1,6 @@
 import {
   rectangle,
+  requireChannel,
   spatial,
   type Bounds,
   type ChannelSummary,
@@ -26,7 +27,7 @@ function summarize(values: SampleArray, active: SampleArray, categorical: boolea
   }
   return { range: [minimum, maximum], categories: [...categories].sort((a, b) => a - b) };
 }
-export function summarizeField(grid: Grid, resource: NumericalResource) {
+export function summarizeField(grid: Grid<string>, resource: NumericalResource) {
   const field = resource.field!,
     activeArray = resource.arrays.find((array) => array.name === "active")!;
   const summaries: Record<string, ChannelSummary> = {},
@@ -38,7 +39,7 @@ export function summarizeField(grid: Grid, resource: NumericalResource) {
     for (const [name, key] of Object.entries(field.channels)) {
       const array = resource.arrays.find((array) => array.name === key)!,
         summary = summarize(
-          readBandPartition(grid.channels[name], array, partition),
+          readBandPartition(requireChannel(grid, name), array, partition),
           active,
           array.quantity === "category"
         );

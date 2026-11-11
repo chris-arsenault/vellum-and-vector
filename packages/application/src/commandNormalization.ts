@@ -5,6 +5,7 @@ import {
   requireThat,
   semanticId,
   spatial,
+  MapScale,
   type Command,
   type DomainSnapshot,
   type Area,
@@ -45,9 +46,10 @@ function fieldInput(
     width: Number(data.resolution),
     height: Number(data.resolution),
     channels: {
-      [String(data.layerId)]: {
-        unit: data.layerId === "elevation" ? "metre" : "ratio",
-        values: Number(data.value),
+      [data.layerId === "elevation" ? "Elevation" : String(data.layerId)]: {
+        unit: data.layerId === "elevation" ? "native-length" : "ratio",
+        values:
+          data.layerId === "elevation" ? MapScale.native(Number(data.value)) : Number(data.value),
       },
     },
   };

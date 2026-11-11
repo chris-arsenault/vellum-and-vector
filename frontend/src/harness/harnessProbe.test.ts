@@ -4,7 +4,7 @@ import { createWorldMesh } from "../../../packages/generation/src/world/worldMes
 import { physicalContext } from "../../../packages/generation/src/world/context";
 import { physicalProfile } from "../../../packages/generation/src/world/profile";
 import { defineProcess } from "../../../packages/generation/src/processes/groundProcess";
-import { actBy } from "../../../packages/generation/src/processes/processRunner";
+import { nativeOperation } from "../../../packages/generation/src/processes/processRunner";
 import { runNativeStep } from "../../../packages/generation/src/world/physicalSteps";
 import { harnessOptions, runHarness, write as writeReport } from "./harness";
 
@@ -147,7 +147,8 @@ it.each(["world", "region", "quick-region"])(
         asks: [],
         moves: [],
         settings: {},
-        run() {
+        prepare: () => ({}),
+        execute() {
           throw new Error("generation operation failed");
         },
       }),
@@ -155,7 +156,7 @@ it.each(["world", "region", "quick-region"])(
         runNativeStep(map, physicalContext(1, 0, map.scale.resolve(physicalProfile)), [
           "probe-step",
           0,
-          actBy(probe),
+          nativeOperation("probe-step", [probe]),
           [probe],
         ]);
     io.generate.mockImplementation(execute);

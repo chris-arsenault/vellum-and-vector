@@ -3,7 +3,7 @@ import { gridPosition, gridCellBounds, type Grid } from "./grids";
 import type { Position } from "./model";
 
 /** Locate a canonical coordinate in a compact field's continuous seam chart. */
-export function fieldPosition(grid: Grid, p: Position): Position {
+export function fieldPosition(grid: Grid<string>, p: Position): Position {
   const width = grid.periodicWidth;
   if (!width || (p.x >= grid.bounds[0] && p.x <= grid.bounds[2])) return p;
   const center = (grid.bounds[0] + grid.bounds[2]) / 2;
@@ -11,7 +11,7 @@ export function fieldPosition(grid: Grid, p: Position): Position {
 }
 
 export function gridDistance(
-  grid: Grid,
+  grid: Grid<string>,
   a: Pick<Position, "x" | "y">,
   b: Pick<Position, "x" | "y">
 ) {
@@ -19,7 +19,7 @@ export function gridDistance(
   return Math.hypot(delta.x, delta.y);
 }
 export function gridDisplacement(
-  grid: Grid,
+  grid: Grid<string>,
   a: Pick<Position, "x" | "y">,
   b: Pick<Position, "x" | "y">
 ) {
@@ -27,15 +27,15 @@ export function gridDisplacement(
     dx = b.x - a.x;
   return { x: width ? dx - Math.round(dx / width) * width : dx, y: b.y - a.y };
 }
-const seamCache = new WeakMap<Grid, Map<number, number[]>>();
-function oppositeCells(grid: Grid) {
+const seamCache = new WeakMap<Grid<string>, Map<number, number[]>>();
+function oppositeCells(grid: Grid<string>) {
   const previous = seamCache.get(grid);
   if (previous) return previous;
   const result = buildOppositeCells(grid);
   seamCache.set(grid, result);
   return result;
 }
-function buildOppositeCells(grid: Grid) {
+function buildOppositeCells(grid: Grid<string>) {
   const west: number[] = [],
     east: number[] = [],
     result = new Map<number, number[]>();
@@ -56,7 +56,7 @@ function buildOppositeCells(grid: Grid) {
   return result;
 }
 function connectedAcrossSeam(
-  grid: Grid,
+  grid: Grid<string>,
   a: Position,
   b: Position,
   covers: (geometry: Geometry) => boolean
@@ -75,7 +75,11 @@ function connectedAcrossSeam(
   return line([a.x, a.y], [edge, y]) && line([edge + (dx < 0 ? width : -width), y], [b.x, b.y]);
 }
 /** Extra neighbors use two short chart segments, preserving holes and irregular coastlines. */
-export function seamNeighbors(grid: Grid, index: number, covers: (geometry: Geometry) => boolean) {
+export function seamNeighbors(
+  grid: Grid<string>,
+  index: number,
+  covers: (geometry: Geometry) => boolean
+) {
   if (
     !grid.periodicWidth ||
     grid.bounds[2] - grid.bounds[0] < grid.periodicWidth - 1e-6 ||

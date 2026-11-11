@@ -1,16 +1,14 @@
+import { mapCommand } from "./processTraits";
 import { DomainError } from "@atlas/domain";
 import { expect, it, vi } from "vitest";
 import { configuration, epoch, invoke, landscape, options } from "./mapFixtures";
 import { MapRunner } from "./mapRunner";
 import { MapProcessRegistry, type MapProcess } from "./process";
 
-function process(
-  id: string,
-  apply: Extract<MapProcess["behavior"], { kind: "model-pass" }>["applyPass"]
-): MapProcess {
+function process(id: string, apply: Parameters<typeof mapCommand>[2]): MapProcess {
   return {
     contract: { id, version: "1", parameters: {}, requires: [], produces: [id], invalidates: [] },
-    behavior: { kind: "model-pass", applyPass: apply },
+    operation: mapCommand(id, "event", apply, []),
     validate: () => [],
   };
 }
@@ -43,10 +41,10 @@ it.each([false, true])(
   async (asyncFailure) => {
     const initial = landscape();
     const good = process("good", (state) => {
-      state.surface.channels.elevation.set(0, 17);
+      state.surface.channels.Elevation!.set(0, 17);
     });
     const bad = process("bad", (state) => {
-      state.surface.channels.elevation.set(1, 23);
+      state.surface.channels.Elevation!.set(1, 23);
       const error = new Error("Failed output");
       if (asyncFailure) return Promise.reject(error);
       throw error;
@@ -87,7 +85,7 @@ it("retains validator warnings and original error details without establishing f
     severity: "warning" as const,
     message: "Approximate result",
     invocation: null,
-    resource: "elevation",
+    resource: "Elevation",
   };
   const good = process("good", () => {});
   good.validate = () => [warning];
@@ -102,8 +100,8 @@ it("retains validator warnings and original error details without establishing f
     })
   ).rejects.toMatchObject({ code: "process_output_invalid" });
   expect(diagnostic.mock.calls.map(([entry]) => entry)).toMatchObject([
-    { code: "approximate", outcome: "retained", resource: "elevation" },
-    { code: "invalid_elevation", outcome: "failed", resource: "elevation" },
+    { code: "approximate", outcome: "retained", resource: "Elevation" },
+    { code: "invalid_elevation", outcome: "failed", resource: "Elevation" },
   ]);
 });
 

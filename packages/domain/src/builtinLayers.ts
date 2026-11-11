@@ -31,29 +31,21 @@ const vocabulary: Vocabulary[] = [
   ["pois", "Places of interest", "custom", "vector", "#f0cc7c", null],
 ];
 const fieldFacts: Record<string, string[]> = {
-  elevation: ["elevation", "relief"],
-  geology: ["geology", "hardness", "fracture", "lithology", "uplift"],
+  elevation: ["Elevation", "relief"],
+  geology: ["geology", "hardness", "FractureConductance", "lithology", "uplift"],
   ecology: [
     "ecology",
-    "biome",
-    "treeCover",
-    "grassCover",
-    "wetlandCover",
-    "productivity",
-    "herbivores",
-    "predators",
-    "aquaticFauna",
+    "BiomeCodes",
+    "TreeCover",
+    "GrassCover",
+    "WetlandCover",
+    "Productivity",
+    "Herbivores",
+    "Predators",
+    "AquaticFauna",
   ],
-  climate: [
-    "climate",
-    "temperature",
-    "precipitation",
-    "moisture",
-    "windEast",
-    "windNorth",
-    "windSpeed",
-  ],
-  rivers: ["rivers", "flow"],
+  climate: ["climate", "Temperature", "Precipitation", "Moisture", "WindX", "WindY", "WindSpeed"],
+  rivers: ["rivers", "FlowAccumulation"],
 };
 export function builtinLayers(): Layer[] {
   return vocabulary.map(([id, name, family, representation, color, generator]) => ({

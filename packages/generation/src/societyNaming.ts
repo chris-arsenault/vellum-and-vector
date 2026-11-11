@@ -1,3 +1,4 @@
+import { mapCommand } from "./processTraits";
 import {
   foldSamples,
   languageUse,
@@ -265,12 +266,14 @@ export function finalizeNamesProcess(original: DomainSnapshot): MapProcess {
       produces: ["atlasNames"],
       invalidates: [],
     },
-    behavior: {
-      kind: "extract",
-      extract(state) {
+    operation: mapCommand(
+      "atlas.names",
+      "publish",
+      (state) => {
         finalizeGeography(state, original);
       },
-    },
+      []
+    ),
     validate: () => [],
   };
 }

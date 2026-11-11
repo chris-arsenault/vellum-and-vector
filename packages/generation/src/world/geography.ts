@@ -6,28 +6,28 @@ import { metricSearch } from "./metricSearch";
 import { physicalGradients } from "./physicalMetric";
 import { releaseWorking } from "./physicalNumerics";
 
-function retainInheritedDistance(map: PhysicalField, inherited: Band | null) {
-  if (!inherited) return;
-  for (let i = 0; i < inherited.length; i++) {
-    const held = inherited.get(i),
-      current = map.OceanDistance.get(i);
-    if (held >= 0 && (current < 0 || held < current)) map.OceanDistance.set(i, held);
-  }
-}
-export function oceanDistance(map: PhysicalField) {
-  const inherited = map.OpenBoundary ? map.coverage.copyBand(map.OceanDistance) : null;
+/** Current coast distance, with optional outside-domain sea distances as graph sources. */
+export function oceanDistance(
+  map: PhysicalField,
+  _context?: PhysicalContext,
+  boundary?: (i: number) => number
+) {
   map.OceanDistance.fill(Infinity);
   const seeds = new CellList();
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes.get(i) === 1) {
       map.OceanDistance.set(i, 0);
       if (touchesLand(map, i)) seeds.push(i);
+    } else {
+      const distance = boundary?.(i) ?? -1;
+      if (distance >= 0 && Number.isFinite(distance)) {
+        map.OceanDistance.set(i, distance);
+        seeds.push(i);
+      }
     }
   metricSearch(map.mesh, seeds.finish(), map.OceanDistance, Infinity, () => {});
   for (let i = 0; i < map.mesh.count; i++)
     if (!Number.isFinite(map.OceanDistance.get(i))) map.OceanDistance.set(i, -1);
-  retainInheritedDistance(map, inherited);
-  if (inherited) releaseWorking(map, inherited);
 }
 function touchesLand(map: PhysicalField, i: number) {
   for (let edge = 0; edge < map.mesh.degree(i); edge++) {

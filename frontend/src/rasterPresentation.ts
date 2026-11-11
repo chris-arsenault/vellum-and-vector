@@ -39,8 +39,8 @@ export function defaultRasterPresentation(): RasterPresentation {
 }
 /** Class colours for categorical channels; null for continuous ones. */
 export function categoryPalette(world: World, channel: string): SurfaceCategory[] | null {
-  if (channel === "surfaceMaterial") return surfaceMaterialCategories;
-  if (channel === "biome")
+  if (channel === "SurfaceMaterial") return surfaceMaterialCategories;
+  if (channel === "BiomeCodes")
     return biomes.map((biome, code) => ({
       code,
       name: biome.name,
@@ -73,11 +73,11 @@ export function fieldLabel(world: World, channel: string) {
   const readable = (name: string) =>
     name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
   const names: Record<string, string> = {
-    flow: "River flow",
+    FlowAccumulation: "River flow",
     finalSurface: "Land cover",
     secondSurface: "Land cover · second class",
     naturalSurface: "Natural land cover",
-    surfaceMaterial: "Surface material",
+    SurfaceMaterial: "Surface material",
   };
   if (!id) return names[channel] ?? readable(channel);
   return identityFieldLabel(world, kind, id, rest, readable);

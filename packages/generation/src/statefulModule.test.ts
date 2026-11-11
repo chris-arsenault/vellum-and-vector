@@ -49,7 +49,7 @@ async function execute(deposition: number, enabled = true) {
   return { result, state, recipe };
 }
 
-it("registers a carried extensive product that advances over two epochs and publishes a new layer", async () => {
+it("registers a shared canonical product through explicit time and publication contracts", async () => {
   atlasGenerationModules.register(statefulInventoryModule);
   try {
     const { result } = await execute(2);
@@ -63,9 +63,9 @@ it("registers a carried extensive product that advances over two epochs and publ
       [expect.objectContaining({ description: expect.stringContaining("over 3 years") })],
     ]);
     expect(result.state.facts.has("test:inventory-output")).toBe(true);
-    expect(grid.quantities?.[inventoryChannel]).toBe("extensive");
+    expect(grid.quantities?.[inventoryChannel]).toBe("intensive");
     for (let i = 0; i < grid.active.length; i++)
-      expect(grid.channels[inventoryChannel].get(i) / grid.measures.get(i)).toBeCloseTo(17, 12);
+      expect(grid.channels[inventoryChannel]!.get(i)).toBe(17);
     expect(result.state.domain.world.layers[inventoryLayer].name).toBe("Carried inventory");
     expect(result.state.domain.world.fields.some((field) => field.layerId === inventoryLayer)).toBe(
       true
@@ -74,9 +74,7 @@ it("registers a carried extensive product that advances over two epochs and publ
       result.state.domain.coverage.some((coverage) => coverage.layerId === inventoryLayer)
     ).toBe(true);
     const changed = await execute(4);
-    expect(
-      changed.result.state.surface.channels[inventoryChannel].get(0) / grid.measures.get(0)
-    ).toBeCloseTo(33, 12);
+    expect(changed.result.state.surface.channels[inventoryChannel]!.get(0)).toBe(33);
   } finally {
     atlasGenerationModules.unregister(statefulInventoryModule.id);
   }

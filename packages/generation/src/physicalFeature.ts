@@ -29,6 +29,8 @@ export const nativeStepsOf = (features: readonly PhysicalFeature[]): NativeStep[
   ...new Set(features.flatMap((feature) => feature.nativeSteps ?? [])),
 ];
 type FeatureOptions = {
+  /** Omitted means shared algorithms. Captured formation is not replayed on a child. */
+  regional?: { kind: "captured" } | { kind: "specialized"; operations: Operations };
   settings?: (keyof AtlasParameters)[];
   requires?: string[];
   absent?: string[];
@@ -36,6 +38,25 @@ type FeatureOptions = {
   configuration?: Partial<GenerationFeature>;
   when?(slot: string, context?: FeatureContributionContext): boolean;
 };
+const processName = (name: string) => (name.startsWith("refinement.") ? name : `atlas.${name}`);
+const alternativesOf = (options: FeatureOptions): Operations =>
+  options.regional?.kind === "specialized" ? options.regional.operations : {};
+function selectedOperations(
+  operations: Operations,
+  options: FeatureOptions,
+  slot: string,
+  context?: FeatureContributionContext
+) {
+  const regional = context?.execution === "regional";
+  if (regional && options.regional?.kind === "captured") return [];
+  if (options.when && !options.when(slot, context)) return [];
+  const selected = regional ? alternativesOf(options) : {};
+  return selected[slot as GenerationSlot] ?? operations[slot as GenerationSlot] ?? [];
+}
+function invocation(entry: Operation): ProcessInvocation {
+  const { name, parameters } = operation(entry);
+  return { kind: "process", id: name, process: processName(name), version: "1", parameters };
+}
 
 export function physicalFeature(
   id: string,
@@ -43,8 +64,9 @@ export function physicalFeature(
   operations: Operations,
   options: FeatureOptions = {}
 ): PhysicalFeature {
-  const entries = Object.values(operations).flat().map(operation),
-    processes = entries.map(({ name }) => `atlas.${name}`);
+  const alternatives = alternativesOf(options),
+    entries = [...Object.values(operations), ...Object.values(alternatives)].flat().map(operation),
+    processes = entries.map(({ name }) => processName(name));
   return {
     id,
     label,
@@ -58,21 +80,13 @@ export function physicalFeature(
     ),
     parameterKeys: options.settings ?? [],
     processes: [...new Set(processes)],
-    slots: Object.keys(operations) as GenerationSlot[],
+    slots: [
+      ...new Set([...Object.keys(operations), ...Object.keys(alternatives)]),
+    ] as GenerationSlot[],
     requires: options.requires ?? [],
     absent: options.absent ?? [],
     contribute(slot, _configuration, context) {
-      if (options.when && !options.when(slot, context)) return [];
-      return (operations[slot as GenerationSlot] ?? []).map((entry): ProcessInvocation => {
-        const { name, parameters } = operation(entry);
-        return {
-          kind: "process",
-          id: name,
-          process: `atlas.${name}`,
-          version: "1",
-          parameters,
-        };
-      });
+      return selectedOperations(operations, options, slot, context).map(invocation);
     },
     ...(options.configuration ?? physicalProfileConfiguration(id)),
   };

@@ -3,8 +3,7 @@ import type { AtlasGenerationInput } from "../atlasWorkflow";
 import type { ProcessInvocation, ProcessSequence } from "../process";
 import { resolveGenerationFeatures, type FeatureContributionContext } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
-import { physicalFeatureSequence } from "../physicalFeatureSequence";
-import { physicalSteps } from "./physicalSteps";
+import { composeFeatureSlot } from "../physicalFeatureSequence";
 import { atlasGenerationModules } from "../generationModules";
 import { worldGenerationSettings, type GenerationSettings } from "../generationSettings";
 import { hasHumanRound } from "../societyRound";
@@ -23,27 +22,14 @@ function nativeGroup(
   context: Composition,
   options: { initial?: boolean; material?: boolean } = {}
 ): ProcessSequence {
-  const body: ProcessSequence = [];
-  const bound = { ...context, ...options };
-  for (const step of physicalFeatureSequence(slot, context.resolved, bound)) {
-    if (step.kind !== "process") throw new Error("A physical contribution must name model passes.");
-    // Only a world step takes the before and after hooks; anything else a feature adds runs as it is.
-    if (!Object.hasOwn(physicalSteps, step.process.slice("atlas.".length))) {
-      body.push(step);
-      continue;
+  return composeFeatureSlot(
+    slot,
+    `${occurrence}/${slot}`,
+    { ...context, ...options },
+    {
+      initial: options.initial ?? false,
     }
-    const hooks = { ...bound, process: step.process };
-    body.push(...contributions("before.model-pass", hooks));
-    body.push({
-      ...step,
-      parameters: {
-        initial: options.initial ?? false,
-        ...step.parameters,
-      },
-    });
-    body.push(...contributions("after.model-pass", hooks));
-  }
-  return named(body, `${occurrence}/${slot}`);
+  );
 }
 function named(sequence: ProcessSequence, occurrence: string): ProcessSequence {
   return sequence.map((step) => ({ ...step, id: `${occurrence}/${step.id}` }));
@@ -54,10 +40,9 @@ function climate(occurrence: string, context: Composition, material = false): Pr
     result.push(...nativeGroup(slot, occurrence, context, { material }));
   return result;
 }
-function drainage(occurrence: string, context: Composition, meltwater = false): ProcessSequence {
+function drainage(occurrence: string, context: Composition): ProcessSequence {
   return [
     ...nativeGroup("water.runoff", occurrence, context),
-    ...(meltwater ? nativeGroup("water.glacial-runoff", occurrence, context) : []),
     ...nativeGroup("water.routing", occurrence, context),
   ];
 }
@@ -137,11 +122,11 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     ...drainage("epoch.after-glaciation-water", context),
     ...nativeGroup("ice.flow", "epoch.post-glacial", context),
     ...nativeGroup("ice.meltwater", "epoch.post-glacial", context),
-    ...drainage("epoch.meltwater", context, true),
+    ...drainage("epoch.meltwater", context),
     ...nativeGroup("water.groundwater", "epoch", context),
     ...contributions("epoch.post-glacial-forcing", context),
     ...contributions("epoch.ecology-respond", context),
-    ...drainage("epoch.after-response-water", context, true),
+    ...drainage("epoch.after-response-water", context),
     // One human round inside an epoch with a bound era: people settle, use and exploit
     // before the coasts are cut and the epoch's history is kept.
     ...humanRound(context),
@@ -208,7 +193,7 @@ export function atlasPhysicalSequence(
     ...drainage("present.initial-water", context),
     ...nativeGroup("ice.flow", "present.initial-ice", context),
     ...nativeGroup("ice.meltwater", "present", context),
-    ...drainage("present.meltwater", context, true),
+    ...drainage("present.meltwater", context),
     ...nativeGroup("ice.flow", "present.final-ice", context),
     ...presentExtraction(context),
     ...contributions("present.post-glacial-forcing", context),

@@ -1,3 +1,4 @@
+import { requireChannel } from "@atlas/domain";
 import { fixtureWorld, fixtureState, readFeature } from "./testSupport/workspaceFixture";
 import { afterEach, expect, it, vi } from "vitest";
 import { cancelGeneration, listJobs, startGeneration, generationSnapshot } from "./generationJobs";
@@ -185,15 +186,15 @@ it("publishes adaptive world quantities in their geographic layers without raste
   });
   const grid = createAdaptiveField("world-field", domain.scope, topology);
   for (const [channel, unit] of [
-    ["elevation", "metre"],
-    ["slope", "gradient"],
-    ["riverWidth", "metre"],
-    ["riverDepth", "metre"],
-    ["catchmentArea", "square-metre"],
-    ["biome", "category"],
-    ["treeCover", "ratio"],
-    ["oilCarbon", "kg-carbon/square-metre"],
-  ])
+    ["Elevation", "native-length"],
+    ["Slope", "gradient"],
+    ["RiverWidth", "metre"],
+    ["RiverDepth", "metre"],
+    ["CatchmentArea", "square-metre"],
+    ["BiomeCodes", "category"],
+    ["TreeCover", "ratio"],
+    ["OilCarbon", "kg-carbon/square-metre"],
+  ] as const)
     putChannel(
       grid,
       channel,
@@ -208,7 +209,7 @@ it("publishes adaptive world quantities in their geographic layers without raste
       state: {
         domain,
         surface: grid,
-        facts: new Set(["elevation"]),
+        facts: new Set(["Elevation"]),
         history: [],
         publications: atlasPublicationDefinitions(
           { areaId: domain.scope.areaId, seed: 42, quality: "draft", domains: ["physical"] },
@@ -221,14 +222,16 @@ it("publishes adaptive world quantities in their geographic layers without raste
   );
   const rivers = output.world.fields.find((field) => field.layerId === "rivers")!;
   expect(rivers.channels).toEqual(
-    expect.arrayContaining(["riverWidth", "riverDepth", "catchmentArea"])
+    expect.arrayContaining(["RiverWidth", "RiverDepth", "CatchmentArea"])
   );
   expect(output.world.fields.find((field) => field.layerId === "geology")!.channels).toContain(
-    "slope"
+    "Slope"
   );
   expect(output.numerical[rivers.id].topology).toBe(topology);
-  expect(output.numerical[rivers.id].channels.riverWidth).toBe(grid.channels.riverWidth);
+  expect(output.numerical[rivers.id].channels.RiverWidth).toBe(requireChannel(grid, "RiverWidth"));
   const ecology = output.world.fields.find((field) => field.layerId === "ecology")!;
-  expect(ecology.channels).toEqual(expect.arrayContaining(["biome", "treeCover", "oilCarbon"]));
-  expect(output.numerical[ecology.id].units.oilCarbon).toBe("kg-carbon/square-metre");
+  expect(ecology.channels).toEqual(
+    expect.arrayContaining(["BiomeCodes", "TreeCover", "OilCarbon"])
+  );
+  expect(output.numerical[ecology.id].units.OilCarbon).toBe("kg-carbon/square-metre");
 });

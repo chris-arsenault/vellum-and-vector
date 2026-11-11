@@ -8,6 +8,9 @@ import {
   generateBand,
   gridPosition,
   putChannel,
+  MapScale,
+  canonicalPhysicalFields,
+  fieldChannelName,
 } from "@atlas/domain";
 import { generationSnapshot, atlasPublicationDefinitions } from "@atlas/generation";
 import {
@@ -107,29 +110,36 @@ export function suppliedIsland(width: number, height = width / 4, spacing = widt
     );
   surface.scope.resolution = spacing;
   const values: Record<string, [string, (x: number, y: number) => number]> = {
-    elevation: [
-      "metre",
+    Elevation: [
+      "native-length",
       (x, y) =>
-        500 * (1 - ((x - 0.5) / 0.39) ** 2 - ((y - 0.5) / 0.4) ** 2) +
-        150 * Math.sin(x * Math.PI * 4),
+        MapScale.native(
+          500 * (1 - ((x - 0.5) / 0.39) ** 2 - ((y - 0.5) / 0.4) ** 2) +
+            150 * Math.sin(x * Math.PI * 4)
+        ),
     ],
-    temperature: ["celsius", () => 16],
-    moisture: ["ratio", () => 0.7],
-    rainfall: ["metre/year", () => 1.2],
-    runoff: ["metre/year", () => 0.7],
-    windEast: ["ratio", () => 0.8],
-    windNorth: ["ratio", () => 0.2],
-    soilDepth: ["metre", () => 1],
+    Temperature: ["native-temperature", () => 460],
+    Moisture: ["per-mille", () => 700],
+    Rainfall: ["millimetre/year", () => 1200],
+    Runoff: ["millimetre/year", () => 700],
+    WindX: ["per-mille", () => 800],
+    WindY: ["per-mille", () => 200],
+    SoilDepth: ["metre", () => 1],
   };
   for (const [name, [unit, value]] of Object.entries(values))
     putChannel(
       surface,
-      name,
+      fieldChannelName(name),
       unit,
-      generateBand(surface.coverage, "float64", name, (i) => {
-        const p = gridPosition(surface, i);
-        return value(p.x / width, p.y / height);
-      })
+      generateBand(
+        surface.coverage,
+        canonicalPhysicalFields().find((field) => field.name === name)!.type,
+        name,
+        (i) => {
+          const p = gridPosition(surface, i);
+          return value(p.x / width, p.y / height);
+        }
+      )
     );
   return {
     source,

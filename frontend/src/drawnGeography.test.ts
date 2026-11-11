@@ -1,3 +1,4 @@
+import { requireChannel, MapScale } from "@atlas/domain";
 import { fixtureWorld } from "./testSupport/workspaceFixture";
 import { it, expect } from "vitest";
 import {
@@ -40,23 +41,25 @@ function fixture(): DrawnMapInput {
     9,
     9
   );
-  field.channels.elevation = generateBand(
-    field.coverage,
-    "float64",
-    "elevation",
-    (i) => 500 + 3000 * Math.exp(-(((i % 9) - 5) ** 2 + (Math.floor(i / 9) - 5) ** 2) / 5)
+  field.channels.Elevation = generateBand(field.coverage, "float64", "Elevation", (i) =>
+    MapScale.native(500 + 3000 * Math.exp(-(((i % 9) - 5) ** 2 + (Math.floor(i / 9) - 5) ** 2) / 5))
   );
-  field.channels.treeCover = generateBand(field.coverage, "float64", "treeCover", () => 0.7);
+  field.channels.TreeCover = generateBand(field.coverage, "float64", "TreeCover", () => 0.7);
   field.channels["culture:a"] = generateBand(field.coverage, "float64", "culture:a", () => 0.6);
   field.channels["language:b"] = generateBand(field.coverage, "float64", "language:b", () => 0.8);
-  field.units = { elevation: "m", treeCover: "ratio", "culture:a": "ratio", "language:b": "ratio" };
+  field.units = {
+    Elevation: "native-length",
+    TreeCover: "ratio",
+    "culture:a": "ratio",
+    "language:b": "ratio",
+  };
   field.ocean = rectangle([0, 0, 25000, 100000]);
   const raster: Raster = {
     id: field.id,
     areaId: area.id,
     footprint: area.footprint,
     bounds: field.bounds,
-    channel: "elevation",
+    channel: "Elevation",
     field,
   };
   return {
@@ -66,7 +69,10 @@ function fixture(): DrawnMapInput {
     styles: defaultDrawnStyles(world, "political"),
     view: { ...defaultCartographicPresentation(), mode: "drawn" },
     base: [raster],
-    rasters: ["treeCover", "culture:a", "language:b"].map((channel) => ({ ...raster, channel })),
+    rasters: (["TreeCover", "culture:a", "language:b"] as const).map((channel) => ({
+      ...raster,
+      channel,
+    })),
   };
 }
 function country(input: DrawnMapInput): AtlasFeature {
@@ -93,7 +99,7 @@ it("retains ocean geometry and derives water when only elevation is available", 
   expect(drawnOcean(raster)).toBe(raster.field.ocean);
   const field = copyGrid(raster.field);
   delete field.ocean;
-  field.channels.elevation = generateBand(field.coverage, "float64", "elevation", (i) =>
+  field.channels.Elevation = generateBand(field.coverage, "float64", "Elevation", (i) =>
     i % 9 < 3 ? -500 : 1000
   );
   const before = detachGrid(field);
@@ -133,7 +139,7 @@ it("honours existing terrain-layer visibility without changing the numerical sou
   expect(terrainMarks(input, input.area.footprint).every((m) => m.kind === "tree")).toBe(true);
   input.styles = input.styles.map((s) => (s.layerId === "ecology" ? { ...s, visible: false } : s));
   expect(terrainMarks(input, input.area.footprint)).toEqual([]);
-  expect(input.base[0].field.channels.treeCover.get(0)).toBe(0.7);
+  expect(requireChannel(input.base[0].field, "TreeCover").get(0)).toBe(0.7);
 });
 it("shows coexisting cultural fields independently and explains them in the legend", async () => {
   const input = fixture();

@@ -2,7 +2,7 @@ import type { Grid, NumericalResource } from "@atlas/domain";
 import { fieldPartitionSamples, layoutVector, type LayoutVector } from "./fieldLayout";
 
 /** Sparse material records use normal chunked arrays, outside the scalar channel namespace. */
-export function appendFieldCargo(grid: Grid, resource: NumericalResource): LayoutVector[] {
+export function appendFieldCargo(grid: Grid<string>, resource: NumericalResource): LayoutVector[] {
   const cargo = grid.materialCargo;
   if (!cargo) return [];
   const vectors = [

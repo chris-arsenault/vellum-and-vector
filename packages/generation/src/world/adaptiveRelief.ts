@@ -1,3 +1,4 @@
+import { mapCommand } from "../processTraits";
 // Latent relief realized at a child profile (ADR 0005): the parent's mesh-scale gradient says
 // how rugged and which way; the child adds the ridge-and-valley texture its own mesh resolves.
 import type { Geometry } from "geojson";
@@ -60,8 +61,16 @@ function cellRelief(
 ): number {
   const { x, y } = position,
     half = span / 2;
-  const gx = (elevationAt({ x: x + half, y, z: 0 }) - elevationAt({ x: x - half, y, z: 0 })) / span,
-    gy = (elevationAt({ x, y: y + half, z: 0 }) - elevationAt({ x, y: y - half, z: 0 })) / span;
+  const gx =
+      MapScale.metres(
+        elevationAt({ x: x + half, y, z: 0 }) - elevationAt({ x: x - half, y, z: 0 }),
+        "native"
+      ) / span,
+    gy =
+      MapScale.metres(
+        elevationAt({ x, y: y + half, z: 0 }) - elevationAt({ x, y: y - half, z: 0 }),
+        "native"
+      ) / span;
   const gradient = Math.hypot(gx, gy);
   const amplitude =
     p.ReliefSynthesisGain *
@@ -92,7 +101,7 @@ function proposeRelief(
 ): Proposal {
   const mesh = map.mesh,
     span = parentSpan(parent),
-    elevationAt = fieldInterpolator(parent, "elevation"),
+    elevationAt = fieldInterpolator(parent, "Elevation"),
     interior = spatial.buffer(footprint, -band),
     inside = interior ? spatial.pointCoverage(interior) : () => false,
     [bx0, by0, bx1, by1] = spatial.bounds(footprint);
@@ -104,7 +113,7 @@ function proposeRelief(
   };
   for (let i = 0; i < mesh.count; i++) {
     if (map.WaterKindCodes.get(i) !== 0 || mesh.membership(i) !== 1) continue;
-    const position = nativePosition({ map } as never, i),
+    const position = nativePosition({ map }, i),
       { x, y } = position;
     if (!inside(position)) continue;
     // The amplitude fades to nothing across one parent span inside the inherited band.
@@ -173,7 +182,7 @@ export function synthesizeRegionalRelief(
   seed: number,
   profile: PhysicalProfile
 ): ReliefSynthesis {
-  const elevation = fieldInterpolator(parent, "elevation"),
+  const elevation = fieldInterpolator(parent, "Elevation"),
     span = parentSpan(parent);
   let changed = 0,
     square = 0;
@@ -182,7 +191,7 @@ export function synthesizeRegionalRelief(
     const delta = cellRelief(
         map,
         i,
-        nativePosition({ map } as never, i),
+        nativePosition({ map }, i),
         elevation,
         span,
         seed,
@@ -210,11 +219,12 @@ export function adaptiveReliefProcess(): MapProcess {
       invalidates: [],
       workspaceOnly: true,
     },
-    behavior: {
-      kind: "model-pass",
-      applyPass(state: GenerationState, context) {
+    operation: mapCommand(
+      "atlas.refine-relief",
+      "event",
+      (state: GenerationState, context) => {
         const work = state.physical!;
-        const parent = parentChannels(state).get("elevation");
+        const parent = parentChannels(state).get("Elevation");
         if (!work.inherited || !parent) return;
         const c = nativeContext(state, context, 0x51ef);
         const result = synthesizeRelief(
@@ -233,7 +243,8 @@ export function adaptiveReliefProcess(): MapProcess {
           description: `Realized ridge-and-valley relief below the parent's cells on ${result.changed} cells (${Math.round(result.rmsM)} m RMS), conserving each parent cell's mean height.`,
         });
       },
-    },
+      []
+    ),
     validate: () => [],
   };
 }

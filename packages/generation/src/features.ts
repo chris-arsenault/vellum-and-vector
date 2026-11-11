@@ -21,6 +21,8 @@ export interface FeatureRequirement {
   message?: string;
 }
 export interface FeatureContributionContext {
+  /** Execution policy changes algorithms, never the domain representation. */
+  execution?: "world" | "regional";
   source: DomainSnapshot;
   input: AtlasGenerationInput;
   resolved: ResolvedFeatures;

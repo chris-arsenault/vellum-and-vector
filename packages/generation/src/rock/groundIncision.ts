@@ -1,6 +1,6 @@
 import type { PhysicalField } from "../world/field";
 import { clamp } from "../world/math";
-import { columnFields, type Column } from "./rockLayerFields";
+import { columnFields, type Column } from "@atlas/domain";
 import {
   coarsenColumn,
   deepestLayer,

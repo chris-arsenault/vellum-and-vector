@@ -38,7 +38,7 @@ import { traceRelief } from "./reliefTrace";
 import { processProbeBands, startProcessProbe } from "./processProbe";
 import { groundProbeCells } from "./groundProbe";
 import { startCpuProfile } from "./cpuProfile";
-import { recordMagicInspection } from "./magicInspection";
+import { recordMagicInspection, recordFieldInspection } from "./magicInspection";
 import type { PhysicalBufferName } from "../../../packages/generation/src/world/field";
 
 /** What one harness run does; read from the environment of `pnpm harness`. */
@@ -183,6 +183,7 @@ function liveRecorder(out: string, map: string, places: boolean) {
       process.stdout.write(`${JSON.stringify(event)}\n`);
   }, places);
   recordMagicInspection(recorder.observers, out, map);
+  recordFieldInspection(recorder.observers, out, map);
   return recorder;
 }
 
@@ -275,7 +276,7 @@ async function ensureRegion(options: HarnessOptions, world: CheckpointRecord, ou
   if (!at) throw new Error("Give HARNESS_REGION_AT=x,y: the world records no highest land.");
   copyCheckpoint(world.name, options.region);
   const ws = await openHarnessWorkspace(checkpointDirectory(options.region)),
-    recorder = stageRecorder(undefined, options.places),
+    recorder = liveRecorder(out, "region", options.places),
     started = performance.now(),
     stopProcesses = recordProcesses(options, out, "region");
   try {
@@ -389,8 +390,9 @@ async function describeMap(record: CheckpointRecord, out: string) {
         `${record.kind}-relief`,
         await reliefReport(ws, terrain.world, areaId, { out, kind: record.kind })
       );
-      await rasterOverview(terrain.raster, features, `${record.kind}-overview`, out);
-      await rasterRelief(terrain.raster, `${record.kind}-relief`, out);
+      const view = { extent: terrain.extent, reference: terrain.world.reference };
+      await rasterOverview(terrain.raster, features, `${record.kind}-overview`, out, view);
+      await rasterRelief(terrain.raster, `${record.kind}-relief`, out, view);
     } finally {
       terrain.close();
     }

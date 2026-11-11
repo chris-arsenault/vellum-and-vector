@@ -4,6 +4,8 @@ import {
   generateChannel,
   gridPosition,
   putChannel,
+  requireChannel,
+  channelUnit,
   type Grid,
   type GridSurface,
 } from "./grids";
@@ -12,13 +14,13 @@ import { fillBand, generateBand } from "./lattice/bandValues";
 import { spatial } from "./spatial";
 
 /** Patch-cache room for a sweep over every cell of an adaptive grid (prepared records per cell). */
-export function sweepBudget(grid: GridSurface) {
+export function sweepBudget(grid: GridSurface<string>) {
   return grid.topology ? grid.active.length * 1024 : undefined;
 }
 
 export function resample(
-  source: GridSurface,
-  target: Grid,
+  source: GridSurface<string>,
+  target: Grid<string>,
   channel: string,
   discrete = false
 ): void {
@@ -37,19 +39,24 @@ export function resample(
   putChannel(
     target,
     channel,
-    source.units[channel],
-    generateChannel(target, channel, (i) => valueAt(gridPosition(target, i))),
+    channelUnit(source, channel),
+    generateChannel(
+      target,
+      channel,
+      (i) => valueAt(gridPosition(target, i)),
+      requireChannel(source, channel).type
+    ),
     source.quantities?.[channel]
   );
 }
 
 /** Densities of an extensive channel as scratch bands; the caller releases them. */
 function densityField(
-  source: GridSurface,
+  source: GridSurface<string>,
   name: string,
-  scratch: [GridSurface, Band][]
-): GridSurface {
-  const values = source.channels[name],
+  scratch: [GridSurface<string>, Band][]
+): GridSurface<string> {
+  const values = requireChannel(source, name),
     density = fillBand(
       source.coverage.scratch("float64", `density:${name}`, source.active.length),
       (i) => {
@@ -58,7 +65,7 @@ function densityField(
       }
     );
   scratch.push([source, density]);
-  const result: GridSurface = {
+  const result: GridSurface<string> = {
     ...source,
     channels: { ...source.channels, [name]: density },
     quantities: { ...source.quantities, [name]: "intensive" },
@@ -73,8 +80,8 @@ function densityField(
 }
 /** Compose each channel at the target's own physical samples, retaining patch precedence. */
 export function resampleChannels(
-  source: GridSurface,
-  target: Grid,
+  source: GridSurface<string>,
+  target: Grid<string>,
   channels = Object.keys(source.channels)
 ) {
   for (const name of channels) {
@@ -82,20 +89,20 @@ export function resampleChannels(
       resample(source, target, name, source.units[name] === "category");
       continue;
     }
-    const scratch: [GridSurface, Band][] = [];
+    const scratch: [GridSurface<string>, Band][] = [];
     try {
       resample(densityField(source, name, scratch), target, name, false);
     } finally {
       for (const [grid, band] of scratch) grid.coverage.release(band);
     }
-    const density = target.channels[name];
+    const density = requireChannel(target, name);
     putChannel(
       target,
       name,
-      source.units[name],
+      channelUnit(source, name),
       generateBand(
         target.coverage,
-        "float64",
+        requireChannel(source, name).type,
         `${target.id}:${name}`,
         (i) => density.get(i) * target.measures.get(i),
         target.active.length

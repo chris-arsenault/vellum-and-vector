@@ -13,7 +13,7 @@ export interface CoastalFrame {
  * Where waves reach land: each dry cell's face on open water, with the energy of the waves there, or
  * with what `forcing` raises on the dry cell itself.
  */
-function seedShores(map: PhysicalField, waves: Pick<Band, "get">, forcing?: Band) {
+function seedShores(map: PhysicalField, waves: Pick<Band, "get">, forcing?: Pick<Band, "get">) {
   const columns = Array.from({ length: 7 }, () => new FloatList());
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) !== 0) continue;
@@ -48,7 +48,7 @@ export function coastalFrame(
   map: PhysicalField,
   width: number,
   waves: Pick<Band, "get">,
-  forcing?: Band
+  forcing?: Pick<Band, "get">
 ): CoastalFrame {
   const shores = seedShores(map, waves, forcing),
     nearest = workingArray(map, "int32", "coast:nearest").fill(-1),

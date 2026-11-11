@@ -7,9 +7,14 @@ import { SocietySpread } from "./societyTraversal";
 it("shares checked geometry between spreads while reading current terrain and water", () => {
   const state = landscape(),
     grid = state.surface;
-  grid.channels.elevation.fill(100);
-  for (const name of ["water", "riverOrder"])
-    putChannel(grid, name, "ratio", residentBand("float64", new Float64Array(grid.active.length)));
+  grid.channels.Elevation!.fill(102400);
+  for (const name of ["WaterKindCodes", "RiverOrders"] as const)
+    putChannel(
+      grid,
+      name,
+      "category",
+      residentBand("float64", new Float64Array(grid.active.length))
+    );
   const coverage = spatial.geometryCoverage.bind(spatial),
     queries = vi.fn(coverage(grid.scope.footprint)),
     prepared = vi.spyOn(spatial, "geometryCoverage").mockReturnValue(queries);
@@ -29,12 +34,12 @@ it("shares checked geometry between spreads while reading current terrain and wa
     expect(distance()).toBe(1000);
     const calls = queries.mock.calls.length;
     expect(calls).toBeGreaterThan(0);
-    grid.channels.elevation.set(1, 200);
+    grid.channels.Elevation!.set(1, 204800);
     expect(distance()).toBe(4000);
-    grid.channels.riverOrder.set(0, 1);
-    grid.channels.riverOrder.set(1, 1);
+    grid.channels.RiverOrders!.set(0, 1);
+    grid.channels.RiverOrders!.set(1, 1);
     expect(distance()).toBe(500);
-    grid.channels.water.set(1, 1);
+    grid.channels.WaterKindCodes!.set(1, 1);
     expect(distance()).toBe(Infinity);
     expect(queries.mock.calls.length).toBe(calls);
     expect(prepared).toHaveBeenCalledOnce();

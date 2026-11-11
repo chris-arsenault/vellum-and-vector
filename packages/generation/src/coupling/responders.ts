@@ -3,7 +3,10 @@
  * them here makes sure each has spoken before the first question, whichever of them the run imported.
  */
 import "../world/climate";
+import "../processes/waterProcesses";
+import "../world/waterQuantity";
 import "../world/currents";
+import "../world/coastalForcing";
 import "../world/ecologyGroups";
 import "../world/fluvial";
 import "../world/glacialEvolution";

@@ -1,6 +1,8 @@
+import { mapCommand } from "./processTraits";
 import { expect, it } from "vitest";
 import {
   generateChannel,
+  requireChannel,
   putChannel,
   residentBand,
   validateLayerChange,
@@ -27,11 +29,11 @@ const layer: Layer = {
   profiles: ["world", "region"],
   schema: {},
   generator: "test.survey",
-  facts: ["surveyAccuracy"],
+  facts: ["TreeCover"],
 };
 const output: FieldPublicationDefinition = {
   kind: "field",
-  channel: "surveyAccuracy",
+  channel: "TreeCover",
   unit: "ratio",
   quantity: "intensive",
   layer,
@@ -87,9 +89,10 @@ function surveyModule() {
       invalidates: [],
       parameters: { precision: { type: "number", unit: "ratio", required: true } },
     },
-    behavior: {
-      kind: "model-pass",
-      applyPass(state, context) {
+    operation: mapCommand(
+      "test.survey.measure",
+      "event",
+      (state, context) => {
         const precision = Number(context.parameters.precision);
         putChannel(
           state.surface,
@@ -102,13 +105,14 @@ function surveyModule() {
           )
         );
       },
-    },
+      []
+    ),
     validate: () => [],
   };
   return { feature, process, outputs: [output] };
 }
 
-it("publishes a registered new parameter, channel and layer without an atlas-specific binding", async () => {
+it("publishes a registered parameter, canonical quantity and new layer without an atlas-specific binding", async () => {
   const module = surveyModule(),
     resolved = resolveGenerationFeatures([module.feature], {
       "test.survey": { settings: { precision: 0.25 } },
@@ -132,7 +136,7 @@ it("publishes a registered new parameter, channel and layer without an atlas-spe
     facts: [output.channel],
   });
   expect(field.channels).toEqual([output.channel]);
-  const published = snapshot.numerical[field.id].channels[output.channel];
+  const published = requireChannel(snapshot.numerical[field.id], output.channel);
   expect(published.get(0)).toBeCloseTo(0.025);
   expect(published.get(published.length - 1)).toBe(0.25);
   expect(snapshot.numerical[field.id].units[output.channel]).toBe("ratio");
@@ -146,8 +150,8 @@ it("publishes a registered new parameter, channel and layer without an atlas-spe
 
 it("rejects an unregistered channel instead of classifying it as climate", () => {
   const state = initial();
-  putChannel(state.surface, "unregisteredOutput", "ratio", filled(1));
-  expect(() => publishGenerationProducts(state, "unknown-run")).toThrow("unregisteredOutput");
+  putChannel(state.surface, "WetlandCover", "ratio", filled(1));
+  expect(() => publishGenerationProducts(state, "unknown-run")).toThrow("WetlandCover");
   expect(state.domain.world.fields).toEqual([]);
   expect(state.domain.coverage).toEqual([]);
 });
@@ -182,18 +186,18 @@ it("combines declared channels on one layer and preserves existing cartographic 
     representations: ["vector", "field"],
     facts: ["authoredSurveyNote"],
   };
-  state.publications = [output, { ...output, channel: "surveyConfidence" }];
+  state.publications = [output, { ...output, channel: "GrassCover" }];
   putChannel(state.surface, output.channel, output.unit, filled(0.25));
-  putChannel(state.surface, "surveyConfidence", output.unit, filled(0.75));
+  putChannel(state.surface, "GrassCover", output.unit, filled(0.75));
   publishGenerationProducts(state, "shared-layer");
   const fields = state.domain.world.fields.filter((field) => field.layerId === layer.id);
   expect(fields).toHaveLength(1);
-  expect(fields[0].channels).toEqual([output.channel, "surveyConfidence"]);
+  expect(fields[0].channels).toEqual([output.channel, "GrassCover"]);
   expect(state.domain.world.layers[layer.id]).toMatchObject({
     name: "My survey layer",
     color: "#123456",
     representations: ["vector", "field"],
-    facts: ["authoredSurveyNote", output.channel, "surveyConfidence"],
+    facts: ["authoredSurveyNote", output.channel, "GrassCover"],
   });
   expect(state.domain.coverage).toHaveLength(1);
 });
@@ -310,9 +314,10 @@ it("registers a new vector layer before common extractor validation and worker t
       produces: ["test:survey-stations"],
       invalidates: [],
     },
-    behavior: {
-      kind: "extract",
-      extract(candidate) {
+    operation: mapCommand(
+      "test.survey.extract",
+      "publish",
+      (candidate) => {
         putGenerated(
           candidate,
           generatedFeature(
@@ -325,7 +330,8 @@ it("registers a new vector layer before common extractor validation and worker t
           )
         );
       },
-    },
+      []
+    ),
     validate(candidate) {
       expect(candidate.domain.world.layers[layer.id].representation).toBe("vector");
       return [];

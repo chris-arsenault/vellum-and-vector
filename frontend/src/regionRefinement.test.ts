@@ -128,7 +128,7 @@ it("owns fields recursively without disclosing a descendant's same-profile geogr
   expect(f.current().fields.find((field) => field.areaId === child.id)?.input).toBe(true);
   expect(f.current().fields).toHaveLength(2);
   const rasters = await readMapRasters(f.world.id, child.id);
-  expect(rasters.filter((r) => r.channel === "elevation").map((r) => r.areaId)).toEqual([child.id]);
+  expect(rasters.filter((r) => r.channel === "Elevation").map((r) => r.areaId)).toEqual([child.id]);
   expect(rasters.every((r) => spatial.covers(child.footprint, r.footprint))).toBe(true);
   const parentRasters = await readMapRasters(f.world.id, parent.id);
   expect(parentRasters.every((r) => r.areaId === parent.id)).toBe(true);

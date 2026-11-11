@@ -11,7 +11,6 @@ import {
   lastsWhile,
   lengthOf,
   meanOf,
-  raisedAsCaptured,
   reliefOf,
   sectionAt,
   sectionRadius,
@@ -80,9 +79,11 @@ export const ridge: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured ridge stays a divide of the refined network: the crest cell nearest its top stands as high as the parent's did, and the finer relief branches its own spurs from there. If no crest reads there it takes the nearest one.",
+      "Captured ridge material develops with the child's drainage and erosion. Its name resolves on the local crest, moving to the nearest counterpart when necessary.",
     carry: carryWhereItLands,
-    realize: (state, carried) => raisedAsCaptured(state, carried, counterpart(state, carried)),
+    realize: notApplicable(
+      "Captured ridge ground develops locally without restoring parent heights."
+    ),
     counterpart,
     unrealized: movesTo(counterpart),
     settle: notApplicable("The regional relief re-derives crests from the network each round."),

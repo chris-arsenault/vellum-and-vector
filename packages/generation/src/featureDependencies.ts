@@ -1,6 +1,6 @@
 import {
   areaSpace,
-  ecologyLabels,
+  magicEcologyFields,
   locatedMagicEffectDefinitions,
   point,
   spatial,
@@ -11,7 +11,7 @@ import {
 import type { AtlasGenerationInput } from "./atlasWorkflow";
 import type { FeatureRequirement } from "./features";
 import { effectiveMagicRules } from "./world/magicFeatures";
-import { ecologicalMagicEffects } from "./world/ecologyProcesses";
+import { ecologicalMagicEffects } from "./world/ecologyMagic";
 function requirement(
   feature: string,
   path: (string | number)[],
@@ -63,7 +63,7 @@ function ruleRequirements(system: MagicSystem, index: number): FeatureRequiremen
     return (["seeds", "retains"] as const).flatMap((kind) =>
       (rule[kind] ?? []).flatMap((group, groupIndex) =>
         group.flatMap((condition, conditionIndex) =>
-          Object.hasOwn(ecologyLabels, condition.field)
+          Object.hasOwn(magicEcologyFields, condition.field)
             ? [
                 requirement(
                   "ecology.living",

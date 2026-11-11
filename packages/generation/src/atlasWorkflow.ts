@@ -173,7 +173,7 @@ function checkRunInputs(source: DomainSnapshot, input: AtlasGenerationInput) {
     source.world.areas[input.areaId].profile !== "interior"
   )
     requireThat(
-      inheritedChannelNames(source, input.areaId, false).has("elevation"),
+      inheritedChannelNames(source, input.areaId, false).has("Elevation"),
       "generation_prerequisite",
       "Generate physical geography first, or include Land, climate and water in this request."
     );

@@ -1,7 +1,8 @@
 import type { PhysicalField } from "../world/field";
 import type { TransportPlan } from "../world/transportPlan";
 import { releaseWorking, workingArray } from "../world/physicalNumerics";
-import { columnFields, columns, type Column, type MaterialLayer } from "./rockLayerFields";
+import { columnFields, columns, type Column } from "@atlas/domain";
+import type { MaterialLayer } from "./rockLayerFields";
 import { deformFabric, deformSlope, type Deformation } from "./groundTransform";
 import { heldProperty, type HeldRock } from "./groundTransport";
 import { releaseCargoCustody } from "./groundCargoIdentity";

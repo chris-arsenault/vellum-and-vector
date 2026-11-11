@@ -9,7 +9,8 @@ import {
   prepareTectonicMotion,
   tectonicInterval,
 } from "./tectonicIntegration";
-import { tectonicProvinces } from "./provinces";
+import { provinceLayout } from "../processes/crustProcesses";
+import { runOperation } from "../processOperation";
 import { plateTravel } from "./tectonicControls";
 import { advectLandmarkDrainage } from "./landmarkTransport";
 import { advectGeologicalTrace, geologicalPointMotion } from "./geologicalPointMotion";
@@ -91,7 +92,7 @@ export function plateAdvection(
     const myr = tectonicInterval(map, remaining, rate),
       step = rate * myr;
     prepareTectonicMotion(map, myr);
-    tectonicProvinces(map, context);
+    runOperation(map, provinceLayout.operation, { map, context });
     deformInterval(map, { ...context, AfterPlateStep: afterStep }, myr, step);
     for (let i = 0; i < surplus.length; i++) surplus.add(i, map.ConvergentCrustSurplus.get(i));
     completeTectonicMotion(map, myr, step);
@@ -102,6 +103,6 @@ export function plateAdvection(
   map.LastPlateDriftStep = total;
   map.ConvergentCrustSurplus.copyFrom(surplus);
   releaseWorking(map, surplus);
-  tectonicProvinces(map, context);
+  runOperation(map, provinceLayout.operation, { map, context });
   map.AccumulatedPlateDrift += total;
 }

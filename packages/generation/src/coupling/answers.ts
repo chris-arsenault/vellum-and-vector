@@ -1,4 +1,6 @@
 import type { Band } from "@atlas/domain";
+import { processRevision, readOperation } from "../processOperation";
+import type { PhysicalQuery } from "../processes/groundProcess";
 import type { PhysicalContext } from "../world/context";
 import type { PhysicalBufferName, PhysicalField } from "../world/field";
 import { retainedArray } from "../world/physicalNumerics";
@@ -8,6 +10,12 @@ import { retainedArray } from "../world/physicalNumerics";
  * lives. Whoever has something to say about it responds, in their own terms; the asker never learns who.
  */
 export const answerKeys = [
+  /** Local surface-water supply, in millimetres per year, composed by its current owners. */
+  "surfaceWater",
+  /** Maintained channel intake, in cubic metres per second. */
+  "waterWithdrawal",
+  /** Fraction of received water passing a cell after its withdrawals. */
+  "waterTransmission",
   /** The water each cell sends downstream, against the reference runoff. */
   "discharge",
   /** How wet the ground stays. */
@@ -20,6 +28,8 @@ export const answerKeys = [
   "iceBite",
   /** The energy of the waves on a cell of open water, on the field's 0 to 1000 scale. */
   "waveEnergy",
+  /** External wave forcing received by the current dry shore, on the 0 to 1000 scale. */
+  "coastalForcing",
   /** Worn ground fed to the water on a cell this pass, in height units. */
   "looseSupply",
   /** What a unit of water carries on this ground, per unit of span. */
@@ -30,6 +40,13 @@ export const answerKeys = [
   "heat",
 ] as const;
 export type AnswerKey = (typeof answerKeys)[number];
+type CellAnswer = (key: AnswerKey) => number;
+type Response = (
+  map: PhysicalField,
+  i: number,
+  context: PhysicalContext,
+  answer: CellAnswer
+) => number;
 
 interface ResponderBase {
   readonly key: AnswerKey;
@@ -37,16 +54,19 @@ interface ResponderBase {
   readonly by: string;
   /** What it needs from the field to answer. */
   readonly reads: readonly PhysicalBufferName[];
+  /** Other composed quantities needed before this answer's hot loop. */
+  readonly answers?: readonly AnswerKey[];
+  readonly queries?: readonly PhysicalQuery[];
 }
 /** The first answer to a key: one responder states it, and the rest change it. */
 export interface BaseResponder extends ResponderBase {
-  readonly base: (map: PhysicalField, i: number, context: PhysicalContext) => number;
+  readonly base: Response;
 }
 export interface AddingResponder extends ResponderBase {
-  readonly add: (map: PhysicalField, i: number, context: PhysicalContext) => number;
+  readonly add: Response;
 }
 export interface ScalingResponder extends ResponderBase {
-  readonly scale: (map: PhysicalField, i: number, context: PhysicalContext) => number;
+  readonly scale: Response;
 }
 export type Responder = BaseResponder | AddingResponder | ScalingResponder;
 
@@ -69,12 +89,13 @@ export function explainAnswer(
   context: PhysicalContext
 ) {
   const responders = respondersTo(key);
+  const answer: CellAnswer = (dependency) => explainAnswer(map, dependency, i, context).value;
   const contributions = responders.map((one) => {
     if ("base" in one)
-      return { by: one.by, operation: "base" as const, value: one.base(map, i, context) };
+      return { by: one.by, operation: "base" as const, value: one.base(map, i, context, answer) };
     if ("add" in one)
-      return { by: one.by, operation: "add" as const, value: one.add(map, i, context) };
-    return { by: one.by, operation: "scale" as const, value: one.scale(map, i, context) };
+      return { by: one.by, operation: "add" as const, value: one.add(map, i, context, answer) };
+    return { by: one.by, operation: "scale" as const, value: one.scale(map, i, context, answer) };
   });
   const base = contributions.find((one) => one.operation === "base");
   if (!base) throw new Error(`Nothing answers ${key}.`);
@@ -89,7 +110,6 @@ interface Memo {
   revision: number;
 }
 interface Answers {
-  revision: number;
   memos: Map<AnswerKey, Memo>;
 }
 const answersOf = new WeakMap<PhysicalField, Answers>();
@@ -99,17 +119,13 @@ export function capturedAnswersAt(map: PhysicalField, cell: number) {
     values: Partial<Record<AnswerKey, number>> = {};
   if (!held) return values;
   for (const [key, memo] of held.memos)
-    if (memo.revision === held.revision) values[key] = memo.band.get(cell);
+    if (memo.revision === processRevision(map)) values[key] = memo.band.get(cell);
   return values;
 }
 function state(map: PhysicalField) {
   let held = answersOf.get(map);
-  if (!held) answersOf.set(map, (held = { revision: 0, memos: new Map() }));
+  if (!held) answersOf.set(map, (held = { memos: new Map() }));
   return held;
-}
-/** The world has moved on: what was answered no longer stands. */
-export function worldMoved(map: PhysicalField) {
-  state(map).revision++;
 }
 function compute(map: PhysicalField, key: AnswerKey, context: PhysicalContext, band: Band) {
   const all = registered.get(key)!,
@@ -117,10 +133,12 @@ function compute(map: PhysicalField, key: AnswerKey, context: PhysicalContext, b
   if (!base) throw new Error(`Nothing answers ${key}.`);
   const adding = all.filter((one): one is AddingResponder => "add" in one),
     scaling = all.filter((one): one is ScalingResponder => "scale" in one);
-  for (let i = 0; i < map.mesh.count; i++) {
-    let value = base.base(map, i, context);
-    for (const one of adding) value += one.add(map, i, context);
-    for (const one of scaling) value *= one.scale(map, i, context);
+  let i = 0;
+  const answer: CellAnswer = (dependency) => ask(map, dependency, context).get(i);
+  for (; i < map.mesh.count; i++) {
+    let value = base.base(map, i, context, answer);
+    for (const one of adding) value += one.add(map, i, context, answer);
+    for (const one of scaling) value *= one.scale(map, i, context, answer);
     band.set(i, value);
   }
 }
@@ -135,9 +153,14 @@ export function ask(map: PhysicalField, key: AnswerKey, context: PhysicalContext
     memo = { band: retainedArray(map, "float64", `answer:${key}`), revision: -1 };
     held.memos.set(key, memo);
   }
-  if (memo.revision !== held.revision) {
+  if (memo.revision !== processRevision(map)) {
+    for (const responder of respondersTo(key)) {
+      for (const dependency of responder.queries ?? [])
+        readOperation(map, dependency, { map, context });
+      for (const dependency of responder.answers ?? []) ask(map, dependency, context);
+    }
     compute(map, key, context, memo.band);
-    memo.revision = held.revision;
+    memo.revision = processRevision(map);
   }
   return memo.band;
 }

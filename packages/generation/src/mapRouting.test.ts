@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   createGrid,
+  MapScale,
   generateChannel,
   gridPosition,
   putChannel,
@@ -15,12 +16,12 @@ it("routes a road around water within its exact mapped footprint", () => {
   const grid = createGrid("routing", state.domain.scope, 192, 192);
   putChannel(
     grid,
-    "elevation",
-    "metre",
-    generateChannel(grid, "elevation", (i) => {
+    "Elevation",
+    "native-length",
+    generateChannel(grid, "Elevation", (i) => {
       const x = i % grid.width,
         y = Math.floor(i / grid.width);
-      return x > 85 && x < 105 && y < 150 ? -10 : 100;
+      return MapScale.native(x > 85 && x < 105 && y < 150 ? -10 : 100);
     })
   );
   const start = gridPosition(grid, 20 * grid.width + 20),
@@ -60,9 +61,9 @@ it("keeps roads out of footprint holes even when samples on either side are acti
   const grid = createGrid("hole", state.domain.scope, 30, 12);
   putChannel(
     grid,
-    "elevation",
-    "metre",
-    generateChannel(grid, "elevation", () => 100)
+    "Elevation",
+    "native-length",
+    generateChannel(grid, "Elevation", () => MapScale.native(100))
   );
   const route = findRoute(grid, { x: 1000, y: 500, z: 0 }, { x: 3000, y: 500, z: 0 }, "road");
   expect(route.length).toBeGreaterThan(2);
@@ -80,13 +81,13 @@ it("takes a ridge through its saddle rather than over its crest", () => {
   // A north–south ridge across the middle, with a low saddle near the southern end.
   putChannel(
     grid,
-    "elevation",
-    "metre",
-    generateChannel(grid, "elevation", (i) => {
+    "Elevation",
+    "native-length",
+    generateChannel(grid, "Elevation", (i) => {
       const x = i % grid.width,
         y = Math.floor(i / grid.width);
-      if (x < 27 || x > 33) return 100;
-      return y >= 48 && y <= 51 ? 140 : 900;
+      if (x < 27 || x > 33) return MapScale.native(100);
+      return MapScale.native(y >= 48 && y <= 51 ? 140 : 900);
     })
   );
   const start = gridPosition(grid, 10 * grid.width + 5),
@@ -102,16 +103,16 @@ it("follows a river bank instead of cutting across the open interfluve", () => {
   const grid = createGrid("river", state.domain.scope, 60, 20);
   putChannel(
     grid,
-    "elevation",
-    "metre",
-    generateChannel(grid, "elevation", () => 100)
+    "Elevation",
+    "native-length",
+    generateChannel(grid, "Elevation", () => MapScale.native(100))
   );
   // A river runs west–east along row 15; the straight line between the towns is row 10.
   putChannel(
     grid,
-    "riverOrder",
-    "ratio",
-    generateChannel(grid, "riverOrder", (i) => (Math.floor(i / grid.width) === 15 ? 2 : 0))
+    "RiverOrders",
+    "count",
+    generateChannel(grid, "RiverOrders", (i) => (Math.floor(i / grid.width) === 15 ? 2 : 0))
   );
   const start = gridPosition(grid, 10 * grid.width + 2),
     end = gridPosition(grid, 10 * grid.width + 57);
@@ -127,11 +128,11 @@ it("keeps a lane on the water and along the shallow coast between two harbours",
   // Land in the top five rows, a shallow shelf below it, deep water further south.
   putChannel(
     grid,
-    "elevation",
-    "metre",
-    generateChannel(grid, "elevation", (i) => {
+    "Elevation",
+    "native-length",
+    generateChannel(grid, "Elevation", (i) => {
       const y = Math.floor(i / grid.width);
-      return y < 5 ? 50 : y < 9 ? -50 : -3000;
+      return MapScale.native(y < 5 ? 50 : y < 9 ? -50 : -3000);
     })
   );
   const start = gridPosition(grid, 4 * grid.width + 3),

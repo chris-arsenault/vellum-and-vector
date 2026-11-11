@@ -2,6 +2,7 @@ import {
   fieldInterpolator,
   fieldPosition,
   spatial,
+  requireChannel,
   type AdaptivePointLocator,
   type GridSurface,
   type Position,
@@ -44,7 +45,7 @@ function regularDisplay(grid: RegularGrid, fallback: (p: Position) => number) {
 /** A display polynomial reuses its sixteen source samples while pixels remain in that cell. */
 function displayCell(grid: RegularGrid) {
   const { active, width, height } = grid,
-    values = grid.channels.elevation;
+    values = requireChannel(grid, "Elevation");
   let previous = -1,
     held: number[][] | null = null;
   return (col: number, row: number) => {
@@ -74,12 +75,12 @@ function displayCell(grid: RegularGrid) {
  * Adaptive fields already supply smooth patches through the domain sampler.
  */
 export function terrainDisplaySampler(grid: GridSurface, locate?: AdaptivePointLocator) {
-  const fallback = fieldInterpolator(grid, "elevation", false, locate);
+  const fallback = fieldInterpolator(grid, "Elevation", false, locate);
   const base = grid.topology ? fallback : regularDisplay(grid, fallback);
   const overlays = (grid.overlays ?? [])
     .slice()
     .reverse()
-    .filter((overlay) => overlay.channels.includes("elevation"))
+    .filter((overlay) => overlay.channels.includes("Elevation"))
     .map(({ grid }) => ({
       covers: spatial.pointCoverage(grid.scope.footprint),
       at: terrainDisplaySampler(grid, locate),

@@ -1,7 +1,5 @@
 import {
   DomainError,
-  fieldInterpolator,
-  sweepBudget,
   mappedGenerationDiagnostics,
   requireThat,
   spatial,
@@ -9,8 +7,6 @@ import {
   type Diagnostic,
 } from "@atlas/domain";
 import { atlasRegistry, resolveInput, type AtlasGenerationInput } from "../atlasWorkflow";
-import { nativePosition } from "../world/atlasWorkspace";
-import { units } from "../world/math";
 import { atlasGenerationModules } from "../atlasModules";
 import { atlasParametersSchema } from "../atlasParameters";
 import { generationBindings, serializableBindings } from "../generationBindings";
@@ -22,12 +18,12 @@ import type {
   GenerationState,
   MapProcess,
   MapProcessRegistry,
+  MapProcessContext,
   ProcessConfiguration,
-  ProcessInvocation,
-  ProcessSequence,
 } from "../process";
 import {
   isRegionalRefinement,
+  capturedEpochCount,
   parentSampleSpan,
   refinementInputFields,
   refinementResolution,
@@ -35,13 +31,19 @@ import {
 } from "./capture";
 import "./causes/index";
 import { prepareMagic } from "./magic/index";
-import { Contributions } from "./media";
+import { Contributions } from "../coupling/fieldContributions";
 import { regionalProfile } from "./profile";
-import { regionalExtraction, regionalSchedule, type ScheduledStep } from "./schedule";
+import { regionalOperations, regionalAtmosphere, type ScheduledStep } from "./schedule";
+import { regionalSequence } from "./sequence";
+import { prepareClimate, bindRegionalClimate } from "./climate";
+import { profileForExecution } from "../processes/processCatalogue";
 import type { RegionalState } from "./state";
+import { bindRegionalWater } from "./drainage";
+import { bindRegionalOceanDistance } from "./sharedMedia";
+import { mapCommand } from "../processTraits";
 
 type Options = Omit<MapRunnerOptions, "seed" | "seedScope">;
-const version = "3";
+const version = "1";
 
 /**
  * Attach the regional work to a generation state whose physical workspace exists: the
@@ -49,7 +51,11 @@ const version = "3";
  * extraction thresholds. Called once by `refinement.begin`, and by fixtures that build the
  * same state without the runner.
  */
-export function beginRegional(state: GenerationState, input: AtlasGenerationInput): RegionalState {
+export function beginRegional(
+  state: GenerationState,
+  input: AtlasGenerationInput,
+  context: MapProcessContext
+): RegionalState {
   requireThat(state.physical, "physical_workspace", "Initialize the physical mesh first.");
   const work = state.physical,
     map = work.map,
@@ -57,8 +63,10 @@ export function beginRegional(state: GenerationState, input: AtlasGenerationInpu
     parentSpan = parentSampleSpan(state.domain, input.areaId, physical),
     inheritedHeight = map.coverage.copyBand(map.Elevation);
   inheritedHeight.retain();
+  map.CompletedEpochCount = capturedEpochCount(state.domain, input.areaId, physical);
   regionalProfile(work.profile, parentSpan, map.scale);
-  inheritDerived(state);
+  // Native invocation workSpan apportions local exposure; do not divide the rates again.
+  work.profile = profileForExecution(work.profile, { refined: true, passes: 1 });
   const regional: RegionalState["regional"] = {
     input: {
       areaId: input.areaId,
@@ -74,65 +82,45 @@ export function beginRegional(state: GenerationState, input: AtlasGenerationInpu
     proposed: [],
   };
   const begun = Object.assign(state, { physical: work, regional });
-  // The world's magic workspace on the regional field, when this run develops magic.
-  if (input.domains.includes("magic")) prepareMagic(begun);
+  bindRegionalStrategies(begun, input, context);
   return begun;
 }
-
-/**
- * Captured channels the projection derives rather than binds (discharge, lake level) have no
- * inheritance binding; a refinement reads them as the evidence of its rivers and lakes.
- */
-function inheritDerived(state: GenerationState) {
-  const work = state.physical!,
-    map = work.map,
-    surface = state.surface,
-    at = (name: string) =>
-      surface.channels[name]
-        ? fieldInterpolator(surface, name, false, undefined, sweepBudget(surface))
-        : undefined,
-    flow = at("flow"),
-    level = at("waterLevel");
-  for (let i = 0; i < map.mesh.count; i++) {
-    const p = nativePosition(work, i);
-    if (flow) map.FlowAccumulation.set(i, Math.max(0, flow(p)));
-    if (level && map.WaterKindCodes.get(i) === 2)
-      map.WaterSurfaceElevations.set(i, map.BaseSeaLevel + units(level(p)));
-  }
+function bindRegionalStrategies(
+  state: RegionalState,
+  input: AtlasGenerationInput,
+  context: MapProcessContext
+) {
+  const enabled = (name: string) => input.resolvedFeatures?.selection[name]?.enabled;
+  if (enabled("water.routing")) bindRegionalWater(state);
+  if (enabled("ocean.geography")) bindRegionalOceanDistance(state);
+  // The world's magic workspace on the regional field, when this run develops magic.
+  if (enabled("magic.configured")) prepareMagic(state);
+  prepareClimate(state);
+  if (enabled("physical.climate")) bindRegionalClimate(state, context, regionalAtmosphere);
 }
-function stepProcess(step: ScheduledStep, produces: string[] = []): MapProcess {
+
+function stepProcess(step: ScheduledStep): MapProcess {
   return {
     contract: {
       id: `refinement.${step.id}`,
       version,
-      parameters: {},
+      parameters: {
+        round: { type: "number", unit: null, required: false, default: 0 },
+        society: { type: "boolean", unit: null, required: false, default: false },
+      },
       requires: ["atlas:workspace"],
-      produces,
+      produces: step.produces ?? [],
       invalidates: [],
-      workspaceOnly: !step.publishes,
+      workspaceOnly: step.operation.kind !== "publish",
     },
-    behavior: {
-      kind: step.publishes ? "extract" : "model-pass",
-      ...(step.publishes
-        ? {
-            extract(state, context) {
-              context.progress(0, step.message);
-              step.run(state as RegionalState, context);
-            },
-          }
-        : {
-            applyPass(state, context) {
-              context.progress(0, step.message);
-              step.run(state as RegionalState, context);
-            },
-          }),
-    } as MapProcess["behavior"],
+    operation: step.operation,
     validate: (state) => {
       requireThat(state.physical, "physical_workspace", "Initialize the physical mesh first.");
       return [];
     },
   };
 }
+
 function beginProcess(input: AtlasGenerationInput): MapProcess {
   return {
     contract: {
@@ -144,32 +132,24 @@ function beginProcess(input: AtlasGenerationInput): MapProcess {
       invalidates: [],
       workspaceOnly: true,
     },
-    behavior: {
-      kind: "initialize",
-      initialize(state, context) {
+    operation: mapCommand(
+      "refinement.begin",
+      "initialize",
+      (state, context) => {
         const bound = generationBindings(context);
-        beginRegional(state, { ...input, seed: bound.seed, quality: bound.quality });
+        beginRegional(state, { ...input, seed: bound.seed, quality: bound.quality }, context);
       },
-    },
+      []
+    ),
     validate: () => [],
   };
 }
 /**
- * The regional processes: the schedule's steps as processes beside the world's own. The
- * refresh leaves the field routed and classified, which is the state the world's extraction
- * requires (`atlas:validated`); the world's own validation operation checks world-process
- * invariants that a refinement does not run, so the refresh produces the fact itself.
+ * Regional specializations register beside shared operations. Final refresh calls the
+ * same physical publication validator; refinement does not replay historical bookkeeping.
  */
 export function regionalProcesses(input: AtlasGenerationInput): MapProcess[] {
-  return [
-    beginProcess(input),
-    ...regionalSchedule(input.domains).map((step) =>
-      stepProcess(step, step.id === "refresh" ? ["atlas:validated"] : [])
-    ),
-    ...regionalExtraction(input.domains)
-      .filter((step) => step.id !== "features")
-      .map((step) => stepProcess(step)),
-  ];
+  return [beginProcess(input), ...regionalOperations.map((step) => stepProcess(step))];
 }
 export function regionalRegistry(
   source: DomainSnapshot,
@@ -178,41 +158,6 @@ export function regionalRegistry(
   const registry = atlasRegistry(source, input);
   for (const process of regionalProcesses(input)) registry.register(process);
   return registry;
-}
-const invoke = (id: string, processVersion = "1", feature?: string): ProcessInvocation => ({
-  kind: "process",
-  id,
-  process: id,
-  version: id.startsWith("refinement.") ? version : processVersion,
-  ...(feature ? { feature } : {}),
-});
-/** The capability a regional step stands for in the setup view: its water and climate steps. */
-function stepFeature(id: string) {
-  if (id.endsWith("/water")) return "water.routing";
-  if (id.endsWith("/environment")) return "physical.climate";
-  return undefined;
-}
-/**
- * The fixed coupled realization schedule as a process sequence (spec 7): the world's
- * initialization builds the field on the child lattice, the regional steps develop it, the
- * world's projection and extraction publish it, and the regional identity and place steps
- * finish with what only a refinement knows.
- */
-export function regionalSequence(input: AtlasGenerationInput): ProcessSequence {
-  return [
-    invoke("atlas.initialize"),
-    invoke("refinement.begin"),
-    ...regionalSchedule(input.domains).map((step) =>
-      invoke(`refinement.${step.id}`, undefined, stepFeature(step.id))
-    ),
-    invoke("atlas.project"),
-    ...regionalExtraction(input.domains).flatMap((step) =>
-      step.id === "features"
-        ? [invoke("atlas.features"), invoke("atlas.magic-places")]
-        : [invoke(`refinement.${step.id}`)]
-    ),
-    invoke("atlas.names", "1"),
-  ];
 }
 function initialFacts(source: DomainSnapshot, input: AtlasGenerationInput) {
   const channels = inheritedChannelNames(source, input.areaId, input.domains.includes("physical"));
@@ -226,7 +171,7 @@ export function prepareRegionalRefinement(source: DomainSnapshot, input: AtlasGe
   refinementResolution(source, input);
   // A drawing edited on this map or its space must survive: the same rule as the world's.
   diagnostics.push(...mappedGenerationDiagnostics(source, input.areaId));
-  if (!refinementInputFields(source, input.areaId).some((f) => f.channels?.includes("elevation")))
+  if (!refinementInputFields(source, input.areaId).some((f) => f.channels?.includes("Elevation")))
     diagnostics.push({
       code: "regional_parent",
       severity: "error",
@@ -246,7 +191,7 @@ export function prepareRegionalRefinement(source: DomainSnapshot, input: AtlasGe
     id: "regional-bidirectional-refinement",
     version: 3,
     parameters: resolved.parameters ?? {},
-    sequence: regionalSequence(resolved),
+    sequence: regionalSequence(configured, resolved),
     inputs: serializableBindings({
       settings: resolved.settings!,
       features: resolved.resolvedFeatures!,

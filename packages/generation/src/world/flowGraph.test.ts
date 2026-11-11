@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { contributingArea, targetOrder } from "./flowGraph";
+import { contributingArea, targetOrder, waterGathered } from "./flowGraph";
+import { passingWater } from "./waterQuantity";
 import { createField } from "./field";
 import { createWorldMesh } from "./worldMesh";
 
@@ -51,4 +52,20 @@ it("rejects a routing that cycles", () => {
   map.FlowTargets.set(0, 1);
   map.FlowTargets.set(1, 0);
   expect(() => targetOrder(map, map.FlowTargets)).toThrow(/cycle/);
+});
+
+it("applies an intake once before sending the remaining water to the next cell", () => {
+  const map = field();
+  map.FlowTargets.set(0, 1);
+  map.FlowTargets.set(1, 2);
+  const received = [10, 5, 7],
+    water = waterGathered(
+      map,
+      map.FlowTargets,
+      { get: (cell) => (received[cell] ?? 0) / map.mesh.area(cell) },
+      (cell, amount) => (cell === 1 ? passingWater(amount, 4, 0.5) : amount)
+    );
+  expect(water.get(0)).toBeCloseTo(10);
+  expect(water.get(1)).toBeCloseTo(5.5);
+  expect(water.get(2)).toBeCloseTo(12.5);
 });

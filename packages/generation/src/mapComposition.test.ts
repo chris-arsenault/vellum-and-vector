@@ -1,3 +1,4 @@
+import { mapCommand } from "./processTraits";
 import { expect, it } from "vitest";
 import {
   copyGrid,
@@ -8,6 +9,7 @@ import {
   overlayField,
   putChannel,
   rectangle,
+  MapScale,
   type GridSurface,
 } from "@atlas/domain";
 import { configuration, invoke, landscape, options, registry } from "./mapFixtures";
@@ -19,16 +21,18 @@ const flatten: MapProcess = {
     id: "terrain.flatten",
     version: "1",
     parameters: {},
-    requires: ["elevation"],
-    produces: ["elevation"],
-    invalidates: ["temperature", "precipitation"],
+    requires: ["Elevation"],
+    produces: ["Elevation"],
+    invalidates: ["Temperature", "AtmosphericWaterRate"],
   },
-  behavior: {
-    kind: "model-pass",
-    applyPass(state) {
-      state.surface.channels.elevation.fill(0);
+  operation: mapCommand(
+    "terrain.flatten",
+    "event",
+    (state) => {
+      state.surface.channels.Elevation!.fill(0);
     },
-  },
+    []
+  ),
   validate() {
     return [];
   },
@@ -41,9 +45,9 @@ function authoredRidge(): GenerationState {
     patch = createGrid("authored-ridge", { ...initial.domain.scope, footprint }, 3, 2);
   putChannel(
     patch,
-    "elevation",
-    "metre",
-    generateChannel(patch, "elevation", () => 2000)
+    "Elevation",
+    "native-length",
+    generateChannel(patch, "Elevation", () => 2048000)
   );
   overlayField(base, patch);
   initial.domain.numerical.height = base;
@@ -55,7 +59,7 @@ function authoredRidge(): GenerationState {
     algorithm: "terrain",
     source: { kind: "run", id: "old-run" },
     samples: 10,
-    channels: ["elevation"],
+    channels: ["Elevation"],
     state: "generated",
   });
   initial.domain.fieldPatches.push({
@@ -64,7 +68,7 @@ function authoredRidge(): GenerationState {
     areaId: "area",
     spaceId: "surface",
     footprint,
-    channels: ["elevation"],
+    channels: ["Elevation"],
     actor: "creator",
     resourceId: patch.id,
     protected: true,
@@ -75,19 +79,21 @@ function authoredRidge(): GenerationState {
 
 it("rejects incompatible authored units and changes to exact authored patch resources", async () => {
   const initial = authoredRidge();
-  initial.domain.numerical.height.units.elevation = "kilometre";
+  initial.domain.numerical.height.units.Elevation = "kilometre";
   await expect(
     new MapRunner(configuration([invoke(flatten)]), registry(flatten)).run(initial, options)
   ).rejects.toThrow(/retain their units/);
   const corrupt: MapProcess = {
     ...flatten,
     contract: { ...flatten.contract, id: "terrain.corrupt" },
-    behavior: {
-      kind: "model-pass",
-      applyPass(state) {
-        state.domain.numerical["authored-ridge"].channels.elevation.set(0, 1);
+    operation: mapCommand(
+      "terrain.corrupt",
+      "event",
+      (state) => {
+        state.domain.numerical["authored-ridge"].channels.Elevation!.set(0, 1);
       },
-    },
+      []
+    ),
   };
   await expect(
     new MapRunner(configuration([invoke(corrupt)]), registry(corrupt)).run(authoredRidge(), options)
@@ -99,14 +105,15 @@ const highPoint: MapProcess = {
     id: "gis.highPoint",
     version: "1",
     parameters: {},
-    requires: ["elevation"],
+    requires: ["Elevation"],
     produces: ["peak"],
     invalidates: [],
   },
-  behavior: {
-    kind: "extract",
-    extract(state, context) {
-      const elevation = state.surface.channels.elevation,
+  operation: mapCommand(
+    "gis.highPoint",
+    "publish",
+    (state, context) => {
+      const elevation = state.surface.channels.Elevation!,
         i = foldSamples(
           elevation,
           (highest, value, index) => (value > elevation.get(highest) ? index : highest),
@@ -115,7 +122,7 @@ const highPoint: MapProcess = {
         position = gridPosition(state.surface, i),
         geometry = {
           type: "Point" as const,
-          coordinates: [position.x, position.y, elevation.get(i)],
+          coordinates: [position.x, position.y, MapScale.metres(elevation.get(i), "native")],
         },
         old = state.domain.world.features.ridge;
       if (old)
@@ -152,7 +159,8 @@ const highPoint: MapProcess = {
         description: "Summit derived from the working elevation field.",
       });
     },
-  },
+    []
+  ),
   validate() {
     return [];
   },
@@ -174,12 +182,14 @@ it("rejects overwriting authored vectors and completed history before a boundary
   const overwrite: MapProcess = {
     ...flatten,
     contract: { ...flatten.contract, id: "gis.overwrite" },
-    behavior: {
-      kind: "model-pass",
-      applyPass(state) {
+    operation: mapCommand(
+      "gis.overwrite",
+      "event",
+      (state) => {
         state.domain.world.features.ridge.name = "Replacement";
       },
-    },
+      []
+    ),
   };
   await expect(
     new MapRunner(configuration([invoke(overwrite)]), registry(overwrite)).run(initial, options)
@@ -189,12 +199,14 @@ it("rejects overwriting authored vectors and completed history before a boundary
   const rewriteHistory: MapProcess = {
     ...flatten,
     contract: { ...flatten.contract, id: "history.rewrite" },
-    behavior: {
-      kind: "model-pass",
-      applyPass(state) {
+    operation: mapCommand(
+      "history.rewrite",
+      "event",
+      (state) => {
         state.history = [];
       },
-    },
+      []
+    ),
   };
   let exposed = false;
   await expect(

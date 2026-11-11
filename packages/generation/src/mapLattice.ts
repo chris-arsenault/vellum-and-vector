@@ -70,14 +70,16 @@ export function movableTerrain(state: GenerationState) {
   const patches = state.domain.fieldPatches.filter(
     (p) =>
       p.spaceId === grid.scope.spaceId &&
-      p.channels.some((c) => ["elevation", "bedrock", "sediment"].includes(c))
+      p.channels.some((c) => ["Elevation", "BedrockElevation", "SedimentThickness"].includes(c))
   );
   const fixedFields = state.domain.world.fields.filter(
     (f) =>
       f.areaId === grid.scope.areaId &&
       (f.state === "protected" ||
         (f.state === "authored" && !patches.some((p) => p.fieldId === f.id))) &&
-      (f.channels ?? [f.layerId]).some((c) => ["elevation", "bedrock", "sediment"].includes(c))
+      (f.channels ?? [f.layerId]).some((c) =>
+        ["Elevation", "BedrockElevation", "SedimentThickness"].includes(c)
+      )
   );
   return fillBand(grid.coverage.scratch("uint8", "terrain:movable", grid.active.length), (i) => {
     const active = grid.active.get(i);

@@ -1,19 +1,11 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
-import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, counterpartOf, stays } from "../poiCarry";
-import {
-  notApplicable,
-  type PoiCarried,
-  type PoiEntry,
-  type PoiFieldChange,
-  type PoiPlace,
-} from "../poiContract";
+import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { namingCultureNear, rulePlaces, settlementWithin, within } from "../poiPlaces";
 import { ruleRecord } from "../poiRecords";
 import {
-  adjacent,
   cellsWithin,
   fieldOf,
   gap,
@@ -70,21 +62,6 @@ const factors = {
   cultural: attachment(shoreDistance),
 };
 
-/** The strongest Pressure in the sea beside a shore cell, as coastal forcing. */
-function forcingOn(state: GenerationState, cell: number) {
-  let most = 0;
-  for (const next of adjacent(state, cell))
-    if (isSea(state, next)) most = Math.max(most, pressureAt(state, next));
-  return Math.round(most * 1000);
-}
-/** On a refined map, where rays are not retraced: the force on the finer shore it strikes. */
-const struck = (state: RegionalState, carried: PoiCarried): readonly PoiFieldChange[] =>
-  struckFrom(state, carried.cell).map((cell) => ({
-    change: "atLeast",
-    band: "ExternalCoastalForcing",
-    cell,
-    value: forcingOn(state, cell),
-  }));
 /** Thrown water strips the canopy of the shore it strikes. */
 const flooded = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
   struckFrom(state, place.anchor).map((cell) => ({
@@ -137,15 +114,15 @@ export const rogueWaveImpact: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A refined map inherits the rogue channel and never replays the impulse, which would strike twice. The finer coast within reach takes the same force and is cut by it. If the channel holds nothing near, the impact stays where it lands, because the coast's damage still has to be told.",
+      "A refined map inherits the impact's altered ground and identity. Current Pressure acts on its own receiving shore; the historical impact supplies no renewed force.",
     carry: carryWhereItLands,
-    realize: struck,
+    realize: notApplicable(
+      "Captured ground retains the impact; current Pressure owns coastal forcing."
+    ),
     counterpart,
     unrealized: stays,
-    settle: notApplicable(
-      "An impact's force is declared once; a round's water does not change it."
-    ),
-    schedule: notApplicable("Its force on the finer shore is all an impact does to a refinement."),
+    settle: notApplicable("The historical impact adds no maintained force."),
+    schedule: notApplicable("Refinement develops the captured coastal damage locally."),
   },
   movement: {
     statement:

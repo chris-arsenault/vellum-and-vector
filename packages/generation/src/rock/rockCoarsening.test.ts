@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { coarsenBulk } from "./rockCoarsening";
-import { materialLayer, type MaterialLayer, type Column } from "./rockLayerFields";
+import { materialLayer, type MaterialLayer } from "./rockLayerFields";
+import type { Column } from "@atlas/domain";
 import { rockCatalogue } from "./rockCatalogue";
 
 const { shale, sandstone, limestone, gneiss, tufa } = rockCatalogue;

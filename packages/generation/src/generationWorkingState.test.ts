@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { putChannel } from "@atlas/domain";
+import { putChannel, requireChannel } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import { numericalProcessLifetime, withNumericalLifetime } from "./generationWorkingState";
 
@@ -9,39 +9,39 @@ it("releases replaced channels between feedback cycles inside an unfinished proc
     baseline = grid.coverage.cache.bytes,
     finishProcess = numericalProcessLifetime(state);
   for (let cycle = 0; cycle < 20; cycle++) {
-    const previous = grid.channels.elevation;
+    const previous = requireChannel(grid, "Elevation");
     withNumericalLifetime(state, () => {
       const next = grid.coverage.scratch("float64", "projection", grid.active.length).fill(cycle);
-      putChannel(grid, "elevation", "metre", next);
+      putChannel(grid, "Elevation", "native-length", next);
     });
     expect(previous.released).toBe(true);
-    expect(grid.channels.elevation.get(0)).toBe(cycle);
+    expect(requireChannel(grid, "Elevation").get(0)).toBe(cycle);
     expect(grid.coverage.cache.bytes).toBe(baseline);
   }
   finishProcess();
-  expect(grid.channels.elevation.released).toBe(false);
+  expect(requireChannel(grid, "Elevation").released).toBe(false);
 });
 
 it("keeps a replaced channel while another grid still owns it", () => {
   const state = landscape(),
     grid = state.surface,
-    previous = grid.channels.elevation;
+    previous = requireChannel(grid, "Elevation");
   state.domain.numerical.captured = { ...grid, channels: { ...grid.channels } };
   withNumericalLifetime(state, () => {
     putChannel(
       grid,
-      "elevation",
-      "metre",
+      "Elevation",
+      "native-length",
       grid.coverage.scratch("float64", "replacement", grid.active.length).fill(50)
     );
   });
   expect(previous.released).toBe(false);
-  expect(state.domain.numerical.captured.channels.elevation.get(0)).toBe(-10);
+  expect(requireChannel(state.domain.numerical.captured, "Elevation").get(0)).toBe(-10 * 1024);
   withNumericalLifetime(state, () => {
     delete state.domain.numerical.captured;
   });
   expect(previous.released).toBe(true);
-  expect(grid.channels.elevation.get(0)).toBe(50);
+  expect(requireChannel(grid, "Elevation").get(0)).toBe(50);
 });
 
 it("cleans failed cycles without releasing outer scratch or private retained owner bands", () => {
@@ -90,7 +90,7 @@ it("releases a finished round's final workspace while preserving shared surface 
       magic: [],
     },
   };
-  putChannel(grid, "sharedRiver", "ratio", river);
+  putChannel(grid, "RiverWidth", "metre", river);
   withNumericalLifetime(state, () => {
     delete state.society;
   });

@@ -9,6 +9,7 @@ import GeoJSON from "ol/format/GeoJSON.js";
 import { Stroke, Style } from "ol/style.js";
 import {
   createGrid,
+  MapScale,
   generateBand,
   putChannel,
   rectangle,
@@ -47,11 +48,11 @@ function suppliedTerrain() {
     plainCode = surfaceCode("Grassland");
   putChannel(
     field,
-    "elevation",
-    "metre",
-    generateBand(field.coverage, "float64", "elevation", () => 1000)
+    "Elevation",
+    "native-length",
+    generateBand(field.coverage, "float64", "Elevation", () => MapScale.native(1000))
   );
-  for (const channel of ["naturalSurface", "finalSurface"])
+  for (const channel of ["naturalSurface", "finalSurface"] as const)
     putChannel(
       field,
       channel,
@@ -68,7 +69,7 @@ function suppliedTerrain() {
       areaId: "area",
       field,
       surface: field,
-      channel: "elevation",
+      channel: "Elevation" as const,
       footprint,
       bounds: field.bounds,
     },

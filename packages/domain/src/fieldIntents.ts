@@ -73,7 +73,7 @@ function authoredGrid(data: CreateField, context: IntentContext, snapshot: Domai
     ? createAdaptiveField(id, scope, data.topology, context.blocks)
     : createGrid(id, scope, data.width!, data.height!, undefined, context.blocks);
 }
-function populateChannels(data: CreateField, snapshot: DomainSnapshot, grid: Grid) {
+function populateChannels(data: CreateField, snapshot: DomainSnapshot, grid: Grid<string>) {
   if (data.parentFieldId) {
     const parent = snapshot.numerical[data.parentFieldId];
     requireThat(
@@ -186,7 +186,7 @@ function brushField(
   data: Sculpt,
   context: IntentContext,
   snapshot: DomainSnapshot,
-  support: GridSurface
+  support: GridSurface<string>
 ) {
   const footprint = spatial.intersection(
     brushScope(data, context).footprint,

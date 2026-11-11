@@ -155,13 +155,13 @@ it("uses actual brush footprints, excludes unrelated located spaces and restores
   const f = await mapEditingFixture();
   await f.command("paintMapField", {
     areaId: f.child,
-    channel: "elevation",
+    channel: "Elevation",
     center: { x: 400, y: 400, z: 0 },
     radius: 100,
     mode: "add",
     amount: 100,
   });
-  expect(selected(f, [390, 390, 410, 410])[0].name).toBe("elevation painting");
+  expect(selected(f, [390, 390, 410, 410])[0].name).toBe("Elevation painting");
   // Inside the brush envelope but outside its circular support.
   expect(selected(f, [301, 301, 310, 310])).toEqual([]);
   const snapshot = snapshotCopy(f.current());

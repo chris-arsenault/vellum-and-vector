@@ -18,6 +18,7 @@ import { crossingDirection, lineParts, stationAt } from "./lineStations";
 import { semanticId } from "./identity";
 import { requireThat } from "./errors";
 import { fieldFact } from "./fieldValidation";
+import { MapScale } from "./mapScale";
 
 export interface FieldSample {
   point: Position;
@@ -40,7 +41,7 @@ export function sampleFields(snapshot: DomainSnapshot, p: Position): Record<stri
       layer = binding && snapshot.world.layers[binding.layerId];
     if (!layer) continue;
     for (const channel of Object.keys(grid.channels))
-      result[fieldFact(layer, channel)] = sample(grid, channel, p);
+      result[fieldFact(layer, channel)] = sample<string>(grid, channel, p);
   }
   return result;
 }
@@ -69,7 +70,16 @@ function ringSamples(snapshot: DomainSnapshot, ring: number[][], elevation: numb
           z: elevation,
         };
       const values = sampleFields(snapshot, p);
-      samples.push({ point: { ...p, z: values.elevation ?? elevation }, values });
+      samples.push({
+        point: {
+          ...p,
+          z:
+            values.Elevation === undefined
+              ? elevation
+              : MapScale.metres(values.Elevation, "native"),
+        },
+        values,
+      });
     }
   }
   return samples;
@@ -132,8 +142,9 @@ function crossing(
   index: number
 ): Crossing {
   const fields = sampleFields(snapshot, p),
-    elevation = featureStation(snapshot, feature, "elevations", p) ?? fields.elevation;
-  const flow = featureStation(snapshot, feature, "discharges", p) ?? fields.flow;
+    elevation =
+      featureStation(snapshot, feature, "elevations", p) ?? fieldElevation(fields.Elevation);
+  const flow = featureStation(snapshot, feature, "discharges", p) ?? fields.FlowAccumulation;
   return {
     featureId: feature.id,
     point: { ...p, z: elevation ?? area.frame.origin.z },
@@ -161,6 +172,9 @@ function crossing(
     flowKnown: flow !== undefined,
     elevationKnown: elevation !== undefined,
   };
+}
+function fieldElevation(value: number | undefined) {
+  return value === undefined ? undefined : MapScale.metres(value, "native");
 }
 export function establishBoundary(
   snapshot: DomainSnapshot,

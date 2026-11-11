@@ -3,6 +3,7 @@ import {
   authoredFieldChanges,
   semanticId,
   requireThat,
+  requireChannel,
   applyFieldBrush,
   type BrushInput,
   type DomainSnapshot,
@@ -20,8 +21,7 @@ export function reconcileBrush(
   requireThat(source, "missing_field", "Load the field before reconciliation.");
   const grid = materializeField(source);
   delete grid.overlays;
-  const values = grid.channels[String(data.channel)];
-  requireThat(values, "missing_channel", "Choose an existing field channel.");
+  requireChannel<string>(grid, String(data.channel));
   const radius = Number(data.radius),
     amount = Number(data.amount ?? data.delta);
   requireThat(

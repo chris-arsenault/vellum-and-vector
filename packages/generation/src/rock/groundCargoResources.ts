@@ -8,7 +8,7 @@ import {
 import type { PhysicalField } from "../world/field";
 import { cargoIdentities, cargoIdentity, cargoReleaseNames } from "./groundCargoIdentity";
 import { clearCellCargo, readCargo, writeCargo } from "./groundCargo";
-import { columns, columnFields, type Column } from "./rockLayerFields";
+import { columns, columnFields, type Column } from "@atlas/domain";
 import { layerDepth } from "./rockColumn";
 import { loadOf, seaLoadOf } from "./groundLoad";
 import type { MaterialCargo } from "./materialCargo";

@@ -2,11 +2,12 @@ import { expect, it } from "vitest";
 import { MapScale } from "@atlas/domain";
 import { atlasPhysicalProfile } from "../world/atlasProfile";
 import { physicalContext } from "../world/context";
-import { physicalSchema } from "../world/field";
+import { canonicalPhysicalFields } from "@atlas/domain";
 import { createTestField } from "../rock/groundTestFixture";
 import { units } from "../world/math";
 import { createWorldMesh } from "../world/worldMesh";
-import { ask, explainAnswer, worldMoved } from "./answers";
+import { ask, explainAnswer } from "./answers";
+import { invalidateProcesses } from "../processOperation";
 import { flowRecord } from "./flows";
 import { quantityKinds } from "./quantities";
 import "./responders";
@@ -16,7 +17,7 @@ const field = () => createTestField(createWorldMesh([0, 0, 1_000_000, 1_000_000]
 const context = () => physicalContext(1, 0, atlasPhysicalProfile({}, {}, MapScale.reference()));
 
 it("gives every band a kind, so nothing is left behind when plates move", () => {
-  const missing = physicalSchema()
+  const missing = canonicalPhysicalFields()
     .map(({ name }) => name)
     .filter((name) => !quantityKinds[name]);
   expect(missing).toEqual([]);
@@ -38,7 +39,7 @@ it("holds an answer until the world moves, then answers afresh", () => {
   const before = ask(map, "discharge", c).get(0);
   map.Runoff.set(0, 300);
   expect(ask(map, "discharge", c).get(0)).toBe(before);
-  worldMoved(map);
+  invalidateProcesses(map);
   expect(ask(map, "discharge", c).get(0)).toBeCloseTo(before * 3);
 });
 
@@ -48,7 +49,7 @@ it("lets magic change an answer in its own terms without any process knowing", (
   map.Temperature.fill(500);
   const plain = ask(map, "warmth", c).get(0);
   map.Quickening.fill(1);
-  worldMoved(map);
+  invalidateProcesses(map);
   expect(ask(map, "warmth", c).get(0)).toBeCloseTo(plain * 2);
 });
 
@@ -67,7 +68,7 @@ it("explains current responder contributions without changing a group's cached i
     ])
   );
   expect(ask(map, "warmth", c).get(0)).toBe(initial);
-  worldMoved(map);
+  invalidateProcesses(map);
   expect(ask(map, "warmth", c).get(0)).toBe(explained.value);
 });
 

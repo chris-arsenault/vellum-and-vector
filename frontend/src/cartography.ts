@@ -280,7 +280,7 @@ export function brushChannel(
   customLayer: string
 ): string | null {
   if (workspace === "custom") return world.layers[customLayer] ? customLayer : null;
-  if (workspace !== "cultures") return "elevation";
+  if (workspace !== "cultures") return "Elevation";
   const entity = world.entities[entityId];
   return entity && ["culture", "language", "religion"].includes(entity.kind)
     ? `${entity.kind}:${entity.id}`

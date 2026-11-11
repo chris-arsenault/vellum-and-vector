@@ -11,19 +11,19 @@ export const overlayThemes = [
   "Advanced",
 ];
 const common = new Set([
-  "temperature",
-  "precipitation",
-  "moisture",
-  "flow",
-  "ice",
+  "Temperature",
+  "Precipitation",
+  "Moisture",
+  "FlowAccumulation",
+  "IceThickness",
   "population",
-  "treeCover",
-  "grassCover",
-  "wetlandCover",
-  "herbivores",
+  "TreeCover",
+  "GrassCover",
+  "WetlandCover",
+  "Herbivores",
   "naturalSurface",
   "finalSurface",
-  "surfaceMaterial",
+  "SurfaceMaterial",
 ]);
 export function commonOverlay(channel: string) {
   return common.has(channel) || channel.endsWith(":intensity");

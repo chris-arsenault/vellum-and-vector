@@ -1,3 +1,5 @@
+import { mapElapsed, executeMapOperation, processOwner } from "./processTraits";
+import { runOperation } from "./processOperation";
 import { requireThat } from "@atlas/domain";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
 import { evolvePopulation } from "./societyPopulation";
@@ -6,7 +8,7 @@ import { evolvePolitics } from "./societyPolitics";
 import { applySocietyWorks } from "./societyWorks";
 import { useSocietyMagic } from "./societyMagic";
 import { fishWaters, learnPractices } from "./societyPractices";
-import { refreshSocietyEnvironment } from "./societyEnvironment";
+import { advanceSocietyEnvironment } from "./societyEnvironment";
 import { resolveSocietyHazards } from "./societyHazards";
 import { evolveSettlements } from "./societySettlements";
 import { settledCycle, societyStep } from "./societyTempo";
@@ -49,28 +51,30 @@ function advanceSocietyCycle(
   const work = state.society!;
   work.cycle = cycle;
   bindSocietyProfile(state, context);
-  evolvePopulation(state, context, dt);
-  if (context.parameters.cultural) diffuseCultures(state, context, dt);
-  applySocietyWorks(state, context, dt);
-  useSocietyMagic(state, context, dt);
-  learnPractices(state, context, dt);
-  fishWaters(state, dt);
+  const input = { state, context, years: dt },
+    owner = processOwner(state);
+  runOperation(owner, evolvePopulation, input);
+  if (context.parameters.cultural) runOperation(owner, diffuseCultures, input);
+  runOperation(owner, applySocietyWorks, input);
+  runOperation(owner, useSocietyMagic, input);
+  runOperation(owner, learnPractices, input);
+  runOperation(owner, fishWaters, input);
   // Water, dams and the GIS extraction of changed geography resolve when the settled history
   // ends, not at every era's end: eras in between read the surface, not the features.
   const lastEra = Number(context.epochs.at(-1)?.variables.lastEra ?? 1) > 0;
-  refreshSocietyEnvironment(state, context, dt, cycle.final && lastEra);
-  resolveSocietyHazards(state, context, dt);
-  evolveSettlements(state, context, dt);
+  runOperation(owner, advanceSocietyEnvironment, { ...input, publish: cycle.final && lastEra });
+  runOperation(owner, resolveSocietyHazards, input);
+  runOperation(owner, evolveSettlements, input);
   // The cycle's travel wears the ways; worn ways are cheaper for every process next cycle.
-  wearWays(state, dt);
+  runOperation(owner, wearWays, input);
   if (context.parameters.political) {
-    evolvePolitics(state, context, dt);
-    raiseHighways(state, context);
+    runOperation(owner, evolvePolitics, input);
+    executeMapOperation(raiseHighways, state, context);
   }
   // What the cycle's people left on the ground: tenure, walked ways and the dead.
-  recordSocietyOnMesh(state, dt);
-  if (dt > 0) advanceSocietyMagic(state, context);
-  if (work.connectionsDirty) refreshSocietyConnections(state);
+  runOperation(owner, recordSocietyOnMesh, input);
+  if (dt > 0) executeMapOperation(advanceSocietyMagic, state, context);
+  if (work.connectionsDirty) runOperation(owner, refreshSocietyConnections, state);
 }
 /**
  * Cycles resolve feedback, not annual actors or a cap on elapsed history. Each cycle's
@@ -114,7 +118,7 @@ export const societyEvolution: MapProcess = {
     produces: ["population"],
     invalidates: [],
   },
-  behavior: { kind: "elapsed", duration: { kind: "epoch", fraction: 1 }, advance: evolveSociety },
+  operation: mapElapsed("human.evolve", { kind: "epoch", fraction: 1 }, evolveSociety, []),
   validate: (state) =>
     state.society!.region.communities.flatMap((c) =>
       c.groups.some((g) => !Number.isFinite(g.count) || g.count < 0)

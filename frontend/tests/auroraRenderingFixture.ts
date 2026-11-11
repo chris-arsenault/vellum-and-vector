@@ -1,3 +1,4 @@
+import { MapScale } from "@atlas/domain";
 import OLMap from "ol/Map.js";
 import View from "ol/View.js";
 import Projection from "ol/proj/Projection.js";
@@ -114,19 +115,24 @@ function terrain(options: RenderingOptions): Raster {
   const band = (values: Float64Array) => residentBand("float64", values);
   putChannel(
     field,
-    "elevation",
-    "metre",
+    "Elevation",
+    "native-length",
     band(
       Float64Array.from({ length: count }, (_, i) => {
         const x = ((i % 33) * 1000) / 32;
-        return (
+        return MapScale.native(
           1000 +
-          (options.shape === "ridge" ? Math.abs(x - 500) : options.shape === "slope" ? x / 2 : 0)
+            (options.shape === "ridge" ? Math.abs(x - 500) : options.shape === "slope" ? x / 2 : 0)
         );
       })
     )
   );
-  putChannel(field, "ice", "ratio", band(new Float64Array(count).fill(options.ice ?? 0)));
+  putChannel(
+    field,
+    "IceThickness",
+    "metre",
+    band(new Float64Array(count).fill((options.ice ?? 0) * 1000))
+  );
   const natural = Float64Array.from({ length: count }, (_, i) =>
     surfaceCode(i % 33 < 16 ? "Boreal forest" : "Scree field")
   );
@@ -146,7 +152,7 @@ function terrain(options: RenderingOptions): Raster {
     id: field.id,
     areaId: "area",
     field,
-    channel: "elevation",
+    channel: "Elevation",
     footprint: field.scope.footprint,
     bounds: field.bounds,
     ice: field,

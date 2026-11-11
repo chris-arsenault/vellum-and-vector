@@ -40,7 +40,7 @@ function immutableSamples(grid: GridSurface): boolean {
   return (
     immutable(grid.active) &&
     immutable(grid.measures) &&
-    Object.values(grid.channels).every(immutable) &&
+    Object.values(grid.channels).every((band) => band === undefined || immutable(band)) &&
     (!grid.materialCargo ||
       (immutable(grid.materialCargo.offsets) && immutable(grid.materialCargo.records))) &&
     Object.values(grid.topology ?? {})

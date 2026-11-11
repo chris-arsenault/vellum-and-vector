@@ -1,8 +1,7 @@
 import { expect, it } from "vitest";
-import { gridPosition, putChannel, residentBand } from "@atlas/domain";
+import { gridPosition, putChannel, residentBand, type FieldChannelName } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
-import { initializePopulation } from "./societyPopulation";
-import { refreshSocietyConnections } from "./societyGeography";
+import { supplySociety } from "./societyTestFixture";
 import { makeWork, planSocietyWorks } from "./societyWorks";
 import { demandSamples, realizeDemands, workMedium } from "./societyDemand";
 import type { MapProcessContext } from "./process";
@@ -11,19 +10,19 @@ function fixture(profile: "world" | "local") {
   const state = landscape();
   state.domain.world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.domain.world.areas.area.profile = profile;
-  const set = (name: string, value: number, unit = "ratio") =>
+  const set = (name: FieldChannelName, value: number, unit = "ratio") =>
     putChannel(
       state.surface,
       name,
       unit,
       residentBand("float64", new Float64Array(10).fill(value))
     );
-  set("elevation", 100, "metre");
-  set("treeCover", 0.6);
-  set("broadleafCover", 0.6);
-  set("grassCover", 0.2);
-  set("herbivores", 0.05);
-  set("productivity", 0.2);
+  set("Elevation", 102400, "native-length");
+  set("TreeCover", 0.6);
+  set("BroadleafCover", 0.6);
+  set("GrassCover", 0.2);
+  set("Herbivores", 0.05);
+  set("Productivity", 0.2);
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],
@@ -36,10 +35,10 @@ function fixture(profile: "world" | "local") {
     cancelled: () => false,
     progress() {},
   };
-  initializePopulation(state, context);
+  supplySociety(state);
   // One unit holds the whole country, so a demand has more than one cell to spread over.
   state.society!.region.communities = state.society!.region.communities.slice(0, 1);
-  refreshSocietyConnections(state);
+  state.society!.owner.fill(0);
   for (const c of state.society!.region.communities) {
     c.groups[0].count = 1000;
     c.status = "inhabited";
@@ -61,7 +60,7 @@ it("keeps a demand's initial medium when applying its first effect changes later
     before = [...demandSamples(state, work)],
     samples = demandSamples(state, work);
   expect(samples.next().value).toEqual(before[0]);
-  state.surface.channels["magic:fire:intensity"].fill(0);
+  state.surface.channels["magic:fire:intensity"]!.fill(0);
   expect([...samples]).toEqual(before.slice(1));
   expect([...demandSamples(state, work)]).toEqual([]);
 });
@@ -86,11 +85,11 @@ it("filters a demand's cells by the kind's medium and realizes it at a finer pro
   const steep = 7;
   putChannel(
     state.surface,
-    "slope",
+    "Slope",
     "gradient",
     residentBand("float64", new Float64Array(10).fill(0.01))
   );
-  state.surface.channels.slope.set(steep, 0.2);
+  state.surface.channels.Slope!.set(steep, 0.2);
   const land = workMedium(state, "clearance"),
     pass = workMedium(state, "pass");
   expect(land(0)).toBe(true);

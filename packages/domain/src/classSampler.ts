@@ -2,7 +2,7 @@ import type { Position } from "./model";
 import { requireThat } from "./errors";
 import { spatial } from "./spatial";
 import type { GridSurface } from "./grids";
-import { interpolateSample } from "./grids";
+import { interpolateSample, requireChannel } from "./grids";
 import {
   adaptivePointLocator,
   prepareAdaptivePatches,
@@ -18,7 +18,7 @@ import { fieldPosition } from "./gridPeriodicity";
  * Region margins can use classMarginInterpolator to trace the same winning transition.
  */
 export function classInterpolator(
-  grid: GridSurface,
+  grid: GridSurface<string>,
   channel: string,
   locate: AdaptivePointLocator = adaptivePointLocator()
 ): (p: Position) => number {
@@ -26,7 +26,7 @@ export function classInterpolator(
 }
 /** Signed margin of a family against other classes, using the raster's exact class weights. */
 export function classMarginInterpolator(
-  grid: GridSurface,
+  grid: GridSurface<string>,
   channel: string,
   includes: (code: number) => boolean,
   locate: AdaptivePointLocator = adaptivePointLocator()
@@ -34,7 +34,7 @@ export function classMarginInterpolator(
   return classEvaluator(grid, channel, locate, includes);
 }
 function classEvaluator(
-  grid: GridSurface,
+  grid: GridSurface<string>,
   channel: string,
   locate: AdaptivePointLocator,
   includes?: (code: number) => boolean
@@ -57,7 +57,7 @@ function classEvaluator(
  * over the same four corner cells; ties go to the nearest cell.
  */
 function latticeClassSampler(
-  grid: GridSurface,
+  grid: GridSurface<string>,
   channel: string,
   includes?: (code: number) => boolean
 ) {
@@ -103,8 +103,8 @@ function membershipWeight(codes: number[], mask: number[], weights: number[], co
   for (let b = 0; b < codes.length; b++) if (mask[b] && codes[b] === code) weight += weights[b];
   return weight;
 }
-function latticeMembership(grid: GridSurface, channel: string, width: number) {
-  const values = grid.channels[channel],
+function latticeMembership(grid: GridSurface<string>, channel: string, width: number) {
+  const values = requireChannel(grid, channel),
     active = grid.active;
   let previous = -1,
     held: { codes: number[]; mask: number[] };
@@ -124,7 +124,7 @@ function singleClass(code: number, includes?: (code: number) => boolean) {
   return includes ? (includes(code) ? 1 : -1) : code;
 }
 function baseClassSampler(
-  grid: GridSurface,
+  grid: GridSurface<string>,
   channel: string,
   locate: AdaptivePointLocator,
   includes?: (code: number) => boolean

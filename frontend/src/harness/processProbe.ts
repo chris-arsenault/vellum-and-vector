@@ -3,10 +3,8 @@ import {
   capturedAnswersAt,
   explainAnswer,
 } from "../../../packages/generation/src/coupling/answers";
-import {
-  physicalSchema,
-  type PhysicalBufferName,
-} from "../../../packages/generation/src/world/field";
+import { canonicalPhysicalFields } from "@atlas/domain";
+import type { PhysicalBufferName } from "../../../packages/generation/src/world/field";
 import {
   observeNativeProcesses,
   type NativeProcessObserver,
@@ -52,15 +50,12 @@ export function timedNativeStep(
   return [
     step[0],
     step[1],
-    (map, context) => {
-      const started = performance.now();
-      try {
-        step[2](map, context);
-      } finally {
-        timings.push({ step: step[0], ms: performance.now() - started });
-      }
-    },
+    step[2],
     step[3],
+    {
+      simultaneous: step[4]?.simultaneous ?? false,
+      elapsed: (ms) => timings.push({ step: step[0], ms }),
+    },
   ];
 }
 
@@ -75,7 +70,7 @@ const defaultBands: readonly PhysicalBufferName[] = [
 /** Select actual field bands, so inspecting a new process needs no probe implementation change. */
 export function processProbeBands(text: string): readonly PhysicalBufferName[] {
   if (!text.trim()) return defaultBands;
-  const known = new Set(physicalSchema().map(({ name }) => name)),
+  const known = new Set(canonicalPhysicalFields().map(({ name }) => name)),
     names = text.split(",").map((name) => name.trim());
   for (const name of names)
     if (!known.has(name as PhysicalBufferName))

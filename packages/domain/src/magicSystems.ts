@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PhysicalFieldName } from "./physicalFields";
 
 const finite = z.number().finite();
 const positive = finite.positive();
@@ -367,6 +368,20 @@ export function originParameters(system: Pick<MagicSystem, "parameters">, origin
     if (value !== undefined) (merged as Record<string, number>)[key] = value;
   return merged;
 }
+
+/** Magic rule terms resolve to ecological owners independently of presentation labels. */
+export const magicEcologyFields = {
+  biome: "BiomeCodes",
+  treeCover: "TreeCover",
+  wetlandCover: "WetlandCover",
+  peatCarbon: "PeatCarbon",
+  oilCarbon: "OilCarbon",
+  ecologicalToxicity: "EcologicalToxicity",
+  soilWater: "SoilWater",
+  soilDepth: "SoilDepth",
+  grazers: "Grazers",
+  browsers: "Browsers",
+} as const satisfies Record<string, PhysicalFieldName>;
 
 export const magicPhysicalFields = [
   "temperature",

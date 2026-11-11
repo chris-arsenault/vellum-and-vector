@@ -1,3 +1,4 @@
+import { requireChannel } from "@atlas/domain";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { TileMessage } from "./tileProtocol";
 import { constructedWorld } from "./constructedWorldFixture";
@@ -26,12 +27,12 @@ it("keeps a tile pending until its replacement geography registration has loaded
   const postMessage = vi.fn(),
     raster = (height: number): LoadedRaster => {
       const g = constructedWorld().result.state.surface;
-      g.channels.elevation.fill(height);
+      requireChannel(g, "Elevation").fill(height);
       return {
         id: "supplied",
         areaId: g.scope.areaId,
         field: g,
-        channel: "elevation",
+        channel: "Elevation",
         bounds: g.bounds,
         footprint: g.scope.footprint,
       };

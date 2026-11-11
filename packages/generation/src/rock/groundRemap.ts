@@ -8,7 +8,7 @@ import {
   setLayer,
   type MaterialLayer,
 } from "./rockColumn";
-import { columnFields, materialProperties, type Column } from "./rockLayerFields";
+import { columnFields, materialProperties, type Column } from "@atlas/domain";
 import { facetSurface, projectGround, type GroundFacet } from "./groundShares";
 import { groundStorage } from "./groundStorage";
 import type { Deformation } from "./groundTransform";

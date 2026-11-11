@@ -5,6 +5,7 @@ import { spatial } from "./spatial";
 import { semanticId } from "./identity";
 import { interpolateProfile } from "./lineStations";
 import { sampleFields } from "./boundaryContracts";
+import { MapScale } from "./mapScale";
 
 /** Materialize retained minor channels before fixing the child's crossings. */
 export function refinedDrainageFeatures(snapshot: DomainSnapshot, area: Area): AtlasFeature[] {
@@ -25,8 +26,8 @@ export function refinedDrainageFeatures(snapshot: DomainSnapshot, area: Area): A
         `generated:${area.id}`,
         `retained-river:${parent}:${index}:${part}`
       );
-      const elevations = geometry.coordinates.map(
-        ([x, y]) => sampleFields(snapshot, { x, y, z: 0 }).elevation ?? 0
+      const elevations = geometry.coordinates.map(([x, y]) =>
+        MapScale.metres(sampleFields(snapshot, { x, y, z: 0 }).Elevation ?? 0, "native")
       );
       // The inherited routing supplies direction; monotone water level follows that route.
       for (let i = 1; i < elevations.length; i++)

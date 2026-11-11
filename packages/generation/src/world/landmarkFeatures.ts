@@ -21,6 +21,7 @@ import { nearestTriangle } from "./mesh";
 import { canyonCells } from "./landmarkCanyon";
 import { distance, nearestOnPath, pathMetrics, placeLandmark } from "./landmarkGeometry";
 import type { LandmarkRecord } from "./landmarkLedger";
+import { intersectAreas } from "./geographicContours";
 
 type Work = NonNullable<GenerationState["physical"]>;
 
@@ -218,7 +219,7 @@ function landmarkFeature(
     footprint = state.domain.scope.footprint,
     naming = nameLandmark(state, landmark),
     shape = spatial.buffer(landmark.geometry, footprintReach(landmark, work)),
-    clipped = shape && spatial.intersection(shape, footprint),
+    clipped = intersectAreas(shape, footprint),
     generated = landmark.origin === "generated",
     layerId = landmarkLayer(landmarkKind(landmark.kind));
   return {

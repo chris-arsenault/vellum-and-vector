@@ -8,6 +8,7 @@ import { presentAtlasFeature } from "./featureReads";
 import { spatial, point } from "./spatial";
 import { requireThat } from "./errors";
 import { sameValue } from "./values";
+import { MapScale } from "./mapScale";
 import { moveMappedRoutes, writeMapRepresentation } from "./mapRouteEdits";
 import { updateNetworkTopology } from "./networkTopology";
 import { registerMapRemovalIntents } from "./mapRemoval";
@@ -70,8 +71,8 @@ export function evaluateMapFeature(
 function initializeMappedRiver(snapshot: DomainSnapshot, feature: AtlasFeature) {
   if (feature.kind !== "river" || !feature.geometry.type.includes("LineString")) return;
   const coordinates = lineParts(feature.geometry).flat();
-  feature.attributes.elevations ??= coordinates.map(
-    ([x, y]) => sampleFields(snapshot, { x, y, z: 0 }).elevation ?? 0
+  feature.attributes.elevations ??= coordinates.map(([x, y]) =>
+    MapScale.metres(sampleFields(snapshot, { x, y, z: 0 }).Elevation ?? 0, "native")
   );
   feature.attributes.discharge ??= 1;
   feature.attributes.discharges ??= coordinates.map(() => feature.attributes.discharge);
@@ -135,8 +136,8 @@ export function registerMapFeatureIntents(registry: IntentRegistry) {
         channels:
           data.feature.kind === "river" && data.feature.attributes.elevations === undefined
             ? context.fields
-                .filter((field) => field.channels?.includes("elevation"))
-                .map((field) => ({ fieldId: field.id, names: ["elevation"] }))
+                .filter((field) => field.channels?.includes("Elevation"))
+                .map((field) => ({ fieldId: field.id, names: ["Elevation"] }))
             : [],
       }),
     evaluate: evaluateMapFeature,

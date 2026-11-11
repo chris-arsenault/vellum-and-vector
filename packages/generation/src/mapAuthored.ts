@@ -1,6 +1,7 @@
 import {
   gridPosition,
   gridSampler,
+  fieldChannelName,
   requireThat,
   sameValue,
   spatial,
@@ -68,8 +69,9 @@ function composeSamples(
   footprint: GridSurface["scope"]["footprint"]
 ) {
   const grid = state.surface;
-  for (const channel of channels) {
-    if (!grid.channels[channel]) continue;
+  for (const channel of channels.map(fieldChannelName)) {
+    const target = grid.channels[channel];
+    if (!target) continue;
     requireThat(
       source.channels[channel] && source.units[channel] === grid.units[channel],
       "authored_field_units",
@@ -80,8 +82,7 @@ function composeSamples(
       valueAt = gridSampler(source, channel);
     for (let i = 0; i < grid.active.length; i++) {
       const position = gridPosition(grid, i);
-      if (covers(position) && sourceCovers(position))
-        grid.channels[channel].set(i, valueAt(position));
+      if (covers(position) && sourceCovers(position)) target.set(i, valueAt(position));
     }
   }
 }

@@ -16,7 +16,6 @@ import {
 } from "./lakeStage";
 
 function clearLakes(map: PhysicalField) {
-  rememberLakes(map);
   map.LakeOutletTargets.fill(-1);
   map.LakeOverflow.fill(0);
   for (let i = 0; i < map.mesh.count; i++)
@@ -70,7 +69,7 @@ function addPools(
   water: Band,
   supported: SupportedLake[]
 ) {
-  const lake = solveStage(map, c.Profile, component, water);
+  const lake = solveStage(map, c, component, water);
   if (lake === null) return;
   for (const members of splitConnected(map, lake.members)) {
     const depth = members.reduce(
@@ -145,7 +144,7 @@ function markLake(
 }
 export function lakeBasins(map: PhysicalField, c: PhysicalContext, incoming?: Band) {
   clearLakes(map);
-  const water = contributingWater(map, incoming),
+  const water = contributingWater(map, c, incoming),
     mask = workingValues(map, "uint8", "lakes:mask", (i) =>
       Number(
         map.WaterKindCodes.get(i) === 0 &&

@@ -2,6 +2,9 @@ import { MapScale, biomeCode as B } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 
 export const unit = (value: number) => Math.max(0, Math.min(1, value));
+/** Floodplain and delta classifications can overlap on the same wet ground. */
+export const floodWetness = (floodplain: number, delta: number) =>
+  unit(Math.max(floodplain, delta) / 1000);
 /** The share of wetland cover at which ground is a wetland. */
 export const wetlandCoverShare = 0.3;
 /** Above this gradient water runs off rather than stands. */
@@ -94,7 +97,7 @@ export function environment(map: PhysicalField, i: number, forcing = neutralEcol
     MapScale.metres(map.DrainageElevations.get(i) - map.Elevation.get(i), "native") /
       map.scale.length(7.5e-7)
   );
-  const flood = unit(map.FloodplainIntensity.get(i) / 1000 + map.DeltaIntensity.get(i) / 1000);
+  const flood = floodWetness(map.FloodplainIntensity.get(i), map.DeltaIntensity.get(i));
   const wetness = water
     ? unit(1 - depth / map.scale.length(7.5e-7))
     : flat * unit(drainage + flood + (moisture - 0.7) * 1.8);

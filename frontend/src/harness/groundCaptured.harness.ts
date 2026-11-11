@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { it } from "vitest";
-import { MapScale } from "@atlas/domain";
+import { MapScale, columnFields, columns, materialProperties, type Column } from "@atlas/domain";
 import { groundOf } from "../../../packages/generation/src/rock/ground";
 import { erodeFacets } from "../../../packages/generation/src/rock/groundLedger";
 import {
@@ -15,20 +15,15 @@ import {
 } from "../../../packages/generation/src/rock/groundTransport";
 import { compileMix } from "../../../packages/generation/src/rock/modes";
 import { layDownPackage } from "../../../packages/generation/src/rock/rockColumn";
-import {
-  columnFields,
-  columns,
-  materialProperties,
-  type Column,
-  type MaterialLayer,
-} from "../../../packages/generation/src/rock/rockLayerFields";
+import type { MaterialLayer } from "../../../packages/generation/src/rock/rockLayerFields";
 import {
   createField,
   type PhysicalBufferName,
   type PhysicalField,
 } from "../../../packages/generation/src/world/field";
 import { createMesh } from "../../../packages/generation/src/world/mesh";
-import { plateAdvection } from "../../../packages/generation/src/world/advection";
+import { plates } from "../../../packages/generation/src/processes/builders";
+import { runOperation } from "../../../packages/generation/src/processOperation";
 import { atlasEpoch } from "../../../packages/generation/src/world/atlasProfile";
 import {
   physicalContext,
@@ -301,7 +296,11 @@ function runInterval(
       ),
       timedNativeStep(entry.step, timings)
     );
-  } else plateAdvection(map, context, after);
+  } else
+    runOperation(map, plates.operation, {
+      map,
+      context: { ...context, AfterPlateStep: after },
+    });
   return intervals;
 }
 

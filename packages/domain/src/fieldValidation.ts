@@ -15,7 +15,7 @@ export function fieldFact(layer: Layer, channel: string): string {
 export function validateAuthoredField(
   snapshot: DomainSnapshot,
   area: Area,
-  grid: Grid,
+  grid: Grid<string>,
   layer: Layer,
   descendants = true
 ): void {
@@ -34,7 +34,7 @@ export function validateAuthoredField(
 function validateFieldBoundary(
   snapshot: DomainSnapshot,
   area: Area,
-  grid: Grid,
+  grid: Grid<string>,
   channel: string,
   fact: string
 ) {

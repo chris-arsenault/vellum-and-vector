@@ -22,7 +22,7 @@ export function* adaptiveWindowLeaves(topology: AdaptiveTopology, bounds: Bounds
   }
 }
 /** Candidate sample centres for statistics and point predicates, without scanning the whole field. */
-export function* gridWindowCells(grid: GridSurface, bounds: Bounds) {
+export function* gridWindowCells(grid: GridSurface<string>, bounds: Bounds) {
   if (grid.topology) {
     yield* adaptiveWindowLeaves(grid.topology, bounds);
     return;

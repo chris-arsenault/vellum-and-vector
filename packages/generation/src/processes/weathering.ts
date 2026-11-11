@@ -5,6 +5,7 @@ import { weatheringSettings } from "./weatheringSettings";
 /** Water and frost open rock along its joints and take what dissolves. */
 const breakingDown = compileMix({ plucking: 0.5, solution: 0.5 });
 export const weathering = defineProcess({
+  prepare: () => ({}),
   id: "weathering",
   statement:
     "Water, warmth and frost turn rock into loose cover, fastest on wet ground and slower under a deep mantle, which shields what is beneath it.",
@@ -16,7 +17,7 @@ export const weathering = defineProcess({
   forExecution: (settings, { passes }) => ({
     WeatheringPerSpan: settings.WeatheringPerSpan / passes,
   }),
-  run({ field, context: c, settings: p, span, ask, stage }) {
+  execute({ field, context: c, settings: p, span, ask, stage }) {
     const wetness = ask("wetness"),
       warmth = ask("warmth"),
       frost = ask("frost");

@@ -79,10 +79,7 @@ function lakeRecord(state: GenerationState, place: PoiPlace) {
   return generatedFeature(state, `lake:${key}`, `Lake ${body}`, "lake", "lakes", shape, {
     sourceAlgorithm: "atlas-1",
     waterBody: body,
-    waterLevel: MapScale.metres(
-      map.WaterSurfaceElevations.get(place.anchor) - map.BaseSeaLevel,
-      "native"
-    ),
+    waterLevel: MapScale.metres(map.WaterSurfaceElevations.get(place.anchor), "native"),
     area: spatial.area(shape),
     depth: depthOf(state, place),
   });

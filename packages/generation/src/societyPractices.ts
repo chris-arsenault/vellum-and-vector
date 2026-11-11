@@ -15,6 +15,8 @@ import type { GenerationState, MapProcessContext } from "./process";
 import { changeSample, editableSamples } from "./societyWorks";
 import { societyValue } from "./societySupport";
 import { coastalNeighbors } from "./societySpatial";
+import { defineCommand } from "./processOperation";
+import type { SocietyInput } from "./societyOperation";
 
 export { practiceSkill, practiceYieldGain } from "./societySkill";
 
@@ -31,14 +33,20 @@ export const practiceLearningYears = 120;
  * a community's shore and in its rivers falls under the load of the people who fish them,
  * at the harvest rate hunting uses, and the ecology regrows it between cycles.
  */
-export function fishWaters(state: GenerationState, years: number) {
+export const fishWaters = defineCommand(
+  "human.fishing",
+  "elapsed",
+  ({ state, years }: SocietyInput) => fish(state, years),
+  []
+);
+function fish(state: GenerationState, years: number) {
   const work = state.society!;
-  if (work.inherited || years <= 0 || !state.surface.channels.aquaticFauna) return;
-  const editable = editableSamples(state, "aquaticFauna");
+  if (work.inherited || years <= 0 || !state.surface.channels.AquaticFauna) return;
+  const editable = editableSamples(state, "AquaticFauna");
   for (const [j, load] of fishedWaters(state)) {
     if (!editable(j)) continue;
-    const value = societyValue(state, "aquaticFauna", j);
-    changeSample(state, "aquaticFauna", j, value * Math.exp((-load * years) / 150), "practice");
+    const value = societyValue(state, "AquaticFauna", j);
+    changeSample(state, "AquaticFauna", j, value * Math.exp((-load * years) / 150), "practice");
   }
 }
 /** The share of a community's people who fish, against the room its country gives them. */
@@ -52,7 +60,7 @@ function fishingLoads(state: GenerationState) {
 function fishedWaters(state: GenerationState) {
   const work = state.society!,
     grid = state.surface,
-    water = grid.channels.water,
+    water = grid.channels.WaterKindCodes,
     adjacent = coastalNeighbors(state),
     loads = fishingLoads(state),
     taken = new Map<number, number>();
@@ -95,7 +103,13 @@ export function realizedPractices(
 ): PracticeShares {
   return { ...livelihoodShares(c.support), ...(ledger ? magicActivity(c, ledger) : {}) };
 }
-export function learnPractices(state: GenerationState, context: MapProcessContext, years: number) {
+export const learnPractices = defineCommand(
+  "human.learning",
+  "elapsed",
+  ({ state, context, years }: SocietyInput) => learn(state, context, years),
+  []
+);
+function learn(state: GenerationState, context: MapProcessContext, years: number) {
   const work = state.society!;
   if (work.inherited || years <= 0) return;
   const fraction = -Math.expm1(-years / practiceLearningYears);

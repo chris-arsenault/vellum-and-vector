@@ -4,7 +4,6 @@ import { canyonCells } from "../../world/landmarkCanyon";
 import { incisedReach } from "../../world/landforms";
 import type { GenerationState } from "../../process";
 import { corridorCost } from "../../regional/causes/landmark";
-import type { RegionalState } from "../../regional/state";
 import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
 import { notApplicable, type PoiCarried, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
@@ -15,7 +14,6 @@ import { onMappedRiver } from "../water/waterReads";
 import {
   landmarksOf,
   lengthOf,
-  loweredAsCaptured,
   meanOf,
   reliefOf,
   sitingAdmits,
@@ -105,10 +103,11 @@ export const gorge: PoiEntry = {
   acrossMaps: {
     standsOn: "river",
     statement:
-      "A captured gorge lands on the refined river: the floor lies no higher than the parent's and the network is drawn into it. A canyon record is re-placed and its signature held by its own cause; if an emergent gorge finds no incised reach it takes the nearest one, and otherwise goes.",
+      "Captured gorge material develops with the child's river. The name resolves on a nearby incised reach; a canyon record remains even when no such reach is found.",
     carry: carryWhereItLands,
-    realize: (state: RegionalState, carried) =>
-      loweredAsCaptured(state, carried, counterpart(state, carried)),
+    realize: notApplicable(
+      "Captured gorge ground develops locally without restoring parent heights."
+    ),
     counterpart,
     unrealized(state, carried) {
       if (counterpart(state, carried) >= 0) return movesTo(counterpart)(state, carried);

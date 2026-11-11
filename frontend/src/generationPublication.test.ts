@@ -1,3 +1,4 @@
+import { requireChannel } from "@atlas/domain";
 import { expect, it } from "vitest";
 import { generateBand, putChannel } from "@atlas/domain";
 import { atlasPublicationDefinitions } from "@atlas/generation";
@@ -25,11 +26,11 @@ it("publishes constructed numerical geography with its units, request and author
   result.state.domain.world.features[feature.id] = feature;
   const snapshot = generationSnapshot(result, input, crypto.randomUUID(), source);
   expect(snapshot.world.features[feature.id]).toEqual(feature);
-  const elevation = snapshot.world.fields.find((field) => field.channels?.includes("elevation"))!;
-  expect(Array.from(snapshot.numerical[elevation.id].channels.elevation)).toEqual(
-    Array.from(result.state.surface.channels.elevation)
+  const elevation = snapshot.world.fields.find((field) => field.channels?.includes("Elevation"))!;
+  expect(Array.from(requireChannel(snapshot.numerical[elevation.id], "Elevation"))).toEqual(
+    Array.from(requireChannel(result.state.surface, "Elevation"))
   );
-  expect(snapshot.numerical[elevation.id].units.elevation).toBe("metre");
+  expect(snapshot.numerical[elevation.id].units.Elevation).toBe("native-length");
   expect(snapshot.world.generations.at(-1)).toMatchObject({ seed: input.seed });
   expect(source.world.fields).toEqual([]);
 });
@@ -40,14 +41,14 @@ it("publishes a system's quickening in its magic field rather than attributing i
   result.state.publications = atlasPublicationDefinitions(magicInput, source.world);
   putChannel(
     result.state.surface,
-    "quickening",
+    "Quickening",
     "ratio",
-    generateBand(result.state.surface.coverage, "float64", "quickening", () => 0.4)
+    generateBand(result.state.surface.coverage, "float64", "Quickening", () => 0.4)
   );
   const snapshot = generationSnapshot(result, magicInput, crypto.randomUUID(), source);
-  const field = snapshot.world.fields.find((field) => field.channels?.includes("quickening"))!;
+  const field = snapshot.world.fields.find((field) => field.channels?.includes("Quickening"))!;
   expect(field.layerId).toBe("magic");
-  expect(Array.from(snapshot.numerical[field.id].channels.quickening)).toEqual(
+  expect(Array.from(requireChannel(snapshot.numerical[field.id], "Quickening"))).toEqual(
     new Array(10).fill(0.4)
   );
 });

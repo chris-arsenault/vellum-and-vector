@@ -1,7 +1,6 @@
 import { expect, it } from "vitest";
 import { spatial, gridPosition, point, rectangle } from "@atlas/domain";
 import { worldPoliticsFixture } from "./worldPoliticsFixtures";
-import { initializePolitics } from "./societyPolitics";
 import { publishPolitics } from "./societyPoliticalPublication";
 import { worldGeographyFixture } from "./world/worldGeographyFixtures";
 import { publishPoliticalRegions } from "./worldPoliticalRegions";
@@ -12,7 +11,7 @@ import { publishGenerationProducts } from "./publication";
 import { worldTerritories } from "./worldTerritoryGeography";
 
 it("gives competing countries the same geographic frontier", () => {
-  const { state, context, communities } = worldPoliticsFixture();
+  const { state, communities, region } = worldPoliticsFixture();
   for (const c of communities) {
     c.position = gridPosition(state.surface, nearestSocietySample(state.surface, c.position));
     c.support.capacity = 40_000;
@@ -24,7 +23,16 @@ it("gives competing countries the same geographic frontier", () => {
     name: "East",
     attributes: { center: communities[1].position },
   };
-  initializePolitics(state, context);
+  region.politics = {
+    polities: [
+      { id: "country", seat: "c0", support: 1, status: "active", claims: ["c0"], causes: [] },
+      { id: "east", seat: "c1", support: 1, status: "active", claims: ["c1", "c2"], causes: [] },
+    ],
+    sovereignty: { c0: "country", c1: "east", c2: "east" },
+    control: { c0: "country", c1: "east", c2: "east" },
+    contested: {},
+    history: [],
+  };
   publishPolitics(state);
   const countries = Object.values(state.domain.world.features).filter(
     (f) => f.kind === "sovereignty"
@@ -73,9 +81,23 @@ it("divides a continental territory into geographic parts without creating sover
 });
 
 it("clips a World claim to its map and physical water while retaining disconnected possessions", () => {
-  const { state, context, communities, region } = worldPoliticsFixture();
-  initializePolitics(state, context);
-  region.politics!.polities[0].claims.push("c2");
+  const { state, communities, region } = worldPoliticsFixture();
+  region.politics = {
+    polities: [
+      {
+        id: "country",
+        seat: "c0",
+        support: 1,
+        status: "active",
+        claims: ["c0", "c1", "c2"],
+        causes: [],
+      },
+    ],
+    sovereignty: { c0: "country", c1: "country", c2: "country" },
+    control: { c0: "country", c1: "country", c2: "country" },
+    contested: {},
+    history: [],
+  };
   const footprint = rectangle([20_000, 50_000, 580_000, 350_000]),
     water = rectangle([60_000, 180_000, 70_000, 220_000]);
   state.domain.scope.footprint = footprint;

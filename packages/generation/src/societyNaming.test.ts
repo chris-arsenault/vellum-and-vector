@@ -12,7 +12,7 @@ import { landscape } from "./mapFixtures";
 import type { MapProcessContext } from "./process";
 import { finalizeNamesProcess, namePolity } from "./societyNaming";
 import { generatedFeature } from "./mapFeatures";
-import { executeProcessBehavior } from "./processTraits";
+import { executeMapOperation } from "./processTraits";
 import { emptySupport } from "./societySupport";
 import { makeWork } from "./societyWorks";
 import { publishKinds } from "./poi/poiPublish";
@@ -52,9 +52,9 @@ function fixture() {
   world.layers = Object.fromEntries(builtinLayers().map((layer) => [layer.id, layer]));
   putChannel(
     state.surface,
-    "elevation",
-    "metre",
-    residentBand("float64", new Float64Array(10).fill(100))
+    "Elevation",
+    "native-length",
+    residentBand("float64", new Float64Array(10).fill(102400))
   );
   const communities = abandonedCommunities();
   const region = {
@@ -111,13 +111,13 @@ it("resolves final biome names from regional language use and keeps established 
     })
   );
   for (const f of features) world.features[f.id] = f;
-  await executeProcessBehavior(finalizeNamesProcess(original), state, context);
+  await executeMapOperation(finalizeNamesProcess(original).operation, state, context);
   expect(features.map((f) => f.attributes.namingLanguage)).toEqual(["B", "C"]);
   expect(features.map((f) => f.attributes.namingCulture)).toEqual(["costa", "isles"]);
   expect(features.every((f) => f.name.endsWith(" Boreal Forest"))).toBe(true);
   const names = features.map((f) => f.name);
   state.society!.region.communities.reverse();
-  await executeProcessBehavior(finalizeNamesProcess(original), state, context);
+  await executeMapOperation(finalizeNamesProcess(original).operation, state, context);
   expect(features.map((f) => f.name)).toEqual(names);
 });
 it("keeps source and protected names even when they lack naming metadata", async () => {
@@ -146,7 +146,7 @@ it("keeps source and protected names even when they lack naming metadata", async
   protectedFeature.protected = true;
   protectedFeature.name = "Creator's Forest";
   world.features[protectedFeature.id] = protectedFeature;
-  await executeProcessBehavior(finalizeNamesProcess(original), state, context);
+  await executeMapOperation(finalizeNamesProcess(original).operation, state, context);
   expect(source.name).toBe("The Ancient Wood");
   expect(protectedFeature.name).toBe("Creator's Forest");
 });
@@ -174,7 +174,7 @@ it("names seas from coastal speakers and leaves empty regions without fictional 
   );
   world.features[ocean.id] = ocean;
   world.features[empty.id] = empty;
-  await executeProcessBehavior(finalizeNamesProcess(original), state, context);
+  await executeMapOperation(finalizeNamesProcess(original).operation, state, context);
   expect(ocean.attributes.namingLanguage).toBe("B");
   expect(ocean.attributes.namingCulture).toBe("costa");
   expect(empty.attributes.namingLanguage).toBeNull();
@@ -197,7 +197,7 @@ it("names a multipart river from speakers beside its banks even outside their fo
     ],
   });
   world.features[river.id] = river;
-  await executeProcessBehavior(finalizeNamesProcess(original), state, context);
+  await executeMapOperation(finalizeNamesProcess(original).operation, state, context);
   expect(river.attributes.namingLanguage).toBe("B");
   expect(river.attributes.namedInEra).toBeTruthy();
 });

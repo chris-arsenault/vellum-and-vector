@@ -6,7 +6,7 @@ import {
   undoWorld,
 } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
-import { proceduralSnapshot, restoreMappedEdits, sample } from "@atlas/domain";
+import { MapScale, proceduralSnapshot, restoreMappedEdits, sample } from "@atlas/domain";
 import { mapEditingFixture } from "./mapEditingFixture";
 import { numericalValues, snapshotCopy } from "./testSupport/snapshotCopy";
 
@@ -113,23 +113,23 @@ it("paints across frozen physical samples with a regional overlay, preserving so
   const position = { x: 210, y: 400, z: 0 };
   await f.command("paintMapField", {
     areaId: f.child,
-    channel: "elevation",
+    channel: "Elevation",
     center: position,
     radius: 100,
     mode: "add",
     amount: 1000,
   });
   expect(
-    sample((await readRaster(f.id, f.field, "elevation", f.child)).field, "elevation", position)
+    sample((await readRaster(f.id, f.field, "Elevation", f.child)).field, "Elevation", position)
   ).toBeGreaterThan(1000);
   expect(
-    sample((await readRaster(f.id, f.field, "elevation", f.root)).field, "elevation", position)
-  ).toBe(100);
+    sample((await readRaster(f.id, f.field, "Elevation", f.root)).field, "Elevation", position)
+  ).toBe(MapScale.native(100));
   expect(numericalValues(f.current())[f.field].channels).toEqual(
     numericalValues(before)[f.field].channels
   );
   const procedural = proceduralSnapshot(f.current());
-  expect(sample(procedural.numerical[f.field], "elevation", position)).toBe(100);
+  expect(sample(procedural.numerical[f.field], "Elevation", position)).toBe(MapScale.native(100));
   expect(procedural.fieldPatches).toEqual(before.fieldPatches);
   const restored = snapshotCopy(procedural);
   restoreMappedEdits(restored, f.current());
@@ -168,7 +168,7 @@ it("paints the visible parent surface without absorbing or overwriting an existi
   const f = await mapEditingFixture(),
     position = { x: 400, y: 400, z: 0 };
   const brush = {
-    channel: "elevation",
+    channel: "Elevation",
     center: position,
     radius: 100,
     mode: "add",
@@ -177,11 +177,11 @@ it("paints the visible parent surface without absorbing or overwriting an existi
   await f.command("paintMapField", { ...brush, areaId: f.child, amount: 1000 });
   await f.command("paintMapField", { ...brush, areaId: f.root, amount: 1 });
   expect(
-    sample((await readRaster(f.id, f.field, "elevation", f.root)).field, "elevation", position)
-  ).toBeCloseTo(101, 5);
+    sample((await readRaster(f.id, f.field, "Elevation", f.root)).field, "Elevation", position)
+  ).toBeCloseTo(MapScale.native(100) + 1, 5);
   expect(
-    sample((await readRaster(f.id, f.field, "elevation", f.child)).field, "elevation", position)
-  ).toBeCloseTo(1100, 5);
+    sample((await readRaster(f.id, f.field, "Elevation", f.child)).field, "Elevation", position)
+  ).toBeCloseTo(MapScale.native(100) + 1000, 5);
 });
 
 it("moves a town's local route endpoint while retaining its connection across the region boundary", async () => {

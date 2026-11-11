@@ -3,8 +3,8 @@ import type { PhysicalProfile } from "./profile";
 import type { GenerationState, MapProcessContext } from "../process";
 import { atlasEpoch } from "./atlasProfile";
 import { round } from "./math";
-import { ecologyEpochSchema, type Epoch } from "@atlas/domain";
-import { generationBindings } from "../generationBindings";
+import { ecologyEpochSchema, type Epoch, type GenerationEpoch, type MapScale } from "@atlas/domain";
+import { boundPhysicalEpochIndex, generationBindings } from "../generationBindings";
 import type { ProductLedger } from "../productLedger";
 import { tectonicDefaultMyr, tectonicReferenceMyr } from "./tectonicControls";
 import type { PhysicalField } from "./field";
@@ -27,6 +27,8 @@ export interface PhysicalContext {
   TectonicDurationMyr: number;
   /** How much work this pass stands for: processes state their rates per unit of it. */
   Span: number;
+  /** Explicit local material work; it does not create an epoch or advance history. */
+  LocalDevelopment?: boolean;
   Products?: Pick<ProductLedger, "status">;
   /** What else rides the crust and moves whenever the plates do. */
   AfterPlateStep?: () => void;
@@ -61,17 +63,36 @@ const neutral = {
 };
 export function nativeContext(state: GenerationState, context: MapProcessContext, salt: number) {
   const { settings, seed } = generationBindings(context);
-  const index = context.epochIndices[0],
-    epoch =
-      index === undefined ? null : atlasEpoch(settings.epochs[index], state.physical!.map.scale);
-  const nativeIndex = index ?? (state.physical!.map.CrustSupportInitialized ? -1 : 0);
-  const definition = index === undefined ? undefined : settings.epochs[index];
-  const profile = epochProfile(state.physical!.profile, definition);
-  const physical = physicalContext(seed, salt, profile, epoch, nativeIndex, settings.epochs.length);
-  physical.RainfallMultiplier = ecologyEpochSchema.parse(
-    (definition ?? settings.epochs.at(-1))?.ecology ?? {}
-  ).rainfall;
+  const physical = contextualPhysicalContext(seed, salt, state.physical!.profile, {
+    epochs: settings.epochs,
+    ancestry: context.epochs,
+    scale: state.physical!.map.scale,
+    initialized: state.physical!.map.CrustSupportInitialized,
+  });
   physical.Products = context.products;
+  return physical;
+}
+/** Context construction is independent of terrain execution and the requesting loop's ordinal. */
+export function contextualPhysicalContext(
+  seed: number,
+  salt: number,
+  base: PhysicalProfile,
+  source: {
+    epochs: readonly Epoch[];
+    ancestry: readonly Pick<GenerationEpoch, "parentEpoch">[];
+    scale: MapScale;
+    initialized: boolean;
+  }
+) {
+  const index = boundPhysicalEpochIndex(source.epochs, source.ancestry),
+    epoch = index === undefined ? null : atlasEpoch(source.epochs[index], source.scale);
+  const nativeIndex = index ?? (source.initialized ? -1 : 0);
+  const definition = index === undefined ? undefined : source.epochs[index];
+  const profile = epochProfile(base, definition);
+  const physical = physicalContext(seed, salt, profile, epoch, nativeIndex, source.epochs.length);
+  physical.RainfallMultiplier = ecologyEpochSchema.parse(
+    (definition ?? source.epochs.at(-1))?.ecology ?? {}
+  ).rainfall;
   return physical;
 }
 function epochProfile(base: PhysicalProfile, definition: Epoch | undefined) {
@@ -91,8 +112,7 @@ export function physicalContext(
   return {
     ...(epoch ?? neutral),
     RainfallMultiplier: 1,
-    Seed: seed ^ salt ^ (EpochIndex < 0 ? 0 : Math.imul(EpochIndex + 1, 0x45d9f3b)),
-    EpochStableSeed: seed ^ salt,
+    ...physicalSeeds(seed, salt, EpochIndex),
     EpochIndex,
     EpochCount,
     Profile,
@@ -100,5 +120,13 @@ export function physicalContext(
       ? (epoch.TectonicDurationMyr ?? tectonicDefaultMyr)
       : tectonicReferenceMyr,
     Span: epoch ? (epoch.TectonicDurationMyr ?? tectonicDefaultMyr) / tectonicDefaultMyr : 1,
+  };
+}
+
+/** A process owns its spatial pattern; the requesting consumer supplies only the current epoch. */
+export function physicalSeeds(seed: number, salt: number, epochIndex: number) {
+  return {
+    Seed: seed ^ salt ^ (epochIndex < 0 ? 0 : Math.imul(epochIndex + 1, 0x45d9f3b)),
+    EpochStableSeed: seed ^ salt,
   };
 }

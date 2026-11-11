@@ -50,9 +50,9 @@ it("includes patch ranges and excludes classes hidden by patches and finer field
     const grid = createGrid(id, { ...domain.scope, footprint: rectangle(extent) }, 3, 3, extent);
     putChannel(
       grid,
-      "cover",
+      "BiomeCodes",
       "category",
-      generateBand(grid.coverage, "float64", "cover", () => code),
+      generateBand(grid.coverage, "float64", "BiomeCodes", () => code),
       "category"
     );
     const layout = await writeFieldLayout(store, grid, `${id}:layout`, 1e-6),
@@ -62,23 +62,23 @@ it("includes patch ranges and excludes classes hidden by patches and finer field
       scope: grid.scope,
       bounds: extent,
       units: grid.units,
-      quantities: { cover: "category" },
+      quantities: { BiomeCodes: "category" },
       channels: resource.field!.summaries!,
       patches: [],
     };
   }
   const base = await field("base", [0, 0, 1000, 1000], 1);
   await field("patch", [0, 0, 1000, 1000], 7);
-  base.patches.push({ resourceId: "patch", channels: ["cover"], mapOnly: true });
+  base.patches.push({ resourceId: "patch", channels: ["BiomeCodes"], mapOnly: true });
   await patchRanges(store, base);
-  expect(base.channels.cover.range).toEqual([1, 7]);
+  expect(base.channels.BiomeCodes!.range).toEqual([1, 7]);
   const raster = (id: string, reference: FieldReference): ResourceRaster => ({
     id,
     areaId: "root",
     field: reference,
     bounds: reference.bounds,
     footprint: reference.scope.footprint,
-    channel: "cover",
+    channel: "BiomeCodes",
     geography: {
       scope: reference.scope,
       areaId: "root",
@@ -90,9 +90,9 @@ it("includes patch ranges and excludes classes hidden by patches and finer field
   });
   const baseRaster = raster("base", base);
   await rasterCategorySummaries(store, [baseRaster]);
-  expect(baseRaster.field.channels.cover.categories).toEqual([7]);
+  expect(baseRaster.field.channels.BiomeCodes!.categories).toEqual([7]);
   const fine = raster("fine", await field("fine", [0, 0, 1000, 1000], 9));
   await rasterCategorySummaries(store, [baseRaster, fine]);
-  expect(baseRaster.field.channels.cover.categories).toEqual([]);
-  expect(fine.field.channels.cover.categories).toEqual([9]);
+  expect(baseRaster.field.channels.BiomeCodes!.categories).toEqual([]);
+  expect(fine.field.channels.BiomeCodes!.categories).toEqual([9]);
 });

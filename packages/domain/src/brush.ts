@@ -1,5 +1,12 @@
 import type { Position } from "./model";
-import { gridPosition, neighbors, fieldInterpolator, type Grid, type GridSurface } from "./grids";
+import {
+  gridPosition,
+  neighbors,
+  fieldInterpolator,
+  requireChannel,
+  type Grid,
+  type GridSurface,
+} from "./grids";
 
 export interface BrushInput {
   center: Position;
@@ -10,8 +17,8 @@ export interface BrushInput {
   mode: "add" | "set" | "smooth";
   falloff: "linear" | "smooth" | "constant";
 }
-export function applyFieldBrush(data: BrushInput, source: GridSurface, grid: Grid) {
-  const values = grid.channels[data.channel],
+export function applyFieldBrush(data: BrushInput, source: GridSurface<string>, grid: Grid<string>) {
+  const values = requireChannel(grid, data.channel),
     valueAt = fieldInterpolator(source, data.channel);
   for (let i = 0; i < values.length; i++) {
     const distance = strokeDistance(gridPosition(grid, i), data.stroke ?? [data.center]);
@@ -24,7 +31,7 @@ export function applyFieldBrush(data: BrushInput, source: GridSurface, grid: Gri
 }
 function brushValue(
   data: BrushInput,
-  source: Grid,
+  source: Grid<string>,
   valueAt: (p: Position) => number,
   index: number,
   weight: number

@@ -42,7 +42,7 @@ export const ice = defineProcess({
     },
   }),
   settlesItself: true,
-  run({ field, context: c, settings: p, span, ask, stage, tools }) {
+  execute({ field, context: c, settings: p, span, ask, stage, tools }) {
     const bite = ask("iceBite");
     for (let i = 0; i < field.mesh.count; i++) {
       if (c.GlaciationStrength === 0 || field.GroundedIce.get(i) === 0) continue;

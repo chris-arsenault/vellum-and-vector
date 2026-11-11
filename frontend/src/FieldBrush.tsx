@@ -56,7 +56,7 @@ export function FieldBrush({ world, editor }: { world: World; editor: EditorStat
                   height: 96,
                   channels: {
                     [info.channel]: {
-                      unit: info.channel === "elevation" ? "metre" : "ratio",
+                      unit: info.channel === "Elevation" ? "native-length" : "ratio",
                       values: 0,
                     },
                   },

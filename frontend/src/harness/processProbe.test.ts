@@ -9,8 +9,9 @@ import {
   runNativeStep,
 } from "../../../packages/generation/src/world/physicalSteps";
 import { defineProcess } from "../../../packages/generation/src/processes/groundProcess";
-import { actBy, actTogether } from "../../../packages/generation/src/processes/processRunner";
-import { capturedAnswersAt, worldMoved } from "../../../packages/generation/src/coupling/answers";
+import { nativeOperation } from "../../../packages/generation/src/processes/processRunner";
+import { capturedAnswersAt } from "../../../packages/generation/src/coupling/answers";
+import { invalidateProcesses } from "../../../packages/generation/src/processOperation";
 import { processProbe, processProbeBands, startProcessProbe } from "./processProbe";
 
 it("records actual process boundaries at one coordinate through the native step adapter", () => {
@@ -28,7 +29,8 @@ it("records actual process boundaries at one coordinate through the native step 
     asks: ["warmth"],
     moves: [],
     settings: {},
-    run({ field }) {
+    prepare: () => ({}),
+    execute({ field }) {
       field.Quickening.fill(1);
     },
   });
@@ -37,7 +39,12 @@ it("records actual process boundaries at one coordinate through the native step 
   context.ObserveProcess = existing;
   observeNativeProcesses(probe.observe);
   try {
-    applyNativeStep(map, context, ["probe-step", 0, actBy(process), [process]]);
+    applyNativeStep(map, context, [
+      "probe-step",
+      0,
+      nativeOperation("probe-step", [process]),
+      [process],
+    ]);
   } finally {
     observeNativeProcesses(null);
   }
@@ -84,12 +91,13 @@ it("distinguishes a simultaneous group's captured inputs from current facts usin
       asks: [],
       moves: [],
       settings: {},
+      prepare: () => ({}),
     } as const,
     write = defineProcess({
       ...declaration,
       id: "write",
       writes: ["Runoff"],
-      run({ field }) {
+      execute({ field }) {
         field.Runoff.set(0, 200);
       },
     }),
@@ -98,20 +106,18 @@ it("distinguishes a simultaneous group's captured inputs from current facts usin
       ...declaration,
       id: "read",
       asks: ["discharge"],
-      run({ ask }) {
+      execute({ ask }) {
         consumed(ask("discharge").get(0));
       },
     });
   observeNativeProcesses(probe.observe);
   try {
-    runNativeStep(map, physicalContext(1, 0, map.scale.resolve(physicalProfile)), [
+    const context = physicalContext(1, 0, map.scale.resolve(physicalProfile));
+    context.Profile.FluvialReferenceRunoff = 100;
+    runNativeStep(map, context, [
       "regional-probe",
       0,
-      (field, context) =>
-        actTogether(write, read)(field, {
-          ...context,
-          Profile: { ...context.Profile, FluvialReferenceRunoff: 100 },
-        }),
+      nativeOperation("regional-probe", [write, read], true),
       [write, read],
     ]);
   } finally {
@@ -128,7 +134,7 @@ it("distinguishes a simultaneous group's captured inputs from current facts usin
       }),
     ])
   );
-  worldMoved(map);
+  invalidateProcesses(map);
   expect(capturedAnswersAt(map, 0)).toEqual({});
 });
 
@@ -144,7 +150,8 @@ it("publishes partial samples on failure and detaches before publication", () =>
       asks: [],
       moves: [],
       settings: {},
-      run() {
+      prepare: () => ({}),
+      execute() {
         throw new Error("probe failed");
       },
     }),
@@ -152,7 +159,7 @@ it("publishes partial samples on failure and detaches before publication", () =>
       runNativeStep(map, physicalContext(1, 0, map.scale.resolve(physicalProfile)), [
         "probe",
         0,
-        actBy(broken),
+        nativeOperation("probe", [broken]),
         [broken],
       ]);
   try {

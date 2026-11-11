@@ -9,7 +9,7 @@ import {
   finiteSlice,
   type MaterialLayer,
 } from "./rockColumn";
-import type { Column } from "./rockLayerFields";
+import type { Column } from "@atlas/domain";
 import { releasedMaterial } from "./groundCargoIdentity";
 
 /** A withdrawal visits the actual layers before they disappear; callbacks must consume snapshots. */
@@ -64,6 +64,6 @@ export function withdrawBuried(
   }
   return amount - left;
 }
-import { columnFields } from "./rockLayerFields";
+import { columnFields } from "@atlas/domain";
 import { groundStorage } from "./groundStorage";
 import { writeCargo, touchCargo } from "./groundCargo";

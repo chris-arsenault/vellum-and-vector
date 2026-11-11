@@ -75,7 +75,7 @@ function runPass(
   const schedule = nativeWorkload(epochs).filter((entry) => entry.epochIndices[0] === pass);
   if (!schedule.length)
     throw new Error(`No physical operations selected for continuation epoch ${pass}.`);
-  for (const { step, invocation, deformation } of schedule) {
+  for (const { step, deformation } of schedule) {
     const context = physicalContext(
       seed,
       step[1],
@@ -84,7 +84,6 @@ function runPass(
       pass,
       epochs.length
     );
-    if (invocation.parameters?.unforced) map.ExternalHeatForcing.fill(0);
     applyNativeStep(
       map,
       step[0] === "plate-advection" ? withPlateDeformation(map, context, deformation) : context,

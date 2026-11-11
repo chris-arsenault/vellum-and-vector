@@ -191,7 +191,12 @@ export async function refineRegion(
     domains,
     parameters: atlasParametersSchema.parse(inheritedGeneration(world, child)?.parameters ?? {}),
   };
-  const prepared = await workspaceGenerationSetup(asWorkspace(ws), worldId, request);
+  const prepared = await workspaceGenerationSetup(
+    asWorkspace(ws),
+    worldId,
+    request,
+    ws.working.cache
+  );
   const errors = prepared.diagnostics.filter((item) => item.severity === "error");
   if (errors.length) throw new Error(errors.map((item) => item.message).join("\n"));
   await runGeneration(ws, worldId, { ...request, ...prepared.input }, observers);

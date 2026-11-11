@@ -3,6 +3,8 @@ import { applyNativeStep, observeNativeSteps } from "./physicalSteps";
 import type { NativeStep } from "./sequence";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
+import { defineCommand } from "../processOperation";
+import type { PhysicalInput } from "../processes/groundProcess";
 
 vi.mock("./layerValidation", async (original) => ({
   ...(await original<typeof import("./layerValidation")>()),
@@ -13,7 +15,12 @@ afterEach(() => observeNativeSteps(null));
 // Observer contracts use inert callbacks; no physical process or fixture world runs.
 const map = {} as PhysicalField;
 const context = { EpochIndex: 0 } as PhysicalContext;
-const step = (name: string, run = () => {}): NativeStep => [name, 0, run, []];
+const step = (name: string, run = () => {}): NativeStep => [
+  name,
+  0,
+  defineCommand<PhysicalInput, void>(name, "event", run, []),
+  [],
+];
 
 it("distinguishes embedded completions from their outer operation", () => {
   const seen: { name: string; depth: number }[] = [];

@@ -1,4 +1,4 @@
-import { overlayField, type Grid } from "@atlas/domain";
+import { overlayField, fieldChannelName, type FieldChannelName, type Grid } from "@atlas/domain";
 import {
   FieldWorkingSet,
   type FieldInputStore,
@@ -16,7 +16,7 @@ export async function loadResourceRaster(
   const working = new FieldWorkingSet(store, inputs.blocks, inputs);
   async function field(
     reference: FieldReference | undefined,
-    names: string[]
+    names: FieldChannelName[]
   ): Promise<Grid | undefined> {
     if (!reference) return;
     const resource = await store.describe(reference.resourceId),
@@ -31,7 +31,7 @@ export async function loadResourceRaster(
       }
     );
     for (const patch of reference.patches) {
-      const selected = patch.channels.filter((name) => names.includes(name));
+      const selected = patch.channels.map(fieldChannelName).filter((name) => names.includes(name));
       if (!selected.length) continue;
       const description = await store.describe(patch.resourceId);
       const overlay = await working.load(patch.resourceId, selected, {
@@ -46,10 +46,10 @@ export async function loadResourceRaster(
     const loaded: LoadedRaster = {
       ...raster,
       field: (await field(raster.field, [raster.channel]))!,
-      water: await field(raster.water, ["water", "seaLevel"]),
-      ice: await field(raster.ice, ["ice"]),
+      water: await field(raster.water, ["WaterKindCodes", "EffectiveSeaLevel"]),
+      ice: await field(raster.ice, ["IceThickness"]),
       surface: await field(raster.surface, ["finalSurface", "secondSurface", "naturalSurface"]),
-      lakes: raster.channel === "elevation" ? geography.lakes : undefined,
+      lakes: raster.channel === "Elevation" ? geography.lakes : undefined,
     };
     return { raster: loaded, close: () => working.close() };
   } catch (error) {

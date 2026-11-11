@@ -3,7 +3,7 @@ import type { PhysicalField } from "../world/field";
 import { releaseWorking } from "../world/physicalNumerics";
 import { crustHeight, units } from "../world/math";
 import { recordFlow } from "../coupling/flows";
-import { allColumnFields, columnFields, columns, type Column } from "./rockLayerFields";
+import { allColumnFields, columnFields, columns, type Column } from "@atlas/domain";
 import {
   bindMaterialReader,
   finiteSlice,

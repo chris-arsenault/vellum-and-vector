@@ -14,7 +14,7 @@ import { Coverage } from "./lattice/coverage";
 import { everySample } from "./lattice/bandValues";
 import { validMaterialShape } from "./materialSamples";
 
-const channel = numericalSchema("float64").refine(
+const channel = numericalSchema().refine(
   (values) => everySample(values, Number.isFinite),
   "Numerical channels require finite samples."
 );

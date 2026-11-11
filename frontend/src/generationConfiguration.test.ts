@@ -8,6 +8,7 @@ import {
   type ProcessConfiguration,
 } from "@atlas/generation";
 import { planHash } from "../../packages/generation/src/planHash";
+import { mapCommand } from "../../packages/generation/src/processTraits";
 import { createGrid, generateBand, putChannel } from "@atlas/domain";
 
 function request() {
@@ -54,18 +55,18 @@ it("diagnoses an invalidated fact at its actual causal invocation", async () => 
     invalidates: string[]
   ): MapProcess => ({
     contract: { id, version: "1", parameters: {}, requires, produces, invalidates },
-    behavior: { kind: "model-pass", applyPass() {} },
+    operation: mapCommand(id, "event", () => undefined, []),
     validate: () => [],
   });
   const registry = new MapProcessRegistry()
     .register(make("rain", [], ["rain"], []))
     .register(make("terrain", [], [], ["rain"]))
-    .register(make("runoff", ["rain"], [], []));
+    .register(make("Runoff", ["rain"], [], []));
   const configuration: ProcessConfiguration = {
     id: "test",
     version: 1,
     parameters: {},
-    sequence: ["rain", "terrain", "runoff"].map((process) => ({
+    sequence: ["rain", "terrain", "Runoff"].map((process) => ({
       kind: "process",
       process,
       id: process,
@@ -74,7 +75,7 @@ it("diagnoses an invalidated fact at its actual causal invocation", async () => 
   };
   const errors = preflight(configuration, registry);
   expect(errors).toHaveLength(1);
-  expect(errors[0]).toMatchObject({ invocation: "runoff", resource: "rain" });
+  expect(errors[0]).toMatchObject({ invocation: "Runoff", resource: "rain" });
   expect(errors[0].message).toContain("invalidated by terrain");
 });
 
@@ -103,9 +104,9 @@ it("accepts authored elevation with initialized absent histories and rejects mis
   const grid = createGrid(id, source.scope, 4, 4);
   putChannel(
     grid,
-    "elevation",
-    "metre",
-    generateBand(grid.coverage, "float64", "elevation", () => 100)
+    "Elevation",
+    "native-length",
+    generateBand(grid.coverage, "float64", "Elevation", () => 100)
   );
   source.numerical[id] = grid;
   source.world.fields.push({
@@ -116,12 +117,12 @@ it("accepts authored elevation with initialized absent histories and rejects mis
     algorithm: "authored",
     source: { kind: "operation", id: crypto.randomUUID() },
     samples: 16,
-    channels: ["elevation"],
+    channels: ["Elevation"],
   });
   const prepared = prepareAtlasGeneration(source, { ...input, domains: ["magic"] });
   expect(prepared.diagnostics).toEqual([]);
-  grid.units.elevation = "ratio";
+  grid.units.Elevation = "ratio";
   expect(() => prepareAtlasGeneration(source, { ...input, domains: ["magic"] })).toThrow(
-    "Inherited elevation requires metre"
+    "Inherited Elevation requires native-length"
   );
 });

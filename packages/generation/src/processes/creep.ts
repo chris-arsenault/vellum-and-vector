@@ -48,6 +48,7 @@ function creepFrom(
   });
 }
 export const creep = defineProcess({
+  prepare: () => ({}),
   id: "creep",
   statement:
     "Loose cover moves downhill on any slope, faster the steeper it is, slower under roots, which rounds ranges off and fills the low ground.",
@@ -60,7 +61,7 @@ export const creep = defineProcess({
   settings: creepSettings,
   // A region's passes refine one stretch of the world's history; they do not add more of it.
   forExecution: (settings, { passes }) => ({ CreepPerSpan: settings.CreepPerSpan / passes }),
-  run(work) {
+  execute(work) {
     const { field, stage } = work;
     const send = (source: number, target: number, volume: number) =>
       stage.moveLoose(source, target, volume, "creep");

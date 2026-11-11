@@ -130,8 +130,13 @@ it("reuses geometry queries while fishery reads changed sea and livelihood field
   const state = landscape(),
     grid = state.surface,
     count = grid.active.length;
-  for (const name of ["water", "aquaticFauna", "upwelling", "magic:pressure:intensity"])
-    putChannel(grid, name, "ratio", residentBand("float64", new Float64Array(count)));
+  for (const [name, unit] of [
+    ["WaterKindCodes", "category"],
+    ["AquaticFauna", "kg-carbon/square-metre"],
+    ["Upwelling", "per-mille"],
+    ["magic:pressure:intensity", "relative-intensity"],
+  ] as const)
+    putChannel(grid, name, unit, residentBand("float64", new Float64Array(count)));
   state.society = {
     region: {
       areaId: "area",
@@ -155,20 +160,20 @@ it("reuses geometry queries while fishery reads changed sea and livelihood field
     queries = vi.fn(coverage(grid.scope.footprint)),
     prepared = vi.spyOn(spatial, "geometryCoverage").mockReturnValue(queries);
   try {
-    grid.channels.water.set(1, 1);
+    grid.channels.WaterKindCodes!.set(1, 1);
     const first = coastalFishery(state),
       calls = queries.mock.calls.length,
       topology = coastalNeighbors(state);
     expect(first.get(0)).toBe(0.5);
     expect(calls).toBeGreaterThan(0);
-    grid.channels.aquaticFauna.set(1, 2);
-    grid.channels.upwelling.set(1, 0.5);
-    grid.channels["magic:pressure:intensity"].set(1, 400);
+    grid.channels.AquaticFauna!.set(1, 2);
+    grid.channels.Upwelling!.set(1, 500);
+    grid.channels["magic:pressure:intensity"]!.set(1, 400);
     const second = coastalFishery(state);
     expect(second.get(0)).toBeCloseTo(2.85);
     expect(queries.mock.calls.length).toBe(calls);
     expect(coastalNeighbors(state)).toBe(topology);
-    grid.channels.water.set(1, 0);
+    grid.channels.WaterKindCodes!.set(1, 0);
     const third = coastalFishery(state);
     expect(third.get(0)).toBe(0);
     state.surface = createGrid("replacement", grid.scope, 5, 2);

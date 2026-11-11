@@ -1,9 +1,10 @@
+import { mapCommand, executeMapOperation, processOwner } from "./processTraits";
+import { defineCommand, runOperation } from "./processOperation";
 import { boundEpoch, population, semanticId, type SocietyCommunity } from "@atlas/domain";
 import type { GenerationState, MapProcess, MapProcessContext, HumanRound } from "./process";
 import type { GenerationSettings } from "./generationSettings";
 import { generationBindings } from "./generationBindings";
-import { projectNative } from "./world/atlasProjection";
-import { classifyMagicFeatures, projectMagic } from "./world/magicFeatures";
+import { projectNative, selectedNativeProjection } from "./world/atlasProjection";
 import { createSocietyGeography } from "./societyGeography";
 import { startingPopulations } from "./societySettlements";
 import { societyCycle } from "./societyEvolution";
@@ -12,7 +13,7 @@ import { isMajorRuin } from "./societyMapScope";
 import { profileOf } from "./societyProfile";
 import { mapScale } from "./worldSignificance";
 import { withNumericalLifetime } from "./generationWorkingState";
-import { evaluateSocietyMagic } from "./world/magicProcesses";
+import { evaluateSocietyMagic, publishCurrentMagic } from "./world/magicProcesses";
 
 type Era = GenerationSettings["humanEras"][number];
 /**
@@ -49,15 +50,19 @@ export function hasHumanRound(settings: GenerationSettings) {
 }
 
 /** The society reads the surface; project the epoch's geography and its magic onto it first. */
-function projectEpoch(state: GenerationState, seed: number) {
-  projectNative(state);
-  if (state.physical!.magic) {
-    classifyMagicFeatures(state, seed);
-    projectMagic(state);
-  }
+function projectEpoch(state: GenerationState, context: MapProcessContext) {
+  runOperation(processOwner(state), projectNative, selectedNativeProjection(state, context));
+  if (state.physical!.magic) executeMapOperation(publishCurrentMagic, state, context);
 }
 /** Mobile bands drawn as units, camped on food and warmth, with their founding people. */
-function foundRound(state: GenerationState, context: MapProcessContext, era: Era) {
+const foundRound = defineCommand(
+  "human.round-foundation",
+  "initialize",
+  ({ state, context, era }: { state: GenerationState; context: MapProcessContext; era: Era }) =>
+    found(state, context, era),
+  []
+);
+function found(state: GenerationState, context: MapProcessContext, era: Era) {
   const people = semanticId(state.domain.world.id, "people", "residents");
   state.domain.world.entities[people] ??= {
     id: people,
@@ -78,8 +83,16 @@ function foundRound(state: GenerationState, context: MapProcessContext, era: Era
     c.groups = [
       { people, culture: null, languages: [], religions: [], practices: [], count: starts[i] },
     ];
-  return work;
 }
+const completeRound = defineCommand(
+  "human.round-completion",
+  "event",
+  ({ state, era, epoch }: { state: GenerationState; era: string; epoch: string }) => {
+    (state.rounds ??= []).push(endRound(state, era, epoch));
+    delete state.society;
+  },
+  []
+);
 function roundContext(context: MapProcessContext, era: Era, epoch: string): MapProcessContext {
   return {
     ...context,
@@ -103,18 +116,13 @@ async function runHumanRound(state: GenerationState, context: MapProcessContext)
     index = context.epochIndices[0] ?? -1;
   if (!epoch || index < 0 || !state.physical) return;
   for (const era of roundEras(bound.settings, epoch.id, index))
-    await runEra(state, context, era, epoch.id, bound.seed);
+    await runEra(state, context, era, epoch.id);
 }
-async function runEra(
-  state: GenerationState,
-  context: MapProcessContext,
-  era: Era,
-  epoch: string,
-  seed: number
-) {
+async function runEra(state: GenerationState, context: MapProcessContext, era: Era, epoch: string) {
   context.progress(0, `${era.id}: people enter the ${epoch}`);
-  projectEpoch(state, seed);
-  const work = foundRound(state, context, era),
+  projectEpoch(state, context);
+  runOperation(processOwner(state), foundRound, { state, context, era });
+  const work = state.society!,
     inEra = roundContext(context, era, epoch);
   // A band's generation is the shortest cycle: coarser than the settled decade, and a round
   // costs a fraction of a physical epoch instead of doubling it.
@@ -136,11 +144,9 @@ async function runEra(
     delete work.cycle;
   }
   const round = withNumericalLifetime(state, () => {
-    const completed = endRound(state, era.id, epoch);
-    (state.rounds ??= []).push(completed);
-    delete state.society;
-    if (state.physical?.magic) evaluateSocietyMagic(state, context);
-    return completed;
+    runOperation(processOwner(state), completeRound, { state, era: era.id, epoch });
+    if (state.physical?.magic) executeMapOperation(evaluateSocietyMagic, state, context);
+    return state.rounds!.at(-1)!;
   });
   context.recordCause({
     kind: "domain",
@@ -197,6 +203,6 @@ export const humanRoundProcess: MapProcess = {
     // The round publishes ruins and a people, so its results are validated like any pass.
     workspaceOnly: false,
   },
-  behavior: { kind: "model-pass", applyPass: runHumanRound },
+  operation: mapCommand("human.round", "event", runHumanRound, []),
   validate: () => [],
 };

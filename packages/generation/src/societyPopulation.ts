@@ -20,8 +20,18 @@ import { drawToCentres, urbanTargets } from "./societyCentres";
 import { compactGroups } from "./societyGroups";
 import { bindSocietyProfile } from "./societyProfile";
 import { mapScale } from "./worldSignificance";
+import { mapCommand } from "./processTraits";
+import { defineCommand } from "./processOperation";
+import type { SocietyInput } from "./societyOperation";
 
-export function initializePopulation(state: GenerationState, context: MapProcessContext) {
+export const initializePopulation = mapCommand("human.initialize", "initialize", initialize, []);
+export const evolvePopulation = defineCommand(
+  "human.population",
+  "elapsed",
+  ({ state, context, years }: SocietyInput) => evolve(state, context, years),
+  []
+);
+function initialize(state: GenerationState, context: MapProcessContext) {
   const prior = societyAncestor(state);
   const work = createSocietyGeography(state, context, { retained: prior?.communities });
   bindSocietyProfile(state, context);
@@ -111,11 +121,7 @@ function startingGroups(groups: unknown, defaults: PopulationGroup[], count: num
 export function populationTotal(state: GenerationState) {
   return state.society!.region.communities.reduce((sum, c) => sum + population(c), 0);
 }
-export function evolvePopulation(
-  state: GenerationState,
-  context: MapProcessContext,
-  years: number
-) {
+function evolve(state: GenerationState, context: MapProcessContext, years: number) {
   const work = state.society!;
   if (work.inherited) return;
   refreshSocietySupport(state);

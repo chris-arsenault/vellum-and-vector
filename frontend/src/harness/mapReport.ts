@@ -1,11 +1,13 @@
 import {
   defaultTerrainCells,
+  compactGeometryBounds,
   foldSamples,
+  fieldChannelName,
+  requireChannel,
   mapRefinementLevel,
   regionalScale,
   MapScale,
   spatial,
-  type Bounds,
   type Grid,
   type World,
 } from "@atlas/domain";
@@ -15,7 +17,7 @@ import { workspaceRasterGeography } from "../workspaceRasterGeography";
 import { loadResourceRaster } from "../resourceRaster";
 import { numericTileSampler } from "../numericTiles";
 import { tileBlockWindows } from "../renderResources";
-import { displayTolerance } from "../sceneWindows";
+import { displayTolerance, sceneWindows } from "../sceneWindows";
 import type { LoadedRaster, ResourceRaster } from "../types";
 import type { HarnessWorkspace } from "./harnessWorkspace";
 
@@ -25,14 +27,18 @@ const wholeViewPixels = 1600;
 /** The map's published terrain, loaded as the renderer loads it, with its whole geography. */
 export async function openTerrain(ws: HarnessWorkspace, worldId: string, areaId: string) {
   const world = await ws.catalog.readEditor(worldId),
-    extent = spatial.bounds(world.areas[areaId].footprint) as Bounds,
+    extent = compactGeometryBounds(world.reference, world.areas[areaId].footprint),
     rasters = await workspaceRasters(ws, worldId, areaId, extent, 0),
     // References run parent to child, inputs first: the map's own generated height is last.
-    terrain = rasters.filter((raster) => raster.channel === "elevation").at(-1);
+    terrain = rasters.filter((raster) => raster.channel === "Elevation").at(-1);
   if (!terrain) throw new Error("This map has no published terrain.");
+  if (world.reference.boundaryMode === "cylinder") {
+    const [west, , east] = spatial.bounds(world.reference.domain);
+    terrain.wrap = [west, east];
+  }
   const geography = await workspaceRasterGeography(ws.catalog, {
     ...terrain.geography,
-    windows: [extent],
+    windows: sceneWindows(world, extent),
     tolerance: 0,
   });
   const loaded = await loadResourceRaster(
@@ -59,7 +65,10 @@ export function scaleReport(world: World, areaId: string, quality: string, grid:
       mapAreaKm2: MapScale.areaUnits(spatial.area(area.footprint), "m2", "km2"),
     };
   if (!area.parentId || !area.map) return base;
-  const scale = MapScale.fromCells(spatial.bounds(area.footprint), defaultTerrainCells),
+  const scale = MapScale.fromCells(
+      compactGeometryBounds(world.reference, area.footprint),
+      defaultTerrainCells
+    ),
     intended = regionalScale(Math.max(1, mapRefinementLevel(world.areas, areaId)), quality, scale),
     subject = world.views.find((view) => view.id === area.regionId)?.region?.footprint,
     subjectArea = subject ? spatial.area(subject) : NaN;
@@ -131,7 +140,7 @@ function range(grid: Grid, name: string) {
   let minimum = Infinity,
     maximum = -Infinity,
     invalid = 0;
-  const values = grid.channels[name];
+  const values = requireChannel(grid, fieldChannelName(name));
   for (let i = 0; i < grid.active.length; i++) {
     if (!grid.active.get(i)) continue;
     const value = values.get(i);

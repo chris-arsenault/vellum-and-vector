@@ -7,6 +7,7 @@ import {
   societyWorkAttributesSchema,
   isSocietyWork,
   type SocietyCommunity,
+  type FieldChannelName,
   type SocietyWork,
   type SocietyWorkKind,
 } from "@atlas/domain";
@@ -20,11 +21,14 @@ import { isWorldSociety } from "./societyMapScope";
 import { demandAmount, demandSamples, hasMedium } from "./societyDemand";
 import { coldAgeWorks, placeColdAgeWork } from "./societyColdAge";
 import { authoredFields } from "./mapAuthored";
-import { anchorRiverWork } from "./societyWaterUse";
+import { anchorRiverWork, irrigateSoil } from "./societyWaterUse";
 import { nearestSample, samplesInBox } from "./societySpatial";
 import { societyWorkName } from "./societyNaming";
 import { mapScale } from "./worldSignificance";
 import { returnGroundwater } from "./world/groundwater";
+import { defineCommand } from "./processOperation";
+import { mapCommand } from "./processTraits";
+import type { SocietyInput } from "./societyOperation";
 
 export function makeWork(
   state: GenerationState,
@@ -71,13 +75,13 @@ export const settledHands = 500;
 function settledWorks(state: GenerationState, c: SocietyCommunity): SocietyWorkKind[] {
   if (population(c) < settledHands) return [];
   const i = nearestSample(state, c.position),
-    v = (name: string) => societyValue(state, name, i);
+    v = (name: FieldChannelName) => societyValue(state, name, i);
   const kinds: SocietyWorkKind[] = [];
-  if (v("treeCover") > 0.25 && c.support.farming > c.support.gathering) kinds.push("clearance");
+  if (v("TreeCover") > 0.25 && c.support.farming > c.support.gathering) kinds.push("clearance");
   const wildlife = wildlifeWork(state, c, i);
   if (wildlife) kinds.push(wildlife);
   if (needsWater(state, c, i, 0.2)) kinds.push("irrigation");
-  if (v("slope") > 0.08 && state.society!.region.connections.length) kinds.push("pass");
+  if (v("Slope") > 0.08 && state.society!.region.connections.length) kinds.push("pass");
   if (needsWater(state, c, i, 0.4)) kinds.push("dam");
   return kinds;
 }
@@ -90,7 +94,7 @@ function wildlifeWork(
   c: SocietyCommunity,
   i: number
 ): SocietyWorkKind | null {
-  if (societyValue(state, "herbivores", i) <= 0.001) return null;
+  if (societyValue(state, "Herbivores", i) <= 0.001) return null;
   return c.groups.some((g) => g.practices.includes("conservation")) ? "conservation" : "hunting";
 }
 export function planSocietyWorks(state: GenerationState) {
@@ -141,8 +145,9 @@ function harborSample(state: GenerationState, position: SocietyCommunity["positi
     reach = mapScale(state).resolveMeasure(harbourReach);
   for (const i of samplesInBox(state.surface, [x - reach, y - reach, x + reach, y + reach])) {
     if (
-      societyValue(state, "water", i) !== 1 ||
-      societyValue(state, "waterDepth", i) >= mapScale(state).resolveMeasure(harbourDepth)
+      societyValue(state, "WaterKindCodes", i) !== 1 ||
+      societyValue(state, "WaterDepths", i) >=
+        MapScale.inUnits(mapScale(state).resolveMeasure(harbourDepth), "native")
     )
       continue;
     const p = gridPosition(state.surface, i);
@@ -191,7 +196,13 @@ function configureWork(candidate: SocietyWork, attributes: Record<string, unknow
  * Present works at an inherited profile: authored works, and the works this area realized
  * from inherited demands, act on the surface here without advancing an era.
  */
-export function applyPresentWorks(state: GenerationState) {
+export const applyPresentWorks = mapCommand(
+  "human.present-work-effects",
+  "event",
+  presentWorks,
+  []
+);
+function presentWorks(state: GenerationState) {
   const region = state.society!.region,
     area = state.domain.scope.areaId;
   addAuthoredWorks(state, new Set(region.works.map((w) => w.id)));
@@ -210,7 +221,7 @@ export function applyPresentWorks(state: GenerationState) {
     );
   }
 }
-export function editableSamples(state: GenerationState, channel: string) {
+export function editableSamples(state: GenerationState, channel: FieldChannelName) {
   const authorities = authoredFields(state.domain)
     .filter((a) => a.channels?.includes(channel))
     .filter((a) => !a.spaceId || a.spaceId === state.domain.scope.spaceId)
@@ -224,14 +235,14 @@ export function editableSamples(state: GenerationState, channel: string) {
  */
 export function changeSample(
   state: GenerationState,
-  channel: string,
+  channel: FieldChannelName,
   i: number,
   value: number,
   cause: "work" | "practice" = "work"
 ) {
   const values = state.surface.channels[channel];
   if (!values || !Number.isFinite(value) || values.get(i) === value) return;
-  if (state.physical && channel === "elevation") {
+  if (state.physical && channel === "Elevation") {
     state.society!.elevationBefore ??= state.surface.coverage.copyBand(values);
     state.society!.elevationBefore.retain();
   }
@@ -267,11 +278,13 @@ export function* workSamples(state: GenerationState, work: SocietyWork) {
       };
   }
 }
-export function applySocietyWorks(
-  state: GenerationState,
-  context: MapProcessContext,
-  years: number
-) {
+export const applySocietyWorks = defineCommand(
+  "human.works",
+  "elapsed",
+  ({ state, context, years }: SocietyInput) => advanceWorks(state, context, years),
+  []
+);
+function advanceWorks(state: GenerationState, context: MapProcessContext, years: number) {
   if (state.society!.inherited) return;
   planSocietyWorks(state);
   // A band of 40 keeps up its cold-age works; a settled work needs a hundred hands.
@@ -294,12 +307,12 @@ function applyWork(state: GenerationState, work: SocietyWork, years: number) {
   const target = work.magnitude * work.condition,
     delta = target - work.applied;
   const permitted = new Map<string, (i: number) => boolean>();
-  const change = (name: string, i: number, value: number) => {
+  const change = (name: FieldChannelName, i: number, value: number) => {
     if (!permitted.has(name)) permitted.set(name, editableSamples(state, name));
     if (permitted.get(name)!(i)) changeSample(state, name, i, value);
   };
   for (const { i, fraction } of workSamples(state, work)) {
-    const edit = (name: string, value: number) => change(name, i, value);
+    const edit = (name: FieldChannelName, value: number) => change(name, i, value);
     applyWorkSample(
       state,
       work,
@@ -323,14 +336,15 @@ function applyWorkSample(
   work: SocietyWork,
   i: number,
   { amount, rise, years }: WorkDose,
-  edit: (name: string, value: number) => void
+  edit: (name: FieldChannelName, value: number) => void
 ) {
-  const v = (name: string) => societyValue(state, name, i);
+  const v = (name: FieldChannelName) => societyValue(state, name, i);
   const terrain: Partial<Record<SocietyWorkKind, number>> = {
     pass: -mapScale(state).length(0.000002, 0.5),
     weir: mapScale(state).length(0.000001, 0.5),
   };
-  if (terrain[work.kind]) edit("elevation", v("elevation") + terrain[work.kind]! * rise);
+  if (terrain[work.kind])
+    edit("Elevation", v("Elevation") + MapScale.inUnits(terrain[work.kind]! * rise, "native"));
   if (work.kind === "weir" || work.kind === "quarrying")
     applyNativeColdAgeWork(state, work, i, amount, years);
   applyLivingWork(state, work, i, amount, years, edit);
@@ -342,19 +356,19 @@ function applyLivingWork(
   i: number,
   amount: number,
   years: number,
-  edit: (name: string, value: number) => void
+  edit: (name: FieldChannelName, value: number) => void
 ) {
-  const v = (name: string) => societyValue(state, name, i);
+  const v = (name: FieldChannelName) => societyValue(state, name, i);
   switch (work.kind) {
     case "irrigation":
       // A located work is the irrigation entry's place, which declares its own water.
-      return work.demand ? irrigate(state, i, amount, edit) : undefined;
+      return work.demand ? irrigateSoil(state, i, amount, edit) : undefined;
     case "clearance":
       return clearLand(state, i, amount, years, edit);
     case "burning":
       return clearLand(state, i, amount * 1.5, years, edit);
     case "hunting":
-      for (const animal of ["herbivores", "grazers", "browsers"])
+      for (const animal of ["Herbivores", "Grazers", "Browsers"] as const)
         edit(animal, v(animal) * Math.exp((-amount * years) / 150));
       return;
     case "conservation":
@@ -362,22 +376,6 @@ function applyLivingWork(
     default:
       return;
   }
-}
-/** Soil water depth per diverted flow; the coarse exposure interval is folded into this inverse area. */
-export const soilShare = MapScale.measure(3.2e11, -2);
-function irrigate(
-  state: GenerationState,
-  i: number,
-  amount: number,
-  edit: (name: string, value: number) => void
-) {
-  const available = societyValue(state, "flow", i),
-    diverted = Math.min(available * 0.2, amount);
-  edit("flow", available - diverted);
-  edit(
-    "soilWater",
-    societyValue(state, "soilWater", i) + diverted * mapScale(state).resolveMeasure(soilShare)
-  );
 }
 /**
  * Clearing and burning take the trees and what lives in them: the Greenwood's sap under the
@@ -389,25 +387,25 @@ function clearLand(
   i: number,
   amount: number,
   years: number,
-  edit: (name: string, value: number) => void
+  edit: (name: FieldChannelName, value: number) => void
 ) {
   const fraction = 1 - Math.exp(-amount * (years > 0 ? years / 200 : 1));
   for (const channel of [
-    "treeCover",
-    "broadleafCover",
-    "coniferCover",
-    "broadleafSaplings",
-    "coniferSaplings",
-  ])
+    "TreeCover",
+    "BroadleafCover",
+    "ConiferCover",
+    "BroadleafSaplings",
+    "ConiferSaplings",
+  ] as const)
     edit(channel, societyValue(state, channel, i) * (1 - fraction));
-  edit("grassCover", Math.min(1, societyValue(state, "grassCover", i) + fraction * 0.3));
+  edit("GrassCover", Math.min(1, societyValue(state, "GrassCover", i) + fraction * 0.3));
   const capacity = soilWaterCapacity(state, i);
-  const stored = societyValue(state, "soilWater", i),
+  const stored = societyValue(state, "SoilWater", i),
     work = state.physical,
     returned = work
       ? returnGroundwater(work.map, work.samples.get(i), fraction, capacity - stored)
       : 0;
-  edit("soilWater", stored + returned);
+  edit("SoilWater", stored + returned);
   drawShareAt(state, "greens", "sap", i, fraction);
 }
 function conserve(
@@ -415,12 +413,12 @@ function conserve(
   i: number,
   amount: number,
   years: number,
-  edit: (name: string, value: number) => void
+  edit: (name: FieldChannelName, value: number) => void
 ) {
-  const current = societyValue(state, "herbivores", i);
-  const capacity = societyValue(state, "productivity", i) * 0.05;
+  const current = societyValue(state, "Herbivores", i);
+  const capacity = societyValue(state, "Productivity", i) * 0.05;
   edit(
-    "herbivores",
+    "Herbivores",
     current + Math.max(0, capacity - current) * (1 - Math.exp((-amount * years) / 50))
   );
 }

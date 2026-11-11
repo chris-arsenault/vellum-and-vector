@@ -1,10 +1,17 @@
 import { expect, it } from "vitest";
-import { landscape, epoch } from "./mapFixtures";
+import { landscape, epoch, configuration, invoke, options } from "./mapFixtures";
 import type { MapProcessContext, MapProcess } from "./process";
-import { executeProcessBehavior, type ProcessBehavior } from "./processTraits";
+import {
+  executeMapOperation,
+  mapCommand,
+  mapElapsed,
+  mapQuery,
+  mapWork,
+  elapsedYears,
+  type MapOperation,
+} from "./processTraits";
 import { MapRunner } from "./mapRunner";
 import { MapProcessRegistry } from "./process";
-import { configuration, invoke, options } from "./mapFixtures";
 
 function context(): MapProcessContext {
   return {
@@ -20,109 +27,84 @@ function context(): MapProcessContext {
     progress() {},
   };
 }
-function definition(behavior: ProcessBehavior): MapProcess {
+function definition(operation: MapOperation): MapProcess {
   return {
     contract: {
-      id: "trait",
+      id: operation.id,
       version: "1",
       parameters: {},
       requires: [],
       produces: [],
       invalidates: [],
     },
-    behavior,
+    operation,
     validate: () => [],
   };
 }
-it("dispatches real initialize, pass, transfer and extraction operations without deduplicating passes", async () => {
-  const calls: string[] = [];
-  const operations: ProcessBehavior[] = [
-    {
-      kind: "initialize",
-      initialize: () => {
-        calls.push("initialize");
-      },
-    },
-    {
-      kind: "model-pass",
-      applyPass: () => {
-        calls.push("pass");
-      },
-    },
-    {
-      kind: "transfer",
-      transfer: () => {
-        calls.push("transfer");
-      },
-    },
-    {
-      kind: "extract",
-      extract: () => {
-        calls.push("extract");
-      },
-    },
-  ];
-  const state = landscape(),
-    ctx = context();
-  for (const behavior of operations) await executeProcessBehavior(definition(behavior), state, ctx);
-  await executeProcessBehavior(definition(operations[1]), state, ctx);
-  expect(calls).toEqual(["initialize", "pass", "transfer", "extract", "pass"]);
+it("binds explicit elapsed duration and rejects absent or invalid time", () => {
+  expect(elapsedYears({ kind: "epoch", fraction: 0.5 }, context())).toBe(2500);
+  expect(() => elapsedYears({ kind: "epoch", fraction: 1 }, { epochs: [] })).toThrow("duration");
+  expect(() => elapsedYears({ kind: "years", years: -1 }, context())).toThrow("duration");
 });
-it("binds elapsed evolution to the explicit epoch fraction and rejects an absent clock", () => {
-  let advanced = 0;
-  const process = definition({
-    kind: "elapsed",
-    duration: { kind: "epoch", fraction: 0.5 },
-    advance: (_state, _context, years) => {
-      advanced += years;
-    },
-  });
-  const ctx = context();
-  executeProcessBehavior(process, landscape(), ctx);
-  expect(advanced).toBe(2500);
-  expect(() => executeProcessBehavior(process, landscape(), { ...ctx, epochs: [] })).toThrow(
-    "duration"
-  );
-});
-
-it("executes forcing contributions and awaits material transformation completion", async () => {
-  const calls: string[] = [];
-  const state = landscape(),
+it("keeps current queries cached until explicit work while passing actual exposure", () => {
+  const seen: number[] = [],
+    state = landscape(),
     ctx = context();
-  await executeProcessBehavior(
-    definition({
-      kind: "forcing-contributor",
-      contribute() {
-        calls.push("forcing");
-      },
-    }),
-    state,
-    ctx
+  const current = mapQuery(
+    "current",
+    () => {
+      seen.push(-1);
+    },
+    []
   );
-  await executeProcessBehavior(
-    definition({
-      kind: "material-transformation",
-      async transform() {
+  const work = mapWork(
+    "work",
+    () => 0.25,
+    (_state, _context, exposure) => {
+      seen.push(exposure);
+    },
+    [current]
+  );
+  executeMapOperation(current, state, ctx);
+  executeMapOperation(current, state, ctx);
+  executeMapOperation(work, state, ctx);
+  executeMapOperation(current, state, ctx);
+  expect(seen).toEqual([-1, 0.25, -1]);
+  const invalid = mapWork(
+    "invalid",
+    () => -1,
+    () => undefined,
+    []
+  );
+  expect(() => executeMapOperation(invalid, state, ctx)).toThrow("exposure");
+});
+it("passes the bound years to the elapsed owner", () => {
+  let years = 0;
+  const operation = mapElapsed(
+    "age",
+    { kind: "epoch", fraction: 0.5 },
+    (_state, _context, elapsed) => {
+      years = elapsed;
+    },
+    []
+  );
+  executeMapOperation(operation, landscape(), context());
+  expect(years).toBe(2500);
+});
+it("awaits command completion before validation and product publication", async () => {
+  const calls: string[] = [];
+  const process = definition(
+    mapCommand(
+      "publication",
+      "publish",
+      async () => {
+        calls.push("started");
         await Promise.resolve();
-        calls.push("material");
+        calls.push("completed");
       },
-    }),
-    state,
-    ctx
+      []
+    )
   );
-  expect(calls).toEqual(["forcing", "material"]);
-});
-
-it("awaits asynchronous material transformation before validating or exposing products", async () => {
-  const calls: string[] = [];
-  const process = definition({
-    kind: "material-transformation",
-    async transform() {
-      calls.push("started");
-      await Promise.resolve();
-      calls.push("completed");
-    },
-  });
   process.contract.produces = ["transformed"];
   process.validate = (state) => {
     expect(state.facts.has("transformed")).toBe(false);
@@ -136,17 +118,19 @@ it("awaits asynchronous material transformation before validating or exposing pr
   expect(calls).toEqual(["started", "completed", "validate"]);
   expect(result.state.facts.has("transformed")).toBe(true);
 });
-
-it("rejects failed asynchronous transformation before validation or delivery", async () => {
-  let validated = false;
-  let delivered = false;
-  const process = definition({
-    kind: "material-transformation",
-    async transform() {
-      await Promise.resolve();
-      throw new Error("Material transformation failed");
-    },
-  });
+it("rejects a failed command before validation or delivery", async () => {
+  let validated = false,
+    delivered = false;
+  const process = definition(
+    mapCommand(
+      "failure",
+      "event",
+      async () => {
+        throw new Error("Material transformation failed");
+      },
+      []
+    )
+  );
   process.validate = () => {
     validated = true;
     return [];

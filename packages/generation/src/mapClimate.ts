@@ -1,3 +1,4 @@
+import { mapCommand, mapElapsed } from "./processTraits";
 import {
   everySample,
   neighbors,
@@ -28,53 +29,61 @@ export const temperatureProcess: MapProcess = {
     id: "climate.temperature",
     version: "1",
     parameters: temperatureParameters,
-    requires: ["elevation", "heat"],
-    produces: ["temperature"],
+    requires: ["Elevation", "Heat"],
+    produces: ["Temperature", "NaturalTemperature"],
     invalidates: [
-      "precipitation",
-      "snowfall",
-      "rainfall",
-      "moisture",
+      "ColumnPrecipitation",
+      "Snowfall",
+      "Rainfall",
+      "AtmosphericWaterRate",
       "drainage",
-      "runoff",
-      "flow",
+      "Runoff",
+      "FlowAccumulation",
       "lakes",
-      "ice",
+      "IceThickness",
     ],
   },
-  behavior: {
-    kind: "model-pass",
-    applyPass(state, context) {
+  operation: mapCommand(
+    "climate.temperature",
+    "event",
+    (state, context) => {
       const grid = state.surface,
         scale = MapScale.fromCells(grid.bounds, grid.active.length),
-        elevation = requireChannel(grid, "elevation", "metre"),
-        heat = requireChannel(grid, "heat", "celsius"),
+        elevation = requireChannel(grid, "Elevation", "native-length"),
+        heat = requireChannel(grid, "Heat", "celsius"),
         temperature = surfaceArray(state, "temperature"),
         natural = surfaceArray(state, "natural-temperature");
       for (let i = 0; i < elevation.length; i++) {
         natural.set(
           i,
-          Number(context.parameters.temperature) +
-            Number(context.parameters.temperatureOffset) -
-            Math.max(0, elevation.get(i) - scale.length(Number(context.parameters.seaLevel))) *
-              scale.inverseLength(Number(context.parameters.lapseRate))
+          10 *
+            (30 +
+              Number(context.parameters.temperature) +
+              Number(context.parameters.temperatureOffset) -
+              Math.max(
+                0,
+                MapScale.metres(elevation.get(i), "native") -
+                  scale.length(Number(context.parameters.seaLevel))
+              ) *
+                scale.inverseLength(Number(context.parameters.lapseRate)))
         );
-        temperature.set(i, natural.get(i) + heat.get(i));
+        temperature.set(i, natural.get(i) + 10 * heat.get(i));
       }
-      putChannel(grid, "naturalTemperature", "celsius", natural);
-      putChannel(grid, "temperature", "celsius", temperature);
+      putChannel(grid, "NaturalTemperature", "native-temperature", natural);
+      putChannel(grid, "Temperature", "native-temperature", temperature);
       context.recordCause({
         kind: "climate",
         process: "climate.temperature",
         fields: {
-          naturalTemperature: summarizeChannel(grid, "naturalTemperature"),
-          temperature: summarizeChannel(grid, "temperature"),
+          naturalTemperature: summarizeChannel(grid, "NaturalTemperature"),
+          temperature: summarizeChannel(grid, "Temperature"),
         },
       });
     },
-  },
+    []
+  ),
   validate(state) {
-    requireChannel(state.surface, "temperature", "celsius");
+    requireChannel(state.surface, "Temperature", "native-temperature");
     return [];
   },
 };
@@ -150,17 +159,18 @@ export const precipitationProcess: MapProcess = {
         minimum: 0.001,
       },
     },
-    requires: ["elevation", "temperature"],
-    produces: ["precipitation", "snowfall", "rainfall", "moisture"],
-    invalidates: ["drainage", "runoff", "flow", "lakes", "ice"],
+    requires: ["Elevation", "Temperature"],
+    produces: ["ColumnPrecipitation", "Snowfall", "Rainfall", "AtmosphericWaterRate"],
+    invalidates: ["drainage", "Runoff", "FlowAccumulation", "lakes", "IceThickness"],
   },
-  behavior: {
-    kind: "model-pass",
-    applyPass(state, context) {
+  operation: mapCommand(
+    "climate.precipitation",
+    "event",
+    (state, context) => {
       const grid = state.surface,
         scale = MapScale.fromCells(grid.bounds, grid.active.length),
-        elevation = requireChannel(grid, "elevation", "metre"),
-        temperature = requireChannel(grid, "temperature", "celsius"),
+        elevation = requireChannel(grid, "Elevation", "native-length"),
+        temperature = requireChannel(grid, "Temperature", "native-temperature"),
         precipitation = surfaceArray(state, "precipitation"),
         snowfall = surfaceArray(state, "snowfall"),
         rainfall = surfaceArray(state, "rainfall"),
@@ -171,13 +181,17 @@ export const precipitationProcess: MapProcess = {
           const connected = previous >= 0 && neighbors(grid, i).includes(previous),
             incoming = connected
               ? moisture.get(previous)
-              : scale.length(Number(context.parameters.incomingMoisture)),
-            ocean = elevation.get(i) <= scale.length(Number(context.parameters.seaLevel)),
+              : MapScale.inUnits(scale.length(Number(context.parameters.incomingMoisture)), "mm"),
+            ocean =
+              elevation.get(i) <=
+              MapScale.inUnits(scale.length(Number(context.parameters.seaLevel)), "native"),
             evaporation = ocean
-              ? scale.length(Number(context.parameters.evaporation)) *
-                Math.max(0, Math.min(2, (temperature.get(i) + 20) / 40))
+              ? MapScale.inUnits(scale.length(Number(context.parameters.evaporation)), "mm") *
+                Math.max(0, Math.min(2, (temperature.get(i) - 100) / 400))
               : 0,
-            lift = connected ? Math.max(0, elevation.get(i) - elevation.get(previous)) : 0,
+            lift = connected
+              ? Math.max(0, MapScale.metres(elevation.get(i) - elevation.get(previous), "native"))
+              : 0,
             fraction = Math.min(
               1,
               Number(context.parameters.condensation) +
@@ -190,7 +204,7 @@ export const precipitationProcess: MapProcess = {
                 1,
                 (Number(context.parameters.snowTemperature) +
                   Number(context.parameters.snowTransition) / 2 -
-                  temperature.get(i)) /
+                  (temperature.get(i) / 10 - 30)) /
                   Number(context.parameters.snowTransition)
               )
             );
@@ -201,22 +215,33 @@ export const precipitationProcess: MapProcess = {
           previous = i;
         }
       }
-      for (const [name, values] of Object.entries({ precipitation, snowfall, rainfall, moisture }))
-        putChannel(grid, name, "metre/year", values);
+      for (const [name, values] of [
+        ["ColumnPrecipitation", precipitation],
+        ["Snowfall", snowfall],
+        ["Rainfall", rainfall],
+        ["AtmosphericWaterRate", moisture],
+      ] as const)
+        putChannel(grid, name, "millimetre/year", values);
       context.recordCause({
         kind: "climate",
         process: "climate.precipitation",
         fields: {
-          precipitation: summarizeChannel(grid, "precipitation"),
-          snowfall: summarizeChannel(grid, "snowfall"),
+          precipitation: summarizeChannel(grid, "ColumnPrecipitation"),
+          snowfall: summarizeChannel(grid, "Snowfall"),
         },
       });
     },
-  },
+    []
+  ),
   validate(state) {
-    for (const name of ["precipitation", "snowfall", "rainfall", "moisture"])
+    for (const name of [
+      "ColumnPrecipitation",
+      "Snowfall",
+      "Rainfall",
+      "AtmosphericWaterRate",
+    ] as const)
       requireThat(
-        everySample(requireChannel(state.surface, name, "metre/year"), (value) => value >= 0),
+        everySample(requireChannel(state.surface, name, "millimetre/year"), (value) => value >= 0),
         "precipitation_invalid",
         "Atmospheric water rates remain nonnegative."
       );
@@ -237,14 +262,14 @@ export const iceBalanceProcess: MapProcess = {
         minimum: 0,
       },
     },
-    requires: ["temperature", "snowfall"],
-    produces: ["ice", "meltwater"],
-    invalidates: ["drainage", "runoff", "flow", "lakes"],
+    requires: ["Temperature", "Snowfall"],
+    produces: ["IceThickness", "MaximumIceThickness", "IceMeltDepth"],
+    invalidates: ["drainage", "Runoff", "FlowAccumulation", "lakes"],
   },
-  behavior: {
-    kind: "elapsed",
-    duration: { kind: "epoch", fraction: 1 },
-    advance(state, context, years) {
+  operation: mapElapsed(
+    "ice.balance",
+    { kind: "epoch", fraction: 1 },
+    (state, context, years) => {
       requireThat(
         context.epochs.length > 0,
         "ice_epoch",
@@ -257,11 +282,13 @@ export const iceBalanceProcess: MapProcess = {
       );
       const grid = state.surface,
         scale = MapScale.fromCells(grid.bounds, grid.active.length),
-        temperature = requireChannel(grid, "temperature", "celsius"),
-        snowfall = requireChannel(grid, "snowfall", "metre/year"),
-        ice = grid.channels.ice ? requireChannel(grid, "ice", "metre") : surfaceArray(state, "ice"),
-        maximum = grid.channels.maximumIce
-          ? requireChannel(grid, "maximumIce", "metre")
+        temperature = requireChannel(grid, "Temperature", "native-temperature"),
+        snowfall = requireChannel(grid, "Snowfall", "millimetre/year"),
+        ice = grid.channels.IceThickness
+          ? requireChannel(grid, "IceThickness", "metre")
+          : surfaceArray(state, "ice"),
+        maximum = grid.channels.MaximumIceThickness
+          ? requireChannel(grid, "MaximumIceThickness", "metre")
           : surfaceArray(state, "maximum-ice"),
         meltwater = surfaceArray(state, "meltwater"),
         accumulation = surfaceArray(state, "accumulation");
@@ -272,12 +299,12 @@ export const iceBalanceProcess: MapProcess = {
       );
       for (let i = 0; i < ice.length; i++) {
         maximum.set(i, Math.max(maximum.get(i), ice.get(i)));
-        accumulation.set(i, snowfall.get(i) * years);
+        accumulation.set(i, MapScale.metres(snowfall.get(i), "mm") * years);
         meltwater.set(
           i,
           Math.min(
             ice.get(i) + accumulation.get(i),
-            Math.max(0, temperature.get(i)) *
+            Math.max(0, temperature.get(i) / 10 - 30) *
               scale.length(Number(context.parameters.meltFactor)) *
               years
           )
@@ -285,9 +312,9 @@ export const iceBalanceProcess: MapProcess = {
         ice.set(i, Math.max(0, ice.get(i) + accumulation.get(i) - meltwater.get(i)));
         maximum.set(i, Math.max(maximum.get(i), ice.get(i)));
       }
-      putChannel(grid, "ice", "metre", ice);
-      putChannel(grid, "maximumIce", "metre", maximum);
-      putChannel(grid, "meltwater", "metre", meltwater);
+      putChannel(grid, "IceThickness", "metre", ice);
+      putChannel(grid, "MaximumIceThickness", "metre", maximum);
+      putChannel(grid, "IceMeltDepth", "metre", meltwater);
       context.recordCause({
         kind: "ice",
         process: "ice.balance",
@@ -297,9 +324,10 @@ export const iceBalanceProcess: MapProcess = {
         unit: "cubic-metre",
       });
     },
-  },
+    []
+  ),
   validate(state) {
-    for (const name of ["ice", "maximumIce", "meltwater"])
+    for (const name of ["IceThickness", "MaximumIceThickness", "IceMeltDepth"] as const)
       requireThat(
         everySample(requireChannel(state.surface, name, "metre"), (value) => value >= 0),
         "ice_invalid",
@@ -314,29 +342,31 @@ export const resetForcingProcess: MapProcess = {
     id: "climate.resetForcing",
     version: "1",
     parameters: {},
-    requires: ["elevation"],
-    produces: ["heat"],
+    requires: ["Elevation"],
+    produces: ["Heat"],
     invalidates: [
-      "temperature",
-      "precipitation",
-      "snowfall",
-      "rainfall",
-      "moisture",
-      "runoff",
+      "Temperature",
+      "ColumnPrecipitation",
+      "Snowfall",
+      "Rainfall",
+      "AtmosphericWaterRate",
+      "Runoff",
       "drainage",
-      "flow",
+      "FlowAccumulation",
       "lakes",
-      "ice",
-      "meltwater",
+      "IceThickness",
+      "IceMeltDepth",
     ],
   },
-  behavior: {
-    kind: "initialize",
-    initialize(state) {
-      putChannel(state.surface, "heat", "celsius", surfaceArray(state, "heat"));
-      if (state.surface.channels.meltwater) state.surface.channels.meltwater.fill(0);
+  operation: mapCommand(
+    "climate.resetForcing",
+    "initialize",
+    (state) => {
+      putChannel(state.surface, "Heat", "celsius", surfaceArray(state, "heat"));
+      if (state.surface.channels.IceMeltDepth) state.surface.channels.IceMeltDepth.fill(0);
     },
-  },
+    []
+  ),
   validate() {
     return [];
   },

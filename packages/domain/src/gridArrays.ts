@@ -9,8 +9,8 @@ import type { Coverage } from "./lattice/coverage";
 type Detached<T> = {
   [K in keyof T]: T[K] extends Band
     ? BlockArray
-    : T[K] extends Record<string, Band>
-      ? Record<string, BlockArray>
+    : T[K] extends Partial<Record<string, Band>>
+      ? Partial<Record<keyof T[K], BlockArray>>
       : T[K];
 };
 export type TopologyArrays = Omit<Detached<AdaptiveTopology>, "coverage">;
@@ -48,7 +48,9 @@ export function detachGrid(grid: GridSurface): GridArrays {
     active: grid.active.toArray(),
     measures: grid.measures.toArray(),
     channels: Object.fromEntries(
-      Object.entries(grid.channels).map(([name, values]) => [name, values.toArray()])
+      Object.entries(grid.channels).flatMap(([name, values]) =>
+        values ? [[name, values.toArray()]] : []
+      )
     ),
     ...(topology ? { topology: detachTopology(topology) } : {}),
     ...(overlays
@@ -73,10 +75,9 @@ export function attachGrid(arrays: GridArrays, cache = new BlockCache(Infinity))
     active: band(arrays.active, `${arrays.id}:active`),
     measures: band(arrays.measures, `${arrays.id}:measures`),
     channels: Object.fromEntries(
-      Object.entries(arrays.channels).map(([name, values]) => [
-        name,
-        band(values, `${arrays.id}:${name}`),
-      ])
+      Object.entries(arrays.channels).flatMap(([name, values]) =>
+        values ? [[name, band(values, `${arrays.id}:${name}`)]] : []
+      )
     ),
     ...(topology ? { topology: attachTopology(topology, cache) } : {}),
     ...(overlays

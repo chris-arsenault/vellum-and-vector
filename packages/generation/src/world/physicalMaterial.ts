@@ -34,7 +34,7 @@ export function projectPhysicalMaterial(state: GenerationState) {
     map = work.map;
   putChannel(
     state.surface,
-    "physicalMaterial",
+    "PhysicalMaterial",
     "category",
     projectedValues(
       work,

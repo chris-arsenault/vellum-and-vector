@@ -4,6 +4,8 @@ import { validateNativeLayer } from "./layerValidation";
 import type { NativeStep } from "./sequence";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
 import { nativeStepsOf } from "../physicalFeature";
+import { readOperation, runOperation, selectOperation } from "../processOperation";
+import type { PhysicalInput } from "../processes/groundProcess";
 
 /**
  * What a world step works from and leaves behind, gathered from the processes it runs. A step that needs
@@ -64,9 +66,9 @@ export function observeNativeProcesses(observer: NativeProcessObserver | null) {
 export function runNativeStep(map: PhysicalField, context: PhysicalContext, step: NativeStep) {
   const [name, , process] = step,
     observer = processObserver;
-  process(
+  const input: PhysicalInput = {
     map,
-    observer
+    context: observer
       ? {
           ...context,
           ObserveProcess: (event, field, executionContext) => {
@@ -74,8 +76,17 @@ export function runNativeStep(map: PhysicalField, context: PhysicalContext, step
             observer(name, event, field, executionContext);
           },
         }
-      : context
-  );
+      : context,
+  };
+  const started = step[4]?.elapsed ? performance.now() : 0;
+  try {
+    if (process.kind === "query") {
+      selectOperation(map, process);
+      readOperation(map, process, input);
+    } else runOperation(map, process, input);
+  } finally {
+    step[4]?.elapsed?.(performance.now() - started);
+  }
 }
 /** Plate motion has salt zero; each embedded operation keeps its own seed and interval. */
 export function withPlateDeformation(

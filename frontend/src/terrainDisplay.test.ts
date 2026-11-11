@@ -1,3 +1,4 @@
+import { requireChannel, MapScale } from "@atlas/domain";
 import { expect, it } from "vitest";
 import {
   createGrid,
@@ -31,9 +32,9 @@ function fixture(at: (x: number, y: number) => number): Raster {
   );
   putChannel(
     grid,
-    "elevation",
-    "metre",
-    generateBand(grid.coverage, "float64", "elevation", (i) => {
+    "Elevation",
+    "native-length",
+    generateBand(grid.coverage, "float64", "Elevation", (i) => {
       const p = gridPosition(grid, i);
       return at(p.x, p.y);
     })
@@ -42,7 +43,7 @@ function fixture(at: (x: number, y: number) => number): Raster {
     id: grid.id,
     areaId: "area",
     field: grid,
-    channel: "elevation",
+    channel: "Elevation",
     footprint: grid.scope.footprint,
     bounds: grid.bounds,
   };
@@ -52,17 +53,17 @@ it("retains every height sample, planes and constants including the field edges"
   for (const height of [(x: number, y: number) => 200 + x * 0.3 - y * 0.2, () => 0.1]) {
     const raster = fixture(height),
       display = terrainDisplaySampler(raster.field);
-    const before = Array.from(raster.field.channels.elevation);
+    const before = Array.from(requireChannel(raster.field, "Elevation"));
     for (let x = 0; x <= 1000; x += 25)
       for (let y = 0; y <= 1000; y += 25)
         expect(display({ x, y, z: 0 })).toBeCloseTo(height(x, y), 9);
-    expect(Array.from(raster.field.channels.elevation)).toEqual(before);
+    expect(Array.from(requireChannel(raster.field, "Elevation"))).toEqual(before);
   }
   const raster = fixture((x, y) => 100 + 300 * Math.sin(x / 200) * Math.cos(y / 150));
   const display = terrainDisplaySampler(raster.field);
   for (let i = 0; i < raster.field.active.length; i++)
     expect(display(gridPosition(raster.field, i))).toBeCloseTo(
-      raster.field.channels.elevation.get(i),
+      requireChannel(raster.field, "Elevation").get(i),
       9
     );
 });
@@ -70,7 +71,7 @@ it("retains every height sample, planes and constants including the field edges"
 it("removes lattice slope jumps while retaining bounded ridges and valleys", () => {
   const raster = fixture((x, y) => 1000 + 2000 * Math.exp(-(((x - 480) / 170) ** 2)) + y * 0.1);
   const display = terrainDisplaySampler(raster.field),
-    raw = fieldInterpolator(raster.field, "elevation");
+    raw = fieldInterpolator(raster.field, "Elevation");
   const derivativeJump = (at: typeof raw, x: number) => {
     const p = { x, y: 560, z: 0 },
       h = 0.01;
@@ -82,7 +83,9 @@ it("removes lattice slope jumps while retaining bounded ridges and valleys", () 
   for (let x = 1; x < 1000; x += 13)
     for (let y = 1; y < 1000; y += 17) {
       const i = Math.min(7, Math.floor(y / 125)) * 9 + Math.min(7, Math.floor(x / 125));
-      const corners = [i, i + 1, i + 9, i + 10].map((j) => grid.channels.elevation.get(j));
+      const corners = [i, i + 1, i + 9, i + 10].map((j) =>
+        requireChannel(grid, "Elevation").get(j)
+      );
       const value = display({ x, y, z: 0 });
       expect(value).toBeGreaterThanOrEqual(Math.min(...corners) - 1e-9);
       expect(value).toBeLessThanOrEqual(Math.max(...corners) + 1e-9);
@@ -91,30 +94,30 @@ it("removes lattice slope jumps while retaining bounded ridges and valleys", () 
 
 it("keeps physical values and water separate from display generalization", () => {
   const raster = fixture((x) => 100 + (x * x) / 1000);
-  const raw = fieldInterpolator(raster.field, "elevation");
+  const raw = fieldInterpolator(raster.field, "Elevation");
   raster.lakes = [{ geometry: rectangle([100, 100, 900, 900]), level: 350 }];
   const p = { x: 180, y: 560, z: 0 };
   const tile = numericTileSampler(raster)([p.x - 1, p.y - 1, p.x + 1, p.y + 1], 1);
   expect(tile[0]).toBeCloseTo(raw(p), 4);
-  expect(tile[2]).toBeCloseTo(raw(p), 4);
+  expect(tile[2]).toBeCloseTo(MapScale.metres(raw(p), "native"), 4);
   expect(tile[3]).toBe(2);
-  expect(Math.abs(tile[8] - tile[0])).toBeGreaterThan(1);
+  expect(Math.abs(MapScale.native(tile[8]) - tile[0])).toBeGreaterThan(1);
 });
 
 it("retains overlay precedence and falls back beside inactive or nonfinite samples", () => {
   const raster = fixture((x) => (x * x) / 1000),
     patch = fixture(() => 700).field;
   patch.scope.footprint = rectangle([400, 400, 600, 600]);
-  raster.field.overlays = [{ grid: patch, channels: ["elevation"] }];
+  raster.field.overlays = [{ grid: patch, channels: ["Elevation"] }];
   const display = terrainDisplaySampler(raster.field);
   expect(display({ x: 500, y: 500, z: 0 })).toBe(700);
   expect(display({ x: 399, y: 500, z: 0 })).toBeLessThan(200);
   raster.field.active.set(4 * 9 + 1, 0);
   const point = { x: 270, y: 500, z: 0 },
-    raw = fieldInterpolator(raster.field, "elevation");
+    raw = fieldInterpolator(raster.field, "Elevation");
   expect(display(point)).toBe(raw(point));
   raster.field.active.set(4 * 9 + 1, 1);
-  raster.field.channels.elevation.set(4 * 9 + 1, NaN);
+  requireChannel(raster.field, "Elevation").set(4 * 9 + 1, NaN);
   expect(display(point)).toBe(raw(point));
 });
 
@@ -148,7 +151,7 @@ it("renders both canonical sides of a compact regional chart with native classes
     "category",
     generateBand(g.coverage, "float64", "class", (i) => (i % 9 < 4 ? 28 : 29))
   );
-  putChannel(g, "naturalSurface", "category", g.channels.finalSurface);
+  putChannel(g, "naturalSurface", "category", requireChannel(g, "finalSurface"));
   raster.surface = g;
   const sample = numericTileSampler(raster),
     east = sample([949, 499, 951, 501], 1),
@@ -159,5 +162,5 @@ it("renders both canonical sides of a compact regional chart with native classes
   expect(west[0]).toBeCloseTo(850, 4);
   expect(east[6]).toBe(28);
   expect(west[6]).toBe(29);
-  expect(west[8]).toBeCloseTo(850, 4);
+  expect(west[8]).toBeCloseTo(MapScale.metres(850, "native"), 4);
 });

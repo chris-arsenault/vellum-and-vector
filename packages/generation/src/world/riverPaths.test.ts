@@ -139,6 +139,13 @@ it("carries finite dimensional station profiles without changing the drainage si
   );
   expect(physicalData(map)).toEqual(original);
 });
+it("keeps station elevations in the absolute datum used by geographic node positions", () => {
+  const { map, main } = network();
+  map.BaseSeaLevel = 100 * 1024;
+  map.EffectiveSeaLevel = 150 * 1024;
+  const result = riverPath(map, createRiverPaths(map), main);
+  expect(result.profiles.elevations[0]).toBe(map.DrainageElevations.get(main[0]) / 1024);
+});
 function physicalData(map: import("./field").PhysicalField) {
   const data: Record<string, unknown> = {};
   for (const [name, band] of physicalBands(map)) data[name] = Array.from(band);

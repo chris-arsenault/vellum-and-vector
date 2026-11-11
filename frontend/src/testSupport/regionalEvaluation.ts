@@ -1,3 +1,4 @@
+import { requireChannel } from "@atlas/domain";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { expect } from "vitest";
 import {
@@ -134,14 +135,15 @@ function binnedCoverage(surface: Grid, systems: string[], bin: number) {
     rows = Math.ceil((n - s) / bin),
     totals = systems.map(() => new Float64Array(columns * rows)),
     land = new Float64Array(columns * rows),
-    cells = new Float64Array(columns * rows);
+    cells = new Float64Array(columns * rows),
+    water = requireChannel(surface, "WaterKindCodes");
   for (let i = 0; i < surface.active.length; i++) {
     const p = gridPosition(surface, i),
       k =
         Math.min(rows - 1, Math.floor((p.y - s) / bin)) * columns +
         Math.min(columns - 1, Math.floor((p.x - w) / bin));
     cells[k]++;
-    if (surface.channels.water.get(i) !== 1) land[k]++;
+    if (water.get(i) !== 1) land[k]++;
     systems.forEach((id, index) => {
       totals[index][k] += surface.channels[`magic:${id}:coverage`]?.get(i) ?? 0;
     });

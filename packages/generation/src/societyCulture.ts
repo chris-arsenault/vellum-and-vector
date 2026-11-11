@@ -1,3 +1,6 @@
+import { mapCommand, mapElapsed, executeMapOperation, processOwner } from "./processTraits";
+import { defineCommand, runOperation } from "./processOperation";
+import type { SocietyInput } from "./societyOperation";
 import {
   mergePopulation,
   languageKnowledge,
@@ -66,8 +69,15 @@ function foundingGroup(state: GenerationState, group: PopulationGroup, origin: E
   delete founded.languageShares;
   return founded;
 }
-export function initializeCultures(state: GenerationState, context: MapProcessContext) {
-  if (!state.society) initializePopulation(state, context);
+export const initializeCultures = mapCommand("human.identities", "initialize", initialize, []);
+export const diffuseCultures = defineCommand(
+  "human.contact",
+  "elapsed",
+  ({ state, context, years }: SocietyInput) => diffuse(state, context, years),
+  []
+);
+function initialize(state: GenerationState, context: MapProcessContext) {
+  if (!state.society) executeMapOperation(initializePopulation, state, context);
   const work = state.society!;
   const origins = centers(state, context, "culture", Number(context.parameters.cultureCount ?? 3));
   const distances = withCommunityIndex(state, (nearest) =>
@@ -176,7 +186,7 @@ function diverge(state: GenerationState, c: SocietyCommunity, years: number) {
     );
   }
 }
-export function diffuseCultures(state: GenerationState, context: MapProcessContext, years: number) {
+function diffuse(state: GenerationState, context: MapProcessContext, years: number) {
   if (state.society!.inherited) return;
   const communities = state.society!.region.communities,
     contacts = strongestContacts(state);
@@ -219,7 +229,7 @@ export const cultureInitialize: MapProcess = {
     produces: ["cultures"],
     invalidates: [],
   },
-  behavior: { kind: "initialize", initialize: initializeCultures },
+  operation: initializeCultures,
   validate: () => [],
 };
 export const cultureContact: MapProcess = {
@@ -231,6 +241,12 @@ export const cultureContact: MapProcess = {
     produces: ["cultures"],
     invalidates: [],
   },
-  behavior: { kind: "elapsed", duration: { kind: "epoch", fraction: 1 }, advance: diffuseCultures },
+  operation: mapElapsed(
+    "human.contact",
+    { kind: "epoch", fraction: 1 },
+    (state, context, years) =>
+      runOperation(processOwner(state), diffuseCultures, { state, context, years }),
+    []
+  ),
   validate: () => [],
 };

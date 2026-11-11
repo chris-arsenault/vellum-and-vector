@@ -1,10 +1,10 @@
 import { expect, it } from "vitest";
 import { everySample, putChannel, residentBand } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
-import { initializeCultures } from "./societyCulture";
+import { supplySociety } from "./societyTestFixture";
 import { publishCultures } from "./societyCulturePublication";
+import { executeMapOperation } from "./processTraits";
 import type { MapProcessContext } from "./process";
-import { initializePopulation } from "./societyPopulation";
 
 function fixture() {
   const state = landscape();
@@ -12,9 +12,9 @@ function fixture() {
   state.domain.world.areas.area.profile = "local";
   putChannel(
     state.surface,
-    "elevation",
-    "metre",
-    residentBand("float64", new Float64Array(10).fill(100))
+    "Elevation",
+    "native-length",
+    residentBand("float64", new Float64Array(10).fill(102400))
   );
   const context: MapProcessContext = {
     scope: state.domain.scope,
@@ -28,20 +28,38 @@ function fixture() {
     cancelled: () => false,
     progress() {},
   };
-  initializePopulation(state, context);
-  for (const c of state.society!.region.communities) c.groups[0].count = 1000;
-  initializeCultures(state, context);
+  supplySociety(state);
+  for (const c of state.society!.region.communities)
+    c.groups[0] = {
+      ...c.groups[0],
+      culture: "supplied-culture",
+      languages: ["supplied-language"],
+      religions: ["supplied-faith"],
+    };
+  for (const [id, kind] of [
+    ["supplied-culture", "culture"],
+    ["supplied-language", "language"],
+    ["supplied-faith", "religion"],
+  ])
+    state.domain.world.entities[id] = {
+      id,
+      kind,
+      name: id,
+      state: "generated",
+      attributes: {},
+      relations: [],
+    };
   return { state, context };
 }
 it("publishes cultural, language and religious prevalence independently", () => {
-  const { state } = fixture();
-  publishCultures(state);
+  const { state, context } = fixture();
+  executeMapOperation(publishCultures, state, context);
   for (const kind of ["culture", "language", "religion"]) {
     const channels = Object.entries(state.surface.channels).filter(([key]) =>
       key.startsWith(`${kind}:`)
     );
     expect(channels.length).toBeGreaterThan(0);
     for (const [, values] of channels)
-      expect(everySample(values, (v) => v >= 0 && v <= 1)).toBe(true);
+      expect(everySample(values!, (v) => v >= 0 && v <= 1)).toBe(true);
   }
 });

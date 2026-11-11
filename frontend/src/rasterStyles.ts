@@ -38,7 +38,7 @@ export function overlayVariables(style: FieldStyle, range: number[]) {
 export function overlayStyle(
   style: FieldStyle,
   range: number[],
-  classes: ClassColor[] | null = style.channel === "biome"
+  classes: ClassColor[] | null = style.channel === "BiomeCodes"
     ? biomes.map((biome, code) => ({ code, color: biome.color }))
     : null
 ): Style {

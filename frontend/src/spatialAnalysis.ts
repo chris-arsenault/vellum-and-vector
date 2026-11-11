@@ -4,6 +4,7 @@ import {
   presentAtlasFeature,
   gridPosition,
   gridSampler,
+  fieldChannelName,
   gridWindowCells,
   mappedField,
   requireThat,
@@ -127,7 +128,7 @@ function statistics(result: AnalysisResult, snapshot: DomainSnapshot, input: Ana
     const source = snapshot.numerical[field.id];
     if (!source) continue;
     const grid = mappedField(source, snapshot.world, input.areaId),
-      valueAt = gridSampler(grid, input.channel!),
+      valueAt = gridSampler(grid, fieldChannelName(input.channel!)),
       covered = spatial.pointCoverage(grid.scope.footprint);
     for (const i of gridWindowCells(grid, bounds)) {
       const p = gridPosition(grid, i);

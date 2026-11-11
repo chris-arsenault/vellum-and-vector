@@ -2,19 +2,13 @@ import type { Band } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import { releaseWorking, workingArray } from "../world/physicalNumerics";
 import { mergeMaterial, type MaterialLayer } from "./rockColumn";
-import { materialProperties, type MaterialProperty } from "./rockLayerFields";
+import { materialProperties, type MaterialProperty } from "@atlas/domain";
 
-import { loadFields, seaLoadFields } from "./groundLoadFields";
+import { loadFields, seaLoadFields } from "@atlas/domain";
 import { groundStorage } from "./groundStorage";
 import { CargoStore } from "./groundCargo";
 import { retainedArray } from "../world/physicalNumerics";
 import type { MaterialCargo } from "./materialCargo";
-export {
-  loadIntegerFields,
-  loadScalarFields,
-  seaLoadIntegerFields,
-  seaLoadScalarFields,
-} from "./groundLoadFields";
 const integerProperty = (property: MaterialProperty) =>
   property === "kind" || property === "secondaryKind" || property === "mixed";
 

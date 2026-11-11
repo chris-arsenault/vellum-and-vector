@@ -1,3 +1,6 @@
+import { mapCommand, mapElapsed, executeMapOperation, processOwner } from "./processTraits";
+import { defineCommand, runOperation } from "./processOperation";
+import type { SocietyInput } from "./societyOperation";
 import {
   communityPractices,
   population,
@@ -21,8 +24,15 @@ import { generationFeatures } from "./generationFeatures";
 import { isWorldSociety } from "./societyMapScope";
 import { independentPoliticalBase } from "./worldPoliticalAuthority";
 
-export function initializePolitics(state: GenerationState, context: MapProcessContext) {
-  if (!state.society) initializePopulation(state, context);
+export const initializePolitics = mapCommand("human.polity-origins", "initialize", initialize, []);
+export const evolvePolitics = defineCommand(
+  "human.political-change",
+  "elapsed",
+  ({ state, context, years }: SocietyInput) => evolve(state, context, years),
+  []
+);
+function initialize(state: GenerationState, context: MapProcessContext) {
+  if (!state.society) executeMapOperation(initializePopulation, state, context);
   const region = state.society!.region;
   if (region.politics) return;
   const count =
@@ -267,8 +277,8 @@ function formSuccessor(state: GenerationState, parent: SocietyPolity, years: num
     seat = independent.sort((a, b) => population(b) - population(a))[0];
   if (seat && population(seat) > 100) successor(state, parent, seat.id, era);
 }
-export function evolvePolitics(state: GenerationState, context: MapProcessContext, years: number) {
-  initializePolitics(state, context);
+function evolve(state: GenerationState, context: MapProcessContext, years: number) {
+  if (!state.society?.region.politics) executeMapOperation(initializePolitics, state, context);
   if (state.society!.inherited) return;
   const region = state.society!.region,
     politics = region.politics!;
@@ -338,7 +348,7 @@ export const politicsInitialize: MapProcess = {
     produces: ["polities"],
     invalidates: [],
   },
-  behavior: { kind: "initialize", initialize: initializePolitics },
+  operation: initializePolitics,
   validate: () => [],
 };
 export const politicsChange: MapProcess = {
@@ -350,6 +360,12 @@ export const politicsChange: MapProcess = {
     produces: ["politics"],
     invalidates: [],
   },
-  behavior: { kind: "elapsed", duration: { kind: "epoch", fraction: 1 }, advance: evolvePolitics },
+  operation: mapElapsed(
+    "human.political-change",
+    { kind: "epoch", fraction: 1 },
+    (state, context, years) =>
+      runOperation(processOwner(state), evolvePolitics, { state, context, years }),
+    []
+  ),
   validate: () => [],
 };

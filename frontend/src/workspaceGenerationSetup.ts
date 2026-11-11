@@ -3,6 +3,7 @@ import {
   openGenerationWorkspace,
   type BrowserWorkspace,
 } from "@atlas/storage-browser";
+import type { BlockCache } from "@atlas/domain";
 import {
   prepareAtlasGeneration,
   regionalResolution,
@@ -10,56 +11,61 @@ import {
   isRegionalRefinement,
   prepareRegionalRefinement,
   refinementResolution,
+  refinementReads,
 } from "@atlas/generation";
 import { generationSource } from "./workspaceGeneration";
 import { WorkspaceFields } from "./workspaceFields";
 import { loadGenerationFeatures } from "./generationInputs";
 
 export async function workspaceGenerationSetup(
-  current: BrowserWorkspace,
+  current: Pick<BrowserWorkspace, "catalog" | "resources">,
   worldId: string,
-  input: AtlasGenerationInput
+  input: AtlasGenerationInput,
+  cache?: BlockCache
 ) {
   const source = await generationSource(current.catalog, worldId, input.areaId);
-  if (isRegionalRefinement(source, input.areaId)) {
-    const prepared = prepareRegionalRefinement(source, input);
-    return {
-      input: prepared.input,
-      diagnostics: prepared.diagnostics,
-      resolution: refinementResolution(source, input),
-    };
-  }
-  const working = await openBlockCache(`setup_${crypto.randomUUID()}`);
-  const fields = new WorkspaceFields(current.catalog, current.resources, working.cache);
+  const regional = isRegionalRefinement(source, input.areaId);
+  const working = cache ? undefined : await openBlockCache(`setup_${crypto.randomUUID()}`);
+  const fields = new WorkspaceFields(current.catalog, current.resources, cache ?? working!.cache);
   let features: Awaited<ReturnType<typeof openGenerationWorkspace>> | undefined;
   try {
-    features = await openGenerationWorkspace(`setup_features_${crypto.randomUUID()}`);
-    await loadGenerationFeatures(
-      source,
-      current.catalog,
-      features.sourceFeatures,
-      undefined,
-      features.sourceNetworks
-    );
+    if (!regional) {
+      features = await openGenerationWorkspace(`setup_features_${crypto.randomUUID()}`);
+      await loadGenerationFeatures(
+        source,
+        current.catalog,
+        features.sourceFeatures,
+        undefined,
+        features.sourceNetworks
+      );
+    }
     await fields.read(source, {
       scope: source.scope,
       objects: [],
       spatialLayers: [],
       parentHistory: [],
       dependencies: false,
-      channels: source.world.fields
-        .filter(
-          (field) =>
-            field.resourceId &&
-            (!input.domains.includes("physical") || field.areaId !== input.areaId || field.input)
-        )
-        .map((field) => ({ fieldId: field.id, names: field.channels ?? [] })),
+      channels: regional
+        ? refinementReads(source, input.areaId, input.domains.includes("physical"))
+        : source.world.fields
+            .filter(
+              (field) =>
+                field.resourceId &&
+                (!input.domains.includes("physical") ||
+                  field.areaId !== input.areaId ||
+                  field.input)
+            )
+            .map((field) => ({ fieldId: field.id, names: field.channels ?? [] })),
     });
-    const prepared = prepareAtlasGeneration(source, input, features.sourceFeatures);
+    const prepared = regional
+      ? prepareRegionalRefinement(source, input)
+      : prepareAtlasGeneration(source, input, features!.sourceFeatures);
     return {
       input: prepared.input,
       diagnostics: prepared.diagnostics,
-      resolution: regionalResolution(source, input.areaId, input.quality),
+      resolution: regional
+        ? refinementResolution(source, input)
+        : regionalResolution(source, input.areaId, input.quality),
     };
   } finally {
     try {
@@ -68,7 +74,7 @@ export async function workspaceGenerationSetup(
       try {
         await features?.close();
       } finally {
-        await working.close();
+        await working?.close();
       }
     }
   }

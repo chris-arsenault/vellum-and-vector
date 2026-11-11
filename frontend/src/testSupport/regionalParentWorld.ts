@@ -5,6 +5,8 @@ import {
   gridPosition,
   putChannel,
   spatial,
+  canonicalPhysicalFields,
+  fieldChannelName,
   type AtlasFeature,
   type DomainSnapshot,
   type Grid,
@@ -54,12 +56,17 @@ export function supplyParentWorld(spec: ParentSpec) {
   for (const [name, [unit, value]] of Object.entries(values))
     putChannel(
       surface,
-      name,
+      fieldChannelName(name),
       unit,
-      generateBand(surface.coverage, "float64", name, (i) => {
-        const p = gridPosition(surface, i);
-        return value(p.x, p.y);
-      }),
+      generateBand(
+        surface.coverage,
+        canonicalPhysicalFields().find((field) => field.name === name)?.type ?? "float64",
+        name,
+        (i) => {
+          const p = gridPosition(surface, i);
+          return value(p.x, p.y);
+        }
+      ),
       unit === "category" ? "category" : "intensive"
     );
   supplyCourses(surface, spec.courses);
@@ -98,8 +105,8 @@ function parentPublications(
       facts: ["populationDensity", "populationCapacity"],
     };
   for (const [channel, unit, layer] of [
-    ["structuralGrainX", "ratio", geology],
-    ["structuralGrainY", "ratio", geology],
+    ["StructuralGrainX", "per-mille", geology],
+    ["StructuralGrainY", "per-mille", geology],
     ["populationDensity", "people/square-kilometre", population],
   ] as const)
     if (!publications.some((d) => d.kind === "field" && d.channel === channel))
@@ -109,9 +116,9 @@ function parentPublications(
 
 /** River channels on the parent samples: order, discharge and catchment along each course. */
 function supplyCourses(surface: Grid, courses: Course[]) {
-  const order = generateBand(surface.coverage, "float64", "riverOrder", () => 0),
-    flow = generateBand(surface.coverage, "float64", "flow", () => 0),
-    catchment = generateBand(surface.coverage, "float64", "catchmentArea", (i) =>
+  const order = generateBand(surface.coverage, "int32", "RiverOrders", () => 0),
+    flow = generateBand(surface.coverage, "float32", "FlowAccumulation", () => 0),
+    catchment = generateBand(surface.coverage, "float32", "CatchmentArea", (i) =>
       surface.measures.get(i)
     );
   for (const course of courses)
@@ -125,9 +132,9 @@ function supplyCourses(surface: Grid, courses: Course[]) {
         catchment.set(i, Math.max(catchment.get(i), course.flow(t) * 2e7));
       }
     });
-  putChannel(surface, "riverOrder", "category", order, "category");
-  putChannel(surface, "flow", "cubic-metre/second", flow);
-  putChannel(surface, "catchmentArea", "square-metre", catchment);
+  putChannel(surface, "RiverOrders", "category", order, "category");
+  putChannel(surface, "FlowAccumulation", "cubic-metre/second", flow);
+  putChannel(surface, "CatchmentArea", "square-metre", catchment);
 }
 
 function supplied(

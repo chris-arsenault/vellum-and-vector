@@ -1,11 +1,11 @@
-import type { Band, Landmark } from "@atlas/domain";
+import { requireThat, type Band, type Landmark } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { AtlasPhysicalWorkspace } from "../world/atlasWorkspace";
 import type { PhysicalBufferName, PhysicalField } from "../world/field";
 import type { Placed } from "../world/landmarkGeometry";
 import type { RegionalCharacter } from "./character";
 import type { CapturedCourse } from "./courses";
-import type { Contributions } from "./media";
+import type { Contributions } from "../coupling/fieldContributions";
 import type { SharedMedia } from "./sharedMedia";
 
 export interface RegionalInput {
@@ -69,7 +69,7 @@ export interface NetworkWork {
   /** Cells in order of increasing travel cost from the roots: roots first, heads last. */
   order: Int32Array;
   count: number;
-  /** The eroded surface (m above the datum) the network was routed down. */
+  /** Travel cost of the initial drainage tree through actual terrain and material. */
   cost: Float64Array;
   /** Upstream area (m²) including the country an entering river drains beyond the frame. */
   area: Float64Array;
@@ -83,7 +83,7 @@ export interface NetworkWork {
   level: Float64Array;
   /** Connected sea on the captured base. */
   sea: Uint8Array;
-  /** The smoothed captured base: the macro character the developed relief is calibrated to. */
+  /** Smoothed captured terrain used only to propose the child's initial organization. */
   base: Float64Array;
   /** Captured lake index per cell, or -1. */
   lake: Int32Array;
@@ -93,14 +93,10 @@ export interface NetworkWork {
   bowl: Uint8Array;
 }
 
-/** Relief derived from the network in the latest round, with the fields the derivation produced. */
+/** Initial basin locations used by local site placement; the present ground lives in Ground. */
 export interface ReliefWork {
-  /** Local amplification of the network's increments that fits the captured macro relief. */
-  amplification: Float64Array;
   /** Cells allowed to lie below their receiver: lakes, sinks, ice-carved hollows. */
   basin: Uint8Array;
-  /** Ice flux (reference units) that carved the surface, present or relict. */
-  iceFlux: Float64Array;
 }
 
 /** The drainage graph of the present surface: a working structure other processes read. */
@@ -126,17 +122,11 @@ export interface RegionalWork {
   contributions: Contributions;
   /** Media the field has no band for (insolation, cold pooling, wetness), derived after each round's water. */
   media?: SharedMedia;
-  /** This round's sediment reaching the sea at each root cell (m³), for the coast. */
-  sediment?: { mouthLoad: Float64Array };
   /** The settled places' land: per cell the owning place's cell (-1 none) and 1 field, 2 pasture. */
   fields?: { place: Int32Array; kind: Uint8Array };
   /** The round being evaluated: 0 before the schedule, 1..3 inside it, 4 at the final refresh. */
   round: number;
   character?: RegionalCharacter;
-  /** The belt's fold axes and troughs, continuous along its grain. */
-  structure?: Float64Array;
-  /** How much of each cell's cut has already uncovered its rock. */
-  uncovered?: Float64Array;
   evidence?: Evidence;
   courses?: CapturedCourse[];
   network?: NetworkWork;
@@ -160,6 +150,19 @@ export type RegionalState = GenerationState & {
   physical: AtlasPhysicalWorkspace;
   regional: RegionalWork;
 };
+
+function hasRegionalWork(state: GenerationState): state is RegionalState {
+  return Boolean(state.physical && "regional" in state && state.regional);
+}
+/** Every specialization enters through the same checked regional initialization boundary. */
+export function requireRegional(state: GenerationState): RegionalState {
+  requireThat(
+    hasRegionalWork(state),
+    "regional_workspace",
+    "Initialize regional context before local operations."
+  );
+  return state;
+}
 
 export function regionalMap(state: RegionalState): PhysicalField {
   return state.physical.map;

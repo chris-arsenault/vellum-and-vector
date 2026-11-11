@@ -19,7 +19,6 @@ import {
   holdGradient,
   lastsWhile,
   lengthOf,
-  loweredAsCaptured,
   meanOf,
   sameSpot,
   sectionAt,
@@ -91,9 +90,11 @@ export const valley: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured valley is the finer network's own corridor: its floor lies no higher than the parent's and the river finds it. If the ground there holds no flanks, the name moves to the nearest that does.",
+      "Captured valley ground develops with the child's drainage and erosion. If its local floor no longer has flanks, the name moves to the nearest counterpart.",
     carry: carryWhereItLands,
-    realize: (state, carried) => loweredAsCaptured(state, carried, counterpart(state, carried)),
+    realize: notApplicable(
+      "Captured valley ground develops locally without restoring parent heights."
+    ),
     counterpart,
     unrealized: movesTo(counterpart),
     settle: notApplicable("Valley floors are re-derived from the network each round, not settled."),

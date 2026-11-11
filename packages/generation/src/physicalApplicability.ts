@@ -66,12 +66,12 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
   },
   "physical.climate": {
     settingConsumers: {
-      temperature: ["atlas.temperature"],
-      rainfall: ["atlas.precipitation"],
+      temperature: ["atlas.atmospheric-climate"],
+      rainfall: ["atlas.atmospheric-climate"],
       seaLevel: ["atlas.ocean-connectivity"],
-      southLatitude: ["atlas.temperature", "atlas.atmospheric-flow"],
-      northLatitude: ["atlas.temperature", "atlas.atmospheric-flow"],
-      latitudeProjection: ["atlas.temperature", "atlas.atmospheric-flow"],
+      southLatitude: ["atlas.atmospheric-climate"],
+      northLatitude: ["atlas.atmospheric-climate"],
+      latitudeProjection: ["atlas.atmospheric-climate"],
     },
     // Latitude belongs to the world frame; regions read their parent's frame.
     initialOnlySettings: ["seaLevel", ...latitudeFrameSettings],

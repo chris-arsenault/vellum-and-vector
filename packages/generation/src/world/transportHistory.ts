@@ -1,5 +1,4 @@
 import {
-  physicalSchema,
   isMutablePhysicalName,
   type MutablePhysicalBufferName,
   type PhysicalBufferName,
@@ -8,7 +7,7 @@ import {
 import { clamp } from "./math";
 import { weightScale, type TransportPlan } from "./transportPlan";
 import { captureCrustColumns, transportCrustColumns } from "../rock/crustTransport";
-import { MapScale, type Band } from "@atlas/domain";
+import { MapScale, canonicalPhysicalFields, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import {
   freshCrustValue,
@@ -27,7 +26,7 @@ import { transportGroundLoad } from "../rock/groundTransport";
  * `transportRules` sets out: nothing here names a band. A quantity moves with the crust because it is
  * declared, and an identity with a rule of its own picks its arrival by that rule.
  */
-const schema = new Map(physicalSchema().map((entry) => [entry.name as string, entry]));
+const schema = new Map(canonicalPhysicalFields().map((entry) => [entry.name as string, entry]));
 const answering = (name: string) => transportRules[quantityKinds[name]];
 const bandsAnswering = (answer: TransportAnswer) =>
   (Object.keys(quantityKinds) as PhysicalBufferName[])

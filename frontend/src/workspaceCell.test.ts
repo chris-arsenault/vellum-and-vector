@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { MapScale } from "@atlas/domain";
 import { generationSnapshot } from "@atlas/generation";
 import { constructedWorld } from "./constructedWorldFixture";
 import { registerWorldSnapshot, fixtureWorkspace } from "./testSupport/workspaceFixture";
@@ -21,9 +22,9 @@ it("reads every published channel at the stored cell and leaves the catalog unch
     values = result.cells.flatMap((cell) => cell.values);
   // Every layer's samples of the clicked cell form one card.
   expect(result.cells).toHaveLength(1);
-  expect(values.find((value) => value.channel === "elevation")).toMatchObject({
-    value: 100,
-    unit: "metre",
+  expect(values.find((value) => value.channel === "Elevation")).toMatchObject({
+    value: MapScale.native(100),
+    unit: "native-length",
   });
   expect(new Set(values.map((value) => value.channel))).toEqual(
     new Set(Object.keys(f.result.state.surface.channels))

@@ -10,7 +10,9 @@ import type { Coverage } from "./lattice/coverage";
 import { foldSamples, generateBand, sampleCoverage } from "./lattice/bandValues";
 
 /** Generated fields retain adaptive physical samples instead of a mandatory uniform raster. */
-export interface AdaptiveField extends FieldSamples {
+export interface AdaptiveField<
+  Name extends string = import("./fieldChannels").FieldChannelName,
+> extends FieldSamples<Name> {
   width?: never;
   height?: never;
   topology: AdaptiveTopology;
@@ -40,12 +42,14 @@ export function adaptiveMeasures(
     topology.leaves.length
   );
 }
-export function createAdaptiveField(
+export function createAdaptiveField<
+  Name extends string = import("./fieldChannels").FieldChannelName,
+>(
   id: string,
   scope: SpatialScope,
   topology: AdaptiveTopology,
   cache: BlockCache = topology.coverage.cache
-): AdaptiveField {
+): AdaptiveField<Name> {
   requireThat(
     spatial.covers(rectangle(topology.bounds), scope.footprint),
     "adaptive_extent",
@@ -76,7 +80,11 @@ export function createAdaptiveField(
     units: {},
   };
 }
-export function adaptiveFieldSampler(field: AdaptiveField, channel: string, discrete = false) {
+export function adaptiveFieldSampler<Name extends string>(
+  field: AdaptiveField<Name>,
+  channel: NoInfer<Name>,
+  discrete = false
+) {
   const values = field.channels[channel];
   requireThat(
     values?.length === field.topology.leaves.length,
@@ -86,7 +94,7 @@ export function adaptiveFieldSampler(field: AdaptiveField, channel: string, disc
   const covers = spatial.pointCoverage(field.scope.footprint);
   const categorical =
     discrete ||
-    ["category", "cell-index"].includes(field.units[channel]) ||
+    ["category", "cell-index"].includes(field.units[channel] ?? "") ||
     ["category", "extensive"].includes(field.quantities?.[channel] ?? "");
   const reconstructed = categorical ? null : adaptivePointSampler(field.topology, values);
   return (p: { x: number; y: number }): number => {
@@ -96,11 +104,15 @@ export function adaptiveFieldSampler(field: AdaptiveField, channel: string, disc
     return reconstructed ? reconstructed(p.x, p.y) : values.get(i);
   };
 }
-export function adaptiveIntegral(field: AdaptiveField, channel: string) {
-  requireThat(field.channels[channel], "missing_channel", `No ${channel} channel in this field.`);
+export function adaptiveIntegral<Name extends string>(
+  field: AdaptiveField<Name>,
+  channel: NoInfer<Name>
+) {
+  const values = field.channels[channel];
+  requireThat(values, "missing_channel", `No ${channel} channel in this field.`);
   const extensive = field.quantities?.[channel] === "extensive";
   return foldSamples(
-    field.channels[channel],
+    values,
     (sum, value, i) =>
       sum + (extensive ? (field.active.get(i) ? value : 0) : value * field.measures.get(i)),
     0

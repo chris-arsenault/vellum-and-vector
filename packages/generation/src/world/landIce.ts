@@ -7,6 +7,8 @@ import { canCarryIce, supportElevation } from "./glacierSurface";
 import { CellQueue, MapScale, type Band } from "@atlas/domain";
 import { metricSearch } from "./metricSearch";
 import { workingArray, releaseWorking } from "./physicalNumerics";
+import { setIceResponse } from "../rock/groundSurfaceMedia";
+import { releasedWaterRate } from "./dimensions";
 
 function concavity(map: PhysicalField, i: number): number {
   let curvature = 0;
@@ -87,16 +89,18 @@ function dryLandBalance(map: PhysicalField, c: PhysicalContext, cutoff: number) 
         ((balance - cutoff) * map.scale.length(0.0000005) * c.Span * c.GlaciationStrength) / 1000,
       stands = p.IceYieldHeight * Math.sqrt(edge.get(i) + map.scale.cells(0.5)),
       before = map.IceThickness.get(i);
-    map.IceThickness.set(
+    setIceResponse(
+      map,
       i,
       truncate(
         balance >= cutoff
           ? Math.min(before + gained, Math.max(stands, before))
           : meltedThickness(map, c, i, cutoff - balance)
-      )
+      ),
+      "glaciers"
     );
-    // What went this pass is what can run off as meltwater, and a glacier long gone gives none.
-    map.IceRetreat.set(i, Math.max(0, before - map.IceThickness.get(i)));
+    // Retain the rate at its producing interval; later queries carry no elapsed work.
+    map.IceRetreat.set(i, releasedWaterRate(before - map.IceThickness.get(i), c.Span));
     map.MaximumIceThickness.set(
       i,
       Math.max(map.MaximumIceThickness.get(i), map.IceThickness.get(i))
@@ -141,13 +145,15 @@ function advanceLakes(map: PhysicalField, c: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++) {
     const water = map.WaterKindCodes.get(i);
     if (water === 2)
-      map.IceThickness.set(
+      setIceResponse(
+        map,
         i,
         Math.max(
           0,
           map.IceThickness.get(i) -
             c.Profile.IceAblationStep * c.Span * (1 - map.IcePersistence.get(i))
-        )
+        ),
+        "glaciers"
       );
     else if (water === 0 && map.IceThickness.get(i) > 0) {
       reached.set(i, 1);

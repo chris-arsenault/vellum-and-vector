@@ -4,6 +4,7 @@ import {
   fieldPosition,
   neighbors,
   requireThat,
+  requireChannel,
   spatial,
   CellList,
   KeyedHeap,
@@ -131,7 +132,8 @@ function searchRoute(
 ) {
   const start = locate(from),
     end = locate(to),
-    scale = MapScale.fromCells(grid.bounds, grid.active.length);
+    scale = MapScale.fromCells(grid.bounds, grid.active.length),
+    terrain = routeTerrain(grid);
   // A*: no step costs less than its distance times the cheapest land factor, so the straight
   // distance to the end, so scaled, never overestimates and the search stays near the way.
   const goal = gridPosition(grid, end),
@@ -148,7 +150,7 @@ function searchRoute(
     if (cell === end) return routePoints(grid, previous, start, end, from, to);
     for (let at = adjacent.offset(cell), end = at + adjacent.counts[cell]; at < end; at++) {
       const next = adjacent.cells.at(at);
-      const step = routeCost(grid, cell, next, kind, scale);
+      const step = routeCost(grid, terrain, cell, next, kind, scale);
       const cost = here + step;
       if (cost >= costs.get(next)) continue;
       costs.set(next, cost);
@@ -158,22 +160,51 @@ function searchRoute(
   }
   return [];
 }
-function routeCost(grid: Grid, from: number, to: number, kind: string, scale: MapScale) {
+function routeTerrain(grid: Grid) {
+  const elevation = requireChannel(grid, "Elevation");
+  return {
+    elevation,
+    drainage: grid.channels.DrainageElevations ?? elevation,
+    sea: grid.channels.EffectiveSeaLevel,
+    water: grid.channels.WaterKindCodes,
+    flow: grid.channels.FlowAccumulation,
+    river: grid.channels.RiverOrders,
+    trees: grid.channels.TreeCover,
+    moisture: grid.channels.Moisture,
+    slope: grid.channels.Slope,
+  };
+}
+type RouteTerrain = ReturnType<typeof routeTerrain>;
+function routeCost(
+  grid: Grid,
+  terrain: RouteTerrain,
+  from: number,
+  to: number,
+  kind: string,
+  scale: MapScale
+) {
   const a = gridPosition(grid, from),
     b = gridPosition(grid, to),
     distance = gridDistance(grid, a, b);
-  if (kind === "river") return riverCost(grid, from, to, distance, scale);
-  if (kind === "sea") return distance * seaFactor(grid, to, scale);
-  if (kind === "road" && oceanCell(grid, to)) return Infinity;
-  const rise = grid.channels.elevation.get(to) - grid.channels.elevation.get(from);
+  if (kind === "river") return riverCost(terrain, from, to, distance, scale);
+  if (kind === "sea") return distance * seaFactor(terrain, to, scale);
+  if (kind === "road" && oceanCell(terrain, to)) return Infinity;
+  const rise = MapScale.metres(terrain.elevation.get(to) - terrain.elevation.get(from), "native");
   const slope = 1 + (Math.abs(rise) / Math.max(scale.length(2.5e-7), distance)) * 20;
-  return distance * slope * (kind === "road" ? landFactor(grid, from, to) : 1);
+  return distance * slope * (kind === "road" ? landFactor(terrain, from, to) : 1);
 }
 /** A river runs downhill only, and the more water it carries the easier it is to follow. */
-function riverCost(grid: Grid, from: number, to: number, distance: number, scale: MapScale) {
-  const heights = grid.channels.drainageElevation ?? grid.channels.elevation;
-  if (heights.get(to) - heights.get(from) > scale.length(2.5e-13)) return Infinity;
-  return distance * (1 + 1 / (1 + (grid.channels.flow?.get(to) ?? 0) / scale.volume(1.5625e-20)));
+function riverCost(
+  terrain: RouteTerrain,
+  from: number,
+  to: number,
+  distance: number,
+  scale: MapScale
+) {
+  const heights = terrain.drainage;
+  if (MapScale.metres(heights.get(to) - heights.get(from), "native") > scale.length(2.5e-13))
+    return Infinity;
+  return distance * (1 + 1 / (1 + (terrain.flow?.get(to) ?? 0) / scale.volume(1.5625e-20)));
 }
 /**
  * A pre-modern lane hugs the coast: shallow water beside the shore costs its distance, deep
@@ -181,9 +212,12 @@ function riverCost(grid: Grid, from: number, to: number, distance: number, scale
  * over the shore cell and no further.
  */
 export const landCellSeaCost = 4;
-function seaFactor(grid: Grid, to: number, scale: MapScale) {
-  if (!oceanCell(grid, to)) return landCellSeaCost;
-  const depth = Math.max(0, -grid.channels.elevation.get(to));
+function seaFactor(terrain: RouteTerrain, to: number, scale: MapScale) {
+  if (!oceanCell(terrain, to)) return landCellSeaCost;
+  const depth = Math.max(
+    0,
+    MapScale.metres((terrain.sea?.get(to) ?? 0) - terrain.elevation.get(to), "native")
+  );
   return 1 + Math.min(1, depth / scale.length(0.00025));
 }
 /** A road along a river bank costs this share of open ground: the valley floor is the way. */
@@ -193,22 +227,23 @@ const riverBankFactor = 0.7;
  * a river bank speeds it, and a crossing pays for its ford or bridge. Saddles need no term of
  * their own; the slope term finds them.
  */
-function landFactor(grid: Grid, from: number, to: number) {
-  const river = (i: number) => (grid.channels.riverOrder?.get(i) ?? 0) >= 1;
-  if (river(from) && river(to)) return Math.min(groundFactor(grid, to), riverBankFactor);
-  return groundFactor(grid, to) + (river(from) !== river(to) ? crossingCharge : 0);
+function landFactor(terrain: RouteTerrain, from: number, to: number) {
+  const river = (i: number) => (terrain.river?.get(i) ?? 0) >= 1;
+  if (river(from) && river(to)) return Math.min(groundFactor(terrain, to), riverBankFactor);
+  return groundFactor(terrain, to) + (river(from) !== river(to) ? crossingCharge : 0);
 }
 /** Open ground is one; forest and flat sodden ground ask more of a road. */
-function groundFactor(grid: Grid, to: number) {
-  const c = grid.channels;
-  const trees = c.treeCover?.get(to) ?? 0,
-    sodden = (c.moisture?.get(to) ?? 0) >= 0.95 && (c.slope?.get(to) ?? 1) < 0.01;
+function groundFactor(terrain: RouteTerrain, to: number) {
+  const trees = terrain.trees?.get(to) ?? 0,
+    sodden = (terrain.moisture?.get(to) ?? 0) >= 950 && (terrain.slope?.get(to) ?? 1) < 0.01;
   return 1 + 0.8 * trees + (sodden ? 0.6 : 0);
 }
 /** A river crossing, as extra lengths of the step that crosses it. */
 const crossingCharge = 0.6;
-function oceanCell(grid: Grid, index: number) {
-  return grid.channels.water?.get(index) === 1 || grid.channels.elevation.get(index) < 0;
+function oceanCell(terrain: RouteTerrain, index: number) {
+  return terrain.water
+    ? terrain.water.get(index) === 1
+    : terrain.elevation.get(index) < (terrain.sea?.get(index) ?? 0);
 }
 function routePoints(
   grid: Grid,

@@ -9,6 +9,7 @@ import {
   requireThat,
   canonicalGeometry,
   unwrapCoordinates,
+  MapScale,
   type DomainSnapshot,
   type IntentContext,
   type Position,
@@ -27,7 +28,7 @@ export function routeNetwork(
   attach(snapshot, waypoints, data.endFeatureId, waypoints.length - 1);
   const field = snapshot.world.fields.find(
     (f) =>
-      f.channels?.includes("elevation") &&
+      f.channels?.includes("Elevation") &&
       areaSpace(snapshot.world, f.areaId) === context.scope.spaceId &&
       waypoints.every((p) =>
         spatial.covers(snapshot.numerical[f.id].scope.footprint, {
@@ -52,8 +53,8 @@ export function routeNetwork(
     return index ? path.slice(1) : path;
   });
   const channel =
-    data.kind === "river" && grid.channels.drainageElevation ? "drainageElevation" : "elevation";
-  const elevations = points.map((p) => sample(grid, channel, p));
+    data.kind === "river" && grid.channels.DrainageElevations ? "DrainageElevations" : "Elevation";
+  const elevations = points.map((p) => MapScale.metres(sample(grid, channel, p), "native"));
   const feature = {
     id: semanticId(snapshot.world.id, "route", context.operationId),
     name: data.name,

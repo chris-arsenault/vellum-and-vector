@@ -1,4 +1,4 @@
-import { MapScale, type MagicOrigin, type MagicStock } from "@atlas/domain";
+import type { MagicOrigin, MagicStock } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
@@ -13,7 +13,43 @@ import { carryShelf } from "./magicCurrentStocks";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { buryLivingCharge, carryLitter } from "./magicGroundwater";
 import { carrierPassage } from "./magicCarriers";
-import { transferIce } from "../rock/groundSurfaceMedia";
+import { transferIce, receiveIceMelt, meltedInventory } from "../rock/groundSurfaceMedia";
+
+/** Instantaneous melt releases its actual passenger without running a historical stock cycle. */
+export function bindMagicIceMelt(state: GenerationState) {
+  const map = state.physical!.map;
+  receiveIceMelt(map, (cell, melted, before) => {
+    for (const field of state.physical!.magic?.fields ?? [])
+      for (const origin of field.definition.origins)
+        withOrigin(field, origin, () => releaseOriginIce(map, field, origin, cell, melted, before));
+  });
+}
+function releaseOriginIce(
+  map: PhysicalField,
+  field: MagicField,
+  origin: MagicOrigin,
+  cell: number,
+  melted: number,
+  before: number
+) {
+  for (const stock of originStocks(origin)) {
+    if (stock.reservoir !== "ice" && stock.reservoir !== "shelf") continue;
+    const values = field.stocks[stockKey(origin, stock)],
+      released = meltedInventory(values.get(cell), melted, before);
+    if (released <= 0) continue;
+    values.add(cell, -released);
+    if (stock.reservoir === "shelf" || map.WaterKindCodes.get(cell) === 1) {
+      field.lost += released;
+      continue;
+    }
+    const lost = released * field.definition.parameters.meltwaterLoss,
+      debris = released - lost;
+    field.lost += lost;
+    drop(map, cell, debris, field.stocks[`${origin.id}/moraine`], undefined, () => {
+      field.lost += debris;
+    });
+  }
+}
 
 /**
  * The least strength a located source has, a twentieth of full. A source is a site: the
@@ -74,10 +110,23 @@ const reservoirAdvances: Record<
   },
   sap: decaySap,
   forge: coolForge,
+};
+/** Retained material exchanges, independent of supply and elapsed reservoir aging. */
+const materialResponses: typeof reservoirAdvances = {
   brine: seepBrine,
   bed: weatherBed,
   dust: settleDust,
 };
+/** One local transport exposure, using the same carrier owners as an elapsed world pass. */
+export function transportRetainedMagic(state: GenerationState) {
+  const { map, magic } = state.physical!;
+  for (const field of magic?.fields ?? [])
+    for (const origin of field.definition.origins)
+      withOrigin(field, origin, () => {
+        for (const stock of originStocks(origin))
+          transportStock(map, field, origin, stock, field.stocks[stockKey(origin, stock)]);
+      });
+}
 function advanceStock(
   map: PhysicalField,
   field: MagicField,
@@ -87,6 +136,16 @@ function advanceStock(
   const values = field.stocks[stockKey(origin, stock)];
   if (origin.renewal === "finite" && stock === originStocks(origin)[0]) consume(field, values);
   reservoirAdvances[stock.reservoir]?.(map, field, values, origin);
+  transportStock(map, field, origin, stock, values);
+}
+function transportStock(
+  map: PhysicalField,
+  field: MagicField,
+  origin: MagicOrigin,
+  stock: MagicStock,
+  values: MagicInventory
+) {
+  materialResponses[stock.reservoir]?.(map, field, values, origin);
   carryStock(map, field, origin, stock, values);
 }
 function carryStock(
@@ -199,16 +258,6 @@ function carryWithIce(
   for (let i = 0; i < ice.length; i++) {
     let held = ice.get(i);
     if (held <= 0) continue;
-    const melt =
-      held *
-      p.meltwaterLoss *
-      clamp(
-        MapScale.metres(map.GlacialMeltwater.get(i), "mm") / map.scale.length(0.00000025),
-        0,
-        1
-      );
-    held -= melt;
-    lost += melt;
     if (map.IceThickness.get(i) <= 0 || map.WaterKindCodes.get(i) === 1) {
       const amount = held;
       drop(map, i, amount, moraine, shelf, () => (lost += amount));

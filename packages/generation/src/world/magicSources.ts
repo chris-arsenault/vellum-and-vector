@@ -2,7 +2,7 @@ import { nearestTriangle } from "./mesh";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { clamp, round } from "./math";
-import { worldCandidates, separatedCandidates } from "./worldSources";
+import { worldCandidates, separatedCandidates, type WorldCandidate } from "./worldSources";
 import { areaBudget, mediumArea } from "./worldScale";
 import type { PhysicalField } from "./field";
 import { MapScale, type MagicOrigin, type MagicSource, type MagicSystem } from "@atlas/domain";
@@ -30,27 +30,37 @@ export function deepSiteScore(map: PhysicalField, i: number) {
   }
   return depth;
 }
-function oceanSource(state: GenerationState, field: MagicField, seed: number) {
+function oceanSource(
+  state: GenerationState,
+  field: MagicField,
+  seed: number,
+  context: LocateContext
+) {
   const map = state.physical!.map;
   const budget = areaBudget(
     1,
     mediumArea(map, (i) => map.WaterKindCodes.get(i) === 1),
     map.scale.area(0.39)
   );
-  const candidates = [];
-  for (const source of worldCandidates(map.mesh, seed, Math.max(2048, budget * 64))) {
+  const candidates: (WorldCandidate & { score: number })[] = [];
+  for (const source of context.sites === undefined
+    ? worldCandidates(map.mesh, seed, Math.max(2048, budget * 64))
+    : capturedCandidates(map, context.sites)) {
     const i = nearestTriangle(map.mesh, source.x, source.y);
     if (i < 0 || map.mesh.membership(i) !== 1 || map.WaterKindCodes.get(i) !== 1) continue;
-    candidates.push({ ...source, i, score: deepSiteScore(map, i) });
+    candidates.push({ ...source, score: deepSiteScore(map, i) });
   }
   // hpc-exempt: seeded candidate objects that separatedCandidates consumes as records.
   candidates.sort((a, b) => b.score - a.score || b.priority - a.priority);
-  const selected = separatedCandidates(
-    candidates,
-    budget,
-    field.definition.parameters.rayDistance / 2,
-    map.mesh
-  );
+  const selected =
+    context.sites === undefined
+      ? separatedCandidates(
+          candidates,
+          budget,
+          field.definition.parameters.rayDistance / 2,
+          map.mesh
+        )
+      : candidates;
   for (const source of selected) {
     const i = nearestTriangle(map.mesh, source.x, source.y),
       strength = pressureAtDepth(
@@ -67,6 +77,11 @@ function oceanSource(state: GenerationState, field: MagicField, seed: number) {
       strength,
     });
   }
+}
+/** An inherited locus can stop being ocean; no replacement locus is invented elsewhere. */
+function* capturedCandidates(map: PhysicalField, cells: Int32Array) {
+  for (const cell of cells)
+    yield { id: cell, x: map.mesh.x(cell), y: map.mesh.y(cell), priority: 0 };
 }
 /** Greater water load gives a stronger locus, approaching full response without a depth cutoff. */
 export const pressureAtDepth = (depth: number, referenceDepth: number) =>
@@ -144,6 +159,7 @@ export interface LocateContext {
   origin: MagicOrigin;
   epochIndex: number;
   activity: number;
+  sites?: Int32Array;
 }
 export type SupplyContext = LocateContext;
 export interface SourceStrategy {
@@ -312,7 +328,7 @@ export function locateMagicSources(
         state,
         field,
         index === 0 ? seed : systemSeed(seed, origin.id),
-        { origin, epochIndex, activity }
+        { origin, epochIndex, activity, sites: field.inheritedSites?.[origin.id] }
       );
       if (index === 0) placedSources(state, field, epochIndex, activity, origin);
     });

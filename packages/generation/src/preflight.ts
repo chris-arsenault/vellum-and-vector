@@ -13,7 +13,7 @@ import {
 } from "./process";
 import { sequenceStages, type SequenceStage } from "./sequence";
 import { ProductLedger } from "./productLedger";
-import { validateBehaviorBinding } from "./processTraits";
+import { validateOperationBinding } from "./processTraits";
 import type { ResolvedFeatures } from "./features";
 
 export function invocationParameters(
@@ -78,7 +78,7 @@ function inspectStage(
   try {
     const process = registry.get(invocation.process, invocation.version);
     const contract = process.contract;
-    validateBehaviorBinding(process, stage);
+    validateOperationBinding(process, stage);
     invocationParameters(contract, configuration, stage);
     for (const product of contract.requires) {
       if (!products.accepts(product)) {

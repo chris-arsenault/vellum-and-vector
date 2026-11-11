@@ -1,8 +1,10 @@
 import { MapScale, type Band } from "@atlas/domain";
 import type { PhysicalContext } from "../world/context";
-import { drainageConditioning } from "../world/drainageFlood";
+import { drainageFlood } from "./waterProcesses";
+import { readOperation } from "../processOperation";
 import { resolveLandTargets } from "../world/flowGuidance";
 import { waterGathered } from "../world/flowGraph";
+import { referenceWaterPassage } from "../world/waterQuantity";
 import { clamp, units } from "../world/math";
 import { meshDeltaX } from "../world/mesh";
 import type { WearCause } from "../coupling/stage";
@@ -80,9 +82,11 @@ export const streams = defineProcess({
   ],
   settings: streamSettings,
   prepare: (map) => ({
-    conditionDrainage: (context: PhysicalContext) => drainageConditioning(map, context),
+    conditionDrainage: (context: PhysicalContext) =>
+      readOperation(map, drainageFlood.operation, { map, context }),
     landTargets: (context: PhysicalContext) => resolveLandTargets(map, context),
-    waterGathered: (targets: Band, rain: Pick<Band, "get">) => waterGathered(map, targets, rain),
+    waterGathered: (targets: Band, rain: Pick<Band, "get">, context: PhysicalContext) =>
+      waterGathered(map, targets, rain, referenceWaterPassage(map, context)),
   }),
   forExecution(settings, { refined }) {
     return {
@@ -94,7 +98,7 @@ export const streams = defineProcess({
   },
   // Substeps are how finely the work is resolved; how much gets done is the rate and the span.
   substeps: (p, span) => p.FluvialErosionStepsPerSpan * span,
-  run(work) {
+  execute(work) {
     const { field, context: c, tools, span, substep, ask } = work;
     if (c.HydrologyStrength === 0) return;
     // A lake's water falls over its sill like any river's, so its outlet cuts by what comes through
@@ -102,7 +106,7 @@ export const streams = defineProcess({
     const pass = { ...c, Seed: c.Seed ^ substep };
     tools.conditionDrainage(pass);
     const targets = tools.landTargets(pass),
-      water = tools.waterGathered(targets, ask("discharge"));
+      water = tools.waterGathered(targets, ask("discharge"), c);
     for (let i = 0; i < field.mesh.count; i++) cutCell(work, targets, water, i, span);
     tools.release(targets, water);
   },

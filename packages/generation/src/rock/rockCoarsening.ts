@@ -1,4 +1,5 @@
-import { blendLayers, type Column, type MaterialLayer } from "./rockLayerFields";
+import { blendLayers, type MaterialLayer } from "./rockLayerFields";
+import type { Column } from "@atlas/domain";
 import type { ColumnWatcher } from "./rockColumn";
 import { sameCargo } from "./materialCargo";
 

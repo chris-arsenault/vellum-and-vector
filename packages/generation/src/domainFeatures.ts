@@ -3,8 +3,13 @@ import { domainCartography } from "./domainCartography";
 import { magicCartography } from "./magicCartography";
 import type { GenerationFeature } from "./features";
 import type { MapProcess, ProcessSequence } from "./process";
-import { culturalProcess, politicalProcess } from "./mapPeople";
-import { builtProcess } from "./mapBuilt";
+import {
+  culturalProcess,
+  culturalDevelopmentProcess,
+  politicalProcess,
+  politicalDevelopmentProcess,
+} from "./mapPeople";
+import { builtProcess, builtPreparation } from "./mapBuilt";
 import {
   ecologyConfiguration,
   magicConfiguration,
@@ -12,6 +17,8 @@ import {
 } from "./featureConfiguration";
 import {
   ecologyOperations,
+  regionalEcologyOperations,
+  regionalMagicOperations,
   configuredMagicOperations,
   localMagicSlots,
   localMagicProcesses,
@@ -57,15 +64,25 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       grazing: atlasParameterDefinitions.grazing,
     },
     parameterKeys: ["vegetation", "grazing"],
-    processes: ["initialize", "evolve", "respond", "burial", "present"].map(
-      (name) => `atlas.ecology-${name}`
-    ),
+    processes: [
+      ...Object.values(regionalEcologyOperations),
+      ...["initialize", "evolve", "respond", "burial", "settle", "present"].map(
+        (name) => `atlas.ecology-${name}`
+      ),
+    ],
     requires: ["physical.climate", "water.routing"],
     slots: Object.keys(ecologyOperations) as GenerationSlot[],
-    contribute: (slot) =>
-      ecologyOperations[slot as GenerationSlot]
-        ? [operation(`atlas.ecology-${ecologyOperations[slot as GenerationSlot]}`, "1")]
-        : [],
+    contribute: (slot, _configuration, context) =>
+      context?.execution === "regional"
+        ? regionalEcologyOperations[slot as GenerationSlot]
+          ? [operation(regionalEcologyOperations[slot as GenerationSlot]!)]
+          : []
+        : ecologyOperations[slot as GenerationSlot]
+          ? [
+              ...(slot === "present.ecology" ? [operation("atlas.ecology-settle")] : []),
+              operation(`atlas.ecology-${ecologyOperations[slot as GenerationSlot]}`, "1"),
+            ]
+          : [],
   },
   {
     id: "magic.configured",
@@ -76,20 +93,36 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
     defaultEnabled: true,
     settings: {},
     processes: [
-      "initialize",
-      "climate",
-      "rocks",
-      "post-glacial",
-      "coast",
-      "history",
-      "classify",
-      "project",
-    ].map((name) => `atlas.magic-${name}`),
-    slots: Object.keys(configuredMagicOperations) as GenerationSlot[],
-    contribute: (slot) =>
-      configuredMagicOperations[slot as GenerationSlot]
-        ? [operation(`atlas.magic-${configuredMagicOperations[slot as GenerationSlot]}`)]
-        : [],
+      "refinement.magic-water",
+      ...Object.values(regionalMagicOperations),
+      ...[
+        "initialize",
+        "climate",
+        "rocks",
+        "post-glacial",
+        "coast",
+        "history",
+        "classify",
+        "project",
+      ].map((name) => `atlas.magic-${name}`),
+    ],
+    slots: [
+      ...new Set([
+        ...Object.keys(configuredMagicOperations),
+        ...Object.keys(regionalMagicOperations),
+        "after.model-pass",
+      ]),
+    ] as GenerationSlot[],
+    contribute: (slot, _configuration, context) =>
+      context?.execution === "regional"
+        ? slot === "after.model-pass" && context.process === "atlas.groundwater"
+          ? [operation("refinement.magic-water")]
+          : regionalMagicOperations[slot as GenerationSlot]
+            ? [operation(regionalMagicOperations[slot as GenerationSlot]!)]
+            : []
+        : configuredMagicOperations[slot as GenerationSlot]
+          ? [operation(`atlas.magic-${configuredMagicOperations[slot as GenerationSlot]}`)]
+          : [],
     conditionalRequires: (_configuration, context) =>
       configuredMagicRequirements(
         context.input.settings?.magicSystems ?? [],
@@ -125,9 +158,12 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
     },
     // Shared parameters: the population processes read these through the bound atlas parameters.
     parameterKeys: ["cultureCount", "culturalMobility"],
-    processes: [culturalProcess.contract.id],
+    processes: [culturalDevelopmentProcess.contract.id, culturalProcess.contract.id],
     slots: ["present.people"],
-    contribute: (slot) => present(culturalProcess, slot),
+    contribute: (slot) => [
+      ...present(culturalDevelopmentProcess, slot),
+      ...present(culturalProcess, slot),
+    ],
   },
   {
     id: "human.politics",
@@ -140,9 +176,12 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       politicalReach: atlasParameterDefinitions.politicalReach,
     },
     parameterKeys: ["polityCount", "politicalReach"],
-    processes: [politicalProcess.contract.id],
+    processes: [politicalDevelopmentProcess.contract.id, politicalProcess.contract.id],
     slots: ["present.people"],
-    contribute: (slot) => present(politicalProcess, slot),
+    contribute: (slot) => [
+      ...present(politicalDevelopmentProcess, slot),
+      ...present(politicalProcess, slot),
+    ],
   },
   {
     id: "built.layout",
@@ -165,8 +204,8 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       highways: atlasParameterDefinitions.highways,
     },
     parameterKeys: ["townThreshold", "cityReach", "roadTraffic", "marketTravel", "highways"],
-    processes: [builtProcess.contract.id],
+    processes: [builtPreparation.contract.id, builtProcess.contract.id],
     slots: ["present.people"],
-    contribute: (slot) => present(builtProcess, slot),
+    contribute: (slot) => [...present(builtPreparation, slot), ...present(builtProcess, slot)],
   },
 ];

@@ -26,13 +26,13 @@ const scope: SpatialScope = {
   },
 };
 it("checks bilinear support inside clipped footprints with no active grid vertices", () => {
-  const grid = createGrid("field", scope, 2, 2);
+  const grid = createGrid<string>("field", scope, 2, 2);
   putChannel(grid, "elevation", "metre", residentBand("float64", [1000, 1000, 1000, 1000]));
   expect([...grid.active]).toEqual([0, 0, 0, 0]);
   expect(fieldExtrema(grid, "elevation", scope.footprint)).toEqual([1000, 1000]);
 });
 it("includes quadratic extrema along diagonal constraint edges", () => {
-  const grid = createGrid(
+  const grid = createGrid<string>(
     "field",
     {
       ...scope,

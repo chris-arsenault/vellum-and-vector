@@ -1,14 +1,14 @@
-import { respond } from "../coupling/answers";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { clamp, round, toUnits, truncate } from "./math";
+import { clamp, round, truncate } from "./math";
 import { groundOf } from "../rock/ground";
 import { surfacePorosity } from "../rock/groundQueries";
 import { latitudeAt } from "./latitude";
 import { marchAirColumns, saturation } from "./airColumn";
 import { beltRainout } from "./belts";
 import { MapScale } from "@atlas/domain";
+import { releaseWorking } from "./physicalNumerics";
 
 /** Annual-mean insolation departure from the global mean, in native units. */
 export function insolationTemperature(p: PhysicalProfile, latitude: number) {
@@ -23,16 +23,20 @@ export function seasonality(p: PhysicalProfile, latitude: number, continentality
     (p.MaritimeSeasonality + (1 - p.MaritimeSeasonality) * clamp(continentality, 0, 1))
   );
 }
+/** Native temperature loss for a measured altitude change in the atmosphere's dimensional frame. */
+export function altitudeTemperature(metres: number, lapse: number, elevationScale: number) {
+  return (metres * lapse) / elevationScale;
+}
 export function temperature(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
     const latitude = latitudeAt(p, map, i),
       sea = map.WaterKindCodes.get(i) === 1,
       oceanDistance = map.OceanDistance.get(i);
-    const lapse = truncate(
-      (toUnits(Math.max(0, map.Elevation.get(i) - map.EffectiveSeaLevel)) *
-        p.ElevationTemperatureLapse) /
-        p.ElevationScale
+    const lapse = altitudeTemperature(
+      MapScale.metres(Math.max(0, map.Elevation.get(i) - map.EffectiveSeaLevel), "native"),
+      p.ElevationTemperatureLapse,
+      p.ElevationScale
     );
     map.Seasonality.set(
       i,
@@ -42,32 +46,42 @@ export function temperature(map: PhysicalField, c: PhysicalContext) {
         sea || oceanDistance < 0 ? 0 : oceanDistance / p.ContinentalityDistance
       )
     );
-    // Only heat above the surface threshold (vents, active volcanoes) warms the air.
-    const heat = truncate(
-      (Math.max(0, map.Geothermal.get(i) - p.GeothermalSurfaceThreshold) *
-        p.GeothermalTemperatureStrength) /
-        1000
-    );
-    const current = truncate(
-      (truncate((map.OceanCurrentHeat.get(i) * map.OceanCurrentStrength.get(i)) / 1000) *
-        p.OceanCurrentTemperatureStrength) /
-        1000
-    );
     map.Temperature.set(
       i,
       p.TemperatureBaseline +
         c.TemperatureOffset +
         insolationTemperature(p, latitude) +
-        (sea ? map.SeaSurfaceAnomaly.get(i) : 0) -
-        lapse +
-        heat +
-        current +
-        map.Warmth.get(i) +
-        map.ExternalHeatForcing.get(i) -
-        round(map.FogForcing.get(i) * p.FogCooling) -
-        round(map.Evapotranspiration.get(i) * 15)
+        climateTemperatureForcing(map, p, i) -
+        lapse
     );
   }
+}
+/** Current environmental contribution in native temperature units, independent of latitude/lapse. */
+export function climateTemperatureForcing(map: PhysicalField, p: PhysicalProfile, i: number) {
+  const heat = truncate(
+      (Math.max(0, map.Geothermal.get(i) - p.GeothermalSurfaceThreshold) *
+        p.GeothermalTemperatureStrength) /
+        1000
+    ),
+    current = truncate(
+      (truncate((map.OceanCurrentHeat.get(i) * map.OceanCurrentStrength.get(i)) / 1000) *
+        p.OceanCurrentTemperatureStrength) /
+        1000
+    );
+  return (
+    heat +
+    current +
+    map.Warmth.get(i) +
+    map.ExternalHeatForcing.get(i) +
+    (map.WaterKindCodes.get(i) === 1 ? map.SeaSurfaceAnomaly.get(i) : 0) -
+    round(map.FogForcing.get(i) * p.FogCooling) -
+    round(map.Evapotranspiration.get(i) * 15)
+  );
+}
+
+/** Condensed marine fog supplies precipitation outside the advected atmospheric column. */
+export function fogPrecipitation(fog: number, drip: number) {
+  return fog * drip;
 }
 /**
  * March air columns downwind. Land takes the air's carried marine and magical
@@ -91,6 +105,14 @@ export function moisture(map: PhysicalField, c: PhysicalContext) {
       clamp(round((1000 * column.moisture.get(i)) / saturation(p, map.Temperature.get(i))), 0, 1000)
     );
   }
+  releaseWorking(
+    map,
+    column.precipitation,
+    column.storm,
+    column.airHeat,
+    column.maritime,
+    column.moisture
+  );
 }
 /** Per-mille of the year below the snow threshold for a sinusoidal annual cycle. */
 export function snowShare(p: PhysicalProfile, mean: number, halfRange: number) {
@@ -111,7 +133,7 @@ export function precipitation(map: PhysicalField, c: PhysicalContext) {
     const total = Math.max(
       0,
       (p.PrecipitationBaseline + map.ColumnPrecipitation.get(i)) * c.RainfallMultiplier +
-        map.FogForcing.get(i) * p.FogDrip
+        fogPrecipitation(map.FogForcing.get(i), p.FogDrip)
     );
     const snow = snowShare(p, map.Temperature.get(i), map.Seasonality.get(i) * 10);
     const { snowfall, rainfall } = partitionPrecipitation(total, snow);
@@ -155,7 +177,8 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
             available * map.Infiltration.get(i) * 0.08
         )
       : available * vegetationLoss;
-    // Magical warmth carried down the channel evaporates more of what the channel carries.
+    // The preceding routing pass's carried warmth increases evaporation. Current routing needs
+    // this runoff first; its heat transport feeds the next pass rather than a recursive solve.
     const warmLoss = (available * map.RiverWarmth.get(i) * p.WarmRiverEvaporation) / 1000;
     const evaporation =
       (map.EcologyInitialized
@@ -170,35 +193,3 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
     map.Runoff.set(i, Math.max(0, available - evaporation) * (1 - held) * (1 - seeping));
   }
 }
-
-/** What climate answers of the ground. Temperature is ten native units per degree, freezing at 300. */
-const freezing = 300,
-  warm = 200,
-  frostBand = 100;
-respond({
-  key: "discharge",
-  by: "climate",
-  reads: ["Runoff"],
-  base: (map, i, { Profile: p }) => map.Runoff.get(i) / p.FluvialReferenceRunoff,
-});
-respond({
-  key: "wetness",
-  by: "climate",
-  reads: ["Runoff"],
-  base: (map, i, { Profile: p }) => map.Runoff.get(i) / (p.FluvialReferenceRunoff * 2),
-});
-respond({
-  key: "warmth",
-  by: "climate",
-  reads: ["Temperature"],
-  base: (map, i) => Math.max(0, map.Temperature.get(i) - freezing) / warm,
-});
-// Ground that crosses freezing again and again is opened by frost, if it has water to freeze.
-respond({
-  key: "frost",
-  by: "climate",
-  reads: ["Temperature", "Rainfall"],
-  base: (map, i, { Profile: p }) =>
-    clamp(1 - Math.abs(map.Temperature.get(i) - freezing) / frostBand, 0, 1) *
-    clamp(map.Rainfall.get(i) / p.FluvialReferenceRunoff, 0, 1),
-});

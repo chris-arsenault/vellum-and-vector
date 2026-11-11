@@ -139,7 +139,8 @@ export function growCommunities(
   years: number,
   arrivals: PlantArrival[],
   forcing: (i: number) => EcologyForcing,
-  restore: (i: number) => void
+  restore: (i: number) => void,
+  advanceAge = true
 ) {
   for (let i = 0; i < map.mesh.count; i++) {
     const f = forcing(i),
@@ -150,7 +151,7 @@ export function growCommunities(
     for (const p of proposals) growCohort(map, i, p);
     updateTreeCover(map, i);
     restore(i);
-    canopyAge(map, i, years, proposals);
+    if (advanceAge) canopyAge(map, i, years, proposals);
     map.Productivity.set(
       i,
       plantGroups.reduce(

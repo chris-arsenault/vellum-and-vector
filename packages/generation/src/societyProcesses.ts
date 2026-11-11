@@ -1,3 +1,5 @@
+import { mapCommand, mapElapsed, executeMapOperation, processOwner } from "./processTraits";
+import { runOperation } from "./processOperation";
 import { population, putChannel, type Diagnostic } from "@atlas/domain";
 import type { GenerationState, MapProcess, ProcessSequence } from "./process";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
@@ -32,11 +34,11 @@ export const populationInitialize: MapProcess = {
     id: "human.initialize",
     version: "1",
     parameters: {},
-    requires: ["elevation"],
+    requires: ["Elevation"],
     produces: ["population"],
     invalidates: [],
   },
-  behavior: { kind: "initialize", initialize: initializePopulation },
+  operation: initializePopulation,
   validate: validatePopulation,
 };
 export const populationProcess: MapProcess = {
@@ -48,11 +50,13 @@ export const populationProcess: MapProcess = {
     produces: ["population"],
     invalidates: [],
   },
-  behavior: {
-    kind: "elapsed",
-    duration: { kind: "epoch", fraction: 1 },
-    advance: evolvePopulation,
-  },
+  operation: mapElapsed(
+    "human.population",
+    { kind: "epoch", fraction: 1 },
+    (state, context, years) =>
+      runOperation(processOwner(state), evolvePopulation, { state, context, years }),
+    []
+  ),
   validate: validatePopulation,
 };
 export const populationPublish: MapProcess = {
@@ -64,9 +68,10 @@ export const populationPublish: MapProcess = {
     produces: ["population"],
     invalidates: [],
   },
-  behavior: {
-    kind: "extract",
-    extract(state) {
+  operation: mapCommand(
+    "human.population-present",
+    "publish",
+    (state) => {
       const work = state.society!,
         n = state.surface.active.length;
       const allocate = (name: string) => {
@@ -86,7 +91,8 @@ export const populationPublish: MapProcess = {
       putChannel(state.surface, "populationCapacity", "people/square-kilometre", capacity);
       retainSocietyFootprints(state);
     },
-  },
+    []
+  ),
   validate: validatePopulation,
 };
 export const populationProcesses = [
@@ -110,14 +116,16 @@ export const societyPresent: MapProcess = {
     produces: ["society:environment"],
     invalidates: [],
   },
-  behavior: {
-    kind: "extract",
-    extract(state, context) {
+  operation: mapCommand(
+    "human.present-works",
+    "event",
+    (state, context) => {
       if (!state.society!.inherited) return;
-      applyPresentWorks(state);
-      refreshSocietyEnvironment(state, context, 0);
+      executeMapOperation(applyPresentWorks, state, context);
+      executeMapOperation(refreshSocietyEnvironment, state, context);
     },
-  },
+    []
+  ),
   validate: () => [],
 };
 populationProcesses.push(societyPresent);

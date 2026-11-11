@@ -1,5 +1,3 @@
-import type { PhysicalField } from "./field";
-import type { PhysicalContext } from "./context";
 import {
   burial,
   crustUplift,
@@ -16,17 +14,15 @@ import {
   volcanoes,
 } from "../processes/builders";
 import {
-  airMoisture,
-  airTemperature,
+  atmosphere,
   currents,
-  landBodies,
-  oceanFill,
-  rainfall,
+  oceanBudget,
+  oceanRead,
+  oceanMemory,
   seaFloorZones,
   seaFreezing,
   shoreDistance,
   warmth,
-  winds,
 } from "../processes/climateProcesses";
 import { coast, outsideWaves } from "../processes/coast";
 import { creep } from "../processes/creep";
@@ -36,7 +32,6 @@ import {
   domains,
   epochActivity,
   epochRecord,
-  finalCheck,
   firstLandscape,
   fractures,
   marginKinds,
@@ -47,12 +42,15 @@ import {
 } from "../processes/crustProcesses";
 import type { GroundProcess } from "../processes/groundProcess";
 import { ice } from "../processes/ice";
-import { actBy, actTogether } from "../processes/processRunner";
+import { nativeOperation } from "../processes/processRunner";
 import { slopes, slopesAfterStreams } from "../processes/slopes";
 import { solution } from "../processes/solution";
 import { streams } from "../processes/streams";
 import {
   channelForm,
+  landBodies,
+  riverHeat,
+  finalCheck,
   deltaForm,
   drainageFlood,
   drainageTurns,
@@ -62,7 +60,6 @@ import {
   iceSpread,
   lakes,
   landforms,
-  meltRunoff,
   meltwater,
   groundwater,
   rivers,
@@ -71,10 +68,12 @@ import {
 } from "../processes/waterProcesses";
 import { weathering } from "../processes/weathering";
 
-export type NativeProcess = (map: PhysicalField, context: PhysicalContext) => void;
+export type NativeProcess = ReturnType<typeof nativeOperation>;
 /** How a step's processes meet: in turn, or together on the same ground, sharing what they compete for. */
 export interface StepOptions {
   readonly simultaneous: boolean;
+  /** Optional inspection of the actual executable boundary, including failure. */
+  readonly elapsed?: (milliseconds: number) => void;
 }
 /** A named step of a world's history: its seed salt, how it runs, and the processes it runs. */
 export type NativeStep = readonly [
@@ -88,14 +87,14 @@ export type NativeStep = readonly [
 export const step = (name: string, salt: number, ...processes: GroundProcess[]): NativeStep => [
   name,
   salt,
-  actBy(...processes),
+  nativeOperation(name, processes),
   processes,
 ];
 /** A step whose processes compete for the same ground, and share what there is. */
 export const stage = (name: string, salt: number, ...processes: GroundProcess[]): NativeStep => [
   name,
   salt,
-  actTogether(...processes),
+  nativeOperation(name, processes, true),
   processes,
   { simultaneous: true },
 ];
@@ -104,7 +103,7 @@ export const nativeSteps = {
   crustalSupport: step("crustal-support", 0, support),
   crustalRelaxation: step("crustal-relaxation", 0, crustalRelaxation),
   lithosphericFlexure: step("lithospheric-flexure", 0, settling),
-  oceanConnectivity: step("ocean-connectivity", 0, oceanFill),
+  oceanConnectivity: step("ocean-connectivity", 0, oceanBudget, oceanRead, oceanMemory),
   massWasting: step("mass-wasting", 0, slopes),
   continentalMarginEvolution: step("continental-margin-evolution", 0, margins),
   marineSedimentation: step("marine-sedimentation", 0, seaFloor),
@@ -134,7 +133,7 @@ export const nativeSteps = {
   glacialLandforms: step("glacial-landforms", 0, iceLandforms),
   seaIce: step("sea-ice", 0, seaFreezing),
   landformClassification: step("landform-classification", 0, landforms),
-  riverChannelGeometry: step("river-channel-geometry", 0, channelForm),
+  riverChannelGeometry: step("river-channel-geometry", 0, channelForm, riverHeat),
   riverFloodplains: step("river-floodplains", 0, floodplainForm),
   riverDeltaFormation: step("river-delta-formation", 0, deltaForm),
   oceanDistance: step("ocean-distance", 0, shoreDistance),
@@ -142,10 +141,7 @@ export const nativeSteps = {
   landmassesAndShelfGroups: step("landmasses-and-shelf-groups", 0, landBodies),
   oceanCurrents: step("ocean-currents", 0x6c41e2, currents),
   warmthSources: step("warmth-sources", 0x4a51c73, warmth),
-  temperature: step("temperature", 0, airTemperature),
-  atmosphericFlow: step("atmospheric-flow", 0x4e28b3, winds),
-  moistureTransport: step("moisture-transport", 0x5e29, airMoisture),
-  precipitation: step("precipitation", 0x3b7d19, rainfall),
+  atmosphericClimate: step("atmospheric-climate", 0x4e28b3, atmosphere),
   runoff: step("runoff", 0, waterOff),
   drainageConditioning: step("drainage-conditioning", 0, drainageFlood),
   lakeBasins: step("lake-basins", 0x7a31, lakes),
@@ -162,7 +158,6 @@ export const nativeSteps = {
   ),
   postFluvialMassWasting: step("post-fluvial-mass-wasting", 0, slopesAfterStreams),
   sedimentTransport: step("sediment-transport", 0, riverLoad),
-  glacialRunoff: step("glacial-runoff", 0, meltRunoff),
   lithification: step("lithification", 0, burial),
   rockMetamorphism: step("rock-metamorphism", 0, baking),
   physicalEpochHistory: step("physical-epoch-history", 0, epochRecord),

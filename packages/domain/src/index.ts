@@ -18,6 +18,7 @@ export * from "./schemas";
 export * from "./spatial";
 export * from "./grids";
 export * from "./materialSamples";
+export * from "./materialFields";
 export * from "./gridWindow";
 export * from "./brush";
 export * from "./gridResampling";
@@ -114,3 +115,7 @@ export {
 } from "./worldBoundary";
 export * from "./generationHistory";
 export * from "./mapOwnership";
+export * from "./physicalFields";
+export * from "./ecologyFields";
+export * from "./materialLoadFields";
+export * from "./fieldChannels";

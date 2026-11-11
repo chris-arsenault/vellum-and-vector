@@ -13,6 +13,8 @@ import { createWorldMesh } from "../../packages/generation/src/world/worldMesh";
 import { atlasPhysicalProfile } from "../../packages/generation/src/world/atlasProfile";
 import { refreshWorkspaceSamples } from "../../packages/generation/src/world/atlasWorkspace";
 import { projectNative } from "../../packages/generation/src/world/atlasProjection";
+import { runOperation } from "../../packages/generation/src/processOperation";
+import { processOwner } from "../../packages/generation/src/processTraits";
 import {
   oceanFootprint,
   lakeFootprint,
@@ -52,14 +54,14 @@ function fixture(pattern: "plane" | "coast" | "island") {
     inherited: false,
   };
   refreshWorkspaceSamples(state, state.physical);
-  projectNative(state);
+  runOperation(processOwner(state), projectNative, { state });
   state.surface.ocean = oceanFootprint(state);
   const raster: Raster = {
     id: "coast",
     areaId: "area",
     footprint,
     bounds: state.surface.bounds,
-    channel: "elevation",
+    channel: "Elevation",
     field: state.surface,
     water: state.surface,
   };
@@ -94,8 +96,8 @@ it("meets the shared coastline even where resampled elevation puts the mouth inl
     paths = createRiverPaths(map),
     ocean = state.surface.ocean!;
   paths.water = { ocean, lakes: new Map() };
-  const height = fieldInterpolator(state.surface, "elevation"),
-    sea = fieldInterpolator(state.surface, "seaLevel"),
+  const height = fieldInterpolator(state.surface, "Elevation"),
+    sea = fieldInterpolator(state.surface, "EffectiveSeaLevel"),
     sample = numericTileSampler(raster),
     paint = tilePainter(raster, [-2000, 2000]);
   let exposedMouths = 0;

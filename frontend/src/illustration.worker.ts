@@ -59,7 +59,7 @@ async function assemble({ id, input, footprint }: IllustrationRequest) {
   }
   try {
     const selected = new Set(input.view.fields);
-    if (input.view.terrain) selected.add("treeCover");
+    if (input.view.terrain) selected.add("TreeCover");
     const loaded: LoadedDrawnMapInput = {
       ...input,
       base: await load(input.base),

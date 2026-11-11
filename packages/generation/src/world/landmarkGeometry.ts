@@ -209,7 +209,7 @@ export function channelCell(map: PhysicalField, station: { x: number; y: number 
   }
   return best;
 }
-/** Metres above the published datum. */
+/** Summit targets stay relative to formation sea level, so later tides do not rebuild a mountain. */
 export const metres = (map: PhysicalField, elevation: number) =>
   MapScale.metres(elevation - map.BaseSeaLevel, "native");
 export const unitsAbove = (map: PhysicalField, value: number) => map.BaseSeaLevel + units(value);

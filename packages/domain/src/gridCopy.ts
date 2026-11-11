@@ -4,12 +4,12 @@ import type { Band } from "./lattice/band";
 import type { Coverage } from "./lattice/coverage";
 
 /** Copy a grid's samples copy-on-write: no band is read whole, blocks diverge on write. */
-export function copyGrid<T extends GridSurface>(source: T): T {
+export function copyGrid<T extends GridSurface<string>>(source: T): T {
   return copyGridSamples(source, new Map(), new Map());
 }
-function copyGridSamples<T extends GridSurface>(
+function copyGridSamples<T extends GridSurface<string>>(
   source: T,
-  grids: Map<GridSurface, GridSurface>,
+  grids: Map<GridSurface<string>, GridSurface<string>>,
   samples: Map<Band, Band>
 ): T {
   const existing = grids.get(source);
@@ -30,7 +30,9 @@ function copyGridSamples<T extends GridSurface>(
     active: sampleCopy(source.active),
     measures: sampleCopy(source.measures),
     channels: Object.fromEntries(
-      Object.entries(source.channels).map(([name, values]) => [name, sampleCopy(values)])
+      Object.entries(source.channels).flatMap(([name, values]) =>
+        values ? [[name, sampleCopy(values)]] : []
+      )
     ),
     units: { ...source.units },
     ...(source.materialCargo

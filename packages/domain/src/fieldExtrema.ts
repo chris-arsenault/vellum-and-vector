@@ -7,7 +7,7 @@ import { requireThat } from "./errors";
 import { adaptiveExtrema } from "./adaptiveExtrema";
 
 export function fieldExtrema(
-  grid: GridSurface,
+  grid: GridSurface<string>,
   channel: string,
   footprint: Geometry
 ): [number, number] | null {
@@ -41,7 +41,7 @@ function traces(geometry: Geometry): number[][][] {
     return [[g.coordinates]];
   });
 }
-function edgeValues(grid: Grid, channel: string, a: number[], b: number[]): number[] {
+function edgeValues(grid: Grid<string>, channel: string, a: number[], b: number[]): number[] {
   const at = (t: number) =>
     interpolateSample(grid, channel, {
       x: a[0] + t * (b[0] - a[0]),
@@ -65,7 +65,7 @@ function edgeValues(grid: Grid, channel: string, a: number[], b: number[]): numb
   );
   return values;
 }
-function cellValues(grid: Grid, channel: string, region: Geometry): number[] {
+function cellValues(grid: Grid<string>, channel: string, region: Geometry): number[] {
   return traces(region).flatMap((ring) =>
     ring.length === 1
       ? [interpolateSample(grid, channel, { x: ring[0][0], y: ring[0][1], z: 0 })]
@@ -73,7 +73,7 @@ function cellValues(grid: Grid, channel: string, region: Geometry): number[] {
   );
 }
 function rawFieldExtrema(
-  grid: Grid,
+  grid: Grid<string>,
   channel: string,
   footprint: Geometry
 ): [number, number] | null {

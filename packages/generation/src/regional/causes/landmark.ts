@@ -1,5 +1,4 @@
 import { landmarkKind, MapScale } from "@atlas/domain";
-import { standGround } from "../../rock/groundLedger";
 import { nearestOnPath, pathMetrics, type Placed } from "../../world/landmarkGeometry";
 import { maintainLandmark, placeLandmark, type LandmarkLedger } from "../../world/landmarks";
 import { distance, isContent, regionalSpan } from "../lattice";
@@ -20,8 +19,8 @@ const ledgers = new WeakMap<RegionalState, LandmarkLedger>();
  * network as the cause table says: a mountain repels like a summit, a canyon or falls is a
  * corridor the network is drawn into, a ring repels along its rim, an escarpment's fault is
  * a trunk of the fracture set. Support is the world's own maintenance: after each structure
- * step's relief is written, the signature is measured and the smallest correction applied,
- * which never stacks because the relief is re-derived first.
+ * realization, the shared owner measures the signature and applies its material correction.
+ * Later local development may reshape it; no exterior height rollback preserves a seam.
  */
 registerCause({
   kind: "landmark",
@@ -33,18 +32,11 @@ registerCause({
   },
   restore(state) {
     const ledger = ledgers.get(state) ?? new Map(),
-      map = state.physical.map,
-      mesh = map.mesh,
-      exterior = new Float64Array(mesh.count);
+      map = state.physical.map;
     if (!state.regional.evidence!.landmarks.length) return;
-    // The world's correction writes every cell within reach; the halo keeps the parent's
-    // ground (as the relief does) and each round's maintenance is booked afresh.
-    for (let i = 0; i < mesh.count; i++) exterior[i] = map.Elevation.get(i);
     map.LandmarkMaintenance.fill(0);
     for (const { landmark } of state.regional.evidence!.landmarks)
       maintainLandmark(map, state.physical.profile, landmark, 0, ledger);
-    for (let i = 0; i < mesh.count; i++)
-      if (!isContent(mesh, i)) standGround(map, i, exterior[i], "landmarks");
     ledgers.set(state, ledger);
   },
 });

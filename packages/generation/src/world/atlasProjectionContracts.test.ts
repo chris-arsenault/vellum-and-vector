@@ -1,3 +1,4 @@
+import { mapCommand } from "../processTraits";
 import { expect, it } from "vitest";
 import { residentBand } from "@atlas/domain";
 import { MapRunner } from "../mapRunner";
@@ -63,16 +64,18 @@ function consumer(): MapProcess {
       id: "test.flow-reader",
       version: "1",
       parameters: {},
-      requires: ["flow", "drainage"],
+      requires: ["FlowAccumulation", "drainage"],
       produces: [],
       invalidates: [],
     },
-    behavior: {
-      kind: "model-pass",
-      applyPass(state) {
-        expect(state.surface.channels.flow).toBeDefined();
+    operation: mapCommand(
+      "test.flow-reader",
+      "event",
+      (state) => {
+        expect(state.surface.channels.FlowAccumulation).toBeDefined();
       },
-    },
+      []
+    ),
     validate: () => [],
   };
 }
@@ -81,23 +84,34 @@ it("forcing projection produces its real inputs without inventing flow or draina
   const projector = registry.get("atlas.project-forcing", "1");
   const plan = { ...configuration([invoke(projector)]), inputs };
   const result = await new MapRunner(plan, registry).run(state, options);
-  for (const product of ["elevation", "geology", "fracture", "naturalTemperature", "naturalRock"])
+  for (const product of [
+    "Elevation",
+    "geology",
+    "FractureConductance",
+    "NaturalTemperature",
+    "NaturalRockResistance",
+  ])
     expect(result.state.facts.has(product)).toBe(true);
-  expect(result.state.surface.channels.naturalRock).toBeDefined();
-  expect(result.state.surface.channels.naturalTemperature).toBeDefined();
-  for (const product of ["flow", "drainage"]) expect(result.state.facts.has(product)).toBe(false);
-  expect(result.state.surface.channels.flow).toBeUndefined();
-  expect(result.state.surface.channels.receiver).toBeUndefined();
+  expect(result.state.surface.channels.NaturalRockResistance).toBeDefined();
+  expect(result.state.surface.channels.NaturalTemperature).toBeDefined();
+  for (const product of ["FlowAccumulation", "drainage"])
+    expect(result.state.facts.has(product)).toBe(false);
+  expect(result.state.surface.channels.FlowAccumulation).toBeUndefined();
+  expect(result.state.surface.channels.FlowTargets).toBeUndefined();
   const reader = consumer();
   registry.register(reader);
   const invalid = { ...configuration([invoke(projector), invoke(reader)]), inputs };
   expect(preflight(invalid, registry, state.facts).map((error) => error.resource)).toEqual([
-    "flow",
+    "FlowAccumulation",
     "drainage",
   ]);
   const skipped = await new MapRunner(invalid, registry).run(state, options);
   expect(skipped.state.diagnostics).toEqual([
-    expect.objectContaining({ code: "stale_fact", resource: "flow", outcome: "skipped" }),
+    expect.objectContaining({
+      code: "stale_fact",
+      resource: "FlowAccumulation",
+      outcome: "skipped",
+    }),
     expect.objectContaining({ code: "stale_fact", resource: "drainage", outcome: "skipped" }),
   ]);
 });
@@ -108,10 +122,10 @@ it.each([true, false])(
     const projector = registry.get("atlas.project", "1");
     const plan = { ...configuration([invoke(projector)]), inputs };
     const result = await new MapRunner(plan, registry).run(state, options);
-    expect(result.state.facts.has("flow")).toBe(routing);
+    expect(result.state.facts.has("FlowAccumulation")).toBe(routing);
     expect(result.state.facts.has("drainage")).toBe(false);
-    expect(Boolean(result.state.surface.channels.flow)).toBe(routing);
-    expect(result.state.surface.channels.receiver).toBeUndefined();
+    expect(Boolean(result.state.surface.channels.FlowAccumulation)).toBe(routing);
+    expect(result.state.surface.channels.FlowTargets).toBeUndefined();
   }
 );
 
@@ -122,11 +136,15 @@ it("full projection declares geology and fracture only when it projects those se
     { ...configuration([invoke(projector)]), inputs },
     registry
   ).run(state, options);
-  expect(result.state.facts.has("elevation")).toBe(
-    Boolean(result.state.surface.channels.elevation)
+  expect(result.state.facts.has("Elevation")).toBe(
+    Boolean(result.state.surface.channels.Elevation)
   );
   expect(result.state.facts.has("geology")).toBe(
-    ["bedrock", "rock", "sediment"].every((name) => Boolean(result.state.surface.channels[name]))
+    (["BedrockElevation", "RockResistance", "SedimentThickness"] as const).every((name) =>
+      Boolean(result.state.surface.channels[name])
+    )
   );
-  expect(result.state.facts.has("fracture")).toBe(Boolean(result.state.surface.channels.fracture));
+  expect(result.state.facts.has("FractureConductance")).toBe(
+    Boolean(result.state.surface.channels.FractureConductance)
+  );
 });

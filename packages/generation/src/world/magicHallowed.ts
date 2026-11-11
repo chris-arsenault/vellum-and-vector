@@ -29,12 +29,12 @@ export function tenureSources(
   _seed: number,
   { origin }: LocateContext
 ) {
-  const society = state.society;
+  const society = maintainedSociety(state);
   if (!society) return;
   const map = state.physical!.map,
     p = field.definition.parameters,
-    ways = waysConverging(society.region.connections);
-  for (const c of society.region.communities) {
+    ways = waysConverging(society.connections);
+  for (const c of society.communities) {
     if (c.status !== "inhabited") continue;
     const cell = nativeIndexAtSurface(state, c.position.x, c.position.y);
     if (cell < 0 || map.Tenure.get(cell) <= 0) continue;
@@ -52,6 +52,14 @@ export function tenureSources(
       strength,
     });
   }
+}
+function maintainedSociety(state: GenerationState) {
+  return (
+    state.society?.region ??
+    (state.physical?.inherited
+      ? state.domain.world.societies?.[state.domain.scope.areaId]
+      : undefined)
+  );
 }
 /** How many ways end at each community. */
 function waysConverging(connections: { from: string; to: string }[]) {

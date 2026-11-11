@@ -19,7 +19,7 @@ it("displays an independent map's field beyond its starting outline", async () =
   child.footprint = rectangle([500, 100, 3500, 900]);
   registerWorldSnapshot(snapshot);
   const rasters = await readMapRasters(snapshot.world.id, child.id),
-    elevation = rasters.find((r) => r.channel === "elevation")!;
+    elevation = rasters.find((r) => r.channel === "Elevation")!;
   expect(spatial.covers(elevation.footprint, rectangle([0, 0, 4000, 1000]))).toBe(true);
   expect(elevation.areaId).toBe(child.id);
 });

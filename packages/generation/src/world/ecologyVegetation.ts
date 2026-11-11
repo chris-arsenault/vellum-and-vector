@@ -15,6 +15,28 @@ export function evolveVegetation(
   restore: (i: number) => void = () => {},
   seed = 42
 ) {
+  vegetationResponse(map, years, forcing, restore, seed, true);
+}
+
+/** Local ecological relaxation resolves inherited communities without advancing their age. */
+export function developVegetation(
+  map: PhysicalField,
+  exposure: number,
+  forcing: (i: number) => EcologyForcing,
+  restore: (i: number) => void,
+  seed: number
+) {
+  vegetationResponse(map, exposure, forcing, restore, seed, false);
+}
+
+function vegetationResponse(
+  map: PhysicalField,
+  years: number,
+  forcing: (i: number) => EcologyForcing,
+  restore: (i: number) => void,
+  seed: number,
+  advanceAge: boolean
+) {
   initializeEcology(map, seed);
   if (years > 0) {
     evolveSoils(map, years, forcing);
@@ -22,7 +44,7 @@ export function evolveVegetation(
     disturbEcology(map, years, forcing, seed);
     floodEcology(map, years);
     const arrivals = dispersePlants(map, years, forcing);
-    growCommunities(map, years, arrivals, forcing, restore);
+    growCommunities(map, years, arrivals, forcing, restore, advanceAge);
     evolveAnimals(map, years, forcing);
   }
   for (let i = 0; i < map.mesh.count; i++) {

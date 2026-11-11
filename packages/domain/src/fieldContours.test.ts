@@ -14,7 +14,7 @@ const centres = (tree: AdaptiveTopology) => {
 };
 
 it("skips uniform regular cells while retaining the same shore, holes and outer edge", () => {
-  const grid = createGrid(
+  const grid = createGrid<string>(
     "supplied-contours",
     {
       worldId: "world",
@@ -58,7 +58,7 @@ const topology = () =>
   });
 
 it("keeps contours and holes joined when regular-grid sampling advances between rows", () => {
-  const grid = createGrid(
+  const grid = createGrid<string>(
     "row-contours",
     {
       worldId: "world",

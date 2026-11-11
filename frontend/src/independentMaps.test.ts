@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { rectangle, sample, type DomainSnapshot } from "@atlas/domain";
+import { MapScale, rectangle, sample, requireChannel, type DomainSnapshot } from "@atlas/domain";
 import {
   readScene,
   readMapRasters,
@@ -98,7 +98,7 @@ async function replaceParentField(
     field = output.world.fields.find((candidate) => candidate.id === fieldId)!;
   field.resourceId = crypto.randomUUID();
   output.numerical[fieldId].id = field.resourceId;
-  output.numerical[fieldId].channels.elevation.fill(700);
+  requireChannel(output.numerical[fieldId], "Elevation").fill(MapScale.native(700));
   output.world.version++;
   await publishWorkspaceGeneration(
     workspace.catalog,
@@ -121,18 +121,20 @@ it("keeps frozen numerical inputs when parent resources are replaced and after c
     childResource = childField.resourceId;
   await f.command("sculptField", {
     fieldId: rootField.id,
-    channel: "elevation",
+    channel: "Elevation",
     center: position,
     radius: 50_000,
     amount: 500,
     mode: "add",
     falloff: "constant",
   });
-  expect(sample(f.current().numerical[rootField.id], "elevation", position)).toBeGreaterThan(100);
+  expect(sample(f.current().numerical[rootField.id], "Elevation", position)).toBeGreaterThan(100);
   expect(f.current().world.fields.find((field) => field.id === childField.id)!.resourceId).toBe(
     childResource
   );
-  expect(sample(f.current().numerical[childField.id], "elevation", position)).toBe(100);
+  expect(sample(f.current().numerical[childField.id], "Elevation", position)).toBe(
+    MapScale.native(100)
+  );
   const originalParentResource = rootField.resourceId;
   const replacement = await replaceParentField(workspace, f.current(), rootField.id);
   expect(replacement).not.toBe(originalParentResource);
@@ -151,7 +153,9 @@ it("keeps frozen numerical inputs when parent resources are replaced and after c
     const source = await generationSource(reopened, f.id, f.child);
     expect(source.world.fields.every((field) => field.areaId === f.child)).toBe(true);
     await reader.read(source, numericalReads(source));
-    expect(sample(source.numerical[childField.id], "elevation", position)).toBe(100);
+    expect(sample(source.numerical[childField.id], "Elevation", position)).toBe(
+      MapScale.native(100)
+    );
     expect(
       reopened
         .exportFeatures(f.id, f.child, null, 128)

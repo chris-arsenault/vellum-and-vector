@@ -1,3 +1,4 @@
+import { mapCommand } from "../processTraits";
 import type { GenerationState, MapProcess } from "../process";
 import type { ResolvedFeatures } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
@@ -60,12 +61,14 @@ export function absenceInitialization(
       invalidates: [],
       workspaceOnly: true,
     },
-    behavior: {
-      kind: "initialize",
-      initialize(state) {
+    operation: mapCommand(
+      "atlas.absent-physical",
+      "initialize",
+      (state) => {
         initializeAbsent(state, absent);
       },
-    },
+      []
+    ),
     validate: () => [],
   };
 }

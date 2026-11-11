@@ -7,7 +7,10 @@ import {
   settlementSiteKinds,
   KeyedHeap,
 } from "@atlas/domain";
-import { projectNative } from "../world/atlasProjection";
+import { projectNative, selectedNativeProjection } from "../world/atlasProjection";
+import { runOperation } from "../processOperation";
+import { processOwner } from "../processTraits";
+import type { MapProcessContext } from "../process";
 import { generationFeature, generationFeatures } from "../generationFeatures";
 import { publishKinds } from "../poi/poiPublish";
 import { regionalCommunitySpacing } from "../regionalSociety";
@@ -66,10 +69,10 @@ export function preparePlaces(state: RegionalState) {
  * whose hinterland cannot support a village gives way to its neighbours. Spacing is a
  * consequence of that competition: valleys and shores fill, uplands stay sparse.
  */
-export function proposePlaces(state: RegionalState) {
+export function proposePlaces(state: RegionalState, context: MapProcessContext) {
   const density = state.regional.populationDensity;
   if (!placesEnabled(state.regional.input.domains) || !density) return;
-  const sites = (state.regional.sites = siteClasses(state)),
+  const sites = (state.regional.sites = siteClasses(state, context)),
     access = waterAccess(state),
     seats = (state.regional.evidence?.seats ?? [])
       .filter((seat) => seat.strength === "established")
@@ -93,8 +96,8 @@ export function proposePlaces(state: RegionalState) {
  * the surface, so the field is projected onto it first and each surface sample's class is
  * carried to the physical cell beneath it.
  */
-function siteClasses(state: RegionalState): (SiteOpportunity | null)[] {
-  projectNative(state);
+function siteClasses(state: RegionalState, context: MapProcessContext): (SiteOpportunity | null)[] {
+  runOperation(processOwner(state), projectNative, selectedNativeProjection(state, context));
   const work = state.physical,
     rank = (site: SiteOpportunity) => settlementSiteKinds.indexOf(site.kind),
     sites: (SiteOpportunity | null)[] = new Array(work.map.mesh.count).fill(null),

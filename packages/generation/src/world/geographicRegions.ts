@@ -16,7 +16,7 @@ import {
   combinedContour,
   fillSmallHoles,
   membershipContour,
-  areaGeometry,
+  intersectAreas,
 } from "./geographicContours";
 import { landArea } from "./regionPartition";
 import type { PlaceGeometry } from "./placeGeometry";
@@ -27,7 +27,7 @@ import { significantMagicArea } from "./worldMagicSignificance";
 export { extractLakes } from "./lakeFeatures";
 
 function clipRegion(state: GenerationState, shape: Geometry | null) {
-  return areaGeometry(shape && spatial.intersection(shape, state.domain.scope.footprint));
+  return intersectAreas(shape, state.domain.scope.footprint);
 }
 function connectedMembers(
   state: GenerationState,
@@ -208,7 +208,7 @@ function placeAttributes(
     representative: nativePosition(work, anchor),
     placeType: name,
     geometryMeaning: placement?.meaning ?? "classified geographic region",
-    elevation: MapScale.metres(work.map.Elevation.get(anchor) - work.map.BaseSeaLevel, "native"),
+    elevation: MapScale.metres(work.map.Elevation.get(anchor), "native"),
   };
 }
 /** Where systems meet: a meeting is a process between them, not a kind of place of one. */

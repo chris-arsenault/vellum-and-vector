@@ -264,10 +264,10 @@ function useGenerationRaster(
               areaId,
               footprint: grid.scope.footprint,
               bounds: grid.bounds,
-              channel: "elevation",
+              channel: "Elevation" as const,
               field: grid,
-              water: grid.channels.water ? grid : undefined,
-              ice: grid.channels.ice ? grid : undefined,
+              water: grid.channels.WaterKindCodes ? grid : undefined,
+              ice: grid.channels.IceThickness ? grid : undefined,
               surface: grid.channels.finalSurface ? grid : undefined,
             },
           ]

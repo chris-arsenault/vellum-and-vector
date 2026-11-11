@@ -20,7 +20,7 @@ type Sample = ReturnType<typeof numericTileSampler>;
 /** Terrain tiles add their relief gradients; other channels return their samples. */
 function terrainOrValues(channel: string, sample: Sample): Sample {
   return (extent, size, own) =>
-    channel === "elevation"
+    channel === "Elevation"
       ? terrainTile(sample(extent, size, own), size)
       : sample(extent, size, own);
 }

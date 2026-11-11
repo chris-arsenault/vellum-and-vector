@@ -4,6 +4,7 @@ import { spatial, point } from "./spatial";
 import { requireThat } from "./errors";
 import type { Grid } from "./grids";
 import { fieldExtrema } from "./fieldExtrema";
+import { MapScale } from "./mapScale";
 
 function constrainedAt(area: Area, trait: Trait, p: Position): boolean {
   const location = point(p);
@@ -26,7 +27,7 @@ function valuesFit(trait: Trait, values: number[]): boolean {
     ([min, max], v) => [Math.min(min, v), Math.max(max, v)],
     [Infinity, -Infinity]
   );
-  return bounds[1] - bounds[0] <= trait.maximum;
+  return MapScale.metres(bounds[1] - bounds[0], "native") <= trait.maximum;
 }
 
 export function specializeTraits(
@@ -76,7 +77,7 @@ export function effectiveTraits(
 export function validateBoundaryTraits(area: Area): void {
   if (!area.boundary) return;
   for (const trait of area.traits.filter((t) => t.kind === "hard")) {
-    const channel = trait.field === "relief" ? "elevation" : trait.field;
+    const channel = trait.field === "relief" ? "Elevation" : trait.field;
     const samples = area.boundary.samples.filter(
       (s) => Object.hasOwn(s.values, channel) && constrainedAt(area, trait, s.point)
     );
@@ -90,11 +91,16 @@ export function validateBoundaryTraits(area: Area): void {
     );
   }
 }
-export function validateFieldTraits(area: Area, grid: Grid, channel: string, fact = channel) {
+export function validateFieldTraits(
+  area: Area,
+  grid: Grid<string>,
+  channel: string,
+  fact = channel
+) {
   const values = grid.channels[channel];
   requireThat(values, "missing_channel", `Channel ${channel} is unavailable.`);
   for (const trait of area.traits.filter(
-    (t) => t.kind === "hard" && (t.field === fact || (t.field === "relief" && fact === "elevation"))
+    (t) => t.kind === "hard" && (t.field === fact || (t.field === "relief" && fact === "Elevation"))
   )) {
     const region = constrainedRegion(area, trait, grid);
     const range = region ? fieldExtrema(grid, channel, region) : null;
@@ -106,7 +112,7 @@ export function validateFieldTraits(area: Area, grid: Grid, channel: string, fac
     );
   }
 }
-function constrainedRegion(area: Area, trait: Trait, grid: Grid) {
+function constrainedRegion(area: Area, trait: Trait, grid: Grid<string>) {
   let region = spatial.intersection(area.footprint, grid.scope.footprint);
   if (region && trait.scope) region = spatial.intersection(trait.scope, region);
   for (const exception of area.traits.filter(

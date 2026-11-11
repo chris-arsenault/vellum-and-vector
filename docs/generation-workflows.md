@@ -78,186 +78,108 @@ clipping it to the starting outline. Mapped ways split at the chart edge while
 retaining one feature identity and their network junctions. Physical queries,
 class reads and display interpolation locate canonical coordinates in that chart.
 
-Regional terrain, water, living cover, magic and places develop in a fixed coupled
-schedule (`packages/generation/src/regional/schedule.ts`, recorded in
-[ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)): context once,
-three rounds in a declared order (relief derived from the network, then water and access,
-then climate and magic on the shared media, then the living landscape and places), one
-refresh of derived reads and one extraction. A round is not an epoch; nothing replays world
-history. The network is grown once and the relief is re-derived from it each round through
-the media as they are then; working structures (the network, the evidence, seats and their
-footprints, proposed places, magic materials) persist and evolve, and the shared media are
-natural copies of the captured present plus a ledger of tracked contributions, so a round
-updates an influence instead of adding it again.
+Regional development uses the same selected feature definitions and process runner as
+world generation. Features choose shared algorithms, a regional specialization, or
+captured formation that should not be replayed. The coordinator in
+`regional/sequence.ts` orders those contributions; `regional/schedule.ts` implements
+the local operations. [ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)
+records the ownership boundaries. Disabling a feature removes its operations from
+both policies rather than leaving a second regional implementation active.
 
-A world process enters refinement only with a recorded verdict: included, modified,
-replaced or left off. Three rules apply to every included process. A world locator that
-places a budgeted count per area is replaced by the captured source, because a budget
-that floors at one would invent a source on every map. Bands are re-derived every round,
-so every effect is a derivation term or a ledger total, never an in-place addition.
-Thresholds stated in cells, flow units or epochs are restated in physical units.
+Initialization, local material development and derived refresh have separate
+responsibilities. Initial detail realization runs once. Later work retains its
+Ground and lets shared operations cut, deform, transport and bury it. Local work
+spans are development controls, not new world epochs or human eras. Refresh reads
+current state; it cannot replenish inventory, deposit material or age history.
+Opaque Command and Query objects carry executable dependencies. Map operations, native
+steps and nested domain operations use the same dispatcher and map-owned invalidation
+revision. Selected feature entries install queries; regional atmosphere, shoreline distance
+and water strategies replace the shared query implementations while keeping their consumers.
+Commands remain explicitly ordered. Queries resolve other selected queries; development
+and elapsed evolution require explicit exposure or duration. Ocean budget initialization
+and reconnection history are commands, separate from current shoreline calculation.
 
-Established features enter through a cause registry. Each established-feature kind
-declares the hooks it needs (`read`, `influence`, `support`, `restore`,
-`conjoin`, `respond`), and the schedule calls them at fixed points; a new kind of
-established feature is a registry entry, not a new schedule call. Evidence is ordered by
-identity, so a repeated refinement reads it identically.
+Domain field declarations supply one numerical vocabulary. Working bands, resource
+publication and captured inputs retain those names, encodings and vertical datum.
+Sampling changes spatial resolution and represented area; material columns and their
+cargo retain a common donor. Inspection formats raw quantities for people, and geometry
+calculations use their declared units through `MapScale`. Neither creates a second stored
+version of the ground. New quantities join this schema rather than introducing aliases
+between generation and storage.
 
-The exterior of the frame is the parent's ground. The halo carries the parent's country;
-frame-edge exits sit wherever the exterior is no higher, at the parent's height, and exit
-roots owe a fall cost so water runs down to the low exits. Spill routing treats the
-exterior as an outlet at its own height. Calibration and conditioning blurs are taken
-over the frame's cells only.
+Captured Ground includes finite beds, loose cover, facets, contacts, material history
+and hosted cargo. Local network and relief calculations read the material actually
+reached, including cover over older rock. The initial network uses captured terrain,
+structure and established geography as influences. Relief moves retained packages
+through Ground displacement and exposes material through excavation. There is no
+parent-blur fit or restoration of parent heights after erosion. Once initialized,
+the same incision, mass-wasting, sediment, ice, coastal and groundwater owners used
+by world generation operate on the child.
 
-The captured country's character enters as the world's structural grain, strain, glacial
-reworking and volcanic construction. Captured columns retain their material packages as they are
-conditioned to the child's terrain; later removal exposes their buried beds. The drainage network is a geodesic tree over the land
-rooted at the established waters (the connected sea, open frame edges starting with their
-remaining fall to the sea, captured lakes at their level, the floors of the parent's closed
-basins) and descending a cost field of process terms: climbing the captured base, crossing
-the grain, the rock exposed in the column, open fractures
-and warded ground cost; captured courses, the parent's channel raster and a river seat's
-ground are cheap; the ground around known summits and cones is dear; gathered water makes
-its channel cheaper and the country is routed again through it. Ground heterogeneity decides
-only between routes those terms leave equal, most on plains. Relief is derived from that
-tree: each cell rises above its receiver by a concave channel profile or a material
-hillslope gradient, capped inside a seat's footprint, amplified so that the relief blurred
-to the parent span is the captured base; hillslopes are coupled sideways; ice accumulates
-where the lapsed climate and the recorded history allow, hollows cirques behind lips,
-deepens troughs and leaves moraines; present ice flows down its own surface while the
-recorded glacier follows the network; cones add their construction.
-Spill routes resolve basins and flats. Sheet runoff becomes a channel where the terrain
-gathers it: the channel threshold is a reference runoff in the map's own samples, scaled
-by a bounded slope factor, applied with the strip test and headwater pruning. Those
-channels form the drainage network; which of them are named rivers is decided by the
-river significance rule at the map's scale. Because relief comes from the network, a
-channel lost to transmission loss leaves a dry valley with its incision kept. Closed
-depressions without a cause fill. The parent's closed basins are kept whole, and hollows
-dammed by a slide or a fan that are deep and wide enough to hold a lake stay. Lake supply
-balances precipitation and runoff against evaporation and seepage; shores follow the water
-stage against continuous terrain; ocean outlines use connected sea membership. The footprint
-rule applies to mapped shores as well as names; unresolved ponds remain numerical water
-context. Floodplain coverage follows local channel margins.
+Regional drainage supplies captured inflow to shared conditioning, lake, routing and
+river owners. All downstream consumers read the common routing and water fields.
+The current ocean connection follows current terrain; neither an old coastline nor
+an inherited lake mask determines all later water. Atmospheric context outside the
+frame can affect the child without fixing its river crossings or shore positions.
+The working frame bounds computation, not geographic agreement with another map.
+Rain, melt and groundwater return compose one surface-water quantity. Shared routing
+applies current intake demand and sink losses against available water before passing it
+downstream. Ecology resolves current channel geometry, floodplains and deltas before
+responding to inundation; local rainfall does not gate flooding from an upstream river.
 
-Established features are terms in the processes: an inherited summit is a divide node the
-channels route around and moves to the realized summit of its massif; a captured river's
-course is a corridor the network follows, its discharge enters across the frame edge, and
-the stem that follows it carries the river's name, identity and the course itself as
-evidence for the next refinement; a captured lake is the base level its tributaries rise
-from. A known settlement grades its footprint through the ground owner after relief
-develops, a river seat draws its channel, and a seat still on unusable
-ground moves to the best usable ground within reach that keeps its situation. New villages
-are proposed once at the network's events, compete for hinterland over the travel cost of
-the present surface, and take their support in the last round or are dropped. Each round
-the weakest half of the unsupported candidates gives way, a bounded number of times,
-until the remaining places are supported, so the outcome does not depend on the order of
-elimination. Seats and summits are re-sited from their captured positions and this map's
-own products are regenerated on every refinement, so a repeated refinement reproduces itself.
+Climate retains captured temperature, precipitation and wind as atmospheric inputs.
+Altitude response and continentality retain the world's atmospheric dimensional
+frame through MapScale; a smaller child frame does not amplify cooling per metre.
+Current relief changes lapse, slope exposure and cold pooling; the shared wind and
+snow-partition rules derive local conditions. Shared environmental contributions,
+including current heat, fog and vegetation cooling, replace their captured values;
+fog drip remains separate from terrain-driven precipitation. Shared runoff reads current
+cover and Ground permeability. Climate does not reconstruct soil depth, refill soil
+water or impose an ice floor. Ocean distance follows current internal shores, with
+captured external maritime context entering at the frame boundary.
 
-The derived relief is worked by the processes that act on real ground: the crests between
-neighbouring catchments carry a crest term so ridgelines branch; drainage divides are
-written into the ridge band and a pass is the low point along a divide, so the world's
-landform classifier reads them; ridges above a crest strength are held fixed in hillslope
-smoothing; hillslopes above their angle of repose shed material that the network carries,
-settling along the captured base gradient, dropping at lake entries and leaving its load
-at the shore roots; drainage loses water to the ground along its length; valley floors are
-the flat ground a channel reaches from its cells.
-The coast develops on that surface from the fetch each shore cell faces: exposed shores cut
-back, sheltered shallows fill, and rivers meet the sea as deltas or estuaries by their load
-and the shore's exposure. Ice is routed over the surface, thins as it descends and melts where
-the lapsed climate does not hold it; its erosion is booked once and its melt enters the runoff.
+Ecological inheritance includes published functional groups, saplings, seed banks,
+soil water, nutrients, animal groups and surface and buried carbon. Local response
+uses the shared vegetation, soil, toxicity, animal and organic-material kernels.
+The configured ecological settings and current magical effects remain inputs.
+Development exposure lets the communities respond to resolved local conditions
+without advancing canopy age or fossil thermal maturity. New sediment can bury
+organic matter, and shared cargo handling carries its retained charge. Final habitat
+classification does not repeat succession, burial or water supply.
 
-The shared media are re-derived from the capture each round. The fracture set is the
-captured value, opened further where captured strain is high and the material band is
-weak, plus the ledger; material resistance and seepage read it. Geothermal heat is
-re-derived from the captured value plus opened fractures and cone proximity, and Fire
-sources read it. Insolation, cold pooling and wetness are unpublished per-cell arrays;
-ocean distance is captured.
+Magic inherits actual reservoirs and source identities once. Current field evaluation
+uses shared locators, propagation, warding, meetings and eligibility against the
+child's media. Captured intensity is no longer a maintained floor, and old doors
+cannot override present access conditions. Explicit local material response uses the
+same Ground operations as world generation. Refresh does not replenish sources or
+replay historical deaths, lake drying, tenure growth or ocean impulses. Material
+remnants can remain exposed after the influence that made them is absent.
 
-Climate re-derives each round from the captured copies under the developed relief:
-temperature by lapse, aspect and cold pooling where a gentle floor lies below the surface
-around it; snow re-split from precipitation by the world's seasonality rule; wind deflected
-by the relief through the world's terrain rule; captured precipitation, moisture and runoff
-scaled by each slope's exposure to the deflected captured wind, so windward slopes are
-wetter and lee slopes drier; moisture and wetness on the present surface; runoff changed
-by the present cover against the captured cover (cleared ground sheds more, grown ground
-holds more) and increased by meltwater. Soil develops under the living landscape
-once the ecology has begun and is not re-written by the climate after that.
+Established geography enters through the cause registry. Captured courses guide
+initial organization and provide inflow; summits, lakes, settlements and landmarks
+provide local context. Their named identity persists while location and extent can
+be refined. Existing settlements and works participate in local realization through
+the shared Ground and current routing. New local places and ways use the existing
+placement rules; refinement does not run another society era or redesign society,
+economy or POI categories.
+Newly accepted disaster events apply their catalogue's initialization Command once.
+Their captured material aftermath is then ordinary evolving Ground. Continuing place
+influences are current queries, so a later refresh neither erases active water withdrawals
+nor repeats historical material changes.
 
-The living landscape is the world's ecology engine hosted on the regional field: prepared
-once from the captured state in the context step with its history memory reset to the
-first derived geography, responding each round over a fixed span of horizons under the
-regional climate, the magic systems' living effects and the country's fire causes, with
-its soil water capped by the soil's capacity and its history remembered between rounds.
-Preparation reads the capture without noise: conifer share from captured temperature,
-saplings from a young canopy, seeds from presence, and soils and carbon as captured. The
-fire causes are magic heat, the driest fuelled ground in each block and settlement edges,
-each with a stable keyed draw, beside the engine's own background ignition. Cover under
-new sea, lake or ice dies and its litter goes to the soil; authored forest polygons and
-fixed channels hold. Cover binds the next round's hillslopes and runoff. Surface classes
-use the raster's shared class-boundary evaluator; habitat outlines come from the world's
-ecological extractor judged at the map's scale, with its margin and small-gap rules;
-smaller patches remain field coverage.
+Shared projection and extraction publish terrain, water, habitats, magical classes,
+places and ways at the child's scale. Smaller patches can remain field coverage
+without gaining a named outline. Regional identities relate those records to their
+captured subjects, and a descendant captures the child's result through the same
+resource contract. Regenerating physical geography uses the map's pinned inputs;
+neither this path nor society-only realization reads live parent or sibling terrain.
 
-Topographic prominence locates summits and their joining cols above a prominence floor
-read at the parent's span; a summit is named by the world's prominence-and-isolation rule
-at the map's scale (see [Geographic significance at every scale](#geographic-significance-at-every-scale)),
-so a regional map names its major peaks and a finer map the lesser ones. Measured
-opposing flanks identify ridges and valleys; connected mountain relief becomes range
-footprints. Waterfalls require sharp channel-profile breaks.
-
-Each magic system inherits its captured channels and sources once when refinement begins.
-Origins the world places by a budget per area (geothermal, deep-ocean, death, dead-lake,
-tenure, kept-line) keep the captured source. Point sources (veins, loci, placed sources and
-forges) arrive as sites on the cell under each parent peak of the captured field. Captured
-heat and melt are marked as already applied. From then on the world's engine locates and
-propagates every system each round against the present media through its own carrier.
-Fire separates held and spent material, exposure and release, with fractures carrying vein
-heat while fallen and forge deposits remain local. Aurora charge drains toward cold traps
-and is read from its ice and ground reservoirs against the present cold. The Pressure
-field is copied from the capture and not retraced. Greenwood spreads through connected
-vegetation, while groundwater leaches buried charge toward supported spring breaks. Salt
-beds dissolve into brine, follow drainage, crust in captured closed basins and supply
-wind-carried dust; exposed beds harden or collapse, and Fire consumes their material in the
-first round only. A captured Hallowed ward does not spread again, only its located sources
-do; wards displace other magical fields to their rims and the ground inside resists
-cutting. Veil develops strain where systems compete and pairs coherent tears into doors at
-extraction; the parent's captured doors stand as established evidence beside them. Each
-round the systems are evaluated against the present media in the lore's order, with the
-captured intensity held along the frame edge where the parent's country continues, and
-their ground effects are declared as that evaluation's totals through the ledger: hardened
-rock as the change from the captured intensity, confluence soils against the natural soil,
-the hallowed spill, the Veil's wild relief, door chill and pools, and salt's glass and
-desiccation against the natural ground. Toxicity, the ice held by charge above its relict
-floor and the door rings' grass and saplings are floors written on their own bands. The
-applied heat is the forcing the rivers carry downstream. A resolvable relief change
-reroutes water within the round. These operations develop the captured present without
-another physical epoch or human era. The child publishes its developed grain for its own
-refinement.
-
-Named magic places are judged by the world's magic-place significance at the map's scale;
-local peaks within one site complex do not create separate places. Class coverage
-remains a field even when no named outline qualifies. The physical footprint rule
-also applies to new lakes and non-source sites; unresolved water and magic remain
-field context, while captured source places remain available. Regional refinement
-does not place new global sources, renew historical stocks or replay ocean
-impulses. Known places and completed society history remain context. Smaller
-settlements, local ways and physical sites come from regional terrain and useful
-locations, without demographic allocation gates or another society era. Each settled place
-takes its fields and pasture from its hinterland, ranked by farming suitability and travel
-decay, and declares their clearance on the tree cohorts each round as the difference to the
-cleared target, so the engine grows on cleared ground and the fields stay cleared without
-ratcheting; an abandoned seat clears nothing. At extraction every settled place sends its
-residents to the market seat and a smaller share to its nearest larger neighbour; the flows
-are traced over the present surface with captured roads as worn ground and door ends as free
-edges, in repeated passes over the ground the previous pass wore, so later ways bend into
-earlier ones, and each way is published at the class its own flow earns. A way crossing a
-channel fords it, read geometrically against the drainage tree's links (which join channel
-cells across a vertex); a road over a sizeable river crosses by a bridge; a settled place
-with a falling channel within reach turns a mill; every settlement inside a captured
-control polygon carries that control. Regenerating society alone uses this map's current
-surface and preserves terrain; physical refinement starts from its pinned inputs. Neither
-path reads live geography from another map.
+Verification separates contracts from geographic judgment. Pure tests exercise
+input ownership, material operations and real composition/dispatch with supplied
+inputs. Saved completed parents support regional harness diagnosis without rerunning
+unrelated world history. Terrain, surface materials, water, recognizable inherited
+influences and useful local geography require inspection of actual child maps.
+Sample equality, aggregate budgets and matching coastlines are not acceptance gates.
 
 Ordinary map authoring uses linked feature representations and surface overlays.
 Procedural inputs omit those drawings, leaving terrain, drainage, material stocks
@@ -924,17 +846,22 @@ remaps keys by name and owns independent mutable copies. Groundwater storage kee
 meaning; transient flows regenerate. Resource references remain pinned to the captured parent state.
 Material publication rejects unrepresentable cargo before it becomes a saved resource.
 
-Shared-process regional execution remains open work. The existing regional scalar resistance,
-roughening, captured intensity floors and reinstated doors must yield to the owners below when that
-integration resumes. A named door retains its identity even when it cannot currently be traversed;
-an endpoint outside the child remains outside it. Child geography may change independently.
+Regional execution uses shared physical, ecological and magical owners through the same selected
+feature composition as world generation. Initial detail realization may excavate or displace retained
+Ground; subsequent erosion and transport operate on that material. Current magic responds to retained
+inventories without captured intensity floors or source renewal. A named door retains its identity
+even when it cannot currently be traversed; an endpoint outside the child remains outside it.
+Child geography may change independently. Captured atmospheric altitude and continentality
+responses retain their world dimensional frame through `MapScale`; local terrain and wind
+detail use the child's frame. Refresh replaces environmental contributions rather than
+repeatedly adding heat, fog or vegetation cooling to captured temperature.
 
 | Regional consumer                               | Shared producer or contract                                                                                                                                                                                       |
 | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Terrain, escarpment springs and inherited folds | Ground intervals, finite extraction, groundwater emergence, yielding-plane geometry and continuity. Regional calderas, retreat and landmark conjunctions remain their terrain/POI work.                           |
-| Coasts and changed-shore drainage               | Ordinary coastal sediment transport and connectivity; marine contact and receiving-shore forcing. Regional drainage rerooting and depth presentation remain open.                                                 |
-| Climate and storm medium                        | Current Pressure ocean/weather forcing and captured atmospheric inputs; regional execution must use the shared circulation and carrier owners.                                                                    |
-| Ecology, peat and moraines                      | Organic burial, carbon-bearing sediment, groundwater return and actual ice debris; regional landscape realization remains open.                                                                                   |
+| Coasts and changed-shore drainage               | Shared coastal sediment transport, current ocean connectivity and receiving-shore forcing. Regional routing supplies captured incoming discharge to the shared water owners.                                      |
+| Climate and storm medium                        | Shared circulation and current environmental forcing replace captured contributions as local terrain and carriers change.                                                                                         |
+| Ecology, peat and moraines                      | Shared local vegetation development, organic burial, carbon-bearing sediment, groundwater return and actual ice debris, without historical aging.                                                                 |
 | Magic and named sources                         | Captured host cargo and fluid stores, source supply/location separation, coastal rays, geographic ward rims, distance-based strain and present door eligibility. No captured intensity floor may renew inventory. |
 | Society and existing works                      | Actual material gathering, consumption and trade receipts; maintained route state and present door access. New social generation and magic practices require the separate design session.                         |
 
@@ -1213,19 +1140,20 @@ declared in code.
   subtropical eastern boundaries. A sea-surface anomaly is carried along the current
   from its source latitudes. Eddy mixing applies only where opposing drifts meet, so
   a cell boundary forms a front instead of a step.
-- `temperature`: a global mean plus the epoch offset, a latitude profile and a lapse
+- `atmospheric-climate` completes temperature, wind, moisture transport and precipitation
+  together. Temperature starts with a global mean plus the epoch offset, a latitude profile and a lapse
   rate, plus the sea-surface anomaly and external heat. Crustal heat warms only
   geothermal vents. Hydrothermal heat carried by currents feeds sea ice and reefs,
   not air temperature. A seasonal half-range grows with latitude and continentality.
-- `atmospheric-flow`: Hadley, Ferrel and polar cells by latitude, with terrain
+  Wind follows Hadley, Ferrel and polar cells by latitude, with terrain
   deflection, belt speed, crest exposure, lee shelter and gap channelling
   (`windTerrain.ts`).
-- `moisture-transport`: air columns marched downwind in one ordered pass
+  Air columns march downwind in one ordered pass
   (`airColumn.ts`). They gather moisture over the sea and rain out with distance and
   uplift; pressure-belt rainout comes from `belts.ts`. Marine heat, maritime
   character and magical heat travel with the air; air relaxes toward part of the
   magical forcing beneath it with travel, and that heat spreads across the wind.
-- `precipitation`: column precipitation with the epoch multiplier, in fractional
+  Column precipitation takes the epoch multiplier, in fractional
   mm/year, split into rain and snow by the share of a sinusoidal year below freezing.
   The equatorial convergence spreads to stand in for the rain belt's seasonal
   migration; subtropical subsidence suppresses background rainout. Water already

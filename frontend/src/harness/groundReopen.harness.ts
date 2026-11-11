@@ -10,7 +10,7 @@ import {
 } from "@atlas/domain";
 import { FieldWorkingSet } from "@atlas/storage-browser";
 import type { GenerationState } from "../../../packages/generation/src/process";
-import { atlasChannels } from "../../../packages/generation/src/world/atlasChannels";
+import { physicalChannels } from "../../../packages/generation/src/world/atlasChannels";
 import {
   createAtlasWorkspace,
   nativePosition,
@@ -19,7 +19,7 @@ import { groundOf } from "../../../packages/generation/src/rock/ground";
 import { erodeFacets } from "../../../packages/generation/src/rock/groundLedger";
 import { compileMix } from "../../../packages/generation/src/rock/modes";
 import type { MaterialLayer } from "../../../packages/generation/src/rock/rockColumn";
-import { groundResourceBindings } from "../../../packages/generation/src/rock/groundResources";
+import { groundResourceChannels } from "../../../packages/generation/src/rock/groundResources";
 import { generationSource } from "../workspaceGeneration";
 import { groundProbeCells } from "./groundProbe";
 import { writeGroundSection } from "./groundSection";
@@ -34,7 +34,7 @@ import { openTerrain } from "./mapReport";
 
 /** Read committed map resources into the same input grids the generation workspace consumes. */
 async function loadFields(domain: DomainSnapshot, working: FieldWorkingSet, ws: HarnessWorkspace) {
-  const channels = new Set(["seaDatum", ...atlasChannels.map(({ name }) => name)]);
+  const channels = new Set(["BaseSeaLevel", ...physicalChannels.map(({ name }) => name)]);
   for (const field of domain.world.fields) {
     if (!field.resourceId || field.input) continue;
     const names = (field.channels ?? []).filter((name) => channels.has(name));
@@ -55,7 +55,7 @@ function capturedPackages(domain: DomainSnapshot, work: Work, cells: readonly nu
     for (const name of Object.keys(grid.channels)) sources.set(name, grid);
   }
   const result = cells.map((cell) => ({ cell, channels: {} as Record<string, number> }));
-  for (const binding of groundResourceBindings) {
+  for (const binding of groundResourceChannels) {
     const grid = sources.get(binding.name);
     if (!grid) throw new Error(`Completed map lacks ground channel ${binding.name}.`);
     const sample = gridSampler(grid, binding.name, true);
@@ -123,8 +123,8 @@ it.runIf(process.env.HARNESS_GROUND_REOPEN)(
         terrain = await openTerrain(ws, record.worldId, area);
       try {
         await loadFields(domain, working, ws);
-        const datum = Object.values(domain.numerical).find((grid) => grid.channels.seaDatum);
-        if (datum) resampleChannels(datum, terrain.raster.field, ["seaDatum"]);
+        const datum = Object.values(domain.numerical).find((grid) => grid.channels.BaseSeaLevel);
+        if (datum) resampleChannels(datum, terrain.raster.field, ["BaseSeaLevel"]);
         const state: GenerationState = {
           domain,
           surface: terrain.raster.field,

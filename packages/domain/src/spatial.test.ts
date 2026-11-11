@@ -268,7 +268,7 @@ it("uses Cartesian area, exact holes and fixed boundary crossings", () => {
 });
 
 it("refines inherited fields over arbitrary coverage with reciprocal adjacency", () => {
-  const parent = createGrid("parent", scope(rectangle([0, 0, 20, 20])), 5, 5);
+  const parent = createGrid<string>("parent", scope(rectangle([0, 0, 20, 20])), 5, 5);
   putChannel(
     parent,
     "elevation",
@@ -289,7 +289,7 @@ it("refines inherited fields over arbitrary coverage with reciprocal adjacency",
       ],
     ],
   };
-  const child = createGrid("child", scope(triangle), 9, 9);
+  const child = createGrid<string>("child", scope(triangle), 9, 9);
   resample(parent, child, "elevation");
   expect(sample(child, "elevation", { x: 6, y: 4, z: 0 })).toBe(116);
   expect([...child.measures].reduce((a, b) => a + b, 0)).toBeCloseTo(spatial.area(triangle), 8);

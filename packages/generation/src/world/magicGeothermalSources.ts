@@ -52,7 +52,7 @@ export function geothermalSources(
     p = field.definition.parameters;
   if (context) exhumedSpent(map, field, context.origin);
   if (context && context.activity <= 0) return;
-  const candidates = geothermalCandidates(state, field, seed);
+  const candidates = geothermalCandidates(state, field, seed, context?.sites);
   const selected: (WorldCandidate & { i: number })[] = [];
   for (const source of candidates) {
     const i = source.i;
@@ -106,7 +106,12 @@ function exhumedSpent(map: PhysicalField, field: MagicField, origin: MagicOrigin
     if (strength > 0) field.source.set(i, Math.max(field.source.get(i), strength));
   }
 }
-function* geothermalCandidates(state: GenerationState, field: MagicField, seed: number) {
+function* geothermalCandidates(
+  state: GenerationState,
+  field: MagicField,
+  seed: number,
+  sites?: Int32Array
+) {
   const map = state.physical!.map,
     p = field.definition.parameters;
   const radius = p.sourceSpacing / 2;
@@ -117,7 +122,7 @@ function* geothermalCandidates(state: GenerationState, field: MagicField, seed: 
   );
   // Hottest first, then the higher seeded priority, then the lower cell.
   const candidates = new MultiKeyHeap(["desc", "desc"]);
-  for (let i = 0; i < map.mesh.count; i++) {
+  for (const i of candidateCells(map.mesh.count, sites)) {
     if (map.mesh.membership(i) !== 1) continue;
     const density = map.HeatSourceDensity.get(i);
     if (density < p.sourceThreshold) continue;
@@ -143,6 +148,10 @@ function* geothermalCandidates(state: GenerationState, field: MagicField, seed: 
       priority,
     };
   }
+}
+function* candidateCells(count: number, sites?: Int32Array) {
+  if (sites) yield* sites;
+  else for (let cell = 0; cell < count; cell++) yield cell;
 }
 export function reopenConduits(
   state: GenerationState,

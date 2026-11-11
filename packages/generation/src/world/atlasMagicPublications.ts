@@ -3,6 +3,7 @@ import {
   systemStockKeys,
   type MagicConfluence,
   type MagicSystem,
+  type FieldChannelName,
 } from "@atlas/domain";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import type { ResolvedFeatures } from "../features";
@@ -11,13 +12,14 @@ import { independentInteraction } from "./magicFeatures";
 import {
   magicFieldDefinitions,
   publishedMagicChannels,
+  societyChannels,
   type MagicChannel,
 } from "./magicFieldDefinitions";
 
 /** The publication helpers the atlas module lends out, so these definitions match its own. */
 export interface PublicationTools {
   field(
-    channel: string,
+    channel: FieldChannelName,
     unit: string,
     layerId: string,
     publish?: boolean,
@@ -52,11 +54,7 @@ export function configuredMagicPublications(
   ];
 }
 /** What people left on the ground for society-sourced magic to read: amounts, like stocks. */
-export const societyChannels = [
-  ["tenure", "person-year"],
-  ["walkedRoute", "traveller-year"],
-  ["massDeath", "people"],
-] as const;
+export { societyChannels } from "./magicFieldDefinitions";
 function societyPublications(publish: boolean, tools: PublicationTools) {
   return societyChannels.map(([channel, unit]) => {
     const definition = tools.field(channel, unit, "magic", publish, owners);

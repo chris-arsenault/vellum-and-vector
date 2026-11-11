@@ -1,6 +1,7 @@
 import {
   MapScale,
   CellQueue,
+  magicEcologyFields,
   type Band,
   type MagicCondition,
   type MagicFeatureRule,
@@ -38,7 +39,7 @@ export function conditionReader(
     return (i: number) => read(i) / mesh.area(i);
   }
   if (key === "elevation")
-    return (i: number) => MapScale.metres(map.Elevation.get(i) - map.BaseSeaLevel, "native");
+    return (i: number) => MapScale.metres(map.Elevation.get(i) - map.EffectiveSeaLevel, "native");
   if (key === "slope") return (i: number) => map.Slope.get(i);
   if (key === "noise")
     return (i: number) =>
@@ -88,16 +89,9 @@ function channelValues(map: PhysicalField, field: MagicField): Record<string, Ba
     fracture: map.FractureConductance,
     landform: map.LandformCodes,
     river: map.RiverOrders,
-    biome: map.BiomeCodes,
-    treeCover: map.TreeCover,
-    wetlandCover: map.WetlandCover,
-    peatCarbon: map.PeatCarbon,
-    oilCarbon: map.OilCarbon,
-    ecologicalToxicity: map.EcologicalToxicity,
-    soilWater: map.SoilWater,
-    soilDepth: map.SoilDepth,
-    grazers: map.Grazers,
-    browsers: map.Browsers,
+    ...Object.fromEntries(
+      Object.entries(magicEcologyFields).map(([term, name]) => [term, map[name]])
+    ),
   };
 }
 function matcher(

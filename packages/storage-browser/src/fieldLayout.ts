@@ -43,7 +43,7 @@ export function layoutVector(
     },
   };
 }
-function cellExtent(grid: Grid, start: number, count: number): Bounds {
+function cellExtent(grid: Grid<string>, start: number, count: number): Bounds {
   const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
   requireThat(grid.topology, "field_layout", "Adaptive partitions require topology.");
   for (let i = start; i < start + count; i++) {
@@ -65,7 +65,10 @@ function faceOwner(offsets: Band, face: number) {
   }
   return low;
 }
-export function linearPartitions(grid: Grid, vectors: LayoutVector[]): PartitionReference[] {
+export function linearPartitions(
+  grid: Grid<string>,
+  vectors: LayoutVector[]
+): PartitionReference[] {
   const partitions: PartitionReference[] = [];
   const groups = [...new Set(vectors.map((v) => v.group))];
   for (const group of groups) {
@@ -82,7 +85,7 @@ export function linearPartitions(grid: Grid, vectors: LayoutVector[]): Partition
   return partitions;
 }
 function linearPartition(
-  grid: Grid,
+  grid: Grid<string>,
   vectors: LayoutVector[],
   group: LayoutVector["group"],
   start: number,
@@ -113,7 +116,10 @@ function linearPartition(
     ),
   };
 }
-export function regularPartitions(grid: Grid, arrays: ResourceArray[]): PartitionReference[] {
+export function regularPartitions(
+  grid: Grid<string>,
+  arrays: ResourceArray[]
+): PartitionReference[] {
   requireThat(!grid.topology, "field_layout", "Regular partitions require a regular field.");
   const result: PartitionReference[] = [],
     [x0, y0, x1, y1] = grid.bounds;
@@ -141,7 +147,7 @@ export function regularPartitions(grid: Grid, arrays: ResourceArray[]): Partitio
     }
   return result;
 }
-export function resourceBase(grid: Grid, id: string): NumericalResource {
+export function resourceBase(grid: Grid<string>, id: string): NumericalResource {
   return {
     schemaVersion: 1,
     id,

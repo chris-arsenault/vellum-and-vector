@@ -4,6 +4,7 @@ import { solutionSettings } from "./solutionSettings";
 
 const dissolving = compileMix({ solution: 1 });
 export const solution = defineProcess({
+  prepare: () => ({}),
   id: "solution",
   statement:
     "Water takes soluble rock wherever it runs, valley or not: limestone, salt and tufa all go this way, and granite does not.",
@@ -15,7 +16,7 @@ export const solution = defineProcess({
   forExecution: (settings, { passes }) => ({
     DissolvedPerSpan: settings.DissolvedPerSpan / passes,
   }),
-  run({ field, context: c, settings: p, span, ask, stage }) {
+  execute({ field, context: c, settings: p, span, ask, stage }) {
     const wetness = ask("wetness");
     for (let i = 0; i < field.mesh.count; i++) {
       if (field.WaterKindCodes.get(i) === 1) continue;

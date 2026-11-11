@@ -1,10 +1,32 @@
 import type { GenerationState, MapProcessContext } from "../process";
-import type { ProcessBehavior } from "../processTraits";
+import { mapCommand, mapQuery, mapWork, type MapOperation } from "../processTraits";
+import type { NativeProcess } from "./sequence";
+import { nativeContext } from "./context";
 
-type Operation = (state: GenerationState, context: MapProcessContext) => void | Promise<void>;
-/** Material operations use the same completion boundary as other native operations. */
-export function nativeBehavior(movesMaterial: boolean, operation: Operation): ProcessBehavior {
-  return movesMaterial
-    ? { kind: "material-transformation", transform: operation }
-    : { kind: "model-pass", applyPass: operation };
+/** Native composition already declares the lifecycle of its executable children. */
+export function nativeMapOperation(
+  id: string,
+  native: NativeProcess,
+  apply: (state: GenerationState, context: MapProcessContext, exposure: number) => void
+): MapOperation {
+  switch (native.kind) {
+    case "query":
+      return mapQuery(id, (state, context) => apply(state, context, 0), []);
+    case "initialize":
+      return mapCommand(id, "initialize", (state, context) => apply(state, context, 0), []);
+    case "event":
+      return mapCommand(id, "event", (state, context) => apply(state, context, 0), []);
+    case "work":
+      return mapWork(
+        id,
+        (state, context) =>
+          "regional" in state
+            ? Number(context.parameters.workSpan)
+            : nativeContext(state, context, 0).Span,
+        apply,
+        []
+      );
+    default:
+      throw new Error(`Unsupported native operation ${native.id}: ${native.kind}`);
+  }
 }

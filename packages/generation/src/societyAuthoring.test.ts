@@ -10,7 +10,7 @@ import {
   type ChangeSet,
 } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
-import { initializePopulation, evolvePopulation } from "./societyPopulation";
+import { supplySociety } from "./societyTestFixture";
 import { publishSettlements } from "./societyPublication";
 import type { MapProcessContext } from "./process";
 
@@ -31,8 +31,18 @@ function fixture() {
     cancelled: () => false,
     progress() {},
   };
-  initializePopulation(state, context);
-  evolvePopulation(state, context, 100);
+  supplySociety(state);
+  state.domain.world.societies = { area: state.society!.region };
+  state.society!.region.history.push({
+    id: "Settlement",
+    years: 100,
+    before: 1000,
+    births: 200,
+    deaths: 50,
+    migrated: 0,
+    after: 1150,
+    causes: ["Supplied completed history"],
+  });
   const c = state.society!.region.communities[0];
   c.groups[0].count = 10000;
   c.founded = "Authored fixture";

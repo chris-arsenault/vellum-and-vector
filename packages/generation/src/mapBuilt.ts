@@ -1,3 +1,4 @@
+import { mapCommand, executeMapOperation } from "./processTraits";
 import { spatial, rectangle } from "@atlas/domain";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
@@ -14,9 +15,10 @@ export const builtProcess: MapProcess = {
     produces: ["built"],
     invalidates: [],
   },
-  behavior: {
-    kind: "extract",
-    extract(state, context) {
+  operation: mapCommand(
+    "built.layout",
+    "publish",
+    (state, context) => {
       context.progress(0, "Laying out settlements and structures");
       const area = state.domain.world.areas[state.domain.scope.areaId];
       if (area.profile === "interior") interior(state);
@@ -32,15 +34,29 @@ export const builtProcess: MapProcess = {
             : "Settlement and structure placement follows the requested area's geography and available habitable land.",
       });
     },
-  },
+    []
+  ),
   validate() {
     return [];
   },
 };
 function settlements(state: GenerationState, context: MapProcessContext) {
-  if (!state.society) initializePopulation(state, context);
   publishSettlements(state, context);
 }
+export const builtPreparation: MapProcess = {
+  contract: { ...builtProcess.contract, id: "built.prepare", produces: ["population"] },
+  operation: mapCommand(
+    "built.prepare",
+    "initialize",
+    (state, context) => {
+      const profile = state.domain.world.areas[state.domain.scope.areaId].profile;
+      if (profile !== "interior" && profile !== "site" && !state.society)
+        executeMapOperation(initializePopulation, state, context);
+    },
+    []
+  ),
+  validate: () => [],
+};
 function site(state: GenerationState) {
   const [x0, y0, x1, y1] = state.surface.bounds;
   const dx = (x1 - x0) / 5,

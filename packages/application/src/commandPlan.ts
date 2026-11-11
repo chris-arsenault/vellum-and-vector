@@ -136,12 +136,12 @@ function numericalReads(kind: string, context: IntentContext, data: Record<strin
   const sculpt = data.sculpt as Record<string, unknown> | undefined;
   const needed =
     kind === "putLandform"
-      ? ["elevation"]
+      ? ["Elevation"]
       : kind === "routeNetwork"
-        ? ["elevation", "drainageElevation", "flow", "water"]
+        ? ["Elevation", "DrainageElevations", "FlowAccumulation", "WaterKindCodes"]
         : sculpt
           ? [String(sculpt.channel)]
-          : ["elevation", "flow"];
+          : ["Elevation", "FlowAccumulation"];
   return context.fields.flatMap((field) => {
     const names = (field.channels ?? []).filter((name) => needed.includes(name));
     return names.length ? [{ fieldId: field.id, names }] : [];

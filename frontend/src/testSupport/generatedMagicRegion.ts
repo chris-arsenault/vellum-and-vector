@@ -1,3 +1,4 @@
+import { requireChannel } from "@atlas/domain";
 import { expect } from "vitest";
 import {
   canonicalPosition,
@@ -73,10 +74,11 @@ function magicCountry(surface: Grid) {
   const systems = ["fire", "aurora", "greenwood", "salt"].map(
     (id) => surface.channels[`magic:${id}:coverage`]
   );
+  const water = requireChannel(surface, "WaterKindCodes");
   let best = -1,
     score = -1;
   for (let i = 0; i < surface.active.length; i++) {
-    if (surface.channels.water.get(i) !== 0) continue;
+    if (water.get(i) !== 0) continue;
     const present = systems.reduce((sum, values) => sum + (values?.get(i) ?? 0), 0);
     if (present > score) {
       score = present;
@@ -94,7 +96,7 @@ export function assertDevelopedMagic(result: CompletedBoundary, source: DomainSn
     captured = Object.values(source.numerical).find((field) => field.channels[stock])!;
   expect(captured).toBeDefined();
   const input = fieldInterpolator(captured, stock),
-    inputArea = fieldInterpolator(
+    inputArea = fieldInterpolator<string>(
       { ...captured, channels: { measure: captured.measures } },
       "measure",
       true
@@ -104,7 +106,7 @@ export function assertDevelopedMagic(result: CompletedBoundary, source: DomainSn
   for (let i = 0; i < g.active.length; i++) {
     const p = canonicalPosition(source.world.reference, gridPosition(g, i), bounds),
       before = input(p) / inputArea(p),
-      after = g.channels[stock].get(i) / g.measures.get(i);
+      after = requireChannel(g, stock).get(i) / g.measures.get(i);
     if (Math.abs(after - before) > 1e-6) changed++;
   }
   expect(changed).toBeGreaterThan(0);

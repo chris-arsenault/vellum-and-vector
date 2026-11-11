@@ -1,4 +1,5 @@
 import {
+  MapScale,
   createIntentRegistry,
   intentChanges,
   evaluateFeature,
@@ -214,15 +215,15 @@ function locatedEntity(
   return combineChanges(context, snapshot, [entityChanges, featureChanges]);
 }
 function landform(snapshot: DomainSnapshot, context: IntentContext, data: Record<string, unknown>) {
-  const field = snapshot.world.fields.find((f) => f.channels?.includes("elevation"));
+  const field = snapshot.world.fields.find((f) => f.channels?.includes("Elevation"));
   requireThat(field, "missing_field", "Generate elevation before sculpting a landform.");
   const sculpt = evaluate(snapshot, context, "paintMapField", {
     fieldId: field.id,
     center: data.center,
     radius: data.radius,
-    channel: "elevation",
+    channel: "Elevation",
     mode: "add",
-    amount: data.height,
+    amount: MapScale.native(Number(data.height)),
   });
   const center = data.center as { x: number; y: number; z: number };
   const feature: AtlasFeature = {
@@ -236,7 +237,9 @@ function landform(snapshot: DomainSnapshot, context: IntentContext, data: Record
       context.scope.footprint
     )!,
     attributes: {
-      elevation: (sampleFields(snapshot, center).elevation ?? 0) + Number(data.height),
+      elevation:
+        MapScale.metres(sampleFields(snapshot, center).Elevation ?? 0, "native") +
+        Number(data.height),
       summit: center,
     },
     relations: [],

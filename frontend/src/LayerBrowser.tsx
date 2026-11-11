@@ -49,7 +49,7 @@ export function LayerBrowser({
 }) {
   const catalogue = useId();
   const actions = overlayActions(editor, edit, target);
-  const available = new Set((editor.raster.data ?? []).map((r) => r.channel));
+  const available = new Set<string>((editor.raster.data ?? []).map((r) => r.channel));
   const fields = editor.rasterView.fields.filter((field) => available.has(field.channel));
   return (
     <section className="layer-browser" aria-label="Map layers">

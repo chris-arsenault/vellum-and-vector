@@ -73,7 +73,7 @@ test("cleanup protects live tabs and saved undo inputs, then reclaims abandoned 
     await second
       .getByRole("combobox", { name: "Operation", exact: true })
       .selectOption("fieldStatistics");
-    await second.getByLabel("Field channel", { exact: true }).fill("elevation");
+    await second.getByLabel("Field channel", { exact: true }).fill("Elevation");
     await second.getByRole("button", { name: "Run analysis", exact: true }).click();
     await expect(
       second

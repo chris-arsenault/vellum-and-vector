@@ -8,7 +8,8 @@ const plainGradient = 0.002,
 /**
  * How much of the network's detail the ground shows, from how the parent's country falls. Low
  * or high, level country is plain or plateau: streams cross it without cutting it into ridges.
- * Country falling hard is dissected in full. The macro surface is the parent's either way.
+ * Country falling hard receives stronger initial dissection. Later shared wear can change
+ * either setting; this does not restore the captured macro surface.
  */
 export function ruggedness(state: RegionalState, macro: Float64Array) {
   const mesh = state.physical.map.mesh,

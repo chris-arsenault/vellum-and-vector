@@ -1,3 +1,4 @@
+import { mapCommand } from "../../generation/src/processTraits";
 import { expect, it } from "vitest";
 import {
   attachGrid,
@@ -13,12 +14,12 @@ import { MapProcessRegistry, type MapProcess } from "../../generation/src/proces
 import { landscape, configuration, invoke, options } from "../../generation/src/mapFixtures";
 function runnerProcess(
   id: string,
-  applyPass: Extract<MapProcess["behavior"], { kind: "model-pass" }>["applyPass"],
+  applyPass: Parameters<typeof mapCommand>[2],
   requires: string[] = []
 ): MapProcess {
   return {
     contract: { id, version: "1", parameters: {}, requires, produces: [id], invalidates: [] },
-    behavior: { kind: "model-pass", applyPass },
+    operation: mapCommand(id, "event", applyPass, []),
     validate: () => [],
   };
 }
@@ -30,13 +31,13 @@ function lifetimeProcesses(): MapProcess[] {
       scratch = coverage.scratch("float64", "scratch", 1000);
       scratch.set(0, 7);
       const values = coverage.scratch("float64", "output").fill(9);
-      putChannel(state.surface, "elevation", "metre", values);
+      putChannel(state.surface, "Elevation", "native-length", values);
     }),
     runnerProcess(
       "checked",
       (state) => {
         expect(() => scratch.get(0)).toThrow(/released/);
-        expect(state.surface.channels.elevation.get(0)).toBe(9);
+        expect(state.surface.channels.Elevation!.get(0)).toBe(9);
       },
       ["retained"]
     ),
@@ -49,11 +50,11 @@ function replacementProcesses() {
     runnerProcess(
       "replaced",
       (state) => {
-        previous = state.surface.channels.elevation;
+        previous = state.surface.channels.Elevation!;
         putChannel(
           state.surface,
-          "elevation",
-          "metre",
+          "Elevation",
+          "native-length",
           generateBand(state.surface.coverage, "float64", "next", (i) => previous.get(i) + 1)
         );
       },
@@ -63,7 +64,7 @@ function replacementProcesses() {
       "released",
       (state) => {
         expect(() => previous.get(0)).toThrow(/released/);
-        expect(state.surface.channels.elevation.get(0)).toBe(10);
+        expect(state.surface.channels.Elevation!.get(0)).toBe(10);
       },
       ["replaced"]
     ),
@@ -87,7 +88,7 @@ it("carries published evicting outputs across runner stages and releases success
     ).run(onCache(landscape(), fixture.cache), { ...options, cache: fixture.cache });
     expect(result.state.facts.has("checked")).toBe(true);
     expect(result.state.facts.has("released")).toBe(true);
-    expect(result.state.surface.channels.elevation.get(0)).toBe(10);
+    expect(result.state.surface.channels.Elevation!.get(0)).toBe(10);
   } finally {
     fixture.close();
   }

@@ -15,15 +15,23 @@ import {
 import type { Band } from "./lattice/band";
 import type { BlockCache } from "./lattice/blockCache";
 import type { Coverage } from "./lattice/coverage";
-import { generateBand, sampleCoverage, someSample } from "./lattice/bandValues";
+import { sampleCoverage } from "./lattice/bandValues";
 import type { MaterialCargoSamples } from "./materialSamples";
+import type { FieldChannelName } from "./fieldChannels";
+export {
+  channelBand,
+  generateChannel,
+  putChannel,
+  requireChannel,
+  channelUnit,
+} from "./fieldSamples";
 
 /**
  * Samples of a located field. The samples are the cells of the grid's coverage; every value
  * the grid holds (its active mask, its measures and its channels) is a band in that coverage,
  * paged through the coverage's block cache.
  */
-export interface FieldSamples {
+export interface FieldSamples<Name extends string = FieldChannelName> {
   periodicWidth?: number;
   id: string;
   scope: SpatialScope;
@@ -31,25 +39,25 @@ export interface FieldSamples {
   coverage: Coverage;
   active: Band;
   measures: Band;
-  channels: Record<string, Band>;
-  units: Record<string, string>;
+  channels: Partial<Record<Name, Band>>;
+  units: Partial<Record<Name, string>>;
   waterBodies?: WaterBody[] | null;
   /** Physical lake shores survive omission from the named geographic catalog. */
   lakes?: { id: string; geometry: Geometry; level: number }[];
   /** Physical ocean extent; resampling elevation must not move its shoreline. */
   ocean?: Geometry | null;
-  quantities?: Record<string, "intensive" | "extensive" | "category">;
+  quantities?: Partial<Record<Name, "intensive" | "extensive" | "category">>;
   /** Sparse charge belongs to the complete material donor, never an interpolated channel. */
   materialCargo?: MaterialCargoSamples;
 }
-export interface RegularGrid extends FieldSamples {
+export interface RegularGrid<Name extends string = FieldChannelName> extends FieldSamples<Name> {
   width: number;
   height: number;
   topology?: never;
 }
-export type Grid = RegularGrid | AdaptiveField;
-export type GridSurface = Grid & {
-  overlays?: { grid: GridSurface; channels: string[]; mapOnly?: boolean }[];
+export type Grid<Name extends string = FieldChannelName> = RegularGrid<Name> | AdaptiveField<Name>;
+export type GridSurface<Name extends string = FieldChannelName> = Grid<Name> & {
+  overlays?: { grid: GridSurface<Name>; channels: Name[]; mapOnly?: boolean }[];
 };
 
 export interface WaterBody {
@@ -66,10 +74,10 @@ export interface WaterBody {
 }
 
 /** Samples in the grid. */
-export function gridSamples(grid: FieldSamples) {
+export function gridSamples(grid: FieldSamples<string>) {
   return grid.active.length;
 }
-export function gridPosition(grid: Grid, index: number): Position {
+export function gridPosition(grid: Grid<string>, index: number): Position {
   if (grid.topology) {
     const [x0, y0, x1, y1] = adaptiveCell(grid.topology, index);
     return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: 0 };
@@ -82,7 +90,7 @@ export function gridPosition(grid: Grid, index: number): Position {
   };
 }
 
-export function gridCellBounds(grid: Grid, index: number): Bounds {
+export function gridCellBounds(grid: Grid<string>, index: number): Bounds {
   if (grid.topology) return adaptiveCell(grid.topology, index);
   const p = gridPosition(grid, index);
   const [x0, y0, x1, y1] = grid.bounds;
@@ -100,14 +108,14 @@ export function gridCellBounds(grid: Grid, index: number): Bounds {
  * A regular raster over the sample bounds. Its bands page through `cache`; without one the
  * grid is resident.
  */
-export function createGrid(
+export function createGrid<Name extends string = FieldChannelName>(
   id: string,
   scope: SpatialScope,
   width: number,
   height: number,
   sampleBounds?: Bounds,
   cache?: BlockCache
-): RegularGrid {
+): RegularGrid<Name> {
   requireThat(
     Number.isInteger(width) && Number.isInteger(height) && width >= 2 && height >= 2,
     "invalid_grid",
@@ -118,7 +126,7 @@ export function createGrid(
     measures = coverage.scratch("float64", `${id}:measures`);
   active.retain();
   measures.retain();
-  const grid: RegularGrid = {
+  const grid: RegularGrid<Name> = {
     id,
     scope,
     bounds: sampleBounds ?? spatial.bounds(scope.footprint),
@@ -151,7 +159,7 @@ export function createGrid(
   return grid;
 }
 
-function rectangularMeasures(grid: RegularGrid) {
+function rectangularMeasures(grid: RegularGrid<string>) {
   // Both coverage predicates establish that the footprint equals the sample
   // rectangle. Apply the declared precision without clipping each whole cell.
   const scale = 1 / spatial.precision,
@@ -182,7 +190,7 @@ function validateGridExtent(bounds: Bounds, footprint: Geometry) {
 }
 
 export function neighbors(
-  grid: Grid,
+  grid: Grid<string>,
   index: number,
   diagonal = false,
   covers = (geometry: Geometry) => spatial.covers(grid.scope.footprint, geometry)
@@ -219,7 +227,7 @@ export function neighbors(
   return seam.length ? local.concat(seam) : local;
 }
 function linkCovered(
-  grid: Grid,
+  grid: Grid<string>,
   from: number,
   to: number,
   covers: (geometry: Geometry) => boolean
@@ -235,45 +243,12 @@ function linkCovered(
   });
 }
 
-/** A run-lifetime channel band of the grid's sample count, initially zero. */
-export function channelBand(
-  grid: FieldSamples,
-  name: string,
-  type: "float64" | "int32" | "uint8" = "float64"
-) {
-  const band = grid.coverage.scratch(type, `${grid.id}:${name}`, gridSamples(grid));
-  band.retain();
-  return band;
-}
-/** A run-lifetime channel band of the grid filled from a function of the sample index. */
-export function generateChannel(
-  grid: FieldSamples,
-  name: string,
-  value: (i: number) => number,
-  type: "float64" | "int32" | "uint8" = "float64"
-) {
-  return generateBand(grid.coverage, type, `${grid.id}:${name}`, value, gridSamples(grid));
-}
-
-export function putChannel(
-  grid: Grid,
-  name: string,
-  unit: string,
-  values: Band,
-  quantity: "intensive" | "extensive" | "category" = unit === "category" ? "category" : "intensive"
-): void {
-  requireThat(
-    values.length === gridSamples(grid) && !someSample(values, (v) => !Number.isFinite(v)),
-    "invalid_channel",
-    "Field channels require one finite value per sample."
-  );
-  values.retain();
-  grid.channels[name] = values;
-  grid.units[name] = unit;
-  (grid.quantities ??= {})[name] = quantity;
-}
-
-export function sample(grid: GridSurface, channel: string, p: Position, discrete = false): number {
+export function sample<Name extends string>(
+  grid: GridSurface<Name>,
+  channel: NoInfer<Name>,
+  p: Position,
+  discrete = false
+): number {
   const values = grid.channels[channel];
   requireThat(values, "missing_channel", `Field channel ${channel} is unavailable.`);
   requireThat(
@@ -292,9 +267,9 @@ export function sample(grid: GridSurface, channel: string, p: Position, discrete
 
 // Prepare immutable coverage once for a batch of samples. Overlay precedence,
 // fixed precision and interpolation are identical to individual sample calls.
-export function gridSampler(
-  grid: GridSurface,
-  channel: string,
+export function gridSampler<Name extends string>(
+  grid: GridSurface<Name>,
+  channel: NoInfer<Name>,
   discrete = false
 ): (position: Position) => number {
   requireThat(
@@ -313,7 +288,12 @@ export function gridSampler(
 // Evaluate the lattice polynomial after the caller has established coverage.
 // Clipped-cell extrema use this directly: snapping a point on an oblique edge
 // again can move it across that edge even though the clipped segment is valid.
-function rawSample(grid: Grid, channel: string, p: Position, discrete = false): number {
+function rawSample<Name extends string>(
+  grid: Grid<Name>,
+  channel: NoInfer<Name>,
+  p: Position,
+  discrete = false
+): number {
   const values = grid.channels[channel];
   requireThat(values, "missing_channel", `Field channel ${channel} is unavailable.`);
   if (grid.topology) {
@@ -341,10 +321,14 @@ function rawSample(grid: Grid, channel: string, p: Position, discrete = false): 
     ty * ((1 - tx) * values.get(i + grid.width) + tx * values.get(i + grid.width + 1))
   );
 }
-function discreteChannel(grid: Grid, channel: string, discrete: boolean) {
+function discreteChannel<Name extends string>(
+  grid: Grid<Name>,
+  channel: NoInfer<Name>,
+  discrete: boolean
+) {
   return (
     discrete ||
-    ["category", "cell-index"].includes(grid.units[channel]) ||
+    ["category", "cell-index"].includes(grid.units[channel] ?? "") ||
     ["category", "extensive"].includes(grid.quantities?.[channel] ?? "")
   );
 }
@@ -354,9 +338,9 @@ function discreteChannel(grid: Grid, channel: string, discrete: boolean) {
  * A viewport reader keeps the default patch caches; a sweep over the grid passes a budget
  * with room for every cell (`sweepBudget`).
  */
-export function fieldInterpolator(
-  grid: GridSurface,
-  channel: string,
+export function fieldInterpolator<Name extends string>(
+  grid: GridSurface<Name>,
+  channel: NoInfer<Name>,
   discrete = false,
   locate?: AdaptivePointLocator,
   budget?: number
@@ -374,9 +358,9 @@ export function fieldInterpolator(
     return overlay ? overlay.at(p) : base(fieldPosition(grid, p));
   };
 }
-function baseInterpolator(
-  grid: Grid,
-  channel: string,
+function baseInterpolator<Name extends string>(
+  grid: Grid<Name>,
+  channel: NoInfer<Name>,
   discrete: boolean,
   locate?: AdaptivePointLocator,
   budget?: number
@@ -384,6 +368,7 @@ function baseInterpolator(
   if (!grid.topology) return (p: Position) => rawSample(grid, channel, p, discrete);
   const t = grid.topology,
     values = grid.channels[channel];
+  requireThat(values, "missing_channel", `Field channel ${channel} is unavailable.`);
   const categorical = discreteChannel(grid, channel, discrete),
     uniform = categorical ? NaN : uniformValue(values);
   // A smooth surface through one repeated value is that value: no patch is worth building.
@@ -415,21 +400,21 @@ export function uniformValue(values: Band) {
   for (let i = 1; i < values.length; i++) if (values.get(i) !== first) return NaN;
   return first;
 }
-export function interpolateSample(
-  grid: Grid,
-  channel: string,
+export function interpolateSample<Name extends string>(
+  grid: Grid<Name>,
+  channel: NoInfer<Name>,
   p: Position,
   discrete = false
 ): number {
   return fieldInterpolator(grid, channel, discrete)(p);
 }
 
-export function fieldCoverage(grid: Grid): Geometry {
+export function fieldCoverage(grid: Grid<string>): Geometry {
   return grid.scope.footprint;
 }
 
 function adaptiveNeighbors(
-  grid: AdaptiveField,
+  grid: AdaptiveField<string>,
   index: number,
   covers: (geometry: Geometry) => boolean
 ) {

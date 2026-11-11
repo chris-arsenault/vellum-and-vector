@@ -10,7 +10,7 @@ import {
 } from "./testSupport/workspaceFixture";
 import { it, expect } from "vitest";
 import { saveTemplate } from "./atlasTemplates";
-import { rectangle, sample, type Command, type World } from "@atlas/domain";
+import { MapScale, rectangle, sample, type Command, type World } from "@atlas/domain";
 
 function command(world: World, kind: string, data: Record<string, unknown>): Command {
   return { operationId: crypto.randomUUID(), expectedVersion: world.version, kind, data };
@@ -80,15 +80,15 @@ it("creates skipped profiles, sculpts fields and keeps changes out of other worl
     initial.id,
     command(fields, "sculptField", {
       areaId,
-      channel: "elevation",
+      channel: "Elevation",
       center: { x: 300, y: 300, z: 0 },
       radius: 100,
       delta: 50,
     })
   );
   const peak = sample(
-    (await readRaster(initial.id, fields.fields[0].id, "elevation")).field,
-    "elevation",
+    (await readRaster(initial.id, fields.fields[0].id, "Elevation")).field,
+    "Elevation",
     {
       x: 300,
       y: 300,
@@ -196,20 +196,20 @@ it("publishes landform geometry and sampled changes together, then undoes both",
   const result = (await commitCommand(initial.id, operation)).candidate;
   expect(Object.values(result.features).find((f) => f.name === "Authored hill")).toBeDefined();
   const peak = sample(
-    (await readRaster(initial.id, fields.fields[0].id, "elevation")).field,
-    "elevation",
+    (await readRaster(initial.id, fields.fields[0].id, "Elevation")).field,
+    "Elevation",
     {
       x: 50000,
       y: 50000,
       z: 0,
     }
   );
-  expect(peak).toBeGreaterThan(58);
-  expect(peak).toBeLessThanOrEqual(60);
+  expect(peak).toBeGreaterThan(MapScale.native(58));
+  expect(peak).toBeLessThanOrEqual(MapScale.native(60));
   await undoWorld(initial.id, operation.operationId);
   expect(await readScene(initial.id, areaId)).toEqual([]);
   expect(
-    sample((await readRaster(initial.id, fields.fields[0].id, "elevation")).field, "elevation", {
+    sample((await readRaster(initial.id, fields.fields[0].id, "Elevation")).field, "Elevation", {
       x: 50000,
       y: 50000,
       z: 0,

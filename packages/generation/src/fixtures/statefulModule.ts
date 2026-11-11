@@ -1,3 +1,4 @@
+import { mapCommand, mapElapsed } from "../processTraits";
 /** Test-only module, imported explicitly by extension acceptance fixtures. */
 import { z } from "zod";
 import { builtinLayers, generateChannel, putChannel, rectangle } from "@atlas/domain";
@@ -8,9 +9,9 @@ import { landscape } from "../mapFixtures";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 
 export const inventoryFeature = "test.carried-inventory";
-export const inventoryChannel = "testInventory";
+/** Supplied contract-test carbon uses the actual canonical field and its density units. */
+export const inventoryChannel = "SoilCarbon";
 export const inventoryLayer = "test-inventory";
-const carriedChannel = "test:carriedInventory";
 const inventoryProduct = "test:inventory";
 const configurationSchema = z
   .object({
@@ -28,12 +29,12 @@ function initializeInventory(state: GenerationState, context: MapProcessContext)
   const { initialDensity } = settings(context);
   putChannel(
     state.surface,
-    carriedChannel,
-    "kilogram",
-    generateChannel(state.surface, carriedChannel, (i) =>
-      state.surface.active.get(i) ? state.surface.measures.get(i) * initialDensity : 0
+    inventoryChannel,
+    "kg-carbon/square-metre",
+    generateChannel(state.surface, inventoryChannel, (i) =>
+      state.surface.active.get(i) ? initialDensity : 0
     ),
-    "extensive"
+    "intensive"
   );
 }
 function advanceInventory(state: GenerationState, context: MapProcessContext, years: number) {
@@ -42,22 +43,13 @@ function advanceInventory(state: GenerationState, context: MapProcessContext, ye
     density = Number(context.parameters.deposition) * multiplier * years;
   const grid = state.surface;
   for (let i = 0; i < grid.active.length; i++)
-    if (grid.active.get(i)) grid.channels[carriedChannel].add(i, grid.measures.get(i) * density);
+    if (grid.active.get(i)) grid.channels[inventoryChannel]!.add(i, density);
   context.recordCause({
     kind: "domain",
     process: "test.inventory.advance",
     subjects: [],
     description: `${epoch.id}: accumulated ${density} kilograms per square metre over ${years} years.`,
   });
-}
-function extractInventory(state: GenerationState) {
-  putChannel(
-    state.surface,
-    inventoryChannel,
-    "kilogram",
-    state.surface.coverage.copyBand(state.surface.channels[carriedChannel]),
-    "extensive"
-  );
 }
 
 export const statefulInventoryModule: GenerationModule = {
@@ -108,15 +100,12 @@ export const statefulInventoryModule: GenerationModule = {
             id: inventoryProduct,
             lifetime: "run",
             representation: "field",
-            unit: "kilogram",
+            unit: "kg-carbon/square-metre",
             composition: "shared-state",
           },
         ],
       },
-      behavior: {
-        kind: "initialize",
-        initialize: initializeInventory,
-      },
+      operation: mapCommand("test.inventory.initialize", "initialize", initializeInventory, []),
       validate: () => [],
     },
     {
@@ -130,11 +119,12 @@ export const statefulInventoryModule: GenerationModule = {
         produces: [inventoryProduct],
         invalidates: [],
       },
-      behavior: {
-        kind: "elapsed",
-        duration: { kind: "epoch", fraction: 1 },
-        advance: advanceInventory,
-      },
+      operation: mapElapsed(
+        "test.inventory.advance",
+        { kind: "epoch", fraction: 1 },
+        advanceInventory,
+        []
+      ),
       validate: () => [],
     },
     {
@@ -150,40 +140,21 @@ export const statefulInventoryModule: GenerationModule = {
             id: "test:inventory-output",
             lifetime: "run",
             representation: "field",
-            unit: "kilogram",
+            unit: "kg-carbon/square-metre",
             composition: "exclusive",
           },
         ],
       },
-      behavior: {
-        kind: "extract",
-        extract: extractInventory,
-      },
+      operation: mapCommand("test.inventory.extract", "publish", () => undefined, []),
       validate: () => [],
     },
   ],
   publications: (input) => [
     {
       kind: "field",
-      channel: carriedChannel,
-      unit: "kilogram",
-      quantity: "extensive",
-      publish: false,
-      owners: [inventoryFeature],
-      layer: {
-        ...builtinLayers().find((layer) => layer.id === "climate")!,
-        id: inventoryLayer,
-        name: "Carried inventory",
-        facts: [inventoryChannel],
-        schema: {},
-        generator: "physical",
-      },
-    },
-    {
-      kind: "field",
       channel: inventoryChannel,
-      unit: "kilogram",
-      quantity: "extensive",
+      unit: "kg-carbon/square-metre",
+      quantity: "intensive",
       publish: input.resolvedFeatures!.selection[inventoryFeature].enabled,
       owners: [inventoryFeature],
       layer: {

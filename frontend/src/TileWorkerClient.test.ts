@@ -1,3 +1,4 @@
+import { MapScale, requireChannel } from "@atlas/domain";
 import { fixtureWorld, fixtureState } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import {
@@ -34,15 +35,15 @@ function fixture(): Raster {
   );
   putChannel(
     field,
-    "elevation",
-    "metre",
-    generateBand(field.coverage, "float64", "elevation", (i) => i - 10)
+    "Elevation",
+    "native-length",
+    generateBand(field.coverage, "float64", "Elevation", (i) => i - 10)
   );
   putChannel(
     field,
-    "temperature",
-    "celsius",
-    generateBand(field.coverage, "float64", "temperature", (i) => i)
+    "Temperature",
+    "native-temperature",
+    generateBand(field.coverage, "float64", "Temperature", (i) => i)
   );
   return {
     id: "terrain",
@@ -50,7 +51,7 @@ function fixture(): Raster {
     footprint: field.scope.footprint,
     bounds: field.bounds,
     field,
-    channel: "elevation",
+    channel: "Elevation",
   };
 }
 class WorkerFixture {
@@ -109,7 +110,7 @@ it("shares immutable grid registration across channels and preserves actual samp
     client = new TileWorkerClient(() => worker as unknown as Worker);
   const raster = fixture();
   const elevation = client.register(raster),
-    temperature = client.register({ ...raster, channel: "temperature" });
+    temperature = client.register({ ...raster, channel: "Temperature" });
   expect(worker.messages.filter((m) => m.kind === "grid")).toHaveLength(1);
   const result = client.load(elevation, [20, 20, 80, 80], 6, new AbortController().signal);
   worker.flush();
@@ -121,17 +122,17 @@ it("shares immutable grid registration across channels and preserves actual samp
     expect(tile.slice(pixel * output, pixel * output + input)).toEqual(
       expected.slice(pixel * input, pixel * input + input)
     );
-  expect(tile[(2 * 6 + 2) * output + input]).toBeCloseTo(0.04);
-  expect(tile[(2 * 6 + 2) * output + input + 1]).toBeCloseTo(0.2);
+  expect(tile[(2 * 6 + 2) * output + input]).toBeCloseTo(MapScale.metres(0.04, "native"));
+  expect(tile[(2 * 6 + 2) * output + input + 1]).toBeCloseTo(MapScale.metres(0.2, "native"));
   client.release(elevation);
   expect(worker.messages).toContainEqual({ kind: "release", id: elevation, grids: [] });
   worker.flush();
   const heat = client.load(temperature, [20, 20, 80, 80], 6, new AbortController().signal);
   worker.flush();
   expect(await heat).toEqual(
-    numericTileSampler({ ...raster, channel: "temperature" })([20, 20, 80, 80], 6)
+    numericTileSampler({ ...raster, channel: "Temperature" })([20, 20, 80, 80], 6)
   );
-  expect(raster.field.channels.elevation.length).toBe(25);
+  expect(requireChannel(raster.field, "Elevation").length).toBe(25);
   client.release(temperature);
   expect(worker.messages.some((m) => m.kind === "release" && m.grids.length === 1)).toBe(true);
   client.dispose();
@@ -181,7 +182,7 @@ it("reuses sources for presentation changes and replaces them when numerical dat
   sources.end();
   expect(worker.messages.filter((m) => m.kind === "grid")).toHaveLength(1);
   const next = { ...raster, field: copyGrid(raster.field) };
-  next.field.channels.elevation.fill(400);
+  requireChannel(next.field, "Elevation").fill(400);
   sources.begin();
   expect(sources.source(next)).not.toBe(first);
   sources.end();
@@ -203,8 +204,8 @@ function referencedRaster(): ResourceRaster {
       scope: field.scope,
       bounds: field.bounds,
       units: field.units,
-      quantities: { elevation: "intensive" },
-      channels: { elevation: { range: [-10, 14], categories: [] } },
+      quantities: { Elevation: "intensive" },
+      channels: { Elevation: { range: [-10, 14], categories: [] } },
       patches: [],
     },
     water: undefined,

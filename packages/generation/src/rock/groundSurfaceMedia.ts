@@ -2,6 +2,26 @@ import type { PhysicalField } from "../world/field";
 import { recordFlow, type FlowCause } from "../coupling/flows";
 import { units } from "../world/math";
 import { MapScale, type ReadBand } from "@atlas/domain";
+import { releasedWaterRate } from "../world/dimensions";
+
+type MeltReceiver = (cell: number, melted: number, before: number) => void;
+// hpc-exempt: one carrier receiver per physical field; inventories remain in their owners.
+const meltReceivers = new WeakMap<PhysicalField, MeltReceiver>();
+export function receiveIceMelt(map: PhysicalField, receive: MeltReceiver) {
+  meltReceivers.set(map, receive);
+}
+
+/** A carrier releases only the inventory carried by the fraction that actually melted. */
+export function meltedInventory(held: number, melted: number, before: number) {
+  return before > 0 ? Math.max(0, held) * Math.min(1, Math.max(0, melted / before)) : 0;
+}
+
+/** Formation can add ice; any ablation notifies the existing carrier owners. */
+export function setIceResponse(map: PhysicalField, cell: number, next: number, cause: FlowCause) {
+  const before = map.IceThickness.get(cell);
+  if (next < before) meltIce(map, cell, before - Math.max(0, next), cause);
+  else map.IceThickness.set(cell, next);
+}
 
 /** A carrier moves an available ice volume; its passenger uses the admitted fraction. */
 export function transferIce(map: PhysicalField, from: number, to: number, volume: number) {
@@ -19,20 +39,24 @@ export function redistributeIce(map: PhysicalField, volumes: ReadBand) {
     );
 }
 
-/** Ice melts by metres; basal melt remains available to the later runoff pass. */
+/** Actual metre removals notify carriers; basal runoff retains the producing interval's rate. */
 export function meltIce(
   map: PhysicalField,
   i: number,
   amount: number,
   cause: FlowCause,
-  beneath = false
+  beneath = false,
+  exposure = 1
 ) {
-  const melted = Math.min(Math.max(0, amount), map.IceThickness.get(i));
+  if (!(exposure > 0)) return 0;
+  const before = map.IceThickness.get(i),
+    melted = Math.min(Math.max(0, amount), before);
   if (melted <= 0) return 0;
   map.IceThickness.set(i, map.IceThickness.get(i) - melted);
+  meltReceivers.get(map)?.(i, melted, before);
   recordFlow(map, cause, "ice", "melt", melted * map.mesh.area(i));
   if (beneath) {
-    const water = MapScale.inUnits(melted, "mm");
+    const water = MapScale.inUnits(releasedWaterRate(melted, exposure), "mm");
     map.ExternalMeltwater.add(i, water);
     map.GlacialMeltwater.add(i, water);
   }

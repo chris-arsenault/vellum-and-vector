@@ -1,10 +1,8 @@
+import { mapCommand } from "./processTraits";
 import {
-  gridPosition,
   semanticId,
-  spatial,
   canonicalPosition,
   isDescendant,
-  foldSamples,
   representationId,
   ownsMapGeography,
   type AtlasFeature,
@@ -233,9 +231,10 @@ export function prepareGeneratedProcess(domains: string[]): MapProcess {
       produces: [],
       invalidates: [],
     },
-    behavior: {
-      kind: "initialize",
-      initialize(state) {
+    operation: mapCommand(
+      "atlas.prepare",
+      "initialize",
+      (state) => {
         const world = state.domain.world;
         state.retainedFeatureNames = {};
         for (const f of generationFeatures(state))
@@ -262,7 +261,8 @@ export function prepareGeneratedProcess(domains: string[]): MapProcess {
             removeGenerationReach(state, reach.id);
         }
       },
-    },
+      []
+    ),
     validate() {
       return [];
     },
@@ -290,77 +290,6 @@ function retainsFeature(feature: AtlasFeature, retained: Set<string | null>) {
     !!(feature.placeId && feature.geometry.type === "Point")
   );
 }
-export const extractGeographyProcess: MapProcess = {
-  contract: {
-    id: "physical.features",
-    version: "1",
-    parameters: {},
-    requires: ["elevation", "drainage", "flow"],
-    produces: ["geographicFeatures"],
-    invalidates: [],
-  },
-  behavior: {
-    kind: "extract",
-    extract(state, context) {
-      const grid = state.surface,
-        flow = grid.channels.flow;
-      const maximum = foldSamples(
-        flow,
-        (a, b, i) => (grid.channels.elevation.get(i) > 0 ? Math.max(a, b) : a),
-        0
-      );
-      const threshold = maximum * 0.075;
-      for (let i = 0; i < grid.active.length; i++) {
-        if (!grid.active.get(i) || flow.get(i) <= threshold || grid.channels.elevation.get(i) <= 0)
-          continue;
-        const receiver = grid.channels.receiver.get(i);
-        if (receiver < 0) continue;
-        const a = gridPosition(grid, i),
-          b = gridPosition(grid, receiver);
-        const feature = generatedFeature(
-          state,
-          `river:${i}`,
-          `River reach ${i + 1}`,
-          "river",
-          "rivers",
-          {
-            type: "LineString",
-            coordinates: [
-              [a.x, a.y],
-              [b.x, b.y],
-            ],
-          },
-          {
-            elevations: [
-              grid.channels.drainageElevation.get(i),
-              grid.channels.drainageElevation.get(receiver),
-            ],
-            discharges: [flow.get(i), flow.get(receiver)],
-            discharge: flow.get(i),
-          }
-        );
-        // New tributaries do not invent crossings at a child's fixed interface.
-        if (
-          state.domain.world.areas[state.domain.scope.areaId].boundary &&
-          spatial.crossings(feature.geometry, state.domain.scope.footprint).length
-        )
-          continue;
-        putGeneratedNetwork(state, feature);
-      }
-      context.recordCause({
-        kind: "domain",
-        process: "physical.features",
-        subjects: [],
-        description:
-          "River reaches follow the acyclic conditioned drainage graph and accumulated runoff.",
-      });
-    },
-  },
-  validate() {
-    return [];
-  },
-};
-
 export function cellPolygon(grid: RegularGrid, x0: number, x1: number, y: number) {
   const dx = (grid.bounds[2] - grid.bounds[0]) / (grid.width - 1),
     dy = (grid.bounds[3] - grid.bounds[1]) / (grid.height - 1);

@@ -1,15 +1,31 @@
-import type { Band } from "@atlas/domain";
-import type { PhysicalBufferName } from "../world/field";
+import type { Band, SocietyEvent } from "@atlas/domain";
+import {
+  isMutablePhysicalName,
+  type MutablePhysicalBufferName,
+  type PhysicalBufferName,
+  type PhysicalField,
+} from "../world/field";
+import { executeGroundTarget, isGroundTarget, realizeGroundTarget } from "../rock/groundTargets";
 import type { GenerationState } from "../process";
-import { Contributions, ledgerCeilings, ledgerFloors } from "../regional/media";
+import { Contributions, ledgerCeilings, ledgerFloors } from "../coupling/fieldContributions";
 import { gradeGround } from "../regional/grading";
 import { isContent } from "../regional/lattice";
 import type { RegionalState } from "../regional/state";
 import { poiCatalogue } from "./catalogue";
-import type { PoiCarried, PoiFieldChange, PoiMagicBand, PoiPlace } from "./poiContract";
+import type {
+  PoiCarried,
+  PoiEventCommand,
+  PoiFieldChange,
+  PoiMagicBand,
+  PoiPlace,
+} from "./poiContract";
 import { carrierFactors } from "./poiCosts";
 import { fieldOf, releaseHeld } from "./poiReads";
 import { carriedPlaces, placesOf } from "./poiPublish";
+import { respond } from "../coupling/answers";
+import { bindOperation, defineQuery } from "../processOperation";
+import type { PhysicalInput } from "../processes/groundProcess";
+import { retainedArray } from "../world/physicalNumerics";
 
 interface CellChange {
   add: number;
@@ -22,6 +38,45 @@ interface Declared {
   bands: Map<PhysicalBufferName, Changes>;
   magic: Map<string, { target: PoiMagicBand; cells: Changes }>;
   grades: Map<number, number>;
+  water?: WaterInfluences;
+}
+interface WaterInfluences {
+  withdrawal: Band;
+  transmission: Band;
+}
+const waterInfluences = new WeakMap<PhysicalField, WaterInfluences>();
+/** Bound to one map's generation state; the query cache owns when current inputs need reading. */
+export const placeInfluences = defineQuery<PhysicalInput>("place-influences", () => undefined, []);
+export function bindPlaceInfluences(state: GenerationState) {
+  bindOperation(fieldOf(state), placeInfluences, () => refreshPlaceInfluences(state));
+}
+respond({
+  key: "waterWithdrawal",
+  by: "maintained places",
+  reads: [],
+  queries: [placeInfluences],
+  add: (map, cell) => waterInfluences.get(map)?.withdrawal.get(cell) ?? 0,
+});
+respond({
+  key: "waterTransmission",
+  by: "maintained places",
+  reads: [],
+  queries: [placeInfluences],
+  scale: (map, cell) => waterInfluences.get(map)?.transmission.get(cell) ?? 1,
+});
+
+function clearWaterInfluences(map: PhysicalField) {
+  let water = waterInfluences.get(map);
+  if (!water) {
+    water = {
+      withdrawal: retainedArray(map, "float64", "places:water-withdrawal"),
+      transmission: retainedArray(map, "float64", "places:water-transmission"),
+    };
+    waterInfluences.set(map, water);
+  }
+  water.withdrawal.fill(0);
+  water.transmission.fill(1);
+  return water;
 }
 const roles = ["terrain", "water", "climate", "cover", "magic"] as const;
 
@@ -38,7 +93,15 @@ function take(change: CellChange, declared: PoiFieldChange) {
 const magicKey = (target: PoiMagicBand) =>
   `${target.system}:${"stock" in target ? `stock:${target.stock}` : target.channel}`;
 function collect(declared: Declared, change: PoiFieldChange) {
-  if (change.change === "gradeGround") {
+  if (change.change === "waterPassage") {
+    const water = declared.water;
+    if (!water) return;
+    water.withdrawal.add(change.cell, Math.max(0, change.withdrawal));
+    water.transmission.set(
+      change.cell,
+      water.transmission.get(change.cell) * Math.max(0, Math.min(1, change.transmission))
+    );
+  } else if (change.change === "gradeGround") {
     const held = declared.grades.get(change.cell);
     declared.grades.set(
       change.cell,
@@ -57,6 +120,36 @@ function collect(declared: Declared, change: PoiFieldChange) {
 }
 type PlaceEffect = (state: GenerationState, place: PoiPlace) => readonly PoiFieldChange[];
 const nothingDeclared = (): Declared => ({ bands: new Map(), magic: new Map(), grades: new Map() });
+
+/** Dispatch supplied initialization strategies, independently of maintained-place queries. */
+export function eventChanges<State>(
+  commands: readonly PoiEventCommand<State>[],
+  state: State,
+  event: SocietyEvent
+) {
+  return commands.flatMap((command) =>
+    command.accepts(event) ? command.changes(state, event) : []
+  );
+}
+/** Called by the existing event owner after accepting a new event, never by capture or refresh. */
+export function applyPlaceEvent(state: GenerationState, event: SocietyEvent) {
+  const commands = Object.values(poiCatalogue).flatMap((entry) =>
+      entry.event ? [entry.event] : []
+    ),
+    map = fieldOf(state);
+  for (const change of eventChanges(commands, state, event)) {
+    const target = { add: 0, atMost: Infinity, atLeast: -Infinity };
+    take(target, change);
+    if (isGroundTarget(change.band)) executeGroundTarget(map, change.band, change.cell, target);
+    else {
+      if (!isMutablePhysicalName(change.band))
+        throw new Error(`Unsupported event target: ${change.band}`);
+      const band = map[change.band],
+        current = band.get(change.cell);
+      band.set(change.cell, current + totalOver(current, target));
+    }
+  }
+}
 /** What a parent's places must be given on this refined map. */
 function declareCarried(state: GenerationState, declared: Declared) {
   if (!("regional" in state)) return;
@@ -73,6 +166,7 @@ function declareCarried(state: GenerationState, declared: Declared) {
 /** Every change every place declares on this map, and those a parent's places must be given. */
 function declaredChanges(state: GenerationState) {
   const declared = nothingDeclared();
+  declared.water = clearWaterInfluences(fieldOf(state));
   for (const entry of Object.values(poiCatalogue)) {
     const effects = roles
       .map((role) => entry.fields[role])
@@ -84,6 +178,20 @@ function declaredChanges(state: GenerationState) {
   }
   declareCarried(state, declared);
   return declared;
+}
+/** Derived query: only recomposes current influences; it executes no material commands. */
+export function refreshPlaceInfluences(state: GenerationState) {
+  releaseHeld(state);
+  const declared = nothingDeclared();
+  declared.water = clearWaterInfluences(fieldOf(state));
+  for (const entry of Object.values(poiCatalogue)) {
+    const water = entry.fields.water;
+    if (typeof water !== "function") continue;
+    for (const place of placesOf(state, entry))
+      for (const change of water(state, place))
+        if (change.change === "waterPassage") collect(declared, change);
+  }
+  releaseHeld(state);
 }
 /** The total a cell's change comes to, over what the band holds without any declared change. */
 function totalOver(base: number, change: CellChange) {
@@ -127,6 +235,11 @@ export function declarePlaceEffects(state: GenerationState, ledger: Contribution
   latestGrades.set(state, declared.grades);
   for (const [band, cells] of declared.bands)
     for (const [cell, change] of cells) {
+      if (isGroundTarget(band)) {
+        realizeGroundTarget(map, band, cell, change);
+        continue;
+      }
+      if (!isMutablePhysicalName(band)) throw new Error(`Unsupported owned place target: ${band}`);
       const total = totalOver(map[band].get(cell) - ledger.appliedTo(band, cell), change);
       ledger.add(band, cell, total);
     }
@@ -176,7 +289,7 @@ export function gradePlaces(state: RegionalState) {
  * Bands the world's processes write afresh within an epoch, so nothing of a place's last total
  * remains in them. The ledger would otherwise count it as still applied and write no change.
  */
-const recomputedBands: readonly PhysicalBufferName[] = [
+const recomputedBands: readonly MutablePhysicalBufferName[] = [
   "Temperature",
   "Moisture",
   "Rainfall",

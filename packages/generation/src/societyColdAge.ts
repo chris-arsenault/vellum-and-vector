@@ -2,6 +2,7 @@ import {
   gridPosition,
   MapScale,
   type RelativeMeasure,
+  type FieldChannelName,
   population,
   type SocietyCommunity,
   type SocietyWork,
@@ -26,15 +27,15 @@ const weirReach = MapScale.length(0.00375);
 export function coldAgeWorks(state: GenerationState, c: SocietyCommunity): SocietyWorkKind[] {
   if (population(c) < 40) return [];
   const i = nearestSample(state, c.position),
-    v = (name: string) => societyValue(state, name, i);
+    v = (name: FieldChannelName) => societyValue(state, name, i);
   const kinds: SocietyWorkKind[] = [];
-  if (v("herbivores") > 0.001) kinds.push("hunting");
-  if (v("treeCover") > 0.25) kinds.push("burning");
+  if (v("Herbivores") > 0.001) kinds.push("hunting");
+  if (v("TreeCover") > 0.25) kinds.push("burning");
   // At World a band works the veins, prisms and shore its own unit holds; a finer profile
   // looks for the site within a day's reach of the camp (ADR 0005).
   const reaches = (
     kind: SocietyWorkKind,
-    channel: string,
+    channel: FieldChannelName,
     threshold: number,
     reach: RelativeMeasure
   ) =>
@@ -53,7 +54,7 @@ export function coldAgeWorks(state: GenerationState, c: SocietyCommunity): Socie
 function coldAgeSite(
   state: GenerationState,
   c: SocietyCommunity,
-  channel: string,
+  channel: FieldChannelName,
   threshold: number,
   reachMeasure: RelativeMeasure,
   accepts: (i: number) => boolean = () => true
@@ -82,10 +83,12 @@ export function placeColdAgeWork(state: GenerationState, c: SocietyCommunity, wo
           ? coldAgeSite(
               state,
               c,
-              "water",
+              "WaterKindCodes",
               1,
               weirReach,
-              (i) => societyValue(state, "waterDepth", i) < mapScale(state).length(0.0000075, 0.5)
+              (i) =>
+                societyValue(state, "WaterDepths", i) <
+                MapScale.inUnits(mapScale(state).length(0.0000075, 0.5), "native")
             )
           : -1;
   if (at >= 0) work.position = gridPosition(grid, at);

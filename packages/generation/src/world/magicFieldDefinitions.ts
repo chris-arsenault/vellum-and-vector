@@ -1,3 +1,18 @@
+import type { PhysicalBufferName } from "./field";
+
+/** Present effects use their physical owner identifiers in every representation. */
+export const magicEffectChannels = [
+  "Quickening",
+  "Stillness",
+  "FogForcing",
+  "IcePersistence",
+  "IceCharge",
+  "Verdure",
+  "Salting",
+  "Warding",
+  "Tearing",
+] as const satisfies readonly PhysicalBufferName[];
+
 interface MagicFieldDefinition {
   unit: string;
   quantity: "intensive" | "extensive" | "category";
@@ -59,6 +74,13 @@ export const magicChannels = Object.keys(magicFieldDefinitions) as MagicChannel[
 export const carriedMagicChannels = magicChannels.filter(
   (channel) => magicFieldDefinitions[channel].carried
 );
+/** Maintained amounts are captured inputs; tenure is a point amount, routes and works are fields. */
+export const societyChannels = [
+  ["Tenure", "person-year", "site-amount"],
+  ["WalkedRoute", "traveller-year", "extensive"],
+  ["KeptLine", "year", "extensive"],
+  ["MassDeath", "people", "extensive"],
+] as const;
 export const publishedMagicChannels = magicChannels.filter(
   (channel) => magicFieldDefinitions[channel].publish
 );

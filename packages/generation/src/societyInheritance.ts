@@ -9,6 +9,8 @@ import {
   ownsMapGeography,
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
+import { runOperation } from "./processOperation";
+import { processOwner } from "./processTraits";
 import { refreshSocietyConnections, refreshSocietySupport } from "./societyGeography";
 import { territoryShape } from "./societyPoliticalPublication";
 import { inheritSocietyDrainage } from "./societyDrainage";
@@ -36,7 +38,7 @@ export function inheritSociety(state: GenerationState, prior: SocietyRegion) {
   const work = state.society!;
   if (prior.areaId === work.region.areaId && !prior.capturedFrom) {
     work.region = structuredClone(prior);
-    refreshSocietyConnections(state);
+    runOperation(processOwner(state), refreshSocietyConnections, state);
   } else refineSociety(state, prior);
   work.inherited = true;
   refreshSocietySupport(state);
@@ -85,7 +87,7 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
   );
   inheritPolitics(region, prior);
   region.connections = structuredClone(prior.connections);
-  refreshSocietyConnections(state);
+  runOperation(processOwner(state), refreshSocietyConnections, state);
   realizeDemands(state);
 }
 interface Heir {

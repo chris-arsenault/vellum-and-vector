@@ -1,4 +1,5 @@
 import type { GenerationState, MapProcessContext } from "../process";
+import { boundPhysicalEpoch } from "../generationBindings";
 import { sealConduitRock } from "../rock/rockMagic";
 import type { PhysicalField } from "./field";
 import { clamp, round, units } from "./math";
@@ -13,6 +14,7 @@ import { MapScale, type Band, type MagicSystem } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { MagicInventory } from "./magicInventory";
 import { GroundInventory } from "../rock/groundInventory";
+import { receiveCoastalAction } from "./magicContact";
 
 export const coastalMagicParameters: (keyof MagicSystem["parameters"])[] = [
   "coastalThreshold",
@@ -40,7 +42,7 @@ export function heldCharge(map: PhysicalField, field: Field, i: number) {
     Math.max(unit(map.IceThickness.get(i) / map.scale.length(0.0000125, 0.5)), relict)
   );
 }
-export function magicThermalFeedback(state: GenerationState, elapsed = false) {
+export function magicThermalFeedback(state: GenerationState, exposure = 0) {
   const work = state.physical!,
     magic = work.magic!,
     map = work.map,
@@ -71,13 +73,13 @@ export function magicThermalFeedback(state: GenerationState, elapsed = false) {
     // melt any evaluation asked for, so the climate and post-glacial passes do not both melt.
     // Ice melted from below pools under the glacier, and the runoff pass cuts its outburst
     // channels below the margin.
-    if (elapsed) applyThermalMelt(state, i, melt);
+    if (exposure > 0) applyThermalMelt(state, i, melt * exposure, exposure);
   }
 }
-function applyThermalMelt(state: GenerationState, cell: number, melt: number) {
+function applyThermalMelt(state: GenerationState, cell: number, melt: number, exposure: number) {
   const { map, magic } = state.physical!,
     owed = Math.max(0, round(melt) - magic!.melt.get(cell));
-  const melted = meltIce(map, cell, owed, "fire", true);
+  const melted = meltIce(map, cell, owed, "fire", true, exposure);
   magic!.melt.add(cell, melted);
 }
 /**
@@ -114,7 +116,6 @@ export function magicLivingFeedback(state: GenerationState, elapsed = false) {
     const green = unit(verdure);
     if (elapsed && green > 0.3 && map.RiverOrders.get(i) >= 1 && map.WaterKindCodes.get(i) === 0) {
       map.WetlandCover.set(i, Math.max(map.WetlandCover.get(i), 0.5 * green));
-      map.FloodplainIntensity.set(i, Math.max(map.FloodplainIntensity.get(i), round(600 * green)));
     }
   }
   markRim(map, work.magic!);
@@ -340,11 +341,10 @@ function shoreForcing(map: PhysicalField, field: Field, i: number) {
     1000
   );
 }
-export function magicCoastalFeedback(state: GenerationState, context?: MapProcessContext) {
+export function magicCoastalFeedback(state: GenerationState) {
   const work = state.physical!,
     magic = work.magic!,
     map = work.map;
-  const epoch = context?.epochIndices[0];
   const fields = magic.fields.filter((field) => field.definition.enabled),
     totals = workingArray(map, "float64", "magic:coastal-forcing");
   for (let i = 0; i < map.mesh.count; i++) {
@@ -354,25 +354,24 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
         const forcing = shoreForcing(map, field, i);
         if (forcing <= 0) continue;
         total += forcing;
-        if (epoch !== undefined) rememberCoastalForcing(field, i, forcing, epoch);
       }
     totals.set(i, clamp(total, 0, 1000));
+  }
+  for (const held of Object.values(magic.confluences.states)) {
+    const forcing = held.definition.effects.coastalForcing;
+    if (!forcing) continue;
+    for (let i = 0; i < map.mesh.count; i++)
+      if (map.WaterKindCodes.get(i) === 0) totals.add(i, round(forcing * held.coverage.get(i)));
+    receiveCoastalAction(map, held.coverage, forcing, map.scale.length(0.001), totals);
   }
   // A warded shore holds: its forcing moves to the shore downdrift before it is applied.
   wardCoasts(map, magic, totals);
   for (let i = 0; i < map.mesh.count; i++) {
     const total = totals.get(i);
-    map.ExternalCoastalForcing.set(
-      i,
-      clamp(map.ExternalCoastalForcing.get(i) + total - magic.coastal.get(i), 0, 1000)
-    );
+    map.ExternalCoastalForcing.set(i, clamp(map.ExternalCoastalForcing.get(i) + total, 0, 1000));
     magic.coastal.set(i, total);
   }
   releaseWorking(map, totals);
-}
-function rememberCoastalForcing(field: Field, cell: number, forcing: number, epoch: number) {
-  field.coastalHistory.add(cell, forcing);
-  if (field.coastalFirstEpoch.get(cell) < 0) field.coastalFirstEpoch.set(cell, epoch);
 }
 /**
  * Thawing ground charge on bare land lets the ground settle, like thermokarst,
@@ -391,7 +390,7 @@ function thawSubsidence(map: PhysicalField, field: Field, i: number, thawed: num
  * level) holds ice; the wide cold drainage below that leaves ice to the climate. Charge the
  * glaciers calved onto a shelf holds the sea ice there.
  */
-function holdIce(
+export function holdIce(
   map: PhysicalField,
   field: Field,
   i: number,
@@ -415,9 +414,9 @@ function holdIce(
  */
 export function retainMagicHistory(state: GenerationState, context: MapProcessContext) {
   // Present-only publication carries completed history; it does not elapse another epoch.
-  if (context.epochIndices[0] === undefined) return;
-  const map = state.physical!.map,
-    index = context.epochIndices[0];
+  const index = boundPhysicalEpoch(context);
+  if (index === undefined) return;
+  const map = state.physical!.map;
   map.IcePersistence.fill(0);
   // The next epoch's ice is new ice; its melt starts from nothing.
   state.physical!.magic!.melt.fill(0);
@@ -452,6 +451,13 @@ function retainAt(map: PhysicalField, field: Field, i: number, index: number) {
     retention = field.definition.history,
     stored = retainedCharge(before, field.fresh.get(i), retention.retention, retention.storage);
   field.history.add(i, value);
+  // History records exposure once at the epoch event, never while reading current forcing.
+  const coastal =
+    field.definition.enabled && map.WaterKindCodes.get(i) === 0 ? shoreForcing(map, field, i) : 0;
+  if (coastal > 0) {
+    field.coastalHistory.add(i, coastal);
+    if (field.coastalFirstEpoch.get(i) < 0) field.coastalFirstEpoch.set(i, index);
+  }
   retainGroundCharge(map, field, i, ground, before, stored);
   if (value > 0 && field.firstEpoch.get(i) < 0) field.firstEpoch.set(i, index);
   thawSubsidence(map, field, i, before - stored);

@@ -7,6 +7,7 @@ import {
   societyWorkNatures,
   spatial,
   type SocietyCommunity,
+  type FieldChannelName,
   type SocietyDemand,
   type SocietyWork,
   type SocietyWorkKind,
@@ -32,11 +33,11 @@ export const tappableFire = 100;
  * its steep ground, and clearance, burning, hunting and conservation on all its land.
  */
 export function workMedium(state: GenerationState, kind: SocietyWorkKind) {
-  const v = (name: string, i: number) => societyValue(state, name, i);
+  const v = (name: FieldChannelName, i: number) => societyValue(state, name, i);
   switch (kind) {
     case "dam":
     case "irrigation":
-      return (i: number) => state.society!.river.get(i) > 0.2 || v("riverOrder", i) >= 1;
+      return (i: number) => state.society!.river.get(i) > 0.2 || v("RiverOrders", i) >= 1;
     case "harbor":
     case "weir":
       return (i: number) => state.society!.coast.get(i) > 0;
@@ -45,7 +46,7 @@ export function workMedium(state: GenerationState, kind: SocietyWorkKind) {
     case "quarrying":
       return (i: number) => v("magic:aurora:feature:prism", i) > 0;
     case "pass":
-      return (i: number) => v("slope", i) > 0.08;
+      return (i: number) => v("Slope", i) > 0.08;
     default:
       return () => true;
   }
@@ -81,7 +82,7 @@ export function damCandidateCell(state: GenerationState, work: SocietyWork) {
   let best = -1,
     flow = -Infinity;
   for (const i of mediumCells(state, work)) {
-    const f = societyValue(state, "flow", i);
+    const f = societyValue(state, "FlowAccumulation", i);
     if (f > flow) [best, flow] = [i, f];
   }
   return best;
@@ -124,7 +125,7 @@ function mediumTotals(state: GenerationState, communityId: string, kind: Society
   for (const i of mediumCells(state, { communityId, kind })) {
     area += state.surface.measures.get(i);
     if (kind === "irrigation" || kind === "dam") {
-      const amount = societyValue(state, "flow", i) * 0.2;
+      const amount = societyValue(state, "FlowAccumulation", i) * 0.2;
       flow += amount;
       maximum = Math.max(maximum, amount);
     }
@@ -159,26 +160,34 @@ export function* demandSamples(state: GenerationState, work: SocietyWork) {
 export function siteQuality(state: GenerationState, kind: SocietyWorkKind, i: number) {
   const grid = state.surface,
     ring = neighbors(grid, i, true, spatial.geometryCoverage(grid.scope.footprint)),
-    v = (name: string, j: number) => societyValue(state, name, j),
-    own = v("elevation", i),
-    sea = ring.filter((j) => v("water", j) === 1);
+    v = (name: FieldChannelName, j: number) => societyValue(state, name, j),
+    own = v("Elevation", i),
+    sea = ring.filter((j) => v("WaterKindCodes", j) === 1);
   switch (kind) {
     case "dam":
-      return damQuality(v, ring, own, v("flow", i));
+      return damQuality(v, ring, own, v("FlowAccumulation", i));
     case "harbor":
       return harbourQuality(v, sea);
     case "pass":
       return passQuality(v, ring, own);
     case "weir":
-      return sea.some((j) => v("waterDepth", j) < mapScale(state).length(0.0000075, 0.5)) ? 1 : 0;
+      return sea.some(
+        (j) =>
+          v("WaterDepths", j) < MapScale.inUnits(mapScale(state).length(0.0000075, 0.5), "native")
+      )
+        ? 1
+        : 0;
     default:
       return 0;
   }
 }
-type Read = (name: string, j: number) => number;
+type Read = (name: FieldChannelName, j: number) => number;
 /** The strongest channel between the highest banks: the mean rise of the ring above the bed. */
 function damQuality(v: Read, ring: number[], bed: number, flow: number) {
-  const rise = ring.reduce((sum, j) => sum + Math.max(0, v("elevation", j) - bed), 0);
+  const rise = ring.reduce(
+    (sum, j) => sum + Math.max(0, MapScale.metres(v("Elevation", j) - bed, "native")),
+    0
+  );
   const banks = ring.length ? rise / ring.length : 0;
   return Math.log1p(Math.max(0, flow)) * (1 + banks / 100);
 }
@@ -186,7 +195,8 @@ function damQuality(v: Read, ring: number[], bed: number, flow: number) {
 function harbourQuality(v: Read, sea: number[]) {
   if (!sea.length) return 0;
   const shelter = sea.length <= 3 ? 1 : sea.length <= 4 ? 0.6 : 0.2,
-    depth = Math.max(...sea.map((j) => v("waterDepth", j))) >= 10 ? 1 : 0.4,
+    depth =
+      Math.max(...sea.map((j) => v("WaterDepths", j))) >= MapScale.inUnits(10, "native") ? 1 : 0.4,
     surge = Math.max(...sea.map((j) => v("magic:pressure:intensity", j))) >= 400 ? 0.3 : 1;
   return shelter * depth * surge;
 }
@@ -194,12 +204,12 @@ function harbourQuality(v: Read, sea: number[]) {
 function passQuality(v: Read, ring: number[], own: number) {
   let changes = 0;
   for (let k = 0; k < ring.length; k++) {
-    const here = v("elevation", ring[k]) > own,
-      next = v("elevation", ring[(k + 1) % ring.length]) > own;
+    const here = v("Elevation", ring[k]) > own,
+      next = v("Elevation", ring[(k + 1) % ring.length]) > own;
     if (here !== next) changes++;
   }
-  const rise = Math.max(0, ...ring.map((j) => v("elevation", j) - own)),
-    drop = Math.max(0, ...ring.map((j) => own - v("elevation", j)));
+  const rise = Math.max(0, ...ring.map((j) => v("Elevation", j) - own)),
+    drop = Math.max(0, ...ring.map((j) => own - v("Elevation", j)));
   return changes >= 4 ? Math.min(rise, drop) : 0;
 }
 /** The medium cell this profile's terrain makes the best site for the work, the seat breaking ties. */

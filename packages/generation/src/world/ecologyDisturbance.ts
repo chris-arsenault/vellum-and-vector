@@ -8,8 +8,8 @@ import { MapScale, type Band } from "@atlas/domain";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 
 /**
- * Floods along floodplains and deltas, more often where the seasons and runoff
- * are strong. The epoch's floods kill young plants and part of the mature
+ * Current floodplains and deltas already carry their river's water strength;
+ * seasonality controls flood frequency. Floods kill young plants and part of the mature
  * cover by each group's sensitivity, scour seed and leave nutrients behind;
  * growth then carries the per-year flood mortality.
  */
@@ -17,10 +17,7 @@ export function floodEcology(map: PhysicalField, years: number) {
   for (let i = 0; i < map.mesh.count; i++) {
     const plain = Math.max(map.FloodplainIntensity.get(i), map.DeltaIntensity.get(i)) / 1000;
     const seasons = 0.3 + 0.7 * unit(map.Seasonality.get(i) / 15);
-    const severity =
-      map.WaterKindCodes.get(i) === 0
-        ? plain * seasons * unit(MapScale.metres(map.Runoff.get(i), "mm") / map.scale.length(1e-7))
-        : 0;
+    const severity = map.WaterKindCodes.get(i) === 0 ? plain * seasons : 0;
     map.FloodFrequency.set(i, 0.5 * severity);
     if (severity === 0 || years <= 0) continue;
     const flooded = severity * -Math.expm1(-years * map.FloodFrequency.get(i));

@@ -10,6 +10,7 @@ import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
 import { physicalSampler } from "./physicalMetric";
 import { mapScale } from "../worldSignificance";
+import { intersectAreas } from "./geographicContours";
 
 type Event = NonNullable<GenerationState["physical"]>["map"]["events"][number];
 /** Fault systems need a long retained trace; individual local fractures remain physical. */
@@ -38,7 +39,7 @@ export function eventDisk(
   const disk = spatial.buffer(point(center), radius);
   return (
     disk &&
-    spatial.intersection(
+    intersectAreas(
       canonicalGeometry(state.domain.world.reference, disk),
       state.domain.scope.footprint
     )

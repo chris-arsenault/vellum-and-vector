@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fieldChannelName } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 import type { FieldStyle } from "./types";
 import { fieldLabel } from "./rasterPresentation";
@@ -170,7 +171,9 @@ function CatalogueRow({
   remove: (channel: string) => void;
 }) {
   const name = fieldLabel(editor.world, channel);
-  const unit = editor.raster.data!.find((r) => r.channel === channel)!.field.units[channel];
+  const unit = editor.raster.data!.find((r) => r.channel === channel)!.field.units[
+    fieldChannelName(channel)
+  ];
   return (
     <label className="catalogue-option">
       <input

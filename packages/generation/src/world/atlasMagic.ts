@@ -1,6 +1,13 @@
+import { mapCommand } from "../processTraits";
 // Canonry MagicAdvectionLayer's dominant material-source mapping, adapted to
 // user-configured signed thermal histories on the atlas's GIS grid.
-import { fieldInterpolator, putChannel, spatial } from "@atlas/domain";
+import {
+  fieldInterpolator,
+  putChannel,
+  spatial,
+  fieldChannelName,
+  channelUnit,
+} from "@atlas/domain";
 import type { MapProcess } from "../process";
 import { nativePosition } from "./atlasWorkspace";
 
@@ -13,14 +20,15 @@ export const advectAtlasMagic: MapProcess = {
     produces: [],
     invalidates: [],
   },
-  behavior: {
-    kind: "transfer",
-    transfer(state) {
+  operation: mapCommand(
+    "magic.advection",
+    "event",
+    (state) => {
       const grid = state.surface,
         work = state.physical!;
-      const histories = Object.keys(grid.channels).filter(
-        (name) => name.startsWith("magic:") && name.endsWith(":stored")
-      );
+      const histories = Object.keys(grid.channels)
+        .map(fieldChannelName)
+        .filter((name) => name.startsWith("magic:") && name.endsWith(":stored"));
       if (!histories.length) return;
       const covered = spatial.pointCoverage(grid.scope.footprint);
       for (const name of histories) {
@@ -38,10 +46,11 @@ export const advectAtlasMagic: MapProcess = {
           const p = nativePosition(work, source);
           if (covered(p)) moved.set(i, valueAt(p));
         }
-        putChannel(grid, name, grid.units[name], moved);
+        putChannel(grid, name, channelUnit(grid, name), moved);
       }
     },
-  },
+    []
+  ),
   validate() {
     return [];
   },

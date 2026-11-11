@@ -12,6 +12,8 @@ import { societyValue } from "./societySupport";
 import { peopleTrait } from "./societyTraits";
 import { practiceSkill } from "./societySkill";
 import { mapScale } from "./worldSignificance";
+import { defineCommand } from "./processOperation";
+import type { SocietyInput } from "./societyOperation";
 import { gatherSolid, useSolid, tradeSolid, carriedSolid } from "./societyMaterials";
 import {
   accessibleDive,
@@ -107,7 +109,7 @@ function workFor(
   return work;
 }
 /** The factor a community's practice earns in a channel; skilled hands mine, read and dive more. */
-type Skill = (channel: string) => number;
+type Skill = (practice: string) => number;
 function fireUse(
   state: GenerationState,
   c: SocietyCommunity,
@@ -160,11 +162,14 @@ function auroraUse(
   gatherSolid(state, "stills", "moraine", c.id, i, demand * stock, true);
   p.crystals = carriedSolid(state, "stills", c.id, i) / stock;
   if (p.crystals <= 0) return;
-  const cold = Math.max(0, Math.min(1, -societyValue(state, "temperature", i) / memoryCold));
+  const cold = Math.max(
+    0,
+    Math.min(1, (300 - societyValue(state, "Temperature", i)) / (10 * memoryCold))
+  );
   const retained =
     Math.min(
       1,
-      societyValue(state, "iceThickness", i) / mapScale(state).resolveMeasure(memoryIce)
+      societyValue(state, "IceThickness", i) / mapScale(state).resolveMeasure(memoryIce)
     ) * cold;
   useSolid(
     state,
@@ -208,8 +213,8 @@ function pressureUse(
     p.pressureCharge *= Math.exp(-years / 5);
     return;
   }
-  const depth = societyValue(state, "waterDepth", at);
-  const ocean = societyValue(state, "water", at) === 1;
+  const depth = MapScale.metres(societyValue(state, "WaterDepths", at), "native");
+  const ocean = societyValue(state, "WaterKindCodes", at) === 1;
   const enabled = ocean && depth >= mapScale(state).length(0.0000125) && depth <= p.depthLimit;
   const intensity = enabled ? magicAt(state, "moves-water", at) : 0;
   p.divers =
@@ -352,7 +357,13 @@ function tradeParcels(
     unit
   );
 }
-export function useSocietyMagic(state: GenerationState, context: MapProcessContext, years: number) {
+export const useSocietyMagic = defineCommand(
+  "human.magic-use",
+  "elapsed",
+  ({ state, context, years }: SocietyInput) => useMagic(state, context, years),
+  []
+);
+function useMagic(state: GenerationState, context: MapProcessContext, years: number) {
   const region = state.society!.region;
   if (state.society!.inherited) return;
   const previous = new Map(region.magic.map((p) => [p.communityId, p]));

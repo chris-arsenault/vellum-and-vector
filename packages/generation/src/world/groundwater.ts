@@ -1,5 +1,6 @@
 import { MapScale } from "@atlas/domain";
 import type { PhysicalField } from "./field";
+import type { PhysicalContext } from "./context";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { groundOf } from "../rock/ground";
 import { averageGroundQuery, groundFact } from "../rock/groundQuery";
@@ -9,6 +10,8 @@ import { respond } from "../coupling/answers";
 type ReturnReceiver = (cell: number, returned: number, available: number) => void;
 // hpc-exempt: per-map operation receiver; retained water remains in the physical bands.
 const returnReceivers = new WeakMap<PhysicalField, ReturnReceiver>();
+/** The interval belongs to the transient transfer receipts, not to a later query's context. */
+const returnIntervals = new WeakMap<PhysicalField, number>();
 /** Material owners receive the actual water withdrawn by an instantaneous surface return. */
 export function receiveGroundwaterReturn(map: PhysicalField, receive: ReturnReceiver) {
   returnReceivers.set(map, receive);
@@ -17,13 +20,20 @@ export function receiveGroundwaterReturn(map: PhysicalField, receive: ReturnRece
 export function returnedCharge(inventory: number, available: number, returned: number) {
   return available > 0 ? Math.max(0, inventory) * clamp(returned / available, 0, 1) : 0;
 }
+/** A transfer depth becomes a current rate over the interval that actually moved its water. */
+export function groundwaterReturnRate(returned: number, exposure: number) {
+  return exposure > 0 ? Math.max(0, returned) / exposure : 0;
+}
 
 respond({
-  key: "discharge",
+  key: "surfaceWater",
   by: "groundwater springs",
   reads: ["GroundwaterReturn"],
-  add: (map, i, { Profile: p }) =>
-    MapScale.inUnits(map.GroundwaterReturn.get(i), "mm") / p.FluvialReferenceRunoff,
+  add: (map, i) =>
+    MapScale.inUnits(
+      groundwaterReturnRate(map.GroundwaterReturn.get(i), returnIntervals.get(map) ?? 0),
+      "mm"
+    ),
 });
 respond({
   key: "wetness",
@@ -42,16 +52,34 @@ export function groundwaterBalance(
   recharge: number,
   capacity: number,
   drainage: number,
-  marine: boolean
+  marine: boolean,
+  exposure: number
 ) {
-  const wet = Math.max(0, storage + recharge);
+  if (!(exposure > 0)) return { storage, outflow: 0, returned: 0 };
+  const wet = Math.max(0, storage + recharge * exposure);
   if (marine) return { storage: 0, outflow: wet, returned: 0 };
-  const outflow = wet * clamp(drainage, 0, 1),
+  const share = -Math.expm1(Math.log1p(-clamp(drainage, 0, 1)) * exposure),
+    outflow = wet * share,
     returned = Math.max(0, wet - outflow - capacity);
   return { storage: wet - outflow - returned, outflow, returned };
 }
+/** Start one transfer batch: its receipts and rate interval share the same lifetime. */
+export function beginGroundwaterExchange(map: PhysicalField, exposure: number) {
+  returnIntervals.set(map, Math.max(0, exposure));
+  for (const band of [
+    "GroundwaterExchangeVolume",
+    "GroundwaterRecharge",
+    "GroundwaterOutflow",
+    "GroundwaterReturn",
+  ] as const)
+    map[band].fill(0);
+  map.GroundwaterTargets.fill(-1);
+}
 /** A coarse saturated store routes by hydraulic head and the actual substrate's permeability. */
-export function advanceGroundwater(map: PhysicalField) {
+export function advanceGroundwater(map: PhysicalField, context: PhysicalContext) {
+  const exposure = Math.max(0, context.Span);
+  beginGroundwaterExchange(map, exposure);
+  if (!exposure) return;
   const depth = map.scale.length(2.5e-6),
     conductance = workingArray(map, "float64", "groundwater:conductance"),
     head = workingArray(map, "float64", "groundwater:head"),
@@ -63,7 +91,7 @@ export function advanceGroundwater(map: PhysicalField) {
       recharge =
         map.WaterKindCodes.get(i) === 1
           ? 0
-          : Math.max(0, rain * map.Infiltration.get(i) - map.Evapotranspiration.get(i));
+          : Math.max(0, rain * map.Infiltration.get(i) - map.Evapotranspiration.get(i)) * exposure;
     map.GroundwaterStorage.add(i, recharge);
     map.GroundwaterRecharge.set(i, recharge);
     head.set(
@@ -75,7 +103,8 @@ export function advanceGroundwater(map: PhysicalField) {
             map.GroundwaterStorage.get(i) / Math.max(0.01, permeable)
     );
   }
-  for (let i = 0; i < map.mesh.count; i++) routeWater(map, i, head, conductance, arriving, depth);
+  for (let i = 0; i < map.mesh.count; i++)
+    routeWater(map, i, head, conductance, arriving, depth, exposure);
   for (let i = 0; i < map.mesh.count; i++) {
     const water = arriving.get(i) / map.mesh.area(i);
     if (map.WaterKindCodes.get(i) !== 1) map.GroundwaterStorage.add(i, water);
@@ -88,7 +117,8 @@ function routeWater(
   head: import("@atlas/domain").Band,
   conductance: import("@atlas/domain").Band,
   arriving: import("@atlas/domain").Band,
-  depth: number
+  depth: number,
+  exposure: number
 ) {
   let target = -1,
     gradient = 0;
@@ -111,7 +141,8 @@ function routeWater(
     0,
     depth * conductance.get(i),
     gradient / (gradient + 0.01),
-    marine
+    marine,
+    exposure
   );
   if (marine) target = -1;
   map.GroundwaterTargets.set(i, target);
@@ -120,12 +151,11 @@ function routeWater(
   map.GroundwaterReturn.add(i, balance.returned);
   if (target >= 0) arriving.add(target, balance.outflow * map.mesh.area(i));
 }
-/** Reduced root uptake lets existing shallow groundwater return; clearing cannot invent water. */
+/** Immediate withdrawal into the caller's soil receiver; it is not another river-flow receipt. */
 export function returnGroundwater(map: PhysicalField, i: number, fraction: number, room: number) {
   const available = map.GroundwaterStorage.get(i);
   const returned = Math.min(Math.max(0, room), available * clamp(fraction, 0, 1));
   map.GroundwaterStorage.add(i, -returned);
-  map.GroundwaterReturn.add(i, returned);
   if (returned > 0) returnReceivers.get(map)?.(i, returned, available);
   return returned;
 }

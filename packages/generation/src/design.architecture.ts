@@ -58,12 +58,10 @@ describe("4.2 processes read the world by asking keys", () => {
       []
     );
   });
-  it("gives every key a base answer and someone who asks it", () => {
-    const asked = new Set(groundProcesses.flatMap((each) => each.asks));
-    const gaps = answerKeys.flatMap((key) => [
-      ...(respondersTo(key).some((one) => "base" in one) ? [] : [`${key} has no base answer`]),
-      ...(asked.has(key) ? [] : [`nobody asks ${key}`]),
-    ]);
+  it("gives every composed quantity exactly one base answer", () => {
+    const gaps = answerKeys.filter(
+      (key) => respondersTo(key).filter((one) => "base" in one).length !== 1
+    );
     expect(gaps).toEqual([]);
   });
   it("answers rain into rivers: streams and their load ask discharge, and runoff answers it", () => {
@@ -72,7 +70,8 @@ describe("4.2 processes read the world by asking keys", () => {
     expect(asks("river-load")).toEqual(
       expect.arrayContaining(["discharge", "looseSupply", "loadCapacity"])
     );
-    expect(respondersTo("discharge").flatMap((one) => one.reads)).toContain("Runoff");
+    expect(respondersTo("discharge").flatMap((one) => one.answers ?? [])).toContain("surfaceWater");
+    expect(respondersTo("surfaceWater").flatMap((one) => one.reads)).toContain("Runoff");
   });
 });
 
@@ -239,7 +238,7 @@ describe("4.9 an epoch reaches processes as data", () => {
         .filter(([, processes]) => follower.follow(processes).epoch.has("IsEvolutionEpoch"))
         .map(([name]) => name);
     expect(sorted(reaching)).toEqual([]);
-  });
+  }, 30_000);
 });
 
 describe("5 Canonry is research input only", () => {

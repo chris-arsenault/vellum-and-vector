@@ -3,7 +3,7 @@ import type { PhysicalField } from "./field";
 import { migrateMeanders } from "./meanders";
 import { hashUnit } from "./noise";
 import type { RiverPaths } from "./riverPaths";
-import { MapScale, spatial } from "@atlas/domain";
+import { IntPairIndex, MapScale, spatial } from "@atlas/domain";
 
 type Point = [number, number];
 
@@ -160,16 +160,15 @@ export function withFloodFloor<T>(
 }
 
 function pagedFloor(cellSpan: number, reaches: (x: number, y: number) => boolean) {
-  // hpc-exempt: sparse page addresses, with all per-sample state in typed arrays.
-  const pages = new Map<string, Uint8Array>();
+  const addresses = new IntPairIndex(),
+    pages: Uint8Array[] = [];
   return ([x, y]: Point) => {
     const column = Math.floor(x / cellSpan),
       row = Math.floor(y / cellSpan),
       pageX = Math.floor(column / maskPageWidth),
       pageY = Math.floor(row / maskPageWidth),
-      key = `${pageX},${pageY}`;
-    let page = pages.get(key);
-    if (!page) pages.set(key, (page = new Uint8Array(maskPageWidth ** 2)));
+      key = addresses.include(pageX, pageY);
+    const page = (pages[key] ??= new Uint8Array(maskPageWidth ** 2));
     const at = (row - pageY * maskPageWidth) * maskPageWidth + column - pageX * maskPageWidth;
     if (!page[at]) page[at] = reaches((column + 0.5) * cellSpan, (row + 0.5) * cellSpan) ? 2 : 1;
     return page[at] === 2;

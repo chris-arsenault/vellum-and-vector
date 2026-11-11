@@ -1,3 +1,5 @@
+import { mapElapsed, mapCommand } from "./processTraits";
+import { requireChannel } from "@atlas/domain";
 import { expect, it, vi } from "vitest";
 import { MapRunner } from "./mapRunner";
 import { preflight } from "./preflight";
@@ -16,7 +18,7 @@ function process(id: string): MapProcess {
       invalidates: [],
       workspaceOnly: true,
     },
-    behavior: { kind: "model-pass", applyPass() {} },
+    operation: mapCommand("contract-probe", "event", () => {}, []),
     validate: () => [],
   };
 }
@@ -30,12 +32,14 @@ function fixture() {
     sequence: [invoke(child)],
     guarantees: ["routing"],
   };
-  parent.behavior = {
-    kind: "transfer",
-    async transfer(_state, context) {
+  parent.operation = mapCommand(
+    parent.contract.id,
+    "event",
+    async (_state, context) => {
       await context.reconcile!();
     },
-  };
+    []
+  );
   const registry = new MapProcessRegistry().register(child).register(parent);
   return { parent, child, registry };
 }
@@ -122,10 +126,11 @@ it("pins reviewed branch metadata and rejects runtime registry changes", () => {
 
 it("propagates a nested failure and does not publish partial work", async () => {
   const { parent, child, registry } = fixture();
-  child.behavior = {
-    kind: "model-pass",
-    applyPass(state, context) {
-      state.surface.channels.elevation.fill(999);
+  child.operation = mapCommand(
+    child.contract.id,
+    "event",
+    (state, context) => {
+      requireChannel(state.surface, "Elevation").fill(999);
       context.recordCause({
         kind: "domain",
         process: "routing",
@@ -134,14 +139,17 @@ it("propagates a nested failure and does not publish partial work", async () => 
       });
       throw new Error("Routing failed");
     },
-  };
-  parent.behavior = {
-    kind: "transfer",
-    async transfer(state, context) {
+    []
+  );
+  parent.operation = mapCommand(
+    parent.contract.id,
+    "event",
+    async (state, context) => {
       state.domain.world.name = "In-progress map";
       await context.reconcile!();
     },
-  };
+    []
+  );
   const state = landscape();
   state.facts = new Set(["terrain", "routing"]);
   const config = reviewed(configuration([invoke(parent)]), registry);
@@ -174,7 +182,12 @@ it("joins two outcomes by what both of them left written", () => {
 
 it("rejects an unbound elapsed operation during preflight", () => {
   const elapsed = process("time");
-  elapsed.behavior = { kind: "elapsed", duration: { kind: "epoch", fraction: 0.5 }, advance() {} };
+  elapsed.operation = mapElapsed(
+    elapsed.contract.id,
+    { kind: "epoch", fraction: 0.5 },
+    () => {},
+    []
+  );
   const registry = new MapProcessRegistry().register(elapsed);
   expect(preflight(configuration([invoke(elapsed)]), registry)).toContainEqual(
     expect.objectContaining({

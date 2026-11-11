@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   createGrid,
+  requireChannel,
   gridPosition,
   fieldInterpolator,
   rectangle,
@@ -10,13 +11,15 @@ import {
 import { landscape } from "../mapFixtures";
 import { createAtlasWorkspace } from "./atlasWorkspace";
 import { projectNative } from "./atlasProjection";
+import { runOperation } from "../processOperation";
+import { processOwner, executeMapOperation } from "../processTraits";
 import { initializeMagic } from "./magicState";
-import { projectMagic } from "./magicFeatures";
+import { publishCurrentMagic } from "./magicProcesses";
 import { membershipContour, membershipSampler } from "./geographicContours";
 import { nearestTriangle } from "./mesh";
 import { looseTo, standGround } from "../rock/groundLedger";
 
-it("publishes a fixed triangle world as continuous metre channels and discrete material/magic fields", () => {
+it("publishes a fixed triangle world as continuous canonical channels and discrete material/magic fields", () => {
   const state = landscape();
   state.surface = createGrid("fixed", state.domain.scope, 23, 19);
   state.physical = createAtlasWorkspace(state, "draft");
@@ -30,26 +33,41 @@ it("publishes a fixed triangle world as continuous metre channels and discrete m
   initializeMagic(state);
   work.magic!.fields[0].intensity.fill(700);
   for (let i = 0; i < mesh.count; i++) work.magic!.fields[0].retained.set(i, mesh.area(i) * 7);
-  projectNative(state);
-  projectMagic(state);
+  runOperation(processOwner(state), projectNative, { state });
+  executeMapOperation(publishCurrentMagic, state, {
+    scope: state.domain.scope,
+    invocation: ["supplied-magic-publication"],
+    parameters: {},
+    epochs: [],
+    epochIndices: [],
+    causes: [],
+    recordCause() {},
+    progress() {},
+    random: () => 0.5,
+    cancelled: () => false,
+  });
   for (let i = 0; i < state.surface.active.length; i++) {
     const p = gridPosition(state.surface, i);
-    expect(state.surface.channels.elevation.get(i)).toBeCloseTo(
-      500 + (p.x - mesh.origin[0]) * 0.002,
+    expect(requireChannel(state.surface, "Elevation").get(i)).toBeCloseTo(
+      (500 + (p.x - mesh.origin[0]) * 0.002) * 1024,
       7
     );
     expect(
-      state.surface.channels.bedrock.get(i) + state.surface.channels.sediment.get(i)
-    ).toBeCloseTo(state.surface.channels.elevation.get(i), 7);
-    expect(Number.isInteger(state.surface.channels.province.get(i))).toBe(true);
-    expect(state.surface.channels["magic:fire:retained"].get(i)).toBeCloseTo(
+      requireChannel(state.surface, "BedrockElevation").get(i) +
+        requireChannel(state.surface, "SedimentThickness").get(i)
+    ).toBeCloseTo(requireChannel(state.surface, "Elevation").get(i), 7);
+    expect(Number.isInteger(requireChannel(state.surface, "CrustProvinceIds").get(i))).toBe(true);
+    expect(requireChannel(state.surface, "magic:fire:retained").get(i)).toBeCloseTo(
       state.surface.measures.get(i) * 7,
       5
     );
   }
-  const at = fieldInterpolator(state.surface, "elevation");
+  const at = fieldInterpolator(state.surface, "Elevation");
   const p = gridPosition(state.surface, 42);
-  expect(at({ ...p, x: p.x + 1 })).toBeCloseTo(500 + (p.x + 1 - mesh.origin[0]) * 0.002, 7);
+  expect(at({ ...p, x: p.x + 1 })).toBeCloseTo(
+    (500 + (p.x + 1 - mesh.origin[0]) * 0.002) * 1024,
+    7
+  );
   expect(Object.keys(state.surface.channels).some((name) => name.startsWith("magic:"))).toBe(true);
 });
 

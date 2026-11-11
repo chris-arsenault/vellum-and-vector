@@ -71,13 +71,15 @@ export const wardRing: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A ward the parent established stays on the refined map as a floor under Hallowed's field, so a captured ring has a counterpart wherever it lands. Water does not move it.",
+      "A captured sanctuary retains its identity. Current inhabited seats, maintained ways and retained charge determine its ward; the captured intensity is not a floor.",
     carry: carryWhereItLands,
-    realize: notApplicable("The regional evaluation keeps the captured ward as a floor."),
+    realize: notApplicable(
+      "Shared Hallowed evaluation reads captured maintained ground and current material."
+    ),
     counterpart,
     unrealized: stays,
     settle: notApplicable("A round's water moves no ward."),
-    schedule: notApplicable("The captured ward is all a ring brings to a refinement."),
+    schedule: notApplicable("Current warding is refreshed alongside the other magic systems."),
   },
   movement: {
     statement:
@@ -126,7 +128,7 @@ export const wardRing: PoiEntry = {
   },
   time: {
     statement:
-      "A kept ring holds while its seat is inhabited. Once nobody keeps it, it lapses to its stored charge and loses three tenths an epoch, thinning in coverage until it is gone and leaving nothing behind.",
+      "A kept ring holds while its seat is inhabited. After abandonment its active ward can fade; altered kept stone remains ordinary material that erosion, burial and transport can expose or remove.",
     fate: (state, place) => (hasSeat(state, place) ? { fate: "persists" } : { fate: "ends" }),
   },
   visibility: {

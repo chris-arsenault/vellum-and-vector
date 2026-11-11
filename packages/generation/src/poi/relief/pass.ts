@@ -103,22 +103,15 @@ export const pass: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured pass stays the lowest crossing of its crest on the refined map. Its counterpart is the lowest key col within a parent's cell span, which is held no higher than the parent's col stood, so no finer saddle undercuts it; after each round's water it moves to whichever col is then lowest.",
+      "A captured pass resolves to the lowest local key col within a parent's cell span. After each round's water it follows the current col while the child develops its own heights.",
     carry: carryWhereItLands,
-    realize(state, carried) {
-      const found = lowestColNear(state, carried.cell),
-        cell = found >= 0 ? found : carried.cell,
-        map = fieldOf(state);
-      return crossing(
-        state,
-        cell,
-        Math.min(state.regional.inheritedHeight.get(carried.cell), map.Elevation.get(cell))
-      );
-    },
+    realize: notApplicable(
+      "Captured col ground develops locally without restoring parent heights."
+    ),
     counterpart: (state, carried) => lowestColNear(state, carried.cell),
     unrealized: movesTo((state, carried) => lowestColNear(state, carried.cell)),
     settle: movesTo((state, carried) => lowestColNear(state, carried.cell)),
-    schedule: notApplicable("Its held crossing is all a pass asks of a refinement."),
+    schedule: notApplicable("The counterpart follows current cols without another terrain step."),
   },
   movement: {
     statement:

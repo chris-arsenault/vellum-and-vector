@@ -182,12 +182,11 @@ function appendCurve(
     pending.push({ points: [a, ab, abc, center], start, end: middle });
   }
 }
-function profile(members: number[], stations: Station[], values: ReadBand, scale = 1, offset = 0) {
+function profile(members: number[], stations: Station[], values: ReadBand, scale = 1) {
   return stations.map(
     ({ segment, fraction }) =>
       (values.get(members[segment]) * (1 - fraction) +
-        values.get(members[segment + 1]) * fraction -
-        offset) *
+        values.get(members[segment + 1]) * fraction) *
       scale
   );
 }
@@ -273,18 +272,10 @@ export function riverPath(map: PhysicalField, paths: RiverPaths, members: number
       widths: profile(members, stations, map.RiverWidth),
       depths: profile(members, stations, map.RiverDepth),
       catchmentAreas: profile(members, stations, map.CatchmentArea),
-      elevations: profile(
-        members,
-        stations,
-        map.DrainageElevations,
-        MapScale.metres(1, "native"),
-        map.BaseSeaLevel
-      ),
+      elevations: profile(members, stations, map.DrainageElevations, MapScale.metres(1, "native")),
       bedElevations: paths.elevationAt
-        ? stations.map(({ point }) =>
-            MapScale.metres(paths.elevationAt!(...point) - map.BaseSeaLevel, "native")
-          )
-        : profile(members, stations, map.Elevation, MapScale.metres(1, "native"), map.BaseSeaLevel),
+        ? stations.map(({ point }) => MapScale.metres(paths.elevationAt!(...point), "native"))
+        : profile(members, stations, map.Elevation, MapScale.metres(1, "native")),
     },
   };
 }

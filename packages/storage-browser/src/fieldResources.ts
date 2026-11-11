@@ -1,6 +1,8 @@
 import {
   adaptiveCell,
   requireThat,
+  requireChannel,
+  channelUnit,
   type FieldGeography,
   type Grid,
   type NumericalResource,
@@ -19,7 +21,7 @@ import { arraySelection, readBandPartition } from "./resourceVectors";
 import { summarizeField } from "./fieldSummaries";
 import { appendFieldCargo } from "./fieldCargo";
 
-function layoutVectors(grid: Grid): LayoutVector[] {
+function layoutVectors(grid: Grid<string>): LayoutVector[] {
   const vectors = [
     layoutVector("active", grid.active, "cells"),
     layoutVector("measures", grid.measures, "cells"),
@@ -93,7 +95,7 @@ export interface FieldLayoutResources {
 /** Write topology once; fields sharing these samples alias immutable layout arrays. */
 export async function writeFieldLayout(
   store: ResourceStore,
-  grid: Grid,
+  grid: Grid<string>,
   id: string,
   precision: number,
   check: () => void = () => {}
@@ -147,7 +149,7 @@ export async function writeFieldLayout(
 /** Channel writes use bounded buffers and never transfer the execution arena to the editor. */
 export async function writeFieldChannels(
   store: ResourceStore,
-  grid: Grid,
+  grid: Grid<string>,
   id: string,
   shared: FieldLayoutResources,
   names = Object.keys(grid.channels),
@@ -184,7 +186,7 @@ export async function writeFieldChannels(
   channelVectors.push(...appendFieldCargo(grid, resource));
   return writeVectors(store, resource, channelVectors, check);
 }
-function validateLayout(grid: Grid, layout: NumericalResource) {
+function validateLayout(grid: Grid<string>, layout: NumericalResource) {
   requireThat(layout.state === "ready", "field_layout", "Fields reference a completed layout.");
   requireThat(
     layout.scope.worldId === grid.scope.worldId &&
@@ -201,20 +203,15 @@ function validateLayout(grid: Grid, layout: NumericalResource) {
     "Field samples retain the shared layout size."
   );
 }
-function channelVector(grid: Grid, name: string, index: number): LayoutVector {
-  const values = grid.channels[name];
+function channelVector(grid: Grid<string>, name: string, index: number): LayoutVector {
+  const values = requireChannel(grid, name);
   requireThat(
     values?.length === grid.active.length,
     "field_channel",
     `Field channel ${name} needs one value per sample.`
   );
   const vector = layoutVector(`channel_${index}`, values, "cells");
-  requireThat(
-    vector.array.dtype === "float64",
-    "field_channel",
-    "Field channels retain float64 samples."
-  );
-  vector.array.unit = grid.units[name];
+  vector.array.unit = channelUnit(grid, name);
   vector.array.quantity =
     grid.quantities?.[name] ?? (grid.units[name] === "category" ? "category" : "intensive");
   if (!grid.topology) {

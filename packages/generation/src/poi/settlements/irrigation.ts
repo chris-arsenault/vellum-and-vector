@@ -9,7 +9,6 @@ import {
   cellSpan,
   cellsWithin,
   dischargeAt,
-  fieldOf,
   magicValue,
   moistureAt,
   sedimentAt,
@@ -17,8 +16,8 @@ import {
 } from "../poiReads";
 import { onMappedRiver } from "../water/waterReads";
 import { aloneAmong, attachment, sized } from "../poiVisibilityRules";
-import { diversionShare } from "../../societyWaterUse";
-import { settledHands, soilShare } from "../../societyWorks";
+import { settledHands } from "../../societyWorks";
+import { soilShare } from "../../societyWaterUse";
 import {
   attribute,
   cultureOfWork,
@@ -52,7 +51,7 @@ function suitability(state: GenerationState, cell: number) {
     dry = 1 - moistureAt(state, cell),
     level = 1 - Math.min(1, slopeAt(state, cell) / levelGround),
     soil = Math.min(1, sedimentAt(state, cell) / mapScale(state).length(0.00000025, 0.5)),
-    water = flow / (flow + mapScale(state).resolveMeasure(typicalDiversion) / diversionShare);
+    water = flow / (flow + mapScale(state).resolveMeasure(typicalDiversion));
   return (dry + level + soil + water) / 4;
 }
 const places = workPlaces("irrigation", "irrigation", {
@@ -67,26 +66,20 @@ const places = workPlaces("irrigation", "irrigation", {
 const isA = holdsRecord("irrigation", places);
 const around = (state: GenerationState) => 6 * cellSpan(state);
 const wantedFrom = (state: GenerationState) => mapScale(state).resolveMeasure(wantedReach);
-/** What it takes from the channel, as `irrigateChannels` limits it. */
+/** Water available for the work's local soil response and inspection. */
 const divertedBy = (state: GenerationState, place: PoiPlace) =>
-  Math.min(dischargeAt(state, place.anchor) * diversionShare, strengthOf(place));
+  Math.min(dischargeAt(state, place.anchor), strengthOf(place));
 /** A network's cost on the land a work waters. */
 const onItsLand = (factor: number) => (state: GenerationState, place: PoiPlace) =>
   cellsWithin(state, place.anchor, Math.max(attribute(place, "radius"), cellSpan(state))).map(
     (cell) => ({ cell, factor })
   );
-/** The diversion runs down the whole channel below the intake, as `divertDownstream` walks it. */
+/** Declare the intake once; the shared water owner carries the reduced flow downstream. */
 function downstream(state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] {
-  const diverted = divertedBy(state, place),
-    targets = fieldOf(state).FlowTargets,
-    seen = new Set<number>(),
-    changes: PoiFieldChange[] = [];
-  if (diverted <= 0) return changes;
-  for (let at = place.anchor; at >= 0 && !seen.has(at); at = targets.get(at)) {
-    seen.add(at);
-    changes.push({ change: "add", band: "FlowAccumulation", cell: at, amount: -diverted });
-  }
-  return changes;
+  const diverted = Math.max(0, strengthOf(place));
+  return diverted > 0
+    ? [{ change: "waterPassage", cell: place.anchor, withdrawal: diverted, transmission: 1 }]
+    : [];
 }
 const soaked = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => {
   const water = divertedBy(state, place) * mapScale(state).resolveMeasure(soilShare);
@@ -165,7 +158,7 @@ export const irrigation: PoiEntry = {
       "Ditches cut across a road's way, so roads pay to cross irrigated land. Canals carry what the river carries out over the fields, so river-borne stock reaches further there.",
     roads: onItsLand(ditched),
     boats: notApplicable(
-      "A field ditch floats no boat, and the river below keeps four-fifths of its flow at worst."
+      "A field ditch floats no boat; the river below carries what remains after the intake."
     ),
     drainage: notApplicable(
       "The diversion is deducted from the existing channels; the tree itself does not reroute."

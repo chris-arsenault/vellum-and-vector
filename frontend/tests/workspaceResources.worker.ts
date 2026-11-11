@@ -1,3 +1,4 @@
+import { requireChannel } from "@atlas/domain";
 import {
   OpfsStore,
   ZarrResources,
@@ -98,7 +99,7 @@ async function exerciseFields(id: string) {
   const layoutId = `${id}:layout`,
     fieldId = `${id}:field`;
   try {
-    const grid = createGrid(
+    const grid = createGrid<string>(
       "surface",
       {
         worldId: "example",
@@ -125,7 +126,7 @@ async function exerciseFields(id: string) {
     const resource = await writeFieldChannels(resources, grid, fieldId, layout);
     const writtenBefore = working.scratch.stats.writtenBytes;
     const loaded = await fields.load(fieldId, ["height"], layout.geography),
-      height = loaded.channels.height;
+      height = requireChannel(loaded, "height");
     // Committed input blocks reload from their chunks; reading them never spills.
     for (let i = 0; i < height.length; i++) height.get(i);
     const samples = [height.get(0), height.get(height.length - 1)];

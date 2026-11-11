@@ -7,11 +7,30 @@ plan closes; this file is then deleted.
 Ground ownership and process interaction are described in
 [ADR 0010](adr/0010-processes-and-materials-meet-through-modes.md) and
 [ADR 0011](adr/0011-processes-couple-through-keys-and-a-ledger.md).
-The current world maps are accepted as a useful baseline, and the completed repair
-batch is ready to publish. This does not complete the broader world-relief plan:
-magic-rock interactions, regional inheritance of geological structure, regional
-use of shared ground processes and remnant morphology assessment remain open in
-its existing phases. Further cosmetic tuning is not the next priority.
+The current world maps are accepted as a useful baseline. Physical magic and regional
+inheritance/shared-owner integration are implemented. Regional capture and execution
+mechanisms are described in [ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)
+and ADR 0011 above. Terrain development versus vegetation recovery remains a geography
+tuning concern; completing integration does not close the older geography work below.
+
+The older diagnosis below records the owner's outstanding geography concerns, not
+the implementation of the current regional pipeline. Society, economy, POI categories
+and music still require the separate design session. Further cosmetic tuning is not
+the next priority.
+
+## Periodic regional working frame — pending (phase 14)
+
+A region crossing the world's horizontal seam can allocate the whole world width even
+though its compact chart is much narrower. `refinementFrame` already computes compact
+bounds; regional capture discards them, and shared initialization rebuilds bounds from
+the split footprint. A bounds-only change is insufficient: topology coverage and geometry
+operations need a consistent continuous chart with canonical periodic input and output.
+Preserve that frame through shared initialization and lattice construction, retaining
+periodic sampling and captured identities. Do not add a separate
+regional grid or freeze parent values. Exit: the child develops on a compact working frame
+and renders contiguous geography at the intended cell span. Reuse the saved parent and
+child rather than regenerating upstream history. Report framing is a separate presentation
+concern and does not repair the generator's working allocation.
 
 ## Rivers — diagnosis (phase 2)
 
@@ -80,17 +99,14 @@ et al. 2018 (Nature Communications); Leopold and Maddock downstream hydraulic ge
 Owner correction 2026-11-03: the first design constructed outcomes; the work names processes
 and lets their running make the geography. Built:
 
-1. **Drainage by erosion** (`regional/evolution.ts`). The network is the drainage an erosion
-   process organizes on the smoothed parent surface: uplift follows the parent's height and the
-   material bands along the grain, the established waters are base levels, the parent's rivers
-   are carved in as the valleys the region starts from, and each step routes water by steepest
-   descent over the filled surface, cuts channels by stream power through the ground's
-   erodibility and lets hillslopes creep, from the unresolved unevenness below the parent's
-   cells. Closed basins stay closed only where the climate keeps them dry.
-2. **The world's erosion on the region** (`regional/erosion.ts`). The last round runs the
-   world's drainage, water-budget lakes, fluvial incision, mass wasting and sediment transport
-   for a few epochs, with the channel catchment and the slope a cell step holds read at the
-   map's scale; established features restore their signatures afterwards.
+1. **Initial drainage organization** (`regional/evolution.ts`). A geodesic strategy uses
+   captured terrain, material and waters to organize one-time detail realization. It does
+   not run an unrecorded uplift/erosion history. The later current drainage uses shared
+   conditioning, water-budget lakes, flow routing and river owners.
+2. **Shared physical development** (`regional/sequence.ts`). Feature selection dispatches
+   the shared incision, hillslope, sediment, ice and coastal owners against retained Ground.
+   Local work exposure is separate from historical epochs and from derived refresh. Initial
+   relief may cut or displace actual retained beds; later processes transform those materials.
 3. **Hillslope steps** (`regional/relief.ts`). A step between cells rises over one
    hillslope's length, not the cell's width.
 4. **Meander migration** (`canonry/meanders.ts`, `canonry/riverMeanders.ts`). A reach on a
@@ -119,3 +135,10 @@ is right or the chosen algorithms need more work. Recorded findings, to take up 
    exactly instead of describing a landform (floor and walls) of their own. Possibly belongs with
    the POI work (phases 7–8).
 4. **Peaks.** A whole mountain range publishes two peaks.
+
+Shared-owner integration review: current child maps show connected rivers, lakes and
+exposed inherited materials, but long parallel tributaries still recur across smooth
+uplands. Keep that routing/valley-shape concern in the existing owner-review follow-up
+(root phase 11); completing inheritance does not close it. Sparse vegetation variation
+also remains a geography-quality observation, not evidence that regional ecology is
+fully tuned. The separate society design session remains required.

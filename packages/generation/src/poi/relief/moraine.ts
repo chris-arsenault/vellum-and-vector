@@ -15,15 +15,7 @@ import {
   wetlandCoverAt,
 } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
-import {
-  areaOf,
-  lastsWhile,
-  meanOf,
-  raisedAsCaptured,
-  reliefOf,
-  sameSpot,
-  spans,
-} from "./reliefShape";
+import { areaOf, lastsWhile, meanOf, reliefOf, sameSpot, spans } from "./reliefShape";
 
 /** Area and relief at which a moraine is half as great as they get: a world complex's. */
 const typicalArea = MapScale.area(0.0005),
@@ -84,9 +76,11 @@ export const moraine: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured moraine keeps its class through the captured landform band and stands as high as the parent's ground did, keeping any lake behind it. If no moraine cell reads there, it takes the nearest.",
+      "Captured till and glacial evidence let the child recognize a moraine. Its name resolves on the local counterpart while erosion and water reshape the deposit and any lake behind it.",
     carry: carryWhereItLands,
-    realize: (state, carried) => raisedAsCaptured(state, carried, counterpart(state, carried)),
+    realize: notApplicable(
+      "Captured till develops locally without restoring a parent ridge height."
+    ),
     counterpart,
     unrealized: movesTo(counterpart),
     settle: notApplicable("A round's water can back up a lake without moving the till."),

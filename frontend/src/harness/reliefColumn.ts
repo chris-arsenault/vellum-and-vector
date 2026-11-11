@@ -1,11 +1,6 @@
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
-import { MapScale } from "@atlas/domain";
-import {
-  layerDepth,
-  rockLayers,
-  watchColumn,
-  type Column,
-} from "../../../packages/generation/src/rock/rockColumn";
+import { MapScale, rockLayers, type Column } from "@atlas/domain";
+import { layerDepth, watchColumn } from "../../../packages/generation/src/rock/rockColumn";
 import { rockKindOfCode } from "../../../packages/generation/src/rock/rockCatalogue";
 
 const metres = (units: number) => MapScale.metres(units, "native");

@@ -5,6 +5,7 @@ import {
   type GeographicObservation,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "../process";
+import { boundPhysicalEpoch } from "../generationBindings";
 import { generatedId } from "../mapFeatures";
 import { ruleRecord } from "../poi/poiRecords";
 import { components } from "./geographicRegions";
@@ -52,7 +53,7 @@ function latestObservation(state: GenerationState): GeographicObservation[] {
 
 /** Record only completed epoch surveys of actual rule footprints. Empty surveys end a lineage. */
 export function recordWildZoneHistory(state: GenerationState, context: MapProcessContext) {
-  if (context.epochIndices[0] === undefined) return;
+  if (boundPhysicalEpoch(context) === undefined) return;
   const cause: GenerationCause = {
     kind: "geography",
     process: "atlas.magic-history",

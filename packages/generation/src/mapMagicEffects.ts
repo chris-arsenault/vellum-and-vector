@@ -1,7 +1,10 @@
+import { mapCommand } from "./processTraits";
 import { putChannel } from "@atlas/domain";
 import { magicalForcing } from "./mapMagic";
 import { summarizeChannel, surfaceArray, surfaceValues } from "./mapFields";
-import type { MapProcess } from "./process";
+import type { GenerationState, MapProcess } from "./process";
+import { sampleSurfaceAtNative } from "./world/atlasWorkspace";
+import { alterRock } from "./rock/rockField";
 
 // The physical processes consume altered material resistance and coastal stress,
 // following Canonry's interleaved magic/material feedback boundary.
@@ -13,18 +16,17 @@ export const materialMagicProcess: MapProcess = {
       sourceActivity: { type: "number", unit: "ratio", required: false, default: 1 },
       heatActivity: { type: "number", unit: "ratio", required: false, default: 1 },
       coldActivity: { type: "number", unit: "ratio", required: false, default: 1 },
+      react: { type: "boolean", unit: null, required: false, default: false },
     },
-    requires: ["elevation", "geology"],
+    requires: ["Elevation", "geology"],
     produces: ["magicMaterial"],
     invalidates: [],
   },
-  behavior: {
-    kind: "forcing-contributor",
-    contribute(state, context) {
+  operation: mapCommand(
+    "magic.material",
+    "event",
+    (state, context) => {
       const grid = state.surface;
-      if (!grid.channels.naturalRock)
-        putChannel(grid, "naturalRock", "ratio", grid.coverage.copyBand(grid.channels.rock));
-      grid.channels.rock.copyFrom(grid.channels.naturalRock);
       const pressure = surfaceArray(state, "magic:coastal-pressure");
       for (const source of state.domain.world.magic) {
         if (
@@ -36,16 +38,12 @@ export const materialMagicProcess: MapProcess = {
         const values = surfaceValues(state, `magic:${source.id}`, (i) =>
           grid.active.get(i) ? magicalForcing(state, context, source, i) : 0
         );
-        const key = `magic:${source.id}`;
+        const key = `magic:${source.id}` as const;
         putChannel(grid, key, "ratio", values);
-        for (let i = 0; i < values.length; i++) {
-          if (source.effect === "erosionResistance")
-            grid.channels.rock.set(
-              i,
-              Math.max(0.1, Math.min(1, grid.channels.rock.get(i) + values.get(i) / 1000))
-            );
-          if (source.effect === "pressure") pressure.add(i, Math.abs(values.get(i)));
-        }
+        if (source.effect === "erosionResistance" && context.parameters.react)
+          alterSourceGround(state, key);
+        if (source.effect === "pressure")
+          for (let i = 0; i < values.length; i++) pressure.add(i, Math.abs(values.get(i)));
         context.recordCause({
           kind: "magic",
           process: "magic.material",
@@ -55,10 +53,18 @@ export const materialMagicProcess: MapProcess = {
           stored: summarizeChannel(grid, key),
         });
       }
-      putChannel(grid, "coastalPressure", "ratio", pressure);
+      putChannel(grid, "CoastalPressure", "ratio", pressure);
     },
-  },
+    []
+  ),
   validate() {
     return [];
   },
 };
+
+/** A material response changes the reached rock; subsequent forcing refreshes never reset it. */
+function alterSourceGround(state: GenerationState, key: `magic:${string}`) {
+  const map = state.physical!.map;
+  for (let cell = 0; cell < map.mesh.count; cell++)
+    alterRock(map, cell, sampleSurfaceAtNative(state, key, cell));
+}

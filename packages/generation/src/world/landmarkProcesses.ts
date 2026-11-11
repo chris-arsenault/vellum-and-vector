@@ -1,3 +1,4 @@
+import { mapCommand } from "../processTraits";
 import { landmarkKind, spatial, type Landmark } from "@atlas/domain";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import { generationBindings } from "../generationBindings";
@@ -182,9 +183,10 @@ export const landmarkEmplacement: MapProcess = {
     ["atlas:workspace", "field:Elevation", "field:RockKindCodes"],
     "atlas:landmarks"
   ),
-  behavior: {
-    kind: "model-pass",
-    applyPass(state, context) {
+  operation: mapCommand(
+    "landmark.emplace",
+    "event",
+    (state, context) => {
       const epoch = context.epochIndices[0] ?? 0,
         work = state.physical!,
         scene = landmarkScene(state, context, epoch);
@@ -211,7 +213,8 @@ export const landmarkEmplacement: MapProcess = {
           });
       }
     },
-  },
+    []
+  ),
   validate: () => [],
 };
 /** Restore every emplaced landmark's signature before the epoch's history is kept. */
@@ -221,9 +224,10 @@ export const landmarkMaintenance: MapProcess = {
     ["atlas:workspace", "field:Elevation", "atlas:landmarks"],
     "atlas:landmark-maintenance"
   ),
-  behavior: {
-    kind: "model-pass",
-    applyPass(state, context) {
+  operation: mapCommand(
+    "landmark.maintain",
+    "event",
+    (state, context) => {
       const epoch = context.epochIndices[0] ?? 0,
         work = state.physical!,
         scene = landmarkScene(state, context, epoch);
@@ -250,7 +254,8 @@ export const landmarkMaintenance: MapProcess = {
           });
       }
     },
-  },
+    []
+  ),
   validate: () => [],
 };
 export const landmarkProcesses: MapProcess[] = [landmarkEmplacement, landmarkMaintenance];

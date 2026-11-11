@@ -1,7 +1,7 @@
 import { groundOf } from "../../../packages/generation/src/rock/ground";
 import { yieldingPlane } from "../../../packages/generation/src/rock/groundQueries";
 import { inheritedDetachment } from "../../../packages/generation/src/rock/groundWeakLayers";
-import { columns } from "../../../packages/generation/src/rock/rockLayerFields";
+import { columns } from "@atlas/domain";
 import {
   groundPlacementFields,
   heldLayers,

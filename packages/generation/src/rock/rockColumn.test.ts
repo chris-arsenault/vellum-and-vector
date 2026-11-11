@@ -1,11 +1,11 @@
 import { expect, it } from "vitest";
+import { allColumnFields, rockLayers } from "@atlas/domain";
 import { createTestField as createField } from "./groundTestFixture";
 import { createMesh } from "../world/mesh";
 import { rockCatalogue } from "./rockCatalogue";
 import {
   alterTop,
   changeLayer,
-  allColumnFields,
   copyLayer,
   deepestLayer,
   intrudeBasement,
@@ -17,17 +17,16 @@ import {
   materialLayer,
   mergeMaterial,
   rockColumnFields,
-  rockLayers,
   readLayer,
   setLayer,
   shuffleLayers,
   stripRock,
   watchColumn,
 } from "./rockColumn";
-import { atlasChannels, structureChannels } from "../world/atlasChannels";
+import { physicalChannels, structureChannels } from "../world/atlasChannels";
 
 const { shale, sandstone, limestone, gneiss, tufa, rimerot } = rockCatalogue,
-  nativeBindingNames = atlasChannels.map(({ name }) => name);
+  physicalChannelNames = physicalChannels.map(({ name }) => name);
 function column() {
   const map = createField(createMesh(4, 1));
   setLayer(map, 0, 0, shale.code, 100);
@@ -257,10 +256,10 @@ it("gives every layer of the column a field band and a channel to carry it", () 
   for (const name of allColumnFields) expect(map[name]).toBeDefined();
   expect(rockColumnFields.length).toBe(2 * rockLayers);
   for (let layer = 0; layer < rockLayers; layer++) {
-    expect(structureChannels).toContain(`rockLayer${layer}`);
-    expect(structureChannels).toContain(`rockDepth${layer}`);
-    expect(nativeBindingNames).toContain(`rockLayer${layer}`);
-    expect(nativeBindingNames).toContain(`rockDepth${layer}`);
+    expect(structureChannels).toContain(`RockLayerKind${layer}`);
+    expect(structureChannels).toContain(`RockLayerDepth${layer}`);
+    expect(physicalChannelNames).toContain(`RockLayerKind${layer}`);
+    expect(physicalChannelNames).toContain(`RockLayerDepth${layer}`);
   }
 });
 

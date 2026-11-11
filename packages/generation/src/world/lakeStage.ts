@@ -1,10 +1,13 @@
 // LakeBasinLayer stage and water-budget calculations, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
-import { clamp, truncate, units } from "./math";
+import { truncate, units } from "./math";
 import { depthRateToDischarge } from "./dimensions";
 import { CellList, radixOrder, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
+import { ask } from "../coupling/answers";
+import type { PhysicalContext } from "./context";
+import { waterPassage } from "./waterQuantity";
 
 export interface Depression {
   id: number;
@@ -18,8 +21,14 @@ export interface SupportedLake {
   depth: number;
   overflow: number;
 }
-export function contributingWater(map: PhysicalField, incoming?: Band): Band {
+export function contributingWater(
+  map: PhysicalField,
+  context: PhysicalContext,
+  incoming?: Band
+): Band {
   const count = map.mesh.count,
+    supply = ask(map, "surfaceWater", context),
+    pass = waterPassage(map, context),
     order = workingArray(map, "int32", "lakes:order").fill(-1),
     water = workingArray(map, "float64", "lakes:water");
   for (let i = 0; i < count; i++) {
@@ -27,14 +36,12 @@ export function contributingWater(map: PhysicalField, incoming?: Band): Band {
     if (rank < 0 || rank >= count || order.get(rank) >= 0)
       throw new Error("Priority-flood ranks are not a complete order.");
     order.set(rank, i);
-    water.set(
-      i,
-      depthRateToDischarge(map.Runoff.get(i), map.mesh.area(i)) + (incoming?.get(i) ?? 0)
-    );
+    water.set(i, depthRateToDischarge(supply.get(i), map.mesh.area(i)) + (incoming?.get(i) ?? 0));
   }
   for (let rank = count - 1; rank >= 0; rank--) {
     const i = order.get(rank),
       parent = map.DrainageParents.get(i);
+    water.set(i, pass(i, water.get(i)));
     if (parent >= 0) water.add(parent, water.get(i));
   }
   releaseWorking(map, order);
@@ -64,18 +71,6 @@ export function splitConnected(map: PhysicalField, submerged: ArrayLike<number>)
   releaseWorking(map, remaining);
   return lobes;
 }
-function directInput(map: PhysicalField, p: PhysicalProfile, i: number): number {
-  const melt = clamp(
-    truncate(
-      ((map.Temperature.get(i) - (p.SnowTemperatureThreshold - p.SnowTemperatureTransition)) *
-        1000) /
-        p.SnowTemperatureTransition
-    ),
-    0,
-    1000
-  );
-  return Math.max(0, map.Rainfall.get(i) + (map.Snowfall.get(i) * melt) / 1000);
-}
 /** The depression's cells from the lowest floor up. */
 function basinCells(map: PhysicalField, component: Depression) {
   const members = component.members,
@@ -83,16 +78,20 @@ function basinCells(map: PhysicalField, component: Depression) {
     order = radixOrder(keys);
   return Int32Array.from(order, (k) => members[k]);
 }
-function stageBudget(map: PhysicalField, p: PhysicalProfile, cells: Int32Array, input: number) {
+function stageBudget(
+  map: PhysicalField,
+  context: PhysicalContext,
+  cells: Int32Array,
+  input: number
+) {
+  const p = context.Profile;
   let loss = 0,
-    adjustment = 0,
     count = 0,
     cursor = 0;
   while (cursor < cells.length) {
     const floor = map.Elevation.get(cells[cursor]);
     let end = cursor,
-      groupLoss = 0,
-      groupAdjustment = 0;
+      groupLoss = 0;
     while (end < cells.length && map.Elevation.get(cells[end]) === floor) {
       const i = cells[end],
         area = map.mesh.area(i);
@@ -102,41 +101,37 @@ function stageBudget(map: PhysicalField, p: PhysicalProfile, cells: Int32Array, 
           p.LakeInfiltrationLoss,
         area
       );
-      groupAdjustment += depthRateToDischarge(directInput(map, p, i) - map.Runoff.get(i), area);
       end++;
     }
-    if (loss + groupLoss > Math.max(0, input + adjustment + groupAdjustment)) break;
+    // Candidate flooded cells use the same effective yield already routed through withdrawals.
+    if (loss + groupLoss > Math.max(0, input)) break;
     loss += groupLoss;
-    adjustment += groupAdjustment;
     count = end;
     cursor = end;
   }
-  return { loss, adjustment, count };
+  return { loss, count };
 }
 function basinInput(map: PhysicalField, component: Depression, water: Band) {
   const basin = workingArray(map, "uint8", "lakes:basin");
   for (const i of component.members) basin.set(i, 1);
   let input = 0;
   for (const i of component.members) {
-    input += depthRateToDischarge(map.Runoff.get(i), map.mesh.area(i));
-    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
-      const j = map.mesh.neighbor(i, edge);
-      if (j >= 0 && !basin.get(j) && map.DrainageParents.get(j) === i) input += water.get(j);
-    }
+    const target = map.DrainageParents.get(i);
+    if (target < 0 || !basin.get(target)) input += water.get(i);
   }
   releaseWorking(map, basin);
   return input;
 }
 export function solveStage(
   map: PhysicalField,
-  p: PhysicalProfile,
+  context: PhysicalContext,
   component: Depression,
   water: Band
 ): SupportedLake | null {
   if (component.members.length === 0) return null;
   const cells = basinCells(map, component),
     input = basinInput(map, component, water);
-  const budget = stageBudget(map, p, cells, input);
+  const budget = stageBudget(map, context, cells, input);
   if (budget.count === 0) return null;
   const surface =
     budget.count === cells.length
@@ -150,7 +145,7 @@ export function solveStage(
   if (members.length === 0) return null;
   let depth = 0;
   for (const i of members) depth = Math.max(depth, surface - map.Elevation.get(i));
-  const overflow = complete ? Math.max(0, Math.max(0, input + budget.adjustment) - budget.loss) : 0;
+  const overflow = complete ? Math.max(0, input - budget.loss) : 0;
   return { component, surface, members, depth, overflow };
 }
 function touchesDam(map: PhysicalField, dams: Band, lake: SupportedLake) {

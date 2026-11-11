@@ -19,7 +19,7 @@ it("joins overlapping raster windows into valid ocean and lake masks", async () 
   registerWorldSnapshot(snapshot);
   const { catalog } = await fixtureWorkspace(snapshot.world.id),
     rasters = await readMapRasters(snapshot.world.id, snapshot.scope.areaId),
-    elevation = rasters.find((field) => field.channel === "elevation")!,
+    elevation = rasters.find((field) => field.channel === "Elevation")!,
     geography = await workspaceRasterGeography(catalog, {
       ...elevation.geography!,
       windows: [

@@ -1,4 +1,3 @@
-import { respond } from "../coupling/answers";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, truncate } from "./math";
@@ -94,22 +93,3 @@ export function glacialMeltwater(map: PhysicalField, c: PhysicalContext) {
     );
   }
 }
-export function glacialRunoff(map: PhysicalField, c: PhysicalContext) {
-  for (let i = 0; i < map.mesh.count; i++)
-    map.Runoff.set(
-      i,
-      map.WaterKindCodes.get(i) !== 0
-        ? 0
-        : Math.max(
-            0,
-            map.Runoff.get(i) + (map.GlacialMeltwater.get(i) * c.HydrologyStrength) / 1000
-          )
-    );
-}
-/** Ice melting off the land sends its water down with the rain's. */
-respond({
-  key: "discharge",
-  by: "ice melt",
-  reads: ["GlacialMeltwater"],
-  add: (map, i, { Profile: p }) => map.GlacialMeltwater.get(i) / p.FluvialReferenceRunoff,
-});

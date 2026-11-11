@@ -1,12 +1,12 @@
 import { type Band, ReadBandView } from "@atlas/domain";
 import type { PhysicalBufferName, PhysicalField } from "../world/field";
-import { allColumnFields } from "./rockLayerFields";
+import { allColumnFields } from "@atlas/domain";
 import {
   loadIntegerFields,
   loadScalarFields,
   seaLoadIntegerFields,
   seaLoadScalarFields,
-} from "./groundLoadFields";
+} from "@atlas/domain";
 
 /** The single writable inventory, including projections that only the owner can publish. */
 export const groundOwnedFields = [

@@ -26,7 +26,7 @@ function useEditorState(world: World) {
   const [savedStyles, setStyles] = useState<LayerStyle[]>(() => defaultStyles(world));
   const [selection, setSelection] = useState<Geometry | null>(null);
   const [drawing, setDrawing] = useState<Geometry | null>(null);
-  const [channel, setBrushChannel] = useState("elevation");
+  const [channel, setBrushChannel] = useState("Elevation");
   const [rasterView, setRasterView] = useState(defaultRasterPresentation);
   const [mapEngine, setMapEngine] = useState<MapEngine | null>(null);
   const [brush, setBrush] = useState(() => initialBrush(area));
@@ -56,7 +56,7 @@ function useEditorState(world: World) {
     channel,
     setChannel: (channel: string) => {
       setBrushChannel(channel);
-      if (channel !== "elevation")
+      if (channel !== "Elevation")
         setRasterView((view) => ({
           ...view,
           fields: view.fields.some((field) => field.channel === channel)
@@ -166,7 +166,7 @@ export function useEditor(world: World) {
       const selected = presetChannel(world, name);
       state.setRasterView((view) => ({
         ...view,
-        fields: selected === "elevation" ? [] : [defaultFieldStyle(selected)],
+        fields: selected === "Elevation" ? [] : [defaultFieldStyle(selected)],
       }));
     },
   };
@@ -215,13 +215,13 @@ function presetChannel(world: World, name: string) {
   const entity = Object.values(world.entities).find((e) => e.kind === "culture");
   if (name === "cultural" && entity) return `culture:${entity.id}`;
   if (name === "magical") return magicalChannel(world);
-  return "elevation";
+  return "Elevation";
 }
 function magicalChannel(world: World) {
   const available = world.fields.flatMap((field) => field.channels ?? []);
   if (available.includes("finalSurface")) return "finalSurface";
   if (world.magic.length) return `magic:${world.magic[0].id}`;
-  return "elevation";
+  return "Elevation";
 }
 export type EditorState = ReturnType<typeof useEditor>;
 export type EditorSessionState = ReturnType<typeof useEditorState>;

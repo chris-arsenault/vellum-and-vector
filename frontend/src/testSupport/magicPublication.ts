@@ -1,3 +1,4 @@
+import { requireChannel, fieldChannelName } from "@atlas/domain";
 import { expect } from "vitest";
 import type { FeatureReader, Grid } from "@atlas/domain";
 import { generationSource } from "../workspaceGeneration";
@@ -43,12 +44,12 @@ export function magicSamples(grids: Record<string, Grid>) {
     Object.entries(grids).flatMap(([id, grid]) =>
       Object.entries(grid.channels)
         .filter(([name]) => name.startsWith("magic:"))
-        .map(([name, values]) => [
+        .map(([name]) => [
           `${id}/${name}`,
           {
-            values: Float64Array.from(values),
-            unit: grid.units[name],
-            quantity: grid.quantities?.[name] ?? "intensive",
+            values: Float64Array.from(requireChannel(grid, fieldChannelName(name))),
+            unit: grid.units[fieldChannelName(name)],
+            quantity: grid.quantities?.[fieldChannelName(name)] ?? "intensive",
           },
         ])
     )
@@ -131,9 +132,9 @@ export async function assertMagicPublication(f: Fixture, areaId: string, grid: G
       f.workspace.working.cache
     ),
     values = inspection.cells.flatMap((cell) => cell.values);
-  for (const name of ["elevation", "water", "magic:fire:stock:vein/held"])
+  for (const name of ["Elevation", "WaterKindCodes", "magic:fire:stock:vein/held"])
     expect(values.find((value) => value.channel === name)?.value, name).toBe(
-      grid.channels[name].get(index)
+      requireChannel(grid, fieldChannelName(name)).get(index)
     );
   console.info("regional cell inspection", {
     milliseconds: performance.now() - started,

@@ -6,7 +6,7 @@ export interface LoadedRaster {
   areaId: string;
   footprint: import("geojson").Geometry;
   bounds: number[];
-  channel: string;
+  channel: import("@atlas/domain").FieldChannelName;
   field: import("@atlas/domain").GridSurface;
   water?: import("@atlas/domain").GridSurface;
   ice?: import("@atlas/domain").GridSurface;
@@ -19,10 +19,21 @@ export interface FieldReference {
   resourceId: string;
   scope: import("@atlas/domain").SpatialScope;
   bounds: import("@atlas/domain").Bounds;
-  units: Record<string, string>;
-  quantities: Record<string, "intensive" | "extensive" | "category">;
-  channels: Record<string, { range: [number, number]; categories: number[] }>;
-  patches: { resourceId: string; channels: string[]; mapOnly: boolean }[];
+  units: Partial<Record<import("@atlas/domain").FieldChannelName, string>>;
+  quantities: Partial<
+    Record<import("@atlas/domain").FieldChannelName, "intensive" | "extensive" | "category">
+  >;
+  channels: Partial<
+    Record<
+      import("@atlas/domain").FieldChannelName,
+      { range: [number, number]; categories: number[] }
+    >
+  >;
+  patches: {
+    resourceId: string;
+    channels: import("@atlas/domain").FieldChannelName[];
+    mapOnly: boolean;
+  }[];
 }
 export interface RasterGeographyReference {
   scope: import("@atlas/domain").WorkspaceScope;

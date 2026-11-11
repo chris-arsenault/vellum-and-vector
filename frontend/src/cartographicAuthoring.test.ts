@@ -1,3 +1,4 @@
+import { requireChannel } from "@atlas/domain";
 import {
   fixtureWorld,
   fixtureState,
@@ -12,7 +13,7 @@ import { mappedField, sample, type World } from "@atlas/domain";
 function elevation(world: World, fieldId: string, x = 500) {
   // Each commit and undo already reads the published catalog and field resources back.
   const field = mappedField(fixtureState(world.id).snapshot.numerical[fieldId], world);
-  return sample(field, "elevation", {
+  return sample(field, "Elevation", {
     x,
     y: 500,
     z: 0,
@@ -38,7 +39,7 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
   const radius = 100;
   const command = makeCommand(world, "sculptField", {
     areaId,
-    channel: "elevation",
+    channel: "Elevation",
     center: { x: 200, y: 500, z: 0 },
     stroke: [
       { x: 200, y: 500, z: 0 },
@@ -60,7 +61,7 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
       world.id,
       makeCommand(world, "sculptField", {
         areaId,
-        channel: "elevation",
+        channel: "Elevation",
         center: { x: 500, y: 500, z: 0 },
         radius,
         mode: "set",
@@ -69,7 +70,7 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
     )
   ).candidate;
   expect(elevation(world, fieldId)).toBeCloseTo(0, 0);
-  expect(original.channels.elevation.get(60)).toBe(0);
+  expect(requireChannel(original, "Elevation").get(60)).toBe(0);
   world = await undoWorld(world.id, fixtureState(world.id).history[0].operationId);
   expect(elevation(world, fieldId)).toBeCloseTo(20, 0);
   world = (
@@ -77,7 +78,7 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
       world.id,
       makeCommand(world, "sculptField", {
         areaId,
-        channel: "elevation",
+        channel: "Elevation",
         center: { x: 500, y: 500, z: 0 },
         radius,
         mode: "smooth",

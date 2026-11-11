@@ -1,6 +1,13 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { deflateSync } from "node:zlib";
-import type { AtlasFeature } from "@atlas/domain";
+import {
+  chartCopies,
+  rectangle,
+  spatial,
+  type AtlasFeature,
+  type Bounds,
+  type World,
+} from "@atlas/domain";
 import type { CompletedBoundary } from "@atlas/generation";
 import type { Geometry, Position } from "geojson";
 import { rasterLimits, tilePainter } from "../rasterTiles";
@@ -9,6 +16,10 @@ import type { LoadedRaster } from "../types";
 const imageSize = 1400;
 /** What a drawing reads of a feature. */
 type Drawn = Pick<AtlasFeature, "kind" | "layerId" | "geometry" | "attributes">;
+interface View {
+  extent: Bounds;
+  reference: World["reference"];
+}
 
 /**
  * Local generated artifact: the production terrain painter (cover, relief shading and
@@ -28,16 +39,25 @@ export async function rasterOverview(
   raster: LoadedRaster,
   features: Drawn[],
   name: string,
-  directory: string
+  directory: string,
+  view?: View
 ) {
-  const image = paintedRaster(raster);
-  for (const f of features) drawLine(image, f);
-  for (const f of features) drawSymbol(image, f);
+  const image = paintedRaster(raster, view);
+  for (const bounds of image.frames) {
+    const frame = { ...image, bounds };
+    for (const f of features) drawLine(frame, f);
+    for (const f of features) drawSymbol(frame, f);
+  }
   await savePng(image, name, directory);
 }
 /** The painted terrain alone, from any loaded terrain raster. */
-export async function rasterRelief(raster: LoadedRaster, name: string, directory: string) {
-  await savePng(paintedRaster(raster), name, directory);
+export async function rasterRelief(
+  raster: LoadedRaster,
+  name: string,
+  directory: string,
+  view?: View
+) {
+  await savePng(paintedRaster(raster, view), name, directory);
 }
 
 /** Rivers by order, lake shores and roads, in that order. */
@@ -74,6 +94,7 @@ interface Image {
   height: number;
   bounds: number[];
   span: number;
+  frames: Bounds[];
 }
 
 function surfaceRaster(result: CompletedBoundary): LoadedRaster {
@@ -86,19 +107,36 @@ function surfaceRaster(result: CompletedBoundary): LoadedRaster {
     ice: g,
     footprint: g.scope.footprint,
     bounds: g.bounds,
-    channel: "elevation",
+    channel: "Elevation",
   };
 }
-function paintedRaster(raster: LoadedRaster): Image {
-  const [w, s, e, n] = raster.field.bounds,
+function paintedRaster(raster: LoadedRaster, view?: View): Image {
+  const bounds = view?.extent ?? raster.field.bounds,
+    [w, s, e, n] = bounds,
     span = Math.max(e - w, n - s),
-    square = tilePainter(raster, rasterLimits([raster]))([w, n - span, w + span, n], imageSize),
+    squareBounds: Bounds = [w, n - span, w + span, n],
+    frames = view
+      ? chartCopies(view.reference, rectangle(squareBounds)).map((shape) => spatial.bounds(shape))
+      : [squareBounds],
+    paint = tilePainter(raster, rasterLimits([raster])),
     width = Math.round((imageSize * (e - w)) / span),
     height = Math.round((imageSize * (n - s)) / span),
     pixels = new Uint8ClampedArray(width * height * 4);
-  for (let y = 0; y < height; y++)
-    pixels.set(square.subarray(y * imageSize * 4, (y * imageSize + width) * 4), y * width * 4);
-  return { pixels, width, height, bounds: raster.field.bounds, span };
+  for (const frame of frames) {
+    const square = paint(frame, imageSize);
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        const at = (y * imageSize + x) * 4;
+        if (square[at + 3]) {
+          const target = (y * width + x) * 4;
+          pixels[target] = square[at];
+          pixels[target + 1] = square[at + 1];
+          pixels[target + 2] = square[at + 2];
+          pixels[target + 3] = square[at + 3];
+        }
+      }
+  }
+  return { pixels, width, height, bounds, span, frames };
 }
 
 function pixel(image: Image, [x, y]: Position) {

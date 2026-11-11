@@ -1,9 +1,15 @@
 import { expect, it } from "vitest";
-import { createGrid, putChannel, rectangle, residentBand } from "@atlas/domain";
+import {
+  createGrid,
+  putChannel,
+  rectangle,
+  residentBand,
+  type FieldChannelName,
+} from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { randomStream } from "./random";
 import type { MapProcessContext } from "./process";
-import { initializePopulation } from "./societyPopulation";
+import { supplySociety } from "./societyTestFixture";
 import { roundCycle, settledCycle, societyStep } from "./societyTempo";
 
 function fixture() {
@@ -13,17 +19,17 @@ function fixture() {
   state.domain.scope.footprint = footprint;
   state.domain.world.areas.area.footprint = footprint;
   state.surface = createGrid("society", state.domain.scope, 25, 9);
-  const set = (name: string, value: number) =>
+  const set = (name: FieldChannelName, value: number, unit: string) =>
     putChannel(
       state.surface,
       name,
-      "ratio",
+      unit,
       residentBand("float64", new Float64Array(225).fill(value))
     );
-  set("elevation", 100);
-  set("temperature", 18);
-  set("moisture", 0.7);
-  set("treeCover", 0);
+  set("Elevation", 102400, "native-length");
+  set("Temperature", 480, "native-temperature");
+  set("Moisture", 700, "per-mille");
+  set("TreeCover", 0, "ratio");
   const random = randomStream("7", "society", "tempo", "test", []);
   const context: MapProcessContext = {
     scope: state.domain.scope,
@@ -37,7 +43,7 @@ function fixture() {
     cancelled: () => false,
     progress() {},
   };
-  initializePopulation(state, context);
+  supplySociety(state);
   return { state, context };
 }
 function fill(state: ReturnType<typeof fixture>["state"], share: number) {

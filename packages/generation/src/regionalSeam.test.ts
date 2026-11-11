@@ -12,14 +12,14 @@ import {
 } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import { findRoute } from "./mapRouting";
-import { createSocietyGeography } from "./societyGeography";
+import { supplySociety } from "./societyTestFixture";
 import { landEdges } from "./societyTraversal";
 import { publishSettlements } from "./societyPublication";
 import { emptySupport } from "./societySupport";
 import type { MapProcessContext } from "./process";
 import type { Polygon } from "geojson";
 import { createAtlasWorkspace } from "./world/atlasWorkspace";
-import { groundResourceBindings } from "./rock/groundResources";
+import { groundResourceChannels } from "./rock/groundResources";
 
 function fixture() {
   const state = landscape(),
@@ -55,18 +55,25 @@ function fixture() {
   Object.assign(state.surface, { periodicWidth: 10000 });
   putChannel(
     state.surface,
-    "elevation",
-    "metre",
-    generateChannel(state.surface, "elevation", () => 100)
+    "Elevation",
+    "native-length",
+    generateChannel(state.surface, "Elevation", () => 102400)
   );
-  for (const { name, unit } of groundResourceBindings)
+  for (const { name, unit } of groundResourceChannels)
     putChannel(
       state.surface,
       name,
       unit,
       generateChannel(state.surface, name, () =>
-        name === "bedrock" || name === "crustSupport" ? 100 : 0
+        name === "BedrockElevation" || name === "CrustSupportElevation" ? 102400 : 0
       )
+    );
+  for (const name of ["BaseSeaLevel", "EffectiveSeaLevel"] as const)
+    putChannel(
+      state.surface,
+      name,
+      "native-length",
+      generateChannel(state.surface, name, () => 0)
     );
   const context: MapProcessContext = {
     scope: state.domain.scope,
@@ -101,7 +108,7 @@ function town(id: string, x: number): SocietyCommunity {
 }
 
 it("routes across a supplied seam region by the nearby geographic edge, not through the missing middle of the chart", () => {
-  const { state, context } = fixture(),
+  const { state } = fixture(),
     grid = state.surface;
   const west = Array.from(grid.active, (_, i) => i).find(
     (i) => grid.active.get(i) && gridPosition(grid, i).x < 400
@@ -109,7 +116,6 @@ it("routes across a supplied seam region by the nearby geographic edge, not thro
   expect(neighbors(grid, west).some((i) => gridPosition(grid, i).x > 9600)).toBe(true);
   const route = findRoute(grid, { x: 500, y: 4500, z: 0 }, { x: 9500, y: 4500, z: 0 }, "road");
   expect(route.length).toBeGreaterThan(1);
-  createSocietyGeography(state, context);
   expect(
     [...landEdges(state)].some(
       (edge) =>
@@ -121,7 +127,7 @@ it("routes across a supplied seam region by the nearby geographic edge, not thro
 
 it("publishes a seam-crossing way as one geographic identity with a shared seam junction", () => {
   const { state, context } = fixture();
-  createSocietyGeography(state, context);
+  supplySociety(state);
   state.society!.region.communities = [town("west", 500), town("east", 9500)];
   state.society!.region.connections = [
     { from: "west", to: "east", kind: "land", distance: 1000, travelCost: 600, wear: 1500 },

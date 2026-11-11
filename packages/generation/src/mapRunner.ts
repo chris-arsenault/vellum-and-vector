@@ -17,7 +17,8 @@ import { validateWorkingMap } from "./mapValidation";
 import { composeAuthoredSamples } from "./mapAuthored";
 import { invocationParameters } from "./preflight";
 import { ProductLedger } from "./productLedger";
-import { executeProcessBehavior } from "./processTraits";
+import { executeMapOperation, processOwner } from "./processTraits";
+import { selectOperation } from "./processOperation";
 import { processDiagnostics, processFailureDiagnostics, stageEnabled } from "./processRecovery";
 import { prepareWorkingState, numericalProcessLifetime } from "./generationWorkingState";
 
@@ -53,6 +54,7 @@ function activeCauses(state: GenerationState, nested: GenerationCause[][]): Gene
 }
 
 export class MapRunner {
+  private readonly boundOwners = new WeakSet<object>();
   private readonly configuration: ProcessConfiguration;
   private readonly stages: SequenceStage[];
   constructor(
@@ -212,8 +214,9 @@ export class MapRunner {
     const invocation = stage.invocation!,
       process = this.registry.get(invocation.process, invocation.version);
     const context = this.context(state, stage, parameters, options, causes, products, original);
+    this.bindQueries(state);
     options.progress?.(stage.path, 0, `Starting ${process.contract.id}`);
-    await executeProcessBehavior(process, state, context);
+    await executeMapOperation(process.operation, state, context);
     options.progress?.(stage.path, 0.95, `Validating ${process.contract.id}`);
     if (!process.contract.workspaceOnly) composeAuthoredSamples(state, original);
     const diagnostics = process.validate(state, context);
@@ -235,6 +238,34 @@ export class MapRunner {
     }
     products.commit(process.contract, stage.path.join("/"));
     return diagnostics;
+  }
+  private bindQueries(state: GenerationState) {
+    const owner = processOwner(state);
+    if (this.boundOwners.has(owner)) return;
+    this.boundOwners.add(owner);
+    this.bindScheduledQueries(state, this.stages);
+  }
+  private bindScheduledQueries(state: GenerationState, stages: SequenceStage[]) {
+    for (const stage of stages) {
+      if (!stage.invocation || !stageEnabled(stage)) continue;
+      const process = this.registry.get(stage.invocation.process, stage.invocation.version);
+      const operation = process.operation;
+      if (operation.kind !== "query") continue;
+      selectOperation(processOwner(state), operation, (input) =>
+        input.invoked === operation.id
+          ? input
+          : {
+              ...input,
+              context: {
+                ...input.context,
+                parameters: invocationParameters(process.contract, this.configuration, {
+                  ...stage,
+                  epochs: input.context.epochs,
+                }),
+              },
+            }
+      );
+    }
   }
   private context(
     state: GenerationState,
@@ -308,6 +339,7 @@ export class MapRunner {
       parent.epochs,
       parent.epochIndices
     );
+    this.bindScheduledQueries(state, stages);
     requireThat(
       stages.every((stage) => stage.kind === "process"),
       "nested_epoch",

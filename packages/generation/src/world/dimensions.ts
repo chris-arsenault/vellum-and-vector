@@ -5,6 +5,10 @@ export const secondsPerYear = 365.25 * 24 * 60 * 60;
 export const depthRateToDischarge = (millimetresPerYear: number, area: number) =>
   (MapScale.metres(millimetresPerYear, "mm") * area) / secondsPerYear;
 
+/** A command's actual released depth becomes a rate over that command's explicit exposure. */
+export const releasedWaterRate = (depth: number, exposure: number) =>
+  exposure > 0 ? Math.max(0, depth) / exposure : 0;
+
 /** Hydraulic geometry of a natural alluvial channel; dimensions are metres. */
 export function channelDimensions(discharge: number, slope: number, bank: number, scale: MapScale) {
   const q = Math.max(0, discharge) / scale.volume(1.5625e-20);

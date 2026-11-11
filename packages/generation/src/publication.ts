@@ -11,6 +11,8 @@ import {
   type DomainSnapshot,
   type AtlasFeature,
   type Grid,
+  type FieldChannelName,
+  fieldChannelName,
   type Layer,
   type FeatureWorkspace,
 } from "@atlas/domain";
@@ -26,7 +28,7 @@ interface PublicationBase {
 }
 export interface FieldPublicationDefinition extends PublicationBase {
   kind: "field";
-  channel: string;
+  channel: FieldChannelName;
   unit: string;
   quantity: "intensive" | "extensive" | "category";
 }
@@ -220,8 +222,8 @@ function fieldDefinitions(definitions: PublicationDefinition[]) {
 
 function fieldGroups(grid: Grid, definitions: PublicationDefinition[]) {
   const fields = fieldDefinitions(definitions),
-    groups = new Map<string, { layer: Layer; channels: string[] }>();
-  for (const channel of Object.keys(grid.channels)) {
+    groups = new Map<string, { layer: Layer; channels: FieldChannelName[] }>();
+  for (const channel of Object.keys(grid.channels).map(fieldChannelName)) {
     const definition = fields.get(channel);
     requireThat(definition, "unregistered_product", `Register an output binding for ${channel}.`);
     requireThat(
@@ -330,7 +332,7 @@ function publishField(
   snapshot: DomainSnapshot,
   grid: Grid,
   layerId: string,
-  channels: string[],
+  channels: FieldChannelName[],
   fieldId: string,
   runId: string
 ) {
@@ -354,7 +356,7 @@ function publishField(
   ];
   snapshot.numerical[fieldId] = {
     ...grid,
-    materialCargo: channels.includes("rockLayer0") ? grid.materialCargo : undefined,
+    materialCargo: channels.includes("RockLayerKind0") ? grid.materialCargo : undefined,
     id: resourceId,
     channels: Object.fromEntries(channels.map((channel) => [channel, grid.channels[channel]])),
     units: Object.fromEntries(channels.map((channel) => [channel, grid.units[channel]])),

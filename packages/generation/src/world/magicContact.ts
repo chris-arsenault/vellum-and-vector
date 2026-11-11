@@ -31,18 +31,16 @@ export function receiveCoastalAction(
   map: PhysicalField,
   offshore: import("@atlas/domain").Band,
   strength: number,
-  width: number
+  width: number,
+  received: import("@atlas/domain").Band
 ) {
   if (strength === 0) return;
   const frame = coastalFrame(map, width, { get: (cell) => offshore.get(cell) * strength });
   for (let i = 0; i < map.mesh.count; i++)
     if (frame.coverage.get(i) > 0)
-      map.ExternalCoastalForcing.set(
+      received.set(
         i,
-        Math.min(
-          1000,
-          map.ExternalCoastalForcing.get(i) + frame.strength.get(i) * frame.coverage.get(i)
-        )
+        Math.min(1000, received.get(i) + frame.strength.get(i) * frame.coverage.get(i))
       );
   releaseWorking(map, frame.strength, frame.coverage, frame.source);
 }

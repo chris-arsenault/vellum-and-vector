@@ -40,7 +40,7 @@ export function ruinFields(state: GenerationState): RuinField[] {
 /** Sea over a cell the cold age built a weir on: the shoal flag survives the drowning. */
 function drownedShoal(state: GenerationState, i: number) {
   const physical = state.physical;
-  if (!physical || societyValue(state, "water", i) !== 1) return false;
+  if (!physical || societyValue(state, "WaterKindCodes", i) !== 1) return false;
   const cell = i >= 0 && i < physical.samples.length ? physical.samples.get(i) : -1;
   return cell >= 0 && (physical.map.FeatureFlags.get(cell) & Feature.Shoal) !== 0;
 }

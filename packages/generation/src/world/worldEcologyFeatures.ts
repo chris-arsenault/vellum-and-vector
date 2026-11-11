@@ -2,7 +2,12 @@ import { classMarginInterpolator, spatial } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { landscapeMinimumArea, mapScale } from "../worldSignificance";
 import type { BiomeRule, BiomeSummary } from "./ecologyBiomes";
-import { geographicContour, fillSmallHoles, membershipSampler } from "./geographicContours";
+import {
+  geographicContour,
+  fillSmallHoles,
+  membershipSampler,
+  areaGeometry,
+} from "./geographicContours";
 import { projectedValues } from "./atlasSampling";
 import type { RegionMembers } from "./regionMembers";
 import type { Geometry } from "geojson";
@@ -19,8 +24,8 @@ function dryExtents(state: GenerationState) {
     ],
     subtract = water.length ? spatial.differenceFrom(spatial.unionAll(water)) : null;
   return (shape: Geometry) => {
-    const extent = clip(shape);
-    return extent && subtract ? subtract(extent) : extent;
+    const extent = areaGeometry(clip(shape));
+    return extent && subtract ? areaGeometry(subtract(extent)) : extent;
   };
 }
 

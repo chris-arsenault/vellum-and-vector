@@ -1,4 +1,4 @@
-import { biomeCode, surfaceCode } from "@atlas/domain";
+import { biomeCode, surfaceCode, MapScale } from "@atlas/domain";
 
 /**
  * The constructed parents of the frozen regional evaluation (spec section 9.1): P1, a
@@ -187,30 +187,33 @@ function mountainChannels(geo: ReturnType<typeof mountainGeography>): ParentSpec
     cover,
   } = geo;
   return {
-    elevation: ["metre", elevation],
-    rock: ["ratio", (x, y) => 1 + 0.5 * gaussian(across(x, y), 40_000)],
-    fracture: ["ratio", (x, y) => 0.25 + 0.3 * gaussian(across(x, y), 60_000)],
-    tectonicStrain: ["ratio", (x, y) => 0.7 * gaussian(across(x, y), 110_000) * fade(along(x, y))],
-    structuralGrainX: ["ratio", (x, y) => Math.cos(2 * theta) * coherence(x, y)],
-    structuralGrainY: ["ratio", (x, y) => Math.sin(2 * theta) * coherence(x, y)],
-    glacialErosion: ["metre", glacial],
-    temperature: ["celsius", temperature],
-    rainfall: ["metre/year", rainfall],
-    runoff: ["metre/year", (x, y) => 0.45 * rainfall(x, y)],
-    moisture: ["ratio", (x, y) => clamp01(rainfall(x, y) / 1.6)],
-    windEast: ["ratio", () => -0.55],
-    windNorth: ["ratio", () => 0.6],
-    soilDepth: ["metre", (x, y) => Math.max(0.1, 0.9 - 0.7 * gaussian(across(x, y), 90_000))],
-    treeCover: ["ratio", tree],
-    grassCover: ["ratio", (x, y) => (elevation(x, y) < 0 ? 0 : windward(x, y) ? 0.2 : 0.35)],
-    wetlandCover: ["ratio", () => 0],
-    biome: ["category", (x, y) => biomeCode(cover(x, y))],
+    Elevation: ["native-length", (x, y) => MapScale.native(elevation(x, y))],
+    RockResistance: ["rock-strength", (x, y) => 1000 + 500 * gaussian(across(x, y), 40_000)],
+    FractureConductance: ["per-mille", (x, y) => 250 + 300 * gaussian(across(x, y), 60_000)],
+    TectonicStrain: [
+      "per-mille",
+      (x, y) => 700 * gaussian(across(x, y), 110_000) * fade(along(x, y)),
+    ],
+    StructuralGrainX: ["per-mille", (x, y) => 1000 * Math.cos(2 * theta) * coherence(x, y)],
+    StructuralGrainY: ["per-mille", (x, y) => 1000 * Math.sin(2 * theta) * coherence(x, y)],
+    CumulativeGlacialErosion: ["native-length", (x, y) => MapScale.native(glacial(x, y))],
+    Temperature: ["native-temperature", (x, y) => 10 * (temperature(x, y) + 30)],
+    Rainfall: ["millimetre/year", (x, y) => 1000 * rainfall(x, y)],
+    Runoff: ["millimetre/year", (x, y) => 450 * rainfall(x, y)],
+    Moisture: ["per-mille", (x, y) => 1000 * clamp01(rainfall(x, y) / 1.6)],
+    WindX: ["per-mille", () => -550],
+    WindY: ["per-mille", () => 600],
+    SoilDepth: ["metre", (x, y) => Math.max(0.1, 0.9 - 0.7 * gaussian(across(x, y), 90_000))],
+    TreeCover: ["ratio", tree],
+    GrassCover: ["ratio", (x, y) => (elevation(x, y) < 0 ? 0 : windward(x, y) ? 0.2 : 0.35)],
+    WetlandCover: ["ratio", () => 0],
+    BiomeCodes: ["category", (x, y) => biomeCode(cover(x, y))],
     naturalSurface: ["category", (x, y) => surfaceCode(cover(x, y))],
     finalSurface: ["category", (x, y) => surfaceCode(cover(x, y))],
-    water: ["category", (x, y) => (elevation(x, y) < 0 ? 1 : 0)],
-    waterDepth: ["metre", (x, y) => Math.max(0, -elevation(x, y))],
-    seaLevel: ["metre", () => 0],
-    ice: ["ratio", () => 0],
+    WaterKindCodes: ["category", (x, y) => (elevation(x, y) < 0 ? 1 : 0)],
+    WaterDepths: ["native-length", (x, y) => MapScale.native(Math.max(0, -elevation(x, y)))],
+    EffectiveSeaLevel: ["native-length", () => 0],
+    IceThickness: ["metre", () => 0],
   };
 }
 
@@ -281,40 +284,43 @@ export function plateauCountry(): ParentSpec {
 function plateauChannels(geo: ReturnType<typeof plateauGeography>): ParentSpec["channels"] {
   const { cone, elevation, zone, rainfall, cover } = geo;
   return {
-    elevation: ["metre", elevation],
-    rock: [
-      "ratio",
-      (x, y) => (zone(x, y) === "plateau" ? 1.7 : 0.8) + 0.4 * gaussian(cone(x, y), 30_000),
+    Elevation: ["native-length", (x, y) => MapScale.native(elevation(x, y))],
+    RockResistance: [
+      "rock-strength",
+      (x, y) => (zone(x, y) === "plateau" ? 1700 : 800) + 400 * gaussian(cone(x, y), 30_000),
     ],
-    fracture: ["ratio", (x, y) => (zone(x, y) === "plateau" ? 0.35 : 0.15)],
-    tectonicStrain: ["ratio", () => 0.08],
-    structuralGrainX: ["ratio", () => 0],
-    structuralGrainY: ["ratio", () => 0],
-    glacialErosion: ["metre", () => 0],
-    volcanicConstruction: ["metre", (x, y) => 500 * gaussian(cone(x, y), 25_000)],
-    temperature: ["celsius", (x, y) => 24 - 0.0065 * Math.max(0, elevation(x, y))],
-    rainfall: ["metre/year", rainfall],
-    runoff: ["metre/year", (x, y) => 0.3 * rainfall(x, y)],
-    moisture: ["ratio", (x, y) => clamp01(rainfall(x, y) / 1.2)],
-    windEast: ["ratio", () => -0.4],
-    windNorth: ["ratio", () => 0.7],
-    soilDepth: ["metre", (x, y) => (zone(x, y) === "plateau" ? 0.25 : 1.1)],
-    treeCover: [
+    FractureConductance: ["per-mille", (x, y) => (zone(x, y) === "plateau" ? 350 : 150)],
+    TectonicStrain: ["per-mille", () => 80],
+    StructuralGrainX: ["per-mille", () => 0],
+    StructuralGrainY: ["per-mille", () => 0],
+    CumulativeGlacialErosion: ["native-length", () => 0],
+    VolcanicConstructionHistory: [
+      "native-length",
+      (x, y) => MapScale.native(500 * gaussian(cone(x, y), 25_000)),
+    ],
+    Temperature: ["native-temperature", (x, y) => 540 - 0.065 * Math.max(0, elevation(x, y))],
+    Rainfall: ["millimetre/year", (x, y) => 1000 * rainfall(x, y)],
+    Runoff: ["millimetre/year", (x, y) => 300 * rainfall(x, y)],
+    Moisture: ["per-mille", (x, y) => 1000 * clamp01(rainfall(x, y) / 1.2)],
+    WindX: ["per-mille", () => -400],
+    WindY: ["per-mille", () => 700],
+    SoilDepth: ["metre", (x, y) => (zone(x, y) === "plateau" ? 0.25 : 1.1)],
+    TreeCover: [
       "ratio",
       (x, y) => ({ plateau: 0.03, lowland: 0.25, coast: 0.55, sea: 0 })[zone(x, y)],
     ],
-    grassCover: [
+    GrassCover: [
       "ratio",
       (x, y) => ({ plateau: 0.25, lowland: 0.4, coast: 0.3, sea: 0 })[zone(x, y)],
     ],
-    wetlandCover: ["ratio", () => 0],
-    biome: ["category", (x, y) => biomeCode(cover(x, y))],
+    WetlandCover: ["ratio", () => 0],
+    BiomeCodes: ["category", (x, y) => biomeCode(cover(x, y))],
     naturalSurface: ["category", (x, y) => surfaceCode(cover(x, y))],
     finalSurface: ["category", (x, y) => surfaceCode(cover(x, y))],
-    water: ["category", (x, y) => (elevation(x, y) < 0 ? 1 : 0)],
-    waterDepth: ["metre", (x, y) => Math.max(0, -elevation(x, y))],
-    seaLevel: ["metre", () => 0],
-    ice: ["ratio", () => 0],
+    WaterKindCodes: ["category", (x, y) => (elevation(x, y) < 0 ? 1 : 0)],
+    WaterDepths: ["native-length", (x, y) => MapScale.native(Math.max(0, -elevation(x, y)))],
+    EffectiveSeaLevel: ["native-length", () => 0],
+    IceThickness: ["metre", () => 0],
   };
 }
 

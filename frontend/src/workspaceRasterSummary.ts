@@ -5,6 +5,7 @@ import {
   type FieldPatch,
   type ResourceStore,
   type World,
+  type FieldChannelName,
 } from "@atlas/domain";
 import { mergeSummary, resourceCategories } from "@atlas/storage-browser";
 import type { Geometry } from "geojson";
@@ -32,11 +33,10 @@ export async function patchRanges(store: ResourceStore, reference: FieldReferenc
   for (const patch of reference.patches) {
     const resource = await store.describe(patch.resourceId);
     for (const channel of patch.channels) {
-      const summary = resource.field?.summaries?.[channel];
+      const summary = resource.field?.summaries?.[channel],
+        previous = reference.channels[channel];
       if (summary)
-        reference.channels[channel] = reference.channels[channel]
-          ? mergeSummary(reference.channels[channel], summary)
-          : summary;
+        reference.channels[channel] = previous ? mergeSummary(previous, summary) : summary;
     }
   }
 }
@@ -63,7 +63,7 @@ export async function rasterCategorySummaries(store: ResourceStore, rasters: Res
 async function composedCategories(
   store: ResourceStore,
   reference: FieldReference,
-  channel: string,
+  channel: FieldChannelName,
   footprint: Geometry
 ) {
   const categories = new Set<number>();

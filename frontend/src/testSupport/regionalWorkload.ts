@@ -1,3 +1,4 @@
+import { requireChannel } from "@atlas/domain";
 import { expect } from "vitest";
 import {
   spatial,
@@ -205,9 +206,9 @@ export async function assertRegionalPublication(
 }
 function surfaceSignature(result: CompletedBoundary) {
   return Object.fromEntries(
-    ["elevation", "finalSurface", "treeCover", "riverOrder"].map((name) => {
+    (["Elevation", "finalSurface", "TreeCover", "RiverOrders"] as const).map((name) => {
       let hash = 2166136261;
-      for (const value of result.state.surface.channels[name])
+      for (const value of requireChannel(result.state.surface, name))
         hash = Math.imul(hash ^ Math.round(value * 1000), 16777619);
       return [name, hash >>> 0];
     })
@@ -223,7 +224,7 @@ async function firstRaster(f: Fixture, child: string, cache: import("@atlas/doma
     extent = spatial.bounds(world.areas[child].footprint),
     started = performance.now(),
     rasters = await workspaceRasters(f.workspace, f.id, child, extent, 100),
-    raster = rasters.find((r) => r.channel === "elevation")!;
+    raster = rasters.find((r) => r.channel === "Elevation")!;
   expect(raster.field.scope.areaId).toBe(child);
   expect(raster.surface).toBeDefined();
   expect(spatial.covers(raster.footprint, raster.field.scope.footprint)).toBe(true);
@@ -239,7 +240,7 @@ async function firstRaster(f: Fixture, child: string, cache: import("@atlas/doma
     expect(Array.from(samples).every(Number.isFinite)).toBe(true);
     return {
       milliseconds: performance.now() - started,
-      categories: raster.surface!.channels.finalSurface.categories,
+      categories: raster.surface!.channels.finalSurface!.categories,
       sampled: samples.length,
     };
   } finally {

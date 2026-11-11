@@ -10,6 +10,8 @@ import { communityName } from "./societyNaming";
 import { nearestSample } from "./societySpatial";
 import { dryLand } from "./societySupport";
 import { mapScale } from "./worldSignificance";
+import { defineCommand } from "./processOperation";
+import type { SocietyInput } from "./societyOperation";
 
 /** Founders occupy a subset of suitable country. Empty catchments remain destinations. */
 export function startingPopulations(state: GenerationState, context: MapProcessContext) {
@@ -110,11 +112,13 @@ function townTargets(state: GenerationState) {
   const contact = contactPopulation(state);
   return state.society!.region.communities.map((c) => concentration(c, contact.get(c.id) ?? 0));
 }
-export function evolveSettlements(
-  state: GenerationState,
-  context: MapProcessContext,
-  years: number
-) {
+export const evolveSettlements = defineCommand(
+  "human.settlements",
+  "elapsed",
+  ({ state, context, years }: SocietyInput) => evolve(state, context, years),
+  []
+);
+function evolve(state: GenerationState, context: MapProcessContext, years: number) {
   if (state.society!.inherited) return;
   const targets = townTargets(state);
   const era = context.epochs.at(-1)?.id ?? "Settlement";

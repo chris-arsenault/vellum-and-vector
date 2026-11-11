@@ -92,7 +92,7 @@ export async function executeGeneration(
     yieldControl,
     async saveBoundary(boundary) {
       const preview = generationPreview(boundary.state);
-      if (!preview.channels.elevation) return;
+      if (!preview.channels.Elevation) return;
       const label =
         boundary.kind === "epoch"
           ? boundary.ancestry.map((epoch) => epoch.id).join(" / ")

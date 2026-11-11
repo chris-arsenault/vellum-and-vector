@@ -1,6 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
   createGrid,
+  MapScale,
+  requireChannel,
   generateChannel,
   gridPosition,
   putChannel,
@@ -15,9 +17,9 @@ function grid() {
   const supplied = createGrid("routes", landscape().domain.scope, 5, 3);
   putChannel(
     supplied,
-    "elevation",
-    "metre",
-    generateChannel(supplied, "elevation", () => 100)
+    "Elevation",
+    "native-length",
+    generateChannel(supplied, "Elevation", () => MapScale.native(100))
   );
   return supplied;
 }
@@ -54,7 +56,7 @@ it("reads changed terrain costs while reusing checked adjacency", () => {
     crest = gridPosition(supplied, 7);
   withRouteFinder(supplied, (find) => {
     expect(find(from, to, "road")).toContainEqual(crest);
-    supplied.channels.elevation.set(7, 10000);
+    requireChannel(supplied, "Elevation").set(7, 10240000);
     const around = find(from, to, "road");
     expect(around.at(-1)).toEqual(to);
     expect(around).not.toContainEqual(crest);

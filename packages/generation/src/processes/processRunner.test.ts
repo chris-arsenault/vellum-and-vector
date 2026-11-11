@@ -6,7 +6,7 @@ import { createWorldMesh } from "../world/worldMesh";
 import { Stage } from "../coupling/stage";
 import { defineProcess } from "./groundProcess";
 import { actBy, actTogether } from "./processRunner";
-import { builder } from "./builder";
+import { fieldCommand } from "./builder";
 import { coast, outsideWaves } from "./coast";
 
 const field = () => createField(createWorldMesh([0, 0, 1_000, 1_000], 16, 0));
@@ -28,7 +28,7 @@ it("binds a process's own helper once, with its inferred type, across substeps",
     id: "local-helper",
     prepare,
     substeps: () => 2,
-    run({ tools, span }) {
+    execute({ tools, span }) {
       tools.report(span);
     },
   });
@@ -43,11 +43,12 @@ it("refreshes shared facts between sequential processes and substeps", () => {
   const seen: number[] = [];
   const probe = defineProcess({
     ...declaration,
+    prepare: () => ({}),
     id: "fact-change",
     writes: ["Runoff"],
     asks: ["discharge"],
     substeps: () => 2,
-    run({ field, ask }) {
+    execute({ field, ask }) {
       seen.push(ask("discharge").get(0));
       field.Runoff.set(0, field.Runoff.get(0) * 2);
     },
@@ -64,17 +65,19 @@ it("freezes shared inputs for a simultaneous group and observes its joint settle
     events: string[] = [];
   const write = defineProcess({
     ...declaration,
+    prepare: () => ({}),
     id: "write",
     writes: ["Runoff"],
-    run({ field }) {
+    execute({ field }) {
       field.Runoff.set(0, 200);
     },
   });
   const read = defineProcess({
     ...declaration,
+    prepare: () => ({}),
     id: "read",
     asks: ["discharge"],
-    run({ ask }) {
+    execute({ ask }) {
       seen.push(ask("discharge").get(0));
     },
   });
@@ -104,7 +107,7 @@ it("freezes shared inputs for a simultaneous group and observes its joint settle
 });
 
 it("keeps immediate writers and whole-field builders out of joint stages", () => {
-  const whole = builder({ id: "whole", statement: "Probe.", build: () => {} });
+  const whole = fieldCommand("event", { id: "whole", statement: "Probe.", execute: () => {} }, []);
   for (const process of [coast, outsideWaves, whole])
     expect(() => actTogether(process)).toThrow(`${process.id} cannot run together`);
   const events: string[] = [],

@@ -16,9 +16,8 @@ import { clamp, type RegionalState } from "./state";
 /** Horizontal displacement varies the parent's blocky patch edges without serrating heights. */
 const displacementShare = 0.18;
 /**
- * Smoothing radius, as a share of the parent sample span: enough to round the parent's patch
- * creases, small enough that a valley floor the parent sampled keeps most of its depth, so
- * the base meets the inherited exterior closely along the frame edge.
+ * Initial context smoothing over a share of the parent sample span. It removes sampling
+ * creases without prescribing the developed child's surface or coastline.
  */
 export const baseSmoothing = 0.15;
 /** Sea floor below this depth keeps its sampled value; shallower water is smoothed with the shore. */

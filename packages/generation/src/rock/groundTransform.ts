@@ -1,5 +1,5 @@
 import type { PhysicalField } from "../world/field";
-import { columnFields } from "./rockLayerFields";
+import { columnFields } from "@atlas/domain";
 import { projectGround } from "./groundShares";
 import { groundStorage } from "./groundStorage";
 

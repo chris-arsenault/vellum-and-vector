@@ -30,12 +30,21 @@ export function physicalEpochIndex(
   epochs: readonly Pick<Epoch, "id">[],
   ancestry: readonly Pick<GenerationEpoch, "parentEpoch">[]
 ) {
+  return boundPhysicalEpochIndex(epochs, ancestry) ?? epochs.length - 1;
+}
+/** Only an explicit ancestry binding selects historical forcing; loop ordinals are not clocks. */
+export function boundPhysicalEpochIndex(
+  epochs: readonly Pick<Epoch, "id">[],
+  ancestry: readonly Pick<GenerationEpoch, "parentEpoch">[]
+) {
   const parent = ancestry.find((epoch) => epoch.parentEpoch !== null)?.parentEpoch;
-  if (parent === undefined) return epochs.length - 1;
+  if (parent === undefined) return undefined;
   const index = epochs.findIndex((epoch) => epoch.id === parent);
   requireThat(index >= 0, "physical_epoch", "The era's physical epoch must be in its history.");
   return index;
 }
+export const boundPhysicalEpoch = (context: MapProcessContext) =>
+  boundPhysicalEpochIndex(generationBindings(context).settings.epochs, context.epochs);
 export function serializableBindings(bindings: GenerationBindings): ParameterValues {
   return JSON.parse(JSON.stringify(bindings)) as ParameterValues;
 }

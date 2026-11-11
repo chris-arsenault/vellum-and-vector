@@ -195,10 +195,28 @@ export function triangleSampler(
   mesh: PhysicalMesh,
   values: ArrayLike<number> | ((i: number) => number)
 ) {
-  const read = typeof values === "function" ? values : (i: number) => values[i];
+  const read = typeof values === "function" ? values : (i: number) => values[i],
+    at = samplingLocation(mesh);
   return (x: number, y: number) => {
-    const sample = interpolationAt(mesh, x, y);
+    const sample = at(x, y);
     return sample ? interpolateFan(sample, read) : 0;
+  };
+}
+
+/** Retain immutable mesh topology while scalar and vector readers keep their own live values. */
+function samplingLocation(mesh: PhysicalMesh) {
+  const membership = triangleVertexMembership(mesh),
+    facing = new Int32Array(mesh.count * 3).fill(-1),
+    adjacent = (cell: number, opposite: number) => {
+      const row = cell * 3 + opposite;
+      if (facing[row] < 0) facing[row] = faceNeighbor(mesh, cell, opposite);
+      return facing[row];
+    };
+  let hint = -1;
+  return (x: number, y: number) => {
+    const sample = interpolationAt(mesh, x, y, membership, hint, adjacent);
+    hint = sample?.cell ?? -1;
+    return sample;
   };
 }
 
@@ -267,18 +285,10 @@ export function triangleVectorSampler(
   readY: (i: number) => number,
   options: { fixed?: boolean } = {}
 ) {
-  const membership = triangleVertexMembership(mesh),
-    facing = new Int32Array(mesh.count * 3).fill(-1),
-    adjacent = (cell: number, opposite: number) => {
-      const row = cell * 3 + opposite;
-      if (facing[row] < 0) facing[row] = faceNeighbor(mesh, cell, opposite);
-      return facing[row];
-    },
+  const at = samplingLocation(mesh),
     fixed = options.fixed ? fixedVector(mesh, readX, readY) : null;
-  let hint = -1;
   return (x: number, y: number): [number, number] => {
-    const sample = interpolationAt(mesh, x, y, membership, hint, adjacent);
-    hint = sample?.cell ?? -1;
+    const sample = at(x, y);
     if (!sample) return [0, 0];
     return fixed ? fixed(sample) : [interpolateFan(sample, readX), interpolateFan(sample, readY)];
   };

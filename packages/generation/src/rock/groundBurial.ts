@@ -1,8 +1,8 @@
+import { columnFields } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import { clamp } from "../world/math";
 import { recordFlow, type FlowCause } from "../coupling/flows";
 import {
-  columnFields,
   columnSize,
   blendLayers,
   insertColumnPackage,

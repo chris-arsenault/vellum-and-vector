@@ -4,7 +4,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { finalizeNamesProcess } from "../../../packages/generation/src/societyNaming";
 import { nameGeographicFeature } from "../../../packages/generation/src/atlasNaming";
-import { executeProcessBehavior } from "../../../packages/generation/src/processTraits";
+import { executeMapOperation } from "../../../packages/generation/src/processTraits";
 import type { GenerationState } from "../../../packages/generation/src/process";
 import { generationSource } from "../workspaceGeneration";
 import {
@@ -91,7 +91,7 @@ it.skipIf(!process.env.HARNESS_NAMING)(
                 }
               : undefined,
           };
-        await executeProcessBehavior(finalizeNamesProcess(original), state, {
+        await executeMapOperation(finalizeNamesProcess(original).operation, state, {
           scope: domain.scope,
           invocation: ["atlas.names"],
           parameters: {},

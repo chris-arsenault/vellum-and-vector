@@ -7,8 +7,10 @@ import {
   type SocietyRegion,
   type SocietyCommunity,
   type Band,
+  type FieldChannelName,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
+import { defineCommand } from "./processOperation";
 import { SocietySpread, landEdges, seaEdges } from "./societyTraversal";
 export type { SocietyEdge } from "./societyTraversal";
 import { channelAccess, coastalFishery, dryLand, emptySupport, supportAt } from "./societySupport";
@@ -33,13 +35,13 @@ export interface SocietyWorkspace {
   round?: string;
   inherited: boolean;
   /** Surface channels society edited since the last environmental refresh. */
-  changed: Set<string>;
+  changed: Set<FieldChannelName>;
   /**
    * The subset of `changed` edited by a work on a mesh-scale medium (an earthwork, a tapped
    * vein, a quarried prism). Only these re-route water or re-propagate magic (ADR 0005); a
    * practice warming its seat cell does not.
    */
-  mediumChanged: Set<string>;
+  mediumChanged: Set<FieldChannelName>;
   /** Elevation before local earthworks, for transferring only their terrain changes. */
   elevationBefore?: Band;
   cycle?: { index: number; elapsed: number; final: boolean };
@@ -297,7 +299,13 @@ function seaConnections(
   state.surface.coverage.releaseUnused([seaOwner, seaDistance], []);
 }
 /** Re-evaluate pass and reservoir access without replacing residents or their identities. */
-export function refreshSocietyConnections(state: GenerationState) {
+export const refreshSocietyConnections = defineCommand(
+  "human.connections",
+  "work",
+  connections,
+  []
+);
+function connections(state: GenerationState) {
   const work = state.society!,
     communities = work.region.communities,
     previous = work.region.connections;

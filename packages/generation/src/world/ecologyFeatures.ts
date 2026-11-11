@@ -58,7 +58,7 @@ export function summarize(state: GenerationState, members: RegionMembers) {
     moisture: mean((i) => environment(map, i).moisture),
     wetness: mean((i) => environment(map, i).wetness),
     slope: mean((i) => map.Slope.get(i)),
-    elevation: mean((i) => MapScale.metres(map.Elevation.get(i) - map.BaseSeaLevel, "native")),
+    elevation: mean((i) => MapScale.metres(map.Elevation.get(i) - map.EffectiveSeaLevel, "native")),
     systems,
   } satisfies BiomeSummary;
 }

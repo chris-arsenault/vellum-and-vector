@@ -1,4 +1,13 @@
-import { gridPosition, MapScale, type Grid, type World } from "@atlas/domain";
+import {
+  gridPosition,
+  compactGeometryBounds,
+  MapScale,
+  fieldChannelName,
+  requireChannel,
+  type Grid,
+  type World,
+  type Band,
+} from "@atlas/domain";
 import { FieldInputCache, FieldWorkingSet } from "@atlas/storage-browser";
 import { rockKindOfCode } from "../../../packages/generation/src/rock/rockCatalogue";
 import type { HarnessWorkspace } from "./harnessWorkspace";
@@ -16,18 +25,18 @@ const localCells = 3;
 /** How far apart two cells of a saved map touch, in cells: sides and corners. */
 const touching = 1.5;
 /** Heights that together are a cell's elevation, and what each surface process has moved. */
-const parts = ["elevation", "crustSupport", "rockLoad", "sediment"];
+const parts = ["Elevation", "CrustSupportElevation", "SurfaceRockLoad", "SedimentThickness"];
 const moved = [
-  "fluvialErosion",
-  "glacialErosion",
-  "coastalErosion",
-  "deposition",
-  "glacialDeposition",
-  "volcanicConstruction",
+  "CumulativeFluvialErosion",
+  "CumulativeGlacialErosion",
+  "CumulativeCoastalErosion",
+  "CumulativeDeposition",
+  "CumulativeGlacialDeposition",
+  "VolcanicConstructionHistory",
 ];
 const bands = [0, 200, 500, 1000, 2000, 3000];
 
-type Channels = Record<string, Grid["channels"][string]>;
+type Channels = Record<string, Band>;
 interface Cell {
   index: number;
   x: number;
@@ -101,8 +110,8 @@ export async function loadChannels(ws: HarnessWorkspace, world: World, areaId: s
         id: resource.field!.geographyId,
         scope: resource.scope,
       });
-    if (names.includes("elevation")) grid = loaded;
-    for (const name of names) channels[name] ??= loaded.channels[name];
+    if (names.includes("Elevation")) grid = loaded;
+    for (const name of names) channels[name] ??= requireChannel(loaded, fieldChannelName(name));
   }
   return { channels, grid, close: () => working.close() };
 }
@@ -110,7 +119,7 @@ export async function loadChannels(ws: HarnessWorkspace, world: World, areaId: s
 function rockShares(cells: readonly Cell[], channels: Channels) {
   const counts = new Map<string, number>();
   for (const cell of cells) {
-    const name = rockKindOfCode(channels.rockKind.get(cell.index)).id;
+    const name = rockKindOfCode(channels.RockKindCodes.get(cell.index)).id;
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return Object.fromEntries(
@@ -123,9 +132,9 @@ function rockShares(cells: readonly Cell[], channels: Channels) {
 function savedRockBodies(cells: readonly Cell[], channels: Channels, span: number) {
   const byIndex = new Map(cells.map((cell) => [cell.index, cell])),
     near = neighbours(cells, touching * span),
-    code = (i: number) => channels.rockKind.get(i),
+    code = (i: number) => channels.RockKindCodes.get(i),
     ground = {
-      count: channels.rockKind.length,
+      count: channels.RockKindCodes.length,
       cellKm2: MapScale.areaUnits(span * span, "m2", "km2"),
       included: (i: number) => byIndex.has(i),
       around: (i: number) => near(byIndex.get(i)!).map((cell) => cell.index),
@@ -140,20 +149,27 @@ function savedRockBodies(cells: readonly Cell[], channels: Channels, span: numbe
 }
 function reliefOf(grid: Grid, channels: Channels) {
   const span = Number(grid.scope.resolution),
-    elevation = channels.elevation,
+    elevation = channels.Elevation,
     cells: Cell[] = [];
   for (let index = 0; index < grid.active.length; index++)
-    if (grid.active.get(index) && elevation.get(index) > 0) {
+    if (
+      grid.active.get(index) &&
+      elevation.get(index) > (channels.EffectiveSeaLevel?.get(index) ?? 0)
+    ) {
       const { x, y } = gridPosition(grid, index);
       cells.push({ index, x, y });
     }
   const near = neighbours(cells, localCells * span),
-    height = (cell: Cell) => elevation.get(cell.index);
+    height = (cell: Cell) =>
+      MapScale.metres(
+        elevation.get(cell.index) - (channels.EffectiveSeaLevel?.get(cell.index) ?? 0),
+        "native"
+      );
   const localRange = (name: string) =>
     summary(
       cells.map((cell) => {
         const values = [cell, ...near(cell)].map((c) => channels[name].get(c.index));
-        return Math.max(...values) - Math.min(...values);
+        return MapScale.metres(Math.max(...values) - Math.min(...values), "native");
       })
     );
   return {
@@ -175,11 +191,16 @@ function reliefOf(grid: Grid, channels: Channels) {
     movedByProcess: Object.fromEntries(
       moved
         .filter((name) => channels[name])
-        .map((name) => [name, summary(cells.map((c) => channels[name].get(c.index)))])
+        .map((name) => [
+          name,
+          summary(cells.map((c) => MapScale.metres(channels[name].get(c.index), "native"))),
+        ])
     ),
-    rock: channels.rock ? summary(cells.map((c) => channels.rock.get(c.index) * 4000)) : null,
-    exposedRock: channels.rockKind ? rockShares(cells, channels) : null,
-    rockBodies: channels.rockKind ? savedRockBodies(cells, channels, span) : null,
+    rock: channels.RockResistance
+      ? summary(cells.map((c) => channels.RockResistance.get(c.index) * 4000))
+      : null,
+    exposedRock: channels.RockKindCodes ? rockShares(cells, channels) : null,
+    rockBodies: channels.RockKindCodes ? savedRockBodies(cells, channels, span) : null,
   };
 }
 /** The account of a map's relief, or null when it has no elevation field of its own. */
@@ -191,8 +212,14 @@ export async function reliefReport(
 ) {
   const { channels, grid, close } = await loadChannels(ws, world, areaId);
   try {
-    if (!grid || !channels.elevation) return null;
-    writeReliefPictures(grid, channels, pictures.out, pictures.kind);
+    if (!grid || !channels.Elevation) return null;
+    writeReliefPictures(
+      grid,
+      channels,
+      pictures.out,
+      pictures.kind,
+      compactGeometryBounds(world.reference, world.areas[areaId].footprint)
+    );
     return reliefOf(grid, channels);
   } finally {
     close();

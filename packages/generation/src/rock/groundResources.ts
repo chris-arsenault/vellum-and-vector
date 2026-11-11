@@ -1,21 +1,17 @@
-import type { ChannelBinding } from "../world/atlasChannels";
+import type { PhysicalChannel } from "../world/atlasChannels";
 import { MapScale, requireThat, type ReadBand } from "@atlas/domain";
 import type { PhysicalBufferName, PhysicalField } from "../world/field";
 import { projectGround } from "./groundShares";
 import { groundStorage } from "./groundStorage";
 import type { GroundOwnedName } from "./groundStorage";
-import { allColumnFields, allColumnIntegerFields, columnFields, columns } from "./rockLayerFields";
+import { allColumnFields, allColumnIntegerFields, columnFields, columns } from "@atlas/domain";
 import {
   loadIntegerFields,
   loadScalarFields,
   seaLoadIntegerFields,
   seaLoadScalarFields,
-} from "./groundLoad";
+} from "@atlas/domain";
 
-const aliases = new Map<string, string>([
-  ...columnFields.land.kind.map((name, layer) => [name, `rockLayer${layer}`] as [string, string]),
-  ...columnFields.land.depth.map((name, layer) => [name, `rockDepth${layer}`] as [string, string]),
-]);
 const categories = new Set<string>([
   ...allColumnIntegerFields,
   ...loadIntegerFields,
@@ -26,8 +22,8 @@ const depths = new Set<string>([
   "GroundCutDepth",
   "GroundCutCover",
 ]);
-/** Native names preserve material metadata; the existing land kind/depth channels retain their names. */
-const materialResourceBindings: ChannelBinding[] = [
+/** Material resources retain the owner's identifiers, units and complete donor packages. */
+const materialNames = [
   ...allColumnFields,
   "GroundCutShare",
   "GroundCutDepth",
@@ -36,64 +32,50 @@ const materialResourceBindings: ChannelBinding[] = [
   ...loadScalarFields,
   ...seaLoadIntegerFields,
   ...seaLoadScalarFields,
-].map((native) => {
-  const category = categories.has(native),
-    depth = depths.has(native),
-    epoch = /(?:FormedMin|FormedMax|Altered|Deposited)\d*$/.test(native);
+] as const satisfies readonly PhysicalBufferName[];
+const materialResourceChannels: PhysicalChannel[] = materialNames.map((name) => {
+  const category = categories.has(name),
+    volume = name.endsWith("Volume");
   return {
-    name: aliases.get(native) ?? native,
-    native: native as PhysicalBufferName,
-    unit: category
-      ? "category"
-      : depth
-        ? "metre"
-        : epoch
-          ? "epoch"
-          : native.endsWith("Volume")
-            ? "cubic-metre/square-metre"
-            : "ratio",
-    scale: depth ? MapScale.metres(1, "native") : 1,
-    ...resourceBounds(native),
-    global: false,
-    areaDensity: native.endsWith("Volume"),
+    name,
+    unit: materialUnit(name),
+    quantity: category ? "category" : volume ? "extensive" : "intensive",
+    ...resourceBounds(name),
     discrete: true,
   };
 });
+function materialUnit(name: string) {
+  if (categories.has(name)) return "category";
+  if (depths.has(name)) return "native-length";
+  if (/(?:FormedMin|FormedMax|Altered|Deposited)\d*$/.test(name)) return "epoch";
+  if (name.endsWith("Volume")) return "cubic-metre";
+  if (/Strength\d*$/.test(name)) return "rock-strength";
+  if (/BedSlope[XY]\d*$/.test(name)) return "gradient";
+  return "ratio";
+}
 /** Placement and composition belong to the ground record as much as its material columns. */
-export const groundResourceBindings: ChannelBinding[] = [
-  ...materialResourceBindings,
+export const groundResourceChannels: PhysicalChannel[] = [
+  ...materialResourceChannels,
   {
-    name: "bedrock",
-    native: "BedrockElevation",
-    unit: "metre",
-    scale: MapScale.metres(1, "native"),
-    datum: true,
+    name: "BedrockElevation",
+    unit: "native-length",
   },
   {
-    name: "crustSupport",
-    native: "CrustSupportElevation",
-    unit: "metre",
-    scale: MapScale.metres(1, "native"),
-    datum: true,
+    name: "CrustSupportElevation",
+    unit: "native-length",
   },
   {
-    name: "crustThickness",
-    native: "CrustThickness",
-    unit: "metre",
-    scale: MapScale.metres(1, "native"),
+    name: "CrustThickness",
+    unit: "native-length",
     minimum: 0,
   },
   {
-    name: "rockLoad",
-    native: "SurfaceRockLoad",
-    unit: "metre",
-    scale: MapScale.metres(1, "native"),
+    name: "SurfaceRockLoad",
+    unit: "native-length",
   },
   {
-    name: "continentalFraction",
-    native: "CrustContinentalFraction",
-    unit: "ratio",
-    scale: 1 / 1000,
+    name: "CrustContinentalFraction",
+    unit: "per-mille",
     minimum: 0,
   },
 ];
@@ -102,14 +84,6 @@ function resourceBounds(native: string) {
   if (depths.has(native) && native !== "GroundCutDepth") return { minimum: 0 };
   if (native.endsWith("Volume")) return { minimum: 0 };
   return {};
-}
-
-/** Area represented by a map, excluding its context halo. */
-export function groundResourceArea(map: PhysicalField) {
-  let area = 0;
-  for (let cell = 0; cell < map.mesh.count; cell++)
-    if (map.mesh.membership(cell) === 1) area += map.mesh.area(cell);
-  return area;
 }
 
 /** Copy a complete resource band into its owner during explicit import; no writable alias escapes. */
@@ -131,7 +105,7 @@ export function importGroundBand(
 /** Complete current-format material records own the reconstructed projections. */
 export function finishGroundImport(map: PhysicalField, imported: ReadonlySet<PhysicalBufferName>) {
   requireThat(
-    groundResourceBindings.every(({ native }) => imported.has(native)),
+    groundResourceChannels.every(({ name }) => imported.has(name)),
     "ground_import",
     "Ground import requires complete current-format material records."
   );

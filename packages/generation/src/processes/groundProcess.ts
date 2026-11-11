@@ -3,6 +3,8 @@ import type { PhysicalContext } from "../world/context";
 import type { MutablePhysicalBufferName, PhysicalBufferName, PhysicalField } from "../world/field";
 import type { PhysicalProfile } from "../world/profile";
 import type { AnswerKey } from "../coupling/answers";
+import { defineCommand, type Command, type Query } from "../processOperation";
+import { toolsFor } from "./processTools";
 import type { Pool } from "../coupling/flows";
 import type { Stage } from "../coupling/stage";
 import type { Ground } from "../rock/ground";
@@ -87,24 +89,22 @@ interface ProcessDeclaration {
  * water, ice follows its flux, slopes work between pairs of cells. What it needs and what it moves are
  * stated beside the algorithm. The declarations describe intent; observations show actual effects.
  */
-export interface GroundProcess<
-  R extends PhysicalBufferName = PhysicalBufferName,
-  W extends MutablePhysicalBufferName = MutablePhysicalBufferName,
-> extends ProcessDeclaration {
-  /** What it reads from the field. */
-  readonly reads: readonly R[];
-  /** The bands it writes for itself, such as a history. What it does to the ground is its `moves`. */
-  readonly writes: readonly W[];
-  /** One pass of its work on the view it declared. */
-  readonly run?: (work: ProcessWork<R, W>) => void;
-  /** Bind existing domain helpers once for this execution, beside their consumer. */
-  readonly prepare?: (map: PhysicalField) => object;
-  /**
-   * One pass of work on the whole field, for a long-lived body that holds it directly, declared through
-   * `builder`. Its scheduling prerequisites are explicit; its band reach is not inferred.
-   */
-  readonly build?: (map: PhysicalField, context: PhysicalContext) => void;
+export type PhysicalInput = { map: PhysicalField; context: PhysicalContext };
+export type PhysicalQuery = Query<PhysicalInput>;
+export interface FieldProcess extends ProcessDeclaration {
+  readonly execution: "field";
+  readonly reads: readonly PhysicalBufferName[];
+  readonly writes: readonly MutablePhysicalBufferName[];
+  readonly operation: PhysicalQuery | Command<PhysicalInput, void>;
 }
+export type StageWork = ProcessWork<PhysicalBufferName, MutablePhysicalBufferName>;
+export interface StageProcess extends ProcessDeclaration {
+  readonly execution: "stage";
+  readonly reads: readonly PhysicalBufferName[];
+  readonly writes: readonly MutablePhysicalBufferName[];
+  prepare(map: PhysicalField): Command<StageWork, void>;
+}
+export type GroundProcess = FieldProcess | StageProcess;
 /** A process with its reads and writes kept exact. Every view-holding process is declared this way. */
 export const defineProcess = <
   const R extends PhysicalBufferName,
@@ -114,7 +114,23 @@ export const defineProcess = <
   process: ProcessDeclaration & {
     readonly reads: readonly R[];
     readonly writes?: readonly W[];
-    readonly prepare?: (map: PhysicalField) => Operations;
-    readonly run: (work: ProcessWork<R, W, Operations>) => void;
+    readonly prepare: (map: PhysicalField) => Operations;
+    readonly execute: (work: ProcessWork<R, W, Operations>) => void;
   }
-): GroundProcess => ({ writes: [], ...process }) as unknown as GroundProcess;
+): StageProcess => {
+  const { execute, prepare, ...declaration } = process;
+  return {
+    ...declaration,
+    execution: "stage",
+    writes: process.writes ?? [],
+    prepare(map) {
+      const operations = prepare(map);
+      return defineCommand(
+        process.id,
+        "work",
+        (work: StageWork) => execute({ ...work, tools: { ...toolsFor(map), ...operations } }),
+        []
+      );
+    },
+  };
+};

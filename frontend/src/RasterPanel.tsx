@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { physicalMaterialNames, type SurfaceCategory } from "@atlas/domain";
+import { physicalMaterialNames, fieldChannelName, type SurfaceCategory } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 import {
   resourceRaster,
@@ -135,7 +135,7 @@ function FieldControls({
     return (
       <fieldset className="field-style">
         <legend>{fieldLabel(world, channel)}</legend>
-        {channel === "biome" && (
+        {channel === "BiomeCodes" && (
           <p className="hint">
             Biomes describe living cover independently of landform. Tree cover, wetland cover and
             animal biomass can be inspected as separate fields under Biomes and life.
@@ -183,7 +183,7 @@ function FieldControls({
 /** The full code catalogue, including classes absent from the current map. */
 function SurfaceCodes({ world, channel }: { world: World; channel: string }) {
   const names: Record<number, string> = {};
-  if (channel === "physicalMaterial") physicalMaterialNames.forEach((name, i) => (names[i] = name));
+  if (channel === "PhysicalMaterial") physicalMaterialNames.forEach((name, i) => (names[i] = name));
   if (["naturalSurface", "finalSurface"].includes(channel))
     for (const item of categoryPalette(world, channel) ?? []) names[item.code] = item.name;
   if (!Object.keys(names).length) return null;
@@ -261,7 +261,7 @@ export function FieldLegend({
       <CategoryLegend title={fieldLabel(world, field.channel)} classes={classes} data={data} />
     );
   const range = fieldRange(data, field);
-  const unit = data[0]?.field.units[field.channel] ?? "";
+  const unit = data[0]?.field.units[fieldChannelName(field.channel)] ?? "";
   const number = (value: number) => Number(value.toPrecision(4)).toLocaleString();
   return (
     <figure className="field-legend">

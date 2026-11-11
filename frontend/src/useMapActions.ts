@@ -128,7 +128,7 @@ function chooseWorkspace(world: World, state: EditorSessionState, workspace: Wor
   state.setDrawName("");
   state.setDrawAttributes({});
   if (workspace === "terrain") {
-    state.setChannel("elevation");
+    state.setChannel("Elevation");
     state.setBrush({ ...state.brush, mode: "add", delta: 10 });
   }
 }

@@ -1,11 +1,12 @@
 import {
   areaSpace,
+  fieldChannelName,
   spatial,
   requireThat,
   ownsMapGeography,
   type DomainSnapshot,
 } from "@atlas/domain";
-import { atlasChannels } from "./atlasChannels";
+import { physicalChannels } from "./atlasChannels";
 import type { PhysicalBufferName } from "./field";
 import { fieldProduct } from "./physicalSteps";
 
@@ -17,8 +18,8 @@ import { fieldProduct } from "./physicalSteps";
 export function inheritedProducts(channels: Iterable<string>): string[] {
   const names = new Set(channels),
     bands = new Set<PhysicalBufferName>();
-  for (const { name, native } of atlasChannels) if (names.has(name)) bands.add(native);
-  if (names.has("elevation"))
+  for (const { name } of physicalChannels) if (names.has(name)) bands.add(name);
+  if (names.has("Elevation"))
     for (const band of ["RockKindCodes", "SedimentSupply", "Geothermal", "IceThickness"] as const)
       bands.add(band);
   return [...bands].map(fieldProduct);
@@ -29,13 +30,13 @@ export function inheritedProducts(channels: Iterable<string>): string[] {
  */
 export function absentInheritedHistories(channels: Iterable<string>) {
   const names = new Set(channels);
-  if (!names.has("elevation")) return [];
+  if (!names.has("Elevation")) return [];
   const carriers: Record<string, string[]> = {
     Fractures: [],
-    Impacts: ["impactExcavation"],
-    VolcanicConstruction: ["volcanicConstruction"],
-    GlacialEvolution: ["glacialErosion", "glacialDeposition"],
-    CoastalEvolution: ["coastalErosion"],
+    Impacts: ["ImpactExcavation"],
+    VolcanicConstruction: ["VolcanicConstructionHistory"],
+    GlacialEvolution: ["CumulativeGlacialErosion", "CumulativeGlacialDeposition"],
+    CoastalEvolution: ["CumulativeCoastalErosion"],
   };
   return Object.keys(carriers).filter(
     (history) =>
@@ -60,8 +61,8 @@ export function inheritedChannelNames(source: DomainSnapshot, areaId: string, ph
       !spatial.covers(grid.scope.footprint, area.footprint)
     )
       continue;
-    for (const name of Object.keys(grid.channels)) {
-      const binding = atlasChannels.find((candidate) => candidate.name === name);
+    for (const name of Object.keys(grid.channels).map(fieldChannelName)) {
+      const binding = physicalChannels.find((candidate) => candidate.name === name);
       if (binding)
         requireThat(
           grid.units[name] === binding.unit,

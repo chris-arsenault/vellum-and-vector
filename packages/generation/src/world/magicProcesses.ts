@@ -1,5 +1,5 @@
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
-import { initializeMagic, systemSeed, type MagicField } from "./magicState";
+import { initializeMagic, reservoirStock, systemSeed, type MagicField } from "./magicState";
 import {
   locateMagicSources,
   magicSourceStrategies,
@@ -12,13 +12,13 @@ import {
   magicLivingFeedback,
   magicOceanFeedback,
   magicRockFeedback,
-  magicCoastalFeedback,
   retainMagicHistory,
+  holdIce,
 } from "./magicFeedback";
 import {
   classifyMagicFeatures,
   coverSystems,
-  effectiveMagicRules,
+  magicConditionRequirements,
   projectMagic,
 } from "./magicFeatures";
 import { evaluateConfluences } from "./magicConfluences";
@@ -30,11 +30,34 @@ import { hallowedOnTheColumn, magicOnTheColumn } from "../rock/rockMagic";
 import { nativeContext } from "./context";
 import { exchangeMagicWater } from "./magicGroundwater";
 import { recordWildZoneHistory } from "./wildZoneHistory";
-import { generationBindings, physicalEpochIndex } from "../generationBindings";
-import type { ProcessBehavior } from "../processTraits";
-import { ecologyLabels, type Epoch, type MagicConfluence, type MagicSystem } from "@atlas/domain";
+import { boundPhysicalEpoch, generationBindings, physicalEpochIndex } from "../generationBindings";
+import {
+  executeMapOperation,
+  mapCommand,
+  mapQuery,
+  mapWork,
+  processOwner,
+  type MapInput,
+  type MapOperation,
+} from "../processTraits";
+import { defineCommand, readOperation, runOperation, selectOperation } from "../processOperation";
+import { oceanRead, seaFloorZones } from "../processes/climateProcesses";
+import { coastalForcing } from "./coastalForcing";
+import { type Epoch, type MagicConfluence, type MagicSystem } from "@atlas/domain";
 
-function evaluateMagic(
+/** Refresh derived ice response from retained charge without adding charge or changing ice mass. */
+function refreshIcePersistence(state: GenerationState) {
+  const { map, magic } = state.physical!;
+  map.IcePersistence.fill(0);
+  for (const field of magic!.fields) {
+    if (!field.definition.enabled || field.definition.effects.icePersistence <= 0) continue;
+    const shelf = reservoirStock(field, "shelf");
+    for (let cell = 0; cell < map.mesh.count; cell++)
+      holdIce(map, field, cell, field.definition.effects.icePersistence, shelf);
+  }
+}
+
+function supplyPhase(
   state: GenerationState,
   context: MapProcessContext,
   phase: string,
@@ -45,12 +68,18 @@ function evaluateMagic(
     fields = state.physical!.magic!.fields;
   for (const field of fields) {
     if (field.definition.phase === phase) {
-      if (context.epochIndices[0] !== undefined)
+      if (boundPhysicalEpoch(context) !== undefined)
         supplyMagicSources(state, field, seed, index, sourceActivity(field, epochs[index]));
     } else if (field.definition.enabled && phase === "climate") lapseToStoredCharge(field);
   }
-  refreshFields(state, context, currentPhaseFields(fields, phase));
 }
+const supplyPhaseOperation = defineCommand(
+  "magic.source-supply",
+  "event",
+  ({ state, context, phase }: MapInput & { phase: string }) =>
+    supplyPhase(state, context, phase, generationBindings(context).seed),
+  []
+);
 /** Maintained sources are current dependencies even between their supply phases. */
 export const currentPhaseFields = <
   T extends { definition: Pick<MagicSystem, "phase" | "effects"> },
@@ -115,29 +144,64 @@ function lapseToStoredCharge(field: MagicField) {
   for (let i = 0; i < field.intensity.length; i++)
     field.intensity.set(i, Math.min(1000, Math.round(field.stored.get(i))));
 }
-function applySharedForcing(state: GenerationState, elapsed = false) {
-  magicThermalFeedback(state, elapsed);
-  magicLivingFeedback(state, elapsed);
+function applySharedForcing(state: GenerationState, exposure = 0) {
+  magicThermalFeedback(state, exposure);
+  magicLivingFeedback(state, exposure > 0);
   magicOceanFeedback(state);
+  refreshIcePersistence(state);
 }
 /**
- * The society phase: once people have acted in a cycle, systems made of what they did are
- * evaluated, and systems whose stocks people drew or deposited are located and propagated
- * again, then every system's shared forcing is re-applied. Without people it never runs, so
- * a world with no human era has no society-phase magic and the rest is unchanged.
+ * Current material and maintained sources determine placement. Atmospheric and habitat
+ * inputs are the preceding feedback state: this read publishes forcing for the next
+ * atmospheric read, and must not recursively demand that atmosphere or biome classification.
+ * No source supply, material reaction or elapsed history occurs here.
  */
-export function evaluateSocietyMagic(
-  state: GenerationState,
-  context: MapProcessContext,
-  touched: Set<string> = new Set()
-) {
-  void touched;
-  refreshFields(state, context, state.physical!.magic!.fields);
-  applySharedForcing(state);
-  return true;
-}
+export const evaluateSocietyMagic = mapQuery(
+  "magic.current",
+  (state, context) => {
+    if (!state.physical?.magic) return;
+    refreshFields(state, context, state.physical!.magic!.fields);
+    applySharedForcing(state);
+  },
+  []
+);
+/** Classification asks its current field owner after any intervening material command. */
+export const classifyCurrentMagic = mapQuery(
+  "atlas.magic-classify",
+  (state, context) => classifyMagicFeatures(state, generationBindings(context).seed),
+  [evaluateSocietyMagic]
+);
+export const publishCurrentMagic = mapCommand("atlas.magic-project", "publish", projectMagic, [
+  classifyCurrentMagic,
+]);
+export const initializeMagicWorkspace = defineCommand(
+  "magic.initialize",
+  "initialize",
+  ({
+    state,
+    enabled,
+    systems,
+    confluences,
+  }: {
+    state: GenerationState;
+    enabled?: boolean;
+    systems?: MagicSystem[];
+    confluences?: MagicConfluence[];
+  }) => {
+    initializeMagic(state, enabled, systems, confluences);
+    // Intrinsic current reads belong to this initialized owner, not to optional feature producers.
+    selectOperation(processOwner(state), evaluateSocietyMagic);
+    selectOperation(processOwner(state), classifyCurrentMagic);
+  },
+  []
+);
 /** Current dependency order is shared by epoch, present and society evaluation. */
 function refreshFields(state: GenerationState, context: MapProcessContext, fields: MagicField[]) {
+  const map = state.physical!.map,
+    water = { map, context: nativeContext(state, context, 0) };
+  // The current coastline follows ground changes; climate and living cover are preceding inputs.
+  readOperation(map, oceanRead.operation, water);
+  readOperation(map, seaFloorZones.operation, water);
   const bound = generationBindings(context),
     epochs = bound.settings.epochs,
     index = physicalEpochIndex(epochs, context.epochs);
@@ -156,74 +220,118 @@ function refreshFields(state: GenerationState, context: MapProcessContext, field
     evaluateField(state, field, bound.seed, index, epochs[index]);
 }
 /** Actor events and maintained ground advance only when an actual society cycle elapsed. */
-export function advanceSocietyMagic(state: GenerationState, context: MapProcessContext) {
-  if (!state.physical?.magic) return;
-  const bound = generationBindings(context),
-    index = physicalEpochIndex(bound.settings.epochs, context.epochs);
-  for (const field of state.physical.magic.fields) {
-    const activity = sourceActivity(field, bound.settings.epochs[index]);
-    if (field.definition.phase === "society")
-      supplyMagicSources(state, field, bound.seed, index, activity);
-    supplySocietyEvents(state, field, bound.seed, index, activity);
-  }
-  evaluateSocietyMagic(state, context);
-  hallowedWrites(state);
-  hallowedOnTheColumn(state);
-}
+const supplySocietyOperation = mapCommand(
+  "magic.society-supply",
+  "event",
+  (state, context) => {
+    if (!state.physical?.magic) return;
+    const bound = generationBindings(context),
+      index = physicalEpochIndex(bound.settings.epochs, context.epochs);
+    for (const field of state.physical.magic.fields) {
+      const activity = sourceActivity(field, bound.settings.epochs[index]);
+      if (field.definition.phase === "society")
+        supplyMagicSources(state, field, bound.seed, index, activity);
+      supplySocietyEvents(state, field, bound.seed, index, activity);
+    }
+  },
+  []
+);
+export const advanceSocietyMagic = mapCommand(
+  "magic.society-events",
+  "event",
+  (state, context) => {
+    if (!state.physical?.magic) return;
+    executeMapOperation(supplySocietyOperation, state, context);
+    executeMapOperation(evaluateSocietyMagic, state, context);
+    hallowedWrites(state);
+    hallowedOnTheColumn(state);
+  },
+  []
+);
+
+/** Shared material response. No source supply, stock aging or completed-history write occurs here. */
+export const reactMagicMaterial = defineCommand(
+  "magic.material-response",
+  "work",
+  ({
+    state,
+    response,
+  }: {
+    state: GenerationState;
+    response: { seed: number; phase: number; span: number };
+  }) => {
+    if (!(response.span > 0)) return;
+    magicThermalFeedback(state, response.span);
+    evaluateConfluences(state, response.seed, true, response.span);
+    stormWrites(state);
+    saltWrites(state);
+    hallowedWrites(state);
+    veilWrites(state, response.phase);
+    magicOnTheColumn(state, response.seed, response.span);
+  },
+  []
+);
 export function magicProcesses(
   systems: MagicSystem[] = [],
   confluences: MagicConfluence[] = []
 ): MapProcess[] {
   void confluences;
-  const actions: Record<string, (state: GenerationState, context: MapProcessContext) => void> = {
-    initialize: (state, context) => {
-      const bound = generationBindings(context);
-      initializeMagic(
-        state,
-        bound.features.selection["magic.configured"]?.enabled ?? bound.domains.includes("magic"),
-        bound.settings.magicSystems,
-        bound.settings.confluences
-      );
-    },
-    // Every evaluation re-applies the shared forcings of all systems, so a system evaluated
-    // in the other phase keeps its contribution and a changed one replaces its own.
-    climate: (state, context) => {
-      evaluateMagic(state, context, "climate", generationBindings(context).seed);
-      applySharedForcing(state, context.epochIndices[0] !== undefined);
-    },
-    rocks: (state, context) => {
-      if (context.epochIndices[0] !== undefined) magicRockFeedback(state);
-    },
-    // Both phases have run by now, so the meetings between systems are evaluated here and
-    // act on the ground once per epoch, before ecology responds and the coasts are cut.
-    "post-glacial": (state, context) => {
-      const seed = generationBindings(context).seed;
-      if (context.epochIndices[0] !== undefined) exchangeMagicWater(state);
-      evaluateMagic(state, context, "post-glacial", seed);
-      applySharedForcing(state, context.epochIndices[0] !== undefined);
-      coverSystems(state, seed);
-      // Meetings and ground writes act once per epoch. The present phase evaluates the
-      // systems and their forcing again but passes no time, so it writes no ground.
-      const epoch = context.epochIndices[0];
-      evaluateConfluences(state, seed, epoch !== undefined);
-      if (epoch === undefined) return;
-      stormWrites(state);
-      saltWrites(state);
-      hallowedWrites(state);
-      veilWrites(state, epoch);
-      magicOnTheColumn(state, seed, nativeContext(state, context, 0).Span);
-    },
-    coast: magicCoastalFeedback,
-    history: (state, context) => {
-      if (context.epochIndices[0] === undefined) return;
-      classifyMagicFeatures(state, generationBindings(context).seed);
-      recordWildZoneHistory(state, context);
-      retainMagicHistory(state, context);
-    },
-    classify: (state, context) => classifyMagicFeatures(state, generationBindings(context).seed),
-    project: projectMagic,
+  const climate = phaseReading("climate");
+  const postGlacial = phaseReading("post-glacial");
+  const classify = classifyCurrentMagic;
+  const actions: Record<string, MapOperation> = {
+    initialize: mapCommand(
+      "atlas.magic-initialize",
+      "initialize",
+      (state, context) => {
+        const bound = generationBindings(context);
+        runOperation(processOwner(state), initializeMagicWorkspace, {
+          state,
+          enabled:
+            bound.features.selection["magic.configured"]?.enabled ??
+            bound.domains.includes("magic"),
+          systems: bound.settings.magicSystems,
+          confluences: bound.settings.confluences,
+        });
+      },
+      []
+    ),
+    climate: phaseOperation("climate", climate),
+    rocks: mapWork(
+      "atlas.magic-rocks",
+      epochExposure,
+      (state, _context, exposure) => {
+        if (exposure > 0) magicRockFeedback(state);
+      },
+      []
+    ),
+    "post-glacial": phaseOperation("post-glacial", postGlacial),
+    coast: mapQuery(
+      "atlas.magic-coast",
+      (state, context) => {
+        executeMapOperation(evaluateSocietyMagic, state, context);
+        readOperation(state.physical!.map, coastalForcing, {
+          map: state.physical!.map,
+          context: nativeContext(state, context, 0),
+        });
+      },
+      []
+    ),
+    history: mapCommand(
+      "atlas.magic-history",
+      "event",
+      (state, context) => {
+        if (boundPhysicalEpoch(context) === undefined) return;
+        executeMapOperation(classify, state, context);
+        recordWildZoneHistory(state, context);
+        retainMagicHistory(state, context);
+      },
+      []
+    ),
+    classify,
+    project: publishCurrentMagic,
   };
-  return Object.entries(actions).map(([id, apply]) => ({
+  return Object.entries(actions).map(([id, operation]) => ({
     contract: {
       id: `atlas.magic-${id}`,
       version: "1",
@@ -233,20 +341,48 @@ export function magicProcesses(
       invalidates: [],
       workspaceOnly: id !== "project",
     },
-    behavior: magicBehavior(id, apply),
+    operation,
     validate: () => [],
   }));
 }
-function magicBehavior(
-  id: string,
-  operation: (state: GenerationState, context: MapProcessContext) => void
-): ProcessBehavior {
-  if (id === "initialize") return { kind: "initialize", initialize: operation };
-  if (id === "project") return { kind: "extract", extract: operation };
-  if (["climate", "rocks", "coast"].includes(id))
-    return { kind: "forcing-contributor", contribute: operation };
-  return { kind: "model-pass", applyPass: operation };
+const epochExposure = (state: GenerationState, context: MapProcessContext) =>
+  boundPhysicalEpoch(context) === undefined ? 0 : nativeContext(state, context, 0).Span;
+const phaseReading = (phase: string) =>
+  mapQuery(
+    `magic.current-${phase}`,
+    (state, context) => {
+      refreshFields(state, context, currentPhaseFields(state.physical!.magic!.fields, phase));
+      applySharedForcing(state);
+    },
+    []
+  );
+function phaseOperation(phase: string, current: ReturnType<typeof phaseReading>) {
+  return mapWork(
+    `atlas.magic-${phase}`,
+    epochExposure,
+    (state, context, exposure) => {
+      const seed = generationBindings(context).seed;
+      if (exposure > 0) {
+        if (phase === "post-glacial") runOperation(processOwner(state), exchangeMagicWater, state);
+        runOperation(processOwner(state), supplyPhaseOperation, { state, context, phase });
+      }
+      executeMapOperation(current, state, context);
+      if (phase !== "post-glacial") {
+        if (exposure > 0) applySharedForcing(state, exposure);
+        return;
+      }
+      if (exposure > 0) magicLivingFeedback(state, true);
+      coverSystems(state, seed);
+      if (exposure > 0)
+        runOperation(processOwner(state), reactMagicMaterial, {
+          state,
+          response: { seed, phase: nativeContext(state, context, 0).EpochIndex, span: exposure },
+        });
+    },
+    []
+  );
 }
+
 function magicRequirements(id: string, systems: MagicSystem[]) {
   if (id === "initialize") return ["atlas:workspace"];
   const required = ["atlas:workspace", "atlas:magic-initialize"];
@@ -273,31 +409,11 @@ function environmentalRequirements(id: string, systems: MagicSystem[]) {
   }
   if (id === "coast" && selected.some((system) => system.effects.coastalForcing !== 0))
     return ["field:WaterKindCodes", "field:OceanCurrentX"];
-  return id === "classify" ? systems.flatMap(conditionRequirements) : [];
+  return id === "classify" ? systems.flatMap(magicConditionRequirements) : [];
 }
 function systemRequirements(system: MagicSystem) {
   return system.origins.flatMap((origin) => [
     ...magicSourceStrategies[origin.source].requires,
     ...magicPropagationStrategies[origin.propagation].requires,
   ]);
-}
-function conditionRequirements(system: MagicSystem) {
-  const fields: Record<string, string[]> = {
-    elevation: ["field:Elevation"],
-    slope: ["field:Elevation"],
-    temperature: ["field:Temperature"],
-    ice: ["field:IceThickness"],
-    water: ["field:WaterKindCodes", "field:LakeOutletTargets"],
-    moisture: ["field:Moisture"],
-    geothermal: ["field:Geothermal"],
-    fracture: ["field:FractureConductance"],
-    landform: ["field:LandformCodes"],
-    river: ["field:RiverOrders"],
-    upwelling: ["field:OceanCurrentX"],
-  };
-  return effectiveMagicRules(system)
-    .flatMap((rule) => [...rule.seeds, ...(rule.retains ?? [])].flat())
-    .flatMap((condition) =>
-      Object.hasOwn(ecologyLabels, condition.field) ? ["ecology"] : (fields[condition.field] ?? [])
-    );
 }

@@ -119,8 +119,12 @@ export function accessibleDive(state: GenerationState, c: SocietyCommunity, limi
     x + distance,
     y + distance,
   ])) {
-    const depth = societyValue(state, "waterDepth", i);
-    if (societyValue(state, "water", i) !== 1 || depth < scale.length(0.0000125) || depth > limit)
+    const depth = MapScale.metres(societyValue(state, "WaterDepths", i), "native");
+    if (
+      societyValue(state, "WaterKindCodes", i) !== 1 ||
+      depth < scale.length(0.0000125) ||
+      depth > limit
+    )
       continue;
     const p = gridPosition(state.surface, i),
       d = Math.hypot(p.x - c.position.x, p.y - c.position.y);

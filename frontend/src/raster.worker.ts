@@ -49,7 +49,7 @@ async function tile(message: Extract<TileMessage, { kind: "tile" }>) {
   if (failure) return { request: message.request, error: failure };
   const raster = registrations.get(message.id)?.raster,
     started = performance.now();
-  if (raster?.channel !== "elevation" || !resources) return timed(process(message)!, 0, started);
+  if (raster?.channel !== "Elevation" || !resources) return timed(process(message)!, 0, started);
   try {
     const reader = await resources;
     const geography = await reader.tileGeography(raster, message.extent, message.size),

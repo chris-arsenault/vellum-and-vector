@@ -4,14 +4,14 @@ import { resourceRaster, type Raster, type ResourceRaster } from "./types";
 import { numericTileSource } from "./numericTiles";
 import { TileWorkerPool, type TileClient } from "./TileWorkerClient";
 import { renderingDiagnostics } from "./renderingDiagnostics";
-import type { GridSurface } from "@atlas/domain";
+import { fieldChannelName, type GridSurface } from "@atlas/domain";
 import { rasterGeographyKey, rasterIdentity } from "./rasterIdentity";
 
 function sameGrid(a?: GridSurface, b?: GridSurface): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
   const inputs = ["active", "bounds", "topology", "ocean", "overlays"] as const;
-  const channels = Object.keys(a.channels);
+  const channels = Object.keys(a.channels).map(fieldChannelName);
   return (
     inputs.every((key) => a[key] === b[key]) &&
     a.scope.footprint === b.scope.footprint &&

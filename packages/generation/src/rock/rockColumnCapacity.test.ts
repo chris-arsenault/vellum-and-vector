@@ -1,17 +1,11 @@
 import { expect, it } from "vitest";
+import type { Column } from "@atlas/domain";
 import { createMesh } from "../world/mesh";
 import { units } from "../world/math";
 import { createTestField } from "./groundTestFixture";
 import { rockCatalogue } from "./rockCatalogue";
 import { widenIncision } from "./groundIncision";
-import {
-  layDownPackage,
-  materialLayer,
-  readLayer,
-  setLayer,
-  stripRock,
-  type Column,
-} from "./rockColumn";
+import { layDownPackage, materialLayer, readLayer, setLayer, stripRock } from "./rockColumn";
 
 const { basalt, shale, sandstone, limestone, gneiss, tufa, rimerot } = rockCatalogue;
 function inherited(column: Column = "land") {

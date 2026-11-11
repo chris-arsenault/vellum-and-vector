@@ -27,14 +27,16 @@ test("reuses completed map resources while keeping each scenario copy independen
   await inspection.getByText(/^Stored values/).click();
   const elevation = inspection
     .getByRole("row")
-    .filter({ has: page.getByRole("rowheader", { name: "elevation", exact: true }) });
-  await expect(elevation.getByRole("cell").last()).toHaveText("metre");
+    .filter({ has: page.getByRole("rowheader", { name: "Elevation", exact: true }) });
+  await expect(elevation.getByRole("cell").last()).toHaveText("native-length");
   const index = Number(
     (await inspection.locator(".cell-data h3").first().innerText()).match(/^Cell (\d+)/)![1]
   );
   await expect(elevation.getByRole("cell").first()).toHaveText(String(index % 16));
   await inspection.getByRole("searchbox", { name: "Filter channels" }).fill("water");
-  await expect(inspection.getByRole("rowheader", { name: "water", exact: true })).toBeVisible();
+  await expect(
+    inspection.getByRole("rowheader", { name: "WaterKindCodes", exact: true })
+  ).toBeVisible();
   await expect(elevation).toHaveCount(0);
   await chooseOutline(page, "Only in this copy");
   await page.getByRole("button", { name: "Save map", exact: true }).click();

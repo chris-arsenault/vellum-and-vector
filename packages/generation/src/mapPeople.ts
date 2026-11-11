@@ -1,8 +1,12 @@
+import { mapCommand, executeMapOperation, processOwner } from "./processTraits";
+import { runOperation } from "./processOperation";
 import {
   gridPosition,
   KeyedHeap,
   semanticId,
   spatial,
+  MapScale,
+  requireChannel,
   type Entity,
   type Position,
 } from "@atlas/domain";
@@ -30,13 +34,17 @@ export function* landCells(state: GenerationState) {
 }
 export function suitability(state: GenerationState, i: number) {
   const grid = state.surface,
-    scale = mapScale(state);
-  const temperature = grid.channels.temperature?.get(i) ?? 15;
+    scale = mapScale(state),
+    elevation = requireChannel(grid, "Elevation");
+  const temperature = grid.channels.Temperature?.get(i) ?? 450;
   const rain =
-    (grid.channels.rainfall?.get(i) ?? scale.length(0.000000125)) / scale.length(0.00000025);
+    (grid.channels.Rainfall?.get(i) ?? MapScale.inUnits(scale.length(0.000000125), "mm")) /
+    MapScale.inUnits(scale.length(0.00000025), "mm");
   return (
-    (Math.exp(-Math.abs(temperature - 16) / 20) * (0.2 + Math.min(1, rain))) /
-    (1 + Math.max(0, grid.channels.elevation.get(i)) / scale.length(0.000375, 0.5))
+    (Math.exp(-Math.abs(temperature - 460) / 200) * (0.2 + Math.min(1, rain))) /
+    (1 +
+      Math.max(0, elevation.get(i) - (grid.channels.EffectiveSeaLevel?.get(i) ?? 0)) /
+        MapScale.inUnits(scale.length(0.000375, 0.5), "native"))
   );
 }
 export function centers(
@@ -110,28 +118,31 @@ export const culturalProcess: MapProcess = {
     parameters: {
       cultureCount: { type: "integer", unit: null, required: false, default: 3, minimum: 1 },
     },
-    requires: ["elevation"],
+    requires: ["Elevation"],
     produces: ["cultures"],
     invalidates: [],
   },
-  behavior: {
-    kind: "extract",
-    extract(state, context) {
-      if (state.society?.inherited) {
-        publishCultures(state);
-        return;
-      }
+  operation: publishCultures,
+  validate: () => [],
+};
+export const culturalDevelopmentProcess: MapProcess = {
+  contract: { ...culturalProcess.contract, id: "human.culture-development" },
+  operation: mapCommand(
+    "human.culture-development",
+    "event",
+    (state, context) => {
+      if (state.society?.inherited) return;
       const standalone = !state.society;
-      initializeCultures(state, context);
+      executeMapOperation(initializeCultures, state, context);
       bindSocietyProfile(state, context);
       const eras = context.inputs?.features
         ? presentEras(generationBindings(context).settings)
         : [];
       if (standalone)
         for (const era of eras)
-          diffuseCultures(
+          runOperation(processOwner(state), diffuseCultures, {
             state,
-            {
+            context: {
               ...context,
               epochs: [
                 {
@@ -142,11 +153,11 @@ export const culturalProcess: MapProcess = {
                 },
               ],
             },
-            era.years
-          );
-      publishCultures(state);
+            years: era.years,
+          });
     },
-  },
+    []
+  ),
   validate() {
     return [];
   },
@@ -159,28 +170,38 @@ export const politicalProcess: MapProcess = {
     parameters: {
       polityCount: { type: "integer", unit: null, required: false, default: 3, minimum: 1 },
     },
-    requires: ["elevation"],
+    requires: ["Elevation"],
     produces: ["politics"],
     invalidates: [],
   },
-  behavior: {
-    kind: "extract",
-    extract(state, context) {
-      if (state.society?.inherited) {
-        if (state.society.region.politics) publishPolitics(state);
-        return;
-      }
+  operation: mapCommand(
+    "human.politics",
+    "publish",
+    (state) => {
+      if (state.society?.region.politics) publishPolitics(state);
+    },
+    []
+  ),
+  validate: () => [],
+};
+export const politicalDevelopmentProcess: MapProcess = {
+  contract: { ...politicalProcess.contract, id: "human.politics-development" },
+  operation: mapCommand(
+    "human.politics-development",
+    "event",
+    (state, context) => {
+      if (state.society?.inherited) return;
       const standalone = !state.society?.region.politics;
-      initializePolitics(state, context);
+      executeMapOperation(initializePolitics, state, context);
       bindSocietyProfile(state, context);
       if (standalone) {
         const eras = context.inputs?.features
           ? presentEras(generationBindings(context).settings)
           : [];
         for (const era of eras)
-          evolvePolitics(
+          runOperation(processOwner(state), evolvePolitics, {
             state,
-            {
+            context: {
               ...context,
               epochs: [
                 {
@@ -191,11 +212,11 @@ export const politicalProcess: MapProcess = {
                 },
               ],
             },
-            era.years
-          );
+            years: era.years,
+          });
       }
-      publishPolitics(state);
     },
-  },
+    []
+  ),
   validate: () => [],
 };

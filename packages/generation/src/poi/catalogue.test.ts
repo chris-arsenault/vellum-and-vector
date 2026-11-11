@@ -64,7 +64,11 @@ it("has one page per group and one entry per kind, on its own group", () => {
 
 it("holds every entry to exactly the agreed roles and fields", () => {
   for (const entry of Object.values(poiCatalogue)) {
-    const { id, group, name, trueSize, variety, appearance, account, ...roles } = entry;
+    const { id, group, name, trueSize, variety, appearance, account, event, ...roles } = entry;
+    if (event) {
+      expect(event.accepts).toBeTypeOf("function");
+      expect(event.changes).toBeTypeOf("function");
+    }
     expect([id, group, name, trueSize, variety, appearance, account].every(Boolean)).toBe(true);
     expect(Object.keys(roles).sort()).toEqual(Object.keys(contract).sort());
     for (const [role, fields] of Object.entries(contract))

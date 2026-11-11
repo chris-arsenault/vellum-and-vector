@@ -1,6 +1,17 @@
 /* eslint-disable max-lines-per-function -- The browser worker fixture keeps its lifecycle in one closure. */
 import type { AtlasFeature, DomainSnapshot, Grid, Landmark, SocietyRegion } from "@atlas/domain";
-import { attachGrid, detachGrid, layerSupports } from "@atlas/domain";
+import {
+  attachGrid,
+  detachGrid,
+  layerSupports,
+  fieldChannelName,
+  canonicalPhysicalFields,
+  newBlock,
+  MapScale,
+  type FieldChannelName,
+  type SampleArray,
+  type SampleType,
+} from "@atlas/domain";
 import {
   atlasPublicationDefinitions,
   generationSnapshot,
@@ -16,6 +27,15 @@ import type {
   PublicationDefinition,
   GenerationDiagnostic,
 } from "@atlas/generation";
+
+const sampleTypes = new Map<string, SampleType>(
+  canonicalPhysicalFields().map(({ name, type }) => [name, type])
+);
+function suppliedSamples(name: FieldChannelName, values: Float64Array) {
+  const samples = newBlock(sampleTypes.get(name) ?? "float64", values.length);
+  samples.set(values);
+  return samples;
+}
 
 function fixturePublications(
   input: GenerationWorkspaceStart["input"],
@@ -202,53 +222,62 @@ export function installGenerationFixtureRuntime({
               if (!ecologicalFeatures.length) return i % size < 8 ? 10 : 14;
               return i % size < 5 ? 10 : i % size < 11 ? 7 : 15;
             };
-            const channels: Record<string, Float64Array> = {};
+            const channels: Partial<Record<FieldChannelName, SampleArray>> = {};
             // Without fields the fixture publishes features and society only: no raster map.
-            const fixtureChannels = !fields
+            const fixtureChannels: FieldChannelName[] = !fields
               ? []
               : [
-                  "elevation",
-                  "temperature",
-                  "flow",
-                  "water",
+                  "Elevation",
+                  "BaseSeaLevel",
+                  "EffectiveSeaLevel",
+                  "Temperature",
+                  "FlowAccumulation",
+                  "WaterKindCodes",
                   "naturalSurface",
                   "finalSurface",
-                  "surfaceMaterial",
-                  "bedrock",
-                  "sediment",
-                  "rock",
-                  "province",
-                  "continentalFraction",
-                  "fracture",
-                  "geothermal",
-                  "impactExcavation",
-                  "volcanicConstruction",
-                  "glacialErosion",
-                  "glacialDeposition",
-                  "coastalErosion",
-                  "deposition",
-                  ...(life ? ["biome", "treeCover", "broadleafSaplings", "soilWater"] : []),
+                  "SurfaceMaterial",
+                  "BedrockElevation",
+                  "SedimentThickness",
+                  "RockResistance",
+                  "CrustProvinceIds",
+                  "CrustThickness",
+                  "MarginCodes",
+                  "CrustContinentalFraction",
+                  "FractureConductance",
+                  "Geothermal",
+                  "ImpactExcavation",
+                  "VolcanicConstructionHistory",
+                  "CumulativeGlacialErosion",
+                  "CumulativeGlacialDeposition",
+                  "CumulativeCoastalErosion",
+                  "CumulativeDeposition",
+                  ...(life
+                    ? (["BiomeCodes", "TreeCover", "BroadleafSaplings", "SoilWater"] as const)
+                    : []),
                   ...snapshot.world.magicSystems!.flatMap((system) => [
-                    `magic:${system.id}:history`,
-                    `magic:${system.id}:coastalHistory`,
+                    `magic:${system.id}:history` as const,
+                    `magic:${system.id}:coastalHistory` as const,
                   ]),
                 ];
             for (const name of fixtureChannels) {
               if (!fieldPublications.has(name))
                 throw new Error(`Register a publication descriptor for fixture channel ${name}.`);
-              channels[name] = Float64Array.from({ length: size * size }, (_, i) => {
+              const values = Float64Array.from({ length: size * size }, (_, i) => {
                 const physical = physicalFixtureValue(name, i, size);
                 if (physical !== undefined) return physical;
-                if (name === "surfaceMaterial") return i % size < size / 2 ? 19 : 20;
-                if (name === "biome") return biomeAt(i);
-                if (name === "treeCover") return 0.7;
-                if (name === "broadleafSaplings") return 0.1;
-                if (name === "soilWater") return 0.08;
-                if (name !== "elevation" || !terrain) return i % size;
+                if (name === "SurfaceMaterial") return i % size < size / 2 ? 19 : 20;
+                if (name === "BiomeCodes") return biomeAt(i);
+                if (name === "TreeCover") return 0.7;
+                if (name === "BroadleafSaplings") return 0.1;
+                if (name === "SoilWater") return 0.08;
+                if (name !== "Elevation" || !terrain) return i % size;
                 const x = (i % size) / (size - 1),
                   y = Math.floor(i / size) / (size - 1);
-                return -500 + 2400 * Math.exp(-8 * ((x - 0.6) ** 2 + (y - 0.6) ** 2));
+                return MapScale.native(
+                  -500 + 2400 * Math.exp(-8 * ((x - 0.6) ** 2 + (y - 0.6) ** 2))
+                );
               });
+              channels[name] = suppliedSamples(name, values);
             }
             const surface = attachGrid({
               id: "browser-fixture",
@@ -262,10 +291,16 @@ export function installGenerationFixtureRuntime({
               ),
               channels,
               units: Object.fromEntries(
-                Object.keys(channels).map((name) => [name, fieldPublications.get(name)!.unit])
+                Object.keys(channels).map((name) => [
+                  name,
+                  fieldPublications.get(fieldChannelName(name))!.unit,
+                ])
               ),
               quantities: Object.fromEntries(
-                Object.keys(channels).map((name) => [name, fieldPublications.get(name)!.quantity])
+                Object.keys(channels).map((name) => [
+                  name,
+                  fieldPublications.get(fieldChannelName(name))!.quantity,
+                ])
               ),
             }) as Grid;
             const result: CompletedBoundary = {
@@ -326,23 +361,28 @@ export function installGenerationFixtureRuntime({
       return worker;
     },
   });
-  function physicalFixtureValue(name: string, i: number, size: number) {
-    const values: Record<string, number> = {
-      water: 0,
-      impactExcavation: 0,
-      volcanicConstruction: 0,
-      glacialErosion: 0,
-      glacialDeposition: 0,
-      coastalErosion: 0,
-      deposition: 0,
-      geothermal: 0,
-      province: 0,
-      rock: 1,
-      continentalFraction: 1,
-      fracture: 1,
-      sediment: 0,
+  function physicalFixtureValue(name: FieldChannelName, i: number, size: number) {
+    const values: Partial<Record<FieldChannelName, number>> = {
+      WaterKindCodes: 0,
+      BaseSeaLevel: 0,
+      EffectiveSeaLevel: 0,
+      Temperature: 450,
+      ImpactExcavation: 0,
+      VolcanicConstructionHistory: 0,
+      CumulativeGlacialErosion: 0,
+      CumulativeGlacialDeposition: 0,
+      CumulativeCoastalErosion: 0,
+      CumulativeDeposition: 0,
+      Geothermal: 0,
+      CrustProvinceIds: 0,
+      CrustThickness: MapScale.native(30_000),
+      MarginCodes: 0,
+      RockResistance: 4000,
+      CrustContinentalFraction: 1000,
+      FractureConductance: 1000,
+      SedimentThickness: 0,
     };
-    if (name === "bedrock") return i % size;
+    if (name === "BedrockElevation") return i % size;
     if (Object.hasOwn(values, name)) return values[name];
     return undefined;
   }

@@ -4,6 +4,8 @@ import { nativeIndexAtSurface } from "./world/atlasWorkspace";
 import { withRouteFinder, type RouteFinder } from "./mapRouting";
 import { meshDeltaX } from "./world/mesh";
 import type { PhysicalField } from "./world/field";
+import { defineCommand } from "./processOperation";
+import type { SocietyInput } from "./societyOperation";
 
 /**
  * What people leave on the ground, written to the mesh at the end of every society cycle as
@@ -12,7 +14,13 @@ import type { PhysicalField } from "./world/field";
  * cycle of net population fall at a community (mass death). Society-sourced magic is made of
  * these; nothing here is a magic field of its own.
  */
-export function recordSocietyOnMesh(state: GenerationState, years: number) {
+export const recordSocietyOnMesh = defineCommand(
+  "human.ground-record",
+  "elapsed",
+  ({ state, years }: SocietyInput) => record(state, years),
+  []
+);
+function record(state: GenerationState, years: number) {
   if (!state.physical || !state.society || years <= 0) return;
   decayMaintainedGround(state.physical.map, years);
   const deaths = recordSeats(state, years) + recordEvents(state);

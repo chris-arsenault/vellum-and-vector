@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { fieldChannelName } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 import type { FieldStyle, World } from "./types";
 import { categoryPalette, fieldLabel, palettes } from "./rasterPresentation";
@@ -32,7 +33,7 @@ function OverlayRow(props: RowProps) {
   const disclosure = useRef<HTMLDetailsElement>(null);
   const name = fieldLabel(editor.world, field.channel);
   const data = (editor.raster.data ?? []).filter((r) => r.channel === field.channel);
-  const unit = data[0]?.field.units[field.channel] ?? "";
+  const unit = data[0]?.field.units[fieldChannelName(field.channel)] ?? "";
   const editing = target === `field:${field.channel}`;
   useEffect(() => {
     if (editing && disclosure.current) disclosure.current.open = true;

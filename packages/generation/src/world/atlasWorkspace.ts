@@ -1,8 +1,12 @@
 import { setRockStrength } from "../rock/rockField";
-import { finishGroundImport, groundResourceArea, importGroundBand } from "../rock/groundResources";
+import { finishGroundImport, importGroundBand } from "../rock/groundResources";
 import { looseTo, standGround } from "../rock/groundLedger";
 import {
   gridSampler,
+  requireChannel,
+  type FieldChannelName,
+  requireThat,
+  fillBand,
   interpolateSample,
   fieldInterpolator,
   sweepBudget,
@@ -33,13 +37,12 @@ export { refreshWorkspaceSamples } from "./atlasSurfaceProjection";
 import { atlasPhysicalProfile, atlasQuality } from "./atlasProfile";
 import { generationResolution } from "../resolution";
 import type { PhysicalProfileOverrides } from "../physicalProfileConfiguration";
-import { atlasChannels, type ChannelBinding } from "./atlasChannels";
+import { physicalChannels, type PhysicalChannel } from "./atlasChannels";
 import type { PhysicalProfile } from "./profile";
-import { units } from "./math";
 import type { AtlasParameters } from "../atlasParameters";
 import { mapBoundaryValue } from "../atlasParameters";
 import { releaseWorking, retainedArray } from "./physicalNumerics";
-import { groundResourceBindings } from "../rock/groundResources";
+import { groundResourceChannels } from "../rock/groundResources";
 import { importMaterialCargo } from "../rock/groundCargoResources";
 import { fieldSampleIndex } from "@atlas/domain";
 
@@ -59,10 +62,10 @@ export interface AtlasPhysicalWorkspace {
   grid: Coverage;
   interpolation?: ProjectionInterpolation;
   interpolationKey?: string;
-  fixed: { binding: ChannelBinding; values: Band }[];
+  fixed: { binding: PhysicalChannel; values: Band }[];
   inherited: boolean;
 }
-export function nativePosition(work: AtlasPhysicalWorkspace, i: number): Position {
+export function nativePosition(work: Pick<AtlasPhysicalWorkspace, "map">, i: number): Position {
   return {
     x: work.map.mesh.origin[0] + work.map.mesh.x(i),
     y: work.map.mesh.origin[1] + work.map.mesh.y(i),
@@ -121,17 +124,21 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
   const map = work.map,
     parent = parentChannels(state),
     surface = state.surface;
-  const datum = surface.channels.seaDatum?.get(0) ?? 0;
+  requireThat(
+    surface.channels.BaseSeaLevel && surface.channels.EffectiveSeaLevel,
+    "physical_datum",
+    "Captured physical fields require their canonical sea levels."
+  );
   map.OpenBoundary = true;
-  map.BaseSeaLevel = units(datum);
-  map.EffectiveSeaLevel = map.BaseSeaLevel;
+  map.BaseSeaLevel = surface.channels.BaseSeaLevel.get(0);
+  map.EffectiveSeaLevel = surface.channels.EffectiveSeaLevel.get(0);
   map.SeaLevelInitialized = true;
-  const imported = inheritChannels(surface, work, parent, datum);
+  const imported = inheritChannels(surface, work, parent);
   map.CrustSupportInitialized = true;
   // The parent formed this crust; here it is only carried on.
   map.CrustFormed = true;
   finishGroundImport(map, imported);
-  const material = parent.get("rockLayer0") ?? surface;
+  const material = parent.get("RockLayerKind0") ?? surface;
   if (material.materialCargo)
     importMaterialCargo(map, material.materialCargo, (cell) =>
       fieldSampleIndex(material, nativePosition(work, cell))
@@ -143,64 +150,55 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
   );
   map.SedimentDepositedTotal = map.SedimentProducedTotal;
 }
-function inheritChannels(
-  surface: Grid,
-  work: AtlasPhysicalWorkspace,
-  parent: Map<string, Grid>,
-  datum: number
-) {
-  const map = work.map,
-    imported = new Set<PhysicalBufferName>(),
-    area = groundResourceArea(map),
-    material = parent.get("rockLayer0") ?? surface,
-    materialNames = new Set(groundResourceBindings.map((binding) => binding.name));
-  for (const binding of atlasChannels) {
-    const grid = materialNames.has(binding.name) ? material : (parent.get(binding.name) ?? surface);
-    if (!grid.channels[binding.name]) continue;
-    imported.add(binding.native);
-    if (binding.global) inheritGlobal(map, grid, binding, area);
-    else inheritLocal(work, grid, binding, datum);
+function inheritChannels(surface: Grid, work: AtlasPhysicalWorkspace, parent: Map<string, Grid>) {
+  const imported = new Set<PhysicalBufferName>(),
+    material = parent.get("RockLayerKind0") ?? surface,
+    materialNames = new Set(groundResourceChannels.map(({ name }) => name));
+  for (const channel of physicalChannels) {
+    const grid = materialNames.has(channel.name) ? material : (parent.get(channel.name) ?? surface);
+    if (!grid.channels[channel.name]) continue;
+    imported.add(channel.name);
+    inheritLocalChannel(work, grid, channel);
   }
   return imported;
 }
-function inheritGlobal(map: PhysicalField, grid: Grid, binding: ChannelBinding, area: number) {
-  let sample = 0;
-  while (sample < grid.active.length && !grid.active.get(sample)) sample++;
-  if (sample === grid.active.length) return;
-  const value = inheritedValue(grid.channels[binding.name].get(sample), binding),
-    amount = (value / binding.scale) * (binding.areaDensity ? area : 1);
-  if (isMutablePhysicalName(binding.native)) map[binding.native].set(0, amount);
-  else importGroundBand(map, binding.native, (cell) => (cell === 0 ? amount : 0));
-}
-function inheritLocal(
+/** Sample the same quantity into child-owned bands; only represented area can change an amount. */
+export function inheritLocalChannel(
   work: AtlasPhysicalWorkspace,
   grid: Grid,
-  binding: ChannelBinding,
-  datum: number
+  channel: PhysicalChannel
 ) {
   const map = work.map,
+    band = map[channel.name],
+    values = requireChannel(grid, channel.name),
+    extensive = channel.quantity === "extensive",
+    density = extensive
+      ? fillBand(grid.coverage.scratch("float64", "inherit:area-density", values.length), (cell) =>
+          grid.measures.get(cell) > 0 ? values.get(cell) / grid.measures.get(cell) : 0
+        )
+      : undefined,
+    source = density ? { ...grid, channels: { ...grid.channels, [channel.name]: density } } : grid,
     valueAt = fieldInterpolator(
-      grid,
-      binding.name,
-      binding.unit === "category" || binding.discrete === true,
+      source,
+      channel.name,
+      channel.quantity === "category" || channel.discrete === true,
       undefined,
-      sweepBudget(grid)
-    ),
-    band = map[binding.native],
-    integer = band.type === "int32";
-  const sample = (i: number) => {
-    const value = inheritedValue(valueAt(nativePosition(work, i)), binding),
-      native =
-        ((value - (binding.offset ?? 0) + (binding.datum ? datum : 0)) / binding.scale) *
-        (binding.areaDensity ? map.mesh.area(i) : 1);
-    return integer ? Math.round(native) : native;
+      sweepBudget(source)
+    );
+  const sample = (cell: number) => {
+    const value = inheritedValue(
+      valueAt(nativePosition(work, cell)) * (extensive ? map.mesh.area(cell) : 1),
+      channel
+    );
+    return band.type === "int32" ? Math.round(value) : value;
   };
-  if (isMutablePhysicalName(binding.native))
-    for (let i = 0; i < map.mesh.count; i++) map[binding.native].set(i, sample(i));
-  else importGroundBand(map, binding.native, sample);
+  if (isMutablePhysicalName(channel.name))
+    for (let cell = 0; cell < map.mesh.count; cell++) map[channel.name].set(cell, sample(cell));
+  else importGroundBand(map, channel.name, sample);
+  if (density) grid.coverage.release(density);
 }
 /** Reconstructed field edges can overshoot; imported stocks/fractions retain their meaning. */
-function inheritedValue(value: number, binding: ChannelBinding) {
+function inheritedValue(value: number, binding: PhysicalChannel) {
   return Math.max(binding.minimum ?? -Infinity, Math.min(binding.maximum ?? Infinity, value));
 }
 function fixedInheritedBoundary(state: GenerationState, work: AtlasPhysicalWorkspace) {
@@ -212,14 +210,14 @@ function fixedInheritedBoundary(state: GenerationState, work: AtlasPhysicalWorks
   const interior = spatial.buffer(footprint, -margin);
   for (let i = 0; i < values.length; i++)
     if (!interior || !spatial.covers(interior, point(nativePosition(work, i))))
-      values.set(i, work.map.Elevation.get(i) - work.map.BaseSeaLevel);
-  work.fixed.push({ binding: atlasChannels[0], values });
+      values.set(i, work.map.Elevation.get(i));
+  work.fixed.push({ binding: physicalChannels[0], values });
 }
 function fixedSamples(
   work: AtlasPhysicalWorkspace,
   source: Grid,
   footprint: Grid["scope"]["footprint"],
-  binding: ChannelBinding
+  binding: PhysicalChannel
 ) {
   const values = retainedArray(work.map, "float64", `authored:${binding.name}`).fill(NaN);
   const covers = spatial.pointCoverage(footprint),
@@ -229,11 +227,11 @@ function fixedSamples(
       binding.name,
       binding.unit === "category" || binding.discrete === true
     ),
-    integer = work.map[binding.native].type === "int32";
+    integer = work.map[binding.name].type === "int32";
   for (let i = 0; i < values.length; i++) {
     const position = nativePosition(work, i);
     if (!covers(position) || !sourceCovers(position)) continue;
-    const value = (valueAt(position) - (binding.offset ?? 0)) / binding.scale;
+    const value = valueAt(position);
     values.set(i, integer ? Math.round(value) : value);
   }
   return values;
@@ -243,7 +241,7 @@ function fixedAuthoring(state: GenerationState, work: AtlasPhysicalWorkspace) {
     if (authority.spaceId && authority.spaceId !== state.domain.scope.spaceId) continue;
     const source = authority.source;
     if (!source) throw new Error("Load authored numerical inputs before generation.");
-    for (const binding of atlasChannels.filter((binding) =>
+    for (const binding of physicalChannels.filter((binding) =>
       authority.channels?.includes(binding.name)
     )) {
       if (!source.channels[binding.name]) continue;
@@ -313,7 +311,7 @@ export function createAtlasWorkspace(
     samples: state.surface.coverage.scratch("int32", "physical:samples", 0),
     grid: state.surface.coverage,
     fixed: [],
-    inherited: Boolean(state.surface.channels.elevation),
+    inherited: Boolean(state.surface.channels.Elevation),
   };
   if (work.inherited) inheritNumerical(state, work);
   refreshWorkspaceSamples(state, work);
@@ -338,18 +336,22 @@ export function composeNativeAuthoring(work: AtlasPhysicalWorkspace) {
     for (let i = 0; i < values.length; i++) {
       const fixed = values.get(i);
       if (!Number.isFinite(fixed)) continue;
-      const value = fixed + (binding.datum ? map.BaseSeaLevel : 0);
-      if (binding.native === "Elevation") standGround(map, i, value, "authored");
-      else if (binding.native === "BedrockElevation")
+      const value = fixed;
+      if (binding.name === "Elevation") standGround(map, i, value, "authored");
+      else if (binding.name === "BedrockElevation")
         standGround(map, i, value + map.SedimentThickness.get(i), "authored");
-      else if (binding.native === "RockResistance") setRockStrength(map, i, value);
-      else if (binding.native === "SedimentThickness") looseTo(map, i, value, "authored");
-      else if (isMutablePhysicalName(binding.native)) map[binding.native].set(i, value);
+      else if (binding.name === "RockResistance") setRockStrength(map, i, value);
+      else if (binding.name === "SedimentThickness") looseTo(map, i, value, "authored");
+      else if (isMutablePhysicalName(binding.name)) map[binding.name].set(i, value);
       else throw new Error(`Authored ground field ${binding.name} needs a material operation.`);
     }
   }
 }
-export function sampleSurfaceAtNative(state: GenerationState, name: string, i: number): number {
+export function sampleSurfaceAtNative(
+  state: GenerationState,
+  name: FieldChannelName,
+  i: number
+): number {
   const work = state.physical!;
   return interpolateSample(state.surface, name, nativePosition(work, i));
 }

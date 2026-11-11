@@ -1,10 +1,16 @@
-import type { SocietyCommunity, SocietyConnection, SocietyPolity } from "@atlas/domain";
+import {
+  MapScale,
+  type SocietyCommunity,
+  type SocietyConnection,
+  type SocietyPolity,
+} from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import { nearestSample } from "./societySpatial";
-import { dryLand } from "./societySupport";
+import { dryLand, societyValue } from "./societySupport";
 import { profileOf } from "./societyProfile";
 import { wayClasses, wornCost } from "./societyWays";
 import { mapScale } from "./worldSignificance";
+import { mapCommand } from "./processTraits";
 
 /**
  * Grand highways are built, not worn. A strong polity raises one along a way its traffic has
@@ -33,13 +39,13 @@ function openLine(state: GenerationState, a: SocietyCommunity, b: SocietyCommuni
         y: a.position.y + (b.position.y - a.position.y) * t,
       });
     if (i < 0 || !dryLand(state, i)) return false;
-    if ((channels.slope?.get(i) ?? 0) > openCountry.slope) return false;
-    if ((channels.treeCover?.get(i) ?? 0) > openCountry.trees) return false;
-    const z = channels.elevation.get(i);
+    if ((channels.Slope?.get(i) ?? 0) > openCountry.slope) return false;
+    if ((channels.TreeCover?.get(i) ?? 0) > openCountry.trees) return false;
+    const z = societyValue(state, "Elevation", i);
     low = Math.min(low, z);
     high = Math.max(high, z);
   }
-  return high - low <= mapScale(state).length(openCountry.relief, 0.5);
+  return high - low <= MapScale.inUnits(mapScale(state).length(openCountry.relief, 0.5), "native");
 }
 function polityOf(state: GenerationState, id: string) {
   const politics = state.society!.region.politics;
@@ -97,9 +103,10 @@ function raiseHighway(
   );
 }
 /** Raise the highways the cycle's conditions allow; returns how many were raised. */
-export function raiseHighways(state: GenerationState, context: MapProcessContext) {
+export const raiseHighways = mapCommand("human.highways", "event", raise, []);
+function raise(state: GenerationState, context: MapProcessContext) {
   const region = state.society!.region;
-  if (!region.politics) return 0;
+  if (!region.politics) return;
   const { capacity, era } = eraOf(context);
   const communities = new Map(region.communities.map((c) => [c.id, c]));
   const built = highwaysBuilt(region.connections);
@@ -117,7 +124,6 @@ export function raiseHighways(state: GenerationState, context: MapProcessContext
     raised++;
   }
   if (raised) recordHighways(context, region.connections, raised, era);
-  return raised;
 }
 function recordHighways(
   context: MapProcessContext,

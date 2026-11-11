@@ -7,6 +7,7 @@ import { requireThat } from "./errors";
 import { sameValue } from "./values";
 import type { Value } from "./schemas";
 import { requireValueRecord } from "./layerAttributes";
+import { MapScale } from "./mapScale";
 
 const stations = [
   "elevations",
@@ -41,11 +42,14 @@ function fallbackProfile(
   channel: string,
   input: Record<string, Value>
 ) {
-  if (channel === "elevations") return sampleFields(snapshot, p).elevation ?? null;
+  if (channel === "elevations") {
+    const value = sampleFields(snapshot, p).Elevation;
+    return value === undefined ? null : MapScale.metres(value, "native");
+  }
   if (channel === "discharges")
     return typeof input.discharge === "number"
       ? input.discharge
-      : (sampleFields(snapshot, p).flow ?? null);
+      : (sampleFields(snapshot, p).FlowAccumulation ?? null);
   return null;
 }
 export function featureAttributes(

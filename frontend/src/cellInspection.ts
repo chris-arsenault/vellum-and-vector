@@ -4,6 +4,8 @@ import {
   gridCellBounds,
   gridPosition,
   spatial,
+  requireChannel,
+  channelUnit,
   type Bounds,
   type GridSurface,
   type Position,
@@ -48,7 +50,7 @@ export interface CellInspection {
 
 /** Read the owning stored sample; never interpolate its value or average a polygon. */
 export function inspectStoredCell(
-  grid: GridSurface,
+  grid: GridSurface<string>,
   position: Position,
   channel: string
 ): InspectedCell | null {
@@ -74,17 +76,17 @@ export function inspectStoredCell(
   };
 }
 
-function coveredCell(grid: GridSurface, p: Position) {
+function coveredCell(grid: GridSurface<string>, p: Position) {
   const covered = spatial.pointCoverage(grid.scope.footprint),
     width = grid.periodicWidth ?? 0;
   return [0, -width, width].some((shift) => covered({ ...p, x: p.x + shift }));
 }
 
-function storedValue(grid: GridSurface, channel: string, index: number): CellValue {
+function storedValue(grid: GridSurface<string>, channel: string, index: number): CellValue {
   return {
     channel,
-    value: grid.channels[channel].get(index),
-    unit: grid.units[channel],
+    value: requireChannel(grid, channel).get(index),
+    unit: channelUnit(grid, channel),
     quantity: grid.quantities?.[channel] ?? "intensive",
     fieldId: "",
     resourceId: "",
@@ -92,7 +94,7 @@ function storedValue(grid: GridSurface, channel: string, index: number): CellVal
   };
 }
 
-function storedIndex(grid: GridSurface, p: Position) {
+function storedIndex(grid: GridSurface<string>, p: Position) {
   const [w, s, e, n] = grid.bounds;
   if (p.x < w || p.x > e || p.y < s || p.y > n) return -1;
   if (grid.topology) return adaptiveLeafAt(grid.topology, p.x, p.y);

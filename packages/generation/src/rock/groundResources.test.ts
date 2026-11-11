@@ -1,34 +1,35 @@
 import { expect, it } from "vitest";
-import { residentBand } from "@atlas/domain";
+import { residentBand, type FieldChannelName } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { atlasPhysicalProfile } from "../world/atlasProfile";
 import { projectNative } from "../world/atlasProjection";
-import { atlasChannels } from "../world/atlasChannels";
+import { runOperation } from "../processOperation";
+import { processOwner } from "../processTraits";
+import { physicalChannels } from "../world/atlasChannels";
 import type { PhysicalBufferName } from "../world/field";
 import { createTestField as createField } from "./groundTestFixture";
 import { createMesh } from "../world/mesh";
-import { finishGroundImport, groundResourceBindings } from "./groundResources";
-import { allColumnFields, allColumnIntegerFields, columnFields } from "./rockLayerFields";
+import { finishGroundImport, groundResourceChannels } from "./groundResources";
+import { allColumnFields, allColumnIntegerFields, columnFields } from "@atlas/domain";
 import { readLayer, setLayer } from "./rockColumn";
 import { rockCatalogue } from "./rockCatalogue";
 import { refinementReads } from "../regional/capture";
 
-it("publishes every material field once with its own units and public land channel names", () => {
-  const byNative = new Map(groundResourceBindings.map((binding) => [binding.native, binding]));
-  expect(byNative.size).toBe(groundResourceBindings.length);
-  expect(new Set(groundResourceBindings.map(({ name }) => name)).size).toBe(byNative.size);
+it("publishes every material field under its working identifier and units", () => {
+  const byNative = new Map(groundResourceChannels.map((channel) => [channel.name, channel]));
+  expect(byNative.size).toBe(groundResourceChannels.length);
   for (const name of allColumnFields) expect(byNative.has(name)).toBe(true);
   for (const name of allColumnIntegerFields) expect(byNative.get(name)?.unit).toBe("category");
-  expect(byNative.get(columnFields.land.kind[0])?.name).toBe("rockLayer0");
+  expect(byNative.get(columnFields.land.kind[0])?.name).toBe("RockLayerKind0");
   expect(byNative.get(columnFields.land.depth[0])).toMatchObject({
-    name: "rockDepth0",
-    scale: 1 / 1024,
+    name: "RockLayerDepth0",
+    unit: "native-length",
   });
-  expect(byNative.get(columnFields.cut.formedMin[0])).toMatchObject({ unit: "epoch", scale: 1 });
+  expect(byNative.get(columnFields.cut.formedMin[0])).toMatchObject({ unit: "epoch" });
   expect(byNative.get("SeaLoadVolume")).toMatchObject({
-    global: false,
-    areaDensity: true,
-    scale: 1,
+    unit: "cubic-metre",
+    quantity: "extensive",
+    discrete: true,
   });
   const { domain } = landscape();
   domain.world.fields.push({
@@ -39,10 +40,10 @@ it("publishes every material field once with its own units and public land chann
     algorithm: "supplied",
     source: { kind: "operation", id: "supplied" },
     input: true,
-    channels: groundResourceBindings.map(({ name }) => name),
+    channels: groundResourceChannels.map(({ name }) => name),
   });
   expect(refinementReads(domain, domain.scope.areaId)[0].names).toEqual(
-    groundResourceBindings.map(({ name }) => name)
+    groundResourceChannels.map(({ name }) => name)
   );
 });
 
@@ -65,7 +66,7 @@ it("reconstructs projections from supplied facet material without overwriting it
   map.Elevation.set(0, 99_000);
   map.SedimentThickness.set(0, 7000);
   map.RockResistance.set(0, 999);
-  finishGroundImport(map, new Set(atlasChannels.map(({ native }) => native)));
+  finishGroundImport(map, new Set(physicalChannels.map(({ name }) => name)));
   expect(map.SedimentThickness.get(0)).toBe(65);
   expect(map.Elevation.get(0)).toBe(10_065);
   expect(map.RockResistance.get(0)).toBeLessThan(1500);
@@ -98,7 +99,7 @@ it("rejects incomplete material input without synthesizing missing layers or his
   expect(() => finishGroundImport(map, imported)).toThrow("complete current-format");
 });
 
-it("publishes local sea cargo and carrier volumes as area densities", () => {
+it("publishes local sea cargo and carrier volumes for each represented area", () => {
   const state = landscape(),
     map = createField(createMesh(4, 0)),
     active = Array.from({ length: map.mesh.count }, (_, cell) => cell).filter(
@@ -121,17 +122,24 @@ it("publishes local sea cargo and carrier volumes as area densities", () => {
     map.GroundLoadVolume.set(cell, map.mesh.area(cell) * 1.5);
     map.RockLayerFormedMin0.set(cell, 7);
   }
-  projectNative(state, false, false, groundResourceBindings, new Set());
-  expect(Array.from(state.surface.channels.SeaLoadVolume)).toEqual(
-    Array.from(state.surface.active, (_, cell) => active[cell % active.length] + 1)
+  runOperation(processOwner(state), projectNative, {
+    state,
+    channels: groundResourceChannels,
+    selectedChannels: new Set<FieldChannelName>(),
+  });
+  expect(Array.from(state.surface.channels.SeaLoadVolume!)).toEqual(
+    Array.from(
+      state.surface.active,
+      (_, cell) => (active[cell % active.length] + 1) * state.surface.measures.get(cell)
+    )
   );
-  expect(Array.from(state.surface.channels.SeaLoadKind)).toEqual(
+  expect(Array.from(state.surface.channels.SeaLoadKind!)).toEqual(
     Array.from(state.surface.active, (_, cell) =>
       active[cell % active.length] % 2 ? rockCatalogue.granite.code : rockCatalogue.shale.code
     )
   );
-  expect(Array.from(state.surface.channels.GroundLoadVolume)).toEqual(
-    Array(state.surface.active.length).fill(1.5)
+  expect(Array.from(state.surface.channels.GroundLoadVolume!)).toEqual(
+    Array.from(state.surface.active, (_, cell) => 1.5 * state.surface.measures.get(cell))
   );
-  expect(state.surface.channels.RockLayerFormedMin0.get(0)).toBe(7);
+  expect(state.surface.channels.RockLayerFormedMin0!.get(0)).toBe(7);
 });

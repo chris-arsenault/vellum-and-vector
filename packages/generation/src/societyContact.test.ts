@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { putChannel, residentBand, type PopulationGroup } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import type { MapProcessContext } from "./process";
-import { initializePopulation } from "./societyPopulation";
+import { supplySociety } from "./societyTestFixture";
 import { communityReach, contactCosts, languageOverlap } from "./societyContact";
 
 const speaker = (language: string): PopulationGroup => ({
@@ -26,9 +26,9 @@ function fixture() {
   state.domain.world.areas.area.profile = "local";
   putChannel(
     state.surface,
-    "elevation",
-    "metre",
-    residentBand("float64", new Float64Array(10).fill(100))
+    "Elevation",
+    "native-length",
+    residentBand("float64", new Float64Array(10).fill(102400))
   );
   const context: MapProcessContext = {
     scope: state.domain.scope,
@@ -42,7 +42,7 @@ function fixture() {
     random: () => 0.5,
     cancelled: () => false,
   };
-  initializePopulation(state, context);
+  supplySociety(state);
   const region = state.society!.region;
   region.communities = region.communities.slice(0, 3);
   state.society!.owner.fill(0);

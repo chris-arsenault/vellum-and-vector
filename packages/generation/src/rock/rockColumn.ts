@@ -1,4 +1,12 @@
 import type { Band } from "@atlas/domain";
+import {
+  columnFields,
+  materialProperties,
+  rockLayerDepths,
+  rockLayerKinds,
+  type Column,
+  type MaterialProperty,
+} from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import type { FlowCause } from "../coupling/flows";
 import { rockCatalogue, type RockKind } from "./rockCatalogue";
@@ -10,19 +18,11 @@ import { finiteSlice } from "./materialCargo";
 import { aggregateCargo } from "./materialCargo";
 export { finiteSlice } from "./materialCargo";
 import {
-  allColumnFields,
   bindColumnBands,
   blendLayers,
-  columnFields,
   materialLayer,
-  materialProperties,
   materialSnapshot,
-  rockLayerDepths,
-  rockLayerKinds,
-  rockLayers,
   writeMaterial,
-  type Column,
-  type MaterialProperty,
   type LayerBands,
   type MaterialLayer,
   type MaterialState,
@@ -32,7 +32,6 @@ import {
  * Bounded strata on the field's own bands. Material state travels with each bed. Land and cut
  * columns have an unbounded basement; their loose covers are finite. Placement belongs to Ground.
  */
-export { rockLayers, allColumnFields, columnFields, type Column };
 export {
   bindMaterialReader,
   materialLayer,

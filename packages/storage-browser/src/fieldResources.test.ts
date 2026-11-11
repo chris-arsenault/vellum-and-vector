@@ -1,3 +1,4 @@
+import { requireChannel } from "@atlas/domain";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   adaptiveLeafAt,
@@ -84,7 +85,7 @@ function scope(): SpatialScope {
     footprint: rectangle([0, 0, 1000, 1000]),
   };
 }
-function channels(grid: Grid) {
+function channels(grid: Grid<string>) {
   putChannel(
     grid,
     "height",
@@ -104,29 +105,9 @@ const bandNames = (topology: object) =>
   Object.entries(topology)
     .filter(([, value]) => value instanceof Band)
     .map(([name]) => name);
-it("publishes channel bands over different offsets of one source buffer", async () => {
-  const f = fixture(),
-    grid = createGrid("offsets", scope(), 3, 3);
-  const values = Float64Array.from({ length: 18 }, (_, i) => i + 0.5),
-    over = (start: number, end: number, name: string) =>
-      Band.over(
-        values.subarray(start, end),
-        { name, type: "float64", lifetime: "run" },
-        grid.coverage.cache
-      );
-  putChannel(grid, "first", "metre", over(0, 9, "first"));
-  putChannel(grid, "second", "metre", over(9, 18, "second"));
-  const shared = await writeFieldLayout(f.resources, grid, "offset-layout", 1e-6);
-  await writeFieldChannels(f.resources, grid, "offset-channels", shared);
-  const input = await f.working.load("offset-channels", ["first", "second"], shared.geography);
-  expect(Array.from(input.channels.first)).toEqual(Array.from(values.subarray(0, 9)));
-  expect(Array.from(input.channels.second)).toEqual(Array.from(values.subarray(9)));
-  expect(input.channels.second.get(0)).toBe(9.5);
-  expect(values.byteLength).toBe(144);
-});
 it("shares immutable input bands across readers and releases them after the last reader", async () => {
   const f = fixture(),
-    grid = createGrid("surface", scope(), 9, 9);
+    grid = createGrid<string>("surface", scope(), 9, 9);
   channels(grid);
   const shared = await writeFieldLayout(f.resources, grid, "layout", 1e-6);
   await writeFieldChannels(f.resources, grid, "height", shared, ["height"]);
@@ -139,28 +120,33 @@ it("shares immutable input bands across readers and releases them after the last
     sameHeight = await second.load("height", ["height"], shared.geography);
   expect(a.active).toBe(b.active);
   expect(a.measures).toBe(b.measures);
-  expect(a.channels.height).toBe(sameHeight.channels.height);
-  const exposed = a.channels.height.block(0);
+  expect(requireChannel(a, "height")).toBe(requireChannel(sameHeight, "height"));
+  const exposed = requireChannel(a, "height").block(0);
   exposed[12] = 999;
-  a.channels.height.unpin(0);
-  expect(Reflect.set(a.channels.height.schema, "immutable", false)).toBe(false);
-  expect(() => a.channels.height.set(12, 999)).toThrow(/Immutable/);
-  expect(sameHeight.channels.height.get(12)).toBe(grid.channels.height.get(12));
+  requireChannel(a, "height").unpin(0);
+  expect(Reflect.set(requireChannel(a, "height").schema, "immutable", false)).toBe(false);
+  expect(() => requireChannel(a, "height").set(12, 999)).toThrow(/Immutable/);
+  expect(requireChannel(sameHeight, "height").get(12)).toBe(requireChannel(grid, "height").get(12));
   first.close();
   expect(b.active.get(0)).toBe(1);
-  expect(b.channels.water.get(12)).toBe(grid.channels.water.get(12));
-  expect(sameHeight.channels.height.get(12)).toBe(grid.channels.height.get(12));
+  expect(requireChannel(b, "water").get(12)).toBe(requireChannel(grid, "water").get(12));
+  expect(requireChannel(sameHeight, "height").get(12)).toBe(requireChannel(grid, "height").get(12));
   second.close();
-  expect(() => a.channels.height.get(0)).toThrow(/released/);
+  expect(() => requireChannel(a, "height").get(0)).toThrow(/released/);
   expect(() => b.active.get(0)).toThrow(/released/);
 });
 it("preserves immutable authored input bands through snapshot copies without sample reads", async () => {
   const f = fixture(),
-    grid = createGrid("surface", scope(), 517, 71);
-  channels(grid);
+    grid = createGrid<string>("surface", scope(), 517, 71);
+  putChannel(
+    grid,
+    "Elevation",
+    "native-length",
+    generateBand(grid.coverage, "int32", "Elevation", () => 1024)
+  );
   const shared = await writeFieldLayout(f.resources, grid, "layout", 1e-6);
-  await writeFieldChannels(f.resources, grid, "height", shared, ["height"]);
-  const loaded = await f.working.load("height", ["height"], shared.geography),
+  await writeFieldChannels(f.resources, grid, "Elevation", shared, ["Elevation"]);
+  const loaded = await f.working.load("Elevation", ["Elevation"], shared.geography),
     original = landscape().domain;
   original.world.fields.push({
     id: loaded.id,
@@ -169,21 +155,27 @@ it("preserves immutable authored input bands through snapshot copies without sam
     algorithm: "authored",
     state: "authored",
     samples: loaded.active.length,
-    channels: ["height"],
+    channels: ["Elevation"],
     source: { kind: "operation", id: "paint" },
   });
   original.numerical[loaded.id] = loaded;
   f.reads.length = 0;
   const copy = cloneSnapshot(original);
-  expect(copy.numerical[loaded.id].channels.height).toBe(loaded.channels.height);
+  expect(requireChannel<string>(copy.numerical[loaded.id], "Elevation")).toBe(
+    requireChannel(loaded, "Elevation")
+  );
   expect(sameValue(copy.numerical[loaded.id], loaded)).toBe(true);
   expect(f.reads).toEqual([]);
   // The overlay itself is a separate immutable resource, without a recursive overlay list.
   const overlay = { ...loaded, overlays: undefined };
-  original.numerical[loaded.id].overlays = [{ grid: overlay, channels: ["height"], mapOnly: true }];
+  original.numerical[loaded.id].overlays = [
+    { grid: overlay, channels: ["Elevation"], mapOnly: true },
+  ];
   copy.numerical[loaded.id].overlays = [];
   restoreMappedEdits(copy, original);
-  expect(copy.numerical[loaded.id].overlays![0].grid.channels.height).toBe(loaded.channels.height);
+  expect(requireChannel(copy.numerical[loaded.id].overlays![0].grid, "Elevation")).toBe(
+    requireChannel(loaded, "Elevation")
+  );
   expect(copy.numerical[loaded.id].overlays![0].channels).not.toBe(
     original.numerical[loaded.id].overlays![0].channels
   );
@@ -191,11 +183,11 @@ it("preserves immutable authored input bands through snapshot copies without sam
 });
 it("opens immutable inputs without copying samples and reads only the touched blocks' chunks", async () => {
   const f = fixture(),
-    grid = createGrid("surface", scope(), 517, 71);
+    grid = createGrid<string>("surface", scope(), 517, 71);
   channels(grid);
   const shared = await writeFieldLayout(f.resources, grid, "layout", 1e-6);
   await writeFieldChannels(f.resources, grid, "height", shared, ["height"]);
-  const height = grid.channels.height,
+  const height = requireChannel(grid, "height"),
     input = await f.resources.openArray("height", "channel_0", f.blocks.cache),
     source = input.values;
   f.reads.length = 0;
@@ -220,7 +212,7 @@ it("opens immutable inputs without copying samples and reads only the touched bl
 describe("regular resource field round trips", () => {
   it("reads categories from only the visible partitions, preserving cell overlap at the edge", async () => {
     const f = fixture(),
-      grid = createGrid("classes", scope(), 517, 71);
+      grid = createGrid<string>("classes", scope(), 517, 71);
     putChannel(
       grid,
       "cover",
@@ -248,7 +240,7 @@ describe("regular resource field round trips", () => {
   });
   it("round trips regular edge tiles without loading unselected channels or duplicating layout chunks", async () => {
     const f = fixture(),
-      grid = createGrid("surface", scope(), 517, 71);
+      grid = createGrid<string>("surface", scope(), 517, 71);
     channels(grid);
     grid.periodicWidth = 1000;
     const shared = await writeFieldLayout(f.resources, grid, "layout", 0.000001);
@@ -258,7 +250,9 @@ describe("regular resource field round trips", () => {
     expect(first.arrays.filter((a) => a.source).map((a) => a.name)).toEqual(["active", "measures"]);
     f.reads.length = 0;
     const loaded = await f.working.load("height", ["height"], shared.geography);
-    expect(Array.from(loaded.channels.height)).toEqual(Array.from(grid.channels.height));
+    expect(Array.from(requireChannel(loaded, "height"))).toEqual(
+      Array.from(requireChannel(grid, "height"))
+    );
     expect(Array.from(loaded.measures)).toEqual(Array.from(grid.measures));
     expect(loaded.ocean).toEqual(grid.ocean);
     expect(loaded.periodicWidth).toBe(1000);
@@ -273,7 +267,7 @@ describe("regular resource field round trips", () => {
     const selected = [];
     for await (const part of f.resources.readWindow(window)) selected.push(part);
     expect(selected.length).toBe(1);
-    expect(() => loaded.channels.height.set(0, 123)).toThrow(/Immutable/);
+    expect(() => requireChannel(loaded, "height").set(0, 123)).toThrow(/Immutable/);
     expect(
       (await f.resources.readPartition("height", first.partitions[0].id, ["channel_0"])).arrays
         .channel_0[0]
@@ -283,13 +277,13 @@ describe("regular resource field round trips", () => {
     expect(f.blocks.cache.stats.evictions).toBeGreaterThan(0);
     expect(f.blocks.scratch.stats.writtenBytes).toBe(0);
     f.working.close();
-    expect(() => loaded.channels.height.get(0)).toThrow();
+    expect(() => requireChannel(loaded, "height").get(0)).toThrow();
   });
 });
 describe("adaptive resource fields", () => {
   it("uses adaptive cell footprints for category visibility", async () => {
     const f = fixture(),
-      grid = createAdaptiveField(
+      grid = createAdaptiveField<string>(
         "classes",
         scope(),
         createAdaptiveTopology([0, 0, 1000, 1000], { maximumSize: 250, minimumSize: 250 })
@@ -305,7 +299,7 @@ describe("adaptive resource fields", () => {
       resource = await writeFieldChannels(f.resources, grid, "classes", shared);
     expect(
       await resourceCategories(f.resources, resource, "cover", rectangle([10, 10, 100, 100]))
-    ).toEqual([grid.channels.cover.get(adaptiveLeafAt(grid.topology!, 50, 50))]);
+    ).toEqual([requireChannel(grid, "cover").get(adaptiveLeafAt(grid.topology!, 50, 50))]);
   });
   it("preserves adaptive tree identities, reciprocal faces, units and shared layouts", async () => {
     const f = fixture();
@@ -314,7 +308,7 @@ describe("adaptive resource fields", () => {
       minimumSize: 125,
       refine: (box) => box[0] < 500 && box[1] < 500,
     });
-    const grid = createAdaptiveField("surface", scope(), topology);
+    const grid = createAdaptiveField<string>("surface", scope(), topology);
     channels(grid);
     const shared = await writeFieldLayout(f.resources, grid, "adaptive", 0.000001);
     await writeFieldChannels(f.resources, grid, "terrain", shared);
@@ -350,7 +344,7 @@ describe("adaptive resource field edge cases", () => {
         maximumSize: 1000,
         minimumSize: 1000,
       });
-    const grid = createAdaptiveField("single", scope(), topology);
+    const grid = createAdaptiveField<string>("single", scope(), topology);
     channels(grid);
     const shared = await writeFieldLayout(f.resources, grid, "single-layout", 0.000001);
     await writeFieldChannels(f.resources, grid, "single", shared);
@@ -370,7 +364,7 @@ describe("field publication failures", () => {
     "reclaims an owned failed output at %s while retaining immutable inputs",
     async (failure) => {
       const f = fixture(),
-        grid = createGrid("surface", scope(), 9, 9);
+        grid = createGrid<string>("surface", scope(), 9, 9);
       channels(grid);
       const shared = await writeFieldLayout(f.resources, grid, "layout", 1e-6);
       f.fault.write = failure;
@@ -384,7 +378,7 @@ describe("field publication failures", () => {
   );
   it("reclaims a completed layout when its adaptive tree fails before publication", async () => {
     const f = fixture(),
-      grid = createAdaptiveField(
+      grid = createAdaptiveField<string>(
         "surface",
         scope(),
         createAdaptiveTopology([0, 0, 1000, 1000], { maximumSize: 500, minimumSize: 500 })

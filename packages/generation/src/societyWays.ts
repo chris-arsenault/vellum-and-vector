@@ -3,6 +3,8 @@ import type { GenerationState } from "./process";
 import { profileOf, type SocietyProfile } from "./societyProfile";
 import { atlasParameterDefinitions } from "./atlasParameters";
 import { mapScale } from "./worldSignificance";
+import { defineCommand } from "./processOperation";
+import type { SocietyInput } from "./societyOperation";
 
 /**
  * Ways are made by use. Each connection remembers how many people travel it in a year, as
@@ -59,7 +61,13 @@ export function wornCost(
  * Apply a cycle's traffic to the ways: fold the cycle's yearly travellers into each way's
  * memory, then set what each way costs to travel from here on.
  */
-export function wearWays(state: GenerationState, years: number) {
+export const wearWays = defineCommand(
+  "human.route-wear",
+  "elapsed",
+  ({ state, years }: SocietyInput) => wear(state, years),
+  []
+);
+function wear(state: GenerationState, years: number) {
   const work = state.society!,
     { connections } = work.region;
   const profile = profileOf(state),

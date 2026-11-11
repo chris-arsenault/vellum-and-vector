@@ -1,3 +1,4 @@
+import { mapCommand } from "./processTraits";
 import { expect, it } from "vitest";
 import { canonryMagicPresets, generateChannel, putChannel, valueRecordSchema } from "@atlas/domain";
 import { atlasConfiguration, prepareAtlasGeneration } from "./atlasWorkflow";
@@ -122,17 +123,19 @@ it("registers and executes a feature-owned setting absent from the shared parame
       produces: ["test:survey"],
       invalidates: [],
     },
-    behavior: {
-      kind: "model-pass",
-      applyPass(state, context) {
+    operation: mapCommand(
+      "test.measure",
+      "event",
+      (state, context) => {
         putChannel(
           state.surface,
-          "survey",
+          "TreeCover",
           "ratio",
-          generateChannel(state.surface, "survey", () => Number(context.parameters.threshold))
+          generateChannel(state.surface, "TreeCover", () => Number(context.parameters.threshold))
         );
       },
-    },
+      []
+    ),
     validate: () => [],
   });
   const configuration: ProcessConfiguration = {
@@ -145,7 +148,7 @@ it("registers and executes a feature-owned setting absent from the shared parame
     seed: "73",
     seedScope: "survey",
   });
-  expect(Array.from(result.state.surface.channels.survey)).toEqual(Array(10).fill(0));
+  expect(Array.from(result.state.surface.channels.TreeCover!)).toEqual(Array(10).fill(0));
   expect(Object.hasOwn(resolved.parameters, "threshold")).toBe(false);
   expect(() =>
     resolveGenerationFeatures([survey], {
@@ -186,13 +189,13 @@ it("preserves shared climate occurrence identities when an unrelated impact feat
     });
   const climateKeys = (configuration: ProcessConfiguration) =>
     sequenceStages(configuration.sequence)
-      .filter((stage) => stage.invocation?.process === "atlas.temperature")
+      .filter((stage) => stage.invocation?.process === "atlas.atmospheric-climate")
       .map((stage) => [...stage.epochs.map((epoch) => epoch.id), ...stage.path]);
   expect(climateKeys(enabled).length).toBeGreaterThan(1);
   expect(climateKeys(omitted)).toEqual(climateKeys(enabled));
 });
 
-function randomModule(id: string): GenerationModule {
+function referenceModule(id: string, invocations: string[][] = []): GenerationModule {
   return {
     id,
     features: [
@@ -220,20 +223,14 @@ function randomModule(id: string): GenerationModule {
           produces: [`${id}:measurement`],
           invalidates: [],
         },
-        behavior: {
-          kind: "model-pass",
-          applyPass(state, context) {
-            for (const persistent of [false, true])
-              putChannel(
-                state.surface,
-                `${id}:${persistent ? "structure" : "variation"}`,
-                "ratio",
-                generateChannel(state.surface, `${id}:${persistent}`, () =>
-                  context.random(persistent)
-                )
-              );
+        operation: mapCommand(
+          `${id}.measure`,
+          "event",
+          (_state, context) => {
+            invocations.push([...context.invocation]);
           },
-        },
+          []
+        ),
         validate: () => [],
       },
     ],
@@ -260,7 +257,7 @@ function withProduct(
 }
 
 it("rejects two exclusive feature providers before starting generation", () => {
-  const modules = [randomModule("test.exclusive-a"), randomModule("test.exclusive-b")].map(
+  const modules = [referenceModule("test.exclusive-a"), referenceModule("test.exclusive-b")].map(
     (module) => withProduct(module, "exclusive")
   );
   for (const module of modules) {
@@ -288,7 +285,7 @@ it("rejects two exclusive feature providers before starting generation", () => {
 it.each(["additive", "shared-state"] as const)(
   "accepts multiple feature contributors for a %s product",
   (composition) => {
-    const modules = [randomModule("test.a"), randomModule("test.b")].map((module) =>
+    const modules = [referenceModule("test.a"), referenceModule("test.b")].map((module) =>
       withProduct(module, composition)
     );
     for (const module of modules) atlasGenerationModules.register(module);
@@ -306,7 +303,7 @@ it.each(["additive", "shared-state"] as const)(
   }
 );
 
-it("preserves both random streams when an unrelated module with the same local invocation name is added", async () => {
+it("dispatches module-local operation names with distinct feature-owned invocation paths", async () => {
   async function run(modules: GenerationModule[]) {
     const registry = new GenerationModuleRegistry();
     for (const entry of modules) registry.register(entry);
@@ -323,7 +320,7 @@ it("preserves both random streams when an unrelated module with the same local i
       .reduce((result, process) => result.register(process), new MapProcessRegistry());
     return new MapRunner(
       {
-        id: "random-reference",
+        id: "invocation-reference",
         version: 1,
         parameters: {},
         inputs: valueRecordSchema.parse(JSON.parse(JSON.stringify({ features: resolved }))),
@@ -332,17 +329,12 @@ it("preserves both random streams when an unrelated module with the same local i
       processes
     ).run(state, { seed: "73", seedScope: "module-composition" });
   }
-  const a = randomModule("test.a"),
-    b = randomModule("test.b"),
-    alone = await run([a]),
-    expanded = await run([b, a]);
-  for (const stream of ["variation", "structure"]) {
-    const samples = Array.from(alone.state.surface.channels[`test.a:${stream}`]);
-    expect(new Set(samples).size).toBeGreaterThan(1);
-    expect(Array.from(expanded.state.surface.channels[`test.a:${stream}`])).toEqual(samples);
-    expect(expanded.state.surface.channels[`test.b:${stream}`]).toHaveLength(samples.length);
-    expect(Array.from(expanded.state.surface.channels[`test.b:${stream}`])).not.toEqual(samples);
-  }
+  const invocations: string[][] = [];
+  await run([referenceModule("test.a", invocations), referenceModule("test.b", invocations)]);
+  expect(invocations).toEqual([
+    ["test.a/present.products/measure"],
+    ["test.b/present.products/measure"],
+  ]);
 });
 
 it("keeps native water and incision groups ordered in the actual selected sequence", () => {
@@ -382,7 +374,9 @@ it("evolves selected marine ice after climate and before magical stock evolution
       .flatMap(({ invocation }) => (invocation ? [invocation.process] : [])),
     sea = epoch.indexOf("atlas.sea-ice");
   expect(sea).toBeGreaterThan(epoch.indexOf("atlas.land-ice-mass-balance"));
-  expect(epoch.slice(epoch.indexOf("atlas.magic-climate"), sea)).toContain("atlas.temperature");
+  expect(epoch.slice(epoch.indexOf("atlas.magic-climate"), sea)).toContain(
+    "atlas.atmospheric-climate"
+  );
   expect(sea).toBeLessThan(epoch.indexOf("atlas.magic-post-glacial"));
   expect(sea).toBeLessThan(epoch.indexOf("atlas.magic-history"));
   expect(

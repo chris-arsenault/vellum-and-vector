@@ -42,6 +42,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
         "landFraction",
         "mapBoundary",
       ],
+      regional: { kind: "captured" },
       inherited: true,
       requires: ["physical.lifecycle"],
       when: (slot, context) =>
@@ -56,7 +57,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
       "epoch.advection": [nativeSteps.plateAdvection],
       "epoch.crust.activity": [nativeSteps.tectonicEpochActivity],
     },
-    { settings: ["plateDrift"], requires: ["physical.foundation"] }
+    { settings: ["plateDrift"], requires: ["physical.foundation"], regional: { kind: "captured" } }
   ),
   physicalFeature(
     "physical.mountains",
@@ -70,6 +71,10 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       requires: ["physical.foundation"],
       absent: ["OrogenicConstruction"],
+      regional: {
+        kind: "specialized",
+        operations: { "terrain.refinement": ["refinement.relief"] },
+      },
       when: (slot, context) => slot !== "terrain.refinement" || isRefinement(context),
     }
   ),
@@ -82,6 +87,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     },
     {
       settings: ["volcanism"],
+      regional: { kind: "captured" },
       requires: ["physical.foundation"],
       absent: ["MantlePlumeRoots", "VolcanicConstruction"],
     }
@@ -93,7 +99,12 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
       "formation.impacts": [nativeSteps.impactCratering],
       "epoch.impacts": [nativeSteps.impactCratering],
     },
-    { settings: ["impacts", "impactSize"], requires: ["physical.foundation"], absent: ["Impacts"] }
+    {
+      settings: ["impacts", "impactSize"],
+      requires: ["physical.foundation"],
+      absent: ["Impacts"],
+      regional: { kind: "captured" },
+    }
   ),
   landmarkFeature,
   physicalFeature(
@@ -141,7 +152,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       "formation.coastal-construction": [nativeSteps.coastalDetail],
     },
-    { requires: ["physical.foundation"] }
+    { requires: ["physical.foundation"], regional: { kind: "captured" } }
   ),
   physicalFeature(
     "physical.fractures",
@@ -149,7 +160,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       "geology.fractures": [nativeSteps.fractureNetwork],
     },
-    { requires: ["physical.foundation"], absent: ["Fractures"] }
+    { requires: ["physical.foundation"], absent: ["Fractures"], regional: { kind: "captured" } }
   ),
   physicalFeature(
     "physical.geothermal",
@@ -157,7 +168,12 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       "geology.geothermal": [nativeSteps.geothermal],
     },
-    { requires: ["physical.foundation"], absent: ["Geothermal"], inherited: true }
+    {
+      requires: ["physical.foundation"],
+      absent: ["Geothermal"],
+      inherited: true,
+      regional: { kind: "captured" },
+    }
   ),
   physicalFeature(
     "ocean.geography",
@@ -173,7 +189,22 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
         nativeSteps.landmassesAndShelfGroups,
       ],
     },
-    { requires: ["physical.foundation"], inherited: true }
+    {
+      requires: ["physical.foundation"],
+      inherited: true,
+      regional: {
+        kind: "specialized",
+        operations: {
+          "climate.ocean": [
+            "refinement.ocean",
+            "refinement.ocean-memory",
+            nativeSteps.oceanDistance,
+            nativeSteps.bathymetry,
+            nativeSteps.landmassesAndShelfGroups,
+          ],
+        },
+      },
+    }
   ),
   physicalFeature(
     "physical.ocean-circulation",
@@ -187,15 +218,14 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     "physical.climate",
     "Climate",
     {
-      "climate.atmosphere": [
-        nativeSteps.temperature,
-        nativeSteps.atmosphericFlow,
-        nativeSteps.moistureTransport,
-        nativeSteps.precipitation,
-      ],
+      "climate.atmosphere": [nativeSteps.atmosphericClimate],
     },
     {
       settings: [...climateSettings],
+      regional: {
+        kind: "specialized",
+        operations: { "climate.atmosphere": ["refinement.climate"] },
+      },
       requires: ["ocean.geography"],
       inherited: true,
     }
@@ -209,6 +239,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
       "water.groundwater": [nativeSteps.groundwater],
     },
     {
+      regional: { kind: "specialized", operations: { "water.routing": ["refinement.water"] } },
       requires: ["physical.climate", "ocean.geography"],
       inherited: true,
     }
@@ -240,7 +271,6 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
       "ice.model": [nativeSteps.landIceMassBalance, nativeSteps.iceFlow],
       "ice.flow": [nativeSteps.iceFlow],
       "ice.meltwater": [nativeSteps.glacialMeltwater],
-      "water.glacial-runoff": [nativeSteps.glacialRunoff],
     },
     {
       requires: ["physical.climate", "water.routing", "material.load-response"],
@@ -317,7 +347,15 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       "present.landforms": [nativeSteps.landformClassification],
     },
-    { requires: ["water.routing", "ocean.geography"], absent: ["Landforms"], inherited: true }
+    {
+      requires: ["water.routing", "ocean.geography"],
+      absent: ["Landforms"],
+      inherited: true,
+      regional: {
+        kind: "specialized",
+        operations: { "present.landforms": ["refinement.landforms"] },
+      },
+    }
   ),
   physicalFeature(
     "physical.lifecycle",
@@ -330,7 +368,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
       ],
       "present.validation": [nativeSteps.physicalStructuralValidation],
     },
-    { inherited: true, configuration: clockConfiguration }
+    { inherited: true, configuration: clockConfiguration, regional: { kind: "captured" } }
   ),
 ];
 

@@ -1,11 +1,48 @@
 import type { AtlasPhysicalWorkspace } from "./atlasWorkspace";
 import type { PhysicalMesh } from "./mesh";
-import { readRange, writeRange, type Band, type ReadBand, type Coverage } from "@atlas/domain";
+import {
+  readRange,
+  writeRange,
+  type Band,
+  type ReadBand,
+  type Coverage,
+  type Grid,
+} from "@atlas/domain";
+import type { PhysicalChannel } from "./atlasChannels";
 import { triangleSample } from "./triangleSampling";
 
 const interpolationBlockSamples = 4096;
 // One fan has a centre, a face neighbor and at most six incident vertex cells.
 const triangleProjectionStride = 8;
+/** Extensive quantities change represented area only while sampling, never their stored unit. */
+export function resamplePhysicalBand(
+  work: AtlasPhysicalWorkspace,
+  grid: Grid,
+  band: ReadBand,
+  channel: PhysicalChannel
+) {
+  const extensive = channel.quantity === "extensive",
+    existing = grid.channels[channel.name],
+    output =
+      existing?.type === band.type && existing.length === grid.active.length
+        ? existing
+        : grid.coverage.scratch(band.type, channel.name, grid.active.length),
+    values = projectedValues(
+      work,
+      extensive
+        ? (cell) => {
+            const area = work.map.mesh.area(cell);
+            return area > 0 ? band.get(cell) / area : 0;
+          }
+        : band,
+      channel.discrete || channel.quantity === "category",
+      output
+    );
+  if (extensive)
+    for (let cell = 0; cell < values.length; cell++)
+      values.set(cell, values.get(cell) * grid.measures.get(cell));
+  return values;
+}
 /** Fan weights from the physical mesh to each surface sample, as bands of the grid coverage. */
 export interface ProjectionInterpolation {
   samples: Band;

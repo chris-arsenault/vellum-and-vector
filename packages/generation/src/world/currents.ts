@@ -1,4 +1,3 @@
-import { respond } from "../coupling/answers";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round, toUnits, truncate } from "./math";
@@ -203,10 +202,3 @@ export function oceanCurrents(map: PhysicalField, c: PhysicalContext) {
   waveExposure(map, c.Profile.OceanCurrentFetchDistance, upstream, linkLength);
   releaseWorking(map, western, upstream);
 }
-/** The sea's waves carry the energy their fetch and the current give them. */
-respond({
-  key: "waveEnergy",
-  by: "sea",
-  reads: ["WaveExposure"],
-  base: (map, i) => map.WaveExposure.get(i),
-});

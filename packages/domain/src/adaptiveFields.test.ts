@@ -214,7 +214,7 @@ it("does not invent interior peaks or negative values between nonnegative sample
 
 it("retains clipped physical measures and discrete category meaning in published fields", () => {
   const tree = topology();
-  const field = createAdaptiveField(
+  const field = createAdaptiveField<string>(
     "field",
     {
       worldId: "world",
@@ -292,7 +292,7 @@ it("shares point lookup without mixing channels, topology identities or discrete
   const tree = topology(),
     geometry = centres(tree),
     locate = adaptivePointLocator();
-  const field = createAdaptiveField(
+  const field = createAdaptiveField<string>(
     "shared",
     {
       worldId: "world",

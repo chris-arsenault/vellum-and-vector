@@ -12,7 +12,6 @@ import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibil
 import { eventOf, eventPlaces, eventRecord, onPlaces } from "./reliefEvents";
 import {
   areaOf,
-  loweredAsCaptured,
   meanOf,
   nearestOrFloor,
   reliefOf,
@@ -94,9 +93,9 @@ export const crater: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured crater is realized as a floor no higher than the parent's, with dear ground the network runs around. An impact-ring record is re-placed and maintained by its own cause; maps below the world record no impacts, so an emergent crater's counterpart is the lowest ground near it, and the record stays.",
+      "Captured crater ground develops with the child's water and erosion. Its record stays and resolves near the local floor without repeating the impact or restoring a parent height.",
     carry: carryWhereItLands,
-    realize: (state, carried) => loweredAsCaptured(state, carried, counterpart(state, carried)),
+    realize: notApplicable("Captured crater ground develops locally without repeating its impact."),
     counterpart,
     unrealized: stays,
     settle: notApplicable("A round's water may fill its lake without moving the pit."),

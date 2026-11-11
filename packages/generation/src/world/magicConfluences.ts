@@ -18,7 +18,7 @@ import { hashUnit } from "./noise";
 import { displaceGround, weatherRock } from "../rock/groundLedger";
 import { meltIce, spoilSoil } from "../rock/groundSurfaceMedia";
 import { retainedArray, releaseWorking } from "./physicalNumerics";
-import { contactView, receiveCoastalAction } from "./magicContact";
+import { contactView } from "./magicContact";
 
 /** A confluence's hold on the mesh this evaluation: where it holds and how much of each cell. */
 export interface ConfluenceState {
@@ -87,7 +87,12 @@ export const frontStrain = (difference: number, distance: number, reach: number)
  * displace the parents, bound every cell's coverages at one, and optionally act on the
  * ground. Systems' rule coverage must be current (see `coverSystems`).
  */
-export function evaluateConfluences(state: GenerationState, seed: number, apply: boolean) {
+export function evaluateConfluences(
+  state: GenerationState,
+  seed: number,
+  apply: boolean,
+  exposure = 1
+) {
   const work = state.physical!,
     map = work.map,
     magic = work.magic!,
@@ -122,7 +127,8 @@ export function evaluateConfluences(state: GenerationState, seed: number, apply:
   }
   boundCoverage(magic.fields, Object.values(magic.confluences.states), count);
   if (apply)
-    for (const held of Object.values(magic.confluences.states)) applyConfluence(state, held, seed);
+    for (const held of Object.values(magic.confluences.states))
+      applyConfluence(state, held, seed, exposure);
 }
 /** A meeting takes its coverage out of the parent's classes in the cell. */
 function displace(field: MagicField, i: number, taken: number) {
@@ -146,7 +152,13 @@ function boundCoverage(fields: MagicField[], states: ConfluenceState[], count: n
   }
 }
 /** The meeting's own process on the ground, scaled by its coverage in each cell. */
-function applyConfluence(state: GenerationState, held: ConfluenceState, seed: number) {
+function applyConfluence(
+  state: GenerationState,
+  held: ConfluenceState,
+  seed: number,
+  exposure: number
+) {
+  if (!(exposure > 0)) return;
   const map = state.physical!.map,
     e = held.definition.effects,
     salt = seed ^ 0x51f7 ^ held.definition.id.length;
@@ -155,9 +167,8 @@ function applyConfluence(state: GenerationState, held: ConfluenceState, seed: nu
     if (c <= 0) continue;
     actOnRock(map, i, c, e, salt);
     meetingInRock(map, held.definition.groundMaterial, i, c, salt);
-    actOnWaterAndLife(map, i, c, e);
+    actOnWaterAndLife(map, i, c, e, exposure);
   }
-  receiveCoastalAction(map, held.coverage, e.coastalForcing, map.scale.length(0.001));
 }
 /** Fractures, rock, bedrock relief and soil: the meeting's geology. */
 function actOnRock(map: PhysicalField, i: number, c: number, e: ConfluenceEffects, salt: number) {
@@ -178,14 +189,15 @@ function actOnRock(map: PhysicalField, i: number, c: number, e: ConfluenceEffect
   }
 }
 /** Coast, fog, ice, debris and toxicity: the meeting's water and living medium. */
-function actOnWaterAndLife(map: PhysicalField, i: number, c: number, e: ConfluenceEffects) {
-  if (e.coastalForcing && map.WaterKindCodes.get(i) === 0)
-    map.ExternalCoastalForcing.set(
-      i,
-      clamp(map.ExternalCoastalForcing.get(i) + round(e.coastalForcing * c), 0, 1000)
-    );
+function actOnWaterAndLife(
+  map: PhysicalField,
+  i: number,
+  c: number,
+  e: ConfluenceEffects,
+  exposure: number
+) {
   if (e.fog) map.FogForcing.set(i, Math.max(map.FogForcing.get(i), e.fog * c));
-  if (e.iceMelt) meltIce(map, i, e.iceMelt * c, "confluences", true);
+  if (e.iceMelt) meltIce(map, i, e.iceMelt * c * exposure, "confluences", true, exposure);
   if (e.debris) collapseDebris(map, i, units(e.debris * c));
   if (e.toxicity)
     map.EcologicalToxicity.set(i, Math.max(map.EcologicalToxicity.get(i), e.toxicity * c));

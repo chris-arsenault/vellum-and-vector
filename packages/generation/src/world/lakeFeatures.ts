@@ -1,6 +1,6 @@
 import { MapScale, semanticId, spatial } from "@atlas/domain";
 import type { GenerationState } from "../process";
-import { lakeFootprint, areaGeometry } from "./geographicContours";
+import { lakeFootprint, intersectAreas } from "./geographicContours";
 import { lakeMembership } from "./lakeMembership";
 
 /**
@@ -17,7 +17,7 @@ export function extractLakes(state: GenerationState) {
     if (!members.some((i) => map.mesh.membership(i) === 1)) continue;
     const level = map.WaterSurfaceElevations.get(members[0]),
       contour = lakeFootprint(state, members, body, level),
-      shape = areaGeometry(contour && spatial.intersection(contour, state.domain.scope.footprint));
+      shape = intersectAreas(contour, state.domain.scope.footprint);
     if (!shape) continue;
     const key = `lake:${spatial
       .bounds(shape)
@@ -26,7 +26,7 @@ export function extractLakes(state: GenerationState) {
     state.surface.lakes.push({
       id: semanticId(state.domain.world.id, `generated:${state.domain.scope.areaId}`, key),
       geometry: shape,
-      level: MapScale.metres(level - map.BaseSeaLevel, "native"),
+      level: MapScale.metres(level, "native"),
     });
     state.physical!.lakeOutlines.set(body, shape);
   }

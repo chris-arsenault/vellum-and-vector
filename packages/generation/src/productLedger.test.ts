@@ -1,3 +1,4 @@
+import { mapCommand } from "./processTraits";
 import { expect, it } from "vitest";
 import { generateBand } from "@atlas/domain";
 import { ProductLedger } from "./productLedger";
@@ -26,7 +27,7 @@ function process(
       invalidates: [],
       workspaceOnly: true,
     },
-    behavior: { kind: "model-pass", applyPass: apply },
+    operation: mapCommand("contract-probe", "event", apply, []),
     validate: () => [],
   };
 }
@@ -169,12 +170,14 @@ it("rejects distinct exclusive providers in preflight and before the second runt
   const first = provider("first"),
     second = provider("second");
   let called = false;
-  second.behavior = {
-    kind: "model-pass",
-    applyPass() {
+  second.operation = mapCommand(
+    second.contract.id,
+    "event",
+    () => {
       called = true;
     },
-  };
+    []
+  );
   const registry = new MapProcessRegistry().register(first).register(second);
   const plan = configuration([invoke(first), invoke(second)]);
   expect(preflight(plan, registry)).toEqual([

@@ -7,15 +7,7 @@ import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
 import { areaRecord } from "../poiRecords";
 import { fieldOf, iceAt, landformAt, Landform, slopeAt } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
-import {
-  areaOf,
-  lastsWhile,
-  loweredAsCaptured,
-  meanOf,
-  reliefOf,
-  sameSpot,
-  spans,
-} from "./reliefShape";
+import { areaOf, lastsWhile, meanOf, reliefOf, sameSpot, spans } from "./reliefShape";
 
 /** Area and relief at which a cirque is half as great as they get: part of a world complex. */
 const typicalArea = MapScale.area(0.00005),
@@ -75,9 +67,11 @@ export const cirque: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured cirque keeps its class on the refined map through the captured landform band, and its floor lies no higher than the parent's. If no cirque cell reads there it takes the nearest.",
+      "Captured ground and glacial evidence let the child recognize a cirque after the ice retreats. Its name resolves on the local counterpart while the bowl develops independently.",
     carry: carryWhereItLands,
-    realize: (state, carried) => loweredAsCaptured(state, carried, counterpart(state, carried)),
+    realize: notApplicable(
+      "Captured cirque ground develops locally without repeating glacial excavation."
+    ),
     counterpart,
     unrealized: movesTo(counterpart),
     settle: notApplicable("A bowl is cut over epochs; a round's water does not shift it."),

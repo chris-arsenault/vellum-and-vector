@@ -6,15 +6,19 @@ import { MultiKeyHeap, type Band } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
 type Front = { i: number; priority: number; cost: number; tie: number };
-function seedOutlets(map: PhysicalField, add: (i: number) => void) {
+/** Boundary supply enters this map; it must not also be an open drain. */
+export const acceptsBoundaryOutflow = (incoming: number) => incoming <= 0;
+function seedOutlets(map: PhysicalField, add: (i: number) => void, incoming?: Band) {
+  const boundary = (i: number) =>
+    map.mesh.boundary(i) && acceptsBoundaryOutflow(incoming?.get(i) ?? 0);
   let count = 0;
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes.get(i) !== 1 && !(map.OpenBoundary && map.mesh.boundary(i))) continue;
+    if (map.WaterKindCodes.get(i) !== 1 && !(map.OpenBoundary && boundary(i))) continue;
     add(i);
     count++;
   }
   if (count || !map.mesh.openBoundary) return;
-  for (let i = 0; i < map.mesh.count; i++) if (map.mesh.boundary(i)) add(i);
+  for (let i = 0; i < map.mesh.count; i++) if (boundary(i)) add(i);
 }
 function corridorResistance(map: PhysicalField, c: PhysicalContext) {
   return workingValues(map, "float64", "drainage:resistance", (i) => {
@@ -65,7 +69,7 @@ function enqueueNeighbor(
   );
   add({ i: j, priority, cost, tie });
 }
-export function drainageConditioning(map: PhysicalField, c: PhysicalContext) {
+export function drainageConditioning(map: PhysicalField, c: PhysicalContext, incoming?: Band) {
   map.DrainageParents.fill(-1);
   map.DrainageRanks.fill(-1);
   const priorities = workingArray(map, "float64", "drainage:priorities").fill(Infinity),
@@ -73,12 +77,16 @@ export function drainageConditioning(map: PhysicalField, c: PhysicalContext) {
   const resistance = corridorResistance(map, c);
   // Lowest fill height, then cheapest corridor, then the seeded tie, then the lower cell.
   const queue = new MultiKeyHeap(["asc", "asc", "asc"]);
-  seedOutlets(map, (i) => {
-    map.DrainageRanks.set(i, 2147483647);
-    priorities.set(i, map.Elevation.get(i));
-    costs.set(i, 0);
-    queue.push(i, priorities.get(i), 0, 0);
-  });
+  seedOutlets(
+    map,
+    (i) => {
+      map.DrainageRanks.set(i, 2147483647);
+      priorities.set(i, map.Elevation.get(i));
+      costs.set(i, 0);
+      queue.push(i, priorities.get(i), 0, 0);
+    },
+    incoming
+  );
   if (!queue.size) throw new Error("Priority flood requires a connected ocean outlet.");
   let rank = 0;
   for (let i = queue.pop(); i >= 0; i = queue.pop()) {

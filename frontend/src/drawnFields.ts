@@ -2,7 +2,7 @@ import Feature from "ol/Feature.js";
 import Point from "ol/geom/Point.js";
 import LineString from "ol/geom/LineString.js";
 import { Circle, Fill, Stroke, Style } from "ol/style.js";
-import { fieldInterpolator, spatial } from "@atlas/domain";
+import { fieldInterpolator, fieldChannelName, spatial } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { LoadedDrawnMapInput as DrawnMapInput } from "./drawnMap";
 import { bounds, lineage } from "./presentation";
@@ -45,7 +45,7 @@ export function fieldMarks(input: DrawnMapInput, footprint: Geometry): FieldMark
       .reverse();
     const samplers = parts.map((r) => ({
       covers: spatial.pointCoverage(r.footprint),
-      at: fieldInterpolator(r.field, channel),
+      at: fieldInterpolator(r.field, fieldChannelName(channel)),
     }));
     const maximum =
       socialFieldChannel.test(channel) && channel.includes(":")

@@ -28,7 +28,7 @@ export function fieldArea(snapshot: DomainSnapshot, context: IntentContext, id: 
 }
 export function fieldArtifact(
   changes: ChangeSet,
-  grid: Grid,
+  grid: Grid<string>,
   layer: Layer,
   lineage: string[] = []
 ) {
@@ -56,7 +56,7 @@ export interface AuthoredFieldDefinition {
   footprint: Geometry;
   parentFieldId?: string;
 }
-function validateScope(data: AuthoredFieldDefinition, grid: Grid, context: IntentContext) {
+function validateScope(data: AuthoredFieldDefinition, grid: Grid<string>, context: IntentContext) {
   gridSchema.parse(grid);
   requireThat(
     grid.scope.worldId === context.scope.worldId &&
@@ -71,7 +71,7 @@ function validateScope(data: AuthoredFieldDefinition, grid: Grid, context: Inten
 /** Numerical operations publish their working grid directly; command JSON carries configuration. */
 export function authoredFieldChanges(
   data: AuthoredFieldDefinition,
-  grid: Grid,
+  grid: Grid<string>,
   context: IntentContext,
   snapshot: DomainSnapshot,
   reconcile = false

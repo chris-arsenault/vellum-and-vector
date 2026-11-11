@@ -3,9 +3,9 @@ import { Band } from "./lattice/band";
 import type { SampleType } from "./workspaceResources";
 
 /** A band of the declared sample type. */
-export function numericalSchema(type: SampleType) {
+export function numericalSchema(type?: SampleType) {
   return z.custom<Band>(
-    (value) => value instanceof Band && value.type === type,
-    `Numerical storage requires ${type} samples.`
+    (value) => value instanceof Band && (type === undefined || value.type === type),
+    type ? `Numerical storage requires ${type} samples.` : "Numerical storage requires a band."
   );
 }

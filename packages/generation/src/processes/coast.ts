@@ -9,7 +9,7 @@ import { coastalFrame, type CoastalFrame } from "../world/coastalFrame";
 import { depositShoreLoads, recordCoastalCut } from "../world/coastalEvolution";
 
 const prepare = (map: PhysicalField) => ({
-  shoreFrame: (width: number, waves: Pick<Band, "get">, forcing?: Band) =>
+  shoreFrame: (width: number, waves: Pick<Band, "get">, forcing?: Pick<Band, "get">) =>
     coastalFrame(map, width, waves, forcing),
   coastCut: (i: number, cut: readonly [number, number], landing = i) =>
     recordCoastalCut(map, i, cut, landing),
@@ -39,7 +39,7 @@ export const coast = defineProcess({
   settings: coastSettings,
   prepare,
   settlesItself: true,
-  run({ field, context: c, settings: p, ground, span, ask, tools }) {
+  execute({ field, context: c, settings: p, ground, span, ask, tools }) {
     // Waves work across the platform they have cut, which widens with time.
     const waves = ask("waveEnergy"),
       frame = tools.shoreFrame(p.CoastalActiveWidth * span, waves),
@@ -73,10 +73,10 @@ export const outsideWaves = defineProcess({
   statement:
     "Waves a magic system raises wear the shore they reach as any waves do, and what they take goes out to sea.",
   reads: ["WaterKindCodes", "Elevation"],
-  writes: ["ExternalCoastalForcing", "ExternalCoastalForcingHistory"],
+  writes: ["ExternalCoastalForcingHistory"],
   needs: ["Elevation", "WaterKindCodes"],
   provides: ["Elevation", "BedrockElevation", "CumulativeCoastalErosion"],
-  asks: ["waveEnergy", "rootHold"],
+  asks: ["waveEnergy", "coastalForcing", "rootHold"],
   moves: [
     ["rock", "load"],
     ["loose", "load"],
@@ -84,17 +84,14 @@ export const outsideWaves = defineProcess({
   settings: coastSettings,
   prepare,
   settlesItself: true,
-  run({ field, context: c, settings: p, ground, span, ask, tools }) {
+  execute({ field, context: c, settings: p, ground, span, ask, tools }) {
+    const received = ask("coastalForcing");
     for (let i = 0; i < field.mesh.count; i++) {
-      const forcing = field.ExternalCoastalForcing.get(i);
+      const forcing = received.get(i);
       if (forcing > 1000 || (forcing > 0 && field.WaterKindCodes.get(i) !== 0))
         throw new Error("External coastal forcing must target dry terrain.");
     }
-    const frame = tools.shoreFrame(
-        p.CoastalActiveWidth * span,
-        ask("waveEnergy"),
-        field.ExternalCoastalForcing
-      ),
+    const frame = tools.shoreFrame(p.CoastalActiveWidth * span, ask("waveEnergy"), received),
       loads = tools.scratch("coast:loads");
     for (let i = 0; i < field.mesh.count; i++) {
       const forcing = frame.strength.get(i),
@@ -112,6 +109,5 @@ export const outsideWaves = defineProcess({
     }
     tools.depositShoreLoads(c, frame, loads, true);
     tools.release(loads, frame.strength, frame.coverage, frame.source);
-    field.ExternalCoastalForcing.fill(0);
   },
 });

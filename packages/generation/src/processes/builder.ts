@@ -2,29 +2,21 @@ import type { PhysicalContext } from "../world/context";
 import type { PhysicalBufferName, PhysicalField } from "../world/field";
 import type { AnswerKey } from "../coupling/answers";
 import type { Pool } from "../coupling/flows";
-import type { GroundProcess } from "./groundProcess";
+import type { FieldProcess, PhysicalInput, PhysicalQuery } from "./groundProcess";
+import { defineCommand, defineQuery, type Command, type OperationKind } from "../processOperation";
 
-/** A process with a long-lived body that works on the whole field. */
-export interface BuilderEntry {
+interface FieldEntry {
   id: string;
-  /** What it does, in a sentence. */
   statement: string;
-  /** Bands it cannot run without, which a selected step must have written earlier. */
   needs?: readonly PhysicalBufferName[];
-  /** Bands other steps can rely on once it has run. */
   provides?: readonly PhysicalBufferName[];
-  /** What it leaves that is not a band. */
   leaves?: readonly string[];
-  /** Each `[from, to]` it moves material between; nothing, for what only reads the land. */
   moves?: readonly (readonly [Pool, Pool])[];
-  /** What it asks of the world, by key. */
   asks?: readonly AnswerKey[];
-  /** What must hold once it has run, or the run is wrong. */
   check?: (map: PhysicalField, context: PhysicalContext) => void;
-  build: (map: PhysicalField, context: PhysicalContext) => void;
+  execute: (input: PhysicalInput) => void;
 }
-/** Adapts an existing algorithm to the sequence; needs/provides are scheduling prerequisites. */
-export const builder = (entry: BuilderEntry): GroundProcess => ({
+const declaration = (entry: Omit<FieldEntry, "execute">) => ({
   needs: [],
   provides: [],
   moves: [],
@@ -33,4 +25,38 @@ export const builder = (entry: BuilderEntry): GroundProcess => ({
   reads: [],
   writes: [],
   ...entry,
+  execution: "field" as const,
 });
+
+/** Whole-field commands declare their actual lifecycle; there is no default work category. */
+export type CommandProcess = FieldProcess & { readonly operation: Command<PhysicalInput, void> };
+export function fieldCommand(
+  kind: Exclude<OperationKind, "query" | "elapsed" | "publish">,
+  entry: FieldEntry,
+  dependencies: readonly QueryProcess[]
+): CommandProcess {
+  const { execute, ...metadata } = entry;
+  return {
+    ...declaration(metadata),
+    operation: defineCommand(
+      entry.id,
+      kind,
+      execute,
+      dependencies.map((dependency) => dependency.operation)
+    ),
+  };
+}
+export type QueryProcess = FieldProcess & { readonly operation: PhysicalQuery };
+/** Queries retain executable dependencies when a map replaces their algorithm. */
+export function fieldQuery(entry: FieldEntry, dependencies: readonly QueryProcess[]): QueryProcess {
+  const { execute, ...metadata } = entry;
+  return {
+    ...declaration(metadata),
+    operation: defineQuery(
+      entry.id,
+      ({ map, context }: PhysicalInput) =>
+        execute({ map, context: { ...context, Span: 0, LocalDevelopment: false } }),
+      dependencies.map((dependency) => dependency.operation)
+    ),
+  };
+}

@@ -16,89 +16,8 @@ import {
 import type { Geometry } from "geojson";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { atlasInitialState } from "../atlasInitialState";
-import { structureChannels } from "../world/atlasChannels";
 import type { GenerationState } from "../process";
 
-/**
- * The present channels a child map reads from its pinned inputs. Physical history channels
- * stay with the world; the regional processes read what the present is and how it is
- * organized (grain, strain, reworking, volcanic construction), never an execution state.
- */
-const presentChannels = new Set([
-  "elevation",
-  "rock",
-  "rockKind",
-  ...structureChannels,
-  "fracture",
-  "geothermal",
-  "margin",
-  "oceanDistance",
-  "glacialErosion",
-  "continentalFraction",
-  "tectonicStrain",
-  "structuralGrainX",
-  "structuralGrainY",
-  "volcanicConstruction",
-  "canopyAge",
-  "peatCarbon",
-  "iceThickness",
-  "ice",
-  "seaDatum",
-  "seaLevel",
-  "temperature",
-  "moisture",
-  "rainfall",
-  "snowfall",
-  "runoff",
-  "windEast",
-  "windNorth",
-  "soilDepth",
-  "soilWater",
-  "groundwaterStorage",
-  "floodplain",
-  "delta",
-  "populationDensity",
-  "populationCapacity",
-  "treeCover",
-  "grassCover",
-  "wetlandCover",
-  "soilCarbon",
-  "mineralNutrients",
-  "heat",
-  "storedHeat",
-  "quickening",
-  "stillness",
-  "fog",
-  "verdure",
-  "salting",
-  "warding",
-  "tearing",
-  "water",
-  "waterDepth",
-  "waterLevel",
-  "flow",
-  "catchmentArea",
-  "riverOrder",
-  "slope",
-  "sediment",
-  "erosion",
-  "biome",
-  "naturalSurface",
-  "finalSurface",
-  "secondSurface",
-  "physicalMaterial",
-  "landform",
-  "waveExposure",
-  "stormTrack",
-  "upwelling",
-  "aquaticFauna",
-  "naturalTemperature",
-]);
-export function refinementChannel(name: string) {
-  // Published magic includes fractional classes and origin-specific material context,
-  // not just intensity. These are present inputs, never a historical execution state.
-  return presentChannels.has(name) || name.startsWith("magic:");
-}
 export function isRegionalRefinement(source: DomainSnapshot, areaId: string) {
   return !!source.world.areas[areaId]?.map;
 }
@@ -106,11 +25,22 @@ export function isRegionalRefinement(source: DomainSnapshot, areaId: string) {
 export function refinementInputFields(source: DomainSnapshot, areaId: string, physical = true) {
   return source.world.fields.filter((f) => f.areaId === areaId && (!physical || f.input));
 }
+/** Material written at the captured present follows that run's completed epochs. */
+export function capturedEpochCount(source: DomainSnapshot, areaId: string, physical: boolean) {
+  const field = refinementInputFields(source, areaId, physical).find((f) =>
+    f.channels?.includes("Elevation")
+  );
+  return (
+    source.world.generations.find((run) => run.id === field?.source.id)?.physicalEpochs?.length ?? 0
+  );
+}
 export function refinementReads(source: DomainSnapshot, areaId: string, physical = true) {
+  // Publication owners already selected these durable facts. Capture their resource mapping
+  // as a whole; a second channel list would silently drop newly supported retained inputs.
   return refinementInputFields(source, areaId, physical)
     .map((field) => ({
       fieldId: field.id,
-      names: (field.channels ?? []).filter(refinementChannel),
+      names: [...(field.channels ?? [])],
     }))
     .filter((field) => field.names.length);
 }
@@ -125,7 +55,7 @@ export function sampleSpan(grid: Grid) {
 /** The pinned parent's sample span: the scale of the captured macro character. */
 export function parentSampleSpan(source: DomainSnapshot, areaId: string, physical: boolean) {
   const grids = refinementInputFields(source, areaId, physical)
-    .filter((f) => f.channels?.includes("elevation") && source.numerical[f.id])
+    .filter((f) => f.channels?.includes("Elevation") && source.numerical[f.id])
     .map((f) => source.numerical[f.id])
     .sort((a, b) => sampleSpan(b) - sampleSpan(a));
   return grids.length ? sampleSpan(grids[0]) : (source.scope.resolution ?? 0) * 4;
@@ -136,7 +66,7 @@ export function refinementFootprint(source: DomainSnapshot, areaId: string, phys
   if (physical && source.world.areas[areaId].map?.extent)
     return source.world.areas[areaId].map!.extent!;
   const fields = source.world.fields.filter(
-    (f) => f.areaId === areaId && f.channels?.includes("elevation")
+    (f) => f.areaId === areaId && f.channels?.includes("Elevation")
   );
   return (
     fields.find((f) => f.input === physical && f.footprint)?.footprint ??
@@ -209,7 +139,6 @@ export function regionalInitialState(
     };
   return atlasInitialState(framed, input, cache, {
     cellSpan,
-    channels: refinementChannel,
     // The display surface is sampled at this map's own cell span, the lattice's span.
     surfaceSpan: cellSpan,
   });

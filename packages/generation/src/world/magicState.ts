@@ -15,7 +15,8 @@ import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { weightScale } from "./transportPlan";
 import { createConfluenceWorkspace, type ConfluenceWorkspace } from "./magicConfluences";
-import { inheritMagicChannel } from "./magicInheritance";
+import { inheritMagicChannel, sourceSiteCells } from "./magicInheritance";
+import { bindMagicIceMelt } from "./magicStocks";
 import { depositSaltBed } from "../rock/rockMagicStock";
 import { stockGroundHosts } from "../rock/rockMagicStock";
 import { GroundInventory } from "../rock/groundInventory";
@@ -27,6 +28,7 @@ import {
   carriedMagicChannels,
   magicChannels,
   magicFieldDefinitions,
+  societyChannels,
   type MagicChannel,
 } from "./magicFieldDefinitions";
 
@@ -46,6 +48,8 @@ export interface MagicField extends Record<MagicChannel, Band> {
   located: LocatedSource[];
   /** Each origin's own source strength per cell; `source` is their maximum. */
   originSources: Record<string, Band>;
+  /** Captured discrete source candidates; their strength and receiving medium remain current. */
+  inheritedSites?: Record<string, Int32Array>;
   /** Amount of the system per cell in each origin reservoir, keyed by `stockKey`. */
   stocks: Record<string, MagicInventory>;
   /** Impact events whose fall has already seeded a finite stock. */
@@ -96,7 +100,7 @@ export function configuredConfluences(state: GenerationState) {
   return state.domain.world.confluences ?? canonryConfluencePresets();
 }
 export const magicKey = (field: MagicField, channel: string) =>
-  `magic:${field.definition.id}:${channel}`;
+  `magic:${field.definition.id}:${channel}` as const;
 export const stockKey = (origin: MagicOrigin, stock: MagicStock) => `${origin.id}/${stock.id}`;
 /** An origin that declares no stock holds its source in one default reservoir. */
 export const defaultStock: MagicStock = { id: "held", reservoir: "held", carriers: [] };
@@ -213,9 +217,16 @@ function inheritMagicField(state: GenerationState, field: MagicField) {
       field.originSources[origin.id],
       siteSources.has(origin.source) ? "site-strength" : "intensive"
     );
+  inheritSourceSites(field);
   // Falls the parent already seeded arrive with their stock, not again.
   for (const event of state.physical!.map.events)
     if (event.kind === "impact") field.seeded.add(event.id);
+}
+function inheritSourceSites(field: MagicField) {
+  field.inheritedSites = {};
+  for (const origin of field.definition.origins)
+    if (origin.source === "geothermal" || origin.source === "deep-ocean")
+      field.inheritedSites[origin.id] = sourceSiteCells(field.originSources[origin.id]);
 }
 /**
  * Take an amount of a system's stock in one reservoir out of the world at a cell, as mining,
@@ -276,6 +287,9 @@ export function initializeMagic(
   confluences = configuredConfluences(state)
 ) {
   const map = state.physical!.map;
+  if (state.physical!.inherited)
+    for (const [name, , quantity] of societyChannels)
+      inheritMagicChannel(state, name, map[name], quantity);
   const allocate = (name: string) => retainedArray(map, "float64", `magic:${name}`);
   state.physical!.magic = {
     fields: enabled
@@ -300,6 +314,7 @@ export function initializeMagic(
   };
   bindCarrierCosts(map, () => state.physical?.magic?.carrierCost);
   bindMagicGroundwater(state);
+  bindMagicIceMelt(state);
 }
 /**
  * Move what the crust carries. History channels follow the dominant source of each cell;

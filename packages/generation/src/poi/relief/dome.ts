@@ -14,7 +14,6 @@ import {
   lastsWhile,
   meanOf,
   nearestOrTop,
-  raisedAsCaptured,
   reliefOf,
   sameSpot,
   sitingAdmits,
@@ -59,7 +58,7 @@ export const dome: PoiEntry = {
   },
   existence: {
     statement:
-      "Both: an eroded dome is sited on quiet low dry ground by a landmark record, which exposes its rings as erosion goes on; a salt dome emerges wherever a buried bed meets enough strain, one bounded rise an epoch.",
+      "Both: an eroded dome is sited on quiet low dry ground by a landmark record, which exposes its rings as erosion goes on; a salt dome emerges wherever a retained buried bed meets strain.",
     way: "both",
     requires: sitingAdmits("dome-ring"),
     suitability: sitingSuits("dome-ring"),
@@ -86,12 +85,14 @@ export const dome: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A dome-ring record is re-placed on the refined map; its rings are maintained by its own cause and the network treats each rim as dear ground. A salt dome keeps the lift it carried: the developed top near it stands as high as the parent's ground did.",
+      "Captured domed ground develops with the child's materials and water. The name resolves near the local top, and the network treats its rims as dear ground.",
     carry: carryWhereItLands,
-    realize: (state, carried) => raisedAsCaptured(state, carried, counterpart(state, carried)),
+    realize: notApplicable(
+      "Captured domed ground develops locally without restoring parent heights."
+    ),
     counterpart,
     unrealized: stays,
-    settle: notApplicable("Its lift is bounded per epoch; a round's water does not change it."),
+    settle: notApplicable("Ground development changes the dome; the named place adds no lift."),
     schedule: notApplicable(
       "A dome-ring record has its landmark cause; a salt dome needs no step."
     ),
@@ -138,7 +139,7 @@ export const dome: PoiEntry = {
   },
   time: {
     statement:
-      "A ring dome's relief grows as erosion cuts the soft rings; a salt dome rises until its bound is spent or its bed has seeped away. A record keeps its rings; a salt dome lasts while its lift is on the books.",
+      "A ring dome's relief grows as erosion cuts the soft rings; a salt dome rises where retained salt meets strain. Its exposed materials continue to weather after that forcing ends.",
     fate: lastsWhile(isA),
   },
   visibility: {

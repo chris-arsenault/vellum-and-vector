@@ -1,3 +1,5 @@
+import { mapCommand, processOwner } from "../processTraits";
+import { runOperation } from "../processOperation";
 import { requireThat, type DomainSnapshot } from "@atlas/domain";
 import { decayMaintainedGround } from "../societyRecord";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
@@ -10,7 +12,7 @@ import {
   describeNativeStep,
   withPlateDeformation,
 } from "./physicalSteps";
-import { plateDeformationSteps } from "../physicalFeatureSequence";
+import { plateDeformationSteps, bindFeatureQueries } from "../physicalFeatureSequence";
 import { nativeContext } from "./context";
 import { atlasQuality } from "./atlasProfile";
 import { configuredPhysicalProfile } from "../physicalProfileConfiguration";
@@ -20,11 +22,12 @@ import {
   parentChannels,
   type AtlasPhysicalWorkspace,
 } from "./atlasWorkspace";
-import { projectNative } from "./atlasProjection";
+import { projectNative, selectedNativeProjection } from "./atlasProjection";
 import { extractNativeGeography } from "./atlasFeatures";
 import { extractConfluencePlaces } from "./geographicRegions";
 import { publishKinds } from "../poi/poiPublish";
 import { contributeForcing } from "./atlasForcing";
+import { bindCoastalForcing } from "./coastalForcing";
 import { featureRevisions } from "../generationFeatures";
 import { reconcileWater } from "./field";
 import type { NativeStep } from "./sequence";
@@ -32,16 +35,16 @@ import { advectMagic } from "./magicState";
 import { retainGeographicIdentities } from "./geographicIdentity";
 import { refreshGrounding } from "./glacierSurface";
 import { adaptiveReliefProcess } from "./adaptiveRelief";
-import { applyPlaceEffects } from "../poi/poiEffects";
+import { applyPlaceEffects, bindPlaceInfluences } from "../poi/poiEffects";
 import { generationBindings } from "../generationBindings";
 import { absenceInitialization } from "./absenceInitialization";
-import { nativeBehavior } from "./physicalProducts";
+import { nativeMapOperation } from "./physicalProducts";
 import { atlasPublicationDefinitions, selectedAtlasChannels } from "./atlasPublications";
 import { inheritedChannelNames, inheritedProducts } from "./inheritedFacts";
 
 const nativeFlags: MapProcess["contract"]["parameters"] = {
   initial: { type: "boolean", unit: null, required: false, default: false },
-  unforced: { type: "boolean", unit: null, required: false, default: false },
+  workSpan: { type: "number", unit: null, required: false, default: 1 },
 };
 const contract = (id: string, requires: string[] = [], produces: string[] = []) => ({
   id,
@@ -59,7 +62,7 @@ function validateWorkspace(state: GenerationState) {
 function restoreAuthoring(work: AtlasPhysicalWorkspace) {
   composeNativeAuthoring(work);
   for (const { binding, values } of work.fixed) {
-    if (binding.native !== "Elevation") continue;
+    if (binding.name !== "Elevation") continue;
     for (let i = 0; i < values.length; i++)
       if (Number.isFinite(values.get(i))) reconcileWater(work.map, i);
   }
@@ -93,25 +96,26 @@ export function nativeProcess(
       ),
       parameters: nativeFlags,
     },
-    behavior: nativeBehavior(declared.movesMaterial, async (state, context) => {
+    operation: nativeMapOperation(`atlas.${name}`, step[2], (state, context, exposure) => {
       const work = state.physical!;
       const c = {
         ...nativeContext(state, context, salt),
         // Magic rides the crust: what it carries moves whenever the plates do.
         AfterPlateStep: () => advectMagic(state),
       };
+      c.Span = exposure;
+      c.LocalDevelopment = "regional" in state && exposure > 0;
       if (context.parameters.initial) {
         c.EpochIndex = 0;
         c.Seed = generationBindings(context).seed ^ salt ^ 0x45d9f3b;
       }
-      restoreAuthoring(work);
-      if (context.parameters.unforced) work.map.ExternalHeatForcing.fill(0);
+      if (step[2].kind !== "query") restoreAuthoring(work);
       applyNativeStep(
         work.map,
         name === "plate-advection" ? withPlateDeformation(work.map, c, deformation) : c,
         step
       );
-      restoreAuthoring(work);
+      if (step[2].kind !== "query") restoreAuthoring(work);
       afterStep[name]?.(state, context, c.EpochIndex);
     }),
     validate: validateWorkspace,
@@ -152,9 +156,10 @@ function initializeProcess(): MapProcess {
       [],
       ["atlas:workspace", fieldProduct("SedimentSupply"), fieldProduct("FractureConductance")]
     ),
-    behavior: {
-      kind: "initialize",
-      initialize(state, context) {
+    operation: mapCommand(
+      "atlas.initialize",
+      "initialize",
+      (state, context) => {
         const bound = generationBindings(context);
         requireThat(
           bound.quality in atlasQuality,
@@ -167,6 +172,9 @@ function initializeProcess(): MapProcess {
           bound.parameters,
           configuredPhysicalProfile(bound.features)
         );
+        bindFeatureQueries(state.physical.map, bound.features, bound.seed);
+        bindPlaceInfluences(state);
+        bindCoastalForcing(state);
         if (state.physical.inherited)
           for (const product of inheritedProducts([
             ...Object.keys(state.surface.channels),
@@ -174,7 +182,8 @@ function initializeProcess(): MapProcess {
           ]))
             context.products?.produce(product);
       },
-    },
+      []
+    ),
     validate: validateWorkspace,
   };
 }
@@ -184,12 +193,24 @@ function projectProcess(input: AtlasGenerationInput, forcingOnly = false): MapPr
     .filter((definition) => definition.kind === "field" && definition.publish !== false)
     .map((definition) => (definition.kind === "field" ? definition.channel : ""));
   const outputs = forcingOnly
-    ? ["elevation", "geology", "fracture", "naturalTemperature", "naturalRock"]
+    ? [
+        "Elevation",
+        "geology",
+        "FractureConductance",
+        "NaturalTemperature",
+        "NaturalRockResistance",
+        "BaseSeaLevel",
+        "EffectiveSeaLevel",
+      ]
     : [
-        ...(channels.has("elevation") ? ["elevation"] : []),
-        ...(["bedrock", "rock", "sediment"].every((name) => channels.has(name)) ? ["geology"] : []),
-        ...(channels.has("fracture") ? ["fracture"] : []),
-        ...(projected.includes("flow") ? ["flow"] : []),
+        ...(channels.has("Elevation") ? ["Elevation"] : []),
+        ...((["BedrockElevation", "RockResistance", "SedimentThickness"] as const).every((name) =>
+          channels.has(name)
+        )
+          ? ["geology"]
+          : []),
+        ...(channels.has("FractureConductance") ? ["FractureConductance"] : []),
+        ...(projected.includes("FlowAccumulation") ? ["FlowAccumulation"] : []),
       ];
   return {
     contract: {
@@ -200,31 +221,39 @@ function projectProcess(input: AtlasGenerationInput, forcingOnly = false): MapPr
       ),
       workspaceOnly: false,
     },
-    behavior: {
-      kind: "extract",
-      extract(state, context) {
-        projectNative(
-          state,
-          forcingOnly,
-          !generationBindings(context).domains.includes("physical"),
-          forcingOnly ? undefined : selectedAtlasChannels(generationBindings(context).features),
-          new Set(
-            (state.publications ?? []).flatMap((definition) =>
-              definition.kind === "field" && definition.publish !== false
-                ? [definition.channel]
-                : []
-            )
-          )
+    operation: mapCommand(
+      forcingOnly ? "atlas.project-forcing" : "atlas.project",
+      "publish",
+      (state, context) => {
+        runOperation(
+          processOwner(state),
+          projectNative,
+          selectedNativeProjection(state, context, forcingOnly)
         );
       },
-    },
+      []
+    ),
     validate: validateWorkspace,
   };
 }
 function forcingProcess(): MapProcess {
   return {
-    contract: contract("atlas.forcing", ["atlas:workspace"]),
-    behavior: { kind: "forcing-contributor", contribute: contributeForcing },
+    contract: {
+      ...contract("atlas.forcing", ["atlas:workspace"]),
+      parameters: {
+        includeStandalone: { type: "boolean", unit: null, required: false, default: true },
+      },
+    },
+    operation: mapCommand(
+      "atlas.forcing",
+      "event",
+      (state, context) =>
+        runOperation(processOwner(state), contributeForcing, {
+          state,
+          includeStandalone: Boolean(context.parameters.includeStandalone),
+        }),
+      []
+    ),
     validate: validateWorkspace,
   };
 }
@@ -232,16 +261,17 @@ function forcingProcess(): MapProcess {
 function placeEffectsProcess(): MapProcess {
   return {
     contract: contract("poi.effects", ["atlas:workspace"]),
-    behavior: { kind: "forcing-contributor", contribute: applyPlaceEffects },
+    operation: mapCommand("poi.effects", "event", applyPlaceEffects, []),
     validate: validateWorkspace,
   };
 }
 function epochStartProcess(): MapProcess {
   return {
     contract: contract("atlas.begin-epoch", ["atlas:workspace"]),
-    behavior: {
-      kind: "initialize",
-      initialize(state, context) {
+    operation: mapCommand(
+      "atlas.begin-epoch",
+      "event",
+      (state, context) => {
         const map = state.physical!.map;
         decayMaintainedGround(
           map,
@@ -257,7 +287,8 @@ function epochStartProcess(): MapProcess {
         state.physical!.magic?.melt.fill(0);
         state.physical!.magic?.coastal.fill(0);
       },
-    },
+      []
+    ),
     validate: validateWorkspace,
   };
 }
@@ -267,22 +298,27 @@ function finishProcess(original: DomainSnapshot): MapProcess {
       ...contract("atlas.features", ["atlas:validated"], ["geographicFeatures"]),
       workspaceOnly: false,
     },
-    behavior: {
-      kind: "extract",
-      extract(state, context) {
+    operation: mapCommand(
+      "atlas.features",
+      "publish",
+      (state, context) => {
         const before = new Map(featureRevisions(state));
         const selected = generationBindings(context).features.selection;
         const enabled = (id: string) => selected[id].enabled;
-        extractNativeGeography(state, context, {
-          oceans: enabled("ocean.geography"),
-          impacts: enabled("physical.impacts"),
-          volcanism: enabled("physical.volcanism"),
-          fractures: enabled("physical.fractures"),
-          lakes: enabled("water.routing"),
-          landforms: enabled("physical.landforms"),
-          ecology: enabled("ecology.living"),
-          rivers: enabled("physical.river-networks"),
-          landmarks: enabled("physical.landmarks"),
+        runOperation(processOwner(state), extractNativeGeography, {
+          state,
+          context,
+          deliveries: {
+            oceans: enabled("ocean.geography"),
+            impacts: enabled("physical.impacts"),
+            volcanism: enabled("physical.volcanism"),
+            fractures: enabled("physical.fractures"),
+            lakes: enabled("water.routing"),
+            landforms: enabled("physical.landforms"),
+            ecology: enabled("ecology.living"),
+            rivers: enabled("physical.river-networks"),
+            landmarks: enabled("physical.landmarks"),
+          },
         });
         const generated = new Set(
           [...featureRevisions(state)]
@@ -296,7 +332,8 @@ function finishProcess(original: DomainSnapshot): MapProcess {
           generated
         );
       },
-    },
+      []
+    ),
     validate: validateWorkspace,
   };
 }
@@ -308,9 +345,10 @@ export function magicPlacesProcess(original: DomainSnapshot): MapProcess {
       ...contract("atlas.magic-places", [], ["magicalPlaces"]),
       workspaceOnly: false,
     },
-    behavior: {
-      kind: "extract",
-      extract(state, context) {
+    operation: mapCommand(
+      "atlas.magic-places",
+      "publish",
+      (state, context) => {
         if (!state.physical) return;
         context.progress(0, "Extracting magical places");
         const before = new Map(featureRevisions(state));
@@ -324,7 +362,8 @@ export function magicPlacesProcess(original: DomainSnapshot): MapProcess {
         retainGeographicIdentities(state, original, state.physical.map.mesh.spacing * 2, generated);
         context.progress(1, "Magical places extracted");
       },
-    },
+      []
+    ),
     validate: () => [],
   };
 }

@@ -1,13 +1,9 @@
-import { MapScale, type Band, type ReadBand } from "@atlas/domain";
+import { MapScale, rockLayers, type Band, type ReadBand } from "@atlas/domain";
 import type { PhysicalContext } from "../../../packages/generation/src/world/context";
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import { meshDeltaX } from "../../../packages/generation/src/world/mesh";
 import { rockKindOfCode } from "../../../packages/generation/src/rock/rockCatalogue";
-import {
-  layerDepth,
-  layerKind,
-  rockLayers,
-} from "../../../packages/generation/src/rock/rockColumn";
+import { layerDepth, layerKind } from "../../../packages/generation/src/rock/rockColumn";
 import { rockBodies, type BodyGround } from "./reliefBodies";
 import { smoothMetric } from "../../../packages/generation/src/world/metricSmoothing";
 import {

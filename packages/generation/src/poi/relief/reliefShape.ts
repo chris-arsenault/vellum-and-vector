@@ -12,16 +12,7 @@ import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { parentSpanOf } from "../poiCarry";
 import type { PoiCarried, PoiFate, PoiFieldChange, PoiPlace } from "../poiContract";
-import {
-  cellsWithin,
-  fieldOf,
-  gap,
-  heldFor,
-  isLand,
-  magicValue,
-  metres,
-  nearestWhere,
-} from "../poiReads";
+import { cellsWithin, fieldOf, gap, heldFor, magicValue, metres, nearestWhere } from "../poiReads";
 
 type IsA = (state: GenerationState, cell: number) => boolean;
 
@@ -189,27 +180,6 @@ export const holdGradient = (
     gradient: Math.min(ceiling, map.Slope.get(cell)),
   }));
 };
-
-const capturedAt = (state: RegionalState, carried: PoiCarried) =>
-  state.regional.inheritedHeight.get(carried.cell);
-/** The finer ground at a cell stands at least as high as the parent's place stood. */
-export const raisedAsCaptured = (
-  state: RegionalState,
-  carried: PoiCarried,
-  cell: number
-): readonly PoiFieldChange[] =>
-  cell < 0 || !isLand(state, cell)
-    ? []
-    : [{ change: "atLeast", band: "Elevation", cell, value: capturedAt(state, carried) }];
-/** The finer ground at a cell lies no higher than the parent's place lay. */
-export const loweredAsCaptured = (
-  state: RegionalState,
-  carried: PoiCarried,
-  cell: number
-): readonly PoiFieldChange[] =>
-  cell < 0 || !isLand(state, cell)
-    ? []
-    : [{ change: "atMost", band: "Elevation", cell, value: capturedAt(state, carried) }];
 
 function extremeNear(state: RegionalState, cell: number, sign: 1 | -1) {
   const map = fieldOf(state);

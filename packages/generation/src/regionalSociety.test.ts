@@ -7,10 +7,12 @@ import {
   rectangle,
   type SocietyCommunity,
   type SocietyRegion,
+  fieldChannelName,
 } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import type { MapProcessContext } from "./process";
-import { initializePopulation } from "./societyPopulation";
+import { supplySociety } from "./societyTestFixture";
+import { inheritSociety } from "./societyInheritance";
 import { emptySupport } from "./societySupport";
 import { publishPolitics } from "./societyPoliticalPublication";
 
@@ -96,18 +98,18 @@ function fixture() {
   state.domain.scope = { ...state.domain.scope, footprint, resolution: 10000 };
   state.surface = createGrid("area", state.domain.scope, 13, 9);
   for (const [key, value] of Object.entries({
-    elevation: 100,
-    temperature: 18,
-    moisture: 1,
-    soilDepth: 1,
-    productivity: 1,
-    grassCover: 0.5,
-    riverOrder: 2,
+    Elevation: 102400,
+    Temperature: 480,
+    Moisture: 1000,
+    SoilDepth: 1,
+    Productivity: 1,
+    GrassCover: 0.5,
+    RiverOrders: 2,
   }))
     putChannel(
       state.surface,
-      key,
-      key === "elevation" ? "metre" : "index",
+      fieldChannelName(key),
+      key === "Elevation" ? "native-length" : "index",
       generateChannel(state.surface, key, () => value)
     );
   const context: MapProcessContext = {
@@ -126,7 +128,7 @@ function fixture() {
 }
 
 it("keeps an inherited polity's world identity and character when publishing a partial territory", () => {
-  const { state, context, prior } = fixture(),
+  const { state, prior } = fixture(),
     id = "old-polity";
   prior.politics = {
     polities: [{ id, seat: "A", support: 1, status: "active", claims: ["A", "B"], causes: [] }],
@@ -147,7 +149,8 @@ it("keeps an inherited polity's world identity and character when publishing a p
   };
   state.domain.world.entities[id] = entity;
   const before = structuredClone(entity);
-  initializePopulation(state, context);
+  supplySociety(state);
+  inheritSociety(state, prior);
   publishPolitics(state);
   expect(state.domain.world.entities[id]).toEqual(before);
   expect(state.society!.region.politics?.polities[0].id).toBe(id);

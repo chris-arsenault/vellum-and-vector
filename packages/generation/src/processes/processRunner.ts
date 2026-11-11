@@ -1,10 +1,17 @@
 import type { PhysicalContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
-import { ask, worldMoved } from "../coupling/answers";
+import { ask } from "../coupling/answers";
+import {
+  commandBatch,
+  defineCommand,
+  defineQuery,
+  readOperation,
+  runOperation,
+} from "../processOperation";
 import "../coupling/responders";
 import { Stage } from "../coupling/stage";
 import { groundOf } from "../rock/ground";
-import type { GroundProcess, ProcessWork } from "./groundProcess";
+import type { GroundProcess, PhysicalInput, StageWork, StageProcess } from "./groundProcess";
 import { toolsFor } from "./processTools";
 
 function workFor(
@@ -13,9 +20,9 @@ function workFor(
   stage: Stage,
   substep: number,
   span: number
-): ProcessWork<never, never> {
+): StageWork {
   return {
-    field: map as never,
+    field: map,
     context,
     settings: context.Profile,
     ground: groundOf(map),
@@ -36,28 +43,30 @@ const substepsOf = (each: GroundProcess, context: PhysicalContext) =>
 function inSubsteps(
   map: PhysicalField,
   context: PhysicalContext,
-  processes: readonly GroundProcess[],
+  processes: readonly StageProcess[],
   simultaneous: boolean
 ) {
   const stage = new Stage(map, { simultaneous }),
     count = Math.max(...processes.map((each) => substepsOf(each, context))),
-    operations = processes.map((each) => each.prepare?.(map)),
+    operations = processes.map((each) => each.prepare(map)),
     questions = new Set(processes.flatMap((each) => each.asks));
   for (let substep = 0; substep < count; substep++) {
-    worldMoved(map);
     // Resolve the group's inputs before any participant runs. The next group reads landed effects.
     for (const key of questions) ask(map, key, context);
     groundOf(map).heldBy(ask(map, "rootHold", context));
     const work = workFor(map, context, stage, substep, context.Span / count);
-    for (const [index, each] of processes.entries()) {
-      context.ObserveProcess?.({ processes: [each.id], phase: "before", substep }, map, context);
-      (each.run as (w: ProcessWork<never, never>) => void)({
-        ...work,
-        tools: { ...work.tools, ...operations[index] },
-      });
-      context.ObserveProcess?.({ processes: [each.id], phase: "after-run", substep }, map, context);
-    }
-    stage.settle();
+    commandBatch(map, () => {
+      for (const [index, each] of processes.entries()) {
+        context.ObserveProcess?.({ processes: [each.id], phase: "before", substep }, map, context);
+        runOperation(map, operations[index], work);
+        context.ObserveProcess?.(
+          { processes: [each.id], phase: "after-run", substep },
+          map,
+          context
+        );
+      }
+      stage.settle();
+    });
     context.ObserveProcess?.(
       {
         processes: processes.map((each) => each.id),
@@ -74,20 +83,22 @@ export const actBy =
   (...processes: readonly GroundProcess[]) =>
   (map: PhysicalField, context: PhysicalContext) => {
     for (const each of processes) {
-      if (each.build) {
-        worldMoved(map);
+      if (each.execution === "stage") inSubsteps(map, context, [each], false);
+      else if (each.operation.kind === "query")
+        readOperation(map, each.operation, { map, context });
+      else {
         context.ObserveProcess?.(
           { processes: [each.id], phase: "before", substep: 0 },
           map,
           context
         );
-        each.build(map, context);
+        runOperation(map, each.operation, { map, context });
         context.ObserveProcess?.(
           { processes: [each.id], phase: "settled", substep: 0 },
           map,
           context
         );
-      } else inSubsteps(map, context, [each], false);
+      }
       each.check?.(map, context);
     }
   };
@@ -96,10 +107,34 @@ export const actBy =
  * material they share it. A body on the whole field, or a solver that settles itself, cannot join.
  */
 export const actTogether = (...processes: readonly GroundProcess[]) => {
-  const alone = processes.find((each) => each.build || each.settlesItself);
+  const alone = processes.find((each) => each.execution !== "stage" || each.settlesItself);
   if (alone) throw new Error(`${alone.id} cannot run together with others.`);
   return (map: PhysicalField, context: PhysicalContext) => {
-    inSubsteps(map, context, processes, true);
+    inSubsteps(
+      map,
+      context,
+      processes.filter((each) => each.execution === "stage"),
+      true
+    );
     for (const each of processes) each.check?.(map, context);
   };
 };
+
+/** Composition takes its lifecycle from explicit executable children, never a default pass. */
+export function nativeOperation(
+  name: string,
+  processes: readonly GroundProcess[],
+  together = false
+) {
+  const kinds = processes.map((process) =>
+    process.execution === "stage" ? "work" : process.operation.kind
+  );
+  const execute = together ? actTogether(...processes) : actBy(...processes);
+  const apply = ({ map, context }: PhysicalInput) => execute(map, context);
+  if (kinds.every((kind) => kind === "query")) return defineQuery(name, apply, []);
+  if (kinds.includes("work")) return defineCommand(name, "work", apply, []);
+  if (kinds.includes("event")) return defineCommand(name, "event", apply, []);
+  if (kinds.every((kind) => kind === "initialize" || kind === "query"))
+    return defineCommand(name, "initialize", apply, []);
+  throw new Error(`Unsupported native lifecycle composition: ${name}`);
+}

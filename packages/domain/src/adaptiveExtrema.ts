@@ -1,5 +1,6 @@
 import type { Geometry } from "geojson";
 import type { AdaptiveField } from "./adaptiveField";
+import { requireChannel } from "./grids";
 import { adaptiveCell } from "./adaptiveTopology";
 import { prepareAdaptivePatches, adaptivePointSampler } from "./adaptivePoint";
 import { preparedAdaptivePolynomial, type PreparedAdaptiveCell } from "./adaptiveHermite";
@@ -17,7 +18,7 @@ function bernstein(v: number[]) {
   return [v[0], (sum + difference) / 2, (b - 4 * sum) / 6, (sum - difference) / 2, v[4]];
 }
 function interval(
-  field: AdaptiveField,
+  field: AdaptiveField<string>,
   cell: PreparedAdaptiveCell,
   piece: Piece
 ): [number, number] {
@@ -65,19 +66,19 @@ function split(piece: Piece): Piece[] {
     return region ? [{ i: piece.i, box: box as Bounds, region }] : [];
   });
 }
-function discreteChannel(field: AdaptiveField, channel: string) {
+function discreteChannel(field: AdaptiveField<string>, channel: string) {
   return (
-    ["category", "cell-index"].includes(field.units[channel]) ||
+    ["category", "cell-index"].includes(field.units[channel] ?? "") ||
     ["category", "extensive"].includes(field.quantities?.[channel] ?? "")
   );
 }
 /** Bound the same reconstructed polynomial, including extrema inside clipped cells. */
 export function adaptiveExtrema(
-  field: AdaptiveField,
+  field: AdaptiveField<string>,
   channel: string,
   region: Geometry
 ): [number, number] | null {
-  const values = field.channels[channel],
+  const values = requireChannel(field, channel),
     patch = prepareAdaptivePatches(field.topology, values),
     sample = adaptivePointSampler(field.topology, values, undefined, patch);
   const discrete = discreteChannel(field, channel);

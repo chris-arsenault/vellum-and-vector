@@ -13,6 +13,25 @@ import {
 
 const mesh = createWorldMesh([2e6, 3e6, 2.2e6, 3.1e6], 1024, 30_000);
 
+it("reuses scalar mesh topology while reading changed terrain values", () => {
+  const local = createWorldMesh([-100, -100, 100, 100], 64, 0),
+    values = new Float64Array(local.count).fill(10),
+    sample = physicalSampler(local, values),
+    cell = local.cellAt(0, 0),
+    x = local.x(cell) + local.spacing * 0.1,
+    y = local.y(cell),
+    address = vi.spyOn(local, "address"),
+    locate = vi.spyOn(local, "cellAt");
+  expect(sample(x, y)).toBe(10);
+  expect(address).toHaveBeenCalledOnce();
+  values.fill(-7);
+  expect(sample(x, y)).toBe(-7);
+  expect(address).toHaveBeenCalledOnce();
+  expect(locate).toHaveBeenCalledOnce();
+  address.mockRestore();
+  locate.mockRestore();
+});
+
 it("captures fixed vector values once and renews them for the next sampling interval", () => {
   const xs = new Float64Array(mesh.count).fill(10),
     readX = vi.fn((i: number) => xs[i]),

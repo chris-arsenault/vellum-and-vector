@@ -88,7 +88,7 @@ export function groundedIceWater(map: PhysicalField) {
  * or rises moves the sea instead of being quietly drowned or stranded, and an epoch's eustatic
  * offset applies on top. A datum inherited from a parent (no recorded volume) is never moved.
  */
-function seaLevel(map: PhysicalField, c: PhysicalContext) {
+export function initializeOceanBudget(map: PhysicalField, c: PhysicalContext) {
   const owned = !map.SeaLevelInitialized || map.BaseOceanVolume > 0;
   if (owned && crustForming(map) && map.CompletedEpochCount === 0) {
     let area = 0;
@@ -101,7 +101,10 @@ function seaLevel(map: PhysicalField, c: PhysicalContext) {
     );
     map.BaseOceanVolume = connectedVolume(map, map.BaseSeaLevel) + groundedIceWater(map);
     map.SeaLevelInitialized = true;
-  } else if (map.BaseOceanVolume > 0) {
+  }
+}
+function seaLevel(map: PhysicalField, c: PhysicalContext) {
+  if (map.BaseOceanVolume > 0) {
     map.BaseSeaLevel = Math.max(
       levelForVolume(map, Math.max(0, map.BaseOceanVolume - groundedIceWater(map))),
       lowestBoundary(map) + MapScale.native(map.scale.length(2.5e-7))
@@ -122,7 +125,8 @@ export function enclosedWaterDepth(
   if (connected || (marine && ground >= seaLevel)) return 0;
   return Math.max(0, Math.min(previousDepth, previousSurface - ground));
 }
-export function oceanConnectivity(map: PhysicalField, c: PhysicalContext) {
+/** Current water classification; formation budgets and historical memory are separate commands. */
+export function oceanSurface(map: PhysicalField, c: PhysicalContext) {
   const previousSurface = workingValues(map, "float64", "ocean:previous-surface", (i) =>
       map.WaterSurfaceElevations.get(i)
     ),
@@ -140,8 +144,6 @@ export function oceanConnectivity(map: PhysicalField, c: PhysicalContext) {
   visitConnectedOcean(map, map.EffectiveSeaLevel, (i) => {
     map.WaterKindCodes.set(i, 1);
     map.WaterBodyIds.set(i, 1);
-    // Reconnection washes out the pending isolated-water source; a later basin starts anew.
-    map.LakeMemory.set(i, 0);
     setWaterSurface(map, i, map.EffectiveSeaLevel);
   });
   // The ordinary lake solver owns the next stage adjustment. Connectivity cannot evaporate
@@ -160,4 +162,9 @@ export function oceanConnectivity(map: PhysicalField, c: PhysicalContext) {
     setWaterSurface(map, i, map.Elevation.get(i) + depth);
   }
   releaseWorking(map, previous, previousSurface, marine);
+}
+/** Reconnection consumes an isolated basin's memory only at an explicit water event. */
+export function recordMarineConnections(map: PhysicalField) {
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.WaterKindCodes.get(i) === 1) map.LakeMemory.set(i, 0);
 }

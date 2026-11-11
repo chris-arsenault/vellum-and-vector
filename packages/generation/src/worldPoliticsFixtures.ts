@@ -9,9 +9,9 @@ export function worldPoliticsFixture() {
     n = state.surface.active.length;
   putChannel(
     state.surface,
-    "elevation",
-    "metre",
-    residentBand("float64", new Float64Array(n).fill(100))
+    "Elevation",
+    "native-length",
+    residentBand("float64", new Float64Array(n).fill(100 * 1024))
   );
   const communities: SocietyCommunity[] = [50_000, 200_000, 550_000].map((x, i) => ({
     id: `c${i}`,

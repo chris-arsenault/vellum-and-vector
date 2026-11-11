@@ -1,4 +1,6 @@
 import {
+  fieldChannelName,
+  requireThat,
   areaSpace,
   areaDepth,
   spatial,
@@ -38,8 +40,13 @@ async function reference(
     quantities: FieldReference["quantities"] = {};
   for (const [name, key] of Object.entries(field.channels)) {
     const array = resource.arrays.find((a) => a.name === key)!;
-    units[name] = array.unit;
-    quantities[name] = array.quantity as FieldReference["quantities"][string];
+    requireThat(
+      array.quantity !== "topology",
+      "field_quantity",
+      "Rendered channels contain field samples."
+    );
+    units[fieldChannelName(name)] = array.unit;
+    quantities[fieldChannelName(name)] = array.quantity;
   }
   const result: FieldReference = {
     resourceId: id,
@@ -50,7 +57,7 @@ async function reference(
     channels: structuredClone(field.summaries ?? {}),
     patches: mappedPatches(world, areaId, fieldId, patchSnapshot.fieldPatches).map((p) => ({
       resourceId: p.resourceId,
-      channels: p.channels,
+      channels: p.channels.map(fieldChannelName),
       mapOnly: p.mapOnly ?? false,
     })),
   };
@@ -133,6 +140,7 @@ async function rasterReferences(
       return found ? references.get(found.id) : undefined;
     };
     return (field.channels ?? [])
+      .map(fieldChannelName)
       .filter((name) => !name.startsWith("magicApplied:") && data.units[name] !== "cell-index")
       .map((channel) => ({
         id: field.id,
@@ -149,10 +157,10 @@ async function rasterReferences(
           tolerance: 0,
           revision: world.version,
         },
-        ...(channel === "elevation"
+        ...(channel === "Elevation"
           ? {
-              water: companion("water"),
-              ice: companion("ice"),
+              water: companion("WaterKindCodes"),
+              ice: companion("IceThickness"),
               surface: companion("finalSurface"),
             }
           : {}),

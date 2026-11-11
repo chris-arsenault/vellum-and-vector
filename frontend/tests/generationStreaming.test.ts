@@ -2,6 +2,7 @@ import { expect, test } from "./uiTest";
 test.use({ generationLifecycle: "Verify preview, cancellation and progressive publication." });
 import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
 import { mapImage, openMapSettings } from "./harness";
+import { MapScale } from "@atlas/domain";
 
 test("an epoch preview shows while generation continues and clears on cancellation @rendering", async ({
   page,
@@ -13,7 +14,7 @@ test("an epoch preview shows while generation continues and clears on cancellati
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await page.waitForFunction(() => "generationFixtureSnapshot" in window);
   const blank = await mapImage(page);
-  await page.evaluate(() => {
+  await page.evaluate((elevation) => {
     const fixture = window as unknown as {
       generationFixtureSnapshot: import("@atlas/domain").DomainSnapshot;
       generationFixtureWorker: { onmessage: (event: MessageEvent) => void };
@@ -26,13 +27,14 @@ test("an epoch preview shows while generation continues and clears on cancellati
       height: 2,
       active: new Uint8Array(4).fill(1),
       measures: new Float64Array(4).fill(1),
-      channels: { elevation: new Float64Array([-50, 30, 70, 150]) },
-      units: { elevation: "metre" },
+      channels: { Elevation: new Int32Array(elevation) },
+      units: { Elevation: "native-length" },
+      quantities: { Elevation: "intensive" },
     };
     fixture.generationFixtureWorker.onmessage(
       new MessageEvent("message", { data: { kind: "preview", grid, label: "Formation" } })
     );
-  });
+  }, [-50, 30, 70, 150].map(MapScale.native));
   await expect(page.locator(".map-instruction")).toContainText("Generation preview · Formation");
   await expect(page.getByRole("application", { name: "World map canvas" })).toHaveAttribute(
     "aria-busy",

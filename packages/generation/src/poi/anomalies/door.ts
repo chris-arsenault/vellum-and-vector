@@ -48,6 +48,23 @@ const holdsOpen = (state: GenerationState, cell: number) => {
     strength = field?.originSources.tear;
   return Boolean(field && strength && doorHoldsOpen(state, field, strength)(cell));
 };
+/** Named endpoints confer no crossing unless the current field still joins both eligible ends. */
+export function traversableDoor(
+  pairs: readonly { a: number; b: number }[],
+  cells: readonly number[],
+  eligible: (cell: number) => boolean
+) {
+  const [a, b] = cells;
+  return (
+    cells.length === 2 &&
+    a !== b &&
+    eligible(a) &&
+    eligible(b) &&
+    pairs.some((pair) => (pair.a === a && pair.b === b) || (pair.a === b && pair.b === a))
+  );
+}
+const traversable = (state: GenerationState, place: PoiPlace) =>
+  traversableDoor(doorsOf(state), place.cells, (cell) => holdsOpen(state, cell));
 /** Whether an end's loss is violent: a Fire release at it, or a tear that started to move. */
 const breaksAt = (state: GenerationState, cell: number) => {
   const field = veil(state);
@@ -169,15 +186,17 @@ export const door: PoiEntry = {
   },
   acrossMaps: {
     statement:
-      "A captured door is established evidence: both its ends carry down, it stands on the refined map even where the finer strain falls short, and the pairing may add new doors beside it. An end whose partner lies outside the frame leads nowhere here. Water does not move it.",
+      "A captured door retains its named endpoints. Current strain and competing fields determine whether they remain traversable; a closed door remains a named place. An end whose partner lies outside the frame provides no crossing on this map.",
     carry: carryEnds,
     realize: notApplicable(
-      "`seedDoors` puts a captured door among the field's doors, so `fields` gives it its pool, chill and ring on the finer ground; declaring them again would double them."
+      "Captured endpoints seed pairing candidates once. Shared eligibility removes closed crossings; only current doors receive their active field effects."
     ),
     counterpart,
     unrealized: stays,
     settle: notApplicable("A door's ends are cells of its pair; a round's water moves neither."),
-    schedule: notApplicable("A captured door seeds the field's doors when magic is prepared."),
+    schedule: notApplicable(
+      "Captured pairing candidates are checked by each current-field refresh."
+    ),
   },
   movement: {
     statement:
@@ -190,10 +209,10 @@ export const door: PoiEntry = {
     magic: notApplicable(
       "Physical carriers stop at each end; what people carry moves by the road rule, and a stored Pressure charge cannot pass at all."
     ),
-    links: (_state, place) =>
-      place.cells.length > 1 ? [{ a: place.cells[0], b: place.cells[1] }] : [],
-    crosses: (_state, place) =>
-      place.cells.length > 1 ? ["river", "ridge", "strait", "wetland", "ice", "ward"] : [],
+    links: (state, place) =>
+      traversable(state, place) ? [{ a: place.cells[0], b: place.cells[1] }] : [],
+    crosses: (state, place) =>
+      traversable(state, place) ? ["river", "ridge", "strait", "wetland", "ice", "ward"] : [],
   },
   others: {
     statement:

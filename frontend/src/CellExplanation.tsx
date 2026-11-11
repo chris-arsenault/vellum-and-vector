@@ -1,4 +1,5 @@
 import type { World } from "./types";
+import type { FieldChannelName } from "@atlas/domain";
 import type { CellValue, InspectedFeature } from "./cellInspection";
 import { categoryPalette } from "./rasterPresentation";
 import { Facts } from "./InspectionSurface";
@@ -7,8 +8,8 @@ import { Facts } from "./InspectionSurface";
 const colourChannels = [
   ["finalSurface", "Map colour"],
   ["secondSurface", "Blended with"],
-  ["biome", "Biome"],
-] as const;
+  ["BiomeCodes", "Biome"],
+] as const satisfies readonly (readonly [FieldChannelName, string])[];
 
 /**
  * Why the clicked place looks as it does: the class that colours it (and the magic system
