@@ -59,3 +59,5 @@ export const humanChannels: HumanChannel[] = [
 ].map(together);
 /** The features whose selection puts people on the map. */
 export const humanFeatures = ["human.cultures", "human.politics", "built.layout"] as const;
+/** Years over which a way nobody walks and a line nobody keeps fade from the ground. */
+export { wayMemoryYears } from "./layerCatalogue";

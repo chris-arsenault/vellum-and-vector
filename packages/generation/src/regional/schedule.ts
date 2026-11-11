@@ -265,7 +265,7 @@ function prepareContext(state: RegionalState) {
 function placeEffects(state: RegionalState, context: MapProcessContext) {
   const applied = state.regional.contributions;
   applied.begin();
-  if (context.parameters.society) declareFields(state);
+  if (context.parameters.people) declareFields(state);
   declarePlaceEffects(state, applied);
   applied.commit(state.physical.map, ledgerFloors, ledgerCeilings);
   respondFeatures(state);

@@ -1,7 +1,6 @@
 import { mapCommand, processOwner } from "../processTraits";
 import { runOperation } from "../processOperation";
 import { requireThat, type DomainSnapshot } from "@atlas/domain";
-import { decayMaintainedGround } from "../societyRecord";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { markPoiLandforms } from "../poi/poiLandforms";
@@ -267,12 +266,8 @@ function epochStartProcess(): MapProcess {
     operation: mapCommand(
       "atlas.begin-epoch",
       "event",
-      (state, context) => {
+      (state) => {
         const map = state.physical!.map;
-        decayMaintainedGround(
-          map,
-          state.physical!.inherited ? 0 : (context.epochs[0]?.duration ?? 0)
-        );
         map.ExternalHeatForcing.fill(0);
         map.ExternalMeltwater.fill(0);
         map.GroundwaterReturn.fill(0);

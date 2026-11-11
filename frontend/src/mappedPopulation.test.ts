@@ -1,9 +1,9 @@
 import { readFeature, fixtureState, undoWorld } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
-import type { PopulationGroup, SocietyCommunity, SocietyRegion } from "@atlas/domain";
+import type { PopulationGroup } from "@atlas/domain";
 import { mapEditingFixture } from "./mapEditingFixture";
 import { snapshotCopy } from "./testSupport/snapshotCopy";
-import { settlementCommunity } from "./settlementSurfaceData";
+import { describedGroups, placeFacts } from "./settlementSurfaceData";
 
 async function residentFixture() {
   const f = await mapEditingFixture();
@@ -19,57 +19,15 @@ async function residentFixture() {
     },
   ];
   f.current().world.features[f.town].attributes = {
-    communityId: "known",
     population: 200,
     communityPopulation: 1000,
     ruralPopulation: 800,
     groups,
   };
-  const community: SocietyCommunity = {
-    id: "known",
-    name: "Known town",
-    position: { x: 500, y: 500, z: 0 },
-    areaKm2: 1,
-    groups: structuredClone(groups),
-    founded: "Retained era",
-    status: "inhabited",
-    protected: false,
-    causes: [],
-    settlement: { population: 200, peak: 200, recoveryYears: 0 },
-    support: {
-      capacity: 1500,
-      farming: 1000,
-      grazing: 300,
-      gathering: 100,
-      fishing: 100,
-      water: 1,
-    },
-    history: [
-      {
-        era: "Retained era",
-        year: 20,
-        population: 1000,
-        capacity: 1500,
-        settlementPopulation: 200,
-        status: "inhabited",
-      },
-    ],
-  };
-  const region: SocietyRegion = {
-    areaId: f.root,
-    spaceId: f.id,
-    communities: [community],
-    connections: [],
-    works: [],
-    events: [],
-    magic: [],
-    history: [],
-  };
-  f.current().world.societies = { [f.root]: region };
   return f;
 }
 
-it("keeps mapped group edits, settlement totals, inspection and undo coherent without changing retained society", async () => {
+it("keeps mapped group edits, settlement totals, inspection and undo coherent without changing the parent's record", async () => {
   const f = await residentFixture(),
     before = snapshotCopy(f.current()),
     feature = await readFeature(f.id, f.town, f.child);
@@ -99,13 +57,8 @@ it("keeps mapped group edits, settlement totals, inspection and undo coherent wi
     ruralPopulation: 960,
     groups: [{ count: 1200, namingLanguage: "Coast speech", practices: ["conservation"] }],
   });
-  const inspected = settlementCommunity(f.current().world, mapped, f.child)!;
-  expect(inspected.community.groups[0].count).toBe(1200);
-  expect(inspected.community.settlement?.population).toBe(240);
-  expect(inspected.community.history).toEqual(
-    before.world.societies![f.root].communities[0].history
-  );
-  expect(f.current().world.societies).toEqual(before.world.societies);
+  expect(describedGroups(mapped)?.[0].count).toBe(1200);
+  expect(placeFacts(mapped)).toMatchObject({ townsfolk: 240, people: 1200, country: 960 });
   expect((await readFeature(f.id, f.town, f.root)).attributes).toEqual(
     before.world.features[f.town].attributes
   );
@@ -130,5 +83,7 @@ it("updates mapped urban counts and resident groups together while keeping the m
     ruralPopulation: 800,
     groups: [{ count: 1100 }],
   });
-  expect(f.current().world.societies).toEqual(before.world.societies);
+  expect((await readFeature(f.id, f.town, f.root)).attributes).toEqual(
+    before.world.features[f.town].attributes
+  );
 });

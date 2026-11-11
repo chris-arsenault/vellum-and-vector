@@ -2,8 +2,9 @@ import { expect, vi } from "vitest";
 import {
   regionRefinementInput,
   refinedRegionArea,
+  type AtlasFeature,
   type DomainSnapshot,
-  type SocietyCommunity,
+  spatial,
   createGrid,
   generateBand,
   gridPosition,
@@ -25,8 +26,8 @@ import { constructedWorld } from "../constructedWorldFixture";
 export async function refinementFixture(width?: number) {
   const constructed = width ? suppliedIsland(width) : constructedWorld(),
     parent = generationSnapshot(constructed.result, constructed.input, crypto.randomUUID());
-  supplyRefinementSociety(parent);
   const scale = width ? width / 4000 : 1;
+  supplyRefinementPeople(parent, scale, width ? 15000 : 300);
   const poi = crypto.randomUUID();
   parent.world.features[poi] = {
     id: poi,
@@ -45,17 +46,6 @@ export async function refinementFixture(width?: number) {
     generationId: null,
     generationDomain: "magic",
   };
-  if (width) {
-    const society = parent.world.societies![parent.scope.areaId],
-      c = society.communities[0];
-    c.position = { x: 2500 * scale, y: 300 * scale, z: 0 };
-    c.groups[0].count = 2_000_000;
-    c.settlement!.population = 15000;
-    c.latentSettlementPopulation = 200000;
-    c.areaKm2 = width ** 2 / 4e6;
-    society.works = [];
-    society.events = [];
-  }
   registerWorldSnapshot(parent);
   const id = parent.world.id,
     root = parent.scope.areaId,
@@ -158,94 +148,56 @@ export function suppliedIsland(width: number, height = width / 4, spacing = widt
     },
   };
 }
-function supplyRefinementSociety(parent: DomainSnapshot) {
+/** A town the parent knows, and an event it recorded there whose reach leaves the region. */
+function supplyRefinementPeople(parent: DomainSnapshot, scale: number, townsfolk: number) {
   const root = parent.scope.areaId,
-    community = crypto.randomUUID();
-  parent.world.societies = {
-    [root]: {
+    town = crypto.randomUUID(),
+    event = crypto.randomUUID(),
+    record = (
+      id: string,
+      kind: string,
+      layerId: string,
+      name: string,
+      geometry: AtlasFeature["geometry"],
+      attributes: Record<string, unknown>
+    ): AtlasFeature => ({
+      id,
       areaId: root,
-      spaceId: parent.scope.spaceId,
-      communities: [suppliedCommunity(community, parent.scope.footprint)],
-      history: [
-        {
-          id: "Earlier era",
-          years: 100,
-          before: 1000,
-          births: 0,
-          deaths: 0,
-          migrated: 0,
-          after: 1000,
-          causes: [],
-        },
-      ],
-      works: [
-        {
-          id: crypto.randomUUID(),
-          communityId: community,
-          name: "Inherited clearance",
-          kind: "clearance",
-          position: { x: 2500, y: 300, z: 0 },
-          radius: 200,
-          magnitude: 1,
-          condition: 1,
-          maintained: true,
-          authored: false,
-          built: "Earlier era",
-          applied: 1,
-          demand: { amount: 0.2, unit: "fraction" },
-          causes: [],
-        },
-      ],
-      events: [
-        {
-          id: crypto.randomUUID(),
-          era: "Earlier era",
-          kind: "migration",
-          position: { x: 3500, y: 500, z: 0 },
-          radius: 1000,
-          magnitude: 1,
-          casualties: 0,
-          displaced: 100,
-          communities: [community],
-          causes: [],
-        },
-      ],
-      connections: [],
-      magic: [],
-    },
-  };
-}
-function suppliedCommunity(id: string, footprint: SocietyCommunity["footprint"]): SocietyCommunity {
-  return {
-    id,
-    name: "Known town",
-    position: { x: 2500, y: 300, z: 0 },
-    areaKm2: 4,
-    footprint,
-    groups: [
-      {
-        people: "residents",
-        culture: null,
-        languages: [],
-        religions: [],
-        practices: [],
-        count: 1000,
-      },
-    ],
-    support: {
-      farming: 1000,
-      grazing: 0,
-      gathering: 0,
-      fishing: 0,
-      water: 1,
-      capacity: 1000,
-    },
-    founded: "Earlier era",
-    status: "inhabited",
-    protected: false,
-    causes: [],
-    settlement: { population: 300, peak: 300, recoveryYears: 0 },
-  };
+      layerId,
+      kind,
+      name,
+      geometry,
+      attributes,
+      relations: [],
+      causes: [],
+      detail: {},
+      state: "generated",
+      protected: false,
+      actor: "generator",
+      generationId: null,
+      generationDomain: "built",
+    });
+  parent.world.features[town] = record(
+    town,
+    "settlement",
+    "settlements",
+    "Known town",
+    { type: "Point", coordinates: [2500 * scale, 300 * scale] },
+    {
+      population: townsfolk,
+      settlementPopulation: townsfolk,
+      status: "inhabited",
+      founded: "Earlier era",
+    }
+  );
+  parent.world.features[event] = record(
+    event,
+    "societyEvent",
+    "historicalEvents",
+    "flood — Earlier era",
+    spatial.buffer({ type: "Point", coordinates: [3500, 500] }, 1000)!,
+    { eventKind: "flood", era: "Earlier era", casualties: 100, atPlace: town }
+  );
 }
 export function denyParentReads(
   workspace: Awaited<ReturnType<typeof fixtureWorkspace>>,

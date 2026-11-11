@@ -13,27 +13,6 @@ import { requireThat, sameValue } from "@atlas/domain";
 import type { MapOperation } from "./processTraits";
 import type { ProductDefinition, ProductLedger } from "./productLedger";
 
-/** What a human round inside an earlier epoch left for the present society to find. */
-export interface HumanRound {
-  era: string;
-  epoch: string;
-  history: import("@atlas/domain").SocietyEraRecord[];
-  ruins: {
-    x: number;
-    y: number;
-    name: string;
-    siteKind: string;
-    siteReason: string;
-    peak: number;
-    /** A camp that met the World's own ruin rule: what its record says of it. */
-    major?: {
-      communityId: string;
-      population: number;
-      founded: import("@atlas/domain").SocietyCommunity["founded"];
-      causes: string[];
-    };
-  }[];
-}
 export interface GenerationState {
   features?: import("@atlas/domain").FeatureWorkspace;
   sourceFeatures?: import("@atlas/domain").FeatureReader;
@@ -43,9 +22,6 @@ export interface GenerationState {
   /** Worker-owned block cache and scratch for every coverage; resident when absent. */
   cache?: import("@atlas/domain").BlockCache;
   retainedFeatureNames?: Record<string, { name: string; attributes: Record<string, unknown> }>;
-  society?: import("./societyGeography").SocietyWorkspace;
-  /** Completed human rounds of earlier epochs; the present society reads their ruins and history. */
-  rounds?: HumanRound[];
   physical?: import("./world/atlasWorkspace").AtlasPhysicalWorkspace;
   domain: DomainSnapshot;
   surface: Grid;

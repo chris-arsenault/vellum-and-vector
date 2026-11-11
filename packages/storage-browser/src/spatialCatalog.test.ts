@@ -264,65 +264,25 @@ it("filters and sorts the entire registry before paging, and refreshes edited va
   expect((await catalog.readRegistry({ ...input, extent: [200, 200, 300, 300] })).total).toBe(0);
 });
 
-it("keeps retained society out of editor metadata and reads just one settlement's context", async () => {
+it("reads what stands beside one settlement from the records that name it", async () => {
   const catalog = await fixture();
-  const community = (id: string) => ({
-    id,
-    name: id,
-    position: { x: 20, y: 20, z: 0 },
-    areaKm2: 1,
-    groups: [],
-    support: { farming: 0, grazing: 0, gathering: 0, fishing: 0, water: 1, capacity: 20 },
-    founded: "First era",
-    status: "inhabited" as const,
-    protected: false,
-    causes: [],
-  });
-  const society: CatalogRecord = {
-    scope,
-    reference: { kind: "society", id: "society:root", revision: 0 },
-    data: {
-      kind: "society",
-      value: {
-        id: "society:root",
-        areaId: "root",
-        spaceId: "surface",
-        communities: [community("near"), community("far"), community("unrelated")],
-        connections: [{ from: "near", to: "far", kind: "land", distance: 200, travelCost: 1 }],
-        history: [],
-        works: [],
-        events: [],
-        magic: [],
-      },
-    },
+  const made = (id: string, kind: string, attributes: Record<string, unknown> = {}) => {
+    const item = record(id);
+    if (item.data.kind !== "feature") throw new Error(`Missing ${id}.`);
+    item.data.value.kind = kind;
+    item.data.value.attributes = attributes;
+    return item;
   };
-  const town = record("town");
-  if (town.data.kind !== "feature") throw new Error("Missing town.");
-  town.data.value.kind = "settlement";
-  town.data.value.attributes.communityId = "near";
-  await write(catalog, [town, society]);
-  expect(await catalog.readWorld(scope.worldId)).not.toHaveProperty("societies");
-  expect(await catalog.readEditor(scope.worldId)).not.toHaveProperty("societies");
+  await write(catalog, [
+    made("town", "settlement"),
+    made("far", "settlement"),
+    made("unrelated", "settlement"),
+    made("road", "road", { fromPlace: "far", toPlace: "town" }),
+    made("elsewhere", "road", { fromPlace: "far", toPlace: "unrelated" }),
+    made("famine", "societyEvent", { atPlace: "town" }),
+  ]);
   const result = await catalog.readSettlement(scope, "town");
-  expect(result?.region.communities.map((c) => c.id)).toEqual(["near", "far"]);
-  expect(result?.region.connections).toHaveLength(1);
-  expect(result?.region).toMatchObject({ areaId: "root", spaceId: "surface" });
-  expect(result?.region).not.toHaveProperty("id");
-  expect(result?.related.map((f) => f.id)).toEqual(["town"]);
-  // The community index follows the society record's revisions.
-  const edited = (await catalog.readRecords(scope, "society", ["society:root"]))[0];
-  if (edited.data.kind !== "society") throw new Error("Missing society.");
-  edited.data.value.connections = [];
-  edited.data.value.communities[0].name = "Nearby";
-  await write(catalog, [edited]);
-  const again = await catalog.readSettlement(scope, "town");
-  expect(again?.region.communities.map((c) => c.name)).toEqual(["Nearby"]);
-  await catalog.undo(
-    scope.worldId,
-    (await catalog.readHistory(scope.worldId, null, 1))[0].operationId
-  );
-  const history = await catalog.readHistory(scope.worldId, null, 1);
-  await catalog.undo(scope.worldId, history[0].operationId);
-  expect(await catalog.readRecords(scope, "society", ["society:root"])).toEqual([]);
-  expect(await catalog.readSettlement(scope, "town")).toBeNull();
+  expect(result?.related.map((f) => f.id).sort()).toEqual(["famine", "far", "road"]);
+  // A record that is not a settlement has nothing beside it to read.
+  expect(await catalog.readSettlement(scope, "road")).toBeNull();
 });

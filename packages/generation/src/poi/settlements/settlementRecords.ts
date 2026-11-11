@@ -6,7 +6,8 @@ import {
 } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
-import { keptCondition, lineMemory } from "../../societyRecord";
+import { wayMemoryYears as lineMemory } from "../../human/humanChannels";
+import { keptCondition } from "./workFacts";
 import type { PoiCost, PoiFieldChange, PoiHazard, PoiPlace, PoiVisibility } from "../poiContract";
 import { namingCultureNear } from "../poiPlaces";
 import { cellSpan, cellsWithin, fieldOf, gap, heldFor, magicRule, magicValue } from "../poiReads";
@@ -87,20 +88,17 @@ export const nearTown = (
     typeof reach === "number" ? reach : mapScale(state).resolveMeasure(reach),
     least
   )[cell] === 1;
-/** The settlement a work's record names: a seat by its record, or by its community. */
+/** The settlement a work's record names as its seat, or the place it was raised at. */
 const townsById = (state: GenerationState) =>
   heldFor(state, "townsById", () => {
     const towns = new Map<string, () => AtlasFeature | undefined>();
-    for (const town of [...settlementPlaces(state), ...ruinPlaces(state)]) {
+    for (const town of [...settlementPlaces(state), ...ruinPlaces(state)])
       towns.set(town.id, () => town.feature);
-      const id = town.feature?.attributes.communityId;
-      if (typeof id === "string") towns.set(id, () => town.feature);
-    }
     return towns;
   });
 export function seatOf(state: GenerationState, place: PoiPlace) {
-  const { seat, communityId } = place.feature?.attributes ?? {};
-  const key = typeof seat === "string" ? seat : communityId;
+  const { seat, atPlace } = place.feature?.attributes ?? {};
+  const key = typeof seat === "string" ? seat : atPlace;
   return typeof key === "string" ? townsById(state).get(key)?.() : undefined;
 }
 export const isGone = (town: AtlasFeature | undefined) =>
@@ -142,7 +140,7 @@ export const damagedGround = (place: PoiPlace, share: number): readonly PoiField
 ];
 /** Who writes an event's dead: a declared total here would re-feed Salt every evaluation. */
 export const deadAreRecorded =
-  "societyRecord's recordEvents writes each event's dead to the mass-death band once, and Salt's source empties that band as it makes brine, so a declared total would raise the dead again at every evaluation.";
+  "The people's layers write those who die to the mass-death band as they die, and Salt's source empties that band as it makes brine, so a declared total would raise the dead again at every evaluation.";
 
 const salted = magicRule("salt", "ground");
 /** People avoid salted ground: a road pays for it within an event's reach, as Salt's avoidance. */

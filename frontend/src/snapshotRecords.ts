@@ -46,10 +46,6 @@ function* listedRecords(snapshot: DomainSnapshot): IterableIterator<DomainWrite>
   for (const value of snapshot.fieldPatches) yield { kind: "fieldPatch", value };
 }
 function* geographicState(snapshot: DomainSnapshot): IterableIterator<DomainWrite> {
-  for (const id in snapshot.world.societies) {
-    const value = snapshot.world.societies[id];
-    yield { kind: "society", value: { ...value, id: `society:${value.areaId}` } };
-  }
   for (const id in snapshot.world.drainage) {
     const value = snapshot.world.drainage[id];
     yield { kind: "drainage", value: { ...value, id: `drainage:${value.areaId}` } };
@@ -89,7 +85,7 @@ function listedRecordValue(snapshot: DomainSnapshot, kind: ObjectKind, id: strin
     fieldPatch: snapshot.fieldPatches,
   };
   if (lists[kind]) return lists[kind]!.find((value) => value.id === id);
-  if (kind !== "society" && kind !== "drainage") return undefined;
-  const value = kind === "society" ? w.societies?.[id.slice(8)] : w.drainage?.[id.slice(9)];
+  if (kind !== "drainage") return undefined;
+  const value = w.drainage?.[id.slice(9)];
   return value ? { ...value, id } : undefined;
 }

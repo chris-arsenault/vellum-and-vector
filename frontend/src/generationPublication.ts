@@ -14,6 +14,7 @@ import {
   type FeatureReader,
   type NetworkReader,
   type SpatialStore,
+  DomainError,
   sameValue,
 } from "@atlas/domain";
 import { catalogChanges } from "@atlas/application";
@@ -193,8 +194,25 @@ function mappedChanges(
 /** Each record's geometry is encoded here, once; the catalog stores the bytes as given. */
 function encodedChanges(publication: Publication, changes: CatalogChanges) {
   const encode = publication.encode;
-  if (encode) for (const write of changes.writes) write.encoded = encode(write);
+  if (!encode) return changes;
+  for (const write of changes.writes)
+    try {
+      write.encoded = encode(write);
+    } catch (error) {
+      throw ownedBy(publication, write, error);
+    }
   return changes;
+}
+/** A record that cannot be stored says which feature it belongs to, where it has one. */
+function ownedBy(publication: Publication, write: CatalogRecord, error: unknown) {
+  const owner = (write.data.value as { featureId?: string }).featureId,
+    feature = owner ? publication.features?.get(owner) : undefined;
+  if (!(error instanceof DomainError) || !feature) return error;
+  return new DomainError(
+    error.code,
+    `${error.message} It belongs to the ${feature.kind} ${feature.name}.`,
+    error.details
+  );
 }
 function publicationSource(
   publication: Publication,

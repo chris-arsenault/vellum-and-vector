@@ -42,7 +42,6 @@ function returnOriginWater(
     if (moved <= 0) continue;
     water.add(cell, -moved);
     releaseWaterCharge(field, receiver, cell, moved);
-    if (state.society) (state.society.magicTouched ??= new Set()).add(field.definition.id);
   }
 }
 

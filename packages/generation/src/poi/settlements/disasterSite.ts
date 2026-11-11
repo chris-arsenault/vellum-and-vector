@@ -1,5 +1,5 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
-import { MapScale, type SocietyEvent } from "@atlas/domain";
+import { MapScale } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
 import {
@@ -10,13 +10,14 @@ import {
   tsunamiRate,
   waveHeight,
   waveShore,
-} from "../../societyHazards";
+} from "../../human/hazardCatalogue";
 import { carryWhereItLands, stays } from "../poiCarry";
 import {
   notApplicable,
   type PoiEntry,
   type PoiPhysicalChange,
   type PoiPlace,
+  type PoiStruck,
 } from "../poiContract";
 import { holdsRecord, namingCultureNear } from "../poiPlaces";
 import {
@@ -30,7 +31,7 @@ import {
   toNative,
 } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
-import { cellOf, onceWritten } from "./communityRecords";
+import { onceWritten } from "./communityRecords";
 import {
   attribute,
   avoidedGround,
@@ -64,8 +65,8 @@ const cracked: Record<string, number> = { "thermal-fracture": 900, "steam-fractu
 /** The share of living cover a disaster's ground loses at full strength. */
 const scoured = 0.8;
 
-const eventsNotDisasters = ["siege", "collapse"];
-const places = eventPlaces("disasterSite", (event) => !eventsNotDisasters.includes(event.kind));
+const eventsNotDisasters = ["siege", "battle", "collapse"];
+const places = eventPlaces("disasterSite", (kind) => !eventsNotDisasters.includes(kind));
 const isA = holdsRecord("disasterSite", places);
 const around = (state: GenerationState) => 6 * cellSpan(state);
 const reachOf = (state: GenerationState, place: PoiPlace) =>
@@ -101,7 +102,7 @@ const factors = {
 };
 /** A new event requests work once; subsequent queries read the ground that survives it. */
 export function disasterChanges(
-  event: Pick<SocietyEvent, "kind" | "magnitude">,
+  event: Pick<PoiStruck, "kind" | "magnitude">,
   cell: number,
   scale: MapScale
 ): readonly PoiPhysicalChange[] {
@@ -148,17 +149,16 @@ export const disasterSite: PoiEntry = {
   name: "Disaster site",
   event: {
     accepts: (event) => !eventsNotDisasters.includes(event.kind),
-    changes: (state, event) =>
-      disasterChanges(event, cellOf(state, event.position), mapScale(state)),
+    changes: (state, event) => disasterChanges(event, event.cell, mapScale(state)),
   },
   recognition: {
     distinct:
-      "A society event that is neither siege nor collapse: avalanche, flood, tsunami, or a magical meeting's hazard such as thermal-fracture, steam-fracture, pressure-ice-breach, rot-fever or undead. A battlefield is the same record at siege; collapse is a polity's end with no ground in it. A rogue wave's impact or a crater are the field's own marks with no event record.",
+      "An event that befell a place and is neither siege nor battle: a famine, an avalanche, a flood, a tsunami, or a magical meeting's hazard such as thermal-fracture, steam-fracture, pressure-ice-breach, rot-fever or undead. A battlefield is the same record at siege. A rogue wave's impact or a crater are the field's own marks with no event record.",
     isA,
   },
   existence: {
     statement:
-      "Sited by the rates a community's own ground gives it: steep ice for an avalanche, flood frequency for a flood, a low straining coast for a tsunami, a meeting's coverage for its hazard. A drawn event strikes that community; those below ten thousand dead and displaced stay off the world map, and a refined map retains each that reaches it as a record of its affected area.",
+      "Sited by the chances a place's own ground gives it over an era: steep ice for an avalanche, flood frequency for a flood, a low straining coast for a tsunami; and a famine where a town's worth of people died on its ground within the era. Those below ten thousand dead stay off a map that lived its own people, and a refined map retains each its parent recorded.",
     way: "sited",
     requires: (state, cell) => exposure(state, cell) > 0 || strained(state, cell),
     /** The chance of one here within what a culture could remember; magic's meetings are read as a share of it. */
@@ -170,7 +170,7 @@ export const disasterSite: PoiEntry = {
   },
   publication: {
     statement:
-      "An event publishes as a historical event, located with its affected communities on a map that ran its society, and as its affected area on a refined map.",
+      "An event publishes as a historical event at the place it befell, and a refined map keeps the record its parent made.",
     moment: "society",
     record: onceWritten,
   },

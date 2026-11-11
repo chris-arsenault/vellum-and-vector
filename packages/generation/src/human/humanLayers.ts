@@ -37,6 +37,8 @@ export interface HumanLayerReads {
   standing(cell: number): number;
   /** A cell's identity column, newest layer first. */
   column(cell: number): IdentityColumn;
+  /** The people living on a cell, per square kilometre. */
+  people(cell: number): number;
 }
 /**
  * The people's layers of one map and the only code that changes them. Everything else reads
@@ -208,13 +210,16 @@ class HumanLayers {
       }
     }
   }
+  /** People keep a line on these cells for some years: a frontier held between realms. */
+  keep(cells: readonly number[], years: number) {
+    for (const cell of cells) this.layers.map.KeptLine.add(cell, positive(years));
+  }
   /**
    * Time passes where people live: the ground keeps the years they have lived on it, and ways
    * and kept lines nobody renews are forgotten.
    */
   dwell(years: number) {
     const elapsed = positive(years),
-      keep = Math.exp(-elapsed / wayMemoryYears),
       map = this.layers.map;
     for (const [kind, band] of Object.entries(this.layers.of)) {
       const tenure = layerCatalogue[kind as HumanLayerId].ground?.tenure;
@@ -223,6 +228,12 @@ class HumanLayers {
         if (band.get(cell) > 0)
           map[tenure].add(cell, band.get(cell) * this.layers.km2(cell) * elapsed);
     }
+    this.forget(elapsed);
+  }
+  /** Years pass with nobody renewing them: ways and kept lines fade from the ground. */
+  forget(years: number) {
+    const keep = Math.exp(-positive(years) / wayMemoryYears),
+      map = this.layers.map;
     for (const kept of forgottenGround)
       for (let cell = 0; cell < map[kept].length; cell++)
         map[kept].set(cell, map[kept].get(cell) * keep);

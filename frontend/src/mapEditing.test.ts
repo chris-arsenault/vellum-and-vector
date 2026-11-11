@@ -94,14 +94,13 @@ it("moves a mapped town and attached route together while preserving their proce
       [650, 650],
     ],
   });
-  expect(route.attributes.fromCommunity).toBe("known");
+  expect(route.attributes.fromPlace).toBe(f.town);
   expect(f.current().world.features[f.town].geometry).toEqual(
     before.world.features[f.town].geometry
   );
   expect(f.current().world.features[f.road].geometry).toEqual(
     before.world.features[f.road].geometry
   );
-  expect(f.current().world.societies).toEqual(before.world.societies);
   expect(f.current().world.epochs).toEqual(before.world.epochs);
   await undoWorld(f.id, fixtureState(f.id).history[0].operationId);
   expect(f.current().world.features).toEqual(before.world.features);

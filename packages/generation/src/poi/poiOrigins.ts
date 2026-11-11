@@ -1,3 +1,4 @@
+import { placesRecorded } from "../human/placeRegistry";
 import type { GenerationState } from "../process";
 import { poiCatalogue } from "./catalogue";
 import type { PoiClaim, PoiEntry, PoiMoment, PoiOrigin, PoiPlace } from "./poiContract";
@@ -31,8 +32,9 @@ export function spacedAmong(
 const reached: Record<PoiMoment, (state: GenerationState) => boolean> = {
   geography: () => true,
   magic: (state) => Boolean(state.physical?.magic),
-  // A refined map starts with the society its parent captured.
-  society: (state) => "regional" in state || Boolean(state.society),
+  // A refined map starts with the places its parent left; a map that lived its own people
+  // has them once an era's places have been recorded.
+  society: (state) => "regional" in state || placesRecorded(state),
 };
 /** Whether a kind's places exist yet on this map. */
 function exists(state: GenerationState, kind: PoiKindId) {

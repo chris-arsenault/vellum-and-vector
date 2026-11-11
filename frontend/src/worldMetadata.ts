@@ -9,20 +9,9 @@ export function worldMetadata(world: World) {
     connections,
     networkNodes,
     networkReaches,
-    societies,
     drainage,
     ...metadata
   } = world;
-  void [
-    areas,
-    features,
-    entities,
-    templates,
-    connections,
-    networkNodes,
-    networkReaches,
-    societies,
-    drainage,
-  ];
+  void [areas, features, entities, templates, connections, networkNodes, networkReaches, drainage];
   return { ...metadata, fields: [], magic: [], landmarks: [], views: [] };
 }

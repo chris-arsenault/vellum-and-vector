@@ -65,7 +65,7 @@ function sourceFeatures(river: string, town: string, road: string, roadEnd: [num
       kind: "settlement",
       layerId: "settlements",
       geometry: { type: "Point", coordinates: [500, 500] },
-      attributes: { communityId: "known", population: 5000 },
+      attributes: { population: 5000 },
     },
     {
       id: road,
@@ -76,7 +76,7 @@ function sourceFeatures(river: string, town: string, road: string, roadEnd: [num
         type: "LineString",
         coordinates: [[500, 500], roadEnd],
       },
-      attributes: { fromCommunity: "known", toCommunity: "other" },
+      attributes: { fromPlace: town, toPlace: "other" },
     },
   ];
 }

@@ -134,7 +134,7 @@ export interface RegionalWork {
   drainage?: DrainageWork;
   proposed: ProposedPlace[];
   /** Site classes of the developed terrain, read in round two and kept for round three. */
-  sites?: (import("../societySites").SiteOpportunity | null)[];
+  sites?: (import("../siteRanking").SiteOpportunity | null)[];
   /** Products of an earlier refinement of this map, removed before the schedule. */
   removedProducts?: Set<string>;
   /** Captured occupation per mesh cell (people per km²), where the parent published any. */

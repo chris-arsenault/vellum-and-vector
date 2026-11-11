@@ -135,7 +135,7 @@ export function catalogChanges(
   }
   for (const write of changes.writes)
     put(write.kind === "feature" ? { ...write, value: { ...write.value, detail: {} } } : write);
-  const metadata = publishSocieties(changes, put);
+  const metadata = changes.worldMetadata ? { ...changes.worldMetadata } : undefined;
   const removed = [...removes.values()].map((r) => expected(revisions, r.kind, r.id));
   return {
     operationId: changes.operationId,
@@ -160,11 +160,4 @@ function writtenWorld(snapshot: DomainSnapshot, changes: ChangeSet) {
     if (write.kind === "feature") world.features[write.value.id] = write.value;
   }
   return world;
-}
-function publishSocieties(changes: ChangeSet, put: (data: DomainWrite) => void) {
-  for (const value of Object.values(changes.worldMetadata?.societies ?? {}))
-    put({ kind: "society", value: { ...value, id: `society:${value.areaId}` } });
-  const metadata = changes.worldMetadata ? { ...changes.worldMetadata } : undefined;
-  if (metadata) delete metadata.societies;
-  return metadata;
 }

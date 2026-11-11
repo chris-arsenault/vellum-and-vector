@@ -79,11 +79,11 @@ function authoredWork(
     generationId: null,
     attributes: {
       workKind: kind,
-      communityId: feature.attributes.communityId,
+      atPlace: feature.id,
       radius,
       magnitude,
       maintained: true,
     },
-    causes: ["Placed by the creator. Regenerate society to refresh present environmental effects."],
+    causes: ["Placed by the creator at this settlement."],
   };
 }

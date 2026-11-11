@@ -52,7 +52,6 @@ export async function generationSource(catalog: SpatialCatalog, worldId: string,
           )
           .map((source) => source.id),
       },
-      { kind: "society", ids: stateAreas.map((id) => `society:${id}`) },
       { kind: "drainage", ids: stateAreas.map((id) => `drainage:${id}`) },
     ],
     spatialLayers: [],

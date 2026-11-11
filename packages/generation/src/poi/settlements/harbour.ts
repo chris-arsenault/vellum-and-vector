@@ -9,9 +9,14 @@ import { holdsRecord, within } from "../poiPlaces";
 import { landCellSeaCost } from "../../mapRouting";
 import { regionalSpan } from "../../regional/lattice";
 import type { RegionalState } from "../../regional/state";
-import { harbourDepth, harbourHands, harbourReach } from "../../societyWorks";
-import { waveHeight, waveShore, tsunamiHazard } from "../../societyHazards";
-import { harbourGoodDepth, harbourSurge } from "../../societySites";
+import {
+  harbourDepth,
+  harbourGoodDepth,
+  harbourHands,
+  harbourReach,
+  harbourSurge,
+} from "./workFacts";
+import { waveHeight, waveShore, tsunamiHazard } from "../../human/hazardCatalogue";
 import {
   adjacent,
   cellsWithin,
@@ -91,7 +96,7 @@ function waters(state: GenerationState, cell: number) {
 }
 const requires = (state: GenerationState, cell: number) =>
   shallows(state, cell) && nearTown(state, cell, harbourReach, harbourHands);
-const places = workPlaces("harbour", "harbor", {
+const places = workPlaces("harbour", {
   record: "harbor",
   layer: "transportSites",
   label: "Harbour",
@@ -148,7 +153,7 @@ export const harbour: PoiEntry = {
   },
   existence: {
     statement:
-      "Sited two ways: the simulation's located harbours of a community of at least 1000 people; and on every map the best sheltered shore within 10 km of such a community, at least 30 km apart. The simulation's World units hold harbours only as latent demands.",
+      "Sited on every map at the best sheltered shore within 10 km of a settlement of at least 1000 people, at least 30 km apart.",
     way: "sited",
     requires,
     suitability: (state, cell) => Math.min(1, waters(state, cell)),
@@ -156,7 +161,7 @@ export const harbour: PoiEntry = {
   },
   publication: {
     statement:
-      "A harbour publishes as a located work; the World shows those the ground sited, and the simulation's own stay demands.",
+      "A harbour publishes as a located work where a map's cells can hold one; the World leaves it for a finer map.",
     moment: "society",
     record: workRecord,
   },

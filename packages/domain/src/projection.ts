@@ -61,20 +61,13 @@ function networks(world: World, writes: DomainWrite[]) {
     world.networkReaches[value.id] = structuredClone(value);
 }
 function retainedGeography(world: World, changes: ChangeSet) {
-  world.societies = { ...world.societies };
   world.drainage = { ...world.drainage };
-  for (const { value } of changes.writes.filter((write) => write.kind === "society")) {
-    const { id, ...region } = value;
-    void id;
-    world.societies[value.areaId] = structuredClone(region);
-  }
   for (const { value } of changes.writes.filter((write) => write.kind === "drainage")) {
     const { id, ...network } = value;
     void id;
     world.drainage[value.areaId] = structuredClone(network);
   }
   for (const remove of changes.removes) {
-    if (remove.kind === "society") delete world.societies[remove.id.slice("society:".length)];
     if (remove.kind === "drainage") delete world.drainage[remove.id.slice("drainage:".length)];
   }
 }

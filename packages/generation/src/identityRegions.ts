@@ -1,11 +1,12 @@
-import { fieldChannelName, generateBand, putChannel } from "@atlas/domain";
+import { MapScale, fieldChannelName, generateBand, putChannel } from "@atlas/domain";
 import { humanLayersOf } from "./human/humanLayers";
 import { held, leadingOf, type TraditionField } from "./human/identityReads";
 import { knownPlaces } from "./human/placeRegistry";
 import { knownTraditions, type Tradition, type TraditionKind } from "./human/traditions";
 import { generatedFeature, generatedId, putGenerated } from "./mapFeatures";
 import type { GenerationState } from "./process";
-import { shapeOfSamples } from "./societyPoliticalPublication";
+import { shapeOfSamples } from "./landShapes";
+import { publishPoliticalRegions } from "./worldPoliticalRegions";
 
 /**
  * Regions and territories read from the identity column and published. A tongue, faith or
@@ -97,6 +98,29 @@ function territory(
     `${realm.founded}: the realm was founded${seat ? "" : "; its seat has since emptied"}. Its ${kind} is the land where ${kind === "claim" ? "anyone still holds" : "most people hold"} its allegiance.`,
   ];
   putGenerated(state, feature);
+  // A realm that spans a continent is drawn in its geographic parts as well.
+  if (kind === "sovereignty") publishPoliticalRegions(state, feature);
+}
+/** What a realm is made of: everyone who holds with it, and the living places it leads. */
+function describeRealm(
+  state: GenerationState,
+  realm: Tradition,
+  anyone: { [cell: number]: number },
+  leads: (cell: number) => boolean
+) {
+  const map = state.physical!.map,
+    layers = humanLayersOf(map),
+    entity = state.domain.world.entities[realm.entity];
+  if (!entity) return;
+  let people = 0;
+  for (let cell = 0; cell < map.mesh.count; cell++)
+    if (anyone[cell] > 0)
+      people +=
+        anyone[cell] * layers.people(cell) * MapScale.areaUnits(map.mesh.area(cell), "m2", "km2");
+  const places = knownPlaces(state).filter(
+    (place) => !place.abandoned && !place.absorbedBy && leads(place.anchor)
+  ).length;
+  entity.attributes = { ...entity.attributes, character: { people: Math.round(people), places } };
 }
 /** Each realm's territory where most hold its allegiance, and its claim where anyone does. */
 export function publishRealms(state: GenerationState) {
@@ -106,6 +130,7 @@ export function publishRealms(state: GenerationState) {
     const anyone = claimed.get(realm.code);
     // A realm that ended holds nothing: its people took up what it joined or broke from.
     if (realm.kind !== "allegiance" || realm.ended || !anyone) continue;
+    describeRealm(state, realm, anyone, (cell) => leading.code[cell] === realm.code);
     territory(state, realm, "sovereignty", (cell) => leading.code[cell] === realm.code);
     // It controls the land where its allegiance is firmly held, not merely the most held.
     territory(state, realm, "control", (cell) => anyone[cell] >= firmlyHeld);

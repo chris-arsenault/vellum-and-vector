@@ -16,8 +16,7 @@ import {
 } from "../poiReads";
 import { onMappedRiver } from "../water/waterReads";
 import { aloneAmong, attachment, sized } from "../poiVisibilityRules";
-import { settledHands } from "../../societyWorks";
-import { soilShare } from "../../societyWaterUse";
+import { settledHands, soilShare } from "./workFacts";
 import {
   attribute,
   cultureOfWork,
@@ -54,7 +53,7 @@ function suitability(state: GenerationState, cell: number) {
     water = flow / (flow + mapScale(state).resolveMeasure(typicalDiversion));
   return (dry + level + soil + water) / 4;
 }
-const places = workPlaces("irrigation", "irrigation", {
+const places = workPlaces("irrigation", {
   record: "irrigation",
   layer: "waterworks",
   label: "Irrigation",
@@ -110,7 +109,7 @@ export const irrigation: PoiEntry = {
   },
   existence: {
     statement:
-      "Sited two ways: the simulation's located works of a community of at least 500 short of water with a river beside it, whose intake sits on the channel; and on every map the dry, level, soiled reaches of a river within reach of such a community, at least 20 km apart. The World's units otherwise hold irrigation as a demand spread over their rivers, which `irrigateChannels` still writes.",
+      "Sited on every map at the dry, level, soiled reaches of a river within reach of a settlement of at least 500 people, at least 20 km apart.",
     way: "sited",
     requires,
     suitability,

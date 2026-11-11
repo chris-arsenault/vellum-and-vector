@@ -1,4 +1,7 @@
 import type { GenerationState } from "../process";
+import { generationFeatures } from "../generationFeatures";
+import { knownWays } from "../human/placeCountry";
+import { knownPlaces } from "../human/placeRegistry";
 import type { PhysicalField } from "./field";
 import type { MagicField, MagicWorkspace } from "./magicState";
 import type { LocateContext } from "./magicSources";
@@ -29,14 +32,11 @@ export function tenureSources(
   _seed: number,
   { origin }: LocateContext
 ) {
-  const society = maintainedSociety(state);
-  if (!society) return;
   const map = state.physical!.map,
     p = field.definition.parameters,
-    ways = waysConverging(society.connections);
-  for (const c of society.communities) {
-    if (c.status !== "inhabited") continue;
-    const cell = nativeIndexAtSurface(state, c.position.x, c.position.y);
+    ways = waysConverging(knownWays(state));
+  for (const c of livingSeats(state)) {
+    const cell = c.cell;
     if (cell < 0 || map.Tenure.get(cell) <= 0) continue;
     // A seat is a point fact: its person-years count whole, whatever the cell's size.
     const tenure = map.Tenure.get(cell) / p.tenureFull,
@@ -53,16 +53,27 @@ export function tenureSources(
     });
   }
 }
-function maintainedSociety(state: GenerationState) {
-  return (
-    state.society?.region ??
-    (state.physical?.inherited
-      ? state.domain.world.societies?.[state.domain.scope.areaId]
-      : undefined)
-  );
+/**
+ * The inhabited places of the map and the cell each stands on: the places the land remembers
+ * where it lived its own people, the settlements the parent left where it inherited them.
+ */
+function livingSeats(state: GenerationState): { id: string; cell: number }[] {
+  if (!state.physical?.inherited)
+    return knownPlaces(state)
+      .filter((place) => !place.abandoned && !place.absorbedBy)
+      .map((place) => ({ id: place.id, cell: place.anchor }));
+  const seats = generationFeatures(state, {
+    areaId: state.domain.scope.areaId,
+    kind: "settlement",
+  });
+  return [...seats].flatMap((seat) => {
+    if (seat.geometry.type !== "Point" || seat.attributes.status !== "inhabited") return [];
+    const [x, y] = seat.geometry.coordinates;
+    return [{ id: seat.id, cell: nativeIndexAtSurface(state, x, y) }];
+  });
 }
-/** How many ways end at each community. */
-function waysConverging(connections: { from: string; to: string }[]) {
+/** How many ways end at each place. */
+function waysConverging(connections: readonly { from: string; to: string }[]) {
   const ways = new Map<string, number>();
   for (const link of connections) {
     ways.set(link.from, (ways.get(link.from) ?? 0) + 1);

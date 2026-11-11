@@ -2,7 +2,7 @@
 import { MapScale } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
-import { uninhabitableIce } from "../../societySites";
+import { uninhabitableIce } from "./workFacts";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holdsRecord, namingCultureNear, within } from "../poiPlaces";
@@ -64,7 +64,7 @@ const requires = (state: GenerationState, cell: number) =>
   isLand(state, cell) &&
   iceAt(state, cell) <= mapScale(state).resolveMeasure(uninhabitableIce) &&
   nearTown(state, cell, keepersReach);
-const places = workPlaces("shrine", null, {
+const places = workPlaces("shrine", {
   record: "shrine",
   layer: "magicPractices",
   label: "Shrine",
@@ -101,7 +101,7 @@ export const shrine: PoiEntry = {
   },
   existence: {
     statement:
-      "Sited by this entry, on every map: within a walk of a settlement, on the ground that answers to people, a ring, a spring, a door, a light well, the graves of the killed, a height; the holiest first, at least 25 km apart. The society simulation has no shrine of its own.",
+      "Sited by this entry, on every map: within a walk of a settlement, on the ground that answers to people, a ring, a spring, a door, a light well, the graves of the killed, a height; the holiest first, at least 25 km apart.",
     way: "sited",
     requires,
     suitability: holiness,

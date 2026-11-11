@@ -125,20 +125,21 @@ export const coreColumns: RegistryColumn[] = [
   { key: "layer", label: "Logical layer", numeric: false },
 ];
 export function registryRows(world: World, areaId?: string, extent?: Geometry): RegistryRow[] {
-  const communities = new Map(
-    Object.values(world.societies ?? {}).flatMap((s) =>
-      s.communities.map((c) => [c.id, c.name] as const)
-    )
+  const places = new Map(
+    Object.values(world.features)
+      .filter((feature) => feature.kind === "settlement")
+      .map((feature) => [feature.id, feature.name] as const)
   );
   return readAtlasFeatures(world, areaId, extent).map((feature) =>
-    registryRow(world, feature, communities)
+    registryRow(world, feature, places)
   );
 }
 /** Project one presented feature; adapters supply native geometry measurements when available. */
 export function registryRow(
   world: World,
   feature: AtlasFeature,
-  communities = new Map<string, string>(),
+  /** The names of the settlements a way or an event names, by their record ids. */
+  places = new Map<string, string>(),
   measurements?: { areaKm2?: number; lengthKm?: number }
 ): RegistryRow {
   const type = describeFeature(world, feature),
@@ -146,7 +147,7 @@ export function registryRow(
   const values: Record<string, Cell> = scalarAttributes(feature.attributes);
   if (measurements) Object.assign(values, measurements);
   else addMeasurements(values, feature);
-  addSociety(values, feature, world, communities);
+  addSociety(values, feature, world, places);
   Object.assign(values, {
     name: feature.name,
     type: type.path.slice(1).join(" / "),
@@ -179,7 +180,7 @@ function addSociety(
   values: Record<string, Cell>,
   f: AtlasFeature,
   world: World,
-  communities: Map<string, string>
+  places: Map<string, string>
 ) {
   if (f.kind === "settlement") values.population = settlementResidents(f);
   const polityId =
@@ -189,24 +190,14 @@ function addSociety(
     )?.targetId;
   if (typeof polityId === "string") values.polity = world.entities[polityId]?.name ?? polityId;
   for (const [key, attr] of [
-    ["from", "fromCommunity"],
-    ["to", "toCommunity"],
+    ["from", "fromPlace"],
+    ["to", "toPlace"],
+    ["affectedPlaces", "atPlace"],
   ]) {
     const id = f.attributes[attr];
-    if (typeof id === "string") values[key] = communities.get(id) ?? id;
+    if (typeof id === "string") values[key] = places.get(id) ?? id;
   }
-  addAffectedPlaces(values, f, communities);
   addAffiliations(values, f, world);
-}
-function addAffectedPlaces(
-  values: Record<string, Cell>,
-  f: AtlasFeature,
-  communities: Map<string, string>
-) {
-  if (Array.isArray(f.attributes.communities))
-    values.affectedPlaces = f.attributes.communities
-      .map((id) => communities.get(String(id)) ?? String(id))
-      .join(", ");
 }
 function settlementResidents(f: AtlasFeature): Cell {
   return (f.attributes.settlementPopulation ?? f.attributes.population ?? null) as Cell;

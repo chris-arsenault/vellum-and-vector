@@ -1,17 +1,10 @@
 import { requireChannel } from "@atlas/domain";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generateAtlas, refineRegionalMap, type AtlasGenerationInput } from "@atlas/generation";
-import {
-  everySample,
-  languageUse,
-  population,
-  someSample,
-  rectangle,
-  type DomainSnapshot,
-} from "@atlas/domain";
+import { everySample, someSample, rectangle, type DomainSnapshot } from "@atlas/domain";
 import { newGenerationDraft, prepareDraft } from "./generationDraft";
 import { generationSnapshot } from "./generationJobs";
-import { presentHumanEras } from "../../packages/generation/src/societyRound";
+import { presentHumanEras } from "../../packages/generation/src/peopleProcesses";
 import { generationStorageFixture } from "../../packages/storage-browser/src/generationFixture";
 import {
   refinementFixture,
@@ -340,21 +333,13 @@ function assertWorldMagic() {
 }
 
 function assertWorldSociety() {
-  const society = published.world.societies![input.areaId];
-  expect(society.communities.length).toBeGreaterThan(1);
+  const features = Object.values(published.world.features),
+    settlements = features.filter((feature) => feature.kind === "settlement");
+  expect(settlements.length).toBeGreaterThan(1);
   expect(
-    society.communities.reduce((sum, community) => sum + population(community), 0)
+    settlements.reduce((sum, place) => sum + Number(place.attributes.population ?? 0), 0)
   ).toBeGreaterThan(0);
-  expect(society.history).toHaveLength(input.settings!.humanEras.length);
-  for (const community of society.communities) {
-    expect(community.name).not.toMatch(/\d|Name-|markov:|slot:/);
-    if (population(community) > 0)
-      expect(
-        Object.values(languageUse(community.groups)).reduce((sum, share) => sum + share, 0)
-      ).toBeCloseTo(1, 8);
-  }
-  const features = Object.values(published.world.features);
-  expect(features.some((feature) => feature.kind === "settlement")).toBe(true);
+  for (const place of settlements) expect(place.name).not.toMatch(/\d|Name-|markov:|slot:/);
   expect(features.some((feature) => feature.kind === "sovereignty")).toBe(true);
   expect(features.every((feature) => feature.name.trim().length > 0)).toBe(true);
   expect(

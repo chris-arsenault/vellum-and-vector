@@ -1,10 +1,4 @@
-import {
-  canonicalPosition,
-  point,
-  spatial,
-  type AtlasFeature,
-  type SocietyCommunity,
-} from "@atlas/domain";
+import { point, type AtlasFeature } from "@atlas/domain";
 import { generationFeature, generationFeatures } from "../../generationFeatures";
 import { generatedFeature, generatedId, putGeneratedDetail } from "../../mapFeatures";
 import type { GenerationState } from "../../process";
@@ -23,11 +17,6 @@ import { landPlaces } from "./landPlaces";
  */
 
 export const isRefined = (state: GenerationState): state is RegionalState => "regional" in state;
-/** The society this map holds, which a refined map reads as captured. */
-export const societyRegionOf = (state: GenerationState) =>
-  isRefined(state)
-    ? state.domain.world.societies?.[state.regional.input.areaId]
-    : state.society?.region;
 /** Whether a place on this map can stand yet: a refined map has no ground before its rounds. */
 export const developed = (state: GenerationState) => !isRefined(state) || state.regional.round > 0;
 /** The cell under a position, or -1 on a map with no physical field. */
@@ -93,52 +82,6 @@ function capturedPlace(state: RegionalState, kind: PoiKindId, feature: AtlasFeat
   const anchor = seatCell(state, feature.id, () => featureCell(state, feature));
   return { id: feature.id, kind, cells: [anchor], anchor, feature };
 }
-function knownSeat(state: RegionalState, c: SocietyCommunity) {
-  const feature = regionalFeature(
-    state,
-    `known-seat:${c.id}`,
-    "settlement",
-    c.status === "inhabited" ? "settlements" : "ruins",
-    point(c.position),
-    { communityId: c.id, population: c.settlement?.population ?? 0, status: c.status },
-    c.name
-  );
-  feature.name = c.name;
-  feature.placeId = c.id;
-  return feature;
-}
-/** Founded communities in this frame that the parent left no record of. */
-function knownPlaces(
-  state: RegionalState,
-  kind: PoiKindId,
-  captured: readonly AtlasFeature[],
-  wanted: (c: SocietyCommunity) => boolean
-): PoiPlace[] {
-  const society = societyRegionOf(state);
-  if (!society) return [];
-  const covered = spatial.pointCoverage(state.surface.scope.footprint),
-    reference = state.domain.world.reference,
-    bounds = spatial.bounds(reference.domain),
-    recorded = (c: SocietyCommunity) =>
-      captured.some((f) => f.attributes.communityId === c.id || f.name === c.name);
-  return society.communities
-    .filter(
-      (c) =>
-        c.founded &&
-        wanted(c) &&
-        covered(canonicalPosition(reference, c.position, bounds)) &&
-        !recorded(c)
-    )
-    .map((c) => {
-      const id = regionalId(state, `known-seat:${c.id}`);
-      return lazyPlace(
-        kind,
-        id,
-        seatCell(state, id, () => cellOf(state, c.position)),
-        () => knownSeat(state, c)
-      );
-    });
-}
 function village(state: RegionalState, proposal: ProposedPlace) {
   return regionalFeature(
     state,
@@ -159,7 +102,6 @@ function village(state: RegionalState, proposal: ProposedPlace) {
   );
 }
 
-const lives = (c: SocietyCommunity) => c.status === "inhabited";
 /** Every inhabited place on this map. */
 export const settlementPlaces = (state: GenerationState): readonly PoiPlace[] =>
   heldFor(state, "places:settlement", () => {
@@ -170,7 +112,6 @@ export const settlementPlaces = (state: GenerationState): readonly PoiPlace[] =>
       ...captured
         .filter((f) => f.layerId === "settlements" && inhabited(f))
         .map((f) => capturedPlace(state, "settlement", f)),
-      ...knownPlaces(state, "settlement", captured, lives),
       ...state.regional.proposed
         .filter((proposal) => proposal.accepted)
         .map((proposal) =>
@@ -191,28 +132,26 @@ const isRuinRecord = (f: AtlasFeature) =>
 export const ruinPlaces = (state: GenerationState): readonly PoiPlace[] =>
   heldFor(state, "places:ruin", () => {
     if (!isRefined(state)) return landPlaces(state, "ruin");
-    const gone = (c: SocietyCommunity) => !lives(c),
-      captured = capturedSeats(state);
-    return [
-      ...captured.filter(isRuinRecord).map((f) => capturedPlace(state, "ruin", f)),
-      ...knownPlaces(state, "ruin", captured, gone),
-    ].filter((place) => place.anchor >= 0);
+    return capturedSeats(state)
+      .filter(isRuinRecord)
+      .map((f) => capturedPlace(state, "ruin", f))
+      .filter((place) => place.anchor >= 0);
   });
 
 /**
- * The record a settlement or ruin publishes as. A community already drawn on this map or a
+ * The record a settlement or ruin publishes as. A place already drawn on this map or a
  * coarser one is a finer drawing of that subject and keeps its identity: that write happens
  * here, and no second record follows.
  */
 export function communityRecord(state: GenerationState, place: PoiPlace): AtlasFeature | null {
   const feature = place.feature;
   if (!feature || isRefined(state)) return onceWritten(state, place);
-  const id = feature.attributes.communityId;
-  if (id === undefined || feature.attributes.round) return feature;
+  const key = feature.attributes.placeKey;
+  if (key === undefined) return feature;
   const kept = putGeneratedDetail(
     state,
     { ...feature, attributes: { ...feature.attributes, poi: place.kind } },
-    (f) => f.kind === "settlement" && f.attributes.communityId === id,
+    (f) => f.kind === "settlement" && f.attributes.placeKey === key,
     { kind: "settlement" }
   );
   return kept ? null : feature;

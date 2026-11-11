@@ -95,12 +95,6 @@ function installRecord(world: World, data: DomainWrite) {
 }
 function installGeographicState(world: World, data: DomainWrite) {
   switch (data.kind) {
-    case "society": {
-      const { id, ...value } = data.value;
-      void id;
-      (world.societies ??= {})[value.areaId] = value;
-      break;
-    }
     case "drainage": {
       const { id, ...value } = data.value;
       void id;
@@ -147,7 +141,6 @@ export class CatalogProjection {
     const selection = new RecordSelection(worldId, this.db, this.kernel);
     selection.select("r.kind IN ('area','entity','layer','field','magic','landmark','view')");
     const world = worldProjection(this.metadata(worldId));
-    delete world.societies;
     delete world.drainage;
     const snapshot = { world, revisions: [], coverage: [], fieldPatches: [] };
     install(snapshot, selection);

@@ -1,9 +1,8 @@
-import { mapCommand, executeMapOperation } from "./processTraits";
+import { mapCommand } from "./processTraits";
 import { spatial, rectangle } from "@atlas/domain";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
-import { publishSettlements } from "./societyPublication";
-import { initializePopulation } from "./societyPopulation";
+import { publishPeoplePlaces } from "./peopleProcesses";
 import { generationFeatures } from "./generationFeatures";
 
 export const builtProcess: MapProcess = {
@@ -41,22 +40,8 @@ export const builtProcess: MapProcess = {
   },
 };
 function settlements(state: GenerationState, context: MapProcessContext) {
-  publishSettlements(state, context);
+  publishPeoplePlaces(state, context);
 }
-export const builtPreparation: MapProcess = {
-  contract: { ...builtProcess.contract, id: "built.prepare", produces: ["population"] },
-  operation: mapCommand(
-    "built.prepare",
-    "initialize",
-    (state, context) => {
-      const profile = state.domain.world.areas[state.domain.scope.areaId].profile;
-      if (profile !== "interior" && profile !== "site" && !state.society)
-        executeMapOperation(initializePopulation, state, context);
-    },
-    []
-  ),
-  validate: () => [],
-};
 function site(state: GenerationState) {
   const [x0, y0, x1, y1] = state.surface.bounds;
   const dx = (x1 - x0) / 5,

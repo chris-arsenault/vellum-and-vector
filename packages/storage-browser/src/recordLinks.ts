@@ -55,7 +55,7 @@ function specificLinks(data: DomainWrite): Link[] {
           target,
           relation: "representation-area",
         })),
-        ...[data.value.attributes.fromCommunity, data.value.attributes.toCommunity]
+        ...[data.value.attributes.fromPlace, data.value.attributes.toPlace]
           .filter((target): target is string => typeof target === "string")
           .map((target) => ({ target, relation: "route-end" })),
       ];

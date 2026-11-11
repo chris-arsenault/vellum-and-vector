@@ -97,7 +97,6 @@ export async function openFixtureMap(
     features: [],
     regionalFeatures: fixture.regionalFeatures ?? [],
     landmarks: [],
-    society: undefined,
   });
   await storagePage(page);
   await restoreMap(page, archive);

@@ -125,14 +125,10 @@ export class RecordSelection {
     );
   }
   attachedRoutes() {
-    const communities = this.ofKind("feature").flatMap(({ data }) =>
-      data.kind === "feature" &&
-      data.value.kind === "settlement" &&
-      typeof data.value.attributes.communityId === "string"
-        ? [data.value.attributes.communityId]
-        : []
+    const places = this.ofKind("feature").flatMap(({ data }) =>
+      data.kind === "feature" && data.value.kind === "settlement" ? [data.value.id] : []
     );
-    this.related(communities, ["route-end"], true);
+    this.related(places, ["route-end"], true);
   }
   identities() {
     const ids = [...this.requested, ...[...this.records.values()].map((r) => r.reference.id)];

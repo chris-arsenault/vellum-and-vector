@@ -4,13 +4,11 @@ import {
   generateBand,
   gridPosition,
   putChannel,
-  spatial,
   canonicalPhysicalFields,
   fieldChannelName,
   type AtlasFeature,
   type DomainSnapshot,
   type Grid,
-  type SocietyCommunity,
 } from "@atlas/domain";
 import {
   atlasPublicationDefinitions,
@@ -199,41 +197,12 @@ function supplyFeatures(parent: DomainSnapshot, root: string, spec: ParentSpec) 
       { prominence: peak.prominence, elevation: peak.elevation, nameStatus: "proper" },
       "physical"
     );
-  const communities = spec.towns.map((town, index) => supplyTown(parent, root, town, index));
-  parent.world.societies = {
-    [root]: {
-      areaId: root,
-      spaceId: parent.scope.spaceId,
-      communities,
-      history: [
-        {
-          id: "Earlier era",
-          years: 300,
-          before: 40_000,
-          births: 0,
-          deaths: 0,
-          migrated: 0,
-          after: 40_000,
-          causes: [],
-        },
-      ],
-      works: [],
-      events: [],
-      connections: [],
-      magic: [],
-    },
-  };
+  for (const town of spec.towns) supplyTown(parent, root, town);
 }
 
-/** A town as the settlement feature and the community behind it. */
-function supplyTown(
-  parent: DomainSnapshot,
-  root: string,
-  town: Town,
-  index: number
-): SocietyCommunity {
-  const id = `community:${index}`,
-    [x, y] = town.position;
+/** A town as the settlement record the parent's map holds. */
+function supplyTown(parent: DomainSnapshot, root: string, town: Town) {
+  const [x, y] = town.position;
   parent.world.features[`settlement:${town.name}`] = supplied(
     root,
     `settlement:${town.name}`,
@@ -244,42 +213,10 @@ function supplyTown(
     {
       population: town.population,
       settlementPopulation: town.population,
-      communityId: id,
       status: "inhabited",
       scale: "town",
       nameStatus: "proper",
     },
     "built"
   );
-  return {
-    id,
-    name: town.name,
-    position: { x, y, z: 0 },
-    areaKm2: 2800,
-    footprint: spatial.buffer({ type: "Point", coordinates: [x, y] }, 30_000)!,
-    groups: [
-      {
-        people: "residents",
-        culture: null,
-        languages: [],
-        religions: [],
-        practices: [],
-        count: 40_000,
-      },
-    ],
-    support: {
-      farming: 30_000,
-      grazing: 5000,
-      gathering: 2000,
-      fishing: 3000,
-      water: 1,
-      capacity: 45_000,
-    },
-    founded: "Earlier era",
-    status: "inhabited",
-    protected: false,
-    causes: [],
-    settlement: { population: town.population, peak: town.population, recoveryYears: 0 },
-    latentSettlementPopulation: 0,
-  };
 }

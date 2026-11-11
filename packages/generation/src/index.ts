@@ -41,6 +41,4 @@ export * from "./setupProjection";
 export { landmarksInExtent } from "./landmarkSelection";
 export { exerciseCatalogue, type KindExercise } from "./poi/catalogueExercise";
 export { auditPlaces } from "./poi/poiAudit";
-export * from "./societyInventory";
-export * from "./societyTempo";
 export { surfaceMaterialCategories } from "./rock/groundPresentation";

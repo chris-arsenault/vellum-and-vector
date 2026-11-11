@@ -1,183 +1,81 @@
-import {
-  MapScale,
-  type SocietyCommunity,
-  type SocietyMagicPractice,
-  type SocietyRegion,
-} from "@atlas/domain";
-import { Badge, LinkList, Meter, Section, ShareBar, Stat, StatGrid } from "./InspectionSurface";
-import { compact, percent } from "./surfaceData";
-import {
-  communityEvents,
-  communityNeighbours,
-  communityWorks,
-  connectionSegments,
-  practiceLabel,
-} from "./settlementSurfaceData";
+import type { AtlasFeature } from "@atlas/domain";
+import { LinkList, Section, ShareBar } from "./InspectionSurface";
+import { compact } from "./surfaceData";
+import { placeWays, practiceLabel, recordedAt, waySegments } from "./settlementSurfaceData";
 import type { FeatureSelector } from "./SettlementSurface";
 
-/** What the community's magic ledger shows: stock, use and the strain of each practice. */
-export function SettlementMagic({
-  region,
-  community,
-}: {
-  region: SocietyRegion;
-  community: SocietyCommunity;
-}) {
-  const ledger = region.magic.find((p) => p.communityId === community.id);
-  if (!ledger || !practised(ledger)) return null;
-  return (
-    <Section title="Magic">
-      <FireMeters ledger={ledger} />
-      <AuroraMeters ledger={ledger} />
-      <StatGrid>
-        {ledger.coreUsed > 0 && <Stat value={ledger.coreUsed.toFixed(1)} label="cores consumed" />}
-        {ledger.crystals > 0 && <Stat value={ledger.crystals.toFixed(1)} label="crystals" />}
-        {ledger.readers > 0 && <Stat value={compact(ledger.readers)} label="readers" />}
-        {ledger.divers > 0 && <Stat value={compact(ledger.divers)} label="divers" />}
-        {ledger.divers > 0 && <Stat value={`${ledger.depthLimit} m`} label="depth limit" />}
-        {ledger.injuries > 0 && <Stat value={compact(ledger.injuries)} label="diving injuries" />}
-      </StatGrid>
-    </Section>
-  );
-}
-function practised(p: SocietyMagicPractice) {
-  return (
-    p.coreSupply + p.coreDeposit + p.coreUsed + p.heatApplied > 0 ||
-    p.crystals + p.readers + p.memoryAccess > 0 ||
-    p.divers + p.pressureUsed > 0
-  );
-}
-function FireMeters({ ledger }: { ledger: SocietyMagicPractice }) {
-  const cores = ledger.coreSupply + ledger.coreDeposit;
-  if (cores + ledger.coreUsed + ledger.heatApplied <= 0) return null;
-  return (
-    <>
-      <Meter
-        label="Fire cores stored"
-        value={ledger.coreSupply}
-        max={cores}
-        text={`${ledger.coreSupply.toFixed(1)} of ${cores.toFixed(1)}`}
-        channel="fire-forge"
-      />
-      <Meter
-        label="Forge heat applied"
-        value={ledger.heatApplied}
-        max={8}
-        text={ledger.heatApplied.toFixed(2)}
-        channel="fire-forge"
-      />
-    </>
-  );
-}
-function AuroraMeters({ ledger }: { ledger: SocietyMagicPractice }) {
-  if (ledger.crystals + ledger.readers + ledger.memoryAccess <= 0) return null;
-  return (
-    <>
-      <Meter
-        label="Archive memory access"
-        value={ledger.memoryAccess}
-        max={1}
-        channel="aurora-archive"
-      />
-      <Meter
-        label="Archive strain"
-        value={ledger.strain}
-        max={1}
-        text={ledger.strain.toFixed(2)}
-        channel="aurora-archive"
-      />
-    </>
-  );
-}
-
-/** Works the community made or demands, the neighbours it reaches, and what befell it. */
-export function SettlementTies({
-  region,
-  community,
-  select,
-}: {
-  region: SocietyRegion;
-  community: SocietyCommunity;
-  select: FeatureSelector;
-}) {
-  return (
-    <>
-      <WorksSection region={region} community={community} select={select} />
-      <ReachSection region={region} community={community} select={select} />
-      <EventsSection region={region} community={community} />
-    </>
-  );
-}
+/**
+ * What the settlement built, what befell it and where its ways lead: the works and events
+ * recorded at it and the ways that end at it, each a feature beside it on the map.
+ */
 interface TieProps {
-  region: SocietyRegion;
-  community: SocietyCommunity;
+  feature: AtlasFeature;
+  related: AtlasFeature[];
   select: FeatureSelector;
 }
-function WorksSection({ region, community, select }: TieProps) {
-  const works = communityWorks(region, community.id);
+export function SettlementTies(props: TieProps) {
+  return (
+    <>
+      <WorksSection {...props} />
+      <ReachSection {...props} />
+      <EventsSection feature={props.feature} related={props.related} />
+    </>
+  );
+}
+function WorksSection({ feature, related, select }: TieProps) {
+  const works = recordedAt(feature, related, false);
   return (
     <Section title="Works" meta={works.length ? `${works.length}` : undefined}>
       <LinkList
-        empty="Nothing built or demanded here."
-        links={works.map((w) => ({
-          id: w.id,
-          label: w.name ?? practiceLabel(w.kind),
-          channel: w.kind,
-          meta: w.demand ? (
-            <Badge tone="warn">demand</Badge>
-          ) : (
-            <>
-              {percent(w.condition)} {w.maintained ? "kept" : "unkept"}
-            </>
-          ),
-          select: select((f) => f.id === `work:${w.id}` || f.id === w.id),
+        empty="Nothing this map shows was built here."
+        links={works.map((work) => ({
+          id: work.id,
+          label: work.name,
+          channel: work.kind,
+          meta:
+            typeof work.attributes.built === "string" ? `raised ${work.attributes.built}` : null,
+          select: select((f) => f.id === work.id),
         }))}
       />
     </Section>
   );
 }
-function ReachSection({ region, community, select }: TieProps) {
-  const neighbours = communityNeighbours(region, community.id);
+function ReachSection({ feature, related, select }: TieProps) {
+  const ways = placeWays(feature, related);
   return (
-    <Section
-      title="Reach"
-      meta={neighbours.length ? `${neighbours.length} connections` : undefined}
-    >
-      {neighbours.length > 0 && (
+    <Section title="Reach" meta={ways.length ? `${ways.length} ways` : undefined}>
+      {ways.length > 0 && (
         <ShareBar
-          label="Connections by way"
-          segments={connectionSegments(neighbours)}
-          format={(s) => String(s.value)}
+          label="Travellers by way"
+          segments={waySegments(ways)}
+          format={(s) => compact(s.value)}
         />
       )}
       <LinkList
-        empty="No connection to another community."
-        links={neighbours.slice(0, 8).map(({ link, neighbour }) => ({
-          id: neighbour.id,
-          label: neighbour.name,
-          channel: link.kind,
-          meta: `${compact(MapScale.inUnits(link.distance, "km"))} km · ${link.kind}`,
-          select: select(
-            (f) => f.kind === "settlement" && f.attributes.communityId === neighbour.id
-          ),
+        empty="No way leads from here to another place."
+        links={ways.slice(0, 8).map(({ way, other, travellers }) => ({
+          id: way.id,
+          label: other?.name ?? way.name,
+          channel: way.kind,
+          meta: `${compact(travellers)} a year · ${practiceLabel(String(way.attributes.roadClass ?? way.kind))}`,
+          select: select((f) => f.id === (other?.id ?? way.id)),
         }))}
       />
     </Section>
   );
 }
-function EventsSection({ region, community }: Omit<TieProps, "select">) {
-  const events = communityEvents(region, community.id);
+function EventsSection({ feature, related }: Omit<TieProps, "select">) {
+  const events = recordedAt(feature, related, true);
   if (!events.length) return null;
   return (
     <Section title="Events" collapsed>
       <table className="surface-table">
         <tbody>
-          {events.map((e) => (
-            <tr key={e.id} title={e.causes.join(" ")}>
-              <td>{e.era}</td>
-              <td>{practiceLabel(e.kind)}</td>
-              <td>{compact(e.casualties)} dead</td>
-              <td>{compact(e.displaced)} displaced</td>
+          {events.map((event) => (
+            <tr key={event.id} title={event.causes.join(" ")}>
+              <td>{String(event.attributes.era ?? "")}</td>
+              <td>{practiceLabel(String(event.attributes.eventKind ?? "event"))}</td>
+              <td>{compact(Number(event.attributes.casualties ?? 0))} dead</td>
             </tr>
           ))}
         </tbody>

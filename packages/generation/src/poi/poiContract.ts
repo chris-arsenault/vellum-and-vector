@@ -1,4 +1,4 @@
-import type { AtlasFeature, SocietyEvent } from "@atlas/domain";
+import type { AtlasFeature } from "@atlas/domain";
 import type { AreaKindId } from "../area/areaKinds";
 import type { PhysicalBufferName } from "../world/field";
 import type { GenerationState } from "../process";
@@ -155,8 +155,14 @@ type FieldEffect<P> = Slot<OnPlace<readonly PoiFieldChange[], P>>;
 
 /** Initialization Command strategy. The event owner invokes it only when an event occurs. */
 export interface PoiEventCommand<State = GenerationState> {
-  readonly accepts: (event: SocietyEvent) => boolean;
-  readonly changes: (state: State, event: SocietyEvent) => readonly PoiPhysicalChange[];
+  readonly accepts: (event: PoiStruck) => boolean;
+  readonly changes: (state: State, event: PoiStruck) => readonly PoiPhysicalChange[];
+}
+/** Something that has just struck a cell: its kind, and how hard it fell from nothing to one. */
+export interface PoiStruck {
+  readonly kind: string;
+  readonly magnitude: number;
+  readonly cell: number;
 }
 export type PoiPhysicalChange = Extract<PoiFieldChange, { readonly band: PhysicalBufferName }>;
 

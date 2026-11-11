@@ -2,7 +2,7 @@
 import { MapScale } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
-import { tappingReach } from "../../societyColdAge";
+import { tappingReach } from "../settlements/workFacts";
 import { carryWhereItLands, costNear, counterpartOf } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holds, namingCultureNear, rulePlaces, within } from "../poiPlaces";

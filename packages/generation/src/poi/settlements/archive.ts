@@ -2,7 +2,7 @@
 import { MapScale } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
-import { memoryCold, memoryIce } from "../../societyMagic";
+import { memoryCold, memoryIce } from "./workFacts";
 import { carryWhereItLands, costNear, goes } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holdsRecord, within } from "../poiPlaces";
@@ -45,7 +45,7 @@ const requires = (state: GenerationState, cell: number) =>
 /** Strong Aurora over thick ice in hard frost: what charges the crystals and what keeps them. */
 const suitability = (state: GenerationState, cell: number) =>
   Math.sqrt(auroraAt(state, cell) * retentionAt(state, cell));
-const places = workPlaces("archive", "aurora-archive", {
+const places = workPlaces("archive", {
   record: "aurora-archive",
   layer: "magicPractices",
   label: "Archive",
@@ -77,7 +77,7 @@ export const archive: PoiEntry = {
   },
   existence: {
     statement:
-      "Sited two ways: the simulation's practice at a community's seat once Aurora and ice under it give it crystals; and on every map beside a seat where Aurora stands over thick ice in hard frost, at least 100 km apart.",
+      "Sited on every map beside a settlement where Aurora stands over thick ice in hard frost, at least 100 km apart.",
     way: "sited",
     requires,
     suitability,
@@ -85,7 +85,7 @@ export const archive: PoiEntry = {
   },
   publication: {
     statement:
-      "An archive publishes as a located practice; the World shows those the ground sited, and the simulation's own stay without a record.",
+      "An archive publishes as a located practice where a map's cells can hold one; the World leaves it for a finer map.",
     moment: "society",
     record: workRecord,
   },
@@ -160,7 +160,7 @@ export const archive: PoiEntry = {
     importance: weighedPlace(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
   },
   naming: {
-    statement: "Named by the community that keeps it, in its record, after its settlement.",
+    statement: "Named by the people who keep it, in its record, after its settlement.",
     namedBy: cultureOfWork,
     takesNameFrom: [{ kind: "settlement", holds: within(seat) }],
     lendsNameTo: notApplicable("Its name is carried by readers, not by any place around it."),

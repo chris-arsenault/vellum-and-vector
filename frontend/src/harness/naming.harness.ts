@@ -1,8 +1,8 @@
 import { expect, it, vi } from "vitest";
-import { residentBand, spatial, type AtlasFeature, type DomainSnapshot } from "@atlas/domain";
+import { spatial, type AtlasFeature, type DomainSnapshot } from "@atlas/domain";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { finalizeNamesProcess } from "../../../packages/generation/src/societyNaming";
+import { finalizeNamesProcess } from "../../../packages/generation/src/landNaming";
 import { nameGeographicFeature } from "../../../packages/generation/src/atlasNaming";
 import { executeMapOperation } from "../../../packages/generation/src/processTraits";
 import type { GenerationState } from "../../../packages/generation/src/process";
@@ -58,7 +58,7 @@ async function loadGeography(ws: HarnessWorkspace, domain: DomainSnapshot) {
 
 /** Exercises naming on saved geography without regenerating or changing the checkpoint. */
 it.skipIf(!process.env.HARNESS_NAMING)(
-  "names the saved map using its completed society",
+  "names the saved map's geography",
   async () => {
     const name = process.env.HARNESS_WORLD ?? "world",
       record = readCheckpoint(name);
@@ -72,24 +72,11 @@ it.skipIf(!process.env.HARNESS_NAMING)(
         terrain = await openTerrain(ws, record.worldId, areaId);
       try {
         const eligible = await loadGeography(ws, domain),
-          region = domain.world.societies?.[areaId],
-          band = () => residentBand("float64", new Float64Array(0)),
           state: GenerationState = {
             domain,
             surface: terrain.raster.field,
             facts: new Set(),
             history: [],
-            society: region
-              ? {
-                  region,
-                  owner: band(),
-                  river: band(),
-                  coast: band(),
-                  mediumChanged: new Set(),
-                  inherited: false,
-                  changed: new Set(),
-                }
-              : undefined,
           };
         await executeMapOperation(finalizeNamesProcess(original).operation, state, {
           scope: domain.scope,
@@ -109,9 +96,7 @@ it.skipIf(!process.env.HARNESS_NAMING)(
             .filter((feature) => !feature.attributes.namedInEra)
             .map((feature) => feature.kind)
         ).toEqual([]);
-        process.stdout.write(
-          `Named ${eligible.length} features with ${region?.communities.length ?? 0} communities from ${name}.\n`
-        );
+        process.stdout.write(`Named ${eligible.length} features from ${name}.\n`);
       } finally {
         terrain.close();
       }

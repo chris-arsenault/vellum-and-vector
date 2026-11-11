@@ -1,5 +1,7 @@
 import { canonicalGeometry, unwrapCoordinates } from "@atlas/domain";
+import { generationBindings } from "./generationBindings";
 import { generationFeature } from "./generationFeatures";
+import { knownTraditions } from "./human/traditions";
 import { knownWays, type KnownWay } from "./human/placeCountry";
 import { knownPlaces, townSize } from "./human/placeRegistry";
 import { generatedFeature, generatedId, putGeneratedNetwork } from "./mapFeatures";
@@ -36,7 +38,26 @@ function course(points: Point[]): Point[] {
   return line;
 }
 
-function way(state: GenerationState, known: KnownWay) {
+/**
+ * The ways a realm keeps up as highways: the most travelled land ways out of its seat, as
+ * many as the map's setting gives a realm.
+ */
+function highways(state: GenerationState, shown: readonly KnownWay[], each: number) {
+  const kept = new Set<KnownWay>();
+  if (each <= 0) return kept;
+  for (const realm of knownTraditions(state)) {
+    if (realm.kind !== "allegiance" || realm.ended || !realm.seat) continue;
+    shown
+      .filter(
+        (known) => known.kind !== "lane" && (known.from === realm.seat || known.to === realm.seat)
+      )
+      .sort((a, b) => b.travellers - a.travellers)
+      .slice(0, each)
+      .forEach((known) => kept.add(known));
+  }
+  return kept;
+}
+function way(state: GenerationState, known: KnownWay, highway: boolean) {
   const map = state.physical!.map,
     places = new Map(knownPlaces(state).map((place) => [place.id, place])),
     [a, b] = [places.get(known.from)!, places.get(known.to)!],
@@ -64,7 +85,7 @@ function way(state: GenerationState, known: KnownWay) {
       fromPlace: generatedId(state, a.id),
       toPlace: generatedId(state, b.id),
       travelCost: known.cost,
-      roadClass: known.kind,
+      roadClass: highway ? "highway" : known.kind,
       wayKind: known.kind === "lane" ? "sea" : "land",
       travellers: Math.round(known.travellers),
       routePopulation: Math.round(Math.min(a.townPeople, b.townPeople)),
@@ -77,9 +98,10 @@ export function publishLandWays(state: GenerationState, context: MapProcessConte
   const recorded = (id: string) => Boolean(generationFeature(state, generatedId(state, id))),
     shown = knownWays(state).filter(
       (known) => known.kind !== "path" && recorded(known.from) && recorded(known.to)
-    );
+    ),
+    kept = highways(state, shown, Number(generationBindings(context).parameters.highways));
   for (const [index, known] of shown.entries()) {
     context.progress(index / shown.length, "Laying the roads people made");
-    if (known.cells.length >= 2) putGeneratedNetwork(state, way(state, known));
+    if (known.cells.length >= 2) putGeneratedNetwork(state, way(state, known, kept.has(known)));
   }
 }

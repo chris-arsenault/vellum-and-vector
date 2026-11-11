@@ -8,16 +8,14 @@ import { magicProcesses } from "./world/magicProcesses";
 import { advectAtlasMagic } from "./world/atlasMagic";
 import { thermalMagicProcess, magicStorageProcess } from "./mapMagic";
 import { materialMagicProcess } from "./mapMagicEffects";
+import { builtProcess } from "./mapBuilt";
+import { atlasPublicationDefinitions } from "./world/atlasPublications";
 import {
   culturalProcess,
-  culturalDevelopmentProcess,
+  peopleProcesses,
+  peoplePublications,
   politicalProcess,
-  politicalDevelopmentProcess,
-} from "./mapPeople";
-import { builtProcess, builtPreparation } from "./mapBuilt";
-import { atlasPublicationDefinitions } from "./world/atlasPublications";
-import { populationProcesses } from "./societyProcesses";
-import { societyPublications } from "./societyPublication";
+} from "./peopleProcesses";
 
 function domainModule(id: string, processes: GenerationModule["processes"]): GenerationModule {
   return {
@@ -32,8 +30,8 @@ function domainModule(id: string, processes: GenerationModule["processes"]): Gen
 atlasGenerationModules.register({
   id: "human.population",
   features: [],
-  processes: () => populationProcesses,
-  publications: societyPublications,
+  processes: () => peopleProcesses,
+  publications: peoplePublications,
 });
 atlasGenerationModules.register({
   id: "atlas.physical",
@@ -62,17 +60,12 @@ atlasGenerationModules.register(
     advectAtlasMagic,
   ])
 );
-atlasGenerationModules.register(
-  domainModule("human.cultures", () => [culturalDevelopmentProcess, culturalProcess])
-);
-atlasGenerationModules.register(
-  domainModule("human.politics", () => [politicalDevelopmentProcess, politicalProcess])
-);
+atlasGenerationModules.register(domainModule("human.cultures", () => [culturalProcess]));
+atlasGenerationModules.register(domainModule("human.politics", () => [politicalProcess]));
 atlasGenerationModules.register(
   domainModule("built.layout", (source, input) => {
     const profile = source.world.areas[input.areaId].profile;
     return [
-      builtPreparation,
       ["site", "interior"].includes(profile)
         ? builtProcess
         : { ...builtProcess, contract: { ...builtProcess.contract, requires: ["Elevation"] } },

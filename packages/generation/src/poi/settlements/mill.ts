@@ -111,7 +111,7 @@ export const mill: PoiEntry = {
   },
   existence: {
     statement:
-      "Sited by people on a refined map: each settled place with a falling channel within three cells turns one mill at the reach of greatest slope by flow. No mill is published on the world map, whose works are latent demands.",
+      "Sited by people on a refined map: each settled place with a falling channel within three cells turns one mill at the reach of greatest slope by flow. No mill is published on the world map, whose cells cannot hold one.",
     way: "sited",
     requires: (state, cell) =>
       fallingChannel(state, cell) && settlementWithin(state, cell, reach(state)),

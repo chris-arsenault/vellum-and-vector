@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./uiTest";
-import type { AtlasFeature, PopulationGroup, SocietyRegion } from "@atlas/domain";
+import type { AtlasFeature, PopulationGroup } from "@atlas/domain";
 import {
   canvas,
   drag,
@@ -25,7 +25,6 @@ function settlementFeature(): AtlasFeature {
     layerId: "settlements",
     geometry: { type: "Point", coordinates: [2000, 500] },
     attributes: {
-      communityId: "town",
       population: 200,
       communityPopulation: 1000,
       ruralPopulation: 800,
@@ -47,71 +46,7 @@ function settlementFeature(): AtlasFeature {
     protected: false,
     actor: "generator",
     generationId: null,
-    causes: [],
-  };
-}
-function societyState(feature: AtlasFeature): SocietyRegion {
-  return {
-    areaId: "fixture",
-    spaceId: "surface",
-    connections: [],
-    works: [],
-    events: [],
-    magic: [],
-    history: [
-      {
-        id: "Settlement",
-        years: 20,
-        before: 900,
-        after: 1000,
-        births: 150,
-        deaths: 50,
-        migrated: 0,
-        cycles: 2,
-        causes: [],
-      },
-    ],
-    communities: [
-      {
-        id: "town",
-        name: feature.name,
-        position: { x: 2000, y: 500, z: 0 },
-        areaKm2: 4,
-        groups: feature.attributes.groups as PopulationGroup[],
-        support: {
-          capacity: 1500,
-          farming: 1000,
-          grazing: 300,
-          gathering: 100,
-          fishing: 100,
-          water: 1,
-        },
-        founded: "Settlement, year 10",
-        naming: { language: "River speech", culture: "marches", era: "Settlement, year 10" },
-        status: "inhabited",
-        protected: false,
-        causes: [],
-        settlement: { population: 200, peak: 200, recoveryYears: 0 },
-        history: [
-          {
-            era: "Settlement",
-            year: 10,
-            population: 900,
-            capacity: 1200,
-            settlementPopulation: 150,
-            status: "inhabited",
-          },
-          {
-            era: "Settlement",
-            year: 20,
-            population: 1000,
-            capacity: 1500,
-            settlementPopulation: 200,
-            status: "inhabited",
-          },
-        ],
-      },
-    ],
+    causes: ["Settlement: people gathered here on a river."],
   };
 }
 /** A 4 × 1 km world whose only settlement sits at the map centre. */
@@ -124,7 +59,7 @@ async function settlementWorld(
   await (supplied ? openFixtureMap : generatedWorld)(
     page,
     name,
-    { features: [settlement], society: societyState(settlement) },
+    { features: [settlement] },
     { width: 4, height: 1 }
   );
   await showPreset(page);
@@ -145,7 +80,7 @@ test("settlement inspection shows residents, mixed languages and history without
   await openFixtureMap(
     page,
     "Society inspection",
-    { features: [settlement], society: societyState(settlement) },
+    { features: [settlement] },
     { width: 4, height: 1 }
   );
   await openRegistry(page);
@@ -163,8 +98,10 @@ test("settlement inspection shows residents, mixed languages and history without
     "River speech 100.0%",
     "Coast speech 40.0%",
   ]);
-  await page.getByText("Local population history", { exact: true }).click();
-  await expect(page.getByRole("cell", { name: "Settlement / 10", exact: true })).toBeVisible();
+  // The record's causes are listed with the feature, folded until asked for.
+  await expect(
+    panel(page).locator("li").filter({ hasText: "people gathered here on a river" })
+  ).toHaveCount(1);
   await expect(panel(page).getByRole("textbox")).toHaveCount(0);
   expect((await exportMap(page)).features).toEqual(before.features);
   expect(errors).toEqual([]);
@@ -179,8 +116,6 @@ test("the settlement surface shows the community and its edits reach the export 
   await expect(page.getByTitle("200 settlement residents", { exact: true })).toBeVisible();
   await expect(page.getByTitle("800 rural residents", { exact: true })).toBeVisible();
   await expect(legend(page, "Naming-language use")).toHaveText(["River speech 100.0%"]);
-  await page.getByText("Local population history", { exact: true }).click();
-  await expect(page.getByRole("cell", { name: "Settlement / 10", exact: true })).toBeVisible();
   await page.getByText("Properties & relationships", { exact: true }).click();
   await page.getByLabel("People in group 1", { exact: true }).fill("1200");
   await page

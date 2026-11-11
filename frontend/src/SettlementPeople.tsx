@@ -1,13 +1,12 @@
-import type { SocietyCommunity, SocietyRegion, World } from "@atlas/domain";
+import type { AtlasFeature, PopulationGroup, World } from "@atlas/domain";
 import { useState } from "react";
-import { Facts, OverlapBars, Section, ShareBar } from "./InspectionSurface";
-import { TrendChart } from "./TrendChart";
+import { OverlapBars, Section, ShareBar } from "./InspectionSurface";
 import { compact, percent } from "./surfaceData";
 import {
-  entityName,
+  describedGroups,
   namingUseSegments,
-  occupationSeries,
-  stepLabel,
+  peoplesSegments,
+  type PeoplesField,
 } from "./settlementSurfaceData";
 import {
   cultureSegments,
@@ -20,19 +19,46 @@ import {
 } from "./settlementPeopleData";
 
 /**
- * Who lives here, read across the population groups: by culture, by tradition, by
- * language and by livelihood. The groups themselves, which partition the residents by
- * people, culture and exact set of traditions, sit folded in a table underneath.
+ * Who lives here. A generated place states the share of its people who hold each tongue,
+ * faith, custom and realm, read from the land it stands on. A place whose residents a creator
+ * described is read across those groups instead.
  */
-export function SettlementPeoples({
-  world,
-  community,
-}: {
-  world: World;
-  community: SocietyCommunity;
-}) {
-  const groups = community.groups,
-    cultures = cultureSegments(world, groups);
+export function SettlementPeoples({ world, feature }: { world: World; feature: AtlasFeature }) {
+  const groups = describedGroups(feature);
+  return groups ? (
+    <DescribedPeoples world={world} groups={groups} />
+  ) : (
+    <LandPeoples world={world} feature={feature} />
+  );
+}
+const landKinds: [PeoplesField, string][] = [
+  ["tongue", "Residents by tongue"],
+  ["faith", "Residents by faith"],
+  ["custom", "Residents by custom"],
+  ["allegiance", "Residents by the realm they hold with"],
+];
+function LandPeoples({ world, feature }: { world: World; feature: AtlasFeature }) {
+  const bars = landKinds
+    .map(([field, label]) => ({ field, label, segments: peoplesSegments(world, feature, field) }))
+    .filter((bar) => bar.segments.length > 0);
+  if (!bars.length) return null;
+  return (
+    <Section title="Peoples">
+      {bars.map((bar) => (
+        <ShareBar
+          key={bar.field}
+          label={bar.label}
+          segments={bar.segments}
+          total={1}
+          format={(s) => percent(s.value)}
+          titled
+        />
+      ))}
+    </Section>
+  );
+}
+function DescribedPeoples({ world, groups }: { world: World; groups: PopulationGroup[] }) {
+  const cultures = cultureSegments(world, groups);
   return (
     <Section
       title="Peoples"
@@ -58,13 +84,6 @@ export function SettlementPeoples({
         format={(s) => percent(s.value)}
         titled
       />
-      {community.naming && (
-        <Facts
-          items={[
-            ["Named", `${community.naming.era} in ${entityName(world, community.naming.language)}`],
-          ]}
-        />
-      )}
       <GroupTable rows={groupRows(world, groups)} />
     </Section>
   );
@@ -116,86 +135,6 @@ function GroupTable({ rows }: { rows: GroupRow[] }) {
           </tbody>
         </table>
       </div>
-    </details>
-  );
-}
-
-/** Residents, support and the settlement over recorded steps, and the eras behind them. */
-export function SettlementHistory({
-  region,
-  community,
-}: {
-  region: SocietyRegion;
-  community: SocietyCommunity;
-}) {
-  const steps = community.history ?? [];
-  return (
-    <Section title="History" meta={steps.length ? `${steps.length} recorded steps` : undefined}>
-      <TrendChart
-        label="Population over recorded steps"
-        series={occupationSeries(community)}
-        xLabel={(x) => stepLabel(community, x)}
-      />
-      {steps.length > 0 && (
-        <details>
-          <summary>Local population history</summary>
-          <table className="surface-table">
-            <thead>
-              <tr>
-                <th>Era / year</th>
-                <th>Residents</th>
-                <th>Support</th>
-                <th>Settlement</th>
-                <th>Occupation</th>
-              </tr>
-            </thead>
-            <tbody>
-              {steps.map((step, i) => (
-                <tr key={i}>
-                  <td>
-                    {step.era} / {Math.round(step.year)}
-                  </td>
-                  <td>{Math.round(step.population).toLocaleString()}</td>
-                  <td>{Math.round(step.capacity).toLocaleString()}</td>
-                  <td>{Math.round(step.settlementPopulation).toLocaleString()}</td>
-                  <td>{step.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </details>
-      )}
-      <EraRecord region={region} />
-    </Section>
-  );
-}
-function EraRecord({ region }: { region: SocietyRegion }) {
-  if (!region.history.length) return null;
-  return (
-    <details>
-      <summary>Completed human eras</summary>
-      <table className="surface-table">
-        <thead>
-          <tr>
-            <th>Era</th>
-            <th>Years</th>
-            <th>Residents</th>
-            <th>Migrated</th>
-          </tr>
-        </thead>
-        <tbody>
-          {region.history.map((era, i) => (
-            <tr key={i} title={era.causes.join(" ")}>
-              <td>{era.id}</td>
-              <td>{Math.round(era.years)}</td>
-              <td>
-                {compact(era.before)} → {compact(era.after)}
-              </td>
-              <td>{compact(era.migrated)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </details>
   );
 }

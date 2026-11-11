@@ -12,14 +12,9 @@ import {
   neighbors,
   putChannel,
   rectangle,
-  type SocietyCommunity,
 } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import { findRoute } from "./mapRouting";
-import { supplySociety } from "./societyTestFixture";
-import { landEdges } from "./societyTraversal";
-import { publishSettlements } from "./societyPublication";
-import { emptySupport } from "./societySupport";
 import type { MapProcessContext } from "./process";
 import type { Polygon } from "geojson";
 import { createAtlasWorkspace } from "./world/atlasWorkspace";
@@ -99,23 +94,6 @@ function fixture(compact = false) {
   };
   return { state, context };
 }
-function town(id: string, x: number): SocietyCommunity {
-  return {
-    id,
-    name: id,
-    position: { x, y: 4500, z: 0 },
-    areaKm2: 10,
-    groups: [
-      { people: "people", culture: null, languages: [], religions: [], practices: [], count: 1000 },
-    ],
-    support: { ...emptySupport(), capacity: 1000 },
-    founded: "Old era",
-    status: "inhabited",
-    protected: false,
-    causes: [],
-    settlement: { population: 500, peak: 500, recoveryYears: 0 },
-  };
-}
 
 it("routes across a supplied seam region by the nearby geographic edge, not through the missing middle of the chart", () => {
   const { state } = fixture(),
@@ -126,32 +104,6 @@ it("routes across a supplied seam region by the nearby geographic edge, not thro
   expect(neighbors(grid, west).some((i) => gridPosition(grid, i).x > 9600)).toBe(true);
   const route = findRoute(grid, { x: 500, y: 4500, z: 0 }, { x: 9500, y: 4500, z: 0 }, "road");
   expect(route.length).toBeGreaterThan(1);
-  expect(
-    [...landEdges(state)].some(
-      (edge) =>
-        Math.abs(gridPosition(grid, edge.a).x - gridPosition(grid, edge.b).x) > 9000 &&
-        edge.distance < 1000
-    )
-  ).toBe(true);
-});
-
-it("publishes a seam-crossing way as one geographic identity with a shared seam junction", () => {
-  const { state, context } = fixture();
-  supplySociety(state);
-  state.society!.region.communities = [town("west", 500), town("east", 9500)];
-  state.society!.region.connections = [
-    { from: "west", to: "east", kind: "land", distance: 1000, travelCost: 600, wear: 1500 },
-  ];
-  publishSettlements(state, context);
-  const road = Object.values(state.domain.world.features).find(
-    (feature) => feature.kind === "road"
-  )!;
-  expect(road.geometry.type).toBe("MultiLineString");
-  const reaches = Object.values(state.domain.world.networkReaches ?? {}).filter(
-    (reach) => reach.featureId === road.id
-  );
-  expect(reaches).toHaveLength(2);
-  expect(new Set(reaches.flatMap((reach) => [reach.start, reach.end])).size).toBe(3);
 });
 
 it("retains periodic field metadata when the regional native workspace replaces its supplied surface", () => {

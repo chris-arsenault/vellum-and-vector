@@ -47,7 +47,6 @@ export function assertWorkloadDetail(
   branching = true
 ) {
   expect(result.state.physical).toBeUndefined();
-  expect(result.state.society).toBeUndefined();
   expect(result.state.history).toEqual([]);
   const reaches = result.state.domain.world.drainage![result.state.surface.scope.areaId].reaches;
   expect(reaches.length).toBeGreaterThan(0);
@@ -167,7 +166,7 @@ export async function regionalWorkload(f: Fixture, child = f.child, quality = "s
   };
 }
 export async function assertRegionalPublication(
-  { id, root, child, workspace, parent }: Fixture,
+  { id, child, workspace, parent }: Fixture,
   result: CompletedBoundary,
   output: DomainSnapshot,
   source: DomainSnapshot,
@@ -177,8 +176,6 @@ export async function assertRegionalPublication(
   expect(output.world.epochs).toEqual(parent.world.epochs);
   expect(result.state.diagnostics?.filter((d) => d.outcome !== "retained") ?? []).toEqual([]);
   expect(result.state.physical).toBeUndefined();
-  expect(result.state.society).toBeUndefined();
-  expect(output.world.societies![child].history).toEqual(parent.world.societies![root].history);
   expect([...features.values()].some((f) => f.name === "Known inland core")).toBe(true);
   const event = [...features.values()].find((feature) => feature.kind === "societyEvent")!;
   expect(event).toBeDefined();
@@ -197,9 +194,6 @@ export async function assertRegionalPublication(
     const restoredFeatures = new SqliteFeatureWorkspace(restoredDb);
     await loadGenerationFeatures(reopenedSource, reopened, restoredFeatures);
     expect(restoredFeatures.get(event.id)?.geometry).toEqual(event.geometry);
-    expect(reopenedSource.world.societies![child].history).toEqual(
-      parent.world.societies![root].history
-    );
   } finally {
     await reopened.close();
   }

@@ -1,6 +1,7 @@
 import type { AtlasFeature } from "@atlas/domain";
 import { atlasName, nameMetadata } from "../../atlasNaming";
 import { placeLand } from "../../human/placeFacts";
+import { placePeoples } from "../../human/placePeoples";
 import { knownPlaces, townSize, type KnownPlace } from "../../human/placeRegistry";
 import { knownTraditions, traditionOf } from "../../human/traditions";
 import { humanLayersOf } from "../../human/humanLayers";
@@ -61,7 +62,11 @@ function record(state: GenerationState, place: KnownPlace, least: number): Atlas
       communityPopulation: Math.round(place.people),
       ruralPopulation: Math.round(Math.max(0, place.people - place.townPeople)),
       peakPopulation: Math.round(place.peak),
+      // Its townsfolk and everyone on its ground at the end of each era it has stood through.
+      history: place.history,
       ...standing(state, place, least),
+      // Who lives here: the share of its people holding each tongue, faith, custom and realm.
+      peoples: living ? placePeoples(state, fieldOf(state), place) : undefined,
       representedAreaKm2: land.zoneKm2,
       ...country(place),
       builtKm2: place.builtKm2,

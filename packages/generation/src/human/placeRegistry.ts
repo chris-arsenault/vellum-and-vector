@@ -30,6 +30,8 @@ export interface KnownPlace {
   works: number;
   /** The country that reaches it most cheaply, as it was last read while the place lived. */
   hinterland?: Hinterland;
+  /** Its townsfolk and everyone on its ground at the end of each era it has been seen in. */
+  history: { era: string; townsfolk: number; people: number }[];
 }
 interface Places {
   next: number;
@@ -41,6 +43,15 @@ const places = (state: GenerationState) =>
   runMemory<Places>(state, "human.places", () => ({ next: 0, known: [], least: 0 }));
 export const knownPlaces = (state: GenerationState): readonly KnownPlace[] => places(state).known;
 export const townSize = (state: GenerationState) => places(state).least;
+/** The place a place is now part of: itself, or the one whose zone grew over it. */
+export function standingPlace(state: GenerationState, id: string) {
+  const byId = new Map(knownPlaces(state).map((place) => [place.id, place]));
+  let place = byId.get(id);
+  while (place?.absorbedBy && byId.has(place.absorbedBy)) place = byId.get(place.absorbedBy);
+  return place?.id ?? id;
+}
+/** Whether an era's places have been recorded on this map yet. */
+export const placesRecorded = (state: GenerationState) => places(state).least > 0;
 
 /** How many of a place's cells, its anchor among them, lie on the given ground. */
 function shared(place: KnownPlace, ground: ReadonlySet<number>) {
@@ -62,7 +73,12 @@ function standingOn(zone: DenseZone, known: readonly KnownPlace[], taken: Set<st
     )
     .reverse();
 }
-function seen(place: KnownPlace, zone: DenseZone) {
+function seen(place: KnownPlace, zone: DenseZone, era: string) {
+  place.history.push({
+    era,
+    townsfolk: Math.round(zone.townPeople),
+    people: Math.round(zone.people),
+  });
   place.anchor = zone.anchor;
   place.cells = [...zone.cells];
   place.townPeople = zone.townPeople;
@@ -73,6 +89,7 @@ function seen(place: KnownPlace, zone: DenseZone) {
   delete place.abandoned;
 }
 function emptied(place: KnownPlace, era: string) {
+  place.history.push({ era, townsfolk: 0, people: 0 });
   place.abandoned = era;
   place.townPeople = 0;
   place.people = 0;
@@ -90,6 +107,7 @@ function founded(memory: Places, anchor: number, era: string): KnownPlace {
     people: 0,
     builtKm2: 0,
     works: 0,
+    history: [],
   };
   memory.known.push(place);
   return place;
@@ -121,7 +139,7 @@ export function recordPlaces(
     const [first, ...others] = standingOn(zone, memory.known, taken),
       place = placeOf(zone, first);
     if (!place) continue;
-    seen(place, zone);
+    seen(place, zone, era);
     taken.add(place.id);
     for (const other of others)
       if (!other.abandoned) {

@@ -1,10 +1,8 @@
 import { z } from "zod";
 import type { AtlasFeature } from "./model";
-import type { ChangeSet, DomainSnapshot } from "./operations";
-import { population, type SocietyCommunity } from "./society";
+import { population, type PopulationGroup } from "./society";
 import { sameValue } from "./values";
 import { requireThat } from "./errors";
-import { spatial } from "./spatial";
 import { isSocietyWork } from "./societyFeatures";
 import { isLivelihood } from "./societyPractices";
 
@@ -88,8 +86,24 @@ export const societyWorkAttributesSchema = z.object({
   magnitude: z.number().finite().nonnegative(),
 });
 
-/** Reconcile the drawing's resident totals without changing the retained society. */
-export function editMappedResidents(feature: AtlasFeature, before: AtlasFeature) {
+/** The residents a settlement's record describes: its groups, and those living in the town itself. */
+interface Residents {
+  groups: PopulationGroup[];
+  /** Absent where the record does not tell the town from the country around it. */
+  town?: number;
+}
+/** A work a creator draws or edits must say what it is, how far it reaches and how strong it is. */
+export function checkAuthoredWork(feature: AtlasFeature) {
+  if (isSocietyWork(feature)) societyWorkAttributesSchema.parse(feature.attributes);
+}
+/**
+ * A creator who changes a settlement's groups or its population changes the other with it:
+ * the record's resident totals are kept in step on the record itself.
+ */
+export function editMappedResidents(
+  feature: AtlasFeature,
+  before: Pick<AtlasFeature, "attributes">
+) {
   const old = before.attributes;
   if (
     feature.kind !== "settlement" ||
@@ -98,160 +112,32 @@ export function editMappedResidents(feature: AtlasFeature, before: AtlasFeature)
       old.population === feature.attributes.population)
   )
     return;
-  const groups = populationGroupsSchema.parse(old.groups),
-    urban = Number(old.population ?? 0);
-  const community: Pick<SocietyCommunity, "groups" | "settlement"> = {
-    groups,
-    ...(old.communityPopulation !== undefined
-      ? {
-          settlement: { population: urban, peak: urban, recoveryYears: 0 },
-        }
-      : {}),
+  const residents: Residents = {
+    groups: populationGroupsSchema.parse(old.groups),
+    ...(old.communityPopulation !== undefined ? { town: Number(old.population ?? 0) } : {}),
   };
-  editResidentCounts(community, feature, old);
-  const total = population(community),
-    settlement = community.settlement?.population ?? total;
+  editResidentCounts(residents, feature, old);
+  const total = population(residents),
+    town = residents.town ?? total;
   feature.attributes = {
     ...feature.attributes,
-    groups: community.groups,
-    population: settlement,
-    settlementPopulation: settlement,
+    groups: residents.groups,
+    population: town,
+    settlementPopulation: town,
     communityPopulation: total,
-    ruralPopulation: total - settlement,
+    ruralPopulation: total - town,
   };
-}
-
-/** Present authoring changes the retained residents, never the completed era records. */
-export function editSocietyFeature(
-  snapshot: DomainSnapshot,
-  changes: ChangeSet,
-  feature: AtlasFeature,
-  areaId = feature.areaId
-) {
-  if (isSocietyWork(feature)) societyWorkAttributesSchema.parse(feature.attributes);
-  const prior = snapshot.world.societies?.[areaId];
-  if (!prior) return;
-  const region = structuredClone(prior);
-  const c = region.communities.find((c) => c.id === feature.attributes.communityId);
-  if (feature.kind === "settlement" && c) {
-    editCommunity(snapshot, feature, c, areaId);
-  } else if (isSocietyWork(feature)) editWork(region.works, feature);
-  else if (region.politics && ["sovereignty", "control", "claim"].includes(feature.kind))
-    editPoliticalFeature(region, feature);
-  else return;
-  changes.worldMetadata = {
-    name: snapshot.world.name,
-    seed: snapshot.world.seed,
-    epochs: snapshot.world.epochs,
-    ...changes.worldMetadata,
-    societies: { ...snapshot.world.societies, [region.areaId]: region },
-  };
-}
-function editPoliticalFeature(
-  region: NonNullable<DomainSnapshot["world"]["societies"]>[string],
-  feature: AtlasFeature
-) {
-  const polity = feature.relations.find((r) =>
-    ["sovereign", "controlledBy", "claimedBy"].includes(r.kind)
-  )?.targetId;
-  if (!polity) return;
-  const members = region.communities
-    .filter((c) => spatial.pointCoverage(feature.geometry)(c.position))
-    .map((c) => c.id);
-  const politics = region.politics!;
-  if (feature.kind === "claim") {
-    const p = politics.polities.find((p) => p.id === polity);
-    if (p) p.claims = members;
-    return;
-  }
-  const field = feature.kind === "control" ? politics.control : politics.sovereignty;
-  for (const [id, owner] of Object.entries(field)) if (owner === polity) delete field[id];
-  for (const id of members) field[id] = polity;
-}
-function editWork(
-  works: NonNullable<DomainSnapshot["world"]["societies"]>[string]["works"],
-  feature: AtlasFeature
-) {
-  const work = works.find((w) => w.id === feature.attributes.workId);
-  if (!work) return;
-  work.previousShape ??= {
-    position: { ...work.position },
-    radius: work.radius,
-    applied: work.applied,
-  };
-  work.applied = 0;
-  const magnitude = Number(feature.attributes.magnitude),
-    radius = Number(feature.attributes.radius);
-  requireThat(
-    Number.isFinite(magnitude) && magnitude >= 0 && Number.isFinite(radius) && radius > 0,
-    "society_work",
-    "Works need a positive radius and nonnegative magnitude."
-  );
-  work.magnitude = magnitude;
-  work.radius = radius;
-  work.maintained = feature.attributes.maintained !== false;
-  work.authored = true;
-  if (work.name !== feature.name) {
-    work.name = feature.name;
-    delete work.naming;
-    feature.attributes.namingLanguage = null;
-    feature.attributes.namingCulture = null;
-    feature.attributes.namedInEra = "Creator edit";
-  }
-  if (feature.geometry.type === "Point")
-    work.position = {
-      x: feature.geometry.coordinates[0],
-      y: feature.geometry.coordinates[1],
-      z: 0,
-    };
-}
-
-function editCommunity(
-  snapshot: DomainSnapshot,
-  feature: AtlasFeature,
-  c: SocietyCommunity,
-  areaId: string
-) {
-  const old = snapshot.world.features[feature.id];
-  const attributes = old?.detail[areaId]?.attributes ?? old?.attributes;
-  editResidentCounts(c, feature, attributes);
-  if (c.name !== feature.name) {
-    delete c.naming;
-    feature.attributes = {
-      ...feature.attributes,
-      namingLanguage: null,
-      namingCulture: null,
-      namedInEra: "Creator edit",
-    };
-  }
-  c.name = feature.name;
-  c.protected = feature.protected;
-  if (feature.geometry.type === "Point")
-    c.position = { x: feature.geometry.coordinates[0], y: feature.geometry.coordinates[1], z: 0 };
-  const urban = c.settlement?.population ?? population(c);
-  feature.attributes = {
-    ...feature.attributes,
-    population: urban,
-    settlementPopulation: urban,
-    communityPopulation: population(c),
-    ruralPopulation: population(c) - urban,
-    groups: c.groups,
-  };
-  updateCommunityStatus(c);
-  c.causes.push(
-    "Present population or settlement edited by the creator; completed history retained."
-  );
 }
 function editResidentCounts(
-  c: Pick<SocietyCommunity, "groups" | "settlement">,
+  residents: Residents,
   feature: AtlasFeature,
-  attributes?: Record<string, unknown>
+  attributes: Record<string, unknown>
 ) {
-  const before = population(c);
-  if (!sameValue(attributes?.groups, feature.attributes.groups)) {
-    c.groups = populationGroupsSchema.parse(feature.attributes.groups);
-    if (c.settlement)
-      c.settlement.population = before > 0 ? (c.settlement.population * population(c)) / before : 0;
+  const before = population(residents);
+  if (!sameValue(attributes.groups, feature.attributes.groups)) {
+    residents.groups = populationGroupsSchema.parse(feature.attributes.groups);
+    if (residents.town !== undefined)
+      residents.town = before > 0 ? (residents.town * population(residents)) / before : 0;
   } else if (feature.attributes.population !== undefined) {
     const count = Number(feature.attributes.population);
     requireThat(
@@ -259,28 +145,28 @@ function editResidentCounts(
       "population",
       "Population must be finite and nonnegative."
     );
-    resizePopulation(c, c.settlement ? before - c.settlement.population + count : count);
-    if (c.settlement) c.settlement.population = count;
+    resizePopulation(
+      residents,
+      residents.town !== undefined ? before - residents.town + count : count
+    );
+    if (residents.town !== undefined) residents.town = count;
   }
 }
-function resizePopulation(c: Pick<SocietyCommunity, "groups" | "settlement">, count: number) {
-  const before = population(c);
+function resizePopulation(residents: Residents, count: number) {
+  const before = population(residents);
   requireThat(
     Number.isFinite(count) && count >= 0,
     "population",
     "Population must be finite and nonnegative."
   );
   requireThat(
-    count === 0 || c.groups.length > 0,
+    count === 0 || residents.groups.length > 0,
     "population_groups",
     "Add a population group before assigning residents to an empty community."
   );
-  c.groups = c.groups.map((g) => ({ ...g, count: before > 0 ? (g.count * count) / before : 0 }));
-  if (before === 0 && count > 0) c.groups[0].count = count;
-}
-function updateCommunityStatus(c: SocietyCommunity) {
-  const residents = c.settlement?.population ?? population(c);
-  if (c.settlement) c.settlement.peak = Math.max(c.settlement.peak, residents);
-  if (residents === 0) c.status = "abandoned";
-  else if (c.status === "abandoned") c.status = "inhabited";
+  residents.groups = residents.groups.map((group) => ({
+    ...group,
+    count: before > 0 ? (group.count * count) / before : 0,
+  }));
+  if (before === 0 && count > 0) residents.groups[0].count = count;
 }

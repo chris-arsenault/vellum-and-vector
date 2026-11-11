@@ -1,13 +1,12 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { MapScale } from "@atlas/domain";
 import type { GenerationState } from "../../process";
-import { fullForgeHeat, thawShare } from "../../societyMagic";
+import { fullForgeHeat, thawShare } from "./workFacts";
 import { carryWhereItLands, costNear, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { holdsRecord, within } from "../poiPlaces";
 import { adjacent, cellSpan, iceAt, isLand, magicRule, magicValue } from "../poiReads";
 import { aloneAmong, attachment, sized, standsOut } from "../poiVisibilityRules";
-import { societyRegionOf } from "./communityRecords";
 import {
   attribute,
   cultureOfWork,
@@ -46,7 +45,7 @@ function suitability(state: GenerationState, cell: number) {
   const cores = [cell, ...adjacent(state, cell)].some((next) => carriesCores(state, next));
   return (fireAt(state, cell) + (cores ? 1 : 0)) / 2;
 }
-const places = workPlaces("forge", "fire-forge", {
+const places = workPlaces("forge", {
   record: "fire-forge",
   layer: "magicPractices",
   label: "Forge",
@@ -65,14 +64,8 @@ const fireAt = (state: GenerationState, cell: number) =>
   Math.min(1, magicValue(state, "fire", "intensity", cell) / 1000);
 const carriesCores = (state: GenerationState, cell: number) =>
   veinAt(state, cell) || coreAt(state, cell) || placerAt(state, cell);
-/** The degrees a forge gives its seat: what its community's ledger met, or its full heat where none keeps one. */
-function heatOf(state: GenerationState, place: PoiPlace) {
-  const id = place.feature?.attributes.communityId,
-    ledger = societyRegionOf(state)?.magic.find((practice) => practice.communityId === id);
-  return ledger
-    ? ledger.heatApplied * attribute(place, "condition", 1)
-    : fullForgeHeat * strengthOf(place);
-}
+/** The degrees a forge gives its seat: its full heat, by how strongly it is kept. */
+const heatOf = (_state: GenerationState, place: PoiPlace) => fullForgeHeat * strengthOf(place);
 const factors = {
   magnitude: sized(seatPeople, typicalPeople),
   localConditions: standsOut(fireAt, around),
@@ -91,7 +84,7 @@ export const forge: PoiEntry = {
   },
   existence: {
     statement:
-      "Sited two ways: the simulation's practice at a community's seat once it has cores to crack, mined under it or traded in along its ways, so an inland city with no vein can make itself a Fire source; and on every map beside a seat with Fire and cores at hand, at least 50 km apart.",
+      "Sited on every map beside a settlement with Fire and cores at hand, at least 50 km apart.",
     way: "sited",
     requires,
     suitability,
@@ -99,7 +92,7 @@ export const forge: PoiEntry = {
   },
   publication: {
     statement:
-      "A forge publishes as a located practice; the World shows those the ground sited, and the simulation's own act on its field without a record.",
+      "A forge publishes as a located practice where a map's cells can hold one; the World leaves it for a finer map.",
     moment: "society",
     record: workRecord,
   },

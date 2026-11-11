@@ -102,7 +102,6 @@ export async function magicMapState(f: Fixture, areaId: string) {
       samples: magicSamples(source.numerical),
       records: {
         fields: source.world.fields,
-        societies: source.world.societies,
         drainage: source.world.drainage,
         epochs: source.world.epochs,
         features: f.workspace.catalog.exportFeatures(f.id, areaId, null, 128),

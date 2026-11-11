@@ -63,39 +63,3 @@ it("cleans failed cycles without releasing outer scratch or private retained own
   coverage.release(outer);
   coverage.release(owner);
 });
-
-it("releases a finished round's final workspace while preserving shared surface data", () => {
-  const state = landscape(),
-    grid = state.surface,
-    finishProcess = numericalProcessLifetime(state),
-    owner = grid.coverage.scratch("int32", "society-owner").fill(0),
-    river = grid.coverage.scratch("float64", "society-river").fill(2),
-    coast = grid.coverage.scratch("float64", "society-coast").fill(3);
-  for (const band of [owner, river, coast]) band.retain();
-  state.society = {
-    owner,
-    river,
-    coast,
-    inherited: false,
-    changed: new Set(),
-    mediumChanged: new Set(),
-    region: {
-      areaId: "area",
-      spaceId: "surface",
-      communities: [],
-      connections: [],
-      history: [],
-      works: [],
-      events: [],
-      magic: [],
-    },
-  };
-  putChannel(grid, "RiverWidth", "metre", river);
-  withNumericalLifetime(state, () => {
-    delete state.society;
-  });
-  finishProcess();
-  expect(owner.released).toBe(true);
-  expect(coast.released).toBe(true);
-  expect(river.get(0)).toBe(2);
-});

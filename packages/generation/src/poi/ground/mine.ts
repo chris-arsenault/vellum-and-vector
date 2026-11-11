@@ -3,9 +3,7 @@ import { exposure } from "../../world/magicStocks";
 import { MapScale } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
-import { cellAt } from "../../regional/lattice";
-import { tappingReach } from "../../societyColdAge";
-import { tappableFire } from "../../societyDemand";
+import { tappableFire, tappingReach } from "../settlements/workFacts";
 import { carryWhereItLands, costNear, counterpartOf } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
 import { holdsRecord, namingCultureNear, sitedPlaces, within } from "../poiPlaces";
@@ -13,7 +11,6 @@ import {
   cellsWithin,
   featureCell,
   fieldOf,
-  gap,
   heldFor,
   isLake,
   isLand,
@@ -77,27 +74,6 @@ const abandoned = 0.1,
 // length-unit: fraction
 const collapseReach = 0.00025;
 
-const worked = new Set(["tapping", "quarrying"]);
-/** The world's located workings by place id; a World-profile demand has no site until realized. */
-const workings = (state: GenerationState) =>
-  heldFor(state, "mine:workings", () => {
-    const found = new Map<string, { kind: string; dose: number; culture?: string; cell: number }>();
-    if (!state.physical) return found;
-    const mesh = fieldOf(state).mesh;
-    for (const work of state.society?.region.works ?? []) {
-      if (!worked.has(work.kind) || work.demand) continue;
-      const cell = cellAt(mesh, work.position.x, work.position.y);
-      if (cell < 0 || mesh.membership(cell) !== 1) continue;
-      found.set(work.id, {
-        kind: work.kind,
-        dose: work.magnitude * work.condition,
-        culture: work.naming?.culture,
-        cell,
-      });
-    }
-    return found;
-  });
-
 const prismRule = magicRule("aurora", "prism");
 const tappable = (state: GenerationState, cell: number) =>
   veinAt(state, cell) || magicValue(state, "fire", "intensity", cell) >= tappableFire;
@@ -156,37 +132,17 @@ const requires = (state: GenerationState, cell: number) =>
 /** The richer the deposit and the easier the ground, the better; neither makes up for the other's lack. */
 const suitability = (state: GenerationState, cell: number) =>
   Math.sqrt(depositAt(state, cell) * (1 - Math.min(1, slopeAt(state, cell) / steepestWorking)));
-const sited = sitedPlaces("mine", requires, suitability, (state) =>
+/** The best-suited ground within people's reach, no two workings nearer than their spacing. */
+const places = sitedPlaces("mine", requires, suitability, (state) =>
   mapScale(state).length(workingSpacing)
 );
-/** The world's own workings, and the best-suited ground no working stands near. */
-const places = (state: GenerationState): readonly PoiPlace[] =>
-  heldFor(state, "mine:places", () => {
-    const recorded = [...workings(state)].map(([id, { cell }]): PoiPlace => ({
-      id,
-      kind: "mine",
-      cells: [cell],
-      anchor: cell,
-    }));
-    return [
-      ...recorded,
-      ...sited(state).filter((place) =>
-        recorded.every(
-          (work) => gap(state, place.anchor, work.anchor) >= mapScale(state).length(workingSpacing)
-        )
-      ),
-    ];
-  });
 const isA = holdsRecord("mine", places);
 
 const workOf = (state: GenerationState, place: PoiPlace) =>
-  workings(state).get(place.id)?.kind ??
   (place.feature?.attributes.work as string | undefined) ??
   (tappable(state, place.anchor) ? "tapping" : "quarrying");
-const doseOf = (state: GenerationState, place: PoiPlace) =>
-  workings(state).get(place.id)?.dose ??
-  (place.feature?.attributes.dose as number | undefined) ??
-  typicalDose;
+const doseOf = (_state: GenerationState, place: PoiPlace) =>
+  (place.feature?.attributes.dose as number | undefined) ?? typicalDose;
 const onDryLand =
   (effect: (state: GenerationState, place: PoiPlace) => readonly PoiFieldChange[]) =>
   (state: GenerationState, place: PoiPlace) =>
@@ -359,8 +315,7 @@ export const mine: PoiEntry = {
   naming: {
     statement:
       "Named by those who work it, from the naming the society's work records; it takes the name of the vein or pan it works and may name the town at its gate.",
-    namedBy: (state, place) =>
-      workings(state).get(place.id)?.culture ?? namingCultureNear(state, place),
+    namedBy: namingCultureNear,
     takesNameFrom: [
       { kind: "thermalVein", holds: (_state, a, b) => b.cells.includes(a.anchor) },
       { kind: "saltPan", holds: (_state, a, b) => b.cells.includes(a.anchor) },

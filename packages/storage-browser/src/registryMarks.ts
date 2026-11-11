@@ -40,13 +40,6 @@ export class RegistryMarks {
       case "layer":
         this.markWhere(worldId, "r.layer_id=?", [reference.id]);
         return true;
-      case "society":
-        this.markWhere(worldId, "r.area_id=?", [
-          next?.data.kind === "society"
-            ? next.data.value.areaId
-            : String(reference.id).replace(/^society:/, ""),
-        ]);
-        return true;
       case "entity":
         this.db.exec({ sql: "DELETE FROM registry_scopes WHERE world_id=?", bind: [worldId] });
         return true;

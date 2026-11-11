@@ -1,4 +1,4 @@
-import type { PopulationGroup, SocietySupport } from "./society";
+import type { PopulationGroup } from "./society";
 
 /**
  * What a group lives by, as shares. The livelihood channels are the ones the support
@@ -73,7 +73,7 @@ export function communityPractices(groups: readonly PopulationGroup[]): Practice
   return result;
 }
 /** The livelihoods a country yields, as the distribution a people living from it would have. */
-export function livelihoodShares(support: Pick<SocietySupport, LivelihoodChannel>): PracticeShares {
+export function livelihoodShares(support: Record<LivelihoodChannel, number>): PracticeShares {
   const total = livelihoodChannels.reduce((sum, id) => sum + Math.max(0, support[id]), 0);
   if (total <= 0) return {};
   return Object.fromEntries(

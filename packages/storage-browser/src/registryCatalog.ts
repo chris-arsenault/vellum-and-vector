@@ -19,7 +19,6 @@ import type { FeatureCatalog, Presented } from "./featureCatalog";
 import type { GeometryKernel } from "./geometryKernel";
 import { registryPath, registryWhere } from "./registryQuery";
 import { RegistryMarks } from "./registryMarks";
-import type { CommunityIndex } from "./communityIndex";
 
 /** Rows are kept per presentation scope (an area, or '' for each feature's own area), so a
  * scope is built once and switching back reads it. Marks name the features a write can
@@ -57,8 +56,7 @@ export class RegistryCatalog {
     private db: Database,
     private projection: CatalogProjection,
     private features: FeatureCatalog,
-    private kernel: GeometryKernel,
-    private communityIndex: CommunityIndex
+    private kernel: GeometryKernel
   ) {
     db.exec(schema);
     this.marks = new RegistryMarks(db, projection, kernel);
@@ -224,7 +222,7 @@ export class RegistryCatalog {
     const precision = world.reference.precision ?? 1e-6;
     const extent = feature.footprint ?? feature.geometry;
     const measures = this.kernel.measure(extent, precision);
-    const row = registryRow(world, feature, this.communities(world.id, feature), {
+    const row = registryRow(world, feature, this.places(world.id, feature), {
       ...(extent.type.includes("Polygon")
         ? { areaKm2: MapScale.areaUnits(measures.area, "m2", "km2") }
         : {}),
@@ -264,15 +262,20 @@ export class RegistryCatalog {
       ],
     });
   }
-  private communities(worldId: string, feature: AtlasFeature) {
-    const { fromCommunity, toCommunity, communities } = feature.attributes;
-    const ids = [
-      fromCommunity,
-      toCommunity,
-      ...(Array.isArray(communities) ? communities : []),
-    ].filter((id): id is string => typeof id === "string");
+  /** The names of the places a way or an event names, by their record ids. */
+  private places(worldId: string, feature: AtlasFeature) {
+    const { fromPlace, toPlace, atPlace } = feature.attributes;
+    const ids = [fromPlace, toPlace, atPlace].filter((id): id is string => typeof id === "string");
     if (!ids.length) return new Map<string, string>();
-    return this.communityIndex.names(worldId, ids);
+    return new Map(
+      this.db
+        .selectObjects(
+          `SELECT id,json_extract(data,'$.value.name') AS name FROM records_core
+            WHERE world_id=? AND kind='feature' AND id IN (SELECT value FROM json_each(?))`,
+          [worldId, JSON.stringify(ids)]
+        )
+        .map((row) => [String(row.id), String(row.name)])
+    );
   }
   private visible(world: World, scope: string, input: RegistryRequest) {
     this.db.exec("DELETE FROM registry_visible");

@@ -7,6 +7,7 @@ import { generationBindings } from "../generationBindings";
 import { recordEraPlaces } from "./eraPlaces";
 import { meetLand, watchLand } from "./landHistory";
 import { advanceHumanLand } from "./landPass";
+import { forgetHumanGround } from "./layerOperations";
 import { loosePass, passesFor, settledPass } from "./passFacts";
 
 /**
@@ -37,8 +38,10 @@ export const humanLandWatch: MapProcess = {
   operation: mapCommand(
     "human.land-watch",
     "event",
-    (state) => {
+    (state, context) => {
       const map = landOf(state);
+      // The epoch about to be lived is far longer than any way or kept line is remembered.
+      runOperation(map, forgetHumanGround, { map, years: context.epochs[0]?.duration ?? 0 });
       runOperation(map, watchLand, { map });
     },
     []

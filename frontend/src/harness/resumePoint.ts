@@ -65,7 +65,6 @@ export interface ResumePoint {
   /** The surface channels last projected from the land, with their units. */
   surface: unknown;
   run: {
-    rounds: GenerationState["rounds"];
     history: GenerationState["history"];
     causes: GenerationState["causes"];
     facts: string[];
@@ -171,7 +170,6 @@ export function captureResumePoint(boundary: CompletedBoundary): ResumePoint {
       quantities: state.surface.quantities,
     }),
     run: {
-      rounds: structuredClone(state.rounds),
       history: structuredClone(state.history),
       causes: structuredClone(state.causes),
       facts: [...state.facts],
@@ -189,7 +187,6 @@ export function restoreResumePoint(state: GenerationState, point: ResumePoint) {
   requireThat(work, "resume_state", "Initializers must build the physical workspace first.");
   restoreFieldState(work.map, point.field);
   revive(work, point.workspace, work.map.coverage);
-  state.rounds = point.run.rounds;
   state.history = point.run.history;
   state.causes = point.run.causes;
   // The saved facts replace the replayed ones in place: the ledger holds this same set.
@@ -227,8 +224,7 @@ export function recordResumePoints(
   };
   writeFileSync(sourcePath(label), serialize(source));
   observers.boundary = (boundary) => {
-    // The people's working state is not held on the land, so an epoch they ran in is not saved.
-    if (boundary.kind !== "epoch" || !boundary.state.physical || boundary.state.society) return;
+    if (boundary.kind !== "epoch" || !boundary.state.physical) return;
     const point = captureResumePoint(boundary);
     writeFileSync(pointPath(label, point.after), serialize(point));
   };

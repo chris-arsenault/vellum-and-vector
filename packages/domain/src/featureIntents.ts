@@ -18,7 +18,7 @@ import { updateNetworkTopology } from "./networkTopology";
 import { validateGeometryWriteScopes } from "./geometryWriteScopes";
 import { fieldFact } from "./fieldValidation";
 import { lineParts } from "./lineStations";
-import { editSocietyFeature } from "./societyEditing";
+import { checkAuthoredWork, editMappedResidents } from "./societyEditing";
 
 export const featureEditSchema = z.object({ areaId: uuid, feature: featureInputSchema });
 export type FeatureEdit = z.infer<typeof featureEditSchema>;
@@ -26,7 +26,6 @@ export function featureRequirements(data: FeatureEdit, context: IntentContext) {
   return intentReads(context, {
     objects: [
       { kind: "area", ids: [data.areaId] },
-      { kind: "society", ids: [`society:${data.areaId}`] },
       {
         kind: "feature",
         ids: [
@@ -153,6 +152,12 @@ function validateExistingFeature(
     );
   }
 }
+/** A drawn work says what it is; a settlement's groups and its population are kept in step. */
+function editPeopleRecord(feature: AtlasFeature, previous: AtlasFeature | undefined, area: string) {
+  checkAuthoredWork(feature);
+  const drawn = previous?.detail[area]?.attributes ?? previous?.attributes;
+  if (drawn) editMappedResidents(feature, { attributes: drawn });
+}
 export function evaluateFeature(
   data: FeatureEdit,
   context: IntentContext,
@@ -170,7 +175,7 @@ export function evaluateFeature(
   if (!options.reconcileOwnBoundary)
     validateCrossings(snapshot, area, feature, geometry, attributes);
   const changes = intentChanges(context, snapshot);
-  editSocietyFeature(snapshot, changes, feature, area.id);
+  editPeopleRecord(feature, previous, area.id);
   if (!previous || previous.areaId === area.id)
     changes.writes.push({ kind: "feature", value: feature });
   else {

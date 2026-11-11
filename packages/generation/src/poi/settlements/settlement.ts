@@ -72,12 +72,12 @@ export const settlement: PoiEntry = {
   name: "Settlement",
   recognition: {
     distinct:
-      "An inhabited place: a community of the society simulation, a seat the parent left, or a village this map proposed. A ruin is the same place no longer inhabited; a village and a city are one kind at different sizes.",
+      "An inhabited place: a crowd the land's layers hold, kept by name through the eras; a seat the parent left; or a village this map proposed. A ruin is the same place no longer inhabited; a village and a city are one kind at different sizes.",
     isA,
   },
   existence: {
     statement:
-      "Sited by people: at world scale by the society simulation's capacity-weighted seeds, on a refined map by keeping captured seats and proposing villages that win a large enough hinterland.",
+      "Sited by people: on a map that lived its own people, where they gathered thickly enough on the land to be a town; on a refined map by keeping captured seats and proposing villages that win a large enough hinterland.",
     way: "sited",
     requires: (state, cell) =>
       isLand(state, cell) &&
@@ -112,10 +112,10 @@ export const settlement: PoiEntry = {
     ),
     climate: notApplicable("A settlement's warmth is below what the climate field resolves."),
     cover: notApplicable(
-      "Clearing is written across each hinterland by regional/society's declareFields and by the simulation's clearance works."
+      "Clearing is the land's own farmland and pasture layers, and on a refined map regional/society's declareFields."
     ),
     magic: notApplicable(
-      "People's tenure is written by societyRecord's recordSeats, which Hallowed reads; the seat declares nothing further."
+      "People's tenure is written by the people's layers as they dwell, which Hallowed reads; the seat declares nothing further."
     ),
   },
   acrossMaps: {

@@ -170,7 +170,8 @@ const gates: Partial<Record<PoiKindId, Gate>> = {
   archive: belowTheWorld,
   harbour: belowTheWorld,
   irrigation: belowTheWorld,
-  dam: belowTheWorld,
+  // A dam whose lake the World's own water shows is resolved there.
+  dam: (state, place) => belowTheWorld(state, place) || place.feature?.attributes.resolved === true,
   clearance: belowTheWorld,
   mill: belowTheWorld,
   ford: belowTheWorld,

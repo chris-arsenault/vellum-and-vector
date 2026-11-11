@@ -1,5 +1,5 @@
 /* eslint-disable max-lines-per-function -- The browser worker fixture keeps its lifecycle in one closure. */
-import type { AtlasFeature, DomainSnapshot, Grid, Landmark, SocietyRegion } from "@atlas/domain";
+import type { AtlasFeature, DomainSnapshot, Grid, Landmark } from "@atlas/domain";
 import {
   attachGrid,
   detachGrid,
@@ -62,10 +62,9 @@ function detached(snapshot: DomainSnapshot): DomainSnapshot {
 /** The records a fixture run leaves in the world, as the real run would leave them. */
 function seedFixtureWorld(
   snapshot: DomainSnapshot,
-  records: { society?: SocietyRegion; ecologicalFeatures: AtlasFeature[]; landmarks: Landmark[] }
+  records: { ecologicalFeatures: AtlasFeature[]; landmarks: Landmark[] }
 ) {
   const { areaId, spaceId } = snapshot.scope;
-  if (records.society) snapshot.world.societies = { [areaId]: { ...records.society, areaId } };
   for (const feature of records.ecologicalFeatures) {
     snapshot.world.features[feature.id] = { ...feature, areaId };
     seedFixtureNetwork(snapshot, feature);
@@ -113,7 +112,6 @@ export function installGenerationFixtureRuntime({
   ecologicalFeatures,
   regionalFeatures,
   landmarks,
-  society,
   diagnostics,
   publicationSource,
 }: {
@@ -124,7 +122,6 @@ export function installGenerationFixtureRuntime({
   ecologicalFeatures: AtlasFeature[];
   regionalFeatures?: AtlasFeature[];
   landmarks: Landmark[];
-  society?: SocietyRegion;
   diagnostics: GenerationDiagnostic[];
   publicationSource: string;
 }) {
@@ -202,7 +199,6 @@ export function installGenerationFixtureRuntime({
               return;
             }
             seedFixtureWorld(snapshot, {
-              society,
               ecologicalFeatures: outputFeatures,
               landmarks,
             });
@@ -223,7 +219,7 @@ export function installGenerationFixtureRuntime({
               return i % size < 5 ? 10 : i % size < 11 ? 7 : 15;
             };
             const channels: Partial<Record<FieldChannelName, SampleArray>> = {};
-            // Without fields the fixture publishes features and society only: no raster map.
+            // Without fields the fixture publishes features only: no raster map.
             const fixtureChannels: FieldChannelName[] = !fields
               ? []
               : [

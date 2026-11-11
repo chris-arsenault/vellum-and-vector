@@ -49,7 +49,6 @@ export type WorldMetadata = Omit<
   | "networkNodes"
   | "networkReaches"
   | "drainage"
-  | "societies"
 >;
 
 export interface WorkspaceScope {

@@ -2,7 +2,7 @@
 import { MapScale } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
-import { besiegedTown } from "../../societySiege";
+import { besiegedTown } from "./workFacts";
 import { carryWhereItLands, stays } from "../poiCarry";
 import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
 import { holdsRecord, namingCultureNear } from "../poiPlaces";
@@ -33,15 +33,15 @@ const frontierSpacing = MapScale.length(0.025);
 /** A siege falls on a town: within this many metres of one. */
 const townReach = MapScale.length(0.0005);
 
-const sieges = eventPlaces("battlefield", (event) => event.kind === "siege");
-/** The sieges on this map; where none reach it, where held territories meet. */
+const sieges = eventPlaces("battlefield", (kind) => kind === "siege" || kind === "battle");
+/** The sieges on this map, and the fields where held territories meet. */
 const places = (state: GenerationState): readonly PoiPlace[] =>
   heldFor(state, "places:battlefield:all", () => {
     if (!developed(state)) return [];
-    const recorded = sieges(state);
-    return recorded.length
-      ? recorded
-      : frontierPlaces(state, "battlefield", mapScale(state).resolveMeasure(frontierSpacing));
+    return [
+      ...sieges(state),
+      ...frontierPlaces(state, "battlefield", mapScale(state).resolveMeasure(frontierSpacing)),
+    ];
   });
 const isA = holdsRecord("battlefield", places);
 const around = (state: GenerationState) => 6 * cellSpan(state);
@@ -69,7 +69,7 @@ export const battlefield: PoiEntry = {
   },
   existence: {
     statement:
-      "Sited by politics, without a war simulation: when a polity falls from active, each settled town of at least 100 people it claimed and no longer controls is besieged where it stands, with the casualties, displacement and ruin any event gives. Sieges below ten thousand dead and displaced stay off the world map; a refined map retains each that reaches it. A map no siege reaches has its fields where a way joins seats held by different polities, the busiest ways first, at least 100 km apart.",
+      "Sited by politics, without a war simulation: a living place whose people come to hold with a different realm within an era is besieged where it stands. A refined map retains each siege its parent recorded. Fields also stand midway along the ways that join places held by different realms, the busiest ways first, at least 100 km apart.",
     way: "sited",
     requires: (state, cell) =>
       isLand(state, cell) && nearTown(state, cell, townReach, besiegedTown),
@@ -80,7 +80,7 @@ export const battlefield: PoiEntry = {
   },
   publication: {
     statement:
-      "A siege publishes as a historical event, a located one on a map that ran its society and its affected area on a refined map; a frontier field publishes as a located battle.",
+      "A siege publishes as a historical event at the place it befell, and a refined map keeps the record its parent made; a frontier field publishes as a located battle.",
     moment: "society",
     record: onceWritten,
   },

@@ -3,13 +3,8 @@ import { domainCartography } from "./domainCartography";
 import { magicCartography } from "./magicCartography";
 import type { GenerationFeature } from "./features";
 import type { MapProcess, ProcessSequence } from "./process";
-import {
-  culturalProcess,
-  culturalDevelopmentProcess,
-  politicalProcess,
-  politicalDevelopmentProcess,
-} from "./mapPeople";
-import { builtProcess, builtPreparation } from "./mapBuilt";
+import { culturalProcess, politicalProcess } from "./peopleProcesses";
+import { builtProcess } from "./mapBuilt";
 import {
   ecologyConfiguration,
   magicConfiguration,
@@ -155,12 +150,9 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
     },
     // Shared parameters: the population processes read these through the bound atlas parameters.
     parameterKeys: ["cultureCount", "culturalMobility"],
-    processes: [culturalDevelopmentProcess.contract.id, culturalProcess.contract.id],
+    processes: [culturalProcess.contract.id],
     slots: ["present.people"],
-    contribute: (slot) => [
-      ...present(culturalDevelopmentProcess, slot),
-      ...present(culturalProcess, slot),
-    ],
+    contribute: (slot) => present(culturalProcess, slot),
   },
   {
     id: "human.politics",
@@ -173,12 +165,9 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       politicalReach: atlasParameterDefinitions.politicalReach,
     },
     parameterKeys: ["polityCount", "politicalReach"],
-    processes: [politicalDevelopmentProcess.contract.id, politicalProcess.contract.id],
+    processes: [politicalProcess.contract.id],
     slots: ["present.people"],
-    contribute: (slot) => [
-      ...present(politicalDevelopmentProcess, slot),
-      ...present(politicalProcess, slot),
-    ],
+    contribute: (slot) => present(politicalProcess, slot),
   },
   {
     id: "built.layout",
@@ -201,8 +190,8 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       highways: atlasParameterDefinitions.highways,
     },
     parameterKeys: ["townThreshold", "cityReach", "roadTraffic", "marketTravel", "highways"],
-    processes: [builtPreparation.contract.id, builtProcess.contract.id],
+    processes: [builtProcess.contract.id],
     slots: ["present.people"],
-    contribute: (slot) => [...present(builtPreparation, slot), ...present(builtProcess, slot)],
+    contribute: (slot) => present(builtProcess, slot),
   },
 ];

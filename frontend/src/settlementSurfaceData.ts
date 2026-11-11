@@ -1,34 +1,108 @@
 import {
   languageUse,
   populationGroupsSchema,
-  population,
   type AtlasFeature,
   type PopulationGroup,
-  type SocietyCommunity,
-  type SocietyRegion,
   type World,
 } from "@atlas/domain";
 import { shareSegments, type Segment, type Series } from "./surfaceData";
 
-/** Retained context with the current map's independently authored resident description. */
-export function settlementCommunity(world: World, feature: AtlasFeature, areaId: string) {
-  const region = world.societies?.[areaId] ?? world.societies?.[feature.areaId];
-  const community = region?.communities.find((c) => c.id === feature.attributes.communityId);
-  if (!region || !community) return null;
-  return { region, community: feature.mapOnly ? mappedCommunity(feature, community) : community };
+/**
+ * What a settlement's own record says of it, shaped for the inspector. A generated place
+ * states its people, its country and who lives there; a drawn one may describe its residents
+ * as groups instead. Nothing here reads beyond the record and the features beside it.
+ */
+const count = (feature: AtlasFeature, key: string) => {
+  const value = Number(feature.attributes[key]);
+  return Number.isFinite(value) ? value : 0;
+};
+const text = (feature: AtlasFeature, key: string) =>
+  typeof feature.attributes[key] === "string" ? (feature.attributes[key] as string) : null;
+
+export interface PlaceFacts {
+  /** People living in the place itself, on the land around it, and both together. */
+  townsfolk: number;
+  country: number;
+  people: number;
+  /** The most townsfolk it ever held. */
+  peak: number;
+  founded: string | null;
+  abandoned: string | null;
+  status: "inhabited" | "abandoned" | "ruined";
+  /** The country that reaches it most cheaply and feeds it, in square kilometres. */
+  countryKm2: number;
 }
-function mappedCommunity(feature: AtlasFeature, community: SocietyCommunity) {
-  const groups = Array.isArray(feature.attributes.groups)
-    ? populationGroupsSchema.parse(feature.attributes.groups)
-    : community.groups;
-  const urban = Number(feature.attributes.population ?? community.settlement?.population ?? 0);
+export function placeFacts(feature: AtlasFeature): PlaceFacts {
+  const townsfolk = count(feature, "settlementPopulation") || count(feature, "population"),
+    people = Math.max(townsfolk, count(feature, "communityPopulation")),
+    status = text(feature, "status");
   return {
-    ...community,
-    groups,
-    name: feature.name,
-    protected: feature.protected,
-    ...(community.settlement ? { settlement: { ...community.settlement, population: urban } } : {}),
+    townsfolk,
+    people,
+    country: people - townsfolk,
+    peak: Math.max(townsfolk, count(feature, "peakPopulation")),
+    founded: text(feature, "founded"),
+    abandoned: text(feature, "abandoned"),
+    status: status === "abandoned" || status === "ruined" ? status : "inhabited",
+    countryKm2: count(feature, "hinterlandKm2"),
   };
+}
+/** A place's townsfolk and everyone on its ground at the end of each era it stood through. */
+export interface PlaceEra {
+  era: string;
+  townsfolk: number;
+  people: number;
+}
+export function placeEras(feature: AtlasFeature): PlaceEra[] {
+  const history = feature.attributes.history;
+  return Array.isArray(history)
+    ? history.flatMap((step: Partial<PlaceEra>) =>
+        typeof step?.era === "string"
+          ? [
+              {
+                era: step.era,
+                townsfolk: Number(step.townsfolk) || 0,
+                people: Number(step.people) || 0,
+              },
+            ]
+          : []
+      )
+    : [];
+}
+/** The place's people over its eras; x is the era's position in its history. */
+export function eraSeries(eras: PlaceEra[]): Series[] {
+  const series = (id: string, label: string, pick: (step: PlaceEra) => number) => ({
+    id,
+    label,
+    points: eras.map((step, index) => ({ x: index, y: pick(step) })),
+  });
+  return [
+    series("people", "Everyone on its ground", (step) => step.people),
+    series("settlement", "Settlement residents", (step) => step.townsfolk),
+  ];
+}
+/** How the place's country is used: under crops, under herds, and left as it was. */
+export function countryUseSegments(feature: AtlasFeature): Segment[] {
+  const farmed = count(feature, "hinterlandFarmedKm2"),
+    grazed = count(feature, "hinterlandGrazedKm2"),
+    wild = Math.max(0, count(feature, "hinterlandKm2") - farmed - grazed);
+  return shareSegments({ farmed, grazed, wild }, practiceLabel);
+}
+export type PeoplesField = "tongue" | "faith" | "custom" | "allegiance";
+/** The share of a generated place's people who hold each tradition of one kind. */
+export function peoplesSegments(world: World, feature: AtlasFeature, field: PeoplesField) {
+  const peoples = feature.attributes.peoples as
+      Partial<Record<PeoplesField, Record<string, number>>> | undefined,
+    shares = peoples?.[field];
+  return shares && typeof shares === "object"
+    ? shareSegments(shares, (id) => entityName(world, id))
+    : [];
+}
+/** The groups a creator described the place's residents as, where the record holds any. */
+export function describedGroups(feature: AtlasFeature): PopulationGroup[] | null {
+  return Array.isArray(feature.attributes.groups)
+    ? populationGroupsSchema.parse(feature.attributes.groups)
+    : null;
 }
 export function entityName(world: World, id: string | null | undefined) {
   return id ? (world.entities[id]?.name ?? id) : "Unspecified";
@@ -43,83 +117,56 @@ export const roleLabels: Record<string, string> = {
   regionalCapital: "Regional centre",
   marketTown: "Market town",
 };
-
-/** The support channels as segments; their sum is the community's capacity. */
-export function supportSegments(c: SocietyCommunity): Segment[] {
-  return shareSegments(
-    {
-      farming: c.support.farming,
-      grazing: c.support.grazing,
-      gathering: c.support.gathering,
-      fishing: c.support.fishing,
-    },
-    practiceLabel
-  );
-}
 export function namingUseSegments(world: World, groups: PopulationGroup[]): Segment[] {
   return shareSegments(languageUse(groups), (id) => entityName(world, id));
 }
 
-/** Residents, support and settlement over the recorded steps; x is the step index. */
-export function occupationSeries(c: SocietyCommunity): Series[] {
-  const steps = c.history ?? [];
-  const series = (id: string, label: string, pick: (s: (typeof steps)[number]) => number) => ({
-    id,
-    label,
-    points: steps.map((s, i) => ({ x: i, y: pick(s) })),
-  });
-  return [
-    series("people", "Residents", (s) => s.population),
-    series("capacity", "Support", (s) => s.capacity),
-    series("settlement", "Settlement", (s) => s.settlementPopulation),
-  ];
+/** A way that ends at the place, and the place at its other end where the map holds it. */
+export interface PlaceWay {
+  way: AtlasFeature;
+  other: AtlasFeature | undefined;
+  travellers: number;
 }
-export function stepLabel(c: SocietyCommunity, index: number) {
-  const step = c.history?.[Math.round(index)];
-  return step ? `${step.era} ${Math.round(step.year)}` : "";
-}
-
-/** The works a community made or demands, located ones first. */
-export function communityWorks(region: SocietyRegion, communityId: string) {
-  return region.works
-    .filter((w) => w.communityId === communityId || w.country?.includes(communityId))
-    .sort(
-      (a, b) =>
-        Number(Boolean(a.demand)) - Number(Boolean(b.demand)) || a.kind.localeCompare(b.kind)
-    );
-}
-/** Each connection of a community, with the neighbour it reaches, nearest first. */
-export function communityNeighbours(region: SocietyRegion, communityId: string) {
-  const byId = new Map(region.communities.map((c) => [c.id, c]));
-  return region.connections
-    .filter((link) => link.from === communityId || link.to === communityId)
-    .map((link) => ({
-      link,
-      neighbour: byId.get(link.from === communityId ? link.to : link.from),
-    }))
-    .filter((x): x is { link: (typeof region.connections)[number]; neighbour: SocietyCommunity } =>
-      Boolean(x.neighbour)
+export function placeWays(feature: AtlasFeature, related: AtlasFeature[]): PlaceWay[] {
+  const places = new Map(related.map((item) => [item.id, item]));
+  return related
+    .filter(
+      (item) => item.attributes.fromPlace === feature.id || item.attributes.toPlace === feature.id
     )
-    .sort((a, b) => a.link.travelCost - b.link.travelCost);
+    .map((way) => {
+      const { fromPlace, toPlace } = way.attributes,
+        far = fromPlace === feature.id ? toPlace : fromPlace;
+      return {
+        way,
+        other: typeof far === "string" ? places.get(far) : undefined,
+        travellers: count(way, "travellers"),
+      };
+    })
+    .sort((a, b) => b.travellers - a.travellers);
 }
-export function connectionSegments(neighbours: ReturnType<typeof communityNeighbours>): Segment[] {
-  const counts: Record<string, number> = {};
-  for (const { link } of neighbours) counts[link.kind] = (counts[link.kind] ?? 0) + 1;
-  return shareSegments(counts, practiceLabel);
+/** Travellers on the place's ways by the kind of way: road, track or sea lane. */
+export function waySegments(ways: PlaceWay[]): Segment[] {
+  const byKind: Record<string, number> = {};
+  for (const { way, travellers } of ways) {
+    const kind = text(way, "roadClass") ?? way.kind;
+    byKind[kind] = (byKind[kind] ?? 0) + travellers;
+  }
+  return shareSegments(byKind, practiceLabel);
 }
-export function communityEvents(region: SocietyRegion, communityId: string) {
-  return region.events.filter((e) => e.communities.includes(communityId));
+/** What was recorded at the place: the events that befell it, or the works raised there. */
+export function recordedAt(feature: AtlasFeature, related: AtlasFeature[], events: boolean) {
+  return related.filter(
+    (item) => item.attributes.atPlace === feature.id && (item.kind === "societyEvent") === events
+  );
 }
-/** The polity character as published on its entity, when the eras have run. */
-export interface PublishedCharacter {
-  practices: Record<string, number>;
-  languages: number;
-  communities: number;
-  people: number;
+/** The territories of the realm the place holds with, among the features beside it. */
+export function realmTerritories(feature: AtlasFeature, related: AtlasFeature[]) {
+  const realm = text(feature, "polityId");
+  return realm
+    ? related.filter(
+        (item) =>
+          ["sovereignty", "control", "claim"].includes(item.kind) &&
+          item.relations.some((relation) => relation.targetId === realm)
+      )
+    : [];
 }
-export function publishedCharacter(world: World, polityId: string): PublishedCharacter | null {
-  const character = world.entities[polityId]?.attributes.character as
-    PublishedCharacter | undefined;
-  return character && typeof character === "object" ? character : null;
-}
-export { population };

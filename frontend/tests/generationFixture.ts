@@ -1,7 +1,7 @@
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
-import type { AtlasFeature, EpochHistory, Landmark, SocietyRegion } from "@atlas/domain";
+import type { AtlasFeature, EpochHistory, Landmark } from "@atlas/domain";
 import type { GenerationDiagnostic } from "@atlas/generation";
 
 const fixtureBundle = build({
@@ -43,7 +43,6 @@ export interface GenerationFixtureOptions {
   regionalFeatures?: AtlasFeature[];
   /** Landmark records the fixture's run leaves in the world, as the generator would. */
   landmarks?: Landmark[];
-  society?: SocietyRegion;
   diagnostics?: GenerationDiagnostic[];
   /** Completed geographic observations supplied to an independent copied catalog. */
   history?: EpochHistory[];
@@ -59,7 +58,6 @@ export async function installGenerationFixture(page: Page, options: GenerationFi
     ecologicalFeatures: options.features ?? [],
     regionalFeatures: options.regionalFeatures,
     landmarks: options.landmarks ?? [],
-    society: options.society,
     diagnostics: options.diagnostics ?? [],
     publicationSource: await publicationBundle,
   };

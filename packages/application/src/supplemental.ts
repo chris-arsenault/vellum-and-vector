@@ -170,10 +170,9 @@ function humanEras(
     "Human eras need names, positive years and nonnegative mobility and political capacity."
   );
   requireThat(
-    !Object.values(snapshot.world.societies ?? {}).some((s) => s.history.length > 0) &&
-      !snapshot.world.generations.some((g) =>
-        g.domains.some((d) => ["cultural", "political"].includes(d))
-      ),
+    !snapshot.world.generations.some((g) =>
+      g.domains.some((d) => ["cultural", "political"].includes(d))
+    ),
     "completed_history",
     "Completed human history stays fixed; edit the present instead."
   );

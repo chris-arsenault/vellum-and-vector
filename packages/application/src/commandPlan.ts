@@ -114,10 +114,7 @@ function supplementalReads(
   ].includes(kind);
   const numerical = geographic ? numericalReads(kind, context, data) : [];
   return intentReads(context, {
-    objects:
-      kind === "setHumanEras"
-        ? [{ kind: "society", ids: [`society:${context.scope.areaId}`] }]
-        : [],
+    objects: [],
     references: ids,
     referencesTo: kind === "deleteFeature" ? ids : [],
     spatialLayers: geographic

@@ -1,4 +1,4 @@
-import type { Band, SocietyEvent } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 import {
   isMutablePhysicalName,
   type MutablePhysicalBufferName,
@@ -18,6 +18,7 @@ import type {
   PoiFieldChange,
   PoiMagicBand,
   PoiPlace,
+  PoiStruck,
 } from "./poiContract";
 import { carrierFactors } from "./poiCosts";
 import { fieldOf, releaseHeld } from "./poiReads";
@@ -126,14 +127,14 @@ const nothingDeclared = (): Declared => ({ bands: new Map(), magic: new Map(), g
 export function eventChanges<State>(
   commands: readonly PoiEventCommand<State>[],
   state: State,
-  event: SocietyEvent
+  event: PoiStruck
 ) {
   return commands.flatMap((command) =>
     command.accepts(event) ? command.changes(state, event) : []
   );
 }
 /** Called by the existing event owner after accepting a new event, never by capture or refresh. */
-export function applyPlaceEvent(state: GenerationState, event: SocietyEvent) {
+export function applyPlaceEvent(state: GenerationState, event: PoiStruck) {
   const commands = Object.values(poiCatalogue).flatMap((entry) =>
       entry.event ? [entry.event] : []
     ),

@@ -4,9 +4,9 @@ import type { EditorState } from "./useEditor";
 type Era = NonNullable<World["humanEras"]>[number];
 export function HumanEraForm({ world, editor }: { world: World; editor: EditorState }) {
   const [eras, setEras] = useState(world.humanEras ?? []);
-  const fixed =
-    Object.values(world.societies ?? {}).some((s) => s.history.length > 0) ||
-    world.generations.some((g) => g.domains.some((d) => d === "cultural" || d === "political"));
+  const fixed = world.generations.some((g) =>
+    g.domains.some((d) => d === "cultural" || d === "political")
+  );
   return (
     <form
       onSubmit={(event) => {

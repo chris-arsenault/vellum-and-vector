@@ -29,7 +29,7 @@ function road(state: ReturnType<typeof landscape>, key: string) {
         [100, 100],
       ],
     },
-    { fromCommunity: "a", toCommunity: "b" }
+    { fromPlace: "a", toPlace: "b" }
   );
 }
 it("filters unrelated catalog records before decoding while retaining local identity and name", async () => {

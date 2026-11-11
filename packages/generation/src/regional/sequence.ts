@@ -77,7 +77,7 @@ export function regionalSequence(
       ...(round === 1 ? group("epoch.post-glacial-forcing", occurrence) : []),
       ...group("epoch.ecology-evolve", occurrence),
       ...group("epoch.ecology-burial", occurrence),
-      invoke("refinement.place-effects", { society }, occurrence),
+      invoke("refinement.place-effects", { people: society }, occurrence),
       ...(society && round === 2 ? [invoke("refinement.propose-places")] : []),
       ...(society && round === 3 ? [invoke("refinement.support-places")] : [])
     );

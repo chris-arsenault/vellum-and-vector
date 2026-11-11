@@ -35,7 +35,7 @@ export function writeMapRepresentation(
   });
 }
 
-/** Community identifiers remain the link between a town symbol and its attached ways. */
+/** A way names the places it joins, so a town symbol that moves takes its ways' ends with it. */
 export function moveMappedRoutes(
   snapshot: DomainSnapshot,
   changes: ChangeSet,
@@ -45,14 +45,12 @@ export function moveMappedRoutes(
   actor: string
 ) {
   if (before.geometry.type !== "Point" || after.geometry.type !== "Point") return;
-  const communityId = before.attributes.communityId;
-  if (!communityId) return;
   const destination = after.geometry.coordinates,
     original = before.geometry.coordinates;
   for (const source of Object.values(snapshot.world.features)) {
     if (!["road", "lane"].includes(source.kind)) continue;
     const drawing = presentAtlasFeature(snapshot.world, source, area.id);
-    if (!drawing || !attachedWay(drawing, communityId)) continue;
+    if (!drawing || !attachedWay(drawing, before.id)) continue;
     const local = spatial.intersection(drawing.geometry, area.footprint);
     if (!local) continue;
     const parts = lineParts(local).map((part) =>
@@ -77,11 +75,10 @@ export function moveMappedRoutes(
     );
   }
 }
-function attachedWay(feature: AtlasFeature, communityId: unknown) {
+function attachedWay(feature: AtlasFeature, placeId: string) {
   return (
     feature.geometry.type.includes("LineString") &&
-    (feature.attributes.fromCommunity === communityId ||
-      feature.attributes.toCommunity === communityId)
+    (feature.attributes.fromPlace === placeId || feature.attributes.toPlace === placeId)
   );
 }
 function movedEndpoints(

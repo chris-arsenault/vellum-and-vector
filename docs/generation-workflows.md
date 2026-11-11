@@ -317,8 +317,7 @@ hugs the shallow coast; and a strong polity raises a straight, named highway
 along its seat's busiest road where the line between the two ends crosses
 open, low country. Road geometry follows river banks and valley floors, pays
 for forest, sodden ground and river crossings, and finds saddles through the
-slope term. `pnpm --dir frontend inventory:society` prints a generated world's
-demographic and route measures headlessly.
+slope term.
 
 ### Controls and module contracts
 
@@ -490,8 +489,7 @@ towns and cities (the World town size and how far a city draws its
 hinterland) and roads and travel (the traffic that makes a road, market
 travel and a polity's highways). Each alternative sets a bundle of feature
 settings; the society coefficients those bundles move are atlas parameters
-with declared defaults, read once per cycle into the society workspace
-(`societyProfile`). Adjust opens the advanced panel on the underlying settings
+with declared defaults. Adjust opens the advanced panel on the underlying settings
 and the era schedule.
 
 The workflow edits version 2 `features`: `physical.impacts` omits the impact

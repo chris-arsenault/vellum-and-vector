@@ -19,7 +19,7 @@ import {
   type ProcessSequence,
 } from "./process";
 import { prepareGeneratedProcess } from "./mapFeatures";
-import { finalizeNamesProcess } from "./societyNaming";
+import { finalizeNamesProcess } from "./landNaming";
 import { atlasPhysicalSequence } from "./world/atlasSequence";
 import { magicPlacesProcess } from "./world/atlasProcesses";
 import { atlasQuality } from "./world/atlasProfile";
@@ -39,7 +39,7 @@ import {
 import { atlasGenerationModules } from "./atlasModules";
 import { serializableBindings } from "./generationBindings";
 import { inheritedChannelNames, inheritedProducts } from "./world/inheritedFacts";
-import { societySequence } from "./societyProcesses";
+import { peopleSequence } from "./peopleProcesses";
 import { atlasInitialState } from "./atlasInitialState";
 import { boundaryDiagnostics, inheritMapBoundary } from "./worldBoundary";
 import { isRegionalRefinement } from "./regional/capture";
@@ -88,7 +88,6 @@ export async function generateAtlas(
   // Numerical scratch never leaves the worker or becomes a saved execution state.
   result.state.publications = atlasGenerationModules.publications(input, result.state.domain.world);
   delete result.state.physical;
-  delete result.state.society;
   return result;
 }
 
@@ -270,7 +269,7 @@ function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput)
         (id) => input.resolvedFeatures!.selection[id]?.enabled
       )
     )
-      sequence.push(...societySequence(input));
+      sequence.push(...peopleSequence(input));
     sequence.push(
       ...atlasGenerationModules.contribute(slot, input.resolvedFeatures!, {
         source,

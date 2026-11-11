@@ -1,21 +1,12 @@
-import {
-  canonicalPosition,
-  MapScale,
-  fieldInterpolator,
-  population,
-  spatial,
-  settlementSiteKinds,
-  KeyedHeap,
-} from "@atlas/domain";
+import { MapScale, fieldInterpolator, settlementSiteKinds, KeyedHeap } from "@atlas/domain";
 import { projectNative, selectedNativeProjection } from "../world/atlasProjection";
 import { runOperation } from "../processOperation";
 import { processOwner } from "../processTraits";
 import type { MapProcessContext } from "../process";
 import { generationFeature, generationFeatures } from "../generationFeatures";
 import { publishKinds } from "../poi/poiPublish";
-import { regionalCommunitySpacing } from "../regionalSociety";
-import { localTownShare } from "../societySettlements";
-import { rankSites, type SiteOpportunity } from "../societySites";
+import { mapScale } from "../worldSignificance";
+import { rankSites, type SiteOpportunity } from "../siteRanking";
 import { celsius, regionalMoisture } from "./climate";
 import { regionalId } from "./extraction/features";
 import {
@@ -34,6 +25,13 @@ import { fordCost } from "./societyWays";
 import { slopeCost } from "./ways";
 
 const societyDomains = ["built", "cultural", "political"];
+/** The share of a country's people who live in its own town before sites and markets add any. */
+const localTownShare = 0.025;
+/** How far apart places stand on this map: the map's ordinary spacing, or a third of a small frame. */
+function placeSpacing(state: RegionalState) {
+  const [west, south, east, north] = state.surface.bounds;
+  return Math.min(mapScale(state).length(0.025), Math.max(east - west, north - south) / 3);
+}
 export function placesEnabled(domains: string[]) {
   return domains.some((id) => societyDomains.includes(id));
 }
@@ -209,7 +207,7 @@ export function hinterlandOwners(state: RegionalState, places: number[]) {
     owner = new Int32Array(n).fill(-1),
     heap = new KeyedHeap(),
     around = new Int32Array(neighborhoodCapacity),
-    reach = regionalCommunitySpacing(state) * hinterlandReach,
+    reach = placeSpacing(state) * hinterlandReach,
     height = (i: number) => MapScale.metres(map.Elevation.get(i), "native");
   for (const p of places) {
     cost[p] = 0;
@@ -304,8 +302,7 @@ export function extractPlaces(state: RegionalState) {
 }
 
 /**
- * The captured occupation per mesh cell: the parent's published density where there is one,
- * else the present located residents over their footprints.
+ * The captured occupation per mesh cell: the density of people the parent published.
  */
 function regionalOccupation(state: RegionalState) {
   const mesh = state.physical.map.mesh,
@@ -315,23 +312,7 @@ function regionalOccupation(state: RegionalState) {
     const at = fieldInterpolator(surface, "populationDensity");
     for (let i = 0; i < mesh.count; i++) density[i] = Math.max(0, at(positionOf(mesh, i)));
     state.regional.populationDensity = density;
-    return;
   }
-  const communities =
-    state.domain.world.societies?.[state.regional.input.areaId]?.communities.filter(
-      (c) => c.footprint && c.areaKm2 > 0 && population(c) > 0
-    ) ?? [];
-  if (!communities.length) return;
-  const footprints = communities.map((c) => c.footprint!),
-    coverage = footprints.map((shape) => spatial.pointCoverage(shape));
-  spatial.withIndex(footprints, (index) => {
-    for (let i = 0; i < mesh.count; i++) {
-      const p = canonicalPosition(state.domain.world.reference, positionOf(mesh, i));
-      for (const k of index.query([p.x, p.y, p.x, p.y]))
-        if (coverage[k](p)) density[i] += population(communities[k]) / communities[k].areaKm2;
-    }
-  });
-  state.regional.populationDensity = density;
 }
 function siteScore(state: RegionalState, i: number, access: Float64Array) {
   const map = state.physical.map,

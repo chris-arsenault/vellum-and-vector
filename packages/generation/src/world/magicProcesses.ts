@@ -104,20 +104,14 @@ function evaluateField(
 ) {
   const definition = field.definition;
   if (!definition.enabled) {
-    if (field.doors.length && state.society) state.society.connectionsDirty = true;
     clearCurrent(field);
     return;
   }
   const localSeed = systemSeed(seed, definition.id);
   const activity = definition.strength * (epoch?.magicActivity?.[definition.id] ?? 1);
-  const doors = field.doors;
   locateMagicSources(state, field, localSeed, index, magicSourceStrategies, activity);
   propagateMagic(state, field, localSeed, activity);
-  if (state.society && changedDoorPairs(doors, field.doors)) state.society.connectionsDirty = true;
 }
-const changedDoorPairs = (before: MagicField["doors"], after: MagicField["doors"]) =>
-  before.length !== after.length ||
-  before.some((pair, i) => pair.a !== after[i].a || pair.b !== after[i].b);
 function clearCurrent(field: MagicField) {
   field.fresh.fill(0);
   for (const name of [
@@ -219,9 +213,14 @@ function refreshFields(state: GenerationState, context: MapProcessContext, field
   for (const field of fields.filter((field) => field.definition.effects.tearing > 0))
     evaluateField(state, field, bound.seed, index, epochs[index]);
 }
-/** Actor events and maintained ground advance only when an actual society cycle elapsed. */
-const supplySocietyOperation = mapCommand(
-  "magic.society-supply",
+/**
+ * Sources that answer to people, the dead and the ground they have kept, supplied for a span
+ * people have lived. No sequence runs this yet: run in every human era as the old society
+ * cycle ran it, it hides the lakes people dam and removes every killing ground, so it waits
+ * for the per-system behaviour of magic use to be settled.
+ */
+const supplyPeopleSources = mapCommand(
+  "magic.people-supply",
   "event",
   (state, context) => {
     if (!state.physical?.magic) return;
@@ -236,12 +235,12 @@ const supplySocietyOperation = mapCommand(
   },
   []
 );
-export const advanceSocietyMagic = mapCommand(
-  "magic.society-events",
+export const advancePeopleMagic = mapCommand(
+  "magic.people-events",
   "event",
   (state, context) => {
     if (!state.physical?.magic) return;
-    executeMapOperation(supplySocietyOperation, state, context);
+    executeMapOperation(supplyPeopleSources, state, context);
     executeMapOperation(evaluateSocietyMagic, state, context);
     hallowedWrites(state);
     hallowedOnTheColumn(state);

@@ -76,6 +76,13 @@ export const dwellOnLand = defineCommand(
   ({ map, years }: Dwelling) => humanLayerWriter(map).dwell(years),
   []
 );
+/** A geological epoch passes: the ways and kept lines of whoever lived before it fade. */
+export const forgetHumanGround = defineCommand(
+  "human.layers.forget",
+  "elapsed",
+  ({ map, years }: Dwelling) => humanLayerWriter(map).forget(years),
+  []
+);
 export const convertHumanLayer = defineCommand(
   "human.layers.convert",
   "work",
@@ -152,6 +159,17 @@ export const travelWays = defineCommand(
   "human.layers.travel",
   "elapsed",
   ({ map, travellerYears }: Travel) => humanLayerWriter(map).travel(travellerYears),
+  []
+);
+export interface KeepLines extends OnMap {
+  /** The cells a line is kept on, and the years it is kept. */
+  cells: readonly number[];
+  years: number;
+}
+export const keepHumanLines = defineCommand(
+  "human.layers.keep",
+  "elapsed",
+  ({ map, cells, years }: KeepLines) => humanLayerWriter(map).keep(cells, years),
   []
 );
 export interface CarryLayers extends OnMap {

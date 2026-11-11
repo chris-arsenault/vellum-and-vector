@@ -557,6 +557,78 @@ modules and the fixture-outcome tests, then remove the guard test.
 Exit: every checklist row has a verdict and its behaviour exists on maps or is
 recorded as dropped. The settlement inspector explains a place from its land.
 
+Mechanisms decided while building (agent decisions):
+
+- Dams. At the end of each era every living place without a dam tries one on
+  the strongest river cell of its own ground. The land's water is worked out
+  again with the dams marked; a dam that makes lake where there was none, over
+  enough cells for the map to show, stands and is remembered, and the others
+  are withdrawn for a finer map and not tried again. A dam whose people have
+  gone fails. After the eras, the map's lakes and rivers are drawn again from
+  the water as people left it. A remembered dam shows on a World map.
+- Events. At the end of each era, for every known place: a famine where a
+  town's worth of people died on its ground within the era; a disaster where
+  one of the land's hazards struck; a siege where the realm most of its people
+  hold with changed. Hazards (avalanche, flood, tsunami) are chances read from
+  the ground a place stands on; one that strikes takes from the layers there
+  what the layer catalogue says they give up, and marks the ground through
+  the disaster entry. A frontier field stands midway along a way whose two
+  ends different realms hold. Hazards strike places only, not open country:
+  spread over the land their yearly toll is far below what growth restores.
+- Geography is named in a tongue spoken on its ground, weighted by speakers.
+- Ways and kept lines are forgotten when a geological epoch begins, by the
+  layers' owner.
+- A river stretch between two junctions closer than the map stores apart is
+  not a stretch; before this a redrawn river could fail to save.
+- Regional maps keep their village proposals until M7; they rank sites with the
+  one classifier kept from the old site code and no longer read a parent's
+  society records. A captured event stands as its parent recorded it.
+- Highways. A realm keeps up the most travelled land ways out of its seat as
+  highways, as many as the map's setting gives a realm.
+- Kept lines. A way whose two ends different realms hold is a frontier; the
+  places at its ends keep that line for the era's years, through the layers'
+  owner. A work's own entry still declares the line it keeps.
+- A realm's entity states how many hold with it and how many living places it
+  leads. A realm that spans a continent is drawn in its geographic parts.
+- A dam a creator draws holds water as one the people raised.
+- A settlement's record states who lives there (the share of its people by
+  tongue, faith, custom and realm), its people at the end of each era it stood
+  through, its country and how that country is used. Works and events name
+  the place they stand at, and ways the places they join.
+- Storage keeps no society record. One settlement's surroundings are read from
+  the records that name it: its ways and their far ends, the works and events
+  at it, and its realm's territories. The settlement inspector reads only
+  that and the settlement's own record. A creator's edit to a settlement's
+  groups or population is reconciled on the settlement's record.
+
+Verdicts for rows not rebuilt as they were:
+
+- Practice learning, skill and seeking: livelihoods are the land's layers
+  (crops, herds, the wild); magic practice, skill and seeking are M6.
+  Fishing pressure on stocks is dropped: nothing carries a fish stock.
+- Clearance and hunting works are the farmland and pasture layers and the use
+  of the wild. Irrigation, harbour, pass, forge, archive and shrine are sited
+  by their catalogue entries from the ground near living places.
+- World demands realized at finer profiles are dropped: there are no demands.
+  A finer map carries its parent's records and sites works from its own
+  ground.
+- Displacement is not a separate count: people leave by following the pull
+  each pass. Damaged works are what a hazard takes from the built layers.
+- Drawn records. A territory, an event or a work a creator draws stands as
+  drawn and is checked when edited; apart from a drawn dam, it does not act on
+  the land or its people when the map is generated again. The old
+  reconciliation of a drawn territory or work against the retained society
+  went with that record.
+- Farm country shows as the published farmland, pasture and built-ground
+  layers, not as outlined areas.
+- Origin markers and institutions were only ever drawn on finer maps: M7.
+- The society inventory script is deleted with the records it counted.
+- Homed in M6, with what was found: the old per-cycle supply of magic that
+  answers to people (the dead, tenure) is not run in the eras. Run as it was,
+  it hid every dam lake on the World (a magic rule then claims those cells)
+  and removed every killing ground. Hallowed seats now read the known places.
+  Mine workings, forge heat and magic meeting hazards wait for magic use.
+
 ### M6 — Aggregate magic use, all seven systems
 
 A people's collective practice over a pass acts on the land as one force through

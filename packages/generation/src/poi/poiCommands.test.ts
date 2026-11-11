@@ -1,23 +1,13 @@
-import { MapScale, type SocietyEvent } from "@atlas/domain";
+import { MapScale } from "@atlas/domain";
 import { expect, it, vi } from "vitest";
+import type { PoiStruck } from "./poiContract";
 import { eventChanges } from "./poiEffects";
 import { disasterChanges, disasterSite } from "./settlements/disasterSite";
 
-const flood: SocietyEvent = {
-  id: "flood-1",
-  kind: "flood",
-  era: "Settlement",
-  position: { x: 0, y: 0, z: 0 },
-  radius: 100,
-  magnitude: 0.5,
-  casualties: 0,
-  displaced: 0,
-  communities: [],
-  causes: [],
-};
+const flood: PoiStruck = { kind: "flood", magnitude: 0.5, cell: 4 };
 
 it("event command dispatch selects strategies using the accepted event and supplied context", () => {
-  const changes = vi.fn((context: { cell: number }, event: SocietyEvent) => [
+  const changes = vi.fn((context: { cell: number }, event: PoiStruck) => [
       {
         change: "atLeast" as const,
         band: "EcologicalDamage" as const,

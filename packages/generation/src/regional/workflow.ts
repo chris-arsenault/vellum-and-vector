@@ -106,7 +106,7 @@ function stepProcess(step: ScheduledStep): MapProcess {
       version,
       parameters: {
         round: { type: "number", unit: null, required: false, default: 0 },
-        society: { type: "boolean", unit: null, required: false, default: false },
+        people: { type: "boolean", unit: null, required: false, default: false },
       },
       requires: ["atlas:workspace"],
       produces: step.produces ?? [],
@@ -246,6 +246,5 @@ export async function refineRegionalMap(
     result.state.domain.world
   );
   delete result.state.physical;
-  delete result.state.society;
   return result;
 }

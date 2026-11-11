@@ -1,5 +1,8 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import { generationFeatures } from "../../generationFeatures";
+import { standingPlace } from "../../human/placeRegistry";
+import { standingWorks } from "../../human/workRegistry";
+import { generatedId } from "../../mapFeatures";
 import { MapScale } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import type { GenerationState } from "../../process";
@@ -55,15 +58,34 @@ function suitability(state: GenerationState, cell: number) {
     flow = dischargeAt(state, cell);
   return (banks + flow / (flow + mapScale(state).resolveMeasure(typicalDischarge))) / 2;
 }
-const places = workPlaces("dam", "dam", {
-  record: "dam",
-  layer: "waterworks",
-  label: "Dam",
-  radius: damRadius,
-  spacing: damSpacing,
-  requires,
-  suitability,
-});
+/** The dams the land remembers people raising, each with the lake it holds. */
+const raised = (state: GenerationState) =>
+  standingWorks(state).map((work) => ({
+    key: work.id,
+    cell: work.cell,
+    attributes: {
+      workId: work.id,
+      built: work.built,
+      atPlace: generatedId(state, standingPlace(state, work.place)),
+      resolved: true,
+    },
+    causes: [
+      `${work.built}: the people of the place beside it dammed the river here, and the water behind it spread over ${work.holds} of this map's cells.`,
+    ],
+  }));
+const places = workPlaces(
+  "dam",
+  {
+    record: "dam",
+    layer: "waterworks",
+    label: "Dam",
+    radius: damRadius,
+    spacing: damSpacing,
+    requires,
+    suitability,
+  },
+  raised
+);
 const isA = holdsRecord("dam", places);
 const dischargeOf = (state: GenerationState, place: PoiPlace) => dischargeAt(state, place.anchor);
 const around = (state: GenerationState) => 6 * cellSpan(state);
@@ -99,7 +121,7 @@ export const dam: PoiEntry = {
   },
   existence: {
     statement:
-      "Sited two ways: the society simulation's located dams, and on every map the narrow valleys on sizeable rivers within reach of a settlement, at least 40 km apart. Refinement realizes the crest and basin a record only names.",
+      "Sited two ways: the dams the people of a living place raised on the strongest river of their own ground, where the water behind one makes a lake the map can show; and on every map the narrow valleys on sizeable rivers within reach of a settlement, at least 40 km apart. Refinement realizes the crest and basin a record only names.",
     way: "sited",
     requires,
     suitability,
@@ -107,7 +129,7 @@ export const dam: PoiEntry = {
   },
   publication: {
     statement:
-      "A dam publishes as a located work; the World shows those people sited by the ground but none of the simulation's own, which stay demands.",
+      "A dam publishes as a located work; the World shows those whose lake its own water holds, and leaves the rest for a finer map.",
     moment: "society",
     record: workRecord,
   },

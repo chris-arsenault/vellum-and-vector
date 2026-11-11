@@ -1,34 +1,27 @@
-import type { AtlasFeature, SocietyCommunity, SocietyRegion, World } from "@atlas/domain";
+import type { AtlasFeature, World } from "@atlas/domain";
 import { useQuery } from "@tanstack/react-query";
 import { atlasWorkspace, workspaceScope } from "./atlasWorkspace";
 import type { EditorState } from "./useEditor";
+import { Badge, LinkList, Section, ShareBar, Stat, StatGrid } from "./InspectionSurface";
+import { compact } from "./surfaceData";
 import {
-  Badge,
-  Facts,
-  LinkList,
-  Meter,
-  Section,
-  ShareBar,
-  Stat,
-  StatGrid,
-} from "./InspectionSurface";
-import { compact, percent, shareSegments } from "./surfaceData";
-import {
+  countryUseSegments,
   entityName,
-  population,
-  practiceLabel,
-  publishedCharacter,
+  eraSeries,
+  placeEras,
+  placeFacts,
+  realmTerritories,
   roleLabels,
-  settlementCommunity,
-  supportSegments,
 } from "./settlementSurfaceData";
-import { SettlementHistory, SettlementPeoples } from "./SettlementPeople";
-import { SettlementMagic, SettlementTies } from "./SettlementTies";
+import { TrendChart } from "./TrendChart";
+import { SettlementPeoples } from "./SettlementPeople";
+import { SettlementTies } from "./SettlementTies";
 
 /**
- * The settlement's surface: who lives here and on what, how that has gone, whose polity it
- * is, what magic it practises, what it built and whom it reaches. Every section reads the
- * retained society with mapped resident edits; the links select related features on the map.
+ * The settlement's surface: who lives here and on what country, how it came to be, whose
+ * realm it holds with, what was built and what befell it, and where its ways lead. Every
+ * section reads the settlement's own record and the features beside it on the map; the links
+ * select those features.
  */
 export function SettlementSurface({
   world,
@@ -48,25 +41,16 @@ export function SettlementSurface({
   });
   if (inspection.isPending) return <p role="status">Reading settlement…</p>;
   if (inspection.error) return <p role="alert">{inspection.error.message}</p>;
-  const retained = inspection.data;
-  if (!retained) return null;
-  const found = settlementCommunity(
-    { ...world, societies: { [areaId]: retained.region } },
-    feature,
-    areaId
-  );
-  if (!found) return null;
-  const { region, community } = found;
-  const select = featureSelector(retained.related, editor);
+  const related = inspection.data?.related ?? [],
+    select = featureSelector(related, editor);
   return (
     <>
-      <TitleBadges feature={feature} community={community} />
-      <PeopleSection community={community} />
-      <SettlementPeoples world={world} community={community} />
-      <SettlementHistory region={region} community={community} />
-      <PolitySection world={world} feature={feature} region={region} select={select} />
-      <SettlementMagic region={region} community={community} />
-      <SettlementTies region={region} community={community} select={select} />
+      <TitleBadges feature={feature} />
+      <PeopleSection feature={feature} />
+      <SettlementPeoples world={world} feature={feature} />
+      <StorySection feature={feature} />
+      <RealmSection world={world} feature={feature} related={related} select={select} />
+      <SettlementTies feature={feature} related={related} select={select} />
     </>
   );
 }
@@ -86,150 +70,120 @@ function featureSelector(related: AtlasFeature[], editor: EditorState): FeatureS
 }
 
 const statusTone = { inhabited: "good", abandoned: "warn", ruined: "bad" } as const;
-function TitleBadges({
-  feature,
-  community,
-}: {
-  feature: AtlasFeature;
-  community: SocietyCommunity;
-}) {
-  const role = roleLabels[String(feature.attributes.settlementRole)];
+function TitleBadges({ feature }: { feature: AtlasFeature }) {
+  const role = roleLabels[String(feature.attributes.settlementRole)],
+    { status } = placeFacts(feature);
   const site =
     typeof feature.attributes.siteReason === "string" ? feature.attributes.siteReason : null;
   return (
     <div className="surface-title">
       {role && <Badge tone="accent">{role}</Badge>}
-      <Badge tone={statusTone[community.status]}>{community.status}</Badge>
+      <Badge tone={statusTone[status]}>{status}</Badge>
       {feature.attributes.fortress === true && <Badge>Fortress</Badge>}
-      {community.protected && <Badge>Protected</Badge>}
+      {feature.protected && <Badge>Protected</Badge>}
       {site && <span className="surface-meta">{site}</span>}
     </div>
   );
 }
 
-/** Residents against the room the country gives them, and where that room comes from. */
-function PeopleSection({ community }: { community: SocietyCommunity }) {
-  const people = population(community),
-    urban = Math.min(people, community.settlement?.population ?? 0),
-    capacity = community.support.capacity;
+/** Its townsfolk and the people of its country, and how that country is used. */
+function PeopleSection({ feature }: { feature: AtlasFeature }) {
+  const facts = placeFacts(feature),
+    use = countryUseSegments(feature),
+    meta = [
+      facts.countryKm2 ? `${Math.round(facts.countryKm2).toLocaleString()} km² of country` : null,
+      facts.founded ? `founded ${facts.founded}` : null,
+    ].filter(Boolean);
   return (
-    <Section
-      title="People"
-      meta={`${Math.round(community.areaKm2).toLocaleString()} km² · founded ${community.founded}`}
-    >
+    <Section title="People" meta={meta.join(" · ") || undefined}>
       <StatGrid>
         <Stat
-          value={compact(urban)}
+          value={compact(facts.townsfolk)}
           label="settlement residents"
-          hint={`${Math.round(urban).toLocaleString()} settlement residents`}
+          hint={`${Math.round(facts.townsfolk).toLocaleString()} settlement residents`}
         />
         <Stat
-          value={compact(people - urban)}
+          value={compact(facts.country)}
           label="rural residents"
-          hint={`${Math.round(people - urban).toLocaleString()} rural residents`}
+          hint={`${Math.round(facts.country).toLocaleString()} rural residents`}
         />
-        <Stat value={compact(people)} label="in all" />
+        <Stat value={compact(facts.people)} label="in all" />
       </StatGrid>
-      <Meter
-        label="Residents against local support"
-        value={people}
-        max={capacity}
-        text={`${compact(people)} of ${compact(capacity)}`}
-      />
-      <ShareBar
-        label="Local support by livelihood"
-        segments={supportSegments(community)}
-        format={(s) => compact(s.value)}
-      />
-      {community.settlement && community.settlement.peak > community.settlement.population && (
-        <p className="surface-empty">
-          Peak {compact(community.settlement.peak)} settlement residents; recovering for{" "}
-          {Math.round(community.settlement.recoveryYears)} years.
-        </p>
+      {use.length > 0 && (
+        <ShareBar
+          label="Its country by use"
+          segments={use}
+          format={(s) => `${compact(s.value)} km²`}
+        />
+      )}
+      {facts.peak > facts.townsfolk && (
+        <p className="surface-empty">Peak {compact(facts.peak)} settlement residents.</p>
       )}
     </Section>
   );
 }
 
-/** The polity this settlement seats or answers to, with its published character. */
-function PolitySection({
+/** Its people over the eras it stood through; the record's causes are listed with every feature. */
+function StorySection({ feature }: { feature: AtlasFeature }) {
+  const eras = placeEras(feature);
+  if (!eras.length) return null;
+  return (
+    <Section title="History" meta={`${eras.length} eras`}>
+      <TrendChart
+        label="People over its eras"
+        series={eraSeries(eras)}
+        xLabel={(x) => eras[Math.round(x)]?.era ?? ""}
+      />
+    </Section>
+  );
+}
+
+/** The realm this settlement seats or holds with, and its territories on the map. */
+function RealmSection({
   world,
   feature,
-  region,
+  related,
   select,
 }: {
   world: World;
   feature: AtlasFeature;
-  region: SocietyRegion;
+  related: AtlasFeature[];
   select: FeatureSelector;
 }) {
-  const seats = Array.isArray(feature.attributes.capitalOf)
-    ? (feature.attributes.capitalOf as string[])
-    : [];
-  const controller =
-    typeof feature.attributes.polityId === "string" ? feature.attributes.polityId : null;
-  if (!seats.length && !controller) return null;
-  const polities = new Map(region.politics?.polities.map((p) => [p.id, p]) ?? []);
+  const realm = typeof feature.attributes.polityId === "string" ? feature.attributes.polityId : "";
+  if (!realm) return null;
+  const seat = feature.attributes.settlementRole === "capital",
+    territories = realmTerritories(feature, related),
+    character = world.entities[realm]?.attributes.character as
+      { people?: number; places?: number } | undefined;
   return (
-    <Section title="Polity">
-      {seats.map((id) => (
-        <PolityCharacter key={id} world={world} id={id} seat select={select} />
-      ))}
-      {controller && !seats.includes(controller) && (
-        <LinkList
-          links={[
-            {
-              id: controller,
-              label: `Controlled by ${entityName(world, controller)}`,
-              meta: polities.get(controller)?.status,
-              select: select((f) => f.id === `control:${controller}`),
-            },
-          ]}
-        />
-      )}
-    </Section>
-  );
-}
-function PolityCharacter({
-  world,
-  id,
-  seat,
-  select,
-}: {
-  world: World;
-  id: string;
-  seat: boolean;
-  select: FeatureSelector;
-}) {
-  const character = publishedCharacter(world, id);
-  return (
-    <div>
+    <Section
+      title="Polity"
+      meta={
+        character
+          ? `${compact(Number(character.people ?? 0))} people · ${Number(character.places ?? 0)} places`
+          : undefined
+      }
+    >
       <LinkList
         links={[
           {
-            id,
-            label: `${seat ? "Seat of" : ""} ${entityName(world, id)}`.trim(),
-            meta: character ? `${character.communities} communities` : undefined,
-            select: select((f) => f.id === `sovereignty:${id}`),
+            id: realm,
+            label: `${seat ? "Seat of" : "Holds with"} ${entityName(world, realm)}`,
+            select: select(
+              (f) => f.kind === "sovereignty" && territories.some((t) => t.id === f.id)
+            ),
           },
+          ...territories
+            .filter((territory) => territory.kind !== "sovereignty")
+            .map((territory) => ({
+              id: territory.id,
+              label: territory.name,
+              meta: territory.kind,
+              select: select((f) => f.id === territory.id),
+            })),
         ]}
       />
-      {character && (
-        <>
-          <ShareBar
-            label={`${entityName(world, id)} character`}
-            segments={shareSegments(character.practices, practiceLabel)}
-            total={1}
-            format={(s) => percent(s.value)}
-          />
-          <Facts
-            items={[
-              ["People", compact(character.people)],
-              ["Languages", `${character.languages} widely known`],
-            ]}
-          />
-        </>
-      )}
-    </div>
+    </Section>
   );
 }

@@ -56,13 +56,6 @@ self.onmessage = async ({ data }: MessageEvent<MapCustomization>) => {
             value: { ...landmark, areaId: root.id, spaceId: scope.spaceId },
           })
         );
-      if (data.fixture.society)
-        writes.push(
-          record({
-            kind: "society",
-            value: { ...data.fixture.society, id: `society:${root.id}`, areaId: root.id },
-          })
-        );
       await workspace.catalog.commit({
         operationId: crypto.randomUUID(),
         worldId: world.id,

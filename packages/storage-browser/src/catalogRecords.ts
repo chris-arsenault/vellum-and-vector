@@ -104,8 +104,16 @@ export function encodeRecordGeometry(
     try {
       return kernel.encode(geometry, precision);
     } catch (error) {
-      const value = record.data.value as { id?: string; kind?: string; name?: string };
-      const label = [record.data.kind, value.kind, value.name, value.id].filter(Boolean).join(" ");
+      const value = record.data.value as {
+        id?: string;
+        kind?: string;
+        name?: string;
+        featureId?: string;
+      };
+      const of = value.featureId ? `of feature ${value.featureId}` : "";
+      const label = [record.data.kind, value.kind, value.name, value.id, of]
+        .filter(Boolean)
+        .join(" ");
       throw new DomainError("invalid_geometry", `${label}: ${(error as Error).message}`, geometry);
     }
   };

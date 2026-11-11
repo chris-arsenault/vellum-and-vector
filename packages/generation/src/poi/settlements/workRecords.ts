@@ -1,35 +1,21 @@
-import {
-  canonicalGeometry,
-  canonicalPosition,
-  isSocietyWork,
-  point,
-  societyWorkLayers,
-  spatial,
-  type AtlasFeature,
-  type SocietyEvent,
-  type SocietyRegion,
-  type SocietyWork,
-  type SocietyWorkKind,
-  type RelativeMeasure,
-} from "@atlas/domain";
-import { namingVersion } from "../../atlasNaming";
+import { point, type AtlasFeature, type RelativeMeasure } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
-import { generationFeature, generationFeatures } from "../../generationFeatures";
+import { generationFeatures } from "../../generationFeatures";
+import { knownEvents, lastEra, type KnownEvent } from "../../human/eventRegistry";
+import { frontierWays } from "../../human/placeFrontiers";
+import { knownPlaces, standingPlace } from "../../human/placeRegistry";
+import { entityOf } from "../../human/traditions";
 import type { GenerationState } from "../../process";
 import { regionalFeature, regionalId } from "../../regional/extraction/features";
 import { positionOf } from "../../regional/lattice";
 import { bridgeFlow, roadTravellers } from "../../regional/societyWays";
 import type { RegionalState } from "../../regional/state";
-import { isWorldSociety } from "../../societyMapScope";
-import { societyWorkName } from "../../societyNaming";
-import { eventFootprint, societyWorkGeometry } from "../../societyWorkGeometry";
 import type { PoiPlace } from "../poiContract";
 import type { PoiKindId } from "../poiKinds";
 import { sitedPlaces } from "../poiPlaces";
-import { fieldOf, gap, heldFor, isLand } from "../poiReads";
+import { featureCell, fieldOf, gap, heldFor, isLand } from "../poiReads";
 import { onMappedRiver } from "../water/waterReads";
 import {
-  cellOf,
   developed,
   isRefined,
   lazyPlace,
@@ -37,108 +23,17 @@ import {
   localRecord,
   onceWritten,
   settlementPlaces,
-  societyRegionOf,
 } from "./communityRecords";
 
 type OnCell<T> = (state: GenerationState, cell: number) => T;
 
 /**
- * Where works and events come from: the society simulation's own records, and for the kinds no
- * simulation sites, the ground that suits them. These build the record each place publishes as.
+ * Where works and events come from: what the land's own memory holds of them on a map that
+ * lived its people, what the parent left on a refined map, and for works, the ground that
+ * suits them. These build the record each place publishes as.
  */
 
-/** A work's name once, as the simulation would have given it. */
-export function nameUnrecordedWork(state: GenerationState, work: SocietyWork) {
-  if (work.name) return;
-  const community = societyRegionOf(state)?.communities.find((c) => c.id === work.communityId);
-  if (!community) return;
-  const named = societyWorkName(state.domain.world, community, work);
-  work.name = named.name;
-  work.naming = { language: named.namingLanguage, culture: named.namingCulture, era: work.built };
-}
-const existingNames = (state: GenerationState) =>
-  heldFor(state, "society:workNames", () => {
-    const existing = new Map<unknown, Pick<AtlasFeature, "name" | "attributes">>();
-    for (const feature of generationFeatures(state))
-      if (isSocietyWork(feature))
-        existing.set(feature.attributes.workId, {
-          name: feature.name,
-          attributes: feature.attributes,
-        });
-    return existing;
-  });
-function workName(state: GenerationState, work: SocietyWork) {
-  // A retained map name takes precedence over vocabulary revisions or a changed population.
-  const previous = existingNames(state).get(work.id);
-  if (previous) return { name: previous.name, attributes: previous.attributes };
-  nameUnrecordedWork(state, work);
-  return {
-    name: work.name ?? "Unnamed work",
-    attributes: {
-      namingKind: "societyWork",
-      namingVersion,
-      namingSubkind: work.kind,
-      namingCulture: work.naming?.culture ?? null,
-      namingLanguage: work.naming?.language ?? null,
-      namedInEra: work.naming?.era ?? null,
-    },
-  };
-}
-/** The record a located work of the simulation publishes as. */
-export function workFeature(state: GenerationState, w: SocietyWork) {
-  const named = workName(state, w),
-    shape = societyWorkGeometry(state, w),
-    feature = localRecord(
-      state,
-      `work:${w.id}`,
-      named.name,
-      w.kind,
-      societyWorkLayers[w.kind],
-      shape.geometry,
-      {
-        ...named.attributes,
-        geometryMeaning: shape.meaning,
-        site: w.position,
-        workId: w.id,
-        workKind: w.kind,
-        communityId: w.communityId,
-        radius: w.radius,
-        magnitude: w.magnitude,
-        condition: w.condition,
-        maintained: w.maintained,
-        built: w.built,
-      }
-    );
-  feature.name = named.name;
-  feature.causes = w.causes;
-  return feature;
-}
-function recordedWork(state: GenerationState, kind: PoiKindId, w: SocietyWork): PoiPlace {
-  const anchor = cellOf(state, w.position),
-    authored = w.authored ? generationFeature(state, w.id) : undefined;
-  return authored
-    ? { id: authored.id, kind, cells: anchor >= 0 ? [anchor] : [], anchor, feature: authored }
-    : lazyPlace(kind, localId(state, `work:${w.id}`), anchor, () => workFeature(state, w));
-}
-/** The simulation's located works of a kind in this frame; a demand is latent at every profile. */
-function recordedWorks(state: GenerationState, kind: PoiKindId, workKind: SocietyWorkKind) {
-  const region = societyRegionOf(state);
-  if (!region) return [];
-  const covered = isRefined(state) ? spatial.pointCoverage(state.surface.scope.footprint) : null,
-    reference = state.domain.world.reference,
-    bounds = spatial.bounds(reference.domain);
-  return region.works
-    .filter(
-      (w) =>
-        w.kind === workKind &&
-        !w.demand &&
-        (!covered || covered(canonicalPosition(reference, w.position, bounds)))
-    )
-    .map((w) => recordedWork(state, kind, w))
-    .filter((place) => place.anchor >= 0 || !state.physical);
-}
-
-/** What a kind no simulation sites needs in order to be sited, and what its record says. */
+/** What a kind needs in order to be sited by the ground, and what its record says. */
 export interface SitedWork {
   /** The record's kind and layer, its fallback name and its reach in metres. */
   record: string;
@@ -150,7 +45,13 @@ export interface SitedWork {
   requires: OnCell<boolean>;
   suitability: OnCell<number>;
 }
-const sitedByGround = new WeakSet<PoiPlace>();
+/** A work the land remembers people raising: where it stands and what its record adds. */
+export interface RememberedWork {
+  key: string;
+  cell: number;
+  attributes: Record<string, unknown>;
+  causes: string[];
+}
 function nearestTown(state: GenerationState, cell: number) {
   let best: PoiPlace | undefined,
     reach = Infinity;
@@ -160,160 +61,129 @@ function nearestTown(state: GenerationState, cell: number) {
   }
   return best;
 }
-function sitedFeature(state: GenerationState, kind: PoiKindId, shape: SitedWork, cell: number) {
-  const at = positionOf(fieldOf(state).mesh, cell);
-  return localRecord(state, `${kind}:${cell}`, shape.label, shape.record, shape.layer, point(at), {
-    workKind: shape.record,
-    sited: true,
-    site: at,
-    seat: nearestTown(state, cell)?.id,
-    radius: mapScale(state).resolveMeasure(shape.radius),
-    magnitude: 1,
-    condition: 1,
-    maintained: true,
-  });
+function workFeature(
+  state: GenerationState,
+  shape: SitedWork,
+  work: Pick<RememberedWork, "key" | "cell"> & Partial<RememberedWork>
+) {
+  const at = positionOf(fieldOf(state).mesh, work.cell),
+    feature = localRecord(state, work.key, shape.label, shape.record, shape.layer, point(at), {
+      workKind: shape.record,
+      sited: true,
+      site: at,
+      seat: nearestTown(state, work.cell)?.id,
+      radius: mapScale(state).resolveMeasure(shape.radius),
+      magnitude: 1,
+      condition: 1,
+      maintained: true,
+      ...work.attributes,
+    });
+  if (work.causes) feature.causes = work.causes;
+  return feature;
 }
 function groundPlaces(
   state: GenerationState,
   kind: PoiKindId,
   shape: SitedWork,
-  recorded: readonly PoiPlace[]
+  remembered: readonly PoiPlace[]
 ) {
   if (!state.physical) return [];
   const spacing = mapScale(state).resolveMeasure(shape.spacing),
     found = sitedPlaces(kind, shape.requires, shape.suitability, () => spacing)(state);
   return found
     .filter(({ anchor }) =>
-      recorded.every((other) => other.anchor < 0 || gap(state, anchor, other.anchor) >= spacing)
+      remembered.every((other) => other.anchor < 0 || gap(state, anchor, other.anchor) >= spacing)
     )
     .map(({ anchor }) => {
-      const place = lazyPlace(kind, localId(state, `${kind}:${anchor}`), anchor, () =>
-        sitedFeature(state, kind, shape, anchor)
+      const key = `${kind}:${anchor}`;
+      return lazyPlace(kind, localId(state, key), anchor, () =>
+        workFeature(state, shape, { key, cell: anchor })
       );
-      sitedByGround.add(place);
-      return place;
     });
 }
-/** A kind's places: the simulation's works of it, where it has any, and those the ground sites. */
+/** A kind's places: the works of it the land remembers, and those the ground sites. */
 export const workPlaces =
-  (kind: PoiKindId, workKind: SocietyWorkKind | null, shape: SitedWork) =>
+  (
+    kind: PoiKindId,
+    shape: SitedWork,
+    remembered: (state: GenerationState) => readonly RememberedWork[] = () => []
+  ) =>
   (state: GenerationState): readonly PoiPlace[] =>
     heldFor(state, `places:${kind}`, () => {
       if (!developed(state)) return [];
-      const recorded = workKind ? recordedWorks(state, kind, workKind) : [];
-      return [...recorded, ...groundPlaces(state, kind, shape, recorded)];
+      const raised = (isRefined(state) ? [] : remembered(state)).map((work) =>
+        lazyPlace(kind, localId(state, work.key), work.cell, () => workFeature(state, shape, work))
+      );
+      return [...raised, ...groundPlaces(state, kind, shape, raised)];
     });
-/**
- * A work's record. An authored record stands as authored, and the World publishes no work the
- * simulation made (ADR 0005): such a work acts on the World's field without a record.
- */
+/** A work's record; an authored record stands as authored. */
 export function workRecord(state: GenerationState, place: PoiPlace): AtlasFeature | null {
-  if (!sitedByGround.has(place) && isWorldSociety(state)) return null;
   return place.feature?.state === "generated" ? onceWritten(state, place) : null;
 }
 
-/** Dead and displaced an event needs before the World shows it. */
-const worldEventToll = 10000;
-function worldEvent(state: GenerationState, event: SocietyEvent) {
+/** The dead a famine needs before a map that lived its own people shows it. */
+const shownToll = 10000;
+/** The ground an event reached: the place it befell, as a radius in the map's own lengths. */
+function reachOf(state: GenerationState, event: KnownEvent) {
+  const cells = knownPlaces(state).find((place) => place.id === event.place)?.cells.length ?? 1;
+  return fieldOf(state).mesh.spacing * Math.sqrt(cells / Math.PI);
+}
+function eventFeature(state: GenerationState, event: KnownEvent) {
   const feature = localRecord(
     state,
-    `event:${event.id}`,
+    event.id,
     `${event.kind} — ${event.era}`,
     "societyEvent",
     "historicalEvents",
-    { type: "Point", coordinates: [event.position.x, event.position.y] },
+    point(positionOf(fieldOf(state).mesh, event.cell)),
     {
       eventId: event.id,
-      communities: event.communities,
+      atPlace: localId(state, standingPlace(state, event.place)),
       eventKind: event.kind,
       era: event.era,
-      radius: event.radius,
+      radius: reachOf(state, event),
       casualties: event.casualties,
-      displaced: event.displaced,
+      displaced: 0,
+      townsfolk: event.townsfolk,
       magnitude: event.magnitude,
     }
   );
-  feature.causes = event.causes;
-  const footprint = eventFootprint(state, event);
-  if (footprint) {
-    feature.footprint = footprint;
-    feature.attributes.geometryMeaning = "event location with known affected community extents";
-  }
+  feature.causes = [...event.causes];
   return feature;
 }
-/** The record of an event no catalogue kind stands for, as any other on this map. */
-export const unkindedEvent = worldEvent;
-/** The record of an event this refined map retains: its whole affected area. */
-const retainedEvent = (
-  state: RegionalState,
-  event: SocietyEvent,
-  geometry: AtlasFeature["geometry"]
-) =>
-  regionalFeature(
-    state,
-    `event:${event.id}`,
-    "societyEvent",
-    "historicalEvents",
-    geometry,
-    {
-      era: event.era,
-      eventKind: event.kind,
-      casualties: event.casualties,
-      displaced: event.displaced,
-    },
-    event.kind
-  );
-function retainedEvents(state: RegionalState, kind: PoiKindId, events: readonly SocietyEvent[]) {
-  const intersects = spatial.intersectionPredicate(state.surface.scope.footprint);
-  return events.flatMap((event) => {
-    const geometry = spatial.buffer(point(event.position), event.radius);
-    if (!geometry || !intersects(canonicalGeometry(state.domain.world.reference, geometry)))
-      return [];
-    const at = cellOf(state, event.position),
-      anchor = at >= 0 ? at : cellOf(state, spatial.interiorPosition(geometry));
-    return [
-      lazyPlace(kind, regionalId(state, `event:${event.id}`), anchor, () =>
-        retainedEvent(state, event, geometry)
-      ),
-    ];
-  });
+/** The events the parent left on this refined map: they stand as they were recorded. */
+function capturedEvents(state: RegionalState, kind: PoiKindId, matches: (kind: string) => boolean) {
+  return [...generationFeatures(state, { areaId: state.regional.input.areaId })]
+    .filter((f) => f.kind === "societyEvent" && matches(String(f.attributes.eventKind ?? "")))
+    .map((feature): PoiPlace => {
+      const anchor = featureCell(state, feature);
+      return { id: feature.id, kind, cells: anchor >= 0 ? [anchor] : [], anchor, feature };
+    });
 }
-function worldEvents(state: GenerationState, kind: PoiKindId, events: readonly SocietyEvent[]) {
-  return events
-    .filter(
-      (event) => !isWorldSociety(state) || event.casualties + event.displaced >= worldEventToll
-    )
+function rememberedEvents(
+  state: GenerationState,
+  kind: PoiKindId,
+  matches: (kind: string) => boolean
+) {
+  return knownEvents(state)
+    .filter((event) => matches(event.kind))
+    .filter((event) => event.kind !== "famine" || event.casualties >= shownToll)
     .map((event) =>
-      lazyPlace(kind, localId(state, `event:${event.id}`), cellOf(state, event.position), () =>
-        worldEvent(state, event)
-      )
+      lazyPlace(kind, localId(state, event.id), event.cell, () => eventFeature(state, event))
     );
 }
-/** Events a kind stands for, on this map, from the society's own record of them. */
+/** The events a kind stands for on this map, by the kind each event's record names. */
 export const eventPlaces =
-  (kind: PoiKindId, matches: (event: SocietyEvent) => boolean) =>
+  (kind: PoiKindId, matches: (eventKind: string) => boolean) =>
   (state: GenerationState): readonly PoiPlace[] =>
     heldFor(state, `places:${kind}`, () => {
-      const events = developed(state) ? (societyRegionOf(state)?.events.filter(matches) ?? []) : [];
+      if (!developed(state)) return [];
       const places = isRefined(state)
-        ? retainedEvents(state, kind, events)
-        : worldEvents(state, kind, events);
+        ? capturedEvents(state, kind, matches)
+        : rememberedEvents(state, kind, matches);
       return places.filter((place) => place.anchor >= 0 || !state.physical);
     });
 
-/** A way whose two ends different polities hold: where fighting between them would fall. */
-function frontierWays(region: SocietyRegion) {
-  const control = region.politics?.control ?? {},
-    seats = new Map(region.communities.map((c) => [c.id, c]));
-  return region.connections.flatMap((link) => {
-    const a = seats.get(link.from),
-      b = seats.get(link.to),
-      held = [control[link.from], control[link.to]];
-    return a && b && held[0] && held[1] && held[0] !== held[1]
-      ? [{ a, b, wear: link.wear ?? 0 }]
-      : [];
-  });
-}
 function frontierFeature(
   state: GenerationState,
   key: string,
@@ -342,27 +212,27 @@ function frontierFeature(
   return feature;
 }
 /**
- * Fields where held territories meet, on land between the seats whose ways cross the frontier,
- * the most used ways first and each `spacing` metres from the last.
+ * Fields where realms meet, on land midway along the ways that cross between them, the most
+ * travelled ways first and each `spacing` metres from the last.
  */
 export function frontierPlaces(state: GenerationState, kind: PoiKindId, spacing: number) {
-  const region = societyRegionOf(state);
-  if (!region || !state.physical) return [];
-  const era = region.history.at(-1)?.id ?? "Settlement",
+  if (!state.physical || isRefined(state)) return [];
+  const era = lastEra(state) ?? "Settlement",
     taken: number[] = [],
-    places: PoiPlace[] = [];
-  for (const { a, b } of frontierWays(region).sort((x, y) => y.wear - x.wear)) {
-    const cell = cellOf(state, {
-      x: (a.position.x + b.position.x) / 2,
-      y: (a.position.y + b.position.y) / 2,
-    });
+    places: PoiPlace[] = [],
+    name = (code: number) => entityOf(state, code)?.name ?? "a realm";
+  const ways = frontierWays(state, fieldOf(state)).sort(
+    (x, y) => y.way.travellers - x.way.travellers
+  );
+  for (const { way, held } of ways) {
+    const cell = way.cells[Math.floor(way.cells.length / 2)] ?? -1;
     if (cell < 0 || !isLand(state, cell) || taken.some((t) => gap(state, t, cell) < spacing))
       continue;
     taken.push(cell);
-    const key = `frontier:${a.id}:${b.id}`;
+    const key = `frontier:${way.from}:${way.to}`;
     places.push(
       lazyPlace(kind, localId(state, `event:${key}`), cell, () =>
-        frontierFeature(state, key, era, cell, `${a.name} and ${b.name}`)
+        frontierFeature(state, key, era, cell, `${name(held[0])} and ${name(held[1])}`)
       )
     );
   }

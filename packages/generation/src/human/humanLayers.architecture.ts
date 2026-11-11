@@ -31,13 +31,6 @@ function lines(paths: string[], pattern: RegExp) {
   );
 }
 
-describe("docs/SOCIETY-ECONOMY-INTERACTIONS-PLAN.md is in progress", () => {
-  it("fails until the old society structure is deleted (milestone M5 of that plan)", () => {
-    // Remove this test at the end of M5, when the adoption inventory is empty.
-    expect("old society structure").toBe("deleted");
-  });
-});
-
 describe("people's layers have one writer", () => {
   const writes = new RegExp(`\\b(${bands.join("|")})\\b\\s*\\)?\\s*\\.(set|add|fill|copyFrom)\\(`);
   const namedWrites =
@@ -100,14 +93,12 @@ describe("the land and its people meet without naming each other", () => {
   it("names no human band or layer outside people's own code", () => {
     // The declarations that list bands for the schema, the units and the crust are not
     // processes, and the sequence of people's processes is wiring.
-    const declarations = [
-      "coupling/quantities.ts",
-      "world/atlasChannels.ts",
-      "societyProcesses.ts",
-    ];
-    // A band is named by reading it off the map or by its name as a string.
+    const declarations = ["coupling/quantities.ts", "world/atlasChannels.ts", "peopleProcesses.ts"];
+    // A band is named by reading it off the map or by its name as a string. What the rest of
+    // the generator may import from people's code is their processes, their read view, the
+    // run's memory of places, works and events, and the catalogue of the land's hazards.
     const named = new RegExp(
-      `\\.(${bands.join("|")})\\b|["'\`](${bands.join("|")})["'\`]|(humanLayers|humanRemains|identityColumn)[.\\[]|human/(?!humanChannels|place|landProcesses|humanLayers"|identity(Reads|Processes)"|traditions")`
+      `\\.(${bands.join("|")})\\b|["'\`](${bands.join("|")})["'\`]|(humanLayers|humanRemains|identityColumn)[.\\[]|human/(?!humanChannels|place|landProcesses|humanLayers"|identity(Reads|Processes)"|traditions"|(work|event)Registry"|hazardCatalogue")`
     );
     expect(
       lines(

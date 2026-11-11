@@ -84,7 +84,6 @@ function captureContextSnapshot(
   return catalog.readAuthoring({
     scope,
     objects: [
-      { kind: "society", ids: owners.map((id) => `society:${id}`) },
       { kind: "drainage", ids: owners.map((id) => `drainage:${id}`) },
       {
         kind: "magic",
@@ -174,18 +173,7 @@ function captureContext(
   put: (data: DomainWrite) => unknown
 ) {
   const world = source.world,
-    society = owners.map((id) => world.societies?.[id]).find(Boolean),
     drainage = owners.map((id) => world.drainage?.[id]).find(Boolean);
-  if (society)
-    put({
-      kind: "society",
-      value: {
-        ...structuredClone(society),
-        id: `society:${area.id}`,
-        areaId: area.id,
-        ...(society.areaId !== area.id ? { capturedFrom: society.areaId } : {}),
-      },
-    });
   if (drainage)
     put({
       kind: "drainage",

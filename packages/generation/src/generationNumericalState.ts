@@ -34,9 +34,6 @@ export function generationGridBands(state: GenerationState): Groups {
     work = state.physical;
   gridBands(state.surface, groups);
   for (const grid of Object.values(state.domain.numerical)) gridBands(grid, groups);
-  record(groups, surface, state.society);
-  record(groups, surface, state.society?.urban);
-  for (const path of state.society?.urban?.paths.values() ?? []) record(groups, surface, path);
   if (!work) return groups;
   add(groups, surface, work.samples);
   record(groups, surface, work.interpolation);
