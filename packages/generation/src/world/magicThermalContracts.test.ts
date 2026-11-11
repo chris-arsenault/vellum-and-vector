@@ -3,6 +3,9 @@ import { localSeaIce, retainedSeaIce, seaIceWork } from "./seaIce";
 import { pressureAtDepth } from "./magicSources";
 import { createTestField } from "../rock/groundTestFixture";
 import { createWorldMesh } from "./worldMesh";
+import { MapScale } from "@atlas/domain";
+import { Feature } from "./codes";
+import { marineIceSurface } from "./naturalSurface";
 import {
   meltIce,
   receiveIceMelt,
@@ -16,6 +19,19 @@ it("preservation retains existing sea ice without creating ice or preventing all
   expect(retainedSeaIce(10, 0.8, 0, 2)).toBe(8);
   expect(retainedSeaIce(10, 0.8, 10, 2)).toBe(0);
   expect(retainedSeaIce(0.01, 1, 1, 2)).toBe(0);
+});
+it("classifies retained ice by its present thickness even when cold-regime flags survive", () => {
+  const scale = MapScale.fromCells([0, 0, 1000000, 750000], 15000);
+  for (const flags of [0, Feature.PermanentSeaIce, Feature.PermanentIceMargin]) {
+    expect(marineIceSurface(0.05, true, flags, scale)).toBeNull();
+    expect(marineIceSurface(scale.length(0.00002), true, flags, scale)).toBe("Ice shelf");
+  }
+  expect(marineIceSurface(scale.length(0.000015), false, Feature.PermanentSeaIce, scale)).toBe(
+    "Pack ice"
+  );
+  expect(marineIceSurface(scale.length(0.000015), false, Feature.PermanentIceMargin, scale)).toBe(
+    "Sea ice"
+  );
 });
 it("water load increases Pressure source response smoothly from zero", () => {
   expect(pressureAtDepth(0, 100)).toBe(0);

@@ -5,6 +5,11 @@ import { clamp, round, truncate } from "./math";
 import { meshNoise as fractalNoise } from "./noise";
 import { Feature } from "./codes";
 import { setIceResponse } from "../rock/groundSurfaceMedia";
+import type { MapScale } from "@atlas/domain";
+
+/** A named ice cover needs thickness at this map's scale; traces remain physical ice. */
+export const hasSeaIceCover = (thickness: number, scale: MapScale) =>
+  thickness >= scale.length(0.0000125);
 
 export function seaIce(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile,
@@ -67,7 +72,7 @@ function freezeCell(
       "glaciers"
     );
   }
-  if (map.IceThickness.get(i) <= 0) return;
+  if (!hasSeaIceCover(map.IceThickness.get(i), map.scale)) return;
   map.FeatureFlags.set(
     i,
     map.FeatureFlags.get(i) |

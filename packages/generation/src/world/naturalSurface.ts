@@ -2,6 +2,7 @@ import { biomes, naturalSurfaceNames, surfaceCode, MapScale } from "@atlas/domai
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { Feature, Landform } from "./codes";
+import { hasSeaIceCover } from "./seaIce";
 
 type Surface = (typeof naturalSurfaceNames)[number];
 function frozenNeighbor(map: PhysicalField, i: number) {
@@ -10,7 +11,7 @@ function frozenNeighbor(map: PhysicalField, i: number) {
     if (
       j >= 0 &&
       map.WaterKindCodes.get(j) === 1 &&
-      map.IceThickness.get(j) >= map.scale.length(0.0000125)
+      hasSeaIceCover(map.IceThickness.get(j), map.scale)
     )
       return true;
   }
@@ -51,11 +52,21 @@ function frozenOcean(map: PhysicalField, i: number): Surface | null {
   const shallow = [2, 3].includes(map.BathymetricZoneCodes.get(i)),
     ice = map.IceThickness.get(i),
     flags = map.FeatureFlags.get(i);
-  if (shallow && ice >= map.scale.length(0.00001875)) return "Ice shelf";
-  if (flags & Feature.PermanentSeaIce) return "Pack ice";
-  if (flags & Feature.PermanentIceMargin || ice >= map.scale.length(0.0000125)) return "Sea ice";
+  const cover = marineIceSurface(ice, shallow, flags, map.scale);
+  if (cover) return cover;
   if (frozenNeighbor(map, i)) return "Polynya";
   return null;
+}
+/** Flags describe an existing cover's regime; they cannot turn a thinning trace into a cover. */
+export function marineIceSurface(
+  thickness: number,
+  shallow: boolean,
+  flags: number,
+  scale: MapScale
+): Surface | null {
+  if (!hasSeaIceCover(thickness, scale)) return null;
+  if (shallow && thickness >= scale.length(0.00001875)) return "Ice shelf";
+  return flags & Feature.PermanentSeaIce ? "Pack ice" : "Sea ice";
 }
 function landClimate(map: PhysicalField, i: number): Surface {
   const biome = biomes[map.BiomeCodes.get(i)]?.name;
