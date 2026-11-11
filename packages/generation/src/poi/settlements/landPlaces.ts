@@ -2,6 +2,9 @@ import type { AtlasFeature } from "@atlas/domain";
 import { atlasName, nameMetadata } from "../../atlasNaming";
 import { placeLand } from "../../human/placeFacts";
 import { knownPlaces, townSize, type KnownPlace } from "../../human/placeRegistry";
+import { knownTraditions, traditionOf } from "../../human/traditions";
+import { humanLayersOf } from "../../human/humanLayers";
+import { leading } from "../../human/identityReads";
 import { generatedFeature, generatedId } from "../../mapFeatures";
 import type { GenerationState } from "../../process";
 import type { PoiPlace } from "../poiContract";
@@ -19,6 +22,15 @@ const marketPeople = 4;
 function roleOf(place: KnownPlace, least: number) {
   return place.townPeople >= marketPeople * least ? "marketTown" : "settlement";
 }
+/** A place's standing among realms: its role, and the realm most of its people hold. */
+function standing(state: GenerationState, place: KnownPlace, least: number) {
+  const seatOf = knownTraditions(state).find((tradition) => tradition.seat === place.id),
+    [allegiance] = leading(humanLayersOf(fieldOf(state)).column(place.anchor), "allegiance"),
+    // A seat is its own realm's capital, whoever most of its people now hold with.
+    realm = seatOf ?? traditionOf(state, allegiance),
+    role = place.abandoned ? "settlement" : seatOf ? "capital" : roleOf(place, least);
+  return { settlementRole: role, ...(realm ? { polityId: realm.entity } : {}) };
+}
 function record(state: GenerationState, place: KnownPlace, least: number): AtlasFeature {
   const land = placeLand(fieldOf(state), place),
     living = !place.abandoned,
@@ -26,6 +38,8 @@ function record(state: GenerationState, place: KnownPlace, least: number): Atlas
       key: place.id,
       kind: "settlement",
       position: land,
+      // Its founders' tongue names it, and the name stays whoever lives there later.
+      language: place.tongue ? traditionOf(state, place.tongue)?.entity : undefined,
       era: place.founded,
     }),
     townsfolk = Math.round(place.townPeople);
@@ -47,7 +61,7 @@ function record(state: GenerationState, place: KnownPlace, least: number): Atlas
       communityPopulation: Math.round(place.people),
       ruralPopulation: Math.round(Math.max(0, place.people - place.townPeople)),
       peakPopulation: Math.round(place.peak),
-      settlementRole: living ? roleOf(place, least) : "settlement",
+      ...standing(state, place, least),
       representedAreaKm2: land.zoneKm2,
       ...country(place),
       builtKm2: place.builtKm2,

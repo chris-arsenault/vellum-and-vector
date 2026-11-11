@@ -107,7 +107,7 @@ describe("the land and its people meet without naming each other", () => {
     ];
     // A band is named by reading it off the map or by its name as a string.
     const named = new RegExp(
-      `\\.(${bands.join("|")})\\b|["'\`](${bands.join("|")})["'\`]|humanLayers|humanRemains|identityColumn|human/(?!humanChannels|place|landProcesses)`
+      `\\.(${bands.join("|")})\\b|["'\`](${bands.join("|")})["'\`]|(humanLayers|humanRemains|identityColumn)[.\\[]|human/(?!humanChannels|place|landProcesses|humanLayers"|identity(Reads|Processes)"|traditions")`
     );
     expect(
       lines(

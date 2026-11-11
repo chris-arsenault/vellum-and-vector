@@ -18,6 +18,8 @@ export interface KnownPlace {
   /** The era it was first seen in, and the era it was last seen empty in, if it is empty. */
   readonly founded: string;
   abandoned?: string;
+  /** The tongue most of its people spoke when it was first seen, by tradition code. */
+  tongue?: number;
   /** The place whose zone grew over it, which it has been part of since. */
   absorbedBy?: string;
   /** Its townsfolk now, the most it ever held, and everyone on its zone's cells. */
@@ -136,7 +138,7 @@ export function recordPlaces(
  */
 export function recordRemains(
   state: GenerationState,
-  sites: readonly { anchor: number; cells: readonly number[]; works: number }[],
+  sites: readonly { anchor: number; cells: readonly number[]; works: number; tongue: number }[],
   era: string
 ) {
   const memory = places(state),
@@ -146,6 +148,8 @@ export function recordRemains(
     const place = founded(memory, site.anchor, "an earlier age");
     place.cells = [...site.cells];
     place.works = site.works;
+    // Remains keep the tongue of whoever built them, where the ground still says.
+    if (site.tongue) place.tongue = site.tongue;
     emptied(place, era);
   }
 }

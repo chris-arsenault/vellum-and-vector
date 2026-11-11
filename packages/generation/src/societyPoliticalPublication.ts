@@ -23,9 +23,16 @@ function excludeOcean(shape: Geometry, ocean: Geometry) {
 /** Dissolve ownership cells; physical water boundaries remain authoritative. */
 export function territoryShape(state: GenerationState, members: Set<string>): Geometry | null {
   const work = state.society!;
+  return shapeOfSamples(state, (i) => members.has(work.region.communities[work.owner.get(i)]?.id));
+}
+/** The land of the map's samples that belong, dissolved into one shape with water cut out. */
+export function shapeOfSamples(
+  state: GenerationState,
+  belongs: (sample: number) => boolean
+): Geometry | null {
   const rows = new Map<string, Bounds[]>();
-  for (let i = 0; i < work.owner.length; i++) {
-    if (!members.has(work.region.communities[work.owner.get(i)]?.id)) continue;
+  for (let i = 0; i < state.surface.active.length; i++) {
+    if (!belongs(i)) continue;
     const bounds = ownershipBox(state, i);
     const key = `${bounds[1]}:${bounds[3]}`;
     const row = rows.get(key) ?? [];

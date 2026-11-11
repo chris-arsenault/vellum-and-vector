@@ -5,9 +5,11 @@ import { carryLayers } from "./humanCarry";
 import { buryLayers, reExposeLayers, wearLayers } from "./humanLoss";
 import {
   arriveInColumn,
+  fitColumn,
   overlayColumn,
   partColumn,
   reExposeColumn,
+  renameInColumn,
   type IdentityColumn,
   type IdentityLayer,
   type IdentityTraditions,
@@ -21,6 +23,11 @@ import {
 } from "./layerCatalogue";
 
 type Values = Pick<ReadBand, "get">;
+/** Per tradition, the code each cell's new layer names; a code of zero leaves it as held. */
+export type TraditionCodes = Partial<Record<keyof IdentityTraditions, Values>>;
+/** How hard an identity sets in open country, and in a place of full standing. */
+const softest = 0.2,
+  hardest = 0.9;
 
 /** What anyone may read of a map's human layers beyond the bands themselves. */
 export interface HumanLayerReads {
@@ -110,15 +117,64 @@ class HumanLayers {
       result.add(cell, changed);
     }
   }
-  /** A new identity layer is laid over each cell's column, taken up by `people` of those there. */
-  overlay(traditions: IdentityTraditions, people: Values, hardness: number) {
+  /**
+   * A new identity layer is laid over each cell's column, taken up by `people` of those
+   * there. It names a tradition where the cell's code for it is above zero; the others stay
+   * as each person held them.
+   */
+  overlay(traditions: TraditionCodes, people: Values, hardness: number) {
     for (let cell = 0; cell < this.layers.count; cell++) {
       const taking = positive(people.get(cell));
       if (!taking) continue;
+      const changes: Partial<IdentityTraditions> = {};
+      for (const [tradition, codes] of Object.entries(traditions) as [
+        keyof IdentityTraditions,
+        Values,
+      ][])
+        if (codes.get(cell) > 0) changes[tradition] = codes.get(cell);
       const column = this.layers.column(cell);
       let held = 0;
       for (const layer of column) held += layer.people;
-      overlayColumn(column, traditions, taking, unit(hardness), this.layers.people(cell) - held);
+      overlayColumn(column, changes, taking, unit(hardness), this.layers.people(cell) - held);
+      this.layers.writeColumn(cell, column);
+    }
+  }
+  /** A tradition is renamed, on the cells given, for everyone who holds it there. */
+  rename(tradition: keyof IdentityTraditions, from: number, to: Values) {
+    for (let cell = 0; cell < this.layers.count; cell++) {
+      const next = to.get(cell);
+      if (next === from || !(next >= 0)) continue;
+      const column = this.layers.column(cell);
+      if (column.some((layer) => layer[tradition] === from))
+        this.layers.writeColumn(cell, renameInColumn(column, tradition, from, next));
+    }
+  }
+  /** People born into a cell hold what those already there hold, each layer in its share. */
+  inherit() {
+    for (let cell = 0; cell < this.layers.count; cell++) {
+      const column = this.layers.column(cell);
+      if (!column.length) continue;
+      let held = 0;
+      for (const layer of column) held += layer.people;
+      if (held < this.layers.people(cell))
+        this.layers.writeColumn(cell, fitColumn(column, this.layers.people(cell)));
+    }
+  }
+  /**
+   * Identities age and set: every layer grows older by the years, and hardens toward what
+   * its cell's standing can hold it at, the sooner the longer it has been held.
+   */
+  harden(years: number, settling: number) {
+    const elapsed = positive(years),
+      set = 1 - Math.exp(-elapsed / Math.max(1, settling));
+    for (let cell = 0; cell < this.layers.count; cell++) {
+      const column = this.layers.column(cell);
+      if (!column.length) continue;
+      const most = softest + (hardest - softest) * this.layers.standing(cell);
+      for (const layer of column) {
+        layer.age += elapsed;
+        if (layer.hardness < most) layer.hardness += (most - layer.hardness) * set;
+      }
       this.layers.writeColumn(cell, column);
     }
   }

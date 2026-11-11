@@ -8,6 +8,7 @@ import { compileLayerMix, fullStandingPerBuiltKm2, wayMemoryYears } from "./laye
 import {
   buryHumanLayers,
   dwellOnLand,
+  hardenIdentity,
   convertHumanLayer,
   layHumanLayer,
   moveHumanLayer,
@@ -21,7 +22,7 @@ const field = () => createTestField(createWorldMesh([0, 0, 1000, 1000], 16, 0));
 /** Per-cell values: the listed cells hold what is given and every other cell holds nothing. */
 const at = (values: Record<number, number>) => ({ get: (cell: number) => values[cell] ?? 0 });
 const everywhere = (value: number) => ({ get: () => value });
-const tongue = (code: number) => ({ tongue: code, faith: 0, custom: 0, allegiance: 0 });
+const tongue = (code: number) => ({ tongue: everywhere(code) });
 const tongues = (map: ReturnType<typeof field>, cell: number) =>
   humanLayersOf(map)
     .column(cell)
@@ -79,6 +80,28 @@ it("keeps the years people have lived on the ground and forgets ways nobody walk
   expect(map.Tenure.get(0)).toBeCloseTo(10 * km2 * wayMemoryYears);
   expect(map.Tenure.get(1)).toBe(0);
   expect(map.WalkedRoute.get(3)).toBeCloseTo(300 / Math.E);
+});
+it("ages identities and sets them harder where a place has standing", () => {
+  const map = field();
+  runOperation(map, layHumanLayer, { map, kind: "population", amount: at({ 0: 100, 1: 100 }) });
+  runOperation(map, layHumanLayer, { map, kind: "builtUp", amount: at({ 0: 0.2 }) });
+  runOperation(map, layHumanLayer, {
+    map,
+    kind: "standing",
+    amount: at({ 0: 0.2 * fullStandingPerBuiltKm2 }),
+  });
+  runOperation(map, overlayIdentity, {
+    map,
+    traditions: tongue(1),
+    people: everywhere(100),
+    hardness: 0,
+  });
+  runOperation(map, hardenIdentity, { map, years: 10_000, settling: 300 });
+  const [town] = humanLayersOf(map).column(0),
+    [country] = humanLayersOf(map).column(1);
+  expect(town.age).toBe(10_000);
+  expect(town.hardness).toBeCloseTo(0.9);
+  expect(country.hardness).toBeCloseTo(0.2);
 });
 it("thins identities with the people lost, whether or not everyone held one", () => {
   const map = field();

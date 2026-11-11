@@ -43,6 +43,19 @@ export function withWork<T>(
 export const at = (values: Record<number, number>) => ({
   get: (cell: number) => values[cell] ?? 0,
 });
+/** The cell of the map itself that lies farthest from a cell. */
+export function farthestFrom(map: TestLand, cell: number) {
+  let far = cell,
+    most = 0;
+  for (let other = 0; other < map.mesh.count; other++) {
+    const apart = Math.hypot(
+      map.mesh.x(other) - map.mesh.x(cell),
+      map.mesh.y(other) - map.mesh.y(cell)
+    );
+    if (map.mesh.membership(other) === 1 && apart > most) [far, most] = [other, apart];
+  }
+  return far;
+}
 export function neighbourOf(map: TestLand, cell: number) {
   for (let edge = 0; edge < map.mesh.degree(cell); edge++)
     if (map.mesh.neighbor(cell, edge) >= 0) return map.mesh.neighbor(cell, edge);

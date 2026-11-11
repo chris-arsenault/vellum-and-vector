@@ -90,8 +90,8 @@ it("records old remains on ground no known place stands on as a ruin, and no oth
   recordRemains(
     state,
     [
-      { anchor: 5, cells: [5], works: 1 },
-      { anchor: 30, cells: [30, 31], works: 2 },
+      { anchor: 5, cells: [5], works: 1, tongue: 0 },
+      { anchor: 30, cells: [30, 31], works: 2, tongue: 7 },
     ],
     "first"
   );

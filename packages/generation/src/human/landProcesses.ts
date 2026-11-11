@@ -3,14 +3,11 @@ import type { GenerationState, MapProcess, MapProcessContext } from "../process"
 import { runOperation } from "../processOperation";
 import { mapCommand, mapElapsed } from "../processTraits";
 import { nativeContext } from "../world/context";
-import { ask } from "../coupling/answers";
 import { generationBindings } from "../generationBindings";
-import { denseZones, ruinSites } from "./placeClassifier";
-import { recordCountry } from "./placeCountry";
-import { recordPlaces, recordRemains } from "./placeRegistry";
+import { recordEraPlaces } from "./eraPlaces";
 import { meetLand, watchLand } from "./landHistory";
 import { advanceHumanLand } from "./landPass";
-import { loosePass, passesFor, peoplePerBuiltKm2, settledPass } from "./passFacts";
+import { loosePass, passesFor, settledPass } from "./passFacts";
 
 /**
  * People's passes in a map's sequence. Inside every geological epoch the land is looked at
@@ -99,24 +96,15 @@ export const humanPlaces: MapProcess = {
     (state: GenerationState, context: MapProcessContext) => {
       const map = landOf(state),
         parameters = generationBindings(context).parameters,
-        least = Number(parameters.townThreshold),
-        era = context.epochs.at(-1),
-        physical = nativeContext(state, context, 0);
-      // A place already known lasts while half a town's people remain.
-      recordPlaces(
-        state,
-        denseZones(map, ask(map, "support", physical), least / 2),
-        era?.id ?? "present",
-        least
-      );
-      // Remains as large as a town's buildings, where no known place stands, are ruins too.
-      recordRemains(state, ruinSites(map, least / peoplePerBuiltKm2), era?.id ?? "present");
-      recordCountry(state, {
+        era = context.epochs.at(-1);
+      recordEraPlaces(state, {
         map,
-        friction: ask(map, "travelFriction", physical),
+        context: nativeContext(state, context, 0),
+        era: era?.id ?? "present",
+        years: era?.duration ?? 0,
+        least: Number(parameters.townThreshold),
         range: map.scale.length(Number(parameters.cityReach)),
         roadTravellers: Number(parameters.roadTraffic),
-        years: era?.duration ?? 0,
       });
     },
     []

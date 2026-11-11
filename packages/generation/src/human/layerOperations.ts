@@ -2,7 +2,7 @@ import type { HumanLayerId, ReadBand } from "@atlas/domain";
 import { defineCommand } from "../processOperation";
 import type { PhysicalField } from "../world/field";
 import type { TransportPlan } from "../world/transportPlan";
-import { humanLayerWriter } from "./humanLayers";
+import { humanLayerWriter, type TraditionCodes } from "./humanLayers";
 import type { IdentityTraditions } from "./identityColumn";
 import type { CompiledLayerMix } from "./layerCatalogue";
 
@@ -37,7 +37,8 @@ export interface ConvertLayer extends OnMap {
   amount: Values;
 }
 export interface OverlayIdentity extends OnMap {
-  traditions: IdentityTraditions;
+  /** Per tradition the layer names: each cell's code for it, zero where it names none. */
+  traditions: TraditionCodes;
   /** Per cell: the people who take the new layer up. */
   people: Values;
   /** How far the new layer resists being overlaid in turn, 0 to 1. */
@@ -86,6 +87,37 @@ export const overlayIdentity = defineCommand(
   "work",
   ({ map, traditions, people, hardness }: OverlayIdentity) =>
     humanLayerWriter(map).overlay(traditions, people, hardness),
+  []
+);
+export interface RenameTradition extends OnMap {
+  tradition: keyof IdentityTraditions;
+  /** The code renamed. */
+  from: number;
+  /** Per cell: the code it becomes there; the same code, or below zero, leaves it alone. */
+  to: Values;
+}
+export const renameTradition = defineCommand(
+  "human.identity.rename",
+  "event",
+  ({ map, tradition, from, to }: RenameTradition) =>
+    humanLayerWriter(map).rename(tradition, from, to),
+  []
+);
+export const inheritIdentity = defineCommand(
+  "human.identity.inherit",
+  "work",
+  ({ map }: OnMap) => humanLayerWriter(map).inherit(),
+  []
+);
+export interface HardenIdentity extends OnMap {
+  years: number;
+  /** The years over which an identity sets as hard as its place can hold it. */
+  settling: number;
+}
+export const hardenIdentity = defineCommand(
+  "human.identity.harden",
+  "elapsed",
+  ({ map, years, settling }: HardenIdentity) => humanLayerWriter(map).harden(years, settling),
   []
 );
 export const reExposeIdentity = defineCommand(

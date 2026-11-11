@@ -13,6 +13,7 @@ import { refreshSocietyEnvironment } from "./societyEnvironment";
 import { societyEvolution } from "./societyEvolution";
 import { humanRoundProcess, presentHumanEras, resolvedHumanEras } from "./societyRound";
 import { humanLandEra, humanLandProcesses, humanPlaces } from "./human/landProcesses";
+import { humanIdentityEra, humanIdentityProcesses, humanRealmEra } from "./human/identityProcesses";
 
 function validatePopulation(state: GenerationState): Diagnostic[] {
   const communities = state.society?.region.communities ?? [];
@@ -108,6 +109,7 @@ export const populationProcesses = [
   societyEvolution,
   humanRoundProcess,
   ...humanLandProcesses,
+  ...humanIdentityProcesses,
 ];
 export const societyPresent: MapProcess = {
   contract: {
@@ -146,8 +148,6 @@ export function societySequence(input: AtlasGenerationInput): ProcessSequence {
   const political = input.resolvedFeatures!.selection["human.politics"]?.enabled;
   return [
     invoke(populationInitialize),
-    ...(cultural ? [invoke(cultureInitialize)] : []),
-    ...(political ? [invoke(politicsInitialize)] : []),
     ...(eras.length
       ? [
           {
@@ -165,8 +165,14 @@ export function societySequence(input: AtlasGenerationInput): ProcessSequence {
                 lastEra: i === eras.length - 1 ? 1 : 0,
               },
             })),
-            // People live the era on the land, and the places it leaves are recorded by name.
-            body: [invoke(humanLandEra), invoke(humanPlaces)],
+            // People live the era on the land and take up one another's ways; the places the
+            // era leaves are recorded by name; realms are founded at them and spread.
+            body: [
+              invoke(humanLandEra),
+              ...(cultural ? [invoke(humanIdentityEra)] : []),
+              invoke(humanPlaces),
+              ...(political ? [invoke(humanRealmEra)] : []),
+            ],
           },
         ]
       : []),

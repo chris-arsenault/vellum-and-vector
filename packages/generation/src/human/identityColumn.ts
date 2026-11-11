@@ -18,6 +18,7 @@ export type IdentityTraditions = Pick<IdentityLayer, "tongue" | "faith" | "custo
 /** A cell's column, newest layer first. Older layers lie under newer ones. */
 export type IdentityColumn = IdentityLayer[];
 
+const nothing: IdentityTraditions = { tongue: 0, faith: 0, custom: 0, allegiance: 0 };
 /** Fewer people than this hold nothing worth a layer. */
 const trace = 1e-6;
 const sameTraditions = (a: IdentityTraditions, b: IdentityTraditions) =>
@@ -37,15 +38,48 @@ function join(into: IdentityLayer, from: IdentityLayer) {
 export function settleColumn(column: IdentityColumn) {
   for (let n = column.length - 1; n >= 0; n--) if (column[n].people <= trace) column.splice(n, 1);
   while (column.length > identitySlots) {
-    // The thinnest layer is lost into the one beneath it, or above it at the bottom.
+    // The thinnest layer is lost into the layer most like it: the one sharing the most
+    // traditions, and of those the nearest, so a few people keep as much as they can.
     let thinnest = 0;
     for (let n = 1; n < column.length; n++)
       if (column[n].people < column[thinnest].people) thinnest = n;
-    const [lost] = column.splice(thinnest, 1),
-      heir = column[Math.min(thinnest, column.length - 1)];
-    join(heir, { ...lost, hardness: heir.hardness, age: heir.age });
+    const [lost] = column.splice(thinnest, 1);
+    let heir = 0;
+    for (let n = 1; n < column.length; n++) {
+      const more = alike(column[n], lost) - alike(column[heir], lost);
+      if (more > 0 || (more === 0 && Math.abs(n - thinnest) < Math.abs(heir - thinnest))) heir = n;
+    }
+    join(column[heir], { ...lost, hardness: column[heir].hardness, age: column[heir].age });
   }
   return column;
+}
+/** How many traditions two layers share. */
+const alike = (a: IdentityTraditions, b: IdentityTraditions) =>
+  Number(a.tongue === b.tongue) +
+  Number(a.faith === b.faith) +
+  Number(a.custom === b.custom) +
+  Number(a.allegiance === b.allegiance);
+/**
+ * A tradition is renamed for those who hold it: every layer naming `from` names `to`
+ * instead, whoever its people are and however set. Nobody is asked; a people cut off simply
+ * speaks what its tongue has become, and a dissolved allegiance is what it broke from.
+ */
+export function renameInColumn(
+  column: IdentityColumn,
+  field: keyof IdentityTraditions,
+  from: number,
+  to: number
+) {
+  const renamed = column
+    .splice(0)
+    .map((layer) => (layer[field] === from ? { ...layer, [field]: to } : layer));
+  // Renamed layers may now name what another layer names; they join it where it lies.
+  for (const layer of renamed) {
+    const held = column.find((other) => sameTraditions(other, layer));
+    if (held) join(held, layer);
+    else column.push(layer);
+  }
+  return settleColumn(column);
 }
 /**
  * People arriving with what they already hold: they join the layer that names the same
@@ -63,27 +97,47 @@ export function arriveInColumn(column: IdentityColumn, arriving: readonly Identi
   return settleColumn(column);
 }
 /**
- * A new layer laid over the column: `people` of those already here take it up, the least
- * hardened giving most, and it becomes the newest layer. `unheld` are the people here who
+ * A new layer laid over the column: it reaches `people` of those here who do not already
+ * hold what it names, and those of them not hardened against it take it up, keeping their
+ * other traditions; what they now hold becomes the newest layers. `unheld` are the people here who
  * hold no layer yet; they take it up as readily as an unhardened layer. Returns how many
  * took it up.
  */
 export function overlayColumn(
   column: IdentityColumn,
-  traditions: IdentityTraditions,
+  changes: Partial<IdentityTraditions>,
   people: number,
   hardness = 0,
   unheld = 0
 ) {
-  let open = Math.max(0, unheld);
-  for (const layer of column)
-    if (!sameTraditions(layer, traditions)) open += layer.people * (1 - layer.hardness);
-  const taken = Math.min(Math.max(0, people), open);
+  // Whoever takes the new layer up keeps the traditions it does not name.
+  const changed = (layer: IdentityTraditions): IdentityTraditions => ({
+      tongue: changes.tongue ?? layer.tongue,
+      faith: changes.faith ?? layer.faith,
+      custom: changes.custom ?? layer.custom,
+      allegiance: changes.allegiance ?? layer.allegiance,
+    }),
+    giving = column.filter((layer) => !sameTraditions(layer, changed(layer))),
+    without = Math.max(0, unheld);
+  let open = without,
+    asked = without;
+  for (const layer of giving) {
+    open += layer.people * (1 - layer.hardness);
+    asked += layer.people;
+  }
+  // The call reaches `people` of those who could take it up; the hardened among them refuse.
+  const taken = asked > 0 ? (Math.min(Math.max(0, people), asked) * open) / asked : 0;
   if (taken <= trace) return 0;
-  for (const layer of column)
-    if (!sameTraditions(layer, traditions))
-      layer.people -= (taken * layer.people * (1 - layer.hardness)) / open;
-  arriveInColumn(column, [{ ...traditions, people: taken, hardness, age: 0 }]);
+  const arriving: IdentityLayer[] = [
+    { ...changed(nothing), people: (taken * without) / open, hardness, age: 0 },
+  ];
+  for (const layer of giving) {
+    const moved = (taken * layer.people * (1 - layer.hardness)) / open;
+    layer.people -= moved;
+    // What they keep of who they were is as old and as set as it was.
+    arriving.push({ ...changed(layer), people: moved, hardness: layer.hardness, age: layer.age });
+  }
+  arriveInColumn(column, arriving);
   return taken;
 }
 /** A share of every layer leaves the column, and is returned as layers of its own. */

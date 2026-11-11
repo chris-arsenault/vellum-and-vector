@@ -504,6 +504,48 @@ follow territory borders; a conquered or resettled place shows the older layer
 beneath; a hardened place keeps its identity under pressure that changes its
 neighbours. Removing overlay leaves one layer everywhere.
 
+Mechanisms decided while building (agent decisions):
+
+- The column holds a code per tradition; a run-memory registry says what each
+  code is (a tongue, a faith, a custom or an allegiance), the entity the world
+  knows it by, its parent and where it began. The column is the only record of
+  who holds what.
+- An overlay names only the traditions it changes: whoever takes it up keeps
+  their others, so a faith spreads without replacing a tongue. It reaches a
+  number of people and the hardened among them refuse.
+- Founding peoples begin at the most peopled places that stand apart; every
+  inhabited cell takes the ways of the origin that reaches it most cheaply.
+  Each era the born hold what their parents hold; each cell takes up the
+  tongue, faith and custom of its strongest differing neighbour in proportion
+  to their numbers and the going between them; holders cut off from the heart
+  of a tongue or custom by more travel than it survives begin a daughter; and
+  identities age and set, hardest where a place has standing.
+- A realm is an allegiance with a seat at a known place. The first realms take
+  the greatest towns that stand apart; afterwards a few free towns beyond every
+  reach may found their own each era. A realm's hold is the travel from its
+  seat, cheaper for a stronger seat. A realm keeps a cell it already leads
+  unless another reaches it at well under the cost. People within a hold take
+  the allegiance up as an overlay, so what they held before lies beneath.
+- Regions and territories are read afterwards: each tongue, faith and custom
+  publishes as the share of every cell's people who hold it; a realm's
+  territory is the land where most hold its allegiance and its claim every
+  cell where anyone still does. A place is named in the tongue most of its
+  people spoke when it was first seen, and keeps the name.
+- From the M4 review: contact mixes from every differing neighbour at once; a
+  daughter renames exactly those who held the parent in each separate cut-off
+  country; a full column loses its thinnest layer into the layer most like it;
+  a realm with no seat left ends, and its people hold the realm it joined or
+  broke from; whoever takes up a new allegiance keeps how set their culture
+  was; control is the land where an allegiance is firmly held, sovereignty
+  where it is the most held.
+- Not done in M4 and homed in M5: origin markers, institutions, frontier and
+  administration records, kept lines, and a realm's described character. A
+  child map still publishes its parent's regions the old way until M7.
+- The exit's "removing overlay leaves one layer everywhere" was not literally
+  right: with contact and realms removed, cells holding more than one layer
+  fell from 4,741 to 2,998 on the draft world. The rest comes from people who
+  move carrying what they hold, and from daughter traditions.
+
 ### M5 — Carry over the remaining behaviour and delete the old structure
 
 Work through the dependents checklist below: practices and seeking, works,

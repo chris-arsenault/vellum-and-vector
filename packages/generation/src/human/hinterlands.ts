@@ -36,11 +36,39 @@ export interface Country {
 const km2 = (map: PhysicalField, cell: number) =>
   MapScale.areaUnits(map.mesh.area(cell), "m2", "km2");
 
+/**
+ * Per cell, the centre that reaches it most cheaply within the reach, or -1. A centre of
+ * greater strength travels the same ground more cheaply, so it reaches farther.
+ */
+export function reachedBy(
+  map: PhysicalField,
+  centres: readonly number[],
+  step: (from: number, to: number) => number,
+  reach: number,
+  strength?: readonly number[]
+) {
+  const found = spread(map, centres, step, reach, strength);
+  map.coverage.release(found.cost);
+  return found.owner;
+}
+/** Per cell, what it costs to travel there from one centre; Infinity beyond the reach. */
+export function travelFrom(
+  map: PhysicalField,
+  centre: number,
+  step: (from: number, to: number) => number,
+  reach: number
+) {
+  const found = spread(map, [centre], step, reach),
+    costs = Float64Array.from({ length: map.mesh.count }, (_, cell) => found.cost.get(cell));
+  map.coverage.release(found.cost);
+  return costs;
+}
 function spread(
   map: PhysicalField,
   centres: readonly number[],
   step: (from: number, to: number) => number,
-  reach: number
+  reach: number,
+  strength?: readonly number[]
 ) {
   const count = map.mesh.count,
     owner = new Int32Array(count).fill(-1),
@@ -59,7 +87,7 @@ function spread(
       owner[target] = owner[source];
       from[target] = source;
     },
-    (source, target) => step(source, target)
+    (source, target) => step(source, target) / (strength?.[owner[source]] ?? 1)
   );
   return { owner, from, cost };
 }

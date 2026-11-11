@@ -18,7 +18,9 @@ import {
   type PhysicalContext,
 } from "../../../packages/generation/src/world/context";
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
+import type { GenerationState } from "../../../packages/generation/src/process";
 import { harnessRoot } from "./harnessWorkspace";
+import { identityReport, liveEraIdentity, type HarnessEra } from "./peopleIdentity";
 import { drawCells, drawShade } from "./reliefSystems";
 import { openResumeLand, readResumeSource } from "./resumePoint";
 
@@ -28,8 +30,10 @@ import { openResumeLand, readResumeSource } from "./resumePoint";
  * The land is a resume point (`HARNESS_RESUME_POINTS`), opened as it stood after the named
  * epoch with whatever people its epochs left on it. The eras are the app's default eras, or
  * `HARNESS_PEOPLE_YEARS=300,500` for others. `HARNESS_PEOPLE_OFF=gather` (or `feed`,
- * `harden`, comma-separated) runs the same eras with that operation removed, which is how a
- * mechanism is shown to make what it claims. Writes pictures of each layer and a summary
+ * `harden`, `identity`, `overlay`, `realms`, comma-separated) runs the same eras with that
+ * operation removed, which is how a mechanism is shown to make what it claims. After each
+ * era's passes it runs identity, records the era's places and runs realms, as the generation
+ * sequence does. Writes pictures of each layer and of each tradition's leading code, and a summary
  * under `.artifacts/harness/people/<name>`; `HARNESS_OUT` names the run.
  */
 const label = process.env.HARNESS_RESUME ?? "short",
@@ -55,10 +59,15 @@ function facts(years: number, mobility: number): PassFacts {
     builds: !removed.has("harden"),
   };
 }
-function eras() {
+function eras(): HarnessEra[] {
   const years = process.env.HARNESS_PEOPLE_YEARS?.split(",").map(Number);
   return years
-    ? years.map((span) => ({ years: span, mobility: 1 }))
+    ? years.map((span, index) => ({
+        id: `era ${index + 1}`,
+        years: span,
+        mobility: 1,
+        politicalCapacity: 1,
+      }))
     : defaultHumanEras().filter((era) => era.physicalEpoch === null);
 }
 /** One layer, white where there is none and darker the more there is, on a square-root scale. */
@@ -162,6 +171,11 @@ it("lives the settled eras on a saved land", () => {
       removed: [...removed],
       before: summary(map, context),
     };
+  // The identity column, the places and the realms need a run to remember them in.
+  const state = {
+    domain: structuredClone(readResumeSource(label).snapshot),
+    physical: { map },
+  } as unknown as GenerationState;
   for (const [index, era] of eras().entries()) {
     const passes = passesFor(era.years);
     for (let pass = 0; pass < passes; pass++)
@@ -170,8 +184,10 @@ it("lives the settled eras on a saved land", () => {
         context,
         facts: facts(era.years / passes, era.mobility),
       });
+    liveEraIdentity(state, map, context, era, removed);
     report[`era-${index + 1}`] = summary(map, context);
   }
+  report.identity = identityReport(state, map, out);
   report.seconds = (performance.now() - started) / 1000;
   report.scaleTop = {
     population: draw(map, "population", map[humanLayers.population]),

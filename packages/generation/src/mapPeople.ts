@@ -20,11 +20,18 @@ import { generationBindings } from "./generationBindings";
 import { presentHumanEras, resolvedHumanEras } from "./societyRound";
 import type { GenerationSettings } from "./generationSettings";
 
+/**
+ * A map that lived its own people on its land: its regions and territories are read from the
+ * identity column. A refined map still reads what its parent left until regions run the
+ * same operations.
+ */
+const livedOnLand = (state: GenerationState) => Boolean(state.physical) && !("regional" in state);
 /** The present eras with bindings resolved to existing epoch ids. */
 const presentEras = (settings: GenerationSettings) =>
   presentHumanEras({ ...settings, humanEras: resolvedHumanEras(settings) });
 import { initializeCultures, diffuseCultures } from "./societyCulture";
 import { publishCultures } from "./societyCulturePublication";
+import { publishIdentities, publishRealms } from "./identityRegions";
 import { atlasName, geographicNamingCulture } from "./atlasNaming";
 import { bindSocietyProfile } from "./societyProfile";
 import { mapScale } from "./worldSignificance";
@@ -127,7 +134,15 @@ export const culturalProcess: MapProcess = {
     produces: ["cultures"],
     invalidates: [],
   },
-  operation: publishCultures,
+  operation: mapCommand(
+    "human.cultures",
+    "publish",
+    (state, context) =>
+      livedOnLand(state)
+        ? publishIdentities(state)
+        : executeMapOperation(publishCultures, state, context),
+    []
+  ),
   validate: () => [],
 };
 export const culturalDevelopmentProcess: MapProcess = {
@@ -136,7 +151,7 @@ export const culturalDevelopmentProcess: MapProcess = {
     "human.culture-development",
     "event",
     (state, context) => {
-      if (state.society?.inherited) return;
+      if (state.society?.inherited || livedOnLand(state)) return;
       const standalone = !state.society;
       executeMapOperation(initializeCultures, state, context);
       bindSocietyProfile(state, context);
@@ -183,7 +198,8 @@ export const politicalProcess: MapProcess = {
     "human.politics",
     "publish",
     (state) => {
-      if (state.society?.region.politics) publishPolitics(state);
+      if (livedOnLand(state)) publishRealms(state);
+      else if (state.society?.region.politics) publishPolitics(state);
     },
     []
   ),
@@ -195,7 +211,7 @@ export const politicalDevelopmentProcess: MapProcess = {
     "human.politics-development",
     "event",
     (state, context) => {
-      if (state.society?.inherited) return;
+      if (state.society?.inherited || livedOnLand(state)) return;
       const standalone = !state.society?.region.politics;
       executeMapOperation(initializePolitics, state, context);
       bindSocietyProfile(state, context);

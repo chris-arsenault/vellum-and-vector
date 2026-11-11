@@ -121,7 +121,7 @@ it("carries people, their land and their identities with the crust they stand on
   ] as const)
     runOperation(map, overlayIdentity, {
       map,
-      traditions: { tongue, faith: 0, custom: 0, allegiance: 0 },
+      traditions: { tongue: { get: () => tongue } },
       people,
       hardness: 0.5,
     });
