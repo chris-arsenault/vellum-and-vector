@@ -50,6 +50,28 @@ it.each([
   expect(ids.includes("human-eras")).toBe(domains.includes("cultural"));
 });
 
+it("offers the settings of cultures, realms and built places while a human era reads them", () => {
+  const state = world();
+  state.domain.world.humanEras = [
+    { id: "Settlement", years: 100, physicalEpoch: null, mobility: 1, politicalCapacity: 1 },
+  ];
+  const view = projectGenerationSetup(
+      prepareAtlasGeneration(state.domain, {
+        areaId: "area",
+        seed: 73,
+        quality: "draft",
+        domains: ["physical", "magic", "cultural", "political", "built"],
+      })
+    ),
+    active = (id: string) =>
+      feature(view, id)
+        .settings.filter((item) => item.active)
+        .map((item) => item.key);
+  expect(active("human.cultures")).toEqual(["cultureCount", "culturalMobility"]);
+  expect(active("human.politics")).toEqual(["polityCount", "politicalReach"]);
+  expect(active("built.layout")).toEqual(["townThreshold", "cityReach", "roadTraffic", "highways"]);
+});
+
 it("keeps disabled choices and owned values visible without classifying them as unavailable", () => {
   const resolved = prepared({
     "physical.glacial-sculpting": { enabled: false, settings: { glaciers: 2.7 } },

@@ -142,6 +142,13 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
     cartography: domainCartography["human.cultures"],
     ...culturalConfiguration,
     label: "Cultural distributions",
+    // People's identities are lived in each human era, which reads these.
+    applicability: {
+      settingConsumers: {
+        cultureCount: ["human.identity-era"],
+        culturalMobility: ["human.identity-era"],
+      },
+    },
     domains: ["cultural"],
     defaultEnabled: true,
     settings: {
@@ -158,6 +165,13 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
     id: "human.politics",
     cartography: domainCartography["human.politics"],
     label: "Political territories",
+    // Realms are founded and spread in each human era, which reads these.
+    applicability: {
+      settingConsumers: {
+        polityCount: ["human.realm-era"],
+        politicalReach: ["human.realm-era"],
+      },
+    },
     domains: ["political"],
     defaultEnabled: true,
     settings: {
@@ -178,6 +192,13 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
         settlements: ["world", "region", "local"],
         roads: ["world", "region", "local"],
         structures: ["site", "interior"],
+      },
+      // Places are read at the end of each human era; highways when the ways are published.
+      settingConsumers: {
+        townThreshold: ["human.places"],
+        cityReach: ["human.places"],
+        roadTraffic: ["human.places"],
+        highways: [builtProcess.contract.id],
       },
     },
     domains: ["built"],
