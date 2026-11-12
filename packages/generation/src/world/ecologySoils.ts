@@ -2,6 +2,7 @@ import type { PhysicalField } from "./field";
 import { MapScale } from "@atlas/domain";
 import { environment, approach, unit, type EcologyForcing } from "./ecologyEnvironment";
 import { livingPlantCarbon, plantGroups } from "./ecologyGroups";
+import { soilWaterCapacity } from "../water/soilWater";
 import { recycleOrganicMaterial } from "../rock/organicMaterial";
 
 export const erosionHistory = (map: PhysicalField, i: number) =>
@@ -113,7 +114,7 @@ export function evolveSoils(
         i,
         approach(map.MineralNutrients.get(i), fertility, years, 300 / replenishment)
       );
-    soilWater(map, i, years, f);
+    soilTaking(map, i, f);
     meltRelease(map, i);
     map.EcologyErosion.set(i, erosionHistory(map, i));
     map.EcologyIce.set(i, map.IceThickness.get(i));
@@ -131,17 +132,14 @@ function meltRelease(map: PhysicalField, i: number) {
   }
   map.EcologyStillness.set(i, map.Stillness.get(i));
 }
-function soilWater(map: PhysicalField, i: number, years: number, f: EcologyForcing) {
+/** How readily the ground takes water in, and what its plants draw from the soil's water. */
+function soilTaking(map: PhysicalField, i: number, f: EcologyForcing) {
   const e = environment(map, i, f);
   const roots = unit(
     map.TreeCover.get(i) + map.GrassCover.get(i) * 0.3 + map.WetlandCover.get(i) * 0.4
   );
-  const capacity = map.SoilDepth.get(i) * (0.12 + unit(map.SoilCarbon.get(i) / 30) * 0.15);
+  const capacity = soilWaterCapacity(map, i);
   const rain = MapScale.metres(map.Rainfall.get(i), "mm");
-  const supply =
-    rain * (1 - f.seasonality * 0.6) +
-    e.wetness * map.scale.length(7.5e-8) +
-    MapScale.metres(map.GlacialMeltwater.get(i), "mm") / 3;
   // A salt crust sheds the rain it would have taken in.
   map.Infiltration.set(
     i,
@@ -150,19 +148,8 @@ function soilWater(map: PhysicalField, i: number, years: number, f: EcologyForci
         (1 - 0.6 * f.salting)
     )
   );
+  // What the soil holds is the water budget's to say; what grows here draws on it.
   const demand = Math.max(0, e.summer + 5) * map.scale.length(3e-9) * (0.2 + roots);
-  map.SoilWater.set(
-    i,
-    approach(
-      map.SoilWater.get(i),
-      Math.min(
-        capacity,
-        Math.max(0, supply * map.Infiltration.get(i) + map.GroundwaterReturn.get(i) - demand * 0.3)
-      ),
-      years,
-      1
-    )
-  );
   map.Evapotranspiration.set(
     i,
     Math.min(

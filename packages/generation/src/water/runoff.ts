@@ -1,11 +1,12 @@
 import { MapScale, waterYearFields, type Band } from "@atlas/domain";
 import { moveWater } from "./waterLedger";
+import { holdSoilWater, soilWaterCapacity } from "./soilWater";
+import { ask } from "../coupling/answers";
 import { groundOf } from "../rock/ground";
 import { surfacePorosity } from "../rock/groundQueries";
 import type { PhysicalContext } from "../world/context";
-import { potentialEvaporation } from "../world/ecologyEnvironment";
 import type { PhysicalField } from "../world/field";
-import { monthlyWarmth, months, waterYear, type WaterYear } from "./waterBalance";
+import { airDemand, monthlyWarmth, months, waterYear, type WaterYear } from "./waterBalance";
 
 /**
  * Every land cell's water for the year, from one budget (see `waterBalance`). The year's rain
@@ -32,9 +33,6 @@ function sinkingShare(map: PhysicalField, i: number) {
       : 0;
   return 1 - (1 - Math.max(0, Math.min(1, taken))) * (1 - held);
 }
-/** The water the soil holds when full, as the soil model holds it. */
-const soilCapacity = (map: PhysicalField, i: number) =>
-  millimetres(map.SoilDepth.get(i) * (0.12 + Math.min(1, map.SoilCarbon.get(i) / 30) * 0.15));
 /** The share of bare ground: rain on plant cover soaks in where rain on bare ground runs. */
 const bare = (map: PhysicalField, i: number) =>
   1 - Math.min(1, map.TreeCover.get(i) + map.GrassCover.get(i) + map.WetlandCover.get(i));
@@ -57,9 +55,7 @@ function climateYear(map: PhysicalField, c: PhysicalContext, i: number) {
     const thawed = warmth[at] > 0;
     year.rain[at] = thawed ? falling : 0;
     year.snow[at] = thawed ? 0 : falling;
-    year.demand[at] = thawed
-      ? millimetres(potentialEvaporation(warmth[at], map.scale)) / months
-      : 0;
+    year.demand[at] = airDemand(warmth[at]);
     year.melt[at] = c.Profile.SnowMeltPerDegree * Math.max(0, warmth[at]);
   }
   return year;
@@ -101,17 +97,20 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
   for (const move of landMoves) moveWater(map, move, moved[move]);
 }
 function landWater(map: PhysicalField, c: PhysicalContext, each: Band[], moved: LandMoves) {
+  // What else wets a soil, and what keeps one wet, is said by whoever does it.
+  const wetting = ask(map, "soilWetting", c),
+    held = ask(map, "soilWaterHeld", c),
+    yields = [map.Runoff, map.FloodRunoff, map.DryRunoff, map.WaterRecharge, map.SoilWater];
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) === 1) {
-      for (const band of [map.Runoff, map.FloodRunoff, map.DryRunoff, map.WaterRecharge, ...each])
-        band.set(i, 0);
+      for (const band of [...yields, ...each]) band.set(i, 0);
       continue;
     }
     const sinking = sinkingShare(map, i),
       fell = climateYear(map, c, i),
       water = waterYear({
         ...fell,
-        soilCapacity: soilCapacity(map, i),
+        soilCapacity: millimetres(soilWaterCapacity(map, i)),
         sinking,
         stormShare: c.Profile.StormRunoffShare * (1 - sinking) * bare(map, i),
       });
@@ -129,6 +128,7 @@ function landWater(map: PhysicalField, c: PhysicalContext, each: Band[], moved: 
     map.FloodRunoff.set(i, greatest * months);
     map.DryRunoff.set(i, least * months);
     map.WaterRecharge.set(i, water.recharge);
+    holdSoilWater(map, i, water.soil, wetting.get(i), held.get(i));
     noteYear(moved, fell, water, map.mesh.area(i));
   }
 }

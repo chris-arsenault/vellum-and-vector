@@ -1,7 +1,9 @@
 # Finished maps with browser and LAN backend modes
 
 Working plan, 2026-11-12. Sulion root: `e149a291-9b6b-40c9-9ceb-45ab6e03f700`.
-This request authorizes planning only. Implementation, deletion and deployment remain pending.
+Execution authorized on 2026-11-12. Until the separate water refactor completes, execute
+Rust ports and map/generation interface separation; hold water-dependent work and other
+backend/deployment work. Existing water work remains owned by its separate session.
 
 ## Outcome and authority
 
@@ -45,6 +47,9 @@ generation computation or an authoritative browser workspace.
 - The owner's architecture clarification requires an inventory before porting: data structures
   may change, but the software architecture paradigms must survive. Establish and guard those
   foundations in Rust before building the publisher or porting process families.
+- The owner confirms a separate agent is refactoring water. Port that refactor's completed
+  result, including its final ownership boundaries, state, couplings and guards. Do not
+  freeze the current intermediate implementation or duplicate the refactor in Rust.
 
 ### Existing boundaries retained
 
@@ -110,6 +115,12 @@ Related work retains its own scope:
   map/backend foundations when this work lands; retain unrelated future scope separately.
 
 Do not edit concurrent canonical artifacts without checking their current owner and body.
+The separate water session owns its refactor. Unrelated Rust foundations may proceed while
+it finishes; water-specific foundations and process ports depend on its completed result.
+Before those ports, read the final implementation, relevant tests and architecture guards,
+then refresh this inventory and the affected publication/refinement contracts. Treat any
+water guard failure observed during that work as an intermediate snapshot, not an accepted
+failure in the Rust replacement. Do not repair or redesign water as part of this port.
 At M0, place a cross-reference in the older rendering phase rather than maintaining two
 implementation lists for the same work. Do not mark the older geography outcome complete
 merely because these architectural milestones pass.
@@ -513,7 +524,7 @@ boundaries must be wired into the applicable CI path before completing M4.
 
 ## Milestones
 
-Future milestones remain pending. Expand one with the plan-phase workflow immediately
+Future milestones remain pending until their work starts. Expand one with the plan-phase workflow immediately
 before implementation; keep its expansion in this document. File lists below identify
 boundaries, not a requirement to preserve the current module layout.
 
@@ -559,6 +570,8 @@ feature-derived selection, epoch bindings, invalidation, composed questions and 
 material settlement and their actual lifecycle. Preserve local extension and one state per
 run. Supply native filesystem and browser-worker storage through host adapters; make bulk
 geometry capabilities and cooperative cancellation usable on both targets.
+Water-specific state/capability foundations use the separate session's completed refactor;
+continue independent container, lattice and operation work while that dependency is pending.
 
 Acceptance: native and WASM execute the same Rust core on small explicit inputs, including
 nonzero origins, periodic seams, spill/reload/release, scoped geometry and typed errors.
@@ -649,6 +662,8 @@ the repository's rendering/generation declarations and fixture isolation rules.
 ### R2 — Rust world physical, magic and ecology workflows
 
 Depends on: R1 and the publication/consumer path from M1–M3.
+The water portion also depends on the separate water refactor's completed implementation;
+refresh its port source and coupling inventory before translating it.
 
 Scope: port world initialization and configured epoch execution, geology/material structure,
 climate, water/ice/coastal processes, ecological layers, feature extraction and completed
@@ -840,6 +855,31 @@ These items do not block writing the plan. Public identity, paid hosting, worksp
 multiuser collaboration and deferred manual editing are outside this feature, not missing
 implementations to add during an architectural refactor.
 
+## Current execution expansion — Rust foundations and interface separation
+
+Sulion branch `332c9443-0b92-4fad-892b-973d26f7cd9b` spans the Rust/contracts part of M0
+and R1. It does not complete M0's held backend retirement. The owner's execution instruction
+supersedes planning-only statements earlier in Sulion history.
+
+1. **Independent contracts.** Establish Cargo workspace, native/WASM host targets and separate
+   map/generation schemas. Generate TS computational values from Rust; expose `MapReader`,
+   `MapLibrary` and `GenerationService` with an exclusive browser/backend context. Keep map
+   contracts free of generation dependencies. Check publication/inspection/selection shapes,
+   invalid data, native/WASM calls and type/import boundaries on supplied inputs.
+2. **Packed numerical structures.** Port queues, packed record/list storage, selection,
+   membership, reset, grouping and integer indexing from the inventory. Use focused explicit
+   inputs, including growth, empty selections, requeue and ordering; no simulated worlds.
+3. **Owned lattice and execution foundations.** Port shared geometry/scale/storage lifetimes
+   and opaque query/command/question behavior with architecture guards as each module moves.
+   Supply native/WASM capabilities; water-specific contracts await the completed refactor.
+4. **Integrate interfaces.** Adopt the separated contracts in retained application boundaries
+   where a finished product exists; do not label a generation-backed wrapper a finished-map
+   implementation. Keep publication/frontend adoption pending until real map assets cover
+   their consumers. Run touched lint/type/unit checks and review native/WASM ownership.
+
+Backend retirement, database/services and deployment remain held under the latest focus.
+No new water implementation or substitution is part of this expansion.
+
 ## Sulion mapping and current state
 
 | Milestone                             | Phase ID                               | State                                                                   |
@@ -860,7 +900,5 @@ implementations to add during an architectural refactor.
 | M7                                    | `059cb374-c172-4fa4-9b32-88ce8182c7fe` | Pending                                                                 |
 | M8                                    | `9f9d44e5-5f39-4a57-b08b-346745288f08` | Pending                                                                 |
 
-No implementation expansion exists yet. Next: expand M0 with plan-phase after execution is
-authorized, read the current plan guidance and relevant sources, and coordinate the consumer
-inventory and source retirement. No backend code, saved data, runtime behavior or deployment
-has been changed by this planning task.
+Execution begins with the expansion above. M0 and R1 remain incomplete until their full
+acceptance is established; contract scaffolding alone does not complete either milestone.

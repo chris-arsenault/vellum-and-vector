@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { PhysicalField } from "../world/field";
-import { evaporated } from "./waterBalance";
+import { airDemand, evaporated } from "./waterBalance";
 import { moveDepth, moveFlow, moveWater, waterAccount } from "./waterLedger";
 
 const map = () => ({}) as PhysicalField;
@@ -40,6 +40,15 @@ it("takes depths and flows as a year's volume, and a move stated again replaces 
   expect(waterAccount(land).moves).toEqual([
     { cause: "rain", from: "air", to: "soil", volume: 2e5 },
   ]);
+});
+
+it("asks more of the air the warmer the month, and nothing of a frozen one", () => {
+  expect(airDemand(-5)).toBe(0);
+  expect(airDemand(0)).toBe(0);
+  // About 29, 64 and 100 mm a month at 5, 18 and 25 degrees.
+  expect(airDemand(5)).toBeCloseTo(28.7, 0);
+  expect(airDemand(18)).toBeCloseTo(64.2, 0);
+  expect(airDemand(25)).toBeCloseTo(99.1, 0);
 });
 
 it("draws a drying soil down towards empty, giving less for the same demand each time", () => {

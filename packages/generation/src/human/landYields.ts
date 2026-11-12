@@ -1,6 +1,7 @@
 import { humanLayers } from "@atlas/domain";
 import { respond } from "../coupling/answers";
 import type { PhysicalField } from "../world/field";
+import { soilWaterFilled } from "../water/soilWater";
 
 /**
  * What the land feeds, answered per cell as people per square kilometre. Three yields say what
@@ -13,11 +14,7 @@ const dry = (map: PhysicalField, i: number) => map.WaterKindCodes.get(i) === 0;
 const growing = (map: PhysicalField, i: number) =>
   Math.exp(-Math.pow((map.Temperature.get(i) - 480) / 200, 2));
 /** The water the soil holds against what it could hold. */
-function storedWater(map: PhysicalField, i: number) {
-  const carbon = Math.min(1, map.SoilCarbon.get(i) / 30),
-    capacity = map.SoilDepth.get(i) * (0.12 + carbon * 0.15);
-  return capacity > 0 ? Math.min(1, map.SoilWater.get(i) / capacity) : 0;
-}
+const storedWater = soilWaterFilled;
 const river = (map: PhysicalField, i: number) =>
   map.RiverOrders.get(i) > 0 ? Math.min(1, map.RiverChannelStrength.get(i) / 1000) : 0;
 /** Thick ice leaves nothing to live on. */

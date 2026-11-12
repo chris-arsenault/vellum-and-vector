@@ -1,0 +1,27 @@
+[workspace]
+members = ["crates/atlas-map", "crates/atlas-generation", "crates/atlas-host"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace.dependencies]
+atlas-map = { path = "crates/atlas-map" }
+atlas-generation = { path = "crates/atlas-generation" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ts-rs = { version = "12", features = ["serde-json-impl"] }
+wasm-bindgen = "0.2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+cognitive_complexity = "warn"
+too_many_arguments = "warn"
+type_complexity = "warn"
+
+[profile.release]
+lto = "thin"

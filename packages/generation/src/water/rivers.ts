@@ -86,6 +86,9 @@ export function riverNetwork(
   releaseWorking(map, area);
   map.RiverOrders.fill(0);
   const order = sourceToOutletOrder(map);
+  let entering = 0;
+  if (incoming) for (let i = 0; i < map.mesh.count; i++) entering += incoming.get(i);
+  moveFlow(map, "entering", entering);
   gatherMean(map, c, order);
   seasonalFlows(map, c, order, incoming);
   const channels = buildChannels(map);
@@ -102,7 +105,7 @@ export function riverNetwork(
  */
 function gatherMean(map: PhysicalField, c: PhysicalContext, order: Band) {
   const pass = waterPassageParts(map, c),
-    left = { bedLoss: 0, withdrawal: 0, inflow: 0, spill: 0, mouth: 0, pan: 0 };
+    left = { bedLoss: 0, withdrawal: 0, inflow: 0, spill: 0, mouth: 0, leaving: 0, pan: 0 };
   for (let n = 0; n < order.length; n++) {
     const i = order.get(n),
       target = map.FlowTargets.get(i),
@@ -121,8 +124,7 @@ function gatherMean(map: PhysicalField, c: PhysicalContext, order: Band) {
     const end = map.WaterKindCodes.get(i) === 1 ? undefined : endOf(map, i, target);
     if (end) left[end] += flow;
   }
-  for (const move of ["bedLoss", "withdrawal", "inflow", "spill", "mouth", "pan"] as const)
-    moveFlow(map, move, left[move]);
+  for (const move of Object.keys(left) as (keyof typeof left)[]) moveFlow(map, move, left[move]);
   // What lakes took in and did not let out, they lost to the air and the ground.
   const kept = Math.max(0, left.inflow - left.spill),
     can = lakeLosses(map, c),
@@ -136,7 +138,7 @@ function gatherMean(map: PhysicalField, c: PhysicalContext, order: Band) {
  */
 function endOf(map: PhysicalField, i: number, target: number) {
   if (target >= 0) return map.WaterKindCodes.get(target) === 1 ? "mouth" : undefined;
-  if (map.mesh.boundary(i)) return "mouth";
+  if (map.mesh.boundary(i)) return "leaving";
   return map.WaterKindCodes.get(i) === 2 ? "inflow" : "pan";
 }
 /**

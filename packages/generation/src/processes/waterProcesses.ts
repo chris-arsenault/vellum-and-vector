@@ -7,7 +7,7 @@ import { deltaFormation } from "../world/deltas";
 import { drainageConditioning } from "../water/drainageFlood";
 import { floodplains } from "../world/floodplains";
 import { drainageGuidance } from "../water/flowGuidance";
-import { glacialMeltwater } from "../world/glacialEvolution";
+import { glacialMeltwater } from "../water/meltwater";
 import { glacialLandforms } from "../world/glacialLandforms";
 import { iceFlow } from "../world/iceFlow";
 import { landIce } from "../world/landIce";
@@ -34,7 +34,15 @@ export const waterOff = fieldQuery(
     id: "runoff",
     statement: "What falls and is not lost to the air or the ground runs off.",
     needs: [sea, "Temperature", "Rainfall"],
-    provides: ["Runoff", "FloodRunoff", "DryRunoff", "WaterRecharge", ...waterYearFields],
+    provides: [
+      "Runoff",
+      "FloodRunoff",
+      "DryRunoff",
+      "WaterRecharge",
+      "SoilWater",
+      ...waterYearFields,
+    ],
+    asks: ["soilWetting", "soilWaterHeld"],
     execute: ({ map, context }) => runoff(map, context),
   },
   [oceanRead, atmosphere]

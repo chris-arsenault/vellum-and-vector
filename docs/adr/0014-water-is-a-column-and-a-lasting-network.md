@@ -8,8 +8,9 @@ carries the direction is marked in `packages/generation/src/water/water.architec
 structure below is agent-derived and follows the method in
 [Materials and processes](../../MATERIALS-AND-PROCESSES-ARCHITECTURE.md).
 
-Status: in progress. The guard that states the first decision fails until the rewrite lands,
-and its failure lists what remains.
+Status: in progress. One owner, the ledger of transfers, the year's rhythm and the single
+soil-water store are in the code. The lasting network, one routing for every gathering, and
+inheritance of reaches by a finer map are not yet.
 
 ## Context
 

@@ -4,7 +4,7 @@ import { atmosphericFlow } from "../world/atmosphere";
 import { moisture, precipitation, temperature } from "../world/climate";
 import { oceanCurrents } from "../world/currents";
 import { bathymetry, oceanDistance } from "../world/geography";
-import { initializeOceanBudget, oceanSurface, recordMarineConnections } from "../world/ocean";
+import { initializeOceanBudget, oceanSurface, recordMarineConnections } from "../water/ocean";
 import { seaIce } from "../world/seaIce";
 import { warmthSources } from "../world/warmth";
 import { fieldCommand, fieldQuery } from "./builder";

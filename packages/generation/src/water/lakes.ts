@@ -1,6 +1,7 @@
 import { meshDeltaX } from "../world/mesh";
 // LakeBasinLayer depression discovery, pools and outlets, Canonry 0f62584c.
-import { clearWaterSurface, setWaterSurface, type PhysicalField } from "../world/field";
+import type { PhysicalField } from "../world/field";
+import { clearWaterSurface, setWaterSurface } from "./standing";
 import type { PhysicalContext } from "../world/context";
 import { hashUnit } from "../world/noise";
 import { round } from "../world/math";

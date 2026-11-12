@@ -17,6 +17,8 @@ export const waterStores = [
   "lake",
   "sea",
   "people",
+  /** The country beyond the map's edge. */
+  "beyond",
 ] as const;
 export type WaterStore = (typeof waterStores)[number];
 
@@ -41,6 +43,9 @@ export const waterMoves = {
   lakeSeepage: ["lake", "ground"],
   spill: ["lake", "river"],
   mouth: ["river", "sea"],
+  /** Rivers that cross the map's edge, coming in and going out. */
+  entering: ["beyond", "river"],
+  leaving: ["river", "beyond"],
   /** Water that reaches the floor of a closed basin holding no lake dries there. */
   pan: ["river", "air"],
 } as const satisfies Record<string, readonly [WaterStore, WaterStore]>;

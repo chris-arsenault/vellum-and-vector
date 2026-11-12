@@ -45,6 +45,9 @@ interface Declared {
 interface WaterInfluences {
   withdrawal: Band;
   transmission: Band;
+  /** Water places put into a cell's soil, and the least they keep it holding. */
+  soilWetting: Band;
+  soilHeld: Band;
 }
 const waterInfluences = new WeakMap<PhysicalField, WaterInfluences>();
 /** Bound to one map's generation state; the query cache owns when current inputs need reading. */
@@ -66,6 +69,27 @@ respond({
   queries: [placeInfluences],
   scale: (map, cell) => waterInfluences.get(map)?.transmission.get(cell) ?? 1,
 });
+respond({
+  key: "soilWetting",
+  by: "maintained places",
+  reads: [],
+  queries: [placeInfluences],
+  add: (map, cell) => waterInfluences.get(map)?.soilWetting.get(cell) ?? 0,
+});
+respond({
+  key: "soilWaterHeld",
+  by: "maintained places",
+  reads: [],
+  queries: [placeInfluences],
+  add: (map, cell) => waterInfluences.get(map)?.soilHeld.get(cell) ?? 0,
+});
+/** A place's change to the soil's water is an answer to the water budget, not a write. */
+function wetSoil(water: WaterInfluences, change: PoiFieldChange & { band: PhysicalBufferName }) {
+  if (change.change === "add") water.soilWetting.add(change.cell, change.amount);
+  else if (change.change === "atLeast")
+    water.soilHeld.set(change.cell, Math.max(water.soilHeld.get(change.cell), change.value));
+  else throw new Error("A place cannot hold the soil's water down.");
+}
 
 function clearWaterInfluences(map: PhysicalField) {
   let water = waterInfluences.get(map);
@@ -73,9 +97,13 @@ function clearWaterInfluences(map: PhysicalField) {
     water = {
       withdrawal: retainedArray(map, "float64", "places:water-withdrawal"),
       transmission: retainedArray(map, "float64", "places:water-transmission"),
+      soilWetting: retainedArray(map, "float64", "places:soil-wetting"),
+      soilHeld: retainedArray(map, "float64", "places:soil-held"),
     };
     waterInfluences.set(map, water);
   }
+  water.soilWetting.fill(0);
+  water.soilHeld.fill(0);
   water.withdrawal.fill(0);
   water.transmission.fill(1);
   return water;
@@ -114,6 +142,8 @@ function collect(declared: Declared, change: PoiFieldChange) {
     let entry = declared.magic.get(key);
     if (!entry) declared.magic.set(key, (entry = { target: change.magic, cells: new Map() }));
     take(changeAt(entry.cells, change.cell), change);
+  } else if (change.band === "SoilWater") {
+    if (declared.water) wetSoil(declared.water, change);
   } else {
     let cells = declared.bands.get(change.band);
     if (!cells) declared.bands.set(change.band, (cells = new Map()));
@@ -191,8 +221,11 @@ export function refreshPlaceInfluences(state: GenerationState) {
     if (typeof water !== "function") continue;
     for (const place of placesOf(state, entry))
       for (const change of water(state, place))
-        if (change.change === "waterPassage") collect(declared, change);
+        if (change.change === "waterPassage" || ("band" in change && change.band === "SoilWater"))
+          collect(declared, change);
   }
+  // What a parent's places must be given here wets the soil as the map's own places do.
+  declareCarried(state, declared);
   releaseHeld(state);
 }
 /** The total a cell's change comes to, over what the band holds without any declared change. */

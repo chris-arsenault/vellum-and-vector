@@ -17,6 +17,7 @@ import { clamp, round, units } from "./math";
 import { hashUnit } from "./noise";
 import { displaceGround, weatherRock } from "../rock/groundLedger";
 import { meltIce, spoilSoil } from "../rock/groundSurfaceMedia";
+import { loseSoilWater } from "../water/soilWater";
 import { retainedArray, releaseWorking } from "./physicalNumerics";
 import { contactView } from "./magicContact";
 
@@ -185,7 +186,7 @@ function actOnRock(map: PhysicalField, i: number, c: number, e: ConfluenceEffect
   }
   if (e.soilRemoval) {
     spoilSoil(map, i, e.soilRemoval * c, "confluences");
-    map.SoilWater.set(i, map.SoilWater.get(i) * (1 - e.soilRemoval * c));
+    loseSoilWater(map, i, e.soilRemoval * c);
   }
 }
 /** Coast, fog, ice, debris and toxicity: the meeting's water and living medium. */

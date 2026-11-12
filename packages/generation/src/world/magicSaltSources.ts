@@ -3,6 +3,7 @@ import type { MagicField } from "./magicState";
 import type { LocateContext, SupplyContext } from "./magicSources";
 import { siteStrength } from "./magicStocks";
 import { depositSaltBed } from "../rock/rockMagicStock";
+import { forgetLake } from "../water/standing";
 
 /**
  * Salt's death origin: the dead the ground records become brine where they lie. The record
@@ -49,7 +50,7 @@ export function supplyLakeSalt(
     // Still a basin: the floor lies below the spill its drainage fills to.
     if (map.DrainageElevations.get(i) <= map.Elevation.get(i)) continue;
     const made = memory * map.mesh.area(i) * p.saltPerLakeMetre * activity;
-    map.LakeMemory.set(i, 0);
+    forgetLake(map, i);
     if (made <= 0) continue;
     depositSaltBed(map, bed, i, made, p.saltMaterialDensity);
   }

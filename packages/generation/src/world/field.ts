@@ -1,7 +1,6 @@
 // Canonry PhysicalGeographyField, commit 0f62584c. Plain arrays remain worker-local.
 import type { PhysicalMesh } from "./mesh";
 import type { TransportPlan } from "./transportPlan";
-import { noWaterSurface } from "./math";
 import type { TectonicState } from "./tectonicState";
 import type { LandmarkLedger } from "./landmarkLedger";
 import type { CrustBudget } from "../rock/crustTransport";
@@ -147,32 +146,9 @@ export function createField(
 export function physicalBands(map: PhysicalField): [PhysicalBufferName, ReadBand][] {
   return canonicalPhysicalFields().map(({ name }) => [name, map[name]]);
 }
-export function clearWaterSurface(map: PhysicalField, i: number) {
-  map.WaterDepths.set(i, 0);
-  map.WaterSurfaceElevations.set(i, noWaterSurface);
-}
 export const allowsBoundaryDrainage = (map: PhysicalField) =>
   map.OpenBoundary || map.mesh.openBoundary;
 export const isOpenOutlet = (map: PhysicalField, i: number) =>
   map.mesh.boundary(i) &&
   (map.OpenBoundary ||
     (map.mesh.openBoundary && map.DrainageParents.get(i) < 0 && map.DrainageRanks.get(i) >= 0));
-export function setWaterSurface(map: PhysicalField, i: number, surface: number) {
-  const depth = surface - map.Elevation.get(i);
-  if (depth <= 0) throw new Error("Water surface must be above its physical floor.");
-  map.WaterSurfaceElevations.set(i, surface);
-  map.WaterDepths.set(i, depth);
-}
-export function reconcileWater(map: PhysicalField, i: number) {
-  const surface = map.WaterSurfaceElevations.get(i);
-  if (surface === noWaterSurface) return;
-  if (surface > map.Elevation.get(i)) {
-    map.WaterDepths.set(i, surface - map.Elevation.get(i));
-    return;
-  }
-  map.WaterKindCodes.set(i, 0);
-  map.WaterBodyIds.set(i, 0);
-  map.LakeOutletTargets.set(i, -1);
-  map.LakeOverflow.set(i, 0);
-  clearWaterSurface(map, i);
-}

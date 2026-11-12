@@ -29,6 +29,18 @@ export function evaporatedShare(demand: number, supply: number) {
   if (aridity === 0) return 0;
   return Math.min(1, Math.sqrt(aridity * Math.tanh(1 / aridity) * (1 - Math.exp(-aridity))));
 }
+/**
+ * What the air can evaporate in a month at a monthly mean temperature, in millimetres
+ * (Hamon's method: 13.97 × days × daylight² × saturated vapour density, with daylight in
+ * units of twelve hours). Daylight is taken at its yearly mean of twelve hours, so a high
+ * latitude's long summer days are not counted. Nothing evaporates from frozen ground.
+ */
+export function airDemand(celsius: number) {
+  if (!(celsius > 0)) return 0;
+  const days = 365.25 / months,
+    vapour = (4.95 * Math.exp(0.062 * celsius)) / 100;
+  return 13.97 * days * vapour;
+}
 /** What a cell's ground and climate are, as the budget needs them. */
 export interface WaterGround {
   /** Per month: rain and snow that fall, and what the air could evaporate. */

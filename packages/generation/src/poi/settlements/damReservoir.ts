@@ -7,6 +7,7 @@ import {
   neighborsOf,
 } from "../../regional/lattice";
 import type { RegionalState } from "../../regional/state";
+import { impound } from "../../water/standing";
 
 /** How far (in cells) a dam record snaps to the channel it holds, and the most a crest rises above the bed (m). */
 const damSnap = 2,
@@ -77,11 +78,7 @@ export function holdReservoir(
     const i = queue[head];
     if (!isContent(mesh, i) || map.WaterKindCodes.get(i) === 1 || map.Elevation.get(i) >= crest)
       continue;
-    map.WaterKindCodes.set(i, 2);
-    map.WaterBodyIds.set(i, body);
-    map.WaterDepths.set(i, crest - map.Elevation.get(i));
-    map.WaterSurfaceElevations.set(i, crest);
-    map.RiverOrders.set(i, 0);
+    impound(map, i, body, crest);
     filled++;
     for (let c = children.head[i]; c >= 0; c = children.next[c]) queue.push(c);
   }

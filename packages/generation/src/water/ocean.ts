@@ -1,10 +1,11 @@
 // OceanConnectivityLayer.cs, Canonry 0f62584c.
-import { crustForming, setWaterSurface, type PhysicalField } from "./field";
-import type { PhysicalContext } from "./context";
-import { noWaterSurface } from "./math";
+import { crustForming, type PhysicalField } from "../world/field";
+import { setWaterSurface } from "./standing";
+import type { PhysicalContext } from "../world/context";
+import { noWaterSurface } from "../world/math";
 import { MapScale } from "@atlas/domain";
-import { oceanSeeds, OceanComponents, visitConnectedOcean } from "./oceanComponents";
-import { workingValues, releaseWorking } from "./physicalNumerics";
+import { oceanSeeds, OceanComponents, visitConnectedOcean } from "../world/oceanComponents";
+import { workingValues, releaseWorking } from "../world/physicalNumerics";
 import { ask, respond } from "../coupling/answers";
 
 // Left alone, the sea stands at one level everywhere it reaches.

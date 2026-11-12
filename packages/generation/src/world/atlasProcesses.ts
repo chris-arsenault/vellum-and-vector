@@ -28,7 +28,8 @@ import { publishKinds } from "../poi/poiPublish";
 import { contributeForcing } from "./atlasForcing";
 import { bindCoastalForcing } from "./coastalForcing";
 import { featureRevisions } from "../generationFeatures";
-import { reconcileWater } from "./field";
+import { reconcileWater } from "../water/standing";
+import { beginWaterEpoch } from "../water/meltwater";
 import type { NativeStep } from "./sequence";
 import { advectMagic } from "./magicState";
 import { retainGeographicIdentities } from "./geographicIdentity";
@@ -269,8 +270,7 @@ function epochStartProcess(): MapProcess {
       (state) => {
         const map = state.physical!.map;
         map.ExternalHeatForcing.fill(0);
-        map.ExternalMeltwater.fill(0);
-        map.GroundwaterReturn.fill(0);
+        beginWaterEpoch(map);
         map.OrganicBurialInput.fill(0);
         map.OrganicBurialThickness.fill(0);
         map.ExternalCoastalForcing.fill(0);

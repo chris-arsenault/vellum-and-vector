@@ -1,0 +1,13 @@
+[package]
+name = "atlas-generation"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+atlas-map.workspace = true
+serde.workspace = true
+ts-rs.workspace = true
+
+[lints]
+workspace = true

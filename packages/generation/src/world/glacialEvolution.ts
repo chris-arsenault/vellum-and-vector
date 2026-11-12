@@ -1,6 +1,5 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { clamp, truncate } from "./math";
 import { carryOut, deposit } from "../rock/groundLedger";
 import { loadOf, MaterialLoad } from "../rock/groundLoad";
 import { isGrounded } from "./glacierSurface";
@@ -67,29 +66,4 @@ export function glacialDeposition(map: PhysicalField, c: PhysicalContext) {
   }
   moving.release();
   releaseWorking(map, order);
-}
-export function glacialMeltwater(map: PhysicalField, c: PhysicalContext) {
-  const p = c.Profile;
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes.get(i) !== 0) {
-      map.GlacialMeltwater.set(i, 0);
-      continue;
-    }
-    const ice = map.IceThickness.get(i);
-    const thaw = clamp(
-      truncate(
-        ((map.Temperature.get(i) - p.GlacialMeltTemperatureFloor) * 1000) /
-          Math.max(1, p.IceTemperatureThreshold - p.GlacialMeltTemperatureFloor)
-      ),
-      0,
-      1000
-    );
-    const surface = (ice * thaw * p.GlacialAblationRunoffStrength) / 1_000_000;
-    const basal = (ice * map.Geothermal.get(i) * p.BasalMeltRunoffStrength) / 1_000_000;
-    const retreat = (map.IceRetreat.get(i) * p.GlacialRetreatRunoffStrength) / 1000;
-    map.GlacialMeltwater.set(
-      i,
-      MapScale.inUnits(surface + basal + retreat, "mm") + map.ExternalMeltwater.get(i)
-    );
-  }
 }

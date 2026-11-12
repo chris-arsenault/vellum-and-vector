@@ -18,6 +18,10 @@ export const answerKeys = [
   "waterTransmission",
   /** The water each cell sends downstream, against the reference runoff. */
   "discharge",
+  /** Water put into a cell's soil from outside its own year of rain, as a depth held. */
+  "soilWetting",
+  /** The least water a cell's soil is kept holding, as a depth, whatever the climate takes. */
+  "soilWaterHeld",
   /** How wet the ground stays. */
   "wetness",
   /** How warm the ground's air is, above freezing. */

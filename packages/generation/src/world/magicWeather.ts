@@ -5,6 +5,7 @@ import { alignedNeighbor } from "./atmosphere";
 import { clamp } from "./math";
 import { carryOut, deposit, removeLoose } from "../rock/groundLedger";
 import { spoilSoil } from "../rock/groundSurfaceMedia";
+import { loseSoilWater } from "../water/soilWater";
 import { loadOf } from "../rock/groundLoad";
 import { mergeMaterial, type MaterialLayer } from "../rock/rockColumn";
 import { carrierPassage } from "./magicCarriers";
@@ -25,7 +26,7 @@ export function stormWrites(state: GenerationState) {
     if (track <= 0 || map.WaterKindCodes.get(i) !== 0) continue;
     const scour = p.StormScour * track * clamp(map.Slope.get(i) / 0.05, 0, 1);
     spoilSoil(map, i, scour, "storms");
-    map.SoilWater.set(i, map.SoilWater.get(i) * (1 - scour));
+    loseSoilWater(map, i, scour);
     if (bare(map, i)) driveDunes(map, i, p.DuneMobility * track);
   }
 }

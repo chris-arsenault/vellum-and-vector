@@ -3,6 +3,7 @@ import { recordFlow, type FlowCause } from "../coupling/flows";
 import { units } from "../world/math";
 import { MapScale, type ReadBand } from "@atlas/domain";
 import { releasedWaterRate } from "../world/dimensions";
+import { receiveMeltwater } from "../water/meltwater";
 
 type MeltReceiver = (cell: number, melted: number, before: number) => void;
 // hpc-exempt: one carrier receiver per physical field; inventories remain in their owners.
@@ -57,8 +58,7 @@ export function meltIce(
   recordFlow(map, cause, "ice", "melt", melted * map.mesh.area(i));
   if (beneath) {
     const water = MapScale.inUnits(releasedWaterRate(melted, exposure), "mm");
-    map.ExternalMeltwater.add(i, water);
-    map.GlacialMeltwater.add(i, water);
+    receiveMeltwater(map, i, water);
   }
   return melted;
 }

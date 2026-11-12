@@ -97,11 +97,4 @@ export function followWater(map: PhysicalField, head: number, claimed: Set<numbe
   return cells;
 }
 /** A parent's river is a channel the whole way, however little water its head has here. */
-export function holdContinuingChannels(state: RegionalState) {
-  const map = state.physical.map,
-    claimed = new Set<number>();
-  for (const { head } of continuingRivers(state))
-    for (const cell of followWater(map, head, claimed))
-      if (map.RiverOrders.get(cell) <= 0) map.RiverOrders.set(cell, 1);
-}
 export const isRefinedMap = (state: GenerationState): state is RegionalState => "regional" in state;
