@@ -9,10 +9,10 @@ import { releaseWorking, workingValues } from "../world/physicalNumerics";
 import { lakeHollows } from "./base";
 import { restoreFeatures } from "./causes/registry";
 import { networkDivides } from "./divides";
-import { distance, isContent, neighborsOf, regionalSpan } from "./lattice";
+import { distance, isContent, neighborsOf } from "./lattice";
 import { ruggedness } from "./ruggedness";
 import { materialResistance } from "./material";
-import { channelCells } from "./network";
+import { riverSizes } from "../water/riverSize";
 import { clamp, type NetworkWork, type ReliefWork, type RegionalState } from "./state";
 
 /** Channel gradient at the channel threshold area, and the concavity of the longitudinal profile. */
@@ -90,7 +90,7 @@ function reliefIncrements(state: RegionalState, crest: Float64Array): Increments
     n = mesh.count,
     network = state.regional.network!,
     { receiver, order, count, base } = network,
-    thresholdArea = channelCells * regionalSpan(state) ** 2,
+    thresholdArea = riverSizes(map.scale).catchment,
     increment = new Float64Array(n),
     step = new Float64Array(n),
     steps = new Int32Array(n),

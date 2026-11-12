@@ -1,5 +1,5 @@
-import { neighborsOf, regionalSpan } from "./lattice";
-import { channelCells } from "./network";
+import { neighborsOf } from "./lattice";
+import { riverSizes } from "../water/riverSize";
 import type { RegionalState } from "./state";
 
 /** A tree over the cells: receivers, and the cells in root-first order. */
@@ -9,8 +9,8 @@ interface Tree {
   count: number;
 }
 
-/** Catchments this many times the channel threshold stand on the highest crests. */
-const trunkCatchments = 64;
+/** A catchment this many times a river's own stands on the highest crests. */
+const trunkRatio = 64;
 
 /**
  * The divide network of the drainage network (the ridge tree, plan G2): a hillslope cell
@@ -25,7 +25,7 @@ export function networkDivides(state: RegionalState) {
     network = state.regional.network!,
     channel = (i: number) => network.channel[i] === 1,
     label = segmentLabels(network, channel),
-    threshold = channelCells * regionalSpan(state) ** 2,
+    threshold = riverSizes(state.physical.map.scale).catchment,
     crest = new Float64Array(mesh.count),
     around = new Int32Array(mesh.stride);
   for (let k = 0; k < network.count; k++) {
@@ -40,7 +40,7 @@ export function networkDivides(state: RegionalState) {
       smallest = Math.min(smallest, network.area[label[j]], network.area[label[i]]);
     }
     if (smallest < Infinity)
-      crest[i] = Math.min(1, Math.log2(1 + smallest / threshold) / Math.log2(1 + trunkCatchments));
+      crest[i] = Math.min(1, Math.log2(1 + smallest / threshold) / Math.log2(1 + trunkRatio));
   }
   return crest;
 }

@@ -9,6 +9,7 @@ import { clamp, type NetworkWork, type RegionalState } from "./state";
 import { ask } from "../coupling/answers";
 import { physicalContext } from "../world/context";
 import { waterPassage } from "../water/waterQuantity";
+import { gathered, riverSizes } from "../water/riverSize";
 
 /** Resistance near a known peak or cone, so channels cut around it and it stands on a divide. */
 const peakRepulsion = 12;
@@ -20,10 +21,9 @@ const peakRepulsion = 12;
 const steepRoughness = 0.5,
   flatRoughness = 1.6,
   flatGradient = 0.01,
-  roughnessCells = 20,
+  // The longest unevenness of the ground's erodibility, as a number of the map's samples.
+  roughnessSpan = 20,
   roughnessOctaves = 4;
-/** Reference-runoff samples a mapped channel drains, in this map's own samples. */
-export const channelCells = 128;
 const referenceRunoff = 0.0000001;
 export const secondsPerYear = 365.25 * 24 * 3600;
 
@@ -61,6 +61,7 @@ export function growNetwork(state: RegionalState): NetworkWork {
     flow: new Float64Array(n),
     inflow: new Float64Array(n),
     steadyInflow: new Float64Array(n),
+    inflowCatchment: new Float64Array(n),
     channel: new Uint8Array(n),
     level: new Float64Array(n),
     sea,
@@ -71,6 +72,7 @@ export function growNetwork(state: RegionalState): NetworkWork {
   for (const entry of evidence.entries) {
     network.inflow[entry.cell] = entry.discharge;
     network.steadyInflow[entry.cell] = entry.least;
+    network.inflowCatchment[entry.cell] = entry.catchment;
   }
   const root = networkRoots(state, network);
   evolveNetwork(state, network, root, cellCosts(state, sea, base));
@@ -130,10 +132,10 @@ function openWetBasins(state: RegionalState, sink: Uint8Array) {
 }
 
 /**
- * Upstream area and reference discharge gathered down the tree. An entering river drains
- * country beyond the frame at about reference runoff. A channel at this map's scale drains
- * `channelCells` samples' worth of reference runoff, so every refinement level shows a
- * similar stream density and dry country needs a larger catchment for the same flow.
+ * Upstream area and discharge gathered down the tree. An entering river drains country
+ * beyond the frame: the catchment the parent map gives it. A channel is where a river is: water
+ * gathered from a catchment the map shows, in a river's amount (`water/riverSize`), so dry
+ * country needs a larger catchment for the same flow.
  */
 export function gatherFlow(state: RegionalState, network: NetworkWork) {
   const map = state.physical.map,
@@ -141,15 +143,13 @@ export function gatherFlow(state: RegionalState, network: NetworkWork) {
     context = physicalContext(state.regional.input.seed, 0, state.physical.profile),
     supply = ask(map, "surfaceWater", context),
     pass = waterPassage(map, context),
-    { receiver, order, count, area, flow, inflow, channel } = network,
-    reference = referenceDischarge(state),
-    cellArea = regionalSpan(state) ** 2;
+    { receiver, order, count, area, flow, inflow, channel } = network;
   area.fill(0);
   flow.fill(0);
   for (let k = 0; k < count; k++) {
     const i = order[k],
       runoff = Math.max(0, MapScale.metres(supply.get(i), "mm"));
-    area[i] = mesh.contentArea(i) + (inflow[i] / reference) * cellArea;
+    area[i] = mesh.contentArea(i) + network.inflowCatchment[i];
     flow[i] = (runoff * mesh.contentArea(i)) / secondsPerYear + inflow[i];
   }
   for (let k = count - 1; k >= 0; k--) {
@@ -160,12 +160,14 @@ export function gatherFlow(state: RegionalState, network: NetworkWork) {
     area[j] += area[i];
     flow[j] += flow[i];
   }
-  const threshold = channelCells * reference;
+  const river = riverSizes(map.scale);
   channel.fill(0);
   for (let k = 0; k < count; k++) {
     const i = order[k];
     channel[i] = Number(
-      flow[i] >= threshold * slopeFactor(mesh, network, i) && network.lake[i] < 0
+      gathered(area[i], river) &&
+        flow[i] >= river.discharge * slopeFactor(mesh, network, i) &&
+        network.lake[i] < 0
     );
   }
 }
@@ -190,9 +192,9 @@ function slopeFactor(
 /** Mark the tree path from a cell down to the nearest channel as channel: the stream it stands on. */
 export function promoteChannel(state: RegionalState, cell: number) {
   const network = state.regional.network!,
-    reference = referenceDischarge(state);
+    river = riverSizes(state.physical.map.scale);
   for (let i = cell; i >= 0 && !network.channel[i]; i = network.receiver[i]) {
-    if (network.flow[i] < channelCells * reference * 0.2) return false;
+    if (network.flow[i] < river.discharge * 0.2) return false;
     network.channel[i] = 1;
   }
   return true;
@@ -218,7 +220,7 @@ function cellCosts(state: RegionalState, sea: Uint8Array, base: Float64Array) {
         p.x,
         p.y,
         state.regional.input.seed ^ 0x3a27,
-        map.scale.cells(roughnessCells),
+        map.scale.cells(roughnessSpan),
         roughnessOctaves
       );
     cost[i] = materialResistance(state, i) * Math.exp(amplitude * roughness);

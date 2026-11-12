@@ -48,12 +48,14 @@ All 2026-11-12 unless dated.
 10. Earlier, standing: no caps, no deleting things after the fact, no parameters tuned to
     output, no fresh worlds, only unit and UI tests, sizes through `MapScale`.
 
-## What is true today (read in code, 2026-11-12)
+## What was true when the plan was written (read in code, 2026-11-12)
+
+Each milestone's "State" line below says what has changed since.
 
 **Rivers**
 
 - A river is a per-cell mark (`RiverOrders > 0`), set where a month's gathered flow passes
-  "24 cells of ordinary runoff" (`water/channelRegime.ts`). That is a bare cell count.
+  "24 cells of ordinary runoff". That is a bare cell count. (Changed by M1.)
 - About twenty per-cell layers are recomputed from the surface every pass. Nothing carries.
 - A reach record exists (`DrainageReach`, `world.drainage`), but it is filled only when
   rivers are published. Identity is the end coordinate.
@@ -179,11 +181,23 @@ Scope: the definition only.
   uses to decide what to draw. A cell's own yield, however large, never makes it a river.
 - Below that, flow stays a cell quantity.
 - The region's starting network uses the same declarations.
+- A river entering a region brings the catchment its parent map gives it, so it is a
+  gathered river from its first cell.
+- One exception, because named things persist: a parent map's named river, and the stream a
+  parent's river-side town stands on, continue on a finer map whatever their water there.
+  M2 gives such a river its regime (running, seasonal or dry) so the map says which it is.
 
 Acceptance (owner-required): the region pictures show rivers as separate lines with empty
 ground between; no blocks or tangles; the same place at draft and standard detail shows the
 same rivers.
 Evidence: the three picture pairs at two detail levels; the size guard passes.
+
+State: in the code 2026-11-12, at draft detail. The sizes are in `water/riverSize.ts`. On
+the pictures of all three places the blocks and tangles are gone: rivers are separate lines
+with empty ground between, and the plain is mostly empty of rivers. Still to show: the same
+places at standard detail. Seen on the pictures and left for later milestones: the ground is
+speckled with single-cell bumps (M4), and some rivers stop inland where their water is lost,
+which the map does not yet tell apart from a river that ends for no reason (M2).
 
 ### M2 — Reaches are kept, and everything asks them [depends on M1]
 
@@ -197,6 +211,28 @@ Scope: the representation.
   cell quantity; those that mean "a river" (travel, siting, works, magic carried by rivers,
   landforms) ask the reaches.
 - The old-bed layer added on 2026-11-12 is replaced by former courses on reaches.
+
+#### Execution steps
+
+1. The reach store. `water/reaches.ts`: a reach holds an identity, its cells from head to
+   end, the reach it runs into, its order, its flow in each month at its end, its regime,
+   and its former courses. The store is part of the map's state (on the field, saved and
+   restored with it), not a side table.
+2. Building and carrying. After the flow is gathered, the water code cuts the river cells
+   into reaches at confluences and matches them to the reaches of the pass before: a reach
+   keeps its identity when most of its course is still its course; cells it left are added
+   to its former courses; a reach with no water left stays as a dry reach on its old cells.
+   Unit test on a small field: a course that shifts keeps its identity and leaves a former
+   course; a river that dries stays as a dry reach.
+3. Asking. `riverAt(map, cell)` answers with the reach, from the store. Readers of the cell
+   mark move in two groups, file by file: "water runs here" reads the cell's flow; "a river"
+   asks the store. The list of readers and which group each is in is written here before
+   they are changed.
+4. Publishing reads the store: river records are drawn from kept reaches, with their
+   identity, regime and former courses; a dry reach is drawn as a dry course under its name.
+   The old-bed layer and the separate dry-bed derivation go.
+5. A region takes its parent's reaches as things (their lines and flows, from the parent's
+   stored network) where it now reads the parent's river mark as a picture of cells.
 
 Acceptance (owner-required): a river that loses its water or is turned aside remains on the
 map as a dry course under the same name; boats, towns and works stand only on rivers the map

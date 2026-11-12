@@ -1,5 +1,6 @@
 import { MapScale, spatial, compactGeometryBounds } from "@atlas/domain";
 import type { GenerationState } from "./process";
+import { riverCatchment, riverDischarge } from "./water/riverSize";
 
 /** World publication is independent of mesh density and viewport zoom. */
 export function isWorldGeography(state: GenerationState) {
@@ -95,9 +96,12 @@ export function largeWorldDomain(area: number, span: number, land: number, scale
   );
 }
 
-/** A mapped river needs substantial water, drainage and a geographically meaningful course. */
-export const worldRiverDischarge = MapScale.volume(5.46875e-18);
-export const worldRiverCatchment = MapScale.area(0.00125);
+/**
+ * A mapped river needs substantial water, drainage and a geographically meaningful course.
+ * The water and the drainage are what makes a river at all, stated by the water owner.
+ */
+export const worldRiverDischarge = riverDischarge;
+export const worldRiverCatchment = riverCatchment;
 export const worldRiverLength = MapScale.length(0.05);
 /** A powerful shorter outlet can link a major lake or basin to the sea. */
 export const worldOutletDischarge = MapScale.volume(2.34375e-17);

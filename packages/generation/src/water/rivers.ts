@@ -1,7 +1,7 @@
 // RiverNetworkLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "../world/field";
 import type { PhysicalContext } from "../world/context";
-import { contributingArea, gatherDown, sourceToOutletOrder } from "../world/flowGraph";
+import { gatherDown, sourceToOutletOrder } from "../world/flowGraph";
 import { depthRateToDischarge } from "../world/dimensions";
 import { edgeLeadingTo } from "../world/mesh";
 import type { Band } from "@atlas/domain";
@@ -10,17 +10,18 @@ import { ask } from "../coupling/answers";
 import { waterPassage, waterPassageParts } from "./waterQuantity";
 import { moveFlow } from "./waterLedger";
 import { lakeLosses } from "./lakeStage";
-import { riverFlow } from "./channelRegime";
+import { gathered, riverSizes } from "./riverSize";
 import { waterYearOf } from "./runoff";
 import { months } from "./waterBalance";
 import { closedByAridity } from "./closedBasin";
 import { enteringInMonth } from "./inflow";
 
 /**
- * The cells that carry a river: those the gathered water reaches with a river's flow in at
- * least one month of the year (see `channelRegime`). Each cell is judged on what reaches it
- * and on nothing else: no share of its basin, no help from the cells below. A river therefore
- * starts where enough water has gathered, and ends where it has lost it.
+ * The cells a river runs through: those reached, in at least one month of the year, by a
+ * river's flow gathered from a catchment the map shows (see `riverSize`). No share of its
+ * basin and no help from the cells below: a river starts where enough water has gathered and
+ * ends where it has lost it. One exception is deliberate: a parent map's named river
+ * continues on a finer map whatever its water there, because named things persist.
  */
 function buildChannels(map: PhysicalField): Band {
   const channels = workingArray(map, "uint8", "river:channels");
@@ -106,16 +107,13 @@ export function riverNetwork(
   c: PhysicalContext,
   incoming?: Band,
   continuingHeads: readonly number[] = [],
-  /** What of the incoming flow still enters in the entering river's driest month. */
-  steadyIncoming?: Band
+  entering: EnteringRivers = {}
 ) {
-  const area = contributingArea(map, map.FlowTargets);
-  map.CatchmentArea.copyFrom(area);
-  releaseWorking(map, area);
   map.RiverOrders.fill(0);
   const order = sourceToOutletOrder(map);
+  gatherCatchments(map, order, entering.catchment);
   gatherYear(map, c, order, incoming);
-  seasonalFlows(map, c, order, incoming, steadyIncoming);
+  seasonalFlows(map, c, order, incoming, entering.steady);
   const channels = buildChannels(map);
   retainChannels(map, channels, continuingHeads);
   strahlerOrders(map, order, channels);
@@ -124,6 +122,23 @@ export function riverNetwork(
   releaseWorking(map, order, channels);
 }
 
+/**
+ * The ground each cell's water is gathered from. A river entering across the map's edge
+ * drains country beyond it, and brings the catchment the map it comes from says it has, so an
+ * entering river is a gathered river from its first cell.
+ */
+function gatherCatchments(map: PhysicalField, order: Band, beyond?: Band) {
+  for (let i = 0; i < map.mesh.count; i++)
+    map.CatchmentArea.set(i, map.mesh.area(i) + Math.max(0, beyond?.get(i) ?? 0));
+  gatherDown(order, map.FlowTargets, map.CatchmentArea);
+}
+/** What the map a river comes from says of it, at the cell where it enters this one. */
+export interface EnteringRivers {
+  /** What still enters in the river's driest month, in cubic metres a second. */
+  steady?: Band;
+  /** The catchment the river drains beyond this map, in square metres. */
+  catchment?: Band;
+}
 /**
  * The water each cell gives its river through the year, and what rivers bring in across the
  * map's edge, gathered down the routes as the year's mean flow.
@@ -202,7 +217,7 @@ function seasonalFlows(
     pass = waterPassage(map, c),
     each = waterYearOf(map),
     flow = workingArray(map, "float64", "river:month-flow"),
-    river = riverFlow(map.mesh.area(0), c.Profile.FluvialReferenceRunoff);
+    river = riverSizes(map.scale);
   map.FloodFlow.fill(0);
   map.PerennialFlow.fill(Infinity);
   map.FlowingMonths.fill(0);
@@ -228,12 +243,17 @@ function seasonalFlows(
     if (!Number.isFinite(map.PerennialFlow.get(i))) map.PerennialFlow.set(i, 0);
   releaseWorking(map, flow);
 }
-/** One month's flow at a cell, kept as its greatest and least month and its months in flow. */
-function noteMonth(map: PhysicalField, i: number, carried: number, river: number) {
+/**
+ * One month's flow at a cell, kept as its greatest and least month, and counted as a month
+ * in flow when it is a river's: enough water, gathered from ground the map shows.
+ */
+function noteMonth(map: PhysicalField, i: number, carried: number, river: RiverSizes) {
   if (carried > map.FloodFlow.get(i)) map.FloodFlow.set(i, carried);
   if (carried < map.PerennialFlow.get(i)) map.PerennialFlow.set(i, carried);
-  if (carried >= river) map.FlowingMonths.add(i, 1);
+  if (carried >= river.discharge && gathered(map.CatchmentArea.get(i), river))
+    map.FlowingMonths.add(i, 1);
 }
+type RiverSizes = ReturnType<typeof riverSizes>;
 /** Captured named rivers remain channels along their actual present route. */
 function retainChannels(map: PhysicalField, channels: Band, heads: readonly number[]) {
   for (const head of heads)

@@ -42,7 +42,13 @@ function riverEntries(state: RegionalState): Evidence["entries"] {
       regime ? Math.min(flow(i), Math.max(0, map.PerennialFlow.get(i))) : flow(i);
   for (let i = 0; i < mesh.count; i++)
     if (frameEdge(mesh, i) && flow(i) > 0 && flowsInward(state, i) && strongest(i))
-      entries.push({ cell: i, discharge: flow(i), least: least(i) });
+      entries.push({
+        cell: i,
+        discharge: flow(i),
+        least: least(i),
+        // Read before this map's own water is worked out: the parent's figure for the river.
+        catchment: Math.max(0, map.CatchmentArea.get(i)),
+      });
   return entries;
 }
 

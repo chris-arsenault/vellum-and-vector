@@ -6,16 +6,16 @@ import type { PhysicalField } from "../world/field";
 export function lakeMembership(map: PhysicalField) {
   const { WaterKindCodes: kinds, WaterBodyIds: bodies } = map;
   let labelCount = 0,
-    lakeCells = 0;
+    lakeCount = 0;
   for (let i = 0; i < map.mesh.count; i++) {
     if (kinds.get(i) !== 2) continue;
     labelCount = Math.max(labelCount, bodies.get(i) + 1);
-    lakeCells++;
+    lakeCount++;
   }
   const offsets = new Int32Array(labelCount + 1);
   for (let i = 0; i < map.mesh.count; i++) if (kinds.get(i) === 2) offsets[bodies.get(i) + 1]++;
   for (let body = 0; body < labelCount; body++) offsets[body + 1] += offsets[body];
-  const members = new Int32Array(lakeCells),
+  const members = new Int32Array(lakeCount),
     cursor = offsets.slice(0, labelCount);
   for (let i = 0; i < map.mesh.count; i++)
     if (kinds.get(i) === 2) members[cursor[bodies.get(i)]++] = i;
