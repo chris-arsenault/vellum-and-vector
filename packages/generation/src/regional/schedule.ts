@@ -25,7 +25,8 @@ import { transportRetainedMagic } from "../world/magicStocks";
 import { exchangeMagicWater } from "../world/magicGroundwater";
 import { growNetwork } from "./network";
 import { extractPlaces, livePeople, preparePeople } from "./people";
-import { deriveRelief, updateSlopes } from "./relief";
+import { updateSlopes } from "./relief";
+import { startGround } from "./startingGround";
 import { deriveMedia } from "./sharedMedia";
 import { ledgerCeilings, ledgerFloors } from "../coupling/fieldContributions";
 import { registerCatalogueCauses } from "../poi/poiCauses";
@@ -111,7 +112,7 @@ export const regionalOperations: ScheduledStep[] = [
   {
     id: "relief",
     message: "Developing relief through retained material",
-    operation: command("relief", "initialize", deriveRelief, []),
+    operation: command("relief", "initialize", startGround, []),
   },
   {
     id: "water",

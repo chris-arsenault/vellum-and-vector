@@ -41,9 +41,9 @@ describe("a river's size comes from the map", () => {
     expect(lines(deciding, /\b\w*(Cells|Catchments)\s*=\s*\d/)).toEqual([]);
   });
   it("judges a river's flow against a size of the map, not the size of a cell", () => {
-    expect(
-      lines(["water/rivers.ts", "water/channelRegime.ts"], /mesh\.area\(0\)|cellArea/)
-    ).toEqual([]);
+    expect(lines(["water/rivers.ts", "water/riverSize.ts"], /mesh\.area\(0\)|cellArea/)).toEqual(
+      []
+    );
   });
   it("declares what makes a river once, against the map, for everything that asks", () => {
     // One place states the sizes, through MapScale; the river network, a region's starting

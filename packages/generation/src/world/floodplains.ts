@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round, toUnits, units } from "./math";
 import { dominantUpstream, longitudinalAlignment } from "../water/channelGeometry";
+import { riverOrderAt } from "../water/riverKeeping";
 import { RecordQueue, type Band } from "@atlas/domain";
 import { releaseWorking } from "./physicalNumerics";
 
@@ -72,7 +73,7 @@ export function floodplains(map: PhysicalField, c: PhysicalContext) {
           map.FloodplainIntensity.get(i),
           livingFloodplainSupport(
             map.Verdure.get(i),
-            map.RiverOrders.get(i),
+            riverOrderAt(map, i),
             map.WaterKindCodes.get(i)
           )
         )

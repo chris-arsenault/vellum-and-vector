@@ -1,5 +1,6 @@
 import { MapScale, biomeCode as B } from "@atlas/domain";
 import type { PhysicalField } from "./field";
+import { onRiver } from "../water/riverKeeping";
 
 export const unit = (value: number) => Math.max(0, Math.min(1, value));
 /** Floodplain and delta classifications can overlap on the same wet ground. */
@@ -69,7 +70,7 @@ export function plantWater(map: PhysicalField, i: number) {
 }
 export function environment(map: PhysicalField, i: number, forcing = neutralEcology) {
   // A river carrying magical warmth is warmer than its banks and does not freeze.
-  const warmth = map.RiverOrders.get(i) >= 1 ? map.RiverWarmth.get(i) : 0;
+  const warmth = onRiver(map, i) ? map.RiverWarmth.get(i) : 0;
   const temperature = (map.Temperature.get(i) + warmth) / 10 - 30;
   const depth = MapScale.metres(map.WaterDepths.get(i), "native");
   const water = map.WaterKindCodes.get(i),

@@ -1,8 +1,7 @@
 // OceanConnectivityLayer.cs, Canonry 0f62584c.
 import { crustForming, type PhysicalField } from "../world/field";
-import { setWaterSurface } from "./standing";
+import { clearStandingWater, standWater } from "./column";
 import type { PhysicalContext } from "../world/context";
-import { noWaterSurface } from "../world/math";
 import { MapScale } from "@atlas/domain";
 import { oceanSeeds, OceanComponents, visitConnectedOcean } from "../world/oceanComponents";
 import { workingValues, releaseWorking } from "../world/physicalNumerics";
@@ -141,19 +140,14 @@ export function oceanSurface(map: PhysicalField, c: PhysicalContext) {
     previous = workingValues(map, "float64", "ocean:previous-water", (i) =>
       map.WaterKindCodes.get(i) > 0 ? map.WaterDepths.get(i) : 0
     );
-  map.WaterKindCodes.fill(0);
-  map.WaterBodyIds.fill(0);
-  map.WaterDepths.fill(0);
-  map.WaterSurfaceElevations.fill(noWaterSurface);
+  clearStandingWater(map);
   map.EffectiveSeaLevel = seaLevel(map, c);
   // The sea reaches what lies below its level, and stands on each cell it reaches at the
   // height that cell's own answer gives: its level, unless something holds it elsewhere.
   const stand = ask(map, "seaStand", c);
   visitConnectedOcean(map, map.EffectiveSeaLevel, (i) => {
     if (map.Elevation.get(i) >= stand.get(i)) return;
-    map.WaterKindCodes.set(i, 1);
-    map.WaterBodyIds.set(i, 1);
-    setWaterSurface(map, i, map.EffectiveSeaLevel);
+    standWater(map, i, 1, map.EffectiveSeaLevel, 1);
   });
   // The ordinary lake solver owns the next stage adjustment. Connectivity cannot evaporate
   // enclosed water before that solver observes its finite supply and climate losses.
@@ -167,8 +161,7 @@ export function oceanSurface(map: PhysicalField, c: PhysicalContext) {
       marine.get(i) > 0
     );
     if (depth <= 0) continue;
-    map.WaterKindCodes.set(i, 2);
-    setWaterSurface(map, i, map.Elevation.get(i) + depth);
+    standWater(map, i, 2, map.Elevation.get(i) + depth);
   }
   releaseWorking(map, previous, previousSurface, marine);
 }

@@ -3,7 +3,7 @@ import { ecologyCarbon, ecologyMemory, ecologyRatios, ecologyScalars } from "@at
 import { units } from "../world/math";
 import type { MapScale } from "@atlas/domain";
 import { rockLayerDepths, rockLayerKinds } from "@atlas/domain";
-import { humanIntegerFields, humanScalarFields, waterYearFields } from "@atlas/domain";
+import { humanIntegerFields, humanScalarFields, waterColumn, waterYearFields } from "@atlas/domain";
 import {
   groundMaterialFields,
   groundPlacementFields,
@@ -69,7 +69,6 @@ export const quantityKinds = {
     "Verdure",
     "Salting",
     "LakeMemory",
-    "RiverMemory",
     "Warding",
     "KeptLine",
     "Tearing",
@@ -92,8 +91,6 @@ export const quantityKinds = {
     "WalkedRoute",
     "MassDeath",
     "SoilDepth",
-    "SoilWater",
-    "GroundwaterStorage",
     "MineralNutrients",
     "MigrationFlux",
     "SurfaceRockLoad",
@@ -199,8 +196,6 @@ for (const name of [
   "MantlePlumeRootStrength",
   "VolcanicActivity",
   "LandformCodes",
-  "WaterKindCodes",
-  "WaterBodyIds",
   "DrainageBasinIds",
   "FlowEdges",
   "RiverOrders",
@@ -230,8 +225,6 @@ for (const name of [
   "ConvergentCrustSurplus",
   "LandmarkMaintenance",
   "Slope",
-  "WaterDepths",
-  "WaterSurfaceElevations",
   "DrainageElevations",
   "LakeOverflow",
   "RidgeInfluence",
@@ -274,6 +267,9 @@ for (const name of [
   "SedimentSupply",
 ])
   quantityKinds[name] = "ground";
+// A cell's water column goes with its ground as one package, carried by the water owner.
+for (const part of ["snow", "soil", "ground", "standing", "surface", "kind", "body"] as const)
+  quantityKinds[waterColumn[part]] = "carried";
 
 export const quantitiesOfKind = (kind: QuantityKind) =>
   Object.keys(quantityKinds).filter((name) => quantityKinds[name] === kind) as PhysicalBufferName[];

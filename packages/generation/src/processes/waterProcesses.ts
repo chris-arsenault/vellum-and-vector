@@ -125,7 +125,6 @@ export const rivers = fieldQuery(
       "FloodFlow",
       "PerennialFlow",
       "FlowingMonths",
-      "RiverMemory",
     ],
     execute: ({ map, context }) => riverNetwork(map, context),
   },

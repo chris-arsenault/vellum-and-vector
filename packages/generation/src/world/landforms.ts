@@ -7,6 +7,7 @@ import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
 import { physicalDistance, physicalSampler } from "./physicalMetric";
 import { topographicProminence } from "../topographicProminence";
+import { onRiver } from "../water/riverKeeping";
 import { MapScale } from "@atlas/domain";
 
 function shape(
@@ -126,7 +127,7 @@ function gradientAbove(map: PhysicalField, i: number) {
   let above = 0;
   for (let edge = 0; edge < map.mesh.degree(i); edge++) {
     const j = map.mesh.neighbor(i, edge);
-    if (j >= 0 && map.RiverOrders.get(j) > 0 && map.FlowTargets.get(j) === i)
+    if (j >= 0 && onRiver(map, j) && map.FlowTargets.get(j) === i)
       above = Math.max(above, riverGradient(map, j));
   }
   return above;
@@ -137,7 +138,7 @@ function gradientAbove(map: PhysicalField, i: number) {
  * read this; a step with no reason to be known stays steep water.
  */
 export function isRiverStep(map: PhysicalField, i: number): boolean {
-  if (map.WaterKindCodes.get(i) !== 0 || map.RiverOrders.get(i) <= 0) return false;
+  if (map.WaterKindCodes.get(i) !== 0 || !onRiver(map, i)) return false;
   if (riverDrop(map, i) < waterfallLeastDrop(map)) return false;
   const below = Math.max(0, riverGradient(map, map.FlowTargets.get(i)));
   return riverGradient(map, i) >= waterfallStepRatio * Math.max(gradientAbove(map, i), below);
@@ -158,7 +159,7 @@ function valley(
   s: ReturnType<typeof shape>
 ): boolean {
   return (
-    map.RiverOrders.get(i) > 0 ||
+    onRiver(map, i) ||
     map.CumulativeFluvialErosion.get(i) >= units(p.AncestralValleyMinimumErosion) ||
     (s.higher >= 2 &&
       map.Slope.get(i) > p.PlainSlopeThreshold &&
@@ -178,7 +179,7 @@ function relief(
 /** A river cell both steep and deeply incised: what makes a reach a gorge. */
 export function incisedReach(map: PhysicalField, p: PhysicalProfile, i: number) {
   return (
-    map.RiverOrders.get(i) > 0 &&
+    onRiver(map, i) &&
     map.Slope.get(i) >= p.GorgeMinimumSlope &&
     map.CumulativeFluvialErosion.get(i) >= units(p.GorgeMinimumIncision)
   );
@@ -209,7 +210,7 @@ export function landformClassification(map: PhysicalField, c: PhysicalContext) {
 }
 const reliefClasses = new Set([L.Plain, L.Slope, L.Valley, L.Ridge]);
 const dryCol = (map: PhysicalField, cell: number) =>
-  map.WaterKindCodes.get(cell) === 0 && map.RiverOrders.get(cell) <= 0;
+  map.WaterKindCodes.get(cell) === 0 && !onRiver(map, cell);
 function adjacentCells(map: PhysicalField) {
   return function* (cell: number) {
     for (let edge = 0; edge < map.mesh.degree(cell); edge++) {

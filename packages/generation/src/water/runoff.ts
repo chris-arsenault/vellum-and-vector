@@ -1,6 +1,7 @@
 import { MapScale, waterYearFields, type Band } from "@atlas/domain";
 import { moveWater } from "./waterLedger";
 import { holdSoilWater, soilWaterCapacity } from "./soilWater";
+import { putSnow, putSoilWater } from "./column";
 import { ask } from "../coupling/answers";
 import { groundOf } from "../rock/ground";
 import { surfacePorosity } from "../rock/groundQueries";
@@ -109,27 +110,31 @@ function landWater(map: PhysicalField, c: PhysicalContext, each: Band[], moved: 
   // What else wets a soil, and what keeps one wet, is said by whoever does it.
   const wetting = ask(map, "soilWetting", c),
     held = ask(map, "soilWaterHeld", c),
-    yields = [
-      map.Runoff,
-      map.FloodRunoff,
-      map.DryRunoff,
-      map.WaterRecharge,
-      map.SoilWater,
-      map.SnowKept,
-    ];
+    yields = [map.Runoff, map.FloodRunoff, map.DryRunoff, map.WaterRecharge, map.SnowKept];
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) === 1) {
       for (const band of [...yields, ...each]) band.set(i, 0);
+      // The sea floor holds no soil water or snow of its own.
+      putSoilWater(map, i, 0);
+      putSnow(map, i, 0);
       continue;
     }
     const sinking = sinkingShare(map, i),
       fell = climateYear(map, c, i),
-      water = waterYear({
-        ...fell,
-        soilCapacity: millimetres(soilWaterCapacity(map, i)),
-        sinking,
-        stormShare: c.Profile.StormRunoffShare * (1 - sinking) * bare(map, i),
-      });
+      capacity = millimetres(soilWaterCapacity(map, i)),
+      water = waterYear(
+        {
+          ...fell,
+          soilCapacity: capacity,
+          sinking,
+          stormShare: c.Profile.StormRunoffShare * (1 - sinking) * bare(map, i),
+        },
+        // What the cell's column holds from before: carried with its ground, or inherited.
+        {
+          soil: Math.min(capacity, millimetres(map.SoilWater.get(i))),
+          snow: millimetres(map.SnowPack.get(i)),
+        }
+      );
     let total = 0,
       least = Infinity,
       greatest = 0;
@@ -145,6 +150,8 @@ function landWater(map: PhysicalField, c: PhysicalContext, each: Band[], moved: 
     map.DryRunoff.set(i, least * months);
     map.WaterRecharge.set(i, water.recharge);
     map.SnowKept.set(i, water.keptSnow);
+    // The snow that lies through the year is part of what the cell holds.
+    putSnow(map, i, MapScale.metres(water.snow, "mm"));
     holdSoilWater(map, i, water.soil, wetting.get(i), held.get(i));
     noteYear(moved, fell, water, map.mesh.area(i));
   }

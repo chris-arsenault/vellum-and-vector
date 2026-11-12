@@ -7,7 +7,8 @@ import {
   neighborsOf,
 } from "../../regional/lattice";
 import type { RegionalState } from "../../regional/state";
-import { impound } from "../../water/standing";
+import { onRiver } from "../../water/riverKeeping";
+import { impound } from "../../water/column";
 
 /** How far (in cells) a dam record snaps to the channel it holds, and the most a crest rises above the bed (m). */
 const damSnap = 2,
@@ -18,7 +19,7 @@ export function channelNear(state: RegionalState, cell: number) {
   const map = state.physical.map,
     mesh = map.mesh;
   if (cell < 0) return -1;
-  if (map.RiverOrders.get(cell) > 0) return cell;
+  if (onRiver(map, cell)) return cell;
   const around = new Int32Array(mesh.stride),
     queue = [cell],
     seen = new Set<number>([cell]), // hpc-exempt: a few cells around one dam
@@ -29,7 +30,7 @@ export function channelNear(state: RegionalState, cell: number) {
       const j = around[k];
       if (seen.has(j) || Math.hypot(mesh.x(j) - mesh.x(cell), mesh.y(j) - mesh.y(cell)) > reach)
         continue;
-      if (map.RiverOrders.get(j) > 0) return j;
+      if (onRiver(map, j)) return j;
       seen.add(j);
       queue.push(j);
     }
@@ -100,8 +101,7 @@ export function crestAt(state: RegionalState, dam: number) {
   for (let k = 0; k < m; k++) {
     const j = around[k],
       height = map.Elevation.get(j);
-    if (map.RiverOrders.get(j) === 0 && map.WaterKindCodes.get(j) === 0 && height > bed)
-      banks.push(height);
+    if (!onRiver(map, j) && map.WaterKindCodes.get(j) === 0 && height > bed) banks.push(height);
   }
   banks.sort((a, b) => b - a);
   const bank = banks.length >= 2 ? banks[1] : (banks[0] ?? bed);

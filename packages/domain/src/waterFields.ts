@@ -9,6 +9,8 @@ import { waterYearFields } from "./waterYearFields";
  * (packages/generation/src/water) and everything else asks it.
  */
 export const waterColumn = {
+  /** Snow lying on the cell through the year, as a depth of water over the cell. */
+  snow: "SnowPack",
   /** Water held in the soil, as a depth over the cell. */
   soil: "SoilWater",
   /** Water held in the ground below the soil, as a depth over the cell. */
@@ -21,8 +23,6 @@ export const waterColumn = {
   body: "WaterBodyIds",
   /** The deepest water the cell has held as a lake. */
   lakeMemory: "LakeMemory",
-  /** The order of the river the cell carries or last carried: what stays of an old course. */
-  riverMemory: "RiverMemory",
 } as const satisfies Record<string, PhysicalFieldName>;
 
 /** What a cell's year of water gives: to the surface, and into the ground. */

@@ -1,5 +1,6 @@
 import { MapScale, type ReadBand } from "@atlas/domain";
 import { ask, respond } from "../coupling/answers";
+import { onRiver, riverLayer, riverOrders } from "../water/riverKeeping";
 import type { PhysicalContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
 import { physicalDistance } from "../world/physicalMetric";
@@ -22,11 +23,11 @@ const steepestStep = 0.6;
 respond({
   key: "travelFriction",
   by: "ground, cover and water",
-  reads: ["WaterKindCodes", "RiverOrders", "TreeCover", "WetlandCover", "IceThickness"],
+  reads: ["WaterKindCodes", riverLayer, "TreeCover", "WetlandCover", "IceThickness"],
   base(map, i) {
     // Ice stops boats as it slows walkers: a frozen sea or river is ground to cross.
     const ice = Math.min(1, map.IceThickness.get(i) / map.scale.length(0.00025)),
-      afloat = map.WaterKindCodes.get(i) !== 0 || map.RiverOrders.get(i) > 0,
+      afloat = map.WaterKindCodes.get(i) !== 0 || onRiver(map, i),
       going = afloat ? boatTravel : 1 + map.TreeCover.get(i) + 2 * map.WetlandCover.get(i);
     return going + 3 * ice;
   },
@@ -57,7 +58,7 @@ export function travelStep(
 ) {
   const launch = map.scale.length(0.0025),
     water = map.WaterKindCodes,
-    rivers = map.RiverOrders;
+    rivers = riverOrders(map);
   return (from: number, to: number) => {
     const distance = physicalDistance(map.mesh, from, to),
       going = (distance * (friction.get(from) + friction.get(to))) / 2,

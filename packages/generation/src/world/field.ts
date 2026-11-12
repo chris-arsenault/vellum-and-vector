@@ -4,6 +4,7 @@ import type { TransportPlan } from "./transportPlan";
 import type { TectonicState } from "./tectonicState";
 import type { LandmarkLedger } from "./landmarkLedger";
 import type { CrustBudget } from "../rock/crustTransport";
+import { emptyReaches, type ReachStore } from "../water/reaches";
 import {
   Band,
   BlockCache,
@@ -51,6 +52,8 @@ export type PhysicalField = Record<MutablePhysicalBufferName, Band> &
       caldera?: boolean;
     }[];
     faults: { id: string; coordinates: [number, number][]; width: number }[];
+    /** The map's rivers, kept from pass to pass; the water owner alone changes them. */
+    rivers: ReachStore;
     /** Slip each thrust sheet has taken that has not yet added up to a whole cell of movement. */
     ThrustSlipOwed: Map<string, number>;
     EffectiveSeaLevel: number;
@@ -115,6 +118,7 @@ export function createField(
     },
     events: [] as PhysicalField["events"],
     faults: [] as PhysicalField["faults"],
+    rivers: emptyReaches(),
     ThrustSlipOwed: new Map<string, number>(),
     EngineeredDams: null as Band | null,
     EffectiveSeaLevel: 0,

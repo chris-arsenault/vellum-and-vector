@@ -5,6 +5,7 @@ import { continuingRivers } from "../area/riverLineage";
 import { riverCourseJudgments, type CourseJudgment } from "../world/worldRiverCourses";
 import type { RegionalState } from "../regional/state";
 import { generationFeatures } from "../generationFeatures";
+import { onRiver } from "../water/riverKeeping";
 import type { GenerationState } from "../process";
 import { mapScale, riverShortfalls } from "../worldSignificance";
 import { poiCatalogue } from "./catalogue";
@@ -105,7 +106,7 @@ function channelAt(state: GenerationState, cell: number, rivers: Rivers) {
   if (cell < 0) return { onChannel: false, discharge: null, record: undefined };
   const map = fieldOf(state);
   return {
-    onChannel: map.RiverOrders.get(cell) > 0,
+    onChannel: onRiver(map, cell),
     discharge: map.FlowAccumulation.get(cell),
     record: rivers.at(cell),
   };

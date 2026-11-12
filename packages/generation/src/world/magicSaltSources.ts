@@ -3,7 +3,7 @@ import type { MagicField } from "./magicState";
 import type { LocateContext, SupplyContext } from "./magicSources";
 import { siteStrength } from "./magicStocks";
 import { depositSaltBed } from "../rock/rockMagicStock";
-import { forgetLake } from "../water/standing";
+import { forgetLake } from "../water/column";
 
 /**
  * Salt's death origin: the dead the ground records become brine where they lie. The record

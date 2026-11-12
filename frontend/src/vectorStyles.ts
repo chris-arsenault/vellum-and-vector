@@ -217,7 +217,6 @@ function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, r
 function physicalStrokeWidth(feature: AtlasFeature, resolution: number) {
   if (feature.kind === "fault") return 1;
   if (feature.layerId === "roads") return routeStrokeWidth(feature);
-  if (feature.kind === "dryBed") return 1.2;
   if (feature.kind !== "river") return 2;
   return channelStrokeWidth(riverWidth(feature), resolution);
 }
@@ -231,7 +230,7 @@ function routeStrokeWidth(feature: AtlasFeature) {
 const seasonalDash = [8, 5],
   dryDash = [1, 5];
 function waterLineDash(feature: AtlasFeature) {
-  if (feature.kind === "dryBed" || feature.attributes.regime === "dry") return dryDash;
+  if (feature.attributes.regime === "dry") return dryDash;
   return feature.attributes.regime === "seasonal" ? seasonalDash : undefined;
 }
 /** How a stretch between two points of a river's course is drawn, by its months in flow. */

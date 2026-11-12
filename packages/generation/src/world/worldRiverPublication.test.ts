@@ -4,6 +4,8 @@ import { extractNativeGeography } from "./atlasFeatures";
 import { runOperation } from "../processOperation";
 import { processOwner } from "../processTraits";
 import type { MapProcessContext } from "../process";
+import { cutReaches } from "../water/reachCuts";
+import { carryReaches } from "../water/reaches";
 
 function suppliedNetwork(branchFlow: number) {
   const state = worldGeographyFixture(undefined, 25_000),
@@ -28,6 +30,8 @@ function suppliedNetwork(branchFlow: number) {
       map.RiverWidth.set(cell, 50);
       map.RiverDepth.set(cell, 3);
     });
+  // The map keeps its rivers as reaches; publishing reads those.
+  carryReaches(map.rivers, cutReaches(map, map.RiverOrders), 0);
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],

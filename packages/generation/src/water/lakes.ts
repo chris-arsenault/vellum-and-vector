@@ -1,7 +1,7 @@
 import { meshDeltaX } from "../world/mesh";
 // LakeBasinLayer depression discovery, pools and outlets, Canonry 0f62584c.
 import type { PhysicalField } from "../world/field";
-import { clearWaterSurface, setWaterSurface } from "./standing";
+import { drainCell, standWater } from "./column";
 import type { PhysicalContext } from "../world/context";
 import { hashUnit } from "../world/noise";
 import { round } from "../world/math";
@@ -19,12 +19,7 @@ import {
 function clearLakes(map: PhysicalField) {
   map.LakeOutletTargets.fill(-1);
   map.LakeOverflow.fill(0);
-  for (let i = 0; i < map.mesh.count; i++)
-    if (map.WaterKindCodes.get(i) === 2) {
-      map.WaterKindCodes.set(i, 0);
-      map.WaterBodyIds.set(i, 0);
-      clearWaterSurface(map, i);
-    }
+  for (let i = 0; i < map.mesh.count; i++) if (map.WaterKindCodes.get(i) === 2) drainCell(map, i);
 }
 /** Retain water present before the next equilibrium adjustment can dry a basin. */
 export function rememberLakes(map: PhysicalField) {
@@ -131,11 +126,7 @@ function markLake(
   marks: Band,
   id: number
 ) {
-  for (const i of lake.members) {
-    map.WaterKindCodes.set(i, 2);
-    map.WaterBodyIds.set(i, id);
-    setWaterSurface(map, i, lake.surface);
-  }
+  for (const i of lake.members) standWater(map, i, 2, lake.surface, id);
   if (lake.overflow <= 0 || lake.surface < lake.component.spill) return;
   const outlet = findOutlet(map, c, lake, marks);
   if (outlet.member >= 0) {

@@ -8,6 +8,7 @@ import { sourceToOutletOrder } from "./flowGraph";
 import { edgeLeadingTo } from "./mesh";
 import { isGrounded } from "./glacierSurface";
 import { releaseWorking } from "./physicalNumerics";
+import { riverOrderAt } from "../water/riverKeeping";
 
 function scalar(map: PhysicalField, name: PhysicalBufferName, low = 0, high = 1000) {
   const outside = map.coverage.reduce(
@@ -71,7 +72,7 @@ export function validateChannels(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {
     const strength = map.RiverChannelStrength.get(i),
       order = map.RiverChannelOrders.get(i),
-      river = map.RiverOrders.get(i);
+      river = riverOrderAt(map, i);
     if (
       order < 0 ||
       (strength === 0) !== (order === 0) ||

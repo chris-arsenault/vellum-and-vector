@@ -3,6 +3,7 @@ import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { Feature, Landform } from "./codes";
 import { hasSeaIceCover } from "./seaIce";
+import { onRiver, riverOrderAt } from "../water/riverKeeping";
 
 type Surface = (typeof naturalSurfaceNames)[number];
 function frozenNeighbor(map: PhysicalField, i: number) {
@@ -102,7 +103,7 @@ function landRelief(map: PhysicalField, i: number): Surface {
     [Landform.Ridge, Landform.Peak, Landform.ImpactRim].includes(map.LandformCodes.get(i))
   )
     return "Ridge";
-  if (!map.EcologyInitialized && map.RiverOrders.get(i) >= 1) return "River valley";
+  if (!map.EcologyInitialized && onRiver(map, i)) return "River valley";
   return landClimate(map, i);
 }
 function landSurface(map: PhysicalField, i: number): Surface {
@@ -120,7 +121,7 @@ function fluvialSurface(map: PhysicalField, i: number): Surface | null {
   const landform = map.LandformCodes.get(i);
   if (landform === Landform.Waterfall) return "Waterfall";
   if (landform === Landform.Gorge) return "Gorge";
-  const order = map.RiverOrders.get(i);
+  const order = riverOrderAt(map, i);
   // A river carrying a wellspring's warmth stays open and green through the cold.
   if (order >= 1 && map.RiverWarmth.get(i) >= 50) return "Warm-water reach";
   // Only a trunk river's channel is wider than the cover around it at mesh scale.

@@ -1,3 +1,4 @@
+import { riverLayer } from "./water/riverKeeping";
 import {
   gridPosition,
   gridDistance,
@@ -170,7 +171,7 @@ function routeTerrain(grid: Grid) {
     sea: grid.channels.EffectiveSeaLevel,
     water: grid.channels.WaterKindCodes,
     flow: grid.channels.FlowAccumulation,
-    river: grid.channels.RiverOrders,
+    river: grid.channels[riverLayer],
     trees: grid.channels.TreeCover,
     moisture: grid.channels.Moisture,
     slope: grid.channels.Slope,

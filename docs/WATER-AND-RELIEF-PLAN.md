@@ -112,6 +112,10 @@ These are not redefined to fit code. If the code cannot meet one, the milestone 
 
 These are part of the work, not advice.
 
+Owner's correction, 2026-11-12: pictures, reviews, commits and pushes are batched over
+several milestones, not done after each one. Points 1 and 6 below apply at each batch: M2
+and M3 together, then M4 and M5, then M6. Unit tests still run as each piece is written.
+
 1. **A picture gate on every milestone.** Each milestone ends with the parent and region
    pictures of three fixed places (the world's highest land, a plain, a coast), made by the
    quick region check, with their paths given to the owner. A milestone with no visible gain
@@ -194,8 +198,16 @@ Evidence: the three picture pairs at two detail levels; the size guard passes.
 
 State: in the code 2026-11-12, at draft detail. The sizes are in `water/riverSize.ts`. On
 the pictures of all three places the blocks and tangles are gone: rivers are separate lines
-with empty ground between, and the plain is mostly empty of rivers. Still to show: the same
-places at standard detail. Seen on the pictures and left for later milestones: the ground is
+with empty ground between, and the plain is mostly empty of rivers.
+
+At standard detail the same holds: rivers are as few and as separate as at draft, so the
+size no longer depends on how many cells the map has. But they are not the same rivers. On
+the plain the main river takes a different course at each detail level, and standard detail
+has many more small lakes. The cause is not the river's size: a region's ground is rebuilt
+from its own drainage tree, and comes out different at each detail level. "The same rivers
+at any detail" is therefore an acceptance of M4, and is checked again there.
+
+Seen on the pictures and left for later milestones: the ground is
 speckled with single-cell bumps (M4), and some rivers stop inland where their water is lost,
 which the map does not yet tell apart from a river that ends for no reason (M2).
 
@@ -240,6 +252,22 @@ could draw.
 Evidence: picture pairs; a unit test of reach matching and of a course change on a small
 field; the reader guard passes.
 
+State: in the code 2026-11-12. The map keeps its reaches (`water/reaches.ts`, on the field
+as `rivers`); each pass's rivers are carried onto them (`water/riverKeeping.ts`); publishing
+reads them, and a drawn river that loses its water is drawn again as the same record, dry.
+Everything outside the water code asks `onRiver`, `riverOrderAt` or `reachAt`; the readers
+were all of one kind ("a river"), about fifty reads in thirty files. A region takes its
+parent's rivers from the parent's stored reaches. The reader checks pass.
+
+Not met, and said plainly:
+
+- The kept reaches are not saved with a run or carried when the plates move. A run resumed
+  from a saved point starts with no reaches; after a plate move, dry and former courses are
+  let go and rivers are found again on the ground as it lies.
+- "Only on rivers the map could draw": the answer is true on every reach that meets the
+  map's river sizes. A reach too short to be drawn as a course still counts as a river.
+- No dry course has been seen on a map: the saved world has no history that makes one.
+
 ### M3 — The water column is one package [depends on M0]
 
 Scope: snow, soil water, groundwater and standing water as one owned package, stored (lying
@@ -249,6 +277,16 @@ Acceptance: a region starts with its parent's snow, soil water, groundwater and 
 recomputing them; the column guard passes.
 Evidence: unit tests of the package under movement and inheritance; picture pairs unchanged
 or better (a region's lakes and snowfields present from its first round).
+
+State: in the code 2026-11-12. `water/column.ts` holds the package: lying snow (a new
+layer), soil water, groundwater and standing water. Every change to a part goes through it;
+it is carried with the crust by the water owner (lakes ride their ground, the sea does not),
+and its list of parts is what a finer map inherits. The year's water budget starts from the
+snow and soil water a cell already holds. The column checks pass.
+
+Not met: soil water and snow are worked out again by a region's first budget, starting from
+the inherited values; they are inherited, not left untouched. The saved world predates the
+snow layer, so the pictures do not show inherited snow.
 
 ### M4 — A region keeps the parent's ground [depends on M1]
 
@@ -262,8 +300,32 @@ Scope: the starting surface and the verdict table.
   are.
 
 Acceptance (owner-required): region and parent pictures show the same mountains, plateaus and
-plains at the same heights, with valleys and smaller forms added.
+plains at the same heights, with valleys and smaller forms added; and the same place at draft
+and standard detail shows the same rivers and lakes (carried over from M1).
 Evidence: the three picture pairs; the starting-surface guard passes.
+
+State: the starting ground is in the code 2026-11-12 (`regional/startingGround.ts`). A parent
+cell's rock column already records how much of the cell is valley and how deep the valley
+lies. Each finer cell inherits that record, and the region places the valley along its own
+drainage: the stream's cells first, then outward, until the parent's share is placed.
+Valley cells take the recorded floor and the rest the uncut surface
+(`resolveCut` in `rock/groundShares.ts`, with unit tests of the behaviour). The code that
+rebuilt heights from the tree is gone, and the starting-ground check passes.
+
+On the pictures the highland now has its parent's plateau, escarpment and long even slope,
+and a region's ground at its start is the parent's ground with connected valley floors.
+
+Not met:
+
+- The verdict table is not yet written here.
+- After the three rounds of development the low ground is speckled, cell against cell. The
+  quick check now records what each process does to low ground (`ground-changes.json`), and
+  it names stream incision: in a region's rounds it lowers the cells that gather the least
+  water the most (about eleven metres in the first round on the plain) and by very different
+  amounts from one cell to the next, while cells many others drain through barely move.
+  Its settings for a finer map were made for the rebuilt surface. This is the first row of
+  M5.
+- Draft against standard detail has not been pictured again since the ground changed.
 
 ### M5 — The rock column shapes what is inside a cell [depends on M4]
 

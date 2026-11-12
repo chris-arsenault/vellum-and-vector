@@ -1,5 +1,5 @@
 import type { PhysicalField } from "../world/field";
-import { reconcileWater } from "../water/standing";
+import { reconcileWater } from "../water/column";
 import { clamp } from "../world/math";
 import { columnFields, columns, materialProperties, type Column } from "@atlas/domain";
 import { writeCargo, touchCargo } from "./groundCargo";
@@ -46,6 +46,24 @@ export function openCut(map: PhysicalField, cell: number, share: number) {
       copyLayer(map, cell, layer, layer, to, from);
   groundStorage(map).GroundCutShare.set(cell, clamp(share, 0, 1));
   groundStorage(map).GroundCutDepth.set(cell, 0);
+}
+/**
+ * A finer map says how much of the valley its coarser ground recorded lies in this cell. A
+ * coarse cell holds an uncut surface and a cut one, with the share of it the cut takes and
+ * how deep it lies; each of its finer cells inherits both. Here one finer cell is told its
+ * own share: all valley, none, or the part of the valley's edge that crosses it. Nothing is
+ * added or removed: the uncut surface stays at its height and the valley floor at its depth,
+ * and the cell's own surface follows from how much of each it holds.
+ */
+export function resolveCut(map: PhysicalField, cell: number, share: number) {
+  if (cutShare(map, cell) <= 0) return;
+  const owned = groundStorage(map),
+    uncut = rockSurface(map, cell, "land"),
+    held = clamp(share, 0, 1);
+  owned.BedrockElevation.set(cell, uncut - held * map.GroundCutDepth.get(cell));
+  if (held > 0) owned.GroundCutShare.set(cell, held);
+  else resetShares(map, cell);
+  projectGround(map, cell);
 }
 /** Move one share's rock surface; callers own the corresponding addition/removal of material. */
 export function moveFacet(map: PhysicalField, cell: number, facet: GroundFacet, change: number) {

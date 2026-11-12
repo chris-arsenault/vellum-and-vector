@@ -1,6 +1,7 @@
 import { humanLayers } from "@atlas/domain";
 import { respond } from "../coupling/answers";
 import type { PhysicalField } from "../world/field";
+import { onRiver, riverLayer } from "../water/riverKeeping";
 import { soilWaterFilled } from "../water/soilWater";
 
 /**
@@ -16,7 +17,7 @@ const growing = (map: PhysicalField, i: number) =>
 /** The water the soil holds against what it could hold. */
 const storedWater = soilWaterFilled;
 const river = (map: PhysicalField, i: number) =>
-  map.RiverOrders.get(i) > 0 ? Math.min(1, map.RiverChannelStrength.get(i) / 1000) : 0;
+  onRiver(map, i) ? Math.min(1, map.RiverChannelStrength.get(i) / 1000) : 0;
 /** Thick ice leaves nothing to live on. */
 const iceFree = (map: PhysicalField, i: number) =>
   1 - Math.min(1, map.IceThickness.get(i) / map.scale.length(0.00025));
@@ -57,7 +58,7 @@ respond({
     "SoilCarbon",
     "Slope",
     "TreeCover",
-    "RiverOrders",
+    riverLayer,
     "RiverChannelStrength",
     "Quickening",
     "Stillness",
@@ -97,7 +98,7 @@ respond({
     "Herbivores",
     "AquaticFauna",
     "Upwelling",
-    "RiverOrders",
+    riverLayer,
     "RiverChannelStrength",
     "IceThickness",
   ],

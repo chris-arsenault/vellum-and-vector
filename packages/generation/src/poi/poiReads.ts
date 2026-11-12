@@ -7,6 +7,7 @@ import { generationFeatures } from "../generationFeatures";
 import type { GenerationState } from "../process";
 import { cellAt, positionOf } from "../regional/lattice";
 import { groundOf } from "../rock/ground";
+import { onRiver } from "../water/riverKeeping";
 import {
   surfaceHardness,
   surfaceKind,
@@ -80,8 +81,7 @@ export const isSea = (state: GenerationState, cell: number) =>
 export const isLake = (state: GenerationState, cell: number) =>
   fieldOf(state).WaterKindCodes.get(cell) === Water.Lake;
 /** Whether water runs in a channel here. This is not a river: a river is the river area's to say. */
-export const hasChannel = (state: GenerationState, cell: number) =>
-  fieldOf(state).RiverOrders.get(cell) > 0;
+export const hasChannel = (state: GenerationState, cell: number) => onRiver(fieldOf(state), cell);
 export const landformAt = (state: GenerationState, cell: number) =>
   fieldOf(state).LandformCodes.get(cell);
 export { Landform };

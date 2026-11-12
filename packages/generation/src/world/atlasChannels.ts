@@ -3,6 +3,7 @@ import type { PhysicalBufferName } from "./field";
 import { ecologyFields, ecologyRatios } from "@atlas/domain";
 import { magicEffectChannels } from "./magicFieldDefinitions";
 import { humanChannels, humanFeatures } from "../human/humanChannels";
+import { landWaterNames, standingWaterNames, waterColumnChannels } from "../water/column";
 
 /** The working band's identity and meaning also govern its published samples. */
 export interface PhysicalChannel {
@@ -31,12 +32,18 @@ const category = (name: PhysicalBufferName): PhysicalChannel => ({
   unit: "category",
   quantity: "category",
 });
+/**
+ * What the living landscape publishes. The soil's water is shown with it but belongs to the
+ * water column, which publishes it with the rest of what a cell holds.
+ */
+const columnParts = new Set<string>(waterColumnChannels.map(({ name }) => name)),
+  livingFields = ecologyFields.filter(({ name }) => !columnParts.has(name));
 
 /** Publication selects facts; it never renames, re-encodes or rebases their values. */
 export const physicalChannels: PhysicalChannel[] = [
   length("Elevation"),
   ...magicEffectChannels.map((name) => channel(name, "ratio")),
-  ...ecologyFields.map((field) => ({
+  ...livingFields.map((field) => ({
     ...field,
     minimum: 0,
     maximum: ecologyRatios.some((name) => name === field.name) ? 1 : undefined,
@@ -53,10 +60,9 @@ export const physicalChannels: PhysicalChannel[] = [
   amount("ImpactExcavation"),
   amount("ImpactRimUplift"),
   amount("ImpactEjectaThickness"),
-  amount("WaterDepths"),
-  length("WaterSurfaceElevations"),
+  // A cell's water column is published and inherited as the water owner's package.
+  ...waterColumnChannels,
   length("DrainageElevations"),
-  channel("GroundwaterStorage", "metre"),
   fraction("FractureConductance"),
   channel("RockResistance", "rock-strength"),
   fraction("CrustAge"),
@@ -114,8 +120,6 @@ export const physicalChannels: PhysicalChannel[] = [
   category("ThrustSheetIndex"),
   category("ThrustSegmentIds"),
   ...groundResourceChannels,
-  category("WaterKindCodes"),
-  category("WaterBodyIds"),
   category("DrainageBasinIds"),
   category("RiverOrders"),
   category("GroundedIce"),
@@ -221,20 +225,15 @@ export const physicalChannelOwnership: Ownership[] = [
     "rivers",
     [
       "Runoff",
-      "WaterBodyIds",
+      ...landWaterNames,
       "DrainageBasinIds",
       "CatchmentArea",
       "RiverWarmth",
-      "GroundwaterStorage",
       "FlowAccumulation",
       "DrainageElevations",
     ],
   ],
-  [
-    "ocean.geography",
-    "rivers",
-    ["WaterKindCodes", "WaterDepths", "OceanDistance", "WaterSurfaceElevations"],
-  ],
+  ["ocean.geography", "rivers", [...standingWaterNames, "OceanDistance"]],
   ["ocean.geography", "geology", ["BathymetricZoneCodes"]],
   [
     "physical.ocean-circulation",
@@ -260,6 +259,6 @@ export const physicalChannelOwnership: Ownership[] = [
   ],
   ["physical.floodplains", "rivers", ["FloodplainIntensity"]],
   ["physical.deltas", "rivers", ["DeltaIntensity"]],
-  ["ecology.living", "ecology", ecologyFields.map(({ name }) => name)],
+  ["ecology.living", "ecology", livingFields.map(({ name }) => name)],
   [humanFeatures, "cultures", humanChannels.map(({ name }) => name)],
 ];

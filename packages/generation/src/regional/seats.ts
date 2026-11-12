@@ -8,6 +8,7 @@ import { celsius } from "./climate";
 import { cellAt, distance, isContent, neighborsOf, positionOf } from "./lattice";
 import { promoteChannel } from "./network";
 import { gradeSeat } from "./grading";
+import { onRiver } from "../water/riverKeeping";
 import { clamp, type RegionalState, type Seat, type Situation } from "./state";
 
 /** Slope above which a seat's own cell is not usable ground. */
@@ -60,7 +61,7 @@ export function situationAt(state: RegionalState, cell: number): Situation {
     water = (kind: number) => cells.some((j) => map.WaterKindCodes.get(j) === kind);
   if (water(1)) return "coast";
   if (water(2)) return "lake";
-  if (cells.some((j) => map.RiverOrders.get(j) > 0)) return "river";
+  if (cells.some((j) => onRiver(map, j))) return "river";
   return "inland";
 }
 

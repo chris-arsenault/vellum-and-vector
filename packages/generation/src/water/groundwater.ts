@@ -7,6 +7,7 @@ import { averageGroundQuery, groundFact } from "../rock/groundQuery";
 import { clamp } from "../world/math";
 import { respond } from "../coupling/answers";
 import { moveWater } from "./waterLedger";
+import { addGroundwater, putGroundwater } from "./column";
 
 /** A dissolved inventory accompanies the fraction of its carrier actually withdrawn. */
 export function returnedCharge(inventory: number, available: number, returned: number) {
@@ -96,7 +97,7 @@ export function advanceGroundwater(map: PhysicalField, context: PhysicalContext)
       map.WaterKindCodes.get(i) === 1
         ? 0
         : MapScale.metres(map.WaterRecharge.get(i), "mm") * exposure;
-    map.GroundwaterStorage.add(i, recharge);
+    addGroundwater(map, i, recharge);
     map.GroundwaterRecharge.set(i, recharge);
     head.set(
       i,
@@ -113,7 +114,7 @@ export function advanceGroundwater(map: PhysicalField, context: PhysicalContext)
     sprung = 0;
   for (let i = 0; i < map.mesh.count; i++) {
     const water = arriving.get(i) / map.mesh.area(i);
-    if (map.WaterKindCodes.get(i) !== 1) map.GroundwaterStorage.add(i, water);
+    if (map.WaterKindCodes.get(i) !== 1) addGroundwater(map, i, water);
     // What arrives under the sea has left the land's groundwater.
     else toSea += arriving.get(i);
     sprung += map.GroundwaterReturn.get(i) * map.mesh.area(i);
@@ -158,7 +159,7 @@ function routeWater(
   if (marine) target = -1;
   map.GroundwaterTargets.set(i, target);
   map.GroundwaterOutflow.set(i, balance.outflow);
-  map.GroundwaterStorage.set(i, balance.storage);
+  putGroundwater(map, i, balance.storage);
   map.GroundwaterReturn.add(i, balance.returned);
   if (target >= 0) arriving.add(target, balance.outflow * map.mesh.area(i));
 }

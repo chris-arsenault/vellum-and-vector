@@ -9,6 +9,7 @@ import { physicalSampler } from "./physicalMetric";
 import { distance, type Point } from "./landmarkGeometry";
 import { CellList, MapScale, SmallIntSet, radixOrder, type Band } from "@atlas/domain";
 import { workingArray } from "./physicalNumerics";
+import { onRiver } from "../water/riverKeeping";
 
 /** The field read once per siting pass. */
 export interface Terrain {
@@ -71,7 +72,7 @@ export function analyseTerrain(map: PhysicalField): Terrain {
     if (
       map.mesh.membership(i) === 1 &&
       map.WaterKindCodes.get(i) === 0 &&
-      map.RiverOrders.get(i) > 0 &&
+      onRiver(map, i) &&
       height(map, i) > map.scale.length(0.00000125)
     )
       rivers.push(i);

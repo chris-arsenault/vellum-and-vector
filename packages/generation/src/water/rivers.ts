@@ -13,7 +13,7 @@ import { lakeLosses } from "./lakeStage";
 import { gathered, riverSizes } from "./riverSize";
 import { waterYearOf } from "./runoff";
 import { months } from "./waterBalance";
-import { closedByAridity } from "./closedBasin";
+import { keepReaches } from "./riverKeeping";
 import { enteringInMonth } from "./inflow";
 
 /**
@@ -51,36 +51,6 @@ function strahlerOrders(map: PhysicalField, order: Band, channels: Band) {
   }
   releaseWorking(map, largest, count);
 }
-/**
- * What the ground keeps of its rivers. A cell that carries a river is marked with its order.
- * A bed whose river has gone (dried, drawn off or turned elsewhere) stays where the ground is
- * too dry to heal it; in wetter country slopes and growth fill a dry channel long before the
- * next pass, and the mark goes. Water standing on a cell drowns the bed.
- */
-function rememberBeds(map: PhysicalField, c: PhysicalContext) {
-  for (let i = 0; i < map.mesh.count; i++) {
-    const order = map.RiverOrders.get(i);
-    if (order > 0) map.RiverMemory.set(i, order);
-    else if (map.RiverMemory.get(i) > 0 && !keepsBed(map, c, i)) map.RiverMemory.set(i, 0);
-  }
-}
-/**
- * Whether a cell's ground still holds an old bed. Ground carried with the crust arrives as
- * shares of the cells it came from, so the mark can arrive as a part: the cell holds a bed
- * when the greater part of its ground does.
- */
-export const holdsOldBed = (map: PhysicalField, i: number) =>
-  map.WaterKindCodes.get(i) === 0 && map.RiverOrders.get(i) <= 0 && map.RiverMemory.get(i) >= 0.5;
-/** A course known from elsewhere to have carried a river of this order: its land remembers it. */
-export function rememberCourse(map: PhysicalField, cells: ArrayLike<number>, order: number) {
-  for (let n = 0; n < cells.length; n++) {
-    const i = cells[n];
-    if (map.WaterKindCodes.get(i) === 0 && order > map.RiverMemory.get(i))
-      map.RiverMemory.set(i, order);
-  }
-}
-const keepsBed = (map: PhysicalField, c: PhysicalContext, i: number) =>
-  map.WaterKindCodes.get(i) === 0 && closedByAridity(map, c.Profile, i);
 export function carriesSpine(map: PhysicalField, source: number, target: number): boolean {
   return (
     map.RiverOrders.get(source) > 0 ||
@@ -106,6 +76,7 @@ export function riverNetwork(
   map: PhysicalField,
   c: PhysicalContext,
   incoming?: Band,
+  /** Where each of a parent map's rivers that continue here enters. */
   continuingHeads: readonly number[] = [],
   entering: EnteringRivers = {}
 ) {
@@ -117,7 +88,8 @@ export function riverNetwork(
   const channels = buildChannels(map);
   retainChannels(map, channels, continuingHeads);
   strahlerOrders(map, order, channels);
-  rememberBeds(map, c);
+  // The rivers are kept as things: this pass's courses are carried onto the map's reaches.
+  keepReaches(map, c, channels);
   spineMasks(map);
   releaseWorking(map, order, channels);
 }

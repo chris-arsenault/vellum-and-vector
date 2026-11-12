@@ -7,6 +7,7 @@ import { isGrounded } from "./glacierSurface";
 import { validateLandscape } from "../rock/groundInitialization";
 import { allowsBoundaryDrainage, isOpenOutlet } from "./field";
 import { releaseWorking } from "./physicalNumerics";
+import { onRiver, riverOrderAt } from "../water/riverKeeping";
 import { waterPassage } from "../water/waterQuantity";
 import { MapScale } from "@atlas/domain";
 
@@ -76,7 +77,7 @@ function validateRivers(map: PhysicalField, c: PhysicalContext) {
   // A cell that takes water out of its river passes on less than it received, and no more.
   const pass = waterPassage(map, c);
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.RiverOrders.get(i) <= 0) continue;
+    if (!onRiver(map, i)) continue;
     const target = map.FlowTargets.get(i);
     if (
       (target < 0 && !isOpenOutlet(map, i)) ||
@@ -88,7 +89,7 @@ function validateRivers(map: PhysicalField, c: PhysicalContext) {
         `River network does not continue toward an outlet: cell ${i} (water ${map.WaterKindCodes.get(i)}, flow ${map.FlowAccumulation.get(i)}) drains to ${target}${
           target < 0
             ? ""
-            : ` (water ${map.WaterKindCodes.get(target)}, flow ${map.FlowAccumulation.get(target)}, river order ${map.RiverOrders.get(target)})`
+            : ` (water ${map.WaterKindCodes.get(target)}, flow ${map.FlowAccumulation.get(target)}, river order ${riverOrderAt(map, target)})`
         }.`
       );
   }

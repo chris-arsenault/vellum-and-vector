@@ -26,6 +26,7 @@ import {
   type CheckpointRecord,
 } from "./harnessWorkspace";
 import { quickTerrain } from "./quickTerrain";
+import { groundChangeWatch } from "./groundChange";
 import { stageRecorder } from "./stageRecord";
 import { channelRanges, fieldInventory, openTerrain, scaleReport, tileTiming } from "./mapReport";
 import { featureReport, mapFeatures } from "./featureReport";
@@ -316,15 +317,17 @@ async function quickRegion(options: HarnessOptions, out: string) {
   const ws = await openHarnessWorkspace(checkpointDirectory(quickCheckpoint)),
     started = performance.now(),
     stopProcesses = recordProcesses(options, out, "quick-region");
-  let done = false;
+  let done = false,
+    stage = 0;
+  const watch = groundChangeWatch();
   const observers = {
     inspect(_path: string[], process: string, state: Parameters<typeof quickTerrain>[0]) {
       const seconds = () => Math.round((performance.now() - started) / 1000);
-      if (process.endsWith("/structure"))
-        process_report(
-          quickTerrain(state, out, process.split(".")[1].replace("/", "-")),
-          seconds()
-        );
+      // What each process does to low ground: which one roughens it shows here.
+      if (state.physical) write(out, "ground-changes", watch.look(process, state.physical.map));
+      // The ground as the region starts with it, and again as each round leaves it.
+      if (process === "refinement.relief" || process === "refinement.round")
+        process_report(quickTerrain(state, out, `${process.split(".")[1]}-${stage++}`), seconds());
       if (process !== quickUntil) return;
       process_report(quickTerrain(state, out), seconds());
       done = true;

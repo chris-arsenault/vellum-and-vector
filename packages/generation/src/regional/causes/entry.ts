@@ -1,6 +1,7 @@
 import { frameEdge, isContent, neighborsOf, stepVector } from "../lattice";
 import type { Evidence, RegionalState } from "../state";
 import { registerCause } from "./registry";
+import { onParentRiver } from "../parentRivers";
 import { parentChannels } from "../../world/atlasWorkspace";
 
 /**
@@ -22,7 +23,7 @@ function riverEntries(state: RegionalState): Evidence["entries"] {
     entries: Evidence["entries"] = [],
     around = new Int32Array(mesh.stride),
     flow = (i: number) =>
-      isContent(mesh, i) && map.WaterKindCodes.get(i) !== 1 && map.RiverOrders.get(i) > 0
+      isContent(mesh, i) && map.WaterKindCodes.get(i) !== 1 && onParentRiver(state, i)
         ? Math.max(0, map.FlowAccumulation.get(i))
         : 0;
   // One entry per crossing: the edge cell with the most flow among its edge neighbours.

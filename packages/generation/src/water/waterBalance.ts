@@ -120,8 +120,9 @@ function month(ground: WaterGround, at: number, stores: Stores) {
  * A year of the budget in balance with itself: the stores are run through years until one
  * ends as it began, so a dry-season soil and a winter's snow carry over as they do every year.
  */
-export function waterYear(ground: WaterGround): WaterYear {
-  const stores: Stores = { soil: 0, snow: 0 };
+export function waterYear(ground: WaterGround, held: Partial<Stores> = {}): WaterYear {
+  // The year starts from what the cell already holds, so its water is carried, not remade.
+  const stores: Stores = { soil: Math.max(0, held.soil ?? 0), snow: Math.max(0, held.snow ?? 0) };
   let year = emptyYear();
   // Soil and seasonal snow settle within a few years; snow that never melts is kept apart.
   for (let pass = 0; pass < 3; pass++) {

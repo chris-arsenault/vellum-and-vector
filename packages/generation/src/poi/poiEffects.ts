@@ -1,6 +1,6 @@
 import { waterBandNames, type Band } from "@atlas/domain";
 import { shoalBed } from "../water/channelGeometry";
-import { holdWaterSurface } from "../water/standing";
+import { holdWaterSurface } from "../water/column";
 import {
   isMutablePhysicalName,
   type MutablePhysicalBufferName,

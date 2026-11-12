@@ -4,6 +4,7 @@ import { MapScale } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import type { MaterialLayer } from "../rock/rockColumn";
 import { units } from "../world/math";
+import { onRiver } from "../water/riverKeeping";
 import { distance, isContent, neighborsOf, regionalSpan } from "./lattice";
 import type { RegionalState, Seat } from "./state";
 
@@ -37,7 +38,7 @@ export function gradeGround(state: RegionalState, targets: ReadonlyMap<number, n
     network = state.regional.network,
     basin = state.regional.relief?.basin,
     // This round's channels and kept hollows, and the last routing's rivers, stay as they are.
-    movable = cells.map((i) => map.RiverOrders.get(i) === 0 && !network?.channel[i] && !basin?.[i]),
+    movable = cells.map((i) => !onRiver(map, i) && !network?.channel[i] && !basin?.[i]),
     edges = gradeEdges(state, targets, cells, inside),
     // A graded step is good to a share of the step it is held to: nobody levels ground to a
     // millimetre, and asking for that kept large or steep footprints relaxing without end.

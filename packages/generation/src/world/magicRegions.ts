@@ -5,8 +5,10 @@ import {
   type Band,
   type MagicCondition,
   type MagicFeatureRule,
+  type ReadBand,
 } from "@atlas/domain";
 import { retainedArray } from "./physicalNumerics";
+import { riverOrders } from "../water/riverKeeping";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
@@ -63,7 +65,7 @@ export function conditionReader(
   return (i: number) => band?.get(i) ?? 0;
 }
 /** The named per-cell channels a condition may read directly. */
-function channelValues(map: PhysicalField, field: MagicField): Record<string, Band> {
+function channelValues(map: PhysicalField, field: MagicField): Record<string, ReadBand> {
   return {
     intensity: field.intensity,
     history: field.history,
@@ -88,7 +90,7 @@ function channelValues(map: PhysicalField, field: MagicField): Record<string, Ba
     geothermal: map.Geothermal,
     fracture: map.FractureConductance,
     landform: map.LandformCodes,
-    river: map.RiverOrders,
+    river: riverOrders(map),
     ...Object.fromEntries(
       Object.entries(magicEcologyFields).map(([term, name]) => [term, map[name]])
     ),

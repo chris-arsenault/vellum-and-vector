@@ -10,14 +10,16 @@ import {
   generationFeatures,
   writeGenerationFeature,
 } from "../generationFeatures";
-import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
+import { generatedFeature, putGenerated, putGeneratedNetwork } from "../mapFeatures";
 import type { GenerationState, MapProcessContext } from "../process";
-import { publishDryBeds } from "./dryBeds";
+import { reachAt, reachesOf } from "../water/riverKeeping";
+import type { Reach } from "../water/reaches";
+import { mapScale, worldRiverLength } from "../worldSignificance";
 import {
-  drainageReaches,
+  basinDischarges,
   drawnRivers,
   establishRivers,
-  riverInputs,
+  keptReaches,
   riversOf,
 } from "./riverCourses";
 
@@ -105,13 +107,14 @@ function publishCourse(
   parts: readonly number[][],
   paths: RiverPaths,
   basinDischarge: number
-): string[] {
+): { ids: string[]; key?: string } {
   const work = state.physical!,
     stretches = parts
       .filter((members) => members.length >= 2)
       .map((members) => drawStretch(state, members, paths)),
     ids: string[] = [];
-  if (!stretches.length) return ids;
+  let first: string | undefined;
+  if (!stretches.length) return { ids };
   const head = stretches[0].members[0],
     source = nativePosition(work, head),
     outlet = nativePosition(work, stretches.at(-1)!.members.at(-1)!),
@@ -123,9 +126,11 @@ function publishCourse(
         pieces.flatMap((piece) => piece.profiles[key]),
       ])
     );
+    const key = `river:${coordinateKey(source.x, source.y)}:${coordinateKey(outlet.x, outlet.y)}:${ids.length}`;
+    first ??= key;
     const feature = generatedFeature(
       state,
-      `river:${coordinateKey(source.x, source.y)}:${coordinateKey(outlet.x, outlet.y)}:${ids.length}`,
+      key,
       `River ${Math.round(MapScale.inUnits(source.x, "km"))} ${Math.round(MapScale.inUnits(source.y, "km"))}`,
       "river",
       "rivers",
@@ -133,7 +138,7 @@ function publishCourse(
         ? { type: "LineString", coordinates: pieces[0].coordinates }
         : { type: "MultiLineString", coordinates: pieces.map((piece) => piece.coordinates) },
       {
-        order: work.map.RiverOrders.get(head),
+        order: reachAt(work.map, head)?.order ?? 0,
         junctions,
         discharge: profiles.discharges[0],
         regime: courseRegime(profiles.flowingMonths),
@@ -145,7 +150,7 @@ function publishCourse(
     putGeneratedNetwork(state, feature);
     ids.push(feature.id);
   }
-  return ids;
+  return { ids, key: first };
 }
 /**
  * What a river is through the year, by the greater part of its course: running all year,
@@ -184,6 +189,85 @@ function nameItsRiver(state: GenerationState, ids: readonly string[], riverId: s
       });
   }
 }
+/** A course's cells inside the map's frame, as a line through their centres. */
+function lineOf(state: GenerationState, cells: readonly number[]) {
+  const work = state.physical!;
+  return cells
+    .filter((cell) => work.map.mesh.membership(cell) === 1)
+    .map((cell) => {
+      const p = nativePosition(work, cell);
+      return [Math.round(p.x), Math.round(p.y)];
+    });
+}
+/**
+ * The dry reaches that were part of the river a named dry reach ends: those that ran into it,
+ * and so on up, as far as another river's own named end.
+ */
+function dryCourseOf(end: Reach, dry: readonly Reach[]) {
+  const course = [end];
+  for (let n = 0; n < course.length; n++)
+    for (const reach of dry)
+      if (reach.downstream === course[n].id && !reach.river && !course.includes(reach))
+        course.push(reach);
+  return course;
+}
+/**
+ * Rivers the map has drawn that have lost their water. Each is drawn again, dry, on the
+ * course it had, as the same record it was drawn as when it ran: the same river, by the same
+ * name, with no river in it.
+ */
+function publishDryRivers(state: GenerationState) {
+  const dry = [...reachesOf(state.physical!.map)].filter((reach) => reach.dry);
+  for (const end of dry) {
+    if (!end.river || !end.record) continue;
+    const lines = dryCourseOf(end, dry)
+      .map((reach) => lineOf(state, reach.cells))
+      .filter((line) => line.length >= 2);
+    if (!lines.length) continue;
+    const feature = generatedFeature(
+      state,
+      end.record,
+      "Dry river",
+      "river",
+      "rivers",
+      lines.length === 1
+        ? { type: "LineString", coordinates: lines[0] }
+        : { type: "MultiLineString", coordinates: lines },
+      { order: end.order, regime: "dry", riverId: end.river, sourceAlgorithm: "atlas-1" }
+    );
+    putGenerated(state, feature);
+  }
+}
+/**
+ * The ground a drawn river has left: each course it used to take, long enough to be a course
+ * at this map's scale, is drawn dry under the river's own name.
+ */
+function publishFormerCourses(
+  state: GenerationState,
+  reaches: readonly Reach[],
+  drawnAs: string | undefined,
+  riverId: string
+) {
+  const river = drawnAs ? generationFeature(state, drawnAs) : undefined,
+    least = mapScale(state).resolveMeasure(worldRiverLength);
+  if (!river) return;
+  for (const reach of reaches)
+    reach.former.forEach((course, n) => {
+      const line = lineOf(state, course.cells);
+      if (line.length < 2 || spatial.length({ type: "LineString", coordinates: line }) < least)
+        return;
+      const feature = generatedFeature(
+        state,
+        `river-former:${riverId}:${reach.id}:${n}`,
+        river.name,
+        "river",
+        "rivers",
+        { type: "LineString", coordinates: line },
+        { order: reach.order, regime: "dry", former: true, riverId, sourceAlgorithm: "atlas-1" }
+      );
+      putGenerated(state, { ...feature, name: river.name });
+    });
+}
 /** The map's rivers, drawn: each river once, as the course it holds inside the map's frame. */
 export function publishRivers(state: GenerationState, context: MapProcessContext) {
   // Settled first: the working arrays below are the ones this reads with.
@@ -191,15 +275,15 @@ export function publishRivers(state: GenerationState, context: MapProcessContext
   const work = state.physical!,
     map = work.map,
     paths = createRiverPaths(map),
-    { incoming, basinDischarge } = riverInputs(map);
+    basinDischarge = basinDischarges(map);
   paths.water = riverWater(state);
-  const records = [...drainageReaches(state, incoming)],
+  const records = keptReaches(state),
     reaches = records.map((record) => record.reach);
   try {
     // The map shows the rivers significant at its scale; the stored network keeps every reach
     // as latent drainage for finer maps. Every reach of a river points at the river's records.
     for (const { riverId, parts } of drawnRivers(state, records)) {
-      const ids = publishCourse(
+      const { ids, key } = publishCourse(
         state,
         parts.map((part) => part.flatMap((i, n) => records[i].members.slice(n ? 1 : 0))),
         paths,
@@ -207,14 +291,23 @@ export function publishRivers(state: GenerationState, context: MapProcessContext
       );
       nameItsRiver(state, ids, riverId);
       for (const i of parts.flat()) reaches[i].featureIds = ids;
+      // The reach the river ends in keeps the record it was drawn as.
+      const last = parts.at(-1)?.at(-1);
+      if (last !== undefined && key) records[last].kept.record = key;
+      publishFormerCourses(
+        state,
+        parts.flat().map((i) => records[i].kept),
+        ids[0],
+        riverId
+      );
     }
   } finally {
-    releaseWorking(map, incoming, basinDischarge);
+    releaseWorking(map, basinDischarge);
     releaseWorking(map, paths.x, paths.y, paths.upstream);
     if (paths.incoming) releaseWorking(map, paths.incoming);
   }
-  establishRivers(state, reaches);
-  publishDryBeds(state);
+  establishRivers(state, records);
+  publishDryRivers(state);
   state.domain.world.drainage = {
     ...state.domain.world.drainage,
     [state.domain.scope.areaId]: {

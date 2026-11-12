@@ -2,6 +2,7 @@
 import { CellList, MapScale, radixOrder } from "@atlas/domain";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { hardenRock } from "../rock/rockField";
+import { onRiver } from "../water/riverKeeping";
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { clamp, round, units } from "./math";
@@ -205,7 +206,7 @@ function riversNear(map: PhysicalField, head: number, reach: number, floor: Set<
     candidates = new CellList(),
     at: [number, number] = [map.mesh.x(head), map.mesh.y(head)];
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes.get(i) !== 0 || map.RiverOrders.get(i) <= 0 || floor.has(i)) continue;
+    if (map.WaterKindCodes.get(i) !== 0 || !onRiver(map, i) || floor.has(i)) continue;
     if (
       map.Elevation.get(i) <= base + units(map.scale.length(0.00000125)) ||
       reachesSea(map, i, nearSea)
@@ -232,14 +233,14 @@ function heldRiver(map: PhysicalField, floor: Set<number>, record: LandmarkRecor
   let held = 0;
   record.capture = null;
   for (const i of floor)
-    if (map.RiverOrders.get(i) > 0 && map.FlowAccumulation.get(i) > held) {
+    if (onRiver(map, i) && map.FlowAccumulation.get(i) > held) {
       held = map.FlowAccumulation.get(i);
       record.capture = riverAt(map, i);
     }
   return held;
 }
 function anyRiver(map: PhysicalField) {
-  for (let i = 0; i < map.mesh.count; i++) if (map.RiverOrders.get(i) > 0) return true;
+  for (let i = 0; i < map.mesh.count; i++) if (onRiver(map, i)) return true;
   return false;
 }
 export interface CaptureTarget {

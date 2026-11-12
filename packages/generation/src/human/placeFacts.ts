@@ -1,4 +1,5 @@
 import { MapScale, humanLayers } from "@atlas/domain";
+import { riverOrderAt } from "../water/riverKeeping";
 import type { PhysicalField } from "../world/field";
 import type { KnownPlace } from "./placeRegistry";
 
@@ -70,7 +71,7 @@ export function placeLand(
     grazedKm2 = 0,
     zoneKm2 = 0;
   for (const cell of place.cells.length ? place.cells : [anchor]) {
-    river = Math.max(river, map.RiverOrders.get(cell));
+    river = Math.max(river, riverOrderAt(map, cell));
     coastal ||= beside(map, cell, 1);
     farmedKm2 += map[humanLayers.farmland].get(cell) * km2(map, cell);
     grazedKm2 += map[humanLayers.pasture].get(cell) * km2(map, cell);

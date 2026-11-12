@@ -192,6 +192,8 @@ const metricFields = [
   "WaterRecharge",
   // Snow that outlasts the year, in mm/year: what the ice is fed.
   "SnowKept",
+  // Snow lying on the cell through the year, as a depth of water: part of the water column.
+  "SnowPack",
   // Precipitation in mm/year from the downwind air columns before the epoch multiplier.
   "ColumnPrecipitation",
   "FlowAccumulation",
@@ -243,9 +245,6 @@ const metricFields = [
   // cell held while it was a lake, which outlives the lake for Salt's dead-lake origin.
   "Salting",
   "LakeMemory",
-  // The order of the river a cell carries or last carried. A bed with no river in it now is
-  // an old course; it stays while the ground is too dry to heal it.
-  "RiverMemory",
   // Hallowed's warding (0 to 1): every other system is scaled down inside and lands on the
   // rim; and the kept-years of the lines people keep walking, forgetting over a memory.
   "Warding",

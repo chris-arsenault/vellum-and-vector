@@ -1,6 +1,7 @@
 import { MapScale } from "@atlas/domain";
 import { respond } from "../coupling/answers";
 import type { PhysicalField } from "../world/field";
+import { putSoilWater } from "./column";
 
 /**
  * The soil's water: one store, filled and drawn down by the year's water budget and read by
@@ -29,9 +30,9 @@ export function holdSoilWater(
   wetting: number,
   held: number
 ) {
-  map.SoilWater.set(i, Math.max(held, MapScale.metres(millimetres, "mm") + wetting));
+  putSoilWater(map, i, Math.max(held, MapScale.metres(millimetres, "mm") + wetting));
 }
 /** Soil that is stripped away takes its share of the water it held. */
 export function loseSoilWater(map: PhysicalField, i: number, share: number) {
-  map.SoilWater.set(i, map.SoilWater.get(i) * (1 - Math.max(0, Math.min(1, share))));
+  putSoilWater(map, i, map.SoilWater.get(i) * (1 - Math.max(0, Math.min(1, share))));
 }

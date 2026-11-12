@@ -157,7 +157,6 @@ export function featureReport(features: MapFeature[], water: Water) {
       count: rivers.length,
       // How many run all year, in their wet season only, or are named courses with no river now.
       regimes: tally(rivers.map((river) => String(river.attributes.regime ?? "not stated"))),
-      dryBeds: of("dryBed").length,
       ...riverEndings(rivers, water),
     },
     waterfalls: waterfalls(features, rivers, water.cellSpan),

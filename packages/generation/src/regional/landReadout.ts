@@ -3,8 +3,7 @@ import type { MapProcessContext } from "../process";
 import { nativeContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
 import { MapScale } from "@atlas/domain";
-import { dryBedCourses } from "../area/dryBeds";
-import { holdsOldBed } from "../water/rivers";
+import { onRiver, reachAt, reachesOf } from "../water/riverKeeping";
 import { soilWaterCapacity } from "../water/soilWater";
 import { months } from "../water/waterBalance";
 import { waterAccountLine } from "../water/waterLedger";
@@ -36,17 +35,16 @@ const measured = {
   capacity: 0,
   oldBed: 0,
 };
-/** 1 where the ground keeps the bed of a river that no longer runs there. */
-const oldBed = (map: PhysicalField, cell: number) => (holdsOldBed(map, cell) ? 1 : 0);
-/** How many old courses the ground keeps, and how many cells the longest and the middle one run. */
+/** 1 where the cell lies on a dry reach: a river's course with no river in it now. */
+const oldBed = (map: PhysicalField, cell: number) => (reachAt(map, cell)?.dry ? 1 : 0);
+/** How many of the map's reaches run, and how many are dry courses. */
 function oldCourses(map: PhysicalField) {
-  const lengths = dryBedCourses(map)
-    .map((course) => course.length)
-    .sort((a, b) => a - b);
-  return lengths.length
-    ? `${lengths.length} courses, the longest ${lengths[lengths.length - 1]} cells, ` +
-        `the middle one ${lengths[Math.floor(lengths.length / 2)]}`
-    : "no courses";
+  let running = 0,
+    dry = 0;
+  for (const reach of reachesOf(map))
+    if (reach.dry) dry++;
+    else running++;
+  return `${running} running reaches, ${dry} dry`;
 }
 export function landReadout(state: RegionalState, context: MapProcessContext) {
   const map = state.physical.map,
@@ -67,7 +65,7 @@ export function landReadout(state: RegionalState, context: MapProcessContext) {
     sums.slope += map.Slope.get(cell) * area;
     sums.trees += map.TreeCover.get(cell) * area;
     sums.grass += map.GrassCover.get(cell) * area;
-    sums.river += (map.RiverOrders.get(cell) > 0 ? 1 : 0) * area;
+    sums.river += (onRiver(map, cell) ? 1 : 0) * area;
     sums.rain += (map.Rainfall.get(cell) + map.Snowfall.get(cell)) * area;
     sums.runoff += map.Runoff.get(cell) * area;
     sums.recharge += map.WaterRecharge.get(cell) * area;

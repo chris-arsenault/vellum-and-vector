@@ -6,6 +6,7 @@ import { clamp } from "./math";
 import { gatherDown, sourceToOutletOrder } from "./flowGraph";
 import { physicalDistance } from "./physicalMetric";
 import { workingValues, releaseWorking } from "./physicalNumerics";
+import { onRiver, riverOrderAt } from "../water/riverKeeping";
 import { MapScale, type Band } from "@atlas/domain";
 
 function sedimentDelivery(map: PhysicalField): Band {
@@ -33,7 +34,7 @@ function qualifies(
 ): boolean {
   const p = c.Profile;
   const major =
-    map.RiverOrders.get(mouth) >= p.DeltaMinimumRiverOrder ||
+    riverOrderAt(map, mouth) >= p.DeltaMinimumRiverOrder ||
     map.FlowAccumulation.get(mouth) >= p.RiverAccumulationThreshold * p.DeltaDischargeMultiplier;
   return (
     major &&
@@ -111,7 +112,7 @@ export function deltaFormation(map: PhysicalField, c: PhysicalContext) {
   map.DeltaIntensity.fill(0);
   const delivery = sedimentDelivery(map);
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.RiverOrders.get(i) <= 0) continue;
+    if (!onRiver(map, i)) continue;
     const ocean = map.FlowTargets.get(i);
     if (ocean >= 0 && map.WaterKindCodes.get(ocean) === 1 && qualifies(map, c, delivery, i, ocean))
       buildFan(map, c, i, ocean);

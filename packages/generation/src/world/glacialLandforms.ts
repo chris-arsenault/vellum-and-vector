@@ -4,6 +4,7 @@ import type { PhysicalContext } from "./context";
 import { Landform } from "./codes";
 import { truncate, units } from "./math";
 import { physicalSampler } from "./physicalMetric";
+import { onRiver } from "../water/riverKeeping";
 
 function cirqueHead(
   map: PhysicalField,
@@ -37,7 +38,7 @@ export function glacialLandforms(map: PhysicalField, c: PhysicalContext) {
       continue;
     if (
       map.CumulativeGlacialErosion.get(i) >= units(c.Profile.UValleyMinimumGlacialErosion) &&
-      (map.RiverOrders.get(i) > 0 ||
+      (onRiver(map, i) ||
         map.FlowAccumulation.get(i) >= truncate(c.Profile.RiverAccumulationThreshold / 2))
     )
       map.LandformCodes.set(i, Landform.UValley);

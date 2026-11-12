@@ -216,7 +216,7 @@ function riversAlongLakes(map: PhysicalField) {
   return { rivers, along };
 }
 /** Metres between a low cell and its neighbours, the tenth, median and ninetieth: how rough plains are. */
-function lowlandRoughness(map: PhysicalField) {
+export function lowlandRoughness(map: PhysicalField) {
   const mesh = map.mesh,
     rough: number[] = [];
   for (let cell = 0; cell < mesh.count; cell++) {
@@ -306,6 +306,34 @@ function groundwaterReport(map: PhysicalField, spring: (cell: number) => number)
     ),
   };
 }
+/**
+ * The valleys the ground records inside its cells, on low land: how much of a cell is valley
+ * and how many metres its floor lies below the ground beside it, the median and the
+ * ninetieth of cells that have one; and what share of low cells have one.
+ */
+function valleyReport(map: PhysicalField) {
+  const shares: number[] = [],
+    depths: number[] = [];
+  let low = 0;
+  for (let cell = 0; cell < map.mesh.count; cell++) {
+    const height = MapScale.metres(map.Elevation.get(cell) - map.EffectiveSeaLevel, "native");
+    if (map.mesh.membership(cell) !== 1 || map.WaterKindCodes.get(cell) !== 0 || height > lowland)
+      continue;
+    low++;
+    if (map.GroundCutShare.get(cell) <= 0) continue;
+    shares.push(map.GroundCutShare.get(cell));
+    depths.push(MapScale.metres(map.GroundCutDepth.get(cell), "native"));
+  }
+  const at = (values: number[], q: number) => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted.length ? Math.round(sorted[Math.floor(q * (sorted.length - 1))] * 100) / 100 : 0;
+  };
+  return {
+    cellsWithValley: low ? shares.length / low : 0,
+    share: [at(shares, 0.5), at(shares, 0.9)],
+    depthMetres: [at(depths, 0.5), at(depths, 0.9)],
+  };
+}
 export function quickTerrain(state: GenerationState, out: string, name = "terrain") {
   const map = state.physical!.map,
     handed = (state as { regional?: { inheritedHeight?: { get(cell: number): number } } }).regional
@@ -323,6 +351,7 @@ export function quickTerrain(state: GenerationState, out: string, name = "terrai
     lakes: lakeReport(map),
     rivers: riversAlongLakes(map),
     riverMark: riverMarkReport(map, drawn),
+    valleys: valleyReport(map),
   };
   writeFileSync(join(out, `${name}.json`), JSON.stringify(report, null, 2));
   return report;

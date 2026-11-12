@@ -10,6 +10,7 @@ import { magicMaterial } from "../rock/rockMagic";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { materialLayer } from "../rock/rockColumn";
 import { loadOf } from "../rock/groundLoad";
+import { onRiver } from "../water/riverKeeping";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { clamp, units } from "./math";
 import type { GenerationState } from "../process";
@@ -210,7 +211,7 @@ export function carryLitter(
   const stratum = field.stocks[`${origin.id}/stratum`];
   if (!(stratum instanceof GroundInventory)) return;
   for (let i = 0; i < sap.length; i++) {
-    if (map.RiverOrders.get(i) <= 0 || map.WaterKindCodes.get(i) === 1) continue;
+    if (!onRiver(map, i) || map.WaterKindCodes.get(i) === 1) continue;
     const packet = litterPacket(
       sap.get(i),
       map.SoilCarbon.get(i),

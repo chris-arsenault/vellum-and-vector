@@ -9,6 +9,7 @@ import { meltIce } from "../rock/groundSurfaceMedia";
 import { magicBudget, originStocks, reservoirStock } from "./magicState";
 import { advanceStocks, retainGroundCharge, rememberStrain } from "./magicStocks";
 import { rememberLakes } from "../water/lakes";
+import { onRiver } from "../water/riverKeeping";
 import { markRim, wardCoasts } from "./magicHallowed";
 import { MapScale, type Band, type MagicSystem } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
@@ -114,9 +115,8 @@ export function magicLivingFeedback(state: GenerationState, elapsed = false) {
     map.Tearing.set(i, unit(tearing));
     // Greenwood divides the river that crosses it into wetland channels: the braided reach.
     const green = unit(verdure);
-    if (elapsed && green > 0.3 && map.RiverOrders.get(i) >= 1 && map.WaterKindCodes.get(i) === 0) {
+    if (elapsed && green > 0.3 && onRiver(map, i) && map.WaterKindCodes.get(i) === 0)
       map.WetlandCover.set(i, Math.max(map.WetlandCover.get(i), 0.5 * green));
-    }
   }
   markRim(map, work.magic!);
 }

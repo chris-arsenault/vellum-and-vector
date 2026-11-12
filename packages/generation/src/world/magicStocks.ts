@@ -5,6 +5,7 @@ import type { PhysicalField } from "./field";
 import { originStocks, stockKey, withOrigin, type MagicField } from "./magicState";
 import { clamp, round, units } from "./math";
 import { displaceGround } from "../rock/groundLedger";
+import { onRiver } from "../water/riverKeeping";
 import { seepBrine, settleDust, weatherBed } from "./magicSaltStocks";
 import { stockExposure, stockGroundHosts } from "../rock/rockMagicStock";
 import type { MagicInventory } from "./magicInventory";
@@ -338,7 +339,7 @@ function carryDownstream(map: PhysicalField, field: MagicField, values: MagicInv
         value *
         exposed *
         mobility *
-        (map.RiverOrders.get(i) > 0 ? 1 : 0.25) *
+        (onRiver(map, i) ? 1 : 0.25) *
         carrierPassage(map, "river", target);
     if (share <= 0 || target < 0) continue;
     values.add(i, -share);

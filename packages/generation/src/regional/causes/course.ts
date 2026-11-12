@@ -2,6 +2,7 @@ import { capturedCourses, courseIndex } from "../courses";
 import { neighborsOf, regionalSpan } from "../lattice";
 import type { RegionalState } from "../state";
 import { registerCause } from "./registry";
+import { onParentRiver } from "../parentRivers";
 
 /**
  * A captured course is a valley at the parent's scale, not a one-cell trench: its ground is
@@ -23,12 +24,11 @@ registerCause({
     evidence.courses.push(...capturedCourses(state));
   },
   influence(state, cost) {
-    const map = state.physical.map,
-      course = courseWeight(state, courseIndex(state, state.regional.evidence!.courses));
+    const course = courseWeight(state, courseIndex(state, state.regional.evidence!.courses));
     for (let i = 0; i < cost.length; i++)
       cost[i] *= Math.min(
         1 - (1 - courseCorridor) * course[i],
-        map.RiverOrders.get(i) > 0 ? rasterCorridor : 1
+        onParentRiver(state, i) ? rasterCorridor : 1
       );
   },
 });

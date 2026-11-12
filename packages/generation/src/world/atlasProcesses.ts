@@ -28,7 +28,7 @@ import { publishKinds } from "../poi/poiPublish";
 import { contributeForcing } from "./atlasForcing";
 import { bindCoastalForcing } from "./coastalForcing";
 import { featureRevisions } from "../generationFeatures";
-import { reconcileWater } from "../water/standing";
+import { reconcileWater } from "../water/column";
 import { beginWaterEpoch } from "../water/meltwater";
 import type { NativeStep } from "./sequence";
 import { advectMagic } from "./magicState";

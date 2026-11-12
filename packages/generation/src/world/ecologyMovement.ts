@@ -1,6 +1,7 @@
 import type { PhysicalField } from "./field";
 import { MapScale, KeyedHeap, type Band } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import { onRiver } from "../water/riverKeeping";
 
 export interface EcologicalFront {
   time: Band;
@@ -48,7 +49,7 @@ export function migrateAnimals(
 ) {
   const admits = (i: number) =>
     aquatic
-      ? (map.WaterKindCodes.get(i) > 0 || map.RiverOrders.get(i) > 0) &&
+      ? (map.WaterKindCodes.get(i) > 0 || onRiver(map, i)) &&
         map.IceThickness.get(i) < map.scale.length(5e-7)
       : map.WaterKindCodes.get(i) !== 1 &&
         MapScale.metres(map.WaterDepths.get(i), "native") < map.scale.length(3.75e-7);

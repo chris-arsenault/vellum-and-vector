@@ -4,6 +4,7 @@ import { spatial, MapScale, type Band, type ReadBand } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { meshDeltaX, meshPointX } from "./mesh";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import { onRiver } from "../water/riverKeeping";
 
 type Coordinate = [number, number];
 type Station = { point: Coordinate; segment: number; fraction: number };
@@ -32,7 +33,7 @@ export function createRiverPaths(map: PhysicalField): RiverPaths {
   };
   for (let i = 0; i < map.mesh.count; i++) {
     const target = map.FlowTargets.get(i);
-    if (map.RiverOrders.get(i) <= 0 || target < 0) continue;
+    if (!onRiver(map, i) || target < 0) continue;
     paths.incoming!.add(target, 1);
     const previous = paths.upstream.get(target);
     if (previous < 0 || map.FlowAccumulation.get(i) > map.FlowAccumulation.get(previous))
@@ -51,7 +52,7 @@ function relax(map: PhysicalField, paths: RiverPaths) {
     if (
       previous < 0 ||
       next < 0 ||
-      map.RiverOrders.get(i) <= 0 ||
+      !onRiver(map, i) ||
       map.WaterKindCodes.get(i) !== 0 ||
       bordersWater(map, i)
     )

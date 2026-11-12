@@ -10,6 +10,7 @@ import { ask } from "../coupling/answers";
 import { physicalContext } from "../world/context";
 import { waterPassage } from "../water/waterQuantity";
 import { gathered, riverSizes } from "../water/riverSize";
+import { onParentRiver } from "./parentRivers";
 
 /** Resistance near a known peak or cone, so channels cut around it and it stands on a divide. */
 const peakRepulsion = 12;
@@ -319,7 +320,7 @@ function edgeExits(state: RegionalState) {
     return !exterior && mesh.boundary(i);
   };
   for (let i = 0; i < n; i++)
-    if (frameEdge(mesh, i) && (map.RiverOrders.get(i) > 0 || descends(i))) exits[i] = 1;
+    if (frameEdge(mesh, i) && (onParentRiver(state, i) || descends(i))) exits[i] = 1;
   return exits;
 }
 

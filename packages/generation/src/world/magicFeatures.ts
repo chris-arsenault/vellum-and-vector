@@ -7,6 +7,7 @@ import {
   type MagicSystem,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
+import { riverLayer } from "../water/riverKeeping";
 import type { MagicField } from "./magicState";
 import { magicKey } from "./magicState";
 import { classifyNaturalSurface } from "./naturalSurface";
@@ -54,7 +55,7 @@ export function magicConditionRequirements(system: MagicSystem) {
     geothermal: ["field:Geothermal"],
     fracture: ["field:FractureConductance"],
     landform: ["field:LandformCodes"],
-    river: ["field:RiverOrders"],
+    river: [`field:${riverLayer}`],
     upwelling: ["field:OceanCurrentX"],
   };
   return effectiveMagicRules(system)
