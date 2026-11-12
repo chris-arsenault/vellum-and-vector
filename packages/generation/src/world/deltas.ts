@@ -3,7 +3,7 @@ import { meshDeltaX } from "./mesh";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp } from "./math";
-import { sourceToOutletOrder } from "./flowGraph";
+import { gatherDown, sourceToOutletOrder } from "./flowGraph";
 import { physicalDistance } from "./physicalMetric";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 import { MapScale, type Band } from "@atlas/domain";
@@ -20,11 +20,7 @@ function sedimentDelivery(map: PhysicalField): Band {
       ) * map.mesh.area(i)
   );
   const order = sourceToOutletOrder(map);
-  for (let n = 0; n < order.length; n++) {
-    const i = order.get(n),
-      target = map.FlowTargets.get(i);
-    if (target >= 0) delivery.add(target, delivery.get(i));
-  }
+  gatherDown(order, map.FlowTargets, delivery);
   releaseWorking(map, order);
   return delivery;
 }

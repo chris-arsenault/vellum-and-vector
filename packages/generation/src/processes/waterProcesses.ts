@@ -263,8 +263,5 @@ respond({
   by: "ice melt",
   reads: ["GlacialMeltwater"],
   queries: [meltwater.operation],
-  add: (map, i, context) =>
-    map.WaterKindCodes.get(i) === 1
-      ? 0
-      : (map.GlacialMeltwater.get(i) * context.HydrologyStrength) / 1000,
+  add: (map, i) => (map.WaterKindCodes.get(i) === 1 ? 0 : map.GlacialMeltwater.get(i)),
 });

@@ -62,7 +62,7 @@ it("actual basal melting retains water separately from recomputed runoff", () =>
   expect(meltIce(map, 0, 8, "test", true)).toBe(0);
 });
 
-it("basal melt retains the command's rate while carriers receive only the actual removed depth", () => {
+it("basal melt notes the depth actually removed while carriers receive only the actual removed depth", () => {
   const map = createTestField(createWorldMesh([0, 0, 1000, 1000], 16, 0)),
     receive = vi.fn();
   receiveIceMelt(map, receive);
@@ -70,8 +70,7 @@ it("basal melt retains the command's rate while carriers receive only the actual
   expect(meltIce(map, 0, 2, "test", true, 0)).toBe(0);
   expect(map.IceThickness.get(0)).toBe(3);
   expect(meltIce(map, 0, 2, "test", true, 0.5)).toBe(2);
-  expect(map.ExternalMeltwater.get(0)).toBe(4000);
-  expect(map.GlacialMeltwater.get(0)).toBe(4000);
+  expect(map.ExternalMeltwater.get(0)).toBe(2000);
   expect(receive).toHaveBeenCalledExactlyOnceWith(0, 2, 3);
 });
 

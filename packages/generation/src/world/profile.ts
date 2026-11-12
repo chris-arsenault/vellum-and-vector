@@ -205,8 +205,6 @@ export const physicalProfile = MapScale.definitions({
   OpenBedSeepage: 3e-6,
   // The share of each rain that runs off bare, tight ground before it can soak in.
   StormRunoffShare: 0.1,
-  LakeEvaporationMinimum: MapScale.length(4.5e-8, 1, "mm"),
-  LakeEvaporationTemperatureStrength: MapScale.length(1.3e-7, 1, "mm"),
   LakeInfiltrationLoss: MapScale.length(3.5e-8, 1, "mm"),
   DrainageGuidanceLookaheadDistance: MapScale.length(0.03),
   DrainageFloorGradientWeight: 1000,

@@ -50,7 +50,7 @@ it("composes rain, melt and returned groundwater once for routing and incision",
   beginGroundwaterExchange(map, 0.5);
   map.GroundwaterReturn.set(0, 0.01);
   const supply = ask(map, "surfaceWater", context).get(0);
-  expect(supply).toBeCloseTo(145);
+  expect(supply).toBeCloseTo(170);
   expect(
     ask(map, "discharge", context).get(0) * context.Profile.FluvialReferenceRunoff
   ).toBeCloseTo(supply);
@@ -58,10 +58,10 @@ it("composes rain, melt and returned groundwater once for routing and incision",
   expect(map.GroundwaterReturn.get(0)).toBe(0.01);
   map.Runoff.set(0, 200);
   invalidateProcesses(map);
-  expect(ask(map, "surfaceWater", context).get(0)).toBeCloseTo(245);
+  expect(ask(map, "surfaceWater", context).get(0)).toBeCloseTo(270);
   beginGroundwaterExchange(map, 0);
   invalidateProcesses(map);
-  expect(ask(map, "surfaceWater", context).get(0)).toBeCloseTo(225);
+  expect(ask(map, "surfaceWater", context).get(0)).toBeCloseTo(250);
 });
 
 it("a contributor extends the quantity without changing either consumer", () => {

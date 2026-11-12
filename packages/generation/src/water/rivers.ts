@@ -1,7 +1,7 @@
 // RiverNetworkLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "../world/field";
 import type { PhysicalContext } from "../world/context";
-import { contributingArea, sourceToOutletOrder } from "../world/flowGraph";
+import { contributingArea, gatherDown, sourceToOutletOrder } from "../world/flowGraph";
 import { depthRateToDischarge } from "../world/dimensions";
 import { edgeLeadingTo } from "../world/mesh";
 import type { Band } from "@atlas/domain";
@@ -102,12 +102,9 @@ export function gatherYear(map: PhysicalField, c: PhysicalContext, order: Band, 
       area = map.mesh.area(i);
     map.FlowAccumulation.set(i, depthRateToDischarge(water.get(i), area) + brought);
     entering += brought;
-    // Ice gives the rivers its water at the same strength the supply counts it.
+    // All the water ice gives up reaches the rivers.
     if (map.WaterKindCodes.get(i) !== 1)
-      melt += depthRateToDischarge(
-        (map.GlacialMeltwater.get(i) * c.HydrologyStrength) / 1000,
-        area
-      );
+      melt += depthRateToDischarge(map.GlacialMeltwater.get(i), area);
   }
   moveFlow(map, "entering", entering);
   moveFlow(map, "iceMelt", melt);
@@ -121,10 +118,8 @@ export function gatherYear(map: PhysicalField, c: PhysicalContext, order: Band, 
 function gatherMean(map: PhysicalField, c: PhysicalContext, order: Band) {
   const pass = waterPassageParts(map, c),
     left = { bedLoss: 0, withdrawal: 0, inflow: 0, spill: 0, mouth: 0, leaving: 0, pan: 0 };
-  for (let n = 0; n < order.length; n++) {
-    const i = order.get(n),
-      target = map.FlowTargets.get(i),
-      parts = pass(i, map.FlowAccumulation.get(i));
+  gatherDown(order, map.FlowTargets, map.FlowAccumulation, (i, received) => {
+    const parts = pass(i, received);
     left.bedLoss += parts.bed;
     left.withdrawal += parts.drawn;
     let flow = parts.passed;
@@ -134,11 +129,10 @@ function gatherMean(map: PhysicalField, c: PhysicalContext, order: Band) {
       flow = Math.min(flow, map.LakeOverflow.get(i));
       left.spill += flow;
     }
-    map.FlowAccumulation.set(i, flow);
-    if (target >= 0) map.FlowAccumulation.add(target, flow);
-    const end = map.WaterKindCodes.get(i) === 1 ? undefined : endOf(map, i, target);
+    const end = map.WaterKindCodes.get(i) === 1 ? undefined : endOf(map, i, map.FlowTargets.get(i));
     if (end) left[end] += flow;
-  }
+    return flow;
+  });
   for (const move of Object.keys(left) as (keyof typeof left)[]) moveFlow(map, move, left[move]);
   // What lakes took in and did not let out, they lost to the air and the ground.
   const kept = Math.max(0, left.inflow - left.spill),
@@ -181,14 +175,13 @@ function seasonalFlows(map: PhysicalField, c: PhysicalContext, order: Band, inco
           map.mesh.area(i)
         ) + (incoming?.get(i) ?? 0)
       );
-    for (let n = 0; n < order.length; n++) {
-      const i = order.get(n),
-        target = map.FlowTargets.get(i);
-      flow.set(i, pass(i, flow.get(i)));
-      if (map.LakeOutletTargets.get(i) >= 0) flow.set(i, map.FlowAccumulation.get(i));
-      if (target >= 0) flow.add(target, flow.get(i));
-      noteMonth(map, i, flow.get(i), river);
-    }
+    gatherDown(order, map.FlowTargets, flow, (i, received) => {
+      // A lake evens out the year: its outlet runs at the year's overflow in every month.
+      const carried =
+        map.LakeOutletTargets.get(i) >= 0 ? map.FlowAccumulation.get(i) : pass(i, received);
+      noteMonth(map, i, carried, river);
+      return carried;
+    });
   }
   for (let i = 0; i < map.mesh.count; i++)
     if (!Number.isFinite(map.PerennialFlow.get(i))) map.PerennialFlow.set(i, 0);

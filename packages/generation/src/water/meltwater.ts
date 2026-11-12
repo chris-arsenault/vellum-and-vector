@@ -10,8 +10,9 @@ import { moveWater } from "./waterLedger";
  * Water that ice gives up in a typical year. Ice makes no water: it gives back the snow it
  * was fed. Snow that outlasts the year rides down the ice and melts out along the way by how
  * warm it is, and all of it is out where the ice ends. Ice that reaches the sea calves, and
- * kept snow with no ice to carry it goes back to the air. Whatever else melts ice (a volcano,
- * a magic) hands its water over here.
+ * kept snow with no ice to carry it goes back to the air. Where something outside the climate
+ * keeps ice melted (a volcano, a magic, a place), all the snow and ice that reach that ground
+ * melt there: the heat makes no water of its own, it decides where the ice's water comes out.
  *
  * Ice that grows or shrinks between passes does so over the ages a pass stands for. Spread
  * over those ages it is far less than a millimetre a year, so it is no part of the year's
@@ -51,6 +52,10 @@ function release(
     totals.calved += held;
     return 0;
   }
+  if (map.ExternalMeltwater.get(i) > 0) {
+    totals.outside += held;
+    return held;
+  }
   if (!iced(map, i)) {
     // No ice stands here to carry the snow down: it leaves to the air.
     totals.sublimed += (map.SnowKept.get(i) / 1000) * area;
@@ -74,24 +79,25 @@ export function glacialMeltwater(map: PhysicalField, c: PhysicalContext) {
       map.GlacialMeltwater.set(i, 0);
       continue;
     }
-    // Ice that thinned over the last span gives the water it was.
-    map.GlacialMeltwater.set(i, (out / area) * 1000 + map.ExternalMeltwater.get(i));
+    map.GlacialMeltwater.set(i, (out / area) * 1000);
     totals.fed += out;
-    totals.outside += (map.ExternalMeltwater.get(i) / 1000) * area;
   }
   // What the rivers take of the melt is stated where they gather it; these say where it came from.
-  moveWater(map, "meltOfKeptSnow", totals.fed);
+  moveWater(map, "meltOfKeptSnow", totals.fed - totals.outside);
   moveWater(map, "meltFromOutside", totals.outside);
   moveWater(map, "calving", totals.calved);
   moveWater(map, "sublimation", totals.sublimed);
   releaseWorking(map, order, carried);
 }
-/** Ice melted from outside the climate hands over its water, in millimetres a year. */
+/**
+ * Notes that something outside the climate melted ice here, and how deep (millimetres of
+ * water). The depth is a record of the work done over the pass, never a year's water: the
+ * melt that reaches rivers is the snow and ice that arrive at this ground each year.
+ */
 export function receiveMeltwater(map: PhysicalField, i: number, water: number) {
-  map.ExternalMeltwater.add(i, water);
-  map.GlacialMeltwater.add(i, water);
+  if (water > 0) map.ExternalMeltwater.add(i, water);
 }
-/** A new epoch starts with no water handed over from outside and none yet returned from the ground. */
+/** A new epoch starts with no ice melted from outside and no water yet returned from the ground. */
 export function beginWaterEpoch(map: PhysicalField) {
   map.ExternalMeltwater.fill(0);
   map.GroundwaterReturn.fill(0);

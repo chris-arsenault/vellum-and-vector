@@ -42,8 +42,6 @@ it("declares precipitation in physical metres and encodes native millimetre fiel
     declaration.fraction
   );
   expect(half.ColumnSaturation).toBeCloseTo(825);
-  expect(resolved.LakeEvaporationMinimum).toBeCloseTo(180);
-  expect(resolved.LakeEvaporationTemperatureStrength).toBeCloseTo(520);
   expect(resolved.LakeInfiltrationLoss).toBeCloseTo(140);
   expect(resolved.FluvialReferenceRunoff).toBeCloseTo(300);
   expect(resolved.FogDrip).toBeCloseTo(300);

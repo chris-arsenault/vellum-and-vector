@@ -2,7 +2,6 @@ import type { PhysicalField } from "../world/field";
 import { recordFlow, type FlowCause } from "../coupling/flows";
 import { units } from "../world/math";
 import { MapScale, type ReadBand } from "@atlas/domain";
-import { releasedWaterRate } from "../world/dimensions";
 import { receiveMeltwater } from "../water/meltwater";
 
 type MeltReceiver = (cell: number, melted: number, before: number) => void;
@@ -40,7 +39,7 @@ export function redistributeIce(map: PhysicalField, volumes: ReadBand) {
     );
 }
 
-/** Actual metre removals notify carriers; basal runoff retains the producing interval's rate. */
+/** Actual metre removals notify carriers; melt from beneath is noted for the water it frees. */
 export function meltIce(
   map: PhysicalField,
   i: number,
@@ -56,10 +55,7 @@ export function meltIce(
   map.IceThickness.set(i, map.IceThickness.get(i) - melted);
   meltReceivers.get(map)?.(i, melted, before);
   recordFlow(map, cause, "ice", "melt", melted * map.mesh.area(i));
-  if (beneath) {
-    const water = MapScale.inUnits(releasedWaterRate(melted, exposure), "mm");
-    receiveMeltwater(map, i, water);
-  }
+  if (beneath) receiveMeltwater(map, i, MapScale.inUnits(melted, "mm"));
   return melted;
 }
 

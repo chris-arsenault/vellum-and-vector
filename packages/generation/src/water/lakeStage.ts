@@ -1,13 +1,15 @@
 // LakeBasinLayer stage and water-budget calculations, Canonry 0f62584c.
 import type { PhysicalField } from "../world/field";
 import type { PhysicalProfile } from "../world/profile";
-import { truncate, units } from "../world/math";
+import { units } from "../world/math";
+import { yearlyAirDemand } from "./closedBasin";
 import { depthRateToDischarge } from "../world/dimensions";
 import { CellList, radixOrder, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "../world/physicalNumerics";
 import { ask } from "../coupling/answers";
 import type { PhysicalContext } from "../world/context";
 import { waterPassage } from "./waterQuantity";
+import { gatherDown } from "../world/flowGraph";
 
 export interface Depression {
   id: number;
@@ -35,15 +37,11 @@ export function contributingWater(
     const rank = map.DrainageRanks.get(i);
     if (rank < 0 || rank >= count || order.get(rank) >= 0)
       throw new Error("Priority-flood ranks are not a complete order.");
-    order.set(rank, i);
+    // The flood's ranks run from the outlets up, so the highest rank is gathered first.
+    order.set(count - 1 - rank, i);
     water.set(i, depthRateToDischarge(supply.get(i), map.mesh.area(i)) + (incoming?.get(i) ?? 0));
   }
-  for (let rank = count - 1; rank >= 0; rank--) {
-    const i = order.get(rank),
-      parent = map.DrainageParents.get(i);
-    water.set(i, pass(i, water.get(i)));
-    if (parent >= 0) water.add(parent, water.get(i));
-  }
+  gatherDown(order, map.DrainageParents, water, pass);
   releaseWorking(map, order);
   return water;
 }
@@ -78,6 +76,17 @@ function basinCells(map: PhysicalField, component: Depression) {
     order = radixOrder(keys);
   return Int32Array.from(order, (k) => members[k]);
 }
+/**
+ * What open water on a cell loses to the air beyond what the same cell lost as land, in
+ * millimetres a year. Open water gives the air all it asks (see `airDemand`). The cell's
+ * yield as land, already counted in what reaches the lake, had the land's evaporation taken
+ * from it, so the lake is charged the difference.
+ */
+export function openWaterLoss(map: PhysicalField, i: number) {
+  const fell = map.Rainfall.get(i) + map.Snowfall.get(i),
+    yielded = map.Runoff.get(i) + map.WaterRecharge.get(i) + map.SnowKept.get(i);
+  return Math.max(0, yearlyAirDemand(map, i) - Math.max(0, fell - yielded));
+}
 function stageBudget(
   map: PhysicalField,
   context: PhysicalContext,
@@ -95,12 +104,7 @@ function stageBudget(
     while (end < cells.length && map.Elevation.get(cells[end]) === floor) {
       const i = cells[end],
         area = map.mesh.area(i);
-      groupLoss += depthRateToDischarge(
-        p.LakeEvaporationMinimum +
-          truncate((map.Temperature.get(i) * p.LakeEvaporationTemperatureStrength) / 1000) +
-          p.LakeInfiltrationLoss,
-        area
-      );
+      groupLoss += depthRateToDischarge(openWaterLoss(map, i) + p.LakeInfiltrationLoss, area);
       end++;
     }
     // Candidate flooded cells use the same effective yield already routed through withdrawals.
@@ -121,11 +125,7 @@ export function lakeLosses(map: PhysicalField, context: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) !== 2) continue;
     const area = map.mesh.area(i);
-    losses.evaporation += depthRateToDischarge(
-      p.LakeEvaporationMinimum +
-        truncate((map.Temperature.get(i) * p.LakeEvaporationTemperatureStrength) / 1000),
-      area
-    );
+    losses.evaporation += depthRateToDischarge(openWaterLoss(map, i), area);
     losses.seepage += depthRateToDischarge(p.LakeInfiltrationLoss, area);
   }
   return losses;
