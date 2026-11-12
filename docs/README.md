@@ -27,6 +27,7 @@
 | [0011](adr/0011-processes-couple-through-keys-and-a-ledger.md)       | Land-shaping processes couple through declared keys, quantity kinds and one ledger; caps exist only for numerical reasons |
 | [0012](adr/0012-people-live-on-the-lands-layers.md)                  | People are layers on the land read by classifiers; their magic breaks a rule through a shared question                    |
 | [0013](adr/0013-plates-travel-far-apart-from-strength.md)            | Plates travel far, as a share of the map, and separately from each epoch's tectonic strength                              |
+| [0014](adr/0014-water-is-a-column-and-a-lasting-network.md)          | Water is one owned column on every cell and a river network that lasts; processes are recorded transfers (in progress)    |
 
 Files named `*-PLAN.md` in this directory are working copies of open plans and
 are deleted when their plan closes; see the

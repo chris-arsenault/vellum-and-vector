@@ -8,9 +8,9 @@ import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { ask } from "../coupling/answers";
 import { waterPassage } from "./waterQuantity";
-import { riverFlow } from "./channelRegime";
-import { monthlyRunoff } from "./runoff";
-import { months } from "./waterBalance";
+import { riverFlow } from "../water/channelRegime";
+import { waterYearOf } from "../water/runoff";
+import { months } from "../water/waterBalance";
 
 /**
  * The cells that carry a river: those the gathered water reaches with a river's flow in at
@@ -110,7 +110,7 @@ export function riverNetwork(
 function seasonalFlows(map: PhysicalField, c: PhysicalContext, order: Band, incoming?: Band) {
   const water = ask(map, "surfaceWater", c),
     pass = waterPassage(map, c),
-    each = monthlyRunoff(map),
+    each = waterYearOf(map),
     flow = workingArray(map, "float64", "river:month-flow"),
     river = riverFlow(map.mesh.area(0), c.Profile.FluvialReferenceRunoff);
   map.FloodFlow.fill(0);
@@ -122,7 +122,7 @@ function seasonalFlows(map: PhysicalField, c: PhysicalContext, order: Band, inco
         i,
         depthRateToDischarge(
           // Springs and melt come steadily; the surface gives what this month gives.
-          Math.max(0, water.get(i) - map.Runoff.get(i)) + each[i * months + month] * months,
+          Math.max(0, water.get(i) - map.Runoff.get(i)) + each[month].get(i) * months,
           map.mesh.area(i)
         ) + (incoming?.get(i) ?? 0)
       );

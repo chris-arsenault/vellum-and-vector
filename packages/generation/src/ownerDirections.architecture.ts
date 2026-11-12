@@ -24,6 +24,13 @@ interface OwnerDirection {
 }
 const directions: readonly OwnerDirection[] = [
   {
+    direction:
+      "water gets the same intentional paradigms and columnar state as geology and society",
+    given: "2026-11-12",
+    marks: ["packages/generation/src/water/water.architecture.ts"],
+    test: "packages/generation/src/water/water.architecture.ts",
+  },
+  {
     direction: "plate movement and tectonic strength cannot be coupled",
     given: "2026-11-07, restated 2026-11-12",
     marks: ["packages/generation/src/world/tectonicControls.ts"],

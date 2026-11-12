@@ -2,7 +2,7 @@ import { ask, respond } from "../coupling/answers";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { depthRateToDischarge } from "./dimensions";
-import { bedLeak, bedLoss } from "./channelLoss";
+import { bedLeak, bedLoss } from "../water/channelLoss";
 import { groundPermeability, groundwaterFilled } from "./groundwater";
 
 respond({ key: "waterWithdrawal", by: "surface water", reads: [], base: () => 0 });

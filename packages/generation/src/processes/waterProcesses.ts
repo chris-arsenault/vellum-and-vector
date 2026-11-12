@@ -1,5 +1,6 @@
 import { riverChannelGeometry } from "../world/channelGeometry";
-import { runoff } from "../world/runoff";
+import { waterYearFields } from "@atlas/domain";
+import { runoff } from "../water/runoff";
 import { atmosphere, oceanRead, currents, seaFloorZones } from "./climateProcesses";
 import { landmasses } from "../world/geography";
 import { deltaFormation } from "../world/deltas";
@@ -33,7 +34,7 @@ export const waterOff = fieldQuery(
     id: "runoff",
     statement: "What falls and is not lost to the air or the ground runs off.",
     needs: [sea, "Temperature", "Rainfall"],
-    provides: ["Runoff", "FloodRunoff", "DryRunoff", "WaterRecharge"],
+    provides: ["Runoff", "FloodRunoff", "DryRunoff", "WaterRecharge", ...waterYearFields],
     execute: ({ map, context }) => runoff(map, context),
   },
   [oceanRead, atmosphere]

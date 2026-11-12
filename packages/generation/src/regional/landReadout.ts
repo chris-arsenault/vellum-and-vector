@@ -1,7 +1,7 @@
 import { ask } from "../coupling/answers";
 import type { MapProcessContext } from "../process";
 import { nativeContext } from "../world/context";
-import { months } from "../world/waterBalance";
+import { months } from "../water/waterBalance";
 import { isContent } from "./lattice";
 import type { RegionalState } from "./state";
 

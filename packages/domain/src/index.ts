@@ -119,5 +119,7 @@ export * from "./mapOwnership";
 export * from "./physicalFields";
 export * from "./ecologyFields";
 export * from "./humanFields";
+export * from "./waterYearFields";
+export * from "./waterFields";
 export * from "./materialLoadFields";
 export * from "./fieldChannels";

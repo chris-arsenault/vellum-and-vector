@@ -8,6 +8,7 @@ import {
   seaLoadScalarFields,
 } from "./materialLoadFields";
 import { humanIntegerFields, humanScalarFields } from "./humanFields";
+import { waterYearFields } from "./waterYearFields";
 
 const integerFields = [
   "GroundwaterTargets",
@@ -195,6 +196,8 @@ const metricFields = [
   "PerennialFlow",
   // The months of the year a cell carries at least a river's flow.
   "FlowingMonths",
+  // What a cell's surface gives the rivers in each month of its year, in millimetres.
+  ...waterYearFields,
   "CatchmentArea",
   "RiverWidth",
   "RiverDepth",

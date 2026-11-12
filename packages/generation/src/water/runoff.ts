@@ -1,9 +1,9 @@
-import { MapScale } from "@atlas/domain";
+import { MapScale, waterYearFields } from "@atlas/domain";
 import { groundOf } from "../rock/ground";
 import { surfacePorosity } from "../rock/groundQueries";
-import type { PhysicalContext } from "./context";
-import { potentialEvaporation } from "./ecologyEnvironment";
-import type { PhysicalField } from "./field";
+import type { PhysicalContext } from "../world/context";
+import { potentialEvaporation } from "../world/ecologyEnvironment";
+import type { PhysicalField } from "../world/field";
 import { monthlyWarmth, months, waterYear } from "./waterBalance";
 
 /**
@@ -17,16 +17,8 @@ import { monthlyWarmth, months, waterYear } from "./waterBalance";
 const degrees = (native: number) => native / 10 - 30;
 const millimetres = (metres: number) => MapScale.inUnits(metres, "mm");
 
-/** By map: what each cell's surface gives in each month, in millimetres, twelve to a cell. */
-const monthly = new WeakMap<PhysicalField, Float32Array>();
-export function monthlyRunoff(map: PhysicalField) {
-  let held = monthly.get(map);
-  if (!held || held.length !== map.mesh.count * months) {
-    held = new Float32Array(map.mesh.count * months);
-    monthly.set(map, held);
-  }
-  return held;
-}
+/** A cell's year of water: the band of each month, coldest first, held on the map itself. */
+export const waterYearOf = (map: PhysicalField) => waterYearFields.map((name) => map[name]);
 /** The share of water shed by full soil that the ground takes in before it can run off. */
 function sinkingShare(map: PhysicalField, i: number) {
   // Soil and what grows in it say how much goes in; before anything grows, the rock does.
@@ -72,12 +64,11 @@ function climateYear(map: PhysicalField, c: PhysicalContext, i: number) {
   return year;
 }
 export function runoff(map: PhysicalField, c: PhysicalContext) {
-  const each = monthlyRunoff(map);
+  const each = waterYearOf(map);
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) === 1) {
-      for (const band of [map.Runoff, map.FloodRunoff, map.DryRunoff, map.WaterRecharge])
+      for (const band of [map.Runoff, map.FloodRunoff, map.DryRunoff, map.WaterRecharge, ...each])
         band.set(i, 0);
-      each.fill(0, i * months, (i + 1) * months);
       continue;
     }
     const sinking = sinkingShare(map, i),
@@ -92,7 +83,7 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
       greatest = 0;
     for (let at = 0; at < months; at++) {
       const quick = water.quick[at];
-      each[i * months + at] = quick;
+      each[at].set(i, quick);
       total += quick;
       least = Math.min(least, quick);
       greatest = Math.max(greatest, quick);

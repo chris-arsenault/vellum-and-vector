@@ -3,7 +3,7 @@ import { ecologyCarbon, ecologyMemory, ecologyRatios, ecologyScalars } from "@at
 import { units } from "../world/math";
 import type { MapScale } from "@atlas/domain";
 import { rockLayerDepths, rockLayerKinds } from "@atlas/domain";
-import { humanIntegerFields, humanScalarFields } from "@atlas/domain";
+import { humanIntegerFields, humanScalarFields, waterYearFields } from "@atlas/domain";
 import {
   groundMaterialFields,
   groundPlacementFields,
@@ -247,6 +247,7 @@ for (const name of [
   "FloodFlow",
   "PerennialFlow",
   "FlowingMonths",
+  ...waterYearFields,
   "CatchmentArea",
   "RiverWidth",
   "RiverDepth",
