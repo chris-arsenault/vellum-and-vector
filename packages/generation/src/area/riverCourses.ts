@@ -14,14 +14,15 @@ import { coordinateKey } from "../world/worldSources";
 import { heldFor } from "../poi/poiReads";
 import type { GenerationState } from "../process";
 import { isWorldGeography, mapScale } from "../worldSignificance";
+import { joinReaches } from "./riverJoin";
 import { continuingRivers, followWater, isRefinedMap } from "./riverLineage";
 import { runMemory } from "../runMemory";
 
 /**
  * What a river is on this map, read by the river's area entry. The channel field holds all the
  * water that runs; a river is a channel on a course significant at this map's scale, inside its
- * frame, or a parent's river continuing here. River publication draws exactly these, and places
- * that stand on a river read exactly these.
+ * frame, or a parent's river continuing here. River publication draws exactly these, one record
+ * to a river, and places that stand on a river read exactly these.
  */
 
 function riverReach(state: GenerationState, start: number, incoming: Band) {
@@ -99,7 +100,7 @@ export function riverInputs(map: PhysicalField) {
   return { incoming, basinDischarge };
 }
 /** Whether a finer map draws a reach: a World draws whole courses, wherever they start. */
-export const reachInFrame = (state: GenerationState, start: number) =>
+const reachInFrame = (state: GenerationState, start: number) =>
   isWorldGeography(state) ||
   spatial.covers(
     state.domain.scope.footprint,
@@ -212,3 +213,26 @@ const riverPositions = (state: GenerationState) =>
   });
 export const riverPositionAt = (state: GenerationState, cell: number) =>
   riverPositions(state).get(cell);
+
+/**
+ * The rivers this map draws, each joined from its reaches in the frame. A World and a finer map
+ * are drawn the same way: a World holds every reach of a course, a finer map those inside its
+ * frame, and a parent's river keeps the reaches its water runs through.
+ */
+export function drawnRivers(state: GenerationState, records: readonly ReachMembers[]) {
+  const reaches = records.map(({ reach }) => reach),
+    course = reaches.map((): string | null => null);
+  for (const members of mappedCourses(state, reaches)) {
+    const id = riverIdOf(members.map((index) => reaches[index]));
+    for (const index of members) course[index] = id;
+  }
+  return joinReaches(
+    records.map(({ start, members, reach }, index) => ({
+      downstream: reach.downstream,
+      inFrame: reachInFrame(state, start),
+      course: course[index],
+      held: members.slice(0, -1).flatMap((cell) => riverPositionAt(state, cell)?.riverId ?? []),
+    })),
+    new Set(isRefinedMap(state) ? continuingRivers(state).map(({ id }) => id) : [])
+  );
+}

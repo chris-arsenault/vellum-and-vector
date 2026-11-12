@@ -191,7 +191,8 @@ export const regionalOperations: ScheduledStep[] = [
     operation: mapWork(
       "refinement.ecology-develop",
       (state) => developmentExposure[requireRegional(state).regional.round - 1] ?? 0,
-      (state, context, exposure) => respondEcology(requireRegional(state), exposure, context),
+      (state, context, exposure) =>
+        respondEcology(requireRegional(state), exposure, context, 1 / rounds),
       [climate, water]
     ),
   },

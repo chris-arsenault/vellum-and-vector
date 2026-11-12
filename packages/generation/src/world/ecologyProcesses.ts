@@ -12,6 +12,7 @@ import { generationFeatures } from "../generationFeatures";
 import { composeNativeAuthoring, nativePosition } from "./atlasWorkspace";
 import { environment, classifyBiome, unit } from "./ecologyEnvironment";
 import { evolveVegetation } from "./ecologyVegetation";
+import { geologicalYears } from "./ecologySoils";
 import { readEcologyEnvironment } from "./ecologyEnvironmentRead";
 import { nativeContext } from "./context";
 import { accumulateOrganicMatter, evolveBuriedCarbon } from "./ecologyCarbon";
@@ -335,13 +336,16 @@ function advance(
   const f = forcing(state, input, context);
   const map = state.physical!.map,
     before = map.coverage.copyBand(map.BiomeCodes);
-  readEcologyEnvironment(map, nativeContext(state, context, 0));
+  const land = nativeContext(state, context, 0);
+  readEcologyEnvironment(map, land);
   evolveVegetation(
     map,
     years,
     f,
     coverAuthority(state),
-    input.seed ^ Math.imul(physicalEpochIndex(input.epochs, context.epochs) + 1, 16777619)
+    input.seed ^ Math.imul(physicalEpochIndex(input.epochs, context.epochs) + 1, 16777619),
+    // What the land wore since plants were last followed, it wore over the epoch's own span.
+    newHumanTime ? years : Math.max(years, geologicalYears(land.TectonicDurationMyr))
   );
   applyWoodlands(state);
   accumulateOrganicMatter(map, years, f);

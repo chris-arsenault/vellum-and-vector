@@ -12,17 +12,54 @@ export const erosionHistory = (map: PhysicalField, i: number) =>
     "native"
   );
 
-/** Soil is a carried substrate; erosion and ice can remove centuries of ecological development. */
+/** The years a span of the land's shaping stands for, given in millions of years. */
+export const geologicalYears = (millionYears: number) => Math.max(0, millionYears) * 1e6;
+/**
+ * Soil forms from the rock under it, fastest where it is thin, and erosion takes it from the
+ * top. Where ground wears slowly the two balance at a depth that is deeper the slower the
+ * wear; where ground wears faster than bare rock can make soil, there is none.
+ */
+export function soilBalanceDepth(
+  erosionRate: number,
+  production: number,
+  depthScale: number,
+  deepest: number
+) {
+  if (!(production > 0)) return 0;
+  if (!(erosionRate > 0)) return deepest;
+  return Math.max(0, Math.min(deepest, depthScale * Math.log(production / erosionRate)));
+}
+/**
+ * What erosion takes that soil cannot replace in the time the erosion took. Metres a river
+ * carves over a geological age are no loss to the soil riding the surface down; the same
+ * metres in a season strip it.
+ */
+export const strippedSoil = (erosion: number, production: number, landYears: number) =>
+  Math.max(0, erosion - Math.max(0, production) * Math.max(0, landYears));
+
+/**
+ * Soil is a carried substrate; fast erosion and ice can remove centuries of ecological
+ * development. `landYears` is how long the land's shaping since soil was last looked at
+ * stands for: erosion is judged by its rate over that time, never by the metres alone.
+ */
 export function evolveSoils(
   map: PhysicalField,
   years: number,
-  forcing: (i: number) => EcologyForcing
+  forcing: (i: number) => EcologyForcing,
+  landYears = years
 ) {
+  // Bare rock makes soil at this rate where it is warm, wet and nothing holds growth back, and the
+  // rate falls by e with each of this depth of soil over the rock.
+  const bareProduction = map.scale.length(2.5e-11),
+    productionDepth = map.scale.length(1.25e-7);
   for (let i = 0; i < map.mesh.count; i++) {
     const f = forcing(i),
       env = environment(map, i, f);
     recycleOrganicMaterial(map, i, years, f.stillness);
-    const erosion = Math.max(0, erosionHistory(map, i) - map.EcologyErosion.get(i));
+    // Rock breaks down to soil with warmth and with water: slowly in the cold and in the dry.
+    const production = bareProduction * env.warmth * env.moisture * f.recovery,
+      worn = Math.max(0, erosionHistory(map, i) - map.EcologyErosion.get(i)),
+      erosion = strippedSoil(worn, production, landYears);
     const iceAdvance = Math.max(0, map.IceThickness.get(i) - map.EcologyIce.get(i));
     const damage =
       1 - Math.exp(-erosion / map.scale.length(5e-8) - iceAdvance / map.scale.length(1.25e-6));
@@ -44,17 +81,25 @@ export function evolveSoils(
       Math.max(damage, map.EcologicalDamage.get(i) * Math.exp((-years * f.recovery) / 300))
     );
     const weathering = (0.00015 + map.SoilCarbon.get(i) * 0.000005) * env.warmth * f.recovery;
-    // Greenwood deepens the soil it grows in.
+    // The depth soil settles at on this ground: what its wear leaves room for, on what there
+    // is to make it from. Soil has had the land's own time to reach it, not only the years
+    // plants are followed for. Greenwood deepens the soil it grows in.
+    const room = Math.min(
+        map.scale.length(3.75e-7),
+        MapScale.metres(map.SedimentThickness.get(i), "native") + map.scale.length(7.5e-8)
+      ),
+      settled = soilBalanceDepth(
+        landYears > 0 ? worn / landYears : 0,
+        production,
+        productionDepth,
+        room
+      );
     map.SoilDepth.set(
       i,
       approach(
         map.SoilDepth.get(i),
-        Math.min(
-          map.scale.length(3.75e-7),
-          MapScale.metres(map.SedimentThickness.get(i), "native") + map.scale.length(7.5e-8)
-        ) +
-          map.scale.length(2.5e-7) * f.verdure,
-        years,
+        settled + map.scale.length(2.5e-7) * f.verdure,
+        Math.max(years, landYears),
         1 / Math.max(1e-8, weathering)
       )
     );

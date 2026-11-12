@@ -14,7 +14,13 @@ export function networkParts(feature: AtlasFeature, reference: World["reference"
   };
   const junctions = new Set(((feature.attributes.junctions ?? []) as number[][]).map(key)),
     precision = reference.precision ?? spatial.precision;
-  return lineParts(feature.geometry).flatMap((coordinates) => {
+  // A course drawn in several lines keeps one value per vertex across all of them, in order.
+  const lines = lineParts(feature.geometry),
+    vertices = lines.reduce((sum, line) => sum + line.length, 0);
+  let before = 0;
+  return lines.flatMap((coordinates) => {
+    const offset = before;
+    before += coordinates.length;
     const cuts = [
       0,
       ...coordinates.flatMap((p, i) =>
@@ -28,8 +34,8 @@ export function networkParts(feature: AtlasFeature, reference: World["reference"
       // Two junctions closer than the map stores apart leave no stretch between them.
       if (!hasLength(coordinates.slice(start, end + 1), precision)) return [];
       for (const [name, values] of Object.entries(attributes))
-        if (name !== "junctions" && Array.isArray(values) && values.length === coordinates.length)
-          attributes[name] = values.slice(start, end + 1);
+        if (name !== "junctions" && Array.isArray(values) && values.length === vertices)
+          attributes[name] = values.slice(offset + start, offset + end + 1);
       if (Array.isArray(attributes.discharges)) attributes.discharge = attributes.discharges[0];
       return [{ coordinates: coordinates.slice(start, end + 1), attributes }];
     });

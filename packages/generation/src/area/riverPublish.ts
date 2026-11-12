@@ -1,5 +1,5 @@
 import { chartCopies, chartFootprint, interpolateProfile, MapScale, spatial } from "@atlas/domain";
-import type { Geometry } from "geojson";
+import type { Geometry, LineString } from "geojson";
 import { nativePosition } from "../world/atlasWorkspace";
 import { releaseWorking } from "../world/physicalNumerics";
 import { meanderReach } from "../world/riverMeanders";
@@ -12,17 +12,26 @@ import {
 } from "../generationFeatures";
 import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
 import type { GenerationState, MapProcessContext } from "../process";
-import { isWorldGeography } from "../worldSignificance";
 import {
   drainageReaches,
+  drawnRivers,
   establishRivers,
-  mappedCourses,
-  reachInFrame,
-  riverIdOf,
   riverInputs,
-  riverPositionAt,
   riversOf,
 } from "./riverCourses";
+
+type Profiles = Record<string, number[]>;
+/** One unbroken stretch of a river: its cells head to end, its line and the profiles along it. */
+interface Stretch {
+  members: number[];
+  geometry: LineString;
+  profiles: Profiles;
+}
+/** A line of a river inside the frame, with the profiles along it. */
+interface Piece {
+  coordinates: number[][];
+  profiles: Profiles;
+}
 
 function lineParts(geometry: Geometry): number[][][] {
   if (geometry.type === "LineString") return [geometry.coordinates];
@@ -30,89 +39,104 @@ function lineParts(geometry: Geometry): number[][][] {
   if (geometry.type === "GeometryCollection") return geometry.geometries.flatMap(lineParts);
   return [];
 }
-function publishReach(
+function drawStretch(state: GenerationState, members: number[], paths: RiverPaths): Stretch {
+  const map = state.physical!.map,
+    valley = riverPath(map, paths, members),
+    // A reach on a floodplain migrates across it; elsewhere it keeps the valley line.
+    meandered = meanderReach(map, paths, valley.geometry, valley.profiles, members[0]);
+  return {
+    members,
+    geometry: meandered?.geometry ?? valley.geometry,
+    profiles: meandered?.profiles ?? valley.profiles,
+  };
+}
+/** What of one chart copy of a stretch lies in the frame. */
+function piecesInFrame(state: GenerationState, copy: LineString, profiles: Profiles): Piece[] {
+  const footprint = state.domain.scope.footprint;
+  if (!spatial.intersects(copy, footprint)) return [];
+  const area = state.domain.world.areas[state.domain.scope.areaId];
+  if (area.boundary && spatial.crossings(copy, footprint).length) return [];
+  if (spatial.covers(footprint, copy)) return [{ coordinates: copy.coordinates, profiles }];
+  const clipped = spatial.intersection(copy, footprint);
+  if (!clipped) return [];
+  return lineParts(clipped)
+    .filter((coordinates) => coordinates.length >= 2)
+    .map((coordinates) => ({
+      coordinates,
+      profiles: Object.fromEntries(
+        Object.keys(profiles).map((key) => [
+          key,
+          interpolateProfile(copy, profiles, { type: "LineString", coordinates }, key)!,
+        ])
+      ),
+    }));
+}
+/** A river's lines in the frame, head to end, gathered for each copy of the chart it shows on. */
+function chartPieces(state: GenerationState, stretches: readonly Stretch[]): Piece[][] {
+  // hpc-exempt: one entry per chart copy a river shows on, seldom more than one.
+  const copies = new Map<number, Piece[]>();
+  for (const { geometry, profiles } of stretches)
+    for (const copy of chartCopies(state.domain.world.reference, geometry) as LineString[]) {
+      const pieces = piecesInFrame(state, copy, profiles);
+      if (!pieces.length) continue;
+      const shift = Math.round(copy.coordinates[0][0] - geometry.coordinates[0][0]);
+      copies.set(shift, [...(copies.get(shift) ?? []), ...pieces]);
+    }
+  return [...copies.values()];
+}
+/** Where the stretches' channels meet others: the points a river's network is cut at. */
+function junctionsOf(state: GenerationState, stretches: readonly Stretch[], paths: RiverPaths) {
+  const [ox, oy] = state.physical!.map.mesh.origin;
+  return stretches.flatMap(({ members }) =>
+    members
+      .filter((i) => (paths.incoming?.get(i) ?? 0) > 1)
+      .map((i) => [paths.x.get(i) + ox, paths.y.get(i) + oy])
+  );
+}
+/**
+ * One river, drawn once: the stretches of its course inside the frame as one record, a single
+ * line or one line for each stretch where the course leaves the frame and returns. The record
+ * describes the whole course the map holds, from its head here to its end here. A course that
+ * shows on more than one copy of the chart has a record on each.
+ */
+function publishCourse(
   state: GenerationState,
-  start: number,
-  members: number[],
+  parts: readonly number[][],
   paths: RiverPaths,
   basinDischarge: number
 ): string[] {
-  if (members.length < 2) return [];
   const work = state.physical!,
-    map = work.map,
+    stretches = parts
+      .filter((members) => members.length >= 2)
+      .map((members) => drawStretch(state, members, paths)),
     ids: string[] = [];
-  const valley = riverPath(map, paths, members),
-    // A reach on a floodplain migrates across it; elsewhere it keeps the valley line.
-    meandered = meanderReach(map, paths, valley.geometry, valley.profiles, start),
-    geometry = meandered?.geometry ?? valley.geometry,
-    profiles = (meandered?.profiles ?? valley.profiles) as typeof valley.profiles;
-  for (const copy of chartCopies(state.domain.world.reference, geometry)) {
-    ids.push(
-      ...publishReachCopy(
-        state,
-        start,
-        members,
-        copy as typeof geometry,
-        profiles,
-        basinDischarge,
-        ids.length,
-        members
-          .filter((i) => (paths.incoming?.get(i) ?? 0) > 1)
-          .map((i) => [paths.x.get(i) + map.mesh.origin[0], paths.y.get(i) + map.mesh.origin[1]])
-      )
+  if (!stretches.length) return ids;
+  const head = stretches[0].members[0],
+    source = nativePosition(work, head),
+    outlet = nativePosition(work, stretches.at(-1)!.members.at(-1)!),
+    junctions = junctionsOf(state, stretches, paths);
+  for (const pieces of chartPieces(state, stretches)) {
+    const profiles = Object.fromEntries(
+      Object.keys(pieces[0].profiles).map((key) => [
+        key,
+        pieces.flatMap((piece) => piece.profiles[key]),
+      ])
     );
-  }
-  return ids;
-}
-function publishReachCopy(
-  state: GenerationState,
-  start: number,
-  members: number[],
-  geometry: ReturnType<typeof riverPath>["geometry"],
-  profiles: ReturnType<typeof riverPath>["profiles"],
-  basinDischarge: number,
-  offset: number,
-  junctions: number[][]
-) {
-  const work = state.physical!,
-    map = work.map,
-    footprint = state.domain.scope.footprint,
-    ids: string[] = [];
-  if (!spatial.intersects(geometry, footprint)) return ids;
-  const area = state.domain.world.areas[state.domain.scope.areaId];
-  if (area.boundary && spatial.crossings(geometry, footprint).length) return ids;
-  const clipped = spatial.covers(footprint, geometry)
-    ? geometry
-    : spatial.intersection(geometry, footprint);
-  if (!clipped) return ids;
-  for (const [part, coordinates] of lineParts(clipped).entries()) {
-    if (coordinates.length < 2) continue;
-    const reach = { type: "LineString" as const, coordinates };
-    const source = nativePosition(work, start),
-      outlet = nativePosition(work, members.at(-1)!);
-    const attributes =
-      clipped === geometry
-        ? profiles
-        : Object.fromEntries(
-            Object.keys(profiles).map((key) => [
-              key,
-              interpolateProfile(geometry, profiles, reach, key)!,
-            ])
-          );
-    const discharges = attributes.discharges;
     const feature = generatedFeature(
       state,
-      `river:${coordinateKey(source.x, source.y)}:${coordinateKey(outlet.x, outlet.y)}:${part + offset}`,
+      `river:${coordinateKey(source.x, source.y)}:${coordinateKey(outlet.x, outlet.y)}:${ids.length}`,
       `River ${Math.round(MapScale.inUnits(source.x, "km"))} ${Math.round(MapScale.inUnits(source.y, "km"))}`,
       "river",
       "rivers",
-      reach,
+      pieces.length === 1
+        ? { type: "LineString", coordinates: pieces[0].coordinates }
+        : { type: "MultiLineString", coordinates: pieces.map((piece) => piece.coordinates) },
       {
-        order: map.RiverOrders.get(start),
+        order: work.map.RiverOrders.get(head),
         junctions,
-        discharge: discharges[0],
+        discharge: profiles.discharges[0],
         basinDischarge,
-        ...attributes,
+        ...profiles,
         sourceAlgorithm: "atlas-1",
       }
     );
@@ -149,7 +173,7 @@ function nameItsRiver(state: GenerationState, ids: readonly string[], riverId: s
       });
   }
 }
-/** The map's rivers, drawn: a World's whole courses, a finer map's reach by reach in its frame. */
+/** The map's rivers, drawn: each river once, as the course it holds inside the map's frame. */
 export function publishRivers(state: GenerationState, context: MapProcessContext) {
   // Settled first: the working arrays below are the ones this reads with.
   riversOf(state);
@@ -160,43 +184,19 @@ export function publishRivers(state: GenerationState, context: MapProcessContext
   paths.water = riverWater(state);
   const records = [...drainageReaches(state, incoming)],
     reaches = records.map((record) => record.reach);
-  function* publish() {
-    // The map shows the rivers significant at its scale; the stored network keeps every reach
-    // as latent drainage for finer maps.
-    const courses = mappedCourses(state, reaches);
-    if (isWorldGeography(state)) {
-      for (const course of courses) {
-        const members = course.flatMap((i, n) => records[i].members.slice(n ? 1 : 0)),
-          first = records[course[0]],
-          ids = publishReach(
-            state,
-            first.start,
-            members,
-            paths,
-            basinDischarge.get(first.reach.basin)
-          );
-        nameItsRiver(state, ids, riverIdOf(course.map((i) => reaches[i])));
-        for (const i of course) reaches[i].featureIds = ids;
-        yield { members, featureIds: ids };
-      }
-      return;
-    }
-    // A finer map publishes its rivers reach by reach, inside its footprint.
-    for (const { start, members, reach } of records) {
-      const riverId = members
-        .slice(0, -1)
-        .map((cell) => riverPositionAt(state, cell)?.riverId)
-        .find(Boolean);
-      if (!riverId) continue;
-      const discharge = basinDischarge.get(reach.basin);
-      if (!reachInFrame(state, start)) continue;
-      reach.featureIds = publishReach(state, start, members, paths, discharge);
-      nameItsRiver(state, reach.featureIds, riverId);
-      yield { members, featureIds: reach.featureIds };
-    }
-  }
   try {
-    for (const reach of publish()) void reach;
+    // The map shows the rivers significant at its scale; the stored network keeps every reach
+    // as latent drainage for finer maps. Every reach of a river points at the river's records.
+    for (const { riverId, parts } of drawnRivers(state, records)) {
+      const ids = publishCourse(
+        state,
+        parts.map((part) => part.flatMap((i, n) => records[i].members.slice(n ? 1 : 0))),
+        paths,
+        basinDischarge.get(reaches[parts[0][0]].basin)
+      );
+      nameItsRiver(state, ids, riverId);
+      for (const i of parts.flat()) reaches[i].featureIds = ids;
+    }
   } finally {
     releaseWorking(map, incoming, basinDischarge);
     releaseWorking(map, paths.x, paths.y, paths.upstream);

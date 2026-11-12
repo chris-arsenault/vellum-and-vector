@@ -18,6 +18,7 @@ import { publishPeoplePlaces } from "../landWays";
 import { publishKinds } from "../poi/poiPublish";
 import { cellsWithin, featureCell, inhabited } from "../poi/poiReads";
 import type { MapProcessContext } from "../process";
+import { landReadout } from "./landReadout";
 import { isContent, regionalSpan } from "./lattice";
 import { developmentExposure } from "./schedule";
 import type { RegionalState } from "./state";
@@ -62,6 +63,7 @@ export function livePeople(state: RegionalState, context: MapProcessContext) {
   const met = Math.round(peopleOn(state));
   // They settle the finer land and stay as many as the parent says they are.
   liveKeptPass(state, context, developmentExposure[state.regional.round - 1] ?? 0);
+  context.progress(1, `Land on the map: ${landReadout(state, context)}`);
   context.progress(
     1,
     `People on the map: ${before} before the round, ${met} after its water and ice, ${Math.round(peopleOn(state))} after living it; the land as now used feeds ${Math.round(landFeeds(state, context))}; all under crops it would feed ${Math.round(landFeeds(state, context, "cropYield"))}, under herds ${Math.round(landFeeds(state, context, "herdYield"))}, left wild ${Math.round(landFeeds(state, context, "wildYield"))}`

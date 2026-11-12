@@ -133,7 +133,7 @@ export const river: AreaEntry = {
   },
   publication: {
     statement:
-      "Each river publishes as records of its course, every one saying which river it draws. A World draws whole courses; a finer map draws reach by reach inside its frame.",
+      "Each river publishes as records of its course, every one saying which river it draws. Every map draws whole courses; a finer map draws the stretches of each that lie inside its frame as one record.",
     moment: "geography",
     publish: (state, context) => publishRivers(state, context),
   },

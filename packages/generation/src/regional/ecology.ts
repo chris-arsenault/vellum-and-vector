@@ -7,14 +7,14 @@ import { livingPlantCarbon } from "../world/ecologyGroups";
 import { developVegetation } from "../world/ecologyVegetation";
 import { authoritativeCanopy, updateTreeCover } from "../world/ecologyGrowth";
 import { ecologicalForcing } from "../world/ecologyMagic";
-import { erosionHistory } from "../world/ecologySoils";
+import { erosionHistory, geologicalYears } from "../world/ecologySoils";
 import { ecologyScalars } from "@atlas/domain";
 import { hashUnit } from "../world/noise";
 import { generationFeatures } from "../generationFeatures";
 import { magicHeat } from "./climate";
 import { distance, isContent, positionOf, regionalSpan } from "./lattice";
 import { seatRadius } from "./seats";
-import { clamp, naturalBand, type RegionalState } from "./state";
+import { clamp, type RegionalState } from "./state";
 import { generationBindings } from "../generationBindings";
 import type { MapProcessContext } from "../process";
 import { readEcologyEnvironment } from "../world/ecologyEnvironmentRead";
@@ -31,14 +31,17 @@ const fireHeat = 3,
  * local relaxation, not elapsed world history: canopy age and thermal maturity do not advance.
  * Soil water, organic recycling, toxicity, competition and animals use the shared owners.
  */
-export function respondEcology(state: RegionalState, exposure: number, context: MapProcessContext) {
+export function respondEcology(
+  state: RegionalState,
+  exposure: number,
+  context: MapProcessContext,
+  /** The share of an epoch's span of land-shaping this response follows. */
+  landShare: number
+) {
   if (exposure <= 0) return;
   const map = state.physical.map;
-  // A round's carving shows the relief the parent's cells averaged away. It is no new event
-  // in the land's history: the soil and what grows in it ride the surface as it is drawn.
-  keepSoil(state);
-  rememberHistory(state);
-  readEcologyEnvironment(map, nativeContext(state, context, 0));
+  const land = nativeContext(state, context, 0);
+  readEcologyEnvironment(map, land);
   const forcing = regionalForcing(state, context),
     restore = regionalAuthority(state);
   developVegetation(
@@ -46,7 +49,10 @@ export function respondEcology(state: RegionalState, exposure: number, context: 
     exposure,
     forcing,
     restore,
-    state.regional.input.seed ^ state.regional.round
+    state.regional.input.seed ^ state.regional.round,
+    // What a round wears off the ground, it wears over the round's share of an epoch's span:
+    // soil is judged against that, so slow carving strips nothing and soil rides the surface.
+    geologicalYears(land.TectonicDurationMyr) * landShare
   );
   accumulateOrganicMatter(map, exposure, forcing);
   buryOrganicMatter(map);
@@ -54,9 +60,8 @@ export function respondEcology(state: RegionalState, exposure: number, context: 
 
 /**
  * Once, before round one: preserve captured functional groups, cohorts, seeds and carbon.
- * Damage reference bands start at the inherited ground and are set to the present again
- * before each round's response: neither the parent's completed events nor a round's own
- * redrawing of the surface is a disturbance to what grows on it.
+ * Damage reference bands start at the inherited ground, so the parent's completed events are
+ * no disturbance here. What a round then wears is judged by its rate over the round's span.
  */
 export function prepareEcology(state: RegionalState) {
   const map = state.physical.map;
@@ -64,24 +69,6 @@ export function prepareEcology(state: RegionalState) {
   initializeEcology(map, state.regional.input.seed, true);
   map.EcologyStillness.copyFrom(map.Stillness);
   rememberHistory(state);
-  // The soil as the parent left it, kept before any round carves the ground under it.
-  naturalBand(state, "SoilDepth");
-}
-/**
- * Soil is a skin on the surface, and the ground model takes it with every metre a round
- * carves. On dry ground the skin the parent left lies on the finer surface as it lay on the
- * coarser one; soil the map's own processes have deepened since stays as they left it.
- */
-function keepSoil(state: RegionalState) {
-  const map = state.physical.map,
-    left = naturalBand(state, "SoilDepth");
-  for (let i = 0; i < map.mesh.count; i++) {
-    // Only ground the round carved lost its skin that way: soil a place holds thin, or ice
-    // has taken, stays as it is.
-    const carved = erosionHistory(map, i) > map.EcologyErosion.get(i),
-      open = map.WaterKindCodes.get(i) === 0 && !(map.IceThickness.get(i) > 0);
-    if (carved && open && map.SoilDepth.get(i) < left.get(i)) map.SoilDepth.set(i, left.get(i));
-  }
 }
 
 /** Classify the current communities without growth, death, burial or water renewal. */

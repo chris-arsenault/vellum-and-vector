@@ -13,9 +13,11 @@ export function evolveVegetation(
   years: number,
   forcing: (i: number) => EcologyForcing = () => neutralEcology,
   restore: (i: number) => void = () => {},
-  seed = 42
+  seed = 42,
+  /** How long the land's shaping since the last response stands for; the same years if absent. */
+  landYears = years
 ) {
-  vegetationResponse(map, years, forcing, restore, seed, true);
+  vegetationResponse(map, { years, landYears }, forcing, restore, seed, true);
 }
 
 /** Local ecological relaxation resolves inherited communities without advancing their age. */
@@ -24,14 +26,15 @@ export function developVegetation(
   exposure: number,
   forcing: (i: number) => EcologyForcing,
   restore: (i: number) => void,
-  seed: number
+  seed: number,
+  landYears = exposure
 ) {
-  vegetationResponse(map, exposure, forcing, restore, seed, false);
+  vegetationResponse(map, { years: exposure, landYears }, forcing, restore, seed, false);
 }
 
 function vegetationResponse(
   map: PhysicalField,
-  years: number,
+  { years, landYears }: { years: number; landYears: number },
   forcing: (i: number) => EcologyForcing,
   restore: (i: number) => void,
   seed: number,
@@ -39,7 +42,7 @@ function vegetationResponse(
 ) {
   initializeEcology(map, seed);
   if (years > 0) {
-    evolveSoils(map, years, forcing);
+    evolveSoils(map, years, forcing, landYears);
     applyToxicity(map, years, forcing);
     disturbEcology(map, years, forcing, seed);
     floodEcology(map, years);

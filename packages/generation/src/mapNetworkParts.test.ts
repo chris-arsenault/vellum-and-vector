@@ -37,6 +37,31 @@ it("cuts a course at its interior junctions and carries each stretch's own profi
   ]);
 });
 
+it("gives each line of a course drawn in several its own run of the per-vertex values", () => {
+  const lines = [
+      [
+        [0, 0],
+        [10, 0],
+      ],
+      [
+        [50, 0],
+        [60, 0],
+        [70, 0],
+      ],
+    ],
+    feature = {
+      geometry: { type: "MultiLineString", coordinates: lines },
+      attributes: { junctions: [], discharges: [1, 2, 3, 4, 5] },
+    } as unknown as AtlasFeature,
+    parts = networkParts(feature, reference);
+  expect(parts.map((part) => part.coordinates)).toEqual(lines);
+  expect(parts.map((part) => part.attributes.discharges)).toEqual([
+    [1, 2],
+    [3, 4, 5],
+  ]);
+  expect(parts.map((part) => part.attributes.discharge)).toEqual([1, 3]);
+});
+
 it("leaves no stretch between two junctions closer than the map stores apart", () => {
   const parts = networkParts(
     course(
