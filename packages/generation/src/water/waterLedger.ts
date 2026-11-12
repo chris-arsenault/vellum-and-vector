@@ -30,6 +30,9 @@ export const waterMoves = {
   /** Snow that outlasts the year becomes ice and leaves the year's water. */
   firn: ["snow", "ice"],
   iceMelt: ["ice", "river"],
+  /** Where the ice's melt came from, before the rivers take it: these stay within the ice. */
+  meltOfKeptSnow: ["ice", "ice"],
+  meltFromOutside: ["ice", "ice"],
   calving: ["ice", "sea"],
   /** Kept snow with no ice to carry it down goes back to the air. */
   sublimation: ["ice", "air"],

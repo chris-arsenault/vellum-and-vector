@@ -1,4 +1,4 @@
-import { MapScale, type Band } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 import type { PhysicalContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
 import { targetOrder } from "../world/flowGraph";
@@ -7,15 +7,16 @@ import { releaseWorking, workingArray } from "../world/physicalNumerics";
 import { moveWater } from "./waterLedger";
 
 /**
- * Water that ice gives up. Ice makes no water: it gives back the snow it was fed and the ice
- * it lost. Snow that outlasts the year rides down the ice and melts out along the way by how
- * warm it is, and all of it is out where the ice ends. Ice that thinned gives its own water
- * where it thinned. Ice that reaches the sea calves, and kept snow with no ice to carry it
- * goes back to the air. Whatever else melts ice (a volcano, a magic) hands its water over here.
+ * Water that ice gives up in a typical year. Ice makes no water: it gives back the snow it
+ * was fed. Snow that outlasts the year rides down the ice and melts out along the way by how
+ * warm it is, and all of it is out where the ice ends. Ice that reaches the sea calves, and
+ * kept snow with no ice to carry it goes back to the air. Whatever else melts ice (a volcano,
+ * a magic) hands its water over here.
+ *
+ * Ice that grows or shrinks between passes does so over the ages a pass stands for. Spread
+ * over those ages it is far less than a millimetre a year, so it is no part of the year's
+ * water: counting a pass's thinning as a year's melt drowned warm country in rivers.
  */
-
-/** A depth of ice as the depth of water it melts to. */
-const waterOfIce = 0.9;
 
 /** The share of what the ice carries past a cell that melts out there, by its warmth. */
 function thawShare(map: PhysicalField, c: PhysicalContext, i: number) {
@@ -31,6 +32,8 @@ const iced = (map: PhysicalField, i: number) =>
   map.WaterKindCodes.get(i) === 0 && map.IceThickness.get(i) > 0;
 
 interface IceWater {
+  fed: number;
+  outside: number;
   calved: number;
   sublimed: number;
 }
@@ -62,7 +65,7 @@ function release(
 export function glacialMeltwater(map: PhysicalField, c: PhysicalContext) {
   const order = targetOrder(map, map.IceFlowTargets),
     carried = workingArray(map, "float64", "meltwater:carried"),
-    totals: IceWater = { calved: 0, sublimed: 0 };
+    totals: IceWater = { fed: 0, outside: 0, calved: 0, sublimed: 0 };
   for (let n = 0; n < order.length; n++) {
     const i = order.get(n),
       area = map.mesh.area(i),
@@ -72,11 +75,13 @@ export function glacialMeltwater(map: PhysicalField, c: PhysicalContext) {
       continue;
     }
     // Ice that thinned over the last span gives the water it was.
-    const thinned = Math.max(0, map.IceRetreat.get(i)) * waterOfIce,
-      depth = (out / area) * 1000 + MapScale.inUnits(thinned, "mm");
-    map.GlacialMeltwater.set(i, depth + map.ExternalMeltwater.get(i));
+    map.GlacialMeltwater.set(i, (out / area) * 1000 + map.ExternalMeltwater.get(i));
+    totals.fed += out;
+    totals.outside += (map.ExternalMeltwater.get(i) / 1000) * area;
   }
-  // What the rivers take of the melt is stated where they gather it.
+  // What the rivers take of the melt is stated where they gather it; these say where it came from.
+  moveWater(map, "meltOfKeptSnow", totals.fed);
+  moveWater(map, "meltFromOutside", totals.outside);
   moveWater(map, "calving", totals.calved);
   moveWater(map, "sublimation", totals.sublimed);
   releaseWorking(map, order, carried);
