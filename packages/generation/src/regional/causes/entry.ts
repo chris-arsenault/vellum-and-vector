@@ -1,6 +1,7 @@
 import { frameEdge, isContent, neighborsOf, stepVector } from "../lattice";
 import type { Evidence, RegionalState } from "../state";
 import { registerCause } from "./registry";
+import { parentChannels } from "../../world/atlasWorkspace";
 
 /**
  * A captured river crossing the frame edge brings its upstream discharge with it: the network
@@ -34,9 +35,14 @@ function riverEntries(state: RegionalState): Evidence["entries"] {
     }
     return true;
   };
+  // A parent that states its rivers' driest month hands that on; otherwise the river is
+  // taken to run evenly through the year.
+  const regime = parentChannels(state).has("PerennialFlow"),
+    least = (i: number) =>
+      regime ? Math.min(flow(i), Math.max(0, map.PerennialFlow.get(i))) : flow(i);
   for (let i = 0; i < mesh.count; i++)
     if (frameEdge(mesh, i) && flow(i) > 0 && flowsInward(state, i) && strongest(i))
-      entries.push({ cell: i, discharge: flow(i) });
+      entries.push({ cell: i, discharge: flow(i), least: least(i) });
   return entries;
 }
 

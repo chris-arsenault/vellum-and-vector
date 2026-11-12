@@ -87,6 +87,8 @@ export const physicalChannels: PhysicalChannel[] = [
   { ...channel("MaximumIceFlux", "cubic-metre/year"), minimum: 0 },
   { ...channel("MaximumGroundedIceFlux", "cubic-metre/year"), minimum: 0 },
   channel("FlowAccumulation", "cubic-metre/second"),
+  // What a river still carries in its driest month: a finer map's entering rivers keep it.
+  { ...channel("PerennialFlow", "cubic-metre/second"), minimum: 0 },
   channel("OceanDistance", "metre"),
   fraction("RiverChannelStrength"),
   fraction("FloodplainIntensity"),
@@ -254,7 +256,7 @@ export const physicalChannelOwnership: Ownership[] = [
   [
     "physical.river-networks",
     "rivers",
-    ["RiverOrders", "RiverChannelStrength", "RiverWidth", "RiverDepth"],
+    ["RiverOrders", "RiverChannelStrength", "RiverWidth", "RiverDepth", "PerennialFlow"],
   ],
   ["physical.floodplains", "rivers", ["FloodplainIntensity"]],
   ["physical.deltas", "rivers", ["DeltaIntensity"]],

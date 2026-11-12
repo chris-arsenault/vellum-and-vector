@@ -35,14 +35,25 @@ export function bindRegionalWater(state: RegionalState) {
     withIncoming(state, (incoming) => lakeBasins(map, context, incoming))
   );
   bindOperation(map, rivers.operation, ({ context }) => {
-    withIncoming(state, (incoming) =>
-      riverNetwork(
+    withIncoming(state, (incoming) => {
+      const steady = workingValues(
         map,
-        context,
-        incoming,
-        continuingRivers(state).map(({ head }) => head)
-      )
-    );
+        "float64",
+        "regional:steady-incoming-water",
+        (i) => state.regional.network?.steadyInflow[i] ?? 0
+      );
+      try {
+        riverNetwork(
+          map,
+          context,
+          incoming,
+          continuingRivers(state).map(({ head }) => head),
+          steady
+        );
+      } finally {
+        releaseWorking(map, steady);
+      }
+    });
     readDrainage(state);
   });
 }

@@ -42,7 +42,8 @@ export interface Evidence {
   lakes: { cells: Int32Array; level: number }[];
   seats: Seat[];
   /** Captured rivers entering across the frame edge, with the discharge they bring (m³/s). */
-  entries: { cell: number; discharge: number }[];
+  /** `least` is what the river still brings in its driest month, where the parent map says. */
+  entries: { cell: number; discharge: number; least: number }[];
   /** Captured landmark records standing in the frame, placed on this lattice. */
   landmarks: { landmark: Landmark; placed: Placed }[];
 }
@@ -66,6 +67,8 @@ export interface NetworkWork {
   flow: Float64Array;
   /** Discharge entering across the frame edge at this cell (m³/s). */
   inflow: Float64Array;
+  /** What of that inflow still enters in the river's driest month (m³/s). */
+  steadyInflow: Float64Array;
   /** Whether the cell carries a channel at this map's scale. */
   channel: Uint8Array;
   /** Water surface level each cell's tributaries rise from (datum, edge base, lake level). */

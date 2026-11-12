@@ -14,6 +14,7 @@ import { riverFlow } from "./channelRegime";
 import { waterYearOf } from "./runoff";
 import { months } from "./waterBalance";
 import { closedByAridity } from "./closedBasin";
+import { enteringInMonth } from "./inflow";
 
 /**
  * The cells that carry a river: those the gathered water reaches with a river's flow in at
@@ -62,6 +63,14 @@ function rememberBeds(map: PhysicalField, c: PhysicalContext) {
     else if (map.RiverMemory.get(i) > 0 && !keepsBed(map, c, i)) map.RiverMemory.set(i, 0);
   }
 }
+/** A course known from elsewhere to have carried a river of this order: its land remembers it. */
+export function rememberCourse(map: PhysicalField, cells: ArrayLike<number>, order: number) {
+  for (let n = 0; n < cells.length; n++) {
+    const i = cells[n];
+    if (map.WaterKindCodes.get(i) === 0 && order > map.RiverMemory.get(i))
+      map.RiverMemory.set(i, order);
+  }
+}
 const keepsBed = (map: PhysicalField, c: PhysicalContext, i: number) =>
   map.WaterKindCodes.get(i) === 0 && closedByAridity(map, c.Profile, i);
 export function carriesSpine(map: PhysicalField, source: number, target: number): boolean {
@@ -89,7 +98,9 @@ export function riverNetwork(
   map: PhysicalField,
   c: PhysicalContext,
   incoming?: Band,
-  continuingHeads: readonly number[] = []
+  continuingHeads: readonly number[] = [],
+  /** What of the incoming flow still enters in the entering river's driest month. */
+  steadyIncoming?: Band
 ) {
   const area = contributingArea(map, map.FlowTargets);
   map.CatchmentArea.copyFrom(area);
@@ -97,7 +108,7 @@ export function riverNetwork(
   map.RiverOrders.fill(0);
   const order = sourceToOutletOrder(map);
   gatherYear(map, c, order, incoming);
-  seasonalFlows(map, c, order, incoming);
+  seasonalFlows(map, c, order, incoming, steadyIncoming);
   const channels = buildChannels(map);
   retainChannels(map, channels, continuingHeads);
   strahlerOrders(map, order, channels);
@@ -173,7 +184,13 @@ function endOf(map: PhysicalField, i: number, target: number) {
  * what else reaches the river (springs, melt) comes steadily. A lake evens out what passes
  * through it: below its outlet all three start from what it overflows.
  */
-function seasonalFlows(map: PhysicalField, c: PhysicalContext, order: Band, incoming?: Band) {
+function seasonalFlows(
+  map: PhysicalField,
+  c: PhysicalContext,
+  order: Band,
+  incoming?: Band,
+  steadyIncoming?: Band
+) {
   const water = ask(map, "surfaceWater", c),
     pass = waterPassage(map, c),
     each = waterYearOf(map),
@@ -190,7 +207,7 @@ function seasonalFlows(map: PhysicalField, c: PhysicalContext, order: Band, inco
           // Springs and melt come steadily; the surface gives what this month gives.
           Math.max(0, water.get(i) - map.Runoff.get(i)) + each[month].get(i) * months,
           map.mesh.area(i)
-        ) + (incoming?.get(i) ?? 0)
+        ) + enteringInMonth(each, i, month, incoming?.get(i) ?? 0, steadyIncoming)
       );
     gatherDown(order, map.FlowTargets, flow, (i, received) => {
       // A lake evens out the year: its outlet runs at the year's overflow in every month.

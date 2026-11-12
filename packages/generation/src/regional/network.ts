@@ -60,6 +60,7 @@ export function growNetwork(state: RegionalState): NetworkWork {
     area: new Float64Array(n),
     flow: new Float64Array(n),
     inflow: new Float64Array(n),
+    steadyInflow: new Float64Array(n),
     channel: new Uint8Array(n),
     level: new Float64Array(n),
     sea,
@@ -67,7 +68,10 @@ export function growNetwork(state: RegionalState): NetworkWork {
     lake,
     ...capturedSinks(state, base, sea, lake),
   };
-  for (const entry of evidence.entries) network.inflow[entry.cell] = entry.discharge;
+  for (const entry of evidence.entries) {
+    network.inflow[entry.cell] = entry.discharge;
+    network.steadyInflow[entry.cell] = entry.least;
+  }
   const root = networkRoots(state, network);
   evolveNetwork(state, network, root, cellCosts(state, sea, base));
   gatherFlow(state, network);

@@ -8,9 +8,12 @@ carries the direction is marked in `packages/generation/src/water/water.architec
 structure below is agent-derived and follows the method in
 [Materials and processes](../../MATERIALS-AND-PROCESSES-ARCHITECTURE.md).
 
-Status: in progress. One owner, the ledger of transfers, the year's rhythm and the single
-soil-water store are in the code. The lasting network, one routing for every gathering, and
-inheritance of reaches by a finer map are not yet.
+Status: in the code, with two parts open. One owner, the ledger of transfers, the year's
+rhythm with wet and dry seasons, the single soil-water store, one gathering routine, the
+ground's memory of its rivers, and a finer map's inheritance of entering rivers and old beds
+are in. Open: a finer map's starting ground is still raised from a drainage tree of its own
+(`regional/relief.ts`), with its own gathering, pending the owner's decision on regional
+refinement; and what plants transpire is still the ecology's own figure.
 
 ## Context
 
@@ -32,16 +35,25 @@ depend on both belonged to neither file.
 - **A water column on every cell.** Snow, soil water, groundwater and standing water are one
   package: carried with the crust, inherited by a finer map as shares, never split band by
   band. A cell's year of water is part of that state, held month by month on the map.
-- **A network that lasts.** Reaches, lakes and outlets have identity, a course, a flow through
-  the year and a regime, and they persist across passes. Processes change the network; they do
-  not redraw it. What a reach was before it moved or dried stays on the ground.
+- **A network that lasts.** Where water runs is read from the present ground in every pass:
+  a course moves only when the ground or the water changes. What lasts is on the map itself.
+  Every cell keeps the order of the river it carries or last carried, so a reach that dried,
+  was drawn off or turned elsewhere leaves its bed, for as long as the ground is too dry to
+  heal it. A river's identity is the end it reaches, which outlasts changes at its head; its
+  records carry its flow through the year and its regime. A finer map takes a parent's
+  rivers and old beds as things, with what each river brings in its driest month.
 - **Transfers between stores.** A water process is a move between two named stores: fall,
   melt, evaporate, soak, seep, spring, run, fill and spill. Each store states what it holds,
   what room it has and how readily it gives. Every transfer is recorded, with the air and the
   sea as stores, so nothing is made or lost unrecorded.
 - **The year's rhythm, not elapsed time.** A pass works out each cell's typical year in twelve
   months and rivers gather those months. The months describe the climate within the span a
-  pass stands for; no clock advances.
+  pass stands for; no clock advances. Rain falls in the months the rain belts stand over a
+  cell, and the air's demand follows each month's warmth and day length; the climate states
+  that demand once, and water, lakes and plants all read it.
+- **Ice and heat make no water.** Ice gives back the snow it was fed. What melts ice from
+  outside the climate decides where that water comes out, not how much there is. Ground lost
+  or gained over the ages a pass stands for is never a year's water.
 - **Couplings by question.** Plants, people, erosion and magic ask water how wet the ground
   is, what flows and when. What changes water answers a question at a named point: the air's
   demand, what the ground takes, what a bed leaks, what people draw.
@@ -55,8 +67,11 @@ depend on both belonged to neither file.
   closed-basin balance replaces three tests; one soil-water store serves water and plants.
 - A finer map inherits the columns as a package and the reaches that cross its frame as
   things, with what they carry in each month.
-- Sediment that builds fans, plains and deltas, courses that break out, and old beds that stay
-  dry are built on the lasting network; they are not possible without it.
+- A river's load settles up to the grade its water needs, which builds fans and plains, and
+  on the sea floor at its mouth up to the sea's surface, which builds deltas into land. A bed
+  raised above lower ground beside it loses its river when the routes are next read, and the
+  ground keeps the old bed.
+- A place changes water only by asking: the contributions ledger refuses every water band.
 
 ## What stays out
 
