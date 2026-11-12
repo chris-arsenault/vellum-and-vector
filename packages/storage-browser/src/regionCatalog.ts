@@ -7,8 +7,6 @@ import {
   polygonGeometry,
   regionalDistricts,
   regionalSelectionArea,
-  MapScale,
-  defaultTerrainCells,
   rectangle,
   regionBoundaryLines,
   requireThat,
@@ -70,8 +68,7 @@ export class RegionCatalog {
     const world = this.db.selectObject("SELECT data,revision FROM worlds WHERE id=?", [worldId]);
     requireThat(world, "missing_world", "Choose an existing world.");
     const reference: World["reference"] = JSON.parse(String(world.data)).reference,
-      precision = reference.precision ?? 1e-6,
-      scale = MapScale.fromCells(spatial.bounds(reference.domain), defaultTerrainCells);
+      precision = reference.precision ?? 1e-6;
     const parentRow = query.parentId
       ? this.db.selectObject("SELECT * FROM records WHERE world_id=? AND kind='view' AND id=?", [
           worldId,
@@ -101,7 +98,7 @@ export class RegionCatalog {
       parentArea: this.kernel.measure(parent, precision).area,
       precision,
       revision: Number(world.revision),
-      targetArea: regionalSelectionArea(regionSelectionLevel(this.db, this.kernel, query), scale),
+      targetArea: regionalSelectionArea(regionSelectionLevel(this.db, this.kernel, query)),
       minimumWidth: regionMinimumWidth(this.db, this.kernel, query),
     };
   }

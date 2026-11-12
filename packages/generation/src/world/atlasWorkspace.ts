@@ -307,8 +307,7 @@ export function createAtlasWorkspace(
   profile.WrapLongitude = Number(profile.MapBoundary === 1);
   const resolution = generationResolution(
     quality,
-    state.domain.world.areas[state.domain.scope.areaId].profile,
-    scale
+    state.domain.world.areas[state.domain.scope.areaId].profile
   );
   const cellSpan = state.domain.world.areas[state.domain.scope.areaId].parentId
       ? (state.domain.scope.resolution ?? resolution.cellSpan)

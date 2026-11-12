@@ -21,6 +21,8 @@ import { looseTo, standGround } from "../rock/groundLedger";
 
 it("publishes a fixed triangle world as continuous canonical channels and discrete material/magic fields", () => {
   const state = landscape();
+  // A few kilometres of ground is a site: its fixed cell size gives the sheet cells to read.
+  state.domain.world.areas.area.profile = "site";
   state.surface = createGrid("fixed", state.domain.scope, 23, 19);
   state.physical = createAtlasWorkspace(state, "draft");
   const work = state.physical!,

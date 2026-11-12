@@ -5,8 +5,8 @@ import {
   type DomainSnapshot,
   type Grid,
   ownsMapGeography,
-  MapScale,
-  defaultTerrainCells,
+  regionalScale,
+  mapRefinementLevel,
 } from "@atlas/domain";
 import { generationResolution } from "./resolution";
 
@@ -35,9 +35,10 @@ export function regionalInputChannels(fields: Grid[]) {
   for (const grid of fields) for (const name of Object.keys(grid.channels)) result.set(name, grid);
   return result;
 }
-/** Independent maps choose resolution from their own frame and selected detail. */
+/** A refined map takes its level's rung of the fixed ladder; any other map its profile's. */
 export function regionalResolution(source: DomainSnapshot, areaId: string, quality: string) {
-  const area = source.world.areas[areaId],
-    scale = MapScale.fromCells(spatial.bounds(area.footprint), defaultTerrainCells);
-  return generationResolution(quality, area.profile, scale);
+  const area = source.world.areas[areaId];
+  return area.parentId && area.map
+    ? regionalScale(Math.max(1, mapRefinementLevel(source.world.areas, areaId)), quality)
+    : generationResolution(quality, area.profile);
 }

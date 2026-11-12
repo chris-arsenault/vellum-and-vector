@@ -16,6 +16,8 @@ function suppliedField() {
   const state = landscape(),
     footprint = rectangle([0, 0, 1000, 1000]);
   state.domain.world.areas.area.footprint = footprint;
+  // A kilometre of ground is a site: its fixed cell size gives the import cells to fill.
+  state.domain.world.areas.area.profile = "site";
   state.domain.world.reference.domain = footprint;
   state.domain.scope = { ...state.domain.scope, footprint };
   state.surface = createAdaptiveField(

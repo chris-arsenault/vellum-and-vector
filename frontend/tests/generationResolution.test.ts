@@ -1,8 +1,8 @@
 import { expect, test } from "./uiTest";
 import { installGenerationFixture } from "./generationFixture";
 
-// A detail level is a fixed amount of work; the world's dimensions set what each cell covers.
-test("updates km² resolution, cell counts and the non-blocking warning with detail and dimensions", async ({
+// A detail level is a fixed ground size per cell; the world's dimensions set the cell count.
+test("updates km² resolution, cell counts and the non-blocking warning with world dimensions", async ({
   page,
 }) => {
   await installGenerationFixture(page, { hold: true });
@@ -14,11 +14,14 @@ test("updates km² resolution, cell counts and the non-blocking warning with det
   await page.getByLabel("Width · km", { exact: true }).fill("40000");
   await page.getByLabel("Height · km", { exact: true }).fill("20000");
   await page.getByLabel("Detail level", { exact: true }).selectOption("fine");
-  await expect(world.locator(".generation-workload")).toHaveAttribute("data-cell-count", "240000");
-  await expect(world.getByRole("status")).toContainText(/3,333\.3+ km² per terrain cell/);
+  await expect(world.locator(".generation-workload")).toHaveAttribute(
+    "data-cell-count",
+    "16000000"
+  );
+  await expect(world.getByRole("status")).toContainText("50 km² per terrain cell");
   await expect(world.getByRole("alert")).toContainText("crash this tab");
   await expect(page.getByLabel("Detail level").locator("option:checked")).toContainText(
-    "240,000 cells"
+    "16,000,000 cells"
   );
   await page.getByRole("button", { name: /Review & generate/ }).click();
   await expect(page.getByRole("button", { name: "Generate world", exact: true })).toBeEnabled();

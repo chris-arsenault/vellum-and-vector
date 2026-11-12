@@ -64,9 +64,15 @@ it("selects finest ancestor inputs regardless of field order, excluding overlapp
   const channels = regionalInputChannels(regionalInputFields(domain, "child"));
   expect(channels.get("Elevation")!.id).toBe("fine");
 });
-it("transfers amounts by physical area and resolves recursively within the same map profile", () => {
+it("transfers amounts by physical area and resolves each deeper map at a finer fixed rung", () => {
   const { domain, add } = fixture(),
     source = add("parent", "area", 5, 200);
+  const captured = (refinementLevel: number) => ({
+    sourceAreaId: "area",
+    sourceRevision: 1,
+    refinementLevel,
+  });
+  domain.world.areas.child.map = captured(1);
   const resolution = regionalResolution(domain, "child", "standard"),
     target = createGrid(
       "target",
@@ -85,11 +91,11 @@ it("transfers amounts by physical area and resolves recursively within the same 
     true
   );
   expect(target.quantities!["magic:fire:retained"]).toBe("extensive");
-  expect(resolution.cellSpan).toBeLessThan(source.scope.resolution!);
   domain.world.areas.nested = {
     ...domain.world.areas.child,
     id: "nested",
     parentId: "child",
+    map: captured(2),
     footprint: rectangle([1200, 200, 2000, 800]),
   };
   domain.numerical.target = target;

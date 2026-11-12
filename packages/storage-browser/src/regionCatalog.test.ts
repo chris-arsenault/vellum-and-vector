@@ -6,7 +6,6 @@ import {
   spatial,
   regionalSelectionArea,
   regionalScale,
-  MapScale,
   type AtlasFeature,
   type CatalogRecord,
   type DomainWrite,
@@ -227,16 +226,12 @@ it("offers a region-sized piece within a large landmass instead of defaulting to
     viewport: [0, 0, 4_000_000, 3_000_000],
   });
   const first = (await f.catalog.regionChoices(query)).candidates;
-  const scale = MapScale.fromCells(spatial.bounds(domain), 60_000),
-    target = regionalSelectionArea(1, scale),
+  const target = regionalSelectionArea(1),
     area = spatial.area(first[0].footprint);
   expect(area).toBeGreaterThan(target / 4);
   expect(area).toBeLessThan(target * 2.5);
   const [w, s, e, n] = spatial.bounds(first[0].footprint);
-  expect(
-    ((e - w) * (n - s)) /
-      regionalScale(1, "standard", MapScale.fromCells([w, s, e, n], 60_000)).cellArea
-  ).toBeLessThan(180_000);
+  expect(((e - w) * (n - s)) / regionalScale(1, "standard").cellArea).toBeLessThan(180_000);
   expect(first.some((candidate) => candidate.name === "Landmass")).toBe(true);
   expect(first.some((candidate) => candidate.name === "Small grove")).toBe(true);
   const closer = await f.catalog.regionChoices({
@@ -297,10 +292,7 @@ it("selects smaller districts using the open map's captured level without a live
   });
   await f.put("Regional country", rectangle([10_000, 10_000, 690_000, 490_000]));
   const picked = await f.pick(300_000, 250_000),
-    target = regionalSelectionArea(
-      2,
-      MapScale.fromCells(spatial.bounds(world.reference.domain), 60_000)
-    );
+    target = regionalSelectionArea(2);
   expect(spatial.area(picked.candidates[0].footprint)).toBeGreaterThan(target / 2);
   expect(spatial.area(picked.candidates[0].footprint)).toBeLessThan(target * 2);
   expect(picked.candidates.some((c) => c.name === "Regional country")).toBe(true);

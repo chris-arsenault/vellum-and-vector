@@ -2,12 +2,9 @@ import { expect, it } from "vitest";
 import { regionalDistricts } from "./regionalDistricts";
 import { regionalSelectionArea, regionalScale } from "./regionalScale";
 import { point, rectangle, spatial } from "./spatial";
-import { MapScale } from "./mapScale";
-
-const rootScale = MapScale.reference();
 
 it("offers roughly region-sized connected geography across an irregular landmass without changing its coast", () => {
-  const target = regionalSelectionArea(1, rootScale),
+  const target = regionalSelectionArea(1),
     land = spatial.difference(
       rectangle([0, 0, 1_400_000, 2_600_000]),
       rectangle([0, 900_000, 300_000, 1_500_000])
@@ -29,7 +26,7 @@ it("offers roughly region-sized connected geography across an irregular landmass
 });
 
 it("subdivides a normal parent region at the next fixed scale and responds to geographic centres", () => {
-  const target = regionalSelectionArea(2, rootScale),
+  const target = regionalSelectionArea(2),
     land = rectangle([0, 0, 700_000, 500_000]);
   const a = regionalDistricts(land, target, [{ x: 270_000, y: 250_000, z: 0 }]);
   const b = regionalDistricts(land, target, [{ x: 290_000, y: 255_000, z: 0 }]);
@@ -37,22 +34,16 @@ it("subdivides a normal parent region at the next fixed scale and responds to ge
   expect(a.length).toBeLessThanOrEqual(15);
   expect(a).not.toEqual(b);
   const areas = a.map((g) => spatial.area(g)).sort((x, y) => x - y);
-  const typicalCells =
-    areas[Math.floor(areas.length / 2)] /
-    regionalScale(
-      2,
-      "standard",
-      MapScale.fromCells([0, 0, Math.sqrt(target), Math.sqrt(target)], 60_000)
-    ).cellArea;
+  const typicalCells = areas[Math.floor(areas.length / 2)] / regionalScale(2, "standard").cellArea;
   expect(typicalCells).toBeGreaterThan(30_000);
   expect(typicalCells).toBeLessThan(120_000);
   expect(spatial.area(spatial.unionAll(a))).toBeCloseTo(spatial.area(land), 1);
 });
 
 it("keeps suitably sized islands as geographic candidates rather than subdividing them again", () => {
-  expect(
-    regionalDistricts(rectangle([0, 0, 400_000, 400_000]), regionalSelectionArea(1, rootScale))
-  ).toEqual([]);
+  expect(regionalDistricts(rectangle([0, 0, 400_000, 400_000]), regionalSelectionArea(1))).toEqual(
+    []
+  );
 });
 
 it("breaks a sprawling coastal belt into useful local pieces even when its land area is modest", () => {
@@ -60,7 +51,7 @@ it("breaks a sprawling coastal belt into useful local pieces even when its land 
       rectangle([0, 0, 1_800_000, 1_200_000]),
       rectangle([80_000, 80_000, 1_720_000, 1_300_000])
     )!,
-    pieces = regionalDistricts(belt, regionalSelectionArea(1, rootScale));
+    pieces = regionalDistricts(belt, regionalSelectionArea(1));
   expect(pieces.length).toBeGreaterThan(2);
   expect(
     pieces.every((piece) => {

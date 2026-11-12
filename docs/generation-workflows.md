@@ -40,12 +40,12 @@ settlements. This is a single geographic heuristic, without equal-area balancing
 or an exact district count. Keeping a region does not move its neighbours' proposed
 boundaries. Whole landmasses and smaller named regions remain choices.
 
-Each independent map derives cell size from its actual frame and chosen detail's
-sample count. A smaller map therefore samples finer geography without a fixed
-metre ladder. Captured hierarchy levels guide suggested selection sizes, not a
-second resolution law. `MapScale` owns the conversions used by
-`packages/domain/src/regionalScale.ts` and generation resolution. Rectangular
-sampling frames and coastal context determine the area being sampled.
+A refined map takes its cell size from a fixed physical ladder: its captured
+refinement level and chosen detail select the rung, and the map's frame decides
+only how many cells that makes. The same ladder sizes the selections offered at
+each level, so a suggested region holds about the default world's cell count.
+`packages/domain/src/regionalScale.ts` owns the ladder. Rectangular sampling
+frames and coastal context determine the area being sampled.
 Setup shows approximate spacing and sample count before generation.
 
 Child maps use a rectangular working frame around the subject, including nearby
@@ -1131,8 +1131,8 @@ validation is consolidated in `layerValidation.ts`.
   clock's temperature, ice, water forcing and elapsed times. The default clock
   includes a cold age independently of terrain selection.
 
-Detail presets select a sample count. `MapScale` derives physical cell area and
-spacing from each map's frame. `resolution.ts` owns the presets and workload
+Detail presets select a fixed ground area per cell; a world's dimensions decide
+its cell count. `resolution.ts` owns the presets and workload
 calculation shared by setup and generation. Setup shows live estimates for every preset and warns
 above the default world's Standard workload. This warning does not limit map
 size or detail. Numerical boundary support adds halo cells.

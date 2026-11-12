@@ -65,11 +65,7 @@ export function scaleReport(world: World, areaId: string, quality: string, grid:
       mapAreaKm2: MapScale.areaUnits(spatial.area(area.footprint), "m2", "km2"),
     };
   if (!area.parentId || !area.map) return base;
-  const scale = MapScale.fromCells(
-      compactGeometryBounds(world.reference, area.footprint),
-      defaultTerrainCells
-    ),
-    intended = regionalScale(Math.max(1, mapRefinementLevel(world.areas, areaId)), quality, scale),
+  const intended = regionalScale(Math.max(1, mapRefinementLevel(world.areas, areaId)), quality),
     subject = world.views.find((view) => view.id === area.regionId)?.region?.footprint,
     subjectArea = subject ? spatial.area(subject) : NaN;
   return {
@@ -77,8 +73,8 @@ export function scaleReport(world: World, areaId: string, quality: string, grid:
     intendedCellSpan: intended.cellSpan,
     // Standard detail puts the default cell count in a selection; draft cells are larger.
     intendedCellsInRegion:
-      (regionalScale(1, "standard", scale).cellArea * defaultTerrainCells) /
-      regionalScale(1, quality, scale).cellArea,
+      (regionalScale(1, "standard").cellArea * defaultTerrainCells) /
+      regionalScale(1, quality).cellArea,
     regionAreaKm2: MapScale.areaUnits(subjectArea, "m2", "km2"),
     cellsInRegion: subjectArea / span ** 2,
     mapCellsAtIntendedSpan: MapScale.areaUnits(base.mapAreaKm2, "km2", "m2") / intended.cellArea,

@@ -5,8 +5,6 @@ import {
   regionMapFootprint,
   regionalScale,
   mapRefinementLevel,
-  MapScale,
-  defaultTerrainCells,
   spatial,
   type DomainSnapshot,
   type BlockCache,
@@ -100,11 +98,9 @@ export function refinementResolution(
   input: Pick<AtlasGenerationInput, "areaId" | "quality">
 ) {
   const bounds = compactBounds(source, refinementFootprint(source, input.areaId)),
-    scale = MapScale.fromCells(bounds, defaultTerrainCells),
     base = regionalScale(
       Math.max(1, mapRefinementLevel(source.world.areas, input.areaId)),
-      input.quality,
-      scale
+      input.quality
     );
   const { cellSpan } = base;
   const cells =

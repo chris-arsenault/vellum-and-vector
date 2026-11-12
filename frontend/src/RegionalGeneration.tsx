@@ -1,12 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  spatial,
-  regionalScale,
-  mapRefinementLevel,
-  MapScale,
-  defaultTerrainCells,
-} from "@atlas/domain";
+import { spatial, regionalScale, mapRefinementLevel, MapScale } from "@atlas/domain";
 import { atlasWorkspace } from "./atlasWorkspace";
 import { inheritedGeneration } from "./generationJobs";
 import { useGenerate } from "./useAtlas";
@@ -62,11 +56,7 @@ function useRegionalGeneration(world: World, editor: EditorState) {
 }
 function regionalResolution(world: World, areaId: string, quality: string) {
   return {
-    ...regionalScale(
-      Math.max(1, mapRefinementLevel(world.areas, areaId)),
-      quality,
-      MapScale.fromCells(spatial.bounds(world.areas[areaId].footprint), defaultTerrainCells)
-    ),
+    ...regionalScale(Math.max(1, mapRefinementLevel(world.areas, areaId)), quality),
     cells: undefined,
   };
 }

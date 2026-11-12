@@ -12,8 +12,8 @@ export const regionalUsableLandFraction = 0.35;
 export const regionalSubdivisionCount = 12;
 const regionalDetailArea = { draft: 4, standard: 1, fine: 0.25 };
 
-/** An independent child resolves its own frame; ancestry never multiplies its cell count. */
-export function regionalScale(level: number, quality: string, scale: MapScale) {
+/** A fixed physical ladder, calibrated once on the default world, never fitted to a selection. */
+export function regionalScale(level: number, quality = "standard") {
   requireThat(
     Number.isInteger(level) && level > 0,
     "regional_scale",
@@ -24,20 +24,21 @@ export function regionalScale(level: number, quality: string, scale: MapScale) {
     "generation_quality",
     "Choose draft, standard or fine."
   );
-  return scale.resolution(
-    defaultTerrainCells / regionalDetailArea[quality as keyof typeof regionalDetailArea]
-  );
+  const standardArea =
+    (referenceWorldArea * regionalUsableLandFraction) /
+    regionalSubdivisionCount ** level /
+    defaultTerrainCells;
+  const cellArea = standardArea * regionalDetailArea[quality as keyof typeof regionalDetailArea];
+  return {
+    cellArea,
+    cellAreaKm2: MapScale.areaUnits(cellArea, "m2", "km2"),
+    cellSpan: Math.sqrt(cellArea),
+  };
 }
 
-/** Selection shares use the actual root-world frame, with the existing dimensionless subdivision. */
-export function regionalSelectionArea(level: number, rootScale: MapScale) {
-  requireThat(
-    Number.isInteger(level) && level > 0,
-    "regional_scale",
-    "Choose a positive regional scale level."
-  );
-  return rootScale.resolution(regionalSubdivisionCount ** level / regionalUsableLandFraction)
-    .cellArea;
+/** The selection a level suggests: the ground its Standard cells cover at the default count. */
+export function regionalSelectionArea(level: number) {
+  return regionalScale(level).cellArea * defaultTerrainCells;
 }
 
 /** A world is level zero; each independent map records its own refinement level. */
