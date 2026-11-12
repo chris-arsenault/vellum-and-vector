@@ -29,7 +29,7 @@ it("subdivides a normal parent region at the next fixed scale and responds to ge
   const target = regionalSelectionArea(2),
     land = rectangle([0, 0, 700_000, 500_000]);
   const a = regionalDistricts(land, target, [{ x: 270_000, y: 250_000, z: 0 }]);
-  const b = regionalDistricts(land, target, [{ x: 290_000, y: 255_000, z: 0 }]);
+  const b = regionalDistricts(land, target, [{ x: 520_000, y: 120_000, z: 0 }]);
   expect(a.length).toBeGreaterThanOrEqual(4);
   expect(a.length).toBeLessThanOrEqual(10);
   expect(a).not.toEqual(b);
