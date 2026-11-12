@@ -13,7 +13,7 @@ export function mapScale(
   return (
     state.physical?.map.scale ??
     MapScale.fromBounds(
-      state.surface.bounds,
+      spatial.bounds(state.domain.world.reference.domain),
       state.surface.scope.resolution ??
         Math.sqrt(
           spatial.area(state.domain.scope.footprint) / Math.max(1, state.surface.active.length)

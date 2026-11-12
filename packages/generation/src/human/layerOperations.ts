@@ -178,6 +178,18 @@ export interface CarryLayers extends OnMap {
   /** Where each cell's ground went when the plates last moved. */
   plan: TransportPlan;
 }
+export interface ApportionLayers extends OnMap {
+  /** Per cell: the coarser cell it lies under, or -1. */
+  groups: Values;
+  /** Per cell: how much of its coarser cell's holdings the cell draws, against its neighbours. */
+  weight: Values;
+}
+export const apportionHumanLayers = defineCommand(
+  "human.layers.apportion",
+  "event",
+  ({ map, groups, weight }: ApportionLayers) => humanLayerWriter(map).apportion(groups, weight),
+  []
+);
 export const carryHumanLayers = defineCommand(
   "human.layers.carry",
   "event",

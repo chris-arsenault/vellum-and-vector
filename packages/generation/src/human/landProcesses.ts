@@ -1,4 +1,5 @@
-import { requireThat } from "@atlas/domain";
+import { requireThat, type ReadBand } from "@atlas/domain";
+import { ask } from "../coupling/answers";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import { runOperation } from "../processOperation";
 import { mapCommand, mapElapsed } from "../processTraits";
@@ -8,7 +9,7 @@ import { craftsPractised } from "./craftCatalogue";
 import { recordEraPlaces } from "./eraPlaces";
 import { meetLand, watchLand } from "./landHistory";
 import { advanceHumanLand } from "./landPass";
-import { forgetHumanGround } from "./layerOperations";
+import { apportionHumanLayers, forgetHumanGround } from "./layerOperations";
 import { keptPass, loosePass, passesFor, settledPass, type PassFacts } from "./passFacts";
 
 /**
@@ -67,6 +68,26 @@ export const humanLandEpoch: MapProcess = {
   ),
   validate,
 };
+/**
+ * The people a coarser map gave this one arrive spread evenly over each coarser cell. They are
+ * settled on the finer land once: each coarser cell's people, works and land in use go to the
+ * finer cells under it by what each can feed at its best use, and the coarser cell's totals
+ * stand. `groups` names each cell's coarser cell, or -1 where it has none.
+ */
+export function settleInheritedPeople(
+  state: GenerationState,
+  context: MapProcessContext,
+  groups: Pick<ReadBand, "get">
+) {
+  const map = landOf(state),
+    native = nativeContext(state, context, 0),
+    yields = (["cropYield", "herdYield", "wildYield"] as const).map((key) => ask(map, key, native)),
+    weight = map.coverage.scratch("float64", "human:inherited-weight", map.mesh.count);
+  for (let cell = 0; cell < map.mesh.count; cell++)
+    weight.set(cell, Math.max(...yields.map((band) => band.get(cell))));
+  runOperation(map, apportionHumanLayers, { map, groups, weight });
+  map.coverage.release(weight);
+}
 /** People meet the land as it now stands: what water covers and ice scours is lost to them. */
 export function meetPresentLand(state: GenerationState) {
   const map = landOf(state);

@@ -25,7 +25,7 @@ it("gives an irregular subject a full surrounding map, including land outside it
       rectangle([25_000, 25_000, 65_000, 55_000])
     )!,
     frame = regionMapFootprint(world, subject);
-  expect(spatial.covers(frame, rectangle([10_000, 10_000, 70_000, 70_000]))).toBe(true);
+  expect(spatial.covers(frame, rectangle([16_000, 16_000, 64_000, 64_000]))).toBe(true);
   expect(spatial.covers(frame, rectangle([30_000, 30_000, 50_000, 50_000]))).toBe(true);
 });
 

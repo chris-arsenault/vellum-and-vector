@@ -5,8 +5,12 @@ import { spatial, rectangle } from "./spatial";
 import { mapRefinementLevel } from "./regionalScale";
 import { canonicalGeometry, compactGeometryBounds } from "./worldBoundary";
 
-/** Surrounding geography is working map area, not a narrow shoreline halo. */
-const regionalContextFraction = 0.25;
+/**
+ * Surrounding geography is working map area, not a narrow shoreline halo. It is also work:
+ * the margin on every side multiplies the cells a region's map holds well beyond the region's
+ * own, so it is kept to what gives the region's edges their neighbouring country.
+ */
+const regionalContextFraction = 0.1;
 
 /** Refinement adds a representation to an existing subject, never a second region tree. */
 export function refinedRegionArea(world: World, regionId: string): Area | undefined {

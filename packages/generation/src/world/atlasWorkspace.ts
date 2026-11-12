@@ -297,9 +297,10 @@ export function createAtlasWorkspace(
   parameters: Partial<AtlasParameters> = {},
   overrides: PhysicalProfileOverrides = {}
 ): AtlasPhysicalWorkspace {
+  // A share of the map is a share of the world: a finer map of part of it works the same
+  // geology and water, so its smaller working frame never shrinks a physical measure.
   const frame = spatial.bounds(state.domain.world.reference.domain),
-    mapFrame = state.surface.bounds,
-    scale = MapScale.fromCells(mapFrame, defaultTerrainCells);
+    scale = MapScale.fromCells(frame, defaultTerrainCells);
   const profile = atlasPhysicalProfile(parameters, overrides, scale);
   profile.WorldExtentY = [frame[1], frame[3]];
   profile.WorldExtentX = [frame[0], frame[2]];
@@ -312,7 +313,10 @@ export function createAtlasWorkspace(
   const cellSpan = state.domain.world.areas[state.domain.scope.areaId].parentId
       ? (state.domain.scope.resolution ?? resolution.cellSpan)
       : resolution.cellSpan,
-    map = createField(mapLattice(state, profile, cellSpan), state.cache);
+    lattice = mapLattice(state, profile, cellSpan),
+    // The world's frame with this map's own cell spacing: shares resolve as the world's do,
+    // and counts of cells are this map's.
+    map = createField(lattice, state.cache, MapScale.fromBounds(frame, lattice.spacing));
   const work: AtlasPhysicalWorkspace = {
     map,
     profile,

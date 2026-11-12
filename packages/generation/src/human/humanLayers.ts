@@ -1,7 +1,7 @@
 import { requireThat, type Band, type HumanLayerId, type ReadBand } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
 import type { TransportPlan } from "../world/transportPlan";
-import { carryLayers } from "./humanCarry";
+import { apportionLayers, carryLayers } from "./humanCarry";
 import { buryLayers, reExposeLayers, wearLayers } from "./humanLoss";
 import {
   arriveInColumn,
@@ -198,6 +198,13 @@ class HumanLayers {
   }
   carry(plan: TransportPlan) {
     carryLayers(this.layers, plan);
+  }
+  /**
+   * What a coarser map gave evenly to the finer cells under each of its cells is shared out
+   * among them by a weight; `groups` names each cell's coarser cell, or -1 for none.
+   */
+  apportion(groups: Values, weight: Values) {
+    apportionLayers(this.layers, groups, weight);
   }
   /** Travellers between places wear the ground they cross, in traveller-years per cell. */
   travel(travellerYears: Values) {

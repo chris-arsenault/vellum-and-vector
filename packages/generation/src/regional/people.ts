@@ -1,17 +1,24 @@
-import { MapScale, type AtlasFeature } from "@atlas/domain";
+import { MapScale, fieldSampleIndex, type AtlasFeature } from "@atlas/domain";
+import { humanChannels } from "../human/humanChannels";
+import { nativePosition, parentChannels } from "../world/atlasWorkspace";
 import { ask } from "../coupling/answers";
 import { nativeContext } from "../world/context";
 import { generationBindings } from "../generationBindings";
 import { generationFeatures } from "../generationFeatures";
 import { humanLayersOf } from "../human/humanLayers";
-import { liveKeptPass, meetPresentLand, recordLandPlaces } from "../human/landProcesses";
+import {
+  liveKeptPass,
+  meetPresentLand,
+  recordLandPlaces,
+  settleInheritedPeople,
+} from "../human/landProcesses";
 import { adoptPlace, type KnownPlace } from "../human/placeRegistry";
 import { restoreTraditions } from "../human/traditions";
 import { publishPeoplePlaces } from "../landWays";
 import { publishKinds } from "../poi/poiPublish";
 import { cellsWithin, featureCell, inhabited } from "../poi/poiReads";
 import type { MapProcessContext } from "../process";
-import { regionalSpan } from "./lattice";
+import { isContent, regionalSpan } from "./lattice";
 import { developmentExposure } from "./schedule";
 import type { RegionalState } from "./state";
 
@@ -47,6 +54,9 @@ export function livePeople(state: RegionalState, context: MapProcessContext) {
   if (!placesEnabled(state.regional.input.domains)) return;
   const before = Math.round(peopleOn(state));
   if (!before) return;
+  // The parent's people arrive as one even amount under each of its cells; they take up the
+  // finer land once, before they go on living on it.
+  if (state.regional.round === 1) settleOnFinerLand(state, context);
   // The round's water and ice are met first: nobody goes on living under a new lake.
   meetPresentLand(state);
   const met = Math.round(peopleOn(state));
@@ -56,6 +66,22 @@ export function livePeople(state: RegionalState, context: MapProcessContext) {
     1,
     `People on the map: ${before} before the round, ${met} after its water and ice, ${Math.round(peopleOn(state))} after living it; the land as now used feeds ${Math.round(landFeeds(state, context))}`
   );
+}
+/** Each cell's parent cell, by the parent sample that gave the cell its people. */
+function settleOnFinerLand(state: RegionalState, context: MapProcessContext) {
+  const map = state.physical.map,
+    parent = parentChannels(state).get(humanChannels[0].name);
+  if (!parent) return;
+  const groups = map.coverage.scratch("int32", "people:parent-cell", map.mesh.count);
+  for (let cell = 0; cell < map.mesh.count; cell++)
+    groups.set(
+      cell,
+      isContent(map.mesh, cell)
+        ? fieldSampleIndex(parent, nativePosition(state.physical, cell))
+        : -1
+    );
+  settleInheritedPeople(state, context, groups);
+  map.coverage.release(groups);
 }
 /** Everyone the map's land feeds as it is now used. */
 function landFeeds(state: RegionalState, context: MapProcessContext) {
