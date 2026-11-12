@@ -8,12 +8,15 @@ carries the direction is marked in `packages/generation/src/water/water.architec
 structure below is agent-derived and follows the method in
 [Materials and processes](../../MATERIALS-AND-PROCESSES-ARCHITECTURE.md).
 
-Status: in the code, with two parts open. One owner, the ledger of transfers, the year's
-rhythm with wet and dry seasons, the single soil-water store, one gathering routine, the
-ground's memory of its rivers, and a finer map's inheritance of entering rivers and old beds
-are in. Open: a finer map's starting ground is still raised from a drainage tree of its own
-(`regional/relief.ts`), with its own gathering, pending the owner's decision on regional
-refinement; and what plants transpire is still the ecology's own figure.
+Status: partly in the code. In: one owner of water's writes, the year's rhythm with wet and
+dry seasons, the single soil-water store, the record of transfers, and one gathering routine
+for rivers, lakes, erosion and deltas (a region's starting network still has its own).
+**Not built:** the
+water column as one package (its parts are still separate layers, lying snow is not stored,
+and a finer map inherits only groundwater), and the network that lasts (a river is still a
+mark on a cell, redrawn from the surface every pass, and decided by a count of cells). Both
+are the work of [the water and relief plan](../WATER-AND-RELIEF-PLAN.md), whose failing
+checks are `water/riverDefinition.architecture.ts`.
 
 ## Context
 
@@ -35,13 +38,11 @@ depend on both belonged to neither file.
 - **A water column on every cell.** Snow, soil water, groundwater and standing water are one
   package: carried with the crust, inherited by a finer map as shares, never split band by
   band. A cell's year of water is part of that state, held month by month on the map.
-- **A network that lasts.** Where water runs is read from the present ground in every pass:
-  a course moves only when the ground or the water changes. What lasts is on the map itself.
-  Every cell keeps the order of the river it carries or last carried, so a reach that dried,
-  was drawn off or turned elsewhere leaves its bed, for as long as the ground is too dry to
-  heal it. A river's identity is the end it reaches, which outlasts changes at its head; its
-  records carry its flow through the year and its regime. A finer map takes a parent's
-  rivers and old beds as things, with what each river brings in its driest month.
+- **A network that lasts.** Reaches, lakes and outlets have identity, a course, a flow through
+  the year and a regime, and they persist across passes. Processes change the network; they do
+  not redraw it. What a reach was before it moved or dried stays on its record. A cell holds
+  quantities of water and is never itself a river; a reach exists by a size declared against
+  the map ([ADR 0005](0005-scale-contract.md)).
 - **Transfers between stores.** A water process is a move between two named stores: fall,
   melt, evaporate, soak, seep, spring, run, fill and spill. Each store states what it holds,
   what room it has and how readily it gives. Every transfer is recorded, with the air and the
@@ -57,20 +58,20 @@ depend on both belonged to neither file.
 - **Couplings by question.** Plants, people, erosion and magic ask water how wet the ground
   is, what flows and when. What changes water answers a question at a named point: the air's
   demand, what the ground takes, what a bed leaks, what people draw.
-- **A river is an outcome.** A cell carries a river when a river's flow reaches it, judged on
-  what reaches it and on nothing else. How much flow makes a river is a statement about what a
-  map of that cell size can show, and is the same on every map.
+- **A river is an outcome.** A river is water gathered from a catchment the map resolves, in
+  an amount significant at the map's scale. A cell that sheds much water of its own is wet
+  ground, not a river. The sizes are declared against the map and are the same on every map.
 
 ## Consequences
+
+These follow from the decision; the status above says which are in the code.
 
 - One routing replaces the separate gatherings for rivers, lakes, erosion and regions; one
   closed-basin balance replaces three tests; one soil-water store serves water and plants.
 - A finer map inherits the columns as a package and the reaches that cross its frame as
   things, with what they carry in each month.
-- A river's load settles up to the grade its water needs, which builds fans and plains, and
-  on the sea floor at its mouth up to the sea's surface, which builds deltas into land. A bed
-  raised above lower ground beside it loses its river when the routes are next read, and the
-  ground keeps the old bed.
+- Sediment that builds fans, plains and deltas, courses that break out, and old beds that stay
+  dry are built on the lasting network; they are not possible without it.
 - A place changes water only by asking: the contributions ledger refuses every water band.
 
 ## What stays out

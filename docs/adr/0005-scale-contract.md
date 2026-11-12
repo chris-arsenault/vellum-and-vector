@@ -83,9 +83,16 @@ same town-size test to appear as a place on a map, and a finer map shows smaller
 places. Hazards are yearly chances read from the ground a place stands on.
 
 **Regional maps develop independently.** A child owns captured present geography
-and completed historical context. Dedicated algorithms add local relief, coasts,
-drainage, habitats, magic detail and places at the selected physical scale. They
-do not conserve parent-cell heights, run human eras or replay world history. The
+and completed historical context. It starts from its parent's ground and makes it
+more defined: a parent cell is a rough average, and what lies inside it (a plain, a
+slope, a cliff, a ridged range) comes from its rock column and history, shaped by
+every process that shapes ground. The parent's elevation is not thrown away or
+rebuilt. Nothing is fitted to the parent numerically and no boundary is pinned
+(user clarification 2026-11-12 of the 2026-10-30 direction). The code does not yet
+meet this: it rebuilds a region's heights from a drainage tree; see
+[the water and relief plan](../WATER-AND-RELIEF-PLAN.md). Regional development
+adds coasts, drainage, habitats, magic detail and places at the selected physical
+scale; it does not run human eras or replay world history. The
 child inherits its parent's people as layers; known places remain available and
 smaller settlements are read from where those people gather. Neither a revised parent nor
 a refined sibling changes the child's captured inputs. The child never writes

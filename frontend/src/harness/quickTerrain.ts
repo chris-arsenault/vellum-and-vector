@@ -5,6 +5,12 @@ import { crc32, deflateSync } from "node:zlib";
 import type { GenerationState } from "@atlas/generation";
 import { physicalSampler } from "../../../packages/generation/src/world/physicalMetric";
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
+import { mappedRiverCells } from "../../../packages/generation/src/area/riverCourses";
+import { releaseHeld } from "../../../packages/generation/src/poi/poiReads";
+import {
+  groundwaterCapacity,
+  groundwaterReturnRate,
+} from "../../../packages/generation/src/water/groundwater";
 
 /**
  * A look at a refined map's ground the moment its water is settled, from the field itself. It
@@ -20,6 +26,7 @@ type Colour = [number, number, number];
 const sea: Colour = [176, 208, 216],
   lake: Colour = [120, 180, 220],
   river: Colour = [40, 90, 170],
+  markedOnly: Colour = [225, 130, 200],
   contour: Colour = [120, 100, 70],
   outside: Colour = [255, 255, 255];
 const hypsometric: [number, Colour][] = [
@@ -73,24 +80,36 @@ function contentBounds(map: PhysicalField) {
   }
   return { west, south, east, north };
 }
+/**
+ * The ground a refined map was handed by its parent, on the refined map's own cells and in
+ * the same colours and contours as its own picture, so the two can be laid side by side. It
+ * shows no rivers or lakes: only ground, and sea where that ground lies below the sea.
+ */
+function parentPicture(map: PhysicalField, heights: { get(cell: number): number }) {
+  return picture(map, heights, (cell) =>
+    heights.get(cell) <= map.EffectiveSeaLevel ? sea : undefined
+  );
+}
 /** The map's ground, with a contour every hundred metres, its water and its rivers. */
-function picture(map: PhysicalField) {
+function picture(
+  map: PhysicalField,
+  heights: { get(cell: number): number } = map.Elevation,
+  waterAt: (cell: number) => Colour | undefined = (cell) => waterColour(map, cell)
+) {
   const { west, south, east, north } = contentBounds(map),
     step = (east - west) / imageWidth,
     width = imageWidth,
     height = Math.ceil((north - south) / step),
     rgb = new Uint8Array(3 * width * height),
-    ground = physicalSampler(map.mesh, map.Elevation),
+    ground = physicalSampler(map.mesh, (cell) => heights.get(cell)),
     above = (x: number, y: number) =>
       MapScale.metres(ground(x, y) - map.EffectiveSeaLevel, "native"),
     band = (metres: number) => Math.floor(metres / contourMetres);
   const colourAt = (x: number, y: number): Colour => {
     const cell = map.mesh.cellAt(x, y);
     if (cell < 0 || map.mesh.membership(cell) !== 1) return outside;
-    const water = map.WaterKindCodes.get(cell);
-    if (water === 1) return sea;
-    if (water === 2) return lake;
-    if (map.RiverOrders.get(cell) > 0) return river;
+    const water = waterAt(cell);
+    if (water) return water;
     const here = above(x, y);
     return band(here) !== band(above(x + step, y)) || band(here) !== band(above(x, y + step))
       ? contour
@@ -100,6 +119,39 @@ function picture(map: PhysicalField) {
     for (let col = 0; col < width; col++)
       rgb.set(colourAt(west + col * step, north - row * step), 3 * (width * row + col));
   return png(width, height, rgb);
+}
+/**
+ * Water on a cell. A cell on a river the map would draw is dark blue; a cell the generator
+ * treats as river that no drawn river runs through is pink, so the two are told apart.
+ */
+function waterColour(
+  map: PhysicalField,
+  cell: number,
+  drawn?: ReadonlySet<number>
+): Colour | undefined {
+  const water = map.WaterKindCodes.get(cell);
+  if (water === 1) return sea;
+  if (water === 2) return lake;
+  // A drawn river's cell is shown whether or not the mark is on it.
+  if (drawn?.has(cell)) return river;
+  return map.RiverOrders.get(cell) > 0 ? markedOnly : undefined;
+}
+/**
+ * The cells of the rivers this map would draw now: its own courses that pass its tests, with
+ * rivers it has already published and its parent's rivers continuing here. What was held
+ * from an earlier look is let go first, so the answer is of the present water. If the map
+ * cannot say, the failure is written out and every marked cell shows as marked only.
+ */
+function drawnRiverCells(state: GenerationState) {
+  try {
+    releaseHeld(state);
+    return mappedRiverCells(state);
+  } catch (error) {
+    process.stdout.write(`\nNo drawn rivers could be read: ${String(error)}\n`);
+    return new Set<number>();
+  } finally {
+    releaseHeld(state);
+  }
 }
 const shareBelow = (sorted: number[], limit: number) =>
   sorted.length ? sorted.filter((value) => value < limit).length / sorted.length : 0;
@@ -185,15 +237,92 @@ function lowlandRoughness(map: PhysicalField) {
   rough.sort((a, b) => a - b);
   return [0.1, 0.5, 0.9].map((q) => Math.round(rough[Math.floor(q * (rough.length - 1))]));
 }
+const middle = (values: number[]) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted.length ? Math.round(sorted[sorted.length >> 1] * 10) / 10 : 0;
+};
+/**
+ * Why cells are treated as river: for those on a drawn river and those not, how many cells
+ * drain through one, and what the cell itself yields a year from rain and from springs. It
+ * tells a gathered river apart from ground that is marked for its own seepage or for a long
+ * strip of slope above it.
+ */
+function riverMarkReport(map: PhysicalField, drawn?: ReadonlySet<number>) {
+  const groups = { drawn: [] as number[], markedOnly: [] as number[] };
+  for (let cell = 0; cell < map.mesh.count; cell++)
+    if (
+      map.mesh.membership(cell) === 1 &&
+      map.WaterKindCodes.get(cell) === 0 &&
+      map.RiverOrders.get(cell) > 0
+    )
+      (drawn?.has(cell) ? groups.drawn : groups.markedOnly).push(cell);
+  const spring = (cell: number) =>
+    MapScale.inUnits(
+      groundwaterReturnRate(map.GroundwaterReturn.get(cell), map.GroundwaterInterval),
+      "mm"
+    );
+  const describe = (cells: number[]) => ({
+    cells: cells.length,
+    cellsDrainingThrough: middle(
+      cells.map((cell) => map.CatchmentArea.get(cell) / map.mesh.area(cell))
+    ),
+    fewerThanTenDrainingThrough:
+      cells.filter((cell) => map.CatchmentArea.get(cell) / map.mesh.area(cell) < 10).length /
+      Math.max(1, cells.length),
+    ownRainRunoffMm: middle(cells.map((cell) => map.Runoff.get(cell))),
+    ownSpringMm: middle(cells.map(spring)),
+    monthsInFlow: middle(cells.map((cell) => map.FlowingMonths.get(cell))),
+    meanFlow: middle(cells.map((cell) => map.FlowAccumulation.get(cell))),
+  });
+  return {
+    drawn: describe(groups.drawn),
+    markedOnly: describe(groups.markedOnly),
+    groundwater: groundwaterReport(map, spring),
+  };
+}
+/**
+ * The land's groundwater as depths over the land, in millimetres: what falls and sinks in a
+ * year, what springs are counted as giving in a year, and what the ground holds against what
+ * it can hold. Springs giving more than sinks in means stored water is being counted as a
+ * year's supply.
+ */
+function groundwaterReport(map: PhysicalField, spring: (cell: number) => number) {
+  const sums = { falls: 0, sinksIn: 0, springs: 0, held: 0, canHold: 0 };
+  let land = 0;
+  for (let cell = 0; cell < map.mesh.count; cell++) {
+    if (map.mesh.membership(cell) !== 1 || map.WaterKindCodes.get(cell) === 1) continue;
+    const area = map.mesh.area(cell);
+    land += area;
+    sums.falls += (map.Rainfall.get(cell) + map.Snowfall.get(cell)) * area;
+    sums.sinksIn += map.WaterRecharge.get(cell) * area;
+    sums.springs += spring(cell) * area;
+    sums.held += MapScale.inUnits(map.GroundwaterStorage.get(cell), "mm") * area;
+    sums.canHold += MapScale.inUnits(groundwaterCapacity(map, cell), "mm") * area;
+  }
+  return {
+    interval: map.GroundwaterInterval,
+    ...Object.fromEntries(
+      Object.entries(sums).map(([name, sum]) => [name, Math.round(land > 0 ? sum / land : 0)])
+    ),
+  };
+}
 export function quickTerrain(state: GenerationState, out: string, name = "terrain") {
-  const map = state.physical!.map;
-  writeFileSync(join(out, `${name}.png`), picture(map));
+  const map = state.physical!.map,
+    handed = (state as { regional?: { inheritedHeight?: { get(cell: number): number } } }).regional
+      ?.inheritedHeight;
+  const drawn = drawnRiverCells(state);
+  writeFileSync(
+    join(out, `${name}.png`),
+    picture(map, map.Elevation, (cell) => waterColour(map, cell, drawn))
+  );
+  if (handed) writeFileSync(join(out, "parent.png"), parentPicture(map, handed));
   const report = {
     name,
     lowlandRoughness: lowlandRoughness(map),
     ground: groundReport(map),
     lakes: lakeReport(map),
     rivers: riversAlongLakes(map),
+    riverMark: riverMarkReport(map, drawn),
   };
   writeFileSync(join(out, `${name}.json`), JSON.stringify(report, null, 2));
   return report;

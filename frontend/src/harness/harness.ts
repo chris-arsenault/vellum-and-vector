@@ -2,6 +2,7 @@ import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { newGenerationDraft, normalizeGenerationDraft } from "../generationDraft";
 import { write } from "./harnessWrite";
+import { namedPlaces, position } from "./harnessPlaces";
 import { recordResumePoints } from "./resumePoint";
 import { resumeWorld } from "./harnessResume";
 import { applyCartographicChoice, cartographicControls } from "../cartographicDraft";
@@ -55,6 +56,8 @@ export interface HarnessOptions {
   regionQuality: string;
   /** Map metres of the point whose subdivision becomes the region. */
   regionAt?: [number, number];
+  /** Named places for the quick region check to look at one after another. */
+  quickPlaces: { name: string; at: [number, number] }[];
   /** Checkpoints to make again rather than reuse; a new world also makes a new region. */
   fresh: Set<string>;
   /** Only the saved world's region's ground and water, and a picture of them. */
@@ -109,10 +112,6 @@ const defaults = {
   HARNESS_CPU_PROFILE: "",
   HARNESS_PLACES: "",
 };
-function position(text: string): [number, number] | undefined {
-  const at = text.split(",").map(Number);
-  return at.length === 2 && at.every(Number.isFinite) ? [at[0], at[1]] : undefined;
-}
 export function harnessOptions(env: Record<string, string | undefined>): HarnessOptions {
   const read = (key: keyof typeof defaults) => env[key] || defaults[key];
   const fresh = new Set(read("HARNESS_FRESH").split(",").filter(Boolean));
@@ -140,6 +139,7 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
     region: read("HARNESS_REGION"),
     regionQuality: read("HARNESS_REGION_QUALITY"),
     regionAt: position(read("HARNESS_REGION_AT")),
+    quickPlaces: namedPlaces(read("HARNESS_REGION_AT")),
     fresh,
     quick: Boolean(read("HARNESS_QUICK")),
     worldOnly: Boolean(read("HARNESS_WORLD_ONLY")),
@@ -410,7 +410,13 @@ export async function runHarness(options: HarnessOptions) {
   const stopProfile = await startCpuProfile(join(out, "run.cpuprofile"), options.cpuProfile);
   try {
     if (options.quick) {
-      await quickRegion(options, out);
+      // Several named places make one report with a folder of pictures for each.
+      for (const { name, at } of options.quickPlaces) {
+        const folder = join(out, name);
+        mkdirSync(folder, { recursive: true });
+        await quickRegion({ ...options, regionAt: at }, folder);
+      }
+      if (!options.quickPlaces.length) await quickRegion(options, out);
       return out;
     }
     if (options.resume) {
