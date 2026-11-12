@@ -318,14 +318,20 @@ and a region's ground at its start is the parent's ground with connected valley 
 Not met:
 
 - The verdict table is not yet written here.
-- After the three rounds of development the low ground is speckled, cell against cell. The
-  quick check now records what each process does to low ground (`ground-changes.json`), and
-  it names stream incision: in a region's rounds it lowers the cells that gather the least
-  water the most (about eleven metres in the first round on the plain) and by very different
-  amounts from one cell to the next, while cells many others drain through barely move.
-  Its settings for a finer map were made for the rebuilt surface. This is the first row of
-  M5.
 - Draft against standard detail has not been pictured again since the ground changed.
+
+Found and fixed on the way (2026-11-12). After the three rounds of development the low
+ground was speckled, cell against cell, with dozens of small false lakes. The quick check
+now records what each process does to low ground (`ground-changes.json`), and a trace of one
+cell showed its loose cover swinging by hundreds of metres from one working to the next:
+taken away, then put back. The cause was the rule for how much cover may creep between two
+cells at once. It let each pair close half the drop between them, as if no other face of
+either cell moved; a hollow then filled from all its sides at once and came out a peak. At
+the world's pace the rule seldom binds; at a region's it bound everywhere. Each pair now
+closes its share of the drop among all the faces moving (`levelling` in
+`processes/creep.ts`, with a unit test). On the pictures the plain is smooth again, the false
+lakes are gone, and the highland and the coast read as their parents' country with rivers
+as lines.
 
 ### M5 — The rock column shapes what is inside a cell [depends on M4]
 

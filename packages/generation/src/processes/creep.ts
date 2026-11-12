@@ -37,16 +37,26 @@ function creepFrom(
     wanted += moves * drop * width;
   });
   if (wanted <= 0) return;
-  // A cell cannot send more than it has, and no more than would level it with a neighbour.
+  // A cell cannot send more than it has, and no more than would level it with its neighbours.
   const share = Math.min(1, mantle / wanted);
   eachFall(work, i, (j, drop, width) => {
     const volume = Math.min(
       share * moves * drop * width,
-      (drop / 2) * Math.min(mesh.area(i), mesh.area(j))
+      levelling(drop, Math.min(mesh.area(i), mesh.area(j)), mesh.degree(i), mesh.degree(j))
     );
     send(i, j, volume);
   });
 }
+/**
+ * The most cover that can pass between two cells in one working without leaving the lower
+ * one standing above the higher. Every face of both cells moves cover in the same working, so
+ * a low cell fills from all its neighbours at once: each pair may close only its share of the
+ * drop between them, one part in the faces of the busier cell and one more. Sharing it
+ * between the pair alone, as if no other face moved, piles cover into every hollow from all
+ * sides and turns smooth ground into alternating peaks and pits.
+ */
+export const levelling = (drop: number, area: number, faces: number, otherFaces: number) =>
+  (Math.max(0, drop) * area) / (1 + Math.max(faces, otherFaces));
 export const creep = defineProcess({
   prepare: () => ({}),
   id: "creep",
