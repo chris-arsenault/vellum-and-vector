@@ -55,13 +55,45 @@ function RegionHeading({ editor }: { editor: EditorState }) {
     </>
   );
 }
+/** Where a region stands on the way to its own finer map. */
+type RefinementState = "chosen" | "started" | "generated";
+function refinementState(editor: EditorState): RefinementState {
+  const map = Object.values(editor.world.areas).find((area) => area.regionId === editor.region!.id);
+  if (!map) return "chosen";
+  return editor.world.fields.some((field) => field.areaId === map.id && !field.input)
+    ? "generated"
+    : "started";
+}
+/** One next step per state, opened by the same button wherever the region is reached from. */
+const refinementSteps: Record<
+  RefinementState,
+  { status: string; heading: string; explanation: string; action: string }
+> = {
+  chosen: {
+    status: "Showing existing map detail",
+    heading: "Add finer detail here",
+    explanation:
+      "Resolve smaller valleys, tributaries and places from the geography already on the map.",
+    action: "Refine this region",
+  },
+  started: {
+    status: "No regional detail generated yet",
+    heading: "Finish refining this region",
+    explanation:
+      "This region has its own map, and nothing has been generated on it yet. Choose its detail and generate it.",
+    action: "Refine this region",
+  },
+  generated: {
+    status: "Regional detail generated",
+    heading: "Generate this region again",
+    explanation:
+      "Replace this region's detail with a new generation at another detail level or seed.",
+    action: "Refine this region",
+  },
+};
 function SelectedRegion({ editor }: { editor: EditorState }) {
-  const region = editor.region!;
-  const refined = Object.values(editor.world.areas).some(
-    (area) =>
-      area.regionId === region.id &&
-      editor.world.fields.some((field) => field.areaId === area.id && !field.input)
-  );
+  const region = editor.region!,
+    step = refinementSteps[refinementState(editor)];
   return (
     <>
       <p>
@@ -71,19 +103,17 @@ function SelectedRegion({ editor }: { editor: EditorState }) {
             maximumFractionDigits: 1,
           }
         )}{" "}
-        km² · {refined ? "Regional detail generated" : "Showing existing map detail"}
+        km² · {step.status}
       </p>
       <div className="selection-next">
-        <h3>Add finer detail here</h3>
-        <p>
-          Resolve smaller valleys, tributaries and places from the geography already on the map.
-        </p>
+        <h3>{step.heading}</h3>
+        <p>{step.explanation}</p>
         <button
           className="primary"
           onClick={editor.refineSelectedRegion}
           disabled={editor.commit.isPending}
         >
-          Refine this region
+          {step.action}
         </button>
       </div>
       <RegionDetails key={`${region.id}:${region.name}`} editor={editor} />

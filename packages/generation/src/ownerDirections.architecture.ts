@@ -41,11 +41,26 @@ const directions: readonly OwnerDirection[] = [
     marks: ["packages/generation/src/world/profile.ts"],
   },
   {
-    direction: "the default world has mixed mountains and plains, not low-activity plains",
-    given: "2026-11-12",
+    direction:
+      "the default is a good mix of very mountainous parts and large stretches of relatively flat land",
+    given: "2026-11-09, restated 2026-11-12",
     marks: ["packages/generation/src/terrainCartography.ts"],
   },
   {
+    // Magic and terrain settings are entered as shares of the map; cell size is not.
+    direction: "geology is shares of the map; digital representation precision is fixed",
+    given: "2026-11-12",
+    marks: ["packages/domain/src/mapScale.ts"],
+  },
+  {
+    direction:
+      "a standard region has roughly the cells of the default standard world, at 7-ish land regions in a world",
+    given: "2026-11-12",
+    marks: ["packages/domain/src/regionalScale.ts"],
+    test: "packages/domain/src/regionalScale.test.ts",
+  },
+  {
+    // Covers world detail levels and the regional ladder (confirmed 2026-11-12).
     direction: "the resolutions are fixed; a detail level is not a cell count",
     given: "2026-11-12",
     marks: ["packages/generation/src/resolution.ts", "packages/domain/src/regionalScale.ts"],

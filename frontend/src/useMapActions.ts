@@ -169,14 +169,19 @@ function placeExtent(feature: AtlasFeature) {
 function enterArea(world: World, state: EditorSessionState, id: string) {
   const area = world.areas[id] ?? state.area,
     box = bounds(area.footprint);
+  // A region's own map opens on its region, so its detail can be generated or regenerated from
+  // wherever the map is opened, including one created by Refine and left without detail.
+  const regionId = world.views.some((view) => view.id === area.regionId && view.region)
+    ? area.regionId!
+    : null;
   state.setAreaId(id);
-  state.setRegionId(null);
+  state.setRegionId(regionId);
   state.setViewport(null);
   state.setSelected(null);
   state.setSelection(null);
   state.setDrawing(null);
   state.setTool("select");
-  state.setPanel("generate");
+  state.setPanel(regionId ? "regions" : "generate");
   state.setBrush({ ...state.brush, radius: (box[2] - box[0]) / 30 });
   state.setWorkspace(area.profile === "interior" ? "interior" : "terrain");
   state.setMagicDraft(null);

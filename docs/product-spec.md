@@ -273,7 +273,7 @@ subject. The subject retains its original source and hierarchy; its nearest
 refined ancestor supplies procedural context. A child remains a geographic map
 at every nesting depth. A fixed physical resolution ladder follows its captured
 refinement level and requested detail. The default-world usable land calibrates
-the first scale; successive levels aim for roughly eight to twelve useful
+the first scale; successive levels aim for about seven useful
 subregions. Geographic shape and coastal context vary the resulting sample count.
 
 Regional setup offers detail, seed and inherited magic/people choices. It does

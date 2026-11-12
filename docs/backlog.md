@@ -46,6 +46,12 @@ existing code.
       pole-to-pole coverage uses cylindrical metre geometry with independent
       terrain along its closed north and south edges.
 
+- [ ] **30. Break continents apart in later epochs.** A default world should
+      end with an ocean between two distinct continents. Plates now travel far
+      and weld what they bring together, and nothing reliably splits a large
+      landmass afterwards. Add a process that rifts a continent in a later
+      epoch and opens sea between the pieces.
+
 - [ ] **27. Carry very long rivers across wide continents.** Parameters support
       narrow worlds and fat ones, and an Earth-sized, full-latitude example world
       ships with the product, so continents must be able to hold rivers that cross

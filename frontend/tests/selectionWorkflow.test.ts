@@ -162,6 +162,16 @@ test("a selected feature boundary becomes a region and keeps refinement settings
   await expect(panel).toContainText("same seed and settings reproduce");
   await panel.getByRole("button", { name: "Return to region", exact: true }).click();
   await expect(panel.getByLabel("Regional detail")).toHaveCount(0);
+  // Refine made the region's map; leaving before generating must not strand it. Opened again
+  // from the Atlas, the empty map still offers to finish refining.
+  await page.locator(".breadcrumbs button").first().click();
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await page.locator(".atlas-tree .area-row", { hasText: "Juniper reach" }).click();
+  await closeDrawer(page);
+  await expect(panel).toContainText("No regional detail generated yet");
+  await panel.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await expect(panel.getByLabel("Regional detail")).toBeVisible();
+  await panel.getByRole("button", { name: "Return to region", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await panel
     .getByRole("button", { name: "Refine this region", exact: true })

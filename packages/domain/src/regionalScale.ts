@@ -9,7 +9,10 @@ export const defaultWorldDimensions = {
 export const referenceWorldArea = defaultWorldDimensions.width * defaultWorldDimensions.height;
 export const defaultTerrainCells = 60_000;
 export const regionalUsableLandFraction = 0.35;
-export const regionalSubdivisionCount = 12;
+// A world's land divides into about this many regions, and each level divides again alike, so a
+// Standard region holds about the cells of the default Standard world.
+// owner-direction(2026-11-12): a standard region has roughly the cells of the default standard world, at 7-ish land regions in a world.
+export const regionalSubdivisionCount = 7;
 const regionalDetailArea = { draft: 4, standard: 1, fine: 0.25 };
 
 /**

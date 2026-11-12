@@ -60,10 +60,10 @@ it("defaults to compound continents and keeps island-world assemblies dispersed"
     );
   };
   expect(configured(newGenerationDraft())).toMatchObject({
-    ContinentalAssemblyCount: 5,
-    TectonicProvinceCount: 56,
+    ContinentalAssemblyCount: 3,
+    TectonicProvinceCount: 42,
     ContinentalCrustFraction: 0.48,
-    ContinentalAssemblyClustering: 0.7,
+    ContinentalAssemblyClustering: 1,
     QualityTargets: { OceanCoverage: { target: 0.62 } },
   });
   expect(prepareDraft(newGenerationDraft()).input.parameters!.mapBoundary).toBe(1);
@@ -86,8 +86,8 @@ it("changes ocean coverage without changing continental organization or relief",
   expect(after.features!["physical.foundation"].configuration).toEqual(
     before.features!["physical.foundation"].configuration
   );
-  expect(cartographicValue(changed, control("terrain"))).toBe("ranges");
-  expect(cartographicValue(changed, control("land-and-sea"))).toBe("broken");
+  expect(cartographicValue(changed, control("terrain"))).toBe("balanced");
+  expect(cartographicValue(changed, control("land-and-sea"))).toBe("broad");
   expect(
     prepareDraft(choose(changed, "land-and-sea", "islands")).input.parameters!.landFraction
   ).toBe(0.25);

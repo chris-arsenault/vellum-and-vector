@@ -38,9 +38,10 @@ export const terrainCartography: CartographicControl = {
   label: "Terrain",
   section: "land",
   initialOnly: true,
-  // A world has both plains and ranges; a quieter land is a deliberate choice, not the default.
-  // owner-direction(2026-11-12): the default world has mixed mountains and plains, not low-activity plains.
-  defaultChoice: "ranges",
+  // The middle choice is the default; nearly all mountains and nearly all plains are the options
+  // either side of it. A default that comes out as either extreme is a defect in the mix.
+  // owner-direction(2026-11-09, restated 2026-11-12): the default is a good mix of very mountainous parts and large stretches of relatively flat land.
+  defaultChoice: "balanced",
   explanation:
     "Choose inherited mountain relief and how erosion, deposition and glaciers rework it. Continental motion, shoreline detail and island organization have separate controls.",
   choices: ["Mostly plains", "Plains and ranges", "Mostly mountains", "Glacier-carved"].map(

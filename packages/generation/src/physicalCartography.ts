@@ -67,7 +67,7 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
       label: "Continental organization",
       section: "land",
       initialOnly: true,
-      defaultChoice: "broken",
+      defaultChoice: "broad",
       explanation:
         "Choose coherent continental interiors or dispersed crust assemblies. Ocean coverage is independent; motion and the water budget determine which landmasses remain separate.",
       choices: [
@@ -104,7 +104,7 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
     label: "Shoreline",
     section: "land",
     initialOnly: true,
-    defaultChoice: "inlets",
+    defaultChoice: "smooth",
     explanation:
       "Broad reworked outlines, intricate inlets, or deposited river-mouth lowlands. Sediment supply and coastal exposure still matter.",
     choices: [

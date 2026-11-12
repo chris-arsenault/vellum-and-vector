@@ -11,8 +11,8 @@ it("offers roughly region-sized connected geography across an irregular landmass
     )!,
     before = structuredClone(land),
     districts = regionalDistricts(land, target);
-  expect(districts.length).toBeGreaterThanOrEqual(7);
-  expect(districts.length).toBeLessThanOrEqual(15);
+  expect(districts.length).toBeGreaterThanOrEqual(4);
+  expect(districts.length).toBeLessThanOrEqual(10);
   const areas = districts.map((g) => spatial.area(g)).sort((a, b) => a - b);
   expect(areas[Math.floor(areas.length / 2)]).toBeGreaterThan(target / 2);
   expect(areas[Math.floor(areas.length / 2)]).toBeLessThan(target * 2);
@@ -30,8 +30,8 @@ it("subdivides a normal parent region at the next fixed scale and responds to ge
     land = rectangle([0, 0, 700_000, 500_000]);
   const a = regionalDistricts(land, target, [{ x: 270_000, y: 250_000, z: 0 }]);
   const b = regionalDistricts(land, target, [{ x: 290_000, y: 255_000, z: 0 }]);
-  expect(a.length).toBeGreaterThanOrEqual(8);
-  expect(a.length).toBeLessThanOrEqual(15);
+  expect(a.length).toBeGreaterThanOrEqual(4);
+  expect(a.length).toBeLessThanOrEqual(10);
   expect(a).not.toEqual(b);
   const areas = a.map((g) => spatial.area(g)).sort((x, y) => x - y);
   const typicalCells = areas[Math.floor(areas.length / 2)] / regionalScale(2, "standard").cellArea;

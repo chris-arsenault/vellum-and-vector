@@ -32,6 +32,8 @@ const isMeasure = (value: unknown): value is RelativeMeasure =>
  * Fractions use an equal-area 4:3 frame's width: changing aspect ratio alone does not
  * change an isotropic process radius. Nonlinear laws act on a dimensionless size ratio.
  * Resolution affects explicit cell support, never the size of a declared landform.
+ *
+ * owner-direction(2026-11-12): geology is shares of the map; digital representation precision is fixed.
  */
 export class MapScale {
   static readonly referenceWidth = 4_000_000;
