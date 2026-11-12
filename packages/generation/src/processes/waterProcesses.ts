@@ -39,6 +39,7 @@ export const waterOff = fieldQuery(
       "FloodRunoff",
       "DryRunoff",
       "WaterRecharge",
+      "SnowKept",
       "SoilWater",
       ...waterYearFields,
     ],
@@ -198,12 +199,12 @@ export const meltwater = fieldQuery(
   {
     id: "glacial-meltwater",
     statement:
-      "Ice gives up water by the warmth above it, the heat under it and how far it retreated.",
-    needs: [sea, "Temperature", "IceThickness"],
+      "Ice gives back the snow it was fed and the ice it lost, where it is warm and where it ends.",
+    needs: [sea, "Temperature", "IceThickness", "SnowKept"],
     provides: ["GlacialMeltwater"],
     execute: ({ map, context }) => glacialMeltwater(map, context),
   },
-  [oceanRead, atmosphere, crustHeat]
+  [oceanRead, atmosphere, crustHeat, waterOff]
 );
 export const groundwater = fieldCommand(
   "work",

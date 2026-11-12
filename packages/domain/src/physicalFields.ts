@@ -188,6 +188,8 @@ const metricFields = [
   "FloodRunoff",
   "DryRunoff",
   "WaterRecharge",
+  // Snow that outlasts the year, in mm/year: what the ice is fed.
+  "SnowKept",
   // Precipitation in mm/year from the downwind air columns before the epoch multiplier.
   "ColumnPrecipitation",
   "FlowAccumulation",

@@ -100,7 +100,14 @@ function landWater(map: PhysicalField, c: PhysicalContext, each: Band[], moved: 
   // What else wets a soil, and what keeps one wet, is said by whoever does it.
   const wetting = ask(map, "soilWetting", c),
     held = ask(map, "soilWaterHeld", c),
-    yields = [map.Runoff, map.FloodRunoff, map.DryRunoff, map.WaterRecharge, map.SoilWater];
+    yields = [
+      map.Runoff,
+      map.FloodRunoff,
+      map.DryRunoff,
+      map.WaterRecharge,
+      map.SoilWater,
+      map.SnowKept,
+    ];
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) === 1) {
       for (const band of [...yields, ...each]) band.set(i, 0);
@@ -128,6 +135,7 @@ function landWater(map: PhysicalField, c: PhysicalContext, each: Band[], moved: 
     map.FloodRunoff.set(i, greatest * months);
     map.DryRunoff.set(i, least * months);
     map.WaterRecharge.set(i, water.recharge);
+    map.SnowKept.set(i, water.keptSnow);
     holdSoilWater(map, i, water.soil, wetting.get(i), held.get(i));
     noteYear(moved, fell, water, map.mesh.area(i));
   }

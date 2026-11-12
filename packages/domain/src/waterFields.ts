@@ -29,6 +29,7 @@ export const waterYields = [
   "FloodRunoff",
   "DryRunoff",
   "WaterRecharge",
+  "SnowKept",
   "GlacialMeltwater",
   "ExternalMeltwater",
   "GroundwaterRecharge",

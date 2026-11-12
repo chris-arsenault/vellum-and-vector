@@ -75,21 +75,12 @@ export function riverNetwork(
   incoming?: Band,
   continuingHeads: readonly number[] = []
 ) {
-  const water = ask(map, "surfaceWater", c);
-  for (let i = 0; i < map.mesh.count; i++)
-    map.FlowAccumulation.set(
-      i,
-      depthRateToDischarge(water.get(i), map.mesh.area(i)) + (incoming?.get(i) ?? 0)
-    );
   const area = contributingArea(map, map.FlowTargets);
   map.CatchmentArea.copyFrom(area);
   releaseWorking(map, area);
   map.RiverOrders.fill(0);
   const order = sourceToOutletOrder(map);
-  let entering = 0;
-  if (incoming) for (let i = 0; i < map.mesh.count; i++) entering += incoming.get(i);
-  moveFlow(map, "entering", entering);
-  gatherMean(map, c, order);
+  gatherYear(map, c, order, incoming);
   seasonalFlows(map, c, order, incoming);
   const channels = buildChannels(map);
   retainChannels(map, channels, continuingHeads);
@@ -98,6 +89,30 @@ export function riverNetwork(
   releaseWorking(map, order, channels);
 }
 
+/**
+ * The water each cell gives its river through the year, and what rivers bring in across the
+ * map's edge, gathered down the routes as the year's mean flow.
+ */
+export function gatherYear(map: PhysicalField, c: PhysicalContext, order: Band, incoming?: Band) {
+  const water = ask(map, "surfaceWater", c);
+  let entering = 0,
+    melt = 0;
+  for (let i = 0; i < map.mesh.count; i++) {
+    const brought = incoming?.get(i) ?? 0,
+      area = map.mesh.area(i);
+    map.FlowAccumulation.set(i, depthRateToDischarge(water.get(i), area) + brought);
+    entering += brought;
+    // Ice gives the rivers its water at the same strength the supply counts it.
+    if (map.WaterKindCodes.get(i) !== 1)
+      melt += depthRateToDischarge(
+        (map.GlacialMeltwater.get(i) * c.HydrologyStrength) / 1000,
+        area
+      );
+  }
+  moveFlow(map, "entering", entering);
+  moveFlow(map, "iceMelt", melt);
+  gatherMean(map, c, order);
+}
 /**
  * The year's mean flow gathered down the routes, with what left it on the way entered in the
  * water ledger: what beds took, what people drew, what lakes kept, and what reached the sea

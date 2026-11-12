@@ -244,6 +244,7 @@ for (const name of [
   "FloodRunoff",
   "DryRunoff",
   "WaterRecharge",
+  "SnowKept",
   "FloodFlow",
   "PerennialFlow",
   "FlowingMonths",

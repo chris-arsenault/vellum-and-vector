@@ -30,6 +30,9 @@ export const waterMoves = {
   /** Snow that outlasts the year becomes ice and leaves the year's water. */
   firn: ["snow", "ice"],
   iceMelt: ["ice", "river"],
+  calving: ["ice", "sea"],
+  /** Kept snow with no ice to carry it down goes back to the air. */
+  sublimation: ["ice", "air"],
   evaporation: ["soil", "air"],
   /** Rain that runs before it can soak in, and what full soil sheds over the surface. */
   runoff: ["soil", "river"],
@@ -72,7 +75,7 @@ export const moveDepth = (map: PhysicalField, move: WaterMove, millimetres: numb
 
 /** The year's moves in words, each as a share of what fell, for a report. */
 export function waterAccountLine(map: PhysicalField) {
-  const { moves } = waterAccount(map),
+  const { moves, net } = waterAccount(map),
     fell = moves
       .filter((move) => move.from === "air")
       .reduce((total, move) => total + move.volume, 0);
@@ -80,7 +83,12 @@ export function waterAccountLine(map: PhysicalField) {
   const share = (volume: number) => `${((100 * volume) / fell).toFixed(1)}%`;
   return (
     `of the ${(fell / 1e9).toFixed(1)} cubic km that falls in a year: ` +
-    moves.map((move) => `${move.cause} ${move.from} to ${move.to} ${share(move.volume)}`).join(", ")
+    moves
+      .map((move) => `${move.cause} ${move.from} to ${move.to} ${share(move.volume)}`)
+      .join(", ") +
+    // Rivers and lakes only pass water on: a gain or loss here is water unaccounted for.
+    `; left over in rivers ${share(net.river)}, in lakes ${share(net.lake)}, ` +
+    `in soil ${share(net.soil)}, gained by the ground ${share(net.ground)}`
   );
 }
 /** What each store gained and lost over the year, and every move, largest first. */
