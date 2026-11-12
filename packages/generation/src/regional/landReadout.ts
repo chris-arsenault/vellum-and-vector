@@ -4,6 +4,7 @@ import { nativeContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
 import { MapScale } from "@atlas/domain";
 import { dryBedCourses } from "../area/dryBeds";
+import { holdsOldBed } from "../water/rivers";
 import { soilWaterCapacity } from "../water/soilWater";
 import { months } from "../water/waterBalance";
 import { waterAccountLine } from "../water/waterLedger";
@@ -36,8 +37,7 @@ const measured = {
   oldBed: 0,
 };
 /** 1 where the ground keeps the bed of a river that no longer runs there. */
-const oldBed = (map: PhysicalField, cell: number) =>
-  map.RiverOrders.get(cell) <= 0 && map.RiverMemory.get(cell) > 0 ? 1 : 0;
+const oldBed = (map: PhysicalField, cell: number) => (holdsOldBed(map, cell) ? 1 : 0);
 /** How many old courses the ground keeps, and how many cells the longest and the middle one run. */
 function oldCourses(map: PhysicalField) {
   const lengths = dryBedCourses(map)

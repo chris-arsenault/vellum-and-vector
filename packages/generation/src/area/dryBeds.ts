@@ -3,6 +3,7 @@ import { nativePosition } from "../world/atlasWorkspace";
 import type { PhysicalField } from "../world/field";
 import { releaseWorking, workingArray } from "../world/physicalNumerics";
 import { coordinateKey } from "../world/worldSources";
+import { holdsOldBed } from "../water/rivers";
 import { generatedFeature, putGenerated } from "../mapFeatures";
 import type { GenerationState } from "../process";
 import { mapScale, worldRiverLength } from "../worldSignificance";
@@ -15,8 +16,7 @@ import { mapScale, worldRiverLength } from "../worldSignificance";
  */
 
 /** Ground that carried a river and carries none now. */
-const bed = (map: PhysicalField, i: number) =>
-  map.WaterKindCodes.get(i) === 0 && map.RiverOrders.get(i) <= 0 && map.RiverMemory.get(i) > 0;
+const bed = holdsOldBed;
 
 /**
  * The old courses, each as its cells from head to end, followed down the present slope. Where
@@ -80,7 +80,11 @@ export function publishDryBeds(state: GenerationState) {
         "dryBed",
         "rivers",
         { type: "LineString", coordinates: line },
-        { order: map.RiverMemory.get(cells[0]), regime: "dry", sourceAlgorithm: "atlas-1" }
+        {
+          order: Math.round(map.RiverMemory.get(cells[0])),
+          regime: "dry",
+          sourceAlgorithm: "atlas-1",
+        }
       )
     );
   }

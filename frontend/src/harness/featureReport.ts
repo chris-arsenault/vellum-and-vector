@@ -135,6 +135,12 @@ function waterfalls(features: MapFeature[], rivers: MapFeature[], cellSpan: numb
   };
 }
 
+/** How many of each value there are. */
+function tally(values: string[]) {
+  const counts: Record<string, number> = {};
+  for (const value of values) counts[value] = (counts[value] ?? 0) + 1;
+  return counts;
+}
 /** Counts and measures of what the map publishes, read from the published features. */
 export function featureReport(features: MapFeature[], water: Water) {
   const kinds: Record<string, number> = {};
@@ -147,7 +153,13 @@ export function featureReport(features: MapFeature[], water: Water) {
     );
   return {
     kinds,
-    rivers: { count: rivers.length, ...riverEndings(rivers, water) },
+    rivers: {
+      count: rivers.length,
+      // How many run all year, in their wet season only, or are named courses with no river now.
+      regimes: tally(rivers.map((river) => String(river.attributes.regime ?? "not stated"))),
+      dryBeds: of("dryBed").length,
+      ...riverEndings(rivers, water),
+    },
     waterfalls: waterfalls(features, rivers, water.cellSpan),
     peaks: of("peak").length,
     ranges: of("range").length,

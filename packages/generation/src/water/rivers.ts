@@ -63,6 +63,13 @@ function rememberBeds(map: PhysicalField, c: PhysicalContext) {
     else if (map.RiverMemory.get(i) > 0 && !keepsBed(map, c, i)) map.RiverMemory.set(i, 0);
   }
 }
+/**
+ * Whether a cell's ground still holds an old bed. Ground carried with the crust arrives as
+ * shares of the cells it came from, so the mark can arrive as a part: the cell holds a bed
+ * when the greater part of its ground does.
+ */
+export const holdsOldBed = (map: PhysicalField, i: number) =>
+  map.WaterKindCodes.get(i) === 0 && map.RiverOrders.get(i) <= 0 && map.RiverMemory.get(i) >= 0.5;
 /** A course known from elsewhere to have carried a river of this order: its land remembers it. */
 export function rememberCourse(map: PhysicalField, cells: ArrayLike<number>, order: number) {
   for (let n = 0; n < cells.length; n++) {
