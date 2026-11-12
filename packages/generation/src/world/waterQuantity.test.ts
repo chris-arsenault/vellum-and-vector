@@ -10,7 +10,7 @@ import { createWorldMesh } from "./worldMesh";
 import { passingWater, referenceWaterPassage, waterPassage } from "./waterQuantity";
 import { depthRateToDischarge, releasedWaterRate } from "./dimensions";
 import type { PhysicalField } from "./field";
-import { beginGroundwaterExchange } from "./groundwater";
+import { beginGroundwaterExchange, groundwaterCapacity } from "./groundwater";
 
 const extraSupply = new WeakMap<PhysicalField, number>(),
   intake = new WeakMap<PhysicalField, number>(),
@@ -84,6 +84,9 @@ it("a contributor extends the quantity without changing either consumer", () => 
 
 it("routing and erosion apply the same maintained loss to available incoming water", () => {
   const { map, context } = supplied();
+  // Ground already full takes nothing through the bed, so only the maintained loss acts.
+  for (let i = 0; i < map.mesh.count; i++)
+    map.GroundwaterStorage.set(i, groundwaterCapacity(map, i));
   intake.set(map, 4);
   passage.set(map, 0.5);
   expect(waterPassage(map, context)(0, 14)).toBe(5);

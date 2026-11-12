@@ -182,9 +182,19 @@ const metricFields = [
   "OrganicBurialInput",
   "OrganicBurialThickness",
   "Runoff",
+  // One water budget, in mm/year: what a cell's surface gives in its wetter and its drier
+  // season, and what sinks into its ground.
+  "FloodRunoff",
+  "DryRunoff",
+  "WaterRecharge",
   // Precipitation in mm/year from the downwind air columns before the epoch multiplier.
   "ColumnPrecipitation",
   "FlowAccumulation",
+  // What a river carries in flood and in its driest season, in m³/s, beside its mean.
+  "FloodFlow",
+  "PerennialFlow",
+  // The months of the year a cell carries at least a river's flow.
+  "FlowingMonths",
   "CatchmentArea",
   "RiverWidth",
   "RiverDepth",

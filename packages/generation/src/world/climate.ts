@@ -2,8 +2,6 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, round, truncate } from "./math";
-import { groundOf } from "../rock/ground";
-import { surfacePorosity } from "../rock/groundQueries";
 import { latitudeAt } from "./latitude";
 import { marchAirColumns, saturation } from "./airColumn";
 import { beltRainout } from "./belts";
@@ -139,57 +137,5 @@ export function precipitation(map: PhysicalField, c: PhysicalContext) {
     const { snowfall, rainfall } = partitionPrecipitation(total, snow);
     map.Snowfall.set(i, snowfall);
     map.Rainfall.set(i, rainfall);
-  }
-}
-/** How much of the water on fully porous rock goes into the ground instead of running off. */
-const groundwaterShare = 0.35;
-export function runoff(map: PhysicalField, c: PhysicalContext) {
-  const p = c.Profile;
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes.get(i) === 1) {
-      map.Runoff.set(i, 0);
-      continue;
-    }
-    const temperature = map.Temperature.get(i);
-    const melt = clamp(
-      truncate(
-        ((temperature - (p.SnowTemperatureThreshold - p.SnowTemperatureTransition)) * 1000) /
-          p.SnowTemperatureTransition
-      ),
-      0,
-      1000
-    );
-    const available = Math.max(0, map.Rainfall.get(i) + (map.Snowfall.get(i) * melt) / 1000);
-    const loss = clamp(
-      p.RunoffMinimumLossPerMille +
-        truncate((temperature * p.RunoffTemperatureLossPerMille) / 1000),
-      0,
-      1000
-    );
-    const vegetationLoss = Math.min(
-      1,
-      map.TreeCover.get(i) * 0.22 + map.GrassCover.get(i) * 0.08 + map.WetlandCover.get(i) * 0.12
-    );
-    const ecologicalLoss = map.EcologyInitialized
-      ? Math.min(
-          available,
-          MapScale.inUnits(map.Evapotranspiration.get(i), "mm") +
-            available * map.Infiltration.get(i) * 0.08
-        )
-      : available * vegetationLoss;
-    // The preceding routing pass's carried warmth increases evaporation. Current routing needs
-    // this runoff first; its heat transport feeds the next pass rather than a recursive solve.
-    const warmLoss = (available * map.RiverWarmth.get(i) * p.WarmRiverEvaporation) / 1000;
-    const evaporation =
-      (map.EcologyInitialized
-        ? Math.max((available * loss) / 1000, ecologicalLoss)
-        : (available * loss) / 1000 + ecologicalLoss) + warmLoss;
-    // Wetlands and peat hold water back, so the floods below them are flatter.
-    const held = map.EcologyInitialized
-      ? Math.min(1, 0.3 * map.WetlandCover.get(i) + map.PeatCarbon.get(i) / 60)
-      : 0;
-    // Porous rock takes water into the ground, so less of it runs off over the surface.
-    const seeping = groundOf(map).fold(i, surfacePorosity) * groundwaterShare;
-    map.Runoff.set(i, Math.max(0, available - evaporation) * (1 - held) * (1 - seeping));
   }
 }

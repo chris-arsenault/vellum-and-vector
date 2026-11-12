@@ -1,5 +1,5 @@
 import { riverChannelGeometry } from "../world/channelGeometry";
-import { runoff } from "../world/climate";
+import { runoff } from "../world/runoff";
 import { atmosphere, oceanRead, currents, seaFloorZones } from "./climateProcesses";
 import { landmasses } from "../world/geography";
 import { deltaFormation } from "../world/deltas";
@@ -33,7 +33,7 @@ export const waterOff = fieldQuery(
     id: "runoff",
     statement: "What falls and is not lost to the air or the ground runs off.",
     needs: [sea, "Temperature", "Rainfall"],
-    provides: ["Runoff"],
+    provides: ["Runoff", "FloodRunoff", "DryRunoff", "WaterRecharge"],
     execute: ({ map, context }) => runoff(map, context),
   },
   [oceanRead, atmosphere]
@@ -108,7 +108,14 @@ export const rivers = fieldQuery(
     id: "river-network",
     statement: "Water gathered down those routes makes rivers of the order it comes to.",
     needs: ["Runoff", targets],
-    provides: [orders, "CatchmentArea", "FlowAccumulation"],
+    provides: [
+      orders,
+      "CatchmentArea",
+      "FlowAccumulation",
+      "FloodFlow",
+      "PerennialFlow",
+      "FlowingMonths",
+    ],
     execute: ({ map, context }) => riverNetwork(map, context),
   },
   [waterOff, routing]

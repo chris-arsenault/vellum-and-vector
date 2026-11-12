@@ -199,8 +199,12 @@ export const physicalProfile = MapScale.definitions({
   LakeDepthThreshold: MapScale.length(0.00001125),
   MinimumLakeArea: MapScale.area(0.000003125),
   LakeCompactnessShare: 560,
-  RunoffMinimumLossPerMille: 160,
-  RunoffTemperatureLossPerMille: 420,
+  // Snow a degree of a month's warmth melts in that month.
+  SnowMeltPerDegree: MapScale.length(3.05e-8, 1, "mm"),
+  // How fast a river's bed takes water over open, empty sand, in metres a second.
+  OpenBedSeepage: 3e-6,
+  // The share of each rain that runs off bare, tight ground before it can soak in.
+  StormRunoffShare: 0.1,
   LakeEvaporationMinimum: MapScale.length(4.5e-8, 1, "mm"),
   LakeEvaporationTemperatureStrength: MapScale.length(1.3e-7, 1, "mm"),
   LakeInfiltrationLoss: MapScale.length(3.5e-8, 1, "mm"),
@@ -211,16 +215,9 @@ export const physicalProfile = MapScale.definitions({
   DrainageCaptureWeight: 900,
   DrainageInheritedValleyWeight: 450,
   RiverAccumulationThreshold: MapScale.volume(6.25e-19),
-  RiverMinimumAccumulationThreshold: MapScale.volume(4.6875e-20),
-  RiverBasinHeadwaterFraction: 80,
-  RiverMinimumBasinDischarge: MapScale.volume(3.90625e-19),
   // World river vectors require a substantial basin, in annual mean m³/s.
   // Smaller physical channels still drive erosion, waterfalls and local landforms.
   WorldRiverMinimumBasinDischarge: MapScale.volume(5.46875e-18),
-  ChannelReferenceSlope: 0.004,
-  ChannelSlopeFloor: 350,
-  ChannelSlopeCeiling: 2600,
-  MinimumRiverReachLength: MapScale.length(0.0075),
   RiverChannelBaseStrength: 260,
   RiverChannelOrderStrength: 145,
   RiverChannelDischargeStrength: 55,

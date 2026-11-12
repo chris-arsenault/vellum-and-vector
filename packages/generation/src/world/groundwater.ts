@@ -46,6 +46,17 @@ const permeability = averageGroundQuery({
   start: 0,
   rock: (_, layer) => Math.max(groundFact(layer, "porosity"), groundFact(layer, "solubility")),
 });
+/** How far a cell's ground lets water through, 0 to 1, by the rock at its surface. */
+export const groundPermeability = (map: PhysicalField, i: number) =>
+  clamp(groundOf(map).fold(i, permeability), 0, 1);
+/** The water a cell's ground holds when full, as a depth over the cell. */
+export const groundwaterCapacity = (map: PhysicalField, i: number) =>
+  map.scale.length(2.5e-6) * groundPermeability(map, i);
+/** How full a cell's ground is, 0 to 1; ground that holds nothing counts as full. */
+export function groundwaterFilled(map: PhysicalField, i: number) {
+  const capacity = groundwaterCapacity(map, i);
+  return capacity > 0 ? clamp(map.GroundwaterStorage.get(i) / capacity, 0, 1) : 1;
+}
 /** Retained water depth is a volume per area, not the elevation of a water table. */
 export function groundwaterBalance(
   storage: number,
@@ -87,11 +98,11 @@ export function advanceGroundwater(map: PhysicalField, context: PhysicalContext)
   for (let i = 0; i < map.mesh.count; i++) {
     const permeable = clamp(groundOf(map).fold(i, permeability), 0, 1);
     conductance.set(i, permeable);
-    const rain = MapScale.metres(map.Rainfall.get(i), "mm"),
-      recharge =
-        map.WaterKindCodes.get(i) === 1
-          ? 0
-          : Math.max(0, rain * map.Infiltration.get(i) - map.Evapotranspiration.get(i)) * exposure;
+    // What the year's water budget says sank in: the same water the surface did not get.
+    const recharge =
+      map.WaterKindCodes.get(i) === 1
+        ? 0
+        : MapScale.metres(map.WaterRecharge.get(i), "mm") * exposure;
     map.GroundwaterStorage.add(i, recharge);
     map.GroundwaterRecharge.set(i, recharge);
     head.set(

@@ -1,123 +1,28 @@
 // RiverNetworkLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import type { PhysicalProfile } from "./profile";
-import { clamp } from "./math";
 import { contributingArea, sourceToOutletOrder } from "./flowGraph";
 import { depthRateToDischarge } from "./dimensions";
 import { edgeLeadingTo } from "./mesh";
-import { physicalDistance } from "./physicalMetric";
 import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { ask } from "../coupling/answers";
 import { waterPassage } from "./waterQuantity";
+import { riverFlow } from "./channelRegime";
+import { monthlyRunoff } from "./runoff";
+import { months } from "./waterBalance";
 
-function completeChannels(map: PhysicalField, order: Band, channels: Band) {
-  const downstream = map.coverage.copyBand(channels);
-  for (let n = 0; n < order.length; n++) {
-    const i = order.get(n);
-    if (!downstream.get(i)) continue;
-    const target = map.FlowTargets.get(i);
-    if (target < 0) continue;
-    downstream.set(target, 1);
-    if (map.WaterKindCodes.get(target) === 0) channels.set(target, 1);
-  }
-  releaseWorking(map, downstream);
-}
-function buildChannels(map: PhysicalField, p: PhysicalProfile, order: Band): Band {
-  let largest = 0;
-  for (let i = 0; i < map.mesh.count; i++) largest = Math.max(largest, map.DrainageBasinIds.get(i));
-  const maximum = workingArray(map, "float64", "river:basinMaximum", largest + 1),
-    channels = workingArray(map, "uint8", "river:channels");
-  for (let i = 0; i < map.mesh.count; i++) {
-    const basin = map.DrainageBasinIds.get(i);
-    if (basin > 0) maximum.set(basin, Math.max(maximum.get(basin), map.FlowAccumulation.get(i)));
-  }
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes.get(i) !== 0) continue;
-    const basin = map.DrainageBasinIds.get(i),
-      discharge =
-        basin > 0 && basin < maximum.length ? maximum.get(basin) : p.RiverAccumulationThreshold;
-    if (discharge < p.RiverMinimumBasinDischarge) continue;
-    const threshold = clamp(
-      (discharge * p.RiverBasinHeadwaterFraction) / 1000,
-      p.RiverMinimumAccumulationThreshold,
-      p.RiverAccumulationThreshold
-    );
-    const factor = clamp(
-      Math.sqrt(Math.max(0, map.Slope.get(i)) / Math.max(0.000001, p.ChannelReferenceSlope)),
-      p.ChannelSlopeFloor / 1000,
-      p.ChannelSlopeCeiling / 1000
-    );
-    if (map.FlowAccumulation.get(i) * factor >= threshold) channels.set(i, 1);
-  }
-  completeChannels(map, order, channels);
-  releaseWorking(map, maximum);
+/**
+ * The cells that carry a river: those the gathered water reaches with a river's flow in at
+ * least one month of the year (see `channelRegime`). Each cell is judged on what reaches it
+ * and on nothing else: no share of its basin, no help from the cells below. A river therefore
+ * starts where enough water has gathered, and ends where it has lost it.
+ */
+function buildChannels(map: PhysicalField): Band {
+  const channels = workingArray(map, "uint8", "river:channels");
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.WaterKindCodes.get(i) === 0 && map.FlowingMonths.get(i) > 0) channels.set(i, 1);
   return channels;
-}
-function headwaterReach(
-  map: PhysicalField,
-  channels: Band,
-  incoming: Band,
-  protectedStarts: Band,
-  headwater: number
-) {
-  // A reach is a short chain of cells; it is sized by the chain, never by the world.
-  const reach: number[] = [];
-  let current = headwater;
-  while (current >= 0 && channels.get(current) && incoming.get(current) <= 1) {
-    reach.push(current);
-    const target = map.FlowTargets.get(current);
-    if (
-      target < 0 ||
-      !channels.get(target) ||
-      incoming.get(target) > 1 ||
-      protectedStarts.get(target)
-    )
-      break;
-    current = target;
-  }
-  return reach;
-}
-function headwaterCounts(map: PhysicalField, channels: Band) {
-  const incoming = workingArray(map, "int32", "river:incoming"),
-    protectedStarts = workingArray(map, "uint8", "river:protectedStarts");
-  for (let i = 0; i < channels.length; i++) {
-    const target = map.FlowTargets.get(i);
-    if (target < 0) continue;
-    if (channels.get(i) && channels.get(target)) incoming.add(target, 1);
-    if (map.WaterKindCodes.get(i) === 2 && channels.get(target)) protectedStarts.set(target, 1);
-  }
-  return { incoming, protectedStarts };
-}
-function shortReachSupported(
-  map: PhysicalField,
-  p: PhysicalProfile,
-  channels: Band,
-  incoming: Band,
-  reach: number[]
-): boolean {
-  const target = map.FlowTargets.get(reach[reach.length - 1]);
-  return (
-    (target >= 0 && Boolean(channels.get(target)) && incoming.get(target) > 1) ||
-    map.FlowAccumulation.get(reach[0]) >= p.RiverAccumulationThreshold
-  );
-}
-function pruneHeadwaters(map: PhysicalField, p: PhysicalProfile, channels: Band) {
-  const { incoming, protectedStarts } = headwaterCounts(map, channels);
-  for (let i = 0; i < channels.length; i++) {
-    if (!channels.get(i) || incoming.get(i) !== 0 || protectedStarts.get(i)) continue;
-    const reach = headwaterReach(map, channels, incoming, protectedStarts, i);
-    if (
-      reach.reduce((length, cell) => {
-        const target = map.FlowTargets.get(cell);
-        return length + (target < 0 ? 0 : physicalDistance(map.mesh, cell, target));
-      }, 0) < p.MinimumRiverReachLength &&
-      !shortReachSupported(map, p, channels, incoming, reach)
-    )
-      for (const member of reach) channels.set(member, 0);
-  }
-  releaseWorking(map, incoming, protectedStarts);
 }
 function strahlerOrder(largest: number, count: number): number {
   return largest === 0 ? 1 : count >= 2 ? largest + 1 : largest;
@@ -188,15 +93,58 @@ export function riverNetwork(
       map.FlowAccumulation.set(i, Math.min(map.FlowAccumulation.get(i), map.LakeOverflow.get(i)));
     if (target >= 0) map.FlowAccumulation.add(target, map.FlowAccumulation.get(i));
   }
-  const channels = buildChannels(map, c.Profile, order);
-  pruneHeadwaters(map, c.Profile, channels);
+  seasonalFlows(map, c, order, incoming);
+  const channels = buildChannels(map);
   retainChannels(map, channels, continuingHeads);
-  completeChannels(map, order, channels);
   strahlerOrders(map, order, channels);
   spineMasks(map);
   releaseWorking(map, order, channels);
 }
 
+/**
+ * What each cell's river carries in flood and in its driest season, gathered down the same
+ * routes as the mean. A cell's surface gives more in its wetter season and less in its drier;
+ * what else reaches the river (springs, melt) comes steadily. A lake evens out what passes
+ * through it: below its outlet all three start from what it overflows.
+ */
+function seasonalFlows(map: PhysicalField, c: PhysicalContext, order: Band, incoming?: Band) {
+  const water = ask(map, "surfaceWater", c),
+    pass = waterPassage(map, c),
+    each = monthlyRunoff(map),
+    flow = workingArray(map, "float64", "river:month-flow"),
+    river = riverFlow(map.mesh.area(0), c.Profile.FluvialReferenceRunoff);
+  map.FloodFlow.fill(0);
+  map.PerennialFlow.fill(Infinity);
+  map.FlowingMonths.fill(0);
+  for (let month = 0; month < months; month++) {
+    for (let i = 0; i < map.mesh.count; i++)
+      flow.set(
+        i,
+        depthRateToDischarge(
+          // Springs and melt come steadily; the surface gives what this month gives.
+          Math.max(0, water.get(i) - map.Runoff.get(i)) + each[i * months + month] * months,
+          map.mesh.area(i)
+        ) + (incoming?.get(i) ?? 0)
+      );
+    for (let n = 0; n < order.length; n++) {
+      const i = order.get(n),
+        target = map.FlowTargets.get(i);
+      flow.set(i, pass(i, flow.get(i)));
+      if (map.LakeOutletTargets.get(i) >= 0) flow.set(i, map.FlowAccumulation.get(i));
+      if (target >= 0) flow.add(target, flow.get(i));
+      noteMonth(map, i, flow.get(i), river);
+    }
+  }
+  for (let i = 0; i < map.mesh.count; i++)
+    if (!Number.isFinite(map.PerennialFlow.get(i))) map.PerennialFlow.set(i, 0);
+  releaseWorking(map, flow);
+}
+/** One month's flow at a cell, kept as its greatest and least month and its months in flow. */
+function noteMonth(map: PhysicalField, i: number, carried: number, river: number) {
+  if (carried > map.FloodFlow.get(i)) map.FloodFlow.set(i, carried);
+  if (carried < map.PerennialFlow.get(i)) map.PerennialFlow.set(i, carried);
+  if (carried >= river) map.FlowingMonths.add(i, 1);
+}
 /** Captured named rivers remain channels along their actual present route. */
 function retainChannels(map: PhysicalField, channels: Band, heads: readonly number[]) {
   for (const head of heads)
