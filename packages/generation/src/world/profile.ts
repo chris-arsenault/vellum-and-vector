@@ -47,7 +47,8 @@ export const physicalProfile = MapScale.definitions({
   ContinentalSutureDetectionReach: MapScale.length(0.015),
   ContinentalSutureMinimumFraction: 420,
   ContinentalSutureStrengthGain: 620,
-  // How fast a plate moves at full tectonic strength, in metres per million years.
+  // How fast a plate moves at full travel, per million years, as a share of the map.
+  // owner-direction(2026-11-07): plate travel is a share of the world's size, not a fixed distance.
   PlateDriftPerMyr: MapScale.length(0.025),
   MarginInfluenceReach: MapScale.length(0.065),
   CrustAgeSaturationDistance: MapScale.length(0.175),

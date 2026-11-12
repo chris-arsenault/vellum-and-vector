@@ -18,6 +18,7 @@ import {
   rasterCategories,
   surfacePalette,
 } from "./rasterPresentation";
+import { shownUnit } from "./fieldNames";
 
 export function RasterPanel({
   world,
@@ -201,6 +202,9 @@ function SurfaceCodes({ world, channel }: { world: World; channel: string }) {
     </details>
   );
 }
+/** The unit a field's values are shown in, and what one stored step is worth in it. */
+const storedUnit = (data: Raster[], channel: string) =>
+  shownUnit(data[0]?.field.units[fieldChannelName(channel)] ?? "");
 function RangeControls({
   field,
   data,
@@ -210,7 +214,8 @@ function RangeControls({
   data: Raster[];
   update: (changes: Partial<FieldStyle>) => void;
 }) {
-  const range = fieldRange(data, field);
+  const { unit, factor } = storedUnit(data, field.channel),
+    range = fieldRange(data, field).map((value) => Number((value * factor).toPrecision(6)));
   return (
     <form
       className="range-controls"
@@ -225,11 +230,11 @@ function RangeControls({
           max = Number(input.get("maximum"));
         const maximum = event.currentTarget.elements.namedItem("maximum") as HTMLInputElement;
         maximum.setCustomValidity(max > min ? "" : "Maximum must exceed minimum.");
-        if (event.currentTarget.reportValidity()) update({ range: [min, max] });
+        if (event.currentTarget.reportValidity()) update({ range: [min / factor, max / factor] });
       }}
     >
       <label>
-        Range minimum
+        Range minimum{unit && ` · ${unit}`}
         <input name="minimum" type="number" step="any" required defaultValue={range[0]} />
       </label>
       <label>
@@ -261,8 +266,8 @@ export function FieldLegend({
       <CategoryLegend title={fieldLabel(world, field.channel)} classes={classes} data={data} />
     );
   const range = fieldRange(data, field);
-  const unit = data[0]?.field.units[fieldChannelName(field.channel)] ?? "";
-  const number = (value: number) => Number(value.toPrecision(4)).toLocaleString();
+  const { unit, factor } = storedUnit(data, field.channel);
+  const number = (value: number) => Number((value * factor).toPrecision(4)).toLocaleString();
   return (
     <figure className="field-legend">
       <figcaption>

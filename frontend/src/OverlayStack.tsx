@@ -3,6 +3,7 @@ import { fieldChannelName } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 import type { FieldStyle, World } from "./types";
 import { categoryPalette, fieldLabel, palettes } from "./rasterPresentation";
+import { shownUnit } from "./fieldNames";
 import { FieldLegend, RasterPanel } from "./RasterPanel";
 
 export interface OverlayActions {
@@ -59,7 +60,7 @@ function OverlayRow(props: RowProps) {
           <span title={name}>{name}</span>
         </label>
         <small className="overlay-unit" title={unit}>
-          {unit === "category" ? "Classes" : unit}
+          {shownUnit(unit).unit}
         </small>
         <OverlayOpacity name={name} field={field} update={actions.update} />
         <OverlayButtons

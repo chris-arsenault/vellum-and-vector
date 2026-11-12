@@ -6,9 +6,10 @@ const curve = z.tuple([
   z.number().min(0).max(1),
   z.number().min(0).max(1),
 ]);
+/** How far plates travel across the clock; an epoch's tectonic strength is not this control's. */
 export const terrainHistorySchema = z
   .object({
-    tectonics: curve,
+    plateTravel: curve,
   })
   .strict();
 export type TerrainHistory = z.infer<typeof terrainHistorySchema>;
@@ -27,7 +28,7 @@ export function terrainEpochs(
 ): Epoch[] {
   return epochs.map((epoch, index) => ({
     ...epoch,
-    tectonics: at(history.tectonics, index, epochs.length),
+    plateTravel: at(history.plateTravel, index, epochs.length),
   }));
 }
 

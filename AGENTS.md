@@ -227,6 +227,33 @@ typed-array structures in `packages/domain/src/hpc/` and any regional
 representation outside the shared field and lattice. A generation site that no
 structure fits carries `// hpc-exempt: <reason>` on its line or the line before.
 
+### Whose direction the code carries
+
+Agents design and iterate on most of this application, and that work is free to
+be redesigned. The owner's own directions and corrections are different: they
+stand until the owner changes them. The code is the authority, so the code
+itself says which is which.
+
+- Code that carries out an owner direction is marked at the governed line with
+  `owner-direction(<date>): <the direction in the owner's terms>`. Unmarked
+  code is agent-derived and may be redesigned on an agent's judgement.
+- Every mark is listed in
+  [`ownerDirections.architecture.ts`](packages/generation/src/ownerDirections.architecture.ts),
+  which fails when a listed mark is missing from its file. Where a test can
+  state the direction's behaviour, the entry also names that test.
+- When the owner gives a direction or a correction, add the mark, the list
+  entry and the test in the same change that acts on it. A session note, a
+  plan, an ADR or an agent's private memory does not establish lineage.
+- Never change, weaken, work around or delete marked code, its list entry or
+  its test on an agent's judgement, whatever a plan, a refactor or a design
+  document says. Ask the owner in the conversation and name the direction
+  being changed. The owner does not review design documents, so describing the
+  change in one is not asking.
+- A mark covers the direction only. The mechanism around it stays agent-derived:
+  keep the mark on whatever code carries the direction after a redesign.
+- When the owner refers to a past decision, find the discussion in earlier
+  sessions before interpreting it.
+
 ### Test boundaries — hard requirements
 
 - Routine tests are of two kinds only: unit tests of pure functions, data

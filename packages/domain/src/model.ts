@@ -61,6 +61,8 @@ export interface WaterFlux {
 export interface Epoch {
   /** Geological interval for plate motion, independent of model-year duration. */
   tectonicDurationMyr?: number;
+  /** Share of full plate travel this epoch moves; never derived from `tectonics`. */
+  plateTravel?: number;
   ecology?: Partial<import("./ecology").EcologyEpoch>;
   duration?: number;
   impacts?: number;

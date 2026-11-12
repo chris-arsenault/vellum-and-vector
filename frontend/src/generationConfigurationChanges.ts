@@ -19,6 +19,7 @@ const physicalFields: {
 }[] = [
   { key: "duration", label: "duration", unit: "years" },
   { key: "tectonicDurationMyr", label: "geological interval", unit: "Myr" },
+  { key: "plateTravel", label: "plate travel", unit: "of full travel" },
   { key: "tectonics", label: "tectonic activity", unit: "×" },
   { key: "hydrology", label: "hydrological activity", unit: "×" },
   { key: "ice", label: "glacial activity", unit: "×" },

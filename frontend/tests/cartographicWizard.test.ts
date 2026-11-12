@@ -75,7 +75,9 @@ test("composes geographic outcomes and sends the complete reviewed recipe to gen
     InteriorReliefStrength: 0.025,
   });
   expect(input.resolvedFeatures!.selection["human.politics"].enabled).toBe(false);
-  expect(input.settings!.epochs.map((epoch) => epoch.tectonics)).toEqual([1, 0.65, 0.25]);
+  // The motion choice sets how far plates travel and leaves each epoch's tectonic strength alone.
+  expect(input.settings!.epochs.map((epoch) => epoch.plateTravel)).toEqual([1, 0.65, 0.25]);
+  expect(input.settings!.epochs.map((epoch) => epoch.tectonics)).toEqual([1, 0.7, 0.4]);
 });
 
 test("accepts the curated reference through keyboard navigation without raw configuration", async ({
@@ -87,9 +89,9 @@ test("accepts the curated reference through keyboard navigation without raw conf
   await setupStep(page, /Land$/).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Land", exact: true })).toBeFocused();
-  await expect(page.getByLabel("Terrain", { exact: true })).toHaveValue("balanced");
-  await expect(page.getByLabel("Continental motion", { exact: true })).toHaveValue("drifting");
-  await expect(page.getByLabel("Continental organization", { exact: true })).toHaveValue("broad");
+  await expect(page.getByLabel("Terrain", { exact: true })).toHaveValue("ranges");
+  await expect(page.getByLabel("Continental motion", { exact: true })).toHaveValue("restless");
+  await expect(page.getByLabel("Continental organization", { exact: true })).toHaveValue("broken");
   await expect(page.getByLabel("Ocean coverage", { exact: true })).toHaveValue("wide");
   await setupStep(page, /Review & generate/).click();
   await expect(page.getByLabel("Generation configuration", { exact: true })).toHaveCount(0);

@@ -123,6 +123,9 @@ export function defaultEpochs(): World["epochs"] {
       temperature: 15,
       seaLevel: 0,
       tectonicDurationMyr: 20,
+      // Plates travel furthest while the world assembles and less in each later epoch; this is
+      // stated apart from how strongly each epoch builds.
+      plateTravel: 1,
     },
     {
       id: "Cold age",
@@ -133,6 +136,7 @@ export function defaultEpochs(): World["epochs"] {
       temperature: -3,
       seaLevel: 0,
       tectonicDurationMyr: 20,
+      plateTravel: 0.65,
     },
     {
       id: "Present",
@@ -143,6 +147,7 @@ export function defaultEpochs(): World["epochs"] {
       temperature: 15,
       seaLevel: 0,
       tectonicDurationMyr: 20,
+      plateTravel: 0.25,
     },
   ];
 }

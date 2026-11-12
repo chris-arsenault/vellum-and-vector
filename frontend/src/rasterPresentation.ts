@@ -17,6 +17,7 @@ import {
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { surfaceMaterialCategories } from "@atlas/generation";
+import { fieldClasses, fieldName } from "./fieldNames";
 
 export const palettes = {
   viridis: ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"],
@@ -54,7 +55,7 @@ export function categoryPalette(world: World, channel: string): SurfaceCategory[
       world.magicSystems ?? [],
       world.confluences ?? canonryConfluencePresets()
     );
-  return null;
+  return fieldClasses(world, channel);
 }
 export const surfacePalette = (world: World) => categoryPalette(world, "finalSurface")!;
 export function defaultFieldStyle(channel: string): FieldStyle {
@@ -69,6 +70,8 @@ export function defaultFieldStyle(channel: string): FieldStyle {
 }
 export function fieldLabel(world: World, channel: string) {
   if (ecologyLabels[channel]) return ecologyLabels[channel];
+  const named = fieldName(channel);
+  if (named) return named.label;
   const [kind, id, ...rest] = channel.split(":");
   const readable = (name: string) =>
     name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());

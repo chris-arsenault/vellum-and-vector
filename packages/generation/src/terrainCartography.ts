@@ -38,7 +38,9 @@ export const terrainCartography: CartographicControl = {
   label: "Terrain",
   section: "land",
   initialOnly: true,
-  defaultChoice: "balanced",
+  // A world has both plains and ranges; a quieter land is a deliberate choice, not the default.
+  // owner-direction(2026-11-12): the default world has mixed mountains and plains, not low-activity plains.
+  defaultChoice: "ranges",
   explanation:
     "Choose inherited mountain relief and how erosion, deposition and glaciers rework it. Continental motion, shoreline detail and island organization have separate controls.",
   choices: ["Mostly plains", "Plains and ranges", "Mostly mountains", "Glacier-carved"].map(
@@ -52,7 +54,10 @@ export const continentalMotionCartography: CartographicControl = {
   label: "Continental motion",
   section: "land",
   initialOnly: true,
-  defaultChoice: "drifting",
+  // Plates travel far at first and less each epoch, far enough for oceans to close and for a
+  // continent's interior to be former sea floor. Shorter travel is a deliberate choice.
+  // owner-direction(2026-11-07): plate travel needs to be much bigger; a few cells of travel is not enough.
+  defaultChoice: "restless",
   explanation:
     "Set how strongly plates move and rework continents through history. Motion changes coasts, opens or closes seas and builds new collision ranges independently of inherited terrain.",
   choices: ["Quiet plates", "Drifting continents", "Restless plates"].map((label, index) =>
@@ -62,8 +67,10 @@ export const continentalMotionCartography: CartographicControl = {
       },
       "physical.lifecycle": {
         configuration: {
+          // Each epoch's share of full travel: far at first, less later. An epoch's tectonic
+          // strength is its own figure and this control leaves it alone.
           history: {
-            tectonics: [
+            plateTravel: [
               [0.12, 0.04, 0.01],
               [0.6, 0.25, 0.08],
               [1, 0.65, 0.25],

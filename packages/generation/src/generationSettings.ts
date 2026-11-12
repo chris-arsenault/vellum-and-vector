@@ -45,6 +45,7 @@ export const generationEpochSchema = z
     id: z.string().trim().min(1),
     duration: z.number().finite().positive().default(1000),
     tectonicDurationMyr: z.number().finite().nonnegative().default(tectonicDefaultMyr),
+    plateTravel: nonnegative.default(1),
     tectonics: strength,
     hydrology: strength,
     ice: strength,

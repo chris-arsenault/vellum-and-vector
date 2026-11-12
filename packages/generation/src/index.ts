@@ -42,3 +42,4 @@ export { landmarksInExtent } from "./landmarkSelection";
 export { exerciseCatalogue, type KindExercise } from "./poi/catalogueExercise";
 export { auditPlaces } from "./poi/poiAudit";
 export { surfaceMaterialCategories } from "./rock/groundPresentation";
+export { crafts } from "./human/craftCatalogue";

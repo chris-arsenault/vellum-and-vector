@@ -12,7 +12,11 @@ export const regionalUsableLandFraction = 0.35;
 export const regionalSubdivisionCount = 12;
 const regionalDetailArea = { draft: 4, standard: 1, fine: 0.25 };
 
-/** A fixed physical ladder, calibrated once on the default world, never fitted to a selection. */
+/**
+ * A fixed physical ladder, calibrated once on the default world, never fitted to a selection.
+ *
+ * owner-direction(2026-11-12): the resolutions are fixed; a detail level is not a cell count.
+ */
 export function regionalScale(level: number, quality = "standard") {
   requireThat(
     Number.isInteger(level) && level > 0,

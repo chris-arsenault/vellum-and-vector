@@ -65,7 +65,7 @@ export function plateAdvection(
   context: PhysicalContext,
   afterStep: () => void = () => {}
 ) {
-  const total = plateTravel(context.Profile, context.TectonicDurationMyr, context.TectonicStrength),
+  const total = plateTravel(context.Profile, context.TectonicDurationMyr, context.PlateTravelShare),
     rate = total / Math.max(1e-9, context.TectonicDurationMyr);
   // From here on the plates carry the crust: what the world first laid out is formed.
   map.CrustFormed = true;

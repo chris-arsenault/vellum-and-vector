@@ -60,10 +60,10 @@ it("defaults to compound continents and keeps island-world assemblies dispersed"
     );
   };
   expect(configured(newGenerationDraft())).toMatchObject({
-    ContinentalAssemblyCount: 3,
-    TectonicProvinceCount: 42,
+    ContinentalAssemblyCount: 5,
+    TectonicProvinceCount: 56,
     ContinentalCrustFraction: 0.48,
-    ContinentalAssemblyClustering: 1,
+    ContinentalAssemblyClustering: 0.7,
     QualityTargets: { OceanCoverage: { target: 0.62 } },
   });
   expect(prepareDraft(newGenerationDraft()).input.parameters!.mapBoundary).toBe(1);
@@ -86,8 +86,8 @@ it("changes ocean coverage without changing continental organization or relief",
   expect(after.features!["physical.foundation"].configuration).toEqual(
     before.features!["physical.foundation"].configuration
   );
-  expect(cartographicValue(changed, control("terrain"))).toBe("balanced");
-  expect(cartographicValue(changed, control("land-and-sea"))).toBe("broad");
+  expect(cartographicValue(changed, control("terrain"))).toBe("ranges");
+  expect(cartographicValue(changed, control("land-and-sea"))).toBe("broken");
   expect(
     prepareDraft(choose(changed, "land-and-sea", "islands")).input.parameters!.landFraction
   ).toBe(0.25);
@@ -105,7 +105,23 @@ it("changes inherited relief without changing continental motion or disabling mo
   });
   expect(profiles[0].OrogenicInitialShortening).toBeLessThan(profiles[1].OrogenicInitialShortening);
   expect(profiles[1].OrogenicInitialShortening).toBeLessThan(profiles[2].OrogenicInitialShortening);
-  expect(profiles.map((profile) => profile.PlateDriftPerMyr)).toEqual([45_000, 45_000, 45_000]);
+  expect(profiles.map((profile) => profile.PlateDriftPerMyr)).toEqual([120_000, 120_000, 120_000]);
+});
+
+// Owner decision (docs/adr/0013): plate travel and tectonic strength are separate figures.
+it("sets how far plates travel without touching any epoch's tectonic strength", () => {
+  const strengths = (motion: string) =>
+      prepareDraft(
+        choose(newGenerationDraft(), "continental-motion", motion)
+      ).input.settings!.epochs.map((epoch) => epoch.tectonics),
+    travel = (motion: string) =>
+      prepareDraft(
+        choose(newGenerationDraft(), "continental-motion", motion)
+      ).input.settings!.epochs.map((epoch) => epoch.plateTravel);
+  expect(strengths("quiet")).toEqual(strengths("restless"));
+  expect(strengths("drifting")).toEqual(strengths("restless"));
+  expect(travel("restless")).toEqual([1, 0.65, 0.25]);
+  expect(travel("quiet")[0]).toBeLessThan(travel("restless")[0]!);
 });
 
 it("composes plains and restless continents without overwriting authored tectonic history", () => {
@@ -221,7 +237,7 @@ it("passes all owned native coefficients into the actual physical profile, prese
     ContinentalAssemblyCount: 10,
     ContinentalWarpStrength: 260_000,
     InteriorReliefStrength: 0.25,
-    PlateDriftPerMyr: 45_000,
+    PlateDriftPerMyr: 120_000,
     FluvialEquilibriumGradient: 0.0004,
     CoastalDepositionReach: 35_000,
     CoastalDetailPassiveAmplitude: 62 * 0.35,

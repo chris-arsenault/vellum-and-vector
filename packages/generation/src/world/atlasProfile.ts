@@ -86,5 +86,6 @@ export function atlasEpoch(epoch: Epoch, scale: MapScale) {
     TemperatureOffset: round((epoch.temperature - 15) * 10),
     SeaLevelOffset: scale.length(epoch.seaLevel),
     TectonicDurationMyr: epoch.tectonicDurationMyr ?? tectonicDefaultMyr,
+    PlateTravelShare: epoch.plateTravel ?? 1,
   };
 }

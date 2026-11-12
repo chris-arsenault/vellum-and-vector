@@ -1,18 +1,19 @@
 /** The geological interval of a context with no epoch. */
 export const tectonicReferenceMyr = 10;
 /**
- * How far a plate at full speed travels in an epoch: its speed, for as long as the epoch lasts, at
- * the epoch's tectonic strength. What an epoch does is the epoch's own data, and none of it depends on
- * which epoch it is.
+ * How far a plate at full speed travels in an epoch: its speed, for as long as the epoch lasts, by
+ * the share of full travel the epoch states. Travel is the epoch's own figure and never follows how
+ * strongly the epoch builds: an old world's plates slow while its collisions still raise ranges,
+ * and a quiet epoch can still close an ocean (docs/adr/0013-plates-travel-far-apart-from-strength.md).
+ *
+ * owner-direction(2026-11-07, restated 2026-11-12): plate movement and tectonic strength cannot be coupled.
  */
 export function plateTravel(
   profile: { PlateDriftPerMyr: number },
   durationMyr: number,
-  tectonicStrength: number
+  travelShare: number
 ) {
-  return (
-    (profile.PlateDriftPerMyr * Math.max(0, durationMyr) * Math.max(0, tectonicStrength)) / 1000
-  );
+  return profile.PlateDriftPerMyr * Math.max(0, durationMyr) * Math.max(0, travelShare);
 }
 /** Default physical history interval; ecology and society keep their model years. */
 export const tectonicDefaultMyr = 20;

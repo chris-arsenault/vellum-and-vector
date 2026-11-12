@@ -1,7 +1,11 @@
 import { MapScale, requireThat, defaultTerrainCells, type Profile } from "@atlas/domain";
 export { defaultWorldDimensions, referenceWorldArea, defaultTerrainCells } from "@atlas/domain";
 
-/** Ground one World terrain cell represents, whatever the map's dimensions. */
+/**
+ * Ground one World terrain cell represents, whatever the map's dimensions.
+ *
+ * owner-direction(2026-11-12): the resolutions are fixed; a detail level is not a cell count.
+ */
 export const atlasQuality = {
   draft: { cellAreaKm2: 800 },
   standard: { cellAreaKm2: 200 },

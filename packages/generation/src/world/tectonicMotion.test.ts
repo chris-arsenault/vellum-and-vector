@@ -4,12 +4,43 @@ import { plateTravel } from "./tectonicControls";
 import { edgeAllowance, updatePlateMotion } from "./tectonicMotion";
 import type { TectonicSite, TectonicState } from "./tectonicState";
 import { createWorldMesh } from "./worldMesh";
+import { MapScale, type Epoch } from "@atlas/domain";
+import { atlasEpoch, atlasPhysicalProfile } from "./atlasProfile";
+import { physicalContext } from "./context";
+import { plateDriftSteps } from "./landmarkGeometry";
 
-it("travels by its speed, for as long as the epoch lasts, at the epoch's strength", () => {
+const defaultEpoch: Epoch = {
+  id: "Any epoch",
+  tectonics: 1,
+  hydrology: 1,
+  ice: 0,
+  coasts: 1,
+  temperature: 15,
+  seaLevel: 0,
+  tectonicDurationMyr: 20,
+};
+
+it("travels by its speed, for as long as the epoch lasts, by the epoch's share of full travel", () => {
   const profile = { PlateDriftPerMyr: 1000 };
-  expect(plateTravel(profile, 20, 1000)).toBe(20_000);
-  expect(plateTravel(profile, 40, 500)).toBe(20_000);
+  expect(plateTravel(profile, 20, 1)).toBe(20_000);
+  expect(plateTravel(profile, 40, 0.5)).toBe(20_000);
   expect(plateTravel(profile, 20, 0)).toBe(0);
+});
+
+// Owner decision (docs/adr/0013): how far plates travel never follows how strongly an epoch builds.
+it("moves plates the same distance whatever the epoch's tectonic strength", () => {
+  const profile = atlasPhysicalProfile({}, {}, MapScale.reference()),
+    epoch = { ...defaultEpoch, plateTravel: 0.5 },
+    travel = (tectonics: number) => {
+      const bound = atlasEpoch({ ...epoch, tectonics }, MapScale.reference()),
+        context = physicalContext(1, 0, profile, bound, 0, 1);
+      return plateTravel(profile, context.TectonicDurationMyr, context.PlateTravelShare);
+    };
+  expect(travel(1)).toBeGreaterThan(0);
+  expect(travel(0.1)).toBe(travel(1));
+  expect(travel(0)).toBe(travel(1));
+  const weak: Epoch = { ...epoch, tectonics: 0.1 };
+  expect(plateDriftSteps(profile, [weak])).toEqual([travel(1)]);
 });
 
 it("keeps a plate's outward motion until its continent nears the edge, then stops it there", () => {

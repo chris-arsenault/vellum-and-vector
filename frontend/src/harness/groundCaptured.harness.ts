@@ -334,7 +334,7 @@ it.runIf(process.env.HARNESS_CAPTURED_INTERVAL)(
         epochs.length
       ),
       rate =
-        plateTravel(profile, original.TectonicDurationMyr, original.TectonicStrength) /
+        plateTravel(profile, original.TectonicDurationMyr, original.PlateTravelShare) /
         original.TectonicDurationMyr,
       durationMyr = tectonicInterval(map, original.TectonicDurationMyr, rate),
       interval = {

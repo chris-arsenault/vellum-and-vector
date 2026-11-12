@@ -728,7 +728,9 @@ they lock and weld into one plate along a seam weaker than either; what drove th
 A continent's interior is hard to break, so when later pull from sinking ocean tears a welded plate it
 tears along the seam, and the pieces and their shares of the old belt leave with whatever pulls them. Ocean-bearing parts of a plate
 can tear under the same pull, so a merged plate gains new edges around its land and the old edges end up
-inside it. Epoch duration and tectonic strength jointly determine travel. On a bounded map a plate slows as
+inside it. Plates travel furthest in the first epoch and less in each later one, far enough early on for
+oceans to close. Each epoch states its own share of full travel, apart from how strongly it builds
+([ADR 0013](adr/0013-plates-travel-far-apart-from-strength.md)). On a bounded map a plate slows as
 its continent reaches the edge, so continents stay on the map while oceans can still pass off it.
 
 Rock piled on the crust sinks by about its density over the mantle's, but a strong plate carries a

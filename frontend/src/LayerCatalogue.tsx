@@ -4,6 +4,7 @@ import type { EditorState } from "./useEditor";
 import type { FieldStyle } from "./types";
 import { fieldLabel } from "./rasterPresentation";
 import { commonOverlay, overlayTheme, overlayThemes, overlayBranch } from "./overlayFields";
+import { shownUnit } from "./fieldNames";
 export function LayerCatalogue({
   id,
   editor,
@@ -183,7 +184,7 @@ function CatalogueRow({
         onChange={(e) => (e.target.checked ? update(channel, { visible: true }) : remove(channel))}
       />
       <span title={channel}>{name}</span>
-      <small title={unit}>{unit === "category" ? "Classes" : unit}</small>
+      <small title={unit}>{shownUnit(unit ?? "").unit}</small>
     </label>
   );
 }

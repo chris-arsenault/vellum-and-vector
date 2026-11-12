@@ -15,6 +15,8 @@ export interface ProcessObservation {
 }
 export interface PhysicalEpoch {
   TectonicDurationMyr?: number;
+  /** The share of full plate travel this epoch moves; apart from its tectonic strength. */
+  PlateTravelShare?: number;
   StableName: string;
   TectonicStrength: number;
   HydrologyStrength: number;
@@ -25,6 +27,7 @@ export interface PhysicalEpoch {
 }
 export interface PhysicalContext {
   TectonicDurationMyr: number;
+  PlateTravelShare: number;
   /** How much work this pass stands for: processes state their rates per unit of it. */
   Span: number;
   /** Explicit local material work; it does not create an epoch or advance history. */
@@ -61,6 +64,8 @@ const neutral = {
   TemperatureOffset: 0,
   SeaLevelOffset: 0,
 };
+/** A context with no epoch, or an epoch that states no share, travels in full. */
+const travelShare = (epoch: PhysicalEpoch | null) => epoch?.PlateTravelShare ?? 1;
 export function nativeContext(state: GenerationState, context: MapProcessContext, salt: number) {
   const { settings, seed } = generationBindings(context);
   const physical = contextualPhysicalContext(seed, salt, state.physical!.profile, {
@@ -120,6 +125,7 @@ export function physicalContext(
       ? (epoch.TectonicDurationMyr ?? tectonicDefaultMyr)
       : tectonicReferenceMyr,
     Span: epoch ? (epoch.TectonicDurationMyr ?? tectonicDefaultMyr) / tectonicDefaultMyr : 1,
+    PlateTravelShare: travelShare(epoch),
   };
 }
 

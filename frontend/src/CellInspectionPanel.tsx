@@ -8,6 +8,7 @@ import { categoryPalette } from "./rasterPresentation";
 import { ErrorMessage } from "./ErrorMessage";
 import { Facts } from "./InspectionSurface";
 import { CellExplanation } from "./CellExplanation";
+import { CellPeople, CellRock } from "./CellLand";
 import "./cellInspection.css";
 
 export function CellInspectionPanel({ world, editor }: { world: World; editor: EditorState }) {
@@ -40,12 +41,13 @@ function CellResult({ world, data }: { world: World; data: CellInspection }) {
   if (!data.cells.length && !data.features.length)
     return <p>No stored numerical cell at this position on this map.</p>;
   // The finest stored cell speaks first: its class is the one the map draws here.
-  const values = [...data.cells]
-    .sort((a, b) => a.measure - b.measure)
-    .flatMap((cell) => cell.values);
+  const finest = [...data.cells].sort((a, b) => a.measure - b.measure),
+    values = finest.flatMap((cell) => cell.values);
   return (
     <>
       <CellExplanation world={world} values={values} features={data.features} />
+      <CellPeople world={world} values={values} area={finest[0]?.measure ?? 0} />
+      <CellRock world={world} values={values} />
       <details className="cell-stored">
         <summary>Stored values ({values.length} channels)</summary>
         <label>

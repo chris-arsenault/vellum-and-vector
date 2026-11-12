@@ -34,6 +34,7 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
     epochControls: [
       strength("tectonics", "Epoch tectonic activity"),
       { key: "tectonicDurationMyr", label: "Geological interval", unit: "Myr", min: 0 },
+      { key: "plateTravel", label: "Epoch plate travel", unit: "share of full travel", min: 0 },
     ],
   },
   "physical.mountains": { epochControls: [strength("tectonics", "Epoch tectonic activity")] },
