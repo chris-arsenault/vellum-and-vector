@@ -1,12 +1,11 @@
 import { MapScale, type AtlasFeature, type MagicSystem } from "@atlas/domain";
 import { mapScale } from "../../worldSignificance";
 import { bareGround } from "../../world/ecologyBiomes";
-import { potentialEvaporation } from "../../world/ecologyEnvironment";
 import type { PhysicalBufferName } from "../../world/field";
 import { components } from "../../world/geographicRegions";
 import { reservoirAmount } from "../../world/magicState";
 import type { GenerationState } from "../../process";
-import { closedBasinAridity } from "../../regional/network";
+import { closedByAridity as basinClosedByAridity } from "../../water/closedBasin";
 import type { RegionalState } from "../../regional/state";
 import type { PoiCarried, PoiFieldChange, PoiPlace, PoiUnrealized } from "../poiContract";
 import type { PoiKindId } from "../poiKinds";
@@ -14,7 +13,6 @@ import { rulePlaces } from "../poiPlaces";
 import {
   adjacent,
   cellSpan,
-  celsiusAt,
   fieldOf,
   gap,
   heldFor,
@@ -138,14 +136,8 @@ export const spillDepthAt = (state: GenerationState, cell: number) => {
   return metres(map.DrainageElevations.get(cell) - map.Elevation.get(cell));
 };
 /** Whether rain and snow fall short of what the air takes up by enough to keep a basin closed. */
-export const closedByAridity = (state: GenerationState, cell: number) => {
-  const map = fieldOf(state),
-    falling = MapScale.metres(map.Rainfall.get(cell) + map.Snowfall.get(cell), "mm");
-  return (
-    falling <
-    closedBasinAridity * potentialEvaporation(celsiusAt(state, cell), fieldOf(state).scale)
-  );
-};
+export const closedByAridity = (state: GenerationState, cell: number) =>
+  basinClosedByAridity(fieldOf(state), cell);
 const saltPanRule = magicRule("salt", "pan"),
   glassRule = magicRule("salt", "flat");
 /** A dry, bare, level floor below the spill of its basin: a pan with no magic in it. */

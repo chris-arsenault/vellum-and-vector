@@ -1,6 +1,5 @@
-import { potentialEvaporation } from "../world/ecologyEnvironment";
+import { closedByAridity } from "../water/closedBasin";
 import { fractalNoise } from "../world/noise";
-import { celsius, regionalPrecipitation } from "./climate";
 import { capturedSinks, connectedSea, smoothedBase } from "./base";
 import { influenceCosts } from "./causes/registry";
 import { evolveNetwork } from "./evolution";
@@ -82,18 +81,7 @@ export function growNetwork(state: RegionalState): NetworkWork {
   return network;
 }
 
-/**
- * Precipitation over potential evaporation below which a basin's floor loses more water than
- * reaches it, so the basin stays closed: a terminal lake, a salt flat or a dry pan. A wetter
- * basin fills to its spill and overflows; its river continues.
- */
-export const closedBasinAridity = 0.5;
-function closedBasin(state: RegionalState, i: number) {
-  return (
-    regionalPrecipitation(state, i) <
-    closedBasinAridity * potentialEvaporation(celsius(state, i), state.physical.map.scale)
-  );
-}
+const closedBasin = (state: RegionalState, i: number) => closedByAridity(state.physical.map, i);
 
 /**
  * Roots: every land cell beside the sea or at an exit across the frame drains out; lake cells
