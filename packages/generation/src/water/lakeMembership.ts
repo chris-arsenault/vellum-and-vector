@@ -1,4 +1,4 @@
-import type { PhysicalField } from "./field";
+import type { PhysicalField } from "../world/field";
 
 /** Water-body identities own grouped membership, including off-content support. Body ids
  * are small positive integers, so two passes over the lake cells group them: a count per

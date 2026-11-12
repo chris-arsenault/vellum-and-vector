@@ -1,21 +1,13 @@
 import { MapScale } from "@atlas/domain";
-import type { PhysicalField } from "./field";
-import type { PhysicalContext } from "./context";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import type { PhysicalField } from "../world/field";
+import type { PhysicalContext } from "../world/context";
+import { workingArray, releaseWorking } from "../world/physicalNumerics";
 import { groundOf } from "../rock/ground";
 import { averageGroundQuery, groundFact } from "../rock/groundQuery";
-import { clamp } from "./math";
+import { clamp } from "../world/math";
 import { respond } from "../coupling/answers";
+import { moveWater } from "./waterLedger";
 
-type ReturnReceiver = (cell: number, returned: number, available: number) => void;
-// hpc-exempt: per-map operation receiver; retained water remains in the physical bands.
-const returnReceivers = new WeakMap<PhysicalField, ReturnReceiver>();
-/** The interval belongs to the transient transfer receipts, not to a later query's context. */
-const returnIntervals = new WeakMap<PhysicalField, number>();
-/** Material owners receive the actual water withdrawn by an instantaneous surface return. */
-export function receiveGroundwaterReturn(map: PhysicalField, receive: ReturnReceiver) {
-  returnReceivers.set(map, receive);
-}
 /** A dissolved inventory accompanies the fraction of its carrier actually withdrawn. */
 export function returnedCharge(inventory: number, available: number, returned: number) {
   return available > 0 ? Math.max(0, inventory) * clamp(returned / available, 0, 1) : 0;
@@ -31,7 +23,8 @@ respond({
   reads: ["GroundwaterReturn"],
   add: (map, i) =>
     MapScale.inUnits(
-      groundwaterReturnRate(map.GroundwaterReturn.get(i), returnIntervals.get(map) ?? 0),
+      // The interval is the one the returned water was moved over, kept on the map with it.
+      groundwaterReturnRate(map.GroundwaterReturn.get(i), map.GroundwaterInterval),
       "mm"
     ),
 });
@@ -76,7 +69,7 @@ export function groundwaterBalance(
 }
 /** Start one transfer batch: its receipts and rate interval share the same lifetime. */
 export function beginGroundwaterExchange(map: PhysicalField, exposure: number) {
-  returnIntervals.set(map, Math.max(0, exposure));
+  map.GroundwaterInterval = Math.max(0, exposure);
   for (const band of [
     "GroundwaterExchangeVolume",
     "GroundwaterRecharge",
@@ -116,10 +109,17 @@ export function advanceGroundwater(map: PhysicalField, context: PhysicalContext)
   }
   for (let i = 0; i < map.mesh.count; i++)
     routeWater(map, i, head, conductance, arriving, depth, exposure);
+  let toSea = 0,
+    sprung = 0;
   for (let i = 0; i < map.mesh.count; i++) {
     const water = arriving.get(i) / map.mesh.area(i);
     if (map.WaterKindCodes.get(i) !== 1) map.GroundwaterStorage.add(i, water);
+    // What arrives under the sea has left the land's groundwater.
+    else toSea += arriving.get(i);
+    sprung += map.GroundwaterReturn.get(i) * map.mesh.area(i);
   }
+  moveWater(map, "seepToSea", toSea / exposure);
+  moveWater(map, "spring", sprung / exposure);
   releaseWorking(map, conductance, head, arriving);
 }
 function routeWater(
@@ -161,12 +161,4 @@ function routeWater(
   map.GroundwaterStorage.set(i, balance.storage);
   map.GroundwaterReturn.add(i, balance.returned);
   if (target >= 0) arriving.add(target, balance.outflow * map.mesh.area(i));
-}
-/** Immediate withdrawal into the caller's soil receiver; it is not another river-flow receipt. */
-export function returnGroundwater(map: PhysicalField, i: number, fraction: number, room: number) {
-  const available = map.GroundwaterStorage.get(i);
-  const returned = Math.min(Math.max(0, room), available * clamp(fraction, 0, 1));
-  map.GroundwaterStorage.add(i, -returned);
-  if (returned > 0) returnReceivers.get(map)?.(i, returned, available);
-  return returned;
 }

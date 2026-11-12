@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round, toUnits, units } from "./math";
-import { dominantUpstream, longitudinalAlignment } from "./channelGeometry";
+import { dominantUpstream, longitudinalAlignment } from "../water/channelGeometry";
 import { RecordQueue, type Band } from "@atlas/domain";
 import { releaseWorking } from "./physicalNumerics";
 

@@ -1,12 +1,12 @@
 // LakeBasinLayer stage and water-budget calculations, Canonry 0f62584c.
-import type { PhysicalField } from "./field";
-import type { PhysicalProfile } from "./profile";
-import { truncate, units } from "./math";
-import { depthRateToDischarge } from "./dimensions";
+import type { PhysicalField } from "../world/field";
+import type { PhysicalProfile } from "../world/profile";
+import { truncate, units } from "../world/math";
+import { depthRateToDischarge } from "../world/dimensions";
 import { CellList, radixOrder, type Band } from "@atlas/domain";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import { workingArray, releaseWorking } from "../world/physicalNumerics";
 import { ask } from "../coupling/answers";
-import type { PhysicalContext } from "./context";
+import type { PhysicalContext } from "../world/context";
 import { waterPassage } from "./waterQuantity";
 
 export interface Depression {
@@ -110,6 +110,25 @@ function stageBudget(
     cursor = end;
   }
   return { loss, count };
+}
+/**
+ * What the map's lakes can lose to the air and to the ground, in cubic metres a second, by the
+ * same rates the stage budget sets against their inflow.
+ */
+export function lakeLosses(map: PhysicalField, context: PhysicalContext) {
+  const p = context.Profile,
+    losses = { evaporation: 0, seepage: 0 };
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.WaterKindCodes.get(i) !== 2) continue;
+    const area = map.mesh.area(i);
+    losses.evaporation += depthRateToDischarge(
+      p.LakeEvaporationMinimum +
+        truncate((map.Temperature.get(i) * p.LakeEvaporationTemperatureStrength) / 1000),
+      area
+    );
+    losses.seepage += depthRateToDischarge(p.LakeInfiltrationLoss, area);
+  }
+  return losses;
 }
 function basinInput(map: PhysicalField, component: Depression, water: Band) {
   const basin = workingArray(map, "uint8", "lakes:basin");

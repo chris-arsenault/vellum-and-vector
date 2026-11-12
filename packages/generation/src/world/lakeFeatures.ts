@@ -1,7 +1,7 @@
 import { MapScale, semanticId, spatial } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { lakeFootprint, clipGeographicArea } from "./geographicContours";
-import { lakeMembership } from "./lakeMembership";
+import { lakeMembership } from "../water/lakeMembership";
 
 /**
  * Every physical shoreline, which the land and water surfaces read. The lake entry publishes

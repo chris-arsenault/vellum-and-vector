@@ -7,7 +7,7 @@ import { isGrounded } from "./glacierSurface";
 import { validateLandscape } from "../rock/groundInitialization";
 import { allowsBoundaryDrainage, isOpenOutlet } from "./field";
 import { releaseWorking } from "./physicalNumerics";
-import { waterPassage } from "./waterQuantity";
+import { waterPassage } from "../water/waterQuantity";
 import { MapScale } from "@atlas/domain";
 
 const range = (value: number, low: number, high: number) => value >= low && value <= high;

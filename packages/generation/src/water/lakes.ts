@@ -1,11 +1,11 @@
-import { meshDeltaX } from "./mesh";
+import { meshDeltaX } from "../world/mesh";
 // LakeBasinLayer depression discovery, pools and outlets, Canonry 0f62584c.
-import { clearWaterSurface, setWaterSurface, type PhysicalField } from "./field";
-import type { PhysicalContext } from "./context";
-import { hashUnit } from "./noise";
-import { round } from "./math";
+import { clearWaterSurface, setWaterSurface, type PhysicalField } from "../world/field";
+import type { PhysicalContext } from "../world/context";
+import { hashUnit } from "../world/noise";
+import { round } from "../world/math";
 import { CellList, MapScale, type Band } from "@atlas/domain";
-import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import { workingArray, workingValues, releaseWorking } from "../world/physicalNumerics";
 import {
   contributingWater,
   qualifies,

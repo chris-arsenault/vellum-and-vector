@@ -1,15 +1,15 @@
-import { meshDeltaX } from "./mesh";
+import { meshDeltaX } from "../world/mesh";
 // RiverChannelGeometryLayer.cs, Canonry 0f62584c.
-import type { PhysicalField } from "./field";
-import type { PhysicalContext } from "./context";
-import { clamp, toUnits, truncate, units } from "./math";
-import { edgeLeadingTo } from "./mesh";
+import type { PhysicalField } from "../world/field";
+import type { PhysicalContext } from "../world/context";
+import { clamp, toUnits, truncate, units } from "../world/math";
+import { edgeLeadingTo } from "../world/mesh";
 import { groundOf } from "../rock/ground";
 import { surfaceStanding } from "../rock/groundQueries";
-import { channelDimensions } from "./dimensions";
-import { physicalDistance } from "./physicalMetric";
+import { channelDimensions } from "../world/dimensions";
+import { physicalDistance } from "../world/physicalMetric";
 import { RecordQueue, type Band } from "@atlas/domain";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import { workingArray, releaseWorking } from "../world/physicalNumerics";
 
 function normalize(x: number, y: number): [number, number] {
   const length = Math.max(0.000001, Math.sqrt(x * x + y * y));

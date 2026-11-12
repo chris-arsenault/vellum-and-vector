@@ -8,7 +8,7 @@ import { displaceGround } from "../rock/groundLedger";
 import { meltIce } from "../rock/groundSurfaceMedia";
 import { magicBudget, originStocks, reservoirStock } from "./magicState";
 import { advanceStocks, retainGroundCharge, rememberStrain } from "./magicStocks";
-import { rememberLakes } from "./lakes";
+import { rememberLakes } from "../water/lakes";
 import { markRim, wardCoasts } from "./magicHallowed";
 import { MapScale, type Band, type MagicSystem } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";

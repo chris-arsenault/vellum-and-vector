@@ -1,8 +1,8 @@
 import { ask, respond } from "../coupling/answers";
-import type { PhysicalField } from "./field";
-import type { PhysicalContext } from "./context";
-import { depthRateToDischarge } from "./dimensions";
-import { bedLeak, bedLoss } from "../water/channelLoss";
+import type { PhysicalField } from "../world/field";
+import type { PhysicalContext } from "../world/context";
+import { depthRateToDischarge } from "../world/dimensions";
+import { bedLeak, bedLoss } from "./channelLoss";
 import { groundPermeability, groundwaterFilled } from "./groundwater";
 
 respond({ key: "waterWithdrawal", by: "surface water", reads: [], base: () => 0 });
@@ -44,11 +44,21 @@ export function channelLosses(map: PhysicalField, context: PhysicalContext) {
  * metres/second. The bed takes its share first, then what people draw and hold.
  */
 export function waterPassage(map: PhysicalField, context: PhysicalContext) {
+  const parts = waterPassageParts(map, context);
+  return (cell: number, received: number) => parts(cell, received).passed;
+}
+/** The same passage, stating what the bed took and what people took of what was received. */
+export function waterPassageParts(map: PhysicalField, context: PhysicalContext) {
   const withdrawal = ask(map, "waterWithdrawal", context),
     transmission = ask(map, "waterTransmission", context),
-    lost = channelLosses(map, context);
-  return (cell: number, received: number) =>
-    passingWater(received - lost(cell, received), withdrawal.get(cell), transmission.get(cell));
+    lost = channelLosses(map, context),
+    parts = { passed: 0, bed: 0, drawn: 0 };
+  return (cell: number, received: number) => {
+    parts.bed = lost(cell, received);
+    parts.passed = passingWater(received - parts.bed, withdrawal.get(cell), transmission.get(cell));
+    parts.drawn = received - parts.bed - parts.passed;
+    return parts;
+  };
 }
 
 /** Erosion uses reference-runoff area; its routing still passes the same actual water quantity. */

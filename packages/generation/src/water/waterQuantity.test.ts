@@ -4,12 +4,12 @@ import { ask, respond } from "../coupling/answers";
 import { invalidateProcesses } from "../processOperation";
 import "../coupling/responders";
 import { createTestField } from "../rock/groundTestFixture";
-import { atlasPhysicalProfile } from "./atlasProfile";
-import { physicalContext } from "./context";
-import { createWorldMesh } from "./worldMesh";
+import { atlasPhysicalProfile } from "../world/atlasProfile";
+import { physicalContext } from "../world/context";
+import { createWorldMesh } from "../world/worldMesh";
 import { passingWater, referenceWaterPassage, waterPassage } from "./waterQuantity";
-import { depthRateToDischarge, releasedWaterRate } from "./dimensions";
-import type { PhysicalField } from "./field";
+import { depthRateToDischarge, releasedWaterRate } from "../world/dimensions";
+import type { PhysicalField } from "../world/field";
 import { beginGroundwaterExchange, groundwaterCapacity } from "./groundwater";
 
 const extraSupply = new WeakMap<PhysicalField, number>(),

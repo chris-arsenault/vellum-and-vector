@@ -1,9 +1,9 @@
 // PriorityFlood.cs, Canonry 0f62584c: depression filling and preferred cheap flat corridors.
-import type { PhysicalField } from "./field";
-import type { PhysicalContext } from "./context";
-import { meshWorldUnitNoise as unitNoise, hashUnit } from "./noise";
+import type { PhysicalField } from "../world/field";
+import type { PhysicalContext } from "../world/context";
+import { meshWorldUnitNoise as unitNoise, hashUnit } from "../world/noise";
 import { MultiKeyHeap, type Band } from "@atlas/domain";
-import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import { workingArray, workingValues, releaseWorking } from "../world/physicalNumerics";
 
 type Front = { i: number; priority: number; cost: number; tie: number };
 /** Boundary supply enters this map; it must not also be an open drain. */

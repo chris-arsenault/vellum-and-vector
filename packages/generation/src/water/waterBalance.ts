@@ -51,18 +51,40 @@ export interface WaterYear {
   recharge: number;
   evaporated: number;
   keptSnow: number;
+  /** What the soil holds and the snow that lies, as means through the year. */
+  soil: number;
+  snow: number;
 }
+const emptyYear = (): WaterYear => ({
+  quick: [],
+  recharge: 0,
+  evaporated: 0,
+  keptSnow: 0,
+  soil: 0,
+  snow: 0,
+});
 interface Stores {
   soil: number;
   snow: number;
+}
+/**
+ * What the air takes in a month. It takes the month's water first. For what it still lacks it
+ * draws on the soil, and soil gives up water less readily the drier it gets: what it holds
+ * falls off as the unmet demand mounts against what it can hold (Thornthwaite and Mather), so
+ * a soil is drawn down towards empty and never suddenly to it.
+ */
+export function evaporated(demand: number, wetting: number, soil: number, capacity: number) {
+  const met = Math.min(demand, wetting),
+    lack = demand - met;
+  if (!(lack > 0) || !(soil > 0)) return met;
+  return met + (capacity > 0 ? soil * -Math.expm1(-lack / capacity) : soil);
 }
 /** One month of the budget: the stores as it leaves them, and what it shed. */
 function month(ground: WaterGround, at: number, stores: Stores) {
   const thaw = Math.min(stores.snow + ground.snow[at], Math.max(0, ground.melt[at])),
     storm = ground.rain[at] * ground.stormShare,
     wetting = ground.rain[at] - storm + thaw,
-    // The air takes the month's water first, then draws on what the soil holds.
-    taken = Math.min(Math.max(0, ground.demand[at]), wetting + stores.soil),
+    taken = evaporated(Math.max(0, ground.demand[at]), wetting, stores.soil, ground.soilCapacity),
     held = wetting + stores.soil - taken,
     shed = Math.max(0, held - ground.soilCapacity),
     sinking = shed * ground.sinking;
@@ -76,17 +98,23 @@ function month(ground: WaterGround, at: number, stores: Stores) {
  */
 export function waterYear(ground: WaterGround): WaterYear {
   const stores: Stores = { soil: 0, snow: 0 };
-  let year: WaterYear = { quick: [], recharge: 0, evaporated: 0, keptSnow: 0 };
+  let year = emptyYear();
   // Soil and seasonal snow settle within a few years; snow that never melts is kept apart.
   for (let pass = 0; pass < 3; pass++) {
     const before = stores.snow;
-    year = { quick: [], recharge: 0, evaporated: 0, keptSnow: 0 };
+    let least = Infinity;
+    year = emptyYear();
     for (let at = 0; at < months; at++) {
       const shed = month(ground, at, stores);
       year.quick.push(shed.quick);
       year.recharge += shed.recharge;
       year.evaporated += shed.evaporated;
+      year.soil += stores.soil / months;
+      year.snow += stores.snow / months;
+      least = Math.min(least, stores.snow);
     }
+    // The lying snow is the season's cover: what never melted all year is on its way to ice.
+    year.snow -= least;
     // Snow lying at the year's end that also lay at its start is the same winter's cover.
     // What a year adds beyond that never melts: it becomes ice and leaves this budget.
     year.keptSnow = Math.max(0, stores.snow - before);

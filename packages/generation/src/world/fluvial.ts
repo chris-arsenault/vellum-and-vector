@@ -12,7 +12,7 @@ import { ask, respond } from "../coupling/answers";
 import { sourceToOutletOrder, waterGathered } from "./flowGraph";
 import { cellTravel } from "./physicalMetric";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { referenceWaterPassage } from "./waterQuantity";
+import { referenceWaterPassage } from "../water/waterQuantity";
 
 function transportDistance(map: PhysicalField, i: number, previous: Band) {
   const target = map.FlowTargets.get(i),

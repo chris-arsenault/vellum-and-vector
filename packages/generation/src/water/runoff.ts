@@ -1,10 +1,11 @@
-import { MapScale, waterYearFields } from "@atlas/domain";
+import { MapScale, waterYearFields, type Band } from "@atlas/domain";
+import { moveWater } from "./waterLedger";
 import { groundOf } from "../rock/ground";
 import { surfacePorosity } from "../rock/groundQueries";
 import type { PhysicalContext } from "../world/context";
 import { potentialEvaporation } from "../world/ecologyEnvironment";
 import type { PhysicalField } from "../world/field";
-import { monthlyWarmth, months, waterYear } from "./waterBalance";
+import { monthlyWarmth, months, waterYear, type WaterYear } from "./waterBalance";
 
 /**
  * Every land cell's water for the year, from one budget (see `waterBalance`). The year's rain
@@ -63,8 +64,43 @@ function climateYear(map: PhysicalField, c: PhysicalContext, i: number) {
   }
   return year;
 }
+/** A year's moves over the land, in cubic metres, summed before they enter the ledger. */
+const landMoves = [
+  "rain",
+  "snowfall",
+  "thaw",
+  "firn",
+  "evaporation",
+  "runoff",
+  "recharge",
+] as const;
+type LandMoves = Record<(typeof landMoves)[number], number>;
+/** One cell's year, added to the land's moves: depths in millimetres over the cell's area. */
+function noteYear(moved: LandMoves, fell: typeof year, water: WaterYear, area: number) {
+  const depth = area / 1000;
+  let rain = 0,
+    snow = 0,
+    quick = 0;
+  for (let at = 0; at < months; at++) {
+    rain += fell.rain[at];
+    snow += fell.snow[at];
+    quick += water.quick[at];
+  }
+  moved.rain += rain * depth;
+  moved.snowfall += snow * depth;
+  moved.thaw += (snow - water.keptSnow) * depth;
+  moved.firn += water.keptSnow * depth;
+  moved.evaporation += water.evaporated * depth;
+  moved.runoff += quick * depth;
+  moved.recharge += water.recharge * depth;
+}
 export function runoff(map: PhysicalField, c: PhysicalContext) {
-  const each = waterYearOf(map);
+  const each = waterYearOf(map),
+    moved = Object.fromEntries(landMoves.map((move) => [move, 0])) as LandMoves;
+  landWater(map, c, each, moved);
+  for (const move of landMoves) moveWater(map, move, moved[move]);
+}
+function landWater(map: PhysicalField, c: PhysicalContext, each: Band[], moved: LandMoves) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) === 1) {
       for (const band of [map.Runoff, map.FloodRunoff, map.DryRunoff, map.WaterRecharge, ...each])
@@ -72,8 +108,9 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
       continue;
     }
     const sinking = sinkingShare(map, i),
+      fell = climateYear(map, c, i),
       water = waterYear({
-        ...climateYear(map, c, i),
+        ...fell,
         soilCapacity: soilCapacity(map, i),
         sinking,
         stormShare: c.Profile.StormRunoffShare * (1 - sinking) * bare(map, i),
@@ -92,5 +129,6 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
     map.FloodRunoff.set(i, greatest * months);
     map.DryRunoff.set(i, least * months);
     map.WaterRecharge.set(i, water.recharge);
+    noteYear(moved, fell, water, map.mesh.area(i));
   }
 }

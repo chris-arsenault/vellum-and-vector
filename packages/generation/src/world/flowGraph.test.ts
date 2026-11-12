@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { contributingArea, targetOrder, waterGathered } from "./flowGraph";
-import { passingWater } from "./waterQuantity";
+import { passingWater } from "../water/waterQuantity";
 import { createField } from "./field";
 import { createWorldMesh } from "./worldMesh";
 

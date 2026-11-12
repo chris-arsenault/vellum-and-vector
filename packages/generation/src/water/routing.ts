@@ -1,13 +1,13 @@
 // FlowRoutingLayer.cs, Canonry 0f62584c.
-import type { PhysicalField } from "./field";
-import { isOpenOutlet } from "./field";
-import type { PhysicalContext } from "./context";
-import { hashUnit } from "./noise";
-import { edgeLeadingTo } from "./mesh";
+import type { PhysicalField } from "../world/field";
+import { isOpenOutlet } from "../world/field";
+import type { PhysicalContext } from "../world/context";
+import { hashUnit } from "../world/noise";
+import { edgeLeadingTo } from "../world/mesh";
 import { selectByOutletAlignment } from "./flowGuidance";
-import { sourceToOutletOrder } from "./flowGraph";
+import { sourceToOutletOrder } from "../world/flowGraph";
 import { CellQueue, MapScale, type Band } from "@atlas/domain";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import { workingArray, releaseWorking } from "../world/physicalNumerics";
 import { lakeMembership } from "./lakeMembership";
 
 function stableRoot(map: PhysicalField, members: Iterable<number>, seed: number): number {

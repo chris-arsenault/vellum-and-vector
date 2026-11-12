@@ -9,7 +9,7 @@ import { materialResistance } from "./material";
 import { clamp, type NetworkWork, type RegionalState } from "./state";
 import { ask } from "../coupling/answers";
 import { physicalContext } from "../world/context";
-import { waterPassage } from "../world/waterQuantity";
+import { waterPassage } from "../water/waterQuantity";
 
 /** Resistance near a known peak or cone, so channels cut around it and it stands on a divide. */
 const peakRepulsion = 12;

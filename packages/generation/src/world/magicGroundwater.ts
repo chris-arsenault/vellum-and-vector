@@ -14,42 +14,13 @@ import { workingArray, releaseWorking } from "./physicalNumerics";
 import { clamp, units } from "./math";
 import type { GenerationState } from "../process";
 import { organicCargoKey, organicDensity } from "../rock/organicMaterial";
-import { receiveGroundwaterReturn, returnedCharge } from "./groundwater";
+import { returnedCharge } from "../water/groundwater";
 import { defineCommand } from "../processOperation";
-
-/** Bind fluid inventory to water returns, including work performed after the epoch exchange. */
-export function bindMagicGroundwater(state: GenerationState) {
-  const map = state.physical!.map;
-  receiveGroundwaterReturn(map, (cell, returned, available) => {
-    for (const field of state.physical!.magic?.fields ?? [])
-      for (const origin of field.definition.origins)
-        returnOriginWater(state, field, origin, cell, returned, available);
-  });
-}
-function returnOriginWater(
-  state: GenerationState,
-  field: MagicField,
-  origin: MagicOrigin,
-  cell: number,
-  returned: number,
-  available: number
-) {
-  const receiver = field.stocks[`${origin.id}/brine`] ?? field.stocks[`${origin.id}/springwater`];
-  for (const stock of originStocks(origin)) {
-    if (!stock.carriers.includes("groundwater")) continue;
-    const water = field.stocks[stockKey(origin, stock)],
-      moved = returnedCharge(water.get(cell), available, returned);
-    if (moved <= 0) continue;
-    water.add(cell, -moved);
-    releaseWaterCharge(field, receiver, cell, moved);
-  }
-}
 
 /** Once after ordinary groundwater moves and before current spring/soil response is evaluated. */
 export const exchangeMagicWater = defineCommand("magic.water-exchange", "event", exchangeWater, []);
 function exchangeWater(state: GenerationState) {
   const map = state.physical!.map;
-  bindMagicGroundwater(state);
   for (const field of state.physical!.magic!.fields) {
     for (const origin of field.definition.origins)
       withOrigin(field, origin, () => {

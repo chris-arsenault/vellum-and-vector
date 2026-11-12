@@ -1,15 +1,15 @@
-import { meshDeltaX } from "./mesh";
+import { meshDeltaX } from "../world/mesh";
 // ConditionedFlowResolver.cs, Canonry 0f62584c.
-import type { PhysicalField } from "./field";
-import { isOpenOutlet } from "./field";
-import type { PhysicalContext } from "./context";
-import type { PhysicalProfile } from "./profile";
-import { clamp } from "./math";
-import { hashUnit } from "./noise";
-import { contributingArea } from "./flowGraph";
-import { physicalDistance, physicalGradients } from "./physicalMetric";
+import type { PhysicalField } from "../world/field";
+import { isOpenOutlet } from "../world/field";
+import type { PhysicalContext } from "../world/context";
+import type { PhysicalProfile } from "../world/profile";
+import { clamp } from "../world/math";
+import { hashUnit } from "../world/noise";
+import { contributingArea } from "../world/flowGraph";
+import { physicalDistance, physicalGradients } from "../world/physicalMetric";
 import { MapScale, type Band } from "@atlas/domain";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import { workingArray, releaseWorking } from "../world/physicalNumerics";
 
 const epsilon = 0.0000001;
 function normalize(x: number, y: number): [number, number] {

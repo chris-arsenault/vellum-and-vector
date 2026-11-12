@@ -1,33 +1,6 @@
-import { expect, it, vi } from "vitest";
-import {
-  groundwaterBalance,
-  groundwaterReturnRate,
-  receiveGroundwaterReturn,
-  returnedCharge,
-  returnGroundwater,
-} from "./groundwater";
-import { createTestField } from "../rock/groundTestFixture";
-import { createWorldMesh } from "./worldMesh";
-import { buriedCharge, litterPacket } from "./magicGroundwater";
-
-it("a surface return delivers its actual carrier withdrawal once to the current receiver", () => {
-  const map = createTestField(createWorldMesh([0, 0, 1000, 1000], 16, 0)),
-    old = vi.fn(),
-    current = vi.fn();
-  map.GroundwaterStorage.set(0, 4);
-  map.GroundwaterReturn.set(0, 0.25);
-  receiveGroundwaterReturn(map, old);
-  receiveGroundwaterReturn(map, current);
-  expect(returnGroundwater(map, 0, 0.5, 1)).toBe(1);
-  expect(current).toHaveBeenCalledWith(0, 1, 4);
-  expect(old).not.toHaveBeenCalled();
-  expect(map.GroundwaterStorage.get(0)).toBe(3);
-  expect(returnGroundwater(map, 0, 1, 0)).toBe(0);
-  expect(current).toHaveBeenCalledTimes(1);
-  expect(returnGroundwater(map, 0, 1, 20)).toBe(3);
-  expect(current).toHaveBeenLastCalledWith(0, 3, 3);
-  expect(map.GroundwaterReturn.get(0)).toBe(0.25);
-});
+import { expect, it } from "vitest";
+import { groundwaterBalance, groundwaterReturnRate, returnedCharge } from "./groundwater";
+import { buriedCharge, litterPacket } from "../world/magicGroundwater";
 
 it("routing reads a return rate over the actual transfer interval, not its refresh interval", () => {
   expect(groundwaterReturnRate(0.25, 0.25)).toBe(1);

@@ -72,6 +72,8 @@ export type PhysicalField = Record<MutablePhysicalBufferName, Band> &
     EcologyInitialized: boolean;
     AccumulatedPlateDrift: number;
     LastPlateDriftStep: number;
+    /** The span the groundwater last moved over: its returned depths are rates over this. */
+    GroundwaterInterval: number;
     /** The last plate drift's scatter, kept so amounts riding the crust can follow it. */
     transportPlan: TransportPlan | null;
     DrainageTieDecisionTotal: number;
@@ -131,6 +133,7 @@ export function createField(
     EcologyInitialized: false,
     AccumulatedPlateDrift: 0,
     LastPlateDriftStep: 0,
+    GroundwaterInterval: 0,
     transportPlan: null as TransportPlan | null,
     DrainageTieDecisionTotal: 0,
     DrainageDecisionTotal: 0,

@@ -22,7 +22,6 @@ import { stockGroundHosts } from "../rock/rockMagicStock";
 import { GroundInventory } from "../rock/groundInventory";
 import type { MagicInventory } from "./magicInventory";
 import { bindCarrierCosts } from "./magicCarriers";
-import { bindMagicGroundwater } from "./magicGroundwater";
 import { retainedArray, workingArray, releaseWorking } from "./physicalNumerics";
 import {
   carriedMagicChannels,
@@ -313,7 +312,6 @@ export function initializeMagic(
     rimLabel: retainedArray(map, "int32", "magic:rim-label").fill(-1),
   };
   bindCarrierCosts(map, () => state.physical?.magic?.carrierCost);
-  bindMagicGroundwater(state);
   bindMagicIceMelt(state);
 }
 /**

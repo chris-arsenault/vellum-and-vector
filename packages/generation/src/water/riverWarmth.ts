@@ -1,7 +1,7 @@
-import type { PhysicalField } from "./field";
-import { sourceToOutletOrder } from "./flowGraph";
-import { physicalDistance } from "./physicalMetric";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import type { PhysicalField } from "../world/field";
+import { sourceToOutletOrder } from "../world/flowGraph";
+import { physicalDistance } from "../world/physicalMetric";
+import { workingArray, releaseWorking } from "../world/physicalNumerics";
 
 /**
  * Thawed water runs downstream from halos and springs, so a river below a wellspring

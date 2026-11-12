@@ -4,7 +4,7 @@
  */
 import "../world/climate";
 import "../processes/waterProcesses";
-import "../world/waterQuantity";
+import "../water/waterQuantity";
 import "../world/currents";
 import "../world/coastalForcing";
 import "../world/ecologyGroups";

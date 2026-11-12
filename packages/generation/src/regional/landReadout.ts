@@ -2,6 +2,7 @@ import { ask } from "../coupling/answers";
 import type { MapProcessContext } from "../process";
 import { nativeContext } from "../world/context";
 import { months } from "../water/waterBalance";
+import { waterAccountLine } from "../water/waterLedger";
 import { isContent } from "./lattice";
 import type { RegionalState } from "./state";
 
@@ -58,6 +59,7 @@ export function landReadout(state: RegionalState, context: MapProcessContext) {
     `slope ${mean(sums.slope)}, tree cover ${mean(sums.trees)}, grass ${mean(sums.grass)}, ` +
     `on a river ${mean(sums.river)}; water: ${mean(sums.rain, 0)} mm falls, ` +
     `${mean(sums.runoff, 0)} mm runs off, ${mean(sums.recharge, 0)} mm sinks in; ` +
-    `a river's flow all year on ${mean(sums.allYear)} of it, part of the year on ${mean(sums.partYear)}`
+    `a river's flow all year on ${mean(sums.allYear)} of it, part of the year on ${mean(sums.partYear)}; ` +
+    waterAccountLine(map)
   );
 }

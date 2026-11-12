@@ -1,16 +1,18 @@
 // RiverNetworkLayer.cs, Canonry 0f62584c.
-import type { PhysicalField } from "./field";
-import type { PhysicalContext } from "./context";
-import { contributingArea, sourceToOutletOrder } from "./flowGraph";
-import { depthRateToDischarge } from "./dimensions";
-import { edgeLeadingTo } from "./mesh";
+import type { PhysicalField } from "../world/field";
+import type { PhysicalContext } from "../world/context";
+import { contributingArea, sourceToOutletOrder } from "../world/flowGraph";
+import { depthRateToDischarge } from "../world/dimensions";
+import { edgeLeadingTo } from "../world/mesh";
 import type { Band } from "@atlas/domain";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import { workingArray, releaseWorking } from "../world/physicalNumerics";
 import { ask } from "../coupling/answers";
-import { waterPassage } from "./waterQuantity";
-import { riverFlow } from "../water/channelRegime";
-import { waterYearOf } from "../water/runoff";
-import { months } from "../water/waterBalance";
+import { waterPassage, waterPassageParts } from "./waterQuantity";
+import { moveFlow } from "./waterLedger";
+import { lakeLosses } from "./lakeStage";
+import { riverFlow } from "./channelRegime";
+import { waterYearOf } from "./runoff";
+import { months } from "./waterBalance";
 
 /**
  * The cells that carry a river: those the gathered water reaches with a river's flow in at
@@ -73,8 +75,7 @@ export function riverNetwork(
   incoming?: Band,
   continuingHeads: readonly number[] = []
 ) {
-  const water = ask(map, "surfaceWater", c),
-    pass = waterPassage(map, c);
+  const water = ask(map, "surfaceWater", c);
   for (let i = 0; i < map.mesh.count; i++)
     map.FlowAccumulation.set(
       i,
@@ -85,14 +86,7 @@ export function riverNetwork(
   releaseWorking(map, area);
   map.RiverOrders.fill(0);
   const order = sourceToOutletOrder(map);
-  for (let n = 0; n < order.length; n++) {
-    const i = order.get(n),
-      target = map.FlowTargets.get(i);
-    map.FlowAccumulation.set(i, pass(i, map.FlowAccumulation.get(i)));
-    if (map.LakeOutletTargets.get(i) >= 0)
-      map.FlowAccumulation.set(i, Math.min(map.FlowAccumulation.get(i), map.LakeOverflow.get(i)));
-    if (target >= 0) map.FlowAccumulation.add(target, map.FlowAccumulation.get(i));
-  }
+  gatherMean(map, c, order);
   seasonalFlows(map, c, order, incoming);
   const channels = buildChannels(map);
   retainChannels(map, channels, continuingHeads);
@@ -101,6 +95,50 @@ export function riverNetwork(
   releaseWorking(map, order, channels);
 }
 
+/**
+ * The year's mean flow gathered down the routes, with what left it on the way entered in the
+ * water ledger: what beds took, what people drew, what lakes kept, and what reached the sea
+ * or ran off the map's edge.
+ */
+function gatherMean(map: PhysicalField, c: PhysicalContext, order: Band) {
+  const pass = waterPassageParts(map, c),
+    left = { bedLoss: 0, withdrawal: 0, inflow: 0, spill: 0, mouth: 0, pan: 0 };
+  for (let n = 0; n < order.length; n++) {
+    const i = order.get(n),
+      target = map.FlowTargets.get(i),
+      parts = pass(i, map.FlowAccumulation.get(i));
+    left.bedLoss += parts.bed;
+    left.withdrawal += parts.drawn;
+    let flow = parts.passed;
+    if (map.LakeOutletTargets.get(i) >= 0) {
+      // A lake lets out what it does not lose: what reached its outlet went into it.
+      left.inflow += flow;
+      flow = Math.min(flow, map.LakeOverflow.get(i));
+      left.spill += flow;
+    }
+    map.FlowAccumulation.set(i, flow);
+    if (target >= 0) map.FlowAccumulation.add(target, flow);
+    const end = map.WaterKindCodes.get(i) === 1 ? undefined : endOf(map, i, target);
+    if (end) left[end] += flow;
+  }
+  for (const move of ["bedLoss", "withdrawal", "inflow", "spill", "mouth", "pan"] as const)
+    moveFlow(map, move, left[move]);
+  // What lakes took in and did not let out, they lost to the air and the ground.
+  const kept = Math.max(0, left.inflow - left.spill),
+    can = lakeLosses(map, c),
+    whole = can.evaporation + can.seepage;
+  moveFlow(map, "lakeEvaporation", whole > 0 ? (kept * can.evaporation) / whole : kept);
+  moveFlow(map, "lakeSeepage", whole > 0 ? (kept * can.seepage) / whole : 0);
+}
+/**
+ * Where a cell's water ends, if it ends here: at the sea or the map's edge, in a lake with no
+ * way out, or on the dry floor of a closed basin.
+ */
+function endOf(map: PhysicalField, i: number, target: number) {
+  if (target >= 0) return map.WaterKindCodes.get(target) === 1 ? "mouth" : undefined;
+  if (map.mesh.boundary(i)) return "mouth";
+  return map.WaterKindCodes.get(i) === 2 ? "inflow" : "pan";
+}
 /**
  * What each cell's river carries in flood and in its driest season, gathered down the same
  * routes as the mean. A cell's surface gives more in its wetter season and less in its drier;

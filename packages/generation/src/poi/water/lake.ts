@@ -1,6 +1,6 @@
 // @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
 import { MapScale, spatial } from "@atlas/domain";
-import { lakeMembership } from "../../world/lakeMembership";
+import { lakeMembership } from "../../water/lakeMembership";
 import { noWaterSurface } from "../../world/math";
 import { generatedFeature } from "../../mapFeatures";
 import type { GenerationState } from "../../process";
