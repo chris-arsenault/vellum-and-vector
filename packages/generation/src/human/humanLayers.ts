@@ -200,11 +200,11 @@ class HumanLayers {
     carryLayers(this.layers, plan);
   }
   /**
-   * What a coarser map gave evenly to the finer cells under each of its cells is shared out
-   * among them by a weight; `groups` names each cell's coarser cell, or -1 for none.
+   * What a coarser map gave evenly of these kinds to the finer cells under each of its cells
+   * is shared out among them by a weight; `groups` names each cell's coarser cell, or -1.
    */
-  apportion(groups: Values, weight: Values) {
-    apportionLayers(this.layers, groups, weight);
+  apportion(kinds: readonly HumanLayerId[], groups: Values, weight: Values) {
+    apportionLayers(this.layers, kinds, groups, weight);
   }
   /** Travellers between places wear the ground they cross, in traveller-years per cell. */
   travel(travellerYears: Values) {

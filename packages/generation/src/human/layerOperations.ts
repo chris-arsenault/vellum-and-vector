@@ -179,6 +179,7 @@ export interface CarryLayers extends OnMap {
   plan: TransportPlan;
 }
 export interface ApportionLayers extends OnMap {
+  kinds: readonly HumanLayerId[];
   /** Per cell: the coarser cell it lies under, or -1. */
   groups: Values;
   /** Per cell: how much of its coarser cell's holdings the cell draws, against its neighbours. */
@@ -187,7 +188,8 @@ export interface ApportionLayers extends OnMap {
 export const apportionHumanLayers = defineCommand(
   "human.layers.apportion",
   "event",
-  ({ map, groups, weight }: ApportionLayers) => humanLayerWriter(map).apportion(groups, weight),
+  ({ map, kinds, groups, weight }: ApportionLayers) =>
+    humanLayerWriter(map).apportion(kinds, groups, weight),
   []
 );
 export const carryHumanLayers = defineCommand(

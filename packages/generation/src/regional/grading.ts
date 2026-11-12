@@ -23,6 +23,8 @@ export function gradeSeat(state: RegionalState, seat: Seat) {
   gradeGround(state, new Map(footprint(state, seat).map((cell) => [cell, seat.gradient])));
 }
 
+/** How close to its grade a step is brought, as a share of the step the grade allows. */
+const gradeSlack = 0.05;
 /** Feature footprints request a grade; their cut material supplies the fill. */
 export function gradeGround(state: RegionalState, targets: ReadonlyMap<number, number>) {
   const map = state.physical.map,
@@ -36,9 +38,12 @@ export function gradeGround(state: RegionalState, targets: ReadonlyMap<number, n
     basin = state.regional.relief?.basin,
     // This round's channels and kept hollows, and the last routing's rivers, stay as they are.
     movable = cells.map((i) => map.RiverOrders.get(i) === 0 && !network?.channel[i] && !basin?.[i]),
-    edges = gradeEdges(state, targets, cells, inside);
-  while (gradeRound(h, movable, areas, edges)) {
-    // Resolve achievable grading until a complete pass makes no native-unit progress.
+    edges = gradeEdges(state, targets, cells, inside),
+    // A graded step is good to a share of the step it is held to: nobody levels ground to a
+    // millimetre, and asking for that kept large or steep footprints relaxing without end.
+    tolerance = edges.reduce((least, edge) => Math.min(least, edge[2] * gradeSlack), Infinity);
+  while (gradeRound(h, movable, areas, edges, Math.max(1, tolerance))) {
+    // Resolve achievable grading until a complete pass moves nothing by more than the slack.
   }
   placeGrade(map, cells, h);
 }
@@ -130,13 +135,14 @@ export function gradeRound(
   h: number[],
   movable: boolean[],
   areas: number[],
-  edges: readonly GradeEdge[]
+  edges: readonly GradeEdge[],
+  tolerance = 1
 ) {
   const changes = new Float64Array(h.length),
     counts = new Uint32Array(h.length);
   for (const [a, b, limit] of edges) {
     const pair = [h[a], h[b]];
-    gradePair(pair, [movable[a], movable[b]], 0, 1, limit, [areas[a], areas[b]]);
+    gradePair(pair, [movable[a], movable[b]], 0, 1, limit, [areas[a], areas[b]], tolerance);
     changes[a] += pair[0] - h[a];
     changes[b] += pair[1] - h[b];
     counts[a]++;
@@ -146,7 +152,7 @@ export function gradeRound(
   for (let i = 0; i < h.length; i++) {
     const before = h[i];
     if (counts[i] > 0) h[i] += changes[i] / counts[i];
-    moved = Math.abs(h[i] - before) > 1 || moved;
+    moved = Math.abs(h[i] - before) > tolerance || moved;
   }
   return moved;
 }
@@ -158,11 +164,12 @@ export function gradePair(
   a: number,
   b: number,
   limit: number,
-  areas: number[]
+  areas: number[],
+  tolerance: number
 ) {
   const step = h[a] - h[b],
     excess = Math.abs(step) - limit;
-  if (excess <= 1 || (!movable[a] && !movable[b])) return false;
+  if (excess <= tolerance || (!movable[a] && !movable[b])) return false;
   const beforeA = h[a],
     beforeB = h[b],
     toward = Math.sign(step) * excess,

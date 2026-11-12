@@ -5,15 +5,16 @@ import {
   identityColumn,
   type Band,
   type HumanBandName,
+  type HumanLayerId,
   type HumanScalarName,
   type ReadBand,
 } from "@atlas/domain";
-
-type Values = Pick<ReadBand, "get">;
 import { weightScale, type TransportPlan } from "../world/transportPlan";
 import { arriveInColumn } from "./identityColumn";
-import { areaLayers, layerCatalogue } from "./layerCatalogue";
+import { areaLayers, layerCatalogue, layerRoles } from "./layerCatalogue";
 import type { LayerBands } from "./layerBands";
+
+type Values = Pick<ReadBand, "get">;
 
 /**
  * People's layers ride the crust they stand on. A cell's layers, remains and identity column
@@ -61,12 +62,10 @@ function settle(layers: LayerBands, cell: number) {
   map[humanRemains.cover].set(cell, arrived > 0 ? map[humanRemains.cover].get(cell) / arrived : 0);
   map[humanRemains.builtUp].set(cell, Math.min(1, arrived));
 }
-/** What is counted per person or per work, and so shares out without any ceiling. */
-const counted: HumanScalarName[] = [
-  ...humanLayerIds
-    .filter((id) => layerCatalogue[id].measure === "density")
-    .map((id) => layerCatalogue[id].band),
-  ...identityColumn.people,
+/** The bands a kind is held in: the people's layer carries the identity column with it. */
+const bandsOf = (layers: LayerBands, kind: HumanLayerId): Band[] => [
+  layers.of[kind],
+  ...(kind === layerRoles.people ? identityColumn.people.map((name) => layers.map[name]) : []),
 ];
 /** One band's holdings in each group move to where the weight lies; the group keeps its total. */
 function shareOut(layers: LayerBands, band: Band, groups: Values, weight: Values, count: number) {
@@ -91,16 +90,21 @@ function shareOut(layers: LayerBands, band: Band, groups: Values, weight: Values
 }
 /**
  * A finer map is given each coarser cell's holdings as the same amount on every finer cell
- * under it. They are shared out again by a weight on the finer cells: each coarser cell keeps
- * its people, its works and its land in use, and they lie on the finer ground the weight
- * favours. Land in use never exceeds a cell; what a full cell cannot take stays unshared.
+ * under it. The kinds named are shared out again by a weight on the finer cells: each coarser
+ * cell keeps what it held of them, and it lies on the finer ground the weight favours. Land in
+ * use never exceeds a cell; what a full cell cannot take stays unshared.
  */
-export function apportionLayers(layers: LayerBands, groups: Values, weight: Values) {
+export function apportionLayers(
+  layers: LayerBands,
+  kinds: readonly HumanLayerId[],
+  groups: Values,
+  weight: Values
+) {
   let count = 0;
   for (let cell = 0; cell < layers.count; cell++) count = Math.max(count, groups.get(cell) + 1);
   if (!count) return;
-  for (const name of counted) shareOut(layers, layers.map[name], groups, weight, count);
-  for (const kind of areaLayers) shareOut(layers, layers.of[kind], groups, weight, count);
+  for (const kind of kinds)
+    for (const band of bandsOf(layers, kind)) shareOut(layers, band, groups, weight, count);
   for (let cell = 0; cell < layers.count; cell++) {
     let used = 0;
     for (const kind of areaLayers) used += layers.of[kind].get(cell);

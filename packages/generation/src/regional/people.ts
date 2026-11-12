@@ -64,7 +64,7 @@ export function livePeople(state: RegionalState, context: MapProcessContext) {
   liveKeptPass(state, context, developmentExposure[state.regional.round - 1] ?? 0);
   context.progress(
     1,
-    `People on the map: ${before} before the round, ${met} after its water and ice, ${Math.round(peopleOn(state))} after living it; the land as now used feeds ${Math.round(landFeeds(state, context))}`
+    `People on the map: ${before} before the round, ${met} after its water and ice, ${Math.round(peopleOn(state))} after living it; the land as now used feeds ${Math.round(landFeeds(state, context))}; all under crops it would feed ${Math.round(landFeeds(state, context, "cropYield"))}, under herds ${Math.round(landFeeds(state, context, "herdYield"))}, left wild ${Math.round(landFeeds(state, context, "wildYield"))}`
   );
 }
 /** Each cell's parent cell, by the parent sample that gave the cell its people. */
@@ -83,10 +83,14 @@ function settleOnFinerLand(state: RegionalState, context: MapProcessContext) {
   settleInheritedPeople(state, context, groups);
   map.coverage.release(groups);
 }
-/** Everyone the map's land feeds as it is now used. */
-function landFeeds(state: RegionalState, context: MapProcessContext) {
+/** Everyone the map's land feeds: as it is now used, or wholly under crops, herds or the wild. */
+function landFeeds(
+  state: RegionalState,
+  context: MapProcessContext,
+  by: "support" | "cropYield" | "herdYield" | "wildYield" = "support"
+) {
   const map = state.physical.map,
-    support = ask(map, "support", nativeContext(state, context, 0));
+    support = ask(map, by, nativeContext(state, context, 0));
   let fed = 0;
   for (let cell = 0; cell < map.mesh.count; cell++)
     fed += support.get(cell) * MapScale.areaUnits(map.mesh.contentArea(cell), "m2", "km2");
