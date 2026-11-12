@@ -140,6 +140,10 @@ function expansionSteps(map: PhysicalField, c: PhysicalContext, i: number): numb
   );
   return (map.RiverWidth.get(i) / 2) * (1 + scale * 0.05);
 }
+/** A bed kept shallow where people cross (a ford) is no deeper than it is kept. */
+export function shoalBed(map: PhysicalField, i: number, depth: number) {
+  if (depth < map.RiverDepth.get(i)) map.RiverDepth.set(i, Math.max(0, depth));
+}
 export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
   map.RiverChannelStrength.fill(0);
   map.RiverChannelOrders.fill(0);

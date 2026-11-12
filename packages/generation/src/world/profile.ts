@@ -347,6 +347,9 @@ export const physicalProfile = MapScale.definitions({
   SubtropicalSubsidenceWidth: 10,
   PolarSubsidence: 0.7,
   MinimumRainout: 0.08,
+  // length-unit: degrees — the latitude of the tropics: how far the sun, and deep inland the
+  // rain belts, move towards each pole. Over open sea the belts move the maritime share.
+  AxialTilt: 23.5,
   SnowTemperatureThreshold: 300,
   SnowTemperatureTransition: 100,
   // Annual-mean surface temperature, after current and wave resistance, below

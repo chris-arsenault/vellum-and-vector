@@ -1,4 +1,6 @@
-import type { Band } from "@atlas/domain";
+import { waterBandNames, type Band } from "@atlas/domain";
+import { shoalBed } from "../water/channelGeometry";
+import { holdWaterSurface } from "../water/standing";
 import {
   isMutablePhysicalName,
   type MutablePhysicalBufferName,
@@ -41,6 +43,29 @@ interface Declared {
   magic: Map<string, { target: PoiMagicBand; cells: Changes }>;
   grades: Map<number, number>;
   water?: WaterInfluences;
+  /** What places ask of standing water and river beds; the water owner carries these out. */
+  waterWorks: WaterWork[];
+}
+type WaterWork = PoiFieldChange & { band: PhysicalBufferName };
+const waterBands: ReadonlySet<string> = new Set(waterBandNames);
+/**
+ * A place never writes water. What it asks of the soil's water and of a river's passage is an
+ * answer to the water budget; holding a surface up or a bed shallow is done by the water
+ * owner. Anything else a place declares on water is refused.
+ */
+function askWater(declared: Declared, change: WaterWork) {
+  if (change.band === "SoilWater") {
+    if (declared.water) wetSoil(declared.water, change);
+  } else if (change.band === "WaterSurfaceElevations" && change.change === "atLeast")
+    declared.waterWorks.push(change);
+  else if (change.band === "RiverDepth" && change.change === "atMost")
+    declared.waterWorks.push(change);
+  else throw new Error(`A place cannot ${change.change} ${change.band}: water has one owner.`);
+}
+function carryOutWaterWorks(map: PhysicalField, works: readonly WaterWork[]) {
+  for (const work of works)
+    if (work.change === "atLeast") holdWaterSurface(map, work.cell, work.value);
+    else if (work.change === "atMost") shoalBed(map, work.cell, work.value);
 }
 interface WaterInfluences {
   withdrawal: Band;
@@ -142,8 +167,8 @@ function collect(declared: Declared, change: PoiFieldChange) {
     let entry = declared.magic.get(key);
     if (!entry) declared.magic.set(key, (entry = { target: change.magic, cells: new Map() }));
     take(changeAt(entry.cells, change.cell), change);
-  } else if (change.band === "SoilWater") {
-    if (declared.water) wetSoil(declared.water, change);
+  } else if (waterBands.has(change.band)) {
+    askWater(declared, change);
   } else {
     let cells = declared.bands.get(change.band);
     if (!cells) declared.bands.set(change.band, (cells = new Map()));
@@ -151,7 +176,12 @@ function collect(declared: Declared, change: PoiFieldChange) {
   }
 }
 type PlaceEffect = (state: GenerationState, place: PoiPlace) => readonly PoiFieldChange[];
-const nothingDeclared = (): Declared => ({ bands: new Map(), magic: new Map(), grades: new Map() });
+const nothingDeclared = (): Declared => ({
+  bands: new Map(),
+  magic: new Map(),
+  grades: new Map(),
+  waterWorks: [],
+});
 
 /** Dispatch supplied initialization strategies, independently of maintained-place queries. */
 export function eventChanges<State>(
@@ -174,7 +204,7 @@ export function applyPlaceEvent(state: GenerationState, event: PoiStruck) {
     take(target, change);
     if (isGroundTarget(change.band)) executeGroundTarget(map, change.band, change.cell, target);
     else {
-      if (!isMutablePhysicalName(change.band))
+      if (!isMutablePhysicalName(change.band) || waterBands.has(change.band))
         throw new Error(`Unsupported event target: ${change.band}`);
       const band = map[change.band],
         current = band.get(change.cell);
@@ -278,6 +308,7 @@ export function declarePlaceEffects(state: GenerationState, ledger: Contribution
       const total = totalOver(map[band].get(cell) - ledger.appliedTo(band, cell), change);
       ledger.add(band, cell, total);
     }
+  carryOutWaterWorks(map, declared.waterWorks);
   writeMagic(state, declared);
   const magic = state.physical?.magic;
   if (magic)
@@ -328,12 +359,7 @@ const recomputedBands: readonly MutablePhysicalBufferName[] = [
   "Temperature",
   "Moisture",
   "Rainfall",
-  "Runoff",
-  "RiverOrders",
-  "FlowAccumulation",
   "Slope",
-  "WaterDepths",
-  "WaterSurfaceElevations",
 ];
 /** The world's cycle, once per epoch: declared totals replace the last epoch's, so nothing compounds. */
 export function applyPlaceEffects(state: GenerationState) {

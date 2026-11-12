@@ -145,7 +145,16 @@ export const regionalOperations: ScheduledStep[] = [
     id: "climate",
     message: "Developing captured climate on local terrain",
     produces: (
-      ["Temperature", "Rainfall", "Snowfall", "Moisture", "WindX", "WindY", "Seasonality"] as const
+      [
+        "Temperature",
+        "Rainfall",
+        "Snowfall",
+        "Moisture",
+        "WindX",
+        "WindY",
+        "Seasonality",
+        "AirDemand",
+      ] as const
     ).map(fieldProduct),
     operation: climate,
   },

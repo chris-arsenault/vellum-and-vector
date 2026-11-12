@@ -35,7 +35,7 @@ export function contributingWater(
     water = workingArray(map, "float64", "lakes:water");
   for (let i = 0; i < count; i++) {
     const rank = map.DrainageRanks.get(i);
-    if (rank < 0 || rank >= count || order.get(rank) >= 0)
+    if (rank < 0 || rank >= count || order.get(count - 1 - rank) >= 0)
       throw new Error("Priority-flood ranks are not a complete order.");
     // The flood's ranks run from the outlets up, so the highest rank is gathered first.
     order.set(count - 1 - rank, i);
@@ -82,10 +82,10 @@ function basinCells(map: PhysicalField, component: Depression) {
  * yield as land, already counted in what reaches the lake, had the land's evaporation taken
  * from it, so the lake is charged the difference.
  */
-export function openWaterLoss(map: PhysicalField, i: number) {
+export function openWaterLoss(map: PhysicalField, p: PhysicalProfile, i: number) {
   const fell = map.Rainfall.get(i) + map.Snowfall.get(i),
     yielded = map.Runoff.get(i) + map.WaterRecharge.get(i) + map.SnowKept.get(i);
-  return Math.max(0, yearlyAirDemand(map, i) - Math.max(0, fell - yielded));
+  return Math.max(0, yearlyAirDemand(map, p, i) - Math.max(0, fell - yielded));
 }
 function stageBudget(
   map: PhysicalField,
@@ -104,7 +104,7 @@ function stageBudget(
     while (end < cells.length && map.Elevation.get(cells[end]) === floor) {
       const i = cells[end],
         area = map.mesh.area(i);
-      groupLoss += depthRateToDischarge(openWaterLoss(map, i) + p.LakeInfiltrationLoss, area);
+      groupLoss += depthRateToDischarge(openWaterLoss(map, p, i) + p.LakeInfiltrationLoss, area);
       end++;
     }
     // Candidate flooded cells use the same effective yield already routed through withdrawals.
@@ -125,7 +125,7 @@ export function lakeLosses(map: PhysicalField, context: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) !== 2) continue;
     const area = map.mesh.area(i);
-    losses.evaporation += depthRateToDischarge(openWaterLoss(map, i), area);
+    losses.evaporation += depthRateToDischarge(openWaterLoss(map, p, i), area);
     losses.seepage += depthRateToDischarge(p.LakeInfiltrationLoss, area);
   }
   return losses;

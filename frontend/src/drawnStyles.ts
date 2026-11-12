@@ -154,6 +154,7 @@ function shapeStyle(
   resolution: number,
   c: DrawnStyleContext
 ): Style[] {
+  if (f.kind === "dryBed") return river(f, layer, resolution, c);
   const special = specialStyle(f, c);
   if (special) return [special];
   if (f.layerId === "magic") return magicStyle(f, layer, resolution, c);
@@ -194,7 +195,12 @@ function river(
 ): Style[] {
   const result = featureStyle(
     f,
-    { ...layer, color: c.view.style === "ink" ? ink : "#557e83", labels: false },
+    {
+      ...layer,
+      // A bed with no river in it is the colour of dry ground, not of water.
+      color: c.view.style === "ink" ? ink : f.kind === "dryBed" ? "#a08a6a" : "#557e83",
+      labels: false,
+    },
     resolution
   );
   return Array.isArray(result) ? result : [result];

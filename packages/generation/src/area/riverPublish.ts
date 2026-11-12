@@ -12,6 +12,7 @@ import {
 } from "../generationFeatures";
 import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
 import type { GenerationState, MapProcessContext } from "../process";
+import { publishDryBeds } from "./dryBeds";
 import {
   drainageReaches,
   drawnRivers,
@@ -135,6 +136,7 @@ function publishCourse(
         order: work.map.RiverOrders.get(head),
         junctions,
         discharge: profiles.discharges[0],
+        regime: courseRegime(profiles.flowingMonths),
         basinDischarge,
         ...profiles,
         sourceAlgorithm: "atlas-1",
@@ -144,6 +146,15 @@ function publishCourse(
     ids.push(feature.id);
   }
   return ids;
+}
+/**
+ * What a river is through the year, by the greater part of its course: running all year,
+ * running in its wet season only, or a named course that carries no river's flow now.
+ */
+export function courseRegime(flowingMonths: readonly number[] = []) {
+  const months = flowingMonths.map(Math.round).sort((a, b) => a - b),
+    middle = months[Math.floor(months.length / 2)] ?? 0;
+  return middle >= 12 ? "perennial" : middle > 0 ? "seasonal" : "dry";
 }
 function riverWater(state: GenerationState) {
   const work = state.physical!,
@@ -203,6 +214,7 @@ export function publishRivers(state: GenerationState, context: MapProcessContext
     if (paths.incoming) releaseWorking(map, paths.incoming);
   }
   establishRivers(state, reaches);
+  publishDryBeds(state);
   state.domain.world.drainage = {
     ...state.domain.world.drainage,
     [state.domain.scope.areaId]: {

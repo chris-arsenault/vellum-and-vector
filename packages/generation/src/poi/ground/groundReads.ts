@@ -137,7 +137,7 @@ export const spillDepthAt = (state: GenerationState, cell: number) => {
 };
 /** Whether rain and snow fall short of what the air takes up by enough to keep a basin closed. */
 export const closedByAridity = (state: GenerationState, cell: number) =>
-  basinClosedByAridity(fieldOf(state), cell);
+  basinClosedByAridity(fieldOf(state), state.physical!.profile, cell);
 const saltPanRule = magicRule("salt", "pan"),
   glassRule = magicRule("salt", "flat");
 /** A dry, bare, level floor below the spill of its basin: a pan with no magic in it. */

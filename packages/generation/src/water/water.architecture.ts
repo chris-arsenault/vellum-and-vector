@@ -3,6 +3,8 @@ import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import { waterBandNames } from "@atlas/domain";
 import { source, sourceFiles } from "../architectureReach";
+import { Contributions } from "../coupling/fieldContributions";
+import type { MutablePhysicalBufferName } from "../world/field";
 
 /**
  * Water has one owner (docs/adr/0014-water-is-a-column-and-a-lasting-network.md). Everything
@@ -13,8 +15,8 @@ import { source, sourceFiles } from "../architectureReach";
  * owner-direction(2026-11-12): water gets the same intentional paradigms and columnar state as geology and society.
  *
  * A writer that appears outside the owner is brought under it or made to ask; it is never
- * exempted here. What places declare on a water band through the contributions ledger is not
- * seen by these checks.
+ * exempted here. A place changes water by asking: the contributions ledger refuses a water
+ * band outright.
  */
 const files = () => [...sourceFiles(source)].map((path) => relative(source, path));
 const text = (path: string) => readFileSync(join(source, path), "utf8");
@@ -35,6 +37,11 @@ describe("water has one owner", () => {
   const writes = new RegExp(`\\b(${bands.join("|")})\\b\\s*\\)?\\s*\\.(set|add|fill|copyFrom)\\(`);
   it("writes water bands only inside the water namespace", () => {
     expect(lines(outside(), writes)).toEqual([]);
+  });
+  it("lets no place put a change on water through the contributions ledger", () => {
+    const ledger = new Contributions(1);
+    for (const band of waterBandNames)
+      expect(() => ledger.add(band as MutablePhysicalBufferName, 0, 1), band).toThrow();
   });
   it("keeps no water state beside the map: no store keyed by map outside the owner's own", () => {
     // State held in a side store is not saved with a run and not inherited by a finer map.

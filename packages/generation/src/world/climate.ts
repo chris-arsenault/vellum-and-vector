@@ -7,6 +7,7 @@ import { marchAirColumns, saturation } from "./airColumn";
 import { beltRainout } from "./belts";
 import { MapScale } from "@atlas/domain";
 import { releaseWorking } from "./physicalNumerics";
+import { yearlyAirDemand } from "../water/closedBasin";
 
 /** Annual-mean insolation departure from the global mean, in native units. */
 export function insolationTemperature(p: PhysicalProfile, latitude: number) {
@@ -20,6 +21,15 @@ export function seasonality(p: PhysicalProfile, latitude: number, continentality
     (p.SeasonalityEquator + p.SeasonalityPolar * s * s) *
     (p.MaritimeSeasonality + (1 - p.MaritimeSeasonality) * clamp(continentality, 0, 1))
   );
+}
+/**
+ * How far a cell's year swings between its seasons, from the sea's share (the maritime
+ * floor) to 1 deep inland: its temperature range over the most its latitude could have.
+ */
+export function seasonalSwing(p: PhysicalProfile, latitude: number, halfRange: number) {
+  const s = Math.sin((latitude * Math.PI) / 180),
+    most = p.SeasonalityEquator + p.SeasonalityPolar * s * s;
+  return most > 0 ? clamp(halfRange / most, 0, 1) : 0;
 }
 /** Native temperature loss for a measured altitude change in the atmosphere's dimensional frame. */
 export function altitudeTemperature(metres: number, lapse: number, elevationScale: number) {
@@ -137,5 +147,7 @@ export function precipitation(map: PhysicalField, c: PhysicalContext) {
     const { snowfall, rainfall } = partitionPrecipitation(total, snow);
     map.Snowfall.set(i, snowfall);
     map.Rainfall.set(i, rainfall);
+    // What the air could take of that over the year: the one figure water and plants share.
+    map.AirDemand.set(i, yearlyAirDemand(map, p, i));
   }
 }

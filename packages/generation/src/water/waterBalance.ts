@@ -32,15 +32,27 @@ export function evaporatedShare(demand: number, supply: number) {
 /**
  * What the air can evaporate in a month at a monthly mean temperature, in millimetres
  * (Hamon's method: 13.97 × days × daylight² × saturated vapour density, with daylight in
- * units of twelve hours). Daylight is taken at its yearly mean of twelve hours, so a high
- * latitude's long summer days are not counted. Nothing evaporates from frozen ground.
+ * units of twelve hours). A high latitude's long summer days take more than its warmth
+ * alone would. Nothing evaporates from frozen ground.
  */
-export function airDemand(celsius: number) {
+export function airDemand(celsius: number, daylight = 1) {
   if (!(celsius > 0)) return 0;
   const days = 365.25 / months,
     vapour = (4.95 * Math.exp(0.062 * celsius)) / 100;
-  return 13.97 * days * vapour;
+  return 13.97 * days * daylight * daylight * vapour;
 }
+/**
+ * The length of the day in units of twelve hours, at a latitude when the sun stands
+ * `declination` degrees towards that latitude's pole: 1 at the equator and at the equinox,
+ * 0 in the polar night and 2 under the midnight sun (the sunrise equation).
+ */
+export function dayLength(latitude: number, declination: number) {
+  const radians = Math.PI / 180,
+    x = -Math.tan(Math.abs(latitude) * radians) * Math.tan(declination * radians);
+  return x >= 1 ? 0 : x <= -1 ? 2 : (2 * Math.acos(x)) / Math.PI;
+}
+/** Where the sun stands in each month, from −1 over the other hemisphere's tropic to 1 over this one's. */
+export const sunStanding = (month: number) => -Math.cos((2 * Math.PI * month) / months);
 /** What a cell's ground and climate are, as the budget needs them. */
 export interface WaterGround {
   /** Per month: rain and snow that fall, and what the air could evaporate. */

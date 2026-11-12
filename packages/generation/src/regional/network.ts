@@ -81,7 +81,8 @@ export function growNetwork(state: RegionalState): NetworkWork {
   return network;
 }
 
-const closedBasin = (state: RegionalState, i: number) => closedByAridity(state.physical.map, i);
+const closedBasin = (state: RegionalState, i: number) =>
+  closedByAridity(state.physical.map, state.physical.profile, i);
 
 /**
  * Roots: every land cell beside the sea or at an exit across the frame drains out; lake cells

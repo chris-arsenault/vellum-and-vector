@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { PhysicalField } from "../world/field";
-import { airDemand, evaporated } from "./waterBalance";
+import { airDemand, dayLength, evaporated } from "./waterBalance";
 import { moveDepth, moveFlow, moveWater, waterAccount } from "./waterLedger";
 
 const map = () => ({}) as PhysicalField;
@@ -49,6 +49,17 @@ it("asks more of the air the warmer the month, and nothing of a frozen one", () 
   expect(airDemand(5)).toBeCloseTo(28.7, 0);
   expect(airDemand(18)).toBeCloseTo(64.2, 0);
   expect(airDemand(25)).toBeCloseTo(99.1, 0);
+});
+
+it("asks more of the air through long days and nothing through the polar night", () => {
+  expect(dayLength(0, 23.5)).toBeCloseTo(1, 12);
+  expect(dayLength(50, 0)).toBeCloseTo(1, 12);
+  // About eighteen and a half hours at 60 degrees in midsummer, five and a half in midwinter.
+  expect(dayLength(60, 23.5) * 12).toBeCloseTo(18.5, 0);
+  expect(dayLength(-60, -23.5) * 12).toBeCloseTo(5.5, 0);
+  expect(dayLength(80, 23.5)).toBe(2);
+  expect(dayLength(80, -23.5)).toBe(0);
+  expect(airDemand(18, 1.5)).toBeCloseTo(airDemand(18) * 2.25, 9);
 });
 
 it("draws a drying soil down towards empty, giving less for the same demand each time", () => {

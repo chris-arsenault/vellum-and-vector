@@ -57,9 +57,16 @@ export const neutralEcology: EcologyForcing = {
   verdure: 0,
   salting: 0,
 };
-/** Potential evaporation in metres/year from relative depth controls and temperature in °C. */
-export const potentialEvaporation = (celsius: number, scale: MapScale) =>
-  scale.length(Math.max(6.25e-8, 7.5e-8 + 1.125e-8 * celsius));
+/**
+ * Plant water: the year's rain and snow over what the air could evaporate, at most 1. The
+ * air's demand is the climate's own figure, the one the water budget and the lakes use.
+ * Where the air asks nothing (frozen all year) whatever falls is all surplus.
+ */
+export function plantWater(map: PhysicalField, i: number) {
+  const fell = map.Rainfall.get(i) + map.Snowfall.get(i),
+    demand = map.AirDemand.get(i);
+  return demand > 0 ? Math.min(1, fell / demand) : fell > 0 ? 1 : 0;
+}
 export function environment(map: PhysicalField, i: number, forcing = neutralEcology) {
   // A river carrying magical warmth is warmer than its banks and does not freeze.
   const warmth = map.RiverOrders.get(i) >= 1 ? map.RiverWarmth.get(i) : 0;
@@ -72,11 +79,10 @@ export function environment(map: PhysicalField, i: number, forcing = neutralEcol
     ice > map.scale.resolveMeasure(frozenIce) &&
     !(warmth >= 50 && ice <= map.scale.length(0.0000125));
   const warmSeason = unit((temperature + 8) / 18) * unit((52 - temperature) / 18);
-  const rain = MapScale.metres(map.Rainfall.get(i) + map.Snowfall.get(i), "mm");
-  // Plant water is the aridity index: precipitation over evaporative demand,
-  // about 1.4 m/year at 25 °C. Column humidity is not surface humidity: heavy
-  // rainout drains the column exactly where plants have most water.
-  const moisture = Math.min(1, rain / potentialEvaporation(temperature, map.scale));
+  // Plant water is the aridity index: precipitation over evaporative demand. Column
+  // humidity is not surface humidity: heavy rainout drains the column exactly where
+  // plants have most water.
+  const moisture = plantWater(map, i);
   // Climate supplies each cell's seasonal half-range; the epoch's seasonality
   // scales it, with the neutral 0.3 leaving it unchanged. Before climate has
   // run, the former uniform 7.5 °C half-range at neutral seasonality applies.

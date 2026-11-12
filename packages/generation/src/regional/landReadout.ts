@@ -1,6 +1,7 @@
 import { ask } from "../coupling/answers";
 import type { MapProcessContext } from "../process";
 import { nativeContext } from "../world/context";
+import type { PhysicalField } from "../world/field";
 import { months } from "../water/waterBalance";
 import { waterAccountLine } from "../water/waterLedger";
 import { isContent } from "./lattice";
@@ -25,7 +26,13 @@ const measured = {
   recharge: 0,
   allYear: 0,
   partYear: 0,
+  warmth: 0,
+  demand: 0,
+  oldBed: 0,
 };
+/** 1 where the ground keeps the bed of a river that no longer runs there. */
+const oldBed = (map: PhysicalField, cell: number) =>
+  map.RiverOrders.get(cell) <= 0 && map.RiverMemory.get(cell) > 0 ? 1 : 0;
 export function landReadout(state: RegionalState, context: MapProcessContext) {
   const map = state.physical.map,
     season = ask(map, "season", nativeContext(state, context, 0)),
@@ -51,13 +58,18 @@ export function landReadout(state: RegionalState, context: MapProcessContext) {
     sums.recharge += map.WaterRecharge.get(cell) * area;
     sums.allYear += (flowing >= months ? 1 : 0) * area;
     sums.partYear += (flowing > 0 && flowing < months ? 1 : 0) * area;
+    sums.warmth += (map.Temperature.get(cell) / 10 - 30) * area;
+    sums.demand += map.AirDemand.get(cell) * area;
+    sums.oldBed += oldBed(map, cell) * area;
   }
   const mean = (value: number, digits = 3) => (land > 0 ? value / land : 0).toFixed(digits);
   return (
     `dry land ${(all > 0 ? (100 * land) / all : 0).toFixed(1)}% of the map; over it: ` +
     `growing season ${mean(sums.season)}, soil ${mean(sums.soil)} m, moisture ${mean(sums.moisture)}, ` +
     `slope ${mean(sums.slope)}, tree cover ${mean(sums.trees)}, grass ${mean(sums.grass)}, ` +
-    `on a river ${mean(sums.river)}; water: ${mean(sums.rain, 0)} mm falls, ` +
+    `on a river ${mean(sums.river)}, on an old bed ${mean(sums.oldBed)}; ` +
+    `mean warmth ${mean(sums.warmth, 1)} degrees, the air could take ${mean(sums.demand, 0)} mm; ` +
+    `water: ${mean(sums.rain, 0)} mm falls, ` +
     `${mean(sums.runoff, 0)} mm runs off, ${mean(sums.recharge, 0)} mm sinks in; ` +
     `a river's flow all year on ${mean(sums.allYear)} of it, part of the year on ${mean(sums.partYear)}; ` +
     waterAccountLine(map)

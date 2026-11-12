@@ -93,6 +93,7 @@ export const atmosphere = fieldQuery(
     provides: [
       "Temperature",
       "Seasonality",
+      "AirDemand",
       "WindX",
       "WindY",
       "WindSpeed",

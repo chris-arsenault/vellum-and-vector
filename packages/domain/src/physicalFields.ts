@@ -167,6 +167,8 @@ const metricFields = [
   "OceanDistance",
   // Seasonal temperature half-range in °C; zero until temperature first runs.
   "Seasonality",
+  // What the air can evaporate over the year, in mm, by each month's warmth and day length.
+  "AirDemand",
   // Surface wind speed in m/s; WindX/WindY carry its direction.
   "WindSpeed",
   // Water depth rates in mm/year retain fractional amounts when map scale changes.
@@ -241,6 +243,9 @@ const metricFields = [
   // cell held while it was a lake, which outlives the lake for Salt's dead-lake origin.
   "Salting",
   "LakeMemory",
+  // The order of the river a cell carries or last carried. A bed with no river in it now is
+  // an old course; it stays while the ground is too dry to heal it.
+  "RiverMemory",
   // Hallowed's warding (0 to 1): every other system is scaled down inside and lands on the
   // rim; and the kept-years of the lines people keep walking, forgetting over a memory.
   "Warding",

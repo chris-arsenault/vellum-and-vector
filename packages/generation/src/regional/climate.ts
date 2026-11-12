@@ -9,6 +9,7 @@ import {
 import { contributeForcing } from "../world/atlasForcing";
 import { environment } from "../world/ecologyEnvironment";
 import { latitudeAt } from "../world/latitude";
+import { yearlyAirDemand } from "../water/closedBasin";
 import { releaseWorking } from "../world/physicalNumerics";
 import { deflectWind, windTerrain } from "../world/windTerrain";
 import { physicalProfile, type PhysicalProfile } from "../world/profile";
@@ -245,6 +246,7 @@ function splitPrecipitation(state: RegionalState, i: number, rainFactor: number)
   );
   map.Snowfall.set(i, snowfall);
   map.Rainfall.set(i, rainfall);
+  map.AirDemand.set(i, yearlyAirDemand(map, profile, i));
 }
 
 /** Present temperature in °C. */

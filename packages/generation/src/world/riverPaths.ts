@@ -271,6 +271,8 @@ export function riverPath(map: PhysicalField, paths: RiverPaths, members: number
       discharges: profile(members, stations, map.FlowAccumulation),
       widths: profile(members, stations, map.RiverWidth),
       depths: profile(members, stations, map.RiverDepth),
+      // The months of the year each stretch carries a river's flow: twelve runs all year.
+      flowingMonths: profile(members, stations, map.FlowingMonths),
       catchmentAreas: profile(members, stations, map.CatchmentArea),
       elevations: profile(members, stations, map.DrainageElevations, MapScale.metres(1, "native")),
       bedElevations: paths.elevationAt

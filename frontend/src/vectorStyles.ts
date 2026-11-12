@@ -203,6 +203,7 @@ function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, r
           geometry: new LineString([coordinates[i], coordinate]),
           stroke: new Stroke({
             color,
+            lineDash: feature.kind === "river" ? stretchDash(feature, i) : undefined,
             width: segmentWidth(
               feature,
               (Number(widths[i]) + Number(widths[i + 1])) / 2,
@@ -216,6 +217,7 @@ function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, r
 function physicalStrokeWidth(feature: AtlasFeature, resolution: number) {
   if (feature.kind === "fault") return 1;
   if (feature.layerId === "roads") return routeStrokeWidth(feature);
+  if (feature.kind === "dryBed") return 1.2;
   if (feature.kind !== "river") return 2;
   return channelStrokeWidth(riverWidth(feature), resolution);
 }
@@ -225,8 +227,23 @@ function routeStrokeWidth(feature: AtlasFeature) {
   if (feature.kind === "lane") return routeWidths.lane;
   return routeWidths[String(feature.attributes.roadClass ?? "road")] ?? routeWidths.road;
 }
+/** A river that runs only in its wet season is a broken line; a bed with no river is dotted. */
+const seasonalDash = [8, 5],
+  dryDash = [1, 5];
+function waterLineDash(feature: AtlasFeature) {
+  if (feature.kind === "dryBed" || feature.attributes.regime === "dry") return dryDash;
+  return feature.attributes.regime === "seasonal" ? seasonalDash : undefined;
+}
+/** How a stretch between two points of a river's course is drawn, by its months in flow. */
+function stretchDash(feature: AtlasFeature, i: number) {
+  const months = feature.attributes.flowingMonths;
+  if (!Array.isArray(months)) return waterLineDash(feature);
+  const flowing = Math.min(Number(months[i]), Number(months[i + 1]));
+  return flowing >= 11.5 ? undefined : flowing >= 0.5 ? seasonalDash : dryDash;
+}
 /** Tracks and sea lanes are broken lines; roads and highways are solid. */
 function routeLineDash(feature: AtlasFeature) {
+  if (feature.layerId === "rivers") return waterLineDash(feature);
   if (feature.layerId !== "roads") return undefined;
   if (feature.kind === "lane") return [6, 6];
   return feature.attributes.roadClass === "track" ? [3, 3] : undefined;

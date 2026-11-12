@@ -6,7 +6,11 @@ import { groundOf } from "../rock/ground";
 import { surfacePorosity } from "../rock/groundQueries";
 import type { PhysicalContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
-import { airDemand, monthlyWarmth, months, waterYear, type WaterYear } from "./waterBalance";
+import { rainThroughYear } from "../world/belts";
+import { seasonalSwing } from "../world/climate";
+import { latitudeAt } from "../world/latitude";
+import { airDemandThroughYear } from "./closedBasin";
+import { months, waterYear, type WaterYear } from "./waterBalance";
 
 /**
  * Every land cell's water for the year, from one budget (see `waterBalance`). The year's rain
@@ -16,7 +20,6 @@ import { airDemand, monthlyWarmth, months, waterYear, type WaterYear } from "./w
  * year, what its surface gives on average, in its wettest month and in its driest, and what
  * sank for the groundwater; and it keeps the twelve months for the rivers to gather.
  */
-const degrees = (native: number) => native / 10 - 30;
 const millimetres = (metres: number) => MapScale.inUnits(metres, "mm");
 
 /** A cell's year of water: the band of each month, coldest first, held on the map itself. */
@@ -42,20 +45,26 @@ const year = {
   snow: new Float64Array(months),
   demand: new Float64Array(months),
   melt: new Float64Array(months),
+  share: new Float64Array(months),
 };
 /** A cell's twelve months of rain, snow, demand and melt, from its yearly climate. */
 function climateYear(map: PhysicalField, c: PhysicalContext, i: number) {
   // A river carrying magical warmth warms the air over it, which then takes more.
-  const warmth = monthlyWarmth(
-      degrees(map.Temperature.get(i) + map.RiverWarmth.get(i)),
-      map.Seasonality.get(i)
+  const warmth = airDemandThroughYear(map, c.Profile, i, year.demand, map.RiverWarmth.get(i)),
+    latitude = latitudeAt(c.Profile, map, i),
+    // The year's fall comes in the months the rain belts stand over the cell.
+    share = rainThroughYear(
+      c.Profile,
+      latitude,
+      seasonalSwing(c.Profile, latitude, map.Seasonality.get(i)),
+      year.share
     ),
-    falling = (map.Rainfall.get(i) + map.Snowfall.get(i)) / months;
+    fell = map.Rainfall.get(i) + map.Snowfall.get(i);
   for (let at = 0; at < months; at++) {
-    const thawed = warmth[at] > 0;
+    const thawed = warmth[at] > 0,
+      falling = fell * share[at];
     year.rain[at] = thawed ? falling : 0;
     year.snow[at] = thawed ? 0 : falling;
-    year.demand[at] = airDemand(warmth[at]);
     year.melt[at] = c.Profile.SnowMeltPerDegree * Math.max(0, warmth[at]);
   }
   return year;

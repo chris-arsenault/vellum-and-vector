@@ -1,4 +1,7 @@
+import { waterBandNames } from "@atlas/domain";
 import { type MutablePhysicalBufferName, type PhysicalField } from "../world/field";
+
+const waterBands: ReadonlySet<string> = new Set(waterBandNames);
 
 /** Material quantities stay nonnegative; covers and per-mille intensities keep their scales. */
 export const ledgerFloors: Partial<Record<MutablePhysicalBufferName, number>> = {
@@ -13,9 +16,7 @@ export const ledgerFloors: Partial<Record<MutablePhysicalBufferName, number>> = 
   WetlandCover: 0,
   TreeCover: 0,
   BroadleafSaplings: 0,
-  SoilWater: 0,
   AquaticProductivity: 0,
-  WaterDepths: 0,
 };
 export const ledgerCeilings: Partial<Record<MutablePhysicalBufferName, number>> = {
   FractureConductance: 1000,
@@ -61,6 +62,8 @@ export class Contributions {
   }
   /** Declare part of the total change this evaluation wants on `band` at `i`. */
   add(band: MutablePhysicalBufferName, i: number, amount: number) {
+    // Water has one owner: what changes water asks it, and is never a contribution here.
+    if (waterBands.has(band)) throw new Error(`${band} is water's to write, not a contribution.`);
     if (!amount) return;
     let values = this.desired.get(band);
     if (!values) {

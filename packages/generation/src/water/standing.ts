@@ -36,6 +36,13 @@ export function impound(map: PhysicalField, i: number, body: number, crest: numb
   setWaterSurface(map, i, crest);
   map.RiverOrders.set(i, 0);
 }
+/**
+ * A work that holds water up on its cell (a mill pond, a weir, a flooded threshold) keeps the
+ * surface there at least so high. It makes no lake and moves no water.
+ */
+export function holdWaterSurface(map: PhysicalField, i: number, surface: number) {
+  if (surface > map.WaterSurfaceElevations.get(i)) map.WaterSurfaceElevations.set(i, surface);
+}
 /** A lake bed that has given up what its water left behind remembers no lake. */
 export function forgetLake(map: PhysicalField, i: number) {
   map.LakeMemory.set(i, 0);

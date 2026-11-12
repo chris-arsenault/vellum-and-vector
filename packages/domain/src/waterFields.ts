@@ -21,6 +21,8 @@ export const waterColumn = {
   body: "WaterBodyIds",
   /** The deepest water the cell has held as a lake. */
   lakeMemory: "LakeMemory",
+  /** The order of the river the cell carries or last carried: what stays of an old course. */
+  riverMemory: "RiverMemory",
 } as const satisfies Record<string, PhysicalFieldName>;
 
 /** What a cell's year of water gives: to the surface, and into the ground. */

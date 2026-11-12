@@ -39,6 +39,7 @@ export const featureDefinitions: Definition[] = [
   ["fault", "faults", "Fault traces", "Terrain and geology", "Tectonics"],
   ["waterfall", "geology", "Waterfalls", "Water and coasts", "Watercourses"],
   ["river", "rivers", "Rivers", "Water and coasts", "Watercourses"],
+  ["dryBed", "rivers", "Dry river beds", "Water and coasts", "Watercourses"],
   ["lake", "lakes", "Lakes", "Water and coasts", "Water bodies"],
   ["ocean", "oceans", "Oceans and seas", "Water and coasts", "Water bodies"],
   ["fjord", "geology", "Fjords", "Water and coasts", "Water bodies"],
