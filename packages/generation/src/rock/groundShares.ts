@@ -1,7 +1,7 @@
 import type { PhysicalField } from "../world/field";
 import { reconcileWater } from "../water/column";
 import { clamp } from "../world/math";
-import { columnFields, columns, materialProperties, type Column } from "@atlas/domain";
+import { columnFields, materialProperties, type Column } from "@atlas/domain";
 import { writeCargo, touchCargo } from "./groundCargo";
 import {
   copyLayer,
@@ -62,7 +62,7 @@ export function resolveCut(map: PhysicalField, cell: number, share: number) {
     held = clamp(share, 0, 1);
   owned.BedrockElevation.set(cell, uncut - held * map.GroundCutDepth.get(cell));
   if (held > 0) owned.GroundCutShare.set(cell, held);
-  else resetShares(map, cell);
+  else clearIncision(map, cell);
   projectGround(map, cell);
 }
 /** Move one share's rock surface; callers own the corresponding addition/removal of material. */
@@ -123,14 +123,23 @@ export function groundSection(map: PhysicalField, cell: number, facet: GroundFac
 }
 /** A fresh crust or explicit imported initial state starts with no inherited incision. */
 export function resetShares(map: PhysicalField, cell: number) {
+  clearIncision(map, cell);
+  clearColumn(map, cell, "loose");
+}
+
+/** An interfluve keeps its own loose cover when no inherited valley occupies it. */
+function clearIncision(map: PhysicalField, cell: number) {
   const owned = groundStorage(map);
   owned.GroundCutShare.set(cell, 0);
   owned.GroundCutDepth.set(cell, 0);
   owned.GroundCutCover.set(cell, 0);
-  for (const column of columns.filter((column) => column !== "land")) {
-    for (let slot = 0; slot < columnFields[column].depth.length; slot++)
-      writeCargo(map, cell, slot, column);
-    for (const property of materialProperties)
-      for (const name of columnFields[column][property]) owned[name].set(cell, 0);
-  }
+  clearColumn(map, cell, "cut");
+  clearColumn(map, cell, "cutLoose");
+}
+
+function clearColumn(map: PhysicalField, cell: number, column: Column) {
+  for (let slot = 0; slot < columnFields[column].depth.length; slot++)
+    writeCargo(map, cell, slot, column);
+  for (const property of materialProperties)
+    for (const name of columnFields[column][property]) groundStorage(map)[name].set(cell, 0);
 }

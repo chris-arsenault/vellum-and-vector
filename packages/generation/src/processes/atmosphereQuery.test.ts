@@ -4,7 +4,7 @@ import { createMesh } from "../world/mesh";
 import { physicalContext } from "../world/context";
 import { atlasPhysicalProfile } from "../world/atlasProfile";
 import { atmosphere } from "./climateProcesses";
-import { meltwater, waterOff } from "./waterProcesses";
+import { meltwater, waterTransfer } from "./waterProcesses";
 import { bindOperation, defineCommand, readOperation, runOperation } from "../processOperation";
 
 it("temperature and rainfall consumers share the selected completed atmospheric result", () => {
@@ -20,12 +20,18 @@ it("temperature and rainfall consumers share the selected completed atmospheric 
     map.Seasonality.set(0, 9);
     map.Rainfall.set(0, 640);
   });
-  for (const consumer of [meltwater, waterOff])
-    bindOperation(map, consumer.operation, () => {
-      seen.push([map.Temperature.get(0), map.Seasonality.get(0), map.Rainfall.get(0)]);
-    });
+  const recordClimate = () => {
+    seen.push([map.Temperature.get(0), map.Seasonality.get(0), map.Rainfall.get(0)]);
+  };
+  bindOperation(map, meltwater.operation, recordClimate);
+  const budgetConsumer = defineCommand(
+    "supplied budget consumer",
+    "work",
+    recordClimate,
+    waterTransfer.operation.dependencies
+  );
   readOperation(map, meltwater.operation, input);
-  readOperation(map, waterOff.operation, input);
+  runOperation(map, budgetConsumer, input);
   expect(seen).toEqual([
     [427, 9, 640],
     [427, 9, 640],
@@ -36,7 +42,7 @@ it("temperature and rainfall consumers share the selected completed atmospheric 
     defineCommand("changed forcing", "event", () => {}, []),
     undefined
   );
-  readOperation(map, waterOff.operation, input);
+  runOperation(map, budgetConsumer, input);
   expect(reads).toBe(2);
 });
 

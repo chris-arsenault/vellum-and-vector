@@ -1,10 +1,18 @@
 import { expect, it } from "vitest";
 import { units } from "../world/math";
 import { createWorldMesh } from "../world/worldMesh";
-import { facetSurface, moveFacet, openCut, projectGround, resolveCut } from "./groundShares";
+import {
+  facetSurface,
+  moveFacet,
+  openCut,
+  projectGround,
+  resetShares,
+  resolveCut,
+} from "./groundShares";
 import { createTestField } from "./groundTestFixture";
 import { rockCatalogue as rocks } from "./rockCatalogue";
-import { setLayer } from "./rockColumn";
+import { readLayer, setLayer } from "./rockColumn";
+import { cargoIdentity } from "./groundCargoIdentity";
 
 /** Four cells of one coarse cell's ground: a surface at 100 with a quarter of it cut 40 deep. */
 function inherited() {
@@ -50,4 +58,48 @@ it("changes nothing on ground that inherited no valley", () => {
   resolveCut(map, 0, 1);
   expect(map.Elevation.get(0)).toBe(before);
   expect(map.GroundCutShare.get(0)).toBe(0);
+});
+
+it("keeps the uncut surface's loose material and cargo when a finer cell holds no valley", () => {
+  const map = inherited(),
+    key = cargoIdentity(map, "captured-cover"),
+    cargo = new Float64Array([key, rocks.shale.code, 4]);
+  setLayer(
+    map,
+    1,
+    0,
+    rocks.shale.code,
+    units(5),
+    {
+      deposited: 7,
+      formedMin: 2,
+      formedMax: 3,
+      cargo,
+    },
+    "loose"
+  );
+  setLayer(map, 1, 0, rocks.basalt.code, units(2), {}, "cutLoose");
+  projectGround(map, 1);
+  const surface = facetSurface(map, 1, "land");
+  resolveCut(map, 1, 0);
+  expect(readLayer(map, 1, 0, "loose")).toMatchObject({
+    kind: rocks.shale.code,
+    depth: units(5),
+    deposited: 7,
+    formedMin: 2,
+    formedMax: 3,
+  });
+  expect(readLayer(map, 1, 0, "loose").cargo).toEqual(cargo);
+  expect(map.Elevation.get(1)).toBe(surface);
+  expect(readLayer(map, 1, 0, "cutLoose").depth).toBe(0);
+});
+
+it("still clears loose cover when explicitly resetting fresh crust", () => {
+  const map = inherited();
+  setLayer(map, 0, 0, rocks.shale.code, units(5), {}, "loose");
+  setLayer(map, 0, 0, rocks.basalt.code, units(2), {}, "cutLoose");
+  resetShares(map, 0);
+  expect(readLayer(map, 0, 0, "loose").depth).toBe(0);
+  expect(readLayer(map, 0, 0, "cutLoose").depth).toBe(0);
+  expect(readLayer(map, 0, 0, "land").kind).toBe(rocks.quartzite.code);
 });

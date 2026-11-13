@@ -1,27 +1,30 @@
 import { chartCopies, chartFootprint, interpolateProfile, MapScale, spatial } from "@atlas/domain";
 import type { Geometry, LineString } from "geojson";
 import { nativePosition } from "../world/atlasWorkspace";
+import { edgeLeadingTo } from "../world/mesh";
 import { releaseWorking } from "../world/physicalNumerics";
 import { meanderReach } from "../world/riverMeanders";
 import { createRiverPaths, riverPath, type RiverPaths } from "../world/riverPaths";
 import {
   generationFeature,
   generationFeatures,
+  removeGenerationFeature,
   writeGenerationFeature,
 } from "../generationFeatures";
+import { generationNetworks, removeGenerationReach } from "../generationNetworks";
 import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
 import type { GenerationState, MapProcessContext } from "../process";
-import { reachAt, reachesOf, riverSample } from "../water/riverKeeping";
-import type { Reach } from "../water/reaches";
+import {
+  associateRiverPublication,
+  reachAt,
+  reachById,
+  reachesOf,
+  riverSample,
+} from "../water/riverKeeping";
+import type { ReachView } from "../water/reaches";
 import { captureRivers } from "../water/networkResources";
 import { mapScale, worldRiverLength } from "../worldSignificance";
-import {
-  basinDischarges,
-  drawnRivers,
-  establishRivers,
-  keptReaches,
-  riversOf,
-} from "./riverCourses";
+import { basinDischarges, drawnRivers, keptReaches, riversOf } from "./riverCourses";
 
 type Profiles = Record<string, number[]>;
 /** One unbroken stretch of a river: its cells head to end, its line and the profiles along it. */
@@ -208,7 +211,7 @@ function lineOf(state: GenerationState, cells: readonly number[]) {
  * The dry reaches that were part of the river a named dry reach ends: those that ran into it,
  * and so on up, as far as another river's own named end.
  */
-function dryCourseOf(end: Reach, dry: readonly Reach[]) {
+function dryCourseOf(end: ReachView, dry: readonly ReachView[]) {
   const course = [end];
   for (let n = 0; n < course.length; n++)
     for (const reach of dry)
@@ -220,13 +223,26 @@ function dryCourseOf(end: Reach, dry: readonly Reach[]) {
         course.push(reach);
   return course;
 }
+/** The retained junction completes a dry reach; clipped re-entry pieces stay separate. */
+function dryMembers(state: GenerationState, reach: ReachView) {
+  const map = state.physical!.map,
+    downstream = reach.downstream === null ? undefined : reachById(map, reach.downstream),
+    last = reach.cells.at(-1),
+    next = downstream?.cells[0];
+  return last !== undefined && next !== undefined && edgeLeadingTo(map.mesh, last, next) >= 0
+    ? [...reach.cells, next]
+    : reach.cells;
+}
 /**
  * Rivers the map has drawn that have lost their water. Each is drawn again, dry, on the
  * course it had, as the same record it was drawn as when it ran: the same river, by the same
  * name, with no river in it.
  */
 function publishDryRivers(state: GenerationState) {
-  const dry = [...reachesOf(state.physical!.map)].filter((reach) => reach.dry),
+  clearDryMembers(state);
+  const reaches = [...reachesOf(state.physical!.map)],
+    dry = reaches.filter((reach) => reach.dry),
+    running = new Set(reaches.filter((reach) => !reach.dry).flatMap((reach) => reach.river ?? [])),
     published = new Set<string>();
   for (const end of dry) {
     if (!end.river || !end.record || published.has(end.river)) continue;
@@ -237,22 +253,42 @@ function publishDryRivers(state: GenerationState) {
       ),
     ];
     const lines = courses
-      .map((reach) => lineOf(state, reach.cells))
+      .map((reach) => lineOf(state, dryMembers(state, reach)))
       .filter((line) => line.length >= 2);
     if (!lines.length) continue;
     const feature = generatedFeature(
       state,
-      end.record,
+      // A dry member shares its river's identity, while its running course keeps its record.
+      running.has(end.river) ? `river-dry:${end.river}` : end.record,
       "Dry river",
       "river",
       "rivers",
       lines.length === 1
         ? { type: "LineString", coordinates: lines[0] }
         : { type: "MultiLineString", coordinates: lines },
-      { order: end.order, regime: "dry", riverId: end.river, sourceAlgorithm: "atlas-1" }
+      {
+        order: end.order,
+        regime: "dry",
+        riverId: end.river,
+        dryMember: running.has(end.river),
+        sourceAlgorithm: "atlas-1",
+      }
     );
     putGeneratedNetwork(state, end.name ? { ...feature, name: end.name } : feature);
     publishFormerCourses(state, courses, feature.id, end.river);
+  }
+}
+/** Partial dry-course records are projections of current membership, replaced at publication. */
+function clearDryMembers(state: GenerationState) {
+  for (const feature of generationFeatures(state, {
+    kind: "river",
+    areaId: state.domain.scope.areaId,
+  })) {
+    if (!feature.attributes.dryMember || feature.state !== "generated" || feature.protected)
+      continue;
+    removeGenerationFeature(state, feature.id);
+    for (const reach of generationNetworks(state).reaches({ featureId: feature.id }))
+      removeGenerationReach(state, reach.id);
   }
 }
 /**
@@ -261,7 +297,7 @@ function publishDryRivers(state: GenerationState) {
  */
 function publishFormerCourses(
   state: GenerationState,
-  reaches: readonly Reach[],
+  reaches: readonly ReachView[],
   drawnAs: string | undefined,
   riverId: string
 ) {
@@ -312,8 +348,8 @@ export function publishRivers(state: GenerationState, context: MapProcessContext
       // The reach the river ends in keeps the record it was drawn as.
       const last = parts.at(-1)?.at(-1);
       if (last !== undefined && key) {
-        records[last].kept.record = key;
-        records[last].kept.name = ids[0] ? generationFeature(state, ids[0])?.name : undefined;
+        const name = ids[0] ? generationFeature(state, ids[0])?.name : undefined;
+        if (name !== undefined) associateRiverPublication(map, riverId, { record: key, name });
       }
       publishFormerCourses(
         state,
@@ -327,7 +363,6 @@ export function publishRivers(state: GenerationState, context: MapProcessContext
     releaseWorking(map, paths.x, paths.y, paths.upstream);
     if (paths.incoming) releaseWorking(map, paths.incoming);
   }
-  establishRivers(state, records);
   publishDryRivers(state);
   state.domain.world.drainage = {
     ...state.domain.world.drainage,
@@ -343,6 +378,43 @@ export function publishRivers(state: GenerationState, context: MapProcessContext
     process: "atlas.geographic-extraction",
     subjects: [],
     description:
-      "River reaches follow Canonry's water-budget lakes, capture drainage and Strahler network; raster channels retain crust, erosion, ice and landform history.",
+      "Current and former river courses appear under their retained names, with present water and terrain.",
   });
+}
+
+/** Final cartographic names return through the owner before its network is captured. */
+export function retainPublishedRiverNames(state: GenerationState) {
+  const map = state.physical?.map,
+    network = state.domain.world.drainage?.[state.domain.scope.areaId],
+    names = new Map<string, string>();
+  if (!map || !network || network.input) return;
+  for (const feature of generationFeatures(state, {
+    kind: "river",
+    areaId: state.domain.scope.areaId,
+  })) {
+    const river = feature.attributes.riverId;
+    if (typeof river === "string" && !feature.attributes.former && !feature.attributes.dryMember) {
+      associateRiverPublication(map, river, { name: feature.name });
+      names.set(river, feature.name);
+    }
+  }
+  nameRiverProjections(state, names);
+  network.kept = captureRivers(map);
+}
+
+function nameRiverProjections(state: GenerationState, names: ReadonlyMap<string, string>) {
+  for (const feature of generationFeatures(state, {
+    kind: "river",
+    areaId: state.domain.scope.areaId,
+  })) {
+    const river = feature.attributes.riverId,
+      name = typeof river === "string" ? names.get(river) : undefined;
+    if (
+      name !== undefined &&
+      (feature.attributes.former || feature.attributes.dryMember) &&
+      feature.state === "generated" &&
+      !feature.protected
+    )
+      writeGenerationFeature(state, { ...feature, name });
+  }
 }

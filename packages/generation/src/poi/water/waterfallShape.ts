@@ -8,6 +8,7 @@ import type { PoiFieldChange, PoiPlace, PoiVariety } from "../poiContract";
 import { carriedPlaces } from "../poiPublish";
 import {
   adjacent,
+  dischargeAt,
   fieldOf,
   hardnessAt,
   hasChannel,
@@ -31,7 +32,7 @@ const worldFallsWidth = 0.000125;
 export const dropOf = (state: GenerationState, place: PoiPlace) =>
   riverDrop(fieldOf(state), place.anchor);
 export const dischargeOf = (state: GenerationState, place: PoiPlace) =>
-  fieldOf(state).FlowAccumulation.get(place.anchor);
+  dischargeAt(state, place.anchor);
 
 const sizes = (state: GenerationState) =>
   runMemory(state, "falls.true-size", () => new Map<string, TrueFallSize>());
@@ -50,7 +51,7 @@ export function sizeAtCell(state: GenerationState, cell: number) {
   return trueFallSize(
     {
       budget: riverDrop(fieldOf(state), cell),
-      discharge: fieldOf(state).FlowAccumulation.get(cell),
+      discharge: dischargeAt(state, cell),
       fracture: jointedAt(state, cell),
     },
     hashUnit(salts.height, cell, 0),

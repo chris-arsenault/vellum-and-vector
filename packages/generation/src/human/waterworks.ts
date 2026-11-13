@@ -16,7 +16,7 @@ import {
 import { releaseHeld } from "../poi/poiReads";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import { defineCommand, readOperation, runOperation } from "../processOperation";
-import { channelForm } from "../processes/waterProcesses";
+import { channelForm, riverEvolution } from "../processes/waterProcesses";
 import { mapCommand } from "../processTraits";
 import { extractNativeGeography } from "../world/atlasFeatures";
 import { projectNative, selectedNativeProjection } from "../world/atlasProjection";
@@ -135,21 +135,45 @@ function advanceWaterworks(state: GenerationState, context: MapProcessContext) {
     drawn = drawnDams(state, map),
     // A drawn dam the water has not yet been worked out with.
     unmarked = drawn.some((cell) => !map.EngineeredDams?.get(cell)),
-    wanted = trials(state, map);
+    wanted = trials(state, map),
+    changed = failed || unmarked;
   if (unmarked) noteWaterMoved(state);
   if (!wanted.length) {
-    if (failed || unmarked) settleWater(state, context, dammed(state, drawn));
+    if (changed) {
+      settleWater(state, context, dammed(state, drawn));
+      retainAcceptedWater(state, context);
+    }
     return;
   }
+  const accepted = tryDams(state, context, wanted, drawn, era);
+  if (changed || accepted) retainAcceptedWater(state, context);
+  context.progress(1, `${standingWorks(state).length} dams stand; ${lakeCells(map)} cells of lake`);
+}
+
+function tryDams(
+  state: GenerationState,
+  context: MapProcessContext,
+  wanted: ReturnType<typeof trials>,
+  drawn: readonly number[],
+  era: string
+) {
+  const map = state.physical!.map;
   const lakeBefore = workingArray(map, "uint8", "waterworks:lake-before");
   for (let i = 0; i < map.mesh.count; i++)
     lakeBefore.set(i, map.WaterKindCodes.get(i) === 2 ? 1 : 0);
   settleWater(state, context, [...dammed(state, drawn), ...wanted.map((trial) => trial.cell)]);
-  const dry = judgeTrials(state, map, wanted, lakeBefore, era);
+  const { dry, accepted } = judgeTrials(state, map, wanted, lakeBefore, era);
   releaseWorking(map, lakeBefore);
   // Leave the water as the dams that stand alone make it.
   if (dry) settleWater(state, context, dammed(state, drawn));
-  context.progress(1, `${standingWorks(state).length} dams stand; ${lakeCells(map)} cells of lake`);
+  return accepted > 0;
+}
+/** Trial reads are hypothetical; only accepted constraints change the retained courses. */
+function retainAcceptedWater(state: GenerationState, context: MapProcessContext) {
+  const map = state.physical!.map,
+    input = { map, context: nativeContext(state, context, 0) };
+  runOperation(map, riverEvolution.operation, input);
+  readOperation(map, channelForm.operation, input);
 }
 /** Keep the tried dams that hold a lake this map can show; returns whether any held too little. */
 function judgeTrials(
@@ -159,7 +183,8 @@ function judgeTrials(
   lakeBefore: { get(i: number): number },
   era: string
 ) {
-  let dry = false;
+  let dry = false,
+    accepted = 0;
   // Water one dam already holds is not counted again for the next dam on the same lake.
   const held = new Set<number>(); // hpc-exempt: the cells of an era's new reservoirs
   for (const { cell, place } of wanted) {
@@ -167,13 +192,14 @@ function judgeTrials(
       holds = water.length;
     if (holds >= resolutionCells) {
       recordDam(state, { cell, place, built: era, holds });
+      accepted++;
       for (const i of water) held.add(i);
     } else {
       recordDryDam(state, cell);
       dry = true;
     }
   }
-  return dry;
+  return { dry, accepted };
 }
 function lakeCells(map: PhysicalField) {
   let cells = 0;

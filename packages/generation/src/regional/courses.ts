@@ -1,5 +1,7 @@
-import { CellList, type AtlasFeature } from "@atlas/domain";
+import { BitSet, CellList, type AtlasFeature } from "@atlas/domain";
 import type { Geometry } from "geojson";
+import { reachesOf } from "../water/riverKeeping";
+import type { PhysicalField } from "../world/field";
 import { cellAt, isContent, regionalSpan } from "./lattice";
 import type { RegionalState } from "./state";
 
@@ -9,11 +11,11 @@ export interface CapturedCourse {
   cells: Int32Array;
   discharge: number;
   order: number;
-  /** Present when the feature is a developed river carrying a captured course. */
+  /** Identity provenance only; this does not locate the current captured course. */
   carried?: CarriedCourse;
 }
 
-/** The captured course a developed river stands for: its geometry, size and source identity. */
+/** An earlier course retained as provenance, never as the current map's spatial authority. */
 export interface CarriedCourse {
   sourceId: string;
   geometry: Geometry;
@@ -31,27 +33,14 @@ export function capturedCourses(state: RegionalState): CapturedCourse[] {
     reader = state.sourceFeatures;
   if (!reader) return courses;
   const rivers = [...reader.values({ areaId: state.regional.input.areaId })]
-      .filter((f) => f.kind === "river")
-      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
-    carriedSources = new Set(
-      rivers.map((f) => carriedCourse(f)?.sourceId).filter((id): id is string => !!id)
-    ),
-    // A developed river that took a captured course's identity carries that course with it
-    // (see `carryIdentities`), so the evidence survives the product's regeneration and the
-    // source line, where it is still present, is not read twice.
-    superseded = (f: AtlasFeature) =>
-      Boolean(state.regional.removedProducts?.has(f.id)) || carriedSources.has(f.id),
-    // Every river of the stem that took the identity carries the same course; it is one
-    // course, read once (otherwise each carrier would claim another reach every run).
-    read = new Set<string>();
+    .filter((f) => f.kind === "river")
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   for (const f of rivers) {
+    if (state.regional.removedProducts?.has(f.id)) continue;
     const carried = carriedCourse(f);
-    if (!carried && superseded(f)) continue;
-    if (carried && read.has(carried.sourceId)) continue;
     const course = courseOf(state, f, carried);
     if (!course) continue;
     courses.push(course);
-    if (carried) read.add(carried.sourceId);
   }
   return courses;
 }
@@ -64,13 +53,13 @@ function courseOf(
   feature: AtlasFeature,
   carried: CarriedCourse | undefined
 ): CapturedCourse | null {
-  const cells = courseCells(state, courseLines(carried?.geometry ?? feature.geometry));
+  const cells = courseCells(state, courseLines(feature.geometry));
   if (!cells.length) return null;
   return {
     feature,
     cells,
-    discharge: Number(carried?.discharge ?? feature.attributes.discharge ?? 0),
-    order: Number(carried?.order ?? feature.attributes.order ?? 1),
+    discharge: Number(feature.attributes.discharge ?? 0),
+    order: Number(feature.attributes.order ?? 1),
     carried,
   };
 }
@@ -103,11 +92,20 @@ export function courseCells(state: RegionalState, lines: number[][][]) {
   return cells.finish();
 }
 
-/** Course membership per cell: the index of the course crossing it, or -1. */
-export function courseIndex(state: RegionalState, courses: CapturedCourse[]) {
-  const owner = new Int32Array(state.physical.map.mesh.count).fill(-1);
-  courses.forEach((course, index) => {
-    for (const cell of course.cells) if (owner[cell] < 0) owner[cell] = index;
-  });
-  return owner;
+/** Current and abandoned beds are physical context from the map's retained river objects. */
+export function retainedCourseCells(map: PhysicalField) {
+  const included = new BitSet(map.mesh.count),
+    cells = new CellList(),
+    include = (course: readonly number[]) => {
+      for (const cell of course)
+        if (!included.has(cell)) {
+          included.add(cell);
+          cells.push(cell);
+        }
+    };
+  for (const reach of reachesOf(map)) {
+    include(reach.cells);
+    for (const former of reach.former) include(former.cells);
+  }
+  return cells.finish();
 }

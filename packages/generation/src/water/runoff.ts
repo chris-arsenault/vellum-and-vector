@@ -86,31 +86,52 @@ function noteYear(moved: LandMoves, fell: typeof year, water: WaterYear, area: n
   const depth = area / 1000;
   let rain = 0,
     snow = 0,
+    thaw = 0,
     quick = 0;
   for (let at = 0; at < months; at++) {
     rain += fell.rain[at];
     snow += fell.snow[at];
+    thaw += water.thaw[at];
     quick += water.quick[at];
   }
   moved.rain += rain * depth;
   moved.snowfall += snow * depth;
-  moved.thaw += (snow - water.keptSnow) * depth;
+  moved.thaw += thaw * depth;
   moved.firn += water.keptSnow * depth;
   moved.evaporation += water.evaporated * depth;
   moved.runoff += quick * depth;
   moved.recharge += water.recharge * depth;
 }
-export function runoff(map: PhysicalField, c: PhysicalContext) {
+/** An explicit water occurrence commits its returned year's supply and ending contents together. */
+export function advanceWaterYear(map: PhysicalField, c: PhysicalContext) {
   const each = waterYearOf(map),
     moved = Object.fromEntries(landMoves.map((move) => [move, 0])) as LandMoves;
   landWater(map, c, each, moved);
   for (const move of landMoves) moveWater(map, move, moved[move]);
 }
+/** Current runoff is a view of the established year; reading it spends no held water. */
+export function runoff(map: PhysicalField) {
+  const each = waterYearOf(map);
+  for (let cell = 0; cell < map.mesh.count; cell++) {
+    let total = 0,
+      least = Infinity,
+      greatest = 0;
+    for (const band of each) {
+      const quick = band.get(cell);
+      total += quick;
+      least = Math.min(least, quick);
+      greatest = Math.max(greatest, quick);
+    }
+    map.Runoff.set(cell, total);
+    map.FloodRunoff.set(cell, greatest * months);
+    map.DryRunoff.set(cell, least * months);
+  }
+}
 function landWater(map: PhysicalField, c: PhysicalContext, each: Band[], moved: LandMoves) {
   // What else wets a soil, and what keeps one wet, is said by whoever does it.
   const wetting = ask(map, "soilWetting", c),
     held = ask(map, "soilWaterHeld", c),
-    yields = [map.Runoff, map.FloodRunoff, map.DryRunoff, map.WaterRecharge, map.SnowKept];
+    yields = [map.WaterRecharge, map.SnowKept];
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) === 1) {
       for (const band of [...yields, ...each]) band.set(i, 0);
@@ -131,23 +152,11 @@ function landWater(map: PhysicalField, c: PhysicalContext, each: Band[], moved: 
         },
         // What the cell's column holds from before: carried with its ground, or inherited.
         {
-          soil: Math.min(capacity, millimetres(map.SoilWater.get(i))),
+          soil: millimetres(map.SoilWater.get(i)),
           snow: millimetres(map.SnowPack.get(i)),
         }
       );
-    let total = 0,
-      least = Infinity,
-      greatest = 0;
-    for (let at = 0; at < months; at++) {
-      const quick = water.quick[at];
-      each[at].set(i, quick);
-      total += quick;
-      least = Math.min(least, quick);
-      greatest = Math.max(greatest, quick);
-    }
-    map.Runoff.set(i, total);
-    map.FloodRunoff.set(i, greatest * months);
-    map.DryRunoff.set(i, least * months);
+    for (let at = 0; at < months; at++) each[at].set(i, water.quick[at]);
     map.WaterRecharge.set(i, water.recharge);
     map.SnowKept.set(i, water.keptSnow);
     // The snow that lies through the year is part of what the cell holds.

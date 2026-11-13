@@ -1,4 +1,4 @@
-import type { AtlasFeature } from "@atlas/domain";
+import { spatial, type AtlasFeature } from "@atlas/domain";
 import type { PoiHostLink } from "../poi/poiContract";
 import type { GenerationState } from "../process";
 import type { RegionalState } from "../regional/state";
@@ -15,5 +15,7 @@ export function hostedCell(state: GenerationState, feature: AtlasFeature) {
   const link = feature.attributes.hostedBy as PoiHostLink | undefined;
   if (!link || !("regional" in state)) return -1;
   const cellFor = areaCatalogue[link.host].hosting.cellFor;
-  return typeof cellFor === "function" ? cellFor(state as RegionalState, link) : -1;
+  return typeof cellFor === "function"
+    ? cellFor(state as RegionalState, link, spatial.interiorPosition(feature.geometry))
+    : -1;
 }

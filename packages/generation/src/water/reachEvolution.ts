@@ -55,19 +55,37 @@ function course(from: number, owner: Int32Array, env: RiverEnvironment, own = 0)
 }
 
 /** A new tributary splits a receiving reach; its named lower end keeps the old identity. */
-function splitAt(store: ReachStore, reach: Reach, cell: number, owner: Int32Array) {
+export function splitReachAt(store: ReachStore, reach: Reach, cell: number, owner?: Int32Array) {
   const at = reach.cells.indexOf(cell);
   if (at <= 0) return;
   const upper = addReach(store, reach.cells.slice(0, at));
+  upper.drawn = reach.drawn;
+  upper.dry = reach.dry;
+  upper.order = reach.order;
+  upper.river = reach.river;
+  upper.record = reach.record;
+  upper.name = reach.name;
+  if (reach.driedIn !== undefined) upper.driedIn = reach.driedIn;
+  for (const key of ["monthly", "catchment", "bed", "width", "depth", "leakage"] as const) {
+    const offset = at * (key === "monthly" ? 12 : 1);
+    upper[key] = reach[key].slice(0, offset);
+    reach[key] = reach[key].slice(offset);
+  }
+  const water = flowThroughYear(upper.monthly.subarray(-12), 0);
+  upper.flow = water.mean;
+  upper.least = water.perennial;
+  upper.flood = water.flood;
+  upper.months = reachMonths(upper, upper.cells.length - 1);
   upper.downstream = reach.id;
   for (const other of store.reaches.values())
     if (other !== upper && other.downstream === reach.id) other.downstream = upper.id;
   reach.cells = reach.cells.slice(at);
-  for (const member of upper.cells) owner[member] = upper.id;
+  if (owner) for (const member of upper.cells) owner[member] = upper.id;
+  store.at = undefined;
 }
 
 /** Update the existing object, retaining dry beds and the course left by a diversion. */
-function refresh(reach: Reach, owner: Int32Array, env: RiverEnvironment) {
+function refresh(store: ReachStore, reach: Reach, owner: Int32Array, env: RiverEnvironment) {
   const head = reach.cells.find(
     (cell) => env.land(cell) && env.resolved(cell) && hasWater(cell, env)
   );
@@ -77,6 +95,7 @@ function refresh(reach: Reach, owner: Int32Array, env: RiverEnvironment) {
     reach.driedIn ??= env.epoch;
     return;
   }
+  splitReceiving(store, cells, owner, env, reach.id);
   const running = new BitSet(env.count);
   for (const cell of cells) running.add(cell);
   reach.former = reach.former.flatMap((old) =>
@@ -89,6 +108,19 @@ function refresh(reach: Reach, owner: Int32Array, env: RiverEnvironment) {
   reach.dry = false;
   delete reach.driedIn;
   for (const cell of reach.cells) owner[cell] = reach.id;
+}
+
+/** Diversion and first discovery both establish the receiving confluence before linking. */
+function splitReceiving(
+  store: ReachStore,
+  cells: readonly number[],
+  owner: Int32Array,
+  env: RiverEnvironment,
+  own = 0
+) {
+  const next = env.next(cells[cells.length - 1]),
+    receiving = next >= 0 ? store.reaches.get(owner[next]) : undefined;
+  if (receiving && receiving.id !== own) splitReachAt(store, receiving, next, owner);
 }
 
 /** Retain abandoned edges with their junctions; disjoint diversions remain separate lines. */
@@ -108,8 +140,11 @@ function leftCourses(before: readonly number[], running: BitSet) {
   return courses;
 }
 
-/** Reach-owned water through the year, and its bed; field layers are downstream projections. */
-function updateWater(reach: Reach, env: RiverEnvironment) {
+/** Current profiles derive from routed supply without changing course, identity or history. */
+export function refreshReachWater(
+  reach: Reach,
+  env: Pick<RiverEnvironment, "flow" | "bed" | "catchment" | "discharge">
+) {
   reach.monthly = new Float64Array(reach.cells.length * 12);
   reach.bed = Float64Array.from(reach.cells, env.bed);
   reach.catchment = Float64Array.from(reach.cells, env.catchment);
@@ -128,6 +163,11 @@ function updateWater(reach: Reach, env: RiverEnvironment) {
   reach.least = water.perennial;
   reach.flood = water.flood;
   reach.months = reachMonths(reach, reach.cells.length - 1);
+}
+
+/** The explicit evolution occurrence records loss of water; a current read does not. */
+function updateWater(reach: Reach, env: RiverEnvironment) {
+  refreshReachWater(reach, env);
   if (!reach.monthly.some((flow) => flow > 0)) {
     reach.dry = true;
     reach.driedIn ??= env.epoch;
@@ -143,7 +183,7 @@ export function advanceReaches(store: ReachStore, env: RiverEnvironment) {
   const owner = new Int32Array(env.count);
   for (const reach of store.reaches.values())
     if (!reach.dry) for (const cell of reach.cells) owner[cell] = reach.id;
-  for (const reach of store.reaches.values()) refresh(reach, owner, env);
+  for (const reach of store.reaches.values()) refresh(store, reach, owner, env);
   discoverReaches(store, owner, env);
   for (const reach of store.reaches.values()) {
     if (reach.dry) continue;
@@ -198,9 +238,7 @@ function discoverReaches(store: ReachStore, owner: Int32Array, env: RiverEnviron
     if (!startsReach(cell, owner, env)) continue;
     const cells = course(cell, owner, env);
     if (!cells.length) continue;
-    const next = env.next(cells[cells.length - 1]),
-      receiving = next >= 0 ? store.reaches.get(owner[next]) : undefined;
-    if (receiving) splitAt(store, receiving, next, owner);
+    splitReceiving(store, cells, owner, env);
     const reach = addReach(store, cells);
     for (const member of cells) owner[member] = reach.id;
   }

@@ -124,7 +124,7 @@ export const waterfall: PoiEntry = {
   acrossMaps: {
     standsOn: "river",
     statement:
-      "A captured fall recorded the river it stands on and how far along it, and it stands at that place on the refined river, however the river has bent. The finer ground is made to hold its step there.",
+      "A captured fall keeps its river's identity and its position on the source map. It stands on the retained river nearest that captured position, and the finer ground is made to hold its step there.",
     carry: carryWhereItLands,
     realize: realizedStep,
     counterpart,

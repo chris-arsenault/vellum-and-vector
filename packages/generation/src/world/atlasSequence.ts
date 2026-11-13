@@ -143,6 +143,7 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     // People meet everything the epoch did to their ground, its coasts included, and live
     // one loose pass on it before the epoch's history is kept.
     ...(!inherited ? peopled(context, "human.land-epoch") : []),
+    ...nativeGroup("water.routing", "epoch.final-courses", context),
     ...nativeGroup("epoch.history", "epoch", context),
   ];
 }
@@ -185,10 +186,10 @@ export function atlasPhysicalSequence(
   result.push(
     ...climate("present.climate", context),
     ...contributions("present.climate-forcing", context),
-    ...drainage("present.initial-water", context),
+    ...nativeGroup("water.current", "present.initial-water", context),
     ...nativeGroup("ice.flow", "present.initial-ice", context),
     ...nativeGroup("ice.meltwater", "present", context),
-    ...drainage("present.meltwater", context),
+    ...nativeGroup("water.current", "present.meltwater", context),
     ...nativeGroup("ice.flow", "present.final-ice", context),
     ...presentExtraction(context),
     ...contributions("present.post-glacial-forcing", context),

@@ -7,6 +7,7 @@ import { physicalSampler } from "../../../packages/generation/src/world/physical
 import type { PhysicalField } from "../../../packages/generation/src/world/field";
 import { mappedRiverCells } from "../../../packages/generation/src/area/riverCourses";
 import { releaseHeld } from "../../../packages/generation/src/poi/poiReads";
+import { riverSuccessor } from "../../../packages/generation/src/water/riverKeeping";
 import {
   groundwaterCapacity,
   groundwaterReturnRate,
@@ -211,7 +212,7 @@ function riversAlongLakes(map: PhysicalField) {
     let beside = false;
     for (let edge = 0; edge < mesh.degree(cell); edge++)
       beside ||= isLake(mesh.neighbor(cell, edge));
-    if (beside && !isLake(map.FlowTargets.get(cell))) along++;
+    if (beside && !isLake(riverSuccessor(map, cell))) along++;
   }
   return { rivers, along };
 }

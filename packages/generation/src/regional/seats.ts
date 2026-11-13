@@ -1,4 +1,4 @@
-import { point } from "@atlas/domain";
+import { point, type AtlasFeature } from "@atlas/domain";
 import {
   generationFeature,
   generationFeatures,
@@ -6,9 +6,9 @@ import {
 } from "../generationFeatures";
 import { celsius } from "./climate";
 import { cellAt, distance, isContent, neighborsOf, positionOf } from "./lattice";
-import { promoteChannel } from "./network";
 import { gradeSeat } from "./grading";
-import { onRiver } from "../water/riverKeeping";
+import { onRiver, reachAt, retainRiverCourse } from "../water/riverKeeping";
+import type { PoiHostLink } from "../poi/poiContract";
 import { clamp, type RegionalState, type Seat, type Situation } from "./state";
 
 /** Slope above which a seat's own cell is not usable ground. */
@@ -22,26 +22,30 @@ const seatGradient = 0.03;
 
 /**
  * The seat operations (spec 6.3); the settlement entry's schedule calls them.
- * Known seats are read from their captured position every run, so a seat an earlier
- * refinement moved is re-sited from the same evidence.
+ * Known seats start at the source map's present position and retain its river-side
+ * relationship. Earlier positions remain provenance, not another map's location authority.
  */
 export function knownSeats(state: RegionalState): Seat[] {
   const seats: Seat[] = [];
   for (const f of generationFeatures(state, { areaId: state.regional.input.areaId })) {
     if (f.kind !== "settlement" || f.geometry.type !== "Point") continue;
-    const captured = f.attributes.sitedFrom as [number, number] | undefined,
-      [x, y] = captured ?? f.geometry.coordinates,
+    const [x, y] = f.geometry.coordinates,
       cell = cellAt(state.physical.map.mesh, x, y);
     if (cell < 0) continue;
     seats.push({
       featureId: f.id,
       cell,
-      situation: situationAt(state, cell),
+      situation: riverSide(f) ? "river" : situationAt(state, cell),
       radius: seatRadius(state),
       gradient: seatGradient,
     });
   }
   return seats;
+}
+
+function riverSide(feature: AtlasFeature) {
+  const link = feature.attributes.hostedBy as PoiHostLink | undefined;
+  return feature.attributes.situation === "river" || link?.host === "river";
 }
 
 export function seatRadius(state: RegionalState) {
@@ -75,39 +79,48 @@ export function usableSite(state: RegionalState, i: number) {
   );
 }
 
-/** After the network is grown, every river seat stands on a channel: the stream it was built on. */
+/** A captured river-side seat retains its stream's course; actual water decides whether it runs. */
 export function drawChannelsToSeats(state: RegionalState) {
   for (const seat of state.regional.evidence?.seats ?? []) {
     if (seat.situation !== "river") continue;
-    const { onChannel, nearest } = channelAround(state, seat.cell);
-    if (!onChannel) promoteChannel(state, nearest);
+    const feature = generationFeature(state, seat.featureId);
+    if (!feature) continue;
+    const hosted = feature.attributes.hostedBy as PoiHostLink | undefined,
+      river = hosted?.host === "river" ? hosted.hostId : undefined,
+      identity = river ?? `seat-stream:${feature.placeId ?? feature.id}`;
+    // owner-direction(2026-11-12): the stream a parent's river-side town stands on continues on a finer map whatever its water there.
+    retainRiverCourse(state.physical.map, seatCourse(state, seat.cell, river), identity);
   }
 }
 
-/** Whether a channel touches the cell, and the ring's least-flow cell to promote if not. */
-function channelAround(state: RegionalState, cell: number) {
-  const mesh = state.physical.map.mesh,
-    network = state.regional.network!,
+/** Prefer an adjacent owned course; otherwise submit the existing initial tree's location proposal. */
+function seatCourse(state: RegionalState, cell: number, river: string | undefined) {
+  const map = state.physical.map,
+    mesh = map.mesh,
     around = new Int32Array(mesh.stride),
-    m = neighborsOf(mesh, cell, around);
-  let onChannel = Boolean(network.channel[cell]),
-    nearest = cell,
-    best = network.receiver[cell] < 0 ? Infinity : network.flow[cell];
-  for (let k = 0; k < m; k++) {
-    const i = around[k];
-    onChannel ||= Boolean(network.channel[i]);
-    if (network.flow[i] >= best || network.receiver[i] < 0) continue;
-    best = network.flow[i];
-    nearest = i;
+    m = neighborsOf(mesh, cell, around),
+    adjacent = [cell, ...around.subarray(0, m)].find((candidate) => {
+      const reach = reachAt(map, candidate);
+      return reach && (!river || reach.river === river);
+    });
+  if (adjacent !== undefined) return [adjacent];
+  const course: number[] = [];
+  for (
+    let at = cell;
+    at >= 0 && map.WaterKindCodes.get(at) === 0;
+    at = state.regional.network!.receiver[at]
+  ) {
+    course.push(at);
+    if (reachAt(map, at)) break;
   }
-  return { onChannel, nearest };
+  return course;
 }
 
 /**
  * Settle every seat on the derived surface. Its footprint already held the relief
  * down; if the ground under it is still not usable it moves to the best usable ground within
- * reach that keeps its broad situation, and its footprint follows. The captured position is
- * remembered for later runs.
+ * reach that keeps its broad situation, and its footprint follows. Earlier positions remain
+ * provenance; the source map's current position is what its child captures.
  */
 export function settleSeats(state: RegionalState) {
   for (const seat of state.regional.evidence?.seats ?? []) {

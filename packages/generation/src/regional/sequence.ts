@@ -54,8 +54,7 @@ export function regionalSequence(
     invoke("refinement.media", {}, occurrence),
     ...group("present.climate-forcing", occurrence, 0),
     ...group("climate.atmosphere", occurrence, 0),
-    ...group("water.runoff", occurrence, 0),
-    ...group("water.routing", occurrence, 0),
+    ...group("water.current", occurrence, 0),
   ];
   const sequence: ProcessSequence = [
     invoke("atlas.initialize"),
@@ -70,6 +69,8 @@ export function regionalSequence(
     sequence.push(
       invoke("refinement.round", { round }, occurrence),
       ...refresh(`${occurrence}/before`),
+      ...group("water.runoff", `${occurrence}/supply`),
+      ...group(round === 1 ? "water.initialize" : "water.routing", `${occurrence}/courses`),
       ...(round === 1 ? group("epoch.material-forcing", occurrence) : []),
       ...developmentSlots.flatMap((slot, position) => group(slot, `${occurrence}/${position}`)),
       ...refresh(`${occurrence}/after`),
@@ -77,7 +78,8 @@ export function regionalSequence(
       ...(round === 1 ? group("epoch.post-glacial-forcing", occurrence) : []),
       ...group("epoch.ecology-evolve", occurrence),
       ...group("epoch.ecology-burial", occurrence),
-      invoke("refinement.place-effects", { people: society }, occurrence)
+      invoke("refinement.place-effects", { people: society }, occurrence),
+      ...group("water.routing", `${occurrence}/final-courses`)
     );
   }
   sequence.push(

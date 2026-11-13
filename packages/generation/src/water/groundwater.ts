@@ -7,7 +7,8 @@ import { averageGroundQuery, groundFact } from "../rock/groundQuery";
 import { clamp } from "../world/math";
 import { respond } from "../coupling/answers";
 import { moveWater } from "./waterLedger";
-import { addGroundwater } from "./column";
+import { addGroundwater, waterStorage } from "./column";
+import type { GroundFacet } from "../rock/groundShares";
 
 /** A dissolved inventory accompanies the fraction of its carrier actually withdrawn. */
 export function returnedCharge(inventory: number, available: number, returned: number) {
@@ -41,8 +42,8 @@ const permeability = averageGroundQuery({
   rock: (_, layer) => Math.max(groundFact(layer, "porosity"), groundFact(layer, "solubility")),
 });
 /** How far a cell's ground lets water through, 0 to 1, by the rock at its surface. */
-export const groundPermeability = (map: PhysicalField, i: number) =>
-  clamp(groundOf(map).fold(i, permeability), 0, 1);
+export const groundPermeability = (map: PhysicalField, i: number, facet?: GroundFacet) =>
+  clamp(groundOf(map).fold(i, permeability, facet), 0, 1);
 /** The water a cell's ground holds when full, as a depth over the cell. */
 export const groundwaterCapacity = (map: PhysicalField, i: number) =>
   map.scale.length(2.5e-6) * groundPermeability(map, i);
@@ -144,7 +145,7 @@ function routeWater(
       gradient = slope;
     }
   }
-  const store = map.water.ground,
+  const store = waterStorage(map).ground,
     available = store.held(i),
     marine = map.WaterKindCodes.get(i) === 1;
   map.GroundwaterExchangeVolume.set(i, available);

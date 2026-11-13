@@ -1,6 +1,6 @@
 import { riverChannelGeometry } from "../water/channelGeometry";
 import { waterYearFields } from "@atlas/domain";
-import { runoff } from "../water/runoff";
+import { advanceWaterYear, runoff } from "../water/runoff";
 import { atmosphere, oceanRead, currents, seaFloorZones } from "./climateProcesses";
 import { landmasses } from "../world/geography";
 import { deltaFormation } from "../world/deltas";
@@ -14,7 +14,7 @@ import { landIce } from "../world/landIce";
 import { landformClassification } from "../world/landforms";
 import { validateChannels, validateDrainage, validateIce } from "../world/layerValidation";
 import { lakeBasins } from "../water/lakes";
-import { riverNetwork } from "../water/rivers";
+import { advanceRiverNetwork, riverNetwork } from "../water/rivers";
 import { riverWarmth } from "../water/riverWarmth";
 import { crustHeat } from "./crustProcesses";
 import { flowRouting } from "../water/routing";
@@ -22,8 +22,11 @@ import { fieldCommand, fieldQuery } from "./builder";
 import { advanceGroundwater } from "../water/groundwater";
 import { validatePhysical } from "../world/validation";
 import { respond } from "../coupling/answers";
+import type { PhysicalInput } from "./groundProcess";
+import type { Band } from "@atlas/domain";
+import { withBoundaryFlow } from "../water/boundaryWater";
 
-/** Where water and ice go, and the landforms read from what they did. They move no material. */
+/** Water commands own transfers and course changes; queries expose their current products. */
 const ground = "Elevation",
   sea = "WaterKindCodes",
   targets = "FlowTargets",
@@ -33,18 +36,20 @@ export const waterOff = fieldQuery(
   {
     id: "runoff",
     statement: "What falls and is not lost to the air or the ground runs off.",
+    provides: ["Runoff", "FloodRunoff", "DryRunoff"],
+    execute: ({ map }) => runoff(map),
+  },
+  []
+);
+export const waterTransfer = fieldCommand(
+  "work",
+  {
+    id: "water-column-transfer",
+    statement: "The year's transfers change held snow and soil and establish its monthly supply.",
     needs: [sea, "Temperature", "Rainfall"],
-    provides: [
-      "Runoff",
-      "FloodRunoff",
-      "DryRunoff",
-      "WaterRecharge",
-      "SnowKept",
-      "SoilWater",
-      ...waterYearFields,
-    ],
+    provides: ["WaterRecharge", "SnowKept", "SoilWater", "SnowPack", ...waterYearFields],
     asks: ["soilWetting", "soilWaterHeld"],
-    execute: ({ map, context }) => runoff(map, context),
+    execute: ({ map, context }) => advanceWaterYear(map, context),
   },
   [oceanRead, atmosphere]
 );
@@ -68,7 +73,8 @@ export const drainageFlood = fieldQuery(
     statement: "Every low place is filled in thought, so each cell has a way down to its outlet.",
     needs: [ground, sea],
     provides: ["DrainageElevations", "DrainageParents", "DrainageRanks"],
-    execute: ({ map, context }) => drainageConditioning(map, context),
+    execute: ({ map, context }) =>
+      withBoundaryFlow(map, (incoming) => drainageConditioning(map, context, incoming)),
   },
   [oceanRead]
 );
@@ -78,7 +84,8 @@ export const lakes = fieldQuery(
     statement: "Low places hold what water they gather against what they lose, and spill if full.",
     needs: [ground, sea, "Runoff", "DrainageElevations"],
     provides: ["LakeOutletTargets", "LakeOverflow", sea, "WaterDepths", "WaterSurfaceElevations"],
-    execute: ({ map, context }) => lakeBasins(map, context),
+    execute: ({ map, context }) =>
+      withBoundaryFlow(map, (incoming) => lakeBasins(map, context, incoming)),
   },
   [waterOff, drainageFlood]
 );
@@ -129,6 +136,21 @@ export const rivers = fieldQuery(
       "FlowingMonths",
     ],
     execute: ({ map, context }) => riverNetwork(map, context),
+  },
+  [waterOff, routing]
+);
+/** Captured latent channel is an explicit initialization input, never consumed by a read. */
+export interface RiverEvolutionInput extends PhysicalInput {
+  channelLength?: Pick<Band, "get">;
+}
+export const riverEvolution = fieldCommand<RiverEvolutionInput>(
+  "work",
+  {
+    id: "river-evolution",
+    statement: "Established rivers change their courses and retain the courses they leave.",
+    needs: ["Runoff", targets],
+    provides: [orders, "SmallChannelLength"],
+    execute: ({ map, context, channelLength }) => advanceRiverNetwork(map, context, channelLength),
   },
   [waterOff, routing]
 );

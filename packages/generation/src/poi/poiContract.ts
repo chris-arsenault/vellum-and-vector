@@ -29,16 +29,14 @@ export type Must<T> = T | Unwritten;
 /** A field a kind answers, or states does not apply. */
 export type Slot<T> = T | Unwritten | NotApplicable;
 
-/** The area a place stands on and how far along it, on its record: it moves when the area does. */
+/** The area's identity; the place's actual feature geometry owns its position on each map. */
 export interface PoiHostLink {
   readonly host: AreaKindId;
   readonly hostId: string;
-  /** 0 at a course's head, 1 at its end. */
-  readonly along: number;
 }
 /** A place of a kind on one map. Cells are the physical lattice's. */
 export interface PoiPlace {
-  /** The area it was placed on, recorded at that moment and never worked out afterwards. */
+  /** The area it stands on; its map-owned geometry supplies the hosting position. */
   hostedBy?: PoiHostLink;
   readonly id: string;
   readonly kind: PoiKindId;

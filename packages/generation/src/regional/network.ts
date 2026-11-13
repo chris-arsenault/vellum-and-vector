@@ -6,7 +6,6 @@ import { distance, frameEdge, isContent, neighborsOf, regionalSpan } from "./lat
 import { type NetworkWork, type RegionalState } from "./state";
 import { physicalContext } from "../world/context";
 import { waterPassage } from "../water/waterQuantity";
-import { gathered, riverSizes } from "../water/riverSize";
 import { onParentRiver } from "./parentRivers";
 
 /** Resistance near a known peak or cone, so channels cut around it and it stands on a divide. */
@@ -48,7 +47,6 @@ export function growNetwork(state: RegionalState): NetworkWork {
     flow: new Float64Array(n),
     inflow: new Float64Array(n),
     inflowCatchment: new Float64Array(n),
-    channel: new Uint8Array(n),
     level: new Float64Array(n),
     sea,
     base,
@@ -118,9 +116,8 @@ function openWetBasins(state: RegionalState, sink: Uint8Array) {
 
 /**
  * Upstream area and discharge gathered down the tree. An entering river drains country
- * beyond the frame: the catchment the parent map gives it. A channel is where a river is: water
- * gathered from a catchment the map shows, in a river's amount (`water/riverSize`), so dry
- * country needs a larger catchment for the same flow.
+ * beyond the frame: the catchment the parent map gives it. These quantities organize the
+ * initial terrain proposal; the water owner subsequently decides which courses are rivers.
  */
 export function gatherFlow(state: RegionalState, network: NetworkWork) {
   const map = state.physical.map,
@@ -129,7 +126,7 @@ export function gatherFlow(state: RegionalState, network: NetworkWork) {
     // Initial organization reads captured quantities; development runs the current budget later.
     supply = map.Runoff,
     pass = waterPassage(map, context),
-    { receiver, order, count, area, flow, inflow, channel } = network;
+    { receiver, order, count, area, flow, inflow } = network;
   area.fill(0);
   flow.fill(0);
   for (let k = 0; k < count; k++) {
@@ -146,27 +143,6 @@ export function gatherFlow(state: RegionalState, network: NetworkWork) {
     area[j] += area[i];
     flow[j] += flow[i];
   }
-  const river = riverSizes(map.scale);
-  channel.fill(0);
-  for (let k = 0; k < count; k++) {
-    const i = order[k];
-    channel[i] = Number(
-      gathered(area[i], river, mesh.contentArea(i)) &&
-        flow[i] >= river.discharge &&
-        network.lake[i] < 0
-    );
-  }
-}
-
-/** Mark the tree path from a cell down to the nearest channel as channel: the stream it stands on. */
-export function promoteChannel(state: RegionalState, cell: number) {
-  const network = state.regional.network!,
-    river = riverSizes(state.physical.map.scale);
-  for (let i = cell; i >= 0 && !network.channel[i]; i = network.receiver[i]) {
-    if (network.flow[i] < river.discharge * 0.2) return false;
-    network.channel[i] = 1;
-  }
-  return true;
 }
 
 /**

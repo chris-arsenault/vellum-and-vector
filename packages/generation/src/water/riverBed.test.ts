@@ -25,3 +25,19 @@ it("reads the physical valley floor before and after a river resolves there", ()
   projectGround(map, 0);
   expect(drainageBed(map, 0)).toBe(units(80));
 });
+
+it("keeps the actual drainage floor when water stands in the valley", () => {
+  const map = createTestField(createWorldMesh([0, 0, 1000, 1000], 16, 0));
+  map.BedrockElevation.set(0, units(100));
+  setLayer(map, 0, 0, rocks.quartzite.code, units(200));
+  openCut(map, 0, 0.25);
+  moveFacet(map, 0, "cut", -units(40));
+  projectGround(map, 0);
+
+  expect(drainageBed(map, 0)).toBe(units(60));
+  map.WaterKindCodes.set(0, 2);
+  expect(drainageBed(map, 0)).toBe(units(60));
+
+  map.WaterKindCodes.set(0, 1);
+  expect(drainageBed(map, 0)).toBe(map.Elevation.get(0));
+});

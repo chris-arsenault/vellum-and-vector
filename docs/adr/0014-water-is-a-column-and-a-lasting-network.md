@@ -66,16 +66,22 @@ These follow from the decision.
 
 ## Implemented ownership
 
-The physical field owns a water column of stores and its retained reach store. The monthly
-budget transfers held water; year-end contents remain distinct from the year's presentation
-means. Column resources import the package before regional organization. Ground transport
-carries both the stores and the reaches, including abandoned courses.
+The physical field owns a water column of stores and its retained reach store. An explicit
+budget command establishes the monthly supply and ending contents together. Current runoff
+reads reduce that established supply; they neither spend the ending stores again nor
+reconstruct the transferred year from them. Supplied contents start the returned year's
+transfers; seasonal warmup applies to unspecified initial contents. Soil that loses room
+releases its excess through the budget. Water resources publish and import both the column
+and its established year. Ground transport carries them and the reaches, including abandoned
+courses.
 
-Conditioning reads the current Ground valley floor, including unresolved channels,
-independently of the cell's averaged terrain height. Routing and erosion reads keep viable
-existing courses. Gathered cell water updates the retained reaches;
-only afterwards do they produce river rasters. Bed leakage, channel dimensions, floodplain
-seeds and published profiles read the owned courses. Unresolved water and small-channel
+Conditioning reads the current Ground valley floor under land and lakes, including
+unresolved channels, independently of the cell's averaged terrain height. Routing and erosion keep viable
+existing courses. Explicit development changes retained courses, history and river membership.
+Current queries update their flow and bed profiles without another network transition, then
+produce river rasters. Bed leakage, channel dimensions, floodplain
+seeds and published profiles read the owned courses; leakage asks the actual bed facet.
+Unresolved water and small-channel
 length remain cell quantities. Presence and seasonal status read each point's monthly
 profile, so a losing river may have a wet head and a dry end.
 
@@ -84,6 +90,17 @@ courses. Refinement clips captured river objects onto the child's lattice and im
 actual boundary water and catchment. Published-map input with only a mean supplies that
 mean throughout the year; it does not invent seasons from the receiving cell. Named dry
 and abandoned courses publish under their river's name through the ordinary network contract.
+An established river-side town retains its stream through the water owner, without adding
+water. A dry course keeps its retained confluence rather than following new routing.
+Water establishes identity and membership before publication. Current flow cannot regroup
+an established river. Cartography joins that owned graph through read-only reach views;
+publication and final naming associate record names through the water owner.
+Curves, junction cuts, river landmarks and riverborne material follow the retained graph.
+Terrain drainage remains a separate cell quantity graph. Terminal courses may project into
+adjacent standing water through the shared water owner.
+Captured confluence edges remain distinct from owned profile samples. Scoped import follows
+those actual edges with the tributary's outgoing supply, retains isolated owned points, and
+imports former-only paths as dry history without a present downstream relationship.
 
 ## What stays out
 

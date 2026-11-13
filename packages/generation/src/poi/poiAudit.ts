@@ -5,7 +5,7 @@ import { continuingRivers } from "../area/riverLineage";
 import { riverCourseJudgments, type CourseJudgment } from "../world/worldRiverCourses";
 import type { RegionalState } from "../regional/state";
 import { generationFeatures } from "../generationFeatures";
-import { onRiver, waterAt } from "../water/riverKeeping";
+import { onRiver, riverSuccessor, waterAt } from "../water/riverKeeping";
 import type { GenerationState } from "../process";
 import { mapScale, riverShortfalls } from "../worldSignificance";
 import { poiCatalogue } from "./catalogue";
@@ -192,7 +192,7 @@ function auditFalls(state: GenerationState, features: readonly AtlasFeature[]) {
 /** What the water does after a river's last land cell. */
 function endOf(state: GenerationState, cell: number) {
   const map = fieldOf(state),
-    next = map.FlowTargets.get(cell);
+    next = riverSuccessor(map, cell);
   if (next < 0) return map.mesh.membership(cell) === 1 ? "drains no further" : "leaves the frame";
   return ["joins land", "sea", "lake"][map.WaterKindCodes.get(next)] ?? "other water";
 }
@@ -209,7 +209,6 @@ function riverAudit(state: GenerationState, features: readonly AtlasFeature[]) {
     list: riversOf(state).map(({ id, cells }) => ({
       id,
       fromParent: parents.has(id),
-      share: parents.has(id) ? [parents.get(id)!.from, parents.get(id)!.to] : null,
       parentCellsHere: parents.get(id)?.course.cells.length ?? null,
       cells: cells.length,
       endFromParentEndCells: parents.has(id)

@@ -50,8 +50,8 @@ export interface Evidence {
 }
 
 /**
- * The drainage network grown once in round one: a tree over the land cells rooted at the
- * established waters. Every later structure (relief, ice, places, ways) is derived from it.
+ * The initial terrain proposal: a tree over land cells rooted at established waters. Later
+ * processes read the shared field and the water owner's current routing and reaches.
  * Arrays are indexed by mesh cell; heights are metres above the datum.
  */
 export interface NetworkWork {
@@ -64,14 +64,12 @@ export interface NetworkWork {
   cost: Float64Array;
   /** Upstream area (m²) including the country an entering river drains beyond the frame. */
   area: Float64Array;
-  /** Reference discharge (m³/s) gathered down the tree, for channel qualification. */
+  /** Captured discharge (m³/s) gathered down the initial proposal. */
   flow: Float64Array;
   /** Discharge entering across the frame edge at this cell (m³/s). */
   inflow: Float64Array;
   /** The catchment beyond the frame that the parent map gives each entering river (m²). */
   inflowCatchment: Float64Array;
-  /** Whether the cell carries a channel at this map's scale. */
-  channel: Uint8Array;
   /** Water surface level each cell's tributaries rise from (datum, edge base, lake level). */
   level: Float64Array;
   /** Connected sea on the captured base. */

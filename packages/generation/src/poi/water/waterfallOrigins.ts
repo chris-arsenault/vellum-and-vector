@@ -10,7 +10,16 @@ import { mapScale } from "../../worldSignificance";
 import type { PoiClaim, PoiOrigin } from "../poiContract";
 import { spacedAmong } from "../poiOrigins";
 import { carriedPlaces } from "../poiPublish";
-import { cellSpan, cellsWithin, fieldOf, fractureAt, heldFor, isLake, isSea } from "../poiReads";
+import {
+  cellSpan,
+  cellsWithin,
+  dischargeAt,
+  fieldOf,
+  fractureAt,
+  heldFor,
+  isLake,
+  isSea,
+} from "../poiReads";
 import { settlementPlaces } from "../settlements/communityRecords";
 import { sizeAtCell } from "./waterfallShape";
 import { flowTarget } from "./waterReads";
@@ -33,7 +42,6 @@ const portageSpans = 2,
   portageChance = 0.5;
 const salt = 0x7041;
 
-const flowOf = (state: GenerationState, cell: number) => fieldOf(state).FlowAccumulation.get(cell);
 /** Every step on this map's rivers, tallest first. No rivers, no steps. */
 export const stepsOf = (state: GenerationState): readonly number[] =>
   heldFor(state, "fall:steps", () => {
@@ -86,7 +94,8 @@ const hanging = (state: GenerationState, claimed: Claimed) =>
   among(
     state,
     claimed,
-    (cell, target) => target >= 0 && flowOf(state, target) >= hangingShare * flowOf(state, cell)
+    (cell, target) =>
+      target >= 0 && dischargeAt(state, target) >= hangingShare * dischargeAt(state, cell)
   );
 /** A river going straight over a cliff into the sea or a lake. */
 const shore = (state: GenerationState, claimed: Claimed) =>

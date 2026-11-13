@@ -4,6 +4,8 @@ import { ecologyFields, ecologyRatios } from "@atlas/domain";
 import { magicEffectChannels } from "./magicFieldDefinitions";
 import { humanChannels, humanFeatures } from "../human/humanChannels";
 import { landWaterNames, standingWaterNames, waterColumnChannels } from "../water/column";
+import { waterYearChannels } from "../water/yearResources";
+import { waterYearStateFields } from "@atlas/domain";
 
 /** The working band's identity and meaning also govern its published samples. */
 export interface PhysicalChannel {
@@ -62,6 +64,7 @@ export const physicalChannels: PhysicalChannel[] = [
   amount("ImpactEjectaThickness"),
   // A cell's water column is published and inherited as the water owner's package.
   ...waterColumnChannels,
+  ...waterYearChannels,
   length("DrainageElevations"),
   fraction("FractureConductance"),
   channel("RockResistance", "rock-strength"),
@@ -228,6 +231,7 @@ export const physicalChannelOwnership: Ownership[] = [
     "rivers",
     [
       "Runoff",
+      ...waterYearStateFields,
       ...landWaterNames.filter((name) => name !== "SoilWater"),
       "DrainageBasinIds",
       "CatchmentArea",

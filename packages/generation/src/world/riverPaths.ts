@@ -4,7 +4,13 @@ import { spatial, MapScale, type Band, type ReadBand } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { meshDeltaX, meshPointX } from "./mesh";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
-import { onRiver, riverSample, waterAt, type RiverSample } from "../water/riverKeeping";
+import {
+  onRiver,
+  riverSample,
+  riverSuccessor,
+  waterAt,
+  type RiverSample,
+} from "../water/riverKeeping";
 
 type Coordinate = [number, number];
 type Station = { point: Coordinate; segment: number; fraction: number };
@@ -32,7 +38,7 @@ export function createRiverPaths(map: PhysicalField): RiverPaths {
     elevationAt: physicalSampler(map.mesh, map.Elevation),
   };
   for (let i = 0; i < map.mesh.count; i++) {
-    const target = map.FlowTargets.get(i);
+    const target = riverSuccessor(map, i);
     if (!onRiver(map, i) || target < 0) continue;
     paths.incoming!.add(target, 1);
     const previous = paths.upstream.get(target);
@@ -47,7 +53,7 @@ function relax(map: PhysicalField, paths: RiverPaths) {
     y = workingValues(map, "float64", "river:relax-y", (i) => paths.y.get(i));
   for (let i = 0; i < map.mesh.count; i++) {
     const previous = paths.upstream.get(i),
-      next = map.FlowTargets.get(i);
+      next = riverSuccessor(map, i);
     if (
       previous < 0 ||
       next < 0 ||
@@ -100,7 +106,7 @@ function openWater(map: PhysicalField, i: number) {
 }
 function tangent(map: PhysicalField, paths: RiverPaths, i: number): Coordinate {
   const previous = paths.upstream.get(i),
-    target = map.FlowTargets.get(i),
+    target = riverSuccessor(map, i),
     next = target < 0 && map.WaterKindCodes.get(i) !== 0 ? openWater(map, i) : target;
   const a = position(paths, previous < 0 ? i : previous),
     b = position(paths, next < 0 ? i : next);

@@ -105,8 +105,8 @@ between generation and storage.
 
 Captured Ground includes finite beds, loose cover, facets, contacts, material history
 and hosted cargo. A region starts at the captured surface. Inclined contacts expose the
-actual beds before initial drainage organization; grain, dip and material response guide
-the connected placement of inherited valley floors. Captured faults and sheet contacts
+actual beds before initial drainage organization; retained courses locate inherited valley
+floors, with grain, dip and material response guiding their connected widening. Captured faults and sheet contacts
 open local discontinuities through the shared fracture owner. Later Ground actions move
 retained packages and expose material through excavation. There is no parent-blur fit or
 restoration of parent heights after erosion.
@@ -121,8 +121,10 @@ circulation remain captured context. No separate regional wind-transport process
 Regional drainage supplies captured inflow to shared conditioning, lake, routing and
 river owners. Rivers are retained objects with monthly profiles and physical beds;
 river consumers ask those records, while unresolved water remains a cell quantity.
-The water column imports snow, soil, groundwater and standing water together before
-development. Finer channels can emerge from captured small-channel quantities where water
+The water owner imports snow, soil, groundwater, standing water and the established supply
+year before development. Explicit commands transfer held water and evolve courses; current
+reads project the resulting supply and owned river membership. Publication cannot establish
+or regroup a river. Finer channels can emerge from captured small-channel quantities where water
 is present. Boundary inflow uses the captured river's monthly profile, without inferring
 its seasons from local rainfall.
 The current ocean connection follows current terrain; neither an old coastline nor

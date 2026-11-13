@@ -12,6 +12,7 @@ import {
   standWater,
   waterColumnChannels,
   inheritColumn,
+  waterStorage,
 } from "./column";
 import { transferColumn } from "./stores";
 
@@ -21,12 +22,12 @@ it("owns stores with room and release behavior, not only a list of writable laye
   map.SoilDepth.set(0, 1);
   putSoilWater(map, 0, 0.06);
   expect(map.water.soil.room(0)).toBeCloseTo(0.06);
-  const released = map.water.soil.give(0, 0.12);
+  const released = waterStorage(map).soil.give(0, 0.12);
   expect(released).toBeGreaterThan(0);
   expect(released).toBeLessThan(0.06);
   expect(map.SoilWater.get(0)).toBeCloseTo(0.06 - released);
   putSnow(map, 0, 0.3);
-  const transfer = transferColumn(map.water.snow, map.water.soil, 0, 0.2);
+  const transfer = transferColumn(waterStorage(map).snow, waterStorage(map).soil, 0, 0.2);
   expect(transfer.overflow).toBeGreaterThan(0);
   expect(map.SnowPack.get(0)).toBeCloseTo(0.1);
   expect(map.SoilWater.get(0)).toBeCloseTo(0.12);
@@ -80,6 +81,9 @@ it("moves the water a cell holds with its ground when the plates move", () => {
   putSoilWater(map, 0, 0.2);
   putGroundwater(map, 0, 5);
   putGroundwater(map, 2, 1);
+  map.SurfaceWaterMonth0.set(0, 12);
+  map.WaterRecharge.set(0, 8);
+  map.SnowKept.set(0, 3);
   carryColumn(map, plan);
   expect(map.SnowPack.get(1)).toBeCloseTo(0.3, 9);
   expect(map.SoilWater.get(1)).toBeCloseTo(0.2, 9);
@@ -89,6 +93,9 @@ it("moves the water a cell holds with its ground when the plates move", () => {
   expect(map.GroundwaterStorage.get(0)).toBe(0);
   // Ground that did not move keeps what it held.
   expect(map.GroundwaterStorage.get(2)).toBeCloseTo(1, 9);
+  expect(map.SurfaceWaterMonth0.get(1)).toBe(12);
+  expect(map.WaterRecharge.get(1)).toBe(8);
+  expect(map.SnowKept.get(1)).toBe(3);
 });
 
 it("moves a lake with the ground it lies on, and leaves the sea where it is", () => {

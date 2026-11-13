@@ -8,6 +8,7 @@ import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from
 import { namingCultureNear, within } from "../poiPlaces";
 import { ruleRecord, siteRecord } from "../poiRecords";
 import {
+  adjacent,
   celsiusAt,
   dischargeAt,
   fieldOf,
@@ -24,7 +25,7 @@ import {
 } from "../poiReads";
 import { permeableFrom } from "../../rock/rockCatalogue";
 import { aloneAmong, attachment, sized, weighed } from "../poiVisibilityRules";
-import { drynessAround, inflows, onMappedRiver, spans, standsIn } from "./waterReads";
+import { drynessAround, flowTarget, inflows, onMappedRiver, spans, standsIn } from "./waterReads";
 
 /** Ground fractured past this share lets water rise, whatever its rock. */
 const openFracture = 0.32;
@@ -51,7 +52,8 @@ function steepestAbove(state: GenerationState, cell: number) {
 /** A channel's first cell: a river no river runs into, and not one entering across the frame. */
 function isChannelHead(state: GenerationState, cell: number) {
   if (!onMappedRiver(state, cell) || frameEdge(fieldOf(state).mesh, cell)) return false;
-  for (const next of inflows(state, cell)) if (onMappedRiver(state, next)) return false;
+  for (const next of adjacent(state, cell))
+    if (onMappedRiver(state, next) && flowTarget(state, next) === cell) return false;
   return true;
 }
 const unfrozen = (state: GenerationState, cell: number) =>

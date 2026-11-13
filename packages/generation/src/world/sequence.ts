@@ -63,8 +63,10 @@ import {
   meltwater,
   groundwater,
   rivers,
+  riverEvolution,
   routing,
   waterOff,
+  waterTransfer,
 } from "../processes/waterProcesses";
 import { weathering } from "../processes/weathering";
 
@@ -142,12 +144,13 @@ export const nativeSteps = {
   oceanCurrents: step("ocean-currents", 0x6c41e2, currents),
   warmthSources: step("warmth-sources", 0x4a51c73, warmth),
   atmosphericClimate: step("atmospheric-climate", 0x4e28b3, atmosphere),
-  runoff: step("runoff", 0, waterOff),
+  runoff: step("runoff", 0, waterTransfer, waterOff),
+  currentWater: step("current-water", 0, rivers),
   drainageConditioning: step("drainage-conditioning", 0, drainageFlood),
   lakeBasins: step("lake-basins", 0x7a31, lakes),
   drainageGuidance: step("drainage-guidance", 0x61bd23, drainageTurns),
   flowRouting: step("flow-routing", 0, routing),
-  riverNetwork: step("river-network", 0, rivers),
+  riverNetwork: step("river-network", 0, riverEvolution, rivers),
   ancestralFluvialErosion: stage(
     "ancestral-fluvial-erosion",
     0,

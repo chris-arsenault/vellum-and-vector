@@ -35,10 +35,9 @@ export function gradeGround(state: RegionalState, targets: ReadonlyMap<number, n
     inside = new Map(cells.map((cell, k) => [cell, k])),
     h = cells.map((i) => map.Elevation.get(i)),
     areas = cells.map((i) => map.mesh.area(i)),
-    network = state.regional.network,
     basin = state.regional.relief?.basin,
-    // This round's channels and kept hollows, and the last routing's rivers, stay as they are.
-    movable = cells.map((i) => !onRiver(map, i) && !network?.channel[i] && !basin?.[i]),
+    // Present rivers and captured hollows stay as they are; a routing proposal owns no water.
+    movable = cells.map((i) => !onRiver(map, i) && !basin?.[i]),
     edges = gradeEdges(state, targets, cells, inside),
     // A graded step is good to a share of the step it is held to: nobody levels ground to a
     // millimetre, and asking for that kept large or steep footprints relaxing without end.

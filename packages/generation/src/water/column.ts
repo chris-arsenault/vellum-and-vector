@@ -1,4 +1,4 @@
-import { MapScale, waterColumn, type Band } from "@atlas/domain";
+import { MapScale, waterColumn, waterYearStateFields, type Band } from "@atlas/domain";
 import { StoreColumn, type WaterColumn } from "./stores";
 import { soilWaterCapacity } from "./soilWater";
 import { groundwaterCapacity } from "./groundwater";
@@ -61,20 +61,23 @@ export function ownWater(map: PhysicalField): WaterColumn {
   };
 }
 
+/** Internal transfer capability over the same map-owned stores exposed by the public read view. */
+export const waterStorage = (map: PhysicalField): WaterColumn => map.water as WaterColumn;
+
 // --- Snow, soil water and groundwater -------------------------------------------------
 
 /** The snow lying on a cell through the year, as a depth of water. */
 export const putSnow = (map: PhysicalField, i: number, depth: number) =>
-  map.water.snow.replace(i, depth);
+  waterStorage(map).snow.replace(i, depth);
 /** What a cell's soil holds, as a depth of water. */
 export const putSoilWater = (map: PhysicalField, i: number, depth: number) =>
-  map.water.soil.replace(i, depth);
+  waterStorage(map).soil.replace(i, depth);
 /** What the ground below a cell's soil holds, as a depth of water. */
 export const putGroundwater = (map: PhysicalField, i: number, depth: number) =>
-  map.water.ground.replace(i, depth);
+  waterStorage(map).ground.replace(i, depth);
 /** Water reaching or leaving the ground below a cell, as a depth. */
 export const addGroundwater = (map: PhysicalField, i: number, depth: number) =>
-  map.water.ground.replace(i, map.water.ground.held(i) + depth);
+  waterStorage(map).ground.replace(i, map.water.ground.held(i) + depth);
 
 // --- Standing water -------------------------------------------------------------------
 
@@ -156,7 +159,7 @@ export function forgetLake(map: PhysicalField, i: number) {
  */
 export function carryColumn(map: PhysicalField, plan: TransportPlan) {
   const arriving = workingArray(map, "float64", "water:column-arriving");
-  for (const part of held) {
+  for (const part of [...held, ...waterYearStateFields]) {
     arriving.fill(0);
     spread(map, plan, map[part], arriving);
     for (let cell = 0; cell < map.mesh.count; cell++)

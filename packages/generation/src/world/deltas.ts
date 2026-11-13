@@ -3,11 +3,12 @@ import { meshDeltaX } from "./mesh";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp } from "./math";
-import { gatherDown, sourceToOutletOrder } from "./flowGraph";
+import { gatherDown, targetOrder } from "./flowGraph";
 import { physicalDistance } from "./physicalMetric";
 import { workingValues, releaseWorking } from "./physicalNumerics";
-import { onRiver, riverOrderAt, waterAt } from "../water/riverKeeping";
+import { onRiver, riverOrderAt, riverSuccessor, waterAt } from "../water/riverKeeping";
 import { MapScale, type Band } from "@atlas/domain";
+import { sedimentTarget } from "./fluvial";
 
 function sedimentDelivery(map: PhysicalField): Band {
   const delivery = workingValues(
@@ -20,9 +21,10 @@ function sedimentDelivery(map: PhysicalField): Band {
         "native"
       ) * map.mesh.area(i)
   );
-  const order = sourceToOutletOrder(map);
-  gatherDown(order, map.FlowTargets, delivery);
-  releaseWorking(map, order);
+  const targets = workingValues(map, "int32", "delta:targets", (cell) => sedimentTarget(map, cell)),
+    order = targetOrder(map, targets);
+  gatherDown(order, targets, delivery);
+  releaseWorking(map, order, targets);
   return delivery;
 }
 function qualifies(
@@ -108,14 +110,18 @@ function buildFan(map: PhysicalField, c: PhysicalContext, mouth: number, ocean: 
     }
   }
 }
+/** A delta's receiving sea belongs to the retained river's actual terminal edge. */
+export function deltaMouth(map: PhysicalField, cell: number) {
+  const next = onRiver(map, cell) ? riverSuccessor(map, cell) : -1;
+  return next >= 0 && map.WaterKindCodes.get(next) === 1 ? next : -1;
+}
+
 export function deltaFormation(map: PhysicalField, c: PhysicalContext) {
   map.DeltaIntensity.fill(0);
   const delivery = sedimentDelivery(map);
   for (let i = 0; i < map.mesh.count; i++) {
-    if (!onRiver(map, i)) continue;
-    const ocean = map.FlowTargets.get(i);
-    if (ocean >= 0 && map.WaterKindCodes.get(ocean) === 1 && qualifies(map, c, delivery, i, ocean))
-      buildFan(map, c, i, ocean);
+    const ocean = deltaMouth(map, i);
+    if (ocean >= 0 && qualifies(map, c, delivery, i, ocean)) buildFan(map, c, i, ocean);
   }
   releaseWorking(map, delivery);
 }

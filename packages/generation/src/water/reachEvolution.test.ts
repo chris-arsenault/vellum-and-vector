@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { advanceReaches, type RiverEnvironment } from "./reachEvolution";
+import { addReach, advanceReaches, type RiverEnvironment } from "./reachEvolution";
 import { emptyReaches } from "./reaches";
 
 function environment(targets: number[], resolved = targets.map(() => true)): RiverEnvironment {
@@ -98,3 +98,23 @@ it("realizes initial tributaries from supplied latent channel origins, leaving d
   advanceReaches(store, env);
   expect([...store.reaches.values()].map((reach) => reach.cells)).toEqual([[0, 2]]);
 });
+
+it.each([false, true])(
+  "splits an existing receiving course when a retained river diverts into its middle (named: %s)",
+  (named) => {
+    const store = emptyReaches(),
+      diverted = addReach(store, [0, 1]),
+      receiving = addReach(store, [2, 3, 4]),
+      env = environment([1, 3, 3, 4, -1]);
+    if (named) {
+      diverted.river = "tributary";
+      receiving.river = "main-river";
+    }
+    advanceReaches(store, env);
+    expect(receiving.cells).toEqual([3, 4]);
+    expect(diverted.downstream).toBe(receiving.id);
+    for (const reach of store.reaches.values())
+      for (let at = 1; at < reach.cells.length; at++)
+        expect(env.next(reach.cells[at - 1])).toBe(reach.cells[at]);
+  }
+);

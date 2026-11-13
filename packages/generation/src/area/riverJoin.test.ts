@@ -9,7 +9,6 @@ const reach = (
   downstream,
   course,
   inFrame: true,
-  held: course ? [course] : [],
   ...options,
 });
 
@@ -45,35 +44,23 @@ it("draws a course that leaves the frame and returns as one river of two parts",
 });
 
 it("keeps a tributary that is a river of its own separate", () => {
-  const rivers = joinReaches([
-    reach(2, "main"),
-    reach(2, "branch"),
-    // The confluence cell is held by the branch that reached it first; the reach is the main's.
-    reach(null, "main", { held: ["branch", "main"] }),
-  ]);
+  const rivers = joinReaches([reach(2, "main"), reach(2, "branch"), reach(null, "main")]);
   expect(rivers).toEqual([
     { riverId: "main", parts: [[0, 2]] },
     { riverId: "branch", parts: [[1]] },
   ]);
 });
 
-it("gives a reach held only at its confluence cell by another course to its own course", () => {
-  const rivers = joinReaches([reach(1, "branch"), reach(null, "main", { held: ["branch"] })]);
+it("keeps different owned memberships separate at their confluence", () => {
+  const rivers = joinReaches([reach(1, "branch"), reach(null, "main")]);
   expect(rivers.map(({ riverId, parts }) => [riverId, parts])).toEqual([
     ["branch", [[0]]],
     ["main", [[1]]],
   ]);
 });
 
-it("gives a parent's river the reaches its water runs through, whatever course they lie on", () => {
-  const rivers = joinReaches(
-    [
-      reach(1, "own", { held: ["own", "parent"] }),
-      reach(2, "own", { held: ["parent"] }),
-      reach(null, null, { held: ["parent"] }),
-    ],
-    new Set(["parent"])
-  );
+it("assembles inherited memberships without assigning a parent's identity to another course", () => {
+  const rivers = joinReaches([reach(1, "own"), reach(2, "parent"), reach(null, "parent")]);
   expect(rivers).toEqual([
     { riverId: "own", parts: [[0]] },
     { riverId: "parent", parts: [[1, 2]] },

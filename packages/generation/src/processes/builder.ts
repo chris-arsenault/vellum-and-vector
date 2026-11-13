@@ -5,7 +5,7 @@ import type { Pool } from "../coupling/flows";
 import type { FieldProcess, PhysicalInput, PhysicalQuery } from "./groundProcess";
 import { defineCommand, defineQuery, type Command, type OperationKind } from "../processOperation";
 
-interface FieldEntry {
+interface FieldEntry<Input extends PhysicalInput = PhysicalInput> {
   id: string;
   statement: string;
   needs?: readonly PhysicalBufferName[];
@@ -14,7 +14,7 @@ interface FieldEntry {
   moves?: readonly (readonly [Pool, Pool])[];
   asks?: readonly AnswerKey[];
   check?: (map: PhysicalField, context: PhysicalContext) => void;
-  execute: (input: PhysicalInput) => void;
+  execute: (input: Input) => void;
 }
 const declaration = (entry: Omit<FieldEntry, "execute">) => ({
   needs: [],
@@ -29,12 +29,15 @@ const declaration = (entry: Omit<FieldEntry, "execute">) => ({
 });
 
 /** Whole-field commands declare their actual lifecycle; there is no default work category. */
-export type CommandProcess = FieldProcess & { readonly operation: Command<PhysicalInput, void> };
-export function fieldCommand(
+export type CommandProcess<Input extends PhysicalInput = PhysicalInput> = Omit<
+  FieldProcess,
+  "operation"
+> & { readonly operation: Command<Input, void> };
+export function fieldCommand<Input extends PhysicalInput = PhysicalInput>(
   kind: Exclude<OperationKind, "query" | "elapsed" | "publish">,
-  entry: FieldEntry,
+  entry: FieldEntry<Input>,
   dependencies: readonly QueryProcess[]
-): CommandProcess {
+): CommandProcess<Input> {
   const { execute, ...metadata } = entry;
   return {
     ...declaration(metadata),

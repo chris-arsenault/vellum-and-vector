@@ -74,8 +74,64 @@ it("holds a winter's snow and releases it as the thaw's flood", () => {
 });
 
 it("keeps as ice the snow no summer melts", () => {
-  const year = waterYear(ground({ rain: even(0), snow: even(900), melt: even(300) }));
+  const year = waterYear(ground({ rain: even(0), snow: even(900), melt: even(300) }), {
+    snow: 120,
+  });
   expect(year.keptSnow).toBeCloseTo(600, 6);
+  expect(year.end.snow).toBe(120);
+});
+
+it("retains an inherited frozen snowpack when neither snowfall nor thaw changes it", () => {
+  const year = waterYear(ground({ rain: even(0), snow: even(0), melt: even(0), demand: even(0) }), {
+    snow: 120,
+  });
+  expect(year.end.snow).toBe(120);
+  expect(year.keptSnow).toBe(0);
+});
+
+it("carries late-season snow through warmup instead of repeatedly classifying it as firn", () => {
+  const snow = even(0),
+    melt = even(0);
+  snow[11] = 120;
+  melt[0] = 120;
+  const year = waterYear(ground({ rain: even(0), snow, melt, demand: even(0), soilCapacity: 0 }));
+  expect(year.end.snow).toBe(120);
+  expect(year.keptSnow).toBe(0);
+  expect(year.quick[0]).toBeGreaterThan(0);
+});
+
+it("returns the thaw from a supplied snowpack instead of consuming it in warmup", () => {
+  const melt = even(0);
+  melt[0] = 120;
+  const year = waterYear(
+    ground({ rain: even(0), snow: even(0), melt, demand: even(0), soilCapacity: 0 }),
+    { snow: 120 }
+  );
+  expect(year.quick[0]).toBeGreaterThan(0);
+  expect(year.thaw[0]).toBe(120);
+  expect(year.thaw[1]).toBe(0);
+  expect(year.end.snow).toBe(0);
+  expect(year.keptSnow).toBe(0);
+});
+
+it("releases supplied soil water beyond the present soil's room instead of discarding it", () => {
+  const year = waterYear(
+    ground({ rain: even(0), snow: even(0), melt: even(0), demand: even(0), soilCapacity: 50 }),
+    { soil: 120, snow: 0 }
+  );
+  expect(year.quick[0]).toBeGreaterThan(0);
+  expect(year.end.soil).toBeLessThanOrEqual(50);
+});
+
+it("warms unspecified soil without spending a supplied snowpack before the returned year", () => {
+  const melt = even(0);
+  melt[0] = 120;
+  const year = waterYear(
+    ground({ rain: even(0), snow: even(0), melt, demand: even(0), soilCapacity: 150 }),
+    { snow: 120 }
+  );
+  expect(year.quick[0]).toBe(0);
+  expect(year.end.soil).toBe(120);
 });
 
 it("turns flashy runoff into steady groundwater as the ground takes more", () => {

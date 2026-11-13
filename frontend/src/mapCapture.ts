@@ -5,6 +5,7 @@ import {
   spatial,
   layerSupports,
   polygonGeometry,
+  retainedRiverTrace,
   type Area,
   type AtlasFeature,
   type CatalogChanges,
@@ -29,14 +30,7 @@ export async function captureMap(
     scope = { ...source.scope, areaId: sourceId, footprint: area.footprint },
     captured = await captureContextSnapshot(catalog, scope, world, owners);
   const features = await captureFeatures(catalog, scope, area);
-  const ids = new Map(
-    features.map((f) => [
-      f.id,
-      f.areaId === area.id
-        ? f.id
-        : semanticId(world.id, `map:${area.id}:feature`, f.placeId ?? f.id),
-    ])
-  );
+  const ids = capturedFeatureIds(world.id, area.id, features);
   const seen = new Set<string>();
   const put = (data: DomainWrite) => {
     const key = `${data.kind}:${data.value.id}`;
@@ -102,7 +96,18 @@ function captureContextSnapshot(
     dependencies: false,
   });
 }
-function capturedFeature(
+/** Record identity stays distinct from the place that several records may represent. */
+export const capturedFeatureIds = (worldId: string, areaId: string, features: AtlasFeature[]) =>
+  new Map(
+    features.map((feature) => [
+      feature.id,
+      feature.areaId === areaId
+        ? feature.id
+        : semanticId(worldId, `map:${areaId}:feature`, feature.id),
+    ])
+  );
+
+export function capturedFeature(
   feature: AtlasFeature,
   area: Area,
   ids: Map<string, string>,
@@ -112,7 +117,7 @@ function capturedFeature(
   const clipped = clip(feature.geometry),
     geometry = feature.geometry.type.includes("Polygon") ? polygonGeometry(clipped) : clipped;
   if (!geometry) return null;
-  const local = {
+  const local: AtlasFeature = {
     ...structuredClone(feature),
     // Source authorship is provenance; only this map's existing drawings remain constraints.
     ...(converting ? {} : { state: "generated" as const, protected: false, mapOnly: undefined }),
@@ -129,6 +134,8 @@ function capturedFeature(
       .filter((r) => !["follows", "dependsOn"].includes(r.kind) || ids.has(r.targetId))
       .map((r) => ({ ...r, targetId: ids.get(r.targetId) ?? r.targetId })),
   };
+  // A parent's product is captured input here; only same-map products remain regeneration work.
+  if (!converting) delete local.attributes.developedBy;
   delete local.footprint;
   const footprint = feature.footprint && polygonGeometry(clip(feature.footprint));
   if (footprint) local.footprint = footprint;
@@ -228,16 +235,25 @@ function captureWater(
 ) {
   if (!network) return undefined;
   const touches = spatial.intersectionPredicate(area.footprint),
+    inside = spatial.pointCoverage(area.footprint),
     present = (course: [number, number][]) =>
       course.length > 1 && touches({ type: "LineString", coordinates: course });
   return {
     ...structuredClone(network),
     reaches: structuredClone(
-      network.reaches.filter(
-        (reach) => present(reach.course) || reach.former.some((old) => present(old.course))
-      )
+      network.reaches.filter((reach) => {
+        const trace = retainedRiverTrace(reach);
+        return (
+          (trace
+            ? touches(trace.geometry)
+            : reach.course.some(([x, y]) => inside({ x, y, z: 0 }))) ||
+          reach.former.some((old) => present(old.course))
+        );
+      })
     ),
-    entries: [],
+    entries: structuredClone(
+      network.entries.filter(({ position: [x, y] }) => inside({ x, y, z: 0 }))
+    ),
   };
 }
 function captureDrainage(
@@ -247,9 +263,18 @@ function captureDrainage(
 ) {
   const kept = reaches
       .map((reach, index) => ({ reach, index }))
-      .filter(({ reach }) =>
-        spatial.intersects({ type: "LineString", coordinates: reach.coordinates }, area.footprint)
-      ),
+      .filter(({ reach }) => {
+        const coordinates = reach.coordinates;
+        return (
+          coordinates.length > 0 &&
+          spatial.intersects(
+            coordinates.length === 1
+              ? { type: "Point", coordinates: coordinates[0] }
+              : { type: "LineString", coordinates },
+            area.footprint
+          )
+        );
+      }),
     indexes = new Map(kept.map(({ index }, i) => [index, i]));
   return kept.map(({ reach }) => ({
     ...reach,

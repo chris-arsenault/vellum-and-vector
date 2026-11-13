@@ -57,7 +57,7 @@ function heldRiver(): RetainedRiver {
     leakage: [0.1, 0.1],
   };
 }
-async function capturedContext() {
+async function capturedContext(kept = [heldRiver()]) {
   const world = fixtureWorld({ name: "Context", seed: 1, width: 100_000, height: 100_000 }),
     root = Object.values(world.areas)[0],
     state = () => fixtureState(world.id).snapshot,
@@ -92,8 +92,29 @@ async function capturedContext() {
         id: `drainage:${root.id}`,
         areaId: root.id,
         spaceId: root.spaceId!,
-        reaches: [reach(99_000, null), reach(30_000, 2), reach(40_000, null)],
-        kept: { next: 12, entries: [], reaches: [heldRiver()] },
+        reaches: [
+          reach(99_000, null),
+          reach(30_000, 2),
+          reach(40_000, null),
+          {
+            ...reach(30_000, null),
+            coordinates: [[30_000, 30_000]],
+            discharges: [20],
+            catchmentAreas: [100_000],
+          },
+        ],
+        kept: {
+          next: Math.max(...kept.map((reach) => reach.id)) + 1,
+          entries: [
+            {
+              position: [0, 25_000],
+              monthly: Array.from({ length: 12 }, (_, month) => (month < 6 ? 40 : 0)),
+              catchment: 9000,
+            },
+            { position: [99_000, 25_000], monthly: Array(12).fill(999), catchment: 999 },
+          ],
+          reaches: kept,
+        },
       },
     },
     ...contextSources(root),
@@ -103,7 +124,7 @@ async function capturedContext() {
     areaId: root.id,
     name: "Local coast",
     layers: [],
-    region: { parentId: null, footprint: rectangle([10_000, 10_000, 80_000, 80_000]) },
+    region: { parentId: null, footprint: rectangle([0, 10_000, 80_000, 80_000]) },
   });
   await command("createArea", regionRefinementInput(state().world, regionId));
   const child = refinedRegionArea(state().world, regionId)!,
@@ -165,8 +186,9 @@ it("captures valid local drainage indexes and links magic to the captured landma
     landmark = source.world.landmarks[0],
     injected = source.world.magic.find((s) => s.landmarkId)!,
     dependent = source.world.magic.find((s) => s.dependsOn?.length)!;
-  expect(drainage.reaches).toHaveLength(2);
+  expect(drainage.reaches).toHaveLength(3);
   expect(drainage.reaches[0].downstream).toBe(1);
+  expect(drainage.reaches[2].coordinates).toEqual([[30_000, 30_000]]);
   expect(drainage.input).toBe(true);
   expect(drainage.kept?.reaches[0]).toMatchObject({
     river: "long-river",
@@ -175,6 +197,54 @@ it("captures valid local drainage indexes and links magic to the captured landma
     bed: [90, 80],
     former: [{ course: reach(30_000, null).coordinates, leftIn: 1 }],
   });
+  expect(drainage.kept?.entries).toEqual([
+    {
+      position: [0, 25_000],
+      monthly: Array.from({ length: 12 }, (_, month) => (month < 6 ? 40 : 0)),
+      catchment: 9000,
+    },
+  ]);
   expect(injected.landmarkId).toBe(landmark.id);
   expect(dependent.dependsOn).toEqual([injected.id]);
+});
+
+it("captures a one-cell course crossing into the child through its verified receiving junction", async () => {
+  const receiving = {
+      ...heldRiver(),
+      course: [
+        [1000, 50_000],
+        [1000, 60_000],
+      ] as [number, number][],
+      former: [],
+    },
+    crossing: RetainedRiver = {
+      ...heldRiver(),
+      id: 12,
+      river: "seat-stream",
+      name: "Seat Stream",
+      course: [[-1000, 50_000]],
+      junction: [1000, 50_000],
+      downstream: receiving.id,
+      former: [],
+      monthly: Array(12).fill(0),
+      catchment: [100],
+      bed: [90],
+      width: [5],
+      depth: [1],
+      leakage: [0.1],
+    },
+    f = await capturedContext([crossing, receiving]),
+    source = await generationSource(f.workspace.catalog, f.world.id, f.child.id),
+    captured = source.world.drainage![f.child.id].kept!.reaches.find(
+      (reach) => reach.id === crossing.id
+    )!;
+  expect(captured).toMatchObject({
+    river: "seat-stream",
+    name: "Seat Stream",
+    course: crossing.course,
+    junction: crossing.junction,
+    downstream: receiving.id,
+  });
+  expect(captured.monthly).toHaveLength(12);
+  expect(captured.catchment).toEqual([100]);
 });

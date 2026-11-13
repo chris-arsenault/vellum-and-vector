@@ -3,7 +3,13 @@ import { ecologyCarbon, ecologyMemory, ecologyRatios, ecologyScalars } from "@at
 import { units } from "../world/math";
 import type { MapScale } from "@atlas/domain";
 import { rockLayerDepths, rockLayerKinds } from "@atlas/domain";
-import { humanIntegerFields, humanScalarFields, waterColumn, waterYearFields } from "@atlas/domain";
+import {
+  humanIntegerFields,
+  humanScalarFields,
+  waterColumn,
+  waterYearFields,
+  waterYearStateFields,
+} from "@atlas/domain";
 import {
   groundMaterialFields,
   groundPlacementFields,
@@ -272,6 +278,7 @@ for (const name of [
 // A cell's water column goes with its ground as one package, carried by the water owner.
 for (const part of ["snow", "soil", "ground", "standing", "surface", "kind", "body"] as const)
   quantityKinds[waterColumn[part]] = "carried";
+for (const part of waterYearStateFields) quantityKinds[part] = "carried";
 
 export const quantitiesOfKind = (kind: QuantityKind) =>
   Object.keys(quantityKinds).filter((name) => quantityKinds[name] === kind) as PhysicalBufferName[];

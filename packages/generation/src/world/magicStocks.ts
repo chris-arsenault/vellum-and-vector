@@ -5,7 +5,7 @@ import type { PhysicalField } from "./field";
 import { originStocks, stockKey, withOrigin, type MagicField } from "./magicState";
 import { clamp, round, units } from "./math";
 import { displaceGround } from "../rock/groundLedger";
-import { onRiver } from "../water/riverKeeping";
+import { onRiver, riverSuccessor } from "../water/riverKeeping";
 import { seepBrine, settleDust, weatherBed } from "./magicSaltStocks";
 import { stockExposure, stockGroundHosts } from "../rock/rockMagicStock";
 import type { MagicInventory } from "./magicInventory";
@@ -326,6 +326,9 @@ function consume(field: MagicField, values: MagicInventory) {
     values.set(i, values.get(i) * (1 - field.releasing.get(i)));
 }
 /** Placers: a share of the stock on a river cell moves to the cell the river flows to. */
+export const placerTarget = (map: PhysicalField, cell: number) =>
+  onRiver(map, cell) ? riverSuccessor(map, cell) : map.FlowTargets.get(cell);
+
 function carryDownstream(map: PhysicalField, field: MagicField, values: MagicInventory) {
   const mobility = field.definition.parameters.placerMobility,
     moved = workingArray(map, "float64", "magic:river-carriage", values.length);
@@ -334,7 +337,7 @@ function carryDownstream(map: PhysicalField, field: MagicField, values: MagicInv
     const value = values.get(i);
     if (value <= 0 || map.WaterKindCodes.get(i) === 1) continue;
     const exposed = exposure(map, i, field.definition.parameters.buryDepth),
-      target = map.FlowTargets.get(i),
+      target = placerTarget(map, i),
       share =
         value *
         exposed *

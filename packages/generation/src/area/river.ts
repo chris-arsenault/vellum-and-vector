@@ -1,5 +1,5 @@
-import type { AtlasFeature } from "@atlas/domain";
-import { waterAt } from "../water/riverKeeping";
+import { chartFootprint, point, spatial, type AtlasFeature, type Position } from "@atlas/domain";
+import { reachesOf, waterAt } from "../water/riverKeeping";
 import {
   generationFeature,
   generationFeatures,
@@ -12,9 +12,10 @@ import type { CapturedCourse } from "../regional/courses";
 import type { RegionalState } from "../regional/state";
 import type { GenerationState } from "../process";
 import type { AreaEntry, AreaPlace } from "./areaContract";
-import { mappedRiverCells, riverPositionAt, riversOf, type River } from "./riverCourses";
+import { mappedRiverCells, riverIdAt, riversOf, type River } from "./riverCourses";
 import { continuingRivers, riverIdOfRecord } from "./riverLineage";
-import { publishRivers } from "./riverPublish";
+import { publishRivers, retainPublishedRiverNames } from "./riverPublish";
+import { nativePosition } from "../world/atlasWorkspace";
 
 /** Discharge at which a river is half as great as rivers get, in cubic metres a second. */
 const typicalDischarge = 350;
@@ -52,21 +53,40 @@ const onIt = (kind: PoiKindId): PoiRelation<AreaPlace> => ({
   holds: (_state, river, place) => Boolean(river.extent.cells?.includes(place.anchor)),
 });
 
-/** Where a place that recorded this river stands: its share of the parent's river, on the part here. */
-function cellFor(state: RegionalState, link: PoiHostLink) {
-  const parent = continuingRivers(state).find((candidate) => candidate.id === link.hostId),
-    river = riversOf(state).find((candidate) => candidate.id === link.hostId);
-  if (!parent || !river || parent.to <= parent.from) return -1;
-  const along = (link.along - parent.from) / (parent.to - parent.from);
-  return along < 0 || along > 1 ? -1 : river.cells[Math.round(along * (river.cells.length - 1))];
+/** The captured position lands on the actual host cells; disconnected pieces add no false edge. */
+function cellFor(state: RegionalState, link: PoiHostLink, position: Position) {
+  const map = state.physical.map,
+    cells = [...reachesOf(map)]
+      .filter((reach) => reach.drawn && reach.river === link.hostId)
+      .flatMap((reach) => [...reach.cells])
+      .filter((cell) => map.mesh.membership(cell) === 1 && map.WaterKindCodes.get(cell) !== 1);
+  if (!cells.length) return -1;
+  const located = spatial.interiorPosition(
+    chartFootprint(point(position), state.surface.bounds, state.surface.periodicWidth)
+  );
+  return spatial.withIndex(
+    cells.map((cell) => point(nativePosition(state.physical, cell))),
+    (index) => cells[index.nearest(located)] ?? -1
+  );
 }
 function linkAt(state: GenerationState, cell: number): PoiHostLink | null {
-  const position = riverPositionAt(state, cell);
-  return position ? { host: "river", hostId: position.riverId, along: position.along } : null;
+  const hostId = riverIdAt(state, cell);
+  return hostId ? { host: "river", hostId } : null;
 }
 /** No developed record draws the course: the captured river stays on the map as captured. */
 function keepCaptured(state: RegionalState, course: CapturedCourse) {
   if (!generationFeature(state, course.feature.id)) writeGenerationFeature(state, course.feature);
+}
+/** The same generated, unprotected and undetailed policy used by ordinary publication. */
+function replaceable(state: GenerationState, feature: AtlasFeature) {
+  return (
+    feature.state === "generated" &&
+    !feature.protected &&
+    Object.keys(feature.detail).length === 0 &&
+    !Object.values(state.domain.world.areas).some((area) =>
+      area.boundary?.crossings.some((crossing) => crossing.featureId === feature.id)
+    )
+  );
 }
 /**
  * The developed river stands for the captured course from now on: it takes the name and place
@@ -95,8 +115,8 @@ function takeIdentity(state: RegionalState, featureId: string, course: CapturedC
     developedBy: "regional",
   };
   writeGenerationFeature(state, feature);
-  if (!course.carried && generationFeature(state, course.feature.id))
-    removeGenerationFeature(state, course.feature.id);
+  const captured = generationFeature(state, course.feature.id);
+  if (captured && replaceable(state, captured)) removeGenerationFeature(state, course.feature.id);
 }
 /** A continuing river's records draw the captured course: they take its name and identity. */
 function adopt(state: RegionalState) {
@@ -105,11 +125,16 @@ function adopt(state: RegionalState) {
   );
   for (const { id, course } of continuingRivers(state)) {
     const drawn = rivers.filter(
-      (feature) => feature.id !== course.feature.id && feature.attributes.riverId === id
+      (feature) =>
+        feature.id !== course.feature.id &&
+        replaceable(state, feature) &&
+        feature.attributes.developedBy === "regional" &&
+        feature.attributes.riverId === id
     );
     if (!drawn.length) keepCaptured(state, course);
     for (const feature of drawn) takeIdentity(state, feature.id, course);
   }
+  retainPublishedRiverNames(state);
 }
 function continues(state: RegionalState, parent: AtlasFeature) {
   const id = riverIdOfRecord(parent),
@@ -147,7 +172,7 @@ export const river: AreaEntry = {
   },
   hosting: {
     statement:
-      "A place on a river records the river and how far along it stands, and stands at that share of the river on a finer map.",
+      "A place records its river's identity; its captured position lands on that river's actual cells on a finer map.",
     linkAt,
     cellFor,
   },

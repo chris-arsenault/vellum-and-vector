@@ -24,6 +24,7 @@ import {
 } from "../poiReads";
 import { ruleRecord } from "../poiRecords";
 import { onMappedRiver } from "../water/waterReads";
+import { riverSuccessor } from "../../water/riverKeeping";
 
 /**
  * What the ground group's entries share: its material tests, which the mine reads as deposits,
@@ -86,7 +87,7 @@ export function ruleFloor(state: GenerationState, system: string, rule: string, 
 /** A river's fall over its run from a cell to the next, never negative. */
 export function flowGradient(state: GenerationState, cell: number) {
   const map = fieldOf(state),
-    target = map.FlowTargets.get(cell);
+    target = riverSuccessor(map, cell);
   if (target < 0) return 0;
   const run = gap(state, cell, target),
     fall = metres(map.Elevation.get(cell) - map.Elevation.get(target));
@@ -96,7 +97,7 @@ export function flowGradient(state: GenerationState, cell: number) {
 export function gradientInto(state: GenerationState, cell: number) {
   let steepest = 0;
   for (const next of adjacent(state, cell))
-    if (onMappedRiver(state, next) && fieldOf(state).FlowTargets.get(next) === cell)
+    if (onMappedRiver(state, next) && riverSuccessor(fieldOf(state), next) === cell)
       steepest = Math.max(steepest, flowGradient(state, next));
   return steepest;
 }

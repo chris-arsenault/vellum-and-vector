@@ -9,7 +9,7 @@ import { cut, distance, shiftBedrock, type Placed } from "./landmarkGeometry";
 import type { LandmarkRecord } from "./landmarkLedger";
 import type { Kind } from "./landmarkKind";
 import { captureInto } from "./landmarkCanyon";
-import { waterAt } from "../water/riverKeeping";
+import { reachAt, riverSuccessor, waterAt } from "../water/riverKeeping";
 
 /** The river cell at the point: the greatest flow among the nearest cell and its neighbours. */
 function lipCell(map: PhysicalField, placed: Placed, record?: LandmarkRecord) {
@@ -26,10 +26,12 @@ function lipCell(map: PhysicalField, placed: Placed, record?: LandmarkRecord) {
     -1
   );
 }
-/** The cell the water leaves the lip into: its flow target, or its lowest neighbour before routing. */
+/** An existing course owns the foot; before one exists, emplacement chooses from terrain. */
 function footCell(map: PhysicalField, lip: number) {
-  const target = map.FlowTargets.get(lip);
+  const course = reachAt(map, lip),
+    target = course ? riverSuccessor(map, lip, course) : map.FlowTargets.get(lip);
   if (target >= 0 && map.WaterKindCodes.get(target) === 0) return target;
+  if (course) return -1;
   let lowest = -1;
   for (let edge = 0; edge < map.mesh.degree(lip); edge++) {
     const j = map.mesh.neighbor(lip, edge);
@@ -60,6 +62,7 @@ export const falls: Kind = {
     ])
       if (i >= 0 && map.Elevation.get(i) >= lipElevation) hardenRock(map, i, "quartzite");
     const foot = footCell(map, lip);
+    if (foot < 0) return;
     holdStep(
       map,
       lip,

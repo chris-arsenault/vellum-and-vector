@@ -4,7 +4,8 @@ import { nativePosition, parentChannels } from "../world/atlasWorkspace";
 import { restoreFeatures } from "./causes/registry";
 import { isContent } from "./lattice";
 import { directionalResistance } from "./material";
-import { valleyOrder, valleyScratch } from "./valleyPlacement";
+import { valleyOrder, valleyScratch, valleyShares } from "./valleyPlacement";
+import { reachAt } from "../water/riverKeeping";
 import { updateSlopes } from "./relief";
 import { realizeColumns } from "./columns";
 import type { RegionalState, ReliefWork } from "./state";
@@ -13,9 +14,9 @@ import type { RegionalState, ReliefWork } from "./state";
  * A region's starting ground is its parent's ground. A parent cell is a rough average of the
  * country inside it, and its rock column says what that country is like: how much of it is
  * valley, and how deep the valleys lie below the ground beside them. Every finer cell inherits
- * that record. Here the region decides where in each parent cell the valley is: along its own
- * drainage, in the finer cells most water gathers to. Those cells take the valley floor at its
- * recorded depth, and the rest stand at the uncut surface.
+ * that record. Captured river courses locate the valley first; elsewhere the finer drainage
+ * locates its floor. A narrow floor can occupy part of every course cell. Those cells take the
+ * recorded floor and the rest stand at the uncut surface.
  *
  * No height is built up from a formula, nothing is fitted to the parent, and no edge is
  * pinned. Ground a parent recorded no valley in starts exactly as the parent's surface.
@@ -76,28 +77,26 @@ function streamCells(state: RegionalState, cells: readonly number[]) {
   return [...steps];
 }
 /**
- * Shares each parent cell's valley out among its finer cells: the stream's cells first and
- * then through yielding faces until the valley's share is placed; the cell where it runs out
- * holds the valley's edge. Grain and exposed contacts decide which shoulders remain.
+ * Shares each parent cell's valley among its finer cells: its retained course first, then
+ * through yielding faces. Grain and exposed contacts decide which shoulders remain.
  */
 export function placeInheritedValleys(state: RegionalState) {
   const map = state.physical.map,
     scratch = valleyScratch(map.mesh.count);
   for (const cells of byParentCell(state).values()) {
-    const whole = cells.reduce((sum, cell) => sum + map.mesh.area(cell), 0);
-    let valley = cutShare(map, cells[0]) * whole;
+    const whole = cells.reduce((sum, cell) => sum + map.mesh.area(cell), 0),
+      retained = cells.filter((cell) => reachAt(map, cell)),
+      seeds = retained.length ? retained : streamCells(state, cells);
     const order = valleyOrder(
       map.mesh,
       cells,
-      streamCells(state, cells),
+      seeds,
       (from, toward) => directionalResistance(map, from, toward),
       scratch
     );
-    for (const cell of order) {
-      const area = map.mesh.area(cell),
-        share = Math.min(1, Math.max(0, valley / area));
-      resolveCut(map, cell, share);
-      valley -= share * area;
-    }
+    const shares = valleyShares(order, seeds.length, cutShare(map, cells[0]) * whole, (cell) =>
+      map.mesh.area(cell)
+    );
+    order.forEach((cell, at) => resolveCut(map, cell, shares[at]));
   }
 }

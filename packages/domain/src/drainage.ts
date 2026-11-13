@@ -1,3 +1,5 @@
+import type { LineString } from "geojson";
+
 /**
  * One generated channel between confluences, ordered source to mouth through cell centres.
  * Each reach ends at the cell its downstream reach starts from, or at its receiving water.
@@ -35,6 +37,8 @@ export interface RetainedRiverNetwork {
 export interface RetainedRiver {
   id: number;
   course: [number, number][];
+  /** A verified edge to the receiving reach's first cell; owned profiles stop before it. */
+  junction?: [number, number];
   downstream: number | null;
   order: number;
   flow: number;
@@ -54,4 +58,27 @@ export interface RetainedRiver {
   river?: string;
   record?: string;
   name?: string;
+}
+
+/** Directed geometry and the owned sample supporting each vertex, before confluence mixing. */
+export interface RetainedRiverTrace {
+  readonly geometry: LineString;
+  readonly sampleIndices: readonly number[];
+}
+
+/** A current course includes only a junction verified by its owning lattice, never a guessed link. */
+export function retainedRiverTrace(
+  reach: Pick<RetainedRiver, "course" | "junction">
+): RetainedRiverTrace | null {
+  const coordinates = reach.course.map(([x, y]) => [x, y]),
+    sampleIndices = reach.course.map((_, at) => at),
+    last = coordinates.at(-1),
+    junction = reach.junction;
+  if (last && junction && (last[0] !== junction[0] || last[1] !== junction[1])) {
+    coordinates.push([...junction]);
+    sampleIndices.push(reach.course.length - 1);
+  }
+  return coordinates.length < 2
+    ? null
+    : { geometry: { type: "LineString", coordinates }, sampleIndices };
 }

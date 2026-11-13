@@ -73,6 +73,8 @@ export interface WaterGround {
 export interface WaterYear {
   /** Per month: what runs off the surface. */
   quick: number[];
+  /** Per month: water actually released by thawing the held snow. */
+  thaw: number[];
   /** Over the year: what sank to the groundwater, what evaporated, and snow left unmelted. */
   recharge: number;
   evaporated: number;
@@ -85,6 +87,7 @@ export interface WaterYear {
 }
 const emptyYear = (): WaterYear => ({
   quick: [],
+  thaw: [],
   recharge: 0,
   evaporated: 0,
   keptSnow: 0,
@@ -116,29 +119,31 @@ function month(ground: WaterGround, at: number, stores: Stores) {
     wetting = ground.rain[at] - storm + thaw,
     met = Math.min(Math.max(0, ground.demand[at]), wetting),
     taken = met + stores.soil.give(Math.max(0, ground.demand[at]) - met),
-    shed = stores.soil.receive(wetting - met),
+    shed = stores.soil.drainExcess() + stores.soil.receive(wetting - met),
     sinking = shed * ground.sinking;
-  return { quick: storm + shed - sinking, recharge: sinking, evaporated: taken };
+  return { quick: storm + shed - sinking, thaw, recharge: sinking, evaporated: taken };
 }
 /**
- * A year of the budget in balance with itself: the stores are run through years until one
- * ends as it began, so a dry-season soil and a winter's snow carry over as they do every year.
+ * Unspecified initial stores settle into a typical seasonal year. Supplied contents are
+ * actual stocks: they start the returned year's transfers, without being spent in warmup.
  */
 export function waterYear(ground: WaterGround, held: Partial<WaterYear["end"]> = {}): WaterYear {
-  // The year starts from what the cell already holds, so its water is carried, not remade.
+  // Warm unspecified contents first; supplied stocks enter only the returned year's transfers.
   const stores: Stores = {
-    soil: new WaterStore(Math.max(0, held.soil ?? 0), ground.soilCapacity, ground.soilCapacity),
-    snow: new WaterStore(Math.max(0, held.snow ?? 0), Infinity),
+    soil: new WaterStore(0, ground.soilCapacity, ground.soilCapacity),
+    snow: new WaterStore(0, Infinity),
   };
   let year = emptyYear();
   // Soil and seasonal snow settle within a few years; snow that never melts is kept apart.
   for (let pass = 0; pass < 3; pass++) {
+    if (pass === 2) restoreSuppliedContents(stores, held);
     const before = stores.snow.held;
     let least = Infinity;
     year = emptyYear();
     for (let at = 0; at < months; at++) {
       const shed = month(ground, at, stores);
       year.quick.push(shed.quick);
+      year.thaw.push(shed.thaw);
       year.recharge += shed.recharge;
       year.evaporated += shed.evaporated;
       year.soil += stores.soil.held / months;
@@ -147,13 +152,19 @@ export function waterYear(ground: WaterGround, held: Partial<WaterYear["end"]> =
     }
     // The lying snow is the season's cover: what never melted all year is on its way to ice.
     year.snow -= least;
-    // Snow lying at the year's end that also lay at its start is the same winter's cover.
-    // What a year adds beyond that never melts: it becomes ice and leaves this budget.
-    year.keptSnow = Math.max(0, stores.snow.held - before);
-    stores.snow.give(least);
+    // A year that exhausts its snow can end with the next winter's cover. Keep that cover
+    // through warmup; only net accumulation in a year with lying snow throughout becomes ice.
+    // The inherited stock is not new accumulation and remains until thaw actually takes it.
+    year.keptSnow = least > 0 ? Math.max(0, stores.snow.held - before) : 0;
+    stores.snow.give(year.keptSnow);
     year.end = { soil: stores.soil.held, snow: stores.snow.held };
   }
   return year;
+}
+
+function restoreSuppliedContents(stores: Stores, held: Partial<WaterYear["end"]>) {
+  if (held.soil !== undefined) stores.soil.held = Math.max(0, held.soil);
+  if (held.snow !== undefined) stores.snow.held = Math.max(0, held.snow);
 }
 /**
  * What a river carries through the year, from the flow that reaches it each month: its mean,

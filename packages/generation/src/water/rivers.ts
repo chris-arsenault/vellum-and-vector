@@ -13,11 +13,13 @@ import { lakeLosses } from "./lakeStage";
 import { gathered, riverSizes } from "./riverSize";
 import { waterYearOf } from "./runoff";
 import { months } from "./waterBalance";
-import { advanceReaches } from "./reachEvolution";
-import { markDrawnReaches } from "./riverVisibility";
+import { advanceReaches, refreshReachWater } from "./reachEvolution";
+import { establishRiverIdentities, markDrawnReaches } from "./riverVisibility";
 import { projectRivers } from "./riverProjection";
 import { currentBed } from "./riverBed";
 import { channelOrigins } from "./channelOrigins";
+import { riverStorage } from "./riverStorage";
+import { withBoundaryRivers, type BoundaryRivers } from "./boundaryWater";
 
 /**
  * The cells a river runs through: those reached, in at least one month of the year, by a
@@ -47,22 +49,62 @@ function spineMasks(map: PhysicalField) {
     map.RiverSpineEdgeMasks.set(target, map.RiverSpineEdgeMasks.get(target) | (1 << targetEdge));
   }
 }
-export function riverNetwork(
+export function riverNetwork(map: PhysicalField, c: PhysicalContext) {
+  withBoundaryRivers(map, (input) =>
+    withRoutedYear(map, c, input, (_order, monthly) => {
+      const store = riverStorage(map);
+      for (const reach of store.reaches.values())
+        refreshReachWater(reach, {
+          flow: (cell, month) => monthly[month].get(cell),
+          bed: (cell) => currentBed(map, cell),
+          catchment: (cell) => map.CatchmentArea.get(cell),
+          discharge: riverSizes(map.scale).discharge,
+        });
+      store.at = undefined;
+      projectNetwork(map);
+    })
+  );
+}
+
+/** Only an explicit occurrence evolves courses, dry history and established river identity. */
+export function advanceRiverNetwork(
   map: PhysicalField,
   c: PhysicalContext,
-  incoming?: Band,
-  entering: EnteringRivers = {}
+  channelLength?: Pick<Band, "get">
+) {
+  withBoundaryRivers(map, (input) =>
+    withRoutedYear(map, c, input, (order, monthly) => {
+      const heads = [...map.rivers.reaches.values()]
+        .filter((reach) => reach.river)
+        .map((reach) => reach.cells[0]);
+      evolveNetwork(map, order, monthly, heads, channelLength);
+      establishRiverIdentities(map);
+      projectNetwork(map);
+    })
+  );
+}
+
+function withRoutedYear(
+  map: PhysicalField,
+  c: PhysicalContext,
+  entering: BoundaryRivers,
+  apply: (order: Band, monthly: Band[]) => void
 ) {
   const order = sourceToOutletOrder(map);
   gatherCatchments(map, order, entering.catchment);
-  gatherYear(map, c, order, incoming);
-  const monthly = seasonalFlows(map, c, order, incoming, entering.monthly);
-  const namedHeads = [...map.rivers.reaches.values()]
-    .filter((reach) => reach.river)
-    .map((reach) => reach.cells[0]);
-  evolveNetwork(map, order, monthly, namedHeads, entering.channelLength);
+  gatherYear(map, c, order, entering.incoming);
+  const monthly = seasonalFlows(map, c, order, entering.incoming, entering.monthly);
+  try {
+    apply(order, monthly);
+  } finally {
+    releaseWorking(map, order, ...monthly);
+  }
+}
+
+function projectNetwork(map: PhysicalField) {
+  markDrawnReaches(map);
+  projectRivers(map);
   spineMasks(map);
-  releaseWorking(map, order, ...monthly);
 }
 
 function evolveNetwork(
@@ -80,7 +122,7 @@ function evolveNetwork(
       if (map.WaterKindCodes.get(cell) === 1) break;
       forced[cell] = 1;
     }
-  advanceReaches(map.rivers, {
+  advanceReaches(riverStorage(map), {
     count: map.mesh.count,
     order: Int32Array.from({ length: order.length }, (_, n) => order.get(n)),
     next: (cell) => map.FlowTargets.get(cell),
@@ -96,8 +138,6 @@ function evolveNetwork(
     epoch: map.CompletedEpochCount,
     newHead: origins ? (cell) => origins[cell] > 0 || forced[cell] > 0 : undefined,
   });
-  markDrawnReaches(map);
-  projectRivers(map);
 }
 
 /**
@@ -109,14 +149,6 @@ function gatherCatchments(map: PhysicalField, order: Band, beyond?: Band) {
   for (let i = 0; i < map.mesh.count; i++)
     map.CatchmentArea.set(i, map.mesh.area(i) + Math.max(0, beyond?.get(i) ?? 0));
   gatherDown(order, map.FlowTargets, map.CatchmentArea);
-}
-/** What the map a river comes from says of it, at the cell where it enters this one. */
-export interface EnteringRivers {
-  /** The catchment the river drains beyond this map, in square metres. */
-  catchment?: Band;
-  monthly?: readonly Band[];
-  /** Captured unresolved channel length, used only for the initial finer realization. */
-  channelLength?: Pick<Band, "get">;
 }
 /**
  * The water each cell gives its river through the year, and what rivers bring in across the

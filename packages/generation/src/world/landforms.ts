@@ -7,7 +7,7 @@ import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
 import { physicalDistance, physicalSampler } from "./physicalMetric";
 import { topographicProminence } from "../topographicProminence";
-import { onRiver } from "../water/riverKeeping";
+import { onRiver, riverSample, riverSuccessor } from "../water/riverKeeping";
 import { MapScale } from "@atlas/domain";
 
 function shape(
@@ -105,8 +105,8 @@ export const waterfallLeastDrop = (map: PhysicalField) => map.scale.length(0.000
 const waterfallStepRatio = 5;
 /** The height water runs at: the ground, or the surface of the water standing on it. */
 function riverLevel(map: PhysicalField, i: number) {
-  const ground = map.Elevation.get(i),
-    kind = map.WaterKindCodes.get(i);
+  const kind = map.WaterKindCodes.get(i),
+    ground = kind === 0 ? riverSample(map, i, "bed") : map.Elevation.get(i);
   if (kind === 0) return ground;
   if (kind === 1) return Math.max(ground, map.EffectiveSeaLevel);
   const surface = map.WaterSurfaceElevations.get(i);
@@ -114,12 +114,12 @@ function riverLevel(map: PhysicalField, i: number) {
 }
 /** Metres a river falls from a cell to the next: to its surface where that cell holds water. */
 export function riverDrop(map: PhysicalField, i: number) {
-  const target = map.FlowTargets.get(i);
+  const target = riverSuccessor(map, i);
   return target < 0 ? 0 : MapScale.metres(riverLevel(map, i) - riverLevel(map, target), "native");
 }
 /** A river's gradient from a cell to the next, rise over run. */
 export function riverGradient(map: PhysicalField, i: number) {
-  const target = map.FlowTargets.get(i);
+  const target = riverSuccessor(map, i);
   return target < 0 ? 0 : riverDrop(map, i) / physicalDistance(map.mesh, i, target);
 }
 /** The steepest reach of river running into a cell. */
@@ -127,7 +127,7 @@ function gradientAbove(map: PhysicalField, i: number) {
   let above = 0;
   for (let edge = 0; edge < map.mesh.degree(i); edge++) {
     const j = map.mesh.neighbor(i, edge);
-    if (j >= 0 && onRiver(map, j) && map.FlowTargets.get(j) === i)
+    if (j >= 0 && onRiver(map, j) && riverSuccessor(map, j) === i)
       above = Math.max(above, riverGradient(map, j));
   }
   return above;
@@ -140,7 +140,8 @@ function gradientAbove(map: PhysicalField, i: number) {
 export function isRiverStep(map: PhysicalField, i: number): boolean {
   if (map.WaterKindCodes.get(i) !== 0 || !onRiver(map, i)) return false;
   if (riverDrop(map, i) < waterfallLeastDrop(map)) return false;
-  const below = Math.max(0, riverGradient(map, map.FlowTargets.get(i)));
+  const next = riverSuccessor(map, i),
+    below = next < 0 ? 0 : Math.max(0, riverGradient(map, next));
   return riverGradient(map, i) >= waterfallStepRatio * Math.max(gradientAbove(map, i), below);
 }
 function ridge(map: PhysicalField, p: PhysicalProfile, i: number): boolean {

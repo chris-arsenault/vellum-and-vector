@@ -47,6 +47,10 @@ All 2026-11-12 unless dated.
    results.
 10. Earlier, standing: no caps, no deleting things after the fact, no parameters tuned to
     output, no fresh worlds, only unit and UI tests, sizes through `MapScale`.
+11. Owner correction, 2026-11-13: architecture reviews assess structural issues in interfaces,
+    organization and correct, complete use of the engineering paradigms. Finish the structural
+    pass before reporting. Finding and fixing minor functional defects does not establish that
+    the architecture is complete.
 
 ## What was true when the plan was written (read in code, 2026-11-12)
 
@@ -224,6 +228,16 @@ Scope: the representation.
   landforms) ask the reaches.
 - The old-bed layer added on 2026-11-12 is replaced by former courses on reaches.
 
+#### Reader decisions for the remaining authority review
+
+River geometry, regime, waterborne travel, settlement crossings, works, river landmarks and
+river publication ask the owned reach profile (`waterAt`, `riverSample`, `onRiver`). This
+includes `riverPaths`, `riverCourses`, `riverPublish`, `poiReads`, bridges, fords, work records,
+waterworks, delta qualification and river landmark selection. Hydrological routing, gathered
+catchment, unresolved erosion, physical validation and final numerical-grid presentation
+continue to read cell quantities. Published mean-only input supplies a mean; it does not
+authorize inventing monthly variation from the receiving cell's seasons.
+
 #### Execution steps
 
 1. The reach store. `water/reaches.ts`: a reach holds an identity, its cells from head to
@@ -335,6 +349,99 @@ as lines.
 
 ### M5 — The rock column shapes what is inside a cell [depends on M4]
 
+#### Regional verdicts, checked against the current shared owners
+
+These are implementation decisions, not additional owner requirements. Captured history is
+input to present development, never permission to replay the world's construction. A run
+below means the existing selected shared operation, with the regional exposure, not a new
+regional copy of its physics.
+
+| Retained fact                                                  | Contribution within a parent cell                       | Verdict                                                                                                                                                                                                                     |
+| -------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bedrock elevation and surface                                  | Starting height and exposed face                        | Keep; never reconstruct from a tree                                                                                                                                                                                         |
+| Ordered bed kinds, secondary kinds and shares                  | Resistant caps, weak foundations, soluble intervals     | Read the exposed stack for routing and valley placement; shared wear already traverses it                                                                                                                                   |
+| Each bed's depth                                               | Finite cap thickness and absolute contacts              | Resolve the recorded inclined contacts before organization asks the ground, then from those same captured beds after facet placement; allocate captured finite material, never manufacture repeated bands                   |
+| Strength and consolidation                                     | Resistance of intact rock and cohesion of loose cover   | Existing Ground responses                                                                                                                                                                                                   |
+| Damage                                                         | Local weakness of the actual bed                        | Existing Ground responses                                                                                                                                                                                                   |
+| Grain X/Y                                                      | Axial ease of release and erosion along fabric          | Feed direction to initial organization and shared directional wear; the extra coastal direction bands were removed after no clear visible benefit                                                                           |
+| Bed slope X/Y                                                  | Signed release planes and asymmetric scarps             | Resolve contacts and feed direction to initial organization and existing directional Ground actions                                                                                                                         |
+| Deposited, formedMin, formedMax, altered, mixed                | Surviving material history and identity                 | Carry intact; no synthetic epochs or forcing from ages                                                                                                                                                                      |
+| Land/cut rock stacks and loose stacks                          | Distinct floor and interfluve material, cover and fill  | Keep all four; expose through Ground                                                                                                                                                                                        |
+| Cut share and depth                                            | Valley footprint and floor beneath the parent average   | Place the inherited share on connected, material-responsive ground                                                                                                                                                          |
+| Hosted material and magic cargo                                | Actual constituents moved or exposed by wear            | Move the complete bed records at their retained densities; finite material availability limits allocation, never discard hosted cargo to draw an outcrop                                                                    |
+| Structural grain, strain, thrust pair/sheet/segment/across/dip | Captured organization and discontinuities               | Realize local fracture fabric from captured structures; no renewed mountain uplift                                                                                                                                          |
+| Fracture conductance and retained fault lines                  | Joints, weakness and water passage                      | Resolve captured traces and sheet contacts from retained strain and material openness through the existing fracture owner; the additional sampled joint generator was removed after no visible gain in its removal pictures |
+| Construction, impact and glacial histories                     | Established forms and previous reworking                | Retain forms and causes; do not rerun their historical events                                                                                                                                                               |
+| Snow, soil, ground and standing water                          | Present stores for climate, ice, vegetation and routing | Inherit the owned column before development                                                                                                                                                                                 |
+| Reaches and small-channel length                               | Established courses and latent finer drainage           | Import records; resolve wet tributaries from quantities                                                                                                                                                                     |
+
+| Process                        | Contribution inside the parent cell                                     | Runs in a region?                                                        |
+| ------------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| tectonic-provinces             | Captured crust provinces                                                | No; captured                                                             |
+| continental-sutures            | Captured contacts                                                       | No; captured                                                             |
+| tectonic-margins               | Captured margin structure                                               | No; captured                                                             |
+| continental-domains            | Captured continental architecture                                       | No; captured                                                             |
+| crust-uplift                   | Captured construction and level                                         | No; captured                                                             |
+| landscape-initialization       | Existing parent ground                                                  | No reset; refinement inherits it                                         |
+| plates                         | Captured plate positions                                                | No historical transport                                                  |
+| tectonic-epoch-activity        | Captured strain and grain                                               | No new epoch                                                             |
+| mountains                      | Captured thrust sheets and mountains                                    | No new belt or uplift                                                    |
+| mantle-plume-roots             | Captured thermal sources                                                | No new sources                                                           |
+| volcanoes                      | Captured cones, beds and causes                                         | No new eruptions                                                         |
+| impacts                        | Captured craters, beds and causes                                       | No new impacts                                                           |
+| slopes                         | Failure of exposed faces, including cap support                         | Yes                                                                      |
+| slopes-after-streams           | Failure after incision exposes support                                  | Yes                                                                      |
+| crustal-relaxation             | Local response of loaded crust                                          | Yes, around captured support datum                                       |
+| crustal-support                | Support response to changed local loads                                 | Yes, around captured support datum                                       |
+| settling                       | Changed material settles on existing surfaces                           | Yes, through shared material settlement                                  |
+| margins                        | Present erosion at ocean-facing margins                                 | Yes                                                                      |
+| sea-floor                      | Ocean floor presentation from current ground                            | Yes, current geography refresh                                           |
+| shore-detail                   | Coast from current ground                                               | Yes, current geography refresh                                           |
+| fracture-network               | Finer traces and discontinuities along captured structural organization | Resolve captured faults and sheet contacts locally; no new sampled roots |
+| geothermal                     | Current effects of captured heat sources                                | Captured sources; current responders remain available                    |
+| ocean-budget                   | Existing ocean and datum                                                | Captured; no new global inventory                                        |
+| ocean-surface                  | Present connected water surface                                         | Yes, current geography refresh                                           |
+| marine-reconnection            | Present connections through altered ground                              | Yes, current geography refresh                                           |
+| ocean-distance                 | Distance from the child's current shore                                 | Yes, captured maritime context at frame                                  |
+| bathymetry                     | Current submerged relief                                                | Yes, current geography refresh                                           |
+| landmasses-and-shelf-groups    | Current outlines and named geography                                    | Yes, current geography refresh                                           |
+| ocean-currents                 | Maritime forcing from captured context                                  | Captured; no global circulation replay                                   |
+| warmth-sources                 | Current effects of captured heat and magic                              | Yes, shared responders                                                   |
+| atmospheric-climate            | Current climate over finer slopes                                       | Yes                                                                      |
+| runoff                         | Transfers through inherited stores                                      | Yes, after initial organization                                          |
+| drainage-conditioning          | Current depressions and routes                                          | Yes                                                                      |
+| lake-basins                    | Standing water on current ground                                        | Yes                                                                      |
+| drainage-guidance              | Established courses and actual ground                                   | Yes                                                                      |
+| flow-routing                   | Water quantities routed through current ground                          | Yes                                                                      |
+| river-network                  | Kept reaches evolve from routed water                                   | Yes                                                                      |
+| groundwater                    | Store release and seepage through retained ground                       | Yes                                                                      |
+| weathering                     | Weather releases actual surface material                                | Yes                                                                      |
+| streams                        | Directional incision of retained bed stacks                             | Yes                                                                      |
+| solution                       | Dissolution of soluble exposed material                                 | Yes                                                                      |
+| creep                          | Cover moves across slopes; plains remain plain                          | Yes                                                                      |
+| river-load                     | Carrying and deposition on actual courses                               | Yes                                                                      |
+| land-ice-mass-balance          | Present snow and ice accumulation or melt                               | Yes                                                                      |
+| ice-flow                       | Present grounded ice transport                                          | Yes                                                                      |
+| glacial-meltwater              | Meltwater enters current water quantities                               | Yes                                                                      |
+| ice                            | Directional abrasion and plucking                                       | Yes                                                                      |
+| moraines                       | Deposition of carried glacial material                                  | Yes                                                                      |
+| glacial-landforms              | Existing and newly exposed glacial forms                                | Yes, final geography                                                     |
+| sea-ice                        | Present sea ice                                                         | Yes when selected                                                        |
+| outside-waves                  | Current external wave forcing                                           | Yes; existing owner, without the unproven extra direction bands          |
+| coast                          | Material wear and deposited shore loads                                 | Yes; existing owner, without the unproven extra direction bands          |
+| river-channel-geometry         | Owned bed width and depth                                               | Yes                                                                      |
+| river-warmth                   | Present warmth carried by rivers                                        | Yes through selected shared responders                                   |
+| river-floodplains              | Current river banks and overflow ground                                 | Yes, final geography                                                     |
+| river-delta-formation          | Mouth deposits from delivered load                                      | Yes; retention depends on removal pictures                               |
+| landform-classification        | Names and outlines from current terrain                                 | Yes, finer significance                                                  |
+| burial                         | Existing consolidated material                                          | No new geological age                                                    |
+| rock-metamorphism              | Existing altered material                                               | No historical replay                                                     |
+| physical-epoch-history         | Completed world history                                                 | Preserve; no invented regional epochs                                    |
+| physical-structural-validation | Publication invariants                                                  | Yes, where shared publication requires them                              |
+
+There is no existing wind-transport owner to schedule. This work does not add a new wind
+simulation: the missing paths above use existing Ground responses and captured structure.
+
 Scope: the column facts and processes the table marks as needed and missing. Known from the
 survey: layer sequence and bed dip, grain, thrust sheets, strain, the cut share, a regional
 fracture set, direction in coastal wear. Each is done through the existing ground
@@ -373,7 +480,128 @@ becomes a river" in plan `5b7dd6d0-f4d1-432e-8946-806632479c1a`.
 | M5        | `6f88525f-477b-4345-ae5b-b637daadc761` |
 | M6        | `16170012-92b7-417c-aee5-c2ebce1be9d2` |
 
-## Current state
+## Current implementation — 2026-11-13
 
-M0 done 2026-11-12. Baseline pictures are kept outside the repository at
-`scratchpad/pictures/m0-before/`. Next action: M1.
+The resumed implementation makes retained reaches and the water stores authoritative.
+Commands transfer the supply year and change courses; current queries derive profiles without
+advancing stocks or history. Publication, material carriers, landmarks and hosted places use
+the retained owner interfaces. Captured records and place identity are distinct; a new map
+takes current source geometry as input, including dry courses, without inheriting the source
+map's product role. Protected and authored records remain outside replaceable generation.
+
+Full structural reviews found and repaired competing authorities in current queries,
+publication connectivity, year capture, clipped import and inherited hosting coordinates.
+The integrated architecture, routine unit and type checks pass. The completed structural
+repair is receiving its final representative saved-map validation before the architecture
+branch closes.
+
+The parent/Draft/Standard pictures establish the broad plateau, escarpment, plain and coast.
+The contact/material/fault implementation and removal checks are present, but the sampled
+maps have not established M5's folded ridges and valleys. That visual acceptance remains open;
+passing structural checks does not close it. The stop snapshot below describes the predecessor,
+not the current implementation.
+
+## Historical stop snapshot — `cfd022c`
+
+Work stopped by the owner on 2026-11-12, after `cfd022c`. Everything below is committed and
+pushed on `main`; nothing of this plan is uncommitted. The unit, architecture and frontend
+suites passed at `cfd022c`. Nothing is running.
+
+### The owner's judgement at the stop
+
+The reports kept centring on fixed symptoms, and the architecture that was agreed is only
+partly what was built. The milestone "State" notes above were written as each piece landed
+and read more favourably than this section. Where they differ, this section is the truer
+one.
+
+### What was agreed, against what the code does
+
+| Agreed                                                 | In the code at `cfd022c`                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A cell holds quantities and is never a river           | Not met. Each pass still marks cells as river by a test on the cell (`noteMonth` and `buildChannels` in `water/rivers.ts`). Only the test changed (`water/riverSize.ts`).                                                                                                                                                                              |
+| Rivers are kept things that processes change           | Half. `map.rivers` (`water/reaches.ts`) keeps identity, dry courses and former courses across passes. It is filled after the cell marks, by cutting marked cells into stretches (`water/reachCuts.ts`) and matching them to the last pass's (`carryReaches`). No water process works on reaches: flow, bed loss, regime and channel size are per cell. |
+| Everything asks the rivers                             | In name only. `onRiver` and `riverOrderAt` (`water/riverKeeping.ts`) read the `RiverOrders` layer. `reachAt` is used by publishing and the land readout alone.                                                                                                                                                                                         |
+| How much small channel a cell holds, as a quantity     | Not built.                                                                                                                                                                                                                                                                                                                                             |
+| The water column as one package of stores              | A funnel. `water/column.ts` is the one place the parts change, with a carrier and an inheritance list. The parts are still separate layers; soil water and snow are worked out afresh by each budget, starting from the held values. No stores stating what they hold, their room and how readily they give.                                           |
+| A region keeps its parent's ground                     | Met. `regional/startingGround.ts` places each parent cell's recorded valley among its finer cells (`resolveCut` in `rock/groundShares.ts`). The code that rebuilt heights from a drainage tree is gone.                                                                                                                                                |
+| The rock column shapes what is inside a cell           | Not started, beyond the recorded valley share and depth. Grain, bed dip, layer sequence, thrust sheets, strain and fractures are inherited and unused at the start. The verdict table M4 asks for is not written.                                                                                                                                      |
+| A region takes the parent's rivers and cell quantities | Partly. It reads the parent's stored reach lines as a mask of cells (`regional/parentRivers.ts`) and takes an entering river's flow, driest-month flow and catchment. It does not take reaches as things or realise smaller ones from cell quantities.                                                                                                 |
+
+### What changed what a map looks like
+
+Two changes account for nearly all the visible difference, and neither is architecture:
+
+1. The river test: water gathered from a catchment the map resolves, in a flow significant
+   at the map's scale (`a970d0e`).
+2. A numerical fault in how loose cover creeps between cells, which roughened a region's low
+   ground and made false lakes (`cfd022c`). It is a shared process, so it also changes world
+   generation wherever creep runs at its limit; that has not been looked at on a world.
+
+The region's starting ground (`9d6cf15`) is the third, and is architecture.
+
+### Commits of this plan
+
+- `0009f66` plan, picture tools, failing checks, decision records corrected.
+- `a970d0e` the river test and its sizes.
+- `1dfbc76` and `9d6cf15` kept rivers, the column funnel, the region's starting ground. The
+  first holds only deleted files by mistake; the second is the rest.
+- `cfd022c` the creep fix and the per-process record of what moves low ground.
+
+### What a successor should know before trusting it
+
+- **The checks pass by name.** `water/riverDefinition.architecture.ts` and
+  `regional/startingGround.architecture.ts` are all green, but several match identifiers and
+  were satisfied by moving or renaming code. Green there does not show the agreed
+  architecture exists. The reader check in particular passes because readers call a
+  function that reads the same layer.
+- **The kept rivers are not saved** with a run or a map, and are let go when the plates move
+  (`carriedBy("rivers")` in `water/riverKeeping.ts`). A resumed run starts with none.
+- **No dry course or former course has been seen on a map.** The saved test world
+  (`people-full-resumed`) has no history that makes one. The code paths are covered by unit
+  tests only.
+- **Some drawn rivers end inland** on the region pictures. Not investigated.
+- **Standard detail was never pictured after the ground changed.** Before it, draft and
+  standard showed different rivers for the same place.
+- **A river's regime on a record** comes from per-cell months in flow, not from the reach.
+- **Soil water is now published with the water layers**, no longer with the living landscape,
+  so it is absent from a map generated with water routing off and ecology on.
+- **The owner-directions registry** has no entries for this plan's directions; the two check
+  files say so. Another session had open edits in that file.
+- **Earlier work of the same day** (seasons by rain belt, day length in the air's demand,
+  deltas settling at river mouths, seasonal inflow to regions) was never shown to change a
+  map and was never tested by removal. M6 was to do that.
+- **The Rust port session** recorded the water refactor as complete. It is not. Its plan
+  (`docs/FINISHED-MAPS-PLAN.md`) should not port water's present shape as final.
+
+### How to look
+
+- Pictures, parent beside region, three fixed places, draft detail:
+  `.artifacts/harness/pictures/m5/` (now) and `.artifacts/harness/pictures/m0-before/`
+  (before). The folder is ignored by git.
+- To remake them:
+  `HARNESS_QUICK=1 HARNESS_WORLD=people-full-resumed HARNESS_WORLD_QUALITY=draft HARNESS_REGION_QUALITY=draft HARNESS_REGION_AT='highland:1858268,187500;plain:2286000,1914000;coast:3143000,1571000' pnpm --dir frontend harness regional`.
+  One report folder under `.artifacts/harness/reports/` then holds a folder for each place
+  with `parent.png`, the ground at its start and after each round, `terrain.png`, and
+  `ground-changes.json` (what each process did to low ground). About three minutes a place
+  at draft, ten at standard.
+
+### Work identified at that stop
+
+In the order the agreed architecture needs, not the order of the milestones above:
+
+1. Make the kept rivers what decides: update them each pass (heads extend and retreat, a
+   course changes only where the ground forces it), fill the cell layer from them, and keep
+   each river's months of flow, regime and bed on the river.
+2. Move water's river processes (bed loss, channel size, floodplains, sediment along a
+   course) onto rivers.
+3. Give cells the quantity of small channel they hold.
+4. Make the column's parts stores that state what they hold and give, with the year's budget
+   moving water between them.
+5. Save the kept rivers with a map and decide what happens to them when the plates move.
+6. M5 as written: the verdict table, then the rock column's unused facts, one at a time,
+   each proved by removal.
+7. M6 as written, including the removal tests of the earlier additions.
+
+Sulion plan `4a82dad4-8288-4201-82e0-612170985313`: M0 to M3 marked completed, M4 in
+progress, M5 and M6 pending. Those marks record that the milestone's code landed, not that
+the table above is met.

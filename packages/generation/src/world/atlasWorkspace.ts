@@ -49,8 +49,7 @@ import { fieldSampleIndex } from "@atlas/domain";
 import { captureSupportDatum } from "./support";
 import { physicalContext } from "./context";
 import { restoreRivers } from "../water/networkResources";
-import { columnNames } from "../water/column";
-import { inheritWaterColumn } from "../water/columnResources";
+import { inheritWaterState, waterStateChannels } from "../water/columnResources";
 
 export interface AtlasPhysicalWorkspace {
   /** Physical lake shores used while tracing mouths, independent of named publication. */
@@ -168,13 +167,13 @@ function inheritChannels(surface: Grid, work: AtlasPhysicalWorkspace, parent: Ma
     material = parent.get("RockLayerKind0") ?? surface,
     materialNames = new Set(groundResourceChannels.map(({ name }) => name));
   for (const channel of physicalChannels) {
-    if ((columnNames as readonly string[]).includes(channel.name)) continue;
+    if (waterStateChannels.some((part) => part.name === channel.name)) continue;
     const grid = materialNames.has(channel.name) ? material : (parent.get(channel.name) ?? surface);
     if (!grid.channels[channel.name]) continue;
     imported.add(channel.name);
     inheritLocalChannel(work, grid, channel);
   }
-  inheritWaterColumn(work.map, surface, parent);
+  inheritWaterState(work.map, surface, parent);
   return imported;
 }
 /** Sample the same quantity into child-owned bands; only represented area can change an amount. */

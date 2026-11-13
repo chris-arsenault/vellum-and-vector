@@ -2,13 +2,18 @@ import { unwrapCoordinates, type DrainageReach } from "@atlas/domain";
 import { nativePosition } from "../world/atlasWorkspace";
 import type { PhysicalField } from "../world/field";
 import { workingArray } from "../world/physicalNumerics";
-import { onRiver, reachesOf, riverSample, waterAt } from "../water/riverKeeping";
-import type { Reach } from "../water/reaches";
-import { riverCourseJudgments } from "../world/worldRiverCourses";
-import { coordinateKey } from "../world/worldSources";
+import {
+  onRiver,
+  reachById,
+  reachesOf,
+  riverSample,
+  riverSuccessor,
+  waterAt,
+} from "../water/riverKeeping";
+import type { ReachView } from "../water/reaches";
 import { heldFor } from "../poi/poiReads";
 import type { GenerationState } from "../process";
-import { isWorldGeography, mapScale } from "../worldSignificance";
+import { isWorldGeography } from "../worldSignificance";
 import { joinReaches } from "./riverJoin";
 
 /**
@@ -21,7 +26,7 @@ import { joinReaches } from "./riverJoin";
 /** The stored record of one kept reach: where it ends, what it carries, and its course. */
 function reachRecord(
   state: GenerationState,
-  kept: Reach,
+  kept: ReachView,
   members: number[],
   downstream: number | null
 ): DrainageReach {
@@ -56,9 +61,12 @@ export function keptReaches(state: GenerationState): ReachMembers[] {
     wanted = [...reachesOf(map)].filter((reach) => !reach.dry),
     place = new Map(wanted.map((reach, index) => [reach.id, index]));
   return wanted.map((kept) => {
-    const next = map.FlowTargets.get(kept.cells[kept.cells.length - 1]),
+    const next = riverSuccessor(map, kept.cells[kept.cells.length - 1], kept),
       members = next >= 0 ? [...kept.cells, next] : [...kept.cells],
-      downstream = kept.downstream === null ? null : (place.get(kept.downstream) ?? null);
+      downstream =
+        kept.downstream !== null && next === reachById(map, kept.downstream)?.cells[0]
+          ? (place.get(kept.downstream) ?? null)
+          : null;
     return {
       start: kept.cells[0],
       members,
@@ -82,42 +90,6 @@ const reachInFrame = (state: GenerationState, members: readonly number[]) =>
   isWorldGeography(state) ||
   members.some((cell) => state.physical!.map.mesh.membership(cell) === 1);
 
-/**
- * A course's identity: the end it reaches and the cell it reaches it from. A river's head moves
- * when people take its water, and its end does not, so the identity outlasts what they do to it.
- */
-export function riverIdOf(course: readonly ReachMembers[]) {
-  const last = course[course.length - 1];
-  // The reach a river ends in keeps which river it is, whatever happens to its course.
-  if (last.kept.river) return last.kept.river;
-  const line = last.reach.coordinates,
-    end = line[line.length - 1],
-    from = line[Math.max(0, line.length - 2)];
-  return `river:${coordinateKey(end[0], end[1])}:${coordinateKey(from[0], from[1])}`;
-}
-/**
- * A river the map has drawn stays a river: the reach it ends in is told which river it is,
- * and keeps that through changes of course, dry spells and the passes to come.
- */
-export function establishRivers(state: GenerationState, records: readonly ReachMembers[]) {
-  for (const course of mappedCourses(state, records)) {
-    const members = course.map((index) => records[index]);
-    members[members.length - 1].kept.river = riverIdOf(members);
-  }
-}
-/** The courses this map draws, as lists of reaches: those significant, and those already rivers. */
-export function mappedCourses(state: GenerationState, records: readonly ReachMembers[]) {
-  return riverCourseJudgments(
-    records.map(({ reach, members }) => ({
-      ...reach,
-      discharges: members.map((cell) => waterAt(state.physical!.map, cell, "flood")),
-    })),
-    mapScale(state)
-  )
-    .filter(({ course }) => course.some((index) => records[index].kept.drawn))
-    .map(({ course }) => course);
-}
-
 /** A river of this map: a thing that exists before and whether or not it is ever published. */
 export interface River {
   readonly id: string;
@@ -128,18 +100,8 @@ export interface River {
 export interface ReachMembers {
   start: number;
   members: number[];
-  kept: Reach;
+  kept: ReachView;
   reach: DrainageReach;
-}
-function riverOfCourse(state: GenerationState, reaches: readonly ReachMembers[]): River {
-  const work = state.physical!;
-  return {
-    id: riverIdOf(reaches),
-    cells: reaches
-      .filter(({ members }) => reachInFrame(state, members))
-      .flatMap(({ members }, n) => members.slice(n ? 1 : 0))
-      .filter((cell) => work.map.mesh.membership(cell) === 1 && onRiver(work.map, cell)),
-  };
 }
 /**
  * The rivers of this map, greatest claim first. Publication draws these; a place on a river is
@@ -150,13 +112,14 @@ export const riversOf = (state: GenerationState): readonly River[] =>
     // A building interior has no water of its own to read.
     if (!state.physical) return [];
     const records = keptReaches(state),
-      own = mappedCourses(state, records)
-        .map((course) =>
-          riverOfCourse(
-            state,
-            course.map((index) => records[index])
-          )
-        )
+      map = state.physical.map,
+      own = drawnRivers(state, records)
+        .map(({ riverId, parts }): River => ({
+          id: riverId,
+          cells: parts
+            .flatMap((part) => part.flatMap((index, n) => records[index].members.slice(n ? 1 : 0)))
+            .filter((cell) => map.mesh.membership(cell) === 1 && onRiver(map, cell)),
+        }))
         .filter((river) => river.cells.length > 0)
         .sort((a, b) => b.cells.length - a.cells.length);
     return own;
@@ -165,19 +128,17 @@ export const riversOf = (state: GenerationState): readonly River[] =>
 export const mappedRiverCells = (state: GenerationState): ReadonlySet<number> =>
   heldFor(state, "rivers:cells", () => new Set(riversOf(state).flatMap((river) => river.cells)));
 
-/** Which river a cell is on and how far along it. A cell two rivers share is the first's. */
-const riverPositions = (state: GenerationState) =>
-  heldFor(state, "rivers:positions", () => {
-    const positions = new Map<number, { riverId: string; along: number }>();
+/** Which river owns a hosted cell. A cell two rivers share is the first's. */
+const riverIdentities = (state: GenerationState) =>
+  heldFor(state, "rivers:identities", () => {
+    const identities = new Map<number, string>();
     for (const { id, cells } of riversOf(state))
-      cells.forEach((cell, k) => {
-        if (!positions.has(cell))
-          positions.set(cell, { riverId: id, along: k / Math.max(1, cells.length - 1) });
+      cells.forEach((cell) => {
+        if (!identities.has(cell)) identities.set(cell, id);
       });
-    return positions;
+    return identities;
   });
-export const riverPositionAt = (state: GenerationState, cell: number) =>
-  riverPositions(state).get(cell);
+export const riverIdAt = (state: GenerationState, cell: number) => riverIdentities(state).get(cell);
 
 /**
  * The rivers this map draws, each joined from its reaches in the frame. A World and a finer map
@@ -185,18 +146,11 @@ export const riverPositionAt = (state: GenerationState, cell: number) =>
  * frame, and a parent's river keeps the reaches its water runs through.
  */
 export function drawnRivers(state: GenerationState, records: readonly ReachMembers[]) {
-  const course = records.map((): string | null => null);
-  for (const members of mappedCourses(state, records)) {
-    const id = riverIdOf(members.map((index) => records[index]));
-    for (const index of members) course[index] = id;
-  }
   return joinReaches(
-    records.map(({ members, reach }, index) => ({
+    records.map(({ members, reach, kept }) => ({
       downstream: reach.downstream,
       inFrame: reachInFrame(state, members),
-      course: course[index],
-      held: members.slice(0, -1).flatMap((cell) => riverPositionAt(state, cell)?.riverId ?? []),
-    })),
-    new Set([...reachesOf(state.physical!.map)].flatMap((reach) => reach.river ?? []))
+      course: kept.drawn ? (kept.river ?? null) : null,
+    }))
   );
 }

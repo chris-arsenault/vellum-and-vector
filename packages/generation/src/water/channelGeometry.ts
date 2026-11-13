@@ -10,9 +10,10 @@ import { channelDimensions } from "../world/dimensions";
 import { physicalDistance } from "../world/physicalMetric";
 import { RecordQueue, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "../world/physicalNumerics";
-import { reachesOf, reachAt } from "./riverKeeping";
+import { reachAt } from "./riverKeeping";
 import type { Reach } from "./reaches";
 import { flowThroughYear } from "./waterBalance";
+import { riverStorage } from "./riverStorage";
 
 function normalize(x: number, y: number): [number, number] {
   const length = Math.max(0.000001, Math.sqrt(x * x + y * y));
@@ -145,7 +146,8 @@ function expansionSteps(map: PhysicalField, c: PhysicalContext, i: number): numb
 }
 /** A bed kept shallow where people cross (a ford) is no deeper than it is kept. */
 export function shoalBed(map: PhysicalField, i: number, depth: number) {
-  const reach = reachAt(map, i),
+  const found = reachAt(map, i),
+    reach = found ? riverStorage(map).reaches.get(found.id) : undefined,
     at = reach?.cells.indexOf(i) ?? -1;
   if (!reach || at < 0 || depth >= reach.depth[at]) return;
   reach.depth[at] = Math.max(0, depth);
@@ -158,7 +160,7 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
   map.RiverDepth.fill(0);
   const upstream = dominantUpstream(map),
     frontier = new RecordQueue(3);
-  for (const reach of reachesOf(map))
+  for (const reach of riverStorage(map).reaches.values())
     if (!reach.dry) reach.cells.forEach((_, at) => sizeChannel(map, c, reach, at, frontier));
   try {
     expandChannels(map, c, upstream, frontier);

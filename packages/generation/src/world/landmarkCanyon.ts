@@ -2,7 +2,7 @@
 import { CellList, MapScale, radixOrder } from "@atlas/domain";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { hardenRock } from "../rock/rockField";
-import { onRiver, waterAt } from "../water/riverKeeping";
+import { onRiver, riverSuccessor, waterAt } from "../water/riverKeeping";
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { clamp, round, units } from "./math";
@@ -151,7 +151,7 @@ function cutCorridor(map: PhysicalField, from: number, to: number, floorWidth: n
   }
   const start = lowest - units(map.scale.length(0.00000075));
   if (start <= baseLevel(map)) return null;
-  const exit = map.FlowTargets.get(from);
+  const exit = riverSuccessor(map, from);
   const fall =
     exit >= 0
       ? (map.Elevation.get(from) - map.Elevation.get(exit)) /
@@ -183,7 +183,7 @@ function flowsInto(map: PhysicalField, from: number, floor: Set<number>, steps: 
   let i = from;
   for (let n = 0; n < steps && i >= 0; n++) {
     if (floor.has(i)) return true;
-    i = map.FlowTargets.get(i);
+    i = riverSuccessor(map, i);
   }
   return false;
 }
@@ -192,7 +192,7 @@ function reachesSea(map: PhysicalField, from: number, steps: number) {
   let i = from;
   for (let n = 0; n < steps && i >= 0; n++) {
     if (map.WaterKindCodes.get(i) === 1) return true;
-    i = map.FlowTargets.get(i);
+    i = riverSuccessor(map, i);
   }
   return false;
 }

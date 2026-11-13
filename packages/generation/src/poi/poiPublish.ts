@@ -152,7 +152,7 @@ export function carriedPlaces(state: RegionalState): readonly CarriedPlace[] {
     const found: CarriedPlace[] = [];
     for (const stored of generationFeatures(state, { areaId: state.regional.input.areaId })) {
       const entry = isCaptured(stored) ? entryOf(stored) : undefined,
-        feature = parentRecord(stored),
+        feature = capturedPlace(state, stored),
         carry =
           entry &&
           called<(s: RegionalState, f: AtlasFeature) => PoiCarried | null>(entry.acrossMaps.carry),
@@ -174,15 +174,9 @@ export function carriedPlaces(state: RegionalState): readonly CarriedPlace[] {
   });
 }
 
-/**
- * The record as the parent left it, whatever an earlier refinement of this map moved it to:
- * rules read the same evidence on every run, so a repeated refinement places things the same.
- */
-function parentRecord(feature: AtlasFeature): AtlasFeature {
-  const parent = feature.attributes.capturedRecord as
-    Pick<AtlasFeature, "geometry" | "footprint" | "attributes"> | undefined;
-  return parent ? { ...feature, ...parent } : feature;
-}
+/** Pinned current input owns the source position; capturedRecord remains provenance only. */
+export const capturedPlace = (state: GenerationState, feature: AtlasFeature): AtlasFeature =>
+  state.sourceFeatures?.get(feature.id) ?? feature;
 /** What names a place: these stay with the captured record when it moves onto developed ground. */
 const namingAttributes = [
   "nameStatus",
@@ -195,7 +189,7 @@ const namingAttributes = [
 ] as const;
 /** The captured record takes the developed place's shape and readings; that record leaves. */
 function standsFor(state: RegionalState, captured: AtlasFeature, developed: AtlasFeature) {
-  const parent = parentRecord(captured),
+  const parent = capturedPlace(state, captured),
     names = Object.fromEntries(
       namingAttributes
         .map((key) => [key, parent.attributes[key]])

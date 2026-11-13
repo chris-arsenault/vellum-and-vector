@@ -56,12 +56,20 @@ quantities adjust for represented area during sampling, and material packages us
 There is no separate regional channel allowlist. Retained ice evidence survives thaw, and the atmosphere carries its actual
 applied heat and fog operands for replacement at the child's present.
 
+Captured feature records stay distinct even when they depict the same named place. A parent
+product becomes input on a new map; same-map regeneration retains its local product role.
+Hosted places carry a host identity and their map-owned position. Refinement locates them on
+the current owned host, including its dry courses, without treating ancestral geometry as a
+second spatial authority. Authored and protected records remain outside replaceable generation.
+
 Initial local relief starts at the captured surface. Complete retained beds supply their
 inclined contacts before drainage organization asks which faces yield. Valley placement
 resolves the captured cut share through connected, material-responsive ground; contacts
 then resolve from the same captured beds on the occupied facets. Grain, bed dip and exposed
 support act through the ordinary Ground responses. Captured faults and sheet contacts
 provide local fracture organization without replaying tectonic motion.
+Current retained river courses locate their inherited floors first. A narrow floor can
+occupy part of every course cell; interfluves keep their own loose cover and material history.
 Ground displacement moves retained contacts, and excavation exposes and
 transfers the material it reaches. This initialization runs once. Subsequent rounds
 retain and work its result through shared erosion, mass wasting, sediment, coast,
@@ -87,7 +95,7 @@ Derived climate, routing, classifications and publication are separate from mate
 development. Captured atmospheric contributions are replaced rather than added twice.
 Selected current queries share the map's operation revision. A query resolves its own
 derived dependencies; ecology therefore reads the current channel and flood environment.
-Regional inflow is a Strategy for the shared current-water query. Groundwater development
+Captured boundary supplies are shared water-owner inputs for reads and development. Groundwater development
 uses explicit exposure; current water reads never recharge its retained store.
 External maritime context enters through the working frame; interior coast distance
 follows the child's current shoreline. The finite frame is a computational boundary,

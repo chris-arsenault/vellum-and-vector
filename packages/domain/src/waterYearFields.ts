@@ -10,3 +10,5 @@ export const waterYearFields = Array.from(
   (_, month) => `SurfaceWaterMonth${month as Month}` as const
 );
 export type WaterYearField = (typeof waterYearFields)[number];
+/** The established transfer year travels and is captured independently of ending held contents. */
+export const waterYearStateFields = [...waterYearFields, "WaterRecharge", "SnowKept"] as const;

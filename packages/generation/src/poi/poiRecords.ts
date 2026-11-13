@@ -6,6 +6,7 @@ import type { MagicField } from "../world/magicState";
 import type { GenerationState } from "../process";
 import type { PoiPlace } from "./poiContract";
 import { fieldOf } from "./poiReads";
+import { riverSuccessor } from "../water/riverKeeping";
 
 type Attributes = (state: GenerationState, place: PoiPlace) => Record<string, unknown>;
 const none: Attributes = () => ({});
@@ -98,7 +99,12 @@ export const courseRecord =
   ({ kind, layer, name, attributes = none }: RecordShape) =>
   (state: GenerationState, place: PoiPlace): AtlasFeature | null => {
     if (place.cells.length < placeMinimumCells.course) return null;
-    const geometry = linkedCourse(state, place.cells, fieldOf(state).FlowTargets, true);
+    const geometry = linkedCourse(
+      state,
+      place.cells,
+      (cell) => riverSuccessor(fieldOf(state), cell),
+      true
+    );
     return geometry
       ? placeFeature(state, kind, name, place.cells, layer, attributes(state, place), undefined, {
           geometry,

@@ -1,4 +1,4 @@
-import type { AtlasFeature } from "@atlas/domain";
+import type { AtlasFeature, Position } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { Must, PlaceRoles, PoiHostLink, PoiMoment, Slot } from "../poi/poiContract";
 import type { GenerationState, MapProcessContext } from "../process";
@@ -67,8 +67,8 @@ export interface AreaHosting {
   readonly statement: Must<string>;
   /** The link a place standing at this cell records, if an area of this kind is there. */
   readonly linkAt: Slot<(state: GenerationState, cell: number) => PoiHostLink | null>;
-  /** Where a place that recorded a link stands on this map, or -1 when that lies off this map. */
-  readonly cellFor: Slot<(state: RegionalState, link: PoiHostLink) => number>;
+  /** Resolve the captured place's actual position on its developed host, or -1 off this map. */
+  readonly cellFor: Slot<(state: RegionalState, link: PoiHostLink, position: Position) => number>;
 }
 /** One area entry: the POI contract's shared roles, and its own. */
 export interface AreaEntry extends PlaceRoles<AreaPlace> {

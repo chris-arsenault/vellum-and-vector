@@ -2,6 +2,7 @@ import { mappedRiverCells } from "../../area/riverCourses";
 import type { GenerationState } from "../../process";
 import type { PoiPlace } from "../poiContract";
 import { adjacent, cellsWithin, fieldOf, moistureAt } from "../poiReads";
+import { riverSuccessor } from "../../water/riverKeeping";
 
 /** What the water group's entries read in common. Nothing here computes geography or writes. */
 
@@ -9,13 +10,14 @@ import { adjacent, cellsWithin, fieldOf, moistureAt } from "../poiReads";
 export const onMappedRiver = (state: GenerationState, cell: number) =>
   mappedRiverCells(state).has(cell);
 
-/** The cell a cell drains to, or -1 where its water leaves the network. */
+/** The next cell of the owned river, or -1 at an unrepresented end. */
 export const flowTarget = (state: GenerationState, cell: number) =>
-  fieldOf(state).FlowTargets.get(cell);
+  riverSuccessor(fieldOf(state), cell);
 
-/** The neighbours draining into a cell. */
+/** Terrain drainage includes water too small to be an owned river. */
 export function* inflows(state: GenerationState, cell: number) {
-  for (const next of adjacent(state, cell)) if (flowTarget(state, next) === cell) yield next;
+  for (const next of adjacent(state, cell))
+    if (fieldOf(state).FlowTargets.get(next) === cell) yield next;
 }
 
 /** A place's ground area in square metres, counting only the cells this map owns. */

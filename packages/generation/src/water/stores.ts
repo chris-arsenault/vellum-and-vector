@@ -10,6 +10,12 @@ export class WaterStore {
   get room() {
     return Math.max(0, this.capacity - this.held);
   }
+  /** A changed medium releases contents it can no longer hold before taking new supply. */
+  drainExcess() {
+    const released = Math.max(0, this.held - this.capacity);
+    this.held -= released;
+    return released;
+  }
   receive(amount: number) {
     const supplied = Math.max(0, amount),
       kept = Math.min(supplied, this.room);
@@ -69,6 +75,10 @@ export interface WaterColumn {
   ground: StoreColumn;
   standing: StoreColumn;
 }
+/** Other owners can inspect the column; only water operations receive transfer methods. */
+export type WaterColumnView = {
+  readonly [Store in keyof WaterColumn]: Readonly<Pick<StoreColumn, "held" | "room" | "capacity">>;
+};
 
 /** The receiver returns overflow; a transfer never invents supply or silently drops it. */
 export function transferColumn(from: StoreColumn, to: StoreColumn, cell: number, request: number) {

@@ -46,15 +46,16 @@ describe("a river's size comes from the map", () => {
     );
   });
   it("declares what makes a river once, against the map, for everything that asks", () => {
-    // One place states the sizes, through MapScale; the river network, a region's starting
-    // network and the test for drawing a river all take them from there.
+    // One place states the sizes, through MapScale; the water owner and publication read it.
+    // The initial terrain tree no longer classifies a second set of river cells.
     const declared = existsSync(join(source, "water/riverSize.ts"))
       ? text("water/riverSize.ts")
       : "";
     expect(declared).toMatch(/MapScale\.volume\(/);
     expect(declared).toMatch(/MapScale\.area\(/);
-    for (const user of ["water/rivers.ts", "regional/network.ts", "worldSignificance.ts"])
+    for (const user of ["water/rivers.ts", "worldSignificance.ts"])
       expect(text(user), user).toMatch(/from "(\.\.?\/)+(water\/)?riverSize"/);
+    expect(text("regional/network.ts")).not.toMatch(/\bchannel\s*:\s*new\s+Uint8Array|\.channel\b/);
   });
 });
 

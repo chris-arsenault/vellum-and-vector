@@ -16,7 +16,12 @@ import { conjoinFeatures, readEvidence, respondFeatures, supportFeatures } from 
 import { deriveCharacter } from "./character";
 import { respondClimate } from "./climate";
 import { divides } from "./divides";
-import { routeWater, refreshRegionalOcean } from "./drainage";
+import {
+  routeWater,
+  developRegionalWater,
+  initializeRegionalWater,
+  refreshRegionalOcean,
+} from "./drainage";
 import { clearRegionalProducts } from "./extraction/features";
 import { carryIdentities } from "./extraction/identity";
 import { prepareEcology, respondEcology, presentEcology } from "./ecology";
@@ -120,6 +125,18 @@ export const regionalOperations: ScheduledStep[] = [
     message: "Routing present regional water",
     produces: routingProducts(),
     operation: water,
+  },
+  {
+    id: "water-initialize",
+    message: "Realizing captured channel quantities",
+    produces: routingProducts(),
+    operation: command("water-initialize", "initialize", initializeRegionalWater, [climate]),
+  },
+  {
+    id: "water-evolution",
+    message: "Developing retained river courses",
+    produces: routingProducts(),
+    operation: command("water-evolution", "event", developRegionalWater, [climate]),
   },
   {
     id: "ocean",

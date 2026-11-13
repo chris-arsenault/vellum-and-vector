@@ -11,8 +11,6 @@ export interface ReachOnMap {
   readonly inFrame: boolean;
   /** The river of the mapped course the reach lies on, or null where its course is no river. */
   readonly course: string | null;
-  /** The rivers holding its cells, head to end, without the cell it ends on. */
-  readonly held: readonly string[];
 }
 /** One river as the map draws it. */
 export interface JoinedRiver {
@@ -21,16 +19,6 @@ export interface JoinedRiver {
   readonly parts: readonly (readonly number[])[];
 }
 
-/**
- * The river a reach draws. A parent's river holds the water it runs through, so it takes the
- * reach from the first cell it holds; otherwise the reach is its own course's. A confluence cell
- * is held by whichever river reaches it first, which says nothing of the reach leaving it, so
- * another course's hold is not read.
- */
-function riverOf(reach: ReachOnMap, continuing: ReadonlySet<string>) {
-  if (!reach.inFrame) return null;
-  return reach.held.find((id) => id === reach.course || continuing.has(id)) ?? reach.course;
-}
 /** How many reaches lie between a reach and the end of its water. */
 function reachesBelow(reaches: readonly ReachOnMap[], from: number) {
   let count = 0;
@@ -69,13 +57,10 @@ function partsOf(
 }
 /**
  * The rivers a map draws, each once: every reach of one river inside the frame, joined. A
- * tributary that is a river of its own stays its own. `continuing` names the parents' rivers.
+ * tributary that is a river of its own stays its own. Membership belongs to the water owner.
  */
-export function joinReaches(
-  reaches: readonly ReachOnMap[],
-  continuing: ReadonlySet<string> = new Set()
-): JoinedRiver[] {
-  const rivers = reaches.map((reach) => riverOf(reach, continuing)),
+export function joinReaches(reaches: readonly ReachOnMap[]): JoinedRiver[] {
+  const rivers = reaches.map((reach) => (reach.inFrame ? reach.course : null)),
     joined = new Map<string, number[]>();
   rivers.forEach((id, i) => {
     if (id === null) return;

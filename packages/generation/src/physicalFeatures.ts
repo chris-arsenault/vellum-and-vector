@@ -232,10 +232,19 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       "water.runoff": [runoffStep],
       "water.routing": routingSteps,
+      "water.current": [nativeSteps.currentWater],
+      "water.initialize": [nativeSteps.riverNetwork],
       "water.groundwater": [nativeSteps.groundwater],
     },
     {
-      regional: { kind: "specialized", operations: { "water.routing": ["refinement.water"] } },
+      regional: {
+        kind: "specialized",
+        operations: {
+          "water.routing": ["refinement.water-evolution"],
+          "water.current": ["refinement.water"],
+          "water.initialize": ["refinement.water-initialize"],
+        },
+      },
       requires: ["physical.climate", "ocean.geography"],
     }
   ),

@@ -1,11 +1,4 @@
-import {
-  canonicalGeometry,
-  point,
-  spatial,
-  geometryParts,
-  combineGeometry,
-  type Band,
-} from "@atlas/domain";
+import { canonicalGeometry, point, spatial, geometryParts, combineGeometry } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
@@ -26,7 +19,7 @@ export function bestMember(members: RegionMembers, score: (i: number) => number)
 export function linkedCourse(
   state: GenerationState,
   members: RegionMembers,
-  targets: Band,
+  successor: (cell: number) => number,
   exits = false
 ) {
   const work = state.physical!,
@@ -34,7 +27,7 @@ export function linkedCourse(
     lines: number[][][] = [];
   for (const cell of members) included.set(cell, 1);
   for (const i of members) {
-    const j = targets.get(i);
+    const j = successor(i);
     if (j < 0 || (!exits && !included.get(j))) continue;
     const a = nativePosition(work, i),
       b = nativePosition(work, j);
@@ -78,7 +71,7 @@ export function magicPlaceGeometry(
     const course =
       ruleId === "wake"
         ? wakeCourse(state, field, extent)
-        : parents && linkedCourse(state, members, parents);
+        : parents && linkedCourse(state, members, (cell) => parents.get(cell));
     return course
       ? { geometry: course, anchor, meaning: "retained physical propagation course" }
       : null;

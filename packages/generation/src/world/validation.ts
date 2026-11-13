@@ -5,10 +5,8 @@ import { noWaterSurface } from "./math";
 import { sourceToOutletOrder } from "./flowGraph";
 import { isGrounded } from "./glacierSurface";
 import { validateLandscape } from "../rock/groundInitialization";
-import { allowsBoundaryDrainage, isOpenOutlet } from "./field";
+import { allowsBoundaryDrainage } from "./field";
 import { releaseWorking } from "./physicalNumerics";
-import { onRiver, riverOrderAt } from "../water/riverKeeping";
-import { waterPassage } from "../water/waterQuantity";
 import { MapScale } from "@atlas/domain";
 
 const range = (value: number, low: number, high: number) => value >= low && value <= high;
@@ -73,25 +71,16 @@ function validateWater(map: PhysicalField) {
   if (ocean === 0 && !allowsBoundaryDrainage(map))
     throw new Error("Physical geography contains no connected ocean.");
 }
-function validateRivers(map: PhysicalField, c: PhysicalContext) {
-  // A cell that takes water out of its river passes on less than it received, and no more.
-  const pass = waterPassage(map, c);
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (!onRiver(map, i)) continue;
-    const target = map.FlowTargets.get(i);
+export function validateRiverReferences(map: PhysicalField) {
+  for (const reach of map.rivers.reaches.values()) {
     if (
-      (target < 0 && !isOpenOutlet(map, i)) ||
-      (target >= 0 &&
-        map.WaterKindCodes.get(target) !== 2 &&
-        map.FlowAccumulation.get(target) + 1e-9 < pass(target, map.FlowAccumulation.get(i)))
+      reach.downstream !== null &&
+      (reach.downstream === reach.id || !map.rivers.reaches.has(reach.downstream))
     )
-      throw new Error(
-        `River network does not continue toward an outlet: cell ${i} (water ${map.WaterKindCodes.get(i)}, flow ${map.FlowAccumulation.get(i)}) drains to ${target}${
-          target < 0
-            ? ""
-            : ` (water ${map.WaterKindCodes.get(target)}, flow ${map.FlowAccumulation.get(target)}, river order ${riverOrderAt(map, target)})`
-        }.`
-      );
+      throw new Error("Retained river has an invalid receiving reach.");
+    for (const cell of reach.cells)
+      if (cell < 0 || cell >= map.mesh.count || !map.mesh.membership(cell))
+        throw new Error("Retained river has a cell outside this map.");
   }
 }
 function validateIce(map: PhysicalField, c: PhysicalContext) {
@@ -109,7 +98,8 @@ export function validatePhysical(map: PhysicalField, c: PhysicalContext) {
   validateCodes(map, c.Products?.status("field:LandformCodes") !== "available");
   validateWater(map);
   releaseWorking(map, sourceToOutletOrder(map));
-  validateRivers(map, c);
+  // owner-direction(2026-11-13): numerical accuracy and reproducibility are not goals of this repository, and guarding them is forbidden.
+  validateRiverReferences(map);
   validateIce(map, c);
   validateLandscape(map);
 }

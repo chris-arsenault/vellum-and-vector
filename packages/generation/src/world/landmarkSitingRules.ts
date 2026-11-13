@@ -9,7 +9,7 @@ import { physicalSampler } from "./physicalMetric";
 import { distance, type Point } from "./landmarkGeometry";
 import { CellList, MapScale, SmallIntSet, radixOrder, type Band } from "@atlas/domain";
 import { workingArray } from "./physicalNumerics";
-import { onRiver, waterAt } from "../water/riverKeeping";
+import { onRiver, riverSuccessor, waterAt } from "../water/riverKeeping";
 
 /** The field read once per siting pass. */
 export interface Terrain {
@@ -164,7 +164,7 @@ const point = (t: Terrain, i: number): Site => ({
 });
 /** The river's drop into the cell it flows to, in metres. */
 function stepDown(map: PhysicalField, i: number) {
-  const target = map.FlowTargets.get(i);
+  const target = riverSuccessor(map, i);
   return target >= 0
     ? Math.max(0, MapScale.metres(map.Elevation.get(i) - map.Elevation.get(target), "native"))
     : 0;
@@ -173,7 +173,7 @@ function stepDown(map: PhysicalField, i: number) {
 function reachesSea(map: PhysicalField, i: number, steps: number) {
   let at = i;
   for (let n = 0; n < steps && at >= 0; n++) {
-    at = map.FlowTargets.get(at);
+    at = riverSuccessor(map, at);
     if (at >= 0 && map.WaterKindCodes.get(at) === 1) return true;
   }
   return false;

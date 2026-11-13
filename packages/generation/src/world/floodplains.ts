@@ -4,6 +4,7 @@ import type { PhysicalContext } from "./context";
 import { clamp, round, toUnits, units } from "./math";
 import { dominantUpstream, longitudinalAlignment } from "../water/channelGeometry";
 import { riverOrderAt, reachesOf } from "../water/riverKeeping";
+import { reachMonths } from "../water/reaches";
 import { RecordQueue, type Band } from "@atlas/domain";
 import { releaseWorking } from "./physicalNumerics";
 
@@ -40,9 +41,15 @@ function seedFloodplains(
   upstream: Band,
   frontier: RecordQueue
 ) {
+  for (const cell of floodplainSources(map, c.Profile.FloodplainMinimumRiverOrder))
+    seedBanks(map, c, upstream, frontier, cell);
+}
+/** Current river cells that can supply water to their banks. */
+export function* floodplainSources(map: PhysicalField, minimumOrder: number) {
   for (const reach of reachesOf(map)) {
-    if (reach.dry || reach.order < c.Profile.FloodplainMinimumRiverOrder) continue;
-    for (const i of reach.cells) seedBanks(map, c, upstream, frontier, i);
+    if (reach.dry || reach.order < minimumOrder) continue;
+    for (const [at, cell] of reach.cells.entries())
+      if (map.WaterKindCodes.get(cell) === 0 && reachMonths(reach, at) > 0) yield cell;
   }
 }
 function seedBanks(

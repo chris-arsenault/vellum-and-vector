@@ -4,7 +4,9 @@ import type { PhysicalContext } from "../world/context";
 import { depthRateToDischarge } from "../world/dimensions";
 import { bedLeak, bedLoss } from "./channelLoss";
 import { groundPermeability, groundwaterFilled } from "./groundwater";
-import { reachesOf, reachAt } from "./riverKeeping";
+import { reachAt } from "./riverKeeping";
+import { cutShare, type GroundFacet } from "../rock/groundShares";
+import { riverStorage } from "./riverStorage";
 
 respond({ key: "waterWithdrawal", by: "surface water", reads: [], base: () => 0 });
 respond({ key: "waterTransmission", by: "surface water", reads: [], base: () => 1 });
@@ -29,8 +31,12 @@ export function passingWater(received: number, withdrawal: number, transmission:
 export function channelLosses(map: PhysicalField, context: PhysicalContext) {
   const leak = new Float64Array(map.mesh.count),
     length = new Float64Array(map.mesh.count);
-  const permeability = (i: number) =>
-    bedLeak(context.Profile.OpenBedSeepage, groundPermeability(map, i), groundwaterFilled(map, i));
+  const permeability = (i: number, facet?: GroundFacet) =>
+    bedLeak(
+      context.Profile.OpenBedSeepage,
+      groundPermeability(map, i, facet),
+      groundwaterFilled(map, i)
+    );
   // Unresolved channels retain their aggregate passage loss as a cell quantity.
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) !== 0) continue;
@@ -38,12 +44,14 @@ export function channelLosses(map: PhysicalField, context: PhysicalContext) {
     length[i] = Math.sqrt(map.mesh.area(i));
   }
   // A resolved river owns its bed response. Routing delivers water through those responses.
-  for (const reach of reachesOf(map)) {
-    reach.leakage = Float64Array.from(reach.cells, permeability);
+  for (const reach of riverStorage(map).reaches.values()) {
+    reach.leakage = Float64Array.from(reach.cells, (cell) =>
+      permeability(cell, cutShare(map, cell) > 0 ? "cut" : "land")
+    );
   }
   return (cell: number, received: number) => {
     const reach = reachAt(map, cell),
-      at = map.rivers.at?.position(cell) ?? 0,
+      at = riverStorage(map).at?.position(cell) ?? 0,
       response = reach ? reach.leakage[at] : leak[cell];
     return bedLoss(received, response, length[cell]);
   };

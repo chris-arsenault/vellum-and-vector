@@ -7,4 +7,4 @@ export const currentBed = (map: PhysicalField, cell: number) =>
 
 /** Water drains through the present valley floor, including channels still too small to name. */
 export const drainageBed = (map: PhysicalField, cell: number) =>
-  map.WaterKindCodes.get(cell) === 0 ? currentBed(map, cell) : map.Elevation.get(cell);
+  map.WaterKindCodes.get(cell) === 1 ? map.Elevation.get(cell) : currentBed(map, cell);

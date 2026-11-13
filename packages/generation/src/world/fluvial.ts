@@ -9,15 +9,23 @@ import { loadOf, MaterialLoad } from "../rock/groundLoad";
 import type { MaterialLayer } from "../rock/rockColumn";
 import { cutShare, facetSurface } from "../rock/groundShares";
 import { ask, respond } from "../coupling/answers";
-import { sourceToOutletOrder, waterGathered } from "./flowGraph";
+import { targetOrder, waterGathered } from "./flowGraph";
 import { cellTravel } from "./physicalMetric";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 import { referenceWaterPassage } from "../water/waterQuantity";
-import { reachAt, waterAt } from "../water/riverKeeping";
+import { reachAt, riverSuccessor, waterAt } from "../water/riverKeeping";
 import { depthRateToDischarge } from "./dimensions";
 
-function transportDistance(map: PhysicalField, i: number, previous: Band) {
-  const target = map.FlowTargets.get(i),
+/** Sediment follows its running retained carrier; unresolved water keeps its cell route. */
+export function sedimentTarget(map: PhysicalField, cell: number) {
+  const reach = reachAt(map, cell);
+  return reach && !reach.dry && map.WaterKindCodes.get(cell) === 0
+    ? riverSuccessor(map, cell, reach)
+    : map.FlowTargets.get(cell);
+}
+
+function transportDistance(map: PhysicalField, i: number, previous: Band, targets: Band) {
+  const target = targets.get(i),
     next = target >= 0 ? target : previous.get(i);
   return next >= 0
     ? cellTravel(
@@ -76,12 +84,15 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
   const moving = new MaterialLoad(map, "sediment:moving"),
     supply = loadOf(map),
     p = c.Profile;
-  const previous = workingArray(map, "int32", "sediment:previous").fill(-1);
+  const targets = workingValues(map, "int32", "sediment:targets", (cell) =>
+      sedimentTarget(map, cell)
+    ),
+    previous = workingArray(map, "int32", "sediment:previous").fill(-1);
   for (let i = 0; i < map.mesh.count; i++) {
-    const target = map.FlowTargets.get(i);
+    const target = targets.get(i);
     if (target >= 0) previous.set(target, i);
   }
-  const order = sourceToOutletOrder(map),
+  const order = targetOrder(map, targets),
     water = waterGathered(
       map,
       map.FlowTargets,
@@ -102,14 +113,14 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
     moving.add(i, supply.take(i, supply.amount(i)));
     const load = moving.amount(i);
     if (load <= 0) continue;
-    const target = map.FlowTargets.get(i);
+    const target = targets.get(i);
     // Water carries what its flow and slope can. Standing water carries nothing, and what it cannot
     // carry settles over the distance it takes to drop out, which is what builds plains and deltas.
     const still =
       map.WaterKindCodes.get(i) === 2 || (target >= 0 && map.WaterKindCodes.get(target) === 1);
     const routed = carriedWater(map, i, p.FluvialReferenceRunoff, water),
       capacity = still ? 0 : carries.get(i) * routed * c.Span;
-    const distance = transportDistance(map, i, previous);
+    const distance = transportDistance(map, i, previous, targets);
     const capture = -Math.expm1(
       (Math.log1p(-p.SedimentTransportFraction / 1000) * distance) / p.SedimentDepositionLength
     );
@@ -127,7 +138,7 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
     else releaseRiverLoad(map, i, carried);
   }
   moving.release();
-  releaseWorking(map, order, previous, water);
+  releaseWorking(map, targets, order, previous, water);
 }
 /** Flowing water carries more the steeper it runs. */
 respond({

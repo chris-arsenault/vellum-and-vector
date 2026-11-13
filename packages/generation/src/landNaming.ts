@@ -13,6 +13,7 @@ import { traditionOf } from "./human/traditions";
 import { takePublishedNames } from "./poi/poiPublish";
 import type { GenerationState, MapProcess } from "./process";
 import { mapCommand } from "./processTraits";
+import { retainPublishedRiverNames } from "./area/riverPublish";
 
 /**
  * Names for the geography a map generated, given by the people who live along it. A river,
@@ -120,6 +121,7 @@ export function finalizeNamesProcess(original: DomainSnapshot): MapProcess {
           }
         // Last: a town takes the name its peak ended up with.
         takePublishedNames(state);
+        retainPublishedRiverNames(state);
       },
       []
     ),

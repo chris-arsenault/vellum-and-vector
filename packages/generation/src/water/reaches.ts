@@ -21,14 +21,31 @@ export interface Reach {
   width: Float64Array;
   depth: Float64Array;
   leakage: Float64Array;
-  /** Published identity and name survive loss of water. */
+  /** Established river membership on every member reach survives loss of water. */
   river?: string;
+  /** Publication associations describe that existing river without establishing it. */
   record?: string;
   name?: string;
 }
 export interface FormerCourse {
   cells: readonly number[];
   leftIn: number;
+}
+/** Readers can inspect retained profiles without receiving their writable typed arrays. */
+export type RiverProfile = ArrayLike<number> & Iterable<number>;
+type ProfileName = "monthly" | "catchment" | "bed" | "width" | "depth" | "leakage";
+export type ReachView = Readonly<Omit<Reach, ProfileName | "former">> &
+  Readonly<Record<ProfileName, RiverProfile>> & {
+    readonly former: readonly Readonly<FormerCourse>[];
+  };
+export interface ReachStoreView {
+  readonly reaches: ReadonlyMap<number, ReachView>;
+  readonly next: number;
+  readonly entries: readonly {
+    readonly cell: number;
+    readonly monthly: RiverProfile;
+    readonly catchment: number;
+  }[];
 }
 export interface ReachStore {
   readonly reaches: Map<number, Reach>;
@@ -40,7 +57,7 @@ export interface ReachStore {
 export const emptyReaches = (): ReachStore => ({ reaches: new Map(), next: 1, entries: [] });
 
 /** A losing river can have water upstream of a dry end. */
-export function reachMonths(reach: Reach, at: number) {
+export function reachMonths(reach: Pick<ReachView, "monthly">, at: number) {
   let months = 0;
   for (let month = 0; month < 12; month++) if (reach.monthly[at * 12 + month] > 0) months++;
   return months;

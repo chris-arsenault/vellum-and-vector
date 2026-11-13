@@ -7,10 +7,14 @@ import { createTestField } from "../rock/groundTestFixture";
 import { atlasPhysicalProfile } from "../world/atlasProfile";
 import { physicalContext } from "../world/context";
 import { createWorldMesh } from "../world/worldMesh";
-import { passingWater, referenceWaterPassage, waterPassage } from "./waterQuantity";
+import { channelLosses, passingWater, referenceWaterPassage, waterPassage } from "./waterQuantity";
 import { depthRateToDischarge, releasedWaterRate } from "../world/dimensions";
 import type { PhysicalField } from "../world/field";
 import { beginGroundwaterExchange, groundwaterCapacity } from "./groundwater";
+import { openCut, projectGround } from "../rock/groundShares";
+import { setLayer } from "../rock/rockColumn";
+import { rockCatalogue as rocks } from "../rock/rockCatalogue";
+import { addReach } from "./reachEvolution";
 
 const extraSupply = new WeakMap<PhysicalField, number>(),
   intake = new WeakMap<PhysicalField, number>(),
@@ -96,4 +100,24 @@ it("routing and erosion apply the same maintained loss to available incoming wat
   invalidateProcesses(map);
   expect(waterPassage(map, context)(0, 14)).toBe(0);
   expect(passingWater(2, 4, 1)).toBe(0);
+});
+
+it("reads a retained river's exposed bed independently of the interfluve cap", () => {
+  const { map, context } = supplied();
+  setLayer(map, 0, 0, rocks.quartzite.code, 100);
+  openCut(map, 0, 0.1);
+  setLayer(map, 0, 0, rocks.sandstone.code, 100, {}, "cut");
+  projectGround(map, 0);
+  const reach = addReach(map.rivers, [0]);
+  channelLosses(map, context);
+  const exposed = reach.leakage[0];
+  expect(exposed).toBeGreaterThan(0);
+  setLayer(map, 0, 0, rocks.basalt.code, 100);
+  projectGround(map, 0);
+  channelLosses(map, context);
+  expect(reach.leakage[0]).toBe(exposed);
+  setLayer(map, 0, 0, rocks.quartzite.code, 100, {}, "cut");
+  projectGround(map, 0);
+  channelLosses(map, context);
+  expect(reach.leakage[0]).toBeLessThan(exposed);
 });

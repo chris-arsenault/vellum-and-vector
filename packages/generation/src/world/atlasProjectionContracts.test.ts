@@ -119,12 +119,20 @@ it.each([true, false])(
   "full projection declares routing only when selected (%s)",
   async (routing) => {
     const { state, registry, inputs } = fixture(routing ? [] : ["water.routing"]);
+    state.physical!.map.SurfaceWaterMonth0.fill(120);
+    state.physical!.map.WaterRecharge.fill(9);
     const projector = registry.get("atlas.project", "1");
     const plan = { ...configuration([invoke(projector)]), inputs };
     const result = await new MapRunner(plan, registry).run(state, options);
     expect(result.state.facts.has("FlowAccumulation")).toBe(routing);
     expect(result.state.facts.has("drainage")).toBe(false);
     expect(Boolean(result.state.surface.channels.FlowAccumulation)).toBe(routing);
+    expect(Boolean(result.state.surface.channels.SurfaceWaterMonth0)).toBe(routing);
+    expect(Boolean(result.state.surface.channels.WaterRecharge)).toBe(routing);
+    if (routing) {
+      expect(result.state.surface.channels.SurfaceWaterMonth0!.get(0)).toBe(120);
+      expect(result.state.surface.channels.WaterRecharge!.get(0)).toBe(9);
+    }
     expect(result.state.surface.channels.FlowTargets).toBeUndefined();
   }
 );

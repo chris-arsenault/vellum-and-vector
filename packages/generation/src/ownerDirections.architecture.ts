@@ -51,6 +51,20 @@ const directions: readonly OwnerDirection[] = [
   },
   {
     direction:
+      "the stream a parent's river-side town stands on continues on a finer map whatever its water there",
+    given: "2026-11-12",
+    marks: ["packages/generation/src/regional/seats.ts"],
+    test: "packages/generation/src/regional/seats.test.ts",
+  },
+  {
+    direction:
+      "numerical accuracy and reproducibility are not goals of this repository, and guarding them is forbidden",
+    given: "2026-11-13",
+    marks: ["packages/generation/src/world/validation.ts"],
+    test: "packages/generation/src/world/riverValidation.test.ts",
+  },
+  {
+    direction:
       "a region starts at the parent's level and gets more defined; the parent's elevation is not thrown away",
     given: "2026-11-12",
     marks: ["packages/generation/src/regional/startingGround.ts"],

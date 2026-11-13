@@ -143,7 +143,7 @@ export const riverMouth: PoiEntry = {
   name: "River mouth",
   recognition: {
     distinct:
-      "A land cell with RiverOrders above zero whose water goes straight into the sea: its FlowTargets cell is Ocean, or it has no target and an Ocean neighbour, as a refined network's root does. A river entering a lake is not one (the target is Lake, not Ocean), nor is one leaving across the frame (no Ocean beside it); a spring is the other end of the river. A delta and an estuary are this kind, with the form a property read from DeltaIntensity.",
+      "A land cell on a drawn retained river whose next river cell is sea, or whose represented course ends beside the sea. A river entering a lake is not one, nor is one leaving across the frame with no sea beside it; a spring is the other end of the river. A delta and an estuary are this kind, with the form a property read from DeltaIntensity.",
     isA,
   },
   existence: {
