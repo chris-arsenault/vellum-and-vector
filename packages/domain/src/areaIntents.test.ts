@@ -3,6 +3,7 @@ import { registerAreaIntents } from "./areaIntents";
 import { FactDependencies } from "./factDependencies";
 import { IntentRegistry, type IntentContext } from "./intent";
 import { rectangle } from "./spatial";
+import { valueRecordSchema } from "./schemas";
 
 it("keeps a regional creation scoped to its source while its new map includes surrounding context", () => {
   const registry = new IntentRegistry();
@@ -33,7 +34,7 @@ it("keeps a regional creation scoped to its source while its new map includes su
         version: 1,
         kind: "createArea",
         scope,
-        data: {
+        data: valueRecordSchema.parse({
           id: crypto.randomUUID(),
           regionId: crypto.randomUUID(),
           parentId: scope.areaId,
@@ -44,7 +45,7 @@ it("keeps a regional creation scoped to its source while its new map includes su
           approach: "procedural",
           layers: [],
           traits: [],
-        },
+        }),
       },
       context
     );

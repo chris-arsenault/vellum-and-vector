@@ -51,7 +51,10 @@ it("does not call a retained confluence a spring head when terrain routing disag
   map.FractureConductance.set(target, 1000);
   map.Slope.set(target, 0.001);
   map.Slope.set(terrain, 0.1);
-  expect(spring.recognition.isA!(state, target)).toBe(false);
+  const isSpring = spring.recognition.isA;
+  if (typeof isSpring !== "function")
+    throw new Error("Spring recognition must answer its question");
+  expect(isSpring(state, target)).toBe(false);
 });
 
 it("draws a gorge along its retained river even when current drainage points elsewhere", () => {

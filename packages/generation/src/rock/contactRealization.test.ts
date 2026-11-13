@@ -64,3 +64,31 @@ it("exposes the lower bed across an inclined contact while retaining the cap's h
   expect(readLayer(map, left, 0).cargo).toEqual(cargo);
   expect(readLayer(map, right, 0).kind).toBe(rocks.shale.code);
 });
+
+it("resolves an inclined donor contact in the child's longitude chart", () => {
+  const mesh = createWorldMesh(
+      [800, 100, 1200, 300],
+      32,
+      0,
+      () => true,
+      80000,
+      undefined,
+      false,
+      false,
+      1000
+    ),
+    map = createTestField(mesh),
+    cells = Array.from({ length: mesh.count }, (_, cell) => cell);
+  for (const cell of cells) {
+    map.BedrockElevation.set(cell, units(100));
+    setLayer(map, cell, 0, rocks.quartzite.code, units(20), { bedSlopeX: 0.3 });
+    setLayer(map, cell, 1, rocks.shale.code, units(1000));
+    projectGround(map, cell);
+  }
+  // Source longitude zero is the child's central longitude, represented here as 1000.
+  realizeContacts(map, cells, { x: 0, y: 200, land: units(100), cut: units(100) });
+  const west = cells.find((cell) => mesh.x(cell) < -100)!,
+    east = cells.find((cell) => mesh.x(cell) > 100)!;
+  expect(readLayer(map, west, 0).kind).toBe(rocks.quartzite.code);
+  expect(readLayer(map, east, 0).kind).toBe(rocks.shale.code);
+});

@@ -1,8 +1,10 @@
 import { expect, it } from "vitest";
 import { point, type AtlasFeature } from "@atlas/domain";
 import { capturedPlace } from "../poi/poiPublish";
-import type { RegionalState } from "../regional/state";
+import type { RegionalState, RegionalWork } from "../regional/state";
+import { Contributions } from "../coupling/fieldContributions";
 import { addReach } from "../water/reachEvolution";
+import { riverStorage } from "../water/riverStorage";
 import { nativePosition } from "../world/atlasWorkspace";
 import { worldGeographyFixture } from "../world/worldGeographyFixtures";
 import { hostedCell, linkOn } from "./areaHosting";
@@ -10,12 +12,21 @@ import { river } from "./river";
 
 function suppliedFragments() {
   const supplied = worldGeographyFixture([0, 0, 8000, 8000], 1000),
-    state = Object.assign(supplied, { regional: { input: { areaId: "area" } } }) as RegionalState,
-    map = state.physical.map,
+    map = supplied.physical.map,
+    regional: RegionalWork = {
+      input: { areaId: "area", quality: "draft", seed: 73, domains: ["physical"] },
+      parentSpan: map.mesh.spacing,
+      inheritedHeight: map.coverage.copyBand(map.Elevation),
+      natural: {},
+      contributions: new Contributions(map.mesh.count),
+      round: 0,
+      evidence: { courses: [], lakes: [], seats: [], entries: [], landmarks: [] },
+    },
+    state = Object.assign(supplied, { regional }),
     first = 0,
     last = map.mesh.count - 1;
   for (const cell of [first, last]) {
-    const reach = addReach(map.rivers, [cell]);
+    const reach = addReach(riverStorage(map), [cell]);
     reach.river = "host-river";
     reach.drawn = true;
     reach.monthly.fill(20);
@@ -79,7 +90,7 @@ it("locates a canonical source position in the host map's continuous chart", () 
 it("retains an established host on a dry course while new-place siting still reads running water", () => {
   const { state, first, last } = suppliedFragments(),
     map = state.physical.map;
-  for (const reach of map.rivers.reaches.values()) {
+  for (const reach of riverStorage(map).reaches.values()) {
     reach.dry = true;
     reach.monthly.fill(0);
   }
@@ -92,7 +103,7 @@ it("keeps a losing river's dry tail available as an established host", () => {
   const { state, first } = suppliedFragments(),
     map = state.physical.map,
     tail = map.mesh.neighbor(first, 0),
-    reach = addReach(map.rivers, [first, tail]);
+    reach = addReach(riverStorage(map), [first, tail]);
   reach.river = "host-river";
   reach.drawn = true;
   reach.monthly.fill(20, 0, 12);
@@ -145,7 +156,11 @@ function adoptionInputs() {
         carried: { sourceId: "ancestor", geometry: source.geometry, discharge: 10, order: 1 },
       },
     ],
-  } as RegionalState["regional"]["evidence"];
+    lakes: [],
+    seats: [],
+    entries: [],
+    landmarks: [],
+  };
   const adopt = river.lineage.adopt;
   if (typeof adopt !== "function") throw new Error("River adoption is required");
   return { state, source, other, developed, adopt };

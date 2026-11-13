@@ -6,6 +6,7 @@ import { nearestTriangle, type TriangularLattice } from "./mesh";
 import { createRiverPaths, riverPath } from "./riverPaths";
 import { addReach } from "../water/reachEvolution";
 import { captureRivers } from "../water/networkResources";
+import { riverStorage } from "../water/riverStorage";
 
 function network() {
   const map = createField(createWorldMesh([-100_000, -100_000, 100_000, 100_000], 1024, 0));
@@ -48,12 +49,12 @@ function network() {
   map.WaterKindCodes.set(mouth, 1);
   map.RiverOrders.set(mouth, 0);
   [main.slice(0, join), branch.slice(0, -1), main.slice(join, -1)].forEach((cells, n) => {
-    const reach = addReach(map.rivers, cells);
+    const reach = addReach(riverStorage(map), cells);
     reach.downstream = n < 2 ? 3 : null;
     reach.order = n < 2 ? 1 : 2;
     reach.drawn = true;
   });
-  for (const reach of map.rivers.reaches.values())
+  for (const reach of riverStorage(map).reaches.values())
     reach.cells.forEach((cell, at) => {
       reach.monthly.fill(map.FlowAccumulation.get(cell), at * 12, (at + 1) * 12);
       reach.width[at] = map.RiverWidth.get(cell);

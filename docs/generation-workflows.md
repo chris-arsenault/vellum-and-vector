@@ -104,7 +104,8 @@ version of the ground. New quantities join this schema rather than introducing a
 between generation and storage.
 
 Captured Ground includes finite beds, loose cover, facets, contacts, material history
-and hosted cargo. A region starts at the captured surface. Inclined contacts expose the
+and hosted cargo. Its regional initialization is independent of mountain-construction
+selection. A region starts at the captured surface. Inclined contacts expose the
 actual beds before initial drainage organization; retained courses locate inherited valley
 floors, with grain, dip and material response guiding their connected widening. Captured faults and sheet contacts
 open local discontinuities through the shared fracture owner. Later Ground actions move
@@ -117,6 +118,8 @@ Present weathering, solution, creep, incision, mass wasting, sediment transport,
 coastal wear and groundwater use the same owners as world generation. Current shore,
 bathymetry and landform reads follow the developed ground; ocean inventory and global
 circulation remain captured context. No separate regional wind-transport process exists.
+Selected crustal relaxation redistributes captured crust, with support and flexure responding
+around its captured mechanical reference.
 
 Regional drainage supplies captured inflow to shared conditioning, lake, routing and
 river owners. Rivers are retained objects with monthly profiles and physical beds;

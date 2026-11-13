@@ -5,6 +5,7 @@ import { meshWorldUnitNoise as unitNoise, hashUnit } from "../world/noise";
 import { MultiKeyHeap, type Band } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "../world/physicalNumerics";
 import { drainageBed } from "./riverBed";
+import { directionalResponsesFrom } from "./routingMaterial";
 
 type Front = { i: number; priority: number; cost: number; tie: number };
 /** Boundary supply enters this map; it must not also be an open drain. */
@@ -43,7 +44,7 @@ function enqueueNeighbor(
   priorities: Band,
   costs: Band,
   add: (entry: Front) => void,
-  seed: number
+  context: PhysicalContext
 ) {
   const j = map.mesh.neighbor(front.i, edge);
   if (j < 0) return;
@@ -53,7 +54,8 @@ function enqueueNeighbor(
   const cost =
     priority > front.priority
       ? 0
-      : front.cost + map.mesh.edgeLength(front.i, edge) * resistance.get(j);
+      : front.cost +
+        corridorCost(map, j, front.i, map.mesh.edgeLength(front.i, edge), resistance, context);
   const held = priorities.get(j);
   if (priority > held || (priority === held && cost >= costs.get(j))) return;
   if (held === Infinity) {
@@ -65,11 +67,25 @@ function enqueueNeighbor(
   map.DrainageParents.set(j, front.i);
   map.DrainageRanks.set(j, 2147483647);
   const tie = hashUnit(
-    seed,
+    context.Seed,
     Math.round(map.mesh.x(j) + map.mesh.origin[0]),
     Math.round(map.mesh.y(j) + map.mesh.origin[1])
   );
   add({ i: j, priority, cost, tie });
+}
+
+/** Flat-corridor work prefers yielding faces; even non-yielding rock still permits water. */
+function corridorCost(
+  map: PhysicalField,
+  source: number,
+  target: number,
+  length: number,
+  resistance: Band,
+  context: PhysicalContext
+) {
+  return (
+    (length * resistance.get(source)) / (1 + directionalResponsesFrom(map, source, context)(target))
+  );
 }
 export function drainageConditioning(map: PhysicalField, c: PhysicalContext, incoming?: Band) {
   map.DrainageParents.fill(-1);
@@ -114,7 +130,7 @@ export function drainageConditioning(map: PhysicalField, c: PhysicalContext, inc
         priorities,
         costs,
         (entry) => queue.push(entry.i, entry.priority, entry.cost, entry.tie),
-        c.Seed
+        c
       );
   }
   if (rank !== map.mesh.count)

@@ -71,6 +71,7 @@ export const drainageFlood = fieldQuery(
   {
     id: "drainage-conditioning",
     statement: "Every low place is filled in thought, so each cell has a way down to its outlet.",
+    asks: ["rootHold"],
     needs: [ground, sea],
     provides: ["DrainageElevations", "DrainageParents", "DrainageRanks"],
     execute: ({ map, context }) =>
@@ -103,6 +104,7 @@ export const drainageTurns = fieldQuery(
   {
     id: "drainage-guidance",
     statement: "Water's way across flat ground is settled by where it is heading.",
+    asks: ["rootHold"],
     needs: [ground, sea, "DrainageElevations"],
     provides: ["DrainageGuidanceTargets"],
     execute: ({ map, context }) => drainageGuidance(map, context),

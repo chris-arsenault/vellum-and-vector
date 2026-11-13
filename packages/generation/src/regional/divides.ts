@@ -1,5 +1,5 @@
 import { neighborsOf } from "./lattice";
-import { onRiver } from "../water/riverKeeping";
+import { onRiver, riverSuccessor } from "../water/riverKeeping";
 import type { RegionalState } from "./state";
 
 /** A tree over the cells: receivers, and the cells in root-first order. */
@@ -21,7 +21,7 @@ export function divides(state: RegionalState) {
     mesh = map.mesh,
     { order, count } = state.regional.drainage!,
     channel = (i: number) => onRiver(map, i),
-    label = segmentLabels(state.regional.drainage!, channel),
+    label = segmentLabels(state.regional.drainage!, channel, (cell) => riverSuccessor(map, cell)),
     divide = new Uint8Array(mesh.count),
     around = new Int32Array(mesh.stride);
   for (let k = 0; k < count; k++) {
@@ -31,24 +31,74 @@ export function divides(state: RegionalState) {
   return divide;
 }
 
-/** The channel segment each cell's water first reaches, as the id of that segment's lowest cell. */
-function segmentLabels(tree: Tree, channel: (i: number) => boolean) {
-  const n = tree.receiver.length,
-    { receiver, order, count } = tree,
-    joins = new Uint8Array(n),
-    label = new Int32Array(n).fill(-1);
-  for (let k = 0; k < count; k++) {
-    const i = order[k],
-      j = receiver[i];
-    if (j >= 0 && channel(i) && channel(j)) joins[j] = Math.min(2, joins[j] + 1);
-  }
-  for (let k = 0; k < count; k++) {
-    const i = order[k],
-      j = receiver[i],
-      continues = j >= 0 && (!channel(i) || (channel(j) && joins[j] < 2));
-    label[i] = continues ? label[j] : i;
+/** Owned segments are labelled first; only off-channel catchments follow terrain drainage. */
+export function segmentLabels(
+  tree: Tree,
+  channel: (cell: number) => boolean,
+  successor: (cell: number) => number
+) {
+  const { member, next } = channelTopology(tree.receiver.length, channel, successor),
+    label = channelLabels(member, next);
+  for (let k = 0; k < tree.count; k++) {
+    const cell = tree.order[k];
+    if (member[cell]) continue;
+    const target = tree.receiver[cell];
+    label[cell] = target >= 0 ? label[target] : cell;
   }
   return label;
+}
+
+function channelTopology(
+  count: number,
+  channel: (cell: number) => boolean,
+  successor: (cell: number) => number
+) {
+  const member = Uint8Array.from({ length: count }, (_, cell) => Number(channel(cell))),
+    next = new Int32Array(count).fill(-1);
+  for (let cell = 0; cell < count; cell++) {
+    if (!member[cell]) continue;
+    const target = successor(cell);
+    if (target >= 0 && member[target]) next[cell] = target;
+  }
+  return { member, next };
+}
+
+function channelLabels(member: Uint8Array, next: Int32Array) {
+  const joins = new Uint8Array(next.length),
+    label = new Int32Array(next.length).fill(-1),
+    stack = new Int32Array(next.length);
+  for (const target of next) if (target >= 0) joins[target] = Math.min(2, joins[target] + 1);
+  for (let cell = 0; cell < next.length; cell++)
+    if (member[cell] && label[cell] < 0) labelChannelPath(cell, next, joins, label, stack);
+  return label;
+}
+
+/** Memoized channel chains need their own order; the terrain tree may point another way. */
+function labelChannelPath(
+  cell: number,
+  next: Int32Array,
+  joins: Uint8Array,
+  label: Int32Array,
+  stack: Int32Array
+) {
+  let end = cell,
+    count = 0;
+  while (label[end] === -1) {
+    label[end] = -2;
+    stack[count++] = end;
+    const target = next[end];
+    if (target < 0 || joins[target] >= 2) {
+      label[end] = end;
+      break;
+    }
+    end = target;
+  }
+  if (label[end] === -2) throw new Error("Retained channel segments contain a cycle.");
+  while (count) {
+    const at = stack[--count],
+      target = next[at];
+    label[at] = target >= 0 && joins[target] < 2 ? label[target] : at;
+  }
 }
 
 /** A cell beside ground of another segment, and not itself on a channel bank. */

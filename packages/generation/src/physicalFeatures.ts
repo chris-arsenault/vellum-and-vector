@@ -70,10 +70,7 @@ export const physicalFeatureDefinitions: PhysicalFeature[] = [
     {
       requires: ["physical.foundation"],
       absent: ["OrogenicConstruction"],
-      regional: {
-        kind: "specialized",
-        operations: { "terrain.refinement": ["refinement.relief"] },
-      },
+      regional: { kind: "captured" },
       when: (slot, context) => slot !== "terrain.refinement" || isRefinement(context),
     }
   ),

@@ -151,7 +151,7 @@ it("imports incoming water at a course's re-entry even when its original head is
 
 it("retains a shared-boundary head's actual supply once and derives its later re-entry separately", () => {
   const map = createTestField(createWorldMesh([0, 0, 10_000, 10_000], 64, 0)),
-    monthly = Array.from({ length: 12 }, (_, month) => (month < 6 ? 40 : 0)),
+    monthly: number[] = Array.from({ length: 12 }, (_, month) => (month < 6 ? 40 : 0)),
     record: RetainedRiver = {
       id: 1,
       course: [

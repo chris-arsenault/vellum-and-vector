@@ -7,6 +7,7 @@ import { captureInto } from "./landmarkCanyon";
 import { meshDeltaX } from "./mesh";
 import type { LandmarkRecord } from "./landmarkLedger";
 import { addReach } from "../water/reachEvolution";
+import { riverStorage } from "../water/riverStorage";
 
 function record(map: PhysicalField, cell: number): LandmarkRecord {
   const value: LandmarkRecord = {
@@ -28,7 +29,7 @@ function record(map: PhysicalField, cell: number): LandmarkRecord {
 it("uses present captured flow rather than retaining a historical peak", () => {
   const map = createField(createWorldMesh([0, 0, 400_000, 300_000], 1024, 0)),
     value = record(map, 0);
-  const reach = addReach(map.rivers, [0]);
+  const reach = addReach(riverStorage(map), [0]);
   reach.drawn = true;
   reach.monthly.fill(10);
   map.FlowAccumulation.set(0, 10);
@@ -40,7 +41,7 @@ it("uses present captured flow rather than retaining a historical peak", () => {
     label: "head",
   });
   expect(value.capture?.accumulation).toBe(10);
-  map.rivers.reaches.get(1)!.dry = true;
+  reach.dry = true;
   captureInto(map, value, {
     head: 0,
     floor: new Set([0]),

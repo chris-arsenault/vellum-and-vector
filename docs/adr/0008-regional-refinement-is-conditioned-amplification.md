@@ -62,7 +62,8 @@ Hosted places carry a host identity and their map-owned position. Refinement loc
 the current owned host, including its dry courses, without treating ancestral geometry as a
 second spatial authority. Authored and protected records remain outside replaceable generation.
 
-Initial local relief starts at the captured surface. Complete retained beds supply their
+Ground realization is part of regional initialization, independently of mountain construction
+selection. Initial local relief starts at the captured surface. Complete retained beds supply their
 inclined contacts before drainage organization asks which faces yield. Valley placement
 resolves the captured cut share through connected, material-responsive ground; contacts
 then resolve from the same captured beds on the occupied facets. Grain, bed dip and exposed
@@ -70,6 +71,8 @@ support act through the ordinary Ground responses. Captured faults and sheet con
 provide local fracture organization without replaying tectonic motion.
 Current retained river courses locate their inherited floors first. A narrow floor can
 occupy part of every course cell; interfluves keep their own loose cover and material history.
+Current routing also asks directional Ground responses when choosing among legal routes.
+The initial valley proposal does not replace the shared router or its retained-course precedence.
 Ground displacement moves retained contacts, and excavation exposes and
 transfers the material it reaches. This initialization runs once. Subsequent rounds
 retain and work its result through shared erosion, mass wasting, sediment, coast,
@@ -78,7 +81,9 @@ ice and groundwater owners; they do not rebuild it from a parent-height fit.
 Imported crust starts from its captured mechanical support. The shared flexure owner
 evaluates the imported state at the new map scale once, then responds to changes from
 that settled reference. A smaller frame does not itself lift the seabed or lower a
-plateau. New loads and changes in crust still deform ground through its owner.
+plateau. Selected crustal relaxation redistributes existing crust during local development;
+support and flexure respond through the same captured reference. New loads and changes in
+crust still deform ground through its owner.
 
 Local ecological response uses the shared soil, vegetation, toxicity, animal and
 organic-material kernels. Development exposure is a local relaxation control, not

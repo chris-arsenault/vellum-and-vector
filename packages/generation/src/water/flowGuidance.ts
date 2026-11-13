@@ -11,6 +11,7 @@ import { physicalDistance, physicalGradients } from "../world/physicalMetric";
 import { MapScale, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "../world/physicalNumerics";
 import { retainRiverRoutes } from "./reachRouting";
+import { directionalResponsesFrom } from "./routingMaterial";
 
 const epsilon = 0.0000001;
 function normalize(x: number, y: number): [number, number] {
@@ -197,12 +198,18 @@ function aspectTarget(
     return { x: step.x + next.x, y: step.y + next.y };
   });
   const { left, right, p } = bracket(twoSteps, ax, ay);
+  if (left === right) return steps[left].target;
+  // Material weighs legal alternatives, without spending erosion or preventing water flow.
+  // Equal responses preserve the descent bracket's existing probabilities.
+  const response = directionalResponsesFrom(map, source, c),
+    leftWeight = p * (1 + response(steps[left].target)),
+    rightWeight = (1 - p) * (1 + response(steps[right].target));
   const draw = hashUnit(
     c.EpochStableSeed ^ 0x2f8a,
     MapScale.native(map.mesh.x(source)),
     MapScale.native(map.mesh.y(source))
   );
-  return draw < p ? steps[left].target : steps[right].target;
+  return draw * (leftWeight + rightWeight) < leftWeight ? steps[left].target : steps[right].target;
 }
 function captureScore(
   map: PhysicalField,
@@ -227,6 +234,20 @@ function selectTarget(
   map.DrainageDecisionTotal++;
   return aspect;
 }
+/** Material breaks an existing score tie before the coordinate draw. */
+function tiedRoutePreference(
+  map: PhysicalField,
+  source: number,
+  target: number,
+  held: number,
+  seed: number,
+  response: (cell: number) => number
+) {
+  return (
+    response(target) - response(held) ||
+    coordinateTie(map, source, target, seed) - coordinateTie(map, source, held, seed)
+  );
+}
 function scoredTarget(
   map: PhysicalField,
   c: PhysicalContext,
@@ -234,10 +255,10 @@ function scoredTarget(
   area: Band | null,
   gradient: ReturnType<typeof physicalGradients>
 ): number {
-  const [dx, dy] = descentDirection(map, c.Profile, source, gradient);
+  const [dx, dy] = descentDirection(map, c.Profile, source, gradient),
+    response = directionalResponsesFrom(map, source, c);
   let best = -1,
     bestScore = -Number.MAX_VALUE,
-    bestTie = -Number.MAX_VALUE,
     tieDecided = false;
   for (let edge = 0; edge < map.mesh.degree(source); edge++) {
     const target = map.mesh.neighbor(source, edge);
@@ -249,15 +270,11 @@ function scoredTarget(
     if (score > bestScore + epsilon) {
       best = target;
       bestScore = score;
-      bestTie = coordinateTie(map, source, target, c.Seed);
       tieDecided = false;
     } else if (Math.abs(score - bestScore) < epsilon) {
-      tieDecided = true;
-      const tie = coordinateTie(map, source, target, c.Seed);
-      if (tie > bestTie) {
-        best = target;
-        bestTie = tie;
-      }
+      // Outlet, rank and gradient scores stay primary; material precedes only the seeded tie.
+      tieDecided = response(target) === response(best);
+      if (tiedRoutePreference(map, source, target, best, c.Seed, response) > 0) best = target;
     }
   }
   map.DrainageDecisionTotal++;

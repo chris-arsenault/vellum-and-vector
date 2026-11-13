@@ -78,6 +78,8 @@ courses.
 Conditioning reads the current Ground valley floor under land and lakes, including
 unresolved channels, independently of the cell's averaged terrain height. Routing and erosion keep viable
 existing courses. Explicit development changes retained courses, history and river membership.
+Directional Ground responses weigh legal routing alternatives and flat corridors through the
+shared water owner; they do not spend erosion or prevent water from crossing resistant rock.
 Current queries update their flow and bed profiles without another network transition, then
 produce river rasters. Bed leakage, channel dimensions, floodplain
 seeds and published profiles read the owned courses; leakage asks the actual bed facet.

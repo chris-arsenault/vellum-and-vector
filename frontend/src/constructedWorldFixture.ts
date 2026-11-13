@@ -23,6 +23,7 @@ export function constructedWorld() {
   const values: Record<string, [string, number[]]> = {
     Elevation: ["native-length", [-100, -50, 100, 300, 500].map(MapScale.native)],
     WaterKindCodes: ["category", [1, 1, 0, 0, 0]],
+    CrustProvinceIds: ["category", [1, 1, 2, 2, 2]],
     MarginCodes: ["category", [0, 0, 0, 0, 0]],
     Temperature: ["native-temperature", [450, 450, 440, 430, 420]],
     ImpactExcavation: ["native-length", [0, 0, 0, MapScale.native(20), 0]],

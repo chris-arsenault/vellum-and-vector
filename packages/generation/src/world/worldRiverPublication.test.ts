@@ -14,6 +14,7 @@ import { nativePosition } from "./atlasWorkspace";
 import { retainPublishedRiverNames } from "../area/riverPublish";
 import type { Bounds } from "@atlas/domain";
 import { createRiverPaths } from "./riverPaths";
+import { riverStorage } from "../water/riverStorage";
 
 function suppliedNetwork(branchFlow: number, bounds?: Bounds) {
   const state = worldGeographyFixture(bounds, 25_000),
@@ -44,11 +45,11 @@ function suppliedNetwork(branchFlow: number, bounds?: Bounds) {
   // The map keeps its rivers as reaches; publishing reads those.
   const join = main.indexOf(junction);
   [main.slice(0, join), branch, main.slice(join)].forEach((cells, n) => {
-    const reach = addReach(map.rivers, cells);
+    const reach = addReach(riverStorage(map), cells);
     reach.order = n < 2 ? 1 : 2;
     reach.downstream = n < 2 ? 3 : null;
   });
-  for (const reach of map.rivers.reaches.values()) {
+  for (const reach of riverStorage(map).reaches.values()) {
     reach.months = 12;
     reach.width.fill(50);
     reach.depth.fill(3);
@@ -106,7 +107,7 @@ it("publishes one main river identity while retaining omitted tributary drainage
   const network = Object.values(state.domain.world.networkReaches!);
   // The omitted tributary remains in drainage context; it creates no drawn junction.
   expect(network).toHaveLength(1);
-  const tributary = [...state.physical!.map.rivers.reaches.values()].find(
+  const tributary = [...riverStorage(state.physical!.map).reaches.values()].find(
     (reach) => reach.monthly[0] === 50
   )!;
   tributary.river = "supplied-tributary";
@@ -118,7 +119,7 @@ it("publishes one main river identity while retaining omitted tributary drainage
   releaseHeld(state);
   const before = features.find((feature) => feature.kind === "river")!;
   const map = state.physical!.map;
-  for (const reach of map.rivers.reaches.values()) {
+  for (const reach of riverStorage(map).reaches.values()) {
     reach.dry = true;
     if (reach.record) reach.former.push({ cells: [...main].reverse(), leftIn: 1 });
   }
@@ -146,7 +147,7 @@ it("publishes one main river identity while retaining omitted tributary drainage
 it("captures final published names without establishing another river", () => {
   const { state, publish } = suppliedNetwork(50),
     map = state.physical.map,
-    upper = [...map.rivers.reaches.values()][0];
+    upper = [...riverStorage(map).reaches.values()][0];
   upper.dry = true;
   upper.monthly.fill(0);
   markDrawnReaches(map);
@@ -175,7 +176,7 @@ it("captures final published names without establishing another river", () => {
 it("publishes established A-to-C membership after B becomes the stronger tributary", () => {
   const { state, publish } = suppliedNetwork(750, [0, 0, 600_000, 1_000_000]),
     map = state.physical.map,
-    [a, b, c] = [...map.rivers.reaches.values()],
+    [a, b, c] = [...riverStorage(map).reaches.values()],
     main = a.river!,
     branch = b.river!;
   expect(main).toBe(c.river);
@@ -255,7 +256,7 @@ it("publishes retained confluences and network cuts when current quantity routes
 it("publishes a dry member beside its river's running course under their shared identity", () => {
   const { state, publish } = suppliedNetwork(50),
     map = state.physical.map,
-    [upper, , lower] = [...map.rivers.reaches.values()],
+    [upper, , lower] = [...riverStorage(map).reaches.values()],
     river = lower.river!,
     before = Object.values(state.domain.world.features).find(
       (feature) => feature.attributes.riverId === river

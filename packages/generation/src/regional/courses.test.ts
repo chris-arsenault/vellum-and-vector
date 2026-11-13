@@ -1,29 +1,68 @@
 import { expect, it } from "vitest";
-import type { AtlasFeature } from "@atlas/domain";
+import { point, type AtlasFeature } from "@atlas/domain";
 import { continuingRivers } from "../area/riverLineage";
-import { createTestField } from "../rock/groundTestFixture";
-import { createWorldMesh } from "../world/worldMesh";
 import { addReach } from "../water/reachEvolution";
+import { riverStorage } from "../water/riverStorage";
+import { Contributions } from "../coupling/fieldContributions";
 import { featureCauses } from "./causes/registry";
 import { capturedCourses } from "./courses";
 import { nativePosition } from "../world/atlasWorkspace";
 import { worldGeographyFixture } from "../world/worldGeographyFixtures";
-import type { RegionalState } from "./state";
+import type { RegionalState, RegionalWork } from "./state";
 import "./causes/course";
 
+function suppliedRegion(bounds: [number, number, number, number], size: number) {
+  const supplied = worldGeographyFixture(bounds, size),
+    map = supplied.physical.map,
+    regional: RegionalWork = {
+      input: { areaId: "area", quality: "draft", seed: 73, domains: ["physical"] },
+      parentSpan: map.mesh.spacing,
+      inheritedHeight: map.coverage.copyBand(map.Elevation),
+      natural: {},
+      contributions: new Contributions(map.mesh.count),
+      round: 0,
+      evidence: { courses: [], lakes: [], seats: [], entries: [], landmarks: [] },
+    };
+  return Object.assign(supplied, { regional });
+}
+
+function sourceFeature(
+  state: RegionalState,
+  id: string,
+  geometry: AtlasFeature["geometry"],
+  attributes: AtlasFeature["attributes"]
+): AtlasFeature {
+  return {
+    id,
+    name: id,
+    areaId: state.regional.input.areaId,
+    layerId: "rivers",
+    kind: "river",
+    geometry,
+    attributes,
+    relations: [],
+    detail: {},
+    causes: [],
+    state: "generated",
+    protected: false,
+    actor: "generator",
+    generationId: null,
+  };
+}
+
 it("uses owned courses for corridor influence when feature lineage describes another course", () => {
-  const map = createTestField(createWorldMesh([0, 0, 1000, 1000], 32, 0)),
+  const state = suppliedRegion([0, 0, 1000, 1000], 1000 / Math.sqrt(32)),
+    map = state.physical.map,
     actual = 0,
     ancestor = map.mesh.count - 1,
-    cost = new Float64Array(map.mesh.count).fill(1),
-    state = {
-      physical: { map },
-      regional: {
-        parentSpan: map.mesh.spacing,
-        evidence: { courses: [{ cells: Int32Array.of(ancestor) }] },
-      },
-    } as unknown as RegionalState;
-  const reach = addReach(map.rivers, [actual, map.mesh.neighbor(actual, 0)]),
+    cost = new Float64Array(map.mesh.count).fill(1);
+  state.regional.evidence!.courses.push({
+    feature: sourceFeature(state, "ancestor", point(nativePosition(state.physical, ancestor)), {}),
+    cells: Int32Array.of(ancestor),
+    discharge: 10,
+    order: 1,
+  });
+  const reach = addReach(riverStorage(map), [actual, map.mesh.neighbor(actual, 0)]),
     former = Math.floor(map.mesh.count / 2);
   reach.former = [{ cells: [former], leftIn: 1 }];
   featureCauses().find((cause) => cause.kind === "river")!.influence!(state, cost);
@@ -33,8 +72,7 @@ it("uses owned courses for corridor influence when feature lineage describes ano
 });
 
 function capturedFragments() {
-  const supplied = worldGeographyFixture([0, 0, 8000, 8000], 1000),
-    state = Object.assign(supplied, { regional: { input: { areaId: "area" } } }) as RegionalState,
+  const state = suppliedRegion([0, 0, 8000, 8000], 1000),
     mesh = state.physical.map.mesh,
     first = 0,
     last = mesh.count - 1,
@@ -52,12 +90,12 @@ function capturedFragments() {
       order: 9,
     },
     feature = (id: string, cell: number): AtlasFeature =>
-      ({
+      sourceFeature(
+        state,
         id,
-        kind: "river",
-        geometry: { type: "LineString", coordinates: line(cell) },
-        attributes: { riverId: "same-river", discharge: 10, order: 2, capturedCourse: ancestor },
-      }) as AtlasFeature,
+        { type: "LineString", coordinates: line(cell) },
+        { riverId: "same-river", discharge: 10, order: 2, capturedCourse: ancestor }
+      ),
     features = [feature("first", first), feature("last", last)];
   state.sourceFeatures = { get: (id) => features.find((f) => f.id === id), values: () => features };
   return { state, first, last, features };
@@ -73,7 +111,7 @@ it("captures every current fragment and its current size despite their shared an
     { discharge: 10, order: 2 },
     { discharge: 10, order: 2 },
   ]);
-  state.regional.evidence = { courses } as RegionalState["regional"]["evidence"];
+  state.regional.evidence!.courses = courses;
   expect(continuingRivers(state).map(({ head }) => head)).toEqual([first, last]);
 });
 

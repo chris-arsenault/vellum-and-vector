@@ -8,6 +8,7 @@ import { valleyOrder, valleyScratch, valleyShares } from "./valleyPlacement";
 import { reachAt } from "../water/riverKeeping";
 import { updateSlopes } from "./relief";
 import { realizeColumns } from "./columns";
+import { physicalContext } from "../world/context";
 import type { RegionalState, ReliefWork } from "./state";
 
 /**
@@ -82,6 +83,7 @@ function streamCells(state: RegionalState, cells: readonly number[]) {
  */
 export function placeInheritedValleys(state: RegionalState) {
   const map = state.physical.map,
+    context = physicalContext(state.regional.input.seed, 0, state.physical.profile),
     scratch = valleyScratch(map.mesh.count);
   for (const cells of byParentCell(state).values()) {
     const whole = cells.reduce((sum, cell) => sum + map.mesh.area(cell), 0),
@@ -91,7 +93,7 @@ export function placeInheritedValleys(state: RegionalState) {
       map.mesh,
       cells,
       seeds,
-      (from, toward) => directionalResistance(map, from, toward),
+      (from, toward) => directionalResistance(map, from, toward, context),
       scratch
     );
     const shares = valleyShares(order, seeds.length, cutShare(map, cells[0]) * whole, (cell) =>

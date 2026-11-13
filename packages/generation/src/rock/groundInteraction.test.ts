@@ -33,6 +33,26 @@ function suppliedGround() {
   return map;
 }
 
+it.each([400, 600])(
+  "reads explicit root support without changing stage support across a neighbor at %s metres",
+  (height) => {
+    const map = suppliedGround(),
+      owner = groundOf(map),
+      mix = compileMix({ abrasion: 0.6, plucking: 0.4 }),
+      current = { get: () => 1 },
+      bare = { get: () => 0 };
+    standGround(map, 1, units(height), "supplied neighbor");
+    owner.heldBy({ get: () => 4 });
+    const stageResponse = owner.faceGivesFrom(0, mix)(1),
+      currentResponse = owner.faceGivesFrom(0, mix, current)(1),
+      bareResponse = owner.faceGivesFrom(0, mix, bare)(1);
+    expect(currentResponse).toBeGreaterThan(stageResponse);
+    expect(currentResponse).toBeLessThan(bareResponse);
+    expect(owner.faceGivesFrom(0, mix, null)(1)).toBe(bareResponse);
+    expect(owner.faceGivesFrom(0, mix)(1)).toBe(stageResponse);
+  }
+);
+
 it("carries the same worn parcel through routing, burial and exposure into its next material response", () => {
   const map = suppliedGround(),
     owner = groundOf(map);

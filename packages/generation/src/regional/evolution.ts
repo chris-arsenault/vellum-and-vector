@@ -3,6 +3,7 @@ import type { PhysicalMesh } from "../world/mesh";
 import { distance, isContent, neighborhood, neighborhoodCapacity } from "./lattice";
 import type { NetworkWork, RegionalState } from "./state";
 import { directionalResistance } from "./material";
+import { physicalContext } from "../world/context";
 
 /**
  * Initial drainage organization through the captured terrain and present material. This
@@ -15,11 +16,13 @@ export function evolveNetwork(
   root: Uint8Array,
   resistance: Float64Array
 ) {
+  const context = physicalContext(state.regional.input.seed, 0, state.physical.profile);
   const routed = drainageTree(
     state.physical.map.mesh,
     network.base,
     (from, to) =>
-      (directionalResistance(state.physical.map, from, to) * (resistance[from] + resistance[to])) /
+      (directionalResistance(state.physical.map, from, to, context) *
+        (resistance[from] + resistance[to])) /
       2,
     root,
     network.level,

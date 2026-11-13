@@ -81,7 +81,7 @@ export function refreshRegionalOcean(state: RegionalState, context?: MapProcessC
   readOperation(state.physical.map, oceanRead.operation, { map: state.physical.map, context: c });
 }
 
-/** Regional readers consume the same current routing graph as the material carriers. */
+/** Current cell routing and its root-first order serve off-channel terrain catchments. */
 function readDrainage(state: RegionalState) {
   const map = state.physical.map,
     sourceFirst = sourceToOutletOrder(map),

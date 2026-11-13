@@ -38,6 +38,7 @@ export interface GroundTaken {
 }
 /** Horizontal displacement of the acting carrier, in the field's coordinate frame. */
 export type GroundDirection = readonly [number, number];
+type GroundHold = { get(i: number): number } | null;
 const grounds = new WeakMap<PhysicalField, Ground>();
 
 /**
@@ -49,7 +50,7 @@ const grounds = new WeakMap<PhysicalField, Ground>();
 export class Ground {
   private stiffen: ((i: number) => number) | null = null;
   /** How far roots bind each cell, as the world answers it; nothing holds where none is given. */
-  private hold: { get(i: number): number } | null = null;
+  private hold: GroundHold = null;
   /** An action's power not yet spent, and how deep it has reached, in metres. */
   private left = 0;
   private reached = 0;
@@ -118,13 +119,13 @@ export class Ground {
   faceGives(i: number, neighbor: number, mix: CompiledMix) {
     return this.faceGivesFrom(i, mix)(neighbor);
   }
-  /** Read one unchanged source against its neighbors; discard before material settlement. */
-  faceGivesFrom(i: number, mix: CompiledMix) {
+  /** Queries supply current root support; stages may use their existing binding. Discard on settlement. */
+  faceGivesFrom(i: number, mix: CompiledMix, hold: GroundHold = this.hold) {
     const mesh = this.map.mesh,
       sourceX = mesh.x(i),
       sourceY = mesh.y(i),
       layers = [...this.section(i, "land"), ...this.section(i, "cut")],
-      bearing = this.bearing(i, mix);
+      bearing = this.bearing(i, mix, hold);
     return (neighbor: number) => {
       let response = 0,
         extent = 0;
@@ -144,7 +145,7 @@ export class Ground {
         response += materialGives(mix, layer, layer.medium === "loose", x, y) * weight;
         extent += weight;
       }
-      return extent > 0 ? (response / extent) * bearing : this.gives(i, mix, [x, y]);
+      return extent > 0 ? (response / extent) * bearing : this.gives(i, mix, [x, y], hold);
     };
   }
   /** A finite slab can fail above an exposed weak foundation, independently on each surface. */
@@ -189,15 +190,15 @@ export class Ground {
     this.hold = hold;
   }
   /** How far what lies on this cell changes what a mix does to whatever it reaches. */
-  private bearing(i: number, mix: CompiledMix) {
+  private bearing(i: number, mix: CompiledMix, hold: GroundHold = this.hold) {
     const map = this.map,
       fracture = clamp(map.FractureConductance.get(i) / 1000, 0, 1),
       ward = clamp(map.Warding.get(i), 0, 1);
     let bearing = Math.exp(mix.fracturesWeaken * fracture) / (1 + mix.wardHolds * ward);
     if (this.stiffen) bearing /= this.stiffen(i);
-    if (mix.coverHolds <= 0 || !this.hold) return bearing;
+    if (mix.coverHolds <= 0 || !hold) return bearing;
     // Burning removes root support; the material's own resistance remains when roots are gone.
-    const remaining = this.hold.get(i) * Math.max(0, 1 - burntShare * map.FireActivity.get(i));
+    const remaining = hold.get(i) * Math.max(0, 1 - burntShare * map.FireActivity.get(i));
     return bearing / (1 + mix.coverHolds * remaining);
   }
   private rate(mix: CompiledMix, code: number, strength: number, bearing: number) {
@@ -332,9 +333,14 @@ export class Ground {
    * What this cell's surface gives up to a mix, against ordinary rock's 1, without acting on it:
    * loose cover counts for as much of the surface as it covers.
    */
-  gives(i: number, mix: CompiledMix, direction: GroundDirection = [0, 0]) {
+  gives(
+    i: number,
+    mix: CompiledMix,
+    direction: GroundDirection = [0, 0],
+    hold: GroundHold = this.hold
+  ) {
     const map = this.map,
-      bearing = this.bearing(i, mix),
+      bearing = this.bearing(i, mix, hold),
       share = cutShare(map, i),
       beneath =
         bearing *

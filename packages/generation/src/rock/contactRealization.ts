@@ -1,5 +1,6 @@
 import { MapScale } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
+import { meshDeltaX } from "../world/mesh";
 import { facetShare, projectGround, rockSurface, type GroundFacet } from "./groundShares";
 import { deepestLayer, readLayer, writeColumn, type MaterialLayer } from "./rockColumn";
 
@@ -81,7 +82,7 @@ function projectedDepths(
 ) {
   const depths = layers.slice(0, -1).map(() => new Float64Array(cells.length));
   cells.forEach((cell, at) => {
-    const dx = map.mesh.x(cell) + map.mesh.origin[0] - reference.x,
+    const dx = meshDeltaX(map.mesh, map.mesh.x(cell) + map.mesh.origin[0] - reference.x),
       dy = map.mesh.y(cell) + map.mesh.origin[1] - reference.y;
     let top = rockSurface(map, cell, facet),
       contact = reference[facet];

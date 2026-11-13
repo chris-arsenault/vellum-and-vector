@@ -17,6 +17,7 @@ const invoke = (
   parameters,
 });
 const developmentSlots = [
+  "material.relaxation",
   "material.hillslopes",
   "material.margins",
   "ice.model",
@@ -61,6 +62,7 @@ export function regionalSequence(
     invoke("refinement.begin"),
     invoke("refinement.clear-products"),
     invoke("refinement.context"),
+    invoke("refinement.relief"),
     ...group("terrain.refinement", "detail"),
     ...group("initialize.ecology", "detail"),
   ];

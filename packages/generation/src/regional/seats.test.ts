@@ -1,32 +1,44 @@
 import { expect, it } from "vitest";
 import { point } from "@atlas/domain";
 import { generatedFeature } from "../mapFeatures";
-import { landscape } from "../mapFixtures";
-import { createTestField } from "../rock/groundTestFixture";
 import { addReach } from "../water/reachEvolution";
 import { reachAt } from "../water/riverKeeping";
-import { createWorldMesh } from "../world/worldMesh";
+import { riverStorage } from "../water/riverStorage";
+import { worldGeographyFixture } from "../world/worldGeographyFixtures";
+import { Contributions } from "../coupling/fieldContributions";
 import { positionOf } from "./lattice";
 import { drawChannelsToSeats, knownSeats } from "./seats";
-import type { RegionalState } from "./state";
+import type { RegionalWork } from "./state";
 
 function supplied(attributes: Record<string, unknown> = {}) {
-  const base = landscape();
-  base.domain.world.id = crypto.randomUUID();
-  base.domain.scope.worldId = base.domain.world.id;
-  const map = createTestField(createWorldMesh([0, 0, 4000, 1000], 32, 0)),
-    state = {
-      ...base,
-      physical: { map },
-      regional: {
-        input: { areaId: "area" },
-        parentSpan: map.mesh.spacing,
-        network: {
-          receiver: new Int32Array(map.mesh.count).fill(-1),
-          flow: new Float64Array(map.mesh.count),
-        },
+  const supplied = worldGeographyFixture([0, 0, 4000, 1000], Math.sqrt(4000000 / 32)),
+    map = supplied.physical.map,
+    count = map.mesh.count,
+    regional: RegionalWork = {
+      input: { areaId: "area", quality: "draft", seed: 73, domains: ["physical"] },
+      parentSpan: map.mesh.spacing,
+      inheritedHeight: map.coverage.copyBand(map.Elevation),
+      natural: {},
+      contributions: new Contributions(count),
+      round: 0,
+      network: {
+        receiver: new Int32Array(count).fill(-1),
+        order: new Int32Array(count),
+        count,
+        cost: new Float64Array(count),
+        area: new Float64Array(count),
+        flow: new Float64Array(count),
+        inflow: new Float64Array(count),
+        inflowCatchment: new Float64Array(count),
+        level: new Float64Array(count),
+        sea: new Uint8Array(count),
+        base: new Float64Array(count),
+        lake: new Int32Array(count).fill(-1),
+        sink: new Uint8Array(count),
+        bowl: new Uint8Array(count),
       },
-    } as unknown as RegionalState,
+    },
+    state = Object.assign(supplied, { regional }),
     feature = {
       ...generatedFeature(
         state,
@@ -68,7 +80,7 @@ it.each([
       end = Array.from({ length: map.mesh.degree(middle) }, (_, edge) =>
         map.mesh.neighbor(middle, edge)
       ).find((cell) => cell >= 0 && cell !== 0)!,
-      receiving = addReach(map.rivers, [end]);
+      receiving = addReach(riverStorage(map), [end]);
     receiving.river = "receiving-river";
     state.regional.network!.receiver[0] = middle;
     state.regional.network!.receiver[middle] = end;
@@ -87,14 +99,14 @@ it.each([
       downstream: receiving.id,
     });
     expect(kept?.cells).toEqual([0, middle]);
-    expect(kept?.monthly.every((flow) => flow === 0)).toBe(true);
+    expect(kept && Array.from(kept.monthly).every((flow) => flow === 0)).toBe(true);
   }
 );
 
 it("reuses an adjacent dry course without replacing its retained identity", () => {
   const { state, map } = supplied({ situation: "river" }),
     next = map.mesh.neighbor(0, 0),
-    existing = addReach(map.rivers, [next]);
+    existing = addReach(riverStorage(map), [next]);
   existing.river = "existing-river";
   existing.dry = true;
   state.regional.evidence = {
