@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { expect, type Page } from "@playwright/test";
-import type { AtlasFeature } from "@atlas/domain";
+import { spatial, type Area, type AtlasFeature } from "@atlas/domain";
 import { installGenerationFixture, type GenerationFixtureOptions } from "./generationFixture";
 
 export { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
@@ -79,6 +79,18 @@ export async function exportMap(page: Page) {
   const pending = page.waitForEvent("download");
   await page.getByRole("button", { name: "Export GIS", exact: true }).click();
   return JSON.parse(await readFile((await (await pending).path())!, "utf8"));
+}
+
+/** Sample eastings inside a child's context margin and just outside its map frame. */
+export async function regionalFrameEastings(page: Page) {
+  const result = await exportMap(page),
+    region = result.regions[0],
+    child: Area = result.areas.find((area: Area) => area.parentId === region.areaId),
+    [frameWest] = spatial.bounds(child.footprint),
+    [subjectWest] = spatial.bounds(region.footprint),
+    margin = subjectWest - frameWest;
+  expect(margin).toBeGreaterThan(0);
+  return [frameWest + margin / 2, frameWest - margin / 2] as const;
 }
 
 /** A hash of the rendered map, for "the map changed" assertions. */
