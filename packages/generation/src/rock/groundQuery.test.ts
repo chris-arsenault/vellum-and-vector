@@ -16,6 +16,29 @@ import { setLayer } from "./rockColumn";
 import { openCut, projectGround } from "./groundShares";
 import { removeRock } from "./groundLedger";
 import { containsHost, stockExposure } from "./rockMagicStock";
+import { compileMix } from "./modes";
+
+it("reads directional surface fabric on a flat face as well as exposed beds on a scarp", () => {
+  const map = createTestField(createWorldMesh([0, 0, 1000, 1000], 16, 0)),
+    ground = groundOf(map),
+    wear = compileMix({ plucking: 1 });
+  for (const cell of [0, 1]) {
+    map.BedrockElevation.set(cell, units(100));
+    setLayer(map, cell, 0, rocks.shale.code, units(10), { grainX: 1000, bedSlopeX: -1 });
+    setLayer(map, cell, 1, rocks.granite.code, units(1000));
+    projectGround(map, cell);
+  }
+  expect(ground.gives(0, wear, [1, 0])).toBeGreaterThan(ground.gives(0, wear, [0, 1]));
+  const before = ground.faceGives(0, 1, wear);
+  setLayer(map, 0, 1, rocks.shale.code, units(1000));
+  expect(ground.faceGives(0, 1, wear)).toBe(before);
+  setLayer(map, 0, 1, rocks.granite.code, units(1000));
+  map.BedrockElevation.set(1, units(60));
+  projectGround(map, 1);
+  const scarp = ground.faceGives(0, 1, wear);
+  setLayer(map, 0, 1, rocks.shale.code, units(1000));
+  expect(ground.faceGives(0, 1, wear)).toBeGreaterThan(scarp);
+});
 
 function mixedGround() {
   const map = createTestField(createWorldMesh([0, 0, 1000, 1000], 16, 0));

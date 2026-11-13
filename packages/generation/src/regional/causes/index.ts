@@ -2,4 +2,5 @@
 import "./course";
 import "./entry";
 import "./landmark";
+import "./fault";
 export * from "./registry";

@@ -151,8 +151,8 @@ function landWater(map: PhysicalField, c: PhysicalContext, each: Band[], moved: 
     map.WaterRecharge.set(i, water.recharge);
     map.SnowKept.set(i, water.keptSnow);
     // The snow that lies through the year is part of what the cell holds.
-    putSnow(map, i, MapScale.metres(water.snow, "mm"));
-    holdSoilWater(map, i, water.soil, wetting.get(i), held.get(i));
+    putSnow(map, i, MapScale.metres(water.end.snow, "mm"));
+    holdSoilWater(map, i, water.end.soil, wetting.get(i), held.get(i));
     noteYear(moved, fell, water, map.mesh.area(i));
   }
 }

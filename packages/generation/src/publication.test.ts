@@ -259,6 +259,35 @@ it("rejects new undeclared geographic kinds while retaining unchanged original g
   expect(state.domain.coverage).toContainEqual(expect.objectContaining({ layerId: layer.id }));
 });
 
+it("validates a carried record against its registered inactive kind without authorizing new products", () => {
+  const state = initial(),
+    feature = generatedFeature(
+      state,
+      "captured-marker",
+      "Captured station",
+      "surveyMarker",
+      layer.id,
+      { type: "Point", coordinates: [100, 100] }
+    );
+  state.domain.world.features[feature.id] = feature;
+  const original = structuredClone(state.domain);
+  state.publications = [
+    {
+      kind: "geography",
+      publish: false,
+      featureKinds: ["surveyMarker"],
+      layer: { ...layer, representation: "vector", representations: ["vector"] },
+    },
+  ];
+  feature.geometry = { type: "Point", coordinates: [120, 100] };
+  expect(publishGenerationProducts(state, "carried-context", original)).toEqual(new Set());
+  const made = { ...feature, id: "new-marker" };
+  state.domain.world.features[made.id] = made;
+  expect(() => publishGenerationProducts(state, "undeclared-product", original)).toThrow(
+    "surveyMarker"
+  );
+});
+
 it("stores the nearest value for a generated attribute that cannot be stored and warns", () => {
   const state = initial(),
     vector = { ...layer, representation: "vector" as const, representations: ["vector" as const] };

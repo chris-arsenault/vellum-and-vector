@@ -104,16 +104,27 @@ version of the ground. New quantities join this schema rather than introducing a
 between generation and storage.
 
 Captured Ground includes finite beds, loose cover, facets, contacts, material history
-and hosted cargo. Local network and relief calculations read the material actually
-reached, including cover over older rock. The initial network uses captured terrain,
-structure and established geography as influences. Relief moves retained packages
-through Ground displacement and exposes material through excavation. There is no
-parent-blur fit or restoration of parent heights after erosion. Once initialized,
-the same incision, mass-wasting, sediment, ice, coastal and groundwater owners used
-by world generation operate on the child.
+and hosted cargo. A region starts at the captured surface. Inclined contacts expose the
+actual beds before initial drainage organization; grain, dip and material response guide
+the connected placement of inherited valley floors. Captured faults and sheet contacts
+open local discontinuities through the shared fracture owner. Later Ground actions move
+retained packages and expose material through excavation. There is no parent-blur fit or
+restoration of parent heights after erosion.
+
+Tectonic construction, plate positions, thrust sheets, volcanic and impact structures
+are captured history. Refinement does not replay their formation or add an uplift epoch.
+Present weathering, solution, creep, incision, mass wasting, sediment transport, ice,
+coastal wear and groundwater use the same owners as world generation. Current shore,
+bathymetry and landform reads follow the developed ground; ocean inventory and global
+circulation remain captured context. No separate regional wind-transport process exists.
 
 Regional drainage supplies captured inflow to shared conditioning, lake, routing and
-river owners. All downstream consumers read the common routing and water fields.
+river owners. Rivers are retained objects with monthly profiles and physical beds;
+river consumers ask those records, while unresolved water remains a cell quantity.
+The water column imports snow, soil, groundwater and standing water together before
+development. Finer channels can emerge from captured small-channel quantities where water
+is present. Boundary inflow uses the captured river's monthly profile, without inferring
+its seasons from local rainfall.
 The current ocean connection follows current terrain; neither an old coastline nor
 an inherited lake mask determines all later water. Atmospheric context outside the
 frame can affect the child without fixing its river crossings or shore positions.

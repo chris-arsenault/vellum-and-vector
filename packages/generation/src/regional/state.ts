@@ -44,7 +44,7 @@ export interface Evidence {
   /** Captured rivers entering across the frame edge, with the discharge they bring (m³/s). */
   /** `least` is what the river still brings in its driest month, where the parent map says. */
   /** `catchment` is the ground the parent map says the river drains, in square metres. */
-  entries: { cell: number; discharge: number; least: number; catchment: number }[];
+  entries: { cell: number; discharge: number; catchment: number }[];
   /** Captured landmark records standing in the frame, placed on this lattice. */
   landmarks: { landmark: Landmark; placed: Placed }[];
 }
@@ -68,8 +68,6 @@ export interface NetworkWork {
   flow: Float64Array;
   /** Discharge entering across the frame edge at this cell (m³/s). */
   inflow: Float64Array;
-  /** What of that inflow still enters in the river's driest month (m³/s). */
-  steadyInflow: Float64Array;
   /** The catchment beyond the frame that the parent map gives each entering river (m²). */
   inflowCatchment: Float64Array;
   /** Whether the cell carries a channel at this map's scale. */
@@ -106,6 +104,8 @@ export interface DrainageWork {
  * geography itself is the physical field on the child lattice; nothing here duplicates it.
  */
 export interface RegionalWork {
+  /** Complete captured beds used both before organization and after facet placement. */
+  contacts?: import("../rock/contactRealization").ContactPlan[];
   input: RegionalInput;
   /** Sample span of the pinned parent (m): the scale the captured macro character has. */
   parentSpan: number;

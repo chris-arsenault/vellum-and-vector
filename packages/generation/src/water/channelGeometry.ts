@@ -10,6 +10,9 @@ import { channelDimensions } from "../world/dimensions";
 import { physicalDistance } from "../world/physicalMetric";
 import { RecordQueue, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "../world/physicalNumerics";
+import { reachesOf, reachAt } from "./riverKeeping";
+import type { Reach } from "./reaches";
+import { flowThroughYear } from "./waterBalance";
 
 function normalize(x: number, y: number): [number, number] {
   const length = Math.max(0.000001, Math.sqrt(x * x + y * y));
@@ -142,7 +145,11 @@ function expansionSteps(map: PhysicalField, c: PhysicalContext, i: number): numb
 }
 /** A bed kept shallow where people cross (a ford) is no deeper than it is kept. */
 export function shoalBed(map: PhysicalField, i: number, depth: number) {
-  if (depth < map.RiverDepth.get(i)) map.RiverDepth.set(i, Math.max(0, depth));
+  const reach = reachAt(map, i),
+    at = reach?.cells.indexOf(i) ?? -1;
+  if (!reach || at < 0 || depth >= reach.depth[at]) return;
+  reach.depth[at] = Math.max(0, depth);
+  map.RiverDepth.set(i, reach.depth[at]);
 }
 export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
   map.RiverChannelStrength.fill(0);
@@ -150,44 +157,54 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
   map.RiverWidth.fill(0);
   map.RiverDepth.fill(0);
   const upstream = dominantUpstream(map),
-    frontier = new RecordQueue(3),
-    p = c.Profile;
-  for (let i = 0; i < map.mesh.count; i++) {
-    const order = map.RiverOrders.get(i),
-      flow = map.FlowAccumulation.get(i);
-    if (order <= 0 && (map.WaterKindCodes.get(i) === 0 || flow <= 0)) continue;
-    const dimensions = channelDimensions(
-      flow,
-      map.Slope.get(i),
-      groundOf(map).fold(i, surfaceStanding),
-      map.scale
-    );
-    map.RiverWidth.set(i, dimensions.width);
-    map.RiverDepth.set(i, dimensions.depth);
-    if (order <= 0) continue;
-    const discharge = truncate(
-      flow / Math.max(map.scale.volume(1.5625e-20), p.RiverAccumulationThreshold)
-    );
-    map.RiverChannelStrength.set(
-      i,
-      clamp(
-        p.RiverChannelBaseStrength +
-          (order - 1) * p.RiverChannelOrderStrength +
-          discharge * p.RiverChannelDischargeStrength,
-        1,
-        1000
-      )
-    );
-    map.RiverChannelOrders.set(i, order);
-    const maximum = expansionSteps(map, c, i);
-    if (maximum > 0) frontier.push(i, i, 0, maximum);
-  }
+    frontier = new RecordQueue(3);
+  for (const reach of reachesOf(map))
+    if (!reach.dry) reach.cells.forEach((_, at) => sizeChannel(map, c, reach, at, frontier));
   try {
     expandChannels(map, c, upstream, frontier);
     extendSpines(map);
   } finally {
     releaseWorking(map, upstream);
   }
+}
+
+function sizeChannel(
+  map: PhysicalField,
+  c: PhysicalContext,
+  reach: Reach,
+  at: number,
+  frontier: RecordQueue
+) {
+  const i = reach.cells[at],
+    p = c.Profile,
+    flow = flowThroughYear(reach.monthly.subarray(at * 12, (at + 1) * 12), 0).mean;
+  if (flow <= 0 || map.WaterKindCodes.get(i) !== 0) return;
+  const dimensions = channelDimensions(
+    flow,
+    map.Slope.get(i),
+    groundOf(map).fold(i, surfaceStanding),
+    map.scale
+  );
+  reach.width[at] = dimensions.width;
+  reach.depth[at] = dimensions.depth;
+  map.RiverWidth.set(i, reach.width[at]);
+  map.RiverDepth.set(i, reach.depth[at]);
+  const discharge = truncate(
+    flow / Math.max(map.scale.volume(1.5625e-20), p.RiverAccumulationThreshold)
+  );
+  map.RiverChannelStrength.set(
+    i,
+    clamp(
+      p.RiverChannelBaseStrength +
+        (reach.order - 1) * p.RiverChannelOrderStrength +
+        discharge * p.RiverChannelDischargeStrength,
+      1,
+      1000
+    )
+  );
+  map.RiverChannelOrders.set(i, reach.order);
+  const maximum = expansionSteps(map, c, i);
+  if (maximum > 0) frontier.push(i, i, 0, maximum);
 }
 /** Frontier records: the widened triangle, then spine, depth and maximum as fields 0..2. */
 function expandChannels(

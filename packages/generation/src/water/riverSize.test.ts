@@ -21,6 +21,7 @@ it("asks less of a river on a map of a smaller country", () => {
 it("calls water a river's only when it was gathered from ground the map shows", () => {
   const sizes = { catchment: 1000 };
   // One very wet cell sheds a great deal and is still wet ground.
-  expect(gathered(50, sizes)).toBe(false);
-  expect(gathered(1000, sizes)).toBe(true);
+  expect(gathered(50, sizes, 50)).toBe(false);
+  expect(gathered(1000, sizes, 50)).toBe(true);
+  expect(gathered(100_000, sizes, 100_000)).toBe(false);
 });

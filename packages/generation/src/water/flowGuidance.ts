@@ -10,6 +10,7 @@ import { contributingArea } from "../world/flowGraph";
 import { physicalDistance, physicalGradients } from "../world/physicalMetric";
 import { MapScale, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "../world/physicalNumerics";
+import { retainRiverRoutes } from "./reachRouting";
 
 const epsilon = 0.0000001;
 function normalize(x: number, y: number): [number, number] {
@@ -276,6 +277,7 @@ export function resolveLandTargets(map: PhysicalField, c: PhysicalContext): Band
       if (map.WaterKindCodes.get(i) !== 1) targets.set(i, selectTarget(map, c, i, area, gradient));
     releaseWorking(map, area);
   }
+  retainRiverRoutes(map, targets);
   releaseWorking(map, gradient.x, gradient.y);
   return targets;
 }

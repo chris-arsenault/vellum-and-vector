@@ -2,6 +2,7 @@ import {
   areaSpace,
   refinedRegionArea,
   regionRefinementInput,
+  regionMapFootprint,
   spatial,
   type Position,
 } from "@atlas/domain";
@@ -133,9 +134,15 @@ export async function generateWorld(
   return { worldId: snapshot.world.id, root: snapshot.scope.areaId };
 }
 
-async function command(ws: HarnessWorkspace, worldId: string, kind: string, data: object) {
+async function command(
+  ws: HarnessWorkspace,
+  worldId: string,
+  kind: string,
+  data: object,
+  areaId?: string
+) {
   const world = await ws.catalog.readEditor(worldId),
-    root = Object.values(world.areas).find((area) => !area.parentId)!.id;
+    root = areaId ?? Object.values(world.areas).find((area) => !area.parentId)!.id;
   await executeWorkspaceCommand(
     ws.catalog,
     ws.resources,
@@ -163,10 +170,11 @@ export async function refineRegion(
   position: Position,
   quality: string,
   observers?: RunObservers,
-  domains = ["physical", "magic", "built", "cultural", "political"]
+  domains = ["physical", "magic", "built", "cultural", "political"],
+  sourceAreaId?: string
 ) {
   let world = await ws.catalog.readEditor(worldId);
-  const root = Object.values(world.areas).find((area) => !area.parentId)!.id,
+  const root = sourceAreaId ?? Object.values(world.areas).find((area) => !area.parentId)!.id,
     choices = await ws.catalog.regionChoices({
       scope: { worldId, areaId: root, spaceId: areaSpace(world, root) },
       sourceAreaId: root,
@@ -177,16 +185,27 @@ export async function refineRegion(
       viewport: spatial.bounds(world.areas[root].footprint),
     });
   if (!choices.candidates.length) throw new Error("No region at that position.");
+  const selected = choices.candidates.find((candidate) =>
+    spatial.covers(world.areas[root].footprint, regionMapFootprint(world, candidate.footprint))
+  );
+  if (!selected)
+    throw new Error("No offered region has its surrounding context inside the saved source map.");
   const regionId = crypto.randomUUID();
-  await command(ws, worldId, "putView", {
-    id: regionId,
-    name: "Harness region",
-    areaId: root,
-    layers: [],
-    region: { parentId: null, footprint: choices.candidates[0].footprint },
-  });
+  await command(
+    ws,
+    worldId,
+    "putView",
+    {
+      id: regionId,
+      name: "Harness region",
+      areaId: root,
+      layers: [],
+      region: { parentId: null, footprint: selected.footprint },
+    },
+    root
+  );
   world = await ws.catalog.readEditor(worldId);
-  await command(ws, worldId, "createArea", regionRefinementInput(world, regionId));
+  await command(ws, worldId, "createArea", regionRefinementInput(world, regionId), root);
   world = await ws.catalog.readEditor(worldId);
   const child = refinedRegionArea(world, regionId)!.id;
   // The app's regional request (RegionalGeneration, startGeneration) with every domain.

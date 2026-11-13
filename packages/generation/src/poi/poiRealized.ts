@@ -1,4 +1,5 @@
 import { MapScale, type MagicFeatureRule } from "@atlas/domain";
+import { waterAt } from "../water/riverKeeping";
 import { craterRelief, volcanicRelief } from "../world/geologicalFeatures";
 import { keyCols } from "../world/landforms";
 import type { MagicField } from "../world/magicState";
@@ -98,7 +99,7 @@ const lake: Gate = (state, place) => {
   return (
     reads((cell) => MapScale.metres(map.WaterDepths.get(cell), "native")) >=
       scale.resolveMeasure(worldLakeDepth) ||
-    reads((cell) => map.FlowAccumulation.get(cell)) >= scale.resolveMeasure(worldOutletDischarge)
+    reads((cell) => waterAt(map, cell)) >= scale.resolveMeasure(worldOutletDischarge)
   );
 };
 const landscape =
@@ -196,7 +197,7 @@ function exceptionalSource(
         map.IceCharge.get(i) >= exceptionalIceCharge,
       pressure: () => rule.id === "locus" && field.source.get(i) > 0,
       greenwood: () =>
-        map.FlowAccumulation.get(i) >= mapScale(state).resolveMeasure(worldRiverDischarge) &&
+        waterAt(map, i) >= mapScale(state).resolveMeasure(worldRiverDischarge) &&
         field.source.get(i) > 0,
       veil: () => rule.id === "door" && (field.originSources.door?.get(i) ?? 0) > 0,
     };

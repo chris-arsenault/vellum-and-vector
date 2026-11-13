@@ -3,7 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round, toUnits, units } from "./math";
 import { dominantUpstream, longitudinalAlignment } from "../water/channelGeometry";
-import { riverOrderAt } from "../water/riverKeeping";
+import { riverOrderAt, reachesOf } from "../water/riverKeeping";
 import { RecordQueue, type Band } from "@atlas/domain";
 import { releaseWorking } from "./physicalNumerics";
 
@@ -40,23 +40,32 @@ function seedFloodplains(
   upstream: Band,
   frontier: RecordQueue
 ) {
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (map.RiverChannelOrders.get(i) < c.Profile.FloodplainMinimumRiverOrder) continue;
-    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
-      const j = map.mesh.neighbor(i, edge),
-        distance = map.mesh.edgeLength(i, edge);
-      if (!canFlood(map, c, upstream, i, j)) continue;
-      const intensity = clamp(
-        map.RiverChannelStrength.get(i) +
-          toUnits(map.CumulativeDeposition.get(j)) / map.scale.length(2.5e-7) -
-          map.Slope.get(j) * 60_000,
-        1,
-        1000
-      );
-      if (intensity <= map.FloodplainIntensity.get(j)) continue;
-      map.FloodplainIntensity.set(j, intensity);
-      frontier.push(j, distance);
-    }
+  for (const reach of reachesOf(map)) {
+    if (reach.dry || reach.order < c.Profile.FloodplainMinimumRiverOrder) continue;
+    for (const i of reach.cells) seedBanks(map, c, upstream, frontier, i);
+  }
+}
+function seedBanks(
+  map: PhysicalField,
+  c: PhysicalContext,
+  upstream: Band,
+  frontier: RecordQueue,
+  i: number
+) {
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge),
+      distance = map.mesh.edgeLength(i, edge);
+    if (!canFlood(map, c, upstream, i, j)) continue;
+    const intensity = clamp(
+      map.RiverChannelStrength.get(i) +
+        toUnits(map.CumulativeDeposition.get(j)) / map.scale.length(2.5e-7) -
+        map.Slope.get(j) * 60_000,
+      1,
+      1000
+    );
+    if (intensity <= map.FloodplainIntensity.get(j)) continue;
+    map.FloodplainIntensity.set(j, intensity);
+    frontier.push(j, distance);
   }
 }
 export function floodplains(map: PhysicalField, c: PhysicalContext) {

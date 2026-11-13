@@ -1,5 +1,6 @@
 // @needsResolution carry: follows its river; without one it may not resolve (ADR 0009).
 import type { GenerationState } from "../../process";
+import { riverSample } from "../../water/riverKeeping";
 import { MapScale } from "@atlas/domain";
 import { bridgeFlow, fordCost, roadTravellers } from "./workRecords";
 import type { RegionalState } from "../../regional/state";
@@ -46,7 +47,8 @@ const crossable = (state: GenerationState, cell: number) =>
 const bridgeable = (state: GenerationState, cell: number) =>
   crossable(state, cell) &&
   dischargeAt(state, cell) >= fieldOf(state).scale.resolveMeasure(bridgeFlow);
-const widthAt = (state: GenerationState, cell: number) => fieldOf(state).RiverWidth.get(cell);
+const widthAt = (state: GenerationState, cell: number) =>
+  riverSample(fieldOf(state), cell, "width");
 /** Traffic and water together: a great road on a little river is not a great bridge. */
 const greatness = (state: GenerationState, place: PoiPlace) =>
   (sized(travellersOf, roadTravellers)(state, place) +

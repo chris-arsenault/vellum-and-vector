@@ -1,14 +1,8 @@
-import {
-  canonicalPosition,
-  point,
-  spatial,
-  unwrapCoordinates,
-  type DrainageReach,
-} from "@atlas/domain";
+import { unwrapCoordinates, type DrainageReach } from "@atlas/domain";
 import { nativePosition } from "../world/atlasWorkspace";
 import type { PhysicalField } from "../world/field";
 import { workingArray } from "../world/physicalNumerics";
-import { reachesOf } from "../water/riverKeeping";
+import { onRiver, reachesOf, riverSample, waterAt } from "../water/riverKeeping";
 import type { Reach } from "../water/reaches";
 import { riverCourseJudgments } from "../world/worldRiverCourses";
 import { coordinateKey } from "../world/worldSources";
@@ -16,7 +10,6 @@ import { heldFor } from "../poi/poiReads";
 import type { GenerationState } from "../process";
 import { isWorldGeography, mapScale } from "../worldSignificance";
 import { joinReaches } from "./riverJoin";
-import { continuingRivers, followWater, isRefinedMap } from "./riverLineage";
 
 /**
  * What a river is on this map, read by the river's area entry. The channel field holds all the
@@ -48,8 +41,8 @@ function reachRecord(
       }),
       map.mesh.periodic?.width
     ) as [number, number][],
-    discharges: members.map((j) => map.FlowAccumulation.get(j)),
-    catchmentAreas: members.map((j) => map.CatchmentArea.get(j)),
+    discharges: members.map((j) => waterAt(map, j)),
+    catchmentAreas: members.map((j) => riverSample(map, j, "catchment")),
     featureIds: [],
   };
 }
@@ -60,9 +53,7 @@ function reachRecord(
  */
 export function keptReaches(state: GenerationState): ReachMembers[] {
   const map = state.physical!.map,
-    wanted = [...reachesOf(map)].filter(
-      (reach) => !reach.dry && map.mesh.membership(reach.cells[0]) === 1
-    ),
+    wanted = [...reachesOf(map)].filter((reach) => !reach.dry),
     place = new Map(wanted.map((reach, index) => [reach.id, index]));
   return wanted.map((kept) => {
     const next = map.FlowTargets.get(kept.cells[kept.cells.length - 1]),
@@ -87,12 +78,9 @@ export function basinDischarges(map: PhysicalField) {
   return basinDischarge;
 }
 /** Whether a finer map draws a reach: a World draws whole courses, wherever they start. */
-const reachInFrame = (state: GenerationState, start: number) =>
+const reachInFrame = (state: GenerationState, members: readonly number[]) =>
   isWorldGeography(state) ||
-  spatial.covers(
-    state.domain.scope.footprint,
-    point(canonicalPosition(state.domain.world.reference, nativePosition(state.physical!, start)))
-  );
+  members.some((cell) => state.physical!.map.mesh.membership(cell) === 1);
 
 /**
  * A course's identity: the end it reaches and the cell it reaches it from. A river's head moves
@@ -120,10 +108,13 @@ export function establishRivers(state: GenerationState, records: readonly ReachM
 /** The courses this map draws, as lists of reaches: those significant, and those already rivers. */
 export function mappedCourses(state: GenerationState, records: readonly ReachMembers[]) {
   return riverCourseJudgments(
-    records.map(({ reach }) => reach),
+    records.map(({ reach, members }) => ({
+      ...reach,
+      discharges: members.map((cell) => waterAt(state.physical!.map, cell, "flood")),
+    })),
     mapScale(state)
   )
-    .filter(({ publish, course }) => publish || records[course[course.length - 1]].kept.river)
+    .filter(({ course }) => course.some((index) => records[index].kept.drawn))
     .map(({ course }) => course);
 }
 
@@ -145,18 +136,10 @@ function riverOfCourse(state: GenerationState, reaches: readonly ReachMembers[])
   return {
     id: riverIdOf(reaches),
     cells: reaches
-      .filter(({ start }) => reachInFrame(state, start))
+      .filter(({ members }) => reachInFrame(state, members))
       .flatMap(({ members }, n) => members.slice(n ? 1 : 0))
-      .filter((cell) => work.map.WaterKindCodes.get(cell) === 0),
+      .filter((cell) => work.map.mesh.membership(cell) === 1 && onRiver(work.map, cell)),
   };
-}
-/** The parents' rivers, each continuing under its own identity; the rest of this map's rivers yield to them. */
-function continuedRivers(state: GenerationState, claimed: Set<number>): River[] {
-  if (!isRefinedMap(state)) return [];
-  const map = state.physical.map;
-  return continuingRivers(state)
-    .map(({ id, head }) => ({ id, cells: followWater(map, head, claimed) }))
-    .filter((river) => river.cells.length > 0);
 }
 /**
  * The rivers of this map, greatest claim first. Publication draws these; a place on a river is
@@ -166,9 +149,7 @@ export const riversOf = (state: GenerationState): readonly River[] =>
   heldFor(state, "rivers:mapped", () => {
     // A building interior has no water of its own to read.
     if (!state.physical) return [];
-    const claimed = new Set<number>(),
-      continued = continuedRivers(state, claimed),
-      records = keptReaches(state),
+    const records = keptReaches(state),
       own = mappedCourses(state, records)
         .map((course) =>
           riverOfCourse(
@@ -176,13 +157,9 @@ export const riversOf = (state: GenerationState): readonly River[] =>
             course.map((index) => records[index])
           )
         )
-        .map((river) => ({
-          ...river,
-          cells: river.cells.filter((cell) => !claimed.has(cell)),
-        }))
         .filter((river) => river.cells.length > 0)
         .sort((a, b) => b.cells.length - a.cells.length);
-    return [...continued, ...own];
+    return own;
   });
 /** Every cell of this map's rivers. */
 export const mappedRiverCells = (state: GenerationState): ReadonlySet<number> =>
@@ -214,12 +191,12 @@ export function drawnRivers(state: GenerationState, records: readonly ReachMembe
     for (const index of members) course[index] = id;
   }
   return joinReaches(
-    records.map(({ start, members, reach }, index) => ({
+    records.map(({ members, reach }, index) => ({
       downstream: reach.downstream,
-      inFrame: reachInFrame(state, start),
+      inFrame: reachInFrame(state, members),
       course: course[index],
       held: members.slice(0, -1).flatMap((cell) => riverPositionAt(state, cell)?.riverId ?? []),
     })),
-    new Set(isRefinedMap(state) ? continuingRivers(state).map(({ id }) => id) : [])
+    new Set([...reachesOf(state.physical!.map)].flatMap((reach) => reach.river ?? []))
   );
 }

@@ -27,5 +27,6 @@ export const riverSizes = (scale: MapScale) => ({
  * Whether water at a place is a river's: it has been gathered from a catchment the map
  * shows. A cell that sheds a great deal of its own water is wet ground, not a river.
  */
-export const gathered = (catchment: number, sizes: { catchment: number }) =>
-  catchment >= sizes.catchment;
+// owner-direction(2026-11-12): a cell's own yield, however large, never makes it a river.
+export const gathered = (catchment: number, sizes: { catchment: number }, ownArea: number) =>
+  catchment > ownArea && catchment >= sizes.catchment;

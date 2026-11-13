@@ -1,4 +1,7 @@
-import { waterColumn, type Band } from "@atlas/domain";
+import { MapScale, waterColumn, type Band } from "@atlas/domain";
+import { StoreColumn, type WaterColumn } from "./stores";
+import { soilWaterCapacity } from "./soilWater";
+import { groundwaterCapacity } from "./groundwater";
 import { carriedBy } from "../coupling/carriers";
 import type { PhysicalField } from "../world/field";
 import { noWaterSurface } from "../world/math";
@@ -17,21 +20,61 @@ import type { PhysicalChannel } from "../world/atlasChannels";
 
 /** Depths the column holds as amounts of water, each over the whole cell. */
 const held = [waterColumn.snow, waterColumn.soil, waterColumn.ground] as const;
+export const columnNames = [
+  ...held,
+  waterColumn.standing,
+  waterColumn.surface,
+  waterColumn.kind,
+  waterColumn.body,
+] as const;
+export type ColumnPart = (typeof columnNames)[number];
+
+/** Import one complete cell before any budget or geographic development runs. */
+export function inheritColumn(
+  map: PhysicalField,
+  cell: number,
+  value: (part: ColumnPart) => number
+) {
+  const captured = columnNames.map(value);
+  columnNames.forEach((part, at) => map[part].set(cell, captured[at]));
+}
+
+/**
+ * owner-direction(2026-11-12): water gets an actual column of water, carried and inherited as one package.
+ * Stores own the numerical contents; capacities and release behavior describe their medium.
+ */
+export function ownWater(map: PhysicalField): WaterColumn {
+  return {
+    snow: new StoreColumn(map.SnowPack, () => Infinity),
+    soil: new StoreColumn(map.SoilWater, (cell) => soilWaterCapacity(map, cell), true),
+    ground: new StoreColumn(map.GroundwaterStorage, (cell) => groundwaterCapacity(map, cell)),
+    standing: new StoreColumn(
+      map.WaterDepths,
+      (cell) =>
+        MapScale.metres(
+          Math.max(0, map.WaterSurfaceElevations.get(cell) - map.Elevation.get(cell)),
+          "native"
+        ),
+      false,
+      MapScale.metres(1, "native")
+    ),
+  };
+}
 
 // --- Snow, soil water and groundwater -------------------------------------------------
 
 /** The snow lying on a cell through the year, as a depth of water. */
 export const putSnow = (map: PhysicalField, i: number, depth: number) =>
-  map[waterColumn.snow].set(i, Math.max(0, depth));
+  map.water.snow.replace(i, depth);
 /** What a cell's soil holds, as a depth of water. */
 export const putSoilWater = (map: PhysicalField, i: number, depth: number) =>
-  map[waterColumn.soil].set(i, Math.max(0, depth));
+  map.water.soil.replace(i, depth);
 /** What the ground below a cell's soil holds, as a depth of water. */
 export const putGroundwater = (map: PhysicalField, i: number, depth: number) =>
-  map[waterColumn.ground].set(i, depth);
+  map.water.ground.replace(i, depth);
 /** Water reaching or leaving the ground below a cell, as a depth. */
 export const addGroundwater = (map: PhysicalField, i: number, depth: number) =>
-  map[waterColumn.ground].add(i, depth);
+  map.water.ground.replace(i, map.water.ground.held(i) + depth);
 
 // --- Standing water -------------------------------------------------------------------
 

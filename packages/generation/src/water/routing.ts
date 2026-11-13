@@ -9,6 +9,8 @@ import { sourceToOutletOrder } from "../world/flowGraph";
 import { CellQueue, MapScale, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "../world/physicalNumerics";
 import { lakeMembership } from "./lakeMembership";
+import { retainRiverRoutes } from "./reachRouting";
+import "./reachTransport";
 
 function stableRoot(map: PhysicalField, members: Iterable<number>, seed: number): number {
   let selected = -1,
@@ -103,6 +105,7 @@ export function flowRouting(map: PhysicalField, c: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes.get(i) === 0) map.FlowTargets.set(i, map.DrainageGuidanceTargets.get(i));
   routeLakes(map, c.Seed);
+  retainRiverRoutes(map);
   for (let i = 0; i < map.mesh.count; i++) {
     const target = map.FlowTargets.get(i);
     if (target >= 0) map.FlowEdges.set(i, edgeLeadingTo(map.mesh, i, target));

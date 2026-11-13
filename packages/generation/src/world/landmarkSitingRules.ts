@@ -9,7 +9,7 @@ import { physicalSampler } from "./physicalMetric";
 import { distance, type Point } from "./landmarkGeometry";
 import { CellList, MapScale, SmallIntSet, radixOrder, type Band } from "@atlas/domain";
 import { workingArray } from "./physicalNumerics";
-import { onRiver } from "../water/riverKeeping";
+import { onRiver, waterAt } from "../water/riverKeeping";
 
 /** The field read once per siting pass. */
 export interface Terrain {
@@ -79,7 +79,7 @@ export function analyseTerrain(map: PhysicalField): Terrain {
   // Largest flow first; rivers were pushed ascending, so ties keep index order.
   const riverCells = rivers.finish(),
     byFlow = radixOrder(
-      Float64Array.from(riverCells, (i) => map.FlowAccumulation.get(i)),
+      Float64Array.from(riverCells, (i) => waterAt(map, i)),
       true
     );
   return {
@@ -282,7 +282,7 @@ const canyon: Rule = {
     const rough = relief(t.map, within(t.map, i, 2 * w));
     if (rough > t.map.scale.length(0.0001)) return null;
     const river = riverNear(t, i, MapScale.metres(p.captureDistance, "km"));
-    const flow = river >= 0 ? 1 + Math.log10(1 + t.map.FlowAccumulation.get(river)) / 10 : 0;
+    const flow = river >= 0 ? 1 + Math.log10(1 + waterAt(t.map, river)) / 10 : 0;
     return 1 - rough / t.map.scale.length(0.0001) + flow;
   },
   shape(t, i, p) {
@@ -310,10 +310,7 @@ const falls: Rule = {
       reachesSea(t.map, i, steps)
     )
       return null;
-    return (
-      Math.log10(1 + t.map.FlowAccumulation.get(i)) +
-      stepDown(t.map, i) / t.map.scale.length(0.000025)
-    );
+    return Math.log10(1 + waterAt(t.map, i)) + stepDown(t.map, i) / t.map.scale.length(0.000025);
   },
   shape: point,
   fit(t, i, p) {

@@ -11,7 +11,45 @@ import {
   putSoilWater,
   standWater,
   waterColumnChannels,
+  inheritColumn,
 } from "./column";
+import { transferColumn } from "./stores";
+
+it("owns stores with room and release behavior, not only a list of writable layers", () => {
+  const map = createTestField(createWorldMesh([0, 0, 10_000, 10_000], 16, 0));
+  expect(map).toHaveProperty("water");
+  map.SoilDepth.set(0, 1);
+  putSoilWater(map, 0, 0.06);
+  expect(map.water.soil.room(0)).toBeCloseTo(0.06);
+  const released = map.water.soil.give(0, 0.12);
+  expect(released).toBeGreaterThan(0);
+  expect(released).toBeLessThan(0.06);
+  expect(map.SoilWater.get(0)).toBeCloseTo(0.06 - released);
+  putSnow(map, 0, 0.3);
+  const transfer = transferColumn(map.water.snow, map.water.soil, 0, 0.2);
+  expect(transfer.overflow).toBeGreaterThan(0);
+  expect(map.SnowPack.get(0)).toBeCloseTo(0.1);
+  expect(map.SoilWater.get(0)).toBeCloseTo(0.12);
+});
+
+it("inherits the complete column without running its budget", () => {
+  const map = createTestField(createWorldMesh([0, 0, 10_000, 10_000], 16, 0));
+  const captured = {
+    SnowPack: 0.4,
+    SoilWater: 0.07,
+    GroundwaterStorage: 2,
+    WaterDepths: 40,
+    WaterSurfaceElevations: 120,
+    WaterKindCodes: 2,
+    WaterBodyIds: 7,
+  };
+  inheritColumn(map, 0, (part) => captured[part]);
+  expect(map.water.snow.held(0)).toBe(0.4);
+  expect(map.water.soil.held(0)).toBe(0.07);
+  expect(map.water.ground.held(0)).toBe(2);
+  expect(map.WaterKindCodes.get(0)).toBe(2);
+  expect(map.WaterSurfaceElevations.get(0)).toBe(120);
+});
 
 /** A small field, and a plate move that swaps the ground of cells 0 and 1 and leaves the rest. */
 function swapped() {

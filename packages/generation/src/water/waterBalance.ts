@@ -9,6 +9,8 @@
  * Nothing here is a share-of-the-rain loss. A dry, hot cell sheds almost nothing and a cool,
  * wet one most of its rain, and each does so in its own months.
  */
+import { WaterStore } from "./stores";
+
 export const months = 12;
 
 /** The warmth of each month of a year that swings as a sine about its mean; month 0 is coldest. */
@@ -78,6 +80,8 @@ export interface WaterYear {
   /** What the soil holds and the snow that lies, as means through the year. */
   soil: number;
   snow: number;
+  /** Contents left for the next pass, distinct from the typical year's mean presentation. */
+  end: { soil: number; snow: number };
 }
 const emptyYear = (): WaterYear => ({
   quick: [],
@@ -86,10 +90,11 @@ const emptyYear = (): WaterYear => ({
   keptSnow: 0,
   soil: 0,
   snow: 0,
+  end: { soil: 0, snow: 0 },
 });
 interface Stores {
-  soil: number;
-  snow: number;
+  soil: WaterStore;
+  snow: WaterStore;
 }
 /**
  * What the air takes in a month. It takes the month's water first. For what it still lacks it
@@ -105,28 +110,30 @@ export function evaporated(demand: number, wetting: number, soil: number, capaci
 }
 /** One month of the budget: the stores as it leaves them, and what it shed. */
 function month(ground: WaterGround, at: number, stores: Stores) {
-  const thaw = Math.min(stores.snow + ground.snow[at], Math.max(0, ground.melt[at])),
+  stores.snow.receive(ground.snow[at]);
+  const thaw = stores.snow.give(ground.melt[at]),
     storm = ground.rain[at] * ground.stormShare,
     wetting = ground.rain[at] - storm + thaw,
-    taken = evaporated(Math.max(0, ground.demand[at]), wetting, stores.soil, ground.soilCapacity),
-    held = wetting + stores.soil - taken,
-    shed = Math.max(0, held - ground.soilCapacity),
+    met = Math.min(Math.max(0, ground.demand[at]), wetting),
+    taken = met + stores.soil.give(Math.max(0, ground.demand[at]) - met),
+    shed = stores.soil.receive(wetting - met),
     sinking = shed * ground.sinking;
-  stores.snow += ground.snow[at] - thaw;
-  stores.soil = held - shed;
   return { quick: storm + shed - sinking, recharge: sinking, evaporated: taken };
 }
 /**
  * A year of the budget in balance with itself: the stores are run through years until one
  * ends as it began, so a dry-season soil and a winter's snow carry over as they do every year.
  */
-export function waterYear(ground: WaterGround, held: Partial<Stores> = {}): WaterYear {
+export function waterYear(ground: WaterGround, held: Partial<WaterYear["end"]> = {}): WaterYear {
   // The year starts from what the cell already holds, so its water is carried, not remade.
-  const stores: Stores = { soil: Math.max(0, held.soil ?? 0), snow: Math.max(0, held.snow ?? 0) };
+  const stores: Stores = {
+    soil: new WaterStore(Math.max(0, held.soil ?? 0), ground.soilCapacity, ground.soilCapacity),
+    snow: new WaterStore(Math.max(0, held.snow ?? 0), Infinity),
+  };
   let year = emptyYear();
   // Soil and seasonal snow settle within a few years; snow that never melts is kept apart.
   for (let pass = 0; pass < 3; pass++) {
-    const before = stores.snow;
+    const before = stores.snow.held;
     let least = Infinity;
     year = emptyYear();
     for (let at = 0; at < months; at++) {
@@ -134,15 +141,17 @@ export function waterYear(ground: WaterGround, held: Partial<Stores> = {}): Wate
       year.quick.push(shed.quick);
       year.recharge += shed.recharge;
       year.evaporated += shed.evaporated;
-      year.soil += stores.soil / months;
-      year.snow += stores.snow / months;
-      least = Math.min(least, stores.snow);
+      year.soil += stores.soil.held / months;
+      year.snow += stores.snow.held / months;
+      least = Math.min(least, stores.snow.held);
     }
     // The lying snow is the season's cover: what never melted all year is on its way to ice.
     year.snow -= least;
     // Snow lying at the year's end that also lay at its start is the same winter's cover.
     // What a year adds beyond that never melts: it becomes ice and leaves this budget.
-    year.keptSnow = Math.max(0, stores.snow - before);
+    year.keptSnow = Math.max(0, stores.snow.held - before);
+    stores.snow.give(least);
+    year.end = { soil: stores.soil.held, snow: stores.snow.held };
   }
   return year;
 }
@@ -150,7 +159,10 @@ export function waterYear(ground: WaterGround, held: Partial<Stores> = {}): Wate
  * What a river carries through the year, from the flow that reaches it each month: its mean,
  * its greatest and least month, and how many months it carries at least a river's flow.
  */
-export function flowThroughYear(monthly: readonly number[], river: number) {
+export function flowThroughYear(
+  monthly: Iterable<number> & { readonly length: number },
+  river: number
+) {
   let least = Infinity,
     greatest = 0,
     total = 0,

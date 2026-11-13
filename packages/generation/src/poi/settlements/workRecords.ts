@@ -1,4 +1,5 @@
 import { MapScale, point, type AtlasFeature, type RelativeMeasure } from "@atlas/domain";
+import { waterAt } from "../../water/riverKeeping";
 import { mapScale } from "../../worldSignificance";
 import { generationFeatures } from "../../generationFeatures";
 import { knownEvents, lastEra, type KnownEvent } from "../../human/eventRegistry";
@@ -256,7 +257,7 @@ function crossingFeature(state: RegionalState, cell: number, travellers: number,
     kind,
     "transportSites",
     { type: "Point", coordinates: [p.x, p.y] },
-    { workKind: kind, flow: map.FlowAccumulation.get(cell), travellers },
+    { workKind: kind, flow: waterAt(map, cell), travellers },
     bridge ? "Bridge" : "Ford"
   );
 }
@@ -302,9 +303,7 @@ export const crossingsOf = (state: GenerationState) =>
       if (crossed.all[i] <= 0 || seats.has(i)) continue;
       const travellers = crossed.all[i],
         // A road over a sizeable river is bridged; a track, or any way over a stream, fords.
-        bridge =
-          crossed.byRoad[i] > 0 &&
-          map.FlowAccumulation.get(i) >= map.scale.resolveMeasure(bridgeFlow);
+        bridge = crossed.byRoad[i] > 0 && waterAt(map, i) >= map.scale.resolveMeasure(bridgeFlow);
       found[bridge ? "bridge" : "ford"].push(
         lazyPlace(bridge ? "bridge" : "ford", regionalId(state, `crossing:${i}`), i, () =>
           crossingFeature(state, i, travellers, bridge)

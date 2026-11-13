@@ -90,9 +90,12 @@ export const physicalChannels: PhysicalChannel[] = [
   channel("CatchmentArea", "square-metre"),
   channel("RiverWidth", "metre"),
   channel("RiverDepth", "metre"),
-  { ...channel("MaximumIceFlux", "cubic-metre/year"), minimum: 0 },
-  { ...channel("MaximumGroundedIceFlux", "cubic-metre/year"), minimum: 0 },
+  // These are colocated historical observations. Independent polynomial reconstruction can
+  // invent a grounded maximum greater than the total maximum; carry the recorded pair.
+  { ...channel("MaximumIceFlux", "cubic-metre/year"), discrete: true, minimum: 0 },
+  { ...channel("MaximumGroundedIceFlux", "cubic-metre/year"), discrete: true, minimum: 0 },
   channel("FlowAccumulation", "cubic-metre/second"),
+  { ...channel("SmallChannelLength", "metre"), quantity: "extensive" },
   // What a river still carries in its driest month: a finer map's entering rivers keep it.
   { ...channel("PerennialFlow", "cubic-metre/second"), minimum: 0 },
   channel("OceanDistance", "metre"),
@@ -225,11 +228,12 @@ export const physicalChannelOwnership: Ownership[] = [
     "rivers",
     [
       "Runoff",
-      ...landWaterNames,
+      ...landWaterNames.filter((name) => name !== "SoilWater"),
       "DrainageBasinIds",
       "CatchmentArea",
       "RiverWarmth",
       "FlowAccumulation",
+      "SmallChannelLength",
       "DrainageElevations",
     ],
   ],
@@ -260,5 +264,6 @@ export const physicalChannelOwnership: Ownership[] = [
   ["physical.floodplains", "rivers", ["FloodplainIntensity"]],
   ["physical.deltas", "rivers", ["DeltaIntensity"]],
   ["ecology.living", "ecology", livingFields.map(({ name }) => name)],
+  [["water.routing", "ecology.living"], "ecology", ["SoilWater"]],
   [humanFeatures, "cultures", humanChannels.map(({ name }) => name)],
 ];

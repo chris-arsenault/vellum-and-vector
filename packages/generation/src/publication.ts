@@ -162,35 +162,37 @@ function validateGeographicRepresentation(
 }
 
 function validateCandidateBindings(
-  state: Pick<GenerationState, "domain" | "features" | "sourceFeatures">,
+  state: Pick<GenerationState, "domain" | "features" | "sourceFeatures" | "networks">,
   definitions: PublicationDefinition[],
   original?: DomainSnapshot
 ) {
   for (const feature of generationFeatures(state)) {
+    const previous = state.sourceFeatures
+      ? state.sourceFeatures.get(feature.id)
+      : original?.world.features[feature.id];
     if (
       feature.areaId !== state.domain.scope.areaId ||
       feature.state !== "generated" ||
-      sameValue(
-        state.sourceFeatures
-          ? state.sourceFeatures.get(feature.id)
-          : original?.world.features[feature.id],
-        feature
-      )
+      sameValue(previous, feature)
     )
       continue;
+    const binding = definitions.find(
+      (definition): definition is GeographyPublicationDefinition =>
+        definition.kind === "geography" &&
+        definition.layer.id === feature.layerId &&
+        definition.featureKinds.includes(feature.kind)
+    );
     requireThat(
-      definitions.some(
-        (definition) =>
-          definition.kind === "geography" &&
-          definition.publish !== false &&
-          definition.layer.id === feature.layerId &&
-          definition.featureKinds.includes(feature.kind)
-      ),
+      binding && (binding.publish !== false || retainedKind(previous, feature)),
       "unregistered_product",
       `Register an output binding for ${feature.kind} on ${feature.layerId}.`
     );
+    if (binding.publish === false) validateGeographicRepresentation(state, binding, feature);
   }
 }
+/** Carrying an existing identity may move its geography; it cannot introduce another kind or layer. */
+const retainedKind = (previous: AtlasFeature | undefined, feature: AtlasFeature) =>
+  previous?.kind === feature.kind && previous.layerId === feature.layerId;
 
 function checkLayerDefinitions(definitions: PublicationDefinition[]) {
   const layers = new Map<string, Layer>();

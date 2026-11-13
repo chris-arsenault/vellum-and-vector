@@ -4,7 +4,7 @@ import { spatial, MapScale, type Band, type ReadBand } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { meshDeltaX, meshPointX } from "./mesh";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
-import { onRiver } from "../water/riverKeeping";
+import { onRiver, riverSample, waterAt, type RiverSample } from "../water/riverKeeping";
 
 type Coordinate = [number, number];
 type Station = { point: Coordinate; segment: number; fraction: number };
@@ -36,8 +36,7 @@ export function createRiverPaths(map: PhysicalField): RiverPaths {
     if (!onRiver(map, i) || target < 0) continue;
     paths.incoming!.add(target, 1);
     const previous = paths.upstream.get(target);
-    if (previous < 0 || map.FlowAccumulation.get(i) > map.FlowAccumulation.get(previous))
-      paths.upstream.set(target, i);
+    if (previous < 0 || waterAt(map, i) > waterAt(map, previous)) paths.upstream.set(target, i);
   }
   // Numerical de-aliasing, not geological activity or a physical meander wavelength.
   for (let pass = 0; pass < 3; pass++) relax(map, paths);
@@ -183,7 +182,7 @@ function appendCurve(
     pending.push({ points: [a, ab, abc, center], start, end: middle });
   }
 }
-function profile(members: number[], stations: Station[], values: ReadBand, scale = 1) {
+function profile(members: number[], stations: Station[], values: Pick<ReadBand, "get">, scale = 1) {
   return stations.map(
     ({ segment, fraction }) =>
       (values.get(members[segment]) * (1 - fraction) +
@@ -260,6 +259,7 @@ export function riverPath(map: PhysicalField, paths: RiverPaths, members: number
     for (let n = start; n < stations.length; n++) stations[n].point[0] += offset;
   }
   stations = clipReceivingWater(map, paths, members, stations);
+  const owned = (part: RiverSample) => ({ get: (cell: number) => riverSample(map, cell, part) });
   return {
     geometry: {
       type: "LineString" as const,
@@ -269,16 +269,18 @@ export function riverPath(map: PhysicalField, paths: RiverPaths, members: number
       ]),
     },
     profiles: {
-      discharges: profile(members, stations, map.FlowAccumulation),
-      widths: profile(members, stations, map.RiverWidth),
-      depths: profile(members, stations, map.RiverDepth),
+      discharges: profile(members, stations, { get: (cell) => waterAt(map, cell) }),
+      widths: profile(members, stations, owned("width")),
+      depths: profile(members, stations, owned("depth")),
       // The months of the year each stretch carries a river's flow: twelve runs all year.
-      flowingMonths: profile(members, stations, map.FlowingMonths),
-      catchmentAreas: profile(members, stations, map.CatchmentArea),
-      elevations: profile(members, stations, map.DrainageElevations, MapScale.metres(1, "native")),
-      bedElevations: paths.elevationAt
-        ? stations.map(({ point }) => MapScale.metres(paths.elevationAt!(...point), "native"))
-        : profile(members, stations, map.Elevation, MapScale.metres(1, "native")),
+      flowingMonths: profile(members, stations, owned("months")),
+      catchmentAreas: profile(members, stations, owned("catchment")),
+      elevations: profile(members, stations, {
+        get: (cell) =>
+          MapScale.metres(riverSample(map, cell, "bed"), "native") +
+          riverSample(map, cell, "depth"),
+      }),
+      bedElevations: profile(members, stations, owned("bed"), MapScale.metres(1, "native")),
     },
   };
 }

@@ -1,22 +1,14 @@
-import type { Band, ReadBand } from "@atlas/domain";
-import { carriedBy } from "../coupling/carriers";
-import type { PhysicalContext } from "../world/context";
+import type { ReadBand } from "@atlas/domain";
 import type { PhysicalField } from "../world/field";
-import { cutReaches, keepsDryCourse } from "./reachCuts";
-import { carryReaches, reachOfCells, type Reach } from "./reaches";
+import { reachMonths, reachOfCells, type Reach } from "./reaches";
+import { flowThroughYear } from "./waterBalance";
+import { projectRiverOrders } from "./riverProjection";
 
 /**
- * The map's rivers, kept and asked. Each pass the water owner hands over where rivers run now
- * and the map's reaches are carried onto them (`keepReaches`). Everything else that wants to
- * know about a river asks here: whether a river runs through a cell, which one, and what it
- * is. The answers come from the kept reaches.
+ * Queries read the map's retained rivers. RiverOrders is a downstream raster projection;
+ * it never decides whether a river exists or whether a course still runs.
  */
 
-/** Carries the map's reaches onto this pass's rivers. `river` marks the cells rivers run on. */
-export function keepReaches(map: PhysicalField, c: PhysicalContext, river: Band) {
-  const epoch = map.CompletedEpochCount;
-  carryReaches(map.rivers, cutReaches(map, river), epoch, keepsDryCourse(map, c.Profile, epoch));
-}
 /** The reach at a cell, running or dry, if the cell is on one. */
 export function reachAt(map: PhysicalField, cell: number): Reach | undefined {
   return (map.rivers.at ??= reachOfCells(map.rivers)).get(cell);
@@ -26,31 +18,46 @@ export function reachAt(map: PhysicalField, cell: number): Reach | undefined {
  * land: where water has come to stand on a reach's course since the rivers were last worked
  * out (a reservoir filling behind a dam), no river runs under it.
  */
-export const riverOrderAt = (map: PhysicalField, cell: number) =>
-  map.WaterKindCodes.get(cell) === 0 ? map.RiverOrders.get(cell) : 0;
+export function riverOrderAt(map: PhysicalField, cell: number) {
+  const reach = reachAt(map, cell);
+  return map.WaterKindCodes.get(cell) === 0 &&
+    reach?.drawn &&
+    !reach.dry &&
+    reachMonths(reach, map.rivers.at!.position(cell)) > 0
+    ? reach.order
+    : 0;
+}
 /** Whether a river runs through a cell now. */
 export const onRiver = (map: PhysicalField, cell: number) => riverOrderAt(map, cell) > 0;
-/**
- * When the plates move, the ground moves under the rivers. Where rivers ran before is then
- * no record of where a course lies now: dry courses and former courses are let go, and the
- * running rivers are found again on the ground as it comes to lie.
- */
-carriedBy("rivers", (map) => {
-  for (const reach of [...map.rivers.reaches.values()]) {
-    if (reach.dry) map.rivers.reaches.delete(reach.id);
-    else reach.former = [];
-  }
-  for (const reach of map.rivers.reaches.values())
-    if (reach.downstream !== null && !map.rivers.reaches.has(reach.downstream))
-      reach.downstream = null;
-  map.rivers.at = undefined;
-});
 /** The order of the river running through every cell, for those that read the whole map. */
-export const riverOrders = (map: PhysicalField): ReadBand => map.RiverOrders;
+export function riverOrders(map: PhysicalField): ReadBand {
+  projectRiverOrders(map);
+  return map.RiverOrders;
+}
 /**
- * The layer the answers above are read from, for those that must declare what an answer of
- * theirs depends on, and for reading a finished map's published copy of it.
+ * The network's raster projection, used for dependency invalidation and finished-map reads.
  */
 export const riverLayer = "RiverOrders" as const;
 /** The map's reaches, running and dry. */
 export const reachesOf = (map: PhysicalField): Iterable<Reach> => map.rivers.reaches.values();
+
+/** Flow at a point on the owned network; unresolved water remains a cell quantity. */
+export function waterAt(map: PhysicalField, cell: number, statistic: "mean" | "flood" = "mean") {
+  const reach = reachAt(map, cell);
+  if (!reach)
+    return statistic === "mean" ? map.FlowAccumulation.get(cell) : map.FloodFlow.get(cell);
+  const at = map.rivers.at!.position(cell);
+  return flowThroughYear(reach.monthly.subarray(at * 12, (at + 1) * 12), 0)[statistic];
+}
+
+export type RiverSample = "bed" | "width" | "depth" | "catchment" | "months";
+/** Physical profiles belong to the reach; receiving water and unresolved catchments stay quantities. */
+export function riverSample(map: PhysicalField, cell: number, part: RiverSample) {
+  const reach = reachAt(map, cell);
+  if (reach)
+    return part === "months"
+      ? reachMonths(reach, map.rivers.at!.position(cell))
+      : reach[part][map.rivers.at!.position(cell)];
+  if (part === "bed") return map.Elevation.get(cell);
+  return part === "catchment" ? map.CatchmentArea.get(cell) : 0;
+}

@@ -1,5 +1,4 @@
 import type { MapProcessContext } from "../process";
-import { continuingRivers } from "../area/riverLineage";
 import { nativeContext, physicalContext } from "../world/context";
 import { bindOperation, readOperation } from "../processOperation";
 import { rivers, drainageFlood, lakes } from "../processes/waterProcesses";
@@ -11,6 +10,9 @@ import { riverNetwork } from "../water/rivers";
 import { releaseWorking, workingValues } from "../world/physicalNumerics";
 import { updateSlopes } from "./relief";
 import type { RegionalState } from "./state";
+import { flowThroughYear } from "../water/waterBalance";
+import { naturalBand } from "./state";
+import { parentChannels } from "../world/atlasWorkspace";
 
 /**
  * Resolve present water with the shared owners. The regional boundary contributes captured
@@ -26,7 +28,11 @@ export function routeWater(state: RegionalState, context?: MapProcessContext) {
 
 /** Same current-water interface, with captured incoming flow as the regional strategy. */
 export function bindRegionalWater(state: RegionalState) {
-  const map = state.physical.map;
+  const map = state.physical.map,
+    channelLength = parentChannels(state).has("SmallChannelLength")
+      ? naturalBand(state, "SmallChannelLength")
+      : undefined;
+  let initial = true;
   bindOperation(map, drainageFlood.operation, ({ context }) => {
     updateSlopes(state);
     withIncoming(state, (incoming) => drainageConditioning(map, context, incoming));
@@ -36,29 +42,23 @@ export function bindRegionalWater(state: RegionalState) {
   );
   bindOperation(map, rivers.operation, ({ context }) => {
     withIncoming(state, (incoming) => {
-      const network = state.regional.network,
-        steady = workingValues(
-          map,
-          "float64",
-          "regional:steady-incoming-water",
-          (i) => network?.steadyInflow[i] ?? 0
-        ),
-        catchment = workingValues(
-          map,
-          "float64",
-          "regional:incoming-catchment",
-          (i) => network?.inflowCatchment[i] ?? 0
-        );
+      const entries = map.rivers.entries,
+        catchment = workingValues(map, "float64", "regional:incoming-catchment", () => 0),
+        monthly = Array.from({ length: 12 }, (_, month) => {
+          const band = workingValues(map, "float64", `regional:incoming-${month}`, () => 0);
+          for (const entry of entries) band.add(entry.cell, entry.monthly[month]);
+          return band;
+        });
+      for (const entry of entries) catchment.add(entry.cell, entry.catchment);
       try {
-        riverNetwork(
-          map,
-          context,
-          incoming,
-          continuingRivers(state).map(({ head }) => head),
-          { steady, catchment }
-        );
+        riverNetwork(map, context, incoming, {
+          catchment,
+          monthly,
+          channelLength: initial ? channelLength : undefined,
+        });
+        initial = false;
       } finally {
-        releaseWorking(map, steady, catchment);
+        releaseWorking(map, catchment, ...monthly);
       }
     });
     readDrainage(state);
@@ -70,12 +70,9 @@ function withIncoming(
   read: (incoming: import("@atlas/domain").Band) => void
 ) {
   const map = state.physical.map;
-  const incoming = workingValues(
-    map,
-    "float64",
-    "regional:incoming-water",
-    (i) => state.regional.network?.inflow[i] ?? 0
-  );
+  const incoming = workingValues(map, "float64", "regional:incoming-water", () => 0);
+  for (const entry of map.rivers.entries)
+    incoming.add(entry.cell, flowThroughYear(entry.monthly, 0).mean);
   try {
     read(incoming);
   } finally {

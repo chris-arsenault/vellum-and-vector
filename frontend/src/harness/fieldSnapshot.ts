@@ -41,6 +41,7 @@ const heldState = [
   "crustBudget",
   "events",
   "faults",
+  "rivers",
   "ThrustSlipOwed",
 ] as const;
 interface Snapshot {

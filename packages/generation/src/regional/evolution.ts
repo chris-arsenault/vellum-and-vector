@@ -2,6 +2,7 @@ import { KeyedHeap } from "@atlas/domain";
 import type { PhysicalMesh } from "../world/mesh";
 import { distance, isContent, neighborhood, neighborhoodCapacity } from "./lattice";
 import type { NetworkWork, RegionalState } from "./state";
+import { directionalResistance } from "./material";
 
 /**
  * Initial drainage organization through the captured terrain and present material. This
@@ -17,7 +18,9 @@ export function evolveNetwork(
   const routed = drainageTree(
     state.physical.map.mesh,
     network.base,
-    resistance,
+    (from, to) =>
+      (directionalResistance(state.physical.map, from, to) * (resistance[from] + resistance[to])) /
+      2,
     root,
     network.level,
     network.sea
@@ -36,7 +39,7 @@ export function evolveNetwork(
 export function drainageTree(
   mesh: PhysicalMesh,
   height: ArrayLike<number>,
-  resistance: ArrayLike<number>,
+  resistance: ArrayLike<number> | ((from: number, to: number) => number),
   roots: ArrayLike<number>,
   level: ArrayLike<number>,
   sea: ArrayLike<number>
@@ -46,7 +49,11 @@ export function drainageTree(
     cost = new Float64Array(mesh.count).fill(Infinity),
     settled = new Uint8Array(mesh.count),
     around = new Int32Array(neighborhoodCapacity),
-    heap = new KeyedHeap();
+    heap = new KeyedHeap(),
+    effort =
+      typeof resistance === "function"
+        ? resistance
+        : (from: number, to: number) => (resistance[from] + resistance[to]) / 2;
   for (let i = 0; i < mesh.count; i++)
     if (roots[i]) {
       cost[i] = Math.max(0, level[i]);
@@ -64,7 +71,7 @@ export function drainageTree(
       if (!admits(mesh, j, settled, roots, sea)) continue;
       const length = distance(mesh, i, j),
         climb = Math.max(0, height[j] - height[i]),
-        next = cost[i] + ((length + climb) * (resistance[i] + resistance[j])) / 2;
+        next = cost[i] + (length + climb) * effort(j, i);
       if (next >= cost[j]) continue;
       receiver[j] = i;
       cost[j] = next;

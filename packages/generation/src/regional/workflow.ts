@@ -42,6 +42,7 @@ import type { RegionalState } from "./state";
 import { bindRegionalWater } from "./drainage";
 import { bindRegionalOceanDistance } from "./sharedMedia";
 import { mapCommand } from "../processTraits";
+import { inheritRivers } from "../water/networkImport";
 
 type Options = Omit<MapRunnerOptions, "seed" | "seedScope">;
 const version = "1";
@@ -81,6 +82,13 @@ export function beginRegional(
     round: 0,
   };
   const begun = Object.assign(state, { physical: work, regional });
+  const capturedRivers = state.domain.world.drainage?.[input.areaId];
+  if (capturedRivers)
+    inheritRivers(
+      map,
+      capturedRivers,
+      (id) => state.sourceFeatures?.get(id) ?? state.domain.world.features[id]
+    );
   bindRegionalStrategies(begun, input, context);
   return begun;
 }

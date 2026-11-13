@@ -1,6 +1,4 @@
 import type { AtlasFeature } from "@atlas/domain";
-import type { PhysicalField } from "../world/field";
-import type { GenerationState } from "../process";
 import { courseLines, type CapturedCourse } from "../regional/courses";
 import { cellAt, isContent, regionalSpan } from "../regional/lattice";
 import type { RegionalState } from "../regional/state";
@@ -85,16 +83,3 @@ export function continuingRivers(state: RegionalState): readonly ContinuingRiver
   settled.set(state, rivers);
   return rivers;
 }
-/** The land cells water runs through from a head until the sea, or a river already claimed. */
-export function followWater(map: PhysicalField, head: number, claimed: Set<number>) {
-  const cells: number[] = [];
-  for (let i = head; i >= 0 && !claimed.has(i); i = map.FlowTargets.get(i)) {
-    const water = map.WaterKindCodes.get(i);
-    if (water === 1) break;
-    claimed.add(i);
-    if (water === 0) cells.push(i);
-  }
-  return cells;
-}
-/** A parent's river is a channel the whole way, however little water its head has here. */
-export const isRefinedMap = (state: GenerationState): state is RegionalState => "regional" in state;

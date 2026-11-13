@@ -13,8 +13,11 @@ import { lakeLosses } from "./lakeStage";
 import { gathered, riverSizes } from "./riverSize";
 import { waterYearOf } from "./runoff";
 import { months } from "./waterBalance";
-import { keepReaches } from "./riverKeeping";
-import { enteringInMonth } from "./inflow";
+import { advanceReaches } from "./reachEvolution";
+import { markDrawnReaches } from "./riverVisibility";
+import { projectRivers } from "./riverProjection";
+import { currentBed } from "./riverBed";
+import { channelOrigins } from "./channelOrigins";
 
 /**
  * The cells a river runs through: those reached, in at least one month of the year, by a
@@ -23,34 +26,6 @@ import { enteringInMonth } from "./inflow";
  * ends where it has lost it. One exception is deliberate: a parent map's named river
  * continues on a finer map whatever its water there, because named things persist.
  */
-function buildChannels(map: PhysicalField): Band {
-  const channels = workingArray(map, "uint8", "river:channels");
-  for (let i = 0; i < map.mesh.count; i++)
-    if (map.WaterKindCodes.get(i) === 0 && map.FlowingMonths.get(i) > 0) channels.set(i, 1);
-  return channels;
-}
-function strahlerOrder(largest: number, count: number): number {
-  return largest === 0 ? 1 : count >= 2 ? largest + 1 : largest;
-}
-function strahlerOrders(map: PhysicalField, order: Band, channels: Band) {
-  const largest = workingArray(map, "int32", "river:largest"),
-    count = workingArray(map, "int32", "river:count");
-  for (let n = 0; n < order.length; n++) {
-    const i = order.get(n),
-      channel = channels.get(i) !== 0,
-      conduit = !channel && map.WaterKindCodes.get(i) === 2 && largest.get(i) > 0;
-    if (!channel && !conduit) continue;
-    const riverOrder = strahlerOrder(largest.get(i), count.get(i));
-    if (channel) map.RiverOrders.set(i, riverOrder);
-    const target = map.FlowTargets.get(i);
-    if (target < 0) continue;
-    if (riverOrder > largest.get(target)) {
-      largest.set(target, riverOrder);
-      count.set(target, 1);
-    } else if (riverOrder === largest.get(target)) count.add(target, 1);
-  }
-  releaseWorking(map, largest, count);
-}
 export function carriesSpine(map: PhysicalField, source: number, target: number): boolean {
   return (
     map.RiverOrders.get(source) > 0 ||
@@ -76,22 +51,53 @@ export function riverNetwork(
   map: PhysicalField,
   c: PhysicalContext,
   incoming?: Band,
-  /** Where each of a parent map's rivers that continue here enters. */
-  continuingHeads: readonly number[] = [],
   entering: EnteringRivers = {}
 ) {
-  map.RiverOrders.fill(0);
   const order = sourceToOutletOrder(map);
   gatherCatchments(map, order, entering.catchment);
   gatherYear(map, c, order, incoming);
-  seasonalFlows(map, c, order, incoming, entering.steady);
-  const channels = buildChannels(map);
-  retainChannels(map, channels, continuingHeads);
-  strahlerOrders(map, order, channels);
-  // The rivers are kept as things: this pass's courses are carried onto the map's reaches.
-  keepReaches(map, c, channels);
+  const monthly = seasonalFlows(map, c, order, incoming, entering.monthly);
+  const namedHeads = [...map.rivers.reaches.values()]
+    .filter((reach) => reach.river)
+    .map((reach) => reach.cells[0]);
+  evolveNetwork(map, order, monthly, namedHeads, entering.channelLength);
   spineMasks(map);
-  releaseWorking(map, order, channels);
+  releaseWorking(map, order, ...monthly);
+}
+
+function evolveNetwork(
+  map: PhysicalField,
+  order: Band,
+  monthly: Band[],
+  heads: readonly number[],
+  channelLength?: Pick<Band, "get">
+) {
+  const sizes = riverSizes(map.scale),
+    forced = new Uint8Array(map.mesh.count),
+    origins = channelLength ? channelOrigins(map, order, channelLength) : undefined;
+  for (const head of heads)
+    for (let cell = head; cell >= 0 && !forced[cell]; cell = map.FlowTargets.get(cell)) {
+      if (map.WaterKindCodes.get(cell) === 1) break;
+      forced[cell] = 1;
+    }
+  advanceReaches(map.rivers, {
+    count: map.mesh.count,
+    order: Int32Array.from({ length: order.length }, (_, n) => order.get(n)),
+    next: (cell) => map.FlowTargets.get(cell),
+    land: (cell) => map.WaterKindCodes.get(cell) === 0,
+    resolved: (cell) =>
+      forced[cell] > 0 ||
+      (gathered(map.CatchmentArea.get(cell), sizes, map.mesh.area(cell)) &&
+        monthly.some((flow) => flow.get(cell) >= sizes.discharge)),
+    flow: (cell, month) => monthly[month].get(cell),
+    bed: (cell) => currentBed(map, cell),
+    catchment: (cell) => map.CatchmentArea.get(cell),
+    discharge: sizes.discharge,
+    epoch: map.CompletedEpochCount,
+    newHead: origins ? (cell) => origins[cell] > 0 || forced[cell] > 0 : undefined,
+  });
+  markDrawnReaches(map);
+  projectRivers(map);
 }
 
 /**
@@ -106,10 +112,11 @@ function gatherCatchments(map: PhysicalField, order: Band, beyond?: Band) {
 }
 /** What the map a river comes from says of it, at the cell where it enters this one. */
 export interface EnteringRivers {
-  /** What still enters in the river's driest month, in cubic metres a second. */
-  steady?: Band;
   /** The catchment the river drains beyond this map, in square metres. */
   catchment?: Band;
+  monthly?: readonly Band[];
+  /** Captured unresolved channel length, used only for the initial finer realization. */
+  channelLength?: Pick<Band, "get">;
 }
 /**
  * The water each cell gives its river through the year, and what rivers bring in across the
@@ -140,9 +147,11 @@ export function gatherYear(map: PhysicalField, c: PhysicalContext, order: Band, 
 function gatherMean(map: PhysicalField, c: PhysicalContext, order: Band) {
   const pass = waterPassageParts(map, c),
     left = { bedLoss: 0, withdrawal: 0, inflow: 0, spill: 0, mouth: 0, leaving: 0, pan: 0 };
+  map.SeepageRecharge.fill(0);
   gatherDown(order, map.FlowTargets, map.FlowAccumulation, (i, received) => {
     const parts = pass(i, received);
     left.bedLoss += parts.bed;
+    map.SeepageRecharge.set(i, (parts.bed * 365.25 * 24 * 3600 * 1000) / map.mesh.area(i));
     left.withdrawal += parts.drawn;
     let flow = parts.passed;
     if (map.LakeOutletTargets.get(i) >= 0) {
@@ -162,6 +171,9 @@ function gatherMean(map: PhysicalField, c: PhysicalContext, order: Band) {
     whole = can.evaporation + can.seepage;
   moveFlow(map, "lakeEvaporation", whole > 0 ? (kept * can.evaporation) / whole : kept);
   moveFlow(map, "lakeSeepage", whole > 0 ? (kept * can.seepage) / whole : 0);
+  for (let cell = 0; cell < map.mesh.count; cell++)
+    if (map.WaterKindCodes.get(cell) === 2 && whole > 0)
+      map.SeepageRecharge.add(cell, (c.Profile.LakeInfiltrationLoss * kept) / whole);
 }
 /**
  * Where a cell's water ends, if it ends here: at the sea or the map's edge, in a lake with no
@@ -183,13 +195,15 @@ function seasonalFlows(
   c: PhysicalContext,
   order: Band,
   incoming?: Band,
-  steadyIncoming?: Band
+  exactIncoming?: readonly Band[]
 ) {
   const water = ask(map, "surfaceWater", c),
     pass = waterPassage(map, c),
     each = waterYearOf(map),
     flow = workingArray(map, "float64", "river:month-flow"),
-    river = riverSizes(map.scale);
+    monthly = Array.from({ length: months }, (_, n) =>
+      workingArray(map, "float64", `river:flow-${n}`)
+    );
   map.FloodFlow.fill(0);
   map.PerennialFlow.fill(Infinity);
   map.FlowingMonths.fill(0);
@@ -201,37 +215,20 @@ function seasonalFlows(
           // Springs and melt come steadily; the surface gives what this month gives.
           Math.max(0, water.get(i) - map.Runoff.get(i)) + each[month].get(i) * months,
           map.mesh.area(i)
-        ) + enteringInMonth(each, i, month, incoming?.get(i) ?? 0, steadyIncoming)
+        ) + (exactIncoming ? exactIncoming[month].get(i) : (incoming?.get(i) ?? 0))
       );
     gatherDown(order, map.FlowTargets, flow, (i, received) => {
       // A lake evens out the year: its outlet runs at the year's overflow in every month.
       const carried =
         map.LakeOutletTargets.get(i) >= 0 ? map.FlowAccumulation.get(i) : pass(i, received);
-      noteMonth(map, i, carried, river);
+      monthly[month].set(i, carried);
+      if (carried > map.FloodFlow.get(i)) map.FloodFlow.set(i, carried);
+      if (carried < map.PerennialFlow.get(i)) map.PerennialFlow.set(i, carried);
       return carried;
     });
   }
   for (let i = 0; i < map.mesh.count; i++)
     if (!Number.isFinite(map.PerennialFlow.get(i))) map.PerennialFlow.set(i, 0);
   releaseWorking(map, flow);
-}
-/**
- * One month's flow at a cell, kept as its greatest and least month, and counted as a month
- * in flow when it is a river's: enough water, gathered from ground the map shows.
- */
-function noteMonth(map: PhysicalField, i: number, carried: number, river: RiverSizes) {
-  if (carried > map.FloodFlow.get(i)) map.FloodFlow.set(i, carried);
-  if (carried < map.PerennialFlow.get(i)) map.PerennialFlow.set(i, carried);
-  if (carried >= river.discharge && gathered(map.CatchmentArea.get(i), river))
-    map.FlowingMonths.add(i, 1);
-}
-type RiverSizes = ReturnType<typeof riverSizes>;
-/** Captured named rivers remain channels along their actual present route. */
-function retainChannels(map: PhysicalField, channels: Band, heads: readonly number[]) {
-  for (const head of heads)
-    for (let cell = head; cell >= 0; cell = map.FlowTargets.get(cell)) {
-      const water = map.WaterKindCodes.get(cell);
-      if (water === 1 || channels.get(cell)) break;
-      if (water === 0) channels.set(cell, 1);
-    }
+  return monthly;
 }

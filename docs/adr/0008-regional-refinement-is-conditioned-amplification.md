@@ -35,9 +35,8 @@ The regional coordinator supplies ordering and local work exposure.
 
 A specialization keeps the shared consumer contract. Regional drainage can supply
 captured incoming rivers to the shared water owners; incision, groundwater and
-sediment still read the ordinary routing fields. Regional climate starts with captured
-atmospheric inputs and resolves their response to current terrain. It does not
-restore soil, water or ice from the capture.
+sediment read shared river records and routing quantities. Regional climate starts with
+captured atmospheric inputs and resolves their response to current terrain.
 
 New influences join shared question responders. New materials use existing Ground
 responses and transfers. A new carrier still needs an explicit representation and
@@ -57,9 +56,14 @@ quantities adjust for represented area during sampling, and material packages us
 There is no separate regional channel allowlist. Retained ice evidence survives thaw, and the atmosphere carries its actual
 applied heat and fog operands for replacement at the child's present.
 
-Initial local relief resolves detail through the drainage network and reached
-material. Ground displacement moves retained contacts, and excavation exposes and
-transfers the material it reaches. This realization runs once. Subsequent rounds
+Initial local relief starts at the captured surface. Complete retained beds supply their
+inclined contacts before drainage organization asks which faces yield. Valley placement
+resolves the captured cut share through connected, material-responsive ground; contacts
+then resolve from the same captured beds on the occupied facets. Grain, bed dip and exposed
+support act through the ordinary Ground responses. Captured faults and sheet contacts
+provide local fracture organization without replaying tectonic motion.
+Ground displacement moves retained contacts, and excavation exposes and
+transfers the material it reaches. This initialization runs once. Subsequent rounds
 retain and work its result through shared erosion, mass wasting, sediment, coast,
 ice and groundwater owners; they do not rebuild it from a parent-height fit.
 

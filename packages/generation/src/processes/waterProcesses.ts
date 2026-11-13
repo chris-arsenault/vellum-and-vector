@@ -122,6 +122,8 @@ export const rivers = fieldQuery(
       orders,
       "CatchmentArea",
       "FlowAccumulation",
+      "SmallChannelLength",
+      "SeepageRecharge",
       "FloodFlow",
       "PerennialFlow",
       "FlowingMonths",

@@ -2,7 +2,7 @@
 import { CellList, MapScale, radixOrder } from "@atlas/domain";
 import { rockCatalogue } from "../rock/rockCatalogue";
 import { hardenRock } from "../rock/rockField";
-import { onRiver } from "../water/riverKeeping";
+import { onRiver, waterAt } from "../water/riverKeeping";
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { clamp, round, units } from "./math";
@@ -218,7 +218,7 @@ function riversNear(map: PhysicalField, head: number, reach: number, floor: Set<
   // Largest flow first; ties keep ascending cell order.
   const cells = candidates.finish(),
     byFlow = radixOrder(
-      Float64Array.from(cells, (i) => map.FlowAccumulation.get(i)),
+      Float64Array.from(cells, (i) => waterAt(map, i)),
       true
     );
   return Array.from(byFlow, (k) => cells[k]);
@@ -226,15 +226,15 @@ function riversNear(map: PhysicalField, head: number, reach: number, floor: Set<
 const riverAt = (map: PhysicalField, i: number) => ({
   x: map.mesh.x(i),
   y: map.mesh.y(i),
-  accumulation: map.FlowAccumulation.get(i),
+  accumulation: waterAt(map, i),
 });
 /** The largest river already running through the floor, if any, is the present capture. */
 function heldRiver(map: PhysicalField, floor: Set<number>, record: LandmarkRecord) {
   let held = 0;
   record.capture = null;
   for (const i of floor)
-    if (onRiver(map, i) && map.FlowAccumulation.get(i) > held) {
-      held = map.FlowAccumulation.get(i);
+    if (onRiver(map, i) && waterAt(map, i) > held) {
+      held = waterAt(map, i);
       record.capture = riverAt(map, i);
     }
   return held;
@@ -265,7 +265,7 @@ export function captureInto(map: PhysicalField, record: LandmarkRecord, target: 
     steps = 4 * Math.ceil(map.scale.cellCount(reach)) + 8;
   if (!anyRiver(map)) return 0;
   for (const best of riversNear(map, head, reach, floor)) {
-    if (map.FlowAccumulation.get(best) <= held) break;
+    if (waterAt(map, best) <= held) break;
     if (flowsInto(map, best, floor, steps)) return 0;
     const corridor = cutCorridor(map, best, head, target.floorWidth);
     if (!corridor) continue;

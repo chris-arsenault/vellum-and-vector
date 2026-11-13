@@ -4,6 +4,7 @@ import type { PhysicalContext } from "../world/context";
 import { meshWorldUnitNoise as unitNoise, hashUnit } from "../world/noise";
 import { MultiKeyHeap, type Band } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "../world/physicalNumerics";
+import { drainageBed } from "./riverBed";
 
 type Front = { i: number; priority: number; cost: number; tie: number };
 /** Boundary supply enters this map; it must not also be an open drain. */
@@ -38,6 +39,7 @@ function enqueueNeighbor(
   front: Front,
   edge: number,
   resistance: Band,
+  bed: Band,
   priorities: Band,
   costs: Band,
   add: (entry: Front) => void,
@@ -47,7 +49,7 @@ function enqueueNeighbor(
   if (j < 0) return;
   const rank = map.DrainageRanks.get(j);
   if (rank >= 0 && rank < map.mesh.count) return;
-  const priority = Math.max(map.Elevation.get(j), front.priority);
+  const priority = Math.max(bed.get(j), front.priority);
   const cost =
     priority > front.priority
       ? 0
@@ -56,7 +58,7 @@ function enqueueNeighbor(
   if (priority > held || (priority === held && cost >= costs.get(j))) return;
   if (held === Infinity) {
     map.FloodFillTotal++;
-    if (map.Elevation.get(j) <= front.priority) map.FloodFlatFillTotal++;
+    if (bed.get(j) <= front.priority) map.FloodFlatFillTotal++;
   }
   priorities.set(j, priority);
   costs.set(j, cost);
@@ -73,7 +75,8 @@ export function drainageConditioning(map: PhysicalField, c: PhysicalContext, inc
   map.DrainageParents.fill(-1);
   map.DrainageRanks.fill(-1);
   const priorities = workingArray(map, "float64", "drainage:priorities").fill(Infinity),
-    costs = map.coverage.copyBand(priorities);
+    costs = map.coverage.copyBand(priorities),
+    bed = workingValues(map, "float64", "drainage:bed", (cell) => drainageBed(map, cell));
   const resistance = corridorResistance(map, c);
   // Lowest fill height, then cheapest corridor, then the seeded tie, then the lower cell.
   const queue = new MultiKeyHeap(["asc", "asc", "asc"]);
@@ -81,7 +84,7 @@ export function drainageConditioning(map: PhysicalField, c: PhysicalContext, inc
     map,
     (i) => {
       map.DrainageRanks.set(i, 2147483647);
-      priorities.set(i, map.Elevation.get(i));
+      priorities.set(i, bed.get(i));
       costs.set(i, 0);
       queue.push(i, priorities.get(i), 0, 0);
     },
@@ -107,6 +110,7 @@ export function drainageConditioning(map: PhysicalField, c: PhysicalContext, inc
         front,
         edge,
         resistance,
+        bed,
         priorities,
         costs,
         (entry) => queue.push(entry.i, entry.priority, entry.cost, entry.tie),
@@ -115,5 +119,5 @@ export function drainageConditioning(map: PhysicalField, c: PhysicalContext, inc
   }
   if (rank !== map.mesh.count)
     throw new Error("Priority flood did not visit the complete physical graph.");
-  releaseWorking(map, priorities, costs, resistance);
+  releaseWorking(map, priorities, costs, resistance, bed);
 }

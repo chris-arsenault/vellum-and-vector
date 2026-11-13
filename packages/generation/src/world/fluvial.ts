@@ -13,6 +13,8 @@ import { sourceToOutletOrder, waterGathered } from "./flowGraph";
 import { cellTravel } from "./physicalMetric";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { referenceWaterPassage } from "../water/waterQuantity";
+import { reachAt, waterAt } from "../water/riverKeeping";
+import { depthRateToDischarge } from "./dimensions";
 
 function transportDistance(map: PhysicalField, i: number, previous: Band) {
   const target = map.FlowTargets.get(i),
@@ -64,32 +66,11 @@ function releaseRiverLoad(map: PhysicalField, cell: number, material: MaterialLa
   if (isOpenOutlet(map, cell)) carryOut(map, material.depth, "river-load", material);
   else loadOf(map).add(cell, material);
 }
-/**
- * The share of a river's load that stays where it meets the sea: what waves and currents do
- * not carry off. A sheltered, still shore keeps nearly all of it and an exposed one little.
- */
-export const mouthKeeps = (waveExposure: number, currentStrength: number) =>
-  (1 - Math.min(1, Math.max(0, waveExposure / 1000))) *
-  (1 - Math.min(1, Math.max(0, currentStrength / 1000)));
-/**
- * What a river brings to the sea settles on the floor at its mouth, as high as the sea's
- * surface and no higher. A floor built to the surface is new land: a delta, which the river
- * then crosses to build the next. What waves and currents take, and what does not fit, goes
- * out to sea.
- */
-function settleAtSea(map: PhysicalField, i: number, moving: MaterialLoad) {
-  const load = moving.amount(i);
-  if (load <= 0) return;
-  const area = map.mesh.area(i),
-    kept = load * mouthKeeps(map.WaveExposure.get(i), map.OceanCurrentStrength.get(i)),
-    fits = Math.min(
-      MapScale.inUnits(kept / area, "native"),
-      Math.max(0, map.EffectiveSeaLevel - map.Elevation.get(i))
-    ),
-    laid = fits > 0 ? deposit(map, i, fits, "river-load", "load", moving.get(i)) : 0;
-  moving.take(i, MapScale.metres(laid, "native") * area);
-  const rest = moving.amount(i);
-  if (rest > 0) carryOut(map, rest, "river-load", moving.take(i, rest), i);
+function carriedWater(map: PhysicalField, cell: number, reference: number, fallback: Band) {
+  const reach = reachAt(map, cell);
+  return reach && !reach.dry
+    ? waterAt(map, cell) / depthRateToDischarge(reference, 1)
+    : fallback.get(cell);
 }
 export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
   const moving = new MaterialLoad(map, "sediment:moving"),
@@ -112,7 +93,8 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
     const i = order.get(n),
       area = map.mesh.area(i);
     if (map.WaterKindCodes.get(i) === 1) {
-      settleAtSea(map, i, moving);
+      const arriving = moving.amount(i);
+      carryOut(map, arriving, "river-load", moving.take(i, arriving), i);
       // What the sea's own floor has loose stays the sea's.
       carryOut(map, supply.amount(i), "river-load", supply.take(i, supply.amount(i)), i);
       continue;
@@ -125,7 +107,8 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
     // carry settles over the distance it takes to drop out, which is what builds plains and deltas.
     const still =
       map.WaterKindCodes.get(i) === 2 || (target >= 0 && map.WaterKindCodes.get(target) === 1);
-    const capacity = still ? 0 : carries.get(i) * water.get(i) * c.Span;
+    const routed = carriedWater(map, i, p.FluvialReferenceRunoff, water),
+      capacity = still ? 0 : carries.get(i) * routed * c.Span;
     const distance = transportDistance(map, i, previous);
     const capture = -Math.expm1(
       (Math.log1p(-p.SedimentTransportFraction / 1000) * distance) / p.SedimentDepositionLength

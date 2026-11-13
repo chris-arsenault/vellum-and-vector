@@ -1,6 +1,6 @@
 import { resolutionCells, type AtlasFeature } from "@atlas/domain";
 import { generationBindings } from "../generationBindings";
-import { onRiver } from "../water/riverKeeping";
+import { onRiver, waterAt } from "../water/riverKeeping";
 import { generationFeatures, removeGenerationFeature } from "../generationFeatures";
 import { generationNetworks, removeGenerationReach } from "../generationNetworks";
 import { knownPlaces, type KnownPlace } from "./placeRegistry";
@@ -71,7 +71,7 @@ function damSite(map: PhysicalField, place: KnownPlace) {
     flow = 0;
   const consider = (i: number) => {
     if (i < 0 || !onRiver(map, i) || map.WaterKindCodes.get(i) !== 0) return;
-    const carried = map.FlowAccumulation.get(i);
+    const carried = waterAt(map, i);
     if (carried > flow) [best, flow] = [i, carried];
   };
   for (const cell of place.cells) {

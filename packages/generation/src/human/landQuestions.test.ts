@@ -10,6 +10,7 @@ import { units } from "../world/math";
 import { createWorldMesh } from "../world/worldMesh";
 import { layHumanLayer } from "./layerOperations";
 import { travelStep } from "./travel";
+import { addReach } from "../water/reachEvolution";
 
 const context = () => physicalContext(1, 0, atlasPhysicalProfile({}, {}, MapScale.reference()));
 /** Warm, watered, deep-soiled open ground with a little grass and wood on every cell. */
@@ -58,7 +59,9 @@ it("makes a worn way and a river easier going than woods", () => {
   const map = fertile(),
     c = context();
   map.WalkedRoute.set(1, 1e9);
-  map.RiverOrders.set(2, 1);
+  const reach = addReach(map.rivers, [2]);
+  reach.drawn = true;
+  reach.monthly.fill(20);
   const friction = ask(map, "travelFriction", c);
   expect(friction.get(0)).toBeCloseTo(1.2);
   expect(friction.get(1)).toBeCloseTo(0.6);

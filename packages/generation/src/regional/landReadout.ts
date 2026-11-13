@@ -3,7 +3,7 @@ import type { MapProcessContext } from "../process";
 import { nativeContext } from "../world/context";
 import type { PhysicalField } from "../world/field";
 import { MapScale } from "@atlas/domain";
-import { onRiver, reachAt, reachesOf } from "../water/riverKeeping";
+import { onRiver, reachAt, reachesOf, riverSample } from "../water/riverKeeping";
 import { soilWaterCapacity } from "../water/soilWater";
 import { months } from "../water/waterBalance";
 import { waterAccountLine } from "../water/waterLedger";
@@ -55,7 +55,7 @@ export function landReadout(state: RegionalState, context: MapProcessContext) {
   for (let cell = 0; cell < map.mesh.count; cell++) {
     if (!isContent(map.mesh, cell)) continue;
     const area = map.mesh.area(cell),
-      flowing = map.FlowingMonths.get(cell);
+      flowing = riverSample(map, cell, "months");
     all += area;
     if (map.WaterKindCodes.get(cell) !== 0) continue;
     land += area;

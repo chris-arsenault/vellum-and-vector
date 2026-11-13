@@ -168,8 +168,7 @@ export const ford: PoiEntry = {
       if (!settlementWithin(state, place.anchor, 4 * around(state))) return { fate: "ends" };
       const earned =
         travellersOf(state, place) >= roadTravellers &&
-        fieldOf(state).FlowAccumulation.get(place.anchor) >=
-          fieldOf(state).scale.resolveMeasure(bridgeFlow);
+        dischargeAt(state, place.anchor) >= fieldOf(state).scale.resolveMeasure(bridgeFlow);
       return earned ? { fate: "becomes", kind: "bridge" } : { fate: "persists" };
     },
   },

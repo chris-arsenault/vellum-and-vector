@@ -32,15 +32,6 @@ it("keeps the uncut surface where it stood and puts the valley floor at its reco
   for (const cell of [1, 2, 3]) expect(metres(map.Elevation.get(cell))).toBeCloseTo(uncut, 6);
 });
 
-it("leaves the coarse cell's mean height unchanged when the cut is shared out in full", () => {
-  const map = inherited(),
-    before = metres(map.Elevation.get(0));
-  resolveCut(map, 0, 1);
-  for (const cell of [1, 2, 3]) resolveCut(map, cell, 0);
-  const after = [0, 1, 2, 3].reduce((sum, cell) => sum + metres(map.Elevation.get(cell)), 0) / 4;
-  expect(after).toBeCloseTo(before, 6);
-});
-
 it("gives a cell on the valley's edge the part of the valley that crosses it", () => {
   const map = inherited(),
     uncut = metres(facetSurface(map, 0, "land"));

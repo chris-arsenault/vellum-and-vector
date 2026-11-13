@@ -1,12 +1,9 @@
 import { closedByAridity } from "../water/closedBasin";
-import { fractalNoise } from "../world/noise";
 import { capturedSinks, connectedSea, smoothedBase } from "./base";
 import { influenceCosts } from "./causes/registry";
 import { evolveNetwork } from "./evolution";
-import { distance, frameEdge, isContent, neighborsOf, positionOf, regionalSpan } from "./lattice";
-import { materialResistance } from "./material";
-import { clamp, type NetworkWork, type RegionalState } from "./state";
-import { ask } from "../coupling/answers";
+import { distance, frameEdge, isContent, neighborsOf, regionalSpan } from "./lattice";
+import { type NetworkWork, type RegionalState } from "./state";
 import { physicalContext } from "../world/context";
 import { waterPassage } from "../water/waterQuantity";
 import { gathered, riverSizes } from "../water/riverSize";
@@ -14,17 +11,6 @@ import { onParentRiver } from "./parentRivers";
 
 /** Resistance near a known peak or cone, so channels cut around it and it stands on a divide. */
 const peakRepulsion = 12;
-/**
- * Heterogeneity of the ground's erodibility: it decides between valleys the organizing terms
- * leave equal. On a plain nothing else does, and the water finds its way through every local
- * unevenness; on a slope the fall decides.
- */
-const steepRoughness = 0.5,
-  flatRoughness = 1.6,
-  flatGradient = 0.01,
-  // The longest unevenness of the ground's erodibility, as a number of the map's samples.
-  roughnessSpan = 20,
-  roughnessOctaves = 4;
 const referenceRunoff = 0.0000001;
 export const secondsPerYear = 365.25 * 24 * 3600;
 
@@ -61,7 +47,6 @@ export function growNetwork(state: RegionalState): NetworkWork {
     area: new Float64Array(n),
     flow: new Float64Array(n),
     inflow: new Float64Array(n),
-    steadyInflow: new Float64Array(n),
     inflowCatchment: new Float64Array(n),
     channel: new Uint8Array(n),
     level: new Float64Array(n),
@@ -72,7 +57,6 @@ export function growNetwork(state: RegionalState): NetworkWork {
   };
   for (const entry of evidence.entries) {
     network.inflow[entry.cell] = entry.discharge;
-    network.steadyInflow[entry.cell] = entry.least;
     network.inflowCatchment[entry.cell] = entry.catchment;
   }
   const root = networkRoots(state, network);
@@ -142,7 +126,8 @@ export function gatherFlow(state: RegionalState, network: NetworkWork) {
   const map = state.physical.map,
     mesh = map.mesh,
     context = physicalContext(state.regional.input.seed, 0, state.physical.profile),
-    supply = ask(map, "surfaceWater", context),
+    // Initial organization reads captured quantities; development runs the current budget later.
+    supply = map.Runoff,
     pass = waterPassage(map, context),
     { receiver, order, count, area, flow, inflow, channel } = network;
   area.fill(0);
@@ -166,28 +151,11 @@ export function gatherFlow(state: RegionalState, network: NetworkWork) {
   for (let k = 0; k < count; k++) {
     const i = order[k];
     channel[i] = Number(
-      gathered(area[i], river) &&
-        flow[i] >= river.discharge * slopeFactor(mesh, network, i) &&
+      gathered(area[i], river, mesh.contentArea(i)) &&
+        flow[i] >= river.discharge &&
         network.lake[i] < 0
     );
   }
-}
-/** Gradient of the captured base at which the channel threshold is the reference. */
-const referenceGradient = 0.02;
-/**
- * The river network's slope factor (checklist row): gullies start earlier on steep ground
- * and later on plains, so a channel on a slope five times the reference needs less than half
- * the flow and one on a plain up to twice as much.
- */
-function slopeFactor(
-  mesh: RegionalState["physical"]["map"]["mesh"],
-  network: NetworkWork,
-  i: number
-) {
-  const j = network.receiver[i];
-  if (j < 0) return 1;
-  const gradient = Math.abs(network.base[i] - network.base[j]) / distance(mesh, i, j);
-  return clamp(Math.sqrt(referenceGradient / Math.max(1e-4, gradient)), 0.5, 2);
 }
 
 /** Mark the tree path from a cell down to the nearest channel as channel: the stream it stands on. */
@@ -203,49 +171,15 @@ export function promoteChannel(state: RegionalState, cell: number) {
 
 /**
  * The cost of running water through a cell: material resistance (bands, rock, fractures),
- * the heterogeneity that decides between routes the organizing terms leave equal, repulsion
- * around the character's cones, and the established features' influence (peak massifs,
- * course corridors, river seats) through the cause registry.
+ * established features' influence (peak massifs, course corridors, river seats) and repulsion
+ * around captured cones. Directional material resistance is evaluated on each traversed face.
  */
 function cellCosts(state: RegionalState, sea: Uint8Array, base: Float64Array) {
-  const map = state.physical.map,
-    mesh = map.mesh,
-    n = mesh.count,
-    cost = new Float64Array(n),
-    flat = flatness(state, base);
-  for (let i = 0; i < n; i++) {
-    if (sea[i]) continue;
-    const p = positionOf(mesh, i),
-      amplitude = steepRoughness + (flatRoughness - steepRoughness) * flat[i],
-      roughness = fractalNoise(
-        p.x,
-        p.y,
-        state.regional.input.seed ^ 0x3a27,
-        map.scale.cells(roughnessSpan),
-        roughnessOctaves
-      );
-    cost[i] = materialResistance(state, i) * Math.exp(amplitude * roughness);
-  }
+  const cost = new Float64Array(base.length).fill(1);
+  for (let i = 0; i < sea.length; i++) if (sea[i]) cost[i] = 0;
   influenceCosts(state, cost);
   for (const cone of state.regional.character!.cones) repel(state, cost, cone.cell, cone.radius);
   return cost;
-}
-
-/** How flat the captured base is at each cell: one on a plain, zero on a slope. */
-function flatness(state: RegionalState, base: Float64Array) {
-  const mesh = state.physical.map.mesh,
-    around = new Int32Array(mesh.stride),
-    flat = new Float64Array(mesh.count);
-  for (let i = 0; i < mesh.count; i++) {
-    const m = neighborsOf(mesh, i, around);
-    let steepest = 0;
-    for (let k = 0; k < m; k++) {
-      const j = around[k];
-      steepest = Math.max(steepest, Math.abs(base[j] - base[i]) / distance(mesh, i, j));
-    }
-    flat[i] = clamp(1 - steepest / flatGradient);
-  }
-  return flat;
 }
 
 /** Cells within `reach` of a centre, by breadth-first walk, with their distances. */

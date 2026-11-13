@@ -181,7 +181,9 @@ function captureContext(
         ...structuredClone(drainage),
         id: `drainage:${area.id}`,
         areaId: area.id,
+        input: true,
         reaches: captureDrainage(drainage.reaches, area, ids),
+        kept: captureWater(drainage.kept, area),
       },
     });
   const landmarks = world.landmarks.filter((l) => spatial.intersects(l.geometry, area.footprint)),
@@ -219,6 +221,24 @@ function captureContext(
       },
     });
   }
+}
+function captureWater(
+  network: import("@atlas/domain").RetainedRiverNetwork | undefined,
+  area: Area
+) {
+  if (!network) return undefined;
+  const touches = spatial.intersectionPredicate(area.footprint),
+    present = (course: [number, number][]) =>
+      course.length > 1 && touches({ type: "LineString", coordinates: course });
+  return {
+    ...structuredClone(network),
+    reaches: structuredClone(
+      network.reaches.filter(
+        (reach) => present(reach.course) || reach.former.some((old) => present(old.course))
+      )
+    ),
+    entries: [],
+  };
 }
 function captureDrainage(
   reaches: import("@atlas/domain").DrainageReach[],

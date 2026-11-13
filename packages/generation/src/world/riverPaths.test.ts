@@ -4,6 +4,8 @@ import { createWorldMesh } from "./worldMesh";
 import { createField, physicalBands } from "./field";
 import { nearestTriangle, type TriangularLattice } from "./mesh";
 import { createRiverPaths, riverPath } from "./riverPaths";
+import { addReach } from "../water/reachEvolution";
+import { captureRivers } from "../water/networkResources";
 
 function network() {
   const map = createField(createWorldMesh([-100_000, -100_000, 100_000, 100_000], 1024, 0));
@@ -45,6 +47,20 @@ function network() {
   const mouth = main.at(-1)!;
   map.WaterKindCodes.set(mouth, 1);
   map.RiverOrders.set(mouth, 0);
+  [main.slice(0, join), branch.slice(0, -1), main.slice(join, -1)].forEach((cells, n) => {
+    const reach = addReach(map.rivers, cells);
+    reach.downstream = n < 2 ? 3 : null;
+    reach.order = n < 2 ? 1 : 2;
+    reach.drawn = true;
+  });
+  for (const reach of map.rivers.reaches.values())
+    reach.cells.forEach((cell, at) => {
+      reach.monthly.fill(map.FlowAccumulation.get(cell), at * 12, (at + 1) * 12);
+      reach.width[at] = map.RiverWidth.get(cell);
+      reach.depth[at] = map.RiverDepth.get(cell);
+      reach.bed[at] = map.DrainageElevations.get(cell);
+      reach.catchment[at] = map.CatchmentArea.get(cell);
+    });
   return { map, main, branch, join, mouth };
 }
 function turns(coordinates: number[][]) {
@@ -144,13 +160,22 @@ it("keeps station elevations in the absolute datum used by geographic node posit
   map.BaseSeaLevel = 100 * 1024;
   map.EffectiveSeaLevel = 150 * 1024;
   const result = riverPath(map, createRiverPaths(map), main);
-  expect(result.profiles.elevations[0]).toBe(map.DrainageElevations.get(main[0]) / 1024);
+  const kept = [...map.rivers.reaches.values()][0];
+  expect(result.profiles.elevations[0]).toBe(kept.bed[0] / 1024 + kept.depth[0]);
 });
 function physicalData(map: import("./field").PhysicalField) {
   const data: Record<string, unknown> = {};
   for (const [name, band] of physicalBands(map)) data[name] = Array.from(band);
   for (const [name, value] of Object.entries(map)) {
-    if (!(name in data) && name !== "coverage" && name !== "mesh" && typeof value !== "function")
+    if (name === "rivers") {
+      data[name] = captureRivers(map);
+      continue;
+    }
+    if (
+      !(name in data) &&
+      !["coverage", "mesh", "water"].includes(name) &&
+      typeof value !== "function"
+    )
       data[name] = structuredClone(value);
   }
   return data;

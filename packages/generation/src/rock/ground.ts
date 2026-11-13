@@ -125,7 +125,6 @@ export class Ground {
       sourceY = mesh.y(i),
       layers = [...this.section(i, "land"), ...this.section(i, "cut")],
       bearing = this.bearing(i, mix);
-    let unexposed: number | undefined;
     return (neighbor: number) => {
       let response = 0,
         extent = 0;
@@ -145,7 +144,7 @@ export class Ground {
         response += materialGives(mix, layer, layer.medium === "loose", x, y) * weight;
         extent += weight;
       }
-      return extent > 0 ? (response / extent) * bearing : (unexposed ??= this.gives(i, mix));
+      return extent > 0 ? (response / extent) * bearing : this.gives(i, mix, [x, y]);
     };
   }
   /** A finite slab can fail above an exposed weak foundation, independently on each surface. */
@@ -333,25 +332,29 @@ export class Ground {
    * What this cell's surface gives up to a mix, against ordinary rock's 1, without acting on it:
    * loose cover counts for as much of the surface as it covers.
    */
-  gives(i: number, mix: CompiledMix) {
+  gives(i: number, mix: CompiledMix, direction: GroundDirection = [0, 0]) {
     const map = this.map,
       bearing = this.bearing(i, mix),
       share = cutShare(map, i),
       beneath =
         bearing *
-        ((1 - share) * this.facetGives(i, mix, "land") + share * this.facetGives(i, mix, "cut")),
+        ((1 - share) * this.facetGives(i, mix, "land", direction) +
+          share * this.facetGives(i, mix, "cut", direction)),
       skin = this.soilShare(i);
     return beneath + (this.rate(mix, soil.code, soil.resistance, bearing) - beneath) * skin;
   }
-  private facetGives(i: number, mix: CompiledMix, facet: GroundFacet) {
-    const rock = materialGives(mix, readLayer(this.map, i, 0, facet)),
+  private facetGives(i: number, mix: CompiledMix, facet: GroundFacet, direction: GroundDirection) {
+    const rock = materialGives(mix, readLayer(this.map, i, 0, facet), false, ...direction),
       cover = coverColumn(facet),
       share = clamp(
         columnThickness(this.map, i, cover) / units(this.map.scale.length(fullCover)),
         0,
         1
       );
-    return rock + (materialGives(mix, readLayer(this.map, i, 0, cover), true) - rock) * share;
+    return (
+      rock +
+      (materialGives(mix, readLayer(this.map, i, 0, cover), true, ...direction) - rock) * share
+    );
   }
   /** Reads the ground with a query. */
   fold<T>(i: number, query: GroundQuery<T>, facet?: GroundFacet): T {

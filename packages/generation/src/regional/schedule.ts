@@ -27,6 +27,7 @@ import { growNetwork } from "./network";
 import { extractPlaces, livePeople, preparePeople } from "./people";
 import { updateSlopes } from "./relief";
 import { startGround } from "./startingGround";
+import { prepareColumns } from "./columns";
 import { deriveMedia } from "./sharedMedia";
 import { ledgerCeilings, ledgerFloors } from "../coupling/fieldContributions";
 import { registerCatalogueCauses } from "../poi/poiCauses";
@@ -258,6 +259,7 @@ function prepareContext(state: RegionalState) {
   state.regional.character = deriveCharacter(state);
   preparePeople(state);
   readEvidence(state);
+  prepareColumns(state);
   growNetwork(state);
   supportFeatures(state);
 }

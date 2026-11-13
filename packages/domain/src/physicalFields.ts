@@ -190,6 +190,7 @@ const metricFields = [
   "FloodRunoff",
   "DryRunoff",
   "WaterRecharge",
+  "SeepageRecharge",
   // Snow that outlasts the year, in mm/year: what the ice is fed.
   "SnowKept",
   // Snow lying on the cell through the year, as a depth of water: part of the water column.
@@ -197,6 +198,8 @@ const metricFields = [
   // Precipitation in mm/year from the downwind air columns before the epoch multiplier.
   "ColumnPrecipitation",
   "FlowAccumulation",
+  // Aggregate unresolved channel length in metres; no course geometry below this map's mesh.
+  "SmallChannelLength",
   // What a river carries in flood and in its driest season, in m³/s, beside its mean.
   "FloodFlow",
   "PerennialFlow",

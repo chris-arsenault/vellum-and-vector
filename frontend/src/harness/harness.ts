@@ -25,8 +25,7 @@ import {
   removeCheckpoint,
   type CheckpointRecord,
 } from "./harnessWorkspace";
-import { quickTerrain } from "./quickTerrain";
-import { groundChangeWatch } from "./groundChange";
+import { quickRegion } from "./quickRegion";
 import { stageRecorder } from "./stageRecord";
 import { channelRanges, fieldInventory, openTerrain, scaleReport, tileTiming } from "./mapReport";
 import { featureReport, mapFeatures } from "./featureReport";
@@ -83,6 +82,8 @@ export interface HarnessOptions {
   cpuProfile: boolean;
   /** Explicit POI catalogue audit; ordinary geography runs do not exercise every place rule. */
   places: boolean;
+  /** Finish physical publication and retain this region for a nested refinement check. */
+  saveQuick: boolean;
 }
 /** The world the harness judges, so a result is not fitted to the app's default seed. */
 const harnessSeed = 271_828;
@@ -112,6 +113,7 @@ const defaults = {
   HARNESS_SEED: String(harnessSeed),
   HARNESS_CPU_PROFILE: "",
   HARNESS_PLACES: "",
+  HARNESS_QUICK_SAVE: "",
 };
 export function harnessOptions(env: Record<string, string | undefined>): HarnessOptions {
   const read = (key: keyof typeof defaults) => env[key] || defaults[key];
@@ -154,6 +156,7 @@ export function harnessOptions(env: Record<string, string | undefined>): Harness
     groundCells: groundProbeCells(read("HARNESS_GROUND_CELLS")),
     cpuProfile: Boolean(read("HARNESS_CPU_PROFILE")),
     places: Boolean(read("HARNESS_PLACES")),
+    saveQuick: Boolean(read("HARNESS_QUICK_SAVE")),
   };
 }
 
@@ -278,7 +281,9 @@ async function ensureRegion(options: HarnessOptions, world: CheckpointRecord, ou
       world.worldId,
       { x: at[0], y: at[1], z: 0 },
       options.regionQuality,
-      recorder.observers
+      recorder.observers,
+      options.domains,
+      world.child ?? world.root
     );
     const record: CheckpointRecord = {
       ...world,
@@ -302,61 +307,6 @@ async function ensureRegion(options: HarnessOptions, world: CheckpointRecord, ou
     }
   }
 }
-
-/**
- * The saved world's region, ground and water only, stopped as soon as they are settled. It
- * leaves out the living landscape, magic, society, publishing and the full report, and it
- * writes a picture and the ground's numbers. For judging the terrain in about a minute.
- */
-async function quickRegion(options: HarnessOptions, out: string) {
-  const world = readCheckpoint(options.world);
-  if (!world) throw new Error(`No saved world named ${options.world}.`);
-  const at = options.regionAt ?? world.position;
-  if (!at) throw new Error("Give HARNESS_REGION_AT=x,y: the world records no highest land.");
-  copyCheckpoint(world.name, quickCheckpoint);
-  const ws = await openHarnessWorkspace(checkpointDirectory(quickCheckpoint)),
-    started = performance.now(),
-    stopProcesses = recordProcesses(options, out, "quick-region");
-  let done = false,
-    stage = 0;
-  const watch = groundChangeWatch();
-  const observers = {
-    inspect(_path: string[], process: string, state: Parameters<typeof quickTerrain>[0]) {
-      const seconds = () => Math.round((performance.now() - started) / 1000);
-      // What each process does to low ground: which one roughens it shows here.
-      if (state.physical) write(out, "ground-changes", watch.look(process, state.physical.map));
-      // The ground as the region starts with it, and again as each round leaves it.
-      if (process === "refinement.relief" || process === "refinement.round")
-        process_report(quickTerrain(state, out, `${process.split(".")[1]}-${stage++}`), seconds());
-      if (process !== quickUntil) return;
-      process_report(quickTerrain(state, out), seconds());
-      done = true;
-    },
-    stop: () => done,
-  };
-  try {
-    await refineRegion(
-      ws,
-      world.worldId,
-      { x: at[0], y: at[1], z: 0 },
-      options.regionQuality,
-      observers,
-      ["physical"]
-    );
-  } catch (error) {
-    if (!done) throw error;
-  } finally {
-    try {
-      stopProcesses();
-    } finally {
-      await ws.close();
-    }
-  }
-}
-const quickCheckpoint = "quick-region",
-  quickUntil = "refinement.refresh";
-const process_report = (report: object, seconds: number) =>
-  process.stdout.write(`\n${seconds} s ${JSON.stringify(report)}\n`);
 
 /** The map's record: scale, fields and layers, channel ranges, features, tiles and images. */
 async function describeMap(record: CheckpointRecord, out: string) {

@@ -7,7 +7,7 @@ import { generationFeatures } from "../generationFeatures";
 import type { GenerationState } from "../process";
 import { cellAt, positionOf } from "../regional/lattice";
 import { groundOf } from "../rock/ground";
-import { onRiver } from "../water/riverKeeping";
+import { onRiver, waterAt } from "../water/riverKeeping";
 import {
   surfaceHardness,
   surfaceKind,
@@ -60,8 +60,7 @@ export const jointedAt = (state: GenerationState, cell: number) =>
 export const rainfallAt = (state: GenerationState, cell: number) =>
   MapScale.metres(fieldOf(state).Rainfall.get(cell), "mm");
 /** River discharge in cubic metres a second. */
-export const dischargeAt = (state: GenerationState, cell: number) =>
-  fieldOf(state).FlowAccumulation.get(cell);
+export const dischargeAt = (state: GenerationState, cell: number) => waterAt(fieldOf(state), cell);
 /** Ice thickness and sediment thickness, in metres. */
 export const iceAt = (state: GenerationState, cell: number) =>
   fieldOf(state).IceThickness.get(cell);

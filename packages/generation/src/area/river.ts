@@ -1,4 +1,5 @@
 import type { AtlasFeature } from "@atlas/domain";
+import { waterAt } from "../water/riverKeeping";
 import {
   generationFeature,
   generationFeatures,
@@ -40,7 +41,7 @@ const areaOf = ({ id, cells }: River): AreaPlace => ({
 function dischargeOf(state: GenerationState, river: AreaPlace) {
   const cells = river.extent.cells ?? [],
     last = cells[cells.length - 1];
-  return state.physical && last !== undefined ? state.physical.map.FlowAccumulation.get(last) : 0;
+  return state.physical && last !== undefined ? waterAt(state.physical.map, last) : 0;
 }
 const greatness = (state: GenerationState, river: AreaPlace) => {
   const flow = dischargeOf(state, river);

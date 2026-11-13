@@ -5,6 +5,7 @@ import {
   regionRefinementInput,
   refinedRegionArea,
   type DrainageReach,
+  type RetainedRiver,
   type Area,
   type DomainWrite,
 } from "@atlas/domain";
@@ -31,6 +32,29 @@ function reach(x: number, downstream: number | null): DrainageReach {
     discharges: [10, 10],
     catchmentAreas: [100, 100],
     featureIds: [],
+  };
+}
+function heldRiver(): RetainedRiver {
+  return {
+    id: 11,
+    river: "long-river",
+    name: "Long River",
+    course: reach(99_000, null).coordinates,
+    downstream: null,
+    order: 2,
+    flow: 0,
+    least: 0,
+    flood: 0,
+    months: 0,
+    dry: true,
+    drawn: true,
+    former: [{ course: reach(30_000, null).coordinates, leftIn: 1 }],
+    monthly: Array(24).fill(0),
+    catchment: [100, 100],
+    bed: [90, 80],
+    width: [5, 6],
+    depth: [1, 1],
+    leakage: [0.1, 0.1],
   };
 }
 async function capturedContext() {
@@ -69,6 +93,7 @@ async function capturedContext() {
         areaId: root.id,
         spaceId: root.spaceId!,
         reaches: [reach(99_000, null), reach(30_000, 2), reach(40_000, null)],
+        kept: { next: 12, entries: [], reaches: [heldRiver()] },
       },
     },
     ...contextSources(root),
@@ -142,6 +167,14 @@ it("captures valid local drainage indexes and links magic to the captured landma
     dependent = source.world.magic.find((s) => s.dependsOn?.length)!;
   expect(drainage.reaches).toHaveLength(2);
   expect(drainage.reaches[0].downstream).toBe(1);
+  expect(drainage.input).toBe(true);
+  expect(drainage.kept?.reaches[0]).toMatchObject({
+    river: "long-river",
+    name: "Long River",
+    dry: true,
+    bed: [90, 80],
+    former: [{ course: reach(30_000, null).coordinates, leftIn: 1 }],
+  });
   expect(injected.landmarkId).toBe(landmark.id);
   expect(dependent.dependsOn).toEqual([injected.id]);
 });

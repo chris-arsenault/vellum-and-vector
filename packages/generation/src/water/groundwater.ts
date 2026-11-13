@@ -7,7 +7,7 @@ import { averageGroundQuery, groundFact } from "../rock/groundQuery";
 import { clamp } from "../world/math";
 import { respond } from "../coupling/answers";
 import { moveWater } from "./waterLedger";
-import { addGroundwater, putGroundwater } from "./column";
+import { addGroundwater } from "./column";
 
 /** A dissolved inventory accompanies the fraction of its carrier actually withdrawn. */
 export function returnedCharge(inventory: number, available: number, returned: number) {
@@ -96,7 +96,7 @@ export function advanceGroundwater(map: PhysicalField, context: PhysicalContext)
     const recharge =
       map.WaterKindCodes.get(i) === 1
         ? 0
-        : MapScale.metres(map.WaterRecharge.get(i), "mm") * exposure;
+        : MapScale.metres(map.WaterRecharge.get(i) + map.SeepageRecharge.get(i), "mm") * exposure;
     addGroundwater(map, i, recharge);
     map.GroundwaterRecharge.set(i, recharge);
     head.set(
@@ -109,7 +109,7 @@ export function advanceGroundwater(map: PhysicalField, context: PhysicalContext)
     );
   }
   for (let i = 0; i < map.mesh.count; i++)
-    routeWater(map, i, head, conductance, arriving, depth, exposure);
+    routeWater(map, i, head, conductance, arriving, exposure);
   let toSea = 0,
     sprung = 0;
   for (let i = 0; i < map.mesh.count; i++) {
@@ -129,7 +129,6 @@ function routeWater(
   head: import("@atlas/domain").Band,
   conductance: import("@atlas/domain").Band,
   arriving: import("@atlas/domain").Band,
-  depth: number,
   exposure: number
 ) {
   let target = -1,
@@ -145,21 +144,23 @@ function routeWater(
       gradient = slope;
     }
   }
-  const available = map.GroundwaterStorage.get(i),
+  const store = map.water.ground,
+    available = store.held(i),
     marine = map.WaterKindCodes.get(i) === 1;
   map.GroundwaterExchangeVolume.set(i, available);
   const balance = groundwaterBalance(
     available,
     0,
-    depth * conductance.get(i),
+    store.capacity(i),
     gradient / (gradient + 0.01),
     marine,
     exposure
   );
   if (marine) target = -1;
   map.GroundwaterTargets.set(i, target);
-  map.GroundwaterOutflow.set(i, balance.outflow);
-  putGroundwater(map, i, balance.storage);
-  map.GroundwaterReturn.add(i, balance.returned);
-  if (target >= 0) arriving.add(target, balance.outflow * map.mesh.area(i));
+  const outflow = store.give(i, balance.outflow),
+    returned = store.give(i, balance.returned);
+  map.GroundwaterOutflow.set(i, outflow);
+  map.GroundwaterReturn.add(i, returned);
+  if (target >= 0) arriving.add(target, outflow * map.mesh.area(i));
 }

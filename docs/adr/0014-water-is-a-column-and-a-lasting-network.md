@@ -8,16 +8,6 @@ carries the direction is marked in `packages/generation/src/water/water.architec
 structure below is agent-derived and follows the method in
 [Materials and processes](../../MATERIALS-AND-PROCESSES-ARCHITECTURE.md).
 
-Status: partly in the code. In: one owner of water's writes, the year's rhythm with wet and
-dry seasons, the single soil-water store, the record of transfers, and one gathering routine
-for rivers, lakes, erosion and deltas (a region's starting network still has its own).
-**Not built:** the
-water column as one package (its parts are still separate layers, lying snow is not stored,
-and a finer map inherits only groundwater), and the network that lasts (a river is still a
-mark on a cell, redrawn from the surface every pass, and decided by a count of cells). Both
-are the work of [the water and relief plan](../WATER-AND-RELIEF-PLAN.md), whose failing
-checks are `water/riverDefinition.architecture.ts`.
-
 ## Context
 
 Water grew as separate layers, each written by the step that computed it: rain and snow, a
@@ -38,15 +28,15 @@ depend on both belonged to neither file.
 - **A water column on every cell.** Snow, soil water, groundwater and standing water are one
   package: carried with the crust, inherited by a finer map as shares, never split band by
   band. A cell's year of water is part of that state, held month by month on the map.
-- **A network that lasts.** Reaches, lakes and outlets have identity, a course, a flow through
+- **A network that lasts.** River reaches have identity, a course, a flow through
   the year and a regime, and they persist across passes. Processes change the network; they do
   not redraw it. What a reach was before it moved or dried stays on its record. A cell holds
   quantities of water and is never itself a river; a reach exists by a size declared against
   the map ([ADR 0005](0005-scale-contract.md)).
 - **Transfers between stores.** A water process is a move between two named stores: fall,
   melt, evaporate, soak, seep, spring, run, fill and spill. Each store states what it holds,
-  what room it has and how readily it gives. Every transfer is recorded, with the air and the
-  sea as stores, so nothing is made or lost unrecorded.
+  what room it has and how readily it gives. The water ledger records the processes'
+  exchanges, including incoming water and losses to the air and sea.
 - **The year's rhythm, not elapsed time.** A pass works out each cell's typical year in twelve
   months and rivers gather those months. The months describe the climate within the span a
   pass stands for; no clock advances. Rain falls in the months the rain belts stand over a
@@ -64,7 +54,7 @@ depend on both belonged to neither file.
 
 ## Consequences
 
-These follow from the decision; the status above says which are in the code.
+These follow from the decision.
 
 - One routing replaces the separate gatherings for rivers, lakes, erosion and regions; one
   closed-basin balance replaces three tests; one soil-water store serves water and plants.
@@ -73,6 +63,27 @@ These follow from the decision; the status above says which are in the code.
 - Sediment that builds fans, plains and deltas, courses that break out, and old beds that stay
   dry are built on the lasting network; they are not possible without it.
 - A place changes water only by asking: the contributions ledger refuses every water band.
+
+## Implemented ownership
+
+The physical field owns a water column of stores and its retained reach store. The monthly
+budget transfers held water; year-end contents remain distinct from the year's presentation
+means. Column resources import the package before regional organization. Ground transport
+carries both the stores and the reaches, including abandoned courses.
+
+Conditioning reads the current Ground valley floor, including unresolved channels,
+independently of the cell's averaged terrain height. Routing and erosion reads keep viable
+existing courses. Gathered cell water updates the retained reaches;
+only afterwards do they produce river rasters. Bed leakage, channel dimensions, floodplain
+seeds and published profiles read the owned courses. Unresolved water and small-channel
+length remain cell quantities. Presence and seasonal status read each point's monthly
+profile, so a losing river may have a wet head and a dry end.
+
+Explicit local saves retain courses, monthly profiles, physical beds, names and former
+courses. Refinement clips captured river objects onto the child's lattice and imports their
+actual boundary water and catchment. Published-map input with only a mean supplies that
+mean throughout the year; it does not invent seasons from the receiving cell. Named dry
+and abandoned courses publish under their river's name through the ordinary network contract.
 
 ## What stays out
 

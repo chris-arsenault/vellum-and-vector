@@ -31,6 +31,39 @@ const directions: readonly OwnerDirection[] = [
     test: "packages/generation/src/water/water.architecture.ts",
   },
   {
+    direction:
+      "rivers are kept things that processes change; cells hold quantities and are never rivers",
+    given: "2026-11-12",
+    marks: ["packages/generation/src/water/reachEvolution.ts"],
+    test: "packages/generation/src/water/reachEvolution.test.ts",
+  },
+  {
+    direction: "water gets an actual column of water, carried and inherited as one package",
+    given: "2026-11-12",
+    marks: ["packages/generation/src/water/column.ts"],
+    test: "packages/generation/src/water/column.test.ts",
+  },
+  {
+    direction: "a cell's own yield, however large, never makes it a river",
+    given: "2026-11-12",
+    marks: ["packages/generation/src/water/riverSize.ts"],
+    test: "packages/generation/src/water/riverSize.test.ts",
+  },
+  {
+    direction:
+      "a region starts at the parent's level and gets more defined; the parent's elevation is not thrown away",
+    given: "2026-11-12",
+    marks: ["packages/generation/src/regional/startingGround.ts"],
+    test: "packages/generation/src/rock/groundShares.test.ts",
+  },
+  {
+    direction:
+      "what is inside a parent cell comes from the rock column, shaped by all the relevant processes",
+    given: "2026-11-12",
+    marks: ["packages/generation/src/rock/contactRealization.ts"],
+    test: "packages/generation/src/rock/contactRealization.test.ts",
+  },
+  {
     direction: "plate movement and tectonic strength cannot be coupled",
     given: "2026-11-07, restated 2026-11-12",
     marks: ["packages/generation/src/world/tectonicControls.ts"],

@@ -4,16 +4,16 @@ import { nativePosition } from "../world/atlasWorkspace";
 import { releaseWorking } from "../world/physicalNumerics";
 import { meanderReach } from "../world/riverMeanders";
 import { createRiverPaths, riverPath, type RiverPaths } from "../world/riverPaths";
-import { coordinateKey } from "../world/worldSources";
 import {
   generationFeature,
   generationFeatures,
   writeGenerationFeature,
 } from "../generationFeatures";
-import { generatedFeature, putGenerated, putGeneratedNetwork } from "../mapFeatures";
+import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
 import type { GenerationState, MapProcessContext } from "../process";
-import { reachAt, reachesOf } from "../water/riverKeeping";
+import { reachAt, reachesOf, riverSample } from "../water/riverKeeping";
 import type { Reach } from "../water/reaches";
+import { captureRivers } from "../water/networkResources";
 import { mapScale, worldRiverLength } from "../worldSignificance";
 import {
   basinDischarges,
@@ -106,7 +106,8 @@ function publishCourse(
   state: GenerationState,
   parts: readonly number[][],
   paths: RiverPaths,
-  basinDischarge: number
+  basinDischarge: number,
+  riverId: string
 ): { ids: string[]; key?: string } {
   const work = state.physical!,
     stretches = parts
@@ -117,7 +118,6 @@ function publishCourse(
   if (!stretches.length) return { ids };
   const head = stretches[0].members[0],
     source = nativePosition(work, head),
-    outlet = nativePosition(work, stretches.at(-1)!.members.at(-1)!),
     junctions = junctionsOf(state, stretches, paths);
   for (const pieces of chartPieces(state, stretches)) {
     const profiles = Object.fromEntries(
@@ -126,7 +126,7 @@ function publishCourse(
         pieces.flatMap((piece) => piece.profiles[key]),
       ])
     );
-    const key = `river:${coordinateKey(source.x, source.y)}:${coordinateKey(outlet.x, outlet.y)}:${ids.length}`;
+    const key = `river:${riverId}:${ids.length}`;
     first ??= key;
     const feature = generatedFeature(
       state,
@@ -141,13 +141,18 @@ function publishCourse(
         order: reachAt(work.map, head)?.order ?? 0,
         junctions,
         discharge: profiles.discharges[0],
-        regime: courseRegime(profiles.flowingMonths),
+        regime: courseRegime(
+          stretches.flatMap(({ members }) =>
+            members.map((cell) => riverSample(work.map, cell, "months"))
+          )
+        ),
         basinDischarge,
         ...profiles,
         sourceAlgorithm: "atlas-1",
       }
     );
-    putGeneratedNetwork(state, feature);
+    const keptName = reachAt(work.map, head)?.name;
+    putGeneratedNetwork(state, keptName ? { ...feature, name: keptName } : feature);
     ids.push(feature.id);
   }
   return { ids, key: first };
@@ -207,7 +212,11 @@ function dryCourseOf(end: Reach, dry: readonly Reach[]) {
   const course = [end];
   for (let n = 0; n < course.length; n++)
     for (const reach of dry)
-      if (reach.downstream === course[n].id && !reach.river && !course.includes(reach))
+      if (
+        reach.downstream === course[n].id &&
+        (!reach.river || reach.river === end.river) &&
+        !course.includes(reach)
+      )
         course.push(reach);
   return course;
 }
@@ -217,10 +226,17 @@ function dryCourseOf(end: Reach, dry: readonly Reach[]) {
  * name, with no river in it.
  */
 function publishDryRivers(state: GenerationState) {
-  const dry = [...reachesOf(state.physical!.map)].filter((reach) => reach.dry);
+  const dry = [...reachesOf(state.physical!.map)].filter((reach) => reach.dry),
+    published = new Set<string>();
   for (const end of dry) {
-    if (!end.river || !end.record) continue;
-    const lines = dryCourseOf(end, dry)
+    if (!end.river || !end.record || published.has(end.river)) continue;
+    published.add(end.river);
+    const courses = [
+      ...new Set(
+        dry.filter((reach) => reach.river === end.river).flatMap((reach) => dryCourseOf(reach, dry))
+      ),
+    ];
+    const lines = courses
       .map((reach) => lineOf(state, reach.cells))
       .filter((line) => line.length >= 2);
     if (!lines.length) continue;
@@ -235,7 +251,8 @@ function publishDryRivers(state: GenerationState) {
         : { type: "MultiLineString", coordinates: lines },
       { order: end.order, regime: "dry", riverId: end.river, sourceAlgorithm: "atlas-1" }
     );
-    putGenerated(state, feature);
+    putGeneratedNetwork(state, end.name ? { ...feature, name: end.name } : feature);
+    publishFormerCourses(state, courses, feature.id, end.river);
   }
 }
 /**
@@ -265,7 +282,7 @@ function publishFormerCourses(
         { type: "LineString", coordinates: line },
         { order: reach.order, regime: "dry", former: true, riverId, sourceAlgorithm: "atlas-1" }
       );
-      putGenerated(state, { ...feature, name: river.name });
+      putGeneratedNetwork(state, { ...feature, name: river.name });
     });
 }
 /** The map's rivers, drawn: each river once, as the course it holds inside the map's frame. */
@@ -287,13 +304,17 @@ export function publishRivers(state: GenerationState, context: MapProcessContext
         state,
         parts.map((part) => part.flatMap((i, n) => records[i].members.slice(n ? 1 : 0))),
         paths,
-        basinDischarge.get(reaches[parts[0][0]].basin)
+        basinDischarge.get(reaches[parts[0][0]].basin),
+        riverId
       );
       nameItsRiver(state, ids, riverId);
       for (const i of parts.flat()) reaches[i].featureIds = ids;
       // The reach the river ends in keeps the record it was drawn as.
       const last = parts.at(-1)?.at(-1);
-      if (last !== undefined && key) records[last].kept.record = key;
+      if (last !== undefined && key) {
+        records[last].kept.record = key;
+        records[last].kept.name = ids[0] ? generationFeature(state, ids[0])?.name : undefined;
+      }
       publishFormerCourses(
         state,
         parts.flat().map((i) => records[i].kept),
@@ -314,6 +335,7 @@ export function publishRivers(state: GenerationState, context: MapProcessContext
       areaId: state.domain.scope.areaId,
       spaceId: state.domain.scope.spaceId,
       reaches,
+      kept: captureRivers(map),
     },
   };
   context.recordCause({

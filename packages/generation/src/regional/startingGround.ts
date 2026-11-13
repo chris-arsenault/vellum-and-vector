@@ -2,8 +2,11 @@ import { fieldSampleIndex } from "@atlas/domain";
 import { cutShare, resolveCut } from "../rock/groundShares";
 import { nativePosition, parentChannels } from "../world/atlasWorkspace";
 import { restoreFeatures } from "./causes/registry";
-import { isContent, neighborsOf } from "./lattice";
+import { isContent } from "./lattice";
+import { directionalResistance } from "./material";
+import { valleyOrder, valleyScratch } from "./valleyPlacement";
 import { updateSlopes } from "./relief";
+import { realizeColumns } from "./columns";
 import type { RegionalState, ReliefWork } from "./state";
 
 /**
@@ -19,7 +22,10 @@ import type { RegionalState, ReliefWork } from "./state";
  * Later rounds work this ground through the shared processes.
  */
 export function startGround(state: RegionalState) {
+  // owner-direction(2026-11-12): a region starts at the parent's level and gets more defined; the parent's elevation is not thrown away.
   placeInheritedValleys(state);
+  realizeColumns(state);
+  delete state.regional.contacts;
   const network = state.regional.network!,
     basin = new Uint8Array(state.physical.map.mesh.count);
   for (let i = 0; i < basin.length; i++) if (network.lake[i] >= 0 || network.bowl[i]) basin[i] = 1;
@@ -49,54 +55,45 @@ function byParentCell(state: RegionalState) {
 /**
  * One parent cell's finer cells in the order a valley takes them: first the stream that
  * gathers most of the region's drainage through the parent cell, from where it enters to
- * where it leaves, then the cells beside it, then those beside them. A valley is one
- * connected floor about its stream, however wide the parent says it is.
+ * where it leaves. Material responses choose how its connected floor widens from there.
  */
-function fromTheStream(state: RegionalState, cells: readonly number[]) {
-  const mesh = state.physical.map.mesh,
-    { area, receiver } = state.regional.network!,
+function streamCells(state: RegionalState, cells: readonly number[]) {
+  const { area, receiver } = state.regional.network!,
     inside = new Set(cells),
-    steps = new Map<number, number>(),
-    around = new Int32Array(mesh.stride);
+    steps = new Set<number>();
   // The stream: the cell gathering most, the cells it runs on to, and its greatest feeders.
   const most = cells.reduce((best, cell) => (area[cell] > area[best] ? cell : best), cells[0]);
   for (let cell = most; inside.has(cell) && !steps.has(cell); cell = receiver[cell])
-    steps.set(cell, 0);
+    steps.add(cell);
   for (let cell = most; ;) {
     const feeder = cells
       .filter((other) => receiver[other] === cell && !steps.has(other))
       .reduce((best, other) => (best < 0 || area[other] > area[best] ? other : best), -1);
     if (feeder < 0) break;
-    steps.set(feeder, 0);
+    steps.add(feeder);
     cell = feeder;
   }
-  // Outward from the stream, a ring of neighbours at a time.
-  const reached = [...steps.keys()];
-  for (let n = 0; n < reached.length; n++) {
-    const m = neighborsOf(mesh, reached[n], around);
-    for (let k = 0; k < m; k++) {
-      const next = around[k];
-      if (!inside.has(next) || steps.has(next)) continue;
-      steps.set(next, steps.get(reached[n])! + 1);
-      reached.push(next);
-    }
-  }
-  const far = cells.length;
-  return [...cells].sort(
-    (a, b) => (steps.get(a) ?? far) - (steps.get(b) ?? far) || area[b] - area[a] || a - b
-  );
+  return [...steps];
 }
 /**
  * Shares each parent cell's valley out among its finer cells: the stream's cells first and
- * then outward from it, until the valley's share of the parent cell is placed; the cell where
- * it runs out holds the valley's edge.
+ * then through yielding faces until the valley's share is placed; the cell where it runs out
+ * holds the valley's edge. Grain and exposed contacts decide which shoulders remain.
  */
 export function placeInheritedValleys(state: RegionalState) {
-  const map = state.physical.map;
+  const map = state.physical.map,
+    scratch = valleyScratch(map.mesh.count);
   for (const cells of byParentCell(state).values()) {
     const whole = cells.reduce((sum, cell) => sum + map.mesh.area(cell), 0);
     let valley = cutShare(map, cells[0]) * whole;
-    for (const cell of fromTheStream(state, cells)) {
+    const order = valleyOrder(
+      map.mesh,
+      cells,
+      streamCells(state, cells),
+      (from, toward) => directionalResistance(map, from, toward),
+      scratch
+    );
+    for (const cell of order) {
       const area = map.mesh.area(cell),
         share = Math.min(1, Math.max(0, valley / area));
       resolveCut(map, cell, share);

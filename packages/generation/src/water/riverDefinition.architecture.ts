@@ -5,7 +5,7 @@ import { waterColumn } from "@atlas/domain";
 import { source, sourceFiles } from "../architectureReach";
 
 /**
- * What a river is, and what a cell's water is (docs/WATER-AND-RELIEF-PLAN.md). These checks
+ * What a river is, and what a cell's water is (ADR 0014). These checks
  * were written failing, before the code met them, and are not loosened to pass.
  *
  * - A cell holds quantities of water. It is never itself "a river".
@@ -16,8 +16,8 @@ import { source, sourceFiles } from "../architectureReach";
  * - Snow, soil water, groundwater and standing water are one package.
  *
  * The owner's direction of 2026-11-12: an actual column of water and rivers as things, not
- * memory marks on cells; sizes follow the scale and latent contracts. (To be entered in the
- * owner-directions registry once that file is free of another session's open edits.)
+ * memory marks on cells; sizes follow the scale and latent contracts. The implementing
+ * lines and behavior tests are listed in ownerDirections.architecture.ts.
  */
 const files = () => [...sourceFiles(source)].map((path) => relative(source, path));
 const text = (path: string) => readFileSync(join(source, path), "utf8");
@@ -59,9 +59,30 @@ describe("a river's size comes from the map", () => {
 });
 
 describe("a cell is never a river", () => {
+  it("does not construct the owned network from a raster river classification", () => {
+    expect(
+      lines(
+        ["water/rivers.ts", "water/riverKeeping.ts"],
+        /cutReaches|keepReaches|buildChannels|noteMonth/
+      )
+    ).toEqual([]);
+  });
+  it("routes retained courses before gathering water and projects cells after changing reaches", () => {
+    expect(text("water/routing.ts")).toContain("retainRiverRoutes(map)");
+    const algorithm = text("water/rivers.ts");
+    expect(algorithm.indexOf("advanceReaches(map.rivers")).toBeLessThan(
+      algorithm.indexOf("projectRivers(map)")
+    );
+    expect(text("water/reachEvolution.ts")).not.toMatch(/RiverOrders|FlowingMonths|cutReaches/);
+  });
+  it("conditions actual river floors rather than averaged terrain heights", () => {
+    expect(lines(["water/drainageFlood.ts"], /map\.Elevation\.get\(/)).toEqual([]);
+  });
   it("lets nothing outside the water code read the river mark on cells", () => {
     const outside = files().filter((path) => !path.startsWith("water/") && !fixtures.test(path));
-    expect(lines(outside, /\.RiverOrders\b|\.RiverMemory\b/)).toEqual([]);
+    expect(
+      lines(outside, /\.(RiverOrders|RiverMemory|RiverWidth|RiverDepth|FlowingMonths)\b/)
+    ).toEqual([]);
   });
   it("lets nothing outside the water code name the river mark as something it reads", () => {
     // Where the layer is declared, published and given to the water processes is not a read.

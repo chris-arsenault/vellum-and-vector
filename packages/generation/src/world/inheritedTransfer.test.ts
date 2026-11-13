@@ -44,6 +44,10 @@ function suppliedField() {
     ["Elevation", "native-length", 1024],
     ["GrassCover", "ratio", 1 / 750],
     ["MaximumIceFlux", "cubic-metre/year", 100],
+    ["SnowPack", "metre", 1],
+    ["SoilWater", "metre", 1],
+    ["GroundwaterStorage", "metre", 1],
+    ["WaterDepths", "native-length", 1024],
     ["VolcanicConstructionHistory", "native-length", 1024],
     ["CumulativeFluvialErosion", "native-length", 1024],
     ["SedimentThickness", "native-length", 1024],
@@ -66,6 +70,25 @@ function suppliedField() {
   return state;
 }
 
+it("inherits colocated ice history observations rather than independently reconstructing maxima", () => {
+  const state = suppliedField();
+  for (const [name, value] of [
+    ["MaximumIceFlux", () => 100],
+    ["MaximumGroundedIceFlux", (i: number) => (gridPosition(state.surface, i).x < 500 ? 0 : 100)],
+  ] as const)
+    putChannel(
+      state.surface,
+      name,
+      "cubic-metre/year",
+      generateChannel(state.surface, name, value)
+    );
+  const { map } = createAtlasWorkspace(state, "draft");
+  for (let cell = 0; cell < map.mesh.count; cell++) {
+    expect(map.MaximumIceFlux.get(cell)).toBe(100);
+    expect([0, 100]).toContain(map.MaximumGroundedIceFlux.get(cell));
+  }
+});
+
 it("imports bounded ecological fractions and nonnegative ice history without restricting elevation", () => {
   const state = suppliedField();
   const before = Object.fromEntries(
@@ -77,6 +100,11 @@ it("imports bounded ecological fractions and nonnegative ice history without res
     work = createAtlasWorkspace(state, "draft");
   expect(Array.from(work.map.GrassCover).every((value) => value >= 0 && value <= 1)).toBe(true);
   expect(Array.from(work.map.MaximumIceFlux).every((value) => value >= 0)).toBe(true);
+  for (const name of ["SnowPack", "SoilWater", "GroundwaterStorage", "WaterDepths"] as const)
+    expect(
+      Array.from(work.map[name]).every((value) => value >= 0),
+      name
+    ).toBe(true);
   for (const name of [
     "VolcanicConstructionHistory",
     "CumulativeFluvialErosion",

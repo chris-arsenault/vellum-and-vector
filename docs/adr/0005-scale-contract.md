@@ -88,9 +88,7 @@ more defined: a parent cell is a rough average, and what lies inside it (a plain
 slope, a cliff, a ridged range) comes from its rock column and history, shaped by
 every process that shapes ground. The parent's elevation is not thrown away or
 rebuilt. Nothing is fitted to the parent numerically and no boundary is pinned
-(user clarification 2026-11-12 of the 2026-10-30 direction). The code does not yet
-meet this: it rebuilds a region's heights from a drainage tree; see
-[the water and relief plan](../WATER-AND-RELIEF-PLAN.md). Regional development
+(user clarification 2026-11-12 of the 2026-10-30 direction). Regional development
 adds coasts, drainage, habitats, magic detail and places at the selected physical
 scale; it does not run human eras or replay world history. The
 child inherits its parent's people as layers; known places remain available and

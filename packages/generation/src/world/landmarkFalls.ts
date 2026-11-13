@@ -9,6 +9,7 @@ import { cut, distance, shiftBedrock, type Placed } from "./landmarkGeometry";
 import type { LandmarkRecord } from "./landmarkLedger";
 import type { Kind } from "./landmarkKind";
 import { captureInto } from "./landmarkCanyon";
+import { waterAt } from "../water/riverKeeping";
 
 /** The river cell at the point: the greatest flow among the nearest cell and its neighbours. */
 function lipCell(map: PhysicalField, placed: Placed, record?: LandmarkRecord) {
@@ -21,8 +22,7 @@ function lipCell(map: PhysicalField, placed: Placed, record?: LandmarkRecord) {
   }
   const nearby = candidates.filter((i) => distance(map, i, placed.center) <= map.scale.cells(1.1));
   return nearby.reduce(
-    (best, i) =>
-      best < 0 || map.FlowAccumulation.get(i) > map.FlowAccumulation.get(best) ? i : best,
+    (best, i) => (best < 0 || waterAt(map, i) > waterAt(map, best) ? i : best),
     -1
   );
 }

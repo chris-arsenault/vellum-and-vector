@@ -6,7 +6,7 @@ import { clamp } from "./math";
 import { gatherDown, sourceToOutletOrder } from "./flowGraph";
 import { physicalDistance } from "./physicalMetric";
 import { workingValues, releaseWorking } from "./physicalNumerics";
-import { onRiver, riverOrderAt } from "../water/riverKeeping";
+import { onRiver, riverOrderAt, waterAt } from "../water/riverKeeping";
 import { MapScale, type Band } from "@atlas/domain";
 
 function sedimentDelivery(map: PhysicalField): Band {
@@ -35,7 +35,7 @@ function qualifies(
   const p = c.Profile;
   const major =
     riverOrderAt(map, mouth) >= p.DeltaMinimumRiverOrder ||
-    map.FlowAccumulation.get(mouth) >= p.RiverAccumulationThreshold * p.DeltaDischargeMultiplier;
+    waterAt(map, mouth) >= p.RiverAccumulationThreshold * p.DeltaDischargeMultiplier;
   return (
     major &&
     delivery.get(mouth) >= p.DeltaMinimumSedimentDelivery &&

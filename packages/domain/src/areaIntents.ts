@@ -38,7 +38,8 @@ function areaRequirements(data: AreaInput, context: IntentContext) {
           )
           .map((f) => ({ fieldId: f.id, names: f.channels! })),
   });
-  reads.scope = { ...reads.scope, footprint: data.footprint };
+  // Regional capture reads the new contextual extent separately; the command edits its source map.
+  if (!data.regionId) reads.scope = { ...reads.scope, footprint: data.footprint };
   return reads;
 }
 function evaluateArea(data: AreaInput, context: IntentContext, snapshot: DomainSnapshot) {
