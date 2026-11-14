@@ -5,6 +5,7 @@ rust_dir: .
 typescript_dir: frontend
 # The caller workflow supplies compiled Rust artifacts to the same browser action.
 browser_tests: false
+truenas: true
 rust_artifacts:
   binaries:
     - bin: atlas_server

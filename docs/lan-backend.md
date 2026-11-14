@@ -5,21 +5,18 @@ and published maps on TrueNAS. The browser reads published GIS products through 
 HTTP facade. The same service serves the backend-mode frontend, so other home devices
 open `https://<private-TrueNAS-name>:4123/` without a separate frontend origin.
 
-Use the TrueNAS PostgreSQL instance with PostGIS installed and a dedicated atlas database.
-Provision three independent login roles: a map writer, a read-only map reader and a
-generation writer. As the database administrator, run:
+The Ahara Infra TrueNAS database registration provisions `vellum_maps` with PostGIS
+and its `map` schema, and `vellum_generation` with its private `generation` schema on
+the existing TrueNAS PostgreSQL instance. Each database has independent writer and
+reader roles. The application uses the map writer, map reader and generation writer;
+viewing uses only the map reader. The service creates tables through their respective
+writers. No runtime database-administrator connection is needed.
 
-```sh
-psql "$ATLAS_ADMIN_DATABASE_URL" \
-  -v map_writer=atlas_map_writer -v map_reader=atlas_map_reader \
-  -v generation_writer=atlas_generation_writer \
-  -f infrastructure/lan/database.sql
-```
-
-The bootstrap assigns separate schema ownership and grants the reader access only to
-published map tables. The service creates its tables under the corresponding writer.
-The map reader must not inherit either writer role. Supply connection strings through
-the deployment environment; `.env.example` contains placeholders. In Sulion, use
+`platform.yml` enables the shared CI/CD TrueNAS deployment. Before deploying the
+Komodo stack, the workflow invokes the registered database provisioner and resolves
+the three connections from `secret-paths.yml`. The Ahara Infra registration and
+provisioner must be deployed before this application's first deployment.
+`.env.example` contains placeholders for local configuration. In Sulion, use
 `with-cred --` for secret-backed commands rather than writing credentials into files.
 Other installations can supply ordinary environment variables.
 
@@ -36,7 +33,7 @@ make build-lan
 docker build -t vellum-and-vector:local .
 ```
 
-Build the executable for the container architecture and a compatible glibc version.
+Build the executable for the container architecture and Ubuntu 24.04 runtime.
 Deployment uses the existing Ahara CI image publication and Komodo stack workflow.
 Compose consumes the GHCR image at `IMAGE_TAG`; it does not compile on TrueNAS.
 
@@ -45,13 +42,17 @@ PEM private key. Compose mounts them read-only; certificate issuance and renewal
 with the existing LAN certificate service. HTTPS is needed for browser APIs such as
 creating map and view identities. Loopback development can use the executable's HTTP mode.
 
-Create the data and scratch directories from `.env.example`, owned by the configured
-container UID/GID. Set the private TrueNAS address, all three database connections and
-these directory and certificate paths in Komodo's stack environment. The service
+Compose uses persistent Docker volumes on TrueNAS for data and disposable scratch,
+initialized with the image's application-user ownership. The existing certificate
+paths still need deployment configuration: the repository has placeholders, and the
+actual TrueNAS paths have not been verified. Configure them through the deployment
+source, since the shared action replaces Komodo's environment on each deployment.
+The private TrueNAS bind address
+defaults to `192.168.66.3`; `ATLAS_LAN_IP` can override it. The service
 refuses wildcard or public bind addresses. This
 installation has no public proxy route, cloud database or RDS dependency.
 
-Back up the atlas database together with the persistent data directory. `maps/` contains
+Back up both atlas databases together with the `atlas-data` volume. `maps/` contains
 published GIS assets; `generation/` contains the private immutable resources needed for
 later refinement. Scratch is disposable and is not a checkpoint. Stopping the service
 ends running jobs; completed maps and explicit saves remain available. Explicit saves

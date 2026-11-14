@@ -3,10 +3,9 @@ services:
     image: ghcr.io/chris-arsenault/vellum-and-vector:${IMAGE_TAG:-latest}
     network_mode: host
     restart: unless-stopped
-    user: "${ATLAS_UID:-1000}:${ATLAS_GID:-1000}"
     environment:
       # The executable rejects wildcard and public bind addresses.
-      ATLAS_BIND: "${ATLAS_LAN_IP:?Set the private TrueNAS LAN address}:${ATLAS_PORT:-4123}"
+      ATLAS_BIND: "${ATLAS_LAN_IP:-192.168.66.3}:${ATLAS_PORT:-4123}"
       ATLAS_MAP_DATABASE_URL: "${ATLAS_MAP_DATABASE_URL:?Set the map writer connection}"
       ATLAS_MAP_READER_URL: "${ATLAS_MAP_READER_URL:?Set the map reader connection}"
       ATLAS_GENERATION_DATABASE_URL: "${ATLAS_GENERATION_DATABASE_URL:?Set the generation writer connection}"
@@ -17,8 +16,8 @@ services:
       ATLAS_TLS_CERTIFICATE: /certificates/certificate.pem
       ATLAS_TLS_PRIVATE_KEY: /certificates/private-key.pem
     volumes:
-      - "${ATLAS_DATA_DIRECTORY:?Set the atlas dataset directory}:/data"
-      - "${ATLAS_SCRATCH_DIRECTORY:?Set the disposable scratch directory}:/scratch"
+      - atlas-data:/data
+      - atlas-scratch:/scratch
       - "${ATLAS_TLS_CERTIFICATE:?Set the existing LAN certificate path}:/certificates/certificate.pem:ro"
       - "${ATLAS_TLS_PRIVATE_KEY:?Set the existing LAN private key path}:/certificates/private-key.pem:ro"
     healthcheck:
@@ -26,3 +25,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  atlas-data:
+  atlas-scratch:
