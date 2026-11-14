@@ -45,7 +45,7 @@ A refined map takes its cell size from a fixed physical ladder: its captured
 refinement level and chosen detail select the rung, and the map's frame decides
 only how many cells that makes. The same ladder sizes the selections offered at
 each level, so a suggested region holds about the default world's cell count.
-`packages/domain/src/regionalScale.ts` owns the ladder. Rectangular sampling
+The shared Rust resolution and region-selection code owns the ladder. Rectangular sampling
 frames and coastal context determine the area being sampled.
 Setup shows approximate spacing and sample count before generation.
 
@@ -649,9 +649,8 @@ Ordinary present-day edits preserve completed history.
 `World.magicSystems` holds the configured systems. Each declares its origins (sources
 located from physical geography, history, people or authored records), its stocks and
 the carriers that move them, and the propagation its medium implies. Meetings between
-systems are a separate list of confluences (`packages/domain/src/magicConfluences.ts`).
+systems are a separate list of confluences (`crates/atlas-generation/src/magic/confluences/`).
 A confluence that names a system the world lacks is valid and never holds.
-Configurations participate in the generation hash.
 
 Each epoch advects accumulated activity, first occurrence, storage and coastal
 history with the crust's source map. Climate-phase systems (Fire, Pressure)
@@ -1051,8 +1050,8 @@ then simplified again where motion compresses their stations. Their identities
 and histories remain attached. Motion reuses the interval's velocity field and
 resolves travel against local speed.
 
-World-to-display interpolation builds compact typed weights in batches rather
-than retaining JavaScript sample objects for every display cell. Repeated physical
+World-to-display interpolation builds compact typed weights shared across compatible
+published channels. Repeated physical
 projections reuse the working surface's channel buffers. The browser adapter yields
 between process stages so the worker returns to its event loop during a run.
 Processes operate on the shared working geography through its coverages. Local
@@ -1065,6 +1064,10 @@ Shared crossings retain canonical endpoint order when recomputed. This bounds th
 decoded edge graph and tracing buffers; the native overlay and final geometry still require memory
 proportional to the feature being assembled.
 
+Native bands use contiguous resident allocations and borrowed kernel buffers. Browser
+bands can page through host scratch. Both retain owner-only mutation, immutable snapshots
+and the same process algorithms; a resident access does not calculate a page address.
+
 Processes touch the lattice in three shapes, with one code path at every map size. A
 local pass reads and writes a few bands at the same cell, block by block over pinned
 native arrays. A stencil pass reads a cell's lattice neighbours through the band. A
@@ -1073,9 +1076,9 @@ Connected numerical passes keep frontiers resident and sized by the frontier;
 per-cell labels, ranks, marks and scratch channels are bands. Whole-world orderings
 stream over block runs held in bands.
 
-Frontiers and scratch structures (`packages/domain/src/hpc/`) hold their entries in
+Frontiers and scratch structures (`crates/atlas-generation/src/hpc/`) hold their entries in
 typed arrays only, with no per-entry objects, string keys, proxies or comparator
-closures. They grow by doubling and are garbage-collected, never paged. A pop returns
+closures. Their owners release them when their scope ends; they are never paged. A pop returns
 the item; its key or fields are read through an accessor. Float keys are ordered
 exactly through their bits, with negative zero equal to zero, and ties break by
 ascending cell. A monotone frontier needs no decrease-key: a popped entry whose key no
@@ -1085,11 +1088,11 @@ label, bit sets, epoch stamps, typed lists, small integer sets and worklists.
 `make test-architecture` flags substitute shapes in generation code; a site no structure
 fits carries `// hpc-exempt: <reason>` on its line or the line before.
 
-The worker finalizes immutable Zarr resources and publishes their references with
-geographic records. Fields share masks and topology by reference. The catalog
-installs validated batches progressively during initial generation; the editor
-receives revisions and invalidations. An interrupted initial delivery remains
-marked incomplete. Generation processes do not know about browser messaging.
+The host finalizes private immutable numerical resources, sharing masks and topology
+by reference. Extraction separately publishes GIS records and assets; the viewer receives
+only those map products. The GIS catalog installs batches progressively during initial
+generation. Interrupted delivery remains incomplete. Generation processes do not know
+about browser messaging.
 
 Regeneration stages record batches in disposable SQLite storage before applying
 them in one catalog transaction. Check world revision and field ownership. If

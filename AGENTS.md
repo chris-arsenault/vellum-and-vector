@@ -124,9 +124,9 @@ plausibility requirements.
 
 Every process in a world's history is one entry in `processes/`, owning its algorithm,
 settings and any specialist helpers it binds. A native step is a name, a seed salt and
-the processes it runs. Feature operations in `physicalFeatures.ts` reference those
+the processes it runs. Feature operations in `crates/atlas-generation/src/atlas/features/` reference those
 executable steps; both selected execution and registration derive from those operations.
-`world/sequence.ts` holds reusable step definitions, not a second runtime schedule. New
+The sequence modules compose those operations rather than defining a second runtime schedule. New
 settings join the profile through their plain settings module. Shared questions compose
 responders without editing their consumers. A step that needs a band runs only if a
 selected step wrote it earlier or the map inherited it; ordering keeps its inputs useful.
@@ -146,8 +146,8 @@ history where the map behavior needs them.
 
 Implement actual geography and magical feedback through that common context;
 let those processes establish the interfaces they need. Keep numerical fields in
-browser-owned resources and working storage, completed geographic history in the
-local catalog, and generation status in browser memory. There is
+the execution host's private resources and working storage, completed geographic history
+in the GIS catalog, and generation status in host memory. There is
 no saved execution state, restart or recovery.
 
 Preserve completed history while ordinary edits change the present. Apply the
@@ -156,8 +156,9 @@ and publish validated regeneration geography atomically. Per the user's
 2026-10-24 direction, initial generation progressively installs streamed output
 and shows independent epoch previews; interrupted delivery stays incomplete.
 
-Generation runs in a Web Worker and ends when the tab closes. Pure generation
-modules remain independent of that browser adapter.
+Browser generation runs in a Web Worker and ends when the tab closes. Native generation
+runs on the backend and survives a client disconnect, but not a service restart.
+Pure generation modules remain independent of both host adapters.
 
 Every map, world or region, is a generation state whose geography is the same
 physical field on the same triangular lattice class at its own cell span. Fix
@@ -258,7 +259,7 @@ workflows and the product's physical-plausibility requirements.
 Lint is a CI gate (complexity, lines per function and lines per file on every
 `.ts`); lint the touched directory before testing. `make test-architecture`,
 part of `make ci`, flags object, `Map`, Proxy or comparator substitutes for the
-typed-array structures in `packages/domain/src/hpc/` and any regional
+typed numeric structures in `crates/atlas-generation/src/hpc/` and any regional
 representation outside the shared field and lattice. A generation site that no
 structure fits carries `// hpc-exempt: <reason>` on its line or the line before.
 
@@ -273,7 +274,7 @@ itself says which is which.
   `owner-direction(<date>): <the direction in the owner's terms>`. Unmarked
   code is agent-derived and may be redesigned on an agent's judgement.
 - Every mark is listed in
-  [`ownerDirections.architecture.ts`](packages/generation/src/ownerDirections.architecture.ts),
+  [`ownerDirections.architecture.ts`](packages/atlas-context/src/ownerDirections.architecture.ts),
   which fails when a listed mark is missing from its file. Where a test can
   state the direction's behaviour, the entry also names that test.
 - When the owner gives a direction or a correction, add the mark, the list
@@ -359,6 +360,6 @@ itself says which is which.
   high/middle/low configurations.
 - Parameters, thresholds and value sweeps live in code, declared so that a
   reader finds them as easily as in a table (one labelled declaration per
-  control, as in `packages/generation/src/magicCartography.ts`).
+  control, as in `crates/atlas-generation/src/atlas/configuration/cartography.rs`).
 - When code and durable documentation disagree, delete the documentation's
   claim rather than equalizing it; the code is the record.

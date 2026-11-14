@@ -9,9 +9,9 @@ superseded tracking history, not additional execution lists. Other plans, includ
 regional geography quality and overlay improvements, remain untouched.
 
 The owner authorized migration execution and confirmed the water refactor is complete.
-The migration is unfinished. Frontend imports, contracts and supplied-map workflows are
-restored; current native and browser workloads are exercising generation and map lifetimes.
-Performance work and TrueNAS deployment remain open. Completed phases below describe
+The migration is unfinished. Runtime, GIS separation, frontend adoption, map lifetimes and
+representative performance work are complete locally. TrueNAS CI/CD integration and live
+deployment remain open. Completed phases below describe
 their bounded implementation, not a claim that TrueNAS deployment succeeded.
 
 ## Outcome and architectural authority
@@ -217,14 +217,14 @@ Phases 1–10 are bounded completed implementation; phases 11–18 carry all rem
 | 8     | Completed   | Resident memory and shared spatial preparation         |
 | 9     | Completed   | GIS subsystem and viewer separation                    |
 | 10    | Completed   | Local LAN packaging foundation                         |
-| 11    | In progress | Complete Rust runtime and remove migration scaffolding |
-| 12    | In progress | Complete feature extraction and GIS publication        |
-| 13    | In progress | Complete frontend and facade adoption                  |
-| 14    | Pending     | Verify saves and independent map lifetimes             |
-| 15    | Pending     | Verify full workflows and architecture                 |
-| 16    | Pending     | Profile complete workloads and fix measured causes     |
-| 17    | Pending     | Integrate CI/CD and verify LAN deployment              |
-| 18    | Pending     | Finalize migration documentation and close             |
+| 11    | Completed   | Complete Rust runtime and remove migration scaffolding |
+| 12    | Completed   | Complete feature extraction and GIS publication        |
+| 13    | Completed   | Complete frontend and facade adoption                  |
+| 14    | Completed   | Verify saves and independent map lifetimes             |
+| 15    | Completed   | Verify full workflows and architecture                 |
+| 16    | Completed   | Profile complete workloads and fix measured causes     |
+| 17    | Blocked     | Integrate CI/CD and verify LAN deployment              |
+| 18    | Blocked     | Finalize migration documentation and close             |
 
 ### 1. Architecture and migration contract
 
@@ -308,31 +308,31 @@ Current state: Complete. Archived imports and configuration declarations are res
 
 Verify current host wiring for explicit saves, library versions, unsaved views/regions, separate captured inputs, reopen/refine and independent children. Stale saves conflict; incomplete maps cannot be saved; parent changes do not alter captured child resources. Check independent backend clients and local-only browser saves.
 
-Current state: Browser explicit save/reload and independent-tab checks pass. A real browser-generated map saved and reopened through the ordinary release build, which is now refining its selected region. A native generated map opened in two isolated clients with generation disabled, including all raster views and point inspection. Regeneration, cancellation and completed child-capture lifecycle checks remain open. No autosave, merge or format migration.
+Current state: Complete. Native save/reopen, parent regeneration, retained child revision/configuration and cancellation pass. Browser explicit save/reload and independent-tab checks pass; supplied and real generated maps reopen after a full browser process restart, including captured generation configuration. Real browser selected-region refinement and regeneration completed. Two native clients render and inspect with generation disabled. An earlier temporary browser profile was found empty for an unverified reason; fresh fixture and real-map restart checks did not reproduce it. No autosave, merge or format migration.
 
 ### 15. Verify full workflows and architecture
 
 After phases 11-14, restore ordinary builds and existing lint/unit/UI/architecture/native/WASM gates. Exercise complete current create/refine/regenerate, cancellation, publication, save/reopen and inspection on both hosts, with generation data unavailable during viewing. Reuse supplied maps and representative results.
 
-Current state: Native workspace tests/clippy, PostGIS publication/save/reader-boundary integration, production WASM build and 49 current architecture checks pass. Real browser create/refine/regenerate/save/cancel have run; remaining lifecycle and normal-map workload checks continue. Standalone wasm-bindgen test binaries fail with duplicate closure exports in the Emscripten toolchain. Their sources remain, but this agent-derived runner requirement is replaced by native unit/architecture checks plus existing browser scenarios against the production WASM artifact. No custom test harness, simulation-outcome unit tests, numerical replay or Fine workload without approval.
+Current state: Complete. Native workspace tests/clippy, PostGIS publication/save/reader-boundary integration, production WASM build and 49 current architecture checks pass. Chromium, Firefox and WebKit pass the 11 existing UI scenarios; frontend typecheck/build and 153 routine checks pass. Actual native/browser create/refine/regenerate/save/cancel workflows have run. A normal-sized world exposed Delaunay identity lookup based on separately rounded coordinates; input and output now use GEOS-canonical site identities. Spatial contract tests pass. Standalone wasm-bindgen test binaries fail with duplicate closure exports in the Emscripten toolchain. Their sources remain, but this agent-derived runner requirement is replaced by native unit/architecture checks plus existing browser scenarios against the production WASM artifact. No custom test harness, simulation-outcome unit tests, numerical replay or Fine workload without approval.
 
 ### 16. Profile complete workloads and fix measured causes
 
 Profile actual saved slow refinement plus normal-sized world/region cases on current Rust hosts. Separate generation, extraction, publication, database, I/O, network and rendering; measure resident memory/spill, CPU and payload volume. Fix demonstrated stage costs in sequence and reassess the whole run.
 
-Current state: The recorded Draft workload completed before and after grouped publication with every layer retained. Grouping greatly reduced asset count but did not reduce total regional runtime in that run. CPU profiles identified per-value band access and sample serialization; borrowed resident kernels and direct compact serialization are implemented and their full-workload comparison is running. Browser generation exposed a WASM stack overflow; the single target now declares its stack size. Normal-sized world/region cases and final performance assessment remain open. No caps, disabled layers, resolution reductions or hard CI budgets.
+Current state: Complete. The recorded Draft configuration, using a freshly generated parent, retains all 922 layers. Grouping reduced raster assets from 894 to 36 but did not reduce regional runtime by itself. Resident solver buffers, compact sample serialization, contiguous addressing and direct owner material reads reduced sampled regional CPU from 585 to 358 seconds and wall time from 692 to 496 seconds. Peak recorded-case RSS was about 798 MiB. Concurrent work affects wall-time comparisons. A normal Draft world and region also completed, retaining 949 layers; before the final address/material changes they took 1454 and 572 seconds. Their rectangular lattice has about 15,000 and 26,000 slots, including regional context, versus about 1,000 and 19,000 in the whole-parent stress selection. These results do not reproduce the historical 55-minute saved input or establish that every performance concern is solved. Browser stack overflow is fixed and actual workflows run. No caps, disabled layers, approximation substitutes or hard CI budgets.
 
 ### 17. Integrate CI/CD and verify LAN deployment
 
 Integrate existing Ahara image/prebuild, database provisioning and Komodo deployment; rebuild corrected native plus single WASM frontend artifacts. Validate local PostGIS, persistent files, reader roles, scratch/memory and LAN HTTPS. Verify deployment from actual CI logs and two home clients.
 
-Current state: CI declares the native binary artifact, Docker consumes the ordinary frontend output, the native server declares backend mode in HTML, and Compose consumes the GHCR image selected by Komodo's IMAGE_TAG. Database registration, the three provisioned role connections and stack activation remain open; no deployment is verified. The prior credential denial remains a boundary. No manual deployment substitute, public route or RDS.
+Current state: The current local image builds, starts, serves backend-mode HTML and answers its health check. CI declares the native binary artifact, builds production WASM and supplied-map artifacts before the existing three-browser action, and gates the shared pipeline on those browser jobs. Docker consumes the ordinary frontend output; Compose consumes the GHCR image selected by Komodo's IMAGE_TAG. Database registration, the three provisioned role connections, stack activation and home-client verification remain open. The intended credential path previously returned exit 66 / 403 Forbidden with no secret unlocked for this terminal; the owner has not indicated it was fixed, and no retry or alternate credential was attempted. No manual deployment substitute, public route or RDS.
 
 ### 18. Finalize migration documentation and close
 
 After phases 11-17 succeed, reconcile product/generation/architecture/usage guidance with actual implementation, preserve owner diagrams and code boundaries, remove obsolete migration references and delete the working plan and its references. Close this root only when migration outcomes are met.
 
-Current state: Earlier runtime guidance and ADR 0015 remain useful completed work. This phase owns final closure only; leave unrelated geography/overlay/authoring plans untouched and do not claim their outcomes. No separate verification or handoff report.
+Current state: Runtime, architecture, usage and code-layout guidance is reconciled with the Rust implementation and owner diagrams. Final closure and deletion of this working plan wait for phase 17. Unrelated geography/overlay/authoring plans remain untouched. No separate verification or handoff report.
 
 ## Execution order and completion evidence
 

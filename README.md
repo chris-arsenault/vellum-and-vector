@@ -275,7 +275,7 @@ shared-memory support for WasmFS's OPFS worker, using one wasm32 target.
 examples. Existing Playwright scenarios exercise the production WASM engine using
 supplied GIS maps. CI prepares that engine and fixture before running the three
 browser jobs. The standalone wasm-bindgen test runner is not a CI gate: its
-Emscripten test binaries currently fail to link with duplicate closure exports.
+Emscripten test binaries currently contain duplicate closure exports and cannot run.
 The test sources remain available; the existing browser fixture rules still apply.
 
 Run `make wasm-engine` before direct frontend development or focused TypeScript tests.
@@ -333,14 +333,15 @@ local diagnostic output from node tests belongs in ignored `.artifacts/`.
 
 ## Deployment
 
-CI uses Ahara's shared workflow for TypeScript checks, coverage, browser tests
-and frontend deployment on `main`. `platform.yml` declares the `typescript` and
-`terraform` stacks and has no `migrations` entry. The active Terraform root uses
+CI prepares the Rust browser artifact before the existing Chromium, Firefox and WebKit
+jobs, then runs Ahara's shared Rust/TypeScript checks and frontend deployment on `main`.
+`platform.yml` declares the `rust`, `typescript` and `terraform` stacks and has no
+`migrations` entry. The active Terraform root uses
 Ahara's website module to serve `frontend/dist` at
 <https://maps.ahara.io> through private S3 and CloudFront, with DNS and TLS.
 Ahara's OpenGraph origin serves the HTML shell with literal site metadata and
-`/og-image.png`; it has no database query configuration. Geography and authoring
-run in the browser. It declares no application API, database or Cognito client.
+`/og-image.png`; it has no database query configuration. This public frontend selects
+pure browser execution. It declares no application API, database or Cognito client.
 
 Generation logs its inputs and elapsed stage messages to the browser console,
 including validation, worker transfer and publication. **Generation jobs** shows
@@ -350,11 +351,14 @@ The project registration in `ahara-infra` provisions the standard deployer role
 and repository Actions secrets (`OIDC_ROLE`, `STATE_BUCKET`, `PREFIX`). Deploy
 that registration before the initial product push. Later pushes to `main` use
 the shared CI workflow to test, build and deploy the frontend automatically.
-The retired backend Terraform is removed. The replacement backend is LAN-only on TrueNAS,
-using its local database; it has no public route. Publishing user data or using a hosted
+The retired backend Terraform is removed. The replacement backend package uses the same
+frontend with the native service and the TrueNAS database. Its CI/CD and Komodo setup is
+described in the [LAN guide](docs/lan-backend.md); live deployment remains unfinished.
+It has no public route. Publishing user data or using a hosted
 presentation service requires explicit authorization.
 
 ## License
 
-Project code is under the [MIT license](LICENSE), except `packages/name-forge`,
-which carries its own PolyForm Noncommercial 1.0.0 license.
+Project code is under the [MIT license](LICENSE), except the Rust naming port in
+[`crates/atlas-names`](crates/atlas-names/LICENSE) and its archived TypeScript source,
+which carry the PolyForm Noncommercial 1.0.0 license.

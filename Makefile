@@ -58,7 +58,7 @@ terraform-fmt-check:
 build:
 	pnpm build
 
-# Run on Linux with GEOS development libraries; Docker only packages these outputs.
+# Run on Linux with CMake and a C++ compiler for bundled GEOS; Docker packages outputs.
 build-lan: wasm-engine
 	cargo build -p atlas-host --release --bin atlas_server
 	mkdir -p dist
