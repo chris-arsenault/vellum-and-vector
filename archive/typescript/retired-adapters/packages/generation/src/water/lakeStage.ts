@@ -1,0 +1,205 @@
+// LakeBasinLayer stage and water-budget calculations, Canonry 0f62584c.
+import type { PhysicalField } from "../world/field";
+import type { PhysicalProfile } from "../world/profile";
+import { units } from "../world/math";
+import { yearlyAirDemand } from "./closedBasin";
+import { depthRateToDischarge } from "../world/dimensions";
+import { CellList, radixOrder, type Band } from "@atlas/domain";
+import { workingArray, releaseWorking } from "../world/physicalNumerics";
+import { ask } from "../coupling/answers";
+import type { PhysicalContext } from "../world/context";
+import { waterPassage } from "./waterQuantity";
+import { gatherDown } from "../world/flowGraph";
+
+export interface Depression {
+  id: number;
+  members: Int32Array;
+  spill: number;
+}
+export interface SupportedLake {
+  component: Depression;
+  members: Int32Array;
+  surface: number;
+  depth: number;
+  overflow: number;
+}
+export function contributingWater(
+  map: PhysicalField,
+  context: PhysicalContext,
+  incoming?: Band
+): Band {
+  const count = map.mesh.count,
+    supply = ask(map, "surfaceWater", context),
+    pass = waterPassage(map, context),
+    order = workingArray(map, "int32", "lakes:order").fill(-1),
+    water = workingArray(map, "float64", "lakes:water");
+  for (let i = 0; i < count; i++) {
+    const rank = map.DrainageRanks.get(i);
+    if (rank < 0 || rank >= count || order.get(count - 1 - rank) >= 0)
+      throw new Error("Priority-flood ranks are not a complete order.");
+    // The flood's ranks run from the outlets up, so the highest rank is gathered first.
+    order.set(count - 1 - rank, i);
+    water.set(i, depthRateToDischarge(supply.get(i), map.mesh.area(i)) + (incoming?.get(i) ?? 0));
+  }
+  gatherDown(order, map.DrainageParents, water, pass);
+  releaseWorking(map, order);
+  return water;
+}
+export function splitConnected(map: PhysicalField, submerged: ArrayLike<number>): Int32Array[] {
+  const remaining = workingArray(map, "uint8", "lakes:submerged"),
+    lobes: Int32Array[] = [];
+  for (let n = 0; n < submerged.length; n++) remaining.set(submerged[n], 1);
+  for (let n = 0; n < submerged.length; n++) {
+    const start = submerged[n];
+    if (!remaining.get(start)) continue;
+    remaining.set(start, 0);
+    const members = new CellList();
+    members.push(start);
+    for (let head = 0; head < members.length; head++) {
+      const i = members.at(head);
+      for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+        const j = map.mesh.neighbor(i, edge);
+        if (j < 0 || !remaining.get(j)) continue;
+        remaining.set(j, 0);
+        members.push(j);
+      }
+    }
+    lobes.push(members.sort().finish());
+  }
+  releaseWorking(map, remaining);
+  return lobes;
+}
+/** The depression's cells from the lowest floor up. */
+function basinCells(map: PhysicalField, component: Depression) {
+  const members = component.members,
+    keys = Float64Array.from(members, (i) => map.Elevation.get(i)),
+    order = radixOrder(keys);
+  return Int32Array.from(order, (k) => members[k]);
+}
+/**
+ * What open water on a cell loses to the air beyond what the same cell lost as land, in
+ * millimetres a year. Open water gives the air all it asks (see `airDemand`). The cell's
+ * yield as land, already counted in what reaches the lake, had the land's evaporation taken
+ * from it, so the lake is charged the difference.
+ */
+export function openWaterLoss(map: PhysicalField, p: PhysicalProfile, i: number) {
+  const fell = map.Rainfall.get(i) + map.Snowfall.get(i),
+    yielded = map.Runoff.get(i) + map.WaterRecharge.get(i) + map.SnowKept.get(i);
+  return Math.max(0, yearlyAirDemand(map, p, i) - Math.max(0, fell - yielded));
+}
+function stageBudget(
+  map: PhysicalField,
+  context: PhysicalContext,
+  cells: Int32Array,
+  input: number
+) {
+  const p = context.Profile;
+  let loss = 0,
+    count = 0,
+    cursor = 0;
+  while (cursor < cells.length) {
+    const floor = map.Elevation.get(cells[cursor]);
+    let end = cursor,
+      groupLoss = 0;
+    while (end < cells.length && map.Elevation.get(cells[end]) === floor) {
+      const i = cells[end],
+        area = map.mesh.area(i);
+      groupLoss += depthRateToDischarge(openWaterLoss(map, p, i) + p.LakeInfiltrationLoss, area);
+      end++;
+    }
+    // Candidate flooded cells use the same effective yield already routed through withdrawals.
+    if (loss + groupLoss > Math.max(0, input)) break;
+    loss += groupLoss;
+    count = end;
+    cursor = end;
+  }
+  return { loss, count };
+}
+/**
+ * What the map's lakes can lose to the air and to the ground, in cubic metres a second, by the
+ * same rates the stage budget sets against their inflow.
+ */
+export function lakeLosses(map: PhysicalField, context: PhysicalContext) {
+  const p = context.Profile,
+    losses = { evaporation: 0, seepage: 0 };
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.WaterKindCodes.get(i) !== 2) continue;
+    const area = map.mesh.area(i);
+    losses.evaporation += depthRateToDischarge(openWaterLoss(map, p, i), area);
+    losses.seepage += depthRateToDischarge(p.LakeInfiltrationLoss, area);
+  }
+  return losses;
+}
+function basinInput(map: PhysicalField, component: Depression, water: Band) {
+  const basin = workingArray(map, "uint8", "lakes:basin");
+  for (const i of component.members) basin.set(i, 1);
+  let input = 0;
+  for (const i of component.members) {
+    const target = map.DrainageParents.get(i);
+    if (target < 0 || !basin.get(target)) input += water.get(i);
+  }
+  releaseWorking(map, basin);
+  return input;
+}
+export function solveStage(
+  map: PhysicalField,
+  context: PhysicalContext,
+  component: Depression,
+  water: Band
+): SupportedLake | null {
+  if (component.members.length === 0) return null;
+  const cells = basinCells(map, component),
+    input = basinInput(map, component, water);
+  const budget = stageBudget(map, context, cells, input);
+  if (budget.count === 0) return null;
+  const surface =
+    budget.count === cells.length
+      ? component.spill
+      : Math.min(component.spill, map.Elevation.get(cells[budget.count]));
+  const selected = new CellList();
+  for (let n = 0; n < budget.count; n++)
+    if (map.Elevation.get(cells[n]) < surface) selected.push(cells[n]);
+  const members = selected.sort().finish();
+  const complete = budget.count === cells.length;
+  if (members.length === 0) return null;
+  let depth = 0;
+  for (const i of members) depth = Math.max(depth, surface - map.Elevation.get(i));
+  const overflow = complete ? Math.max(0, input - budget.loss) : 0;
+  return { component, surface, members, depth, overflow };
+}
+function touchesDam(map: PhysicalField, dams: Band, lake: SupportedLake) {
+  for (const i of lake.members)
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
+      if (j >= 0 && dams.get(j)) return true;
+    }
+  return false;
+}
+/** The share (per mille) of a lake's area in cells whose perimeter is at least half lake. */
+function compactness(map: PhysicalField, lake: SupportedLake) {
+  const set = workingArray(map, "uint8", "lakes:compactness");
+  for (const i of lake.members) set.set(i, 1);
+  let interior = 0,
+    total = 0;
+  for (const i of lake.members) {
+    let supported = 0;
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
+      if (j >= 0 && set.get(j)) supported += map.mesh.faceLength(i, edge);
+    }
+    const perimeter = 2 * (map.mesh.cellWidth(i) + map.mesh.cellHeight(i)),
+      cellArea = map.mesh.area(i);
+    if (supported >= perimeter / 2) interior += cellArea;
+    total += cellArea;
+  }
+  releaseWorking(map, set);
+  return (interior * 1000) / Math.max(1e-9, total);
+}
+export function qualifies(map: PhysicalField, p: PhysicalProfile, lake: SupportedLake): boolean {
+  const dams = map.EngineeredDams;
+  if (dams && touchesDam(map, dams, lake)) return lake.depth > 0;
+  let area = 0;
+  for (const i of lake.members) area += map.mesh.area(i);
+  if (area < p.MinimumLakeArea || lake.depth < units(p.LakeDepthThreshold)) return false;
+  return compactness(map, lake) >= p.LakeCompactnessShare;
+}

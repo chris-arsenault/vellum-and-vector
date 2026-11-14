@@ -1,14 +1,15 @@
 import { Circle, Fill, RegularShape, Stroke, Style, Text } from "ol/style.js";
-import type { AtlasFeature, LayerStyle } from "./types";
+import type { LayerStyle } from "./types";
+import type { RenderFeature } from "./renderFeature";
 
-export function settlementPriority(feature: AtlasFeature) {
+export function settlementPriority(feature: RenderFeature) {
   const role = feature.attributes.settlementRole;
   const rank =
     role === "capital" ? 4 : role === "regionalCapital" ? 3 : role === "marketTown" ? 2 : 1;
   return rank * 1e9 + Math.max(0, Number(feature.attributes.population ?? 0));
 }
 /** Creation-profile publication owns feature eligibility; zoom never reveals latent towns. */
-export function settlementStyle(feature: AtlasFeature, layer: LayerStyle) {
+export function settlementStyle(feature: RenderFeature, layer: LayerStyle) {
   const role = feature.attributes.settlementRole;
   const capital = role === "capital",
     regional = role === "regionalCapital";

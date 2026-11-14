@@ -1,4 +1,4 @@
-import type { Diagnostic } from "@atlas/domain";
+import type { Diagnostic } from "@atlas/context";
 import type { GenerationWorkflow, WorkflowStage } from "./useGenerationWorkflow";
 import { physicalEpochControls } from "./generationEpochFields";
 import { adapterFieldOwner, configurationFieldKey } from "./generationFeatureAdapters";

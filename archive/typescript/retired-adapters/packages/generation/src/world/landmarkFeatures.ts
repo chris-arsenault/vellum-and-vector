@@ -1,0 +1,291 @@
+// Publication of authored landmarks: one feature per landmark identity, and no second row for
+// the detected landform that is the landmark itself.
+import {
+  canonicalGeometry,
+  canonicalPosition,
+  landmarkKind,
+  MapScale,
+  landmarkLayer,
+  lineParts,
+  spatial,
+  type AtlasFeature,
+  type Band,
+  type Landmark,
+} from "@atlas/domain";
+import { releaseWorking, workingArray } from "./physicalNumerics";
+import type { Geometry } from "geojson";
+import type { GenerationState } from "../process";
+import { generationFeatures, removeGenerationFeature } from "../generationFeatures";
+import { putGenerated } from "../mapFeatures";
+import { atlasName, nameGeographicFeature, nameMetadata } from "../atlasNaming";
+import { remeasureLandmark, type LandmarkScene } from "./landmarks";
+import { nearestTriangle } from "./mesh";
+import { canyonCells } from "./landmarkCanyon";
+import { distance, nearestOnPath, pathMetrics, placeLandmark } from "./landmarkGeometry";
+import type { LandmarkRecord } from "./landmarkLedger";
+import { clipGeographicArea } from "./geographicContours";
+
+type Work = NonNullable<GenerationState["physical"]>;
+
+/** Metres around the landmark's geometry that its published footprint covers. */
+function footprintReach(landmark: Landmark, work: Work) {
+  const p = landmark.parameters;
+  if (landmarkKind(landmark.kind)?.system) return MapScale.metres(p.reach, "km");
+  switch (landmark.kind) {
+    case "volcanic-mountain":
+    case "resistant-mountain":
+      return MapScale.metres(p.baseRadius, "km");
+    case "canyon":
+      return work.map.scale.supported(MapScale.metres(p.rimWidth, "km") / 2, 0.6);
+    case "dome-ring":
+    case "impact-ring":
+      return MapScale.metres(p.diameter, "km") / 2;
+    case "escarpment":
+      return MapScale.metres(p.scarpWidth, "km");
+    default:
+      return work.map.scale.cells(1);
+  }
+}
+/** The radius a point kind's signature claims around its anchor, or null for a line kind. */
+function claimRadius(kind: string, p: Record<string, number>, scale: MapScale) {
+  switch (kind) {
+    case "volcanic-mountain":
+    case "resistant-mountain":
+      return scale.supported(MapScale.metres(p.baseRadius, "km") / 2, 1);
+    case "dome-ring":
+      return MapScale.metres(p.diameter, "km") / 2;
+    case "impact-ring":
+      return (
+        MapScale.metres(p.diameter, "km") / 2 +
+        scale.supported(MapScale.metres(p.diameter, "km") * 0.17, 1)
+      );
+    case "canyon":
+    case "escarpment":
+      return null;
+    default:
+      return scale.cells(1);
+  }
+}
+/** The cells a landmark's signature occupies; a detected landform there is the landmark. */
+function claimedCells(work: Work, landmark: Landmark, record: LandmarkRecord): number[] {
+  const map = work.map,
+    placed = placeLandmark(map, landmark);
+  // A magic source claims no landform: the places its system makes around it are its own.
+  if (!placed || landmarkKind(landmark.kind)?.system) return [];
+  const p = placed.parameters,
+    radius = claimRadius(landmark.kind, p, map.scale),
+    cells: number[] = [];
+  if (landmark.kind === "canyon")
+    return canyonCells(map, placed, record.corridor).floor.map((cell) => cell.i);
+  const metrics = pathMetrics(map, placed.path);
+  for (let i = 0; i < map.mesh.count; i++) {
+    const inside =
+      radius === null
+        ? nearestOnPath(map, metrics, map.mesh.x(i), map.mesh.y(i)).distance <=
+          MapScale.metres(p.scarpWidth, "km")
+        : distance(map, i, placed.center) <= radius;
+    if (inside) cells.push(i);
+  }
+  return cells;
+}
+function landmarkPairs(state: GenerationState) {
+  const work = state.physical!,
+    pairs: [Landmark, LandmarkRecord][] = [];
+  for (const [id, record] of work.landmarks ?? []) {
+    const landmark = state.domain.world.landmarks.find((item) => item.id === id);
+    if (landmark) pairs.push([landmark, record]);
+  }
+  return pairs;
+}
+/** Cells the landmarks claim as a mark band, or null when none claims a cell. */
+export function landmarkClaims(state: GenerationState) {
+  const work = state.physical!;
+  let claimed: Band | null = null;
+  for (const [landmark, record] of landmarkPairs(state))
+    for (const i of claimedCells(work, landmark, record))
+      (claimed ??= workingArray(work.map, "uint8", "landmark:claimed")).set(i, 1);
+  return claimed;
+}
+function cellOf(work: Work, [x, y]: number[]) {
+  const cell = nearestTriangle(
+    work.map.mesh,
+    x - work.map.mesh.origin[0],
+    y - work.map.mesh.origin[1]
+  );
+  return cell === undefined ? -1 : cell;
+}
+/** Coordinates that locate a detected landform: its anchor when it has one, else its geometry. */
+function anchors(feature: AtlasFeature): number[][] {
+  const representative = feature.attributes.representative as { x: number; y: number } | undefined;
+  if (representative && Number.isFinite(representative.x))
+    return [[representative.x, representative.y]];
+  const geometry: Geometry = feature.geometry;
+  if (geometry.type === "Point") return [geometry.coordinates];
+  if (geometry.type.includes("Polygon")) {
+    const [w, s, e, n] = spatial.bounds(geometry);
+    return [[(w + e) / 2, (s + n) / 2]];
+  }
+  return lineParts(geometry).flat();
+}
+const detectedKinds = new Set(["peak", "gorge", "waterfall", "valley"]);
+/** Drop detected landforms that stand on claimed cells: they are the landmark, published once. */
+export function dropClaimedFeatures(state: GenerationState, claimed: Band | null) {
+  if (!claimed) return;
+  const work = state.physical!;
+  for (const feature of generationFeatures(state, {
+    areaId: state.domain.scope.areaId,
+    layerId: "geology",
+  })) {
+    if (
+      feature.areaId !== state.domain.scope.areaId ||
+      feature.state !== "generated" ||
+      feature.layerId !== "geology" ||
+      !detectedKinds.has(feature.kind)
+    )
+      continue;
+    const points = anchors(feature),
+      onClaim = points.filter((p) => {
+        const cell = cellOf(work, p);
+        return cell >= 0 && claimed.get(cell) === 1;
+      }).length;
+    if (onClaim * 2 >= points.length) removeGenerationFeature(state, feature.id);
+  }
+  releaseWorking(work.map, claimed);
+}
+function signatureAttributes(record: LandmarkRecord) {
+  const attributes: Record<string, unknown> = {};
+  for (const [key, target] of Object.entries(record.target)) {
+    const measured = record.measured[key];
+    attributes[key] = Number.isFinite(measured) ? Math.round(measured * 10) / 10 : null;
+    attributes[`${key}Target`] = target;
+  }
+  return attributes;
+}
+/** The landform the naming vocabulary knows each kind as. */
+const landformKinds: Record<string, string> = {
+  "volcanic-mountain": "volcano",
+  "resistant-mountain": "peak",
+  canyon: "gorge",
+  "dome-ring": "dome",
+  "impact-ring": "crater",
+  escarpment: "escarpment",
+  falls: "waterfall",
+};
+/** A landmark the generator sited is named once, here, and keeps that name on every rerun. */
+function nameLandmark(state: GenerationState, landmark: Landmark) {
+  if (landmark.name) return {};
+  const kind = landmarkKind(landmark.kind),
+    [w, s, e, n] = spatial.bounds(landmark.geometry);
+  const named = kind?.system
+    ? atlasName(state.domain.world, {
+        key: landmark.id,
+        kind: "magic",
+        subkind: kind.id,
+        term: kind.term,
+        position: { x: (w + e) / 2, y: (s + n) / 2 },
+      })
+    : nameGeographicFeature(
+        state.domain.world,
+        landmark.id,
+        landformKinds[landmark.kind] ?? "peak",
+        landmark.geometry,
+        {}
+      );
+  if (!named) return {};
+  landmark.name = named.name;
+  return nameMetadata(named);
+}
+/** What a magic landmark publishes beyond the shared signature: its system and source. */
+function magicAttributes(landmark: Landmark, record: LandmarkRecord) {
+  const kind = landmarkKind(landmark.kind);
+  return kind?.system ? { system: kind.system, sourceStrength: record.strength ?? null } : {};
+}
+/** The captured river in world coordinates, with the flow it brought. */
+function captureAttributes(state: GenerationState, record: LandmarkRecord) {
+  if (!record.capture) return { capture: null, captureAccumulation: null };
+  const [x0, y0] = state.physical!.map.mesh.origin,
+    position = canonicalPosition(state.domain.world.reference, {
+      x: Math.round(record.capture.x + x0),
+      y: Math.round(record.capture.y + y0),
+      z: 0,
+    });
+  return {
+    capture: {
+      x: position.x,
+      y: position.y,
+      accumulation: record.capture.accumulation,
+    },
+    captureAccumulation: Math.round(record.capture.accumulation),
+  };
+}
+function landmarkFeature(
+  state: GenerationState,
+  landmark: Landmark,
+  record: LandmarkRecord
+): AtlasFeature {
+  const work = state.physical!,
+    naming = nameLandmark(state, landmark),
+    shape = spatial.buffer(landmark.geometry, footprintReach(landmark, work)),
+    clipped = clipGeographicArea(state, shape),
+    generated = landmark.origin === "generated",
+    layerId = landmarkLayer(landmarkKind(landmark.kind));
+  return {
+    id: landmark.id,
+    areaId: state.domain.scope.areaId,
+    layerId,
+    kind: "landmark",
+    name: landmark.name,
+    geometry: canonicalGeometry(state.domain.world.reference, landmark.geometry),
+    ...(clipped ? { footprint: clipped } : {}),
+    detail: {},
+    attributes: {
+      sourceAlgorithm: "atlas-landmarks-1",
+      causeId: `landmark:${landmark.id}`,
+      nameStatus: "proper",
+      ...naming,
+      landmarkKind: landmark.kind,
+      origin: generated ? "generated" : "authored",
+      emplacedAtEpoch: record.emplacedAtEpoch,
+      signature: record.realized ? "realized" : "latent",
+      ...signatureAttributes(record),
+      ...magicAttributes(landmark, record),
+      maintenance: Math.round(record.maintenance * 10) / 10,
+      ...captureAttributes(state, record),
+      notes: record.notes.join(" "),
+    },
+    relations: [],
+    state: "generated",
+    protected: false,
+    actor: "generator",
+    generationId: null,
+    generationDomain: state.domain.world.layers[layerId]?.generator ?? null,
+    causes: [
+      `${generated ? "Sited by the generator and formed" : "Formed from the authored landmark"} in epoch ${record.emplacedAtEpoch + 1}; its signature was held through every later epoch.`,
+    ],
+  };
+}
+/**
+ * The landmark as geography that exists: its identity with the signature as it stands at
+ * present, read again here because the present phase re-forms ice, water and magic.
+ */
+export function extractLandmarks(state: GenerationState) {
+  const work = state.physical!,
+    footprint = state.domain.scope.footprint,
+    scene: LandmarkScene = {
+      world: state.domain.world,
+      magic: work.magic,
+      scope: { areaId: state.domain.scope.areaId, spaceId: state.domain.scope.spaceId },
+      activity: () => 1,
+    };
+  for (const [landmark, record] of landmarkPairs(state)) {
+    if (
+      !spatial.intersects(
+        canonicalGeometry(state.domain.world.reference, landmark.geometry),
+        footprint
+      )
+    )
+      continue;
+    remeasureLandmark(work.map, landmark, work.landmarks!, scene);
+    putGenerated(state, landmarkFeature(state, landmark, record));
+  }
+}

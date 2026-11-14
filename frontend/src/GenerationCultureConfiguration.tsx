@@ -1,5 +1,5 @@
-import type { SetupFeature } from "@atlas/generation";
-import { beforePresentEpoch } from "@atlas/domain";
+import type { SetupFeature } from "./generationTypes";
+import { beforePresentEpoch } from "./generationPresentation";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { NumberField } from "./WorkflowFields";
 import { WorkflowCommittedName } from "./WorkflowCommittedName";

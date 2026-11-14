@@ -1,4 +1,4 @@
-import type { MagicRenewal, MagicSystem } from "@atlas/domain";
+import type { MagicRenewal, MagicSystem } from "@atlas/context";
 
 /** Labels for the magic systems form: renewal kinds, effects and parameters. */
 export const renewalLabels: Record<MagicRenewal, string> = {

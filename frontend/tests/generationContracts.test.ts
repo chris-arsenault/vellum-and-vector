@@ -1,11 +1,10 @@
 import { expect, test, type Page } from "./uiTest";
 test.use({ generationLifecycle: "Verify generation controls and submitted configuration." });
-import { installGenerationFixture } from "./generationFixture";
 import { tuneGeneration } from "./generationSetup";
 
 async function magic(page: Page) {
-  await installGenerationFixture(page);
   await page.goto("/");
+  await page.getByRole("button", { name: "New world", exact: true }).click();
   await page.getByLabel("World name").fill("Contract atlas");
   await tuneGeneration(page, "Configured magical systems");
   const fire = page

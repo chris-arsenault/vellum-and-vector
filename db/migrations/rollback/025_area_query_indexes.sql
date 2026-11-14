@@ -1,1 +1,0 @@
-DROP INDEX atlas_reach_end,atlas_reach_start,atlas_area_extent;

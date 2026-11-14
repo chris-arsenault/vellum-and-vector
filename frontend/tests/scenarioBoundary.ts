@@ -1,6 +1,8 @@
 declare global {
   interface Window {
     atlasScenario: { rendering: boolean; generation: boolean };
+    generationFixtureInput?: unknown;
+    generationCalls: string[];
   }
 }
 
@@ -21,6 +23,7 @@ export function installScenarioBoundary({
   generation?: boolean;
 }) {
   window.atlasScenario = { rendering, generation };
+  window.generationCalls = [];
   const NativeWorker = window.Worker;
   window.Worker = new Proxy(NativeWorker, {
     construct(target, args) {
@@ -33,7 +36,48 @@ export function installScenarioBoundary({
         console.error(message);
         throw new Error(message);
       }
-      return Reflect.construct(target, args);
+      const worker: Worker = Reflect.construct(target, args);
+      if (url.includes("atlasContext.worker")) {
+        const send = worker.postMessage.bind(worker);
+        const completed = {
+          jobId: "supplied-job",
+          state: "completed",
+          step: "Map published",
+          progress: 1,
+          result: null,
+          message: null,
+        };
+        const supplied = (
+          call: { method: string; request?: { recipe?: unknown; job_id?: string } } | null
+        ) => {
+          if (!generation || !call) return null;
+          if (call.method === "create") {
+            window.generationFixtureInput = structuredClone(call.request?.recipe);
+            return completed;
+          }
+          if (call.method === "observe" && call.request?.job_id === completed.jobId)
+            return { events: [{ kind: "status", status: completed }], status: completed, next: 1 };
+          return null;
+        };
+        worker.postMessage = (value, options?: Transferable[] | StructuredSerializeOptions) => {
+          const call = value?.operation?.service === "generation" ? value.operation.call : null;
+          if (call) window.generationCalls.push(call.method);
+          const reply = supplied(call);
+          if (reply) {
+            queueMicrotask(() =>
+              worker.dispatchEvent(
+                new MessageEvent("message", { data: { id: value.id, value: reply } })
+              )
+            );
+            return;
+          }
+          if (call && ["create", "refine", "regenerate"].includes(call.method))
+            throw new Error("UI scenarios must supply job output, never run real generation.");
+          if (Array.isArray(options)) send(value, options);
+          else send(value, options);
+        };
+      }
+      return worker;
     },
   });
 }

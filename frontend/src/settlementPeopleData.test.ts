@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { PopulationGroup, World } from "@atlas/domain";
+import type { PopulationGroup } from "@atlas/map";
 import {
   cultureSegments,
   foldGroupRows,
@@ -9,16 +9,14 @@ import {
   traditionShares,
 } from "./settlementPeopleData";
 
-const world = {
-  entities: {
-    bayt: { name: "Bayt Abid" },
-    ding: { name: "Upper Dingford" },
-    "rel-bayt": { name: "Bayt Abid tradition" },
-    "rel-ding": { name: "Upper Dingford tradition" },
-    "lang-bayt": { name: "Bayt Abid language" },
-    "lang-ding": { name: "Upper Dingford language" },
-  },
-} as unknown as World;
+const names = {
+  bayt: { name: "Bayt Abid" },
+  ding: { name: "Upper Dingford" },
+  "rel-bayt": { name: "Bayt Abid tradition" },
+  "rel-ding": { name: "Upper Dingford tradition" },
+  "lang-bayt": { name: "Bayt Abid language" },
+  "lang-ding": { name: "Upper Dingford language" },
+};
 function group(
   culture: string | null,
   religions: string[],
@@ -46,7 +44,7 @@ const groups = [
 ];
 
 it("aggregates residents by culture with unspecified cultures under their people", () => {
-  expect(cultureSegments(world, groups)).toEqual([
+  expect(cultureSegments(names, groups)).toEqual([
     { id: "bayt", label: "Bayt Abid", value: 930 },
     { id: "ding", label: "Upper Dingford", value: 66 },
     { id: "founders", label: "founders", value: 4 },
@@ -54,16 +52,16 @@ it("aggregates residents by culture with unspecified cultures under their people
 });
 
 it("reports overlapping tradition and language shares as fractions of all residents", () => {
-  const traditions = traditionShares(world, groups);
+  const traditions = traditionShares(names, groups);
   expect(traditions.map((s) => [s.label, Math.round(1000 * s.value) / 1000])).toEqual([
     ["Bayt Abid tradition", 0.99],
     ["Upper Dingford tradition", 0.096],
   ]);
-  expect(knowledgeSegments(world, groups).map((s) => [s.label, s.value])).toEqual([
+  expect(knowledgeSegments(names, groups).map((s) => [s.label, s.value])).toEqual([
     ["Bayt Abid language", 0.93],
     ["Upper Dingford language", 0.06],
   ]);
-  expect(traditionShares(world, [])).toEqual([]);
+  expect(traditionShares(names, [])).toEqual([]);
 });
 
 it("weighs the residents' practices by head count", () => {
@@ -76,7 +74,7 @@ it("weighs the residents' practices by head count", () => {
 });
 
 it("lists groups heaviest first with their record index and folds the minor ones", () => {
-  const rows = groupRows(world, groups);
+  const rows = groupRows(names, groups);
   expect(rows.map((r) => [r.index, r.culture, r.traditions.length, r.share])).toEqual([
     [0, "Bayt Abid", 1, 0.9],
     [1, "Upper Dingford", 2, 0.06],
@@ -89,5 +87,5 @@ it("lists groups heaviest first with their record index and folds the minor ones
   expect(folded.map((r) => r.index)).toEqual([3, 4]);
   // One minor row is not worth a remainder row.
   expect(foldGroupRows(rows.slice(0, 4))).toEqual({ shown: rows.slice(0, 4), folded: [] });
-  expect(groupRows(world, [])).toEqual([]);
+  expect(groupRows(names, [])).toEqual([]);
 });

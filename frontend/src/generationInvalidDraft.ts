@@ -1,12 +1,9 @@
-import { atlasFeatureDefinitions, type GenerationSetup } from "@atlas/generation";
+import type { GenerationSetup } from "./generationTypes";
+import { atlasFeatureDefinitions } from "./generationPresentation";
 import type { GenerationDraft } from "./generationDraft";
 
-/** Keep editable intent current; an invalid request has no executable projection. */
-export function projectInvalidDraft(
-  draft: GenerationDraft,
-  previous: GenerationSetup | null,
-  historyFixed: boolean
-) {
+/** Keep form edits visible while the host rejects an incomplete configuration. */
+export function projectInvalidDraft(draft: GenerationDraft, previous: GenerationSetup | null) {
   if (!previous) return null;
   const enabled = (id: string) => {
     const definition = atlasFeatureDefinitions.find((feature) => feature.id === id)!;
@@ -19,35 +16,14 @@ export function projectInvalidDraft(
   };
   return {
     ...previous,
-    features: previous.features.map((feature) => {
-      const definition = atlasFeatureDefinitions.find((entry) => entry.id === feature.id)!;
-      return {
-        ...feature,
-        enabled: enabled(feature.id),
-        status:
-          feature.status === "inherited"
-            ? ("inherited" as const)
-            : enabled(feature.id)
-              ? ("unavailable" as const)
-              : ("off" as const),
-        reason:
-          feature.status === "inherited"
-            ? feature.reason
-            : "Resolve the invalid configuration before generating.",
-        configuration: draft.recipe.features?.[feature.id]?.configuration,
-        configurationEditable:
-          enabled(feature.id) &&
-          Boolean(definition.configuration) &&
-          (definition.configurationPresentation?.applicability === "any" || !historyFixed),
-        settings: feature.settings.map((setting) => ({
-          ...setting,
-          value: draft.recipe.features?.[setting.owner]?.settings?.[setting.key] ?? setting.value,
-          active:
-            enabled(setting.controlFeature) &&
-            !(historyFixed && definition.applicability?.initialOnlySettings?.includes(setting.key)),
-        })),
-        invocationIds: [],
-      };
-    }),
+    features: previous.features.map((feature) => ({
+      ...feature,
+      enabled: enabled(feature.id),
+      configuration: draft.recipe.features?.[feature.id]?.configuration,
+      settings: feature.settings.map((setting) => ({
+        ...setting,
+        value: draft.recipe.features?.[setting.owner]?.settings?.[setting.key] ?? setting.value,
+      })),
+    })),
   };
 }

@@ -1,9 +1,9 @@
 # 0002 — TypeScript generation, relational storage and Ahara integration
 
-Backend, persistence, MCP and durable execution provisions are superseded for
-current work by [ADR 0003](0003-frontend-session.md). The active product runs in
-browser memory with worker generation. The relational/platform design below is
-retained as earlier design context, not implementation work to complete now.
+The relational/platform design below is earlier design context. Its browser-only
+successor is [ADR 0003](0003-frontend-session.md); the current execution-host and
+schema boundary is [ADR 0015](0015-finished-maps-and-execution-hosts.md).
+Do not revive the retired backend, public routing or durable-job mechanisms from this ADR.
 
 Direction recorded 2026-10-18.
 
@@ -73,7 +73,7 @@ those read, validation and write responsibilities while resolving compute hostin
 Use a root pnpm workspace with `packages/domain` for shared types, runtime
 schemas, planar GIS operations and numerical resource contracts;
 `packages/generation` for configured process sequences, epoch loops and algorithms;
-`backend/src` for typed repositories and Lambda adapters; and the
+host packages for typed repositories and transport adapters; and the
 existing `frontend` for React/OpenLayers. Package exports are TypeScript source
 consumed by the workspace compiler and bundled for each runtime.
 

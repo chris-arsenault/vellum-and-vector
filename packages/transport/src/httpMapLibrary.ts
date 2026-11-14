@@ -1,0 +1,21 @@
+import { Decoder, Encoder } from "cbor-x";
+import { RpcMapLibrary } from "./mapLibrary";
+
+export function httpMapLibrary(baseUrl: string) {
+  const encoder = new Encoder({ useRecords: false }),
+    decoder = new Decoder({ useRecords: false });
+  const endpoint = new URL("api/maps/library", baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+  return new RpcMapLibrary(async (call, options) => {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      signal: options?.signal,
+      headers: { "Content-Type": "application/cbor", Accept: "application/cbor" },
+      body: new Uint8Array(encoder.encode(call)),
+    });
+    if (!response.ok) {
+      const error = (await response.json()) as { message?: string };
+      throw new Error(error.message ?? `Map library failed (${response.status}).`);
+    }
+    return decoder.decode(new Uint8Array(await response.arrayBuffer()));
+  });
+}

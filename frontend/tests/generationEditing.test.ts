@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "./uiTest";
 test.use({ generationLifecycle: "Verify unfinished configuration and repaired worker requests." });
-import { installGenerationFixture } from "./generationFixture";
 import { tuneGeneration, sharedHistory, recipeEditor } from "./generationSetup";
 
 const stage = (page: Page, name: RegExp) =>
@@ -16,8 +15,8 @@ async function history(page: Page) {
     await details.locator("summary").first().click();
 }
 async function begin(page: Page, name: string) {
-  await installGenerationFixture(page);
   await page.goto("/");
+  await page.getByRole("button", { name: "New world", exact: true }).click();
   await page.getByLabel("World name").fill(name);
 }
 
@@ -119,7 +118,7 @@ test("keeps physical rainfall editable when living ecology is disabled", async (
   await stage(page, /Review & generate/).click();
   await expect(page.getByRole("button", { name: "Generate world", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  await expect(page.getByRole("region", { name: "Generation job" })).toContainText("completed");
   const input = await page.evaluate(
     () =>
       (
@@ -165,20 +164,19 @@ test("edits shared tectonic activity through active consumers and ocean levels w
   await stage(page, /Review & generate/).click();
   await expect(page.getByRole("button", { name: "Generate world", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  await expect(page.getByRole("region", { name: "Generation job" })).toContainText("completed");
   const input = await page.evaluate(
     () =>
       (
         window as unknown as {
           generationFixtureInput: {
-            parameters: { seaLevel: number };
             settings: { epochs: { tectonics: number; seaLevel: number }[] };
-            features: Record<string, { enabled: boolean }>;
+            features: Record<string, { enabled: boolean; settings: { seaLevel?: number } }>;
           };
         }
       ).generationFixtureInput
   );
-  expect(input.parameters.seaLevel).toBe(0.0000075);
+  expect(input.features["physical.climate"].settings.seaLevel).toBe(0.0000075);
   expect(input.settings.epochs[0]).toMatchObject({ tectonics: 0.2, seaLevel: 0.000003 });
   expect(input.features["physical.tectonic-history"].enabled).toBe(false);
 });

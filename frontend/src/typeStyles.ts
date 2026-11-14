@@ -5,31 +5,33 @@ import GeoJSON from "ol/format/GeoJSON.js";
 import type OLGeometry from "ol/geom/Geometry.js";
 import type { Geometry } from "geojson";
 import { asArray } from "ol/color.js";
-import type { AtlasFeature, LayerStyle, World } from "./types";
-import type { CartographicPresentation, FeatureTypeStyle } from "@atlas/domain";
-import { describeFeature, typePresentation } from "@atlas/domain";
+import type { LayerStyle } from "./types";
+import type { FeatureAppearance, RenderFeature } from "./renderFeature";
+import type { CartographicPresentation, FeatureTypeStyle } from "./types";
+import { typePresentation } from "./featureTypePresentation";
 import { featureStyle } from "./vectorStyles";
 import { cartographicFeatureStyle } from "./drawnStyles";
-import type { DrawingGeography } from "./drawnGeography";
+import type { DrawingGeography } from "./publishedAppearance";
+import type { DrawingFeature } from "./drawingGeometry";
 const footprints = new WeakMap<Geometry, OLGeometry>();
 
 /** Apply type visibility outside both the default and the GeoStyler renderers. */
-export function typeStyle(
-  world: World,
+export function typeStyle<F extends RenderFeature>(
+  appearance: FeatureAppearance<F>,
   base: LayerStyle,
   parsed?: StyleLike,
   cartography?: CartographicPresentation,
   footprint?: Geometry,
   geography?: DrawingGeography,
-  features?: AtlasFeature[]
+  drawing?: Map<string, DrawingFeature>
 ): StyleLike {
   return (feature, resolution) => {
-    const domain = feature.get("domain") as AtlasFeature;
-    const type = describeFeature(world, domain),
+    const domain = feature.get("domain") as F;
+    const type = appearance.type(domain),
       effective = typePresentation(type, base);
     if (!effective.visible || !matchesTextFilter(domain, base)) return [];
     const output = styledFeature(
-      world,
+      appearance,
       domain,
       effective,
       feature as Feature,
@@ -38,7 +40,7 @@ export function typeStyle(
       cartography,
       footprint,
       geography,
-      features
+      drawing?.get(domain.id)
     );
     if (!output) return [];
     const styles = Array.isArray(output) ? output : [output];
@@ -55,9 +57,9 @@ export function typeStyle(
     return rendered;
   };
 }
-function styledFeature(
-  world: World,
-  domain: AtlasFeature,
+function styledFeature<F extends RenderFeature>(
+  appearance: FeatureAppearance<F>,
+  domain: F,
   effective: LayerStyle,
   feature: Feature,
   resolution: number,
@@ -65,21 +67,25 @@ function styledFeature(
   cartography?: CartographicPresentation,
   footprint?: Geometry,
   geography?: DrawingGeography,
-  features?: AtlasFeature[]
+  drawing?: DrawingFeature
 ) {
-  if (cartography?.mode === "drawn")
+  if (cartography?.mode === "drawn") {
+    if (!drawing) throw new Error(`Drawing geometry for ${domain.id} was not prepared.`);
     return cartographicFeatureStyle(domain, effective, resolution, {
-      world,
+      typeId: appearance.type(domain).id,
+      name: appearance.name(domain),
+      magic: appearance.magic(domain),
       view: cartography,
       footprint,
       geography,
-      features,
+      drawing,
     });
+  }
   return parsed
     ? parsedOutput(parsed, feature, resolution)
     : featureStyle(domain, effective, resolution);
 }
-function matchesTextFilter(domain: AtlasFeature, base: LayerStyle) {
+function matchesTextFilter(domain: RenderFeature, base: LayerStyle) {
   return (
     !base.filter ||
     JSON.stringify([domain.name, domain.attributes])

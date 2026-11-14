@@ -1,0 +1,30 @@
+[package]
+name = "atlas-gis"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+atlas-map.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ciborium = "0.2"
+percent-encoding = "2"
+uuid = { version = "1", features = ["v4"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+geos = { version = "11", features = ["v3_11_0", "static"] }
+rstar = "0.14"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen.workspace = true
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+postgres = { version = "0.19", features = ["with-serde_json-1"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+wasm-bindgen-test.workspace = true

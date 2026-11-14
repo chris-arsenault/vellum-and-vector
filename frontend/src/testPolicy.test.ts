@@ -1,55 +1,10 @@
-import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
 import { ESLint } from "eslint";
 import { expect, it } from "vitest";
-import { constructedWorld } from "./constructedWorldFixture";
 
-it("fails immediately if a unit test reaches the full generator through a dynamic import", async () => {
-  const generation = await import("../../packages/generation/src/atlasWorkflow");
-  const { source, input } = constructedWorld();
-  expect(() => generation.generateAtlas(source, input)).toThrow(
-    "Full generation is forbidden in unit tests"
-  );
-});
-
-it("keeps full generator calls in shared end-to-end setup without a fixed fixture count", () => {
-  const directory = fileURLToPath(new URL("./", import.meta.url));
-  const source = ts.createSourceFile(
-    "integration.ts",
-    readFileSync(`${directory}/worldIntegration.generation.test.ts`, "utf8"),
-    ts.ScriptTarget.Latest,
-    true
-  );
-  const hooks = new Set<string>();
-  const collectHooks = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      node.expression.getText(source) === "beforeAll" &&
-      node.arguments[0] &&
-      ts.isIdentifier(node.arguments[0])
-    )
-      hooks.add(node.arguments[0].text);
-    ts.forEachChild(node, collectHooks);
-  };
-  collectHooks(source);
-  let generators = 0;
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node) && node.expression.getText(source) === "generateAtlas") {
-      generators++;
-      let parent: ts.Node | undefined = node.parent;
-      while (
-        parent &&
-        !(ts.isCallExpression(parent) && parent.expression.getText(source) === "beforeAll") &&
-        !(ts.isFunctionDeclaration(parent) && parent.name && hooks.has(parent.name.text))
-      )
-        parent = parent.parent;
-      expect(parent, "full generation must live in the shared beforeAll hook").toBeDefined();
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  expect(generators).toBeGreaterThan(0);
+it("fails immediately if a unit test reaches the Rust generator through a dynamic import", async () => {
+  const generation = await import("@atlas/engine");
+  expect(generation.initializeEngine).toThrow("Full generation is forbidden in unit tests");
 });
 
 it.each([

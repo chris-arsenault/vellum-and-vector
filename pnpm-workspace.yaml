@@ -1,3 +1,4 @@
+# owner-direction(2026-11-14): archived TypeScript generation is unused by active code
 packages:
   - frontend
   - packages/*

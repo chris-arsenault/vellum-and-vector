@@ -2,6 +2,7 @@ import { defineConfig } from "@playwright/test";
 const browser = (process.env.BROWSER ?? "chromium") as "chromium" | "firefox" | "webkit";
 const port = Number(process.env.ATLAS_TEST_PORT ?? 26001);
 const outDir = port === 26001 ? "dist" : `.artifacts/test-${port}`;
+const fixture = process.env.CI ? "" : "make -C .. browser-fixture && ";
 export default defineConfig({
   testDir: "./tests",
   // Retained scenarios for the manual authoring work deferred in AGENTS.md.
@@ -16,7 +17,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: `pnpm build --outDir ${outDir} --mode ${process.env.ATLAS_WORKSPACE ? "workspace" : "browser"} && pnpm exec vite preview --host 127.0.0.1 --port ${port} --outDir ${outDir} --strictPort`,
+    command: `${fixture}pnpm build --outDir ${outDir} --mode ${process.env.ATLAS_WORKSPACE ? "workspace" : "browser"} && pnpm exec vite preview --host 127.0.0.1 --port ${port} --outDir ${outDir} --strictPort`,
     url: `http://127.0.0.1:${port}`,
     timeout: 120000,
     reuseExistingServer: false,

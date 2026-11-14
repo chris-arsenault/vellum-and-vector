@@ -1,14 +1,6 @@
-import {
-  areaSpace,
-  MapScale,
-  canonryConfluencePresets,
-  point,
-  spatial,
-  locatedMagicEffectDefinitions,
-  type MagicConfluence,
-  type MagicSystem,
-} from "@atlas/domain";
-import type { SetupFeature } from "@atlas/generation";
+import type { MagicConfluence, MagicSystem } from "@atlas/context";
+import { locatedMagicEffectDefinitions } from "./locatedMagicPresentation";
+import type { SetupFeature } from "./generationTypes";
 import { MagicSystemsEditor } from "./MagicSystemsForm";
 import { MagicConfluencesEditor } from "./MagicConfluencesEditor";
 import { NumberField } from "./WorkflowFields";
@@ -21,6 +13,7 @@ import {
 } from "./generationDraftEpochs";
 import { useWorkflowFields } from "./workflowFieldState";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
+import { defaultMagicConfiguration } from "./generationPresentation";
 
 export function GenerationMagicConfiguration({
   flow,
@@ -32,7 +25,7 @@ export function GenerationMagicConfiguration({
   const systems = flow.draft.recipe.features!["magic.configured"].configuration!
     .magicSystems as unknown as MagicSystem[];
   const confluences = (flow.draft.recipe.features!["magic.configured"].configuration!.confluences ??
-    canonryConfluencePresets()) as unknown as MagicConfluence[];
+    defaultMagicConfiguration().confluences) as unknown as MagicConfluence[];
   const epoch = selectedDraftEpoch(flow);
   const fields = useWorkflowFields();
   const changeSystems = (next: MagicSystem[]) => {
@@ -93,23 +86,7 @@ export function GenerationMagicConfiguration({
 }
 
 export function GenerationLocatedSources({ flow }: { flow: GenerationWorkflow }) {
-  const source = flow.options.source ?? flow.prepared?.source;
-  if (!source || (!flow.options.areaId && !source.world.magic.length))
-    return (
-      <p className="hint">
-        No located sources exist in this new world. This choice uses sources placed on the map; it
-        does not create them.
-      </p>
-    );
-  const area = source.world.areas[flow.options.areaId ?? source.scope.areaId],
-    space = areaSpace(source.world, area.id);
-  const sources = source.world.magic.filter((magic) => {
-    if (magic.systemId || (magic.spaceId && magic.spaceId !== space)) return false;
-    const footprint = magic.scope
-      ? spatial.intersection(magic.scope, area.footprint)
-      : area.footprint;
-    return footprint && spatial.distance(point(magic.source), footprint) < magic.radius;
-  });
+  const sources = flow.prepared?.sources ?? [];
   if (!sources.length)
     return (
       <p className="hint">
@@ -133,7 +110,7 @@ export function GenerationLocatedSources({ flow }: { flow: GenerationWorkflow })
           <tr key={source.id}>
             <th scope="row">{source.name}</th>
             <td>{locatedEffectLabel(source.effect)}</td>
-            <td>{MapScale.inUnits(source.radius, "km")} km</td>
+            <td>{source.radius / 1000} km</td>
             <td>{source.propagation}</td>
           </tr>
         ))}

@@ -1,7 +1,6 @@
-import { spatial } from "@atlas/domain";
 import Point from "ol/geom/Point.js";
 import { Style } from "ol/style.js";
-import type { AtlasFeature } from "./types";
+import type { RenderFeature } from "./renderFeature";
 import { drawnIcon, type DrawnIconKind } from "./drawnSymbols";
 
 const marks: Record<string, DrawnIconKind> = {
@@ -38,33 +37,16 @@ const landmarks: Record<string, DrawnIconKind> = {
   "greenwood-heart": "shrine",
   "salt-pan": "shrine",
 };
-export function placeMark(feature: AtlasFeature) {
+export function placeMark(feature: RenderFeature) {
   return feature.kind === "landmark"
     ? (landmarks[String(feature.attributes.landmarkKind)] ?? "site")
     : marks[feature.kind];
 }
-export function placeAnchor(feature: AtlasFeature): number[] {
-  const shape = feature.geometry;
-  if (shape.type === "Point") return shape.coordinates;
-  const p = feature.attributes.representative as { x?: number; y?: number } | undefined;
-  if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return [p.x!, p.y!];
-  if (shape.type.includes("Polygon")) {
-    const at = spatial.interiorPosition(shape);
-    return [at.x, at.y];
-  }
-  const lines =
-    shape.type === "LineString"
-      ? shape.coordinates
-      : shape.type === "MultiLineString"
-        ? shape.coordinates[0]
-        : [];
-  return lines[Math.floor(lines.length / 2)] ?? [0, 0];
-}
-export function drawnPlace(feature: AtlasFeature, monochrome: boolean) {
+export function drawnPlace(feature: RenderFeature, monochrome: boolean, anchor: number[]) {
   const mark = placeMark(feature);
   return mark
     ? new Style({
-        geometry: new Point(placeAnchor(feature)),
+        geometry: new Point(anchor),
         image: drawnIcon(mark, feature.kind === "landmark" ? 34 : 26, monochrome, true),
         zIndex: feature.kind === "landmark" ? 900 : 400,
       })

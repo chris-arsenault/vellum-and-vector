@@ -1,17 +1,18 @@
 import { useState } from "react";
-import type { World } from "./types";
-import type { RegistryColumn, RegistryQuery, RegistryFacets, AttributeFilter } from "@atlas/domain";
+import type { MapColumn as RegistryColumn, MapRegistryQuery as RegistryQuery, MapRegistryPage } from "@atlas/map";
+type RegistryFacets = MapRegistryPage["facets"];
+type AttributeFilter = RegistryQuery["attributes"][number];
 
 export function RegistryFilters({
   facets,
   query,
   change,
-  world,
+  spaceNames,
 }: {
-  facets: RegistryFacets;
+  facets: Omit<RegistryFacets, "types"> & { types: { id: string; path: string[] }[] };
   query: RegistryQuery;
   change: (q: RegistryQuery) => void;
-  world: World;
+  spaceNames: Record<string, string>;
 }) {
   const types = facets.types;
   return (
@@ -38,7 +39,7 @@ export function RegistryFilters({
           ))}
         </select>
       </label>
-      <CategoryFilters facets={facets} query={query} change={change} world={world} />
+      <CategoryFilters facets={facets} query={query} change={change} spaceNames={spaceNames} />
       <label className="check">
         <input
           type="checkbox"
@@ -58,7 +59,12 @@ export function RegistryFilters({
     </div>
   );
 }
-function CategoryFilters({ facets, query, change, world }: Parameters<typeof RegistryFilters>[0]) {
+function CategoryFilters({
+  facets,
+  query,
+  change,
+  spaceNames,
+}: Parameters<typeof RegistryFilters>[0]) {
   const categories = [
     { key: "status", label: "Status" },
     { key: "state", label: "Authorship" },
@@ -78,7 +84,7 @@ function CategoryFilters({ facets, query, change, world }: Parameters<typeof Reg
             <option value="">All</option>
             {facets.categories[key].map((v) => (
               <option key={v} value={v}>
-                {key === "space" ? (world.areas[v]?.name ?? "World surface") : v}
+                {key === "space" ? (spaceNames[v] ?? "World surface") : v}
               </option>
             ))}
           </select>

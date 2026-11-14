@@ -1,4 +1,4 @@
-import type { SetupFeature } from "@atlas/generation";
+import type { SetupFeature } from "./generationTypes";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { generationFeatureAdapter } from "./generationFeatureAdapters";
 
@@ -15,7 +15,7 @@ export function GenerationConfigurationSummary({
   if (!current || !previous) return null;
   const adapter = generationFeatureAdapter(feature.id);
   if (!adapter?.summarize) return null;
-  const original = flow.baseline.setup?.features.find((entry) => entry.id === feature.id);
+  const original = flow.baseline.prepared?.setup.features.find((entry) => entry.id === feature.id);
   const changes = adapter.summarize({
     current: feature.configuration,
     previous: original?.configuration,

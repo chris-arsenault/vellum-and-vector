@@ -47,33 +47,39 @@ importers:
 
   frontend:
     dependencies:
-      '@atlas/application':
+      '@atlas/context':
         specifier: workspace:*
-        version: link:../packages/application
-      '@atlas/domain':
+        version: link:../packages/atlas-context
+      '@atlas/engine':
         specifier: workspace:*
-        version: link:../packages/domain
-      '@atlas/generation':
+        version: link:../packages/engine
+      '@atlas/map':
         specifier: workspace:*
-        version: link:../packages/generation
-      '@atlas/storage-browser':
+        version: link:../packages/map
+      '@atlas/transport':
         specifier: workspace:*
-        version: link:../packages/storage-browser
+        version: link:../packages/transport
       '@tanstack/react-query':
         specifier: 5.104.4
         version: 5.104.4(@types/react@19.3.0)(react@19.3.1)
       antd:
         specifier: 5.29.3
         version: 5.29.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      cbor-x:
+        specifier: 1.6.8
+        version: 1.6.8
       geostyler:
         specifier: 18.6.0
-        version: 18.6.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(ol@10.11.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        version: 18.6.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(geotiff@3.1.0-beta.0)(ol@10.11.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       geostyler-openlayers-parser:
         specifier: 5.8.0
         version: 5.8.0(ol@10.11.0)
       geostyler-style:
         specifier: 11.1.0
         version: 11.1.0
+      geotiff:
+        specifier: 3.1.0-beta.0
+        version: 3.1.0-beta.0
       ol:
         specifier: 10.11.0
         version: 10.11.0
@@ -89,6 +95,9 @@ importers:
       remark-gfm:
         specifier: 4.0.1
         version: 4.0.1
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@ahara/standards':
         specifier: github:chris-arsenault/ahara-standards#30e038a09b01c8f72e509e3fb1e7aa76003cda3a
@@ -160,73 +169,27 @@ importers:
         specifier: ^4.0.0
         version: 4.1.12(@types/node@24.19.2)(@vitest/coverage-v8@4.1.12)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
-  packages/application:
+  packages/atlas-context:
     dependencies:
-      '@atlas/domain':
+      '@atlas/map':
         specifier: workspace:*
-        version: link:../domain
-      '@atlas/generation':
-        specifier: workspace:*
-        version: link:../generation
+        version: link:../map
 
-  packages/domain:
-    dependencies:
-      geostyler-style:
-        specifier: 11.1.0
-        version: 11.1.0
-      uuid:
-        specifier: 14.0.3
-        version: 14.0.3
-      zod:
-        specifier: 4.6.7
-        version: 4.6.7
-    devDependencies:
-      '@types/geojson':
-        specifier: ^7946.0.16
-        version: 7946.0.16
+  packages/engine: {}
 
-  packages/generation:
-    dependencies:
-      '@atlas/domain':
-        specifier: workspace:*
-        version: link:../domain
-      '@atlas/name-forge':
-        specifier: workspace:*
-        version: link:../name-forge
-      zod:
-        specifier: 4.6.7
-        version: 4.6.7
+  packages/map: {}
 
-  packages/name-forge:
+  packages/transport:
     dependencies:
-      seedrandom:
-        specifier: ^3.0.5
-        version: 3.0.5
-      zod:
-        specifier: 4.6.7
-        version: 4.6.7
-    devDependencies:
-      '@types/seedrandom':
-        specifier: ^3.0.8
-        version: 3.0.8
-
-  packages/storage-browser:
-    dependencies:
-      '@atlas/domain':
+      '@atlas/context':
         specifier: workspace:*
-        version: link:../domain
-      '@sqlite.org/sqlite-wasm':
-        specifier: 3.54.1-build1
-        version: 3.54.1-build1
+        version: link:../atlas-context
+      '@atlas/map':
+        specifier: workspace:*
+        version: link:../map
       cbor-x:
         specifier: 1.6.8
         version: 1.6.8
-      geos-wasm:
-        specifier: 3.1.1
-        version: 3.1.1
-      zarrita:
-        specifier: 0.7.5
-        version: 0.7.5
 
 packages:
 
@@ -980,10 +943,6 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
-  '@sqlite.org/sqlite-wasm@3.54.1-build1':
-    resolution: {integrity: sha512-foW427VBLJ3G87bsnvQTZCc9zYe0Fq1wH0pz1I6BlKLKXcArIAyTkHtq0iT2llmhcMQt9T/p6l5PpQQh+6O8uQ==}
-    engines: {node: '>=22'}
-
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
@@ -1088,9 +1047,6 @@ packages:
 
   '@types/react@19.3.0':
     resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
-
-  '@types/seedrandom@3.0.8':
-    resolution: {integrity: sha512-TY1eezMU2zH2ozQoAFAQFOPpvP15g+ZgSfTZt31AUUH/Rxtnz3H+A/Sv1Snw2/amp//omibc+AEkTaA8KUeOLQ==}
 
   '@types/unist@2.0.11':
     resolution: {integrity: sha512-CmBKiL6NNo/OqgmMn95Fk9Whlp2mtvIv+KNpQKN2F4SjvrEesubTRWGYSg+BnWZOnlCaSTU1sMpsBOzgbYhnsA==}
@@ -1783,9 +1739,6 @@ packages:
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
-
-  geos-wasm@3.1.1:
-    resolution: {integrity: sha512-igWIBE9Ua2f2dw+MjaF3ogwUB45tLSTVdCYBpsHa9fenmtgyfaspjDhWTBhEaftZxATdEPaSwS707ELFYVvm9w==}
 
   geostyler-cql-parser@4.1.1:
     resolution: {integrity: sha512-k594MfqCtQfdaNdK3jyLCiZz5bLeg4pjfAk3qgzfM9dwLmI277BI01Ti68Q+Q72dybUV1VIyGU0ky8teUi5Cmg==}
@@ -2982,9 +2935,6 @@ packages:
     resolution: {integrity: sha512-3A6sD0WYP7+QrjbfNA2FN3FsOaGGFoekCVgTyypy53gPxhbkCIjtO6YWgdrfM+n/8sI8JeXZOIxsHjMTNxQ4nQ==}
     engines: {node: ^14.0.0 || >=16.0.0}
 
-  seedrandom@3.0.5:
-    resolution: {integrity: sha512-8OwmbklUNzwezjGInmZ+2clQmExQPvomqjL7LFqOYqtmuxRgQYqOD3mHaU+MvZn5FLUeVxVfQjwLZW/n/JFuqg==}
-
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
     hasBin: true
@@ -3264,10 +3214,6 @@ packages:
 
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==}
-
-  uuid@14.0.3:
-    resolution: {integrity: sha512-Sc5u1VVln93y1Xnz4R+CunOZc7R9LUcTmhj7Rc7Eg3HVcf7rVn2FOoa812fe0W8p3jD7xeoGSYbfqCGGH2B6xw==}
-    hasBin: true
 
   v8-compile-cache-lib@3.0.1:
     resolution: {integrity: sha512-wa7YjyUGfNZngI/vtK0UHAN+lgDCxBPCylVXGp0zu59Fz5aiGtNXaq3DhIov063MorB+VfufLh3JlF2KdTK3xg==}
@@ -4063,8 +4009,6 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@sqlite.org/sqlite-wasm@3.54.1-build1': {}
-
   '@standard-schema/spec@1.1.0': {}
 
   '@tanstack/query-core@5.104.4': {}
@@ -4172,8 +4116,6 @@ snapshots:
   '@types/react@19.3.0':
     dependencies:
       csstype: 3.2.3
-
-  '@types/seedrandom@3.0.8': {}
 
   '@types/unist@2.0.11': {}
 
@@ -5141,8 +5083,6 @@ snapshots:
 
   gensync@1.0.0-beta.2: {}
 
-  geos-wasm@3.1.1: {}
-
   geostyler-cql-parser@4.1.1:
     dependencies:
       geostyler-style: 10.5.0
@@ -5197,7 +5137,7 @@ snapshots:
       fast-xml-parser: 4.5.7
       geostyler-data: 1.1.0
 
-  geostyler@18.6.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(ol@10.11.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+  geostyler@18.6.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(geotiff@3.1.0-beta.0)(ol@10.11.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@ant-design/icons': 5.6.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@dnd-kit/core': 6.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -5229,7 +5169,7 @@ snapshots:
       lodash-es: 4.18.1
       monaco-editor: 0.52.2
       ol: 10.11.0
-      proj4: 2.22.0
+      proj4: 2.22.0(geotiff@3.1.0-beta.0)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
       typescript-json-schema: 0.67.4
@@ -6218,10 +6158,12 @@ snapshots:
 
   prettier@3.9.10: {}
 
-  proj4@2.22.0:
+  proj4@2.22.0(geotiff@3.1.0-beta.0):
     dependencies:
       mgrs: 1.0.0
       wkt-parser: 1.6.0
+    optionalDependencies:
+      geotiff: 3.1.0-beta.0
 
   prop-types@15.8.1:
     dependencies:
@@ -6731,8 +6673,6 @@ snapshots:
       refa: 0.12.1
       regexp-ast-analysis: 0.7.1
 
-  seedrandom@3.0.5: {}
-
   semver@6.3.1: {}
 
   semver@7.7.4: {}
@@ -7085,8 +7025,6 @@ snapshots:
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
-
-  uuid@14.0.3: {}
 
   v8-compile-cache-lib@3.0.1: {}
 

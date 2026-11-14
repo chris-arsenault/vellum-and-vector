@@ -1,4 +1,4 @@
-import type { SetupFeature } from "@atlas/generation";
+import type { SetupFeature } from "./generationTypes";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { GenerationEpochConfiguration } from "./GenerationEpochConfiguration";
 import { generationFeatureAdapter } from "./generationFeatureAdapters";

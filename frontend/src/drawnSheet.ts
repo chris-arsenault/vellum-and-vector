@@ -1,21 +1,20 @@
 import type RenderEvent from "ol/render/Event.js";
-import { MapScale, regionLineage } from "@atlas/domain";
-import type { DrawnMapInput } from "./drawnMap";
-import { drawnLegend, type DrawnLegendEntry } from "./drawnLegend";
+import type { SheetPresentation } from "./sheetPresentation";
+import type { DrawnLegendEntry } from "./cartographicLegend";
 
 type PaperContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 const ink = "#53452f",
   paper = "#eee4c9";
-export function sheetPadding(input: DrawnMapInput | undefined, width: number) {
+export function sheetPadding(input: SheetPresentation | undefined, width: number) {
   const block = input?.view.sheet.legend ? legendBlock(input, width).blockHeight : 0;
   return [100, 55, Math.max(110, block + 52), 55];
 }
-function legendBlock(input: DrawnMapInput, width: number) {
+function legendBlock(input: SheetPresentation, width: number) {
   const columns = Math.max(1, Math.floor((width - 100) / 250));
-  const rows = Math.ceil(drawnLegend(input).length / columns);
+  const rows = Math.ceil(input.legend.length / columns);
   return { columns, rows, blockHeight: rows * 18 + 22 };
 }
-export function drawSheet(event: RenderEvent, input: DrawnMapInput) {
+export function drawSheet(event: RenderEvent, input: SheetPresentation) {
   const ctx = event.context;
   if (!ctx || !("fillText" in ctx) || !event.frameState || !event.inversePixelTransform) return;
   const [width, height] = event.frameState.size;
@@ -28,7 +27,8 @@ export function drawSheet(event: RenderEvent, input: DrawnMapInput) {
   title(ctx, input, width);
   if (input.view.sheet.compass) compass(ctx, width - 56, 104);
   if (input.view.sheet.legend) legend(ctx, input, width, height);
-  if (input.view.sheet.scale) scale(ctx, event.frameState.viewState.resolution, width, height);
+  if (input.view.sheet.scale)
+    scale(ctx, event.frameState.viewState.resolution * input.metresPerUnit, width, height);
   ctx.restore();
 }
 function frame(ctx: PaperContext, width: number, height: number) {
@@ -47,13 +47,9 @@ function frame(ctx: PaperContext, width: number, height: number) {
     ctx.fill();
   }
 }
-function title(ctx: PaperContext, input: DrawnMapInput, width: number) {
-  const name = input.view.sheet.title || input.region?.name || input.area.name;
-  const path = regionLineage(input.world, input.region?.id ?? null)
-    .slice(0, -1)
-    .map((r) => r.name)
-    .join(" · ");
-  const subtitle = input.view.sheet.subtitle || path;
+function title(ctx: PaperContext, input: SheetPresentation, width: number) {
+  const name = input.view.sheet.title || input.name;
+  const subtitle = input.view.sheet.subtitle || input.ancestry.join(" · ");
   ctx.font = "600 27px Georgia, serif";
   ctx.textAlign = "center";
   const titleWidth = Math.min(width - 80, ctx.measureText(name).width + 44);
@@ -86,8 +82,8 @@ function compass(ctx: PaperContext, x: number, y: number) {
   ctx.textAlign = "center";
   ctx.fillText("N", x, y - 31);
 }
-function legend(ctx: PaperContext, input: DrawnMapInput, width: number, height: number) {
-  const entries = drawnLegend(input);
+function legend(ctx: PaperContext, input: SheetPresentation, width: number, height: number) {
+  const entries = input.legend;
   if (!entries.length) return;
   const { columns, rows, blockHeight } = legendBlock(input, width);
   const y = height - blockHeight - 45;
@@ -153,9 +149,7 @@ function scale(ctx: PaperContext, resolution: number, width: number, height: num
   ctx.textAlign = "center";
   ctx.font = "10px Georgia, serif";
   ctx.fillText(
-    MapScale.inUnits(distance, "km") >= 1
-      ? `${MapScale.inUnits(distance, "km")} km`
-      : `${distance} m`,
+    distance / 1000 >= 1 ? `${distance / 1000} km` : `${distance} m`,
     x + length / 2,
     y - 7
   );

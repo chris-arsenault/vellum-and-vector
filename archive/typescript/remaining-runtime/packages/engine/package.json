@@ -1,0 +1,20 @@
+{
+  "name": "@atlas/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./native": "./src/native.ts",
+    "./navigation": "./src/navigation.ts"
+  },
+  "scripts": {
+    "build": "make -C ../.. wasm-engine",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@atlas/domain": "workspace:*",
+    "@atlas/context": "workspace:*",
+    "@atlas/map": "workspace:*"
+  }
+}

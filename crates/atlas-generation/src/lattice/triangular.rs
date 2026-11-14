@@ -1,0 +1,543 @@
+use super::BLOCK_CELLS;
+use atlas_map::Bounds;
+
+pub const ROOT_THREE: f64 = 1.7320508075688772;
+pub const TRIANGLE_AREA: f64 = 3.0 * ROOT_THREE / 4.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum Membership {
+    NoData,
+    Content,
+    Halo,
+}
+#[derive(Clone, Copy, Debug)]
+pub struct PeriodicFrame {
+    pub width: f64,
+    pub columns: usize,
+    pub closed_poles: bool,
+}
+#[derive(Clone, Copy, Debug)]
+pub struct TriangularFrame {
+    pub width: f64,
+    pub height: f64,
+    pub spacing: f64,
+    pub spacing_y: f64,
+    pub offset: [f64; 2],
+}
+#[derive(Clone, Copy)]
+pub struct LatticeInput {
+    pub bounds: Bounds,
+    pub frame: TriangularFrame,
+    pub area: f64,
+    pub padding: f64,
+    pub periodic: Option<PeriodicFrame>,
+    pub coordinate_width: Option<f64>,
+    pub open_boundary: bool,
+}
+
+pub struct TriangularLattice {
+    origin: [f64; 2],
+    bounds: Bounds,
+    frame: TriangularFrame,
+    periodic: Option<PeriodicFrame>,
+    chart_width: Option<f64>,
+    open_boundary: bool,
+    d_min: i32,
+    rows: usize,
+    columns: usize,
+    a_start: [i32; 4],
+    mask: Vec<u8>,
+    live: Vec<usize>,
+    content_count: usize,
+    content_area: f64,
+    halo_area: f64,
+    content_radius: f64,
+    work_radius: f64,
+}
+
+impl TriangularLattice {
+    pub fn new(
+        input: LatticeInput,
+        covers: impl Fn(f64, f64) -> bool,
+    ) -> Result<Self, &'static str> {
+        Self::with_membership(input, covers, |_, _, _| None)
+    }
+    pub fn with_membership(
+        input: LatticeInput,
+        covers: impl Fn(f64, f64) -> bool,
+        membership: impl Fn(usize, f64, f64) -> Option<Membership>,
+    ) -> Result<Self, &'static str> {
+        input
+            .bounds
+            .validate()
+            .map_err(|_| "Invalid lattice bounds")?;
+        Self::validate_frame(&input)?;
+        let frame = input.frame;
+        let width = input.bounds.2 - input.bounds.0;
+        let height = input.bounds.3 - input.bounds.1;
+        let d_min = ((-frame.height / 2.0 - frame.offset[1]) / (ROOT_THREE * frame.spacing_y / 2.0))
+            .ceil() as i32;
+        let d_max = ((frame.height / 2.0 - frame.offset[1]) / (ROOT_THREE * frame.spacing_y / 2.0))
+            .floor() as i32;
+        let rows = (i64::from(d_max) - i64::from(d_min) + 1).max(0) as usize;
+        let (a_start, columns) = Self::windows(frame, input.periodic);
+        let count = rows
+            .checked_mul(columns)
+            .and_then(|v| v.checked_mul(2))
+            .ok_or("Lattice address overflow")?;
+        if u32::try_from(count).is_err() {
+            return Err("Lattice cell IDs exceed their representation");
+        }
+        let mut lattice = Self {
+            origin: [
+                (input.bounds.0 + input.bounds.2) / 2.0,
+                (input.bounds.1 + input.bounds.3) / 2.0,
+            ],
+            bounds: Bounds(-width / 2.0, -height / 2.0, width / 2.0, height / 2.0),
+            frame,
+            periodic: input.periodic,
+            chart_width: input.coordinate_width,
+            open_boundary: input.open_boundary,
+            d_min,
+            rows,
+            columns,
+            a_start,
+            mask: vec![0; count],
+            live: vec![0; count.div_ceil(BLOCK_CELLS)],
+            content_count: 0,
+            content_area: 0.0,
+            halo_area: TRIANGLE_AREA * frame.spacing.powi(2),
+            content_radius: (input.area / std::f64::consts::PI).sqrt(),
+            work_radius: (width / 2.0 + input.padding).hypot(height / 2.0 + input.padding),
+        };
+        lattice.classify(input.area, covers, membership);
+        Ok(lattice)
+    }
+    fn validate_frame(input: &LatticeInput) -> Result<(), &'static str> {
+        let f = input.frame;
+        if ![f.width, f.height, f.spacing, f.spacing_y, input.area]
+            .iter()
+            .all(|v| v.is_finite() && *v > 0.0)
+            || !f.offset.iter().all(|v| v.is_finite())
+            || !input.padding.is_finite()
+            || input.padding < 0.0
+        {
+            return Err("Lattice dimensions, area and spacing must be finite and positive");
+        }
+        if input
+            .periodic
+            .is_some_and(|p| !p.width.is_finite() || p.width <= 0.0 || p.columns == 0)
+            || input
+                .coordinate_width
+                .is_some_and(|w| !w.is_finite() || w <= 0.0)
+        {
+            return Err("Periodic coordinates need a positive width and columns");
+        }
+        Ok(())
+    }
+    fn windows(frame: TriangularFrame, periodic: Option<PeriodicFrame>) -> ([i32; 4], usize) {
+        let mut starts = [0; 4];
+        let mut columns = 0;
+        for inverted in 0..2 {
+            let shift = (1 + inverted) as f64 * frame.spacing + frame.offset[0];
+            let low = ((-frame.width / 2.0 - shift) / (1.5 * frame.spacing)).ceil() as i32;
+            let high = periodic.map_or_else(
+                || ((frame.width / 2.0 - shift) / (1.5 * frame.spacing)).floor() as i64,
+                |p| i64::from(low) + 2 * p.columns as i64 - 1,
+            );
+            for parity in 0..2 {
+                let first = low + ((low & 1) ^ parity as i32);
+                starts[inverted * 2 + parity] = first;
+                columns =
+                    columns.max(((high - i64::from(first)).div_euclid(2) + 1).max(0) as usize);
+            }
+        }
+        (starts, columns)
+    }
+    fn classify(
+        &mut self,
+        area: f64,
+        covers: impl Fn(f64, f64) -> bool,
+        membership: impl Fn(usize, f64, f64) -> Option<Membership>,
+    ) {
+        for cell in 0..self.len() {
+            let [x, y] = self.position(cell);
+            let kind = if y.abs() > self.frame.height / 2.0 {
+                Membership::NoData
+            } else if let Some(kind) = membership(cell, x, y) {
+                kind
+            } else if x.abs() <= self.bounds.2
+                && y.abs() <= self.bounds.3
+                && covers(x + self.origin[0], y + self.origin[1])
+            {
+                Membership::Content
+            } else {
+                Membership::Halo
+            };
+            self.mask[cell] = kind as u8;
+            if kind == Membership::Content {
+                self.content_count += 1;
+            }
+            if kind != Membership::NoData {
+                self.live[cell / BLOCK_CELLS] += 1;
+            }
+        }
+        if self.content_count > 0 {
+            self.content_area = area / self.content_count as f64;
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.mask.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.mask.is_empty()
+    }
+    pub fn origin(&self) -> [f64; 2] {
+        self.origin
+    }
+    pub fn offset(&self) -> [f64; 2] {
+        self.frame.offset
+    }
+    pub fn bounds(&self) -> Bounds {
+        self.bounds
+    }
+    pub fn content_count(&self) -> usize {
+        self.content_count
+    }
+    pub fn block_live(&self, block: usize) -> usize {
+        self.live[block]
+    }
+    pub fn block_count(&self) -> usize {
+        self.live.len()
+    }
+    pub fn spacing(&self) -> f64 {
+        self.frame.spacing
+    }
+    pub fn spacing_y(&self) -> f64 {
+        self.frame.spacing_y
+    }
+    pub fn cell_width(&self) -> f64 {
+        self.cell_span()
+    }
+    pub fn cell_height(&self) -> f64 {
+        self.cell_span()
+    }
+    pub fn content_radius(&self) -> f64 {
+        self.content_radius
+    }
+    pub fn work_radius(&self) -> f64 {
+        self.work_radius
+    }
+    pub fn open_boundary(&self) -> bool {
+        self.open_boundary
+    }
+    pub fn inverted(&self, cell: usize) -> bool {
+        cell & 1 != 0
+    }
+    pub fn membership(&self, cell: usize) -> Membership {
+        match self.mask[cell] {
+            1 => Membership::Content,
+            2 => Membership::Halo,
+            _ => Membership::NoData,
+        }
+    }
+    fn site(&self, cell: usize) -> (i32, i32, usize) {
+        let inverted = cell & 1;
+        let row = (cell / 2) / self.columns;
+        let k = (cell / 2) % self.columns;
+        let d = row as i32 + self.d_min;
+        (
+            self.a_start[inverted * 2 + (d & 1) as usize] + 2 * k as i32,
+            d,
+            inverted,
+        )
+    }
+    fn site_position(&self, a: i32, d: i32, inverted: usize) -> [f64; 2] {
+        [
+            (1.5 * a as f64 + 1.0 + inverted as f64) * self.frame.spacing + self.frame.offset[0],
+            ROOT_THREE * d as f64 * self.frame.spacing_y / 2.0 + self.frame.offset[1],
+        ]
+    }
+    pub fn position(&self, cell: usize) -> [f64; 2] {
+        let (a, d, i) = self.site(cell);
+        self.site_position(a, d, i)
+    }
+    pub(crate) fn barycentric(&self, cell: usize, [x, y]: [f64; 2]) -> [f64; 3] {
+        let sign = if self.inverted(cell) { -1.0 } else { 1.0 };
+        let point = self.position(cell);
+        let dx = self.delta_x(x - point[0]) / self.frame.spacing * sign;
+        let dy = (y - point[1]) / self.frame.spacing_y;
+        [
+            (1.0 - 2.0 * dx) / 3.0,
+            (1.0 + dx) / 3.0 - dy / ROOT_THREE,
+            (1.0 + dx) / 3.0 + dy / ROOT_THREE,
+        ]
+    }
+    pub fn address(&self, cell: usize) -> (i32, i32, bool) {
+        let (a, d, i) = self.site(cell);
+        ((a - d) / 2, (a + d) / 2, i != 0)
+    }
+    pub fn address_cell(&self, u: i32, v: i32, inverted: bool) -> Option<usize> {
+        self.site_cell(u.checked_add(v)?, v.checked_sub(u)?, usize::from(inverted))
+    }
+    fn site_cell(&self, a: i32, d: i32, inverted: usize) -> Option<usize> {
+        let row = i64::from(d) - i64::from(self.d_min);
+        if row < 0 || row >= self.rows as i64 || self.columns == 0 {
+            return None;
+        }
+        let window = inverted * 2 + (d & 1) as usize;
+        let mut k = (i64::from(a) - i64::from(self.a_start[window])).div_euclid(2);
+        if self.periodic.is_some() {
+            k = k.rem_euclid(self.columns as i64);
+        } else if k < 0 || k >= self.columns as i64 {
+            return None;
+        }
+        let cell = (row as usize * self.columns + k as usize) * 2 + inverted;
+        (self.mask[cell] != 0).then_some(cell)
+    }
+    pub fn area(&self, cell: usize) -> f64 {
+        match self.membership(cell) {
+            Membership::Content => self.content_area,
+            Membership::Halo => self.halo_area,
+            _ => 0.0,
+        }
+    }
+    pub fn content_area(&self, cell: usize) -> f64 {
+        if self.membership(cell) == Membership::Content {
+            self.content_area
+        } else {
+            0.0
+        }
+    }
+    pub fn cell_span(&self) -> f64 {
+        TRIANGLE_AREA.sqrt() * self.frame.spacing
+    }
+    fn step(&self, cell: usize, edge: usize) -> (i32, i32, usize) {
+        assert!(edge < 3);
+        let (a, d, i) = self.site(cell);
+        let direction = if i == 1 { 1 } else { -1 };
+        match edge {
+            1 => (a + direction, d - direction, i ^ 1),
+            2 => (a + direction, d + direction, i ^ 1),
+            _ => (a, d, i ^ 1),
+        }
+    }
+    pub fn neighbor(&self, cell: usize, edge: usize) -> Option<usize> {
+        let (a, d, i) = self.step(cell, edge);
+        self.site_cell(a, d, i)
+    }
+    pub fn edge_delta(&self, cell: usize, edge: usize) -> [f64; 2] {
+        let (a, d, i) = self.step(cell, edge);
+        let to = self.site_position(a, d, i);
+        let from = self.position(cell);
+        [to[0] - from[0], to[1] - from[1]]
+    }
+    pub fn edge_length(&self, cell: usize, edge: usize) -> f64 {
+        if self.neighbor(cell, edge).is_none() {
+            return self.frame.spacing;
+        }
+        let [x, y] = self.edge_delta(cell, edge);
+        x.hypot(y)
+    }
+    /// Pole-crossing neighbors use their physical edge, not distance across the planar chart.
+    pub fn physical_distance(&self, cell: usize, next: usize) -> f64 {
+        if self.periodic.is_some_and(|frame| frame.closed_poles) {
+            if let Some(edge) = (0..3).find(|&edge| self.neighbor(cell, edge) == Some(next)) {
+                return self.edge_length(cell, edge);
+            }
+        }
+        let [x, y] = self.position(cell);
+        let [nx, ny] = self.position(next);
+        self.delta_x(nx - x).hypot(ny - y)
+    }
+    /// Least-squares physical gradient, weighted by the actual support of each triangular face.
+    pub fn gradient(
+        &self,
+        cell: usize,
+        values: &impl Fn(usize) -> std::io::Result<f64>,
+    ) -> std::io::Result<[f64; 2]> {
+        let (mut xx, mut xy, mut yy, mut vx, mut vy) = (0.0, 0.0, 0.0, 0.0, 0.0);
+        let value = values(cell)?;
+        let [x, y] = self.position(cell);
+        for edge in 0..3 {
+            let Some(next) = self.neighbor(cell, edge) else {
+                continue;
+            };
+            let length = self.edge_length(cell, edge);
+            let [dx, dy] = if self.closed_poles() {
+                self.edge_delta(cell, edge)
+            } else {
+                let [nx, ny] = self.position(next);
+                [self.delta_x(nx - x), ny - y]
+            };
+            let weight = self.face_length(cell, edge) / length.powi(2);
+            let delta = values(next)? - value;
+            xx += weight * dx * dx;
+            xy += weight * dx * dy;
+            yy += weight * dy * dy;
+            vx += weight * dx * delta;
+            vy += weight * dy * delta;
+        }
+        let determinant = xx * yy - xy * xy;
+        Ok(if determinant <= 0.0 {
+            [0.0; 2]
+        } else {
+            [
+                (vx * yy - vy * xy) / determinant,
+                (vy * xx - vx * xy) / determinant,
+            ]
+        })
+    }
+    pub fn edge_direction(&self, cell: usize, edge: usize) -> [f64; 2] {
+        if self.neighbor(cell, edge).is_none() {
+            return [0.0, 0.0];
+        }
+        let [x, y] = self.edge_delta(cell, edge);
+        let length = x.hypot(y);
+        [x / length, y / length]
+    }
+    pub fn face_length(&self, cell: usize, edge: usize) -> f64 {
+        if self.neighbor(cell, edge).is_none() {
+            return if self.closed_poles() {
+                0.0
+            } else {
+                ROOT_THREE * self.frame.spacing
+            };
+        }
+        if edge == 0 {
+            ROOT_THREE * self.frame.spacing_y
+        } else {
+            (1.5 * self.frame.spacing).hypot(ROOT_THREE * self.frame.spacing_y / 2.0)
+        }
+    }
+    pub fn physical_face(&self, cell: usize, edge: usize) -> Option<([f64; 2], [f64; 2], f64)> {
+        let next = self.neighbor(cell, edge)?;
+        let at = self.position(cell);
+        let beside = self.position(next);
+        let normal = self.edge_direction(cell, edge);
+        let center = if self.closed_poles() {
+            let distance = self.edge_length(cell, edge) / 2.0;
+            [at[0] + normal[0] * distance, at[1] + normal[1] * distance]
+        } else {
+            [
+                at[0] + self.delta_x(beside[0] - at[0]) / 2.0,
+                (at[1] + beside[1]) / 2.0,
+            ]
+        };
+        Some((center, normal, self.face_length(cell, edge)))
+    }
+    pub fn cell_travel(&self, cell: usize, [dx, dy]: [f64; 2]) -> f64 {
+        let length = dx.hypot(dy);
+        if length == 0.0 {
+            return self.area(cell).sqrt();
+        }
+        let x = if dx == 0.0 {
+            f64::INFINITY
+        } else {
+            self.cell_width() * length / dx.abs()
+        };
+        let y = if dy == 0.0 {
+            f64::INFINITY
+        } else {
+            self.cell_height() * length / dy.abs()
+        };
+        x.min(y)
+    }
+    pub fn boundary(&self, cell: usize) -> bool {
+        !self.closed_poles() && (0..3).any(|edge| self.neighbor(cell, edge).is_none())
+    }
+    pub fn closed_poles(&self) -> bool {
+        self.periodic.is_some_and(|p| p.closed_poles)
+    }
+    pub fn coordinate_width(&self) -> Option<f64> {
+        self.chart_width.or(self.periodic.map(|p| p.width))
+    }
+    pub fn periodic_width(&self) -> Option<f64> {
+        self.periodic.map(|frame| frame.width)
+    }
+    pub fn delta_x(&self, dx: f64) -> f64 {
+        self.coordinate_width()
+            .map_or(dx, |w| dx - (dx / w + 0.5).floor() * w)
+    }
+    pub fn point(&self, x: f64, mut y: f64) -> [f64; 2] {
+        if self.closed_poles() {
+            let height = self.bounds.3 - self.bounds.1;
+            let band = ((y + height / 2.0) / height).floor();
+            let phase = (y + height / 2.0) / height - band;
+            y = if band.rem_euclid(2.0) != 0.0 {
+                height / 2.0 - phase * height
+            } else {
+                -height / 2.0 + phase * height
+            };
+        }
+        [
+            self.coordinate_width()
+                .map_or(x, |w| (x + w / 2.0).rem_euclid(w) - w / 2.0),
+            y,
+        ]
+    }
+    pub fn identity(&self, cell: usize) -> i32 {
+        let (u, v, i) = self.address(cell);
+        u.wrapping_mul(73856093) ^ v.wrapping_mul(19349663) ^ if i { 83492791 } else { 0 }
+    }
+    fn candidate(&self, x: f64, y: f64, inverted: usize) -> Option<usize> {
+        let sum = (x - (1 + inverted) as f64) / 1.5;
+        let difference = 2.0 * y / ROOT_THREE;
+        let u = (sum - difference) / 2.0;
+        let v = (sum + difference) / 2.0;
+        let w = -u - v;
+        let (mut a, mut b, c) = (u.round(), v.round(), w.round());
+        let (du, dv, dw) = ((a - u).abs(), (b - v).abs(), (c - w).abs());
+        if du > dv && du > dw {
+            a = -b - c;
+        } else if dv > dw {
+            b = -a - c;
+        }
+        self.address_cell(a as i32, b as i32, inverted == 1)
+    }
+    pub fn cell_at(&self, x: f64, y: f64) -> Option<usize> {
+        if !x.is_finite() || !y.is_finite() {
+            return None;
+        }
+        let [x, y] = self.point(x, y);
+        let lx = (x - self.frame.offset[0]) / self.frame.spacing;
+        let ly = (y - self.frame.offset[1]) / self.frame.spacing_y;
+        match (self.candidate(lx, ly, 0), self.candidate(lx, ly, 1)) {
+            (Some(a), Some(b)) => Some(if self.distance(a, x, y) <= self.distance(b, x, y) {
+                a
+            } else {
+                b
+            }),
+            _ => self.boundary_cell([x, y], [lx, ly]),
+        }
+    }
+    fn distance(&self, cell: usize, x: f64, y: f64) -> f64 {
+        let p = self.position(cell);
+        self.delta_x(p[0] - x).powi(2) + (p[1] - y).powi(2)
+    }
+    fn boundary_cell(&self, point: [f64; 2], lattice: [f64; 2]) -> Option<usize> {
+        let mut best = f64::INFINITY;
+        let mut index = None;
+        for inverted in 0..2 {
+            let sum = (lattice[0] - (1 + inverted) as f64) / 1.5;
+            let diff = 2.0 * lattice[1] / ROOT_THREE;
+            let u = ((sum - diff) / 2.0).round() as i32;
+            let v = ((sum + diff) / 2.0).round() as i32;
+            for du in -2..=2 {
+                for dv in -2..=2 {
+                    if let Some(cell) =
+                        self.address_cell(u.saturating_add(du), v.saturating_add(dv), inverted == 1)
+                    {
+                        let distance = self.distance(cell, point[0], point[1]);
+                        if distance < best {
+                            best = distance;
+                            index = Some(cell);
+                        }
+                    }
+                }
+            }
+        }
+        index
+    }
+}

@@ -1,0 +1,113 @@
+import { clamp, units } from "../world/math";
+import { compileMix } from "../rock/modes";
+import { defineProcess } from "./groundProcess";
+import { coastSettings } from "./coastSettings";
+import type { Band } from "@atlas/domain";
+import type { PhysicalField } from "../world/field";
+import type { PhysicalContext } from "../world/context";
+import { coastalFrame, type CoastalFrame } from "../world/coastalFrame";
+import { depositShoreLoads, recordCoastalCut } from "../world/coastalEvolution";
+
+const prepare = (map: PhysicalField) => ({
+  shoreFrame: (width: number, waves: Pick<Band, "get">, forcing?: Pick<Band, "get">) =>
+    coastalFrame(map, width, waves, forcing),
+  coastCut: (i: number, cut: readonly [number, number], landing = i) =>
+    recordCoastalCut(map, i, cut, landing),
+  depositShoreLoads: (
+    context: PhysicalContext,
+    frame: CoastalFrame,
+    loads: Band,
+    oceanOnly: boolean
+  ) => depositShoreLoads(map, context, frame, loads, oceanOnly),
+});
+
+/** Waves grind with what they throw, and pull blocks out along joints. */
+const pounding = compileMix({ abrasion: 0.6, plucking: 0.4 });
+export const coast = defineProcess({
+  id: "coast",
+  statement:
+    "Waves wear the land they reach back by their energy and what the rock gives up, down to a platform below the sea, so coasts retreat and rock decides where headlands stand.",
+  reads: ["WaterKindCodes", "Slope", "Elevation"],
+  writes: ["WaveExposureHistory"],
+  needs: ["Elevation", "WaterKindCodes", "RockKindCodes"],
+  provides: ["Elevation", "BedrockElevation", "CumulativeCoastalErosion"],
+  asks: ["waveEnergy", "rootHold"],
+  moves: [
+    ["rock", "load"],
+    ["loose", "load"],
+  ],
+  settings: coastSettings,
+  prepare,
+  settlesItself: true,
+  execute({ field, context: c, settings: p, ground, span, ask, tools }) {
+    // Waves work across the platform they have cut, which widens with time.
+    const waves = ask("waveEnergy"),
+      frame = tools.shoreFrame(p.CoastalActiveWidth * span, waves),
+      loads = tools.scratch("coast:loads");
+    for (let i = 0; i < field.mesh.count; i++) {
+      const wave = frame.strength.get(i),
+        water = field.WaterKindCodes.get(i),
+        coverage = frame.coverage.get(i);
+      if (water === 1)
+        field.WaveExposureHistory.set(i, Math.max(field.WaveExposureHistory.get(i), waves.get(i)));
+      else if (coverage > 0)
+        field.WaveExposureHistory.set(i, Math.max(field.WaveExposureHistory.get(i), wave));
+      if (wave <= 0 || water !== 0) continue;
+      // What the waves can do against this rock is for the ground to answer.
+      const steep = clamp(field.Slope.get(i) * 10_000, 0, 1000),
+        energy = (wave * p.CoastalErosionStrength) / 1000,
+        forcing =
+          energy + steep / 18 + Math.abs(p.CoastalSeaLevelChange) / field.scale.length(2.5e-7),
+        power = (forcing * p.CoastalWearRate * span * c.CoastalStrength * coverage) / 1000,
+        platform = field.EffectiveSeaLevel - units(p.CoastalPlatformDepth),
+        cut = ground.surfaceAction(i, pounding, power, Infinity, platform);
+      if (cut[0] > 0 || cut[1] > 0)
+        loads.add(frame.source.get(i), tools.coastCut(i, cut, frame.source.get(i)));
+    }
+    tools.depositShoreLoads(c, frame, loads, false);
+    tools.release(loads, frame.strength, frame.coverage, frame.source);
+  },
+});
+export const outsideWaves = defineProcess({
+  id: "outside-waves",
+  statement:
+    "Waves a magic system raises wear the shore they reach as any waves do, and what they take goes out to sea.",
+  reads: ["WaterKindCodes", "Elevation"],
+  writes: ["ExternalCoastalForcingHistory"],
+  needs: ["Elevation", "WaterKindCodes"],
+  provides: ["Elevation", "BedrockElevation", "CumulativeCoastalErosion"],
+  asks: ["waveEnergy", "coastalForcing", "rootHold"],
+  moves: [
+    ["rock", "load"],
+    ["loose", "load"],
+  ],
+  settings: coastSettings,
+  prepare,
+  settlesItself: true,
+  execute({ field, context: c, settings: p, ground, span, ask, tools }) {
+    const received = ask("coastalForcing");
+    for (let i = 0; i < field.mesh.count; i++) {
+      const forcing = received.get(i);
+      if (forcing > 1000 || (forcing > 0 && field.WaterKindCodes.get(i) !== 0))
+        throw new Error("External coastal forcing must target dry terrain.");
+    }
+    const frame = tools.shoreFrame(p.CoastalActiveWidth * span, ask("waveEnergy"), received),
+      loads = tools.scratch("coast:loads");
+    for (let i = 0; i < field.mesh.count; i++) {
+      const forcing = frame.strength.get(i),
+        coverage = frame.coverage.get(i);
+      if (forcing <= 0 || coverage <= 0) continue;
+      field.ExternalCoastalForcingHistory.set(
+        i,
+        Math.max(field.ExternalCoastalForcingHistory.get(i), forcing)
+      );
+      const power = (forcing * p.CoastalWearRate * span * c.CoastalStrength * coverage) / 1000,
+        platform = field.EffectiveSeaLevel - units(p.CoastalPlatformDepth),
+        cut = ground.surfaceAction(i, pounding, power, Infinity, platform);
+      if (cut[0] > 0 || cut[1] > 0)
+        loads.add(frame.source.get(i), tools.coastCut(i, cut, frame.source.get(i)));
+    }
+    tools.depositShoreLoads(c, frame, loads, true);
+    tools.release(loads, frame.strength, frame.coverage, frame.source);
+  },
+});

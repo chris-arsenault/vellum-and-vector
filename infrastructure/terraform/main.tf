@@ -28,19 +28,36 @@ module "ctx" {
 }
 
 module "frontend" {
-  source         = "git::https://github.com/chris-arsenault/ahara-tf-patterns.git//modules/website?ref=34287b1925e1b5681281c1fb3ee9199211202ec9"
-  prefix         = local.prefix
-  hostname       = local.app
-  site_directory = "${path.module}/../../frontend/dist"
-  encrypt        = false
-  vpc            = module.ctx.vpc
-  og_artifact    = module.ctx.og_server
+  source                     = "git::https://github.com/chris-arsenault/ahara-tf-patterns.git//modules/website?ref=34287b1925e1b5681281c1fb3ee9199211202ec9"
+  prefix                     = local.prefix
+  hostname                   = local.app
+  response_headers_policy_id = aws_cloudfront_response_headers_policy.browser_runtime.id
+  site_directory             = "${path.module}/../../frontend/dist"
+  encrypt                    = false
+  vpc                        = module.ctx.vpc
+  og_artifact                = module.ctx.og_server
   og_config = {
     site_name = "Vellum & Vector"
     defaults = {
       title       = "Build your world's atlas"
       description = "Generate and shape fictional worlds, from continents and cultures to cities and interiors."
       image       = "/og-image.png"
+    }
+  }
+}
+
+resource "aws_cloudfront_response_headers_policy" "browser_runtime" {
+  name = "${local.prefix}-browser-runtime"
+  custom_headers_config {
+    items {
+      header   = "Cross-Origin-Opener-Policy"
+      value    = "same-origin"
+      override = true
+    }
+    items {
+      header   = "Cross-Origin-Embedder-Policy"
+      value    = "require-corp"
+      override = true
     }
   }
 }

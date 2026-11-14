@@ -1,12 +1,14 @@
-import {
-  atlasFeatureDefinitions,
-  type GenerationFeature,
-  type FeatureSelection,
-} from "@atlas/generation";
-import { requireThat, type Epoch, type ParameterValues } from "@atlas/domain";
+import { type GenerationFeature, type FeatureSelection } from "./generationTypes";
+import { atlasFeatureDefinitions } from "./generationPresentation";
+import type { Epoch } from "@atlas/context";
+import type { ParameterValues } from "./generationTypes";
+import { requireFormValue } from "./values";
 
 export function draftEpochBindings(
-  definitions: readonly GenerationFeature[] = atlasFeatureDefinitions
+  definitions: readonly Pick<
+    GenerationFeature,
+    "id" | "configurationPresentation"
+  >[] = atlasFeatureDefinitions
 ) {
   return definitions.flatMap((feature) =>
     feature.configurationPresentation?.epochs
@@ -16,14 +18,17 @@ export function draftEpochBindings(
 }
 export function sharedClock(selection: FeatureSelection) {
   const binding = draftEpochBindings().find((entry) => entry.shape === "clock");
-  requireThat(binding, "draft_epoch", "Register a shared generation clock.");
+  requireFormValue(binding, "Register a shared generation clock.");
   return selection[binding.id].configuration![binding.path] as unknown as Epoch[];
 }
 export function rebindDraftEpochs(
   selection: FeatureSelection,
   epochs: Epoch[],
   identities: Record<string, string> = {},
-  definitions: readonly GenerationFeature[] = atlasFeatureDefinitions
+  definitions: readonly Pick<
+    GenerationFeature,
+    "id" | "configurationPresentation"
+  >[] = atlasFeatureDefinitions
 ): FeatureSelection {
   const next = { ...selection };
   for (const binding of draftEpochBindings(definitions)) {

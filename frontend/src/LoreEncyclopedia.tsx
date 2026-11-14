@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Brand } from "./App";
+import { Brand } from "./Brand";
 import { externalHref, loreImage, lorePageForHref, lorePages, type LorePage } from "./loreContent";
 import "./lore.css";
 

@@ -1,5 +1,5 @@
 import { ErrorMessage } from "./ErrorMessage";
-import { MapScale, type Diagnostic } from "@atlas/domain";
+import type { Diagnostic } from "@atlas/context";
 import {
   diagnosticFeature,
   diagnosticField,
@@ -15,18 +15,16 @@ export function GenerationSetupSummary({ flow }: { flow: GenerationWorkflow }) {
     <aside className="setup-summary" aria-label="Setup summary">
       <h3>{flow.draft.name || "New world"}</h3>
       <p>
-        {MapScale.inUnits(flow.draft.width, "km")} × {MapScale.inUnits(flow.draft.height, "km")} km
+        {flow.draft.width / 1000} × {flow.draft.height / 1000} km
       </p>
       <p>
         {flow.draft.recipe.quality} detail · seed {flow.draft.recipe.seed}
       </p>
       {flow.approach === "procedural" && (
         <GenerationWorkload
-          width={flow.draft.width}
-          height={flow.draft.height}
+          resolutions={flow.prepared?.resolutions}
           quality={flow.draft.recipe.quality}
           showWarning={flow.stage !== "world"}
-          profile={flow.options.source?.world.areas[flow.options.areaId!]?.profile ?? "world"}
         />
       )}
       {flow.setup?.context.inherited && (
@@ -55,12 +53,7 @@ export function SetupIssues({ flow }: { flow: GenerationWorkflow }) {
     Object.keys(fields.errors).length,
     diagnostics.some((item) => item.severity === "error"),
   ].some(Boolean);
-  if (!issues.some(Boolean))
-    return (
-      <p className="setup-valid" role="status">
-        Configuration ready to review.
-      </p>
-    );
+  if (!issues.some(Boolean)) return <SetupReady flow={flow} />;
   return (
     <section className="setup-issues" aria-label="Configuration issues">
       <h3>{blocking ? "Needs attention" : "Warnings"}</h3>
@@ -93,6 +86,15 @@ export function SetupIssues({ flow }: { flow: GenerationWorkflow }) {
         <SetupDiagnostic key={i} flow={flow} item={item} />
       ))}
     </section>
+  );
+}
+function SetupReady({ flow }: { flow: GenerationWorkflow }) {
+  return (
+    <p className="setup-valid" role="status">
+      {flow.approach === "procedural" && !flow.prepared
+        ? "Reading map context and reviewing configuration…"
+        : "Configuration ready to review."}
+    </p>
   );
 }
 function SetupDiagnostic({ flow, item }: { flow: GenerationWorkflow; item: Diagnostic }) {

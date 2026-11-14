@@ -1,6 +1,7 @@
-**
-!.artifacts
-!.artifacts/publish
-!.artifacts/publish/bootstrap
-!worker
-!worker/Dockerfile
+*
+!Dockerfile
+!dist/
+!dist/**
+!frontend/
+!frontend/dist/
+!frontend/dist/**

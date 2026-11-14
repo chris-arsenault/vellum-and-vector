@@ -1,0 +1,199 @@
+// @needsResolution carry: a carried place may not resolve on a finer map (ADR 0009).
+import { wetlandName } from "../../world/ecologyBiomes";
+import { isWetland, standingWaterSlope } from "../../world/ecologyEnvironment";
+import type { GenerationState } from "../../process";
+import { landscapeMinimumArea } from "../../worldSignificance";
+import {
+  carryWhereItLands,
+  costNear,
+  counterpartOf,
+  goes,
+  movesTo,
+  parentSpanOf,
+} from "../poiCarry";
+import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
+import { namingCultureNear, regionPlaces, settlementWithin, within } from "../poiPlaces";
+import { areaRecord } from "../poiRecords";
+import {
+  cellsWithin,
+  celsiusAt,
+  fieldOf,
+  isLand,
+  rockAt,
+  sedimentAt,
+  wetlandCoverAt,
+} from "../poiReads";
+import { aloneAmong, attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
+import { areaOf, spans } from "./waterReads";
+
+/** Warmth over which standing water breeds fever, in degrees. */
+const feverWarmth = 18;
+
+const isA = (state: GenerationState, cell: number) => isWetland(fieldOf(state), cell);
+const places = regionPlaces("wetland", isA, wetlandCoverAt);
+const around = spans(6);
+const counterpart = counterpartOf(isA, 1);
+const greatness = sized(areaOf, landscapeMinimumArea);
+const peatOf = (state: GenerationState, place: PoiPlace) =>
+  fieldOf(state).PeatCarbon.get(place.anchor);
+const factors = {
+  magnitude: greatness,
+  localConditions: standsOut(wetlandCoverAt, around),
+  isolation: aloneAmong(places, around),
+  cultural: attachment(around),
+};
+
+/** Standing water holds its ground flat: what does not run off does not cut. */
+const heldFlat = (_state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
+  place.cells.map((cell) => ({ change: "gradeGround", cell, gradient: standingWaterSlope }));
+/** A band's area-weighted mean over a wetland. */
+function meanOver(state: GenerationState, place: PoiPlace, read: (cell: number) => number) {
+  const mesh = fieldOf(state).mesh,
+    total = place.cells.reduce((sum, cell) => sum + mesh.area(cell), 0);
+  return place.cells.reduce((sum, cell) => sum + read(cell) * mesh.area(cell), 0) / total;
+}
+/** A bog, a marsh and a swamp are one kind, told apart by their peat, flood and canopy. */
+const biomeOf = (state: GenerationState, place: PoiPlace) => {
+  const map = fieldOf(state);
+  return wetlandName({
+    peat: meanOver(state, place, (i) => map.PeatCarbon.get(i)),
+    flood: meanOver(state, place, (i) => map.FloodFrequency.get(i)),
+    broadleaf: meanOver(state, place, (i) => map.BroadleafCover.get(i)),
+    conifer: meanOver(state, place, (i) => map.ConiferCover.get(i)),
+  });
+};
+/** A wetland's record is its outline at half its peak cover, named by its biome. */
+function wetlandRecord(state: GenerationState, place: PoiPlace) {
+  const biome = biomeOf(state, place),
+    map = fieldOf(state);
+  return areaRecord(
+    {
+      kind: "wetland",
+      layer: "ecology",
+      name: biome,
+      attributes: () => ({
+        biome,
+        wetlandCover: meanOver(state, place, (i) => map.WetlandCover.get(i)),
+      }),
+    },
+    wetlandCoverAt
+  )(state, place);
+}
+
+export const wetland: PoiEntry = {
+  id: "wetland",
+  group: "water",
+  name: "Wetland",
+  recognition: {
+    distinct:
+      "A land cell (WaterKindCodes None) whose WetlandCover is at least 0.3, the share the biome rules read: ground held wet by what grows there, not a surface of its own. A lake has a water body and a level; a floodplain or delta band without the cover is only ground that floods; a forest or grassland has its cover elsewhere. A bog, a marsh and a swamp are this kind, told apart by peat, flood and canopy.",
+    isA,
+  },
+  existence: {
+    statement:
+      "Emerges where the ecology establishes wetland cover: flat ground that floods, drains poorly or stands past the climate's aridity, including the fens below a melt line and the marsh on a delta.",
+    way: "emerges",
+    requires: notApplicable("Its cover is the requirement and already carries what it read."),
+    suitability: notApplicable(
+      "The ecology's establishment decides the ground, not a siting step."
+    ),
+    places,
+  },
+  publication: {
+    statement: "Every wetland publishes as its outline, named as a bog, marsh or swamp.",
+    moment: "geography",
+    record: wetlandRecord,
+  },
+  fields: {
+    statement:
+      "A wetland is a store and a brake on floods: it holds its ground flat. The ecology keeps its soil full and trees' roots out, and the climate process holds back its runoff in proportion to its cover.",
+    terrain: heldFlat,
+    water: notApplicable("The ecology's soil balance writes SoilWater from its wetness."),
+    climate: notApplicable(
+      "Its evaporation reaches the air through the Evapotranspiration the climate already reads."
+    ),
+    cover: notApplicable("The ecology's establishment and waterlogging write its cover and trees."),
+    magic: notApplicable(
+      "Greenwood's peat sources and Salt's anoxic preservation already read WetlandCover and PeatCarbon; the place declares nothing further."
+    ),
+  },
+  acrossMaps: {
+    statement:
+      "A captured wetland needs flat ground on the finer map within half the parent's cell of where it landed, and develops its own cover there through the regional ecology. If that cover does not come, the wetland goes: on closer ground it was only damp.",
+    carry: carryWhereItLands,
+    realize: (state, carried) =>
+      cellsWithin(state, carried.cell, parentSpanOf(state) / 2)
+        .filter((cell) => isLand(state, cell))
+        .map((cell) => ({ change: "gradeGround", cell, gradient: standingWaterSlope })),
+    counterpart,
+    unrealized: (state, carried) =>
+      counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
+    settle: movesTo(counterpart),
+    schedule: notApplicable(
+      "A wetland has no step in refinement's schedule; the ecology grows it."
+    ),
+  },
+  movement: {
+    statement:
+      "A wetland mires carts and takes a causeway to cross; flat-bottomed boats use it slowly; water loses its way across it, and Greenwood's roots run through its connected cover.",
+    roads: costNear(3),
+    boats: costNear(2),
+    drainage: costNear(1.5),
+    magic: { roots: costNear(0.8) },
+    links: notApplicable("A wetland joins no two cells; a causeway is a road's own."),
+    crosses: notApplicable("A wetland is the barrier; a bridge or a ford crosses it, not itself."),
+  },
+  others: {
+    statement:
+      "A wetland excludes a lake's water and a settlement's seat; it gathers at river mouths, below melt lines and beside slow lakes, and it is often the same ground a clearance would drain.",
+    needs: notApplicable("It needs only the wet ground its cover already implies."),
+    excludes: [
+      { kind: "lake", holds: (_state, a, b) => b.cells.includes(a.anchor) },
+      { kind: "settlement", holds: (_state, a, b) => a.cells.includes(b.anchor) },
+    ],
+    contains: notApplicable("It contains cover, not other kinds of place of a sort it could own."),
+    pairsWith: [
+      { kind: "riverMouth", holds: within(spans(3)) },
+      { kind: "meltLine", holds: within(spans(3)) },
+      { kind: "lake", holds: within(spans(3)) },
+      { kind: "clearance", holds: within(around) },
+    ],
+  },
+  people: {
+    statement:
+      "A wetland gives fish and fowl, reeds and peat, and a refuge no army crosses easily. In warm country its standing water brings fever to those who live beside it.",
+    offers(state, place) {
+      const great = greatness(state, place);
+      return { food: great, defence: great / 2, materials: Math.min(1, peatOf(state, place) / 20) };
+    },
+    threatens: (state, place) =>
+      celsiusAt(state, place.anchor) > feverWarmth &&
+      settlementWithin(state, place.anchor, around(state))
+        ? [{ hazard: "fever", reach: around(state) / 2, severity: 0.4 }]
+        : [],
+  },
+  time: {
+    statement:
+      "A wetland fills with its own peat and sediment; while its cover holds it persists. Drained or dried, it leaves open grassland on deep soft ground and otherwise nothing.",
+    fate(state, place) {
+      if (isA(state, place.anchor)) return { fate: "persists" };
+      const soft = rockAt(state, place.anchor) < 0.5 && sedimentAt(state, place.anchor) >= 1;
+      return soft ? { fate: "ends", leaves: "grassland" } : { fate: "ends" };
+    },
+  },
+  visibility: {
+    statement:
+      "A wetland shows by its area and by how sharply it breaks the drier cover around it; a small fen matters mainly to the town that lives on it.",
+    ...factors,
+    importance: weighed(factors, { magnitude: 0.55, localConditions: 0.35, isolation: 0.1 }),
+  },
+  naming: {
+    statement:
+      "Named by the people at its edge; those who live in it take its name for themselves.",
+    namedBy: namingCultureNear,
+    takesNameFrom: notApplicable(
+      "A wetland's name comes from what it is, not from a place near it."
+    ),
+    lendsNameTo: [{ kind: "settlement", holds: within(around) }],
+  },
+};

@@ -38,22 +38,59 @@ direction. Distinguish explicitly agreed boundaries from agent-derived choices;
 revise the latter when a simpler implementation meets the same requirements.
 Read the relevant bodies and record consequential changes and their reasons.
 
-**Current scope:** Build a functioning frontend first. Per the user's 2026-10-18
-direction and [ADR 0003](docs/adr/0003-frontend-session.md), there is no backend or
-MCP in the active product. The browser owns the current session. The user's
-2026-10-27 direction replaces eager memory authority with a local SQLite/RTree and
-GEOS workspace plus chunked numerical resources in OPFS. The user's
-2026-10-24 direction adds explicit local map saves rooted in IndexedDB for reopening
-maps without regeneration. Unsaved changes and independent templates disappear
-on reload. This direction supersedes the storage, service and durable-job
-requirements below and in the older design documents. Do not add generation
-recovery or restart mechanisms.
+**Current scope — 2026-11-13 user direction:** Complete the finished-map and Rust
+migration now that the water refactor has finished. Support only pure browser or
+pure backend execution, with storage and computation on the same host. The backend
+uses TrueNAS compute and its TrueNAS database with LAN-only access and no public route.
+Delete the old C# and TypeScript backends rather than reviving them. Published map
+products and private generation inputs have separate schemas and lifetimes; normal
+viewing reads the map facade. Preserve explicit local saves, independent children,
+all presentation and inspection behavior, and the existing architecture paradigms.
+See [ADR 0015](docs/adr/0015-finished-maps-and-execution-hosts.md).
+The browser worker uses the shared Rust WASM producer; the native application adapter
+uses the same core. Do not add generation recovery, restart mechanisms, a hybrid mode
+or an incomplete substitute generator.
+
+**Language and storage boundary — 2026-11-14 user correction:** Active TypeScript is
+limited to UI, view code and the local/remote facade. Generation preparation, naming,
+process execution, map production, storage services and backend application behavior
+belong in Rust. A TypeScript wrapper around Rust numerical loops does not complete the
+port. Preserve the TypeScript generator in an unused archive for optional port-quality
+checks, with its tests outside normal CI; do not delete it or import the archive from
+active code. Archive it early rather than preserving its interfaces as the target.
+Numerical storage is private generation working/captured data. Presentation, inspection
+and export use only published GIS storage and work with generation resources unavailable.
 
 ## Application structure
 
-Implement the web application, shared domain logic and procedural generation in
-TypeScript. Use React and OpenLayers for the
-editor, pnpm for packages, and Ahara's TypeScript tooling and standards.
+**Subsystem boundary — 2026-11-14 owner diagram:** The TypeScript view/UI reads
+finished maps through the TypeScript data-storage facade. The facade selects
+PostGIS on TrueNAS or GEOS/SQLite in the browser. Generation reads and writes its
+private numerical representation; feature extraction reads it and writes GIS layers
+and rasters. `atlas-generation/src/publication` owns that extraction/publication stage,
+which runs during map production, never on a view request. Viewer and generator are separate clients
+of storage, not callers of each other's implementations. Keep GIS data and query
+contracts in `atlas-map`, storage/query implementations in `atlas-gis`, numerical
+generation in `atlas-generation`, and application wiring in `atlas-host`.
+`atlas-gis` must not depend on generation or private numerical storage. GIS spatial
+queries may use Rust/GEOS/PostGIS; language is not the ownership criterion. View
+composition stays in the frontend; do not put a rendering-preparation service behind
+the data facade. Viewing requires neither a running generator nor private inputs.
+This supersedes interpretations that every geometry operation belongs to generation
+or that every presentation-related calculation must run in TypeScript.
+
+**Rust port — 2026-11-12 user direction:** Execute the finished-map/Rust plan. Preserve
+the established software architecture paradigms; numerical data structures may adapt.
+Computational foundations and their guards move to one Rust core for native and WASM
+execution, with separate published-map and generation contracts. TypeScript keeps the
+React/OpenLayers frontend and facade bindings. Rust owns orchestration and publication;
+remaining TypeScript implementations are unfinished ports. Only pure
+browser or pure backend contexts are supported. The water refactor is complete: port
+its final source, ownership and couplings. This supersedes the generation-language
+requirement below for the port; foundation checks do not establish a complete generator.
+
+Use React and OpenLayers for the frontend, pnpm for its packages, and Ahara's applicable
+TypeScript and Rust standards. Shared domain behavior and procedural generation use Rust.
 
 Organize responsibilities around these boundaries:
 
@@ -104,7 +141,7 @@ The [generation design](docs/generation-workflows.md) describes these adaptation
 Registered GIS, physical, magical and human/built processes use the same contract.
 Map profiles select processes, their order and typed parameters. Epoch loops bind
 changing variables and carry the altered domain state into the next iteration.
-Ordinary TypeScript composition supports reusable process sequences and nested
+Ordinary Rust composition supports reusable process sequences and nested
 history where the map behavior needs them.
 
 Implement actual geography and magical feedback through that common context;
@@ -184,11 +221,10 @@ canonical records; boundary pieces and display products derive from those record
 Keep reads and writes scoped to the affected geography. Nearest points,
 clipping, Voronoi cells, linear referencing and nearest-item lookups go through
 the shared `spatial` adapter (GEOS, R-tree or STRtree); do not add hand-written
-geometry scans. Backend
-and SQL files remain historical source outside the active runtime/build.
+geometry scans. Finished maps use an independent local catalog or the PostgreSQL/PostGIS
+map schema; their readers have no private generation-store capability.
 `infrastructure/terraform` hosts only public frontend assets through Ahara's
-website module; the earlier backend Terraform is preserved in
-`infrastructure/backend-prototype` with a disabled file extension.
+website module. Backend infrastructure must not add a public route or RDS dependency.
 
 ## Working in this repository
 
@@ -211,10 +247,9 @@ forbidden: no fingerprints, exact-replay gates, byte-identical comparisons or ch
 Judge changes by what the map and the processes do. See
 [ADR 0011](docs/adr/0011-processes-couple-through-keys-and-a-ledger.md) for how processes couple.
 
-The backend and its scripts are historical source outside the active product.
-Preserve that source for later reconsideration. Do not resume backend migration,
-storage or service work from the old plans. Distinguish the implemented browser
-behavior from future architecture in documentation and status updates.
+The old backends, migrations and deployment scripts are retired. Build the replacement
+from the current shared domain behavior and generation algorithms. Distinguish tested
+storage/publication foundations from complete frontend and execution cutover.
 
 Assess changes through representative map behavior, geographic output and
 focused domain and browser checks. Keep scope tied to the atlas's authoring
@@ -294,8 +329,7 @@ itself says which is which.
   unit tests and the routine unit suite. Run browser cases for
   changed controls, rendering, editing or worker/UI publication; an algorithm
   adjustment alone does not justify another browser suite.
-- Keep automated end-to-end coverage to a few shared full generations in
-  `frontend/src/worldIntegration.generation.test.ts`, with multiple independent
+- Keep automated end-to-end coverage to a few shared Rust generations, with multiple independent
   assertions per result. Reuse suitable generated worlds instead of generating
   a separate world for each check. Add another shared fixture when coverage
   requires different preconditions; there is no fixed generation-count limit.
@@ -311,7 +345,8 @@ itself says which is which.
   tests enforce shared generation setup. Do not disguise expensive setup as a
   unit test, route it through another routine runner or increase unit-test
   timeouts to hide it. Use `pnpm --dir frontend test <file>` for focused feedback;
-  run the routine suite once the relevant unit tests pass.
+  run the routine suite once the relevant unit tests pass. The old TypeScript generator,
+  its `worldIntegration.generation.test.ts` and development harness are archived outside CI.
 
 ### Documentation
 

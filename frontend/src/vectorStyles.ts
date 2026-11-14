@@ -1,13 +1,14 @@
 import LineString from "ol/geom/LineString.js";
 import { Circle, Fill, RegularShape, Stroke, Style, Text } from "ol/style.js";
-import type { AtlasFeature, LayerStyle } from "./types";
+import type { LayerStyle } from "./types";
+import type { RenderFeature } from "./renderFeature";
 import type { Style as SymbolStyle, Symbolizer, WellKnownName } from "geostyler-style";
 import {
-  biomeFamilies,
   magicPlacePresentation,
   magicPlacePresentations,
   type MagicPlaceSymbol,
-} from "@atlas/domain";
+} from "./geographySurfaces";
+import { biomeFamilies } from "./biomePresentation";
 import { settlementStyle } from "./settlementStyles";
 
 const wellKnownMarks: Record<MagicPlaceSymbol, WellKnownName> = {
@@ -41,7 +42,8 @@ export function defaultSymbolStyle(
   geometries: string[]
 ): SymbolStyle {
   const kinds = new Set(geometries);
-  if (["ecology", "magic"].includes(style.layerId)) kinds.add("Polygon");
+  const layerId = style.layerId.replace(/^vector:/, "");
+  if (["ecology", "magic"].includes(layerId)) kinds.add("Polygon");
   const symbolizers: Symbolizer[] = [];
   if ([...kinds].some((kind) => kind.includes("Polygon")))
     symbolizers.push({
@@ -57,8 +59,8 @@ export function defaultSymbolStyle(
     symbolizers.push({ kind: "Mark", wellKnownName: "circle", color: style.color, radius: 5 });
   if (style.labels)
     symbolizers.push({ kind: "Text", label: "{{name}}", color: style.color, size: 12 });
-  if (style.layerId === "magic") return { name, rules: magicSymbolRules(symbolizers) };
-  if (style.layerId !== "ecology") return { name, rules: [{ name: "Default", symbolizers }] };
+  if (layerId === "magic") return { name, rules: magicSymbolRules(symbolizers) };
+  if (layerId !== "ecology") return { name, rules: [{ name: "Default", symbolizers }] };
   return {
     name,
     rules: [
@@ -76,7 +78,7 @@ export function defaultSymbolStyle(
   };
 }
 
-export function featureStyle(feature: AtlasFeature, style: LayerStyle, resolution: number) {
+export function featureStyle(feature: RenderFeature, style: LayerStyle, resolution: number) {
   if (
     style.filter &&
     !JSON.stringify([feature.name, feature.attributes])
@@ -122,7 +124,7 @@ function magicMark(symbol: MagicPlaceSymbol, color: string) {
   }
 }
 /** Generated magic places: colour and mark follow the classification rule, not the layer. */
-function magicPlaceStyle(feature: AtlasFeature, style: LayerStyle) {
+function magicPlaceStyle(feature: RenderFeature, style: LayerStyle) {
   const { color, symbol } = magicPlacePresentation(String(feature.attributes.rule));
   return new Style({
     text: style.labels
@@ -138,7 +140,7 @@ function magicPlaceStyle(feature: AtlasFeature, style: LayerStyle) {
     image: magicMark(symbol, color),
   });
 }
-function geographicStyle(feature: AtlasFeature, style: LayerStyle, resolution: number) {
+function geographicStyle(feature: RenderFeature, style: LayerStyle, resolution: number) {
   const color = ecologicalColor(feature) ?? style.color;
   const result = new Style({
     text: style.labels
@@ -169,22 +171,27 @@ function geographicStyle(feature: AtlasFeature, style: LayerStyle, resolution: n
   return profiledLineStyles(feature, result, color, resolution);
 }
 /** A landmark stands out from the detected landforms around it. */
-function pointRadius(feature: AtlasFeature) {
+function pointRadius(feature: RenderFeature) {
   if (feature.kind === "landmark") return 6;
   if (feature.layerId === "geology") return 2;
   return feature.kind === "settlement" ? 4 : 5;
 }
-function featureStrokeWidth(feature: AtlasFeature, resolution: number) {
+function featureStrokeWidth(feature: RenderFeature, resolution: number) {
   if (feature.kind === "landmark") return 2.5;
   return feature.layerId === "geology"
     ? Math.min(1, 0.4 + 600 / resolution)
     : physicalStrokeWidth(feature, resolution);
 }
-function ecologicalColor(feature: AtlasFeature) {
+function ecologicalColor(feature: RenderFeature) {
   if (feature.layerId !== "ecology") return null;
   return biomeFamilies.find((biome) => biome.kind === feature.kind)?.color;
 }
-function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, resolution: number) {
+function profiledLineStyles(
+  feature: RenderFeature,
+  base: Style,
+  color: string,
+  resolution: number
+) {
   const widths = feature.attributes.widths;
   if (
     feature.geometry.type !== "LineString" ||
@@ -214,7 +221,7 @@ function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, r
     ),
   ];
 }
-function physicalStrokeWidth(feature: AtlasFeature, resolution: number) {
+function physicalStrokeWidth(feature: RenderFeature, resolution: number) {
   if (feature.kind === "fault") return 1;
   if (feature.layerId === "roads") return routeStrokeWidth(feature);
   if (feature.kind !== "river") return 2;
@@ -222,32 +229,32 @@ function physicalStrokeWidth(feature: AtlasFeature, resolution: number) {
 }
 /** Routes read by class: a track is thin, a road fuller, a highway bold, a lane light. */
 const routeWidths: Record<string, number> = { track: 0.9, road: 1.8, highway: 2.8, lane: 1.2 };
-function routeStrokeWidth(feature: AtlasFeature) {
+function routeStrokeWidth(feature: RenderFeature) {
   if (feature.kind === "lane") return routeWidths.lane;
   return routeWidths[String(feature.attributes.roadClass ?? "road")] ?? routeWidths.road;
 }
 /** A river that runs only in its wet season is a broken line; a bed with no river is dotted. */
 const seasonalDash = [8, 5],
   dryDash = [1, 5];
-function waterLineDash(feature: AtlasFeature) {
+function waterLineDash(feature: RenderFeature) {
   if (feature.attributes.regime === "dry") return dryDash;
   return feature.attributes.regime === "seasonal" ? seasonalDash : undefined;
 }
 /** How a stretch between two points of a river's course is drawn, by its months in flow. */
-function stretchDash(feature: AtlasFeature, i: number) {
+function stretchDash(feature: RenderFeature, i: number) {
   const months = feature.attributes.flowingMonths;
   if (!Array.isArray(months)) return waterLineDash(feature);
   const flowing = Math.min(Number(months[i]), Number(months[i + 1]));
   return flowing >= 11.5 ? undefined : flowing >= 0.5 ? seasonalDash : dryDash;
 }
 /** Tracks and sea lanes are broken lines; roads and highways are solid. */
-function routeLineDash(feature: AtlasFeature) {
+function routeLineDash(feature: RenderFeature) {
   if (feature.layerId === "rivers") return waterLineDash(feature);
   if (feature.layerId !== "roads") return undefined;
   if (feature.kind === "lane") return [6, 6];
   return feature.attributes.roadClass === "track" ? [3, 3] : undefined;
 }
-function riverWidth(feature: AtlasFeature) {
+function riverWidth(feature: RenderFeature) {
   const samples = feature.attributes.widths;
   const width = Array.isArray(samples)
     ? samples.reduce<number>(
@@ -264,7 +271,7 @@ function channelStrokeWidth(width: number, resolution: number) {
   const symbol = 0.35 + 0.35 * Math.log2(1 + width / 10);
   return Math.max(symbol, width / resolution);
 }
-function segmentWidth(feature: AtlasFeature, width: number, resolution: number) {
+function segmentWidth(feature: RenderFeature, width: number, resolution: number) {
   return feature.kind === "river"
     ? channelStrokeWidth(width, resolution)
     : Math.max(1.7, width / resolution);

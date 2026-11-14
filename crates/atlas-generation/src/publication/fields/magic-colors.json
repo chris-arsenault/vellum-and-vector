@@ -1,0 +1,227 @@
+{
+  "core": {
+    "color": "#b8352a",
+    "symbol": "star",
+    "tint": 1
+  },
+  "vein": {
+    "color": "#c8642f",
+    "symbol": "diamond",
+    "tint": 1
+  },
+  "spring": {
+    "color": "#e9a23b",
+    "symbol": "circle",
+    "tint": 1
+  },
+  "vent": {
+    "color": "#5a3b2e",
+    "symbol": "square",
+    "tint": 1
+  },
+  "basalt": {
+    "color": "#4a4040",
+    "symbol": "square",
+    "tint": 1
+  },
+  "scar": {
+    "color": "#302826",
+    "symbol": "square",
+    "tint": 1
+  },
+  "halo": {
+    "color": "#d9a441",
+    "symbol": "circle",
+    "tint": 0.3
+  },
+  "crater": {
+    "color": "#7a3b2f",
+    "symbol": "star",
+    "tint": 1
+  },
+  "fan": {
+    "color": "#c98f6a",
+    "symbol": "triangle",
+    "tint": 0.6
+  },
+  "placer": {
+    "color": "#d8b14a",
+    "symbol": "diamond",
+    "tint": 1
+  },
+  "field": {
+    "color": "#3fd9b5",
+    "symbol": "circle",
+    "tint": 0.25
+  },
+  "well": {
+    "color": "#a8f0ff",
+    "symbol": "star",
+    "tint": 0.6
+  },
+  "prism": {
+    "color": "#9fd8f0",
+    "symbol": "diamond",
+    "tint": 0.45
+  },
+  "melt": {
+    "color": "#5fb1a3",
+    "symbol": "triangle",
+    "tint": 0.35
+  },
+  "locus": {
+    "color": "#1d2f6b",
+    "symbol": "star",
+    "tint": 1
+  },
+  "crush": {
+    "color": "#44506a",
+    "symbol": "square",
+    "tint": 0.45
+  },
+  "front": {
+    "color": "#a9cbdc",
+    "symbol": "triangle",
+    "tint": 0.55
+  },
+  "wake": {
+    "color": "#6d7f9c",
+    "symbol": "circle",
+    "tint": 0.35
+  },
+  "lattice": {
+    "color": "#5b86c7",
+    "symbol": "cross",
+    "tint": 0.5
+  },
+  "rogue": {
+    "color": "#e05a7a",
+    "symbol": "triangle",
+    "tint": 1
+  },
+  "deviation": {
+    "color": "#9cb3d6",
+    "symbol": "circle",
+    "tint": 0.5
+  },
+  "war": {
+    "color": "#c23a7e",
+    "symbol": "star",
+    "tint": 1
+  },
+  "steam": {
+    "color": "#d9c3e6",
+    "symbol": "diamond",
+    "tint": 1
+  },
+  "breach": {
+    "color": "#8f5ce0",
+    "symbol": "cross",
+    "tint": 1
+  },
+  "stand": {
+    "color": "#2f6b3a",
+    "symbol": "square",
+    "tint": 1
+  },
+  "wellspring": {
+    "color": "#7fd36b",
+    "symbol": "circle",
+    "tint": 1
+  },
+  "oasis": {
+    "color": "#b7e07a",
+    "symbol": "circle",
+    "tint": 1
+  },
+  "verdant": {
+    "color": "#5c9e4f",
+    "symbol": "circle",
+    "tint": 0.3
+  },
+  "sinkhole": {
+    "color": "#6e5a3c",
+    "symbol": "square",
+    "tint": 1
+  },
+  "rot": {
+    "color": "#8a6a2b",
+    "symbol": "diamond",
+    "tint": 1
+  },
+  "frozen": {
+    "color": "#bfe6d9",
+    "symbol": "star",
+    "tint": 1
+  },
+  "brackish": {
+    "color": "#7c9a8e",
+    "symbol": "triangle",
+    "tint": 1
+  },
+  "ground": {
+    "color": "#9a8f7a",
+    "symbol": "square",
+    "tint": 1
+  },
+  "pan": {
+    "color": "#e8e2d2",
+    "symbol": "square",
+    "tint": 1
+  },
+  "flat": {
+    "color": "#cfd9e3",
+    "symbol": "diamond",
+    "tint": 1
+  },
+  "dust": {
+    "color": "#d9cfae",
+    "symbol": "circle",
+    "tint": 0.4
+  },
+  "ring": {
+    "color": "#e9dcae",
+    "symbol": "circle",
+    "tint": 0.5
+  },
+  "line": {
+    "color": "#b89b5e",
+    "symbol": "cross",
+    "tint": 1
+  },
+  "tear": {
+    "color": "#6f3fa0",
+    "symbol": "cross",
+    "tint": 0.5
+  },
+  "wild": {
+    "color": "#b48ad6",
+    "symbol": "triangle",
+    "tint": 1
+  },
+  "door": {
+    "color": "#f2d6ff",
+    "symbol": "star",
+    "tint": 1
+  },
+  "preserved": {
+    "color": "#8c9fb3",
+    "symbol": "star",
+    "tint": 1
+  },
+  "fired": {
+    "color": "#e36f3a",
+    "symbol": "diamond",
+    "tint": 1
+  },
+  "standing-dead": {
+    "color": "#8c7b4a",
+    "symbol": "triangle",
+    "tint": 1
+  },
+  "brine-shore": {
+    "color": "#c7b7c9",
+    "symbol": "circle",
+    "tint": 1
+  }
+}

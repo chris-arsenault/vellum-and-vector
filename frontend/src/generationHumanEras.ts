@@ -1,6 +1,7 @@
-import { requireThat, type World, type ParameterValues } from "@atlas/domain";
+import type { HumanEra } from "@atlas/context";
+import type { ParameterValues } from "./generationTypes";
+import { requireFormValue } from "./values";
 import { updateFeature, type GenerationDraft } from "./generationDraft";
-type HumanEra = NonNullable<World["humanEras"]>[number];
 export type OperativeEra = HumanEra;
 export function draftHumanEras(draft: GenerationDraft) {
   return draft.recipe.features!["human.cultures"].configuration!.eras as unknown as OperativeEra[];
@@ -24,9 +25,8 @@ export function renameHumanEra(draft: GenerationDraft, index: number, name: stri
   const eras = draftHumanEras(draft),
     id = name.trim(),
     previous = eras[index].id;
-  requireThat(
+  requireFormValue(
     id && !eras.some((era, i) => i !== index && era.id === id),
-    "draft_era",
     "Use a nonempty, unique era name."
   );
   const next = setEras(

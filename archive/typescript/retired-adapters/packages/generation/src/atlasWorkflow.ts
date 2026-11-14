@@ -1,0 +1,273 @@
+import {
+  requireThat,
+  sameValue,
+  type ParameterValues,
+  type DomainSnapshot,
+  proceduralSnapshot,
+  mappedGenerationDiagnostics,
+  type FeatureReader,
+  hasGeneratedGeography,
+} from "@atlas/domain";
+import { requireGeography } from "./geographyRequired";
+import {
+  MapProcessRegistry,
+  type MapProcess,
+  type ProcessConfiguration,
+  type ProcessSequence,
+} from "./process";
+import { prepareGeneratedProcess } from "./mapFeatures";
+import { finalizeNamesProcess } from "./landNaming";
+import { atlasPhysicalSequence } from "./world/atlasSequence";
+import { magicPlacesProcess } from "./world/atlasProcesses";
+import { atlasQuality } from "./world/atlasProfile";
+import { atlasParametersSchema, mapBoundaryName, type AtlasParameters } from "./atlasParameters";
+import {
+  generationSettingsSchema,
+  worldGenerationSettings,
+  type GenerationSettings,
+} from "./generationSettings";
+import { preflight } from "./preflight";
+import { processConfigurationSchema } from "./configurationSchema";
+import {
+  resolveGenerationFeatures,
+  type FeatureSelection,
+  type ResolvedFeatures,
+} from "./features";
+import { atlasGenerationModules } from "./atlasModules";
+import { serializableBindings } from "./generationBindings";
+import { inheritedChannelNames, inheritedProducts } from "./world/inheritedFacts";
+import { peopleSequence } from "./peopleProcesses";
+import { boundaryDiagnostics, inheritMapBoundary } from "./worldBoundary";
+import { isRegionalRefinement } from "./regional/capture";
+
+export interface AtlasGenerationInput {
+  areaId: string;
+  domains: string[];
+  quality: string;
+  seed: number;
+  parameters?: Partial<AtlasParameters>;
+  features?: FeatureSelection;
+  resolvedFeatures?: ResolvedFeatures;
+  settings?: GenerationSettings;
+  configuration?: ProcessConfiguration;
+}
+export const atlasFeatureDefinitions = atlasGenerationModules.features();
+
+export function atlasRegistry(source: DomainSnapshot, input: AtlasGenerationInput) {
+  input = resolveInput(source, input);
+  return atlasGenerationModules
+    .processes(source, input)
+    .reduce((registry, process) => registry.register(process), new MapProcessRegistry())
+    .register(prepareGeneratedProcess(input.domains))
+    .register(finalizeNamesProcess(source));
+}
+
+export function prepareAtlasGeneration(
+  source: DomainSnapshot,
+  input: AtlasGenerationInput,
+  sourceFeatures?: FeatureReader
+) {
+  requireThat(
+    !isRegionalRefinement(source, input.areaId),
+    "regional_pipeline",
+    "Use dedicated regional preparation for an independently owned map."
+  );
+  // A child area's geography is an independent captured map (ADR 0008); the world pipeline
+  // generates root maps and the built interiors placed on them.
+  const child = source.world.areas[input.areaId];
+  requireThat(
+    !child?.parentId || ["site", "interior"].includes(child.profile),
+    "regional_pipeline",
+    "Capture the region as an independent map before generating it."
+  );
+  const mappedDiagnostics = mappedGenerationDiagnostics(
+    source,
+    input.areaId,
+    sourceFeatures?.values()
+  );
+  source = proceduralSnapshot(source, sourceFeatures);
+  input = structuredClone(input);
+  input = inheritMapBoundary(source, input);
+  source = configuredSource(source, input);
+  checkRunInputs(source, input);
+  input = {
+    ...input,
+    settings: worldGenerationSettings(source.world),
+    parameters: atlasParametersSchema.parse(input.parameters ?? {}),
+  };
+  input = resolveInput(source, input);
+  source = configuredSource(source, input);
+  const resolvedFeatures = input.resolvedFeatures!;
+  const configuration = atlasConfiguration(source, input);
+  checkReviewedConfiguration(input, configuration);
+  input = { ...input, configuration };
+  const registry = atlasRegistry(source, input);
+  const diagnostics = [
+    ...mappedDiagnostics,
+    ...boundaryDiagnostics(input),
+    ...resolvedFeatures.diagnostics.filter((item) => item.code !== "feature_dependency"),
+  ];
+  checkNewSelection(source, input);
+  diagnostics.push(
+    ...atlasGenerationModules.dependencyDiagnostics({ source, input, resolved: resolvedFeatures })
+  );
+  const inherited = usesInheritedInputs(source, input);
+  const initial = inherited ? inheritedFactsForRun(source, input) : [];
+  diagnostics.push(...preflight(configuration, registry, initial));
+  return { input, source, registry, diagnostics };
+}
+function checkRunInputs(source: DomainSnapshot, input: AtlasGenerationInput) {
+  requireThat(
+    input.domains.length &&
+      input.domains.every((domain) =>
+        ["physical", "magic", "cultural", "political", "built"].includes(domain)
+      ),
+    "generation_domains",
+    "Select at least one generation domain."
+  );
+  requireThat(Number.isInteger(input.seed), "generation_seed", "Use an integer generation seed.");
+  requireThat(
+    input.quality in atlasQuality,
+    "generation_quality",
+    "Choose draft, standard or fine."
+  );
+  requireGeography(source, input);
+}
+function inheritedFactsForRun(source: DomainSnapshot, input: AtlasGenerationInput) {
+  const channels = inheritedChannelNames(source, input.areaId);
+  return [...channels, ...inheritedProducts(channels)];
+}
+function configuredSource(source: DomainSnapshot, input: AtlasGenerationInput) {
+  const settings = generationSettingsSchema.parse(
+    input.settings ?? worldGenerationSettings(source.world)
+  );
+  const area = source.world.areas[input.areaId];
+  requireThat(area, "generation_area", "Choose an existing mapped area.");
+  const stable = Boolean(area.parentId) || hasGeneratedGeography(source.world);
+  if (stable)
+    requireThat(
+      sameValue(settings, worldGenerationSettings(source.world)),
+      "completed_history",
+      "Inherited and completed history stays fixed. Configure the new world before its first generation."
+    );
+  const boundaryMode = stable
+    ? (source.world.reference.boundaryMode ?? "none")
+    : mapBoundaryName(atlasParametersSchema.parse(input.parameters ?? {}).mapBoundary);
+  return {
+    ...source,
+    world: {
+      ...source.world,
+      ...(stable ? {} : settings),
+      reference: { ...source.world.reference, boundaryMode },
+    },
+  };
+}
+function checkReviewedConfiguration(
+  input: AtlasGenerationInput,
+  configuration: ProcessConfiguration
+) {
+  if (input.configuration)
+    requireThat(
+      sameValue(processConfigurationSchema.parse(input.configuration), configuration),
+      "generation_configuration",
+      "The reviewed configuration does not match these generation inputs."
+    );
+}
+function usesInheritedInputs(source: DomainSnapshot, input: AtlasGenerationInput) {
+  return Boolean(source.world.areas[input.areaId].parentId);
+}
+function checkNewSelection(source: DomainSnapshot, input: AtlasGenerationInput) {
+  if (Object.values(input.features ?? {}).some((feature) => feature.enabled === false))
+    requireThat(
+      !source.world.generations.some((run) => run.areaId === input.areaId),
+      "process_selection",
+      "Process omission is available for new worlds and newly created regions. Existing-map regeneration keeps its current process configuration."
+    );
+}
+
+function invoke(process: MapProcess, id = process.contract.id) {
+  return {
+    kind: "process" as const,
+    id,
+    process: process.contract.id,
+    version: process.contract.version,
+  };
+}
+export function atlasConfiguration(
+  source: DomainSnapshot,
+  input: AtlasGenerationInput
+): ProcessConfiguration {
+  input = resolveInput(source, input);
+  const settings = input.settings!,
+    features = input.resolvedFeatures!;
+  source = { ...source, world: { ...source.world, ...settings } };
+  const sequence = configuredSequence(source, input);
+  return {
+    id: `atlas:${source.world.areas[input.areaId].profile}`,
+    version: 4,
+    parameters: atlasParametersSchema.parse(input.parameters ?? {}),
+    sequence,
+    inputs: serializableBindings({
+      settings,
+      features,
+      seed: input.seed,
+      quality: input.quality,
+      publications: atlasGenerationModules.publications(input, source.world),
+      reconciliations: atlasRegistry(source, input).reconciliations(),
+      domains: input.domains,
+      parameters: features.parameters,
+    }),
+  };
+}
+function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput): ProcessSequence {
+  const sequence: ProcessSequence = [invoke(prepareGeneratedProcess(input.domains))];
+  const area = source.world.areas[input.areaId];
+  if (area.profile !== "interior") sequence.push(...atlasPhysicalSequence(source, input));
+  for (const slot of ["present.products", "present.people", "present.after-people"]) {
+    if (
+      slot === "present.people" &&
+      !["site", "interior"].includes(area.profile) &&
+      ["human.cultures", "human.politics", "built.layout"].some(
+        (id) => input.resolvedFeatures!.selection[id]?.enabled
+      )
+    )
+      sequence.push(...peopleSequence(input));
+    sequence.push(
+      ...atlasGenerationModules.contribute(slot, input.resolvedFeatures!, {
+        source,
+        input,
+        resolved: input.resolvedFeatures!,
+      })
+    );
+  }
+  requireThat(
+    sequence.length > 1,
+    "profile_domains",
+    "Choose a generation domain supported by this profile."
+  );
+  sequence.push(invoke(magicPlacesProcess(source)), invoke(finalizeNamesProcess(source)));
+  return sequence;
+}
+export function resolveInput(
+  source: DomainSnapshot,
+  input: AtlasGenerationInput
+): AtlasGenerationInput {
+  const suppliedSettings = generationSettingsSchema.parse(
+    input.settings ?? worldGenerationSettings(source.world)
+  );
+  const preparedSettings = atlasGenerationModules.prepareSettings(
+    input.features ?? {},
+    suppliedSettings
+  );
+  const resolvedFeatures = resolveGenerationFeatures(
+    atlasFeatureDefinitions,
+    input.features,
+    input.parameters,
+    input.domains,
+    preparedSettings as unknown as ParameterValues
+  );
+  const settings = generationSettingsSchema.parse(
+    atlasGenerationModules.bindSettings(resolvedFeatures, preparedSettings)
+  );
+  return { ...input, settings, resolvedFeatures, parameters: resolvedFeatures.parameters };
+}

@@ -30,24 +30,28 @@ overlapping thematic layers and located templates.
 
 ## Code layout
 
-| Path                                                | Current contents                                                        |
-| --------------------------------------------------- | ----------------------------------------------------------------------- |
-| `frontend/src`                                      | React/OpenLayers editor, browser workspace client and generation worker |
-| `frontend/tests`                                    | Browser UI wiring tests on fixture worlds                               |
-| `packages/domain`                                   | Shared TypeScript spatial model, lattice, typed-array structures, magic |
-| `packages/application`                              | Command planning, normalization and authoring operations                |
-| `packages/storage-browser`                          | SQLite/RTree catalog, GEOS geography, numerical resources and saves     |
-| `packages/generation`                               | Pure TypeScript geography, regional refinement and human processes      |
-| `packages/name-forge`                               | Name generation (PolyForm Noncommercial license)                        |
-| `infrastructure/terraform`                          | Frontend-only Ahara website hosting                                     |
-| `backend`, `db`, `infrastructure/backend-prototype` | Preserved backend prototype, outside the active build                   |
-| `docs/adr`                                          | Current spatial, generation, storage and platform decisions             |
+| Path                                     | Current contents                                                        |
+| ---------------------------------------- | ----------------------------------------------------------------------- |
+| `frontend/src`                           | React/OpenLayers editor, browser workspace client and generation worker |
+| `frontend/tests`                         | Browser UI wiring tests on fixture worlds                               |
+| `packages/domain`                        | Frontend presentation types and helpers                                 |
+| `packages/storage-browser`               | Browser facade and SQLite, GEOS and OPFS platform bindings              |
+| `archive/typescript`                     | Unused TypeScript reference generator, tests and development harness    |
+| `crates/atlas-names`                     | Name generation (PolyForm Noncommercial license)                        |
+| `infrastructure/terraform`               | Frontend-only Ahara website hosting                                     |
+| `packages/map`, `packages/atlas-context` | Finished-map values and separate map/generation service contracts       |
+| `crates/atlas-host`                      | Rust storage, publication adapters and LAN HTTP service                 |
+| `crates`                                 | Shared Rust native/WASM engine, map contracts and host capabilities     |
+| `docs/adr`                               | Current spatial, generation, storage and platform decisions             |
 
 ## Architecture patterns
 
-Shared TypeScript domain and generation modules underpin the browser editor.
-Read [ADR 0003](docs/adr/0003-frontend-session.md): no backend, server persistence
-or MCP. The workspace keeps records in a local SQLite/RTree catalog with GEOS and
+The migration follows [ADR 0015](docs/adr/0015-finished-maps-and-execution-hosts.md):
+pure browser or pure LAN backend, separate map and generation schemas, one shared
+Rust native/WASM engine. Active TypeScript is limited to UI, view code and local/remote
+facade/platform bindings. Rust owns application, naming, publication and storage behavior.
+Presentation reads only published GIS storage. The old generator
+and its tests are archived outside normal CI. The browser workspace keeps records in SQLite/RTree with GEOS and
 numerical resources in OPFS; **Save map** keeps a map across reloads, and unsaved
 changes disappear on reload. The
 [generation workflow design](docs/generation-workflows.md) defines the common

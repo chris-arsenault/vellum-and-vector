@@ -1,9 +1,12 @@
 import { expect, it } from "vitest";
 import { Circle, Style, RegularShape } from "ol/style.js";
 import { featureStyle, defaultSymbolStyle } from "./vectorStyles";
-import { biomeFamilies, magicPlacePresentations, rectangle } from "@atlas/domain";
+import { rectangle } from "./presentation";
+import { biomeFamilies } from "./biomePresentation";
+import { magicPlacePresentations } from "./geographySurfaces";
 import Parser from "geostyler-openlayers-parser";
-import type { AtlasFeature, LayerStyle } from "./types";
+import type { LayerStyle } from "./types";
+import type { RenderFeature } from "./renderFeature";
 
 const layer: LayerStyle = {
   color: "#226699",
@@ -13,7 +16,7 @@ const layer: LayerStyle = {
   opacity: 1,
   minScale: 0,
 };
-function river(widths: number[]): AtlasFeature {
+function river(widths: number[]): RenderFeature {
   return {
     id: "river",
     name: "River",
@@ -21,21 +24,14 @@ function river(widths: number[]): AtlasFeature {
     layerId: "rivers",
     geometry: { type: "LineString", coordinates: widths.map((_, i) => [i * 1000, i * 500]) },
     attributes: { widths },
-    areaId: "world",
-    detail: {},
     relations: [],
-    state: "generated",
-    protected: false,
-    actor: "generator",
-    generationId: null,
-    causes: [],
   };
 }
-function styles(feature: AtlasFeature, resolution: number) {
+function styles(feature: RenderFeature, resolution: number) {
   const style = featureStyle(feature, layer, resolution);
   return (Array.isArray(style) ? style : [style]) as Style[];
 }
-function width(feature: AtlasFeature, resolution: number) {
+function width(feature: RenderFeature, resolution: number) {
   return styles(feature, resolution)
     .map((style) => style.getStroke()?.getWidth())
     .filter((value) => value !== undefined) as number[];
@@ -50,7 +46,7 @@ it("distinguishes unresolved tributaries and trunks at continental zoom without 
 });
 
 it("distinguishes political seats without using zoom to add or remove settlement features", () => {
-  const town: AtlasFeature = {
+  const town: RenderFeature = {
     ...river([]),
     kind: "settlement",
     layerId: "settlements",
@@ -95,7 +91,7 @@ it("uses biome colors for ecological polygons and preserves thematic rules in Ge
       ...river([]),
       kind,
       layerId: "ecology",
-      geometry: rectangle([0, 0, 100, 100]),
+      geometry: rectangle(0, 0, 100, 100),
       attributes: { biome: "Named region" },
     };
     const style = featureStyle(feature, ecology, 1000) as Style;
@@ -114,7 +110,7 @@ it("uses biome colors for ecological polygons and preserves thematic rules in Ge
 });
 it("marks generated magic places by rule so springs, vents and crush zones differ", async () => {
   const magic = { ...layer, layerId: "magic", color: "#c199ee" };
-  const place = (system: string, rule: string): AtlasFeature => ({
+  const place = (system: string, rule: string): RenderFeature => ({
     ...river([]),
     kind: `${system}:${rule}`,
     layerId: "magic",

@@ -1,4 +1,4 @@
-import type { ConfluenceEffects, MagicConfluence, MagicSystem } from "@atlas/domain";
+import type { ConfluenceEffects, MagicConfluence, MagicSystem } from "@atlas/context";
 import { NumberField as NumberSetting } from "./WorkflowFields";
 import { SetupDisclosure } from "./SetupDisclosure";
 

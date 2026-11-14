@@ -1,0 +1,123 @@
+import { respond } from "../coupling/answers";
+import { MapScale } from "@atlas/domain";
+import type { PhysicalField } from "./field";
+import { environment, unit, type EcologyForcing } from "./ecologyEnvironment";
+
+export const plantGroups = [
+  {
+    id: "grass",
+    cover: "GrassCover",
+    seed: "GrassSeed",
+    juvenile: null,
+    mass: 0.9,
+    maturity: 3,
+    lifespan: 10,
+    spread: MapScale.length(0.0001),
+    nitrogen: 45,
+    shade: 0.15,
+    waterlogging: 0.65,
+    crossing: { carrier: "wind", reach: MapScale.length(0.1), interval: 20 },
+    floodSensitivity: 0.05,
+  },
+  {
+    id: "broadleaf",
+    cover: "BroadleafCover",
+    seed: "BroadleafSeed",
+    juvenile: "BroadleafSaplings",
+    mass: 10,
+    maturity: 45,
+    lifespan: 250,
+    spread: MapScale.length(0.000045),
+    nitrogen: 90,
+    shade: 0.65,
+    waterlogging: 0.35,
+    crossing: { carrier: "current", reach: MapScale.length(0.0625), interval: 20 },
+    floodSensitivity: 0.2,
+  },
+  {
+    id: "conifer",
+    cover: "ConiferCover",
+    seed: "ConiferSeed",
+    juvenile: "ConiferSaplings",
+    mass: 8,
+    maturity: 65,
+    lifespan: 350,
+    spread: MapScale.length(0.000035),
+    nitrogen: 110,
+    shade: 0.5,
+    waterlogging: 0.85,
+    crossing: { carrier: "current", reach: MapScale.length(0.0375), interval: 20 },
+    floodSensitivity: 0.3,
+  },
+  {
+    id: "wetland",
+    cover: "WetlandCover",
+    seed: "WetlandSeed",
+    juvenile: null,
+    mass: 1.8,
+    maturity: 5,
+    lifespan: 8,
+    spread: MapScale.length(0.000075),
+    nitrogen: 55,
+    shade: 0.5,
+    waterlogging: 0,
+    crossing: { carrier: "wind", reach: MapScale.length(0.075), interval: 20 },
+    floodSensitivity: 0,
+  },
+] as const;
+export type PlantGroup = (typeof plantGroups)[number];
+export function plantCover(map: PhysicalField, group: PlantGroup, i: number) {
+  return map[group.cover].get(i) + (group.juvenile ? map[group.juvenile].get(i) : 0);
+}
+export function canopy(map: PhysicalField, i: number) {
+  return map.BroadleafCover.get(i) + map.ConiferCover.get(i);
+}
+export function livingPlantCarbon(map: PhysicalField, i: number) {
+  return plantGroups.reduce(
+    (sum, group) =>
+      sum +
+      map[group.cover].get(i) * group.mass +
+      (group.juvenile ? map[group.juvenile].get(i) * group.mass * 0.2 : 0),
+    0
+  );
+}
+export function groupSuitability(
+  map: PhysicalField,
+  group: PlantGroup,
+  i: number,
+  f: EcologyForcing
+) {
+  const e = environment(map, i, f);
+  if (e.submerged || e.frozen) return 0;
+  const cold = group.id === "conifer" ? -28 : group.id === "grass" ? -20 : -12;
+  const warmth = unit((e.summer + 4) / 18) * unit((55 - e.summer) / 15);
+  const frost = unit((e.winter - cold) / 15);
+  const drought = unit(1 - e.drought);
+  const wet = group.id === "wetland" ? e.wetness : 1 - e.wetness * group.waterlogging;
+  const shade = unit(1 - canopy(map, i) * (1 - group.shade));
+  const soil = unit(map.SoilDepth.get(i) / map.scale.length(group.juvenile ? 7.5e-8 : 1.5e-8));
+  const heatPreference = group.id === "conifer" ? unit((25 - e.temperature) / 12) : 1;
+  const climate = warmth * frost * drought * wet * soil * heatPreference;
+  // Greenwood sustains growth past the climate band: verdure is a floor under the climate's
+  // verdict, while shade still decides who grows under whom.
+  return Math.max(climate, f.verdure) * shade;
+}
+
+/** Dimensionless resistance contribution of each cover; Ground uses it as a response factor. */
+const rootHold = { tree: 1.2, grass: 0.45, wetland: 0.7 };
+respond({
+  key: "rootHold",
+  by: "plants",
+  reads: ["TreeCover", "GrassCover", "WetlandCover"],
+  base: (map, i) =>
+    map.TreeCover.get(i) * rootHold.tree +
+    map.GrassCover.get(i) * rootHold.grass +
+    map.WetlandCover.get(i) * rootHold.wetland,
+});
+// Wetlands hold their water, so the ground under them stays wet.
+respond({
+  key: "wetness",
+  by: "wetlands",
+  reads: ["WetlandCover"],
+  add: (map, i) => map.WetlandCover.get(i) * 0.5,
+});

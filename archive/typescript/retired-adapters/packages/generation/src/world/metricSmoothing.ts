@@ -1,0 +1,128 @@
+import type { PhysicalField } from "./field";
+import type { Band, ReadBand } from "@atlas/domain";
+import {
+  metricArray,
+  metricOperator,
+  metricProduct,
+  releaseMetric,
+  type MetricOperator,
+} from "./metricOperator";
+import { prepareMultigrid } from "./metricMultigrid";
+import { releaseWorking } from "./physicalNumerics";
+
+function dot(a: ReadBand, b: ReadBand) {
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) sum += a.get(i) * b.get(i);
+  return sum;
+}
+/** Restore each connected component's total; the visit queue and marks are working bands. */
+function conserveComponents(matrix: MetricOperator, input: ReadBand, result: Band) {
+  const n = input.length,
+    visited = metricArray(matrix.map, "component-visited", n, "uint8"),
+    queue = metricArray(matrix.map, "component-queue", n, "int32");
+  for (let start = 0; start < n; start++) {
+    if (visited.get(start)) continue;
+    queue.set(0, start);
+    let tail = 1;
+    visited.set(start, 1);
+    let imbalance = 0,
+      area = 0;
+    for (let head = 0; head < tail; head++) {
+      const i = queue.get(head),
+        cellArea = matrix.areas.get(i);
+      imbalance += (input.get(i) - result.get(i)) * cellArea;
+      area += cellArea;
+      const end = matrix.offsets.get(i + 1);
+      for (let at = matrix.offsets.get(i); at < end; at++) {
+        const j = matrix.neighbors.get(at);
+        if (visited.get(j)) continue;
+        visited.set(j, 1);
+        queue.set(tail++, j);
+      }
+    }
+    for (let at = 0; at < tail; at++) result.add(queue.get(at), imbalance / area);
+  }
+  releaseWorking(matrix.map, visited, queue);
+}
+function solve(
+  matrix: MetricOperator,
+  input: ReadBand,
+  condition: ReturnType<typeof prepareMultigrid>
+) {
+  const map = matrix.map,
+    n = input.length,
+    array = (name: string) => metricArray(map, name, n);
+  const result = array("result"),
+    projected = array("product");
+  result.copyFrom(input);
+  metricProduct(matrix, result, projected);
+  const rhs = array("solve-rhs"),
+    residual = array("residual"),
+    direction = array("direction");
+  for (let i = 0; i < n; i++) {
+    const value = input.get(i) * matrix.areas.get(i);
+    rhs.set(i, value);
+    residual.set(i, value - projected.get(i));
+  }
+  direction.copyFrom(condition(residual));
+  let error = dot(residual, direction);
+  const norm = (values: Band) => {
+    let sum = 0;
+    for (let i = 0; i < n; i++) sum += values.get(i) ** 2 / matrix.diagonal.get(i);
+    return sum;
+  };
+  const tolerance = Math.max(1e-12, norm(rhs) * 1e-12);
+  // CG converges to the original finite-volume equation, not the coarse approximation.
+  for (let iteration = 0; iteration < n && norm(residual) > tolerance; iteration++) {
+    metricProduct(matrix, direction, projected);
+    const alpha = error / dot(direction, projected);
+    for (let i = 0; i < n; i++) {
+      result.add(i, alpha * direction.get(i));
+      residual.add(i, -alpha * projected.get(i));
+    }
+    const preconditioned = condition(residual);
+    const next = dot(residual, preconditioned),
+      beta = next / error;
+    for (let i = 0; i < n; i++) direction.set(i, preconditioned.get(i) + beta * direction.get(i));
+    error = next;
+  }
+  conserveComponents(matrix, input, result);
+  releaseWorking(map, projected, rhs, residual, direction);
+  return result;
+}
+/** Solve only participating cells; excluded basins/land never enter the matrix. */
+export function prepareMetricSmoother(map: PhysicalField, length: number, active?: ReadBand) {
+  const matrix = metricOperator(map, length, active),
+    condition = prepareMultigrid(matrix);
+  const apply = (input: ReadBand) => {
+    const cells = matrix.cells!,
+      local = metricArray(map, "local-input", matrix.count),
+      result = metricArray(map, "full-result", input.length);
+    result.copyFrom(input);
+    for (let i = 0; i < local.length; i++) local.set(i, input.get(cells.get(i)));
+    const solved = solve(matrix, local, condition);
+    for (let i = 0; i < matrix.count; i++) result.set(cells.get(i), solved.get(i));
+    releaseWorking(map, local, solved);
+    return result;
+  };
+  return Object.assign(apply, {
+    close() {
+      condition.close();
+      releaseMetric(matrix);
+    },
+  });
+}
+/** Finite-volume screened diffusion with physical reach and no flux through excluded faces. */
+export function smoothMetric(
+  map: PhysicalField,
+  input: ReadBand,
+  length: number,
+  active?: ReadBand
+) {
+  const smooth = prepareMetricSmoother(map, length, active);
+  try {
+    return smooth(input);
+  } finally {
+    smooth.close();
+  }
+}

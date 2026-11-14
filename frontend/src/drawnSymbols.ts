@@ -1,5 +1,5 @@
 import Icon from "ol/style/Icon.js";
-import type { CartographicMark } from "@atlas/domain";
+import type { CartographicMark } from "./types";
 
 export type DrawnIconKind =
   | Exclude<CartographicMark, "auto">

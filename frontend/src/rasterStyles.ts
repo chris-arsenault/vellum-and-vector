@@ -1,16 +1,15 @@
 import type { ExpressionValue as Expr } from "ol/expr/expression.js";
 import type { Style } from "ol/layer/WebGLTile.js";
 import type { FieldStyle, RasterPresentation } from "./types";
-import { palettes, scaledValue } from "./rasterPresentation";
-import { biomes, type SurfaceCategory } from "@atlas/domain";
+import { palettes, scaledValue } from "./rasterColors";
 import { contourScale, terrainContours } from "./terrainContours";
 
 const band = (index: number, x = 0, y = 0): Expr => ["band", index, x, y];
 const variable = (name: string): Expr => ["var", name];
 const mask: Expr = [">", band(2), 0.99];
 /** Terrain band order after `terrainTile`: see `terrainSampleBands`. */
-const terrainBand = { relative: 3, water: 4, ice: 5, surface: 7, natural: 8, east: 10, north: 11 };
-type ClassColor = Pick<SurfaceCategory, "code" | "color">;
+const terrainBand = { relative: 3, water: 4, ice: 5, east: 10, north: 11 };
+type ClassColor = { code: number; color: string };
 function classMatch(value: Expr, classes: ClassColor[], fallback: Expr): Expr {
   if (!classes.length) return fallback;
   return ["match", ["round", value], ...classes.flatMap((c) => [c.code, c.color]), fallback];
@@ -38,9 +37,7 @@ export function overlayVariables(style: FieldStyle, range: number[]) {
 export function overlayStyle(
   style: FieldStyle,
   range: number[],
-  classes: ClassColor[] | null = style.channel === "BiomeCodes"
-    ? biomes.map((biome, code) => ({ code, color: biome.color }))
-    : null
+  classes: ClassColor[] | null = null
 ): Style {
   const value: Expr = band(style.scale === "linear" ? 1 : 3);
   return {
@@ -101,24 +98,23 @@ function landColor(): Expr {
  * Magical surface tints sit over natural cover. Bathymetric water classes keep
  * the depth ramp; relief and contours apply after surface and ice colour.
  */
-function surfaced(base: Expr, classes: SurfaceCategory[]): Expr {
-  const painted = classes.filter((c) => !c.bathymetric);
-  if (!painted.length) return base;
-  const natural = classMatch(
-    band(terrainBand.natural),
-    painted.filter((c) => !c.system),
-    base
-  );
-  const code = band(terrainBand.surface);
-  let colored = classMatch(code, painted, natural);
-  const tinted = painted.filter((c) => c.tint < 1);
-  if (tinted.length) {
-    const weight: Expr = ["match", ["round", code], ...tinted.flatMap((c) => [c.code, c.tint]), 1];
-    colored = ["interpolate", ["linear"], weight, 0, natural, 1, colored];
-  }
-  return ["case", [">", variable("surface"), 0], colored, base];
+function surfaced(base: Expr): Expr {
+  const alpha: Expr = ["clamp", band(16), 0, 1];
+  const divisor: Expr = ["case", [">", alpha, 0.000001], alpha, 0.000001];
+  const color: Expr = [
+    "color",
+    ["/", band(13), divisor],
+    ["/", band(14), divisor],
+    ["/", band(15), divisor],
+  ];
+  return [
+    "case",
+    [">", variable("surface"), 0],
+    ["interpolate", ["linear"], alpha, 0, base, 1, color],
+    base,
+  ];
 }
-export function terrainStyle(view: RasterPresentation, classes: SurfaceCategory[] = []): Style {
+export function terrainStyle(view: RasterPresentation): Style {
   const { slope, light } = gradients();
   const water = band(terrainBand.water);
   const sea = ramp(band(terrainBand.relative), ["#6f9dab", "#b6d4d7"], -6000, 0);
@@ -127,8 +123,8 @@ export function terrainStyle(view: RasterPresentation, classes: SurfaceCategory[
     [">", water, 1.5],
     "#a1c8ce",
     [">", water, 0.5],
-    surfaced(sea, classes),
-    surfaced(landColor(), classes),
+    surfaced(sea),
+    surfaced(landColor()),
   ];
   const ice: Expr = ["clamp", ["*", band(terrainBand.ice), 1.5], 0, 1];
   return {

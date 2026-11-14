@@ -1,0 +1,76 @@
+import type { GenerationState } from "../process";
+import { respond } from "../coupling/answers";
+import { spoilSoil } from "../rock/groundSurfaceMedia";
+import { fuseRock } from "../rock/rockField";
+import type { PhysicalField } from "./field";
+import { type MagicField } from "./magicState";
+import { originStocks, stockKey } from "./magicState";
+import { clamp, round, units } from "./math";
+import { exposedReservoirAmount, originBurialDepth } from "../rock/rockMagicStock";
+import { GroundInventory } from "../rock/groundInventory";
+
+/** The share of a full fusing at which salt ground has become glass. */
+const glassFrom = 0.5;
+
+/**
+ * What Salt does to the ground it lies on, once per epoch after the shared forcings: bed
+ * deep enough fuses the ground to glass (rock resistance up, soil gone), salted ground
+ * draws the air's moisture down in proportion to its salting, and Fire burns reached Salt
+ * reservoirs by its share of the quickening intensity, fusing what it burns.
+ */
+export function saltWrites(state: GenerationState) {
+  const work = state.physical!,
+    map = work.map,
+    fields = work.magic!.fields.filter((field) => field.definition.enabled),
+    salts = fields.filter((field) => field.definition.effects.salting > 0),
+    fire = fields.find((field) => field.definition.effects.quickening > 0);
+  for (const field of salts)
+    for (let i = 0; i < map.mesh.count; i++) {
+      if (map.WaterKindCodes.get(i) !== 0) continue;
+      const p = field.definition.parameters,
+        bed = exposedReservoirAmount(map, field, "bed", i) / map.mesh.area(i);
+      if (bed >= p.glassBed) fuse(map, i, p.glassResistance, p.glassResistance);
+      const salting = (field.intensity.get(i) / 1000) * field.definition.effects.salting;
+      if (salting > 0)
+        map.Moisture.set(i, round(map.Moisture.get(i) * (1 - p.desiccation * salting)));
+      if (fire && fire.intensity.get(i) > 0) burn(map, field, fire, i);
+    }
+}
+function fuse(map: PhysicalField, i: number, resistance: number, full: number) {
+  // A scorch hardens what is there; only a bed burnt through is glass.
+  fuseRock(map, i, resistance, resistance >= full * glassFrom);
+  spoilSoil(map, i, 1, "salt");
+}
+/** Surface carriers burn directly; the bed burns only where Fire reaches retained Salt material. */
+function burn(map: PhysicalField, field: MagicField, fire: MagicField, i: number) {
+  const p = field.definition.parameters,
+    share = clamp(p.saltBurn * (fire.intensity.get(i) / 1000), 0, 1);
+  let burnt = 0;
+  for (const origin of field.definition.origins)
+    for (const stock of originStocks(origin)) {
+      const values = field.stocks[stockKey(origin, stock)],
+        removed =
+          values instanceof GroundInventory
+            ? values.release(i, units(originBurialDepth(field, origin)), () => share)
+            : stock.reservoir === "brine"
+              ? values.get(i) * share
+              : 0;
+      burnt += removed;
+      if (!(values instanceof GroundInventory)) values.add(i, -removed);
+    }
+  if (burnt <= 0) return;
+  field.lost += burnt;
+  fuse(
+    map,
+    i,
+    p.glassResistance * Math.min(1, burnt / (map.mesh.area(i) * p.saltFull)),
+    p.glassResistance
+  );
+}
+// Salt crystals wedge rock apart, so salted ground weathers as if wetter.
+respond({
+  key: "wetness",
+  by: "salt",
+  reads: ["Salting"],
+  add: (map, i) => map.Salting.get(i) * 0.5,
+});

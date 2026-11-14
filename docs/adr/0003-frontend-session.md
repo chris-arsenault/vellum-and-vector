@@ -1,5 +1,9 @@
 # 0003 — Build the atlas in the browser first
 
+The browser-only restriction and backend-preservation instruction are superseded by
+[ADR 0015](0015-finished-maps-and-execution-hosts.md). Browser session, save and
+interruption behavior remain applicable to the browser execution context.
+
 User direction recorded 2026-10-18. Supersedes the backend, persistence, MCP and
 execution-lifecycle requirements in the product specification and ADRs 0001–0002
 for the current product.
@@ -137,11 +141,9 @@ than erasing its procedural records.
 The active pnpm workspace, checks and build contain `frontend`, `packages/domain`,
 `packages/application`, `packages/storage-browser`, `packages/generation` and
 `packages/name-forge`.
-Prototype backend and database files remain outside
-that path as historical source. The earlier combined Terraform and platform
-registration are preserved under `infrastructure/backend-prototype` with disabled
-extensions. Do not deploy that backend as part of frontend development.
-Backend and MCP work will be reconsidered after the frontend product functions.
+The earlier C# and TypeScript backends and their migrations and deployment scripts
+are removed. The replacement uses finished-map contracts and separate generation
+storage, rather than the earlier backend schema.
 
 Ahara's shared CI workflow deploys only static frontend assets using its website
 module in `infrastructure/terraform`. This hosting supplies S3, CloudFront, TLS

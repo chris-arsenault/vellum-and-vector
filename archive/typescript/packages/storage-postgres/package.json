@@ -1,0 +1,23 @@
+{
+  "name": "@atlas/storage-postgres",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@atlas/map": "workspace:*",
+    "@atlas/context": "workspace:*",
+    "@atlas/engine": "workspace:*",
+    "cbor-x": "1.6.8",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^11.0.0"
+  }
+}

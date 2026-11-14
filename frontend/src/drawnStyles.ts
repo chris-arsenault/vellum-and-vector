@@ -1,38 +1,41 @@
 import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import Point from "ol/geom/Point.js";
-import type { AtlasFeature, LayerStyle, World } from "./types";
-import type { CartographicPresentation, CartographicOverride } from "@atlas/domain";
+import type { LayerStyle } from "./types";
+import type { MagicDepiction, RenderFeature } from "./renderFeature";
+import type { CartographicPresentation, CartographicOverride } from "./types";
 import { drawnIcon, atlasColour } from "./drawnSymbols";
 import { settlementPriority } from "./settlementStyles";
 import { featureStyle } from "./vectorStyles";
-import { bounds, defaultStyles } from "./presentation";
-import { drawnLabelGeometry, labelScope } from "./drawnLabels";
+import { drawnLabelGeometry } from "./drawnLabels";
+import type { DrawingFeature } from "./drawingGeometry";
 import type { Geometry } from "geojson";
-import type { DrawingGeography } from "./drawnGeography";
+import type { DrawingGeography } from "./publishedAppearance";
 import { biomeStyle } from "./drawnEcology";
-import { drawnPlace, placeMark, placeAnchor } from "./drawnPlaces";
-import { describeFeature } from "@atlas/domain";
+import { drawnPlace, placeMark } from "./drawnPlaces";
 import { drawnMagic } from "./drawnMagic";
 
 export interface DrawnStyleContext {
-  world: World;
+  typeId: string;
+  name: string;
+  magic: MagicDepiction;
   view: CartographicPresentation;
   footprint?: Geometry;
   geography?: DrawingGeography;
-  features?: AtlasFeature[];
+  features?: RenderFeature[];
+  drawing: DrawingFeature;
 }
 const ink = "#53452f",
   paper = "#eee4c9",
   water = "#a7c4c0";
-export function defaultDrawnStyles(world: World, subject: CartographicPresentation["subject"]) {
-  return defaultStyles(world, subject).map((layer) => ({
+export function drawnLayerStyles(styles: LayerStyle[], faultTypeId?: string) {
+  return styles.map((layer) => ({
     ...layer,
     opacity: 1,
-    ...(layer.layerId === "geology"
+    ...(layer.layerId === "geology" && faultTypeId
       ? {
           types: {
-            [describeFeature(world, { kind: "fault", layerId: "geology", attributes: {} }).id]: {
+            [faultTypeId]: {
               visible: false,
             },
           },
@@ -69,7 +72,7 @@ export function defaultDrawnStyles(world: World, subject: CartographicPresentati
     ].includes(layer.layerId),
   }));
 }
-export function polityIdentity(feature: AtlasFeature) {
+export function polityIdentity(feature: RenderFeature) {
   return (
     feature.relations.find((r) =>
       ["sovereign", "controlledBy", "claimedBy", "administeredBy"].includes(r.kind)
@@ -77,7 +80,7 @@ export function polityIdentity(feature: AtlasFeature) {
   );
 }
 export function cartographicFeatureStyle(
-  feature: AtlasFeature,
+  feature: RenderFeature,
   style: LayerStyle,
   resolution: number,
   context: DrawnStyleContext
@@ -87,16 +90,16 @@ export function cartographicFeatureStyle(
   if (shape === null) return [];
   const depicted = shape ? { ...feature, geometry: shape } : feature;
   const result = illustrationStyle(depicted, style, resolution, context);
-  const name = cartographicName(feature, context.world);
+  const name = context.name;
   if (labelEnabled(feature, style, context) && name)
     result.push(labelStyle(depicted, name, context, resolution));
   if (shape && shape !== feature.geometry) applyDrawingShape(result, shape);
   return result;
 }
-function drawingVisible(f: AtlasFeature, style: LayerStyle, c: DrawnStyleContext) {
+function drawingVisible(f: RenderFeature, style: LayerStyle, c: DrawnStyleContext) {
   return !c.view.overrides[f.id]?.hidden && !hiddenFault(f, style, c);
 }
-function labelEnabled(f: AtlasFeature, style: LayerStyle, c: DrawnStyleContext) {
+function labelEnabled(f: RenderFeature, style: LayerStyle, c: DrawnStyleContext) {
   return style.labels && c.view.labels && !c.view.overrides[f.id]?.labelHidden;
 }
 const renderShapes = new WeakMap<Geometry, import("ol/geom/Geometry.js").default>();
@@ -108,16 +111,11 @@ function applyDrawingShape(styles: Style[], shape: Geometry) {
   }
   for (const style of styles) if (!style.getGeometry()) style.setGeometry(geometry);
 }
-function hiddenFault(f: AtlasFeature, style: LayerStyle, c: DrawnStyleContext) {
-  // Older maps published the computational fault traces in geology, instead of the optional faults layer.
-  return (
-    f.kind === "fault" &&
-    f.layerId === "geology" &&
-    style.types?.[describeFeature(c.world, f).id]?.visible !== true
-  );
+function hiddenFault(f: RenderFeature, style: LayerStyle, c: DrawnStyleContext) {
+  return f.kind === "fault" && f.layerId === "geology" && style.types?.[c.typeId]?.visible !== true;
 }
 function illustrationStyle(
-  f: AtlasFeature,
+  f: RenderFeature,
   layer: LayerStyle,
   resolution: number,
   context: DrawnStyleContext
@@ -133,23 +131,27 @@ function illustrationStyle(
     ];
   return shapeStyle(f, layer, resolution, context);
 }
-export function cartographicName(feature: AtlasFeature, world: World) {
-  const entity = world.entities[polityIdentity(feature)];
-  return entity?.name ?? feature.name;
-}
 /** A magic landmark is a major place, drawn with the landmark marks rather than as a field. */
 function magicStyle(
-  f: AtlasFeature,
+  f: RenderFeature,
   layer: LayerStyle,
   resolution: number,
   c: DrawnStyleContext
 ): Style[] {
-  const place = f.kind === "landmark" ? drawnPlace(f, c.view.style === "ink") : null;
+  const place =
+    f.kind === "landmark" ? drawnPlace(f, c.view.style === "ink", c.drawing.placeAnchor) : null;
   if (place) return [place];
-  return drawnMagic(f, layer, c.world, resolution, c.view.subject === "physical");
+  return drawnMagic(
+    f,
+    layer,
+    c.magic,
+    resolution,
+    c.view.subject === "physical",
+    c.drawing.placeAnchor
+  );
 }
 function shapeStyle(
-  f: AtlasFeature,
+  f: RenderFeature,
   layer: LayerStyle,
   resolution: number,
   c: DrawnStyleContext
@@ -179,15 +181,18 @@ function shapeStyle(
     ];
   return [landmark(f, c)];
 }
-function specialStyle(f: AtlasFeature, c: DrawnStyleContext) {
+function specialStyle(f: RenderFeature, c: DrawnStyleContext) {
   if (f.kind === "settlement") return settlement(f, c);
   if (f.kind === "fault")
     return new Style({ stroke: new Stroke({ color: "#8d8170", width: 0.7, lineDash: [2, 5] }) });
   if (f.kind === "ocean") return new Style({ fill: new Fill({ color: "#00000000" }) });
-  return biomeStyle(f, c.view.style === "ink") ?? drawnPlace(f, c.view.style === "ink");
+  return (
+    biomeStyle(f, c.view.style === "ink") ??
+    drawnPlace(f, c.view.style === "ink", c.drawing.placeAnchor)
+  );
 }
 function river(
-  f: AtlasFeature,
+  f: RenderFeature,
   layer: LayerStyle,
   resolution: number,
   c: DrawnStyleContext
@@ -204,7 +209,7 @@ function river(
   );
   return Array.isArray(result) ? result : [result];
 }
-function territory(f: AtlasFeature, c: DrawnStyleContext) {
+function territory(f: RenderFeature, c: DrawnStyleContext) {
   const colour = c.view.style === "ink" ? ink : atlasColour(polityIdentity(f));
   const sovereignty = f.layerId === "sovereignty" && f.kind !== "politicalRegion";
   return new Style({
@@ -217,7 +222,7 @@ function territory(f: AtlasFeature, c: DrawnStyleContext) {
     zIndex: sovereignty ? -10 : -5,
   });
 }
-function settlement(f: AtlasFeature, c: DrawnStyleContext) {
+function settlement(f: RenderFeature, c: DrawnStyleContext) {
   const own = c.view.overrides[f.id];
   const capital = f.attributes.settlementRole === "capital";
   const ruined = ["ruined", "abandoned"].includes(String(f.attributes.status));
@@ -228,7 +233,7 @@ function settlement(f: AtlasFeature, c: DrawnStyleContext) {
     zIndex: settlementPriority(f),
   });
 }
-function landmark(f: AtlasFeature, c: DrawnStyleContext) {
+function landmark(f: RenderFeature, c: DrawnStyleContext) {
   const own = c.view.overrides[f.id];
   if (own?.symbol && own.symbol !== "auto")
     return new Style({ image: drawnIcon(own.symbol, 24, c.view.style === "ink") });
@@ -251,7 +256,7 @@ function landmark(f: AtlasFeature, c: DrawnStyleContext) {
     }),
   });
 }
-function labelStyle(f: AtlasFeature, name: string, c: DrawnStyleContext, resolution: number) {
+function labelStyle(f: RenderFeature, name: string, c: DrawnStyleContext, resolution: number) {
   const own = c.view.overrides[f.id] ?? {};
   const polity = f.layerId === "sovereignty" && f.kind !== "politicalRegion";
   const width = labelPixelWidth(f, c, resolution);
@@ -275,15 +280,15 @@ function labelStyle(f: AtlasFeature, name: string, c: DrawnStyleContext, resolut
       : undefined,
   });
 }
-function labelGeometry(f: AtlasFeature, c: DrawnStyleContext, own: CartographicOverride) {
+function labelGeometry(f: RenderFeature, c: DrawnStyleContext, own: CartographicOverride) {
   return !own.path && !own.anchor && placeMark(f)
-    ? new Point(placeAnchor(f))
-    : drawnLabelGeometry(f, c, own);
+    ? new Point(c.drawing.placeAnchor)
+    : drawnLabelGeometry(c.drawing, own);
 }
-function labelPlacement(f: AtlasFeature, own: CartographicOverride) {
+function labelPlacement(f: RenderFeature, own: CartographicOverride) {
   return own.path || (f.geometry.type.includes("Line") && !placeMark(f)) ? "line" : "point";
 }
-function labelFont(f: AtlasFeature, own: CartographicOverride, width: number, length: number) {
+function labelFont(f: RenderFeature, own: CartographicOverride, width: number, length: number) {
   const polity = f.layerId === "sovereignty" && f.kind !== "politicalRegion",
     capital = f.attributes.settlementRole === "capital";
   const size =
@@ -291,25 +296,22 @@ function labelFont(f: AtlasFeature, own: CartographicOverride, width: number, le
     (polity ? Math.min(23, Math.max(14, width / Math.max(1, length * 0.7))) : capital ? 15 : 12);
   return `${polity || capital ? "600" : "italic"} ${size}px Georgia, serif`;
 }
-function labelOffsets(f: AtlasFeature, own: CartographicOverride) {
+function labelOffsets(f: RenderFeature, own: CartographicOverride) {
   return {
     offsetX: own.offsetX ?? 0,
     offsetY: own.offsetY ?? automaticLabelOffset(f, own),
   };
 }
-function automaticLabelOffset(f: AtlasFeature, own: CartographicOverride) {
+function automaticLabelOffset(f: RenderFeature, own: CartographicOverride) {
   if (own.anchor) return 0;
   if (placeMark(f)) return 16;
   return f.kind === "settlement" ? 12 : 0;
 }
-function labelVisible(f: AtlasFeature, name: string, own: CartographicOverride, width: number) {
+function labelVisible(f: RenderFeature, name: string, own: CartographicOverride, width: number) {
   if (own.anchor || own.path || f.layerId !== "sovereignty") return true;
   return width > Math.max(1, name.length * 9);
 }
-function labelPixelWidth(f: AtlasFeature, c: DrawnStyleContext, resolution: number) {
+function labelPixelWidth(f: RenderFeature, c: DrawnStyleContext, resolution: number) {
   if (f.layerId !== "sovereignty") return Infinity;
-  const shape = labelScope(f.geometry, c.footprint);
-  if (!shape || !shape.type.includes("Polygon")) return 0;
-  const box = bounds(shape);
-  return (box[2] - box[0]) / resolution;
+  return c.drawing.labelWidth / resolution;
 }

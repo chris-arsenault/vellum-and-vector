@@ -1,7 +1,6 @@
-import { openSpatialRuntime } from "./spatialRuntime";
+export {};
 
 try {
-  await openSpatialRuntime();
   await import("./renderApp");
 } catch (error) {
   const root = document.getElementById("root");

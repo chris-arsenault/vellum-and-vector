@@ -1,0 +1,217 @@
+//! Browser application job. Geometry and SQL execute directly in the Rust module.
+// owner-direction(2026-11-12): computation uses one Rust core for native and WASM
+mod prepare;
+mod publication;
+use crate::{
+    browser_control::BrowserControl, browser_generation::BrowserGenerationHost,
+    generation_application::Configuration, generation_execution, generation_submission::Submission,
+    local_inputs::LocalInputs, native::NativeScratch, native_resources::NativeResources,
+    record_store::Workspace,
+};
+use atlas_generation::storage::{BlockCache, BlockScratch};
+use atlas_generation::RefinementRequest;
+use atlas_gis::{geometry::NativeGeos, map_files::MapFiles, map_store::MapStore, sql::Database};
+use atlas_map::{MapRef, RegionSelection};
+use serde::Deserialize;
+use serde_json::Value;
+use std::rc::Rc;
+use wasm_bindgen::prelude::*;
+
+#[derive(Deserialize)]
+#[serde(tag = "method", content = "request", rename_all = "camelCase")]
+pub enum Action {
+    Create(Configuration),
+    Refine(RefinementRequest<Configuration>),
+    Regenerate {
+        reference: MapRef,
+        configuration: Configuration,
+    },
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Run {
+    action: Action,
+    operation: String,
+    revision: String,
+    cache_bytes: usize,
+}
+pub(super) struct Prepared {
+    submission: Submission,
+    expected: Option<MapRef>,
+    parent: Option<MapRef>,
+    selection: Option<(RegionSelection, String)>,
+    geography: Vec<Value>,
+    resources: Vec<Value>,
+}
+#[wasm_bindgen]
+pub struct BrowserJob {
+    private: LocalInputs,
+    records: Workspace,
+    maps: MapStore,
+    resources: Rc<NativeResources>,
+    output: NativeResources,
+    assets: MapFiles,
+    scratch: std::path::PathBuf,
+}
+#[wasm_bindgen]
+impl BrowserJob {
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        private: &str,
+        records: &str,
+        maps: &MapStore,
+        resources: &str,
+        assets: &str,
+        scratch: &str,
+    ) -> Result<BrowserJob, JsValue> {
+        std::fs::create_dir_all(resources).map_err(error)?;
+        std::fs::create_dir_all(scratch).map_err(error)?;
+        Ok(Self {
+            private: LocalInputs::open(Rc::new(Database::open(private).map_err(error)?))
+                .map_err(error)?,
+            records: Workspace::open(Rc::new(Database::open(records).map_err(error)?))
+                .map_err(error)?,
+            maps: maps.clone(),
+            resources: Rc::new(NativeResources::new(resources.into())),
+            output: NativeResources::new(resources.into()),
+            assets: MapFiles::new(assets),
+            scratch: scratch.into(),
+        })
+    }
+    pub async fn run(
+        &mut self,
+        request: &str,
+        host: BrowserGenerationHost,
+    ) -> Result<String, JsValue> {
+        let Run {
+            action,
+            operation,
+            revision,
+            cache_bytes,
+        } = serde_json::from_str(request).map_err(error)?;
+        let prepared = self.prepare(action, &operation)?;
+        if self
+            .maps
+            .find_head(&prepared.submission.input.area_id)
+            .map_err(error)?
+            != prepared.expected
+        {
+            return Err(error("The map revision changed before generation started"));
+        }
+        crate::regional_capture::write_resources(&prepared.resources, &mut self.output)
+            .await
+            .map_err(error)?;
+        if cache_bytes == 0 {
+            return Err(error("Generation requires a positive block-cache budget"));
+        }
+        let spatial = Rc::new(
+            NativeGeos::new(
+                prepared.submission.source.world["reference"]["precision"]
+                    .as_f64()
+                    .unwrap_or(1e-6),
+            )
+            .map_err(error)?,
+        );
+        let progress_host = host.clone();
+        let finished = generation_execution::run(
+            prepared.submission,
+            &operation,
+            generation_execution::Services {
+                resources: self.resources.clone(),
+                spatial,
+                cache: BlockCache::new(
+                    cache_bytes,
+                    BlockScratch::new(
+                        NativeScratch::create_new(self.scratch.join("generation.blocks"))
+                            .map_err(error)?,
+                    ),
+                ),
+                records: &self.records,
+                progress: Rc::new(move |fraction, message| {
+                    progress_host.work_progress(fraction, message)
+                }),
+                completed_at: || String::from(js_sys::Date::new_0().to_iso_string()),
+            },
+            &BrowserControl::new(host.control()?),
+            host.clone(),
+            &mut self.output,
+        )
+        .await
+        .map_err(error)?;
+        let reference = MapRef {
+            map_id: finished.snapshot.scope.located.area_id.clone(),
+            revision,
+        };
+        let mut geography = prepared.geography;
+        geography.extend(finished.output.geography);
+        host.work_progress(0.0, "Retaining completed generation inputs");
+        self.private
+            .store(
+                &reference,
+                &finished.snapshot,
+                &self.records.features(),
+                &self.records.networks(),
+                &geography,
+            )
+            .map_err(error)?;
+        host.work_progress(0.0, "Preparing finished map publication");
+        let result = self
+            .publish(
+                crate::finished_map::Request::from_document(
+                    finished.snapshot,
+                    reference.clone(),
+                    prepared.expected,
+                    prepared.parent,
+                )
+                .map_err(error)?,
+                cache_bytes,
+                &host,
+            )
+            .await;
+        if result.is_err() {
+            self.private.unbind(&reference).map_err(error)?;
+        }
+        result?;
+        serde_json::to_string(&reference).map_err(error)
+    }
+    pub async fn review(&self, action: &str, operation: &str) -> Result<String, JsValue> {
+        let mut action: Action = serde_json::from_str(action).map_err(error)?;
+        let configuration = match &mut action {
+            Action::Create(c)
+            | Action::Regenerate {
+                configuration: c, ..
+            } => c,
+            Action::Refine(r) => &mut r.configuration,
+        };
+        if configuration.name.trim().is_empty() {
+            configuration.name = "Untitled map".into();
+        }
+        let prepared = self.prepare(action, operation)?;
+        let descriptors = crate::generation_review::Descriptors {
+            captured: &prepared.resources,
+            store: self.resources.as_ref(),
+        };
+        let geography: crate::generation_frame::Geography =
+            serde_json::from_value(prepared.submission.source.world.clone()).map_err(error)?;
+        let spatial =
+            atlas_gis::geometry::NativeGeos::new(geography.reference.precision.unwrap_or(1e-6))
+                .map_err(error)?;
+        let request = prepared
+            .submission
+            .request(&spatial)
+            .map_err(error)?
+            .resolve(&spatial, &descriptors)
+            .map_err(error)?;
+        serde_json::to_string(&request.review(&spatial).map_err(error)?).map_err(error)
+    }
+    pub fn configuration(&self, reference: &str) -> Result<String, JsValue> {
+        let reference = serde_json::from_str(reference).map_err(error)?;
+        let document = self.private.document(&reference).map_err(error)?;
+        let map = self.maps.open(&reference).map_err(error)?;
+        serde_json::to_string(&Configuration::from_map(&document, &map).map_err(error)?)
+            .map_err(error)
+    }
+}
+fn error(value: impl std::fmt::Display) -> JsValue {
+    js_sys::Error::new(&value.to_string()).into()
+}

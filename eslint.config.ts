@@ -73,7 +73,7 @@ const resourceImports = {
 };
 
 export default ts.config(
-  { ignores: ["**/dist/**", "**/node_modules/**", "backend/vendor/**"] },
+  { ignores: ["**/dist/**", "**/node_modules/**", "archive/**", "packages/domain/contracts/**"] },
   js.configs.recommended,
   ...ts.configs.recommended,
   {

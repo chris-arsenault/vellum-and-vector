@@ -1,7 +1,7 @@
-import { controlFeatures, type CartographicControl } from "@atlas/generation";
+import type { CartographicControl } from "./generationTypes";
+import { controlFeatures } from "./generationPresentation";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import {
-  applyCartographicChoice,
   visibleCartographicControls,
   cartographicValue,
   cartographicFieldPending,
@@ -32,7 +32,7 @@ export function CartographicDecision({
   const fields = useWorkflowFields();
   const affected = controlFeatures(control);
   const unfinished = cartographicFieldPending(control, fields.errors);
-  const value = unfinished ? "custom" : cartographicValue(flow.draft, control);
+  const value = unfinished ? "custom" : cartographicValue(flow, control);
   const change = (value: string) => {
     for (const field of control.fields ?? []) fields.clearExact(field);
     const choice = control.choices.find((item) => item.id === value)!;
@@ -42,7 +42,7 @@ export function CartographicDecision({
         for (const key of Object.keys(patch.settings))
           fields.clearExact("feature." + id + "." + key);
     }
-    flow.change(applyCartographicChoice(flow.draft, control, value));
+    void flow.choose(control.id, value);
   };
   return (
     <article className="cartographic-control" id={"intent-" + control.id}>

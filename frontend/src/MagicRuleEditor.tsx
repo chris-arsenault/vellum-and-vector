@@ -1,9 +1,5 @@
-import {
-  magicPhysicalFields,
-  type MagicCondition,
-  type MagicFeatureRule,
-  type MagicSystem,
-} from "@atlas/domain";
+import type { MagicCondition, MagicFeatureRule, MagicSystem } from "@atlas/context";
+import { magicPhysicalFields } from "./magicChoices";
 import { CodeField, NumberField } from "./WorkflowFields";
 import { useWorkflowFields } from "./workflowFieldState";
 
@@ -240,20 +236,20 @@ function ConditionInput({
         fieldKey={`${fieldKey}.min`}
         label="At least"
         optional
-        value={test.min}
+        value={test.min ?? undefined}
         change={(min) => change(optionalBound(test, "min", min))}
       />
       <NumberField
         fieldKey={`${fieldKey}.max`}
         label="At most"
         optional
-        value={test.max}
+        value={test.max ?? undefined}
         change={(max) => change(optionalBound(test, "max", max))}
       />
       <CodeField
         fieldKey={`${fieldKey}.values`}
         label="One of these codes · comma separated"
-        value={test.values}
+        value={test.values ?? undefined}
         change={(values) => {
           const next = { ...test };
           if (values === undefined) delete next.values;

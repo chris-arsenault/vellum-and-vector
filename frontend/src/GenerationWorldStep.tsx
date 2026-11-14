@@ -1,15 +1,12 @@
-import type { GenerationRecipe } from "@atlas/generation";
-import { MapScale } from "@atlas/domain";
+import type { GenerationRecipe } from "./generationTypes";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { NumberField } from "./WorkflowFields";
 import { GenerationResolution } from "./GenerationResolution";
 import { setFeatureSetting } from "./generationDraft";
-import { mapBoundaryValue } from "@atlas/generation";
 
 export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
   const { draft, change } = flow;
   const inherited = Boolean(flow.options.source);
-  const profile = flow.options.source?.world.areas[flow.options.areaId!]?.profile ?? "world";
   return (
     <>
       {flow.options.onManual && <StartingApproach flow={flow} />}
@@ -30,17 +27,15 @@ export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
             label={key === "width" ? "Width" : "Height"}
             unit="km"
             fieldKey={"world." + key}
-            value={MapScale.inUnits(draft[key], "km")}
+            value={draft[key] / 1000}
             min={Number.MIN_VALUE}
             step="any"
             readOnly={inherited}
-            change={(value) => change({ ...draft, [key]: MapScale.metres(value, "km") })}
+            change={(value) => change({ ...draft, [key]: value * 1000 })}
           />
         ))}
         <GenerationResolution
-          width={draft.width}
-          height={draft.height}
-          profile={profile}
+          resolutions={flow.prepared?.resolutions}
           disabled={flow.approach === "blank"}
           quality={draft.recipe.quality}
           change={(quality) =>
@@ -77,12 +72,10 @@ export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
 function BoundaryChoice({ flow }: { flow: GenerationWorkflow }) {
   const { draft, change } = flow,
     source = flow.options.source;
-  const value = source
-    ? mapBoundaryValue(source.world.reference.boundaryMode)
-    : Number(
-        draft.recipe.features?.["physical.foundation"]?.settings?.mapBoundary ??
-          draft.recipe.parameters.mapBoundary
-      );
+  const value = Number(
+    draft.recipe.features?.["physical.foundation"]?.settings?.mapBoundary ??
+      draft.recipe.parameters.mapBoundary
+  );
   return (
     <label>
       Map boundary

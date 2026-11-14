@@ -1,18 +1,15 @@
-import { requireThat, type Epoch } from "@atlas/domain";
+import type { Epoch } from "@atlas/context";
+import { requireFormValue } from "./values";
 import { draftEpochs, updatePhysicalEpoch, updateEcologyEpoch } from "./generationDraftEpochs";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import type { GenerationDraft } from "./generationDraft";
-import {
-  atlasFeatureDefinitions,
-  type EpochControl,
-  type EpochValueKey,
-  type SetupFeature,
-} from "@atlas/generation";
+import { type EpochControl, type EpochValueKey, type SetupFeature } from "./generationTypes";
+import { atlasFeatureDefinitions } from "./generationPresentation";
 
 export function selectedDraftEpoch(flow: Pick<GenerationWorkflow, "draft" | "epoch">) {
   const epochs = draftEpochs(flow.draft);
   const selected = epochs.find((epoch) => epoch.id === flow.epoch) ?? epochs[0];
-  requireThat(selected, "draft_epoch", "Keep at least one shared epoch.");
+  requireFormValue(selected, "Keep at least one shared epoch.");
   return selected;
 }
 

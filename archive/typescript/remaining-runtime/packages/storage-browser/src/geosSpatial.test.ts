@@ -1,0 +1,155 @@
+import { afterEach, expect, it } from "vitest";
+import { configureSpatial, Spatial, spatial, rectangle } from "@atlas/domain";
+import { GeometryKernel } from "./geometryKernel";
+import { GeosSpatial } from "./geosSpatial";
+
+let kernel: GeometryKernel | undefined;
+afterEach(() => {
+  configureSpatial();
+  kernel?.close();
+  kernel = undefined;
+});
+async function configure() {
+  kernel = await GeometryKernel.create(128);
+  configureSpatial((precision) => new GeosSpatial(kernel!, precision));
+}
+it("routes domain spatial operations through native precision and bounded prepared predicates", async () => {
+  await configure();
+  const a = rectangle([0, 0, 100, 100]),
+    b = rectangle([50, 0, 150, 100]);
+  const covers = spatial.pointCoverage(a);
+  expect(covers({ x: 0, y: 10, z: 0 })).toBe(true);
+  expect(covers({ x: -1, y: 10, z: 0 })).toBe(false);
+  expect(spatial.area(spatial.intersection(a, b)!)).toBe(5000);
+  expect(spatial.area(spatial.differenceFrom(b)(a)!)).toBe(5000);
+  expect(spatial.area(spatial.unionAll([a, b]))).toBe(15000);
+  expect(spatial.intersectionArea(a)(b)).toBe(5000);
+  const clip = spatial.intersectionWith(a);
+  expect(spatial.area(clip(b)!)).toBe(5000);
+  expect(clip(rectangle([200, 200, 300, 300]))).toBeNull();
+  expect(spatial.area(clip(rectangle([10, 10, 20, 20]))!)).toBe(100);
+  expect(spatial.distance(a, rectangle([110, 0, 120, 10]))).toBe(10);
+  expect(spatial.geometryCoverage(a)(rectangle([1, 1, 2, 2]))).toBe(true);
+  expect(
+    spatial.covers(a, {
+      type: "Point",
+      coordinates: Object.values(spatial.interiorPosition(a)).slice(0, 2),
+    })
+  ).toBe(true);
+  expect(new Spatial(0.1).canonical({ type: "Point", coordinates: [1.04, 2.06, 0] })).toEqual({
+    type: "Point",
+    coordinates: [1, 2.1, 0],
+  });
+  expect(covers({ x: 50, y: 50, z: 0 })).toBe(true);
+});
+it("validates geometry entering an overlay but never a read-only query rectangle", async () => {
+  await configure();
+  const native = kernel!.native,
+    isValid = native.GEOSisValid.bind(native);
+  let validations = 0;
+  native.GEOSisValid = (geometry: number) => {
+    validations++;
+    return isValid(geometry);
+  };
+  const footprint = rectangle([0, 0, 1000, 1000]),
+    intersects = spatial.intersectionPredicate(footprint),
+    covered = spatial.geometryCoverage(footprint);
+  validations = 0;
+  for (let x = -100; x < 1100; x += 50) {
+    const cell = rectangle([x, x, x + 50, x + 50]);
+    intersects(cell);
+    covered(cell);
+    spatial.bounds(cell);
+  }
+  expect(validations).toBe(0);
+  spatial.intersection(footprint, rectangle([500, 500, 1500, 1500]));
+  expect(validations).toBe(2);
+  native.GEOSisValid = isValid;
+});
+it("buffers crossing multipart lines into one area without counting overlap twice", async () => {
+  await configure();
+  const lines = Array.from({ length: 80 }, (_, i) => [
+      [-100, i - 40],
+      [100, 40 - i],
+    ]),
+    area = spatial.buffer({ type: "MultiLineString", coordinates: lines }, 10)!;
+  expect(area.type).toBe("Polygon");
+  const covers = spatial.pointCoverage(area);
+  expect(covers({ x: 0, y: 0, z: 0 })).toBe(true);
+  expect(covers({ x: 100, y: 40, z: 0 })).toBe(true);
+  expect(covers({ x: 0, y: 70, z: 0 })).toBe(false);
+  expect(spatial.area(area)).toBeLessThan(220 * 100);
+});
+it("buffers nested collections and retains separated parts and polygon holes", async () => {
+  await configure();
+  const ring = rectangle([0, 0, 100, 100]);
+  const hole = rectangle([20, 20, 80, 80]);
+  if (ring.type !== "Polygon" || hole.type !== "Polygon") throw new Error("Expected rectangles");
+  ring.coordinates.push(hole.coordinates[0].reverse());
+  const area = spatial.buffer(
+    {
+      type: "GeometryCollection",
+      geometries: [
+        ring,
+        {
+          type: "MultiPoint",
+          coordinates: [
+            [200, 0],
+            [300, 0],
+          ],
+        },
+      ],
+    },
+    5
+  )!;
+  const covers = spatial.pointCoverage(area);
+  expect(covers({ x: 50, y: 50, z: 0 })).toBe(false);
+  expect(covers({ x: 17, y: 50, z: 0 })).toBe(true);
+  expect(covers({ x: 200, y: 0, z: 0 })).toBe(true);
+  expect(covers({ x: 300, y: 0, z: 0 })).toBe(true);
+  expect(covers({ x: 250, y: 0, z: 0 })).toBe(false);
+});
+it("nodes the reported nearly coincident lines and preserves directed crossings", async () => {
+  await configure();
+  const a = {
+    type: "LineString" as const,
+    coordinates: [
+      [2657949.4244115246, 2574200.0673285],
+      [2657949.8562551714, 2574199.8180034542],
+    ],
+  };
+  const b = {
+    type: "LineString" as const,
+    coordinates: [
+      [2657949.736258257, 2574199.887283705],
+      [2657884.6130642365, 2574237.4861772484],
+    ],
+  };
+  expect(
+    spatial.nodeLines({ type: "MultiLineString", coordinates: [a.coordinates, b.coordinates] }).type
+  ).toBe("MultiLineString");
+  expect(
+    spatial.crossings(
+      {
+        type: "LineString",
+        coordinates: [
+          [-1, 50],
+          [101, 50],
+        ],
+      },
+      rectangle([0, 0, 100, 100])
+    )
+  ).toEqual(
+    expect.arrayContaining([
+      { x: 0, y: 50, z: 0 },
+      { x: 100, y: 50, z: 0 },
+    ])
+  );
+  expect(
+    spatial.delaunayEdges([
+      { x: 0, y: 0, z: 0 },
+      { x: 10, y: 0, z: 0 },
+      { x: 0, y: 10, z: 0 },
+    ])
+  ).toHaveLength(3);
+});

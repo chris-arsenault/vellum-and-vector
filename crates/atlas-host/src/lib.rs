@@ -1,17 +1,49 @@
-//! Coarse native/WASM boundary. Numerical loops stay inside the Rust engine.
-use atlas_map::{MapDescriptor, MapError, MapErrorCode, MapValidation};
-
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
-pub fn validate_map(input: &str) -> String {
-    let result = serde_json::from_str::<MapDescriptor>(input)
-        .map_err(|error| MapError::new(MapErrorCode::InvalidMap, error.to_string()))
-        .and_then(|map| {
-            map.validate()?;
-            Ok(map)
-        });
-    let reply = match result {
-        Ok(map) => MapValidation::Valid(map),
-        Err(error) => MapValidation::Invalid(error),
-    };
-    serde_json::to_string(&reply).expect("Validated map values are JSON serializable")
-}
+//! Application composition and generation hosting. GIS storage lives in atlas-gis.
+pub mod asset_writer;
+#[cfg(target_arch = "wasm32")]
+pub mod browser_control;
+#[cfg(target_arch = "wasm32")]
+pub mod browser_generation;
+#[cfg(target_arch = "wasm32")]
+pub mod browser_inputs;
+#[cfg(target_arch = "wasm32")]
+pub mod browser_job;
+#[cfg(target_arch = "wasm32")]
+pub mod browser_workspace;
+pub mod finished_map;
+pub mod generation_application;
+pub mod generation_bindings;
+pub mod generation_capture;
+pub mod generation_configuration;
+pub mod generation_document;
+pub mod generation_execution;
+pub mod generation_frame;
+pub mod generation_inputs;
+pub mod generation_output;
+pub mod generation_request;
+pub mod generation_review;
+pub mod generation_rules;
+pub mod generation_submission;
+pub mod generation_world;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod host_memory;
+pub mod local_inputs;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod map_http;
+pub mod native;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod native_control;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod native_generation_job;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod native_jobs;
+pub mod native_map_assets;
+pub mod native_resources;
+pub mod numerical_input;
+pub mod numerical_output;
+pub mod numerical_resource;
+pub mod observed_publication;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod private_inputs;
+pub mod record_store;
+pub mod regional_capture;

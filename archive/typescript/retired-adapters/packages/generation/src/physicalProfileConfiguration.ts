@@ -1,0 +1,83 @@
+import { z } from "zod";
+import type { GenerationFeature, ResolvedFeatures } from "./features";
+import { physicalProfile } from "./world/profile";
+
+/** Only the existing coefficients used by curated outcomes are configurable here. */
+const owners = {
+  "physical.foundation": [
+    "ContinentalAssemblyClustering",
+    "ContinentalAssemblyGrowthVariation",
+    "ContinentalMajorAssemblies",
+    "ContinentalMajorGrowth",
+    "ContinentalAssemblySeparationDepth",
+    "ContinentalWarpStrength",
+    "InteriorReliefStrength",
+    "ElevationVariationStrength",
+  ],
+  "physical.tectonic-history": ["EpochTectonicElevationStep"],
+  "physical.mountains": ["OrogenicInitialShortening"],
+  "physical.river-incision": ["FluvialEquilibriumGradient"],
+  "material.fluvial-transport": ["SedimentTransportFraction", "SedimentCarry"],
+  "physical.coastal-construction": [
+    "CoastalDetailStrength",
+    "CoastalDetailScale",
+    "CoastalDetailWarp",
+    "CoastalDetailPassiveAmplitude",
+    "CoastalDetailConvergentAmplitude",
+    "CoastalDetailRiftedAmplitude",
+    "CoastalDetailTransformAmplitude",
+  ],
+  "physical.coastal-evolution": ["CoastalDepositionFraction", "CoastalDepositionReach"],
+  "physical.glacial-sculpting": ["IceAltitudeBalance"],
+  "physical.volcanism": ["MantlePlumeCount"],
+  "physical.impacts": ["ImpactPrimordialShare"],
+} satisfies Record<string, (keyof typeof physicalProfile.values)[]>;
+
+type ProfileCoefficient = (typeof owners)[keyof typeof owners][number];
+export type PhysicalProfileOverrides = Partial<Record<ProfileCoefficient, number>>;
+const coefficientSchemas: Partial<Record<ProfileCoefficient, z.ZodNumber>> = {
+  ContinentalAssemblyClustering: z.number().min(0).max(1),
+  ContinentalAssemblyGrowthVariation: z.number().min(0).max(1),
+  ContinentalMajorAssemblies: z.number().int().nonnegative(),
+  ContinentalMajorGrowth: z.number().finite().positive(),
+  CoastalDetailScale: z.number().finite().positive(),
+  MantlePlumeCount: z.number().int().nonnegative(),
+  ContinentalAssemblySeparationDepth: z.number().min(0).max(1),
+  SedimentTransportFraction: z.number().min(0).max(1000),
+  CoastalDepositionFraction: z.number().min(0).max(1000),
+  ImpactPrimordialShare: z.number().min(0).max(1000),
+};
+
+export function physicalProfileConfiguration(id: string): Partial<GenerationFeature> {
+  const keys = owners[id as keyof typeof owners];
+  if (!keys) return {};
+  const profile = z
+    .object(
+      Object.fromEntries(
+        keys.map((key) => [
+          key,
+          (coefficientSchemas[key] ?? z.number().finite().nonnegative()).optional(),
+        ])
+      )
+    )
+    .strict()
+    .transform((values) =>
+      Object.fromEntries(
+        Object.entries(values).filter((entry): entry is [string, number] => entry[1] !== undefined)
+      )
+    );
+  return {
+    configuration: z.object({ profile: profile.default({}) }).strict(),
+    configurationFromSettings: () => ({ profile: {} }),
+  };
+}
+
+export function configuredPhysicalProfile(features: ResolvedFeatures): PhysicalProfileOverrides {
+  const result: PhysicalProfileOverrides = {};
+  for (const id of Object.keys(owners)) {
+    const feature = features.selection[id];
+    if (!feature?.enabled) continue;
+    Object.assign(result, feature.configuration?.profile ?? {});
+  }
+  return result;
+}

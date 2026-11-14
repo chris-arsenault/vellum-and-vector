@@ -1,0 +1,66 @@
+//! A run's shared physical channels and its canonical owner packages use one coverage.
+pub mod absence;
+pub mod advection;
+pub mod climate;
+pub mod coastal_detail;
+mod continental_margins;
+pub mod contributions;
+mod crust_queries;
+pub mod crust_settings;
+pub mod ecology;
+mod ecology_reads;
+mod epoch;
+pub mod events;
+pub mod forcing;
+pub mod fractures;
+pub mod geographic_contours;
+pub mod geographic_regions;
+pub mod geography;
+pub mod glaciers;
+pub mod impacts;
+pub mod inheritance;
+pub mod landforms;
+pub mod landmark_ledger;
+pub mod landmarks;
+mod landscape;
+pub mod magic;
+mod margins;
+pub mod marine_regions;
+pub mod material;
+pub mod orogeny;
+mod owner;
+pub mod people;
+pub mod plumes;
+pub mod poi;
+pub mod projection;
+pub mod protection;
+pub mod refinement;
+pub mod region_evidence;
+pub mod region_partition;
+mod relief_carry;
+pub mod river_drawing;
+pub mod schema;
+pub mod sea_ice;
+pub mod sediment;
+pub mod shared;
+pub mod significance;
+pub mod stage;
+mod support;
+pub mod surface_media;
+pub mod sutures;
+mod tectonics;
+pub mod transport;
+mod uplift;
+mod validation;
+pub mod volcanism;
+pub mod warmth;
+pub mod water;
+pub use owner::{Field, FieldSeed};
+#[cfg(test)]
+mod process_tests;
+#[cfg(test)]
+mod sediment_tests;
+#[cfg(test)]
+mod tests;
+#[cfg(test)]
+mod transport_tests;

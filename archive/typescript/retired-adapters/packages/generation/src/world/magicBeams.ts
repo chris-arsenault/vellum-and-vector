@@ -1,0 +1,157 @@
+import type { PhysicalField } from "./field";
+import type { MagicField } from "./magicState";
+import { nearestTriangle } from "./mesh";
+import { hashSigned, hashUnit } from "./noise";
+import { Feature } from "./codes";
+
+function kernelWeight(map: PhysicalField, i: number, x: number, y: number, radius: number) {
+  const mesh = map.mesh,
+    cx = mesh.x(i),
+    cy = mesh.y(i),
+    w = mesh.cellWidth(i) / 2,
+    h = mesh.cellHeight(i) / 2;
+  const x0 = Math.max(cx - w, x - radius);
+  const x1 = Math.min(cx + w, x + radius);
+  const y0 = Math.max(cy - h, y - radius);
+  const y1 = Math.min(cy + h, y + radius);
+  if (x1 <= x0 || y1 <= y0) return 0;
+  let weight = 0;
+  for (let a = 0; a < 3; a++)
+    for (let b = 0; b < 3; b++)
+      weight += Math.max(
+        0,
+        1 -
+          Math.hypot(x0 + ((a + 0.5) * (x1 - x0)) / 3 - x, y0 + ((b + 0.5) * (y1 - y0)) / 3 - y) /
+            radius
+      );
+  return (weight / 9) * (x1 - x0) * (y1 - y0);
+}
+function beamCells(map: PhysicalField, x: number, y: number, radius: number) {
+  const mesh = map.mesh,
+    cells: number[] = [];
+  const start = nearestTriangle(mesh, x, y),
+    queue = [start],
+    visited = new Set(queue);
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head];
+    if (
+      i < 0 ||
+      Math.hypot(mesh.x(i) - x, mesh.y(i) - y) >
+        radius + Math.hypot(mesh.cellWidth(i), mesh.cellHeight(i))
+    )
+      continue;
+    cells.push(i);
+    for (let edge = 0; edge < mesh.degree(i); edge++) {
+      const j = mesh.neighbor(i, edge);
+      if (j < 0 || visited.has(j)) continue;
+      visited.add(j);
+      queue.push(j);
+    }
+  }
+  return cells;
+}
+function paintBeam(
+  map: PhysicalField,
+  field: MagicField,
+  x: number,
+  y: number,
+  amount: number,
+  distance: number,
+  wake: boolean
+) {
+  const radius = field.definition.parameters.beamWidth / 2;
+  const cells = beamCells(map, x, y, radius).filter((i) => map.WaterKindCodes.get(i) === 1);
+  const weights = cells.map((i) => kernelWeight(map, i, x, y, radius));
+  const total = weights.reduce((sum, value) => sum + value, 0);
+  if (!total) return;
+  const volume = amount * radius * 2 * distance;
+  cells.forEach((i, index) => {
+    field.intensity.set(
+      i,
+      Math.min(1000, field.intensity.get(i) + (volume * weights[index]) / total / map.mesh.area(i))
+    );
+    if (wake && weights[index] > 0) field.wake.set(i, 1);
+  });
+}
+/** Land reflects a ray, and so does a shoal people built, long after the sea drowned it. */
+function reflects(map: PhysicalField, cell: number) {
+  return (
+    cell < 0 ||
+    map.WaterKindCodes.get(cell) !== 1 ||
+    (map.FeatureFlags.get(cell) & Feature.Shoal) !== 0
+  );
+}
+/** Integrate physical rays; headings never snap to sampling-cell neighbors. */
+export function traceOceanBeam(
+  map: PhysicalField,
+  field: MagicField,
+  seed: number,
+  source: number,
+  angle: number,
+  energy: number,
+  reach: number,
+  wake = false
+) {
+  const beam = { x: map.mesh.x(source), y: map.mesh.y(source), angle, energy, bounces: 0 };
+  const p = field.definition.parameters,
+    step = p.beamWidth / 2;
+  const path: number[][] = [[beam.x + map.mesh.origin[0], beam.y + map.mesh.origin[1]]];
+  for (let distance = 0; distance < reach && beam.energy > 0;) {
+    const travel = Math.min(step, reach - distance);
+    paintBeam(
+      map,
+      field,
+      beam.x,
+      beam.y,
+      wake ? beam.energy : (beam.energy * p.rayIntensity) / 1000,
+      Math.max(travel, step),
+      wake
+    );
+    if (!advanceBeam(map, beam, seed, travel, distance, wake, p.rayDecay)) break;
+    if (wake) path.push([beam.x + map.mesh.origin[0], beam.y + map.mesh.origin[1]]);
+    distance += travel;
+  }
+  if (wake && path.length > 1) (field.wakePaths ??= []).push(path);
+}
+interface Beam {
+  x: number;
+  y: number;
+  angle: number;
+  energy: number;
+  bounces: number;
+}
+function advanceBeam(
+  map: PhysicalField,
+  beam: Beam,
+  seed: number,
+  travel: number,
+  distance: number,
+  wake: boolean,
+  decay: number
+) {
+  const characteristic = map.scale.length(0.0025),
+    nx = beam.x + Math.cos(beam.angle) * travel,
+    ny = beam.y + Math.sin(beam.angle) * travel;
+  const next = nearestTriangle(map.mesh, nx, ny);
+  if (reflects(map, next)) {
+    if (wake || ++beam.bounces > 4) return false;
+    beam.angle +=
+      Math.PI * (0.58 + hashUnit(seed, Math.floor(beam.x / characteristic), beam.bounces) * 0.62);
+    beam.energy -= 90;
+  } else {
+    beam.x = nx;
+    beam.y = ny;
+    if (wake)
+      beam.angle +=
+        (hashSigned(
+          seed,
+          Math.floor(distance / characteristic),
+          Math.floor(beam.x / characteristic)
+        ) *
+          0.16 *
+          travel) /
+        characteristic;
+    else beam.energy -= (decay * (1 + beam.bounces * 0.67) * travel) / characteristic;
+  }
+  return true;
+}

@@ -1,4 +1,5 @@
-import type { AtlasFeature, PopulationGroup, World } from "@atlas/domain";
+import type { PopulationGroup } from "@atlas/map";
+import type { RenderFeature } from "./renderFeature";
 import { useState } from "react";
 import { OverlapBars, Section, ShareBar } from "./InspectionSurface";
 import { compact, percent } from "./surfaceData";
@@ -7,6 +8,7 @@ import {
   namingUseSegments,
   peoplesSegments,
   type PeoplesField,
+  type EntityNames,
 } from "./settlementSurfaceData";
 import {
   cultureSegments,
@@ -23,12 +25,18 @@ import {
  * faith, custom and realm, read from the land it stands on. A place whose residents a creator
  * described is read across those groups instead.
  */
-export function SettlementPeoples({ world, feature }: { world: World; feature: AtlasFeature }) {
+export function SettlementPeoples({
+  names,
+  feature,
+}: {
+  names: EntityNames;
+  feature: RenderFeature;
+}) {
   const groups = describedGroups(feature);
   return groups ? (
-    <DescribedPeoples world={world} groups={groups} />
+    <DescribedPeoples names={names} groups={groups} />
   ) : (
-    <LandPeoples world={world} feature={feature} />
+    <LandPeoples names={names} feature={feature} />
   );
 }
 const landKinds: [PeoplesField, string][] = [
@@ -37,9 +45,9 @@ const landKinds: [PeoplesField, string][] = [
   ["custom", "Residents by custom"],
   ["allegiance", "Residents by the realm they hold with"],
 ];
-function LandPeoples({ world, feature }: { world: World; feature: AtlasFeature }) {
+function LandPeoples({ names, feature }: { names: EntityNames; feature: RenderFeature }) {
   const bars = landKinds
-    .map(([field, label]) => ({ field, label, segments: peoplesSegments(world, feature, field) }))
+    .map(([field, label]) => ({ field, label, segments: peoplesSegments(names, feature, field) }))
     .filter((bar) => bar.segments.length > 0);
   if (!bars.length) return null;
   return (
@@ -57,24 +65,24 @@ function LandPeoples({ world, feature }: { world: World; feature: AtlasFeature }
     </Section>
   );
 }
-function DescribedPeoples({ world, groups }: { world: World; groups: PopulationGroup[] }) {
-  const cultures = cultureSegments(world, groups);
+function DescribedPeoples({ names, groups }: { names: EntityNames; groups: PopulationGroup[] }) {
+  const cultures = cultureSegments(names, groups);
   return (
     <Section
       title="Peoples"
       meta={`${groups.length} ${groups.length === 1 ? "group" : "groups"} · ${cultures.length} ${cultures.length === 1 ? "culture" : "cultures"}`}
     >
       <ShareBar label="Residents by culture" segments={cultures} titled />
-      <OverlapBars label="Traditions residents hold" segments={traditionShares(world, groups)} />
+      <OverlapBars label="Traditions residents hold" segments={traditionShares(names, groups)} />
       <ShareBar
         label="Naming-language use"
-        segments={namingUseSegments(world, groups)}
+        segments={namingUseSegments(names, groups)}
         format={(s) => percent(s.value, 1)}
         titled
       />
       <OverlapBars
         label="Languages residents know"
-        segments={knowledgeSegments(world, groups)}
+        segments={knowledgeSegments(names, groups)}
         format={(s) => percent(s.value, 1)}
       />
       <ShareBar
@@ -84,7 +92,7 @@ function DescribedPeoples({ world, groups }: { world: World; groups: PopulationG
         format={(s) => percent(s.value)}
         titled
       />
-      <GroupTable rows={groupRows(world, groups)} />
+      <GroupTable rows={groupRows(names, groups)} />
     </Section>
   );
 }

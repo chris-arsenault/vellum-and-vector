@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { SetupFeature } from "@atlas/generation";
+import type { SetupFeature } from "./generationTypes";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { GenerationFeatureConfiguration } from "./GenerationFeatureConfiguration";
 import { GenerationEpochConfiguration } from "./GenerationEpochConfiguration";

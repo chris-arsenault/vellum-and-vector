@@ -1,4 +1,11 @@
 project: vellum-and-vector
 prefix: vellum-and-vector
-stack: [typescript, terraform]
+stack: [rust, typescript, terraform]
+rust_dir: .
 typescript_dir: frontend
+# The caller workflow supplies compiled Rust artifacts to the same browser action.
+browser_tests: false
+rust_artifacts:
+  binaries:
+    - bin: atlas_server
+      image: .

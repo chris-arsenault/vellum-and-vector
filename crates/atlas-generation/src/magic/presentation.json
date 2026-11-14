@@ -1,0 +1,219 @@
+{
+  "sources": [
+    {
+      "value": "geothermal",
+      "label": "Geothermal maxima & placed cores",
+      "parameters": [
+        "sourceThreshold",
+        "sourceSpacing"
+      ],
+      "radiusParameter": "sourceSpacing"
+    },
+    {
+      "value": "cold",
+      "label": "Cold terrain & high ground",
+      "parameters": [
+        "baseInput"
+      ]
+    },
+    {
+      "value": "deep-ocean",
+      "label": "Deep ocean locus",
+      "parameters": [],
+      "radiusParameter": "beamWidth"
+    },
+    {
+      "value": "placed",
+      "label": "Only sources placed on the map",
+      "parameters": []
+    },
+    {
+      "value": "verdant",
+      "label": "Old stands, deep peat and planted sap",
+      "parameters": [
+        "standAge",
+        "standCover",
+        "peatDepth",
+        "groveSap",
+        "sapLoss",
+        "organicChargeAffinity"
+      ]
+    },
+    {
+      "value": "aquifer",
+      "label": "Springs on soft rock below a catchment",
+      "parameters": [
+        "springFlow",
+        "springChargeSaturation",
+        "springRock",
+        "overdrawShare",
+        "sinkDepth"
+      ]
+    },
+    {
+      "value": "impact",
+      "label": "Fallen cores around impact craters",
+      "parameters": [
+        "fallenDensity",
+        "fallenRelease",
+        "strainCracking",
+        "iceCracking",
+        "iceCrackDepth",
+        "frostCracking",
+        "impactShock",
+        "impactHeatShare",
+        "placerMobility",
+        "buryDepth",
+        "fanBarrenEpochs",
+        "fanBarrenDepth"
+      ]
+    },
+    {
+      "value": "forge",
+      "label": "Forges where people crack carried cores",
+      "parameters": [
+        "forgeStrength",
+        "forgeCooling"
+      ]
+    },
+    {
+      "value": "death",
+      "label": "The dead the ground records",
+      "parameters": [
+        "saltPerDeath",
+        "saltFull"
+      ]
+    },
+    {
+      "value": "dead-lake",
+      "label": "Lakes that died in a closed basin",
+      "parameters": [
+        "saltPerLakeMetre",
+        "saltFull"
+      ]
+    },
+    {
+      "value": "tenure",
+      "label": "Seats people have kept, by their tenure",
+      "parameters": [
+        "tenureFull",
+        "pilgrimageBonus"
+      ]
+    },
+    {
+      "value": "kept-line",
+      "label": "Lines people keep and roads pilgrims wear",
+      "parameters": [
+        "lineFull",
+        "roadFull"
+      ]
+    },
+    {
+      "value": "strain",
+      "label": "Strain between every other system",
+      "parameters": [
+        "tearFloor",
+        "tearFull",
+        "wildShift",
+        "knitVerdure",
+        "holdSalting"
+      ]
+    },
+    {
+      "value": "pairing",
+      "label": "Stable tears paired into doors",
+      "parameters": [
+        "doorStrain",
+        "doorDistance",
+        "doorMatch"
+      ]
+    }
+  ],
+  "propagations": [
+    {
+      "value": "fracture",
+      "label": "Through connected fractures",
+      "parameters": [
+        "baseCost",
+        "conductanceDivisor"
+      ]
+    },
+    {
+      "value": "cold-drainage",
+      "label": "Toward colder neighbors, retained in ice",
+      "parameters": [
+        "logScale",
+        "iceRetention",
+        "coldRetentionDistance",
+        "accumulationArea"
+      ]
+    },
+    {
+      "value": "ocean-rays",
+      "label": "Ocean rays, reflections & wakes",
+      "parameters": [
+        "rayCount",
+        "rayDistance",
+        "coastalRayDistance",
+        "wakeDistance",
+        "beamWidth",
+        "coastalSources",
+        "coastalSourceDistance",
+        "wakeSources"
+      ]
+    },
+    {
+      "value": "radial",
+      "label": "Radial falloff",
+      "parameters": [],
+      "usesSourceRadius": true
+    },
+    {
+      "value": "roots",
+      "label": "Between roots through connected cover",
+      "parameters": [
+        "rootCost",
+        "rootFloor"
+      ]
+    },
+    {
+      "value": "local",
+      "label": "Where the stock lies",
+      "parameters": []
+    },
+    {
+      "value": "brine",
+      "label": "Brine, bed and dust where the material lies",
+      "parameters": [
+        "saltFull",
+        "brineFlush",
+        "seepShare",
+        "crustShare",
+        "dissolveShare",
+        "dustShare",
+        "dustSettle",
+        "glassBed",
+        "glassResistance",
+        "desiccation",
+        "domeStrain",
+        "domeRise",
+        "domeSeep",
+        "saltBurn"
+      ]
+    },
+    {
+      "value": "ward",
+      "label": "Rings around kept seats, lines where they are kept",
+      "parameters": [
+        "wardReach",
+        "auroraReinforce",
+        "wardSpill"
+      ]
+    }
+  ],
+  "coastal": [
+    "coastalThreshold",
+    "waveAmplification",
+    "currentAmplification"
+  ]
+}

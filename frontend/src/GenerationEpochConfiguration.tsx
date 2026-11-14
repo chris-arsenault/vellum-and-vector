@@ -1,5 +1,6 @@
-import { defaultEcologyEpoch, type EcologyEpoch } from "@atlas/domain";
-import type { SetupFeature } from "@atlas/generation";
+import type { EcologyEpoch } from "@atlas/context";
+import { defaultEcologyEpoch } from "./generationPresentation";
+import type { SetupFeature } from "./generationTypes";
 import { NumberField } from "./WorkflowFields";
 import {
   epochFieldPrefix,
@@ -84,7 +85,7 @@ export function GenerationEcologyConfiguration({
   feature: SetupFeature;
 }) {
   const epoch = selectedDraftEpoch(flow),
-    regime = { ...defaultEcologyEpoch, ...epoch.ecology };
+    regime = { ...defaultEcologyEpoch(), ...epoch.ecology };
   if (flow.setup?.context.inherited)
     return (
       <p className="hint">

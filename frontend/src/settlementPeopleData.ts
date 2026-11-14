@@ -1,12 +1,8 @@
-import {
-  communityPractices,
-  languageKnowledge,
-  population,
-  type PopulationGroup,
-  type World,
-} from "@atlas/domain";
+import { communityPractices } from "./populationPractices";
+import { languageKnowledge } from "./populationLanguages";
+import type { PopulationGroup } from "@atlas/map";
 import { shareSegments, type Segment } from "./surfaceData";
-import { entityName, practiceLabel } from "./settlementSurfaceData";
+import { entityName, practiceLabel, type EntityNames } from "./settlementSurfaceData";
 
 /**
  * A community's composition read across its population groups. The groups partition the
@@ -17,28 +13,28 @@ import { entityName, practiceLabel } from "./settlementSurfaceData";
  */
 
 /** Residents by culture, heaviest first; a group without a culture counts under its people. */
-export function cultureSegments(world: World, groups: PopulationGroup[]): Segment[] {
+export function cultureSegments(names: EntityNames, groups: PopulationGroup[]): Segment[] {
   const counts: Record<string, number> = {};
   for (const group of groups) {
     const id = group.culture ?? group.people;
     counts[id] = (counts[id] ?? 0) + group.count;
   }
-  return shareSegments(counts, (id) => entityName(world, id));
+  return shareSegments(counts, (id) => entityName(names, id));
 }
 
 /** The share of residents holding each tradition; a person may hold several, so shares overlap. */
-export function traditionShares(world: World, groups: PopulationGroup[]): Segment[] {
-  const total = population({ groups });
+export function traditionShares(names: EntityNames, groups: PopulationGroup[]): Segment[] {
+  const total = groups.reduce((sum, group) => sum + group.count, 0);
   if (total <= 0) return [];
   const counts: Record<string, number> = {};
   for (const group of groups)
     for (const id of group.religions) counts[id] = (counts[id] ?? 0) + group.count / total;
-  return shareSegments(counts, (id) => entityName(world, id));
+  return shareSegments(counts, (id) => entityName(names, id));
 }
 
 /** The share of residents who know each language; overlapping like traditions. */
-export function knowledgeSegments(world: World, groups: PopulationGroup[]): Segment[] {
-  return shareSegments(languageKnowledge(groups), (id) => entityName(world, id));
+export function knowledgeSegments(names: EntityNames, groups: PopulationGroup[]): Segment[] {
+  return shareSegments(languageKnowledge(groups), (id) => entityName(names, id));
 }
 
 /** The residents' livelihoods and crafts, each group's shares weighted by its people. */
@@ -55,13 +51,16 @@ export interface GroupRow {
   share: number;
 }
 /** The groups as rows, heaviest first, with their share of all residents. */
-export function groupRows(world: World, groups: PopulationGroup[]): GroupRow[] {
-  const total = Math.max(1, population({ groups }));
+export function groupRows(names: EntityNames, groups: PopulationGroup[]): GroupRow[] {
+  const total = Math.max(
+    1,
+    groups.reduce((sum, group) => sum + group.count, 0)
+  );
   return groups
     .map((group, index) => ({
       index,
-      culture: group.culture ? entityName(world, group.culture) : group.people,
-      traditions: group.religions.map((id) => entityName(world, id)),
+      culture: group.culture ? entityName(names, group.culture) : group.people,
+      traditions: group.religions.map((id) => entityName(names, id)),
       count: group.count,
       share: group.count / total,
     }))

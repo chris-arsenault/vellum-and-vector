@@ -1,2 +1,0 @@
-DROP INDEX atlas_relations_target,atlas_connections_end_b,atlas_connections_end_a,
-    atlas_reaches_feature,atlas_reaches_extent,atlas_nodes_extent;

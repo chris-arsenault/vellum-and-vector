@@ -1,0 +1,3568 @@
+{
+  "names": {
+    "RockLayerKind0": {
+      "label": "Rock · layer 1 (top) · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": true,
+      "classes": "rock"
+    },
+    "RockLayerKind1": {
+      "label": "Rock · layer 2 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerKind2": {
+      "label": "Rock · layer 3 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerKind3": {
+      "label": "Rock · layer 4 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerKind4": {
+      "label": "Rock · layer 5 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerKind5": {
+      "label": "Rock · layer 6 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerKind6": {
+      "label": "Rock · layer 7 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerKind7": {
+      "label": "Rock · layer 8 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerDepth0": {
+      "label": "Rock · layer 1 (top) · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": true
+    },
+    "RockLayerDepth1": {
+      "label": "Rock · layer 2 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDepth2": {
+      "label": "Rock · layer 3 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDepth3": {
+      "label": "Rock · layer 4 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDepth4": {
+      "label": "Rock · layer 5 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDepth5": {
+      "label": "Rock · layer 6 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDepth6": {
+      "label": "Rock · layer 7 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDepth7": {
+      "label": "Rock · layer 8 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerSecondaryKind0": {
+      "label": "Rock · layer 1 (top) · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerSecondaryKind1": {
+      "label": "Rock · layer 2 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerSecondaryKind2": {
+      "label": "Rock · layer 3 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerSecondaryKind3": {
+      "label": "Rock · layer 4 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerSecondaryKind4": {
+      "label": "Rock · layer 5 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerSecondaryKind5": {
+      "label": "Rock · layer 6 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerSecondaryKind6": {
+      "label": "Rock · layer 7 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerSecondaryKind7": {
+      "label": "Rock · layer 8 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockLayerSecondaryShare0": {
+      "label": "Rock · layer 1 (top) · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerSecondaryShare1": {
+      "label": "Rock · layer 2 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerSecondaryShare2": {
+      "label": "Rock · layer 3 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerSecondaryShare3": {
+      "label": "Rock · layer 4 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerSecondaryShare4": {
+      "label": "Rock · layer 5 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerSecondaryShare5": {
+      "label": "Rock · layer 6 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerSecondaryShare6": {
+      "label": "Rock · layer 7 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerSecondaryShare7": {
+      "label": "Rock · layer 8 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerStrength0": {
+      "label": "Rock · layer 1 (top) · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerStrength1": {
+      "label": "Rock · layer 2 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerStrength2": {
+      "label": "Rock · layer 3 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerStrength3": {
+      "label": "Rock · layer 4 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerStrength4": {
+      "label": "Rock · layer 5 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerStrength5": {
+      "label": "Rock · layer 6 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerStrength6": {
+      "label": "Rock · layer 7 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerStrength7": {
+      "label": "Rock · layer 8 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDamage0": {
+      "label": "Rock · layer 1 (top) · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDamage1": {
+      "label": "Rock · layer 2 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDamage2": {
+      "label": "Rock · layer 3 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDamage3": {
+      "label": "Rock · layer 4 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDamage4": {
+      "label": "Rock · layer 5 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDamage5": {
+      "label": "Rock · layer 6 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDamage6": {
+      "label": "Rock · layer 7 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDamage7": {
+      "label": "Rock · layer 8 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainX0": {
+      "label": "Rock · layer 1 (top) · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainX1": {
+      "label": "Rock · layer 2 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainX2": {
+      "label": "Rock · layer 3 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainX3": {
+      "label": "Rock · layer 4 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainX4": {
+      "label": "Rock · layer 5 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainX5": {
+      "label": "Rock · layer 6 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainX6": {
+      "label": "Rock · layer 7 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainX7": {
+      "label": "Rock · layer 8 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainY0": {
+      "label": "Rock · layer 1 (top) · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainY1": {
+      "label": "Rock · layer 2 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainY2": {
+      "label": "Rock · layer 3 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainY3": {
+      "label": "Rock · layer 4 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainY4": {
+      "label": "Rock · layer 5 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainY5": {
+      "label": "Rock · layer 6 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainY6": {
+      "label": "Rock · layer 7 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerGrainY7": {
+      "label": "Rock · layer 8 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeX0": {
+      "label": "Rock · layer 1 (top) · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeX1": {
+      "label": "Rock · layer 2 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeX2": {
+      "label": "Rock · layer 3 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeX3": {
+      "label": "Rock · layer 4 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeX4": {
+      "label": "Rock · layer 5 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeX5": {
+      "label": "Rock · layer 6 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeX6": {
+      "label": "Rock · layer 7 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeX7": {
+      "label": "Rock · layer 8 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeY0": {
+      "label": "Rock · layer 1 (top) · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeY1": {
+      "label": "Rock · layer 2 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeY2": {
+      "label": "Rock · layer 3 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeY3": {
+      "label": "Rock · layer 4 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeY4": {
+      "label": "Rock · layer 5 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeY5": {
+      "label": "Rock · layer 6 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeY6": {
+      "label": "Rock · layer 7 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerBedSlopeY7": {
+      "label": "Rock · layer 8 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDeposited0": {
+      "label": "Rock · layer 1 (top) · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDeposited1": {
+      "label": "Rock · layer 2 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDeposited2": {
+      "label": "Rock · layer 3 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDeposited3": {
+      "label": "Rock · layer 4 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDeposited4": {
+      "label": "Rock · layer 5 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDeposited5": {
+      "label": "Rock · layer 6 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDeposited6": {
+      "label": "Rock · layer 7 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerDeposited7": {
+      "label": "Rock · layer 8 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerConsolidation0": {
+      "label": "Rock · layer 1 (top) · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerConsolidation1": {
+      "label": "Rock · layer 2 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerConsolidation2": {
+      "label": "Rock · layer 3 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerConsolidation3": {
+      "label": "Rock · layer 4 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerConsolidation4": {
+      "label": "Rock · layer 5 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerConsolidation5": {
+      "label": "Rock · layer 6 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerConsolidation6": {
+      "label": "Rock · layer 7 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerConsolidation7": {
+      "label": "Rock · layer 8 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMin0": {
+      "label": "Rock · layer 1 (top) · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMin1": {
+      "label": "Rock · layer 2 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMin2": {
+      "label": "Rock · layer 3 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMin3": {
+      "label": "Rock · layer 4 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMin4": {
+      "label": "Rock · layer 5 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMin5": {
+      "label": "Rock · layer 6 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMin6": {
+      "label": "Rock · layer 7 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMin7": {
+      "label": "Rock · layer 8 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMax0": {
+      "label": "Rock · layer 1 (top) · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMax1": {
+      "label": "Rock · layer 2 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMax2": {
+      "label": "Rock · layer 3 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMax3": {
+      "label": "Rock · layer 4 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMax4": {
+      "label": "Rock · layer 5 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMax5": {
+      "label": "Rock · layer 6 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMax6": {
+      "label": "Rock · layer 7 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerFormedMax7": {
+      "label": "Rock · layer 8 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerAltered0": {
+      "label": "Rock · layer 1 (top) · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerAltered1": {
+      "label": "Rock · layer 2 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerAltered2": {
+      "label": "Rock · layer 3 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerAltered3": {
+      "label": "Rock · layer 4 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerAltered4": {
+      "label": "Rock · layer 5 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerAltered5": {
+      "label": "Rock · layer 6 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerAltered6": {
+      "label": "Rock · layer 7 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerAltered7": {
+      "label": "Rock · layer 8 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerMixed0": {
+      "label": "Rock · layer 1 (top) · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerMixed1": {
+      "label": "Rock · layer 2 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerMixed2": {
+      "label": "Rock · layer 3 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerMixed3": {
+      "label": "Rock · layer 4 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerMixed4": {
+      "label": "Rock · layer 5 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerMixed5": {
+      "label": "Rock · layer 6 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerMixed6": {
+      "label": "Rock · layer 7 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockLayerMixed7": {
+      "label": "Rock · layer 8 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock",
+      "common": false
+    },
+    "RockCutLayerKind0": {
+      "label": "Rock under valley floors · layer 1 (top) · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerKind1": {
+      "label": "Rock under valley floors · layer 2 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerKind2": {
+      "label": "Rock under valley floors · layer 3 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerKind3": {
+      "label": "Rock under valley floors · layer 4 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerKind4": {
+      "label": "Rock under valley floors · layer 5 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerKind5": {
+      "label": "Rock under valley floors · layer 6 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerKind6": {
+      "label": "Rock under valley floors · layer 7 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerKind7": {
+      "label": "Rock under valley floors · layer 8 · kind",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerDepth0": {
+      "label": "Rock under valley floors · layer 1 (top) · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDepth1": {
+      "label": "Rock under valley floors · layer 2 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDepth2": {
+      "label": "Rock under valley floors · layer 3 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDepth3": {
+      "label": "Rock under valley floors · layer 4 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDepth4": {
+      "label": "Rock under valley floors · layer 5 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDepth5": {
+      "label": "Rock under valley floors · layer 6 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDepth6": {
+      "label": "Rock under valley floors · layer 7 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDepth7": {
+      "label": "Rock under valley floors · layer 8 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerSecondaryKind0": {
+      "label": "Rock under valley floors · layer 1 (top) · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerSecondaryKind1": {
+      "label": "Rock under valley floors · layer 2 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerSecondaryKind2": {
+      "label": "Rock under valley floors · layer 3 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerSecondaryKind3": {
+      "label": "Rock under valley floors · layer 4 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerSecondaryKind4": {
+      "label": "Rock under valley floors · layer 5 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerSecondaryKind5": {
+      "label": "Rock under valley floors · layer 6 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerSecondaryKind6": {
+      "label": "Rock under valley floors · layer 7 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerSecondaryKind7": {
+      "label": "Rock under valley floors · layer 8 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "RockCutLayerSecondaryShare0": {
+      "label": "Rock under valley floors · layer 1 (top) · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerSecondaryShare1": {
+      "label": "Rock under valley floors · layer 2 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerSecondaryShare2": {
+      "label": "Rock under valley floors · layer 3 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerSecondaryShare3": {
+      "label": "Rock under valley floors · layer 4 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerSecondaryShare4": {
+      "label": "Rock under valley floors · layer 5 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerSecondaryShare5": {
+      "label": "Rock under valley floors · layer 6 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerSecondaryShare6": {
+      "label": "Rock under valley floors · layer 7 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerSecondaryShare7": {
+      "label": "Rock under valley floors · layer 8 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerStrength0": {
+      "label": "Rock under valley floors · layer 1 (top) · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerStrength1": {
+      "label": "Rock under valley floors · layer 2 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerStrength2": {
+      "label": "Rock under valley floors · layer 3 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerStrength3": {
+      "label": "Rock under valley floors · layer 4 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerStrength4": {
+      "label": "Rock under valley floors · layer 5 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerStrength5": {
+      "label": "Rock under valley floors · layer 6 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerStrength6": {
+      "label": "Rock under valley floors · layer 7 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerStrength7": {
+      "label": "Rock under valley floors · layer 8 · strength",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDamage0": {
+      "label": "Rock under valley floors · layer 1 (top) · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDamage1": {
+      "label": "Rock under valley floors · layer 2 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDamage2": {
+      "label": "Rock under valley floors · layer 3 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDamage3": {
+      "label": "Rock under valley floors · layer 4 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDamage4": {
+      "label": "Rock under valley floors · layer 5 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDamage5": {
+      "label": "Rock under valley floors · layer 6 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDamage6": {
+      "label": "Rock under valley floors · layer 7 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDamage7": {
+      "label": "Rock under valley floors · layer 8 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainX0": {
+      "label": "Rock under valley floors · layer 1 (top) · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainX1": {
+      "label": "Rock under valley floors · layer 2 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainX2": {
+      "label": "Rock under valley floors · layer 3 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainX3": {
+      "label": "Rock under valley floors · layer 4 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainX4": {
+      "label": "Rock under valley floors · layer 5 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainX5": {
+      "label": "Rock under valley floors · layer 6 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainX6": {
+      "label": "Rock under valley floors · layer 7 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainX7": {
+      "label": "Rock under valley floors · layer 8 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainY0": {
+      "label": "Rock under valley floors · layer 1 (top) · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainY1": {
+      "label": "Rock under valley floors · layer 2 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainY2": {
+      "label": "Rock under valley floors · layer 3 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainY3": {
+      "label": "Rock under valley floors · layer 4 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainY4": {
+      "label": "Rock under valley floors · layer 5 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainY5": {
+      "label": "Rock under valley floors · layer 6 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainY6": {
+      "label": "Rock under valley floors · layer 7 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerGrainY7": {
+      "label": "Rock under valley floors · layer 8 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeX0": {
+      "label": "Rock under valley floors · layer 1 (top) · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeX1": {
+      "label": "Rock under valley floors · layer 2 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeX2": {
+      "label": "Rock under valley floors · layer 3 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeX3": {
+      "label": "Rock under valley floors · layer 4 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeX4": {
+      "label": "Rock under valley floors · layer 5 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeX5": {
+      "label": "Rock under valley floors · layer 6 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeX6": {
+      "label": "Rock under valley floors · layer 7 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeX7": {
+      "label": "Rock under valley floors · layer 8 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeY0": {
+      "label": "Rock under valley floors · layer 1 (top) · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeY1": {
+      "label": "Rock under valley floors · layer 2 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeY2": {
+      "label": "Rock under valley floors · layer 3 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeY3": {
+      "label": "Rock under valley floors · layer 4 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeY4": {
+      "label": "Rock under valley floors · layer 5 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeY5": {
+      "label": "Rock under valley floors · layer 6 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeY6": {
+      "label": "Rock under valley floors · layer 7 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerBedSlopeY7": {
+      "label": "Rock under valley floors · layer 8 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDeposited0": {
+      "label": "Rock under valley floors · layer 1 (top) · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDeposited1": {
+      "label": "Rock under valley floors · layer 2 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDeposited2": {
+      "label": "Rock under valley floors · layer 3 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDeposited3": {
+      "label": "Rock under valley floors · layer 4 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDeposited4": {
+      "label": "Rock under valley floors · layer 5 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDeposited5": {
+      "label": "Rock under valley floors · layer 6 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDeposited6": {
+      "label": "Rock under valley floors · layer 7 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerDeposited7": {
+      "label": "Rock under valley floors · layer 8 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerConsolidation0": {
+      "label": "Rock under valley floors · layer 1 (top) · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerConsolidation1": {
+      "label": "Rock under valley floors · layer 2 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerConsolidation2": {
+      "label": "Rock under valley floors · layer 3 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerConsolidation3": {
+      "label": "Rock under valley floors · layer 4 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerConsolidation4": {
+      "label": "Rock under valley floors · layer 5 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerConsolidation5": {
+      "label": "Rock under valley floors · layer 6 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerConsolidation6": {
+      "label": "Rock under valley floors · layer 7 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerConsolidation7": {
+      "label": "Rock under valley floors · layer 8 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMin0": {
+      "label": "Rock under valley floors · layer 1 (top) · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMin1": {
+      "label": "Rock under valley floors · layer 2 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMin2": {
+      "label": "Rock under valley floors · layer 3 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMin3": {
+      "label": "Rock under valley floors · layer 4 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMin4": {
+      "label": "Rock under valley floors · layer 5 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMin5": {
+      "label": "Rock under valley floors · layer 6 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMin6": {
+      "label": "Rock under valley floors · layer 7 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMin7": {
+      "label": "Rock under valley floors · layer 8 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMax0": {
+      "label": "Rock under valley floors · layer 1 (top) · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMax1": {
+      "label": "Rock under valley floors · layer 2 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMax2": {
+      "label": "Rock under valley floors · layer 3 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMax3": {
+      "label": "Rock under valley floors · layer 4 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMax4": {
+      "label": "Rock under valley floors · layer 5 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMax5": {
+      "label": "Rock under valley floors · layer 6 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMax6": {
+      "label": "Rock under valley floors · layer 7 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerFormedMax7": {
+      "label": "Rock under valley floors · layer 8 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerAltered0": {
+      "label": "Rock under valley floors · layer 1 (top) · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerAltered1": {
+      "label": "Rock under valley floors · layer 2 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerAltered2": {
+      "label": "Rock under valley floors · layer 3 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerAltered3": {
+      "label": "Rock under valley floors · layer 4 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerAltered4": {
+      "label": "Rock under valley floors · layer 5 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerAltered5": {
+      "label": "Rock under valley floors · layer 6 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerAltered6": {
+      "label": "Rock under valley floors · layer 7 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerAltered7": {
+      "label": "Rock under valley floors · layer 8 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerMixed0": {
+      "label": "Rock under valley floors · layer 1 (top) · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerMixed1": {
+      "label": "Rock under valley floors · layer 2 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerMixed2": {
+      "label": "Rock under valley floors · layer 3 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerMixed3": {
+      "label": "Rock under valley floors · layer 4 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerMixed4": {
+      "label": "Rock under valley floors · layer 5 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerMixed5": {
+      "label": "Rock under valley floors · layer 6 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerMixed6": {
+      "label": "Rock under valley floors · layer 7 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "RockCutLayerMixed7": {
+      "label": "Rock under valley floors · layer 8 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Rock under valley floors",
+      "common": false
+    },
+    "LooseLayerKind0": {
+      "label": "Loose cover · layer 1 (top) · kind",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": true,
+      "classes": "rock"
+    },
+    "LooseLayerKind1": {
+      "label": "Loose cover · layer 2 · kind",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseLayerKind2": {
+      "label": "Loose cover · layer 3 · kind",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseLayerKind3": {
+      "label": "Loose cover · layer 4 · kind",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseLayerDepth0": {
+      "label": "Loose cover · layer 1 (top) · thickness",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": true
+    },
+    "LooseLayerDepth1": {
+      "label": "Loose cover · layer 2 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerDepth2": {
+      "label": "Loose cover · layer 3 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerDepth3": {
+      "label": "Loose cover · layer 4 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerSecondaryKind0": {
+      "label": "Loose cover · layer 1 (top) · second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseLayerSecondaryKind1": {
+      "label": "Loose cover · layer 2 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseLayerSecondaryKind2": {
+      "label": "Loose cover · layer 3 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseLayerSecondaryKind3": {
+      "label": "Loose cover · layer 4 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseLayerSecondaryShare0": {
+      "label": "Loose cover · layer 1 (top) · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerSecondaryShare1": {
+      "label": "Loose cover · layer 2 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerSecondaryShare2": {
+      "label": "Loose cover · layer 3 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerSecondaryShare3": {
+      "label": "Loose cover · layer 4 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerStrength0": {
+      "label": "Loose cover · layer 1 (top) · strength",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerStrength1": {
+      "label": "Loose cover · layer 2 · strength",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerStrength2": {
+      "label": "Loose cover · layer 3 · strength",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerStrength3": {
+      "label": "Loose cover · layer 4 · strength",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerDamage0": {
+      "label": "Loose cover · layer 1 (top) · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerDamage1": {
+      "label": "Loose cover · layer 2 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerDamage2": {
+      "label": "Loose cover · layer 3 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerDamage3": {
+      "label": "Loose cover · layer 4 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerGrainX0": {
+      "label": "Loose cover · layer 1 (top) · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerGrainX1": {
+      "label": "Loose cover · layer 2 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerGrainX2": {
+      "label": "Loose cover · layer 3 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerGrainX3": {
+      "label": "Loose cover · layer 4 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerGrainY0": {
+      "label": "Loose cover · layer 1 (top) · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerGrainY1": {
+      "label": "Loose cover · layer 2 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerGrainY2": {
+      "label": "Loose cover · layer 3 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerGrainY3": {
+      "label": "Loose cover · layer 4 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerBedSlopeX0": {
+      "label": "Loose cover · layer 1 (top) · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerBedSlopeX1": {
+      "label": "Loose cover · layer 2 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerBedSlopeX2": {
+      "label": "Loose cover · layer 3 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerBedSlopeX3": {
+      "label": "Loose cover · layer 4 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerBedSlopeY0": {
+      "label": "Loose cover · layer 1 (top) · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerBedSlopeY1": {
+      "label": "Loose cover · layer 2 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerBedSlopeY2": {
+      "label": "Loose cover · layer 3 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerBedSlopeY3": {
+      "label": "Loose cover · layer 4 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerDeposited0": {
+      "label": "Loose cover · layer 1 (top) · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerDeposited1": {
+      "label": "Loose cover · layer 2 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerDeposited2": {
+      "label": "Loose cover · layer 3 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerDeposited3": {
+      "label": "Loose cover · layer 4 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerConsolidation0": {
+      "label": "Loose cover · layer 1 (top) · hardening",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerConsolidation1": {
+      "label": "Loose cover · layer 2 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerConsolidation2": {
+      "label": "Loose cover · layer 3 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerConsolidation3": {
+      "label": "Loose cover · layer 4 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerFormedMin0": {
+      "label": "Loose cover · layer 1 (top) · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerFormedMin1": {
+      "label": "Loose cover · layer 2 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerFormedMin2": {
+      "label": "Loose cover · layer 3 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerFormedMin3": {
+      "label": "Loose cover · layer 4 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerFormedMax0": {
+      "label": "Loose cover · layer 1 (top) · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerFormedMax1": {
+      "label": "Loose cover · layer 2 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerFormedMax2": {
+      "label": "Loose cover · layer 3 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerFormedMax3": {
+      "label": "Loose cover · layer 4 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerAltered0": {
+      "label": "Loose cover · layer 1 (top) · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerAltered1": {
+      "label": "Loose cover · layer 2 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerAltered2": {
+      "label": "Loose cover · layer 3 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerAltered3": {
+      "label": "Loose cover · layer 4 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerMixed0": {
+      "label": "Loose cover · layer 1 (top) · mixing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerMixed1": {
+      "label": "Loose cover · layer 2 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerMixed2": {
+      "label": "Loose cover · layer 3 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseLayerMixed3": {
+      "label": "Loose cover · layer 4 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover",
+      "common": false
+    },
+    "LooseCutLayerKind0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · kind",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseCutLayerKind1": {
+      "label": "Loose cover on valley floors · layer 2 · kind",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseCutLayerKind2": {
+      "label": "Loose cover on valley floors · layer 3 · kind",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseCutLayerKind3": {
+      "label": "Loose cover on valley floors · layer 4 · kind",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseCutLayerDepth0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · thickness",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerDepth1": {
+      "label": "Loose cover on valley floors · layer 2 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerDepth2": {
+      "label": "Loose cover on valley floors · layer 3 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerDepth3": {
+      "label": "Loose cover on valley floors · layer 4 · thickness",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerSecondaryKind0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseCutLayerSecondaryKind1": {
+      "label": "Loose cover on valley floors · layer 2 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseCutLayerSecondaryKind2": {
+      "label": "Loose cover on valley floors · layer 3 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseCutLayerSecondaryKind3": {
+      "label": "Loose cover on valley floors · layer 4 · second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false,
+      "classes": "rock"
+    },
+    "LooseCutLayerSecondaryShare0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerSecondaryShare1": {
+      "label": "Loose cover on valley floors · layer 2 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerSecondaryShare2": {
+      "label": "Loose cover on valley floors · layer 3 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerSecondaryShare3": {
+      "label": "Loose cover on valley floors · layer 4 · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerStrength0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · strength",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerStrength1": {
+      "label": "Loose cover on valley floors · layer 2 · strength",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerStrength2": {
+      "label": "Loose cover on valley floors · layer 3 · strength",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerStrength3": {
+      "label": "Loose cover on valley floors · layer 4 · strength",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerDamage0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerDamage1": {
+      "label": "Loose cover on valley floors · layer 2 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerDamage2": {
+      "label": "Loose cover on valley floors · layer 3 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerDamage3": {
+      "label": "Loose cover on valley floors · layer 4 · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerGrainX0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerGrainX1": {
+      "label": "Loose cover on valley floors · layer 2 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerGrainX2": {
+      "label": "Loose cover on valley floors · layer 3 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerGrainX3": {
+      "label": "Loose cover on valley floors · layer 4 · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerGrainY0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerGrainY1": {
+      "label": "Loose cover on valley floors · layer 2 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerGrainY2": {
+      "label": "Loose cover on valley floors · layer 3 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerGrainY3": {
+      "label": "Loose cover on valley floors · layer 4 · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerBedSlopeX0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerBedSlopeX1": {
+      "label": "Loose cover on valley floors · layer 2 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerBedSlopeX2": {
+      "label": "Loose cover on valley floors · layer 3 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerBedSlopeX3": {
+      "label": "Loose cover on valley floors · layer 4 · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerBedSlopeY0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerBedSlopeY1": {
+      "label": "Loose cover on valley floors · layer 2 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerBedSlopeY2": {
+      "label": "Loose cover on valley floors · layer 3 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerBedSlopeY3": {
+      "label": "Loose cover on valley floors · layer 4 · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerDeposited0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerDeposited1": {
+      "label": "Loose cover on valley floors · layer 2 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerDeposited2": {
+      "label": "Loose cover on valley floors · layer 3 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerDeposited3": {
+      "label": "Loose cover on valley floors · layer 4 · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerConsolidation0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · hardening",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerConsolidation1": {
+      "label": "Loose cover on valley floors · layer 2 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerConsolidation2": {
+      "label": "Loose cover on valley floors · layer 3 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerConsolidation3": {
+      "label": "Loose cover on valley floors · layer 4 · hardening",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerFormedMin0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerFormedMin1": {
+      "label": "Loose cover on valley floors · layer 2 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerFormedMin2": {
+      "label": "Loose cover on valley floors · layer 3 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerFormedMin3": {
+      "label": "Loose cover on valley floors · layer 4 · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerFormedMax0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerFormedMax1": {
+      "label": "Loose cover on valley floors · layer 2 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerFormedMax2": {
+      "label": "Loose cover on valley floors · layer 3 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerFormedMax3": {
+      "label": "Loose cover on valley floors · layer 4 · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerAltered0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerAltered1": {
+      "label": "Loose cover on valley floors · layer 2 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerAltered2": {
+      "label": "Loose cover on valley floors · layer 3 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerAltered3": {
+      "label": "Loose cover on valley floors · layer 4 · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerMixed0": {
+      "label": "Loose cover on valley floors · layer 1 (top) · mixing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerMixed1": {
+      "label": "Loose cover on valley floors · layer 2 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerMixed2": {
+      "label": "Loose cover on valley floors · layer 3 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "LooseCutLayerMixed3": {
+      "label": "Loose cover on valley floors · layer 4 · mixing",
+      "theme": "Rock and ground",
+      "branch": "Loose cover on valley floors",
+      "common": false
+    },
+    "IdentityPeople0": {
+      "label": "People holding it · latest layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityPeople1": {
+      "label": "People holding it · second layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityPeople2": {
+      "label": "People holding it · third layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityPeople3": {
+      "label": "People holding it · oldest layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityHardness0": {
+      "label": "Resistance to change · latest layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityHardness1": {
+      "label": "Resistance to change · second layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityHardness2": {
+      "label": "Resistance to change · third layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityHardness3": {
+      "label": "Resistance to change · oldest layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityAge0": {
+      "label": "Age · latest layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityAge1": {
+      "label": "Age · second layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityAge2": {
+      "label": "Age · third layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityAge3": {
+      "label": "Age · oldest layer",
+      "theme": "People",
+      "branch": "Who the people are"
+    },
+    "IdentityTongue0": {
+      "label": "Tongue · latest layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": true,
+      "classes": "Tongue"
+    },
+    "IdentityTongue1": {
+      "label": "Tongue · second layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Tongue"
+    },
+    "IdentityTongue2": {
+      "label": "Tongue · third layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Tongue"
+    },
+    "IdentityTongue3": {
+      "label": "Tongue · oldest layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Tongue"
+    },
+    "IdentityFaith0": {
+      "label": "Faith · latest layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": true,
+      "classes": "Faith"
+    },
+    "IdentityFaith1": {
+      "label": "Faith · second layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Faith"
+    },
+    "IdentityFaith2": {
+      "label": "Faith · third layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Faith"
+    },
+    "IdentityFaith3": {
+      "label": "Faith · oldest layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Faith"
+    },
+    "IdentityCustom0": {
+      "label": "Custom · latest layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": true,
+      "classes": "Custom"
+    },
+    "IdentityCustom1": {
+      "label": "Custom · second layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Custom"
+    },
+    "IdentityCustom2": {
+      "label": "Custom · third layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Custom"
+    },
+    "IdentityCustom3": {
+      "label": "Custom · oldest layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Custom"
+    },
+    "IdentityAllegiance0": {
+      "label": "Realm · latest layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": true,
+      "classes": "Allegiance"
+    },
+    "IdentityAllegiance1": {
+      "label": "Realm · second layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Allegiance"
+    },
+    "IdentityAllegiance2": {
+      "label": "Realm · third layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Allegiance"
+    },
+    "IdentityAllegiance3": {
+      "label": "Realm · oldest layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "Allegiance"
+    },
+    "IdentityCraft0": {
+      "label": "Magic craft · latest layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": true,
+      "classes": "craft"
+    },
+    "IdentityCraft1": {
+      "label": "Magic craft · second layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "craft"
+    },
+    "IdentityCraft2": {
+      "label": "Magic craft · third layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "craft"
+    },
+    "IdentityCraft3": {
+      "label": "Magic craft · oldest layer",
+      "theme": "People",
+      "branch": "Who the people are",
+      "common": false,
+      "classes": "craft"
+    },
+    "GroundLoadKind": {
+      "label": "Sediment in the river · kind",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river",
+      "classes": "rock"
+    },
+    "GroundLoadVolume": {
+      "label": "Sediment in the river · thickness",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadSecondaryKind": {
+      "label": "Sediment in the river · second rock",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river",
+      "classes": "rock"
+    },
+    "GroundLoadSecondaryShare": {
+      "label": "Sediment in the river · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadStrength": {
+      "label": "Sediment in the river · strength",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadDamage": {
+      "label": "Sediment in the river · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadGrainX": {
+      "label": "Sediment in the river · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadGrainY": {
+      "label": "Sediment in the river · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadBedSlopeX": {
+      "label": "Sediment in the river · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadBedSlopeY": {
+      "label": "Sediment in the river · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadDeposited": {
+      "label": "Sediment in the river · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadConsolidation": {
+      "label": "Sediment in the river · hardening",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadFormedMin": {
+      "label": "Sediment in the river · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadFormedMax": {
+      "label": "Sediment in the river · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadAltered": {
+      "label": "Sediment in the river · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "GroundLoadMixed": {
+      "label": "Sediment in the river · mixing",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the river"
+    },
+    "SeaLoadKind": {
+      "label": "Sediment in the sea · kind",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea",
+      "classes": "rock"
+    },
+    "SeaLoadVolume": {
+      "label": "Sediment in the sea · thickness",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadSecondaryKind": {
+      "label": "Sediment in the sea · second rock",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea",
+      "classes": "rock"
+    },
+    "SeaLoadSecondaryShare": {
+      "label": "Sediment in the sea · share of second rock",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadStrength": {
+      "label": "Sediment in the sea · strength",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadDamage": {
+      "label": "Sediment in the sea · fracturing",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadGrainX": {
+      "label": "Sediment in the sea · grain, east",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadGrainY": {
+      "label": "Sediment in the sea · grain, north",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadBedSlopeX": {
+      "label": "Sediment in the sea · bed slope, east",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadBedSlopeY": {
+      "label": "Sediment in the sea · bed slope, north",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadDeposited": {
+      "label": "Sediment in the sea · epoch laid down",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadConsolidation": {
+      "label": "Sediment in the sea · hardening",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadFormedMin": {
+      "label": "Sediment in the sea · earliest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadFormedMax": {
+      "label": "Sediment in the sea · latest epoch formed",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadAltered": {
+      "label": "Sediment in the sea · epoch altered",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "SeaLoadMixed": {
+      "label": "Sediment in the sea · mixing",
+      "theme": "Rock and ground",
+      "branch": "Sediment in the sea"
+    },
+    "Population": {
+      "label": "People",
+      "theme": "People",
+      "branch": "People and land in use",
+      "common": true
+    },
+    "Farmland": {
+      "label": "Farmland",
+      "theme": "People",
+      "branch": "People and land in use",
+      "common": true
+    },
+    "Pasture": {
+      "label": "Pasture",
+      "theme": "People",
+      "branch": "People and land in use",
+      "common": true
+    },
+    "BuiltUp": {
+      "label": "Built-up ground",
+      "theme": "People",
+      "branch": "People and land in use",
+      "common": true
+    },
+    "Standing": {
+      "label": "Works and wealth",
+      "theme": "People",
+      "branch": "People and land in use",
+      "common": false
+    },
+    "RuinedBuiltUp": {
+      "label": "Ruined ground",
+      "theme": "People",
+      "branch": "Ruins",
+      "common": true
+    },
+    "RuinedStanding": {
+      "label": "Works left in ruins",
+      "theme": "People",
+      "branch": "Ruins",
+      "common": false
+    },
+    "RuinCover": {
+      "label": "Ruins buried or drowned",
+      "theme": "People",
+      "branch": "Ruins",
+      "common": false
+    },
+    "RuinTongue": {
+      "label": "Tongue of the ruin builders",
+      "theme": "People",
+      "branch": "Ruins",
+      "common": false,
+      "classes": "Tongue"
+    },
+    "RockKindCodes": {
+      "label": "Rock at the surface",
+      "theme": "Rock and ground",
+      "branch": "",
+      "common": true,
+      "classes": "rock"
+    },
+    "RockResistance": {
+      "label": "Rock strength at the surface",
+      "theme": "Rock and ground",
+      "branch": "",
+      "common": true
+    },
+    "BedrockElevation": {
+      "label": "Top of the bedrock",
+      "theme": "Rock and ground",
+      "branch": "",
+      "common": false
+    },
+    "CrustSupportElevation": {
+      "label": "Height the crust floats at",
+      "theme": "Rock and ground",
+      "branch": "",
+      "common": false
+    },
+    "CrustThickness": {
+      "label": "Crust thickness",
+      "theme": "Rock and ground",
+      "branch": "",
+      "common": false
+    },
+    "SurfaceRockLoad": {
+      "label": "Rock load on the crust",
+      "theme": "Rock and ground",
+      "branch": "",
+      "common": false
+    },
+    "CrustContinentalFraction": {
+      "label": "Continental share of the crust",
+      "theme": "Rock and ground",
+      "branch": "",
+      "common": false
+    },
+    "GroundCutShare": {
+      "label": "Share of the cell cut into valleys",
+      "theme": "Rock and ground",
+      "branch": "",
+      "common": true
+    },
+    "GroundCutDepth": {
+      "label": "Depth of the valleys",
+      "theme": "Rock and ground",
+      "branch": "",
+      "common": false
+    },
+    "GroundCutCover": {
+      "label": "Cover on the valley floors",
+      "theme": "Rock and ground",
+      "branch": "",
+      "common": false
+    }
+  },
+  "biomes": [
+    {
+      "name": "Unclassified",
+      "color": "#d1c8ae"
+    },
+    {
+      "name": "Ocean",
+      "color": "#397d99"
+    },
+    {
+      "name": "Freshwater",
+      "color": "#498b99"
+    },
+    {
+      "name": "Ice",
+      "color": "#e2ede8"
+    },
+    {
+      "name": "Barren",
+      "color": "#b5a58c"
+    },
+    {
+      "name": "Desert",
+      "color": "#ddc78d"
+    },
+    {
+      "name": "Tundra",
+      "color": "#a4b19a"
+    },
+    {
+      "name": "Grassland",
+      "color": "#afbd74"
+    },
+    {
+      "name": "Savanna",
+      "color": "#c0b76a"
+    },
+    {
+      "name": "Woodland",
+      "color": "#7eaa66"
+    },
+    {
+      "name": "Temperate forest",
+      "color": "#4f8d55"
+    },
+    {
+      "name": "Boreal forest",
+      "color": "#527c68"
+    },
+    {
+      "name": "Rainforest",
+      "color": "#28674c"
+    },
+    {
+      "name": "Marsh",
+      "color": "#83a794"
+    },
+    {
+      "name": "Swamp",
+      "color": "#547c69"
+    },
+    {
+      "name": "Ember grove",
+      "color": "#6f9f3c"
+    },
+    {
+      "name": "Thaw meadow",
+      "color": "#a9c86f"
+    },
+    {
+      "name": "Rime forest",
+      "color": "#7d98a4"
+    },
+    {
+      "name": "Glow-lichen barrens",
+      "color": "#b9d4d6"
+    },
+    {
+      "name": "Fog heath",
+      "color": "#9db3a1"
+    },
+    {
+      "name": "Moss forest",
+      "color": "#4e8470"
+    },
+    {
+      "name": "Deepwood",
+      "color": "#2f6b3a"
+    },
+    {
+      "name": "Wending fen",
+      "color": "#6e9a7c"
+    },
+    {
+      "name": "Well meadow",
+      "color": "#9cc26a"
+    },
+    {
+      "name": "Barrow heath",
+      "color": "#9a8f7a"
+    },
+    {
+      "name": "Salt pan",
+      "color": "#e8e2d2"
+    },
+    {
+      "name": "Glass flat",
+      "color": "#cfd9e3"
+    }
+  ],
+  "ecologyLabels": {
+    "BiomeCodes": "Biomes",
+    "TreeCover": "Tree cover",
+    "GrassCover": "Grass and shrub cover",
+    "WetlandCover": "Wetland plant cover",
+    "Productivity": "Plant production",
+    "AquaticProductivity": "Aquatic production",
+    "Herbivores": "Herbivore biomass",
+    "Predators": "Predator biomass",
+    "AquaticFauna": "Aquatic consumer biomass",
+    "SoilCarbon": "Soil organic carbon",
+    "PeatCarbon": "Peat carbon",
+    "AquaticCarbon": "Aquatic organic sediment",
+    "BuriedPlantCarbon": "Buried terrestrial source carbon",
+    "BuriedAquaticCarbon": "Buried aquatic source carbon",
+    "CoalCarbon": "Coal carbon",
+    "OilCarbon": "Oil source potential",
+    "GasCarbon": "Gas source potential",
+    "OrganicBurialDepth": "Organic burial depth",
+    "OrganicMaturity": "Organic thermal exposure",
+    "FireActivity": "Fire disturbance",
+    "BroadleafCover": "Broadleaf canopy",
+    "ConiferCover": "Conifer canopy",
+    "BroadleafSaplings": "Young broadleaf trees",
+    "ConiferSaplings": "Young conifers",
+    "GrassSeed": "Grass and shrub seed bank",
+    "BroadleafSeed": "Broadleaf seed bank",
+    "ConiferSeed": "Conifer seed bank",
+    "WetlandSeed": "Wetland seed bank",
+    "SoilDepth": "Ecological soil depth",
+    "SoilWater": "Plant-available soil water",
+    "MineralNutrients": "Available soil nitrogen",
+    "EcologicalDamage": "Ecological disturbance legacy",
+    "EcologicalToxicity": "Habitat toxicity",
+    "Grazers": "Grazing animal biomass",
+    "Browsers": "Browsing animal biomass",
+    "MigrationFlux": "Animal migration",
+    "FloodFrequency": "Flood frequency",
+    "CanopyAge": "Mean canopy age",
+    "Infiltration": "Infiltrated precipitation fraction",
+    "Evapotranspiration": "Ecological evapotranspiration"
+  },
+  "rock": [
+    {
+      "code": 0,
+      "name": "Bedded strata",
+      "color": "#b7a985",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 1,
+      "name": "Shale",
+      "color": "#848991",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 2,
+      "name": "Sandstone",
+      "color": "#dab069",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 3,
+      "name": "Limestone",
+      "color": "#c9cfa6",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 4,
+      "name": "Salt bed",
+      "color": "#f1e2d6",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 5,
+      "name": "Slate",
+      "color": "#6b7487",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 6,
+      "name": "Schist",
+      "color": "#909789",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 7,
+      "name": "Marble",
+      "color": "#e1decb",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 8,
+      "name": "Quartzite",
+      "color": "#dabdb6",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 9,
+      "name": "Gneiss",
+      "color": "#b19292",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 10,
+      "name": "Granite",
+      "color": "#c59183",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 11,
+      "name": "Basalt",
+      "color": "#595b63",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 12,
+      "name": "Tuff",
+      "color": "#c0ab92",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 13,
+      "name": "Impactite",
+      "color": "#937b69",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 14,
+      "name": "Veinrock",
+      "color": "#b05036",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 15,
+      "name": "Sinter",
+      "color": "#d08c4d",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 16,
+      "name": "Corefall",
+      "color": "#67433c",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 17,
+      "name": "Rimerot",
+      "color": "#8bb4c9",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 18,
+      "name": "Aurora crystal",
+      "color": "#57c1c8",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 19,
+      "name": "Crushstone",
+      "color": "#707bb3",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 20,
+      "name": "Rootstone",
+      "color": "#5e9156",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 21,
+      "name": "Spring tufa",
+      "color": "#c2cd74",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 22,
+      "name": "Salt glass",
+      "color": "#d494bf",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 23,
+      "name": "Kept stone",
+      "color": "#e9cd6c",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 24,
+      "name": "Tornstone",
+      "color": "#9a69b7",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 25,
+      "name": "Alluvium",
+      "color": "#a18767",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 26,
+      "name": "Soil",
+      "color": "#715e42",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 27,
+      "name": "Glacier ice",
+      "color": "#daf0f7",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 28,
+      "name": "Water",
+      "color": "#34566b",
+      "bathymetric": false,
+      "tint": 1
+    }
+  ],
+  "crafts": [
+    {
+      "code": 1,
+      "system": "fire",
+      "name": "hearth-keeping"
+    },
+    {
+      "code": 2,
+      "system": "aurora",
+      "name": "reading"
+    },
+    {
+      "code": 3,
+      "system": "pressure",
+      "name": "diving"
+    },
+    {
+      "code": 4,
+      "system": "greenwood",
+      "name": "tending"
+    },
+    {
+      "code": 5,
+      "system": "salt",
+      "name": "raking"
+    },
+    {
+      "code": 6,
+      "system": "hallowed",
+      "name": "the vow"
+    },
+    {
+      "code": 7,
+      "system": "veil",
+      "name": "door-keeping"
+    }
+  ],
+  "natural": [
+    {
+      "code": 0,
+      "name": "Tundra",
+      "color": "#a4b19a",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 1,
+      "name": "Open field",
+      "color": "#b9bf86",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 2,
+      "name": "Ridge",
+      "color": "#a89f93",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 3,
+      "name": "Glacier",
+      "color": "#dfe9ec",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 4,
+      "name": "Moraine",
+      "color": "#b1a994",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 5,
+      "name": "Lake",
+      "color": "#83b6c5",
+      "bathymetric": true,
+      "tint": 1
+    },
+    {
+      "code": 6,
+      "name": "Fjord",
+      "color": "#6fa3b4",
+      "bathymetric": true,
+      "tint": 1
+    },
+    {
+      "code": 7,
+      "name": "Exposed shelf",
+      "color": "#c8c2a8",
+      "bathymetric": true,
+      "tint": 1
+    },
+    {
+      "code": 8,
+      "name": "Shelf",
+      "color": "#7fb0bf",
+      "bathymetric": true,
+      "tint": 1
+    },
+    {
+      "code": 9,
+      "name": "Ocean",
+      "color": "#397d99",
+      "bathymetric": true,
+      "tint": 1
+    },
+    {
+      "code": 10,
+      "name": "Reef",
+      "color": "#7fc1b0",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 11,
+      "name": "Pack ice",
+      "color": "#e8eff1",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 12,
+      "name": "Sea ice",
+      "color": "#d9e6ea",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 13,
+      "name": "Ice shelf",
+      "color": "#e2ede8",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 14,
+      "name": "Polynya",
+      "color": "#5f97aa",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 15,
+      "name": "Snowfield",
+      "color": "#eef2ee",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 16,
+      "name": "Polar barrens",
+      "color": "#c4bfb0",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 17,
+      "name": "Wet tundra",
+      "color": "#8fa89a",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 18,
+      "name": "Cold steppe",
+      "color": "#b8b98a",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 19,
+      "name": "Scree field",
+      "color": "#a69c90",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 20,
+      "name": "River valley",
+      "color": "#9bb58a",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 21,
+      "name": "River channel",
+      "color": "#86b3a8",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 22,
+      "name": "Floodplain",
+      "color": "#a7bc8c",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 23,
+      "name": "Delta",
+      "color": "#9cc0a8",
+      "bathymetric": true,
+      "tint": 1
+    },
+    {
+      "code": 24,
+      "name": "Gorge",
+      "color": "#8c7f73",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 25,
+      "name": "Waterfall",
+      "color": "#9fd0e3",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 26,
+      "name": "Current channel",
+      "color": "#4f8fa6",
+      "bathymetric": true,
+      "tint": 1
+    },
+    {
+      "code": 27,
+      "name": "Trench",
+      "color": "#2a5f78",
+      "bathymetric": true,
+      "tint": 1
+    },
+    {
+      "code": 28,
+      "name": "Grassland",
+      "color": "#afbd74",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 29,
+      "name": "Savanna",
+      "color": "#c0b76a",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 30,
+      "name": "Woodland",
+      "color": "#7eaa66",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 31,
+      "name": "Temperate forest",
+      "color": "#4f8d55",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 32,
+      "name": "Boreal forest",
+      "color": "#527c68",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 33,
+      "name": "Rainforest",
+      "color": "#28674c",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 34,
+      "name": "Marsh",
+      "color": "#83a794",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 35,
+      "name": "Swamp",
+      "color": "#547c69",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 36,
+      "name": "Desert",
+      "color": "#ddc78d",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 37,
+      "name": "Barren",
+      "color": "#b5a58c",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 38,
+      "name": "Ember grove",
+      "color": "#6f9f3c",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 39,
+      "name": "Thaw meadow",
+      "color": "#a9c86f",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 40,
+      "name": "Rime forest",
+      "color": "#7d98a4",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 41,
+      "name": "Glow-lichen barrens",
+      "color": "#b9d4d6",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 42,
+      "name": "Fog heath",
+      "color": "#9db3a1",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 43,
+      "name": "Moss forest",
+      "color": "#4e8470",
+      "bathymetric": false,
+      "tint": 1
+    },
+    {
+      "code": 44,
+      "name": "Upwelling water",
+      "color": "#3f8fa8",
+      "bathymetric": true,
+      "tint": 1
+    },
+    {
+      "code": 45,
+      "name": "Warm-water reach",
+      "color": "#7fc29a",
+      "bathymetric": false,
+      "tint": 1
+    }
+  ],
+  "physicalMaterials": [
+    "Exposed bedrock",
+    "Scree",
+    "Permafrost",
+    "Tundra soil",
+    "Snowpack",
+    "Glacial ice",
+    "Shelf sediment",
+    "Deep marine sediment",
+    "Reef stone",
+    "Geothermal crust",
+    "Moraine till",
+    "Basalt"
+  ]
+}

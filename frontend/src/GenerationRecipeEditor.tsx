@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { normalizeGenerationRecipe, prepareDraft } from "./generationDraft";
+import type { GenerationDraft } from "./generationDraft";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { useWorkflowFields } from "./workflowFieldState";
 import { ErrorMessage } from "./ErrorMessage";
@@ -18,12 +18,13 @@ function RecipeEditor({ flow }: { flow: GenerationWorkflow }) {
   const fields = useWorkflowFields();
   const current = exportRecipe(flow);
   const text = flow.json.dirty ? flow.json.text : current;
-  const apply = () => {
+  const apply = async () => {
     try {
       const submitted: unknown = JSON.parse(text);
-      const recipe = normalizeGenerationRecipe(submitted);
-      const next = { ...flow.draft, recipe };
-      if (flow.options.source) prepareDraft(next, flow.options.source, flow.options.areaId);
+      const next = await flow.options.service.validate({
+        ...flow.draft,
+        recipe: submitted as GenerationDraft["recipe"],
+      });
       flow.change(next);
       fields.clear();
       flow.setJson({ text: "", dirty: false });
@@ -51,7 +52,7 @@ function RecipeEditor({ flow }: { flow: GenerationWorkflow }) {
         <p role="status">Unapplied JSON edits. Apply or discard them before generating.</p>
       )}
       <div className="setup-inline-actions">
-        <button type="button" onClick={apply}>
+        <button type="button" onClick={() => void apply()}>
           Apply configuration
         </button>
         <button
@@ -72,9 +73,5 @@ function RecipeEditor({ flow }: { flow: GenerationWorkflow }) {
   );
 }
 function exportRecipe(flow: GenerationWorkflow) {
-  try {
-    return JSON.stringify(normalizeGenerationRecipe(flow.draft.recipe), null, 2);
-  } catch {
-    return JSON.stringify(flow.draft.recipe, null, 2);
-  }
+  return JSON.stringify(flow.draft.recipe, null, 2);
 }

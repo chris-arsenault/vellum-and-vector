@@ -1,17 +1,17 @@
-import type { MapCustomization } from "./fixtureMap.worker";
-
+import type { MapRef } from "@atlas/map";
 declare global {
   interface Window {
-    customizeFixtureMap(input: MapCustomization): Promise<void>;
+    prepareFixtureMap(): Promise<MapRef>;
   }
 }
-window.customizeFixtureMap = async (input) => {
+window.prepareFixtureMap = async () => {
   const worker = new Worker(new URL("./fixtureMap.worker.ts", import.meta.url), { type: "module" });
   try {
-    await new Promise<void>((resolve, reject) => {
-      worker.onmessage = ({ data }) => (data.error ? reject(new Error(data.error)) : resolve());
+    return await new Promise<MapRef>((resolve, reject) => {
+      worker.onmessage = ({ data }) =>
+        data.error ? reject(new Error(data.error)) : resolve(data.reference);
       worker.onerror = (event) => reject(new Error(event.message));
-      worker.postMessage(input);
+      worker.postMessage("prepare");
     });
   } finally {
     worker.terminate();

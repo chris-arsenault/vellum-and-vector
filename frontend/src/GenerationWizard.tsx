@@ -4,7 +4,6 @@ import { ErrorMessage } from "./ErrorMessage";
 import { GenerationWorldStep } from "./GenerationWorldStep";
 import { GenerationSetupSummary } from "./GenerationSetupSummary";
 import { GenerationReview } from "./GenerationReview";
-import { RegionGenerationContext } from "./RegionGenerationContext";
 import { CartographicDecisions } from "./CartographicDecisions";
 import { GenerationTuning } from "./GenerationTuning";
 import { GenerationMagicStep } from "./GenerationMagicStep";
@@ -121,8 +120,11 @@ function SetupContent({ flow, error }: { flow: GenerationWorkflow; error: unknow
         </h2>
         <p>{stage.question}</p>
       </header>
-      {flow.options.source && flow.options.areaId && (
-        <RegionGenerationContext world={flow.options.source.world} areaId={flow.options.areaId} />
+      {flow.options.source && (
+        <p className="setup-region-context">
+          Captured context from {flow.options.source.name}. This map owns its geography; generating
+          it leaves its parent and siblings unchanged.
+        </p>
       )}
       <StageContent flow={flow} />
       <GenerationTuning key={flow.targetRevision} flow={flow} />
@@ -209,5 +211,9 @@ function invalid(flow: GenerationWorkflow, errors: Record<string, string>) {
 }
 function finalAction(flow: GenerationWorkflow) {
   if (flow.approach === "blank") return "Create world";
-  return flow.options.source ? "Generate region" : "Generate world";
+  return flow.options.selection
+    ? "Generate region"
+    : flow.options.source
+      ? "Regenerate map"
+      : "Generate world";
 }

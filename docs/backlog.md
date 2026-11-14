@@ -1,7 +1,8 @@
 # Product backlog
 
-The product is browser-only, with explicit local map saves and no backend or MCP.
-The backend source stays in the repository. Manual editing, its authoring tools and
+The product supports a self-contained browser and a private LAN backend, with explicit
+map saves in each context. Public hosting and MCP remain future scope. The retired
+backend prototypes are removed. Manual editing, its authoring tools and
 undo are deferred under the [current product scope](product-spec.md); an entry
 that involves them does not authorize implementation, repair or deletion of their
 existing code.
@@ -227,9 +228,9 @@ simulations.
       publishes; regeneration switches references atomically. Moving a local
       map to hosted is an explicit export and import with stable identities. - Platform: use the shared Ahara load balancer, VPC, RDS, Cognito and state
       bucket, with no NAT gateway or remote-state reads, and reconcile the
-      existing Ahara registrations for this project. - Starting material: `backend/`, `db/migrations` and
-      `infrastructure/backend-prototype` are preserved for inspection, not
-      reactivation. Derive a fresh reviewed schema from the browser domain;
+      existing Ahara registrations for this project. - The old backends and migrations
+      are removed. LAN backend work follows ADR 0015 and does not adopt this item's
+      public hosting or execution recovery proposals. For any future hosted transition,
       inspect the applied migration history before choosing a transition and
       never rewrite an applied migration.
 

@@ -1,11 +1,8 @@
-import {
-  beforePresentEpoch,
-  defaultEcologyEpoch,
-  sameValue,
-  type EcologyEpoch,
-  type Epoch,
-} from "@atlas/domain";
-import type { GenerationSettings } from "@atlas/generation";
+import type { EcologyEpoch, Epoch } from "@atlas/context";
+import { sameValue } from "./values";
+import { beforePresentEpoch } from "./generationPresentation";
+import type { GenerationSettings } from "./generationTypes";
+import { defaultEcologyEpoch } from "./generationPresentation";
 
 export interface ConfigurationChange {
   label: string;
@@ -66,7 +63,7 @@ export function ecologyChanges(current: Epoch[], previous: Epoch[], only?: (keyo
   const keys = only ?? (Object.keys(ecologyLabels) as (keyof EcologyEpoch)[]);
   for (const epoch of current) {
     const before = previous.find((entry) => entry.id === epoch.id);
-    const regime = { ...defaultEcologyEpoch, ...epoch.ecology };
+    const regime = { ...defaultEcologyEpoch(), ...epoch.ecology };
     const changed = keys.filter((key) => regime[key] !== before?.ecology?.[key]);
     if (changed.length)
       changes.push({

@@ -1,10 +1,11 @@
 # GIS/domain-backed generation workflows
 
-Current execution follows [ADR 0003](adr/0003-frontend-session.md): a browser worker
-resolves scoped catalog inputs and opens immutable numerical resources directly.
-Initial generation displays independent epoch previews and publishes validated
-record batches. Explicit map saves retain completed geography; execution state
-does not restart or recover. There is no backend or MCP in this product phase.
+Current execution follows [ADR 0015](adr/0015-finished-maps-and-execution-hosts.md).
+The shared Rust engine resolves scoped private inputs on its execution host: browser
+WASM with local storage, or native compute with the LAN database and files. Initial
+generation displays independent epoch previews and publishes GIS map products.
+Explicit saves retain completed maps and their separate refinement inputs. Execution
+does not restart or recover; presentation reads only the published GIS map.
 
 ## Geographic regional refinement
 
@@ -270,7 +271,7 @@ code is and which crowd is which named place; neither is the source of where
 people are or what they hold.
 [ADR 0012](adr/0012-people-live-on-the-lands-layers.md) records the model.
 
-One owner in `packages/generation/src/human` holds the bands and changes them
+One owner in `crates/atlas-generation/src/human` holds the bands and changes them
 only through registered operations: lay, move, convert, overlay, inherit, harden,
 wear, bury, re-expose and carry. The layer catalogue states each kind's facts:
 what drowning, scouring, shaking, burning, neglect, starving and lying fallow
@@ -300,8 +301,8 @@ passes with farming, food carried over distance and building, scaled by the
 era's mobility. An era bound to an epoch before the last is not lived as a
 settled era.
 
-Processes and people meet through shared questions, the answer keys in
-`packages/generation/src/coupling/answers.ts`. The land answers what a cell
+Processes and people meet through shared questions, registered through Rust's
+`answers` module and composed in `field/people/questions.rs`. The land answers what a cell
 feeds under crops, under herds and left wild, what it supports as used, and
 what it costs to cross. The rules of a pass are questions too: what a blow
 takes, who is free to move, who builds, how fast things are forgotten, how
@@ -412,12 +413,10 @@ Curated generation controls map a creator's outcome choice to the coefficients
 that produce it: physical and living map outcomes, independent cultural and
 political patterns, and distinct controls for each of the seven magic systems that
 follow the magic source authority and product contract above. Each control is declared
-once with its alternatives and the values each alternative sets, in
-`packages/generation/src/physicalCartography.ts` and `terrainCartography.ts`
-for the land controls, `domainCartography.ts` for the living landscape and the
-people controls, and `magicCartography.ts` for the magic controls; those
-declarations are the record of the values. Every system supports independent
-inclusion.
+once with its alternatives and the values each alternative sets. Rust's
+`atlas/configuration/cartography.rs` applies the declarations in the adjacent
+`presentation.json`; those declarations are the record of the values. Every system
+supports independent inclusion.
 
 The [product contract](product-spec.md#10-procedural-generation-domains) defines
 generation behavior; [ADR 0003](adr/0003-frontend-session.md) records application
@@ -442,7 +441,7 @@ one application/validation contract. A map profile selects processes, their orde
 typed settings and an epoch schedule. Repeated uses of an implementation have
 distinct invocation identities.
 
-Use ordinary TypeScript composition for reusable sequences, conditional work and
+Use ordinary Rust composition for reusable sequences, conditional work and
 epoch loops. Implement actual physical, magical and GIS processes through the
 common context and let their needs establish shared interfaces. Extend the
 reference structure for a concrete map behavior that the simpler approach
@@ -530,7 +529,7 @@ profile defaults. Template recipes can select a compatible configuration for a
 placed instance.
 
 Resolve settings from workflow parameters, current epoch variables and explicitly
-selected prior domain consequences through typed TypeScript configuration.
+selected prior domain consequences through typed configuration.
 Validate effective values and units when their inputs become available.
 Conditional work must supply the facts required by the subsequent sequence.
 
@@ -794,6 +793,10 @@ Sediment enters the sea at its river mouth, ice margin or connected shore. Sedim
 split down connected bed gradients and settle as their suspension declines; closed depressions
 retain material locally. Deposition fills the lower occupied surface before covering higher ground.
 Later uplift and wear read those actual beds, including their source history and consolidation.
+At a river mouth, the selected river sediment-transport operation first settles the delivered
+material on the seabed according to wave and current retention and the submerged room. Ground
+owns that deposit, including its constituents, history and hosted cargo. The remaining material
+enters the sea's load for marine transport.
 
 Plumes and subduction arcs supply the same connected lava routing. Mobile head, yield resistance
 and cooling determine where a pulse reaches; its solid deposits change subsequent routes. Lava
@@ -805,7 +808,7 @@ A material holds facts, a mode says how facts answer its attack, and a process s
 modes, without knowing what any material is. A cell is a stack. An action goes down through it, spending
 itself on loose cover first and then on each layer of rock by what that layer gives up, while cover, open
 fractures and wards bear on it. World and region read the same stack, and a region's cone aprons join it as
-a modifier. Streams, solution, ice and slopes are processes in `packages/generation/src/processes`. Each
+a modifier. Streams, solution, ice and slopes are processes in `crates/atlas-generation/src/processes`. Each
 owns relative settings resolved by the shared `MapScale`, one ledger writes what comes off and
 lands, and feature operations say when each runs. Those operations reference executable steps directly,
 so registration and selected execution use the same definitions. `MATERIALS-AND-PROCESSES-ARCHITECTURE.md` at the repository
@@ -1096,7 +1099,8 @@ Domain processes remain independent of the browser adapter.
 
 ## Physical kernel and atlas adapter
 
-`packages/generation/src/world/` holds the physical kernel. It uses an equilateral
+The Rust assembly in `crates/atlas-generation/src/atlas/physical.rs` connects the
+shared field owner with its physical processes. It uses an equilateral
 triangle graph, 1024 elevation subunits per authored metre, seed salts, material
 histories and epoch order. Domain-neutral source processes cover crust,
 orogeny, volcanoes, impacts, support/flexure, margins, climate, drainage, erosion,
@@ -1307,11 +1311,12 @@ polar faces. Transport uses the planar metre chart.
 
 ## Implementation state
 
-The TypeScript runner applies registered processes to one working map in a browser
-worker. The workspace publishes semantic field groups through immutable resources, retains
-completed causes by area, and uses direct shared domain validation for edits.
-The cultural, political and settlement publications read people's layers on the land, described
-above; site/interior layouts retain their own processes.
+The active browser worker invokes Rust WASM. The native adapter invokes the same Rust
+generation core. Rust owns preparation, naming, publication and storage behavior;
+TypeScript supplies UI, view code and facade/platform bindings.
+The old TypeScript runner and its tests are preserved in `archive/typescript`
+outside application execution and routine CI. Publication separates private numerical
+working/captured inputs from the GIS map read by presentation, inspection and export.
 
 ## Geographic significance at every scale
 
@@ -1457,8 +1462,8 @@ supported consequence among many ecological histories.
 
 ## Naming
 
-Names use the standalone `@atlas/name-forge` runtime in `packages/name-forge`.
-The atlas owns its configuration in `packages/generation/src/namingCultures.ts`:
+Names use the standalone Rust runtime in `crates/atlas-names`.
+Its atlas-owned vocabulary contains
 five spelling traditions loosely inspired by English, Italian/Iberian, Nordic,
 Arabic and Japanese place names. Character Markov chains trained on place names
 provide most settlement names, with occasional curated compounds. Geographic

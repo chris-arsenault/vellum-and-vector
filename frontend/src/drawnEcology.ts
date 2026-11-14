@@ -1,6 +1,6 @@
-import { biomeFamilies } from "@atlas/domain";
+import { biomeFamilies } from "./biomePresentation";
 import { Fill, Stroke, Style } from "ol/style.js";
-import type { AtlasFeature } from "./types";
+import type { RenderFeature } from "./renderFeature";
 import type { DrawnIconKind } from "./drawnSymbols";
 
 const motifs: Record<string, DrawnIconKind> = {
@@ -20,7 +20,7 @@ const motifs: Record<string, DrawnIconKind> = {
   pan: "rock",
   flat: "rock",
 };
-export function biomeTreatment(feature: AtlasFeature) {
+export function biomeTreatment(feature: RenderFeature) {
   if (feature.layerId !== "ecology") return null;
   const family = biomeFamilies.find((b) => b.kind === feature.kind);
   if (!family) return null;
@@ -32,7 +32,7 @@ export function biomeTreatment(feature: AtlasFeature) {
       : motifs[family.kind];
   return { ...family, symbol };
 }
-export function biomeStyle(feature: AtlasFeature, monochrome: boolean) {
+export function biomeStyle(feature: RenderFeature, monochrome: boolean) {
   const biome = biomeTreatment(feature);
   return biome
     ? new Style({

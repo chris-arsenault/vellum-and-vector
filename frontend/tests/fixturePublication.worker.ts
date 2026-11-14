@@ -1,61 +1,21 @@
-import { OpfsStore, ZarrResources } from "@atlas/storage-browser";
-import { attachGrid, type DomainSnapshot, type GridArrays } from "@atlas/domain";
-import { WorkspaceClient } from "../src/WorkspaceClient";
-import { publishWorkspaceGeneration } from "../src/generationPublication";
-import { openSpatialRuntime } from "../src/spatialRuntime";
+import type { MapRef } from "@atlas/map";
+import fixture from "../../.artifacts/browser-fixture.json?raw";
 
-/** Test geography enters through the same immutable resources and catalog commits as generation. */
-self.onmessage = async (
-  event: MessageEvent<{
-    original: DomainSnapshot;
-    snapshot: DomainSnapshot;
-    operationId: string;
-    port: MessagePort;
-  }>
-) => {
-  // Grids cross the port as plain arrays; attach them to this worker's cache.
-  const attached = (value: DomainSnapshot): DomainSnapshot => ({
-    ...value,
-    numerical: Object.fromEntries(
-      Object.entries(value.numerical).map(([id, grid]) => [
-        id,
-        attachGrid(grid as unknown as GridArrays) as DomainSnapshot["numerical"][string],
-      ])
-    ),
-  });
-  const { operationId, port } = event.data,
-    original = attached(event.data.original),
-    snapshot = attached(event.data.snapshot);
-  const closeSpatial = await openSpatialRuntime();
-  try {
-    const workspace = new WorkspaceClient(port);
-    const resources = new ZarrResources(await OpfsStore.open("atlas-resources"));
-    const initial =
-      !original.world.generations.length && !original.world.areas[original.scope.areaId].parentId;
-    await publishWorkspaceGeneration(
-      workspace,
-      resources,
-      original,
-      snapshot,
-      operationId,
-      initial,
-      [],
-      (change) =>
-        self.postMessage({
-          kind: "published",
-          revision: change.revision,
-          change,
-          partial: initial,
-        })
-    );
-    self.postMessage({ kind: "completed" });
-  } catch (error) {
-    self.postMessage({
-      kind: "failed",
-      error: error instanceof Error ? error.message : String(error),
-    });
-  } finally {
-    closeSpatial();
-    port.close();
+/** Restore the existing supplied map, published once by Rust before the browser suite. */
+export async function installFixtureMap() {
+  const archive = JSON.parse(fixture) as {
+    reference: MapRef;
+    files: { path: string[]; bytes: number[] }[];
+  };
+  const root = await navigator.storage.getDirectory();
+  for (const { path, bytes } of archive.files) {
+    let directory = root;
+    for (const name of path.slice(0, -1))
+      directory = await directory.getDirectoryHandle(name, { create: true });
+    const file = await directory.getFileHandle(path.at(-1)!, { create: true });
+    const writable = await file.createWritable();
+    await writable.write(new Uint8Array(bytes));
+    await writable.close();
   }
-};
+  return archive.reference;
+}

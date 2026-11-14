@@ -1,4 +1,4 @@
-use crate::{Bounds, MapError, MapErrorCode};
+use crate::{Bounds, DisplayUnit, LayerCatalog, MapError, MapErrorCode};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -6,10 +6,12 @@ use ts_rs::TS;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MapLayer {
     pub id: String,
+    pub space_id: String,
     pub name: String,
     pub bounds: Bounds,
     pub source: LayerSource,
     pub attribution: Vec<String>,
+    pub catalog: LayerCatalog,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -17,6 +19,14 @@ pub struct MapLayer {
 pub enum LayerSource {
     Raster(RasterSource),
     Vector(VectorSource),
+    Attributes(AttributeSource),
+}
+
+/// Inspectable map values can exist without a drawable raster or vector asset.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AttributeSource {
+    pub bands: Vec<RasterBand>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -30,13 +40,17 @@ pub struct RasterSource {
     pub cell_span: f64,
     pub bands: Vec<RasterBand>,
     pub overviews: Vec<String>,
+    /// One-based TIFF band addresses for this layer's logical bands.
+    pub band_indices: Vec<u16>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RasterBand {
     pub id: String,
+    pub name: String,
     pub unit: String,
+    pub display: DisplayUnit,
     pub nodata: Option<f64>,
     pub categories: Vec<Category>,
     pub range: Option<(f64, f64)>,
@@ -49,17 +63,32 @@ pub struct VectorSource {
     pub media_type: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Category {
     pub value: i32,
     pub label: String,
     pub color: Option<String>,
+    pub surface: Option<SurfaceAppearance>,
+    pub present: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SurfaceAppearance {
+    pub bathymetric: bool,
+    pub tint: f64,
+    pub system: Option<String>,
+    pub system_name: Option<String>,
 }
 
 impl MapLayer {
     pub fn validate(&self) -> Result<(), MapError> {
-        self.bounds.validate()?;
+        self.catalog.validate()?;
+        match self.source {
+            LayerSource::Raster(_) => self.bounds.validate()?,
+            LayerSource::Vector(_) | LayerSource::Attributes(_) => self.bounds.validate_window()?,
+        }
         if self.id.is_empty() || self.name.is_empty() {
             return Err(MapError::new(
                 MapErrorCode::InvalidMap,
@@ -68,6 +97,7 @@ impl MapLayer {
         }
         match &self.source {
             LayerSource::Raster(source) => source.validate(),
+            LayerSource::Attributes(source) => validate_bands(&source.bands),
             LayerSource::Vector(source)
                 if source.asset_id.is_empty() || source.media_type.is_empty() =>
             {
@@ -90,28 +120,49 @@ impl RasterSource {
             || !self.cell_span.is_finite()
             || self.cell_span <= 0.0
             || self.bands.is_empty()
+            || self.band_indices.len() != self.bands.len()
+            || self.band_indices.contains(&0)
         {
             return Err(MapError::new(
                 MapErrorCode::InvalidMap,
                 "A raster needs a map asset, dimensions, resolution and bands",
             ));
         }
-        let mut ids = std::collections::BTreeSet::new();
-        for band in &self.bands {
-            if band.id.is_empty()
-                || band.unit.is_empty()
-                || !ids.insert(&band.id)
-                || band.nodata.is_some_and(|v| !v.is_finite())
-                || band
-                    .range
-                    .is_some_and(|(low, high)| !low.is_finite() || !high.is_finite() || high < low)
+        validate_bands(&self.bands)
+    }
+}
+
+fn validate_bands(bands: &[RasterBand]) -> Result<(), MapError> {
+    let mut ids = std::collections::BTreeSet::new();
+    for band in bands {
+        if band.id.is_empty()
+            || band.name.is_empty()
+            || band.unit.is_empty()
+            || !band.display.factor.is_finite()
+            || band.display.factor <= 0.0
+            || !ids.insert(&band.id)
+            || band.nodata.is_some_and(|v| !v.is_finite())
+            || band
+                .range
+                .is_some_and(|(low, high)| !low.is_finite() || !high.is_finite() || high < low)
+        {
+            return Err(MapError::new(
+                MapErrorCode::InvalidMap,
+                "Raster bands need distinct identities, units and finite ranges",
+            ));
+        }
+        for category in &band.categories {
+            if category.label.is_empty()
+                || category.surface.as_ref().is_some_and(|surface| {
+                    !surface.tint.is_finite() || !(0.0..=1.0).contains(&surface.tint)
+                })
             {
                 return Err(MapError::new(
                     MapErrorCode::InvalidMap,
-                    "Raster bands need distinct identities, units and finite ranges",
+                    "Map categories need labels and surface tint fractions",
                 ));
             }
         }
-        Ok(())
     }
+    Ok(())
 }

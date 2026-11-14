@@ -1,0 +1,25 @@
+.published-fixture {
+  display: grid;
+  grid-template-columns: 512px 420px;
+  gap: 1rem;
+}
+.published-fixture-map {
+  position: sticky;
+  top: 0;
+  height: 512px;
+}
+.published-fixture .map-frame,
+.published-fixture .map {
+  width: 512px;
+  height: 512px;
+}
+.published-fixture .map-frame {
+  position: relative;
+}
+.published-fixture-controls {
+  height: 600px;
+  overflow: auto;
+}
+.published-fixture output {
+  overflow-wrap: anywhere;
+}

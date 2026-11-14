@@ -1,0 +1,3844 @@
+[
+  {
+    "id": "physical.foundation",
+    "label": "Continental foundation",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "continents": {
+        "label": "Continental assemblies",
+        "unit": "count",
+        "minimum": 1,
+        "default": 3,
+        "step": 1,
+        "integer": true,
+        "group": "geology"
+      },
+      "oceanicPlates": {
+        "label": "Oceanic plates",
+        "unit": "count",
+        "minimum": 0,
+        "default": 2,
+        "step": 1,
+        "integer": true,
+        "group": "geology"
+      },
+      "provinces": {
+        "label": "Tectonic provinces",
+        "unit": "count",
+        "minimum": 2,
+        "default": 42,
+        "step": 1,
+        "integer": true,
+        "group": "geology"
+      },
+      "continentalCrustFraction": {
+        "label": "Continental crust fraction",
+        "unit": "fraction",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.48,
+        "step": 0.01,
+        "group": "geology"
+      },
+      "landFraction": {
+        "label": "Initial exposed land fraction",
+        "unit": "fraction",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 0.38,
+        "step": 0.01,
+        "group": "geology"
+      },
+      "mapBoundary": {
+        "label": "Map boundary",
+        "unit": "choice",
+        "minimum": 0,
+        "maximum": 2,
+        "default": 1,
+        "step": 1,
+        "integer": true,
+        "choices": [
+          {
+            "value": 1,
+            "label": "Cylinder"
+          },
+          {
+            "value": 2,
+            "label": "Ocean surrounded (coming later)",
+            "disabled": true
+          },
+          {
+            "value": 0,
+            "label": "Nothing"
+          }
+        ],
+        "group": "geology"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "continents": [
+          "atlas.tectonic-provinces"
+        ],
+        "oceanicPlates": [
+          "atlas.tectonic-provinces"
+        ],
+        "provinces": [
+          "atlas.tectonic-provinces"
+        ],
+        "continentalCrustFraction": [
+          "atlas.tectonic-provinces"
+        ],
+        "landFraction": [
+          "atlas.ocean-connectivity"
+        ],
+        "mapBoundary": [
+          "atlas.initialize",
+          "atlas.tectonic-provinces"
+        ]
+      },
+      "initialOnlySettings": [
+        "mapBoundary"
+      ]
+    },
+    "cartography": [
+      {
+        "id": "land-and-sea",
+        "label": "Continental organization",
+        "section": "land",
+        "initialOnly": true,
+        "defaultChoice": "broad",
+        "explanation": "Choose coherent continental interiors or dispersed crust assemblies. Ocean coverage is independent; motion and the water budget determine which landmasses remain separate.",
+        "choices": [
+          {
+            "id": "broad",
+            "label": "Broad continents",
+            "features": {
+              "physical.foundation": {
+                "settings": {
+                  "continents": 3,
+                  "provinces": 42
+                },
+                "configuration": {
+                  "profile": {
+                    "ContinentalAssemblySeparationDepth": 0.2,
+                    "ContinentalWarpStrength": 0.025,
+                    "ContinentalAssemblyClustering": 1,
+                    "ContinentalMajorAssemblies": 2,
+                    "ContinentalMajorGrowth": 3,
+                    "ContinentalAssemblyGrowthVariation": 0.5
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "broken",
+            "label": "Broken continents",
+            "features": {
+              "physical.foundation": {
+                "settings": {
+                  "continents": 5,
+                  "provinces": 56
+                },
+                "configuration": {
+                  "profile": {
+                    "ContinentalAssemblySeparationDepth": 0.38,
+                    "ContinentalWarpStrength": 0.045,
+                    "ContinentalAssemblyClustering": 0.7,
+                    "ContinentalMajorAssemblies": 2,
+                    "ContinentalMajorGrowth": 1.5,
+                    "ContinentalAssemblyGrowthVariation": 0.8
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "islands",
+            "label": "Island world",
+            "features": {
+              "physical.foundation": {
+                "settings": {
+                  "continents": 10,
+                  "provinces": 70
+                },
+                "configuration": {
+                  "profile": {
+                    "ContinentalAssemblySeparationDepth": 0.5,
+                    "ContinentalWarpStrength": 0.065,
+                    "ContinentalAssemblyClustering": 0,
+                    "ContinentalMajorAssemblies": 2,
+                    "ContinentalMajorGrowth": 1,
+                    "ContinentalAssemblyGrowthVariation": 0.8
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "ocean-coverage",
+        "label": "Ocean coverage",
+        "section": "land",
+        "initialOnly": true,
+        "defaultChoice": "wide",
+        "explanation": "Set the initial exposed land share without changing the amount or organization of continental crust. Later history changes the shores.",
+        "choices": [
+          {
+            "id": "oceanic",
+            "label": "Ocean-dominated",
+            "features": {
+              "physical.foundation": {
+                "settings": {
+                  "landFraction": 0.25
+                }
+              }
+            }
+          },
+          {
+            "id": "wide",
+            "label": "Wide oceans",
+            "features": {
+              "physical.foundation": {
+                "settings": {
+                  "landFraction": 0.38
+                }
+              }
+            }
+          },
+          {
+            "id": "land",
+            "label": "Land-dominated",
+            "features": {
+              "physical.foundation": {
+                "settings": {
+                  "landFraction": 0.6
+                }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "configurable": true,
+    "processes": [
+      "atlas.tectonic-provinces",
+      "atlas.continental-sutures",
+      "atlas.tectonic-margins",
+      "atlas.continental-domains",
+      "atlas.tectonic-uplift",
+      "atlas.landscape-initialization"
+    ],
+    "requires": [
+      "physical.lifecycle"
+    ]
+  },
+  {
+    "id": "physical.tectonic-history",
+    "label": "Tectonic evolution",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "plateDrift": {
+        "label": "Plate drift",
+        "unit": "multiplier",
+        "minimum": 0,
+        "default": 1,
+        "step": 0.1,
+        "group": "geology"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "plateDrift": [
+          "atlas.plate-advection"
+        ]
+      },
+      "epochControls": [
+        {
+          "key": "tectonics",
+          "label": "Epoch tectonic activity",
+          "unit": "multiplier",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "tectonicDurationMyr",
+          "label": "Geological interval",
+          "unit": "Myr",
+          "min": 0
+        },
+        {
+          "key": "plateTravel",
+          "label": "Epoch plate travel",
+          "unit": "share of full travel",
+          "min": 0
+        }
+      ]
+    },
+    "cartography": [
+      {
+        "id": "continental-motion",
+        "label": "Continental motion",
+        "section": "land",
+        "initialOnly": true,
+        "defaultChoice": "restless",
+        "explanation": "Set how strongly plates move and rework continents through history. Motion changes coasts, opens or closes seas and builds new collision ranges independently of inherited terrain.",
+        "choices": [
+          {
+            "id": "quiet",
+            "label": "Quiet plates",
+            "features": {
+              "physical.tectonic-history": {
+                "settings": {
+                  "plateDrift": 0.05
+                }
+              },
+              "physical.lifecycle": {
+                "configuration": {
+                  "history": {
+                    "plateTravel": [
+                      0.12,
+                      0.04,
+                      0.01
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "drifting",
+            "label": "Drifting continents",
+            "features": {
+              "physical.tectonic-history": {
+                "settings": {
+                  "plateDrift": 0.45
+                }
+              },
+              "physical.lifecycle": {
+                "configuration": {
+                  "history": {
+                    "plateTravel": [
+                      0.6,
+                      0.25,
+                      0.08
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "restless",
+            "label": "Restless plates",
+            "features": {
+              "physical.tectonic-history": {
+                "settings": {
+                  "plateDrift": 1.2
+                }
+              },
+              "physical.lifecycle": {
+                "configuration": {
+                  "history": {
+                    "plateTravel": [
+                      1,
+                      0.65,
+                      0.25
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "configurable": true,
+    "processes": [
+      "atlas.plate-advection",
+      "atlas.tectonic-epoch-activity"
+    ],
+    "requires": [
+      "physical.foundation"
+    ]
+  },
+  {
+    "id": "physical.mountains",
+    "label": "Mountain construction",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "applicability": {
+      "epochControls": [
+        {
+          "key": "tectonics",
+          "label": "Epoch tectonic activity",
+          "unit": "multiplier",
+          "min": 0,
+          "max": 1
+        }
+      ]
+    },
+    "cartography": [
+      {
+        "id": "terrain",
+        "label": "Terrain",
+        "section": "land",
+        "initialOnly": true,
+        "defaultChoice": "balanced",
+        "explanation": "Choose inherited mountain relief and how erosion, deposition and glaciers rework it. Continental motion, shoreline detail and island organization have separate controls.",
+        "choices": [
+          {
+            "id": "plains",
+            "label": "Mostly plains",
+            "features": {
+              "physical.foundation": {
+                "configuration": {
+                  "profile": {
+                    "InteriorReliefStrength": 0.025,
+                    "ElevationVariationStrength": 0.02
+                  }
+                }
+              },
+              "physical.mountains": {
+                "configuration": {
+                  "profile": {
+                    "OrogenicInitialShortening": 0.001
+                  }
+                }
+              },
+              "physical.river-incision": {
+                "settings": {
+                  "erosion": 1
+                },
+                "configuration": {
+                  "profile": {
+                    "FluvialEquilibriumGradient": 0.0002
+                  }
+                }
+              },
+              "material.fluvial-transport": {
+                "configuration": {
+                  "profile": {
+                    "SedimentTransportFraction": 600,
+                    "SedimentCarry": 0.012
+                  }
+                }
+              },
+              "physical.glacial-sculpting": {
+                "settings": {
+                  "glaciers": 0.3
+                },
+                "configuration": {
+                  "profile": {
+                    "IceAltitudeBalance": 0
+                  }
+                }
+              },
+              "ecology.living": {
+                "configuration": {
+                  "glaciated": false
+                }
+              }
+            }
+          },
+          {
+            "id": "balanced",
+            "label": "Plains and ranges",
+            "features": {
+              "physical.foundation": {
+                "configuration": {
+                  "profile": {
+                    "InteriorReliefStrength": 0.07,
+                    "ElevationVariationStrength": 0.05
+                  }
+                }
+              },
+              "physical.mountains": {
+                "configuration": {
+                  "profile": {
+                    "OrogenicInitialShortening": 0.025
+                  }
+                }
+              },
+              "physical.river-incision": {
+                "settings": {
+                  "erosion": 1
+                },
+                "configuration": {
+                  "profile": {
+                    "FluvialEquilibriumGradient": 0.0004
+                  }
+                }
+              },
+              "material.fluvial-transport": {
+                "configuration": {
+                  "profile": {
+                    "SedimentTransportFraction": 700,
+                    "SedimentCarry": 0.02
+                  }
+                }
+              },
+              "physical.glacial-sculpting": {
+                "settings": {
+                  "glaciers": 0.5
+                },
+                "configuration": {
+                  "profile": {
+                    "IceAltitudeBalance": 0
+                  }
+                }
+              },
+              "ecology.living": {
+                "configuration": {
+                  "glaciated": false
+                }
+              }
+            }
+          },
+          {
+            "id": "ranges",
+            "label": "Mostly mountains",
+            "features": {
+              "physical.foundation": {
+                "configuration": {
+                  "profile": {
+                    "InteriorReliefStrength": 0.25,
+                    "ElevationVariationStrength": 0.16
+                  }
+                }
+              },
+              "physical.mountains": {
+                "configuration": {
+                  "profile": {
+                    "OrogenicInitialShortening": 0.15
+                  }
+                }
+              },
+              "physical.river-incision": {
+                "settings": {
+                  "erosion": 1.5
+                },
+                "configuration": {
+                  "profile": {
+                    "FluvialEquilibriumGradient": 0.0004
+                  }
+                }
+              },
+              "material.fluvial-transport": {
+                "configuration": {
+                  "profile": {
+                    "SedimentTransportFraction": 650,
+                    "SedimentCarry": 0.04
+                  }
+                }
+              },
+              "physical.glacial-sculpting": {
+                "settings": {
+                  "glaciers": 0.7
+                },
+                "configuration": {
+                  "profile": {
+                    "IceAltitudeBalance": 0
+                  }
+                }
+              },
+              "ecology.living": {
+                "configuration": {
+                  "glaciated": false
+                }
+              }
+            }
+          },
+          {
+            "id": "glacial",
+            "label": "Glacier-carved",
+            "features": {
+              "physical.foundation": {
+                "configuration": {
+                  "profile": {
+                    "InteriorReliefStrength": 0.1,
+                    "ElevationVariationStrength": 0.06
+                  }
+                }
+              },
+              "physical.mountains": {
+                "configuration": {
+                  "profile": {
+                    "OrogenicInitialShortening": 0.025
+                  }
+                }
+              },
+              "physical.river-incision": {
+                "settings": {
+                  "erosion": 1
+                },
+                "configuration": {
+                  "profile": {
+                    "FluvialEquilibriumGradient": 0.0004
+                  }
+                }
+              },
+              "material.fluvial-transport": {
+                "configuration": {
+                  "profile": {
+                    "SedimentTransportFraction": 700,
+                    "SedimentCarry": 0.02
+                  }
+                }
+              },
+              "physical.glacial-sculpting": {
+                "settings": {
+                  "glaciers": 1.2
+                },
+                "configuration": {
+                  "profile": {
+                    "IceAltitudeBalance": 1000000
+                  }
+                }
+              },
+              "ecology.living": {
+                "configuration": {
+                  "glaciated": true
+                }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "configurable": true,
+    "processes": [
+      "atlas.orogenic-construction",
+      "atlas.refine-relief"
+    ],
+    "requires": [
+      "physical.foundation"
+    ]
+  },
+  {
+    "id": "physical.volcanism",
+    "label": "Volcanic geography",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "volcanism": {
+        "label": "Volcanic construction",
+        "unit": "multiplier",
+        "minimum": 0,
+        "default": 1,
+        "step": 0.1,
+        "group": "geology"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "volcanism": [
+          "atlas.volcanic-construction"
+        ]
+      },
+      "epochControls": [
+        {
+          "key": "volcanism",
+          "label": "Epoch volcanic activity",
+          "unit": "multiplier",
+          "min": 0
+        }
+      ]
+    },
+    "cartography": [
+      {
+        "id": "landmarks",
+        "label": "Distinctive landmarks",
+        "section": "land",
+        "initialOnly": true,
+        "defaultChoice": "scattered",
+        "explanation": "The prominence of volcanic districts and crater landforms. Footprints scale with the map, and history determines what survives.",
+        "choices": [
+          {
+            "id": "rare",
+            "label": "Rare",
+            "features": {
+              "physical.volcanism": {
+                "settings": {
+                  "volcanism": 0.25
+                },
+                "configuration": {
+                  "profile": {
+                    "MantlePlumeCount": 1
+                  }
+                }
+              },
+              "physical.impacts": {
+                "settings": {
+                  "impacts": 1,
+                  "impactSize": 1
+                },
+                "configuration": {
+                  "profile": {
+                    "ImpactPrimordialShare": 1000
+                  }
+                }
+              }
+            },
+            "landmarkEpochs": true
+          },
+          {
+            "id": "scattered",
+            "label": "Scattered",
+            "features": {
+              "physical.volcanism": {
+                "settings": {
+                  "volcanism": 0.7
+                },
+                "configuration": {
+                  "profile": {
+                    "MantlePlumeCount": 2
+                  }
+                }
+              },
+              "physical.impacts": {
+                "settings": {
+                  "impacts": 3,
+                  "impactSize": 1
+                },
+                "configuration": {
+                  "profile": {
+                    "ImpactPrimordialShare": 1000
+                  }
+                }
+              }
+            },
+            "landmarkEpochs": true
+          },
+          {
+            "id": "prominent",
+            "label": "Prominent",
+            "features": {
+              "physical.volcanism": {
+                "settings": {
+                  "volcanism": 1.3
+                },
+                "configuration": {
+                  "profile": {
+                    "MantlePlumeCount": 4
+                  }
+                }
+              },
+              "physical.impacts": {
+                "settings": {
+                  "impacts": 7,
+                  "impactSize": 1
+                },
+                "configuration": {
+                  "profile": {
+                    "ImpactPrimordialShare": 1000
+                  }
+                }
+              }
+            },
+            "landmarkEpochs": true
+          }
+        ]
+      }
+    ],
+    "configurable": true,
+    "processes": [
+      "atlas.mantle-plume-roots",
+      "atlas.volcanic-construction"
+    ],
+    "requires": [
+      "physical.foundation"
+    ]
+  },
+  {
+    "id": "physical.impacts",
+    "label": "Impact geography",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "impacts": {
+        "label": "Meteor impacts",
+        "unit": "history budget per 12 million km²",
+        "minimum": 0,
+        "default": 6,
+        "step": 1,
+        "integer": true,
+        "group": "geology"
+      },
+      "impactSize": {
+        "label": "Crater radius",
+        "unit": "multiplier",
+        "minimum": 0,
+        "exclusiveMinimum": true,
+        "default": 1,
+        "step": 0.1,
+        "group": "geology"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "impacts": [
+          "atlas.impact-cratering"
+        ],
+        "impactSize": [
+          "atlas.impact-cratering"
+        ]
+      },
+      "epochControls": [
+        {
+          "key": "impacts",
+          "label": "Epoch impact activity",
+          "unit": "multiplier",
+          "min": 0
+        }
+      ]
+    },
+    "cartography": [],
+    "configurable": true,
+    "processes": [
+      "atlas.impact-cratering"
+    ],
+    "requires": [
+      "physical.foundation"
+    ]
+  },
+  {
+    "id": "physical.landmarks",
+    "label": "Major landmarks",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "landscapeLandmarks": {
+        "label": "Major landscape landmarks",
+        "unit": "count",
+        "minimum": 0,
+        "default": 4,
+        "step": 1,
+        "integer": true,
+        "group": "geology"
+      },
+      "magicLandmarks": {
+        "label": "Major magic landmarks",
+        "unit": "count",
+        "minimum": 0,
+        "default": 3,
+        "step": 1,
+        "integer": true,
+        "group": "geology"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "landscapeLandmarks": [
+          "landmark.emplace"
+        ],
+        "magicLandmarks": [
+          "landmark.emplace"
+        ]
+      }
+    },
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "landmark.emplace",
+      "landmark.maintain"
+    ],
+    "requires": [
+      "physical.foundation"
+    ]
+  },
+  {
+    "id": "physical.hillslopes",
+    "label": "Hillslope transport",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.mass-wasting",
+      "atlas.post-fluvial-mass-wasting"
+    ],
+    "requires": [
+      "physical.foundation"
+    ]
+  },
+  {
+    "id": "material.load-response",
+    "label": "Crust and material load response",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.crustal-relaxation",
+      "atlas.crustal-support",
+      "atlas.lithospheric-flexure"
+    ],
+    "requires": [
+      "physical.foundation"
+    ]
+  },
+  {
+    "id": "physical.continental-margins",
+    "label": "Continental margins and marine deposits",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.continental-margin-evolution",
+      "atlas.marine-sedimentation"
+    ],
+    "requires": [
+      "physical.foundation",
+      "ocean.geography",
+      "material.load-response"
+    ]
+  },
+  {
+    "id": "physical.coastal-construction",
+    "label": "Initial coastal construction",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [
+      {
+        "id": "shoreline",
+        "label": "Shoreline",
+        "section": "land",
+        "initialOnly": true,
+        "defaultChoice": "smooth",
+        "explanation": "Broad reworked outlines, intricate inlets, or deposited river-mouth lowlands. Sediment supply and coastal exposure still matter.",
+        "choices": [
+          {
+            "id": "smooth",
+            "label": "Smooth sweeps",
+            "features": {
+              "physical.coastal-construction": {
+                "configuration": {
+                  "profile": {
+                    "CoastalDetailStrength": 450,
+                    "CoastalDetailScale": 0.025,
+                    "CoastalDetailWarp": 0.0025,
+                    "CoastalDetailPassiveAmplitude": 0.000006200000000000001,
+                    "CoastalDetailConvergentAmplitude": 0.0000088,
+                    "CoastalDetailRiftedAmplitude": 0.0000074,
+                    "CoastalDetailTransformAmplitude": 0.0000034
+                  }
+                }
+              },
+              "physical.coastal-evolution": {
+                "settings": {
+                  "coastalErosion": 1.2
+                },
+                "configuration": {
+                  "profile": {
+                    "CoastalDepositionFraction": 700,
+                    "CoastalDepositionReach": 0.00625
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "inlets",
+            "label": "Inlets and headlands",
+            "features": {
+              "physical.coastal-construction": {
+                "configuration": {
+                  "profile": {
+                    "CoastalDetailStrength": 1500,
+                    "CoastalDetailScale": 0.01125,
+                    "CoastalDetailWarp": 0.00875,
+                    "CoastalDetailPassiveAmplitude": 0.000020150000000000002,
+                    "CoastalDetailConvergentAmplitude": 0.0000286,
+                    "CoastalDetailRiftedAmplitude": 0.00002405,
+                    "CoastalDetailTransformAmplitude": 0.000011050000000000001
+                  }
+                }
+              },
+              "physical.coastal-evolution": {
+                "settings": {
+                  "coastalErosion": 0.5
+                },
+                "configuration": {
+                  "profile": {
+                    "CoastalDepositionFraction": 500,
+                    "CoastalDepositionReach": 0.00375
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "flats",
+            "label": "River-mouth flats",
+            "features": {
+              "physical.coastal-construction": {
+                "configuration": {
+                  "profile": {
+                    "CoastalDetailStrength": 350,
+                    "CoastalDetailScale": 0.025,
+                    "CoastalDetailWarp": 0.002,
+                    "CoastalDetailPassiveAmplitude": 0.000005425,
+                    "CoastalDetailConvergentAmplitude": 0.000007699999999999999,
+                    "CoastalDetailRiftedAmplitude": 0.000006474999999999999,
+                    "CoastalDetailTransformAmplitude": 0.000002975
+                  }
+                }
+              },
+              "physical.coastal-evolution": {
+                "settings": {
+                  "coastalErosion": 0.35
+                },
+                "configuration": {
+                  "profile": {
+                    "CoastalDepositionFraction": 850,
+                    "CoastalDepositionReach": 0.00875
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "configurable": true,
+    "processes": [
+      "atlas.coastal-detail"
+    ],
+    "requires": [
+      "physical.foundation"
+    ]
+  },
+  {
+    "id": "physical.fractures",
+    "label": "Fault and fracture network",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "applicability": {
+      "epochControls": [
+        {
+          "key": "tectonics",
+          "label": "Epoch tectonic activity",
+          "unit": "multiplier",
+          "min": 0,
+          "max": 1
+        }
+      ]
+    },
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.fracture-network"
+    ],
+    "requires": [
+      "physical.foundation"
+    ]
+  },
+  {
+    "id": "physical.geothermal",
+    "label": "Geothermal geography",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.geothermal"
+    ],
+    "requires": [
+      "physical.foundation"
+    ]
+  },
+  {
+    "id": "ocean.geography",
+    "label": "Ocean and bathymetric geography",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "applicability": {
+      "epochControls": [
+        {
+          "key": "seaLevel",
+          "label": "Epoch sea level offset",
+          "unit": "of map span"
+        }
+      ]
+    },
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.ocean-connectivity",
+      "atlas.ocean-distance",
+      "atlas.bathymetry",
+      "atlas.landmasses-and-shelf-groups",
+      "refinement.ocean",
+      "refinement.ocean-memory"
+    ],
+    "requires": [
+      "physical.foundation"
+    ]
+  },
+  {
+    "id": "physical.ocean-circulation",
+    "label": "Ocean circulation and heat transport",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.ocean-currents",
+      "atlas.warmth-sources"
+    ],
+    "requires": [
+      "ocean.geography"
+    ]
+  },
+  {
+    "id": "physical.climate",
+    "label": "Climate",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "temperature": {
+        "label": "Baseline temperature",
+        "unit": "°C",
+        "default": 15,
+        "step": 0.5,
+        "group": "climate"
+      },
+      "rainfall": {
+        "label": "Profile rainfall",
+        "unit": "multiplier",
+        "minimum": 0,
+        "default": 1,
+        "step": 0.1,
+        "group": "climate"
+      },
+      "seaLevel": {
+        "label": "Sea level adjustment",
+        "unit": "map fraction",
+        "default": 0,
+        "step": 0.0000025,
+        "group": "climate"
+      },
+      "southLatitude": {
+        "label": "South edge latitude",
+        "unit": "°",
+        "minimum": -90,
+        "maximum": 90,
+        "default": 10,
+        "step": 1,
+        "group": "climate"
+      },
+      "northLatitude": {
+        "label": "North edge latitude",
+        "unit": "°",
+        "minimum": -90,
+        "maximum": 90,
+        "default": 70,
+        "step": 1,
+        "group": "climate"
+      },
+      "latitudeProjection": {
+        "label": "Latitude projection",
+        "unit": "choice",
+        "minimum": 0,
+        "maximum": 1,
+        "default": 1,
+        "step": 1,
+        "integer": true,
+        "choices": [
+          {
+            "value": 0,
+            "label": "Even degrees (equirectangular)"
+          },
+          {
+            "value": 1,
+            "label": "Equal area"
+          }
+        ],
+        "group": "climate"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "temperature": [
+          "atlas.atmospheric-climate"
+        ],
+        "rainfall": [
+          "atlas.atmospheric-climate"
+        ],
+        "seaLevel": [
+          "atlas.ocean-connectivity"
+        ],
+        "southLatitude": [
+          "atlas.atmospheric-climate"
+        ],
+        "northLatitude": [
+          "atlas.atmospheric-climate"
+        ],
+        "latitudeProjection": [
+          "atlas.atmospheric-climate"
+        ]
+      },
+      "initialOnlySettings": [
+        "seaLevel",
+        "southLatitude",
+        "northLatitude",
+        "latitudeProjection"
+      ],
+      "epochControls": [
+        {
+          "key": "temperature",
+          "label": "Epoch temperature shift",
+          "unit": "°C"
+        },
+        {
+          "key": "rainfall",
+          "label": "Epoch rainfall",
+          "unit": "multiplier",
+          "min": 0,
+          "max": 5
+        }
+      ]
+    },
+    "cartography": [
+      {
+        "id": "climate-coverage",
+        "label": "Climate coverage",
+        "section": "environment",
+        "initialOnly": true,
+        "defaultChoice": "hemispheres",
+        "explanation": "The latitude zones represented by this map, independent of its dimensions and map boundary.",
+        "choices": [
+          {
+            "id": "northern",
+            "label": "Northern lands",
+            "features": {
+              "physical.climate": {
+                "settings": {
+                  "southLatitude": 10,
+                  "northLatitude": 70,
+                  "latitudeProjection": 1
+                }
+              }
+            }
+          },
+          {
+            "id": "hemispheres",
+            "label": "Two hemispheres",
+            "features": {
+              "physical.climate": {
+                "settings": {
+                  "southLatitude": -70,
+                  "northLatitude": 70,
+                  "latitudeProjection": 1
+                }
+              }
+            }
+          },
+          {
+            "id": "globe",
+            "label": "Pole to pole",
+            "features": {
+              "physical.climate": {
+                "settings": {
+                  "southLatitude": -90,
+                  "northLatitude": 90,
+                  "latitudeProjection": 1
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "warmth",
+        "label": "Warmth",
+        "section": "environment",
+        "initialOnly": true,
+        "defaultChoice": "earthlike",
+        "explanation": "Shift snowlines and growing conditions. Latitude, altitude, sea transport and magical heat determine local temperatures.",
+        "choices": [
+          {
+            "id": "cooler",
+            "label": "Cooler",
+            "features": {
+              "physical.climate": {
+                "settings": {
+                  "temperature": 5
+                }
+              }
+            }
+          },
+          {
+            "id": "earthlike",
+            "label": "Earth-like",
+            "features": {
+              "physical.climate": {
+                "settings": {
+                  "temperature": 15
+                }
+              }
+            }
+          },
+          {
+            "id": "warmer",
+            "label": "Warmer",
+            "features": {
+              "physical.climate": {
+                "settings": {
+                  "temperature": 23
+                }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "configurable": false,
+    "processes": [
+      "atlas.atmospheric-climate",
+      "refinement.climate"
+    ],
+    "requires": [
+      "ocean.geography"
+    ]
+  },
+  {
+    "id": "water.routing",
+    "label": "Water balance and routing",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.runoff",
+      "atlas.drainage-conditioning",
+      "atlas.lake-basins",
+      "atlas.drainage-guidance",
+      "atlas.flow-routing",
+      "atlas.river-network",
+      "atlas.current-water",
+      "atlas.groundwater",
+      "refinement.water-evolution",
+      "refinement.water",
+      "refinement.water-initialize"
+    ],
+    "requires": [
+      "physical.climate",
+      "ocean.geography"
+    ]
+  },
+  {
+    "id": "physical.river-incision",
+    "label": "River incision",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "erosion": {
+        "label": "River erosion",
+        "unit": "multiplier",
+        "minimum": 0,
+        "default": 1,
+        "step": 0.1,
+        "group": "water"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "erosion": [
+          "atlas.ancestral-fluvial-erosion"
+        ]
+      },
+      "epochControls": [
+        {
+          "key": "hydrology",
+          "label": "Epoch hydrological activity",
+          "unit": "multiplier",
+          "min": 0,
+          "max": 1
+        }
+      ]
+    },
+    "cartography": [],
+    "configurable": true,
+    "processes": [
+      "atlas.ancestral-fluvial-erosion"
+    ],
+    "requires": [
+      "water.routing",
+      "material.fluvial-transport"
+    ]
+  },
+  {
+    "id": "material.fluvial-transport",
+    "label": "Fluvial sediment transport",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": true,
+    "processes": [
+      "atlas.sediment-transport"
+    ],
+    "requires": [
+      "water.routing",
+      "ocean.geography"
+    ]
+  },
+  {
+    "id": "physical.land-ice",
+    "label": "Land ice and meltwater",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "applicability": {
+      "epochControls": [
+        {
+          "key": "ice",
+          "label": "Epoch glacial activity",
+          "unit": "multiplier",
+          "min": 0,
+          "max": 1
+        },
+        {
+          "key": "hydrology",
+          "label": "Epoch hydrological activity",
+          "unit": "multiplier",
+          "min": 0,
+          "max": 1
+        }
+      ]
+    },
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.land-ice-mass-balance",
+      "atlas.ice-flow",
+      "atlas.glacial-meltwater"
+    ],
+    "requires": [
+      "physical.climate",
+      "water.routing",
+      "material.load-response"
+    ]
+  },
+  {
+    "id": "physical.glacial-sculpting",
+    "label": "Glacial sculpting",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "glaciers": {
+        "label": "Glacial erosion and deposition",
+        "unit": "multiplier",
+        "minimum": 0,
+        "default": 1,
+        "step": 0.1,
+        "group": "water"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "glaciers": [
+          "atlas.glacial-erosion",
+          "atlas.glacial-deposition"
+        ]
+      },
+      "epochControls": [
+        {
+          "key": "ice",
+          "label": "Epoch glacial activity",
+          "unit": "multiplier",
+          "min": 0,
+          "max": 1
+        }
+      ]
+    },
+    "cartography": [],
+    "configurable": true,
+    "processes": [
+      "atlas.glacial-erosion",
+      "atlas.glacial-deposition",
+      "atlas.glacial-landforms"
+    ],
+    "requires": [
+      "physical.land-ice"
+    ]
+  },
+  {
+    "id": "physical.sea-ice",
+    "label": "Sea ice",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.sea-ice"
+    ],
+    "requires": [
+      "physical.climate",
+      "ocean.geography"
+    ]
+  },
+  {
+    "id": "physical.coastal-evolution",
+    "label": "Coastal evolution",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "coastalErosion": {
+        "label": "Coastal erosion",
+        "unit": "multiplier",
+        "minimum": 0,
+        "default": 1,
+        "step": 0.1,
+        "group": "water"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "coastalErosion": [
+          "atlas.coastal-erosion-and-deposition"
+        ]
+      },
+      "epochControls": [
+        {
+          "key": "coasts",
+          "label": "Epoch coastal activity",
+          "unit": "multiplier",
+          "min": 0,
+          "max": 1
+        }
+      ]
+    },
+    "cartography": [],
+    "configurable": true,
+    "processes": [
+      "atlas.external-coastal-forcing",
+      "atlas.coastal-erosion-and-deposition"
+    ],
+    "requires": [
+      "ocean.geography",
+      "material.fluvial-transport"
+    ]
+  },
+  {
+    "id": "physical.river-networks",
+    "label": "River networks",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.river-channel-geometry"
+    ],
+    "requires": [
+      "water.routing"
+    ]
+  },
+  {
+    "id": "physical.floodplains",
+    "label": "Floodplains",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.river-floodplains"
+    ],
+    "requires": [
+      "physical.river-networks"
+    ]
+  },
+  {
+    "id": "physical.deltas",
+    "label": "Deltas",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.river-delta-formation"
+    ],
+    "requires": [
+      "physical.floodplains",
+      "material.fluvial-transport"
+    ]
+  },
+  {
+    "id": "physical.landforms",
+    "label": "Landform geography",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurable": false,
+    "processes": [
+      "atlas.landform-classification",
+      "refinement.landforms"
+    ],
+    "requires": [
+      "water.routing",
+      "ocean.geography"
+    ]
+  },
+  {
+    "id": "physical.lifecycle",
+    "label": "Formation history",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [],
+    "configurationPresentation": {
+      "applicability": "initial",
+      "epochs": {
+        "path": "epochs",
+        "shape": "clock"
+      }
+    },
+    "configurable": true,
+    "processes": [
+      "atlas.lithification",
+      "atlas.rock-metamorphism",
+      "atlas.physical-epoch-history",
+      "atlas.physical-structural-validation"
+    ],
+    "requires": []
+  },
+  {
+    "id": "ecology.living",
+    "label": "Living ecology",
+    "domains": [
+      "physical"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "vegetation": {
+        "label": "Vegetation productivity",
+        "unit": "multiplier",
+        "minimum": 0,
+        "default": 1,
+        "step": 0.1,
+        "group": "ecology"
+      },
+      "grazing": {
+        "label": "Herbivore pressure",
+        "unit": "multiplier",
+        "minimum": 0,
+        "default": 1,
+        "step": 0.1,
+        "group": "ecology"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "vegetation": [
+          "atlas.ecology-evolve",
+          "atlas.ecology-respond"
+        ],
+        "grazing": [
+          "atlas.ecology-evolve",
+          "atlas.ecology-respond"
+        ]
+      },
+      "initialOnlySettings": [
+        "vegetation",
+        "grazing"
+      ]
+    },
+    "cartography": [
+      {
+        "id": "living-landscape",
+        "label": "Living landscape",
+        "section": "environment",
+        "initialOnly": true,
+        "defaultChoice": "mosaic",
+        "explanation": "Vegetation, seasonal stress, fire and browsing respond together to water and climate. Isolated or recently disturbed ground still needs time to recover.",
+        "choices": [
+          {
+            "id": "dry",
+            "label": "Dry and sparse",
+            "features": {
+              "physical.climate": {
+                "settings": {
+                  "rainfall": 0.07
+                }
+              },
+              "ecology.living": {
+                "settings": {
+                  "vegetation": 0.8,
+                  "grazing": 0.8
+                },
+                "configuration": {
+                  "landscape": {
+                    "rainfall": 1,
+                    "seasonality": 0.3,
+                    "productivity": 1,
+                    "fire": 0.5,
+                    "migration": 1,
+                    "recovery": 1
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "open",
+            "label": "Seasonally open country",
+            "features": {
+              "physical.climate": {
+                "settings": {
+                  "rainfall": 1
+                }
+              },
+              "ecology.living": {
+                "settings": {
+                  "vegetation": 0.9,
+                  "grazing": 1.4
+                },
+                "configuration": {
+                  "landscape": {
+                    "rainfall": 1,
+                    "seasonality": 0.65,
+                    "productivity": 1,
+                    "fire": 2,
+                    "migration": 1,
+                    "recovery": 1
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "mosaic",
+            "label": "Wooded mosaic",
+            "features": {
+              "physical.climate": {
+                "settings": {
+                  "rainfall": 1
+                }
+              },
+              "ecology.living": {
+                "settings": {
+                  "vegetation": 1.5,
+                  "grazing": 0.5
+                },
+                "configuration": {
+                  "landscape": {
+                    "rainfall": 1,
+                    "seasonality": 0.3,
+                    "productivity": 1,
+                    "fire": 1,
+                    "migration": 1,
+                    "recovery": 2
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "humid",
+            "label": "Humid woodland",
+            "features": {
+              "physical.climate": {
+                "settings": {
+                  "rainfall": 2
+                }
+              },
+              "ecology.living": {
+                "settings": {
+                  "vegetation": 2.5,
+                  "grazing": 0.1
+                },
+                "configuration": {
+                  "landscape": {
+                    "rainfall": 1,
+                    "seasonality": 0.2,
+                    "productivity": 1,
+                    "fire": 0.35,
+                    "migration": 1,
+                    "recovery": 3
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "configurationPresentation": {
+      "applicability": "initial",
+      "epochs": {
+        "path": "epochs",
+        "shape": "record",
+        "extension": "ecology"
+      }
+    },
+    "configurable": true,
+    "processes": [
+      "refinement.ecology-initialize",
+      "refinement.ecology-develop",
+      "refinement.ecology-present",
+      "atlas.ecology-initialize",
+      "atlas.ecology-evolve",
+      "atlas.ecology-respond",
+      "atlas.ecology-burial",
+      "atlas.ecology-settle",
+      "atlas.ecology-present"
+    ],
+    "requires": [
+      "physical.climate",
+      "water.routing"
+    ]
+  },
+  {
+    "id": "magic.configured",
+    "label": "Configured magical systems",
+    "domains": [
+      "magic"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "cartography": [
+      {
+        "id": "fire.cores",
+        "label": "Core-site prevalence",
+        "explanation": "Core-site prevalence scales with land area; geothermal peaks and physical spacing determine which sites can form.",
+        "section": "environment",
+        "system": "fire",
+        "initialOnly": true,
+        "fields": [
+          "magic.fire.parameters.sourceThreshold",
+          "magic.fire.parameters.sourceSpacing"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Isolated",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "sourceThreshold": 450,
+                "sourceSpacing": 0.0375
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Scattered",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "sourceThreshold": 300,
+                "sourceSpacing": 0.0225
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Plentiful",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "sourceThreshold": 250,
+                "sourceSpacing": 0.015
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "fire.reach",
+        "label": "Thermal reach",
+        "explanation": "How far heat follows connected conductive veins from core sites.",
+        "section": "environment",
+        "system": "fire",
+        "initialOnly": true,
+        "fields": [
+          "magic.fire.parameters.baseCost",
+          "magic.fire.parameters.conductanceDivisor"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Near veins",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "baseCost": 6,
+                "conductanceDivisor": 8
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Across districts",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "baseCost": 3,
+                "conductanceDivisor": 12
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Across regions",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "baseCost": 1.5,
+                "conductanceDivisor": 20
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "fire.thaw",
+        "label": "Heat and quickening",
+        "explanation": "Thermal warming, ice melt, quickened life and fire exposure from the same Fire field.",
+        "section": "environment",
+        "system": "fire",
+        "initialOnly": true,
+        "fields": [
+          "magic.fire.effects.heat",
+          "magic.fire.effects.iceMelt",
+          "magic.fire.effects.quickening",
+          "magic.fire.effects.fire"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Mild",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "heat": 0.09,
+                "iceMelt": 3.125e-8,
+                "quickening": 0.5,
+                "fire": 0.1
+              }
+            }
+          },
+          {
+            "id": "1",
+            "label": "Pronounced",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "heat": 0.36,
+                "iceMelt": 1.25e-7,
+                "quickening": 1,
+                "fire": 0.3
+              }
+            }
+          },
+          {
+            "id": "2",
+            "label": "Intense",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "heat": 0.72,
+                "iceMelt": 2.5e-7,
+                "quickening": 1,
+                "fire": 0.5
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "fire.hardening",
+        "label": "Hardened terrain",
+        "explanation": "Heat-baked rock resists erosion and retains its landform imprint.",
+        "section": "environment",
+        "system": "fire",
+        "initialOnly": true,
+        "fields": [
+          "magic.fire.effects.rockResistance"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Subtle",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "rockResistance": 225
+              }
+            }
+          },
+          {
+            "id": "1",
+            "label": "Pronounced",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "rockResistance": 900
+              }
+            }
+          },
+          {
+            "id": "2",
+            "label": "Strong",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "rockResistance": 1800
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "aurora.terrain",
+        "label": "Charge-bearing terrain",
+        "explanation": "Cold and elevated terrain supplies charge to the coldward network.",
+        "section": "environment",
+        "system": "aurora",
+        "initialOnly": true,
+        "fields": [
+          "magic.aurora.parameters.baseInput"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Limited",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "baseInput": 280
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Widespread",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "baseInput": 360
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Extensive",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "baseInput": 420
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "aurora.capture",
+        "label": "Ice-capture pattern",
+        "explanation": "Concentration in ice reservoirs versus continued transport toward colder ground.",
+        "section": "environment",
+        "system": "aurora",
+        "initialOnly": true,
+        "fields": [
+          "magic.aurora.parameters.iceRetention",
+          "magic.aurora.parameters.coldRetentionDistance"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Local reservoirs",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "iceRetention": 0.00015,
+                "coldRetentionDistance": 0.001
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Intermediate",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "iceRetention": 0.0003,
+                "coldRetentionDistance": 0.0025
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Continued coldward flow",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "iceRetention": 0.00045,
+                "coldRetentionDistance": 0.0045
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "aurora.softening",
+        "label": "Softened terrain",
+        "explanation": "Aurora weakens rock, changing its response to weathering and erosion.",
+        "section": "environment",
+        "system": "aurora",
+        "initialOnly": true,
+        "fields": [
+          "magic.aurora.effects.rockResistance"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Subtle",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "rockResistance": -130
+              }
+            }
+          },
+          {
+            "id": "1",
+            "label": "Pronounced",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "rockResistance": -520
+              }
+            }
+          },
+          {
+            "id": "2",
+            "label": "Strong",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "rockResistance": -1040
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "pressure.extent",
+        "label": "Ocean influence extent",
+        "explanation": "The reach and width of Pressure paths through connected ocean, coastal impulses and wakes.",
+        "section": "environment",
+        "system": "pressure",
+        "initialOnly": true,
+        "fields": [
+          "magic.pressure.parameters.rayDistance",
+          "magic.pressure.parameters.rayDecay",
+          "magic.pressure.parameters.coastalRayDistance",
+          "magic.pressure.parameters.wakeDistance",
+          "magic.pressure.parameters.beamWidth"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Nearby",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "rayDistance": 0.3,
+                "rayDecay": 12,
+                "coastalRayDistance": 0.05,
+                "wakeDistance": 0.1125,
+                "beamWidth": 0.0035
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Basin-spanning",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "rayDistance": 0.5,
+                "rayDecay": 8,
+                "coastalRayDistance": 0.075,
+                "wakeDistance": 0.175,
+                "beamWidth": 0.005
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Far-reaching",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "rayDistance": 0.9,
+                "rayDecay": 5,
+                "coastalRayDistance": 0.125,
+                "wakeDistance": 0.3,
+                "beamWidth": 0.0065
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "pressure.water",
+        "label": "Moved water",
+        "explanation": "Upwelling, cold sea surface and fog where a front shoals; warm still water in its wakes.",
+        "section": "environment",
+        "system": "pressure",
+        "initialOnly": true,
+        "fields": [
+          "magic.pressure.effects.upwelling",
+          "magic.pressure.effects.seaSurface",
+          "magic.pressure.effects.wakeWarming",
+          "magic.pressure.effects.fog"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Faint",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "upwelling": 0.4,
+                "seaSurface": -0.04,
+                "wakeWarming": 10,
+                "fog": 0.3
+              }
+            }
+          },
+          {
+            "id": "1",
+            "label": "Pronounced",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "upwelling": 1,
+                "seaSurface": -0.1,
+                "wakeWarming": 30,
+                "fog": 0.8
+              }
+            }
+          },
+          {
+            "id": "2",
+            "label": "Strong",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "upwelling": 2,
+                "seaSurface": -0.2,
+                "wakeWarming": 60,
+                "fog": 1
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "pressure.stress",
+        "label": "Coastal stress",
+        "explanation": "Additional coastal force where Pressure reaches the shore, combined with local waves and currents.",
+        "section": "environment",
+        "system": "pressure",
+        "initialOnly": true,
+        "fields": [
+          "magic.pressure.effects.coastalForcing"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Subtle",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "coastalForcing": 0.25
+              }
+            }
+          },
+          {
+            "id": "1",
+            "label": "Pronounced",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "coastalForcing": 1
+              }
+            }
+          },
+          {
+            "id": "2",
+            "label": "Severe",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "coastalForcing": 2
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "pressure.wakes",
+        "label": "Ancient wake prevalence",
+        "explanation": "The prevalence of historical wake paths scales with ocean area; their travel distances follow map scale.",
+        "section": "environment",
+        "system": "pressure",
+        "initialOnly": true,
+        "fields": [
+          "magic.pressure.parameters.wakeSources"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Sparse",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "wakeSources": 8
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Scattered",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "wakeSources": 16
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Frequent",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "wakeSources": 32
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "pressure.rogues",
+        "label": "Rogue-impact prevalence",
+        "explanation": "The prevalence of Pressure-driven coastal impulses scales with shoreline length in the geographic history.",
+        "section": "environment",
+        "system": "pressure",
+        "initialOnly": true,
+        "fields": [
+          "magic.pressure.parameters.coastalSources"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Sparse",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "coastalSources": 12
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Scattered",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "coastalSources": 24
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Frequent",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "coastalSources": 48
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "aurora.stillness",
+        "label": "Stillness",
+        "explanation": "How far charged ice outlasts its climate and slows the life within it.",
+        "section": "environment",
+        "system": "aurora",
+        "initialOnly": true,
+        "fields": [
+          "magic.aurora.effects.icePersistence",
+          "magic.aurora.effects.stillness",
+          "magic.aurora.effects.heat",
+          "magic.aurora.effects.organicPreservation"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Faint",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "icePersistence": 0.5,
+                "stillness": 0.5,
+                "heat": -0.02,
+                "organicPreservation": 0.8
+              }
+            }
+          },
+          {
+            "id": "1",
+            "label": "Pronounced",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "icePersistence": 0.9,
+                "stillness": 1,
+                "heat": -0.05,
+                "organicPreservation": 1.5
+              }
+            }
+          },
+          {
+            "id": "2",
+            "label": "Strong",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "icePersistence": 1,
+                "stillness": 1,
+                "heat": -0.1,
+                "organicPreservation": 2.5
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "greenwood.stands",
+        "label": "Old-growth threshold",
+        "explanation": "How old and how closed a canopy, or how deep a peat, must be before it is a stand.",
+        "section": "environment",
+        "system": "greenwood",
+        "initialOnly": true,
+        "fields": [
+          "magic.greenwood.parameters.standAge",
+          "magic.greenwood.parameters.standCover",
+          "magic.greenwood.parameters.peatDepth"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Ancient only",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "standAge": 1600,
+                "standCover": 0.75,
+                "peatDepth": 20
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Old growth",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "standAge": 800,
+                "standCover": 0.6,
+                "peatDepth": 10
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Any mature wood",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "standAge": 400,
+                "standCover": 0.45,
+                "peatDepth": 5
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "greenwood.roots",
+        "label": "Reach between roots",
+        "explanation": "How far Greenwood travels through connected living cover from its stands and springs.",
+        "section": "environment",
+        "system": "greenwood",
+        "initialOnly": true,
+        "fields": [
+          "magic.greenwood.parameters.rootCost",
+          "magic.greenwood.parameters.rootFloor"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Within the wood",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "rootCost": 12,
+                "rootFloor": 0.2
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Across the country",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "rootCost": 6,
+                "rootFloor": 0.12
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Across regions",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "rootCost": 3,
+                "rootFloor": 0.06
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "greenwood.verdure",
+        "label": "Verdure",
+        "explanation": "Forest past its climate, deeper soil and braided rivers from the same Greenwood field.",
+        "section": "environment",
+        "system": "greenwood",
+        "initialOnly": true,
+        "fields": [
+          "magic.greenwood.effects.verdure",
+          "magic.greenwood.parameters.groveSap"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Subtle",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "groveSap": 1200
+              },
+              "effects": {
+                "verdure": 0.5
+              }
+            }
+          },
+          {
+            "id": "1",
+            "label": "Pronounced",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "groveSap": 600
+              },
+              "effects": {
+                "verdure": 1
+              }
+            }
+          },
+          {
+            "id": "2",
+            "label": "Strong",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "groveSap": 400
+              },
+              "effects": {
+                "verdure": 1
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "salt.seep",
+        "label": "Brine seep",
+        "explanation": "How far brine travels down the drainage before the air flushes it or a pit crusts it.",
+        "section": "environment",
+        "system": "salt",
+        "initialOnly": true,
+        "fields": [
+          "magic.salt.parameters.seepShare",
+          "magic.salt.parameters.brineFlush"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Short",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "seepShare": 0.3,
+                "brineFlush": 0.8
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Down the valley",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "seepShare": 0.5,
+                "brineFlush": 0.6
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "To the basin floor",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "seepShare": 0.7,
+                "brineFlush": 0.4
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "salt.dust",
+        "label": "Salt dust",
+        "explanation": "How much of an exposed bed the wind lifts and how far it blows before it settles.",
+        "section": "environment",
+        "system": "salt",
+        "initialOnly": true,
+        "fields": [
+          "magic.salt.parameters.dustShare",
+          "magic.salt.parameters.dustSettle"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Still",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "dustShare": 0.05,
+                "dustSettle": 0.7
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Blowing",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "dustShare": 0.15,
+                "dustSettle": 0.5
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Storm-borne",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "dustShare": 0.3,
+                "dustSettle": 0.3
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "salt.glass",
+        "label": "Glass flats and drying",
+        "explanation": "How deep a bed fuses the pan to glass, and how much the air dries over salted ground.",
+        "section": "environment",
+        "system": "salt",
+        "initialOnly": true,
+        "fields": [
+          "magic.salt.parameters.glassBed",
+          "magic.salt.parameters.desiccation"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Subtle",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "glassBed": 1200,
+                "desiccation": 0.3
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Pronounced",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "glassBed": 800,
+                "desiccation": 0.5
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Strong",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "glassBed": 500,
+                "desiccation": 0.7
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "hallowed.reach",
+        "label": "Sanctuary reach",
+        "explanation": "How wide a ring a long-kept seat wards, and how long a seat must be kept to ward one.",
+        "section": "environment",
+        "system": "hallowed",
+        "initialOnly": true,
+        "fields": [
+          "magic.hallowed.parameters.wardReach",
+          "magic.hallowed.parameters.tenureFull"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Close",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "wardReach": 0.005,
+                "tenureFull": 600000000
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "District",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "wardReach": 0.01,
+                "tenureFull": 300000000
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Province",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "wardReach": 0.02,
+                "tenureFull": 150000000
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "hallowed.lines",
+        "label": "Kept lines and pilgrim roads",
+        "explanation": "How many kept years make a frontier a ward line, and how worn a way must be to be a pilgrimage road.",
+        "section": "environment",
+        "system": "hallowed",
+        "initialOnly": true,
+        "fields": [
+          "magic.hallowed.parameters.lineFull",
+          "magic.hallowed.parameters.roadFull"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Rare",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "lineFull": 20000,
+                "roadFull": 20000000
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Common",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "lineFull": 10000,
+                "roadFull": 10000000
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Everywhere",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "lineFull": 5000,
+                "roadFull": 5000000
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "hallowed.warding",
+        "label": "Warding",
+        "explanation": "How much of every other system a ring removes inside and lays on its rim, and how hard the rock holds within.",
+        "section": "environment",
+        "system": "hallowed",
+        "initialOnly": true,
+        "fields": [
+          "magic.hallowed.effects.warding",
+          "magic.hallowed.effects.rockResistance"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Subtle",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "warding": 0.5,
+                "rockResistance": 150
+              }
+            }
+          },
+          {
+            "id": "1",
+            "label": "Pronounced",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "warding": 1,
+                "rockResistance": 300
+              }
+            }
+          },
+          {
+            "id": "2",
+            "label": "Strong",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {},
+              "effects": {
+                "warding": 1,
+                "rockResistance": 600
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "veil.tearing",
+        "label": "Tearing",
+        "explanation": "How much strain between systems tears the ground, and how much makes a full tear.",
+        "section": "environment",
+        "system": "veil",
+        "initialOnly": true,
+        "fields": [
+          "magic.veil.parameters.tearFloor",
+          "magic.veil.parameters.tearFull"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Only at the fiercest fronts",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "tearFloor": 0.1,
+                "tearFull": 0.5
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "At strong fronts",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "tearFloor": 0.05,
+                "tearFull": 0.4
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "At any front",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "tearFloor": 0.02,
+                "tearFull": 0.25
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "veil.doors",
+        "label": "Doors",
+        "explanation": "How strong and how far apart stable tears must be to pair into a door, and how many a world holds.",
+        "section": "environment",
+        "system": "veil",
+        "initialOnly": true,
+        "fields": [
+          "magic.veil.parameters.doorStrain",
+          "magic.veil.parameters.doorDistance"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Few and far",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "doorStrain": 600,
+                "doorDistance": 0.15
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Some",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "doorStrain": 400,
+                "doorDistance": 0.075
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Many",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "doorStrain": 250,
+                "doorDistance": 0.0375
+              },
+              "effects": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "veil.wildness",
+        "label": "Wild zones",
+        "explanation": "How far a wild zone moves its ground and its cover between surveys.",
+        "section": "environment",
+        "system": "veil",
+        "initialOnly": true,
+        "fields": [
+          "magic.veil.parameters.wildRelief",
+          "magic.veil.parameters.wildShuffle"
+        ],
+        "choices": [
+          {
+            "id": "0",
+            "label": "Subtle",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "wildRelief": 0.0000025,
+                "wildShuffle": 0.15
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "1",
+            "label": "Pronounced",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "wildRelief": 0.000005,
+                "wildShuffle": 0.3
+              },
+              "effects": {}
+            }
+          },
+          {
+            "id": "2",
+            "label": "Strong",
+            "features": {
+              "magic.configured": {}
+            },
+            "magicPatch": {
+              "parameters": {
+                "wildRelief": 0.00001,
+                "wildShuffle": 0.5
+              },
+              "effects": {}
+            }
+          }
+        ]
+      }
+    ],
+    "configurationPresentation": {
+      "applicability": "initial",
+      "epochs": {
+        "path": "activity",
+        "shape": "record",
+        "extension": "magicActivity"
+      }
+    },
+    "configurable": true,
+    "processes": [
+      "refinement.magic-water",
+      "refinement.magic-refresh",
+      "refinement.magic-refresh",
+      "refinement.magic-react",
+      "refinement.magic-transport",
+      "refinement.magic-organic",
+      "refinement.magic-map",
+      "atlas.magic-initialize",
+      "atlas.magic-climate",
+      "atlas.magic-rocks",
+      "atlas.magic-post-glacial",
+      "atlas.magic-coast",
+      "atlas.magic-history",
+      "atlas.magic-classify",
+      "atlas.magic-project"
+    ]
+  },
+  {
+    "id": "magic.local",
+    "label": "Located magical sources",
+    "domains": [
+      "magic"
+    ],
+    "defaultEnabled": true,
+    "settings": {},
+    "applicability": {
+      "requiresLocatedSources": true
+    },
+    "configurable": false,
+    "processes": [
+      "magic.thermal",
+      "magic.material",
+      "magic.advanceStorage",
+      "magic.advection",
+      "atlas.atmospheric-climate",
+      "atlas.project-forcing",
+      "atlas.forcing"
+    ]
+  },
+  {
+    "id": "human.cultures",
+    "label": "Cultural distributions",
+    "domains": [
+      "cultural"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "cultureCount": {
+        "label": "Starting cultures",
+        "unit": "count",
+        "minimum": 1,
+        "default": 3,
+        "step": 1,
+        "integer": true,
+        "group": "human"
+      },
+      "culturalMobility": {
+        "label": "Cultural mobility",
+        "unit": "multiplier",
+        "minimum": 0,
+        "default": 1,
+        "step": 0.1,
+        "group": "human"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "cultureCount": [
+          "human.identity-era"
+        ],
+        "culturalMobility": [
+          "human.identity-era"
+        ]
+      }
+    },
+    "cartography": [
+      {
+        "id": "age",
+        "label": "Age of the world",
+        "section": "people",
+        "initialOnly": true,
+        "defaultChoice": "lantern",
+        "explanation": "How far the settled history runs before the present: hearths and chiefdoms, crowned realms, or lantern-lit cities. A longer age fills the land, gathers cities from their hinterlands and wears the ways into roads; the ice-age round before it stays.",
+        "choices": [
+          {
+            "id": "hearth",
+            "label": "Hearth age",
+            "features": {
+              "human.cultures": {
+                "configuration": {
+                  "eras": [
+                    {
+                      "id": "Ice age",
+                      "years": 400,
+                      "mobility": 2,
+                      "physicalEpoch": "before-present"
+                    },
+                    {
+                      "id": "Hearthfall",
+                      "years": 300,
+                      "mobility": 1,
+                      "physicalEpoch": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "crowns",
+            "label": "Age of crowns",
+            "features": {
+              "human.cultures": {
+                "configuration": {
+                  "eras": [
+                    {
+                      "id": "Ice age",
+                      "years": 400,
+                      "mobility": 2,
+                      "physicalEpoch": "before-present"
+                    },
+                    {
+                      "id": "Hearthfall",
+                      "years": 300,
+                      "mobility": 1,
+                      "physicalEpoch": null
+                    },
+                    {
+                      "id": "Age of Crowns",
+                      "years": 500,
+                      "mobility": 0.8,
+                      "physicalEpoch": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "lantern",
+            "label": "Lantern age",
+            "features": {
+              "human.cultures": {
+                "configuration": {
+                  "eras": [
+                    {
+                      "id": "Ice age",
+                      "years": 400,
+                      "mobility": 2,
+                      "physicalEpoch": "before-present"
+                    },
+                    {
+                      "id": "Hearthfall",
+                      "years": 300,
+                      "mobility": 1,
+                      "physicalEpoch": null
+                    },
+                    {
+                      "id": "Age of Crowns",
+                      "years": 500,
+                      "mobility": 0.8,
+                      "physicalEpoch": null
+                    },
+                    {
+                      "id": "Lantern Age",
+                      "years": 300,
+                      "mobility": 1,
+                      "physicalEpoch": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "long",
+            "label": "Long lantern age",
+            "features": {
+              "human.cultures": {
+                "configuration": {
+                  "eras": [
+                    {
+                      "id": "Ice age",
+                      "years": 400,
+                      "mobility": 2,
+                      "physicalEpoch": "before-present"
+                    },
+                    {
+                      "id": "Hearthfall",
+                      "years": 300,
+                      "mobility": 1,
+                      "physicalEpoch": null
+                    },
+                    {
+                      "id": "Age of Crowns",
+                      "years": 500,
+                      "mobility": 0.8,
+                      "physicalEpoch": null
+                    },
+                    {
+                      "id": "Lantern Age",
+                      "years": 600,
+                      "mobility": 1,
+                      "physicalEpoch": null
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "cultural-pattern",
+        "label": "Cultural pattern",
+        "section": "people",
+        "initialOnly": true,
+        "defaultChoice": "overlapping",
+        "explanation": "Distinct concentrations or broader overlapping prevalence: how many identities begin and how far contact carries them. These fields do not prescribe political borders or simulate migration routes.",
+        "choices": [
+          {
+            "id": "distinct",
+            "label": "Distinct centers",
+            "features": {
+              "human.cultures": {
+                "settings": {
+                  "cultureCount": 3,
+                  "culturalMobility": 0.5
+                }
+              }
+            }
+          },
+          {
+            "id": "overlapping",
+            "label": "Overlapping regions",
+            "features": {
+              "human.cultures": {
+                "settings": {
+                  "cultureCount": 6,
+                  "culturalMobility": 1
+                }
+              }
+            }
+          },
+          {
+            "id": "mixed",
+            "label": "Broad mixture",
+            "features": {
+              "human.cultures": {
+                "settings": {
+                  "cultureCount": 9,
+                  "culturalMobility": 1.5
+                }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "configurationPresentation": {
+      "applicability": "initial"
+    },
+    "configurable": true,
+    "processes": [
+      "human.cultures"
+    ]
+  },
+  {
+    "id": "human.politics",
+    "label": "Political territories",
+    "domains": [
+      "political"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "polityCount": {
+        "label": "Starting polities",
+        "unit": "count",
+        "minimum": 1,
+        "default": 3,
+        "step": 1,
+        "integer": true,
+        "group": "human"
+      },
+      "politicalReach": {
+        "label": "Political reach",
+        "unit": "multiplier",
+        "minimum": 0,
+        "default": 1,
+        "step": 0.1,
+        "group": "human"
+      }
+    },
+    "applicability": {
+      "settingConsumers": {
+        "polityCount": [
+          "human.realm-era"
+        ],
+        "politicalReach": [
+          "human.realm-era"
+        ]
+      }
+    },
+    "cartography": [
+      {
+        "id": "political-pattern",
+        "label": "Political pattern",
+        "section": "people",
+        "defaultChoice": "regional",
+        "explanation": "The scale and density of territorial partitions, independently of cultural prevalence: how many seats begin and how far each can hold.",
+        "choices": [
+          {
+            "id": "broad",
+            "label": "Broad territories",
+            "features": {
+              "human.politics": {
+                "settings": {
+                  "polityCount": 3,
+                  "politicalReach": 1.3
+                }
+              }
+            }
+          },
+          {
+            "id": "regional",
+            "label": "Regional states",
+            "features": {
+              "human.politics": {
+                "settings": {
+                  "polityCount": 7,
+                  "politicalReach": 1
+                }
+              }
+            }
+          },
+          {
+            "id": "small",
+            "label": "Many small territories",
+            "features": {
+              "human.politics": {
+                "settings": {
+                  "polityCount": 14,
+                  "politicalReach": 0.8
+                }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "configurable": false,
+    "processes": [
+      "human.politics"
+    ]
+  },
+  {
+    "id": "built.layout",
+    "label": "Built geography",
+    "domains": [
+      "built"
+    ],
+    "defaultEnabled": true,
+    "settings": {
+      "townThreshold": {
+        "label": "World town size",
+        "unit": "residents",
+        "minimum": 100,
+        "default": 5000,
+        "step": 100,
+        "integer": true,
+        "group": "human"
+      },
+      "cityReach": {
+        "label": "City hinterland reach",
+        "unit": "map fraction",
+        "minimum": 0.0025,
+        "default": 0.05,
+        "step": 0.0025,
+        "group": "human"
+      },
+      "roadTraffic": {
+        "label": "Travellers that make a road",
+        "unit": "per year",
+        "minimum": 50,
+        "default": 1000,
+        "step": 50,
+        "group": "human"
+      },
+      "marketTravel": {
+        "label": "Market travel",
+        "unit": "multiplier",
+        "minimum": 0,
+        "default": 1,
+        "step": 0.1,
+        "group": "human"
+      },
+      "highways": {
+        "label": "Highways per polity",
+        "unit": "count",
+        "minimum": 0,
+        "default": 2,
+        "step": 1,
+        "integer": true,
+        "group": "human"
+      }
+    },
+    "applicability": {
+      "publicationProfiles": {
+        "settlements": [
+          "world",
+          "region",
+          "local"
+        ],
+        "roads": [
+          "world",
+          "region",
+          "local"
+        ],
+        "structures": [
+          "site",
+          "interior"
+        ]
+      },
+      "settingConsumers": {
+        "townThreshold": [
+          "human.places"
+        ],
+        "cityReach": [
+          "human.places"
+        ],
+        "roadTraffic": [
+          "human.places"
+        ],
+        "highways": [
+          "built.layout"
+        ]
+      }
+    },
+    "cartography": [
+      {
+        "id": "towns",
+        "label": "Towns and cities",
+        "section": "people",
+        "defaultChoice": "cities",
+        "explanation": "What settlement the map shows: many market towns, towns with a few cities drawing their hinterlands, or great cities gathering whole regions. Places below the World town size stay latent for finer maps.",
+        "choices": [
+          {
+            "id": "markets",
+            "label": "Market towns",
+            "features": {
+              "built.layout": {
+                "settings": {
+                  "townThreshold": 2500,
+                  "cityReach": 0.03
+                }
+              }
+            }
+          },
+          {
+            "id": "cities",
+            "label": "Towns and cities",
+            "features": {
+              "built.layout": {
+                "settings": {
+                  "townThreshold": 5000,
+                  "cityReach": 0.05
+                }
+              }
+            }
+          },
+          {
+            "id": "great",
+            "label": "Great cities",
+            "features": {
+              "built.layout": {
+                "settings": {
+                  "townThreshold": 10000,
+                  "cityReach": 0.075
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "roads",
+        "label": "Roads and travel",
+        "section": "people",
+        "defaultChoice": "markets",
+        "explanation": "How readily use makes ways: tracks and fords between neighbours, roads worn between markets, or a realm's highways raised where its busiest roads cross open country.",
+        "choices": [
+          {
+            "id": "tracks",
+            "label": "Tracks and fords",
+            "features": {
+              "built.layout": {
+                "settings": {
+                  "roadTraffic": 2000,
+                  "marketTravel": 0.5,
+                  "highways": 0
+                }
+              }
+            }
+          },
+          {
+            "id": "markets",
+            "label": "Roads between markets",
+            "features": {
+              "built.layout": {
+                "settings": {
+                  "roadTraffic": 1000,
+                  "marketTravel": 1,
+                  "highways": 2
+                }
+              }
+            }
+          },
+          {
+            "id": "highways",
+            "label": "Highways of the realm",
+            "features": {
+              "built.layout": {
+                "settings": {
+                  "roadTraffic": 500,
+                  "marketTravel": 2,
+                  "highways": 4
+                }
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "configurable": false,
+    "processes": [
+      "built.layout"
+    ]
+  }
+]

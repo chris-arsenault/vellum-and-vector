@@ -1,187 +1,321 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ErrorMessage } from "./ErrorMessage";
-import { registerWorkspaceWorld } from "./atlasWorkspace";
-import { startGeneration } from "./generationJobs";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import type { AtlasContext } from "@atlas/context";
+import type {
+  MapRef,
+  SavedMapDocument,
+  RegionSelection,
+  MapDescriptor,
+  MapNavigationState,
+} from "@atlas/map";
+import { executionMode, openFinishedAtlas } from "./finishedAtlasContext";
+import { installGenerationPresentation } from "./generationPresentation";
+import type { GenerationDraft } from "./generationDraft";
 import { GenerationWizard } from "./GenerationWizard";
-import { draftPreview, draftWorldSnapshot, type GenerationDraft } from "./generationDraft";
-import { useWorld, useWorlds } from "./useAtlas";
-import { Editor } from "./Editor";
-import { TemplateStudio } from "./TemplateStudio";
+import { FinishedMapEditor } from "./FinishedMapEditor";
+import { FinishedMapLibrary } from "./FinishedMapLibrary";
+import { FinishedGeneration } from "./FinishedGeneration";
 import { LoreEncyclopedia } from "./LoreEncyclopedia";
-import { MapStorage } from "./MapStorage";
+import { ErrorMessage } from "./ErrorMessage";
+import type { GenerationStatus } from "@atlas/context";
+import { bounds } from "./presentation";
+import { Brand } from "./Brand";
 
-export function App() {
-  return <Atlas />;
+export type FinishedContext = AtlasContext<GenerationDraft>;
+interface Setup {
+  draft: GenerationDraft;
+  parent?: MapDescriptor;
+  selection?: RegionSelection;
 }
-
-function Atlas() {
-  const worlds = useWorlds();
-  const [selected, setSelected] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [library, setLibrary] = useState(false);
-  const [lore, setLore] = useState(false);
-  const [opened, setOpened] = useState(0);
-  const openSaved = (id: string) => {
-    setSelected(id);
-    setCreating(false);
-    setOpened((value) => value + 1);
-  };
-  const selectedId = selected || firstWorld(worlds.data);
-  const world = useWorld(selectedId);
-  if (lore) return <LoreEncyclopedia onClose={() => setLore(false)} />;
-  if (loadingAtlas(worlds.isPending, world.isPending, selectedId, creating))
-    return <LoadingAtlas />;
-  if (library)
+interface Opened {
+  instance: number;
+  reference: MapRef;
+  saved?: SavedMapDocument;
+}
+export function App() {
+  const mode = executionMode();
+  const [context, setContext] = useState<FinishedContext | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  useEffect(() => {
+    let disposed = false,
+      current: FinishedContext | undefined;
+    const close = () => {
+      const opened = current;
+      current = undefined;
+      return opened?.dispose();
+    };
+    void openFinishedAtlas<GenerationDraft>(
+      mode,
+      import.meta.env.VITE_ATLAS_BACKEND_URL ?? location.origin
+    )
+      .then((opened) => {
+        if (disposed) return opened.dispose();
+        current = opened;
+        setContext(opened);
+      })
+      .catch((error: unknown) => {
+        void close();
+        if (!disposed) setError(error);
+      });
+    return () => {
+      disposed = true;
+      void close();
+    };
+  }, [mode]);
+  if (!context)
     return (
       <main className="welcome">
-        <div className="welcome-card">
-          <Brand />
-          <button className="quiet" onClick={() => setLibrary(false)}>
-            Return to atlas
-          </button>
-          <TemplateStudio />
-        </div>
+        <Brand />
+        <p>Opening atlas…</p>
+        <ErrorMessage error={error} />
       </main>
     );
-  if (world.data && !creating)
-    return (
-      <Editor
-        key={`${world.data.id}:${opened}`}
-        world={world.data}
-        worlds={worlds.data ?? []}
-        changeWorld={setSelected}
-        newWorld={() => setCreating(true)}
-        openLore={() => setLore(true)}
-        openSaved={openSaved}
-      />
-    );
+  return <Atlas context={context} />;
+}
+function useAtlas(context: FinishedContext) {
+  const cache = useQueryClient();
+  const opening = useRef(0);
+  const [opened, setOpened] = useState<Opened | null>(null);
+  const [job, setJob] = useState<GenerationStatus | null>(null);
+  const [jobSelection, setJobSelection] = useState<RegionSelection | null>(null);
+  const [lore, setLore] = useState(false);
+  const [library, setLibrary] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const map = useQuery({
+    queryKey: ["finished-map", opened?.reference],
+    enabled: !!opened,
+    queryFn: ({ signal }) => context.maps.open(opened!.reference, { signal }),
+  });
+  const { setup, setSetup, create, refine, regenerate } = useGenerationSetup(
+    context,
+    map.data,
+    setError
+  );
+  const open = async (reference: MapRef, saved?: SavedMapDocument) => {
+    const request = ++opening.current;
+    try {
+      const stored = saved ?? (await context.library.find(reference.mapId)) ?? undefined;
+      if (request !== opening.current) return;
+      if (saved) cache.setQueryData(["map-navigation", reference], saved.navigation);
+      setOpened({ reference, saved: stored, instance: request });
+      setSetup(null);
+      setLibrary(false);
+    } catch (error) {
+      if (request === opening.current) setError(error);
+    }
+  };
+  const complete = async (reference: MapRef) => {
+    try {
+      await attachChild(context, cache, jobSelection, reference);
+    } catch (error) {
+      setError(error);
+    }
+    await open(reference);
+  };
+  const published = async (reference: MapRef) => {
+    await cache.invalidateQueries({ queryKey: ["finished-map", reference] });
+    if (
+      opened?.reference.mapId !== reference.mapId ||
+      opened.reference.revision !== reference.revision
+    )
+      await open(reference);
+  };
+  return {
+    context,
+    opened,
+    setup,
+    job,
+    lore,
+    library,
+    error,
+    map,
+    create,
+    refine,
+    regenerate,
+    open,
+    complete,
+    published,
+    setSetup,
+    setJob,
+    setJobSelection,
+    setLore,
+    setLibrary,
+    observe(job: GenerationStatus) {
+      setJobSelection(null);
+      setJob(job);
+      setLibrary(false);
+    },
+  };
+}
+function useGenerationSetup(
+  context: FinishedContext,
+  map: MapDescriptor | undefined,
+  setError: (error: unknown) => void
+) {
+  const [setup, setSetup] = useState<Setup | null>(null);
+  const create = async () => {
+    try {
+      const draft = await generationDefaults(context);
+      setSetup({ draft: { ...draft, worldId: crypto.randomUUID() } });
+    } catch (error) {
+      setError(error);
+    }
+  };
+  const refine = async (selection: RegionSelection, name: string) => {
+    try {
+      await generationDefaults(context);
+      const draft = await context.generation.configuration(selection.parent);
+      const [w, s, e, n] = bounds(selection.geometry);
+      setSetup({ draft: { ...draft, name, width: e - w, height: n - s }, parent: map, selection });
+    } catch (error) {
+      setError(error);
+    }
+  };
+  const regenerate = async () => {
+    if (!map) return;
+    try {
+      await generationDefaults(context);
+      setSetup({ draft: await context.generation.configuration(map.reference), parent: map });
+    } catch (error) {
+      setError(error);
+    }
+  };
+  return { setup, setSetup, create, refine, regenerate };
+}
+async function generationDefaults(context: FinishedContext) {
+  const [features, choices] = await Promise.all([
+    context.generation.presentation(),
+    context.generation.configurations(),
+  ]);
+  const draft = await context.generation.validate(choices[0].values);
+  installGenerationPresentation(features, draft);
+  return draft;
+}
+async function attachChild(
+  context: FinishedContext,
+  cache: QueryClient,
+  selection: RegionSelection | null,
+  reference: MapRef
+) {
+  const selected = selection?.regionPath.at(-1);
+  if (selection && selected) {
+    const key = ["map-navigation", selection.parent];
+    const state = cache.getQueryData<MapNavigationState>(key);
+    if (state) {
+      const next = await context.navigation.commit(selection.parent, state, {
+        kind: "attachChild",
+        data: { region_id: selected.id, child: reference },
+      });
+      cache.setQueryData(key, next);
+    }
+  }
+  await cache.invalidateQueries({ queryKey: ["related-maps"] });
+}
+function Atlas({ context }: { context: FinishedContext }) {
+  const state = useAtlas(context);
+  const {
+    opened,
+    setup,
+    job,
+    lore,
+    library,
+    error,
+    map,
+    create,
+    refine,
+    open,
+    setJob,
+    setLore,
+    setLibrary,
+  } = state;
+  if (lore) return <LoreEncyclopedia onClose={() => setLore(false)} />;
+  return (
+    <>
+      {setup ? (
+        <AtlasSetup state={state} />
+      ) : map.data && opened ? (
+        <FinishedMapEditor
+          key={opened.instance}
+          context={context}
+          map={map.data}
+          saved={opened.saved}
+          open={open}
+          create={() => void create()}
+          lore={() => setLore(true)}
+          library={() => setLibrary(true)}
+          refine={(selection, name) => void refine(selection, name)}
+          regenerate={() => void state.regenerate()}
+        />
+      ) : (
+        <main className="welcome">
+          <div className="welcome-card">
+            <Brand />
+            <h1>Your atlas</h1>
+            <p>
+              {context.mode === "browser"
+                ? "Maps run in this browser. Save a map to keep it after closing the tab."
+                : "Maps run on your LAN server. Saved maps are available to your home devices."}
+            </p>
+            <button className="primary" onClick={() => void create()}>
+              New world
+            </button>
+            <button onClick={() => setLibrary(true)}>Saved maps</button>
+            <button onClick={() => setLore(true)}>Magic lore bible</button>
+          </div>
+        </main>
+      )}
+      <ErrorMessage error={error ?? map.error} />
+      {library && (
+        <FinishedMapLibrary
+          context={context}
+          close={() => setLibrary(false)}
+          open={(saved) => open(saved.reference, saved)}
+          observe={state.observe}
+        />
+      )}
+      {job && (
+        <FinishedGeneration
+          key={job.jobId}
+          context={context}
+          initial={job}
+          complete={(reference) => void state.complete(reference)}
+          published={(reference) => void state.published(reference)}
+          close={() => setJob(null)}
+        />
+      )}
+    </>
+  );
+}
+function AtlasSetup({ state }: { state: ReturnType<typeof useAtlas> }) {
+  const { context, setSetup, setJob, setJobSelection } = state;
+  const setup = state.setup!;
   return (
     <main className="setup-page">
       <header className="setup-page-header">
-        <div>
-          <Brand />
-          <h1>New world</h1>
-        </div>
-        <p className="hint">
-          Save maps in this browser to reopen them after reloading. Unsaved changes stay in this
-          tab.
-        </p>
-        <MapStorage onOpen={openSaved} />
-        <button className="secondary" onClick={() => setLibrary(true)}>
-          Independent template library
-        </button>
-        <button className="secondary" onClick={() => setLore(true)}>
-          Magic lore bible
-        </button>
+        <Brand />
+        <h1>{setup.selection ? "Refine region" : setup.parent ? "Regenerate map" : "New world"}</h1>
       </header>
-      <CreateWorld
-        onCancel={world.data ? () => setCreating(false) : undefined}
-        onCreate={(id) => {
-          setSelected(id);
-          setCreating(false);
+      <GenerationWizard
+        key={setup.draft.worldId + setup.draft.name}
+        initial={setup.draft}
+        service={context.generation}
+        source={setup.parent}
+        selection={setup.selection}
+        onCancel={() => setSetup(null)}
+        onGenerate={async (draft) => {
+          const status = setup.selection
+            ? await context.generation.refine({
+                selection: setup.selection,
+                configuration: draft,
+              })
+            : setup.parent
+              ? await context.generation.regenerate(setup.parent.reference, draft)
+              : await context.generation.create(draft);
+          setJob(status);
+          setJobSelection(setup.selection ?? null);
+          setSetup(null);
         }}
       />
-      <ErrorMessage error={worlds.error ?? world.error} />
     </main>
-  );
-}
-
-function LoadingAtlas() {
-  return (
-    <main className="welcome">
-      <div className="welcome-card">
-        <Brand />
-        <p>Loading atlas…</p>
-      </div>
-    </main>
-  );
-}
-
-function firstWorld(worlds: { id: string }[] | undefined) {
-  return worlds?.[0]?.id ?? "";
-}
-function loadingAtlas(
-  worldsPending: boolean,
-  worldPending: boolean,
-  selected: string,
-  creating: boolean
-) {
-  return worldsPending || (!!selected && worldPending && !creating);
-}
-
-function CreateWorld({
-  onCreate,
-  onCancel,
-}: {
-  onCreate: (id: string) => void;
-  onCancel?: () => void;
-}) {
-  const cache = useQueryClient();
-  const create = useMutation({
-    mutationFn: async ({
-      draft,
-      generate,
-      prepared,
-    }: {
-      draft: GenerationDraft;
-      generate: boolean;
-      prepared?: ReturnType<typeof draftPreview>;
-    }) => {
-      const reviewed = generate ? (prepared ?? draftPreview(draft)) : undefined;
-      if (reviewed?.diagnostics.some((item) => item.severity === "error"))
-        throw new Error(reviewed.diagnostics.map((item) => item.message).join("\n"));
-      const world = await registerWorkspaceWorld(reviewed?.source ?? draftWorldSnapshot(draft));
-      if (reviewed)
-        await startGeneration(world.id, {
-          ...reviewed.input,
-          operationId: crypto.randomUUID(),
-          expectedVersion: world.version,
-        });
-      return world;
-    },
-    onSuccess: (world) => {
-      void cache.invalidateQueries({ queryKey: ["worlds"] });
-      cache.setQueryData(["world", world.id], world);
-      onCreate(world.id);
-    },
-  });
-  return (
-    <GenerationWizard
-      onCancel={onCancel}
-      onGenerate={async (draft, prepared) => {
-        await create.mutateAsync({ draft, prepared, generate: true });
-      }}
-      onManual={async (draft) => {
-        await create.mutateAsync({ draft, generate: false });
-      }}
-    />
-  );
-}
-
-export function Brand() {
-  const build = import.meta.env.VITE_BUILD_SHA ?? "development";
-  return (
-    <div className="brand">
-      <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
-        <path
-          d="M16 2 20 12 30 16 20 20 16 30 12 20 2 16 12 12Z"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        />
-        <path d="M16 7 18 14 25 16 18 18 16 25 14 18 7 16 14 14Z" fill="currentColor" />
-      </svg>
-      <span>
-        Vellum <i>&</i> Vector
-      </span>
-      <small
-        className="build-version"
-        aria-label="Application build"
-        title={`Application build ${build}`}
-      >
-        Build {build.slice(0, 7)}
-      </small>
-    </div>
   );
 }

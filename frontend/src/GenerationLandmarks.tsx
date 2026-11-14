@@ -1,5 +1,5 @@
-import { landmarkKind, type Landmark } from "@atlas/domain";
-import { landmarksInExtent } from "@atlas/generation";
+import type { Landmark } from "@atlas/context";
+import { landmarkKind } from "./landmarkPresentation";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 
 /**
@@ -8,9 +8,7 @@ import type { GenerationWorkflow } from "./useGenerationWorkflow";
  * and re-formed; the count setting above says how many the world is owed in all.
  */
 export function GenerationLandmarks({ flow }: { flow: GenerationWorkflow }) {
-  const source = flow.options.source ?? flow.prepared?.source,
-    input = flow.prepared?.input;
-  const landmarks = source && input ? landmarksInExtent(source, input) : [];
+  const landmarks = flow.prepared?.landmarks ?? [];
   const epochs = formingEpochs(flow);
   return (
     <>
@@ -51,8 +49,7 @@ export function GenerationLandmarks({ flow }: { flow: GenerationWorkflow }) {
   );
 }
 function formingEpochs(flow: GenerationWorkflow) {
-  const source = flow.options.source ?? flow.prepared?.source;
-  return flow.prepared?.input?.settings?.epochs ?? source?.world.epochs ?? [];
+  return flow.prepared?.input?.settings?.epochs ?? flow.draft.recipe.settings.epochs;
 }
 function measures(landmark: Landmark) {
   const kind = landmarkKind(landmark.kind);

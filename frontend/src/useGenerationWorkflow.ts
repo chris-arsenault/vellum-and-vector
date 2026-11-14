@@ -1,94 +1,129 @@
-import { useState } from "react";
-import {
-  projectGenerationSetup,
-  type FeatureSelection,
-  type GenerationSetup,
-} from "@atlas/generation";
-import { hasGeneratedGeography, type DomainSnapshot } from "@atlas/domain";
-import { projectInvalidDraft } from "./generationInvalidDraft";
+import { useEffect, useRef, useState } from "react";
+import type { GenerationAction, GenerationService } from "@atlas/context";
+import type { MapDescriptor, RegionSelection } from "@atlas/map";
+import type { Diagnostic, Landmark, LocatedMagicSource } from "@atlas/context";
+import type { FeatureSelection, GenerationSetup, AtlasGenerationInput } from "./generationTypes";
 import { cartographicFeatureStage } from "./cartographicDraft";
-import {
-  draftPreview,
-  newGenerationDraft,
-  normalizeGenerationDraft,
-  updateFeature,
-  type GenerationDraft,
-} from "./generationDraft";
+import { updateFeature, type GenerationDraft } from "./generationDraft";
+import { projectInvalidDraft } from "./generationInvalidDraft";
 
 export type WorkflowStage = "world" | "land" | "environment" | "magic" | "people" | "review";
-export type PreparedSetup = ReturnType<typeof draftPreview>;
+export interface PreparedSetup {
+  input: AtlasGenerationInput;
+  setup: GenerationSetup;
+  diagnostics: Diagnostic[];
+  cartography: Record<string, string | null>;
+  landmarks: Landmark[];
+  sources: LocatedMagicSource[];
+  resolutions: import("./GenerationResolution").Resolution[];
+}
 export interface GenerationWorkflowOptions {
-  initial?: GenerationDraft;
-  source?: DomainSnapshot;
-  areaId?: string;
+  initial: GenerationDraft;
+  service: GenerationService<GenerationDraft>;
+  source?: MapDescriptor;
+  selection?: RegionSelection;
   onGenerate(draft: GenerationDraft, prepared: PreparedSetup): void | Promise<void>;
   onManual?(draft: GenerationDraft): void | Promise<void>;
   onCancel?(): void;
 }
-interface DraftView {
-  draft: GenerationDraft;
-  prepared: PreparedSetup | null;
-  setup: GenerationSetup | null;
-  error: unknown;
-}
-function resolveDraft(
-  draft: GenerationDraft,
-  options: GenerationWorkflowOptions,
-  previous: GenerationSetup | null = null
-): DraftView {
-  try {
-    const prepared = draftPreview(draft, options.source, options.areaId);
-    return { draft, prepared, setup: projectGenerationSetup(prepared), error: null };
-  } catch (error) {
-    // Keep the editors reachable while an invalid nested configuration is repaired.
-    const historyFixed =
-      Boolean(previous?.context.inherited) ||
-      Boolean(options.source && hasGeneratedGeography(options.source.world));
+export function generationAction(
+  options: Pick<GenerationWorkflowOptions, "source" | "selection">,
+  draft: GenerationDraft
+): GenerationAction<GenerationDraft> {
+  if (options.selection)
+    return { method: "refine", request: { selection: options.selection, configuration: draft } };
+  if (options.source)
     return {
-      draft,
-      prepared: null,
-      setup: projectInvalidDraft(draft, previous, historyFixed),
-      error,
+      method: "regenerate",
+      request: { reference: options.source.reference, configuration: draft },
     };
-  }
+  return { method: "create", request: draft };
+}
+function useDraftReview({ initial, service, source, selection }: GenerationWorkflowOptions) {
+  const [draft, setDraft] = useState(initial);
+  const [prepared, setPrepared] = useState<PreparedSetup | null>(null);
+  const [previous, setPrevious] = useState<PreparedSetup | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [baseline, setBaseline] = useState<{
+    draft: GenerationDraft;
+    prepared: PreparedSetup | null;
+  }>({ draft: initial, prepared: null });
+  const revision = useRef(0);
+  useEffect(() => {
+    const current = ++revision.current;
+    let active = true;
+    void service.review(generationAction({ source, selection }, draft)).then(
+      (value) => {
+        if (!active || current !== revision.current) return;
+        const review = value as PreparedSetup;
+        setPrepared(review);
+        setPrevious(review);
+        setError(null);
+        setBaseline((baseline) => (baseline.prepared ? baseline : { draft, prepared: review }));
+      },
+      (error: unknown) => {
+        if (active && current === revision.current) setError(error);
+      }
+    );
+    return () => {
+      active = false;
+    };
+  }, [draft, service, source, selection]);
+  const change = (next: GenerationDraft) => {
+    revision.current++;
+    setPrepared(null);
+    setDraft(next);
+  };
+  const choose = async (control: string, choice: string) => {
+    const current = ++revision.current;
+    setPrepared(null);
+    try {
+      const next = await service.choose(draft, control, choice);
+      if (revision.current === current) change(next);
+    } catch (error) {
+      if (revision.current === current) setError(error);
+    }
+  };
+  const shown = prepared?.input.settings
+    ? { ...draft, recipe: { ...draft.recipe, settings: prepared.input.settings } }
+    : draft;
+  return {
+    draft: shown,
+    prepared,
+    setup: prepared?.setup ?? projectInvalidDraft(draft, previous?.setup ?? null),
+    error,
+    baseline,
+    cartography: (prepared ?? previous)?.cartography ?? {},
+    change,
+    choose,
+  };
 }
 export function useGenerationWorkflow(options: GenerationWorkflowOptions) {
-  const [view, setView] = useState(() =>
-    resolveDraft(
-      normalizeGenerationDraft(options.initial ?? newGenerationDraft(), options.source),
-      options
-    )
-  );
+  const review = useDraftReview(options);
   const [stage, setStage] = useState<WorkflowStage>("world");
-  const [baseline] = useState(view);
   const [target, setTarget] = useState<string | null>(null);
   const [targetField, setTargetField] = useState<string | undefined>();
   const [targetRevision, setTargetRevision] = useState(0);
   const [tuning, setTuning] = useState<string | null>(null);
   const [epoch, setEpoch] = useState("");
   const [approach, setApproach] = useState<"procedural" | "blank">("procedural");
-  const [json, setJson] = useState<{ text: string; dirty: boolean }>({ text: "", dirty: false });
-  const change = (draft: GenerationDraft) =>
-    setView((previous) => resolveDraft(draft, options, previous.setup));
+  const [json, setJson] = useState({ text: "", dirty: false });
   const feature = (id: string, patch: FeatureSelection[string]) =>
-    change(updateFeature(view.draft, id, patch));
+    review.change(updateFeature(review.draft, id, patch));
   const locate = (id: string, field?: string) => {
-    const target = view.setup?.features.find((entry) => entry.id === id);
-    if (target) {
-      const epoch = field?.match(/^feature\..+\.epochs\.([^.]+)\./)?.[1];
-      if (epoch) setEpoch(decodeURIComponent(epoch));
-      const section = cartographicFeatureStage(id);
-      setStage(options.source && section === "land" ? "environment" : section);
-      setTuning(id);
-      setTarget(id);
-      setTargetField(field);
-      setTargetRevision((value) => value + 1);
-    }
-    return target;
+    const feature = review.setup?.features.find((entry) => entry.id === id);
+    const epoch = field?.match(/^feature\..+\.epochs\.([^.]+)\./)?.[1];
+    if (epoch) setEpoch(decodeURIComponent(epoch));
+    const section = cartographicFeatureStage(id);
+    setStage(options.source && section === "land" ? "environment" : section);
+    setTuning(id);
+    setTarget(id);
+    setTargetField(field);
+    setTargetRevision((value) => value + 1);
+    return feature;
   };
   return {
-    ...view,
-    baseline,
+    ...review,
     target,
     targetField,
     targetRevision,
@@ -102,7 +137,6 @@ export function useGenerationWorkflow(options: GenerationWorkflowOptions) {
     setApproach,
     json,
     setJson,
-    change,
     feature,
     locate,
     options,

@@ -1,0 +1,62 @@
+import { BitSet, type MapScale, type DrainageReach } from "@atlas/domain";
+import { riverSignificance, type RiverEvidence } from "../worldSignificance";
+
+/** Confluence samples include the receiving river; tributary evidence stops upstream of it. */
+function contribution(reach: DrainageReach) {
+  const end = Math.max(0, reach.coordinates.length - 2);
+  return { discharge: reach.discharges[end] ?? 0, catchment: reach.catchmentAreas[end] ?? 0 };
+}
+function length(reach: DrainageReach) {
+  return reach.coordinates
+    .slice(1)
+    .reduce(
+      (sum, p, i) =>
+        sum + Math.hypot(p[0] - reach.coordinates[i][0], p[1] - reach.coordinates[i][1]),
+      0
+    );
+}
+
+/** One course and what the map decided about it. */
+export interface CourseJudgment {
+  course: number[];
+  evidence: RiverEvidence;
+  publish: boolean;
+}
+/** The courses the map shows, as lists of reaches. */
+export const worldRiverCourses = (reaches: DrainageReach[], scale: MapScale) =>
+  riverCourseJudgments(reaches, scale)
+    .filter((judged) => judged.publish)
+    .map((judged) => judged.course);
+/** Follow the strongest upstream continuation through junctions; other branches stand alone. */
+export function riverCourseJudgments(reaches: DrainageReach[], scale: MapScale): CourseJudgment[] {
+  const upstream = reaches.map(() => [] as number[]),
+    visited = new BitSet(reaches.length);
+  reaches.forEach((reach, i) => {
+    if (reach.downstream !== null && reach.downstream !== i) upstream[reach.downstream]?.push(i);
+  });
+  const continuation = upstream.map(
+    (branches) =>
+      branches.sort(
+        (a, b) => contribution(reaches[b]).discharge - contribution(reaches[a]).discharge || a - b
+      )[0]
+  );
+  const ends = reaches
+    .map((_, i) => i)
+    .filter((i) => {
+      const next = reaches[i].downstream;
+      return next === null || continuation[next] !== i;
+    });
+  return ends.map((end) => {
+    const course: number[] = [];
+    for (let i: number | undefined = end; i !== undefined && !visited.has(i); i = continuation[i]) {
+      visited.add(i);
+      course.unshift(i);
+    }
+    const evidence: RiverEvidence = {
+      ...contribution(reaches[end]),
+      length: course.reduce((sum, i) => sum + length(reaches[i]), 0),
+      outlet: reaches[end].waterBody !== null,
+    };
+    return { course, evidence, publish: riverSignificance(evidence, scale).publish };
+  });
+}

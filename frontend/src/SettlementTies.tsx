@@ -1,16 +1,16 @@
-import type { AtlasFeature } from "@atlas/domain";
+import type { SettlementFeature } from "./settlementSurfaceData";
 import { LinkList, Section, ShareBar } from "./InspectionSurface";
 import { compact } from "./surfaceData";
 import { placeWays, practiceLabel, recordedAt, waySegments } from "./settlementSurfaceData";
-import type { FeatureSelector } from "./SettlementSurface";
+import type { FeatureSelector } from "./SettlementDetails";
 
 /**
  * What the settlement built, what befell it and where its ways lead: the works and events
  * recorded at it and the ways that end at it, each a feature beside it on the map.
  */
 interface TieProps {
-  feature: AtlasFeature;
-  related: AtlasFeature[];
+  feature: SettlementFeature;
+  related: SettlementFeature[];
   select: FeatureSelector;
 }
 export function SettlementTies(props: TieProps) {

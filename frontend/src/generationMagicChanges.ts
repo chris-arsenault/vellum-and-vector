@@ -1,16 +1,12 @@
-import {
-  sameValue,
-  magicParameterDimensions,
-  type MagicSystem,
-  type MagicFeatureRule,
-  type MagicCondition,
-} from "@atlas/domain";
-import type { GenerationSettings } from "@atlas/generation";
+import type { MagicSystem, MagicFeatureRule, MagicCondition } from "@atlas/context";
+import { sameValue } from "./values";
+import { magicPresentation } from "./generationPresentation";
+import type { GenerationSettings } from "./generationTypes";
 import type { ConfigurationChange } from "./generationConfigurationChanges";
 
 const words = (key: string) => key.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
 function parameterValue(key: string, value: number) {
-  const dimension = magicParameterDimensions[key as keyof typeof magicParameterDimensions];
+  const dimension = magicPresentation().dimensions[key as keyof MagicSystem["parameters"]];
   if (dimension === 1) return `${value * 100}% of map span`;
   if (dimension) return `${value} × map span^${dimension}`;
   return String(value);
@@ -146,7 +142,7 @@ function conditionValue(condition: MagicCondition) {
   const values: string[] = [condition.field];
   if (condition.min !== undefined) values.push(`≥ ${condition.min}${unit}`);
   if (condition.max !== undefined) values.push(`≤ ${condition.max}${unit}`);
-  if (condition.values !== undefined) values.push(`in [${condition.values.join(", ")}]`);
+  if (condition.values != null) values.push(`in [${condition.values.join(", ")}]`);
   if (condition.index !== undefined) values.push(`index ${condition.index}`);
   if (condition.salt !== undefined) values.push(`salt ${condition.salt}`);
   return values.join(" ");

@@ -1,15 +1,15 @@
 # Vellum & Vector
 
 A web atlas for creating fictional worlds progressively, from continents and
-regions to settlements, caves and interiors. Creators combine procedural
-generation, direct editing and reusable templates within one geographically
-connected world. The current application runs entirely in the browser.
+regions to settlements, caves and interiors. Creators generate independent maps
+that share coordinates and completed world history. Manual editing and templates
+remain deferred. Generation and storage run together in the browser or on a LAN backend.
 
 The [product contract](docs/product-spec.md) defines the behavior. Project
 implementation guidance lives in [AGENTS.md](AGENTS.md), with decisions in the
 [spatial ADR](docs/adr/0001-spatial-authority.md),
-[frontend session ADR](docs/adr/0003-frontend-session.md) for the browser-only
-workspace, and
+[execution-host ADR](docs/adr/0015-finished-maps-and-execution-hosts.md) for finished
+maps and browser/backend ownership, and
 [coupling ADR](docs/adr/0004-coupling-through-each-systems-medium.md) for how
 society, magic, climate and geology shape one another. The
 [documentation index](docs/README.md) lists every durable document.
@@ -56,7 +56,7 @@ beside Living ecology for the selected shared epoch, or start with the
 wet/dry/cold/recovery cycle preset in **Edit shared history**.
 **Biomes and life** exposes the resulting fields and selectable land-biome regions;
 the Biomes overlay uses named categories. Every map opens with its feature layers
-off; turn layers on under **Map → Layers** or choose a layer preset. Organic deposits
+off; turn layers on under **Layers** or choose a layer preset. Organic deposits
 and their later burial remain downstream consequences. See the
 [ecology model](docs/generation-workflows.md#ecology-and-organic-geology).
 
@@ -71,16 +71,16 @@ The editor's right sidebar follows this workflow:
 | Refine a region   | Inherited context, detail setting, optional variation settings and generation feedback | Generate detail or return to the region         |
 
 World setup, manual authoring and library workspaces are outside this sidebar.
-Boundary tools appear during outline selection. Earlier generation jobs stay
-collapsed behind a history disclosure.
+Boundary tools appear during outline selection. **Saved maps** also lists the
+current host's generation jobs, including server jobs started on another device.
 
 Click a feature to read its
 properties, origin and relationships; settlements also show their residents and
 the peoples among them, their country and its use, their realm, their history
 through the eras and where their ways lead. **Inspect** returns to feature selection.
-**Atlas → Features** searches existing geography across the world.
+**Registry** searches the open map's published geography.
 
-**Inspect cell** explains a clicked place: the map colour and its blended class,
+**Inspect place** explains a clicked place: the map colour and its class,
 the biome and any magic system behind it, and the mapped features that cover the
 place, each with its causes. The stored values of each cell size stay folded
 underneath.
@@ -104,7 +104,7 @@ the unfinished selection. Hold Space to pan, or choose **Pan** for drag navigati
 Manual feature editing, drawing, field painting, templates and undo are deferred;
 their implementations remain in the repository for a later design.
 
-Open **Map → Appearance** to switch between the **Surface**, **Topographic** and
+Open **Appearance** to switch between the **Surface**, **Topographic** and
 **Relief** base maps. Surface, the default, paints natural and magical surface classes under the
 hillshade with a legend in the terrain appearance panel; generated magic places draw
 with a colour and mark per feature rule, so a hot spring, a vent and an Aurora field
@@ -112,7 +112,7 @@ are distinguishable without switching presets. Living landscapes a magic system 
 through its own forcing appear as surface classes and named biome regions: Fire's
 ember groves and thaw meadows, Aurora's rime forests and glow-lichen barrens, and the
 fog heath and moss forest on a coast facing a Pressure upwelling front.
-The compact drawer floats over the map and closes when you finish. **Map → Layers**
+The compact drawer floats over the map and closes when you finish. **Layers**
 holds visible features and overlays. **Add overlay** opens a separate floating
 chooser with searchable theme groups. **All fields**
 includes diagnostic channels. Checked fields stay in the overlay stack even when
@@ -130,12 +130,12 @@ The **Adjust terrain appearance** icon beside the base choices controls lighting
 exaggeration and contour interval.
 These display settings do not change the geography. Satellite appearance is deferred.
 
-**Map → Views** holds saved compositions. Views retain the geographic subject, base,
+**Views** holds saved compositions. Views retain the geographic subject, base,
 field overlays, vector styles and cartographic finishing together. **Save map view** creates a separate
 composition; opening it restores its subject and appearance. Use **Save map** to
 retain the world and its saved views across reloads.
 
-For a drawn map, choose **Map → Appearance → Drawn map** on the current map
+For a drawn map, choose **Appearance → Drawn map** on the current map
 or a region selected through **Regions**. Choose an ink-and-wash or monochrome
 treatment and a physical, political, cultural or infrastructure subject. Terrain
 illustrations use existing relief, water and woodland geography. The selected
@@ -147,7 +147,7 @@ Generated shared borders use a common rounded depiction, and land washes stop at
 physical shorelines. Biomes combine distinct washes with tree, grass, reed, dune
 or rock motifs; named landmarks and sites have their own symbols. Fault traces
 are optional geological detail rather than ordinary atlas linework.
-Under **Map → Layers**, **Social distributions** adds independent cultural, language
+Under **Layers**, **Social distributions** adds independent cultural, language
 and religious hatches and population dots. Several distributions can coexist on the same map.
 Per-feature label and symbol authoring is deferred with the manual editing tools.
 
@@ -159,18 +159,17 @@ fields and advanced GIS symbol rules.
 
 ## Architecture
 
-The application is written in TypeScript. React and OpenLayers provide the editor;
-shared TypeScript modules define world data, commands, validation and procedural
-generation. The [browser workspace](docs/adr/0003-frontend-session.md) owns local
-geography and executes scoped domain operations. Generation runs in a Web Worker
-with progress and cancellation. There is no backend, authentication, server
-database or MCP.
+React and OpenLayers provide the TypeScript UI and map views. One Rust engine owns
+configuration, generation, naming, publication and storage behavior. It runs as WASM
+in a browser worker or natively on the LAN backend, with progress and cancellation.
+Both modes publish self-contained GIS maps through the same facade. Viewing,
+inspection and export do not read private numerical generation resources.
 
 | Responsibility | Direction                                                                               |
 | -------------- | --------------------------------------------------------------------------------------- |
 | Editor         | React, OpenLayers, geographic selection, refinement and inspection                      |
-| Domain         | Shared TypeScript types, spatial identity, constraints and versioned commands           |
-| Generation     | Shared working map, registered processes and causal epoch sequences in a browser worker |
+| Domain         | Rust spatial identity, constraints and operations; generated TypeScript contracts       |
+| Generation     | Shared Rust working state, registered processes and causal sequences on the chosen host |
 
 Every area has a geographic parent, footprint and coordinate frame. Features keep
 their identity as finer representations are authored. Layer views compose the
@@ -185,7 +184,7 @@ epochs. The atlas adapter projects completed geography into metric GIS fields an
 retains authored inputs.
 
 In the [generation system](docs/generation-workflows.md), configured processes operate
-on shared GIS/domain working state: each checks that a selected step wrote what it needs,
+on private numerical and domain working state: each checks that a selected step wrote what it needs,
 applies its changes and validates them. The common contract covers typed parameters,
 spatial scope, deterministic seeds and application/validation for GIS and domain
 processes.
@@ -197,41 +196,44 @@ temperature, sea level, source activity or population pressure. Physical and
 magical nodes interleave at their causal positions. Cultural, political, site
 and cave generation use the same structure with their inherited context.
 
-Cancellation discards the worker's unpublished output; initial geography already
-delivered remains marked incomplete. If you edit the world during generation, the edits are kept
-and the outdated result is rejected. Generate again from the current geography.
-Child fields inherit parent geography and retain its boundary band while finer
-numerical work occupies the interior.
+Cancellation discards unpublished output; initial geography already delivered remains
+marked incomplete. Regeneration replaces the current revision atomically and rejects
+an outdated result. Refinement creates an independent child from captured parent context.
+Its coast and elevations may change; later parent changes leave existing children intact.
 
 ## Implementation state
 
 Create a world, generate its geography, inspect features and causes, select nested
 geographic regions, refine their detail, and compose map layers and sheets.
 
-Choose **Save map** in the editor to store the current world in this browser.
-Saving again updates that world's saved copy. **Saved maps**, available in the
-editor and on the new-world screen, reopens a save without regenerating it and
-replaces that world's current session copy. Saves include numerical geography,
-world map views, completed causes, history and undo. Finish generation before
-saving its output.
+Choose **Save map** to retain the completed map, presentation settings and navigation.
+Saving again updates its saved copy and rejects stale save versions. **Saved maps**
+reopens it without regeneration. Private captured inputs remain on the same host for
+later refinement; viewing reads only the published GIS map.
 
-Unsaved changes and independent templates disappear on reload, and closing the
-tab stops generation. Saves belong to this browser and site origin; clearing
-site data removes them. There is no autosave or generation recovery. Explicit
-GIS and template exports download local files.
+Browser saves belong to this browser and site origin; clearing site data removes them.
+Closing the tab stops browser generation. Backend saves are shared by home devices,
+and server jobs continue when a browser disconnects. Stopping the backend ends its
+running jobs. Unsaved view changes disappear on reload in either mode. There is no
+autosave or generation recovery. GIS and map-image exports download local files.
 
 Physical generation includes continental assemblies and sutures, plate advection,
 mountain construction, volcanism, impacts, flexure, continental margins, ocean
 currents, atmospheric transport, water-budget lakes, capture drainage, rivers,
-sediment, grounded glaciers, coasts and landforms. A reference fixture checks the
-port's hashes, noise and mesh construction against the original C#. Atlas profile
+sediment, grounded glaciers, coasts and landforms. Atlas profile
 and unit adaptations are described in the [generation design](docs/generation-workflows.md#physical-port-and-atlas-adapter).
 Cultural prevalence, political territory/claims/control and basic settlement,
 site and interior layouts remain atlas-specific processes.
 
-`backend/`, `db/`, `infrastructure/backend-prototype/` and their prototype scripts
-remain historical source outside the active workspace and build. Do not run
-their deployment or migration commands for this frontend.
+The old C# and TypeScript backends, migrations and deployment scripts are removed.
+`crates/atlas-map` defines the finished-map contract. `crates/atlas-gis` owns
+GEOS/SQLite and PostgreSQL/PostGIS storage and queries, independently of generation.
+The TypeScript viewer reads this GIS component through the data-storage facade;
+the Rust feature-extraction stage in `atlas-generation/src/publication` reads numerical
+generation outputs and publishes GIS layers and rasters to it. `crates/atlas-host` wires the
+components and their job lifecycles. See the [subsystem boundary](docs/adr/0015-finished-maps-and-execution-hosts.md).
+`packages/map`, `packages/atlas-context` and `packages/transport` expose the frontend
+facades. See [LAN installation](docs/lan-backend.md) for packaging and database setup.
 
 ## Local development
 
@@ -242,6 +244,7 @@ From the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
+make wasm-engine
 pnpm dev
 ```
 
@@ -257,6 +260,32 @@ make test-browser
 
 The browser tests start and stop their own temporary Vite server. The production
 build is `frontend/dist/` and includes its generation worker.
+
+`crates/atlas-map` owns independent published-map values, `atlas-generation` owns the
+generator and publisher, `atlas-names` owns naming, `atlas-gis` owns GIS storage and
+queries, and `atlas-host` supplies application composition for both hosts.
+`packages/map` and `packages/atlas-context` expose the map and job interfaces. Computational
+TypeScript values are generated from Rust with `make contracts`.
+
+Native development uses Rust and CMake. The browser build uses Emscripten 6.0.10,
+Rust nightly with `rust-src`, and `wasm-bindgen-cli` matching `Cargo.lock`. Activate
+the Emscripten SDK before building. It compiles the Rust standard library with
+shared-memory support for WasmFS's OPFS worker, using one wasm32 target.
+`make test-rust` runs native explicit-input contracts and compile-fail architecture
+examples. Existing Playwright scenarios exercise the production WASM engine using
+supplied GIS maps. CI prepares that engine and fixture before running the three
+browser jobs. The standalone wasm-bindgen test runner is not a CI gate: its
+Emscripten test binaries currently fail to link with duplicate closure exports.
+The test sources remain available; the existing browser fixture rules still apply.
+
+Run `make wasm-engine` before direct frontend development or focused TypeScript tests.
+It builds the optimized browser engine and its bindings into `packages/engine/dist`.
+`make typecheck`, `make test` and the workspace build include that build; CI builds it
+before its TypeScript checks. Rebuild after changing the Rust browser boundary.
+
+Both hosts link GEOS and SQLite directly. Browser workers mount OPFS at `/atlas`;
+Rust reads and writes its separate map and generation stores through WasmFS.
+Browser hosting requires cross-origin isolation headers for the filesystem worker.
 
 Scenarios that require the deferred manual authoring UI retain their bodies and
 assertions with the `@deferred-authoring` tag. The standard Playwright configuration
@@ -275,126 +304,15 @@ The normal Vitest suite holds pure-function, data-structure, contract and
 publication-rule unit tests; none generates a world. For example:
 
 ```sh
-pnpm test packages/domain/src/fieldContours.test.ts
-pnpm test packages/generation/src/world/drainageFlood.test.ts
-pnpm test packages/generation/src/world/metricSearch.test.ts
-pnpm --dir frontend test src/rasterTiles.test.ts
+pnpm --dir frontend test src/mapRasterSamples.test.ts
+cargo test -p atlas-generation --test storage
 ```
 
-`pnpm test:generation` is opt-in and generates a shared small Draft world using
-the SQLite/GEOS execution adapters and file-backed numerical storage.
-Independent checks reuse it for physical history, water and rivers, ecological
-publication, all seven magic systems, settlements, naming, and authored protection.
-Reuse that result across assertions; add a shared fixture only when different
-preconditions require one. There is no fixed generation quota or time limit on
-development work. Fine verification requires separate authorization.
-
-### Generation harness
-
-`pnpm --dir frontend harness` runs a headless generation harness in Node, outside the
-unit suites and CI. It generates a world from the app's default draft and refines a
-region from it through the app's own generation and publication code
-(`executeGeneration`), then records what each map holds. Both maps are kept as
-checkpoints (catalog and resources) under `.artifacts/harness/checkpoints`; a later
-run reuses them, so rendering, publication and feature work is measured on a
-published region in seconds. Each run writes a report directory under
-`.artifacts/harness/reports`:
-
-- `world-run.json`, `region-run.json`: each generation step's time, cells, the surface
-  channels it added or dropped, skipped steps and diagnostics (only for runs that
-  generated);
-- `world.json`, `region.json`: provenance, scale against the intended cell size, fields
-  and the raster layers offered by source, rivers by where they end, waterfalls,
-  peaks, ranges, lakes, settlements, roads, and terrain tile timing at two views;
-- `*-channels.json`: each channel's range and invalid count;
-- `*-overview.png`, `*-relief.png`: the terrain painter with published features.
-
-The report path is printed before work begins. Fresh worlds persist their effective
-draft in `world-input.json` and append timestamped progress, diagnostics, memory and
-CPU observations to `world-progress.jsonl`. Ordinary failures retain partial traces
-and `failure.json`; abrupt termination still leaves the streamed progress and any
-completed snapshots. `world-monitoring.json` separates completed-step probe and
-snapshot costs. Expensive probes observe outer native steps; embedded deformation
-is included in its enclosing plate operation, while material event observers remain
-active throughout. These timings include diagnostic work, not just generation.
-
-`HARNESS_CPU_PROFILE=1` records a V8 CPU profile across generation, publication and
-reporting as `run.cpuprofile`. It finishes on success or an ordinary exception;
-external termination cannot finalize the profile. `invocation.json` and progress
-events include the worker PID for external CPU and resident-memory sampling.
-Progress records separate GEOS and SQLite WASM capacity from SQLite's live and
-peak allocations. Column diagnostics group reconstructed remap packages by size,
-so repeated coarsening can be assessed without retaining individual material events.
-
-With snapshots enabled, an ordinary failure also retains `failure.bin`, marked as
-an incomplete diagnostic field. Inspect it through `stageReplay` with
-`HARNESS_PASS=failure HARNESS_PASSES=0`; it cannot advance a history.
-
-The report states what was made; it checks nothing. Environment variables choose
-the run: `HARNESS_WORLD` and `HARNESS_REGION` name the checkpoints,
-`HARNESS_SEED` selects a new world's seed and `HARNESS_WORLD_ONLY=1` skips refinement,
-`HARNESS_WORLD_QUALITY` and `HARNESS_REGION_QUALITY` choose draft, standard or fine,
-`HARNESS_TERRAIN` applies a curated terrain choice from setup,
-`HARNESS_DOMAINS` selects comma-separated recipe domains for scoped inspection,
-`HARNESS_PLACES=1` adds the exhaustive POI catalogue audit when inspecting place rules,
-`HARNESS_REGION_AT=x,y` picks the region under a point (default: the world's highest
-land), and `HARNESS_FRESH=world` or `HARNESS_FRESH=region` makes a checkpoint again.
-
-For process diagnosis, `HARNESS_PROCESS_AT=x,y` samples one world coordinate during
-world or regional execution. `HARNESS_PROCESS_BANDS=Elevation,Runoff` selects the bands
-to inspect, in their native units. Each sample names the step, process, substep and
-boundary. `capturedAnswers` shows cached inputs; `answers` explains the current field's
-responder contributions. `after-run` includes immediate writes; `settled` includes the
-group's landed demands. Simultaneous settlement names the whole group.
-
-Samples are written to `world-processes.json`, `region-processes.json` or
-`quick-region-processes.json`, including when the run fails. Reused checkpoints do not
-execute processes and produce no new process samples. Band selection lets a new process
-be inspected without adding process-specific probe code.
-
-A world run with `HARNESS_SNAPSHOTS=<name>` saves physical state and epoch settings
-at each pass boundary. `HARNESS_STAGES=<name> HARNESS_PASS=1 HARNESS_PASSES=2 pnpm
---dir frontend harness stageReplay` runs those passes through the current physical
-steps and writes `replay.json` under `.artifacts/harness`. Magic and ecology do not
-run in this replay. The report includes effective profile and epoch inputs, land
-heights and belt supply. Its old-ground classes use transported average heights;
-they do not track individual parcels of the first epoch.
-
-A world run with `HARNESS_RESUME_POINTS=<name>` saves the whole run as each epoch
-completes: the land, its magic and landmarks, and the recorded history.
-`HARNESS_RESUME=<name> HARNESS_AFTER=<epoch id> pnpm --dir frontend harness regional`
-installs the same world and continues the same generation after that epoch, with
-ecology, magic and people running through every later epoch and the present. Stages
-before the resume point do not run again, except initializers, which build the working
-state the saved epoch then fills. The continued world is saved as `<world>-resumed`,
-and its report's `resumed-from.json` names the saved run and the commit that saved it.
-Use this to work on later epochs and the present without generating geology again.
-A resume point holds the land and what the run recorded, not the working state of the
-people, so continue from a physical epoch rather than from a human era.
-`HARNESS_STOP_SECONDS=<n>` cancels a continued run after that long, which with
-`HARNESS_CPU_PROFILE=1` profiles its first minutes.
-
-`HARNESS_RESUME=<name> HARNESS_AFTER=<epoch id> pnpm --dir frontend harness people`
-opens the land of a resume point without running anything and lives the settled
-human eras on it, in seconds. It writes a picture of each human layer (population,
-farmland, pasture, built-up area, ruins, worn ways) and a summary of where people
-are under `.artifacts/harness/people/<run>`. `HARNESS_PEOPLE_OFF=gather` (or
-`feed`, `harden`) runs the same eras with that operation removed, and
-`HARNESS_PEOPLE_YEARS=300,500` replaces the default eras.
-
-`HARNESS_PASSES=0` reports a snapshot as it stands. Replay uses the saved profile;
-`HARNESS_PROFILE_SOURCE=current` selects the current base profile, and
-`HARNESS_PROFILE='{"Name": 0}'` overrides named settings. `HARNESS_EPOCHS` supplies
-an explicit epoch array. Legacy snapshots without epochs use current defaults
-and say so. Judge complete histories with the world harness.
-
-`HARNESS_NAMING=1 HARNESS_WORLD=<checkpoint> pnpm --dir frontend harness naming`
-exercises final naming against a saved map and its people without
-regeneration or changes to the checkpoint. A failed native buffer writes its
-input to `.artifacts/harness/naming-buffer.json` for diagnosis.
-
-Map → Appearance → Rendering diagnostics shows the same kind of record live in the
-app: tile workers, tiles waiting, drawn, cancelled and reloaded, and what a tile costs.
+The TypeScript generator, its tests and its development harness are preserved in
+[the reference archive](archive/typescript/README.md), outside normal CI and application
+imports. The old `test:generation` and `harness` commands are retired from the active
+workspace. Reference checks are optional; no archived generator is an application fallback.
+Fine workload verification still requires separate authorization.
 
 Browser tests import `test` from `frontend/tests/uiTest.ts`. Every journey receives
 the small generation fixture automatically, and a real generation worker throws
@@ -405,8 +323,7 @@ belong in constructed Vitest cases. Worker publication, storage, cancellation
 and save/reopen checks also use small supplied geography and arrays.
 
 These boundaries are enforced by the unit test setup, standard ESLint restricted
-imports, and `frontend/src/testPolicy.test.ts`. The policy checks shared generation
-setup and verifies that direct, aliased and dynamic generator
+imports, and `frontend/src/testPolicy.test.ts`. The policy verifies that direct, aliased and dynamic generator
 attempts cannot enter routine tests. Do not bypass the guards or extend timeouts
 to accommodate generated setup.
 
@@ -433,13 +350,11 @@ The project registration in `ahara-infra` provisions the standard deployer role
 and repository Actions secrets (`OIDC_ROLE`, `STATE_BUCKET`, `PREFIX`). Deploy
 that registration before the initial product push. Later pushes to `main` use
 the shared CI workflow to test, build and deploy the frontend automatically.
-The backend Terraform and its registration are preserved under
-`infrastructure/backend-prototype` as disabled source files. User data
-stays in the tab; publishing data or using a hosted presentation service requires
-explicit authorization.
+The retired backend Terraform is removed. The replacement backend is LAN-only on TrueNAS,
+using its local database; it has no public route. Publishing user data or using a hosted
+presentation service requires explicit authorization.
 
 ## License
 
 Project code is under the [MIT license](LICENSE), except `packages/name-forge`,
-which carries its own PolyForm Noncommercial 1.0.0 license. Source under
-`backend/vendor` retains its [provenance](backend/vendor/README.md).
+which carries its own PolyForm Noncommercial 1.0.0 license.

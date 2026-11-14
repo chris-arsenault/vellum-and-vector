@@ -1,22 +1,24 @@
-import { atlasQuality, defaultTerrainCells, generationWorkload } from "@atlas/generation";
-import type { Profile } from "@atlas/domain";
+export interface Resolution {
+  quality: string;
+  cellAreaKm2: number;
+  cells: number;
+  aboveDefault: boolean;
+}
 
 interface Props {
-  width: number;
-  height: number;
   quality: string;
-  profile?: Profile;
   showWarning?: boolean;
+  resolutions?: Resolution[];
 }
 const areaFormat = (value: number) =>
   value.toLocaleString(undefined, { maximumFractionDigits: 10 });
 
-function resolutionChoices({ width, height, profile = "world" }: Omit<Props, "quality">) {
-  return Object.keys(atlasQuality).map((quality) => {
-    const estimate = generationWorkload(width, height, quality, profile);
+function resolutionChoices({ resolutions }: Omit<Props, "quality">) {
+  return ["draft", "standard", "fine"].map((quality) => {
+    const estimate = resolutions?.find((entry) => entry.quality === quality);
     return {
       quality,
-      label: `${quality[0].toUpperCase()}${quality.slice(1)} · ${areaFormat(estimate.cellAreaKm2)} km²/cell · ≈${estimate.cells.toLocaleString()} cells`,
+      label: `${quality[0].toUpperCase()}${quality.slice(1)}${estimate ? ` · ${areaFormat(estimate.cellAreaKm2)} km²/cell · ≈${estimate.cells.toLocaleString()} cells` : ""}`,
     };
   });
 }
@@ -47,14 +49,9 @@ export function GenerationResolution(
   );
 }
 
-export function GenerationWorkload({
-  width,
-  height,
-  quality,
-  profile = "world",
-  showWarning = true,
-}: Props) {
-  const estimate = generationWorkload(width, height, quality, profile);
+export function GenerationWorkload({ resolutions, quality, showWarning = true }: Props) {
+  const estimate = resolutions?.find((entry) => entry.quality === quality);
+  if (!estimate) return null;
   return (
     <div className="generation-workload" data-cell-count={estimate.cells}>
       <p role="status">
@@ -63,8 +60,7 @@ export function GenerationWorkload({
       </p>
       {showWarning && estimate.aboveDefault && (
         <p className="warning" role="alert">
-          Above the default workload of {defaultTerrainCells.toLocaleString()} cells. Generation
-          will be slower and may run out of memory or crash this tab.
+          Above the default workload of 60,000 cells. Generation will require more time and memory.
         </p>
       )}
     </div>

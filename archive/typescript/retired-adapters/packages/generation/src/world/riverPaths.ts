@@ -1,0 +1,292 @@
+import type { PhysicalField } from "./field";
+import { physicalSampler } from "./physicalMetric";
+import { spatial, MapScale, type Band, type ReadBand } from "@atlas/domain";
+import type { Geometry } from "geojson";
+import { meshDeltaX, meshPointX } from "./mesh";
+import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import {
+  onRiver,
+  riverSample,
+  riverSuccessor,
+  waterAt,
+  type RiverSample,
+} from "../water/riverKeeping";
+
+type Coordinate = [number, number];
+type Station = { point: Coordinate; segment: number; fraction: number };
+export interface RiverPaths {
+  x: Band;
+  y: Band;
+  upstream: Band;
+  incoming?: Band;
+  elevationAt?: (x: number, y: number) => number;
+  water?: { ocean: Geometry | null; lakes: { get(id: number): Geometry | undefined } };
+}
+const mix = (a: Coordinate, b: Coordinate, t = 0.5): Coordinate => [
+  a[0] + (b[0] - a[0]) * t,
+  a[1] + (b[1] - a[1]) * t,
+];
+const position = (paths: RiverPaths, i: number): Coordinate => [paths.x.get(i), paths.y.get(i)];
+
+/** Remove cell-scale stair steps along the main stem, sharing every confluence position. */
+export function createRiverPaths(map: PhysicalField): RiverPaths {
+  const paths: RiverPaths = {
+    x: workingValues(map, "float64", "river:x", (i) => map.mesh.x(i)),
+    y: workingValues(map, "float64", "river:y", (i) => map.mesh.y(i)),
+    upstream: workingArray(map, "int32", "river:upstream").fill(-1),
+    incoming: workingArray(map, "int32", "river:incoming-count"),
+    elevationAt: physicalSampler(map.mesh, map.Elevation),
+  };
+  for (let i = 0; i < map.mesh.count; i++) {
+    const target = riverSuccessor(map, i);
+    if (!onRiver(map, i) || target < 0) continue;
+    paths.incoming!.add(target, 1);
+    const previous = paths.upstream.get(target);
+    if (previous < 0 || waterAt(map, i) > waterAt(map, previous)) paths.upstream.set(target, i);
+  }
+  // Numerical de-aliasing, not geological activity or a physical meander wavelength.
+  for (let pass = 0; pass < 3; pass++) relax(map, paths);
+  return paths;
+}
+function relax(map: PhysicalField, paths: RiverPaths) {
+  const x = workingValues(map, "float64", "river:relax-x", (i) => paths.x.get(i)),
+    y = workingValues(map, "float64", "river:relax-y", (i) => paths.y.get(i));
+  for (let i = 0; i < map.mesh.count; i++) {
+    const previous = paths.upstream.get(i),
+      next = riverSuccessor(map, i);
+    if (
+      previous < 0 ||
+      next < 0 ||
+      !onRiver(map, i) ||
+      map.WaterKindCodes.get(i) !== 0 ||
+      bordersWater(map, i)
+    )
+      continue;
+    const xi = x.get(i),
+      yi = y.get(i),
+      dx =
+        xi +
+        (meshDeltaX(map.mesh, x.get(previous) - xi) + meshDeltaX(map.mesh, x.get(next) - xi)) / 4 -
+        map.mesh.x(i),
+      dy = (y.get(previous) + y.get(next) + 2 * yi) / 4 - map.mesh.y(i);
+    // The centroid-to-edge distance is h/2. Keep the point strictly inside its cell.
+    const factor = Math.min(1, (map.mesh.spacing * 0.45) / Math.hypot(dx, dy));
+    paths.x.set(i, map.mesh.x(i) + dx * factor);
+    paths.y.set(i, map.mesh.y(i) + dy * factor);
+  }
+  releaseWorking(map, x, y);
+}
+/** A shore cell's centre is its only point guaranteed dry in the published water geometry. */
+function bordersWater(map: PhysicalField, i: number) {
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0 && map.WaterKindCodes.get(j) !== 0) return true;
+  }
+  return false;
+}
+/**
+ * The deepest neighbouring cell of the same water body, deeper than `i`. A mouth into
+ * shallow water heads on toward it, so the channel enters open water rather than skimming
+ * the shore where the water is only a sliver deep.
+ */
+function openWater(map: PhysicalField, i: number) {
+  let best = -1;
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (
+      j < 0 ||
+      map.WaterKindCodes.get(j) !== map.WaterKindCodes.get(i) ||
+      map.WaterBodyIds.get(j) !== map.WaterBodyIds.get(i)
+    )
+      continue;
+    if (map.WaterDepths.get(j) > (best < 0 ? map.WaterDepths.get(i) : map.WaterDepths.get(best)))
+      best = j;
+  }
+  return best;
+}
+function tangent(map: PhysicalField, paths: RiverPaths, i: number): Coordinate {
+  const previous = paths.upstream.get(i),
+    target = riverSuccessor(map, i),
+    next = target < 0 && map.WaterKindCodes.get(i) !== 0 ? openWater(map, i) : target;
+  const a = position(paths, previous < 0 ? i : previous),
+    b = position(paths, next < 0 ? i : next);
+  return [meshDeltaX(map.mesh, b[0] - a[0]), b[1] - a[1]];
+}
+
+/** Clip a handle to the convex union of the two adjacent triangular drainage cells. */
+function corridorHandle(map: PhysicalField, i: number, j: number, a: Coordinate, d: Coordinate) {
+  const dx = meshDeltaX(map.mesh, map.mesh.x(j) - map.mesh.x(i)),
+    dy = map.mesh.y(j) - map.mesh.y(i),
+    h = Math.hypot(dx, dy),
+    ex = dx / h,
+    ey = dy / h;
+  const x = a[0] - (map.mesh.x(i) + dx / 2),
+    y = a[1] - (map.mesh.y(i) + map.mesh.y(j)) / 2;
+  const u = (x * ex + y * ey) / (1.5 * h),
+    v = (-x * ey + y * ex) / ((Math.sqrt(3) * h) / 2),
+    du = (d[0] * ex + d[1] * ey) / (1.5 * h),
+    dv = (-d[0] * ey + d[1] * ex) / ((Math.sqrt(3) * h) / 2);
+  let fraction = 1;
+  for (const sx of [-1, 1])
+    for (const sy of [-1, 1]) {
+      const rate = sx * du + sy * dv;
+      if (rate > 0) fraction = Math.min(fraction, Math.max(0, (1 - sx * u - sy * v) / rate));
+    }
+  return [a[0] + d[0] * fraction, a[1] + d[1] * fraction] as Coordinate;
+}
+function handle(map: PhysicalField, paths: RiverPaths, i: number, j: number, end: boolean) {
+  const source = position(paths, i),
+    target = position(paths, j),
+    direction = tangent(map, paths, end ? j : i),
+    chord: Coordinate = [meshDeltaX(map.mesh, target[0] - source[0]), target[1] - source[1]];
+  target[0] = source[0] + chord[0];
+  // A joining tributary must not turn upstream to borrow the main stem's tangent.
+  const vector = direction[0] * chord[0] + direction[1] * chord[1] > 0 ? direction : chord;
+  const scale = (Math.hypot(...chord) / (3 * Math.hypot(...vector))) * (end ? -1 : 1);
+  return corridorHandle(map, i, j, end ? target : source, [vector[0] * scale, vector[1] * scale]);
+}
+function flatness(a: Coordinate, b: Coordinate, c: Coordinate, d: Coordinate) {
+  const dx = d[0] - a[0],
+    dy = d[1] - a[1],
+    length = Math.hypot(dx, dy);
+  // A chord of no length (a step through a cell corner whose portal is the path point itself)
+  // is already flat; dividing it would never end.
+  if (!(length > 0)) return 0;
+  return (
+    Math.max(
+      Math.abs(dx * (b[1] - a[1]) - dy * (b[0] - a[0])),
+      Math.abs(dx * (c[1] - a[1]) - dy * (c[0] - a[0]))
+    ) / length
+  );
+}
+function appendCurve(
+  points: Coordinate[],
+  segment: number,
+  tolerance: number,
+  stations: Station[],
+  range: [number, number] = [0, 1]
+) {
+  const pending = [{ points, start: range[0], end: range[1] }];
+  while (pending.length) {
+    const {
+      points: [a, b, c, d],
+      start,
+      end,
+    } = pending.pop()!;
+    if (flatness(a, b, c, d) <= tolerance) {
+      stations.push({ point: d, segment, fraction: end });
+      continue;
+    }
+    const ab = mix(a, b),
+      bc = mix(b, c),
+      cd = mix(c, d),
+      abc = mix(ab, bc),
+      bcd = mix(bc, cd),
+      center = mix(abc, bcd),
+      middle = (start + end) / 2;
+    pending.push({ points: [center, bcd, cd, d], start: middle, end });
+    pending.push({ points: [a, ab, abc, center], start, end: middle });
+  }
+}
+function profile(members: number[], stations: Station[], values: Pick<ReadBand, "get">, scale = 1) {
+  return stations.map(
+    ({ segment, fraction }) =>
+      (values.get(members[segment]) * (1 - fraction) +
+        values.get(members[segment + 1]) * fraction) *
+      scale
+  );
+}
+/** The mouth is generation's last land cell to receiving water edge; only that segment can enter water. */
+function clipReceivingWater(
+  map: PhysicalField,
+  paths: RiverPaths,
+  members: number[],
+  stations: Station[]
+) {
+  const receiving = members.findIndex((i) => map.WaterKindCodes.get(i) !== 0);
+  if (!paths.elevationAt || receiving < 1) return stations;
+  const wet = receivingWater(map, paths, members[receiving]),
+    final = receiving - 1;
+  for (let n = 0; n < stations.length - 1; n++) {
+    const a = stations[n],
+      b = stations[n + 1];
+    if (b.segment < final || !wet(...b.point)) continue;
+    let low = 0,
+      high = 1;
+    while ((high - low) * Math.hypot(b.point[0] - a.point[0], b.point[1] - a.point[1]) > 1e-6) {
+      const middle = (low + high) / 2;
+      if (!wet(...mix(a.point, b.point, middle))) low = middle;
+      else high = middle;
+    }
+    const fraction = (low + high) / 2;
+    const start = a.segment === b.segment ? a.fraction : 0;
+    return [
+      ...stations.slice(0, n + 1),
+      {
+        point: mix(a.point, b.point, fraction),
+        segment: b.segment,
+        fraction: start + (b.fraction - start) * fraction,
+      },
+    ];
+  }
+  return stations;
+}
+function receivingWater(map: PhysicalField, paths: RiverPaths, last: number) {
+  const shape =
+    map.WaterKindCodes.get(last) === 1
+      ? paths.water?.ocean
+      : paths.water?.lakes.get(map.WaterBodyIds.get(last));
+  if (shape) {
+    const covers = spatial.pointCoverage(shape);
+    return (x: number, y: number) =>
+      covers({ x: meshPointX(map.mesh, x) + map.mesh.origin[0], y: y + map.mesh.origin[1], z: 0 });
+  }
+  const level = map.WaterSurfaceElevations.get(last);
+  return (x: number, y: number) => Number.isFinite(level) && paths.elevationAt!(x, y) < level;
+}
+
+/** The same continuous channel and longitudinal profiles feed drawing, inspection and export. */
+export function riverPath(map: PhysicalField, paths: RiverPaths, members: number[]) {
+  let stations: Station[] = [{ point: position(paths, members[0]), segment: 0, fraction: 0 }];
+  for (let segment = 0; segment < members.length - 1; segment++) {
+    const i = members[segment],
+      j = members[segment + 1];
+    const a = position(paths, i),
+      d = position(paths, j);
+    d[0] = a[0] + meshDeltaX(map.mesh, d[0] - a[0]);
+    const offset = stations.at(-1)!.point[0] - a[0],
+      start = stations.length;
+    appendCurve(
+      [a, handle(map, paths, i, j, false), handle(map, paths, i, j, true), d],
+      segment,
+      Math.min(map.scale.length(0.000025), map.scale.cells(1 / 64)),
+      stations
+    );
+    for (let n = start; n < stations.length; n++) stations[n].point[0] += offset;
+  }
+  stations = clipReceivingWater(map, paths, members, stations);
+  const owned = (part: RiverSample) => ({ get: (cell: number) => riverSample(map, cell, part) });
+  return {
+    geometry: {
+      type: "LineString" as const,
+      coordinates: stations.map(({ point: [x, y] }) => [
+        x + map.mesh.origin[0],
+        y + map.mesh.origin[1],
+      ]),
+    },
+    profiles: {
+      discharges: profile(members, stations, { get: (cell) => waterAt(map, cell) }),
+      widths: profile(members, stations, owned("width")),
+      depths: profile(members, stations, owned("depth")),
+      // The months of the year each stretch carries a river's flow: twelve runs all year.
+      flowingMonths: profile(members, stations, owned("months")),
+      catchmentAreas: profile(members, stations, owned("catchment")),
+      elevations: profile(members, stations, {
+        get: (cell) =>
+          MapScale.metres(riverSample(map, cell, "bed"), "native") +
+          riverSample(map, cell, "depth"),
+      }),
+      bedElevations: profile(members, stations, owned("bed"), MapScale.metres(1, "native")),
+    },
+  };
+}

@@ -1,4 +1,4 @@
-import type { MagicSystem } from "@atlas/domain";
+import type { MagicSystem } from "@atlas/context";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { CartographicDecision } from "./CartographicDecisions";
 import { cartographicControls } from "./cartographicDraft";

@@ -1,0 +1,6416 @@
+{
+  "recipe": {
+    "schemaVersion": 3,
+    "seed": 104729,
+    "quality": "standard",
+    "domains": [
+      "physical",
+      "magic",
+      "cultural",
+      "political",
+      "built"
+    ],
+    "parameters": {
+      "mapBoundary": 1,
+      "continents": 3,
+      "oceanicPlates": 2,
+      "provinces": 42,
+      "continentalCrustFraction": 0.48,
+      "landFraction": 0.38,
+      "temperature": 15,
+      "rainfall": 1,
+      "erosion": 1,
+      "seaLevel": 0,
+      "southLatitude": -70,
+      "northLatitude": 70,
+      "latitudeProjection": 1,
+      "impacts": 3,
+      "impactSize": 1,
+      "landscapeLandmarks": 4,
+      "magicLandmarks": 3,
+      "volcanism": 0.7,
+      "plateDrift": 1.2,
+      "glaciers": 0.5,
+      "coastalErosion": 1.2,
+      "vegetation": 1.5,
+      "grazing": 0.5,
+      "cultureCount": 6,
+      "polityCount": 7,
+      "culturalMobility": 1,
+      "politicalReach": 1,
+      "townThreshold": 5000,
+      "cityReach": 0.05,
+      "roadTraffic": 1000,
+      "marketTravel": 1,
+      "highways": 2
+    },
+    "features": {
+      "physical.foundation": {
+        "enabled": true,
+        "settings": {
+          "continents": 3,
+          "oceanicPlates": 2,
+          "provinces": 42,
+          "continentalCrustFraction": 0.48,
+          "landFraction": 0.38,
+          "mapBoundary": 1
+        },
+        "configuration": {
+          "profile": {
+            "ContinentalAssemblyClustering": 1,
+            "ContinentalAssemblyGrowthVariation": 0.5,
+            "ContinentalMajorAssemblies": 2,
+            "ContinentalMajorGrowth": 3,
+            "ContinentalAssemblySeparationDepth": 0.2,
+            "ContinentalWarpStrength": 0.025,
+            "InteriorReliefStrength": 0.07,
+            "ElevationVariationStrength": 0.05
+          }
+        }
+      },
+      "physical.tectonic-history": {
+        "enabled": true,
+        "settings": {
+          "plateDrift": 1.2
+        },
+        "configuration": {
+          "profile": {}
+        }
+      },
+      "physical.mountains": {
+        "enabled": true,
+        "settings": {},
+        "configuration": {
+          "profile": {
+            "OrogenicInitialShortening": 0.025
+          }
+        }
+      },
+      "physical.volcanism": {
+        "enabled": true,
+        "settings": {
+          "volcanism": 0.7
+        },
+        "configuration": {
+          "profile": {
+            "MantlePlumeCount": 2
+          }
+        }
+      },
+      "physical.impacts": {
+        "enabled": true,
+        "settings": {
+          "impacts": 3,
+          "impactSize": 1
+        },
+        "configuration": {
+          "profile": {
+            "ImpactPrimordialShare": 1000
+          }
+        }
+      },
+      "physical.landmarks": {
+        "enabled": true,
+        "settings": {
+          "landscapeLandmarks": 4,
+          "magicLandmarks": 3
+        }
+      },
+      "physical.hillslopes": {
+        "enabled": true,
+        "settings": {}
+      },
+      "material.load-response": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.continental-margins": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.coastal-construction": {
+        "enabled": true,
+        "settings": {},
+        "configuration": {
+          "profile": {
+            "CoastalDetailStrength": 450,
+            "CoastalDetailScale": 0.025,
+            "CoastalDetailWarp": 0.0025,
+            "CoastalDetailPassiveAmplitude": 0.000006200000000000001,
+            "CoastalDetailConvergentAmplitude": 0.0000088,
+            "CoastalDetailRiftedAmplitude": 0.0000074,
+            "CoastalDetailTransformAmplitude": 0.0000034
+          }
+        }
+      },
+      "physical.fractures": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.geothermal": {
+        "enabled": true,
+        "settings": {}
+      },
+      "ocean.geography": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.ocean-circulation": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.climate": {
+        "enabled": true,
+        "settings": {
+          "temperature": 15,
+          "rainfall": 1,
+          "seaLevel": 0,
+          "southLatitude": -70,
+          "northLatitude": 70,
+          "latitudeProjection": 1
+        }
+      },
+      "water.routing": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.river-incision": {
+        "enabled": true,
+        "settings": {
+          "erosion": 1
+        },
+        "configuration": {
+          "profile": {
+            "FluvialEquilibriumGradient": 0.0004
+          }
+        }
+      },
+      "material.fluvial-transport": {
+        "enabled": true,
+        "settings": {},
+        "configuration": {
+          "profile": {
+            "SedimentTransportFraction": 700,
+            "SedimentCarry": 0.02
+          }
+        }
+      },
+      "physical.land-ice": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.glacial-sculpting": {
+        "enabled": true,
+        "settings": {
+          "glaciers": 0.5
+        },
+        "configuration": {
+          "profile": {
+            "IceAltitudeBalance": 0
+          }
+        }
+      },
+      "physical.sea-ice": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.coastal-evolution": {
+        "enabled": true,
+        "settings": {
+          "coastalErosion": 1.2
+        },
+        "configuration": {
+          "profile": {
+            "CoastalDepositionFraction": 700,
+            "CoastalDepositionReach": 0.00625
+          }
+        }
+      },
+      "physical.river-networks": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.floodplains": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.deltas": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.landforms": {
+        "enabled": true,
+        "settings": {}
+      },
+      "physical.lifecycle": {
+        "enabled": true,
+        "settings": {},
+        "configuration": {
+          "epochs": [
+            {
+              "lengthUnits": "relative",
+              "id": "Formation",
+              "duration": 1000,
+              "tectonicDurationMyr": 20,
+              "plateTravel": 1,
+              "tectonics": 1,
+              "hydrology": 0.5,
+              "ice": 0,
+              "coasts": 0.5,
+              "temperature": 15,
+              "seaLevel": 0,
+              "impacts": 0,
+              "volcanism": 1
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "Cold age",
+              "duration": 1000,
+              "tectonicDurationMyr": 20,
+              "plateTravel": 0.65,
+              "tectonics": 0.7,
+              "hydrology": 1,
+              "ice": 1,
+              "coasts": 1,
+              "temperature": -3,
+              "seaLevel": 0,
+              "impacts": 0,
+              "volcanism": 0.4
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "Present",
+              "duration": 1000,
+              "tectonicDurationMyr": 20,
+              "plateTravel": 0.25,
+              "tectonics": 0.4,
+              "hydrology": 1,
+              "ice": 0,
+              "coasts": 1,
+              "temperature": 15,
+              "seaLevel": 0,
+              "impacts": 0,
+              "volcanism": 0.1
+            }
+          ],
+          "history": {
+            "plateTravel": [
+              1,
+              0.65,
+              0.25
+            ]
+          }
+        }
+      },
+      "ecology.living": {
+        "enabled": true,
+        "settings": {
+          "vegetation": 1.5,
+          "grazing": 0.5
+        },
+        "configuration": {
+          "epochs": {
+            "Formation": {
+              "rainfall": 1,
+              "seasonality": 0.3,
+              "productivity": 1,
+              "fire": 1,
+              "migration": 1,
+              "recovery": 1
+            },
+            "Cold age": {
+              "rainfall": 1,
+              "seasonality": 0.3,
+              "productivity": 1,
+              "fire": 1,
+              "migration": 1,
+              "recovery": 1
+            },
+            "Present": {
+              "rainfall": 1,
+              "seasonality": 0.3,
+              "productivity": 1,
+              "fire": 1,
+              "migration": 1,
+              "recovery": 1
+            }
+          },
+          "landscape": {
+            "rainfall": 1,
+            "seasonality": 0.3,
+            "productivity": 1,
+            "fire": 1,
+            "migration": 1,
+            "recovery": 2
+          },
+          "glaciated": false
+        }
+      },
+      "magic.configured": {
+        "enabled": true,
+        "settings": {},
+        "configuration": {
+          "magicSystems": [
+            {
+              "lengthUnits": "relative",
+              "id": "fire",
+              "name": "Fire",
+              "enabled": true,
+              "origins": [
+                {
+                  "id": "vein",
+                  "source": "geothermal",
+                  "propagation": "fracture",
+                  "renewal": "conduit-fed",
+                  "parameters": {},
+                  "stocks": [
+                    {
+                      "id": "held",
+                      "reservoir": "held",
+                      "carriers": [
+                        "crust"
+                      ]
+                    },
+                    {
+                      "id": "spent",
+                      "reservoir": "spent",
+                      "carriers": [
+                        "crust",
+                        "river"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "fallen",
+                  "source": "impact",
+                  "propagation": "local",
+                  "renewal": "finite",
+                  "parameters": {},
+                  "stocks": [
+                    {
+                      "id": "held",
+                      "reservoir": "held",
+                      "carriers": [
+                        "crust",
+                        "river"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "forge",
+                  "source": "forge",
+                  "propagation": "local",
+                  "renewal": "accumulating",
+                  "parameters": {},
+                  "stocks": [
+                    {
+                      "id": "cracked",
+                      "reservoir": "forge",
+                      "carriers": [
+                        "crust",
+                        "people"
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "phase": "climate",
+              "strength": 1,
+              "parameters": {
+                "sourceThreshold": 300,
+                "sourceSpacing": 0.0225,
+                "baseCost": 3,
+                "conductanceDivisor": 12,
+                "baseInput": 360,
+                "logScale": 66,
+                "iceRetention": 0.0003,
+                "coldRetentionDistance": 0.0025,
+                "accumulationArea": 0.00000625,
+                "featureNoiseScale": 0.0175,
+                "rayCount": 1200,
+                "rayDistance": 1.1,
+                "coastalRayDistance": 0.325,
+                "wakeDistance": 0.475,
+                "beamWidth": 0.005,
+                "coastalSources": 200,
+                "coastalSourceDistance": 0.025,
+                "wakeSources": 260,
+                "coastalThreshold": 140,
+                "waveAmplification": 0.36,
+                "currentAmplification": 0.18,
+                "rayDecay": 3,
+                "rayIntensity": 27.8,
+                "wakeStrength": 180,
+                "conduitBudget": 2400,
+                "fallenDensity": 400000000,
+                "fallenRelease": 0.04,
+                "strainCracking": 0.3,
+                "iceCracking": 0.5,
+                "iceCrackDepth": 0.000075,
+                "frostCracking": 0.05,
+                "impactShock": 0.3,
+                "impactHeatShare": 0.6,
+                "placerMobility": 0.15,
+                "buryDepth": 0.000005,
+                "reopenStrain": 600,
+                "reopenShare": 0.4,
+                "exhumedRelease": 0.3,
+                "fanBarrenEpochs": 3,
+                "fanBarrenDepth": 5e-7,
+                "relictStrength": 0.5,
+                "iceCarry": 0.8,
+                "meltwaterLoss": 0.2,
+                "iceChargeSaturation": 8000000,
+                "thawSubsidence": 7.5e-7,
+                "shelfSaturation": 500,
+                "stormFrontGradient": 30,
+                "standAge": 800,
+                "standCover": 0.6,
+                "peatDepth": 10,
+                "rootCost": 6,
+                "rootFloor": 0.12,
+                "springFlow": 6.25e-19,
+                "springChargeSaturation": 4000000,
+                "springRock": 700,
+                "overdrawShare": 0.5,
+                "sinkDepth": 0.000001,
+                "animalCarry": 0.02,
+                "strataShare": 0.02,
+                "organicChargeAffinity": 4,
+                "groveSap": 600,
+                "sapLoss": 0.3,
+                "forgeStrength": 1000,
+                "forgeCooling": 0.5,
+                "saltPerDeath": 3.125e-7,
+                "saltPerLakeMetre": 160000000,
+                "saltFull": 400,
+                "saltMaterialDensity": 8000000000,
+                "brineFlush": 0.6,
+                "seepShare": 0.5,
+                "crustShare": 0.5,
+                "dissolveShare": 0.3,
+                "dustShare": 0.15,
+                "dustSettle": 0.5,
+                "glassBed": 800,
+                "glassResistance": 300,
+                "desiccation": 0.5,
+                "domeStrain": 600,
+                "domeRise": 7.5e-7,
+                "domeSeep": 0.05,
+                "saltBurn": 0.8,
+                "tenureFull": 300000000,
+                "pilgrimageBonus": 0.1,
+                "lineFull": 10000,
+                "roadFull": 10000000,
+                "wardReach": 0.01,
+                "auroraReinforce": 0.3,
+                "wardSpill": 200,
+                "tearFloor": 0.05,
+                "tearFull": 0.4,
+                "wildShift": 0.3,
+                "doorStrain": 400,
+                "doorDistance": 0.075,
+                "doorMatch": 150,
+                "wildRelief": 0.000005,
+                "wildShuffle": 0.3,
+                "doorChill": 30,
+                "doorPool": 7.5e-7,
+                "doorTravel": 0.00125,
+                "knitVerdure": 0.8,
+                "holdSalting": 1
+              },
+              "effects": {
+                "heat": 0.36,
+                "iceMelt": 1.25e-7,
+                "rockResistance": 900,
+                "coastalForcing": 0,
+                "quickening": 1,
+                "conduitOpening": 120,
+                "stillness": 0,
+                "icePersistence": 0,
+                "upwelling": 0,
+                "seaSurface": 0,
+                "wakeWarming": 0,
+                "fog": 0,
+                "storm": 0,
+                "verdure": 0,
+                "salting": 0,
+                "warding": 0,
+                "tearing": 0,
+                "vegetationGrowth": 0,
+                "fire": 0.3,
+                "organicPreservation": 0,
+                "animalToxicity": 0,
+                "seedDispersal": 0
+              },
+              "history": {
+                "retention": 1,
+                "storage": 0,
+                "advect": true
+              },
+              "features": [
+                {
+                  "cartography": "site",
+                  "id": "core",
+                  "name": "Fire core",
+                  "priority": 90,
+                  "seeds": [
+                    [
+                      {
+                        "field": "source",
+                        "min": 300
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 1
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "course",
+                  "id": "vein",
+                  "name": "Thermal vein",
+                  "priority": 20,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 320
+                      },
+                      {
+                        "field": "fracture",
+                        "min": 430
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 230
+                      },
+                      {
+                        "field": "fracture",
+                        "min": 320
+                      }
+                    ]
+                  ],
+                  "coverage": {
+                    "field": "intensity",
+                    "floor": 230,
+                    "full": 800
+                  }
+                },
+                {
+                  "cartography": "site",
+                  "id": "spring",
+                  "name": "Hot spring",
+                  "priority": 70,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 560
+                      },
+                      {
+                        "field": "water",
+                        "values": [
+                          2
+                        ]
+                      }
+                    ],
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 560
+                      },
+                      {
+                        "field": "river",
+                        "min": 1
+                      }
+                    ],
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 560
+                      },
+                      {
+                        "field": "moisture",
+                        "min": 650
+                      }
+                    ],
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "geothermal",
+                        "min": 720
+                      },
+                      {
+                        "field": "temperature",
+                        "min": 335
+                      },
+                      {
+                        "field": "moisture",
+                        "min": 260
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 340
+                      },
+                      {
+                        "field": "water",
+                        "values": [
+                          2
+                        ]
+                      }
+                    ],
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 340
+                      },
+                      {
+                        "field": "river",
+                        "min": 1
+                      }
+                    ],
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 340
+                      },
+                      {
+                        "field": "moisture",
+                        "min": 560
+                      }
+                    ],
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "geothermal",
+                        "min": 650
+                      },
+                      {
+                        "field": "temperature",
+                        "min": 300
+                      },
+                      {
+                        "field": "moisture",
+                        "min": 220
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "site",
+                  "id": "vent",
+                  "name": "Hydrothermal vent",
+                  "priority": 65,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          1
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 430
+                      }
+                    ],
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          1
+                        ]
+                      },
+                      {
+                        "field": "geothermal",
+                        "min": 720
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          1
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 340
+                      }
+                    ],
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          1
+                        ]
+                      },
+                      {
+                        "field": "geothermal",
+                        "min": 630
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "basalt",
+                  "name": "Basalt flat",
+                  "priority": 25,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 560
+                      },
+                      {
+                        "field": "slope",
+                        "max": 0.0045
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 470
+                      },
+                      {
+                        "field": "slope",
+                        "max": 0.006
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "scar",
+                  "name": "Basalt scar",
+                  "priority": 30,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "sealed",
+                        "min": 1
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "site",
+                  "id": "crater",
+                  "name": "Crater lake",
+                  "priority": 85,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          2
+                        ]
+                      },
+                      {
+                        "field": "stock:fallen/held",
+                        "min": 1000
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "fan",
+                  "name": "Ejecta fan",
+                  "priority": 28,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "source:fallen",
+                        "min": 1
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "course",
+                  "id": "placer",
+                  "name": "Placer band",
+                  "priority": 60,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "river",
+                        "min": 1
+                      },
+                      {
+                        "field": "stock:fallen/held",
+                        "min": 1000
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "river",
+                        "min": 1
+                      },
+                      {
+                        "field": "stock:fallen/held",
+                        "min": 200
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "deviation",
+                  "name": "Compass deviation",
+                  "priority": 5,
+                  "seeds": [
+                    [
+                      {
+                        "field": "stock:fallen/held",
+                        "min": 500
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "halo",
+                  "name": "Thawed halo",
+                  "priority": 10,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 210
+                      },
+                      {
+                        "field": "temperature",
+                        "min": 250
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 140
+                      },
+                      {
+                        "field": "temperature",
+                        "min": 225
+                      },
+                      {
+                        "field": "fracture",
+                        "min": 170
+                      },
+                      {
+                        "field": "scatter",
+                        "min": 0.14,
+                        "salt": 16153,
+                        "index": 1457
+                      }
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "aurora",
+              "name": "Aurora",
+              "enabled": true,
+              "origins": [
+                {
+                  "id": "field",
+                  "source": "cold",
+                  "propagation": "cold-drainage",
+                  "renewal": "accumulating",
+                  "parameters": {},
+                  "stocks": [
+                    {
+                      "id": "ice",
+                      "reservoir": "ice",
+                      "carriers": [
+                        "ice"
+                      ]
+                    },
+                    {
+                      "id": "ground",
+                      "reservoir": "ground",
+                      "carriers": [
+                        "crust"
+                      ]
+                    },
+                    {
+                      "id": "moraine",
+                      "reservoir": "moraine",
+                      "carriers": [
+                        "crust"
+                      ]
+                    },
+                    {
+                      "id": "shelf",
+                      "reservoir": "shelf",
+                      "carriers": [
+                        "current"
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "phase": "post-glacial",
+              "strength": 1,
+              "parameters": {
+                "sourceThreshold": 300,
+                "sourceSpacing": 0.01125,
+                "baseCost": 4,
+                "conductanceDivisor": 26,
+                "baseInput": 360,
+                "logScale": 66,
+                "iceRetention": 0.0003,
+                "coldRetentionDistance": 0.0025,
+                "accumulationArea": 0.00000625,
+                "featureNoiseScale": 0.0175,
+                "rayCount": 1200,
+                "rayDistance": 1.1,
+                "coastalRayDistance": 0.325,
+                "wakeDistance": 0.475,
+                "beamWidth": 0.005,
+                "coastalSources": 200,
+                "coastalSourceDistance": 0.025,
+                "wakeSources": 260,
+                "coastalThreshold": 140,
+                "waveAmplification": 0.36,
+                "currentAmplification": 0.18,
+                "rayDecay": 3,
+                "rayIntensity": 27.8,
+                "wakeStrength": 180,
+                "conduitBudget": 2400,
+                "fallenDensity": 400000000,
+                "fallenRelease": 0.04,
+                "strainCracking": 0.3,
+                "iceCracking": 0.5,
+                "iceCrackDepth": 0.000075,
+                "frostCracking": 0.05,
+                "impactShock": 0.3,
+                "impactHeatShare": 0.6,
+                "placerMobility": 0.15,
+                "buryDepth": 0.000005,
+                "reopenStrain": 600,
+                "reopenShare": 0.4,
+                "exhumedRelease": 0.3,
+                "fanBarrenEpochs": 3,
+                "fanBarrenDepth": 5e-7,
+                "relictStrength": 0.5,
+                "iceCarry": 0.8,
+                "meltwaterLoss": 0.2,
+                "iceChargeSaturation": 8000000,
+                "thawSubsidence": 7.5e-7,
+                "shelfSaturation": 500,
+                "stormFrontGradient": 30,
+                "standAge": 800,
+                "standCover": 0.6,
+                "peatDepth": 10,
+                "rootCost": 6,
+                "rootFloor": 0.12,
+                "springFlow": 6.25e-19,
+                "springChargeSaturation": 4000000,
+                "springRock": 700,
+                "overdrawShare": 0.5,
+                "sinkDepth": 0.000001,
+                "animalCarry": 0.02,
+                "strataShare": 0.02,
+                "organicChargeAffinity": 4,
+                "groveSap": 600,
+                "sapLoss": 0.3,
+                "forgeStrength": 1000,
+                "forgeCooling": 0.5,
+                "saltPerDeath": 3.125e-7,
+                "saltPerLakeMetre": 160000000,
+                "saltFull": 400,
+                "saltMaterialDensity": 8000000000,
+                "brineFlush": 0.6,
+                "seepShare": 0.5,
+                "crustShare": 0.5,
+                "dissolveShare": 0.3,
+                "dustShare": 0.15,
+                "dustSettle": 0.5,
+                "glassBed": 800,
+                "glassResistance": 300,
+                "desiccation": 0.5,
+                "domeStrain": 600,
+                "domeRise": 7.5e-7,
+                "domeSeep": 0.05,
+                "saltBurn": 0.8,
+                "tenureFull": 300000000,
+                "pilgrimageBonus": 0.1,
+                "lineFull": 10000,
+                "roadFull": 10000000,
+                "wardReach": 0.01,
+                "auroraReinforce": 0.3,
+                "wardSpill": 200,
+                "tearFloor": 0.05,
+                "tearFull": 0.4,
+                "wildShift": 0.3,
+                "doorStrain": 400,
+                "doorDistance": 0.075,
+                "doorMatch": 150,
+                "wildRelief": 0.000005,
+                "wildShuffle": 0.3,
+                "doorChill": 30,
+                "doorPool": 7.5e-7,
+                "doorTravel": 0.00125,
+                "knitVerdure": 0.8,
+                "holdSalting": 1
+              },
+              "effects": {
+                "heat": -0.03,
+                "iceMelt": 0,
+                "rockResistance": -520,
+                "coastalForcing": 0,
+                "quickening": 0,
+                "conduitOpening": 0,
+                "stillness": 1,
+                "icePersistence": 0.9,
+                "upwelling": 0,
+                "seaSurface": 0,
+                "wakeWarming": 0,
+                "fog": 0,
+                "storm": 0,
+                "verdure": 0,
+                "salting": 0,
+                "warding": 0,
+                "tearing": 0,
+                "vegetationGrowth": 0,
+                "fire": 0,
+                "organicPreservation": 1.5,
+                "animalToxicity": 0,
+                "seedDispersal": 0
+              },
+              "history": {
+                "retention": 0.3,
+                "storage": 0.5,
+                "advect": true
+              },
+              "features": [
+                {
+                  "cartography": "area",
+                  "id": "field",
+                  "name": "Aurora field",
+                  "priority": 40,
+                  "seeds": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 470
+                      },
+                      {
+                        "field": "ice",
+                        "min": 0.000065
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 380
+                      },
+                      {
+                        "field": "ice",
+                        "min": 0.000045
+                      }
+                    ]
+                  ],
+                  "coverage": {
+                    "field": "intensity",
+                    "floor": 380,
+                    "full": 900
+                  }
+                },
+                {
+                  "cartography": "site",
+                  "id": "well",
+                  "name": "Light well",
+                  "priority": 80,
+                  "seeds": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 680
+                      },
+                      {
+                        "field": "landform",
+                        "values": [
+                          10,
+                          4
+                        ]
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 590
+                      },
+                      {
+                        "field": "landform",
+                        "values": [
+                          10,
+                          4,
+                          3
+                        ]
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "prism",
+                  "name": "Frost prism",
+                  "priority": 45,
+                  "seeds": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 510
+                      },
+                      {
+                        "field": "landform",
+                        "values": [
+                          6,
+                          5
+                        ]
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 420
+                      },
+                      {
+                        "field": "landform",
+                        "values": [
+                          6,
+                          5
+                        ]
+                      },
+                      {
+                        "field": "scatter",
+                        "min": 0.25,
+                        "salt": 30634,
+                        "index": 467
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "melt",
+                  "name": "Melt line",
+                  "priority": 15,
+                  "seeds": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 650
+                      },
+                      {
+                        "field": "ice",
+                        "min": 80,
+                        "max": 360
+                      },
+                      {
+                        "field": "temperature",
+                        "min": 275,
+                        "max": 380
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 560
+                      },
+                      {
+                        "field": "ice",
+                        "min": 50,
+                        "max": 430
+                      },
+                      {
+                        "field": "temperature",
+                        "min": 240,
+                        "max": 420
+                      }
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "pressure",
+              "name": "Pressure",
+              "enabled": true,
+              "origins": [
+                {
+                  "id": "locus",
+                  "source": "deep-ocean",
+                  "propagation": "ocean-rays",
+                  "renewal": "continuous",
+                  "parameters": {},
+                  "stocks": []
+                }
+              ],
+              "phase": "climate",
+              "strength": 1,
+              "parameters": {
+                "sourceThreshold": 300,
+                "sourceSpacing": 0.01125,
+                "baseCost": 4,
+                "conductanceDivisor": 26,
+                "baseInput": 360,
+                "logScale": 66,
+                "iceRetention": 0.0003,
+                "coldRetentionDistance": 0.0025,
+                "accumulationArea": 0.00000625,
+                "featureNoiseScale": 0.0175,
+                "rayCount": 128,
+                "rayDistance": 0.5,
+                "coastalRayDistance": 0.075,
+                "wakeDistance": 0.175,
+                "beamWidth": 0.005,
+                "coastalSources": 24,
+                "coastalSourceDistance": 0.025,
+                "wakeSources": 16,
+                "coastalThreshold": 140,
+                "waveAmplification": 0.36,
+                "currentAmplification": 0.18,
+                "rayDecay": 8,
+                "rayIntensity": 110,
+                "wakeStrength": 150,
+                "conduitBudget": 2400,
+                "fallenDensity": 400000000,
+                "fallenRelease": 0.04,
+                "strainCracking": 0.3,
+                "iceCracking": 0.5,
+                "iceCrackDepth": 0.000075,
+                "frostCracking": 0.05,
+                "impactShock": 0.3,
+                "impactHeatShare": 0.6,
+                "placerMobility": 0.15,
+                "buryDepth": 0.000005,
+                "reopenStrain": 600,
+                "reopenShare": 0.4,
+                "exhumedRelease": 0.3,
+                "fanBarrenEpochs": 3,
+                "fanBarrenDepth": 5e-7,
+                "relictStrength": 0.5,
+                "iceCarry": 0.8,
+                "meltwaterLoss": 0.2,
+                "iceChargeSaturation": 8000000,
+                "thawSubsidence": 7.5e-7,
+                "shelfSaturation": 500,
+                "stormFrontGradient": 30,
+                "standAge": 800,
+                "standCover": 0.6,
+                "peatDepth": 10,
+                "rootCost": 6,
+                "rootFloor": 0.12,
+                "springFlow": 6.25e-19,
+                "springChargeSaturation": 4000000,
+                "springRock": 700,
+                "overdrawShare": 0.5,
+                "sinkDepth": 0.000001,
+                "animalCarry": 0.02,
+                "strataShare": 0.02,
+                "organicChargeAffinity": 4,
+                "groveSap": 600,
+                "sapLoss": 0.3,
+                "forgeStrength": 1000,
+                "forgeCooling": 0.5,
+                "saltPerDeath": 3.125e-7,
+                "saltPerLakeMetre": 160000000,
+                "saltFull": 400,
+                "saltMaterialDensity": 8000000000,
+                "brineFlush": 0.6,
+                "seepShare": 0.5,
+                "crustShare": 0.5,
+                "dissolveShare": 0.3,
+                "dustShare": 0.15,
+                "dustSettle": 0.5,
+                "glassBed": 800,
+                "glassResistance": 300,
+                "desiccation": 0.5,
+                "domeStrain": 600,
+                "domeRise": 7.5e-7,
+                "domeSeep": 0.05,
+                "saltBurn": 0.8,
+                "tenureFull": 300000000,
+                "pilgrimageBonus": 0.1,
+                "lineFull": 10000,
+                "roadFull": 10000000,
+                "wardReach": 0.01,
+                "auroraReinforce": 0.3,
+                "wardSpill": 200,
+                "tearFloor": 0.05,
+                "tearFull": 0.4,
+                "wildShift": 0.3,
+                "doorStrain": 400,
+                "doorDistance": 0.075,
+                "doorMatch": 150,
+                "wildRelief": 0.000005,
+                "wildShuffle": 0.3,
+                "doorChill": 30,
+                "doorPool": 7.5e-7,
+                "doorTravel": 0.00125,
+                "knitVerdure": 0.8,
+                "holdSalting": 1
+              },
+              "effects": {
+                "heat": 0,
+                "iceMelt": 0,
+                "rockResistance": 0,
+                "coastalForcing": 1,
+                "quickening": 0,
+                "conduitOpening": 0,
+                "stillness": 0,
+                "icePersistence": 0,
+                "upwelling": 1,
+                "seaSurface": -0.1,
+                "wakeWarming": 30,
+                "fog": 0.8,
+                "storm": 0.7,
+                "verdure": 0,
+                "salting": 0,
+                "warding": 0,
+                "tearing": 0,
+                "vegetationGrowth": 0,
+                "fire": 0,
+                "organicPreservation": 0,
+                "animalToxicity": 0.5,
+                "seedDispersal": 0
+              },
+              "history": {
+                "retention": 1,
+                "storage": 0,
+                "advect": true
+              },
+              "features": [
+                {
+                  "cartography": "site",
+                  "id": "locus",
+                  "name": "Deep pressure locus",
+                  "priority": 95,
+                  "seeds": [
+                    [
+                      {
+                        "field": "source",
+                        "min": 1
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "crush",
+                  "name": "Crush zone",
+                  "priority": 60,
+                  "seeds": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 360
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 270
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "front",
+                  "name": "Upwelling front",
+                  "priority": 58,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          1
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 250
+                      },
+                      {
+                        "field": "upwelling",
+                        "min": 250
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          1
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 160
+                      },
+                      {
+                        "field": "upwelling",
+                        "min": 160
+                      }
+                    ]
+                  ],
+                  "coverage": {
+                    "field": "intensity",
+                    "floor": 160,
+                    "full": 700
+                  }
+                },
+                {
+                  "cartography": "course",
+                  "id": "wake",
+                  "name": "Ancient wake",
+                  "priority": 55,
+                  "seeds": [
+                    [
+                      {
+                        "field": "wake",
+                        "min": 1
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "lattice",
+                  "name": "Interference lattice",
+                  "priority": 35,
+                  "seeds": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 185
+                      },
+                      {
+                        "field": "noise",
+                        "min": 0.34
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "intensity",
+                        "min": 95
+                      },
+                      {
+                        "field": "noise",
+                        "min": 0.28
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "site",
+                  "id": "rogue",
+                  "name": "Rogue wave impact",
+                  "priority": 50,
+                  "seeds": [
+                    [
+                      {
+                        "field": "rogue",
+                        "min": 1
+                      }
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "greenwood",
+              "name": "Greenwood",
+              "enabled": true,
+              "origins": [
+                {
+                  "id": "stand",
+                  "source": "verdant",
+                  "propagation": "roots",
+                  "renewal": "accumulating",
+                  "parameters": {},
+                  "stocks": [
+                    {
+                      "id": "sap",
+                      "reservoir": "sap",
+                      "carriers": [
+                        "animal",
+                        "people",
+                        "river"
+                      ]
+                    },
+                    {
+                      "id": "stratum",
+                      "reservoir": "stratum",
+                      "carriers": [
+                        "crust"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "spring",
+                  "source": "aquifer",
+                  "propagation": "local",
+                  "renewal": "continuous",
+                  "parameters": {},
+                  "stocks": [
+                    {
+                      "id": "aquifer",
+                      "reservoir": "aquifer",
+                      "carriers": [
+                        "groundwater"
+                      ]
+                    },
+                    {
+                      "id": "springwater",
+                      "reservoir": "springwater",
+                      "carriers": []
+                    }
+                  ]
+                }
+              ],
+              "phase": "post-glacial",
+              "strength": 1,
+              "parameters": {
+                "sourceThreshold": 300,
+                "sourceSpacing": 0.01125,
+                "baseCost": 2,
+                "conductanceDivisor": 26,
+                "baseInput": 360,
+                "logScale": 66,
+                "iceRetention": 0.0003,
+                "coldRetentionDistance": 0.0025,
+                "accumulationArea": 0.00000625,
+                "featureNoiseScale": 0.0175,
+                "rayCount": 1200,
+                "rayDistance": 1.1,
+                "coastalRayDistance": 0.325,
+                "wakeDistance": 0.475,
+                "beamWidth": 0.005,
+                "coastalSources": 200,
+                "coastalSourceDistance": 0.025,
+                "wakeSources": 260,
+                "coastalThreshold": 140,
+                "waveAmplification": 0.36,
+                "currentAmplification": 0.18,
+                "rayDecay": 3,
+                "rayIntensity": 27.8,
+                "wakeStrength": 180,
+                "conduitBudget": 2400,
+                "fallenDensity": 400000000,
+                "fallenRelease": 0.04,
+                "strainCracking": 0.3,
+                "iceCracking": 0.5,
+                "iceCrackDepth": 0.000075,
+                "frostCracking": 0.05,
+                "impactShock": 0.3,
+                "impactHeatShare": 0.6,
+                "placerMobility": 0.15,
+                "buryDepth": 0.000005,
+                "reopenStrain": 600,
+                "reopenShare": 0.4,
+                "exhumedRelease": 0.3,
+                "fanBarrenEpochs": 3,
+                "fanBarrenDepth": 5e-7,
+                "relictStrength": 0.5,
+                "iceCarry": 0.8,
+                "meltwaterLoss": 0.2,
+                "iceChargeSaturation": 8000000,
+                "thawSubsidence": 7.5e-7,
+                "shelfSaturation": 500,
+                "stormFrontGradient": 30,
+                "standAge": 800,
+                "standCover": 0.6,
+                "peatDepth": 10,
+                "rootCost": 6,
+                "rootFloor": 0.12,
+                "springFlow": 6.25e-19,
+                "springChargeSaturation": 4000000,
+                "springRock": 700,
+                "overdrawShare": 0.5,
+                "sinkDepth": 0.000001,
+                "animalCarry": 0.02,
+                "strataShare": 0.02,
+                "organicChargeAffinity": 4,
+                "groveSap": 600,
+                "sapLoss": 0.3,
+                "forgeStrength": 1000,
+                "forgeCooling": 0.5,
+                "saltPerDeath": 3.125e-7,
+                "saltPerLakeMetre": 160000000,
+                "saltFull": 400,
+                "saltMaterialDensity": 8000000000,
+                "brineFlush": 0.6,
+                "seepShare": 0.5,
+                "crustShare": 0.5,
+                "dissolveShare": 0.3,
+                "dustShare": 0.15,
+                "dustSettle": 0.5,
+                "glassBed": 800,
+                "glassResistance": 300,
+                "desiccation": 0.5,
+                "domeStrain": 600,
+                "domeRise": 7.5e-7,
+                "domeSeep": 0.05,
+                "saltBurn": 0.8,
+                "tenureFull": 300000000,
+                "pilgrimageBonus": 0.1,
+                "lineFull": 10000,
+                "roadFull": 10000000,
+                "wardReach": 0.01,
+                "auroraReinforce": 0.3,
+                "wardSpill": 200,
+                "tearFloor": 0.05,
+                "tearFull": 0.4,
+                "wildShift": 0.3,
+                "doorStrain": 400,
+                "doorDistance": 0.075,
+                "doorMatch": 150,
+                "wildRelief": 0.000005,
+                "wildShuffle": 0.3,
+                "doorChill": 30,
+                "doorPool": 7.5e-7,
+                "doorTravel": 0.00125,
+                "knitVerdure": 0.8,
+                "holdSalting": 1
+              },
+              "effects": {
+                "heat": 0,
+                "iceMelt": 0,
+                "rockResistance": 0,
+                "coastalForcing": 0,
+                "quickening": 0,
+                "conduitOpening": 0,
+                "stillness": 0,
+                "icePersistence": 0,
+                "upwelling": 0,
+                "seaSurface": 0,
+                "wakeWarming": 0,
+                "fog": 0,
+                "storm": 0,
+                "verdure": 1,
+                "salting": 0,
+                "warding": 0,
+                "tearing": 0,
+                "vegetationGrowth": 0,
+                "fire": 0,
+                "organicPreservation": 0,
+                "animalToxicity": 0,
+                "seedDispersal": 0
+              },
+              "history": {
+                "retention": 0.6,
+                "storage": 0.4,
+                "advect": true
+              },
+              "features": [
+                {
+                  "cartography": "area",
+                  "id": "stand",
+                  "name": "Old stand",
+                  "priority": 40,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "source:stand",
+                        "min": 1
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 300
+                      }
+                    ]
+                  ],
+                  "coverage": {
+                    "field": "intensity",
+                    "floor": 300,
+                    "full": 900
+                  }
+                },
+                {
+                  "cartography": "site",
+                  "id": "wellspring",
+                  "name": "Greenwood spring",
+                  "priority": 80,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "source:spring",
+                        "min": 1
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "site",
+                  "id": "oasis",
+                  "name": "Oasis",
+                  "priority": 85,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "source:spring",
+                        "min": 1
+                      },
+                      {
+                        "field": "treeCover",
+                        "max": 0.12
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "verdant",
+                  "name": "Verdant country",
+                  "priority": 15,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 250
+                      },
+                      {
+                        "field": "verdure",
+                        "min": 0.2
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 150
+                      },
+                      {
+                        "field": "verdure",
+                        "min": 0.1
+                      }
+                    ]
+                  ],
+                  "coverage": {
+                    "field": "intensity",
+                    "floor": 150,
+                    "full": 800
+                  }
+                },
+                {
+                  "cartography": "site",
+                  "id": "sinkhole",
+                  "name": "Sinkhole field",
+                  "priority": 70,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "sealed",
+                        "min": 1
+                      },
+                      {
+                        "field": "source:spring",
+                        "min": 0
+                      }
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "salt",
+              "name": "Salt",
+              "enabled": true,
+              "origins": [
+                {
+                  "id": "death",
+                  "source": "death",
+                  "propagation": "brine",
+                  "renewal": "accumulating",
+                  "parameters": {},
+                  "stocks": [
+                    {
+                      "id": "brine",
+                      "reservoir": "brine",
+                      "carriers": []
+                    },
+                    {
+                      "id": "aquifer",
+                      "reservoir": "aquifer",
+                      "carriers": [
+                        "groundwater"
+                      ]
+                    },
+                    {
+                      "id": "bed",
+                      "reservoir": "bed",
+                      "carriers": [
+                        "crust",
+                        "wind",
+                        "people"
+                      ]
+                    },
+                    {
+                      "id": "dust",
+                      "reservoir": "dust",
+                      "carriers": [
+                        "wind"
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "dead-lake",
+                  "source": "dead-lake",
+                  "propagation": "brine",
+                  "renewal": "accumulating",
+                  "parameters": {},
+                  "stocks": [
+                    {
+                      "id": "brine",
+                      "reservoir": "brine",
+                      "carriers": []
+                    },
+                    {
+                      "id": "aquifer",
+                      "reservoir": "aquifer",
+                      "carriers": [
+                        "groundwater"
+                      ]
+                    },
+                    {
+                      "id": "bed",
+                      "reservoir": "bed",
+                      "carriers": [
+                        "crust",
+                        "wind",
+                        "people"
+                      ]
+                    },
+                    {
+                      "id": "dust",
+                      "reservoir": "dust",
+                      "carriers": [
+                        "wind"
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "phase": "post-glacial",
+              "strength": 1,
+              "parameters": {
+                "sourceThreshold": 300,
+                "sourceSpacing": 0.01125,
+                "baseCost": 4,
+                "conductanceDivisor": 26,
+                "baseInput": 360,
+                "logScale": 66,
+                "iceRetention": 0.0003,
+                "coldRetentionDistance": 0.0025,
+                "accumulationArea": 0.00000625,
+                "featureNoiseScale": 0.0175,
+                "rayCount": 1200,
+                "rayDistance": 1.1,
+                "coastalRayDistance": 0.325,
+                "wakeDistance": 0.475,
+                "beamWidth": 0.005,
+                "coastalSources": 200,
+                "coastalSourceDistance": 0.025,
+                "wakeSources": 260,
+                "coastalThreshold": 140,
+                "waveAmplification": 0.36,
+                "currentAmplification": 0.18,
+                "rayDecay": 3,
+                "rayIntensity": 27.8,
+                "wakeStrength": 180,
+                "conduitBudget": 2400,
+                "fallenDensity": 400000000,
+                "fallenRelease": 0.04,
+                "strainCracking": 0.3,
+                "iceCracking": 0.5,
+                "iceCrackDepth": 0.000075,
+                "frostCracking": 0.05,
+                "impactShock": 0.3,
+                "impactHeatShare": 0.6,
+                "placerMobility": 0.15,
+                "buryDepth": 0.000005,
+                "reopenStrain": 600,
+                "reopenShare": 0.4,
+                "exhumedRelease": 0.3,
+                "fanBarrenEpochs": 3,
+                "fanBarrenDepth": 5e-7,
+                "relictStrength": 0.5,
+                "iceCarry": 0.8,
+                "meltwaterLoss": 0.2,
+                "iceChargeSaturation": 8000000,
+                "thawSubsidence": 7.5e-7,
+                "shelfSaturation": 500,
+                "stormFrontGradient": 30,
+                "standAge": 800,
+                "standCover": 0.6,
+                "peatDepth": 10,
+                "rootCost": 6,
+                "rootFloor": 0.12,
+                "springFlow": 6.25e-19,
+                "springChargeSaturation": 4000000,
+                "springRock": 700,
+                "overdrawShare": 0.5,
+                "sinkDepth": 0.000001,
+                "animalCarry": 0.02,
+                "strataShare": 0.02,
+                "organicChargeAffinity": 4,
+                "groveSap": 600,
+                "sapLoss": 0.3,
+                "forgeStrength": 1000,
+                "forgeCooling": 0.5,
+                "saltPerDeath": 3.125e-7,
+                "saltPerLakeMetre": 160000000,
+                "saltFull": 400,
+                "saltMaterialDensity": 8000000000,
+                "brineFlush": 0.6,
+                "seepShare": 0.5,
+                "crustShare": 0.5,
+                "dissolveShare": 0.3,
+                "dustShare": 0.15,
+                "dustSettle": 0.5,
+                "glassBed": 800,
+                "glassResistance": 300,
+                "desiccation": 0.5,
+                "domeStrain": 600,
+                "domeRise": 7.5e-7,
+                "domeSeep": 0.05,
+                "saltBurn": 0.8,
+                "tenureFull": 300000000,
+                "pilgrimageBonus": 0.1,
+                "lineFull": 10000,
+                "roadFull": 10000000,
+                "wardReach": 0.01,
+                "auroraReinforce": 0.3,
+                "wardSpill": 200,
+                "tearFloor": 0.05,
+                "tearFull": 0.4,
+                "wildShift": 0.3,
+                "doorStrain": 400,
+                "doorDistance": 0.075,
+                "doorMatch": 150,
+                "wildRelief": 0.000005,
+                "wildShuffle": 0.3,
+                "doorChill": 30,
+                "doorPool": 7.5e-7,
+                "doorTravel": 0.00125,
+                "knitVerdure": 0.8,
+                "holdSalting": 1
+              },
+              "effects": {
+                "heat": 0,
+                "iceMelt": 0,
+                "rockResistance": 0,
+                "coastalForcing": 0,
+                "quickening": 0,
+                "conduitOpening": 0,
+                "stillness": 0,
+                "icePersistence": 0,
+                "upwelling": 0,
+                "seaSurface": 0,
+                "wakeWarming": 0,
+                "fog": 0,
+                "storm": 0,
+                "verdure": 0,
+                "salting": 1,
+                "warding": 0,
+                "tearing": 0,
+                "vegetationGrowth": 0,
+                "fire": 0,
+                "organicPreservation": 0,
+                "animalToxicity": 0,
+                "seedDispersal": 0
+              },
+              "history": {
+                "retention": 0,
+                "storage": 0,
+                "advect": true
+              },
+              "features": [
+                {
+                  "cartography": "area",
+                  "id": "ground",
+                  "name": "Killing ground",
+                  "priority": 60,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "stock:death/brine",
+                        "min": 20
+                      }
+                    ]
+                  ],
+                  "coverage": {
+                    "field": "stock:death/brine",
+                    "floor": 20,
+                    "full": 400
+                  }
+                },
+                {
+                  "cartography": "area",
+                  "id": "pan",
+                  "name": "Salt pan",
+                  "priority": 55,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 200
+                      }
+                    ]
+                  ],
+                  "coverage": {
+                    "field": "intensity",
+                    "floor": 200,
+                    "full": 900
+                  }
+                },
+                {
+                  "cartography": "area",
+                  "id": "flat",
+                  "name": "Glass flat",
+                  "priority": 90,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "stock:dead-lake/bed",
+                        "min": 800
+                      }
+                    ],
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "stock:death/bed",
+                        "min": 800
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "area",
+                  "id": "dust",
+                  "name": "Salt dust",
+                  "priority": 30,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "stock:death/dust",
+                        "min": 10
+                      }
+                    ],
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "stock:dead-lake/dust",
+                        "min": 10
+                      }
+                    ]
+                  ],
+                  "coverage": {
+                    "field": "intensity",
+                    "floor": 20,
+                    "full": 400
+                  }
+                }
+              ]
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "hallowed",
+              "name": "Hallowed",
+              "enabled": true,
+              "origins": [
+                {
+                  "id": "seat",
+                  "source": "tenure",
+                  "propagation": "ward",
+                  "renewal": "kept",
+                  "parameters": {},
+                  "stocks": []
+                },
+                {
+                  "id": "line",
+                  "source": "kept-line",
+                  "propagation": "ward",
+                  "renewal": "kept",
+                  "parameters": {},
+                  "stocks": []
+                }
+              ],
+              "phase": "society",
+              "strength": 1,
+              "parameters": {
+                "sourceThreshold": 300,
+                "sourceSpacing": 0.01125,
+                "baseCost": 4,
+                "conductanceDivisor": 26,
+                "baseInput": 360,
+                "logScale": 66,
+                "iceRetention": 0.0003,
+                "coldRetentionDistance": 0.0025,
+                "accumulationArea": 0.00000625,
+                "featureNoiseScale": 0.0175,
+                "rayCount": 1200,
+                "rayDistance": 1.1,
+                "coastalRayDistance": 0.325,
+                "wakeDistance": 0.475,
+                "beamWidth": 0.005,
+                "coastalSources": 200,
+                "coastalSourceDistance": 0.025,
+                "wakeSources": 260,
+                "coastalThreshold": 140,
+                "waveAmplification": 0.36,
+                "currentAmplification": 0.18,
+                "rayDecay": 3,
+                "rayIntensity": 27.8,
+                "wakeStrength": 180,
+                "conduitBudget": 2400,
+                "fallenDensity": 400000000,
+                "fallenRelease": 0.04,
+                "strainCracking": 0.3,
+                "iceCracking": 0.5,
+                "iceCrackDepth": 0.000075,
+                "frostCracking": 0.05,
+                "impactShock": 0.3,
+                "impactHeatShare": 0.6,
+                "placerMobility": 0.15,
+                "buryDepth": 0.000005,
+                "reopenStrain": 600,
+                "reopenShare": 0.4,
+                "exhumedRelease": 0.3,
+                "fanBarrenEpochs": 3,
+                "fanBarrenDepth": 5e-7,
+                "relictStrength": 0.5,
+                "iceCarry": 0.8,
+                "meltwaterLoss": 0.2,
+                "iceChargeSaturation": 8000000,
+                "thawSubsidence": 7.5e-7,
+                "shelfSaturation": 500,
+                "stormFrontGradient": 30,
+                "standAge": 800,
+                "standCover": 0.6,
+                "peatDepth": 10,
+                "rootCost": 6,
+                "rootFloor": 0.12,
+                "springFlow": 6.25e-19,
+                "springChargeSaturation": 4000000,
+                "springRock": 700,
+                "overdrawShare": 0.5,
+                "sinkDepth": 0.000001,
+                "animalCarry": 0.02,
+                "strataShare": 0.02,
+                "organicChargeAffinity": 4,
+                "groveSap": 600,
+                "sapLoss": 0.3,
+                "forgeStrength": 1000,
+                "forgeCooling": 0.5,
+                "saltPerDeath": 3.125e-7,
+                "saltPerLakeMetre": 160000000,
+                "saltFull": 400,
+                "saltMaterialDensity": 8000000000,
+                "brineFlush": 0.6,
+                "seepShare": 0.5,
+                "crustShare": 0.5,
+                "dissolveShare": 0.3,
+                "dustShare": 0.15,
+                "dustSettle": 0.5,
+                "glassBed": 800,
+                "glassResistance": 300,
+                "desiccation": 0.5,
+                "domeStrain": 600,
+                "domeRise": 7.5e-7,
+                "domeSeep": 0.05,
+                "saltBurn": 0.8,
+                "tenureFull": 300000000,
+                "pilgrimageBonus": 0.1,
+                "lineFull": 10000,
+                "roadFull": 10000000,
+                "wardReach": 0.01,
+                "auroraReinforce": 0.3,
+                "wardSpill": 200,
+                "tearFloor": 0.05,
+                "tearFull": 0.4,
+                "wildShift": 0.3,
+                "doorStrain": 400,
+                "doorDistance": 0.075,
+                "doorMatch": 150,
+                "wildRelief": 0.000005,
+                "wildShuffle": 0.3,
+                "doorChill": 30,
+                "doorPool": 7.5e-7,
+                "doorTravel": 0.00125,
+                "knitVerdure": 0.8,
+                "holdSalting": 1
+              },
+              "effects": {
+                "heat": 0,
+                "iceMelt": 0,
+                "rockResistance": 300,
+                "coastalForcing": 0,
+                "quickening": 0,
+                "conduitOpening": 0,
+                "stillness": 0,
+                "icePersistence": 0,
+                "upwelling": 0,
+                "seaSurface": 0,
+                "wakeWarming": 0,
+                "fog": 0,
+                "storm": 0,
+                "verdure": 0,
+                "salting": 0,
+                "warding": 1,
+                "tearing": 0,
+                "vegetationGrowth": 0,
+                "fire": 0,
+                "organicPreservation": 0,
+                "animalToxicity": 0,
+                "seedDispersal": 0
+              },
+              "history": {
+                "retention": 0.7,
+                "storage": 0.5,
+                "advect": true
+              },
+              "features": [
+                {
+                  "cartography": "area",
+                  "id": "ring",
+                  "name": "Sanctuary ring",
+                  "priority": 88,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 300
+                      }
+                    ]
+                  ],
+                  "retains": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 150
+                      }
+                    ]
+                  ],
+                  "coverage": {
+                    "field": "intensity",
+                    "floor": 150,
+                    "full": 1000
+                  }
+                },
+                {
+                  "cartography": "area",
+                  "id": "line",
+                  "name": "Ward line",
+                  "priority": 86,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "source:line",
+                        "min": 1
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 100
+                      }
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "veil",
+              "name": "Veil",
+              "enabled": true,
+              "origins": [
+                {
+                  "id": "tear",
+                  "source": "strain",
+                  "propagation": "local",
+                  "renewal": "emergent",
+                  "parameters": {},
+                  "stocks": []
+                },
+                {
+                  "id": "door",
+                  "source": "pairing",
+                  "propagation": "local",
+                  "renewal": "emergent",
+                  "parameters": {},
+                  "stocks": []
+                }
+              ],
+              "phase": "post-glacial",
+              "strength": 1,
+              "parameters": {
+                "sourceThreshold": 300,
+                "sourceSpacing": 0.01125,
+                "baseCost": 4,
+                "conductanceDivisor": 26,
+                "baseInput": 360,
+                "logScale": 66,
+                "iceRetention": 0.0003,
+                "coldRetentionDistance": 0.0025,
+                "accumulationArea": 0.00000625,
+                "featureNoiseScale": 0.0175,
+                "rayCount": 1200,
+                "rayDistance": 1.1,
+                "coastalRayDistance": 0.325,
+                "wakeDistance": 0.475,
+                "beamWidth": 0.005,
+                "coastalSources": 200,
+                "coastalSourceDistance": 0.025,
+                "wakeSources": 260,
+                "coastalThreshold": 140,
+                "waveAmplification": 0.36,
+                "currentAmplification": 0.18,
+                "rayDecay": 3,
+                "rayIntensity": 27.8,
+                "wakeStrength": 180,
+                "conduitBudget": 2400,
+                "fallenDensity": 400000000,
+                "fallenRelease": 0.04,
+                "strainCracking": 0.3,
+                "iceCracking": 0.5,
+                "iceCrackDepth": 0.000075,
+                "frostCracking": 0.05,
+                "impactShock": 0.3,
+                "impactHeatShare": 0.6,
+                "placerMobility": 0.15,
+                "buryDepth": 0.000005,
+                "reopenStrain": 600,
+                "reopenShare": 0.4,
+                "exhumedRelease": 0.3,
+                "fanBarrenEpochs": 3,
+                "fanBarrenDepth": 5e-7,
+                "relictStrength": 0.5,
+                "iceCarry": 0.8,
+                "meltwaterLoss": 0.2,
+                "iceChargeSaturation": 8000000,
+                "thawSubsidence": 7.5e-7,
+                "shelfSaturation": 500,
+                "stormFrontGradient": 30,
+                "standAge": 800,
+                "standCover": 0.6,
+                "peatDepth": 10,
+                "rootCost": 6,
+                "rootFloor": 0.12,
+                "springFlow": 6.25e-19,
+                "springChargeSaturation": 4000000,
+                "springRock": 700,
+                "overdrawShare": 0.5,
+                "sinkDepth": 0.000001,
+                "animalCarry": 0.02,
+                "strataShare": 0.02,
+                "organicChargeAffinity": 4,
+                "groveSap": 600,
+                "sapLoss": 0.3,
+                "forgeStrength": 1000,
+                "forgeCooling": 0.5,
+                "saltPerDeath": 3.125e-7,
+                "saltPerLakeMetre": 160000000,
+                "saltFull": 400,
+                "saltMaterialDensity": 8000000000,
+                "brineFlush": 0.6,
+                "seepShare": 0.5,
+                "crustShare": 0.5,
+                "dissolveShare": 0.3,
+                "dustShare": 0.15,
+                "dustSettle": 0.5,
+                "glassBed": 800,
+                "glassResistance": 300,
+                "desiccation": 0.5,
+                "domeStrain": 600,
+                "domeRise": 7.5e-7,
+                "domeSeep": 0.05,
+                "saltBurn": 0.8,
+                "tenureFull": 300000000,
+                "pilgrimageBonus": 0.1,
+                "lineFull": 10000,
+                "roadFull": 10000000,
+                "wardReach": 0.01,
+                "auroraReinforce": 0.3,
+                "wardSpill": 200,
+                "tearFloor": 0.05,
+                "tearFull": 0.4,
+                "wildShift": 0.3,
+                "doorStrain": 400,
+                "doorDistance": 0.075,
+                "doorMatch": 150,
+                "wildRelief": 0.000005,
+                "wildShuffle": 0.3,
+                "doorChill": 30,
+                "doorPool": 7.5e-7,
+                "doorTravel": 0.00125,
+                "knitVerdure": 0.8,
+                "holdSalting": 1
+              },
+              "effects": {
+                "heat": 0,
+                "iceMelt": 0,
+                "rockResistance": 0,
+                "coastalForcing": 0,
+                "quickening": 0,
+                "conduitOpening": 0,
+                "stillness": 0,
+                "icePersistence": 0,
+                "upwelling": 0,
+                "seaSurface": 0,
+                "wakeWarming": 0,
+                "fog": 0,
+                "storm": 0,
+                "verdure": 0,
+                "salting": 0,
+                "warding": 0,
+                "tearing": 1,
+                "vegetationGrowth": 0,
+                "fire": 0,
+                "organicPreservation": 0,
+                "animalToxicity": 0,
+                "seedDispersal": 0
+              },
+              "history": {
+                "retention": 0,
+                "storage": 0,
+                "advect": true
+              },
+              "features": [
+                {
+                  "cartography": "area",
+                  "id": "tear",
+                  "name": "Tear",
+                  "priority": 50,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 300
+                      }
+                    ]
+                  ],
+                  "coverage": {
+                    "field": "intensity",
+                    "floor": 300,
+                    "full": 1000
+                  }
+                },
+                {
+                  "cartography": "area",
+                  "id": "wild",
+                  "name": "Wild zone",
+                  "priority": 75,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "wild",
+                        "min": 0.3
+                      },
+                      {
+                        "field": "intensity",
+                        "min": 100
+                      }
+                    ]
+                  ]
+                },
+                {
+                  "cartography": "site",
+                  "id": "door",
+                  "name": "Door",
+                  "priority": 95,
+                  "seeds": [
+                    [
+                      {
+                        "field": "water",
+                        "values": [
+                          0,
+                          2
+                        ]
+                      },
+                      {
+                        "field": "source:door",
+                        "min": 1
+                      }
+                    ]
+                  ]
+                }
+              ]
+            }
+          ],
+          "confluences": [
+            {
+              "lengthUnits": "relative",
+              "id": "war",
+              "name": "Shatter rim",
+              "enabled": true,
+              "systems": [
+                "fire",
+                "aurora"
+              ],
+              "floor": 0.2,
+              "strainScale": 4,
+              "priority": 100,
+              "cartography": "area",
+              "seeds": [
+                [
+                  {
+                    "field": "system:fire",
+                    "min": 260
+                  },
+                  {
+                    "field": "system:aurora",
+                    "min": 340
+                  }
+                ]
+              ],
+              "effects": {
+                "fractureConductance": 220,
+                "rockResistance": -320,
+                "relief": 0.00001,
+                "soilRemoval": 0.8,
+                "coastalForcing": 0,
+                "fog": 0,
+                "iceMelt": 0,
+                "debris": 0,
+                "toxicity": 0.2
+              },
+              "groundMaterial": "tornstone",
+              "hazard": {
+                "kind": "thermal-fracture",
+                "rate": 0.001,
+                "severity": 0.3,
+                "radius": 0.0005,
+                "cause": "Fire heat met Aurora-bearing ice and the ground shattered between them."
+              }
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "steam",
+              "name": "Boiling shore",
+              "enabled": true,
+              "systems": [
+                "fire",
+                "pressure"
+              ],
+              "floor": 0.2,
+              "strainScale": 4,
+              "priority": 110,
+              "cartography": "course",
+              "seeds": [
+                [
+                  {
+                    "field": "system:fire",
+                    "min": 390
+                  },
+                  {
+                    "field": "system:pressure",
+                    "min": 420
+                  },
+                  {
+                    "field": "fracture",
+                    "min": 520
+                  }
+                ]
+              ],
+              "effects": {
+                "fractureConductance": 120,
+                "rockResistance": 0,
+                "relief": 0,
+                "soilRemoval": 0.3,
+                "coastalForcing": 320,
+                "fog": 0.4,
+                "iceMelt": 0,
+                "debris": 0,
+                "toxicity": 0
+              },
+              "groundMaterial": "sinter",
+              "hazard": {
+                "kind": "steam-fracture",
+                "rate": 0.002,
+                "severity": 0.4,
+                "radius": 0.00075,
+                "cause": "Ocean Pressure entered conductive Fire fractures and the shore boiled."
+              }
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "breach",
+              "name": "Breach",
+              "enabled": true,
+              "systems": [
+                "pressure",
+                "aurora"
+              ],
+              "floor": 0.2,
+              "strainScale": 4,
+              "priority": 120,
+              "cartography": "site",
+              "seeds": [
+                [
+                  {
+                    "field": "system:pressure",
+                    "min": 390
+                  },
+                  {
+                    "field": "system:aurora",
+                    "min": 430
+                  },
+                  {
+                    "field": "water",
+                    "values": [
+                      1
+                    ]
+                  },
+                  {
+                    "field": "ice",
+                    "min": 0.000055
+                  }
+                ]
+              ],
+              "effects": {
+                "fractureConductance": 0,
+                "rockResistance": 0,
+                "relief": 0,
+                "soilRemoval": 0,
+                "coastalForcing": 240,
+                "fog": 0.5,
+                "iceMelt": 0.000015,
+                "debris": 7.5e-7,
+                "toxicity": 0
+              },
+              "groundMaterial": "crushstone",
+              "hazard": {
+                "kind": "pressure-ice-breach",
+                "rate": 0.002,
+                "severity": 0.4,
+                "radius": 0.00125,
+                "cause": "Pressure reached charged coastal ice and breached it."
+              }
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "rot",
+              "name": "Overgrowth rot",
+              "enabled": true,
+              "systems": [
+                "fire",
+                "greenwood"
+              ],
+              "floor": 0.2,
+              "strainScale": 4,
+              "priority": 95,
+              "cartography": "area",
+              "seeds": [
+                [
+                  {
+                    "field": "system:fire",
+                    "min": 300
+                  },
+                  {
+                    "field": "system:greenwood",
+                    "min": 300
+                  },
+                  {
+                    "field": "water",
+                    "values": [
+                      0
+                    ]
+                  }
+                ]
+              ],
+              "effects": {
+                "fractureConductance": 80,
+                "rockResistance": 0,
+                "relief": 0,
+                "soilRemoval": 0.2,
+                "coastalForcing": 0,
+                "fog": 0.2,
+                "iceMelt": 0,
+                "debris": 0,
+                "toxicity": 0.6
+              },
+              "groundMaterial": "rootstone",
+              "hazard": {
+                "kind": "rot-fever",
+                "rate": 0.0015,
+                "severity": 0.25,
+                "radius": 0.000625,
+                "cause": "Fire quickened a Greenwood until it rotted and its springs boiled."
+              }
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "frozen",
+              "name": "Frozen Deepwood",
+              "enabled": true,
+              "systems": [
+                "aurora",
+                "greenwood"
+              ],
+              "floor": 0.2,
+              "strainScale": 4,
+              "priority": 90,
+              "cartography": "area",
+              "seeds": [
+                [
+                  {
+                    "field": "system:aurora",
+                    "min": 400
+                  },
+                  {
+                    "field": "system:greenwood",
+                    "min": 300
+                  },
+                  {
+                    "field": "ice",
+                    "min": 0.0000125
+                  }
+                ]
+              ],
+              "effects": {
+                "fractureConductance": 0,
+                "rockResistance": 0,
+                "relief": 0,
+                "soilRemoval": 0,
+                "coastalForcing": 0,
+                "fog": 0,
+                "iceMelt": 0,
+                "debris": 0,
+                "toxicity": 0
+              },
+              "groundMaterial": "rimerot"
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "brackish",
+              "name": "Brackish wending",
+              "enabled": true,
+              "systems": [
+                "pressure",
+                "greenwood"
+              ],
+              "floor": 0.2,
+              "strainScale": 4,
+              "priority": 92,
+              "cartography": "area",
+              "seeds": [
+                [
+                  {
+                    "field": "system:pressure",
+                    "min": 300
+                  },
+                  {
+                    "field": "system:greenwood",
+                    "min": 300
+                  },
+                  {
+                    "field": "water",
+                    "values": [
+                      0
+                    ]
+                  }
+                ]
+              ],
+              "effects": {
+                "fractureConductance": 0,
+                "rockResistance": 0,
+                "relief": 0,
+                "soilRemoval": 0,
+                "coastalForcing": 0,
+                "fog": 0.3,
+                "iceMelt": 0,
+                "debris": 0,
+                "toxicity": 0.3
+              },
+              "groundMaterial": "tufa"
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "preserved",
+              "name": "Preserved barrow",
+              "enabled": true,
+              "systems": [
+                "aurora",
+                "salt"
+              ],
+              "floor": 0.2,
+              "strainScale": 4,
+              "priority": 96,
+              "cartography": "area",
+              "seeds": [
+                [
+                  {
+                    "field": "system:aurora",
+                    "min": 300
+                  },
+                  {
+                    "field": "system:salt",
+                    "min": 200
+                  },
+                  {
+                    "field": "water",
+                    "values": [
+                      0
+                    ]
+                  }
+                ]
+              ],
+              "effects": {
+                "fractureConductance": 0,
+                "rockResistance": 200,
+                "relief": 0,
+                "soilRemoval": 0,
+                "coastalForcing": 0,
+                "fog": 0,
+                "iceMelt": 0,
+                "debris": 0,
+                "toxicity": 0.3
+              },
+              "hazard": {
+                "kind": "undead",
+                "rate": 0.001,
+                "severity": 0.3,
+                "radius": 0.0005,
+                "cause": "Aurora held a Salt barrow still and its dead did not rest."
+              }
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "fired",
+              "name": "Fired crust",
+              "enabled": true,
+              "systems": [
+                "fire",
+                "salt"
+              ],
+              "floor": 0.2,
+              "strainScale": 4,
+              "priority": 97,
+              "cartography": "area",
+              "seeds": [
+                [
+                  {
+                    "field": "system:fire",
+                    "min": 300
+                  },
+                  {
+                    "field": "system:salt",
+                    "min": 200
+                  },
+                  {
+                    "field": "water",
+                    "values": [
+                      0
+                    ]
+                  }
+                ]
+              ],
+              "effects": {
+                "fractureConductance": 0,
+                "rockResistance": 300,
+                "relief": 0,
+                "soilRemoval": 0.5,
+                "coastalForcing": 0,
+                "fog": 0,
+                "iceMelt": 0,
+                "debris": 0,
+                "toxicity": 0
+              },
+              "groundMaterial": "saltGlass"
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "standing-dead",
+              "name": "Standing-dead front",
+              "enabled": true,
+              "systems": [
+                "greenwood",
+                "salt"
+              ],
+              "floor": 0.2,
+              "strainScale": 4,
+              "priority": 93,
+              "cartography": "area",
+              "seeds": [
+                [
+                  {
+                    "field": "system:greenwood",
+                    "min": 300
+                  },
+                  {
+                    "field": "system:salt",
+                    "min": 200
+                  },
+                  {
+                    "field": "water",
+                    "values": [
+                      0
+                    ]
+                  }
+                ]
+              ],
+              "effects": {
+                "fractureConductance": 0,
+                "rockResistance": 0,
+                "relief": 0,
+                "soilRemoval": 0,
+                "coastalForcing": 0,
+                "fog": 0,
+                "iceMelt": 0,
+                "debris": 0,
+                "toxicity": 0.5
+              }
+            },
+            {
+              "lengthUnits": "relative",
+              "id": "brine-shore",
+              "name": "Brine shore",
+              "enabled": true,
+              "systems": [
+                "pressure",
+                "salt"
+              ],
+              "floor": 0.2,
+              "strainScale": 4,
+              "priority": 94,
+              "cartography": "area",
+              "seeds": [
+                [
+                  {
+                    "field": "system:pressure",
+                    "min": 300
+                  },
+                  {
+                    "field": "system:salt",
+                    "min": 200
+                  },
+                  {
+                    "field": "water",
+                    "values": [
+                      0
+                    ]
+                  }
+                ]
+              ],
+              "effects": {
+                "fractureConductance": 0,
+                "rockResistance": 0,
+                "relief": 0,
+                "soilRemoval": 0,
+                "coastalForcing": 0,
+                "fog": 0.3,
+                "iceMelt": 0,
+                "debris": 0,
+                "toxicity": 0.2
+              },
+              "groundMaterial": "saltbed"
+            }
+          ],
+          "activity": {
+            "Formation": {},
+            "Cold age": {},
+            "Present": {}
+          }
+        }
+      },
+      "magic.local": {
+        "enabled": true,
+        "settings": {}
+      },
+      "human.cultures": {
+        "enabled": true,
+        "settings": {
+          "cultureCount": 6,
+          "culturalMobility": 1
+        },
+        "configuration": {
+          "eras": [
+            {
+              "id": "Ice age",
+              "years": 400,
+              "physicalEpoch": "before-present",
+              "mobility": 2
+            },
+            {
+              "id": "Hearthfall",
+              "years": 300,
+              "physicalEpoch": null,
+              "mobility": 1
+            },
+            {
+              "id": "Age of Crowns",
+              "years": 500,
+              "physicalEpoch": null,
+              "mobility": 0.8
+            },
+            {
+              "id": "Lantern Age",
+              "years": 300,
+              "physicalEpoch": null,
+              "mobility": 1
+            }
+          ]
+        }
+      },
+      "human.politics": {
+        "enabled": true,
+        "settings": {
+          "polityCount": 7,
+          "politicalReach": 1
+        }
+      },
+      "built.layout": {
+        "enabled": true,
+        "settings": {
+          "townThreshold": 5000,
+          "cityReach": 0.05,
+          "roadTraffic": 1000,
+          "marketTravel": 1,
+          "highways": 2
+        }
+      }
+    },
+    "settings": {
+      "epochs": [
+        {
+          "lengthUnits": "relative",
+          "id": "Formation",
+          "duration": 1000,
+          "tectonicDurationMyr": 20,
+          "plateTravel": 1,
+          "tectonics": 1,
+          "hydrology": 0.5,
+          "ice": 0,
+          "coasts": 0.5,
+          "temperature": 15,
+          "seaLevel": 0,
+          "impacts": 0,
+          "volcanism": 1,
+          "magicActivity": {},
+          "ecology": {
+            "rainfall": 1,
+            "seasonality": 0.3,
+            "productivity": 1,
+            "fire": 1,
+            "migration": 1,
+            "recovery": 2
+          }
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "Cold age",
+          "duration": 1000,
+          "tectonicDurationMyr": 20,
+          "plateTravel": 0.65,
+          "tectonics": 0.7,
+          "hydrology": 1,
+          "ice": 1,
+          "coasts": 1,
+          "temperature": -3,
+          "seaLevel": 0,
+          "impacts": 0,
+          "volcanism": 0.4,
+          "magicActivity": {},
+          "ecology": {
+            "rainfall": 1,
+            "seasonality": 0.3,
+            "productivity": 1,
+            "fire": 1,
+            "migration": 1,
+            "recovery": 2
+          }
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "Present",
+          "duration": 1000,
+          "tectonicDurationMyr": 20,
+          "plateTravel": 0.25,
+          "tectonics": 0.4,
+          "hydrology": 1,
+          "ice": 0,
+          "coasts": 1,
+          "temperature": 15,
+          "seaLevel": 0,
+          "impacts": 0,
+          "volcanism": 0.1,
+          "magicActivity": {},
+          "ecology": {
+            "rainfall": 1,
+            "seasonality": 0.3,
+            "productivity": 1,
+            "fire": 1,
+            "migration": 1,
+            "recovery": 2
+          }
+        }
+      ],
+      "humanEras": [
+        {
+          "id": "Ice age",
+          "years": 400,
+          "physicalEpoch": "before-present",
+          "mobility": 2,
+          "politicalCapacity": 0.2
+        },
+        {
+          "id": "Hearthfall",
+          "years": 300,
+          "physicalEpoch": null,
+          "mobility": 1,
+          "politicalCapacity": 0.6
+        },
+        {
+          "id": "Age of Crowns",
+          "years": 500,
+          "physicalEpoch": null,
+          "mobility": 0.8,
+          "politicalCapacity": 1.2
+        },
+        {
+          "id": "Lantern Age",
+          "years": 300,
+          "physicalEpoch": null,
+          "mobility": 1,
+          "politicalCapacity": 1.5
+        }
+      ],
+      "magicSystems": [
+        {
+          "lengthUnits": "relative",
+          "id": "fire",
+          "name": "Fire",
+          "enabled": true,
+          "origins": [
+            {
+              "id": "vein",
+              "source": "geothermal",
+              "propagation": "fracture",
+              "renewal": "conduit-fed",
+              "parameters": {},
+              "stocks": [
+                {
+                  "id": "held",
+                  "reservoir": "held",
+                  "carriers": [
+                    "crust"
+                  ]
+                },
+                {
+                  "id": "spent",
+                  "reservoir": "spent",
+                  "carriers": [
+                    "crust",
+                    "river"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "fallen",
+              "source": "impact",
+              "propagation": "local",
+              "renewal": "finite",
+              "parameters": {},
+              "stocks": [
+                {
+                  "id": "held",
+                  "reservoir": "held",
+                  "carriers": [
+                    "crust",
+                    "river"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "forge",
+              "source": "forge",
+              "propagation": "local",
+              "renewal": "accumulating",
+              "parameters": {},
+              "stocks": [
+                {
+                  "id": "cracked",
+                  "reservoir": "forge",
+                  "carriers": [
+                    "crust",
+                    "people"
+                  ]
+                }
+              ]
+            }
+          ],
+          "phase": "climate",
+          "strength": 1,
+          "parameters": {
+            "sourceThreshold": 300,
+            "sourceSpacing": 0.0225,
+            "baseCost": 3,
+            "conductanceDivisor": 12,
+            "baseInput": 360,
+            "logScale": 66,
+            "iceRetention": 0.0003,
+            "coldRetentionDistance": 0.0025,
+            "accumulationArea": 0.00000625,
+            "featureNoiseScale": 0.0175,
+            "rayCount": 1200,
+            "rayDistance": 1.1,
+            "coastalRayDistance": 0.325,
+            "wakeDistance": 0.475,
+            "beamWidth": 0.005,
+            "coastalSources": 200,
+            "coastalSourceDistance": 0.025,
+            "wakeSources": 260,
+            "coastalThreshold": 140,
+            "waveAmplification": 0.36,
+            "currentAmplification": 0.18,
+            "rayDecay": 3,
+            "rayIntensity": 27.8,
+            "wakeStrength": 180,
+            "conduitBudget": 2400,
+            "fallenDensity": 400000000,
+            "fallenRelease": 0.04,
+            "strainCracking": 0.3,
+            "iceCracking": 0.5,
+            "iceCrackDepth": 0.000075,
+            "frostCracking": 0.05,
+            "impactShock": 0.3,
+            "impactHeatShare": 0.6,
+            "placerMobility": 0.15,
+            "buryDepth": 0.000005,
+            "reopenStrain": 600,
+            "reopenShare": 0.4,
+            "exhumedRelease": 0.3,
+            "fanBarrenEpochs": 3,
+            "fanBarrenDepth": 5e-7,
+            "relictStrength": 0.5,
+            "iceCarry": 0.8,
+            "meltwaterLoss": 0.2,
+            "iceChargeSaturation": 8000000,
+            "thawSubsidence": 7.5e-7,
+            "shelfSaturation": 500,
+            "stormFrontGradient": 30,
+            "standAge": 800,
+            "standCover": 0.6,
+            "peatDepth": 10,
+            "rootCost": 6,
+            "rootFloor": 0.12,
+            "springFlow": 6.25e-19,
+            "springChargeSaturation": 4000000,
+            "springRock": 700,
+            "overdrawShare": 0.5,
+            "sinkDepth": 0.000001,
+            "animalCarry": 0.02,
+            "strataShare": 0.02,
+            "organicChargeAffinity": 4,
+            "groveSap": 600,
+            "sapLoss": 0.3,
+            "forgeStrength": 1000,
+            "forgeCooling": 0.5,
+            "saltPerDeath": 3.125e-7,
+            "saltPerLakeMetre": 160000000,
+            "saltFull": 400,
+            "saltMaterialDensity": 8000000000,
+            "brineFlush": 0.6,
+            "seepShare": 0.5,
+            "crustShare": 0.5,
+            "dissolveShare": 0.3,
+            "dustShare": 0.15,
+            "dustSettle": 0.5,
+            "glassBed": 800,
+            "glassResistance": 300,
+            "desiccation": 0.5,
+            "domeStrain": 600,
+            "domeRise": 7.5e-7,
+            "domeSeep": 0.05,
+            "saltBurn": 0.8,
+            "tenureFull": 300000000,
+            "pilgrimageBonus": 0.1,
+            "lineFull": 10000,
+            "roadFull": 10000000,
+            "wardReach": 0.01,
+            "auroraReinforce": 0.3,
+            "wardSpill": 200,
+            "tearFloor": 0.05,
+            "tearFull": 0.4,
+            "wildShift": 0.3,
+            "doorStrain": 400,
+            "doorDistance": 0.075,
+            "doorMatch": 150,
+            "wildRelief": 0.000005,
+            "wildShuffle": 0.3,
+            "doorChill": 30,
+            "doorPool": 7.5e-7,
+            "doorTravel": 0.00125,
+            "knitVerdure": 0.8,
+            "holdSalting": 1
+          },
+          "effects": {
+            "heat": 0.36,
+            "iceMelt": 1.25e-7,
+            "rockResistance": 900,
+            "coastalForcing": 0,
+            "quickening": 1,
+            "conduitOpening": 120,
+            "stillness": 0,
+            "icePersistence": 0,
+            "upwelling": 0,
+            "seaSurface": 0,
+            "wakeWarming": 0,
+            "fog": 0,
+            "storm": 0,
+            "verdure": 0,
+            "salting": 0,
+            "warding": 0,
+            "tearing": 0,
+            "vegetationGrowth": 0,
+            "fire": 0.3,
+            "organicPreservation": 0,
+            "animalToxicity": 0,
+            "seedDispersal": 0
+          },
+          "history": {
+            "retention": 1,
+            "storage": 0,
+            "advect": true
+          },
+          "features": [
+            {
+              "cartography": "site",
+              "id": "core",
+              "name": "Fire core",
+              "priority": 90,
+              "seeds": [
+                [
+                  {
+                    "field": "source",
+                    "min": 300
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 1
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "course",
+              "id": "vein",
+              "name": "Thermal vein",
+              "priority": 20,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 320
+                  },
+                  {
+                    "field": "fracture",
+                    "min": 430
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 230
+                  },
+                  {
+                    "field": "fracture",
+                    "min": 320
+                  }
+                ]
+              ],
+              "coverage": {
+                "field": "intensity",
+                "floor": 230,
+                "full": 800
+              }
+            },
+            {
+              "cartography": "site",
+              "id": "spring",
+              "name": "Hot spring",
+              "priority": 70,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 560
+                  },
+                  {
+                    "field": "water",
+                    "values": [
+                      2
+                    ]
+                  }
+                ],
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 560
+                  },
+                  {
+                    "field": "river",
+                    "min": 1
+                  }
+                ],
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 560
+                  },
+                  {
+                    "field": "moisture",
+                    "min": 650
+                  }
+                ],
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "geothermal",
+                    "min": 720
+                  },
+                  {
+                    "field": "temperature",
+                    "min": 335
+                  },
+                  {
+                    "field": "moisture",
+                    "min": 260
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 340
+                  },
+                  {
+                    "field": "water",
+                    "values": [
+                      2
+                    ]
+                  }
+                ],
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 340
+                  },
+                  {
+                    "field": "river",
+                    "min": 1
+                  }
+                ],
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 340
+                  },
+                  {
+                    "field": "moisture",
+                    "min": 560
+                  }
+                ],
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "geothermal",
+                    "min": 650
+                  },
+                  {
+                    "field": "temperature",
+                    "min": 300
+                  },
+                  {
+                    "field": "moisture",
+                    "min": 220
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "site",
+              "id": "vent",
+              "name": "Hydrothermal vent",
+              "priority": 65,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      1
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 430
+                  }
+                ],
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      1
+                    ]
+                  },
+                  {
+                    "field": "geothermal",
+                    "min": 720
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      1
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 340
+                  }
+                ],
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      1
+                    ]
+                  },
+                  {
+                    "field": "geothermal",
+                    "min": 630
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "basalt",
+              "name": "Basalt flat",
+              "priority": 25,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 560
+                  },
+                  {
+                    "field": "slope",
+                    "max": 0.0045
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 470
+                  },
+                  {
+                    "field": "slope",
+                    "max": 0.006
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "scar",
+              "name": "Basalt scar",
+              "priority": 30,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "sealed",
+                    "min": 1
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "site",
+              "id": "crater",
+              "name": "Crater lake",
+              "priority": 85,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      2
+                    ]
+                  },
+                  {
+                    "field": "stock:fallen/held",
+                    "min": 1000
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "fan",
+              "name": "Ejecta fan",
+              "priority": 28,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "source:fallen",
+                    "min": 1
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "course",
+              "id": "placer",
+              "name": "Placer band",
+              "priority": 60,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "river",
+                    "min": 1
+                  },
+                  {
+                    "field": "stock:fallen/held",
+                    "min": 1000
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "river",
+                    "min": 1
+                  },
+                  {
+                    "field": "stock:fallen/held",
+                    "min": 200
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "deviation",
+              "name": "Compass deviation",
+              "priority": 5,
+              "seeds": [
+                [
+                  {
+                    "field": "stock:fallen/held",
+                    "min": 500
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "halo",
+              "name": "Thawed halo",
+              "priority": 10,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 210
+                  },
+                  {
+                    "field": "temperature",
+                    "min": 250
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 140
+                  },
+                  {
+                    "field": "temperature",
+                    "min": 225
+                  },
+                  {
+                    "field": "fracture",
+                    "min": 170
+                  },
+                  {
+                    "field": "scatter",
+                    "min": 0.14,
+                    "salt": 16153,
+                    "index": 1457
+                  }
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "aurora",
+          "name": "Aurora",
+          "enabled": true,
+          "origins": [
+            {
+              "id": "field",
+              "source": "cold",
+              "propagation": "cold-drainage",
+              "renewal": "accumulating",
+              "parameters": {},
+              "stocks": [
+                {
+                  "id": "ice",
+                  "reservoir": "ice",
+                  "carriers": [
+                    "ice"
+                  ]
+                },
+                {
+                  "id": "ground",
+                  "reservoir": "ground",
+                  "carriers": [
+                    "crust"
+                  ]
+                },
+                {
+                  "id": "moraine",
+                  "reservoir": "moraine",
+                  "carriers": [
+                    "crust"
+                  ]
+                },
+                {
+                  "id": "shelf",
+                  "reservoir": "shelf",
+                  "carriers": [
+                    "current"
+                  ]
+                }
+              ]
+            }
+          ],
+          "phase": "post-glacial",
+          "strength": 1,
+          "parameters": {
+            "sourceThreshold": 300,
+            "sourceSpacing": 0.01125,
+            "baseCost": 4,
+            "conductanceDivisor": 26,
+            "baseInput": 360,
+            "logScale": 66,
+            "iceRetention": 0.0003,
+            "coldRetentionDistance": 0.0025,
+            "accumulationArea": 0.00000625,
+            "featureNoiseScale": 0.0175,
+            "rayCount": 1200,
+            "rayDistance": 1.1,
+            "coastalRayDistance": 0.325,
+            "wakeDistance": 0.475,
+            "beamWidth": 0.005,
+            "coastalSources": 200,
+            "coastalSourceDistance": 0.025,
+            "wakeSources": 260,
+            "coastalThreshold": 140,
+            "waveAmplification": 0.36,
+            "currentAmplification": 0.18,
+            "rayDecay": 3,
+            "rayIntensity": 27.8,
+            "wakeStrength": 180,
+            "conduitBudget": 2400,
+            "fallenDensity": 400000000,
+            "fallenRelease": 0.04,
+            "strainCracking": 0.3,
+            "iceCracking": 0.5,
+            "iceCrackDepth": 0.000075,
+            "frostCracking": 0.05,
+            "impactShock": 0.3,
+            "impactHeatShare": 0.6,
+            "placerMobility": 0.15,
+            "buryDepth": 0.000005,
+            "reopenStrain": 600,
+            "reopenShare": 0.4,
+            "exhumedRelease": 0.3,
+            "fanBarrenEpochs": 3,
+            "fanBarrenDepth": 5e-7,
+            "relictStrength": 0.5,
+            "iceCarry": 0.8,
+            "meltwaterLoss": 0.2,
+            "iceChargeSaturation": 8000000,
+            "thawSubsidence": 7.5e-7,
+            "shelfSaturation": 500,
+            "stormFrontGradient": 30,
+            "standAge": 800,
+            "standCover": 0.6,
+            "peatDepth": 10,
+            "rootCost": 6,
+            "rootFloor": 0.12,
+            "springFlow": 6.25e-19,
+            "springChargeSaturation": 4000000,
+            "springRock": 700,
+            "overdrawShare": 0.5,
+            "sinkDepth": 0.000001,
+            "animalCarry": 0.02,
+            "strataShare": 0.02,
+            "organicChargeAffinity": 4,
+            "groveSap": 600,
+            "sapLoss": 0.3,
+            "forgeStrength": 1000,
+            "forgeCooling": 0.5,
+            "saltPerDeath": 3.125e-7,
+            "saltPerLakeMetre": 160000000,
+            "saltFull": 400,
+            "saltMaterialDensity": 8000000000,
+            "brineFlush": 0.6,
+            "seepShare": 0.5,
+            "crustShare": 0.5,
+            "dissolveShare": 0.3,
+            "dustShare": 0.15,
+            "dustSettle": 0.5,
+            "glassBed": 800,
+            "glassResistance": 300,
+            "desiccation": 0.5,
+            "domeStrain": 600,
+            "domeRise": 7.5e-7,
+            "domeSeep": 0.05,
+            "saltBurn": 0.8,
+            "tenureFull": 300000000,
+            "pilgrimageBonus": 0.1,
+            "lineFull": 10000,
+            "roadFull": 10000000,
+            "wardReach": 0.01,
+            "auroraReinforce": 0.3,
+            "wardSpill": 200,
+            "tearFloor": 0.05,
+            "tearFull": 0.4,
+            "wildShift": 0.3,
+            "doorStrain": 400,
+            "doorDistance": 0.075,
+            "doorMatch": 150,
+            "wildRelief": 0.000005,
+            "wildShuffle": 0.3,
+            "doorChill": 30,
+            "doorPool": 7.5e-7,
+            "doorTravel": 0.00125,
+            "knitVerdure": 0.8,
+            "holdSalting": 1
+          },
+          "effects": {
+            "heat": -0.03,
+            "iceMelt": 0,
+            "rockResistance": -520,
+            "coastalForcing": 0,
+            "quickening": 0,
+            "conduitOpening": 0,
+            "stillness": 1,
+            "icePersistence": 0.9,
+            "upwelling": 0,
+            "seaSurface": 0,
+            "wakeWarming": 0,
+            "fog": 0,
+            "storm": 0,
+            "verdure": 0,
+            "salting": 0,
+            "warding": 0,
+            "tearing": 0,
+            "vegetationGrowth": 0,
+            "fire": 0,
+            "organicPreservation": 1.5,
+            "animalToxicity": 0,
+            "seedDispersal": 0
+          },
+          "history": {
+            "retention": 0.3,
+            "storage": 0.5,
+            "advect": true
+          },
+          "features": [
+            {
+              "cartography": "area",
+              "id": "field",
+              "name": "Aurora field",
+              "priority": 40,
+              "seeds": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 470
+                  },
+                  {
+                    "field": "ice",
+                    "min": 0.000065
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 380
+                  },
+                  {
+                    "field": "ice",
+                    "min": 0.000045
+                  }
+                ]
+              ],
+              "coverage": {
+                "field": "intensity",
+                "floor": 380,
+                "full": 900
+              }
+            },
+            {
+              "cartography": "site",
+              "id": "well",
+              "name": "Light well",
+              "priority": 80,
+              "seeds": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 680
+                  },
+                  {
+                    "field": "landform",
+                    "values": [
+                      10,
+                      4
+                    ]
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 590
+                  },
+                  {
+                    "field": "landform",
+                    "values": [
+                      10,
+                      4,
+                      3
+                    ]
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "prism",
+              "name": "Frost prism",
+              "priority": 45,
+              "seeds": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 510
+                  },
+                  {
+                    "field": "landform",
+                    "values": [
+                      6,
+                      5
+                    ]
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 420
+                  },
+                  {
+                    "field": "landform",
+                    "values": [
+                      6,
+                      5
+                    ]
+                  },
+                  {
+                    "field": "scatter",
+                    "min": 0.25,
+                    "salt": 30634,
+                    "index": 467
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "melt",
+              "name": "Melt line",
+              "priority": 15,
+              "seeds": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 650
+                  },
+                  {
+                    "field": "ice",
+                    "min": 80,
+                    "max": 360
+                  },
+                  {
+                    "field": "temperature",
+                    "min": 275,
+                    "max": 380
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 560
+                  },
+                  {
+                    "field": "ice",
+                    "min": 50,
+                    "max": 430
+                  },
+                  {
+                    "field": "temperature",
+                    "min": 240,
+                    "max": 420
+                  }
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "pressure",
+          "name": "Pressure",
+          "enabled": true,
+          "origins": [
+            {
+              "id": "locus",
+              "source": "deep-ocean",
+              "propagation": "ocean-rays",
+              "renewal": "continuous",
+              "parameters": {},
+              "stocks": []
+            }
+          ],
+          "phase": "climate",
+          "strength": 1,
+          "parameters": {
+            "sourceThreshold": 300,
+            "sourceSpacing": 0.01125,
+            "baseCost": 4,
+            "conductanceDivisor": 26,
+            "baseInput": 360,
+            "logScale": 66,
+            "iceRetention": 0.0003,
+            "coldRetentionDistance": 0.0025,
+            "accumulationArea": 0.00000625,
+            "featureNoiseScale": 0.0175,
+            "rayCount": 128,
+            "rayDistance": 0.5,
+            "coastalRayDistance": 0.075,
+            "wakeDistance": 0.175,
+            "beamWidth": 0.005,
+            "coastalSources": 24,
+            "coastalSourceDistance": 0.025,
+            "wakeSources": 16,
+            "coastalThreshold": 140,
+            "waveAmplification": 0.36,
+            "currentAmplification": 0.18,
+            "rayDecay": 8,
+            "rayIntensity": 110,
+            "wakeStrength": 150,
+            "conduitBudget": 2400,
+            "fallenDensity": 400000000,
+            "fallenRelease": 0.04,
+            "strainCracking": 0.3,
+            "iceCracking": 0.5,
+            "iceCrackDepth": 0.000075,
+            "frostCracking": 0.05,
+            "impactShock": 0.3,
+            "impactHeatShare": 0.6,
+            "placerMobility": 0.15,
+            "buryDepth": 0.000005,
+            "reopenStrain": 600,
+            "reopenShare": 0.4,
+            "exhumedRelease": 0.3,
+            "fanBarrenEpochs": 3,
+            "fanBarrenDepth": 5e-7,
+            "relictStrength": 0.5,
+            "iceCarry": 0.8,
+            "meltwaterLoss": 0.2,
+            "iceChargeSaturation": 8000000,
+            "thawSubsidence": 7.5e-7,
+            "shelfSaturation": 500,
+            "stormFrontGradient": 30,
+            "standAge": 800,
+            "standCover": 0.6,
+            "peatDepth": 10,
+            "rootCost": 6,
+            "rootFloor": 0.12,
+            "springFlow": 6.25e-19,
+            "springChargeSaturation": 4000000,
+            "springRock": 700,
+            "overdrawShare": 0.5,
+            "sinkDepth": 0.000001,
+            "animalCarry": 0.02,
+            "strataShare": 0.02,
+            "organicChargeAffinity": 4,
+            "groveSap": 600,
+            "sapLoss": 0.3,
+            "forgeStrength": 1000,
+            "forgeCooling": 0.5,
+            "saltPerDeath": 3.125e-7,
+            "saltPerLakeMetre": 160000000,
+            "saltFull": 400,
+            "saltMaterialDensity": 8000000000,
+            "brineFlush": 0.6,
+            "seepShare": 0.5,
+            "crustShare": 0.5,
+            "dissolveShare": 0.3,
+            "dustShare": 0.15,
+            "dustSettle": 0.5,
+            "glassBed": 800,
+            "glassResistance": 300,
+            "desiccation": 0.5,
+            "domeStrain": 600,
+            "domeRise": 7.5e-7,
+            "domeSeep": 0.05,
+            "saltBurn": 0.8,
+            "tenureFull": 300000000,
+            "pilgrimageBonus": 0.1,
+            "lineFull": 10000,
+            "roadFull": 10000000,
+            "wardReach": 0.01,
+            "auroraReinforce": 0.3,
+            "wardSpill": 200,
+            "tearFloor": 0.05,
+            "tearFull": 0.4,
+            "wildShift": 0.3,
+            "doorStrain": 400,
+            "doorDistance": 0.075,
+            "doorMatch": 150,
+            "wildRelief": 0.000005,
+            "wildShuffle": 0.3,
+            "doorChill": 30,
+            "doorPool": 7.5e-7,
+            "doorTravel": 0.00125,
+            "knitVerdure": 0.8,
+            "holdSalting": 1
+          },
+          "effects": {
+            "heat": 0,
+            "iceMelt": 0,
+            "rockResistance": 0,
+            "coastalForcing": 1,
+            "quickening": 0,
+            "conduitOpening": 0,
+            "stillness": 0,
+            "icePersistence": 0,
+            "upwelling": 1,
+            "seaSurface": -0.1,
+            "wakeWarming": 30,
+            "fog": 0.8,
+            "storm": 0.7,
+            "verdure": 0,
+            "salting": 0,
+            "warding": 0,
+            "tearing": 0,
+            "vegetationGrowth": 0,
+            "fire": 0,
+            "organicPreservation": 0,
+            "animalToxicity": 0.5,
+            "seedDispersal": 0
+          },
+          "history": {
+            "retention": 1,
+            "storage": 0,
+            "advect": true
+          },
+          "features": [
+            {
+              "cartography": "site",
+              "id": "locus",
+              "name": "Deep pressure locus",
+              "priority": 95,
+              "seeds": [
+                [
+                  {
+                    "field": "source",
+                    "min": 1
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "crush",
+              "name": "Crush zone",
+              "priority": 60,
+              "seeds": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 360
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 270
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "front",
+              "name": "Upwelling front",
+              "priority": 58,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      1
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 250
+                  },
+                  {
+                    "field": "upwelling",
+                    "min": 250
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      1
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 160
+                  },
+                  {
+                    "field": "upwelling",
+                    "min": 160
+                  }
+                ]
+              ],
+              "coverage": {
+                "field": "intensity",
+                "floor": 160,
+                "full": 700
+              }
+            },
+            {
+              "cartography": "course",
+              "id": "wake",
+              "name": "Ancient wake",
+              "priority": 55,
+              "seeds": [
+                [
+                  {
+                    "field": "wake",
+                    "min": 1
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "lattice",
+              "name": "Interference lattice",
+              "priority": 35,
+              "seeds": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 185
+                  },
+                  {
+                    "field": "noise",
+                    "min": 0.34
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "intensity",
+                    "min": 95
+                  },
+                  {
+                    "field": "noise",
+                    "min": 0.28
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "site",
+              "id": "rogue",
+              "name": "Rogue wave impact",
+              "priority": 50,
+              "seeds": [
+                [
+                  {
+                    "field": "rogue",
+                    "min": 1
+                  }
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "greenwood",
+          "name": "Greenwood",
+          "enabled": true,
+          "origins": [
+            {
+              "id": "stand",
+              "source": "verdant",
+              "propagation": "roots",
+              "renewal": "accumulating",
+              "parameters": {},
+              "stocks": [
+                {
+                  "id": "sap",
+                  "reservoir": "sap",
+                  "carriers": [
+                    "animal",
+                    "people",
+                    "river"
+                  ]
+                },
+                {
+                  "id": "stratum",
+                  "reservoir": "stratum",
+                  "carriers": [
+                    "crust"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "spring",
+              "source": "aquifer",
+              "propagation": "local",
+              "renewal": "continuous",
+              "parameters": {},
+              "stocks": [
+                {
+                  "id": "aquifer",
+                  "reservoir": "aquifer",
+                  "carriers": [
+                    "groundwater"
+                  ]
+                },
+                {
+                  "id": "springwater",
+                  "reservoir": "springwater",
+                  "carriers": []
+                }
+              ]
+            }
+          ],
+          "phase": "post-glacial",
+          "strength": 1,
+          "parameters": {
+            "sourceThreshold": 300,
+            "sourceSpacing": 0.01125,
+            "baseCost": 2,
+            "conductanceDivisor": 26,
+            "baseInput": 360,
+            "logScale": 66,
+            "iceRetention": 0.0003,
+            "coldRetentionDistance": 0.0025,
+            "accumulationArea": 0.00000625,
+            "featureNoiseScale": 0.0175,
+            "rayCount": 1200,
+            "rayDistance": 1.1,
+            "coastalRayDistance": 0.325,
+            "wakeDistance": 0.475,
+            "beamWidth": 0.005,
+            "coastalSources": 200,
+            "coastalSourceDistance": 0.025,
+            "wakeSources": 260,
+            "coastalThreshold": 140,
+            "waveAmplification": 0.36,
+            "currentAmplification": 0.18,
+            "rayDecay": 3,
+            "rayIntensity": 27.8,
+            "wakeStrength": 180,
+            "conduitBudget": 2400,
+            "fallenDensity": 400000000,
+            "fallenRelease": 0.04,
+            "strainCracking": 0.3,
+            "iceCracking": 0.5,
+            "iceCrackDepth": 0.000075,
+            "frostCracking": 0.05,
+            "impactShock": 0.3,
+            "impactHeatShare": 0.6,
+            "placerMobility": 0.15,
+            "buryDepth": 0.000005,
+            "reopenStrain": 600,
+            "reopenShare": 0.4,
+            "exhumedRelease": 0.3,
+            "fanBarrenEpochs": 3,
+            "fanBarrenDepth": 5e-7,
+            "relictStrength": 0.5,
+            "iceCarry": 0.8,
+            "meltwaterLoss": 0.2,
+            "iceChargeSaturation": 8000000,
+            "thawSubsidence": 7.5e-7,
+            "shelfSaturation": 500,
+            "stormFrontGradient": 30,
+            "standAge": 800,
+            "standCover": 0.6,
+            "peatDepth": 10,
+            "rootCost": 6,
+            "rootFloor": 0.12,
+            "springFlow": 6.25e-19,
+            "springChargeSaturation": 4000000,
+            "springRock": 700,
+            "overdrawShare": 0.5,
+            "sinkDepth": 0.000001,
+            "animalCarry": 0.02,
+            "strataShare": 0.02,
+            "organicChargeAffinity": 4,
+            "groveSap": 600,
+            "sapLoss": 0.3,
+            "forgeStrength": 1000,
+            "forgeCooling": 0.5,
+            "saltPerDeath": 3.125e-7,
+            "saltPerLakeMetre": 160000000,
+            "saltFull": 400,
+            "saltMaterialDensity": 8000000000,
+            "brineFlush": 0.6,
+            "seepShare": 0.5,
+            "crustShare": 0.5,
+            "dissolveShare": 0.3,
+            "dustShare": 0.15,
+            "dustSettle": 0.5,
+            "glassBed": 800,
+            "glassResistance": 300,
+            "desiccation": 0.5,
+            "domeStrain": 600,
+            "domeRise": 7.5e-7,
+            "domeSeep": 0.05,
+            "saltBurn": 0.8,
+            "tenureFull": 300000000,
+            "pilgrimageBonus": 0.1,
+            "lineFull": 10000,
+            "roadFull": 10000000,
+            "wardReach": 0.01,
+            "auroraReinforce": 0.3,
+            "wardSpill": 200,
+            "tearFloor": 0.05,
+            "tearFull": 0.4,
+            "wildShift": 0.3,
+            "doorStrain": 400,
+            "doorDistance": 0.075,
+            "doorMatch": 150,
+            "wildRelief": 0.000005,
+            "wildShuffle": 0.3,
+            "doorChill": 30,
+            "doorPool": 7.5e-7,
+            "doorTravel": 0.00125,
+            "knitVerdure": 0.8,
+            "holdSalting": 1
+          },
+          "effects": {
+            "heat": 0,
+            "iceMelt": 0,
+            "rockResistance": 0,
+            "coastalForcing": 0,
+            "quickening": 0,
+            "conduitOpening": 0,
+            "stillness": 0,
+            "icePersistence": 0,
+            "upwelling": 0,
+            "seaSurface": 0,
+            "wakeWarming": 0,
+            "fog": 0,
+            "storm": 0,
+            "verdure": 1,
+            "salting": 0,
+            "warding": 0,
+            "tearing": 0,
+            "vegetationGrowth": 0,
+            "fire": 0,
+            "organicPreservation": 0,
+            "animalToxicity": 0,
+            "seedDispersal": 0
+          },
+          "history": {
+            "retention": 0.6,
+            "storage": 0.4,
+            "advect": true
+          },
+          "features": [
+            {
+              "cartography": "area",
+              "id": "stand",
+              "name": "Old stand",
+              "priority": 40,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "source:stand",
+                    "min": 1
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 300
+                  }
+                ]
+              ],
+              "coverage": {
+                "field": "intensity",
+                "floor": 300,
+                "full": 900
+              }
+            },
+            {
+              "cartography": "site",
+              "id": "wellspring",
+              "name": "Greenwood spring",
+              "priority": 80,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "source:spring",
+                    "min": 1
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "site",
+              "id": "oasis",
+              "name": "Oasis",
+              "priority": 85,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "source:spring",
+                    "min": 1
+                  },
+                  {
+                    "field": "treeCover",
+                    "max": 0.12
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "verdant",
+              "name": "Verdant country",
+              "priority": 15,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 250
+                  },
+                  {
+                    "field": "verdure",
+                    "min": 0.2
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 150
+                  },
+                  {
+                    "field": "verdure",
+                    "min": 0.1
+                  }
+                ]
+              ],
+              "coverage": {
+                "field": "intensity",
+                "floor": 150,
+                "full": 800
+              }
+            },
+            {
+              "cartography": "site",
+              "id": "sinkhole",
+              "name": "Sinkhole field",
+              "priority": 70,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "sealed",
+                    "min": 1
+                  },
+                  {
+                    "field": "source:spring",
+                    "min": 0
+                  }
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "salt",
+          "name": "Salt",
+          "enabled": true,
+          "origins": [
+            {
+              "id": "death",
+              "source": "death",
+              "propagation": "brine",
+              "renewal": "accumulating",
+              "parameters": {},
+              "stocks": [
+                {
+                  "id": "brine",
+                  "reservoir": "brine",
+                  "carriers": []
+                },
+                {
+                  "id": "aquifer",
+                  "reservoir": "aquifer",
+                  "carriers": [
+                    "groundwater"
+                  ]
+                },
+                {
+                  "id": "bed",
+                  "reservoir": "bed",
+                  "carriers": [
+                    "crust",
+                    "wind",
+                    "people"
+                  ]
+                },
+                {
+                  "id": "dust",
+                  "reservoir": "dust",
+                  "carriers": [
+                    "wind"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "dead-lake",
+              "source": "dead-lake",
+              "propagation": "brine",
+              "renewal": "accumulating",
+              "parameters": {},
+              "stocks": [
+                {
+                  "id": "brine",
+                  "reservoir": "brine",
+                  "carriers": []
+                },
+                {
+                  "id": "aquifer",
+                  "reservoir": "aquifer",
+                  "carriers": [
+                    "groundwater"
+                  ]
+                },
+                {
+                  "id": "bed",
+                  "reservoir": "bed",
+                  "carriers": [
+                    "crust",
+                    "wind",
+                    "people"
+                  ]
+                },
+                {
+                  "id": "dust",
+                  "reservoir": "dust",
+                  "carriers": [
+                    "wind"
+                  ]
+                }
+              ]
+            }
+          ],
+          "phase": "post-glacial",
+          "strength": 1,
+          "parameters": {
+            "sourceThreshold": 300,
+            "sourceSpacing": 0.01125,
+            "baseCost": 4,
+            "conductanceDivisor": 26,
+            "baseInput": 360,
+            "logScale": 66,
+            "iceRetention": 0.0003,
+            "coldRetentionDistance": 0.0025,
+            "accumulationArea": 0.00000625,
+            "featureNoiseScale": 0.0175,
+            "rayCount": 1200,
+            "rayDistance": 1.1,
+            "coastalRayDistance": 0.325,
+            "wakeDistance": 0.475,
+            "beamWidth": 0.005,
+            "coastalSources": 200,
+            "coastalSourceDistance": 0.025,
+            "wakeSources": 260,
+            "coastalThreshold": 140,
+            "waveAmplification": 0.36,
+            "currentAmplification": 0.18,
+            "rayDecay": 3,
+            "rayIntensity": 27.8,
+            "wakeStrength": 180,
+            "conduitBudget": 2400,
+            "fallenDensity": 400000000,
+            "fallenRelease": 0.04,
+            "strainCracking": 0.3,
+            "iceCracking": 0.5,
+            "iceCrackDepth": 0.000075,
+            "frostCracking": 0.05,
+            "impactShock": 0.3,
+            "impactHeatShare": 0.6,
+            "placerMobility": 0.15,
+            "buryDepth": 0.000005,
+            "reopenStrain": 600,
+            "reopenShare": 0.4,
+            "exhumedRelease": 0.3,
+            "fanBarrenEpochs": 3,
+            "fanBarrenDepth": 5e-7,
+            "relictStrength": 0.5,
+            "iceCarry": 0.8,
+            "meltwaterLoss": 0.2,
+            "iceChargeSaturation": 8000000,
+            "thawSubsidence": 7.5e-7,
+            "shelfSaturation": 500,
+            "stormFrontGradient": 30,
+            "standAge": 800,
+            "standCover": 0.6,
+            "peatDepth": 10,
+            "rootCost": 6,
+            "rootFloor": 0.12,
+            "springFlow": 6.25e-19,
+            "springChargeSaturation": 4000000,
+            "springRock": 700,
+            "overdrawShare": 0.5,
+            "sinkDepth": 0.000001,
+            "animalCarry": 0.02,
+            "strataShare": 0.02,
+            "organicChargeAffinity": 4,
+            "groveSap": 600,
+            "sapLoss": 0.3,
+            "forgeStrength": 1000,
+            "forgeCooling": 0.5,
+            "saltPerDeath": 3.125e-7,
+            "saltPerLakeMetre": 160000000,
+            "saltFull": 400,
+            "saltMaterialDensity": 8000000000,
+            "brineFlush": 0.6,
+            "seepShare": 0.5,
+            "crustShare": 0.5,
+            "dissolveShare": 0.3,
+            "dustShare": 0.15,
+            "dustSettle": 0.5,
+            "glassBed": 800,
+            "glassResistance": 300,
+            "desiccation": 0.5,
+            "domeStrain": 600,
+            "domeRise": 7.5e-7,
+            "domeSeep": 0.05,
+            "saltBurn": 0.8,
+            "tenureFull": 300000000,
+            "pilgrimageBonus": 0.1,
+            "lineFull": 10000,
+            "roadFull": 10000000,
+            "wardReach": 0.01,
+            "auroraReinforce": 0.3,
+            "wardSpill": 200,
+            "tearFloor": 0.05,
+            "tearFull": 0.4,
+            "wildShift": 0.3,
+            "doorStrain": 400,
+            "doorDistance": 0.075,
+            "doorMatch": 150,
+            "wildRelief": 0.000005,
+            "wildShuffle": 0.3,
+            "doorChill": 30,
+            "doorPool": 7.5e-7,
+            "doorTravel": 0.00125,
+            "knitVerdure": 0.8,
+            "holdSalting": 1
+          },
+          "effects": {
+            "heat": 0,
+            "iceMelt": 0,
+            "rockResistance": 0,
+            "coastalForcing": 0,
+            "quickening": 0,
+            "conduitOpening": 0,
+            "stillness": 0,
+            "icePersistence": 0,
+            "upwelling": 0,
+            "seaSurface": 0,
+            "wakeWarming": 0,
+            "fog": 0,
+            "storm": 0,
+            "verdure": 0,
+            "salting": 1,
+            "warding": 0,
+            "tearing": 0,
+            "vegetationGrowth": 0,
+            "fire": 0,
+            "organicPreservation": 0,
+            "animalToxicity": 0,
+            "seedDispersal": 0
+          },
+          "history": {
+            "retention": 0,
+            "storage": 0,
+            "advect": true
+          },
+          "features": [
+            {
+              "cartography": "area",
+              "id": "ground",
+              "name": "Killing ground",
+              "priority": 60,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "stock:death/brine",
+                    "min": 20
+                  }
+                ]
+              ],
+              "coverage": {
+                "field": "stock:death/brine",
+                "floor": 20,
+                "full": 400
+              }
+            },
+            {
+              "cartography": "area",
+              "id": "pan",
+              "name": "Salt pan",
+              "priority": 55,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 200
+                  }
+                ]
+              ],
+              "coverage": {
+                "field": "intensity",
+                "floor": 200,
+                "full": 900
+              }
+            },
+            {
+              "cartography": "area",
+              "id": "flat",
+              "name": "Glass flat",
+              "priority": 90,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "stock:dead-lake/bed",
+                    "min": 800
+                  }
+                ],
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "stock:death/bed",
+                    "min": 800
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "area",
+              "id": "dust",
+              "name": "Salt dust",
+              "priority": 30,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "stock:death/dust",
+                    "min": 10
+                  }
+                ],
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "stock:dead-lake/dust",
+                    "min": 10
+                  }
+                ]
+              ],
+              "coverage": {
+                "field": "intensity",
+                "floor": 20,
+                "full": 400
+              }
+            }
+          ]
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "hallowed",
+          "name": "Hallowed",
+          "enabled": true,
+          "origins": [
+            {
+              "id": "seat",
+              "source": "tenure",
+              "propagation": "ward",
+              "renewal": "kept",
+              "parameters": {},
+              "stocks": []
+            },
+            {
+              "id": "line",
+              "source": "kept-line",
+              "propagation": "ward",
+              "renewal": "kept",
+              "parameters": {},
+              "stocks": []
+            }
+          ],
+          "phase": "society",
+          "strength": 1,
+          "parameters": {
+            "sourceThreshold": 300,
+            "sourceSpacing": 0.01125,
+            "baseCost": 4,
+            "conductanceDivisor": 26,
+            "baseInput": 360,
+            "logScale": 66,
+            "iceRetention": 0.0003,
+            "coldRetentionDistance": 0.0025,
+            "accumulationArea": 0.00000625,
+            "featureNoiseScale": 0.0175,
+            "rayCount": 1200,
+            "rayDistance": 1.1,
+            "coastalRayDistance": 0.325,
+            "wakeDistance": 0.475,
+            "beamWidth": 0.005,
+            "coastalSources": 200,
+            "coastalSourceDistance": 0.025,
+            "wakeSources": 260,
+            "coastalThreshold": 140,
+            "waveAmplification": 0.36,
+            "currentAmplification": 0.18,
+            "rayDecay": 3,
+            "rayIntensity": 27.8,
+            "wakeStrength": 180,
+            "conduitBudget": 2400,
+            "fallenDensity": 400000000,
+            "fallenRelease": 0.04,
+            "strainCracking": 0.3,
+            "iceCracking": 0.5,
+            "iceCrackDepth": 0.000075,
+            "frostCracking": 0.05,
+            "impactShock": 0.3,
+            "impactHeatShare": 0.6,
+            "placerMobility": 0.15,
+            "buryDepth": 0.000005,
+            "reopenStrain": 600,
+            "reopenShare": 0.4,
+            "exhumedRelease": 0.3,
+            "fanBarrenEpochs": 3,
+            "fanBarrenDepth": 5e-7,
+            "relictStrength": 0.5,
+            "iceCarry": 0.8,
+            "meltwaterLoss": 0.2,
+            "iceChargeSaturation": 8000000,
+            "thawSubsidence": 7.5e-7,
+            "shelfSaturation": 500,
+            "stormFrontGradient": 30,
+            "standAge": 800,
+            "standCover": 0.6,
+            "peatDepth": 10,
+            "rootCost": 6,
+            "rootFloor": 0.12,
+            "springFlow": 6.25e-19,
+            "springChargeSaturation": 4000000,
+            "springRock": 700,
+            "overdrawShare": 0.5,
+            "sinkDepth": 0.000001,
+            "animalCarry": 0.02,
+            "strataShare": 0.02,
+            "organicChargeAffinity": 4,
+            "groveSap": 600,
+            "sapLoss": 0.3,
+            "forgeStrength": 1000,
+            "forgeCooling": 0.5,
+            "saltPerDeath": 3.125e-7,
+            "saltPerLakeMetre": 160000000,
+            "saltFull": 400,
+            "saltMaterialDensity": 8000000000,
+            "brineFlush": 0.6,
+            "seepShare": 0.5,
+            "crustShare": 0.5,
+            "dissolveShare": 0.3,
+            "dustShare": 0.15,
+            "dustSettle": 0.5,
+            "glassBed": 800,
+            "glassResistance": 300,
+            "desiccation": 0.5,
+            "domeStrain": 600,
+            "domeRise": 7.5e-7,
+            "domeSeep": 0.05,
+            "saltBurn": 0.8,
+            "tenureFull": 300000000,
+            "pilgrimageBonus": 0.1,
+            "lineFull": 10000,
+            "roadFull": 10000000,
+            "wardReach": 0.01,
+            "auroraReinforce": 0.3,
+            "wardSpill": 200,
+            "tearFloor": 0.05,
+            "tearFull": 0.4,
+            "wildShift": 0.3,
+            "doorStrain": 400,
+            "doorDistance": 0.075,
+            "doorMatch": 150,
+            "wildRelief": 0.000005,
+            "wildShuffle": 0.3,
+            "doorChill": 30,
+            "doorPool": 7.5e-7,
+            "doorTravel": 0.00125,
+            "knitVerdure": 0.8,
+            "holdSalting": 1
+          },
+          "effects": {
+            "heat": 0,
+            "iceMelt": 0,
+            "rockResistance": 300,
+            "coastalForcing": 0,
+            "quickening": 0,
+            "conduitOpening": 0,
+            "stillness": 0,
+            "icePersistence": 0,
+            "upwelling": 0,
+            "seaSurface": 0,
+            "wakeWarming": 0,
+            "fog": 0,
+            "storm": 0,
+            "verdure": 0,
+            "salting": 0,
+            "warding": 1,
+            "tearing": 0,
+            "vegetationGrowth": 0,
+            "fire": 0,
+            "organicPreservation": 0,
+            "animalToxicity": 0,
+            "seedDispersal": 0
+          },
+          "history": {
+            "retention": 0.7,
+            "storage": 0.5,
+            "advect": true
+          },
+          "features": [
+            {
+              "cartography": "area",
+              "id": "ring",
+              "name": "Sanctuary ring",
+              "priority": 88,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 300
+                  }
+                ]
+              ],
+              "retains": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 150
+                  }
+                ]
+              ],
+              "coverage": {
+                "field": "intensity",
+                "floor": 150,
+                "full": 1000
+              }
+            },
+            {
+              "cartography": "area",
+              "id": "line",
+              "name": "Ward line",
+              "priority": 86,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "source:line",
+                    "min": 1
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 100
+                  }
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "veil",
+          "name": "Veil",
+          "enabled": true,
+          "origins": [
+            {
+              "id": "tear",
+              "source": "strain",
+              "propagation": "local",
+              "renewal": "emergent",
+              "parameters": {},
+              "stocks": []
+            },
+            {
+              "id": "door",
+              "source": "pairing",
+              "propagation": "local",
+              "renewal": "emergent",
+              "parameters": {},
+              "stocks": []
+            }
+          ],
+          "phase": "post-glacial",
+          "strength": 1,
+          "parameters": {
+            "sourceThreshold": 300,
+            "sourceSpacing": 0.01125,
+            "baseCost": 4,
+            "conductanceDivisor": 26,
+            "baseInput": 360,
+            "logScale": 66,
+            "iceRetention": 0.0003,
+            "coldRetentionDistance": 0.0025,
+            "accumulationArea": 0.00000625,
+            "featureNoiseScale": 0.0175,
+            "rayCount": 1200,
+            "rayDistance": 1.1,
+            "coastalRayDistance": 0.325,
+            "wakeDistance": 0.475,
+            "beamWidth": 0.005,
+            "coastalSources": 200,
+            "coastalSourceDistance": 0.025,
+            "wakeSources": 260,
+            "coastalThreshold": 140,
+            "waveAmplification": 0.36,
+            "currentAmplification": 0.18,
+            "rayDecay": 3,
+            "rayIntensity": 27.8,
+            "wakeStrength": 180,
+            "conduitBudget": 2400,
+            "fallenDensity": 400000000,
+            "fallenRelease": 0.04,
+            "strainCracking": 0.3,
+            "iceCracking": 0.5,
+            "iceCrackDepth": 0.000075,
+            "frostCracking": 0.05,
+            "impactShock": 0.3,
+            "impactHeatShare": 0.6,
+            "placerMobility": 0.15,
+            "buryDepth": 0.000005,
+            "reopenStrain": 600,
+            "reopenShare": 0.4,
+            "exhumedRelease": 0.3,
+            "fanBarrenEpochs": 3,
+            "fanBarrenDepth": 5e-7,
+            "relictStrength": 0.5,
+            "iceCarry": 0.8,
+            "meltwaterLoss": 0.2,
+            "iceChargeSaturation": 8000000,
+            "thawSubsidence": 7.5e-7,
+            "shelfSaturation": 500,
+            "stormFrontGradient": 30,
+            "standAge": 800,
+            "standCover": 0.6,
+            "peatDepth": 10,
+            "rootCost": 6,
+            "rootFloor": 0.12,
+            "springFlow": 6.25e-19,
+            "springChargeSaturation": 4000000,
+            "springRock": 700,
+            "overdrawShare": 0.5,
+            "sinkDepth": 0.000001,
+            "animalCarry": 0.02,
+            "strataShare": 0.02,
+            "organicChargeAffinity": 4,
+            "groveSap": 600,
+            "sapLoss": 0.3,
+            "forgeStrength": 1000,
+            "forgeCooling": 0.5,
+            "saltPerDeath": 3.125e-7,
+            "saltPerLakeMetre": 160000000,
+            "saltFull": 400,
+            "saltMaterialDensity": 8000000000,
+            "brineFlush": 0.6,
+            "seepShare": 0.5,
+            "crustShare": 0.5,
+            "dissolveShare": 0.3,
+            "dustShare": 0.15,
+            "dustSettle": 0.5,
+            "glassBed": 800,
+            "glassResistance": 300,
+            "desiccation": 0.5,
+            "domeStrain": 600,
+            "domeRise": 7.5e-7,
+            "domeSeep": 0.05,
+            "saltBurn": 0.8,
+            "tenureFull": 300000000,
+            "pilgrimageBonus": 0.1,
+            "lineFull": 10000,
+            "roadFull": 10000000,
+            "wardReach": 0.01,
+            "auroraReinforce": 0.3,
+            "wardSpill": 200,
+            "tearFloor": 0.05,
+            "tearFull": 0.4,
+            "wildShift": 0.3,
+            "doorStrain": 400,
+            "doorDistance": 0.075,
+            "doorMatch": 150,
+            "wildRelief": 0.000005,
+            "wildShuffle": 0.3,
+            "doorChill": 30,
+            "doorPool": 7.5e-7,
+            "doorTravel": 0.00125,
+            "knitVerdure": 0.8,
+            "holdSalting": 1
+          },
+          "effects": {
+            "heat": 0,
+            "iceMelt": 0,
+            "rockResistance": 0,
+            "coastalForcing": 0,
+            "quickening": 0,
+            "conduitOpening": 0,
+            "stillness": 0,
+            "icePersistence": 0,
+            "upwelling": 0,
+            "seaSurface": 0,
+            "wakeWarming": 0,
+            "fog": 0,
+            "storm": 0,
+            "verdure": 0,
+            "salting": 0,
+            "warding": 0,
+            "tearing": 1,
+            "vegetationGrowth": 0,
+            "fire": 0,
+            "organicPreservation": 0,
+            "animalToxicity": 0,
+            "seedDispersal": 0
+          },
+          "history": {
+            "retention": 0,
+            "storage": 0,
+            "advect": true
+          },
+          "features": [
+            {
+              "cartography": "area",
+              "id": "tear",
+              "name": "Tear",
+              "priority": 50,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 300
+                  }
+                ]
+              ],
+              "coverage": {
+                "field": "intensity",
+                "floor": 300,
+                "full": 1000
+              }
+            },
+            {
+              "cartography": "area",
+              "id": "wild",
+              "name": "Wild zone",
+              "priority": 75,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "wild",
+                    "min": 0.3
+                  },
+                  {
+                    "field": "intensity",
+                    "min": 100
+                  }
+                ]
+              ]
+            },
+            {
+              "cartography": "site",
+              "id": "door",
+              "name": "Door",
+              "priority": 95,
+              "seeds": [
+                [
+                  {
+                    "field": "water",
+                    "values": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "field": "source:door",
+                    "min": 1
+                  }
+                ]
+              ]
+            }
+          ]
+        }
+      ],
+      "confluences": [
+        {
+          "lengthUnits": "relative",
+          "id": "war",
+          "name": "Shatter rim",
+          "enabled": true,
+          "systems": [
+            "fire",
+            "aurora"
+          ],
+          "floor": 0.2,
+          "strainScale": 4,
+          "priority": 100,
+          "cartography": "area",
+          "seeds": [
+            [
+              {
+                "field": "system:fire",
+                "min": 260
+              },
+              {
+                "field": "system:aurora",
+                "min": 340
+              }
+            ]
+          ],
+          "effects": {
+            "fractureConductance": 220,
+            "rockResistance": -320,
+            "relief": 0.00001,
+            "soilRemoval": 0.8,
+            "coastalForcing": 0,
+            "fog": 0,
+            "iceMelt": 0,
+            "debris": 0,
+            "toxicity": 0.2
+          },
+          "groundMaterial": "tornstone",
+          "hazard": {
+            "kind": "thermal-fracture",
+            "rate": 0.001,
+            "severity": 0.3,
+            "radius": 0.0005,
+            "cause": "Fire heat met Aurora-bearing ice and the ground shattered between them."
+          }
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "steam",
+          "name": "Boiling shore",
+          "enabled": true,
+          "systems": [
+            "fire",
+            "pressure"
+          ],
+          "floor": 0.2,
+          "strainScale": 4,
+          "priority": 110,
+          "cartography": "course",
+          "seeds": [
+            [
+              {
+                "field": "system:fire",
+                "min": 390
+              },
+              {
+                "field": "system:pressure",
+                "min": 420
+              },
+              {
+                "field": "fracture",
+                "min": 520
+              }
+            ]
+          ],
+          "effects": {
+            "fractureConductance": 120,
+            "rockResistance": 0,
+            "relief": 0,
+            "soilRemoval": 0.3,
+            "coastalForcing": 320,
+            "fog": 0.4,
+            "iceMelt": 0,
+            "debris": 0,
+            "toxicity": 0
+          },
+          "groundMaterial": "sinter",
+          "hazard": {
+            "kind": "steam-fracture",
+            "rate": 0.002,
+            "severity": 0.4,
+            "radius": 0.00075,
+            "cause": "Ocean Pressure entered conductive Fire fractures and the shore boiled."
+          }
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "breach",
+          "name": "Breach",
+          "enabled": true,
+          "systems": [
+            "pressure",
+            "aurora"
+          ],
+          "floor": 0.2,
+          "strainScale": 4,
+          "priority": 120,
+          "cartography": "site",
+          "seeds": [
+            [
+              {
+                "field": "system:pressure",
+                "min": 390
+              },
+              {
+                "field": "system:aurora",
+                "min": 430
+              },
+              {
+                "field": "water",
+                "values": [
+                  1
+                ]
+              },
+              {
+                "field": "ice",
+                "min": 0.000055
+              }
+            ]
+          ],
+          "effects": {
+            "fractureConductance": 0,
+            "rockResistance": 0,
+            "relief": 0,
+            "soilRemoval": 0,
+            "coastalForcing": 240,
+            "fog": 0.5,
+            "iceMelt": 0.000015,
+            "debris": 7.5e-7,
+            "toxicity": 0
+          },
+          "groundMaterial": "crushstone",
+          "hazard": {
+            "kind": "pressure-ice-breach",
+            "rate": 0.002,
+            "severity": 0.4,
+            "radius": 0.00125,
+            "cause": "Pressure reached charged coastal ice and breached it."
+          }
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "rot",
+          "name": "Overgrowth rot",
+          "enabled": true,
+          "systems": [
+            "fire",
+            "greenwood"
+          ],
+          "floor": 0.2,
+          "strainScale": 4,
+          "priority": 95,
+          "cartography": "area",
+          "seeds": [
+            [
+              {
+                "field": "system:fire",
+                "min": 300
+              },
+              {
+                "field": "system:greenwood",
+                "min": 300
+              },
+              {
+                "field": "water",
+                "values": [
+                  0
+                ]
+              }
+            ]
+          ],
+          "effects": {
+            "fractureConductance": 80,
+            "rockResistance": 0,
+            "relief": 0,
+            "soilRemoval": 0.2,
+            "coastalForcing": 0,
+            "fog": 0.2,
+            "iceMelt": 0,
+            "debris": 0,
+            "toxicity": 0.6
+          },
+          "groundMaterial": "rootstone",
+          "hazard": {
+            "kind": "rot-fever",
+            "rate": 0.0015,
+            "severity": 0.25,
+            "radius": 0.000625,
+            "cause": "Fire quickened a Greenwood until it rotted and its springs boiled."
+          }
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "frozen",
+          "name": "Frozen Deepwood",
+          "enabled": true,
+          "systems": [
+            "aurora",
+            "greenwood"
+          ],
+          "floor": 0.2,
+          "strainScale": 4,
+          "priority": 90,
+          "cartography": "area",
+          "seeds": [
+            [
+              {
+                "field": "system:aurora",
+                "min": 400
+              },
+              {
+                "field": "system:greenwood",
+                "min": 300
+              },
+              {
+                "field": "ice",
+                "min": 0.0000125
+              }
+            ]
+          ],
+          "effects": {
+            "fractureConductance": 0,
+            "rockResistance": 0,
+            "relief": 0,
+            "soilRemoval": 0,
+            "coastalForcing": 0,
+            "fog": 0,
+            "iceMelt": 0,
+            "debris": 0,
+            "toxicity": 0
+          },
+          "groundMaterial": "rimerot"
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "brackish",
+          "name": "Brackish wending",
+          "enabled": true,
+          "systems": [
+            "pressure",
+            "greenwood"
+          ],
+          "floor": 0.2,
+          "strainScale": 4,
+          "priority": 92,
+          "cartography": "area",
+          "seeds": [
+            [
+              {
+                "field": "system:pressure",
+                "min": 300
+              },
+              {
+                "field": "system:greenwood",
+                "min": 300
+              },
+              {
+                "field": "water",
+                "values": [
+                  0
+                ]
+              }
+            ]
+          ],
+          "effects": {
+            "fractureConductance": 0,
+            "rockResistance": 0,
+            "relief": 0,
+            "soilRemoval": 0,
+            "coastalForcing": 0,
+            "fog": 0.3,
+            "iceMelt": 0,
+            "debris": 0,
+            "toxicity": 0.3
+          },
+          "groundMaterial": "tufa"
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "preserved",
+          "name": "Preserved barrow",
+          "enabled": true,
+          "systems": [
+            "aurora",
+            "salt"
+          ],
+          "floor": 0.2,
+          "strainScale": 4,
+          "priority": 96,
+          "cartography": "area",
+          "seeds": [
+            [
+              {
+                "field": "system:aurora",
+                "min": 300
+              },
+              {
+                "field": "system:salt",
+                "min": 200
+              },
+              {
+                "field": "water",
+                "values": [
+                  0
+                ]
+              }
+            ]
+          ],
+          "effects": {
+            "fractureConductance": 0,
+            "rockResistance": 200,
+            "relief": 0,
+            "soilRemoval": 0,
+            "coastalForcing": 0,
+            "fog": 0,
+            "iceMelt": 0,
+            "debris": 0,
+            "toxicity": 0.3
+          },
+          "hazard": {
+            "kind": "undead",
+            "rate": 0.001,
+            "severity": 0.3,
+            "radius": 0.0005,
+            "cause": "Aurora held a Salt barrow still and its dead did not rest."
+          }
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "fired",
+          "name": "Fired crust",
+          "enabled": true,
+          "systems": [
+            "fire",
+            "salt"
+          ],
+          "floor": 0.2,
+          "strainScale": 4,
+          "priority": 97,
+          "cartography": "area",
+          "seeds": [
+            [
+              {
+                "field": "system:fire",
+                "min": 300
+              },
+              {
+                "field": "system:salt",
+                "min": 200
+              },
+              {
+                "field": "water",
+                "values": [
+                  0
+                ]
+              }
+            ]
+          ],
+          "effects": {
+            "fractureConductance": 0,
+            "rockResistance": 300,
+            "relief": 0,
+            "soilRemoval": 0.5,
+            "coastalForcing": 0,
+            "fog": 0,
+            "iceMelt": 0,
+            "debris": 0,
+            "toxicity": 0
+          },
+          "groundMaterial": "saltGlass"
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "standing-dead",
+          "name": "Standing-dead front",
+          "enabled": true,
+          "systems": [
+            "greenwood",
+            "salt"
+          ],
+          "floor": 0.2,
+          "strainScale": 4,
+          "priority": 93,
+          "cartography": "area",
+          "seeds": [
+            [
+              {
+                "field": "system:greenwood",
+                "min": 300
+              },
+              {
+                "field": "system:salt",
+                "min": 200
+              },
+              {
+                "field": "water",
+                "values": [
+                  0
+                ]
+              }
+            ]
+          ],
+          "effects": {
+            "fractureConductance": 0,
+            "rockResistance": 0,
+            "relief": 0,
+            "soilRemoval": 0,
+            "coastalForcing": 0,
+            "fog": 0,
+            "iceMelt": 0,
+            "debris": 0,
+            "toxicity": 0.5
+          }
+        },
+        {
+          "lengthUnits": "relative",
+          "id": "brine-shore",
+          "name": "Brine shore",
+          "enabled": true,
+          "systems": [
+            "pressure",
+            "salt"
+          ],
+          "floor": 0.2,
+          "strainScale": 4,
+          "priority": 94,
+          "cartography": "area",
+          "seeds": [
+            [
+              {
+                "field": "system:pressure",
+                "min": 300
+              },
+              {
+                "field": "system:salt",
+                "min": 200
+              },
+              {
+                "field": "water",
+                "values": [
+                  0
+                ]
+              }
+            ]
+          ],
+          "effects": {
+            "fractureConductance": 0,
+            "rockResistance": 0,
+            "relief": 0,
+            "soilRemoval": 0,
+            "coastalForcing": 0,
+            "fog": 0.3,
+            "iceMelt": 0,
+            "debris": 0,
+            "toxicity": 0.2
+          },
+          "groundMaterial": "saltbed"
+        }
+      ]
+    }
+  },
+  "width": 4000000,
+  "height": 3000000
+}

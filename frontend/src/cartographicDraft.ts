@@ -1,16 +1,10 @@
-import {
-  atlasGenerationModules,
-  controlFeatures,
-  matchCartographicChoice,
-  mergeCartographicConfiguration,
-  type CartographicControl,
-  type FeatureSelection,
-} from "@atlas/generation";
-import { requireThat } from "@atlas/domain";
-import { updateFeature, type GenerationDraft } from "./generationDraft";
+import type { CartographicControl } from "./generationTypes";
+import { atlasFeatureDefinitions, controlFeatures } from "./generationPresentation";
+import type { GenerationDraft } from "./generationDraft";
+import type { GenerationWorkflow } from "./useGenerationWorkflow";
 
 export function cartographicControls() {
-  return atlasGenerationModules.features().flatMap((feature) => feature.cartography ?? []);
+  return atlasFeatureDefinitions.flatMap((feature) => feature.cartography ?? []);
 }
 export function visibleCartographicControls(inherited: boolean, draft?: GenerationDraft) {
   return cartographicControls()
@@ -21,11 +15,10 @@ export function visibleCartographicControls(inherited: boolean, draft?: Generati
       choices: control.choices.filter((choice) => !inherited || !choice.initialOnly),
     }));
 }
-
 function controlAvailable(draft: GenerationDraft, control: CartographicControl) {
-  const owner = atlasGenerationModules
-    .features()
-    .find((feature) => feature.cartography?.some((entry) => entry.id === control.id))!;
+  const owner = atlasFeatureDefinitions.find((feature) =>
+    feature.cartography?.some((entry) => entry.id === control.id)
+  )!;
   if (
     !draft.recipe.features![owner.id]?.enabled ||
     !owner.domains.some((domain) =>
@@ -39,24 +32,9 @@ function controlAvailable(draft: GenerationDraft, control: CartographicControl) 
   }[];
   return systems.some((system) => system.id === control.system);
 }
-
-export function cartographicValue(draft: GenerationDraft, control: CartographicControl) {
-  const selection: FeatureSelection = {};
-  for (const feature of atlasGenerationModules.features()) {
-    const configured = draft.recipe.features?.[feature.id];
-    selection[feature.id] = {
-      ...configured,
-      enabled:
-        Boolean(configured?.enabled) &&
-        feature.domains.some((domain) =>
-          draft.recipe.domains.includes(domain as (typeof draft.recipe.domains)[number])
-        ),
-    };
-  }
-  return matchCartographicChoice(control, selection)?.id ?? "custom";
+export function cartographicValue(flow: GenerationWorkflow, control: CartographicControl) {
+  return flow.cartography[control.id] ?? "custom";
 }
-
-/** Unfinished numeric input affects only controls that actually write that value. */
 export function cartographicFieldPending(
   control: CartographicControl,
   errors: Record<string, string>
@@ -70,40 +48,6 @@ export function cartographicFieldPending(
     )
   );
 }
-
-export function applyCartographicChoice(
-  draft: GenerationDraft,
-  control: CartographicControl,
-  value: string
-) {
-  const selected = control.choices.find((item) => item.id === value);
-  requireThat(selected, "cartographic_choice", "Choose a supported cartographic option.");
-  let next = draft;
-  const patches = selected.resolve?.(draft.recipe.features!) ?? selected.features;
-  for (const [id, patch] of Object.entries(patches)) {
-    const merged = { ...patch };
-    if (patch.configuration !== undefined)
-      merged.configuration = mergeCartographicConfiguration(
-        next.recipe.features![id].configuration!,
-        patch.configuration
-      );
-    next = updateFeature(next, id, merged);
-  }
-  const visited = new Set<string>();
-  const requireFeature = (id: string) => {
-    if (visited.has(id)) return;
-    visited.add(id);
-    const feature = atlasGenerationModules.features().find((entry) => entry.id === id);
-    requireThat(feature, "cartographic_feature", `Unknown cartographic feature ${id}.`);
-    for (const prerequisite of feature.requires ?? []) {
-      next = updateFeature(next, prerequisite, { enabled: true });
-      requireFeature(prerequisite);
-    }
-  };
-  for (const [id, patch] of Object.entries(patches)) if (patch.enabled) requireFeature(id);
-  return next;
-}
-
 export function cartographicFeatureStage(id: string) {
   const control = cartographicControls().find((control) => controlFeatures(control).includes(id));
   return control?.system ? "magic" : (control?.section ?? "environment");

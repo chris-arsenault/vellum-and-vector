@@ -1,28 +1,14 @@
-import {
-  beforePresentEpoch,
-  requireThat,
-  type EcologyEpoch,
-  type Epoch,
-  type MagicConfluence,
-  type MagicSystem,
-  type ParameterValues,
-  type World,
-} from "@atlas/domain";
-import {
-  generationEpochSchema,
-  terrainEpochs,
-  landscapeEpoch,
-  type TerrainHistory,
-} from "@atlas/generation";
-import { defaultEpochs } from "./worldCreation";
-import { normalizeGenerationDraft, updateFeature, type GenerationDraft } from "./generationDraft";
-import { draftEpochBindings, sharedClock, rebindDraftEpochs } from "./generationEpochBindings";
+import type { EcologyEpoch, Epoch, MagicConfluence, MagicSystem, HumanEra } from "@atlas/context";
+import type { ParameterValues } from "./generationTypes";
+import { requireFormValue } from "./values";
+import { updateFeature, type GenerationDraft } from "./generationDraft";
+import { rebindDraftEpochs } from "./generationEpochBindings";
+import { defaultEpoch, beforePresentEpoch } from "./generationPresentation";
 
 type PhysicalEpochPatch = Partial<Omit<Epoch, "id" | "ecology" | "magicActivity">>;
 
 function configuration(draft: GenerationDraft, feature: string) {
-  const normalized = draft.recipe.features ? draft : normalizeGenerationDraft(draft);
-  return normalized.recipe.features![feature].configuration!;
+  return draft.recipe.features![feature].configuration!;
 }
 
 function physicalEpoch({ ecology: _ecology, magicActivity: _magic, ...physical }: Epoch) {
@@ -33,32 +19,7 @@ function physicalEpoch({ ecology: _ecology, magicActivity: _magic, ...physical }
 
 /** A derived view of the shared clock and its feature-owned regimes. */
 export function draftEpochs(draft: GenerationDraft): Epoch[] {
-  const selection = draft.recipe.features ?? normalizeGenerationDraft(draft).recipe.features!;
-  const epochs = sharedClock(selection).map((epoch) => {
-    const combined = structuredClone(epoch);
-    for (const binding of draftEpochBindings()) {
-      if (!binding.extension) continue;
-      const records = selection[binding.id].configuration![binding.path] as Record<
-        string,
-        ParameterValues
-      >;
-      Object.assign(combined, { [binding.extension]: structuredClone(records[epoch.id] ?? {}) });
-    }
-    return combined;
-  });
-  const history = selection["physical.lifecycle"].configuration!.history as TerrainHistory | null;
-  const physical = history ? terrainEpochs(epochs, history) : epochs;
-  const ecology = selection["ecology.living"].configuration!;
-  return physical.map((epoch, index) => ({
-    ...epoch,
-    ecology: landscapeEpoch(
-      epoch.ecology as EcologyEpoch,
-      ecology.landscape as EcologyEpoch | undefined,
-      Boolean(ecology.glaciated),
-      index,
-      epochs.length
-    ),
-  }));
+  return draft.recipe.settings.epochs;
 }
 
 export function replaceDraftEpochs(
@@ -66,16 +27,18 @@ export function replaceDraftEpochs(
   epochs: Epoch[],
   identities: Record<string, string> = {}
 ): GenerationDraft {
-  const normalized = draft.recipe.features ? draft : normalizeGenerationDraft(draft);
-  const parsed = generationEpochSchema.array().min(1).parse(epochs);
-  requireThat(
+  const parsed = epochs;
+  requireFormValue(
+    parsed.length > 0 && parsed.every((epoch) => epoch.id.trim()),
+    "Keep at least one named epoch."
+  );
+  requireFormValue(
     new Set(parsed.map((epoch) => epoch.id)).size === parsed.length,
-    "draft_epoch",
     "Use unique history names."
   );
-  const features = rebindDraftEpochs(normalized.recipe.features!, parsed, identities);
+  const features = rebindDraftEpochs(draft.recipe.features!, parsed, identities);
   const cultures = features["human.cultures"];
-  const eras = cultures.configuration!.eras as unknown as NonNullable<World["humanEras"]>;
+  const eras = cultures.configuration!.eras as unknown as HumanEra[];
   features["human.cultures"] = {
     ...cultures,
     configuration: {
@@ -97,9 +60,10 @@ export function replaceDraftEpochs(
     features["ecology.living"].configuration!.glaciated = false;
   }
   return {
-    ...normalized,
+    ...draft,
     recipe: {
-      ...normalized.recipe,
+      ...draft.recipe,
+      settings: { ...draft.recipe.settings, epochs: parsed },
       features,
     },
   };
@@ -112,9 +76,8 @@ function changeEpoch(
   identities: Record<string, string> = {}
 ) {
   const epochs = draftEpochs(draft);
-  requireThat(
+  requireFormValue(
     epochs.some((epoch) => epoch.id === id),
-    "draft_epoch",
     `Choose an existing epoch: ${id}.`
   );
   return replaceDraftEpochs(
@@ -126,12 +89,11 @@ function changeEpoch(
 
 export function updatePhysicalEpoch(draft: GenerationDraft, id: string, patch: PhysicalEpochPatch) {
   const epochs = draftEpochs(draft);
-  requireThat(
+  requireFormValue(
     epochs.some((epoch) => epoch.id === id),
-    "draft_epoch",
     `Choose an existing epoch: ${id}.`
   );
-  return updateFeature(draft, "physical.lifecycle", {
+  const next = updateFeature(draft, "physical.lifecycle", {
     configuration: {
       history: null,
       epochs: epochs.map((epoch) =>
@@ -139,6 +101,11 @@ export function updatePhysicalEpoch(draft: GenerationDraft, id: string, patch: P
       ),
     },
   });
+  next.recipe.settings = {
+    ...draft.recipe.settings,
+    epochs: epochs.map((epoch) => (epoch.id === id ? { ...epoch, ...patch } : epoch)),
+  };
+  return next;
 }
 
 export function renameDraftEpoch(draft: GenerationDraft, id: string, nextId: string) {
@@ -148,20 +115,19 @@ export function renameDraftEpoch(draft: GenerationDraft, id: string, nextId: str
 
 export function insertDraftEpoch(draft: GenerationDraft, index: number, id: string) {
   const epochs = draftEpochs(draft);
-  requireThat(
+  requireFormValue(
     Number.isInteger(index) && index >= 0 && index <= epochs.length,
-    "draft_epoch",
     "Choose an insertion position in the shared history."
   );
-  epochs.splice(index, 0, generationEpochSchema.parse({ ...defaultEpochs()[0], id }));
-  return replaceDraftEpochs(draft, epochs);
+  const next = [...epochs];
+  next.splice(index, 0, { ...defaultEpoch(), id });
+  return replaceDraftEpochs(draft, next);
 }
 
 export function deleteDraftEpoch(draft: GenerationDraft, id: string) {
   const epochs = draftEpochs(draft);
-  requireThat(
+  requireFormValue(
     epochs.some((epoch) => epoch.id === id),
-    "draft_epoch",
     `Choose an existing epoch: ${id}.`
   );
   return replaceDraftEpochs(
@@ -171,11 +137,10 @@ export function deleteDraftEpoch(draft: GenerationDraft, id: string) {
 }
 
 export function moveDraftEpoch(draft: GenerationDraft, id: string, index: number) {
-  const epochs = draftEpochs(draft),
+  const epochs = [...draftEpochs(draft)],
     previous = epochs.findIndex((epoch) => epoch.id === id);
-  requireThat(
+  requireFormValue(
     previous >= 0 && Number.isInteger(index) && index >= 0 && index < epochs.length,
-    "draft_epoch",
     "Choose an existing epoch and history position."
   );
   const [epoch] = epochs.splice(previous, 1);
@@ -188,21 +153,27 @@ export function updateEcologyEpoch(
   id: string,
   patch: Partial<EcologyEpoch>
 ) {
-  requireThat(
+  requireFormValue(
     draftEpochs(draft).some((epoch) => epoch.id === id),
-    "draft_epoch",
     `Choose an existing epoch: ${id}.`
   );
   const epochs = Object.fromEntries(
     draftEpochs(draft).map((epoch) => [epoch.id, epoch.ecology ?? {}])
   );
-  return updateFeature(draft, "ecology.living", {
+  const next = updateFeature(draft, "ecology.living", {
     configuration: {
       landscape: null,
       glaciated: false,
       epochs: { ...epochs, [id]: { ...epochs[id], ...patch } },
     },
   });
+  next.recipe.settings = {
+    ...draft.recipe.settings,
+    epochs: draftEpochs(draft).map((epoch) =>
+      epoch.id === id ? { ...epoch, ecology: { ...epoch.ecology!, ...patch } } : epoch
+    ),
+  };
+  return next;
 }
 
 export function updateMagicActivity(
@@ -211,9 +182,8 @@ export function updateMagicActivity(
   system: string,
   value: number
 ) {
-  requireThat(
+  requireFormValue(
     draftEpochs(draft).some((epoch) => epoch.id === id),
-    "draft_epoch",
     `Choose an existing epoch: ${id}.`
   );
   const activity = configuration(draft, "magic.configured").activity as Record<

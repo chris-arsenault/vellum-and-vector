@@ -1,4 +1,5 @@
-import { controlFeatures, type SetupFeature } from "@atlas/generation";
+import type { SetupFeature } from "./generationTypes";
+import { controlFeatures } from "./generationPresentation";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { CartographicDecision } from "./CartographicDecisions";
 import { visibleCartographicControls } from "./cartographicDraft";

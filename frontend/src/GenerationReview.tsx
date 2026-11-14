@@ -1,5 +1,5 @@
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
-import type { CartographicControl } from "@atlas/generation";
+import type { CartographicControl } from "./generationTypes";
 import {
   cartographicValue,
   visibleCartographicControls,
@@ -9,7 +9,7 @@ import { useWorkflowFields } from "./workflowFieldState";
 import { GenerationConfigurationSummary } from "./GenerationConfigurationSummary";
 import { GenerationRecipeEditor } from "./GenerationRecipeEditor";
 import { SetupDisclosure } from "./SetupDisclosure";
-import { MapScale, type MagicSystem } from "@atlas/domain";
+import type { MagicSystem } from "@atlas/context";
 
 export function GenerationReview({ flow }: { flow: GenerationWorkflow }) {
   const changed =
@@ -22,7 +22,7 @@ export function GenerationReview({ flow }: { flow: GenerationWorkflow }) {
     <>
       <p>
         <strong>{flow.draft.name || "Untitled world"}</strong> ·{" "}
-        {MapScale.inUnits(flow.draft.width, "km")} × {MapScale.inUnits(flow.draft.height, "km")} km
+        {flow.draft.width / 1000} × {flow.draft.height / 1000} km
         · {flow.draft.recipe.quality} detail · seed {flow.draft.recipe.seed}
       </p>
       <ReviewDecisions flow={flow} />
@@ -81,7 +81,7 @@ function ReviewDecision({
   const fields = useWorkflowFields();
   const value = cartographicFieldPending(control, fields.errors)
     ? "custom"
-    : cartographicValue(flow.draft, control);
+    : cartographicValue(flow, control);
   const systems = flow.draft.recipe.features!["magic.configured"].configuration!
     .magicSystems as unknown as MagicSystem[];
   const system = systems.find((entry) => entry.id === control.system);

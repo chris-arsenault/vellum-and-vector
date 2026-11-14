@@ -31,13 +31,14 @@ Generation, regional selection and refinement, inspection, presentation, explici
 local saves and export remain active scope. Completed causal generation history
 is separate from undo.
 
-**Current implementation scope — updated 2026-10-27:** The user has deferred the
-backend and MCP until the frontend product functions. The browser owns a local GIS
-workspace and runs generation in a worker. Explicit local map saves rooted in IndexedDB
-allow reopening geography without regeneration; unsaved changes disappear on
-reload, and generation stops when the tab closes. [ADR 0003](adr/0003-frontend-session.md)
-supersedes this document's backend, durable-job, recovery and service requirements
-for current work. Geographic authoring remains deferred as described above.
+**Current implementation scope — updated 2026-11-14:** Support pure browser or pure
+LAN backend execution, with computation and storage together. One Rust engine runs
+on both hosts. The browser UI reads finished GIS maps; numerical generation inputs
+have separate storage and lifetimes. Explicit saves retain maps and their captured
+refinement inputs. Browser jobs stop with the tab; backend jobs belong to the service.
+Neither host provides execution recovery. [ADR 0015](adr/0015-finished-maps-and-execution-hosts.md)
+supersedes older browser-only and hosted-service assumptions. MCP and geographic
+authoring remain deferred.
 
 **Regional refinement and map authority — 2026-10-26:** Geographic regions can
 nest arbitrarily within the existing map type. Refinement elaborates retained
@@ -951,7 +952,11 @@ Whether later edits to a template propagate to existing instances is **not accep
 
 A generation request exposes: area, domains, inherited constraints, proposed boundary contract, seed/reproducibility, quality/detail preset, estimated complexity if known, and expected resource/time category. Generation can take minutes or **up to an hour**; that is acceptable as a stated product constraint.
 
-The UI must show server-backed job state and meaningful stage progress (for example geology → climate/hydrology → magic → cultural/political → validation), as well as cancellation and failure diagnostics. Intermediate previews are desirable but must be distinguished from committed valid output. Closing the browser must not turn a running server job into an invisible or unknowable operation. In the current browser-only product, generation runs in a worker and stops when the tab closes ([ADR 0003](adr/0003-frontend-session.md)).
+The UI shows host job state, stage progress, cancellation and failure diagnostics.
+Epoch previews are separate from published map revisions. In backend mode, the library
+lists server jobs so another client can observe them after the original browser closes.
+Jobs remain in server memory; restarting the service ends them. In browser mode,
+generation runs in a worker and stops when its tab closes.
 
 Quality presets should primarily control **spatial sampling/detail, algorithm depth, optional generation stages, and quality/accuracy tradeoffs**, not randomly remove causally required checks. A low-detail preview may be approximate; a committed full-quality result must satisfy structural contracts.
 
@@ -977,8 +982,9 @@ Suggested performance target—not a previously approved SLA—is perceptibly im
 
 ## 14. Persistent domain service and agent/MCP access
 
-The current product is browser-only with no backend, server persistence or MCP
-([ADR 0003](adr/0003-frontend-session.md)); this section states the hosted target.
+The current backend is a LAN-only execution host with explicit saved maps
+([ADR 0015](adr/0015-finished-maps-and-execution-hosts.md)). Public hosting and MCP
+in this section remain future scope.
 
 ### 14.1 Architecture boundary — accepted
 

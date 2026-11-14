@@ -1,0 +1,52 @@
+export {
+  blockShift,
+  blockCells,
+  blockMask,
+  blockOf,
+  blockCount,
+  nodata,
+  content,
+  halo,
+  edgeTo,
+  forEachCell,
+  forEachContentCell,
+  type Lattice,
+  type PeriodicFrame,
+} from "./lattice";
+export {
+  TriangularLattice,
+  triangleArea,
+  type TriangularFrame,
+  type TriangularLatticeInput,
+} from "./triangularLattice";
+export {
+  worldLatticeShape,
+  createWorldLattice,
+  createCenteredLattice,
+  type WorldLatticeOptions,
+} from "./worldLattice";
+export {
+  BlockScratch,
+  blockConstructors,
+  bytesPerSample,
+  newBlock,
+  type BlockArray,
+  type RandomAccessFile,
+} from "./blockScratch";
+export { BlockCache, type BlockOwner } from "./blockCache";
+export { Band, type BandSchema, type BlockSource } from "./band";
+export { ReadBandView, type ReadBand } from "./readBand";
+export { BandList } from "./bandList";
+export { Coverage, sampleLayout, type CoverageLayout } from "./coverage";
+export {
+  sampleCoverage,
+  fillBand,
+  generateBand,
+  bandFrom,
+  residentBand,
+  readRange,
+  writeRange,
+  everySample,
+  someSample,
+  foldSamples,
+} from "./bandValues";

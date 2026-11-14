@@ -1,0 +1,27 @@
+{
+  "name": "@atlas/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@atlas/domain": "workspace:*",
+    "@atlas/generation": "workspace:*",
+    "@atlas/engine": "workspace:*",
+    "@atlas/storage-browser": "workspace:*",
+    "@atlas/map": "workspace:*",
+    "@atlas/transport": "workspace:*",
+    "@atlas/storage-postgres": "workspace:*",
+    "cbor-x": "1.6.8",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "^11.0.0"
+  }
+}

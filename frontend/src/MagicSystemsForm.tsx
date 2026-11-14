@@ -1,54 +1,13 @@
-import { useState } from "react";
-import {
-  canonryConfluencePresets,
-  canonryMagicPresets,
-  magicRenewals,
-  type MagicOrigin,
-  type MagicPropagation,
-  type MagicRenewal,
-  type MagicSource,
-  type MagicSystem,
-} from "@atlas/domain";
-import type { EditorState } from "./useEditor";
+import type { MagicOrigin, MagicPropagation, MagicRenewal, MagicSource, MagicSystem } from "@atlas/context";
+import { magicRenewals } from "./magicChoices";
 import { MagicRuleEditor } from "./MagicRuleEditor";
 import { NumberField as NumberSetting } from "./WorkflowFields";
 import { useWorkflowFields } from "./workflowFieldState";
 import { magicControlKeys, removedMagicParameterFields } from "./generationMagicControls";
-import { magicSourceOptions, magicPropagationOptions } from "@atlas/generation";
+import { magicPresentation, defaultMagicConfiguration } from "./generationPresentation";
 import { SetupDisclosure } from "./SetupDisclosure";
-import { MagicConfluencesEditor } from "./MagicConfluencesEditor";
 import { effectLabels, parameterLabels, renewalLabels } from "./magicLabels";
 
-export function MagicSystemsForm({ editor }: { editor: EditorState }) {
-  const [systems, setSystems] = useState(editor.world.magicSystems ?? canonryMagicPresets());
-  const [confluences, setConfluences] = useState(
-    editor.world.confluences ?? canonryConfluencePresets()
-  );
-  return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        editor.execute("setMagicSystems", { systems, confluences });
-      }}
-    >
-      <h3>Systems that shape this world</h3>
-      <p>
-        Fire follows fractures and hardens rock. Aurora drains toward cold and gathers in ice.
-        Pressure travels through oceans and changes coasts. Combine or alter these examples below.
-      </p>
-      <MagicSystemsEditor systems={systems} change={setSystems} />
-      <MagicConfluencesEditor confluences={confluences} systems={systems} change={setConfluences} />
-      <button className="primary" disabled={editor.commit.isPending}>
-        Save magical systems
-      </button>
-      <p className="hint">
-        Save, then apply to the present landscape or generate land and magic together to carry their
-        effects through every epoch. Disable a system to leave its place in the configuration while
-        removing its active effects from the next generation.
-      </p>
-    </form>
-  );
-}
 export function MagicSystemsEditor({
   systems,
   change,
@@ -97,7 +56,7 @@ export function MagicSystemsEditor({
         className="quiet"
         onClick={() => {
           clear("magic.");
-          change(canonryMagicPresets());
+          change(defaultMagicConfiguration().magicSystems as unknown as MagicSystem[]);
         }}
       >
         Restore example systems
@@ -165,7 +124,7 @@ function OriginSettings({
           value={origin.source}
           onChange={(event) => change({ ...origin, source: event.target.value as MagicSource })}
         >
-          {magicSourceOptions.map(({ value, label }) => (
+          {magicPresentation().sources.map(({ value, label }) => (
             <option key={value} value={value}>
               {label}
             </option>
@@ -180,7 +139,7 @@ function OriginSettings({
             change({ ...origin, propagation: event.target.value as MagicPropagation })
           }
         >
-          {magicPropagationOptions.map(({ value, label }) => (
+          {magicPresentation().propagations.map(({ value, label }) => (
             <option key={value} value={value}>
               {label}
             </option>

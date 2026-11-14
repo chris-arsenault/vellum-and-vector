@@ -39,11 +39,25 @@ impl std::error::Error for MapError {}
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "status", content = "value", rename_all = "camelCase")]
 pub enum MapValidation {
-    Valid(MapDescriptor),
+    Valid(Box<MapDescriptor>),
     Invalid(MapError),
 }
 
 impl Bounds {
+    pub fn validate_window(&self) -> Result<(), MapError> {
+        if [self.0, self.1, self.2, self.3]
+            .iter()
+            .all(|v| v.is_finite())
+            && self.2 >= self.0
+            && self.3 >= self.1
+        {
+            return Ok(());
+        }
+        Err(MapError::new(
+            MapErrorCode::InvalidMap,
+            "Spatial windows must have finite ordered bounds",
+        ))
+    }
     pub fn validate(&self) -> Result<(), MapError> {
         if [self.0, self.1, self.2, self.3]
             .iter()
@@ -87,33 +101,82 @@ impl MapRef {
 impl MapDescriptor {
     pub fn validate(&self) -> Result<(), MapError> {
         self.reference.validate()?;
-        self.space.bounds.validate()?;
-        if self.world_id.is_empty()
-            || self.name.is_empty()
-            || self.space.id.is_empty()
-            || self.space.metres_per_unit != 1.0
-            || self
-                .space
-                .periodic_width
-                .is_some_and(|v| !v.is_finite() || v <= 0.0)
+        self.bounds.validate()?;
+        if !self.region_scale.next_area.is_finite()
+            || self.region_scale.next_area <= 0.0
+            || !self.region_scale.subdivision.is_finite()
+            || self.region_scale.subdivision <= 1.0
+            || !self.region_scale.minimum_width.is_finite()
+            || self.region_scale.minimum_width <= 0.0
         {
             return Err(MapError::new(
                 MapErrorCode::InvalidMap,
-                "Maps need named planar metre coordinates",
+                "Region selection needs finite scale rules",
             ));
         }
+        if self.world_id.is_empty() || self.name.is_empty() || self.primary_space_id.is_empty() {
+            return Err(MapError::new(
+                MapErrorCode::InvalidMap,
+                "Maps need an identity, name and primary coordinate space",
+            ));
+        }
+        self.validate_spaces()?;
         if let Some(parent) = &self.parent {
             parent.validate()?;
         }
         let mut ids = std::collections::BTreeSet::new();
         for layer in &self.layers {
             layer.validate()?;
+            if !self.spaces.iter().any(|space| space.id == layer.space_id) {
+                return Err(MapError::new(
+                    MapErrorCode::InvalidMap,
+                    "A layer must belong to a published coordinate space",
+                ));
+            }
             if !ids.insert(&layer.id) {
                 return Err(MapError::new(
                     MapErrorCode::InvalidMap,
                     "Map layer identities must be distinct",
                 ));
             }
+        }
+        Ok(())
+    }
+
+    fn validate_spaces(&self) -> Result<(), MapError> {
+        let mut ids = std::collections::BTreeSet::new();
+        for space in &self.spaces {
+            space.bounds.validate()?;
+            if space.id.is_empty()
+                || !ids.insert(&space.id)
+                || !space.metres_per_unit.is_finite()
+                || space.metres_per_unit <= 0.0
+                || !space.precision.is_finite()
+                || space.precision <= 0.0
+                || space
+                    .periodic_width
+                    .is_some_and(|v| !v.is_finite() || v <= 0.0)
+                || !space.frame.origin.iter().all(|v| v.is_finite())
+                || !space.frame.rotation.is_finite()
+            {
+                return Err(MapError::new(
+                    MapErrorCode::InvalidMap,
+                    "Coordinate spaces need distinct identities and finite frames",
+                ));
+            }
+        }
+        if !ids.contains(&self.primary_space_id)
+            || self.spaces.iter().any(|space| {
+                space
+                    .parent_space_id
+                    .as_ref()
+                    .is_some_and(|id| !ids.contains(id) || *id == space.id)
+            })
+        {
+            return Err(MapError::new(
+                MapErrorCode::InvalidMap,
+                "Coordinate spaces must resolve their parent and primary identities",
+            ));
         }
         Ok(())
     }

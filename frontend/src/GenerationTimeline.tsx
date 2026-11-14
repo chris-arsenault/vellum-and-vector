@@ -1,11 +1,11 @@
 import { useContext, useState } from "react";
-import { hasGeneratedGeography, type Epoch } from "@atlas/domain";
+import type { Epoch } from "@atlas/context";
 import type { GenerationDraft } from "./generationDraft";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { WorkflowFieldsContext, useWorkflowFields } from "./workflowFieldState";
 import { NumberField } from "./WorkflowFields";
 import { WorkflowCommittedName } from "./WorkflowCommittedName";
-import { HistoryPreset } from "./PhysicalHistoryForm";
+import { HistoryPreset } from "./HistoryPreset";
 import { ErrorMessage } from "./ErrorMessage";
 import { SetupDisclosure } from "./SetupDisclosure";
 import { epochFieldPrefix, selectedDraftEpoch } from "./generationEpochFields";
@@ -62,8 +62,7 @@ export function GenerationTimeline({ flow }: { flow: GenerationWorkflow }) {
         </SetupDisclosure>
       ) : (
         <p className="hint">
-          {flow.setup?.context.inherited ||
-          (flow.options.source && hasGeneratedGeography(flow.options.source.world))
+          {flow.setup?.context.inherited || flow.options.source
             ? "Completed history is inherited. Its epoch definitions stay fixed."
             : "Enable the shared generation lifecycle to edit epoch definitions."}
         </p>

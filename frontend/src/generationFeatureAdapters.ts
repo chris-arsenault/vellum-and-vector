@@ -1,10 +1,10 @@
 import type { ComponentType } from "react";
-import type { ParameterValues } from "@atlas/domain";
+import type { ParameterValues } from "./generationTypes";
 import type {
   SetupFeature,
   GenerationSettings,
   ConfigurationPresentation,
-} from "@atlas/generation";
+} from "./generationTypes";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { GenerationEcologyConfiguration } from "./GenerationEpochConfiguration";
 import {
@@ -75,7 +75,7 @@ function magicField(path: (string | number)[], configuration: ParameterValues) {
   if (path[0] === "magicSystems") {
     if (path.length < 3) return undefined;
     const system = (
-      configuration.magicSystems as unknown as import("@atlas/domain").MagicSystem[]
+      configuration.magicSystems as unknown as import("@atlas/context").MagicSystem[]
     ).find((item, index) =>
       typeof path[1] === "number" ? index === path[1] : item.id === path[1]
     );

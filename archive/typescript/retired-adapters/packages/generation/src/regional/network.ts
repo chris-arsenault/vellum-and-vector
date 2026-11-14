@@ -1,0 +1,244 @@
+import { closedByAridity } from "../water/closedBasin";
+import { capturedSinks, connectedSea, smoothedBase } from "./base";
+import { influenceCosts } from "./causes/registry";
+import { evolveNetwork } from "./evolution";
+import { distance, frameEdge, isContent, neighborsOf, regionalSpan } from "./lattice";
+import { type NetworkWork, type RegionalState } from "./state";
+import { physicalContext } from "../world/context";
+import { waterPassage } from "../water/waterQuantity";
+import { onParentRiver } from "./parentRivers";
+
+/** Resistance near a known peak or cone, so channels cut around it and it stands on a divide. */
+const peakRepulsion = 12;
+const referenceRunoff = 0.0000001;
+export const secondsPerYear = 365.25 * 24 * 3600;
+
+/** Discharge of one interior sample at reference runoff, in m³/s. */
+export function referenceDischarge(state: RegionalState) {
+  const scale = state.physical.map.scale;
+  return (scale.length(referenceRunoff) * scale.cellArea()) / secondsPerYear;
+}
+
+/**
+ * Grow the drainage network once (spec 7.3) by eroding the smoothed captured base down to
+ * the established waters (the connected sea, the valleys that leave the frame, captured
+ * lakes and the parent's closed basins) through the ground's erodibility: the material
+ * bands along the grain, the captured courses and the known peaks. Where the network
+ * branches, joins, runs along strike or breaks through a band is a consequence of that
+ * erosion; no random geography is drawn. Heights are metres above the present sea level.
+ */
+export function growNetwork(state: RegionalState): NetworkWork {
+  const map = state.physical.map,
+    n = map.mesh.count,
+    datum = MapScale.metres(map.EffectiveSeaLevel, "native"),
+    evidence = state.regional.evidence!,
+    base = smoothedBase(state, datum),
+    sea = connectedSea(state, base),
+    lake = new Int32Array(n).fill(-1);
+  evidence.lakes.forEach(({ cells }, k) => {
+    for (const i of cells) if (!sea[i]) lake[i] = k;
+  });
+  const network: NetworkWork = {
+    receiver: new Int32Array(n).fill(-1),
+    order: new Int32Array(n),
+    count: 0,
+    cost: new Float64Array(n),
+    area: new Float64Array(n),
+    flow: new Float64Array(n),
+    inflow: new Float64Array(n),
+    inflowCatchment: new Float64Array(n),
+    level: new Float64Array(n),
+    sea,
+    base,
+    lake,
+    ...capturedSinks(state, base, sea, lake),
+  };
+  for (const entry of evidence.entries) {
+    network.inflow[entry.cell] = entry.discharge;
+    network.inflowCatchment[entry.cell] = entry.catchment;
+  }
+  const root = networkRoots(state, network);
+  evolveNetwork(state, network, root, cellCosts(state, sea, base));
+  gatherFlow(state, network);
+  // Every cell takes its root's level, receivers first (the order the tree was grown in).
+  const { receiver, order, level } = network;
+  for (let k = 0; k < network.count; k++) {
+    const i = order[k];
+    if (receiver[i] >= 0) level[i] = level[receiver[i]];
+  }
+  state.regional.network = network;
+  return network;
+}
+
+const closedBasin = (state: RegionalState, i: number) =>
+  closedByAridity(state.physical.map, state.physical.profile, i);
+
+/**
+ * Roots: every land cell beside the sea or at an exit across the frame drains out; lake cells
+ * receive their tributaries at the lake's level; a captured sink's floor receives its own
+ * where the climate keeps the basin closed. Captured exit levels seed this initial proposal;
+ * subsequent physical development can change them.
+ */
+function networkRoots(state: RegionalState, network: NetworkWork) {
+  const mesh = state.physical.map.mesh,
+    n = mesh.count,
+    { sea, base, lake, sink, level } = network,
+    evidence = state.regional.evidence!,
+    root = new Uint8Array(n),
+    around = new Int32Array(mesh.stride),
+    guarded = entryProtection(state, evidence.entries),
+    exits = edgeExits(state),
+    shore = (i: number) => {
+      const m = neighborsOf(mesh, i, around);
+      for (let k = 0; k < m; k++) if (sea[around[k]]) return true;
+      return false;
+    };
+  openWetBasins(state, sink);
+  const rootLevel = (i: number) => {
+    if (lake[i] >= 0) return evidence.lakes[lake[i]].level;
+    if (sink[i]) return base[i];
+    if (exits[i] && !guarded[i]) return Math.max(base[i], 1);
+    return shore(i) ? 0 : null;
+  };
+  for (let i = 0; i < n; i++) {
+    if (sea[i] || !isContent(mesh, i)) continue;
+    const at = rootLevel(i);
+    if (at === null) continue;
+    level[i] = at;
+    root[i] = 1;
+  }
+  return root;
+}
+/** A wet basin is a hollow its water overflows, not an end: it keeps its bowl, not its sink. */
+function openWetBasins(state: RegionalState, sink: Uint8Array) {
+  for (let i = 0; i < sink.length; i++) if (sink[i] && !closedBasin(state, i)) sink[i] = 0;
+}
+
+/**
+ * Upstream area and discharge gathered down the tree. An entering river drains country
+ * beyond the frame: the catchment the parent map gives it. These quantities organize the
+ * initial terrain proposal; the water owner subsequently decides which courses are rivers.
+ */
+export function gatherFlow(state: RegionalState, network: NetworkWork) {
+  const map = state.physical.map,
+    mesh = map.mesh,
+    context = physicalContext(state.regional.input.seed, 0, state.physical.profile),
+    // Initial organization reads captured quantities; development runs the current budget later.
+    supply = map.Runoff,
+    pass = waterPassage(map, context),
+    { receiver, order, count, area, flow, inflow } = network;
+  area.fill(0);
+  flow.fill(0);
+  for (let k = 0; k < count; k++) {
+    const i = order[k],
+      runoff = Math.max(0, MapScale.metres(supply.get(i), "mm"));
+    area[i] = mesh.contentArea(i) + network.inflowCatchment[i];
+    flow[i] = (runoff * mesh.contentArea(i)) / secondsPerYear + inflow[i];
+  }
+  for (let k = count - 1; k >= 0; k--) {
+    const i = order[k],
+      j = receiver[i];
+    flow[i] = pass(i, flow[i]);
+    if (j < 0) continue;
+    area[j] += area[i];
+    flow[j] += flow[i];
+  }
+}
+
+/**
+ * The cost of running water through a cell: material resistance (bands, rock, fractures),
+ * established features' influence (peak massifs, course corridors, river seats) and repulsion
+ * around captured cones. Directional material resistance is evaluated on each traversed face.
+ */
+function cellCosts(state: RegionalState, sea: Uint8Array, base: Float64Array) {
+  const cost = new Float64Array(base.length).fill(1);
+  for (let i = 0; i < sea.length; i++) if (sea[i]) cost[i] = 0;
+  influenceCosts(state, cost);
+  for (const cone of state.regional.character!.cones) repel(state, cost, cone.cell, cone.radius);
+  return cost;
+}
+
+/** Cells within `reach` of a centre, by breadth-first walk, with their distances. */
+function within(state: RegionalState, center: number, reach: number) {
+  const mesh = state.physical.map.mesh,
+    around = new Int32Array(mesh.stride),
+    cells = [center],
+    distances = [0],
+    seen = new Uint8Array(mesh.count);
+  seen[center] = 1;
+  for (let head = 0; head < cells.length; head++) {
+    const m = neighborsOf(mesh, cells[head], around);
+    for (let k = 0; k < m; k++) {
+      const j = around[k];
+      if (seen[j]) continue;
+      const d = distance(mesh, center, j);
+      if (d > reach) continue;
+      seen[j] = 1;
+      cells.push(j);
+      distances.push(d);
+    }
+  }
+  return { cells, distances };
+}
+
+/** The factor on each cell's cost around a peak or cone, dearest on the cell itself. */
+export function repulsion(state: RegionalState, center: number, reach: number) {
+  const { cells, distances } = within(state, center, reach * 2.5);
+  return cells.map((cell, k) => {
+    const d = distances[k] / reach;
+    return { cell, factor: (1 + peakRepulsion * Math.exp(-d * d)) * (cell === center ? 50 : 1) };
+  });
+}
+/** Dear ground around a peak or cone, dearest on the cell itself. */
+export function repel(state: RegionalState, cost: Float64Array, center: number, reach: number) {
+  for (const { cell, factor } of repulsion(state, center, reach)) cost[cell] *= factor;
+}
+
+/** Scale the cost of every cell within `reach` of a centre. */
+export function scaleAround(
+  state: RegionalState,
+  cost: Float64Array,
+  center: number,
+  reach: number,
+  by: number
+) {
+  for (const i of within(state, center, reach).cells) cost[i] *= by;
+}
+
+/**
+ * Water leaves the frame wherever the exterior is no higher: an exit is a frame-edge cell
+ * that the parent's channel raster leaves through, or that has exterior ground no higher
+ * than itself to run on to. These initial roots carry contextual drainage into detail
+ * realization. They do not constrain later routing or reconcile the child's edge heights.
+ */
+function edgeExits(state: RegionalState) {
+  const map = state.physical.map,
+    mesh = map.mesh,
+    n = mesh.count,
+    exits = new Uint8Array(n),
+    inherited = state.regional.inheritedHeight,
+    around = new Int32Array(mesh.stride);
+  const descends = (i: number) => {
+    const m = neighborsOf(mesh, i, around);
+    let exterior = false;
+    for (let k = 0; k < m; k++) {
+      const j = around[k];
+      if (isContent(mesh, j)) continue;
+      exterior = true;
+      if (inherited.get(j) <= inherited.get(i)) return true;
+    }
+    return !exterior && mesh.boundary(i);
+  };
+  for (let i = 0; i < n; i++)
+    if (frameEdge(mesh, i) && (onParentRiver(state, i) || descends(i))) exits[i] = 1;
+  return exits;
+}
+
+/** Edge cells beside a river entry do not drain the entering river straight back out. */
+function entryProtection(state: RegionalState, entries: { cell: number }[]) {
+  const guarded = new Uint8Array(state.physical.map.mesh.count),
+    reach = 2 * regionalSpan(state);
+  for (const { cell } of entries) for (const i of within(state, cell, reach).cells) guarded[i] = 1;
+  return guarded;
+}
+import { MapScale } from "@atlas/domain";

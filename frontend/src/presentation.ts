@@ -1,56 +1,4 @@
 import type { Geometry, Position as GeoPosition } from "geojson";
-import type { Area, Frame, LayerStyle, World } from "./types";
-
-export function lineage(world: World, areaId: string): Area[] {
-  const result: Area[] = [];
-  let area: Area | null = world.areas[areaId];
-  while (area) {
-    result.unshift(area);
-    area = area.parentId ? world.areas[area.parentId] : null;
-  }
-  return result;
-}
-
-/** Every map opens with its feature layers off; a preset turns on its families. */
-export function defaultStyles(world: World, preset?: string): LayerStyle[] {
-  const families: Record<string, string[]> = {
-    // Magical geography is part of the physical map, not a theme of its own.
-    physical: ["physical", "water", "magic", "transport", "built", "custom"],
-    political: ["physical", "water", "political", "built"],
-    cultural: ["physical", "water", "cultural", "built"],
-    magical: ["physical", "water", "magic"],
-    infrastructure: ["physical", "water", "magic", "transport", "built", "custom"],
-  };
-  return Object.values(world.layers).map((layer) => ({
-    layerId: layer.id,
-    visible:
-      preset !== undefined &&
-      defaultLayerVisibility(layer.id, layer.family, preset, families[preset] ?? []),
-    opacity: layer.family === "political" ? 0.4 : 0.85,
-    color:
-      (
-        { rivers: "#397d99", lakes: "#83b6c5", roads: "#ac8553", geology: "#9b8c70" } as Record<
-          string,
-          string
-        >
-      )[layer.id] ?? layer.color,
-    labels: ["settlements", "pois"].includes(layer.id),
-    minScale: 0,
-  }));
-}
-function defaultLayerVisibility(id: string, family: string, preset: string, families: string[]) {
-  const overlays: Record<string, string> = {
-    waterworks: "infrastructure",
-    transportSites: "infrastructure",
-    landUse: "infrastructure",
-    magicPractices: "magical",
-    institutions: "cultural",
-    historicalEvents: "",
-    ruins: "",
-    faults: "",
-  };
-  return id in overlays ? overlays[id] === preset : families.includes(family);
-}
 
 export function bounds(geometry: Geometry): number[] {
   if (geometry.type === "GeometryCollection") return mergeBounds(geometry.geometries.map(bounds));
@@ -90,13 +38,4 @@ export function rectangle(x: number, y: number, width: number, height: number): 
       ],
     ],
   };
-}
-export function frameAt(
-  x: number,
-  y: number,
-  z = 0,
-  rotation = 0,
-  floor: string | null = null
-): Frame {
-  return { origin: { x, y, z }, rotation, floor, metresPerUnit: 1 };
 }

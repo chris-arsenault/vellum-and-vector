@@ -1,11 +1,28 @@
 services:
-  database:
-    image: postgis/postgis:16-3.5
+  atlas:
+    image: ghcr.io/chris-arsenault/vellum-and-vector:${IMAGE_TAG:-latest}
+    network_mode: host
+    restart: unless-stopped
+    user: "${ATLAS_UID:-1000}:${ATLAS_GID:-1000}"
     environment:
-      POSTGRES_USER: atlas
-      POSTGRES_DB: atlas
-      POSTGRES_PASSWORD: ${ATLAS_DATABASE_PASSWORD:?Set a local development database password}
-    ports: ["127.0.0.1:54329:5432"]
-    volumes: ["atlas-database:/var/lib/postgresql/data"]
-volumes:
-  atlas-database:
+      # The executable rejects wildcard and public bind addresses.
+      ATLAS_BIND: "${ATLAS_LAN_IP:?Set the private TrueNAS LAN address}:${ATLAS_PORT:-4123}"
+      ATLAS_MAP_DATABASE_URL: "${ATLAS_MAP_DATABASE_URL:?Set the map writer connection}"
+      ATLAS_MAP_READER_URL: "${ATLAS_MAP_READER_URL:?Set the map reader connection}"
+      ATLAS_GENERATION_DATABASE_URL: "${ATLAS_GENERATION_DATABASE_URL:?Set the generation writer connection}"
+      ATLAS_MAP_ASSETS: /data/maps
+      ATLAS_GENERATION_RESOURCES: /data/generation
+      ATLAS_GENERATION_SCRATCH: /scratch
+      ATLAS_FRONTEND: /opt/atlas/frontend
+      ATLAS_TLS_CERTIFICATE: /certificates/certificate.pem
+      ATLAS_TLS_PRIVATE_KEY: /certificates/private-key.pem
+    volumes:
+      - "${ATLAS_DATA_DIRECTORY:?Set the atlas dataset directory}:/data"
+      - "${ATLAS_SCRATCH_DIRECTORY:?Set the disposable scratch directory}:/scratch"
+      - "${ATLAS_TLS_CERTIFICATE:?Set the existing LAN certificate path}:/certificates/certificate.pem:ro"
+      - "${ATLAS_TLS_PRIVATE_KEY:?Set the existing LAN private key path}:/certificates/private-key.pem:ro"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --insecure https://$$ATLAS_BIND/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

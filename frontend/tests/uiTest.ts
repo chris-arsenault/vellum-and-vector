@@ -1,6 +1,4 @@
 import { test as base, expect } from "@playwright/test";
-import { installGenerationFixture } from "./generationFixture";
-import { openSpatialRuntime } from "../src/spatialRuntime";
 import { attachPreparedMaps, PreparedMaps } from "./preparedMaps";
 import { installScenarioBoundary } from "./scenarioBoundary";
 
@@ -56,26 +54,20 @@ export const test = storageTest.extend<
     { scope: "worker" },
   ],
   page: async ({ page, preparedMaps, generationLifecycle }, run, testInfo) => {
-    const closeSpatial = await openSpatialRuntime();
     const violations: string[] = [];
     page.on("console", (message) => {
       if (message.text().startsWith("Browser scenario policy:")) violations.push(message.text());
     });
-    try {
-      await page.context().addInitScript(installScenarioBoundary, {
-        rendering:
-          testInfo.tags.includes("@rendering") || testInfo.tags.includes("@deferred-authoring"),
-        generation:
-          Boolean(generationLifecycle) ||
-          testInfo.tags.includes("@generation") ||
-          testInfo.tags.includes("@deferred-authoring"),
-      });
-      attachPreparedMaps(page, preparedMaps);
-      await installGenerationFixture(page);
-      await run(page);
-      expect(violations, "Browser scenario boundaries").toEqual([]);
-    } finally {
-      closeSpatial();
-    }
+    await page.context().addInitScript(installScenarioBoundary, {
+      rendering:
+        testInfo.tags.includes("@rendering") || testInfo.tags.includes("@deferred-authoring"),
+      generation:
+        Boolean(generationLifecycle) ||
+        testInfo.tags.includes("@generation") ||
+        testInfo.tags.includes("@deferred-authoring"),
+    });
+    attachPreparedMaps(page, preparedMaps);
+    await run(page);
+    expect(violations, "Browser scenario boundaries").toEqual([]);
   },
 });

@@ -6,6 +6,7 @@
 | [Materials and processes](../MATERIALS-AND-PROCESSES-ARCHITECTURE.md) | Working design for materials and processes, and the method for analysing interactions across the system |
 | [Generation workflows](generation-workflows.md)                       | How world and regional generation work: processes, epochs, physical, ecology, magic, society            |
 | [Generation modules](generation-modules.md)                           | Feature modules, recipes, process contracts, validity ledger and publication                            |
+| [LAN backend](lan-backend.md)                                         | Build, database roles, private HTTPS and persistent storage                                             |
 | [Backlog](backlog.md)                                                 | Open product and generation work                                                                        |
 | [Magic lore](lore/magic.md)                                           | Character, practice, cost and lore of the seven magic systems; one page per system in `lore/magic/`     |
 | [Lore pool](lore-pool/roll.py)                                        | Script and source pool for rolling adjacent lore for the magic systems                                  |
@@ -28,6 +29,7 @@
 | [0012](adr/0012-people-live-on-the-lands-layers.md)                  | People are layers on the land read by classifiers; their magic breaks a rule through a shared question                    |
 | [0013](adr/0013-plates-travel-far-apart-from-strength.md)            | Plates travel far, as a share of the map, and separately from each epoch's tectonic strength                              |
 | [0014](adr/0014-water-is-a-column-and-a-lasting-network.md)          | Water is one owned column on every cell and a river network that lasts; processes are recorded transfers (in progress)    |
+| [0015](adr/0015-finished-maps-and-execution-hosts.md)                | Finished maps and private generation schemas; pure browser or LAN backend execution                                       |
 
 Files named `*-PLAN.md` in this directory are working copies of open plans and
 are deleted when their plan closes; see the
