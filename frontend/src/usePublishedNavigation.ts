@@ -6,7 +6,7 @@ import type {
   NavigationChange,
 } from "@atlas/map";
 
-/** Rust validates view changes on the selected host; only Save map persists them. */
+/** Rust validates view changes; the host's save policy determines when to retain them. */
 export function usePublishedNavigation(map: MapDescriptor, navigation: MapNavigation) {
   const cache = useQueryClient();
   const queryKey = ["map-navigation", map.reference];

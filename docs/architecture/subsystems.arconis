@@ -100,7 +100,7 @@ frame browser "Browser" hostframe z 26 in-layer hosts at 1140,330 size 400,520 e
 text hosts_caption "Two complete deployments of the same boundary, never a hybrid." caption z 30 in-layer hosts align center at 60,945 size 1480,40 edited "CLI (agent)" at 1794725669883
 frame r_job "A generation job across both hosts" region z 43 jump in-layer job badge lucide:Rocket at 1700,0 size 1780,1300 edited "CLI (agent)" at 1794725392478 {
   frame lane_tab "Browser tab" lane z 44 at 1736,80 size 308,960 edited "CLI (agent)" at 1794725392478 {
-    card j_wizard "Wizard" / "reviewed on every change" view icon lucide:Compass z 45 source "frontend/src/GenerationWizard.tsx" anchor "useSetupGeneration" at 1760,140 size 260,70 edited "CLI (agent)" at 1794725392478
+    card j_wizard "Wizard" / "reviewed on every change" view icon lucide:Compass z 45 source "frontend/src/useSetupGeneration.ts" anchor "useSetupGeneration" at 1760,140 size 260,70 edited "CLI (agent)" at 1794725392478
     card j_app "Launch" / "create, refine, regenerate" view icon lucide:Rocket z 46 source "frontend/src/App.tsx" anchor "AtlasSetup" at 1760,280 size 260,70 edited "CLI (agent)" at 1794725392478
     card j_progress "Progress panel" / "previews and cancel" view icon lucide:Timer z 47 source "frontend/src/FinishedGeneration.tsx" anchor "FinishedGeneration" at 1760,760 size 260,70 edited "CLI (agent)" at 1794725392478
     card j_viewer "Map viewer" / "opens the published revision" view icon lucide:Map z 48 at 1760,900 size 260,70 edited "CLI (agent)" at 1794725392478

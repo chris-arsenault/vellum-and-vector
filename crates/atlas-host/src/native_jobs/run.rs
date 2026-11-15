@@ -21,26 +21,43 @@ use std::{io, rc::Rc};
 
 // owner-direction(2026-11-12): computation uses one Rust core for native and WASM
 pub(super) fn run(action: Action, settings: Settings, job: Job) {
+    log(&job, "started");
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         execute(action, settings, &job)
     }))
     .unwrap_or_else(|_| Err(io::Error::other("Generation worker panicked")));
-    let _ = job.update(|status| match result {
-        Ok(reference) => {
-            status.state = GenerationState::Completed;
-            status.step = "Map published".into();
-            status.progress = Some(1.0);
-            status.result = Some(reference);
+    let _ = job.update(|status| {
+        if let Some(details) = &mut status.details {
+            details.finished_at = Some(chrono::Utc::now().to_rfc3339());
         }
-        Err(error) => {
-            status.state = if job.token.is_cancelled() {
-                GenerationState::Cancelled
-            } else {
-                GenerationState::Failed
-            };
-            status.message = Some(error.to_string());
+        match result {
+            Ok(reference) => {
+                status.state = GenerationState::Completed;
+                status.step = "Map published".into();
+                status.progress = Some(1.0);
+                status.result = Some(reference);
+            }
+            Err(error) => {
+                status.state = if job.token.is_cancelled() {
+                    GenerationState::Cancelled
+                } else {
+                    GenerationState::Failed
+                };
+                status.message = Some(error.to_string());
+            }
         }
     });
+    log(&job, "stopped");
+}
+// owner-direction(2026-11-15): high-level generation logs include start, stop and duration
+fn log(job: &Job, event: &str) {
+    if let Ok(status) = job.status() {
+        eprintln!(
+            "{}",
+            json!({"event":format!("generation.{event}"),"jobId":status.job_id,
+            "state":status.state,"details":status.details,"message":status.message})
+        );
+    }
 }
 fn execute(action: Action, settings: Settings, job: &Job) -> io::Result<atlas_map::MapRef> {
     let mut maps = PostgresMaps::connect(&settings.database_url)?;
@@ -84,6 +101,7 @@ fn execute(action: Action, settings: Settings, job: &Job) -> io::Result<atlas_ma
         Observer {
             job: job.clone(),
             epoch: 0,
+            previous_epoch_seconds: 0.0,
         },
         progress,
     ))
@@ -160,6 +178,7 @@ pub(super) fn prepare(
 struct Observer {
     job: Job,
     epoch: usize,
+    previous_epoch_seconds: f64,
 }
 impl Observations for Observer {
     fn diagnostic(&mut self, diagnostic: &Diagnostic) -> ExecutionResult<()> {
@@ -173,6 +192,28 @@ impl Observations for Observer {
         preview: &Preview,
         ancestry: Option<&[GenerationEpoch]>,
     ) -> ExecutionResult<()> {
+        if let Some(ancestry) = ancestry {
+            let elapsed = self.job.started.elapsed().as_secs_f64();
+            let name = ancestry
+                .iter()
+                .map(|epoch| epoch.id.as_str())
+                .collect::<Vec<_>>()
+                .join(" / ");
+            let seconds = elapsed - self.previous_epoch_seconds;
+            self.previous_epoch_seconds = elapsed;
+            self.job.update(|status| {
+                if let Some(details) = &mut status.details {
+                    details.epochs.push(atlas_generation::EpochDuration {
+                        name: name.clone(),
+                        seconds,
+                    });
+                }
+            })?;
+            eprintln!(
+                "{}",
+                json!({"event":"generation.epoch.completed","jobId":self.job.status()?.job_id,"epoch":name,"seconds":seconds})
+            );
+        }
         let bytes = serde_json::to_vec(&json!({"grid":preview,"ancestry":ancestry}))
             .map_err(io::Error::other)?;
         let mut state = self.job.state.lock().map_err(poisoned)?;

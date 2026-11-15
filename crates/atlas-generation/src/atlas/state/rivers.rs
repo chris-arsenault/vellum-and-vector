@@ -149,13 +149,16 @@ impl State {
             self.regional.as_mut().unwrap().continuing_rivers = Some(rivers);
         }
         if let Some(regional) = &self.regional {
-            river_lineage::adopt(
+            let restored = river_lineage::adopt(
                 self.records.features.as_mut(),
                 &self.scope.area,
                 &regional.evidence.courses,
                 regional.continuing_rivers.as_deref().unwrap_or_default(),
                 &|id| self.scope.contracted.contains(id),
             )?;
+            for feature in restored {
+                self.write_network(feature)?;
+            }
         }
         self.retain_river_names()
     }

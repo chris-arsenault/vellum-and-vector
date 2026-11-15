@@ -4,8 +4,10 @@ Current execution follows [ADR 0015](adr/0015-finished-maps-and-execution-hosts.
 The shared Rust engine resolves scoped private inputs on its execution host: browser
 WASM with local storage, or native compute with the LAN database and files. Initial
 generation displays independent epoch previews and publishes GIS map products.
-Explicit saves retain completed maps and their separate refinement inputs. Execution
-does not restart or recover; presentation reads only the published GIS map.
+Browser saves explicitly retain completed maps and their separate refinement inputs.
+The server retains completed worlds and children automatically; the library reads
+published map heads without requiring saved view preferences. Execution does not
+restart or recover; presentation reads only the published GIS map.
 
 ## Geographic regional refinement
 
@@ -1026,7 +1028,11 @@ The worker receives configuration, seed, scope and a workspace connection. It
 resolves generation inputs through the catalog and opens selected field channels
 from immutable resources without sending samples through the catalog worker.
 Status, stage progress and failure diagnostics live in memory. Terminating the
-worker cancels generation. Closing or reloading the tab discards unsaved session state.
+browser worker cancels generation. Closing or reloading the browser-mode tab discards
+unsaved session state. Native server jobs continue after a browser disconnects and
+log start, terminal outcome, total duration and completed epoch durations. Server
+restart ends running jobs; checkpoint persistence is excluded because of its runtime
+and storage cost. Published worlds and children remain discoverable after restart.
 
 Numerical working storage belongs to the execution worker. A run owns its initial
 state's working parts; a caller that needs that state afterwards builds another.

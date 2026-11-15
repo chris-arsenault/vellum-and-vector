@@ -13,6 +13,8 @@ import { executionMode, openFinishedAtlas } from "./finishedAtlasContext";
 import { installGenerationPresentation } from "./generationPresentation";
 import type { GenerationDraft } from "./generationDraft";
 import { GenerationWizard } from "./GenerationWizard";
+import { RegionalGeneration } from "./RegionalGeneration";
+import type { GenerationWorkflowOptions } from "./useGenerationWorkflow";
 import { FinishedMapEditor } from "./FinishedMapEditor";
 import { FinishedMapLibrary } from "./FinishedMapLibrary";
 import { FinishedGeneration } from "./FinishedGeneration";
@@ -214,64 +216,22 @@ async function attachChild(
 }
 function Atlas({ context }: { context: FinishedContext }) {
   const state = useAtlas(context);
-  const {
-    opened,
-    setup,
-    job,
-    lore,
-    library,
-    error,
-    map,
-    create,
-    refine,
-    open,
-    setJob,
-    setLore,
-    setLibrary,
-  } = state;
+  const { setup, job, lore, library, error, map, open, setJob, setLore, setLibrary } = state;
   if (lore) return <LoreEncyclopedia onClose={() => setLore(false)} />;
   return (
     <>
-      {setup ? (
-        <AtlasSetup state={state} />
-      ) : map.data && opened ? (
-        <FinishedMapEditor
-          key={opened.instance}
-          context={context}
-          map={map.data}
-          saved={opened.saved}
-          open={open}
-          create={() => void create()}
-          lore={() => setLore(true)}
-          library={() => setLibrary(true)}
-          refine={(selection, name) => void refine(selection, name)}
-          regenerate={() => void state.regenerate()}
-        />
-      ) : (
-        <main className="welcome">
-          <div className="welcome-card">
-            <Brand />
-            <h1>Your atlas</h1>
-            <p>
-              {context.mode === "browser"
-                ? "Maps run in this browser. Save a map to keep it after closing the tab."
-                : "Maps run on your LAN server. Saved maps are available to your home devices."}
-            </p>
-            <button className="primary" onClick={() => void create()}>
-              New world
-            </button>
-            <button onClick={() => setLibrary(true)}>Saved maps</button>
-            <button onClick={() => setLore(true)}>Magic lore bible</button>
-          </div>
-        </main>
-      )}
+      <AtlasContent state={state} />
       <ErrorMessage error={error ?? map.error} />
+      {setup?.selection && <AtlasSetup state={state} />}
       {library && (
         <FinishedMapLibrary
           context={context}
           close={() => setLibrary(false)}
           open={(saved) => open(saved.reference, saved)}
-          observe={state.observe}
+          observe={(job) => {
+            if (job.state === "completed" && job.result) void open(job.result);
+            else state.observe(job);
+          }}
         />
       )}
       {job && (
@@ -287,37 +247,76 @@ function Atlas({ context }: { context: FinishedContext }) {
     </>
   );
 }
+function AtlasContent({ state }: { state: ReturnType<typeof useAtlas> }) {
+  const { setup, map, opened, context } = state;
+  if (setup && !setup.selection) return <AtlasSetup state={state} />;
+  if (!map.data || !opened) return <AtlasWelcome state={state} />;
+  return (
+    <FinishedMapEditor
+      key={opened.instance}
+      context={context}
+      map={map.data}
+      saved={opened.saved}
+      open={state.open}
+      create={() => void state.create()}
+      lore={() => state.setLore(true)}
+      library={() => state.setLibrary(true)}
+      refine={(selection, name) => void state.refine(selection, name)}
+      regenerate={() => void state.regenerate()}
+    />
+  );
+}
+function AtlasWelcome({ state }: { state: ReturnType<typeof useAtlas> }) {
+  return (
+    <main className="welcome">
+      <div className="welcome-card">
+        <Brand />
+        <h1>Your atlas</h1>
+        <p>
+          {state.context.mode === "browser"
+            ? "Maps run in this browser. Save a map to keep it after closing the tab."
+            : "Worlds and regions are kept on your LAN server and available to your home devices."}
+        </p>
+        <button className="primary" onClick={() => void state.create()}>
+          New world
+        </button>
+        <button onClick={() => state.setLibrary(true)}>
+          {state.context.mode === "backend" ? "Server maps" : "Saved maps"}
+        </button>
+        <button onClick={() => state.setLore(true)}>Magic lore bible</button>
+      </div>
+    </main>
+  );
+}
 // Arconis: docs/architecture/subsystems.arconis#item=j_app — setup launch for creating, refining or regenerating a map.
 function AtlasSetup({ state }: { state: ReturnType<typeof useAtlas> }) {
   const { context, setSetup, setJob, setJobSelection } = state;
   const setup = state.setup!;
+  const options: GenerationWorkflowOptions = {
+    initial: setup.draft,
+    service: context.generation,
+    source: setup.parent,
+    selection: setup.selection,
+    onCancel: () => setSetup(null),
+    onGenerate: async (draft) => {
+      const status = setup.selection
+        ? await context.generation.refine({ selection: setup.selection, configuration: draft })
+        : setup.parent
+          ? await context.generation.regenerate(setup.parent.reference, draft)
+          : await context.generation.create(draft);
+      setJob(status);
+      setJobSelection(setup.selection ?? null);
+      setSetup(null);
+    },
+  };
+  if (setup.selection) return <RegionalGeneration {...options} />;
   return (
     <main className="setup-page">
       <header className="setup-page-header">
         <Brand />
         <h1>{setup.selection ? "Refine region" : setup.parent ? "Regenerate map" : "New world"}</h1>
       </header>
-      <GenerationWizard
-        key={setup.draft.worldId + setup.draft.name}
-        initial={setup.draft}
-        service={context.generation}
-        source={setup.parent}
-        selection={setup.selection}
-        onCancel={() => setSetup(null)}
-        onGenerate={async (draft) => {
-          const status = setup.selection
-            ? await context.generation.refine({
-                selection: setup.selection,
-                configuration: draft,
-              })
-            : setup.parent
-              ? await context.generation.regenerate(setup.parent.reference, draft)
-              : await context.generation.create(draft);
-          setJob(status);
-          setJobSelection(setup.selection ?? null);
-          setSetup(null);
-        }}
-      />
+      <GenerationWizard key={setup.draft.worldId + setup.draft.name} {...options} />
     </main>
   );
 }

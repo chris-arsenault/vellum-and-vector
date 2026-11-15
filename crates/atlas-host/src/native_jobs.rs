@@ -3,8 +3,8 @@ mod review;
 mod run;
 use crate::generation_application::{Choice, Configuration};
 use atlas_generation::{
-    control::CancellationToken, storage::MemoryBudget, GenerationState, GenerationStatus,
-    RefinementRequest,
+    control::CancellationToken, storage::MemoryBudget, GenerationDetails, GenerationState,
+    GenerationStatus, RefinementRequest,
 };
 use atlas_gis::map_files::MapFiles;
 use atlas_map::MapRef;
@@ -16,6 +16,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
     thread,
+    time::Instant,
 };
 
 #[derive(Clone)]
@@ -71,7 +72,7 @@ pub enum Event {
         reference: MapRef,
     },
     Status {
-        status: GenerationStatus,
+        status: Box<GenerationStatus>,
     },
     Preview {
         #[serde(rename = "jobId")]
@@ -94,16 +95,28 @@ pub(super) struct State {
 pub(super) struct Job {
     state: Arc<Mutex<State>>,
     token: CancellationToken,
+    started: Instant,
 }
 impl Job {
     fn status(&self) -> io::Result<GenerationStatus> {
-        Ok(self.state.lock().map_err(poisoned)?.status.clone())
+        let mut status = self.state.lock().map_err(poisoned)?.status.clone();
+        if status.state == GenerationState::Running {
+            if let Some(details) = &mut status.details {
+                details.elapsed_seconds = self.started.elapsed().as_secs_f64();
+            }
+        }
+        Ok(status)
     }
     fn update(&self, change: impl FnOnce(&mut GenerationStatus)) -> io::Result<()> {
         let mut state = self.state.lock().map_err(poisoned)?;
         change(&mut state.status);
+        if let Some(details) = &mut state.status.details {
+            details.elapsed_seconds = self.started.elapsed().as_secs_f64();
+        }
         let status = state.status.clone();
-        state.events.push(Event::Status { status });
+        state.events.push(Event::Status {
+            status: Box::new(status),
+        });
         Ok(())
     }
 }
@@ -186,15 +199,17 @@ impl Jobs {
             progress: None,
             result: None,
             message: None,
+            details: Some(action.details()),
         };
         let job = Job {
             state: Arc::new(Mutex::new(State {
                 status: status.clone(),
                 events: vec![Event::Status {
-                    status: status.clone(),
+                    status: Box::new(status.clone()),
                 }],
             })),
             token: CancellationToken::default(),
+            started: Instant::now(),
         };
         let settings = self.settings.clone();
         let worker = job.clone();
@@ -203,6 +218,26 @@ impl Jobs {
             .spawn(move || run::run(action, settings, worker))?;
         self.jobs.lock().map_err(poisoned)?.insert(id, job);
         Ok(status)
+    }
+}
+impl Action {
+    fn details(&self) -> GenerationDetails {
+        let (name, parent) = match self {
+            Self::Create(configuration) => (&configuration.name, None),
+            Self::Refine(request) => (
+                &request.configuration.name,
+                Some(request.selection.parent.clone()),
+            ),
+            Self::Regenerate { configuration, .. } => (&configuration.name, None),
+        };
+        GenerationDetails {
+            name: name.clone(),
+            parent,
+            started_at: chrono::Utc::now().to_rfc3339(),
+            finished_at: None,
+            elapsed_seconds: 0.0,
+            epochs: Vec::new(),
+        }
     }
 }
 fn poisoned<T>(_: std::sync::PoisonError<T>) -> io::Error {

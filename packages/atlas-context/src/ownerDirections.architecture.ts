@@ -24,6 +24,29 @@ interface OwnerDirection {
 }
 const directions: readonly OwnerDirection[] = [
   {
+    direction: "regional refinement is a modal with only changeable selections",
+    given: "2026-11-15",
+    marks: ["frontend/src/RegionalGeneration.tsx"],
+    test: "frontend/tests/regionalGeneration.test.ts",
+  },
+  {
+    direction: "if it is on the server, it is a world; no Save action is required",
+    given: "2026-11-15",
+    marks: ["crates/atlas-gis/src/postgres_maps/library.rs"],
+    test: "crates/atlas-host/tests/postgres_maps.rs",
+  },
+  {
+    direction: "server maps and their view preferences do not require a Save action",
+    given: "2026-11-15",
+    marks: ["frontend/src/FinishedSave.tsx"],
+    test: "frontend/tests/selectionStorage.test.ts",
+  },
+  {
+    direction: "high-level generation logs include start, stop and duration",
+    given: "2026-11-15",
+    marks: ["crates/atlas-host/src/native_jobs/run.rs"],
+  },
+  {
     direction: "create our own secrets and use them through the Ahara platform",
     given: "2026-11-15",
     marks: ["infrastructure/terraform/database.tf"],

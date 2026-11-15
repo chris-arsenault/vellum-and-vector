@@ -65,9 +65,12 @@ fn postgis_publication_queries_saves_and_reader_boundary() -> Result<(), Box<dyn
     store.initialize()?;
     PrivateInputs::connect(&url)?.initialize()?;
     let original = complete(&mut store, "original", None)?;
+    assert_eq!(store.list_saved("")?.items[0].reference, original);
+    assert_eq!(store.find_saved("island")?.unwrap().summary.version, 0);
     replacement(&mut store, &original)?;
     scoped_queries(&mut store)?;
     saves(&store)?;
+    automatic_child(&mut store)?;
     interrupted(&mut store)?;
     admin.batch_execute("CREATE ROLE atlas_reader LOGIN")?;
     store.grant_reader("atlas_reader")?;
@@ -115,7 +118,7 @@ fn http_facade(writer: &str, reader: &str) -> Result<(), Box<dyn std::error::Err
             "/api/maps/library",
             json!({"method":"open","args":["island"]}),
         )?;
-        assert_eq!(saved["reference"]["revision"], "spatial");
+        assert_eq!(saved["reference"]["revision"], "after-save");
         let state = json!({"version":0,"regions":[],"views":[]});
         let view = request(
             address,
@@ -247,7 +250,7 @@ fn saves(store: &PostgresMaps) -> io::Result<()> {
     let reference = store.find_head("island")?.unwrap();
     let request = || SaveRequest {
         reference: reference.clone(),
-        expected_version: None,
+        expected_version: Some(0),
         navigation: Default::default(),
         settings: Default::default(),
     };
@@ -258,6 +261,28 @@ fn saves(store: &PostgresMaps) -> io::Result<()> {
     );
     assert_eq!(store.list_saved("")?.items.len(), 1);
     assert!(store.save(request(), "tomorrow".into()).is_err());
+    Ok(())
+}
+fn automatic_child(store: &mut PostgresMaps) -> io::Result<()> {
+    let parent = store.find_head("island")?.unwrap();
+    let mut child = map("child-revision");
+    child.reference.map_id = "child".into();
+    child.parent = Some(parent.clone());
+    store.begin(&child, None, true)?;
+    assert!(store.find_saved("child")?.is_none());
+    store.append(&child.reference, assets())?;
+    store.finish(&child.reference)?;
+    assert_eq!(store.list_saved("")?.items.len(), 2);
+    assert_eq!(
+        store.find_saved("child")?.unwrap().summary.reference,
+        child.reference
+    );
+    assert!(store.related(&parent)?.children.contains(&child.reference));
+    // A replaced head stays discoverable without reusing the old revision's view state.
+    let next = complete(store, "after-save", Some(&parent))?;
+    let opened = store.find_saved("island")?.unwrap();
+    assert_eq!(opened.summary.reference, next);
+    assert_eq!(opened.summary.version, 1);
     Ok(())
 }
 fn interrupted(store: &mut PostgresMaps) -> io::Result<()> {

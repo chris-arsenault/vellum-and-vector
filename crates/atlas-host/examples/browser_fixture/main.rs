@@ -12,7 +12,7 @@ use atlas_gis::{
     sql::Database,
 };
 use atlas_host::{
-    finished_map, generation_world::CreateWorld, native::NativeScratch,
+    finished_map, generation_world::CreateWorld, local_inputs::LocalInputs, native::NativeScratch,
     native_control::NativeControl, native_map_assets::NativeMapAssets,
     native_resources::NativeResources, record_store::Workspace,
 };
@@ -51,6 +51,13 @@ async fn publish(root: &Path) -> io::Result<()> {
         ocean: Some(Some(rectangle(Bounds(0.0, 0.0, 20.0, 100.0)))),
         lakes: Vec::new(),
     };
+    LocalInputs::open(Rc::new(Database::open(root.join("inputs.sqlite"))?))?.store(
+        &reference,
+        &document,
+        &records.features(),
+        &records.networks(),
+        &[serde_json::to_value(&geography)?],
+    )?;
     let cache = BlockCache::resident(
         8_000_000,
         BlockScratch::new(NativeScratch::create_new(root.join("scratch.blocks"))?),
@@ -91,6 +98,12 @@ async fn publish(root: &Path) -> io::Result<()> {
         let entry = entry?;
         files.push(json!({"path":["map-assets",entry.file_name().to_string_lossy()],"bytes":fs::read(entry.path())?}));
     }
+    files.push(json!({"path":["inputs.sqlite"],"bytes":fs::read(root.join("inputs.sqlite"))?}));
+    collect_resources(
+        &root.join("generation"),
+        vec!["generation-resources".into()],
+        &mut files,
+    )?;
     let output =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.artifacts/browser-fixture.json");
     fs::create_dir_all(output.parent().unwrap())?;
@@ -98,4 +111,21 @@ async fn publish(root: &Path) -> io::Result<()> {
         output,
         serde_json::to_vec(&json!({"reference":reference,"files":files}))?,
     )
+}
+fn collect_resources(
+    directory: &Path,
+    path: Vec<String>,
+    files: &mut Vec<serde_json::Value>,
+) -> io::Result<()> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let mut next = path.clone();
+        next.push(entry.file_name().to_string_lossy().into_owned());
+        if entry.file_type()?.is_dir() {
+            collect_resources(&entry.path(), next, files)?;
+        } else {
+            files.push(json!({"path":next,"bytes":fs::read(entry.path())?}));
+        }
+    }
+    Ok(())
 }

@@ -112,7 +112,7 @@ pub fn adopt(
     courses: &[CapturedCourse],
     continuing: &[ContinuingRiver],
     contracted: &impl Fn(&str) -> bool,
-) -> io::Result<()> {
+) -> io::Result<Vec<Feature>> {
     let rivers = features
         .values(FeatureSelection {
             area_id: Some(area),
@@ -120,6 +120,7 @@ pub fn adopt(
             ..Default::default()
         })?
         .collect::<io::Result<Vec<_>>>()?;
+    let mut restored = Vec::new();
     for river in continuing {
         let course = &courses[river.course];
         let drawn: Vec<_> = rivers
@@ -137,11 +138,11 @@ pub fn adopt(
             })
             .collect();
         if drawn.is_empty() && features.get(&course.feature.id)?.is_none() {
-            features.put(course.feature.clone())?;
+            restored.push(course.feature.clone());
         }
         for feature in drawn {
             take_identity(features, &feature.id, course, contracted)?;
         }
     }
-    Ok(())
+    Ok(restored)
 }

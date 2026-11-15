@@ -130,3 +130,15 @@ backends, historical migrations and deployment scripts are removed, not adapted.
 
 Manual authoring and undo remain deferred and preserved. This decision adds no execution
 checkpoints, restart/recovery, format conversion, numerical replay checks or output caps.
+
+The owner's 2026-11-15 usability direction makes a completed server map available
+without Save. The backend library lists complete published heads and overlays stored
+view preferences; worlds and independent children are discoverable after an unattended
+completion. The frontend saves server view preferences through the existing library
+contract. Browser maps retain explicit-save behavior. Job progress can be closed
+without cancellation, and completed jobs link directly to their map. Native jobs log
+start, stop and epoch durations without numerical detail.
+
+The later correction excludes resume when it adds performance or storage cost.
+No checkpoints are persisted; a service restart ends running jobs. Completed map
+durability is separate from execution recovery.

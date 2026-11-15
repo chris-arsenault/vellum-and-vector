@@ -16,7 +16,19 @@ export type GenerationStatus = {
   progress: number | null;
   result: MapRef | null;
   message: string | null;
+  details?: GenerationDetails;
 };
+
+export type GenerationDetails = {
+  name: string;
+  parent: MapRef | null;
+  startedAt: string;
+  finishedAt: string | null;
+  elapsedSeconds: number;
+  epochs: Array<EpochDuration>;
+};
+
+export type EpochDuration = { name: string; seconds: number };
 
 export type GenerationProgress = { path: Array<string>; fraction: number; message: string };
 

@@ -1,6 +1,72 @@
 import { expect, test } from "./uiTest";
 import { chooseOutline, exportMap, openFixtureMap, openSavedFixture, pageErrors } from "./harness";
 
+test("server view preferences save without a Save action", async ({ page }) => {
+  const reference = await openFixtureMap(page);
+  await page.goto("/tests/fixtureMap.html");
+  await page.waitForFunction(() => typeof window.openServerSaveFixture === "function");
+  await page.evaluate((reference) => window.openServerSaveFixture(reference), reference);
+  await expect(page.getByRole("button", { name: "Save map", exact: true })).toHaveCount(0);
+  await chooseOutline(page, "Kept on server");
+  await expect
+    .poll(async () => {
+      const saved = await page.evaluate(() => window.savedFixtureView());
+      return saved.navigation.regions.map((region) => region.name);
+    })
+    .toContain("Kept on server");
+  await expect(page.locator(".map-storage [role=status]")).toHaveText("Stored on server");
+  await page.reload();
+  await page.waitForFunction(() => typeof window.openServerSaveFixture === "function");
+  await page.evaluate((reference) => window.openServerSaveFixture(reference), reference);
+  await expect(page.getByRole("heading", { name: "Kept on server", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.generationCalls)).toEqual([]);
+});
+
+test("@generation closing progress keeps the job and a completed job opens its map", async ({
+  page,
+}) => {
+  const reference = await openFixtureMap(page);
+  await page.evaluate((reference) => {
+    window.generationFixtureJobs = [
+      {
+        jobId: "running-region",
+        state: "running",
+        step: "Epoch 2",
+        progress: 0.5,
+        result: null,
+        message: null,
+        details: {
+          name: "Coastal region",
+          parent: reference,
+          startedAt: "2026-11-15T00:00:00Z",
+          finishedAt: null,
+          elapsedSeconds: 12,
+          epochs: [{ name: "Epoch 1", seconds: 8 }],
+        },
+      },
+      {
+        jobId: "completed-region",
+        state: "completed",
+        step: "Map published",
+        progress: 1,
+        result: reference,
+        message: null,
+      },
+    ];
+  }, reference);
+  await page.getByRole("button", { name: "Saved maps", exact: true }).click();
+  await page.getByText("This tab’s generation jobs", { exact: true }).first().click();
+  await page.getByRole("button", { name: /Coastal region/ }).click();
+  await expect(page.getByText("Elapsed: 12 seconds", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Close progress", exact: true }).click();
+  expect(await page.evaluate(() => window.generationCalls)).not.toContain("cancel");
+  await page.getByRole("button", { name: "Saved maps", exact: true }).click();
+  await page.getByText("This tab’s generation jobs", { exact: true }).first().click();
+  await page.getByRole("button", { name: /Map published.*Open map/ }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("application", { name: "World map canvas" })).toBeVisible();
+});
+
 test("local saves retain GIS geography, selected regions and appearance across reload", async ({
   page,
 }) => {

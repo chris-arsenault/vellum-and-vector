@@ -1,8 +1,21 @@
+import type { GenerationStatus } from "@atlas/context";
+
+interface SuppliedCall {
+  method: string;
+  request?: { recipe?: unknown; job_id?: string; selection?: unknown; configuration?: unknown };
+}
+interface ScenarioOptions {
+  rendering: boolean;
+  generation?: boolean;
+}
+
 declare global {
   interface Window {
     atlasScenario: { rendering: boolean; generation: boolean };
     generationFixtureInput?: unknown;
     generationCalls: string[];
+    generationFixtureJobs?: GenerationStatus[];
+    generationFixtureSelection?: unknown;
   }
 }
 
@@ -15,13 +28,7 @@ export function assertGenerationScenario() {
 }
 
 /** Runs in each page. Numerical preconditions remain real; raster presentation is opt-in. */
-export function installScenarioBoundary({
-  rendering,
-  generation = false,
-}: {
-  rendering: boolean;
-  generation?: boolean;
-}) {
+export function installScenarioBoundary({ rendering, generation = false }: ScenarioOptions) {
   window.atlasScenario = { rendering, generation };
   window.generationCalls = [];
   const NativeWorker = window.Worker;
@@ -47,12 +54,25 @@ export function installScenarioBoundary({
           result: null,
           message: null,
         };
-        const supplied = (
-          call: { method: string; request?: { recipe?: unknown; job_id?: string } } | null
-        ) => {
+        const jobReply = (call: SuppliedCall) => {
+          if (call.method === "jobs" && window.generationFixtureJobs)
+            return window.generationFixtureJobs;
+          const job = window.generationFixtureJobs?.find(
+            (job) => job.jobId === call.request?.job_id
+          );
+          return call.method === "observe" && job
+            ? { events: [{ kind: "status", status: job }], status: job, next: 1 }
+            : null;
+        };
+        const supplied = (call: SuppliedCall | null) => {
           if (!generation || !call) return null;
-          if (call.method === "create") {
-            window.generationFixtureInput = structuredClone(call.request?.recipe);
+          const reply = jobReply(call);
+          if (reply) return reply;
+          if (["create", "refine"].includes(call.method)) {
+            window.generationFixtureInput = structuredClone(
+              call.method === "refine" ? call.request!.configuration : call.request!.recipe
+            );
+            window.generationFixtureSelection = structuredClone(call.request!.selection);
             return completed;
           }
           if (call.method === "observe" && call.request?.job_id === completed.jobId)

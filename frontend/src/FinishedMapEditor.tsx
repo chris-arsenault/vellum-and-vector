@@ -1,15 +1,13 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type {
   Inspection,
-  JsonValue,
   MapDescriptor,
   MapRef,
   RegionSelection,
   SavedMapDocument,
-  MapNavigationState,
 } from "@atlas/map";
-import { sameValue } from "./values";
+import { FinishedSave } from "./FinishedSave";
 import type { AtlasContext } from "@atlas/context";
 import { Brand } from "./Brand";
 import { PublishedMapCanvas } from "./PublishedMapCanvas";
@@ -144,7 +142,9 @@ function FinishedHeader({ model }: { model: Model }) {
           Regenerate map
         </button>
         <FinishedSave {...props} value={value} navigation={navigation.state} />
-        <button onClick={props.library}>Saved maps</button>
+        <button onClick={props.library}>
+          {context.mode === "backend" ? "Server maps" : "Saved maps"}
+        </button>
         <button onClick={props.lore}>Lore</button>
         <button
           onClick={() =>
@@ -302,56 +302,6 @@ function FinishedInspection({ model }: { model: Model }) {
   );
 }
 
-function FinishedSave({
-  context,
-  map,
-  saved,
-  value,
-  navigation,
-}: Props & { value: PublishedPresentation; navigation: MapNavigationState | null }) {
-  const cache = useQueryClient();
-  const [stored, setStored] = useState(saved);
-  const clean = matchesSavedView(map, stored, value, navigation);
-  const save = useMutation({
-    mutationFn: async () => {
-      if (!navigation) throw new Error("Wait for map regions and views to load.");
-      return context.library.save({
-        reference: map.reference,
-        expectedVersion: stored?.version ?? null,
-        navigation,
-        settings: { presentation: value as unknown as JsonValue },
-      });
-    },
-    onSuccess: (saved) => {
-      setStored(saved);
-      void cache.invalidateQueries({ queryKey: ["saved-maps"] });
-    },
-  });
-  return (
-    <div className="map-storage">
-      <span role="status">{stored ? (clean ? "Saved" : "Unsaved changes") : "Not saved"}</span>
-      <button
-        disabled={save.isPending || navigation === null || map.state !== "complete"}
-        onClick={() => save.mutate()}
-      >
-        {save.isPending ? "Saving…" : "Save map"}
-      </button>
-      <ErrorMessage error={save.error} />
-    </div>
-  );
-}
-function matchesSavedView(
-  map: MapDescriptor,
-  saved: SavedMapDocument | undefined,
-  value: PublishedPresentation,
-  navigation: MapNavigationState | null
-) {
-  return (
-    saved?.reference.revision === map.reference.revision &&
-    sameValue(value, saved.settings.presentation ?? initialPublishedPresentation(map)) &&
-    navigation?.version === saved.navigation.version
-  );
-}
 function RelatedMaps({ context, map, open }: Props) {
   const related = useQuery({
     queryKey: ["related-maps", map.reference],

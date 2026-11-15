@@ -18,6 +18,7 @@ export function FinishedMapLibrary({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [showJobs, setShowJobs] = useState(false);
+  const title = context.mode === "backend" ? "Server maps" : "Saved maps";
   useEffect(() => {
     const element = dialog.current!;
     element.showModal();
@@ -35,21 +36,22 @@ export function FinishedMapLibrary({
       } while (cursor);
       return entries;
     },
+    refetchInterval: context.mode === "backend" ? 2000 : false,
   });
   const opening = useMutation({
     mutationFn: (id: string) => context.library.open(id),
     onSuccess: open,
   });
   return (
-    <dialog ref={dialog} className="saved-maps-dialog" aria-label="Saved maps" onCancel={close}>
+    <dialog ref={dialog} className="saved-maps-dialog" aria-label={title} onCancel={close}>
       <header className="saved-maps-heading">
-        <h2>Saved maps</h2>
-        <button onClick={close} aria-label="Close saved maps">
+        <h2>{title}</h2>
+        <button onClick={close} aria-label={`Close ${title.toLowerCase()}`}>
           ×
         </button>
       </header>
-      {maps.isPending && <p>Loading saved maps…</p>}
-      {maps.data?.length === 0 && <p>No saved maps yet. Generate a map and choose Save map.</p>}
+      {maps.isPending && <p>Loading maps…</p>}
+      {maps.data?.length === 0 && <EmptyLibrary mode={context.mode} />}
       <div className="saved-map-list">
         {maps.data?.map((map) => (
           <button
@@ -58,7 +60,7 @@ export function FinishedMapLibrary({
             onClick={() => opening.mutate(map.reference.mapId)}
           >
             <strong>{map.name}</strong>
-            <small>{new Date(map.savedAt).toLocaleString()}</small>
+            <MapSavedTime value={map.savedAt} />
           </button>
         ))}
       </div>
@@ -70,6 +72,18 @@ export function FinishedMapLibrary({
       </details>
       <ErrorMessage error={maps.error ?? opening.error} />
     </dialog>
+  );
+}
+function MapSavedTime({ value }: { value: string }) {
+  return value ? <small>{new Date(value).toLocaleString()}</small> : null;
+}
+function EmptyLibrary({ mode }: { mode: FinishedContext["mode"] }) {
+  return (
+    <p>
+      {mode === "backend"
+        ? "No completed maps yet. Server worlds and regions appear here automatically."
+        : "No saved maps yet. Generate a map and choose Save map."}
+    </p>
   );
 }
 
@@ -94,10 +108,11 @@ function HostJobs({
       <div className="saved-map-list">
         {jobs.data?.map((job) => (
           <button key={job.jobId} onClick={() => observe(job)}>
-            <strong>{job.step}</strong>
+            <strong>{job.details?.name ?? job.step}</strong>
             <small>
               {job.state} · {job.jobId.slice(0, 8)}
             </small>
+            <span>{job.state === "completed" && job.result ? "Open map" : job.step}</span>
           </button>
         ))}
       </div>

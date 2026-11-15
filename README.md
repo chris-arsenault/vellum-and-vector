@@ -71,8 +71,9 @@ The editor's right sidebar follows this workflow:
 | Refine a region   | Inherited context, detail setting, optional variation settings and generation feedback | Generate detail or return to the region         |
 
 World setup, manual authoring and library workspaces are outside this sidebar.
-Boundary tools appear during outline selection. **Saved maps** also lists the
-current host's generation jobs, including server jobs started on another device.
+Boundary tools appear during outline selection. Refinement opens a modal over the
+map with only editable settings. **Saved maps** (browser) or **Server maps** (backend)
+also lists the host's generation jobs, including server jobs started on another device.
 
 Click a feature to read its
 properties, origin and relationships; settlements also show their residents and
@@ -132,8 +133,8 @@ These display settings do not change the geography. Satellite appearance is defe
 
 **Views** holds saved compositions. Views retain the geographic subject, base,
 field overlays, vector styles and cartographic finishing together. **Save map view** creates a separate
-composition; opening it restores its subject and appearance. Use **Save map** to
-retain the world and its saved views across reloads.
+composition; opening it restores its subject and appearance. Browser mode uses
+**Save map** to retain the world and its views across reloads. Server mode saves automatically.
 
 For a drawn map, choose **Appearance → Drawn map** on the current map
 or a region selected through **Regions**. Choose an ink-and-wash or monochrome
@@ -206,16 +207,20 @@ Its coast and elevations may change; later parent changes leave existing childre
 Create a world, generate its geography, inspect features and causes, select nested
 geographic regions, refine their detail, and compose map layers and sheets.
 
-Choose **Save map** to retain the completed map, presentation settings and navigation.
-Saving again updates its saved copy and rejects stale save versions. **Saved maps**
-reopens it without regeneration. Private captured inputs remain on the same host for
-later refinement; viewing reads only the published GIS map.
+In browser mode, choose **Save map** to retain the completed map, presentation
+settings and navigation. **Saved maps** reopens it without regeneration. On the
+server, completed worlds and regions appear automatically in **Server maps**;
+presentation and navigation preferences also save automatically. Private captured
+inputs remain on the same host for later refinement; viewing reads only the published GIS map.
 
 Browser saves belong to this browser and site origin; clearing site data removes them.
-Closing the tab stops browser generation. Backend saves are shared by home devices,
-and server jobs continue when a browser disconnects. Stopping the backend ends its
-running jobs. Unsaved view changes disappear on reload in either mode. There is no
-autosave or generation recovery. GIS and map-image exports download local files.
+Closing the tab stops browser generation. Server maps are shared by home devices,
+and server jobs continue when a browser disconnects or closes progress. Find ongoing
+jobs in **Server maps → Server generation jobs** and completed maps in the library.
+Completed jobs also offer **Open map**. **Cancel generation** stops a running job.
+Server logs include start, stop, elapsed duration and completed epoch durations.
+Stopping the backend ends running jobs; there is no generation recovery. GIS and
+map-image exports download local files.
 
 Physical generation includes continental assemblies and sutures, plate advection,
 mountain construction, volcanism, impacts, flexure, continental margins, ocean

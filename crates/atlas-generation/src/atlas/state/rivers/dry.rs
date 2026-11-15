@@ -13,14 +13,17 @@ use serde_json::json;
 use std::io;
 
 fn line_of(state: &State, cells: &[usize]) -> io::Result<Vec<Position>> {
-    cells
+    let mut line = cells
         .iter()
         .filter(|&&cell| state.field().mesh().membership(cell) == Membership::Content)
         .map(|&cell| {
             let [x, y, _] = map_records::native_position(state, cell)?.coordinates();
             Ok(Position::xy((x + 0.5).floor(), (y + 0.5).floor()))
         })
-        .collect()
+        .collect::<io::Result<Vec<_>>>()?;
+    // Retained courses may revisit the same cell; coincident vertices have no line extent.
+    line.dedup();
+    Ok(line)
 }
 fn course<'a>(end: &'a Reach, dry: &[&'a Reach]) -> Vec<&'a Reach> {
     let mut course = vec![end];

@@ -456,6 +456,27 @@
 .setup-region-dialog::backdrop {
   background: #101d20b8;
 }
+.refinement-dialog {
+  width: min(700px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 18px;
+  border: 1px solid #71837a;
+  border-radius: 3px;
+  color: #dfdfd4;
+  background: #1b2b2d;
+}
+.refinement-dialog::backdrop {
+  background: #101d20b8;
+}
+.refinement-dialog form {
+  max-width: none;
+  margin: 0;
+}
+.refinement-dialog .setup-actions {
+  margin-top: 16px;
+}
 .setup-region-shell {
   height: 100%;
 }

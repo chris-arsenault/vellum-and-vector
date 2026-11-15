@@ -1,8 +1,8 @@
 # Product backlog
 
-The product supports a self-contained browser and a private LAN backend, with explicit
-map saves in each context. Public hosting and MCP remain future scope. The retired
-backend prototypes are removed. Manual editing, its authoring tools and
+The product supports a self-contained browser with explicit saves and a private LAN
+backend that retains completed maps automatically. Public hosting and MCP remain
+future scope. The retired backend prototypes are removed. Manual editing, its authoring tools and
 undo are deferred under the [current product scope](product-spec.md); an entry
 that involves them does not authorize implementation, repair or deletion of their
 existing code.
@@ -127,6 +127,12 @@ vegetation, mortality and hazard mechanisms; their names do not imply those adde
 simulations.
 
 ## Regional refinement
+
+- [ ] **31. Human visual comparison of sampling methods — much later.** Compare
+      representative maps made with the historical adaptive regional surface and
+      the current common world/regional sampling rules. The owner accepts the
+      current method as an improvement; this is deferred human visual review,
+      not a prerequisite, benchmark, numerical parity test or request to revert it.
 
 - [ ] **14. Regional terrain.** Add calderas as closed-basin roots with crater
       lakes, lava plateaus, and spring lines at escarpment feet. Add landmark

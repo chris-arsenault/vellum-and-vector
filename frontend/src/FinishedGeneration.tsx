@@ -20,8 +20,7 @@ interface Props {
   published(reference: MapRef): void;
   close(): void;
 }
-// Arconis: docs/architecture/subsystems.arconis#item=j_progress — progress panel with previews and cancel.
-export function FinishedGeneration({ context, initial, complete, published, close }: Props) {
+function useJobObservation({ context, initial, complete, published }: Props) {
   const [status, setStatus] = useState(initial);
   const [previews, setPreviews] = useState<Preview[]>([]);
   const [error, setError] = useState<unknown>(null);
@@ -54,18 +53,32 @@ export function FinishedGeneration({ context, initial, complete, published, clos
     });
     return () => controller.abort();
   }, [context, initial.jobId]);
+  return { status, previews, error, setError };
+}
+// Arconis: docs/architecture/subsystems.arconis#item=j_progress — progress panel with previews and cancel.
+export function FinishedGeneration(props: Props) {
+  const { context, complete, close } = props;
+  const { status, previews, error, setError } = useJobObservation(props);
   return (
     <section className="finished-generation" aria-label="Generation job">
+      <GenerationTiming status={status} />
       <h2>{status.step}</h2>
       <p>{status.state}</p>
       <progress aria-label="Generation progress" value={status.progress ?? undefined} max={1} />
       {status.message && <p>{status.message}</p>}
-      {status.state === "running" ? (
+      {status.state === "running" && (
         <button onClick={() => void context.generation.cancel(status.jobId).catch(setError)}>
           Cancel generation
         </button>
-      ) : (
-        <button onClick={close}>Close generation</button>
+      )}
+      {status.state === "completed" && status.result && (
+        <button onClick={() => complete(status.result!)}>Open map</button>
+      )}
+      <button onClick={close}>
+        {status.state === "running" ? "Close progress" : "Close generation"}
+      </button>
+      {status.state === "running" && context.mode === "backend" && (
+        <p>Generation continues on the server. Find it in Server maps.</p>
       )}
       {previews.length > 0 && (
         <details open>
@@ -79,6 +92,28 @@ export function FinishedGeneration({ context, initial, complete, published, clos
       )}
       <ErrorMessage error={error} />
     </section>
+  );
+}
+function GenerationTiming({ status }: { status: GenerationStatus }) {
+  const details = status.details;
+  if (!details) return null;
+  return (
+    <>
+      <h2>{details.name}</h2>
+      <p>Elapsed: {Math.round(details.elapsedSeconds)} seconds</p>
+      {details.epochs.length > 0 && (
+        <details>
+          <summary>Epoch durations</summary>
+          <ul>
+            {details.epochs.map((epoch, index) => (
+              <li key={index}>
+                {epoch.name}: {Math.round(epoch.seconds)} seconds
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </>
   );
 }
 /** Render the detached display grid directly. It never becomes a numerical workspace. */

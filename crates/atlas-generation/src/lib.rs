@@ -70,6 +70,27 @@ pub struct GenerationStatus {
     pub progress: Option<f64>,
     pub result: Option<MapRef>,
     pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub details: Option<GenerationDetails>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GenerationDetails {
+    pub name: String,
+    pub parent: Option<MapRef>,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub elapsed_seconds: f64,
+    pub epochs: Vec<EpochDuration>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EpochDuration {
+    pub name: String,
+    pub seconds: f64,
 }
 
 impl<Configuration> RefinementRequest<Configuration> {
@@ -85,6 +106,8 @@ pub fn declarations() -> String {
         RefinementRequest::<()>::decl(&cfg),
         GenerationState::decl(&cfg),
         GenerationStatus::decl(&cfg),
+        GenerationDetails::decl(&cfg),
+        EpochDuration::decl(&cfg),
         control::GenerationProgress::decl(&cfg),
         publication::raster::RasterGrid::decl(&cfg),
         publication::raster::Resampling::decl(&cfg),
