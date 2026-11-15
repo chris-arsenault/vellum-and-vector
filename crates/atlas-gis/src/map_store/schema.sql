@@ -1,4 +1,5 @@
 -- owner-direction(2026-11-12): map and generation use separate schemas
+-- Arconis: docs/architecture/subsystems.arconis#item=r_schema — SQLite tables of the published map schema.
 PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS maps (
   map_id TEXT NOT NULL, revision TEXT NOT NULL, descriptor TEXT NOT NULL,

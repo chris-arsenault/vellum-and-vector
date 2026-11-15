@@ -2,6 +2,7 @@ import { Decoder, Encoder } from "cbor-x";
 import { RpcGeneration } from "./generation";
 import { cborOptions } from "./cbor";
 
+// Arconis: docs/architecture/subsystems.arconis#item=j_be_http — client posting CBOR generation calls to api/generation.
 export class HttpGeneration<Configuration> extends RpcGeneration<Configuration> {
   constructor(baseUrl: string) {
     const endpoint = new URL("api/generation", baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);

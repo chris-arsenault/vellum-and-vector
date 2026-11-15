@@ -6,6 +6,7 @@ use crate::{
     scale::{LengthUnit, MapScale, RelativeMeasure},
     water::groundwater::return_rate,
 };
+// Arconis: docs/architecture/subsystems.arconis#item=r_wet — wetness from climate, plus groundwater, greenwood, salt and wetlands.
 pub fn respond(
     book: &mut QuestionBook<Field, &'static str>,
     runoff: QueryDependency<Field>,

@@ -1,3 +1,4 @@
+-- Arconis: docs/architecture/subsystems.arconis#item=r_schema — PostGIS tables of the published map schema.
 CREATE EXTENSION IF NOT EXISTS postgis;
 -- owner-direction(2026-11-12): map and generation use separate schemas
 DO $$ BEGIN

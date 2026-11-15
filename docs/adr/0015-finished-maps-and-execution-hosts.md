@@ -8,7 +8,10 @@ The viewer and generator are independent clients of that storage. A language bou
 is not an architectural boundary: a spatial query in Rust, GEOS or PostGIS is a GIS
 operation, not generator execution. Drawing composition belongs to the view.
 
-![Owner-supplied layout: generation and feature extraction below separate numerical and GIS stores; GIS data reaches the view through the storage facade.](../architecture/map-data-boundary.png)
+The owner's diagrams are kept in the editable, source-linked
+[architecture canvas](../architecture/subsystems.arconis). Its **Platform: map data boundary**
+frame (`#item=r_platform`) shows generation and feature extraction below separate numerical
+and GIS stores, with GIS data reaching the view through the storage facade.
 
 Generation reads and writes its private numerical representation. Feature extraction
 reads that representation and produces the GIS layers, rasters, attributes and inspection
@@ -17,9 +20,9 @@ view request. The viewer receives the resulting GIS data through PostGIS or GEOS
 and the TypeScript storage facade. There is no numerical-store route from that facade.
 
 PostGIS on TrueNAS and GEOS/SQLite in the browser are alternative complete deployments,
-never a hybrid. Both use this same subsystem layout.
-
-![Owner-supplied execution hosts: the TypeScript view and storage facade read PostGIS beside native Rust on TrueNAS, or GEOS/SQLite beside Rust WASM in the browser.](../architecture/execution-hosts.png)
+never a hybrid. Both use this same subsystem layout. The canvas's **Overlay: execution
+hosts** layer places PostGIS beside native Rust on TrueNAS (`#item=backend`) and
+GEOS/SQLite beside Rust WASM in the browser (`#item=browser`) over that boundary.
 
 The data facade exposes map records, assets, inspection, spatial queries and map
 navigation. It does not expose numerical fields, process state or a renderer-specific
@@ -30,15 +33,15 @@ capability; they are not part of map reads.
 
 Code organization follows these components:
 
-| Component               | Implementation home                                    | Data boundary                                                                                        |
-| ----------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| View and UI             | `frontend/src`                                         | Map products, presentation state and GIS query results                                               |
-| Data-storage facade     | `packages/map`, map operations in `packages/transport` | Same asynchronous data contract for local and remote storage                                         |
-| GIS storage and queries | `crates/atlas-gis`                                     | SQLite/PostGIS map records, spatial operations and map assets; no generation dependency              |
-| Published map contracts | `crates/atlas-map`                                     | Shared GIS values and publication contract; no generator or host dependency                          |
-| Numerical generation    | Process, field and storage modules in `crates/atlas-generation` | Reads and writes private numerical state                                                           |
-| Feature extraction and publication | `crates/atlas-generation/src/publication`      | Reads numerical outputs and generated records; produces independent GIS values and assets             |
-| Application composition | `crates/atlas-host`                                    | Wires storage and generation separately; owns job lifecycle and explicit retention of private inputs |
+| Component                          | Implementation home                                             | Data boundary                                                                                        |
+| ---------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| View and UI                        | `frontend/src`                                                  | Map products, presentation state and GIS query results                                               |
+| Data-storage facade                | `packages/map`, map operations in `packages/transport`          | Same asynchronous data contract for local and remote storage                                         |
+| GIS storage and queries            | `crates/atlas-gis`                                              | SQLite/PostGIS map records, spatial operations and map assets; no generation dependency              |
+| Published map contracts            | `crates/atlas-map`                                              | Shared GIS values and publication contract; no generator or host dependency                          |
+| Numerical generation               | Process, field and storage modules in `crates/atlas-generation` | Reads and writes private numerical state                                                             |
+| Feature extraction and publication | `crates/atlas-generation/src/publication`                       | Reads numerical outputs and generated records; produces independent GIS values and assets            |
+| Application composition            | `crates/atlas-host`                                             | Wires storage and generation separately; owns job lifecycle and explicit retention of private inputs |
 
 `atlas-host` supplies extraction with private inputs and a GIS publisher; it supplies
 the viewer with only GIS read/query capabilities. The `publication` module is the

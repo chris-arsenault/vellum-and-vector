@@ -10,6 +10,7 @@ use crate::{
     storage::ReadBand,
 };
 
+// Arconis: docs/architecture/subsystems.arconis#item=q_register — registers each system's question responders beside that system.
 pub fn base(
     profile: &ResolvedSettings,
     environment: &Environment,

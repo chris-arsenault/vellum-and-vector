@@ -8,6 +8,7 @@ use crate::{
 use std::io;
 
 impl Field {
+    // Arconis: docs/architecture/subsystems.arconis#item=e1 — opens an epoch by clearing forcing and starting water.
     pub fn begin_atlas_epoch() -> Command<Self> {
         let water = super::water::WaterOperations::new().begin_epoch;
         Command::with_inputs(
@@ -50,6 +51,7 @@ impl Field {
             },
         )
     }
+    // Arconis: docs/architecture/subsystems.arconis#item=e8 — closes the epoch, saving heat history and first-epoch height.
     fn record_epoch(&mut self, epoch: i32) -> io::Result<()> {
         let mut ground = self.ground.try_borrow_mut().map_err(io::Error::other)?;
         if f64::from(epoch) != ground.completed_epochs() {

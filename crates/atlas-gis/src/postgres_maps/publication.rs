@@ -5,6 +5,7 @@ use atlas_map::{
 };
 use std::{collections::BTreeSet, io};
 impl Publisher for PostgresMaps {
+    // Arconis: docs/architecture/subsystems.arconis#item=j_be_store — opens a publication in the PostGIS map schema under a row lock.
     fn begin(
         &mut self,
         map: &MapDescriptor,

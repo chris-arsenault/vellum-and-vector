@@ -1,5 +1,6 @@
 //! Published map values. This crate has no generation, storage or execution dependency.
 // owner-direction(2026-11-12): map and generation use separate schemas
+// Arconis: docs/architecture/subsystems.arconis#item=gis — published GIS layer, raster and record contracts.
 mod geometry;
 mod layers;
 mod navigation;

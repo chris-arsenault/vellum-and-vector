@@ -116,6 +116,7 @@ pub fn ground_fact(layer: &GroundLayer, fact: Fact) -> f64 {
     }
 }
 impl Ground {
+    // Arconis: docs/architecture/subsystems.arconis#item=g_reads — folds over a cell's layers to answer ground queries.
     pub fn fold<T: Clone>(
         &self,
         cell: usize,

@@ -1,4 +1,5 @@
 //! Executable sea, sky, ice and water dependencies from the current process definitions.
+// Arconis: docs/architecture/subsystems.arconis#item=c_sea — wires the ocean surface: where the sea stands.
 use crate::{
     answers::{AnswerBand, QuestionBinding, QuestionBook},
     bindings::physical_seeds,

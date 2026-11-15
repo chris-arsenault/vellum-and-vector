@@ -17,6 +17,7 @@ pub(super) fn capture(
     capture_drainage(region, owners, ids, world)?;
     capture_sources(region, owners, ids, world)
 }
+// Arconis: docs/architecture/subsystems.arconis#item=rg_ctx — incoming rivers; capture_sources takes landmarks and magic.
 fn capture_drainage(
     region: &Region<'_>,
     owners: &[String],

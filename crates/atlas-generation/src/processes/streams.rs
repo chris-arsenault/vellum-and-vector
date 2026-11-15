@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=g_stream — streams incise their beds by abrasion, then plucking.
 use super::runner::{FieldStage, StageProcess, StageWork};
 use crate::{
     field::{

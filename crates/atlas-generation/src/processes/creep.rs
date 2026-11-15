@@ -1,4 +1,5 @@
 //! Loose cover moves down every lower face, limited by its mantle and local levelling.
+// Arconis: docs/architecture/subsystems.arconis#item=g_slope — loose cover creeps downslope by shear.
 use super::runner::{FieldStage, StageProcess};
 use crate::{
     rock::{catalogue, ground::GroundField, CompiledMix, ModeId, ModeMix},

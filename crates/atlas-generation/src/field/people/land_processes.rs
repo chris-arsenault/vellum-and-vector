@@ -18,6 +18,7 @@ pub struct Era {
     pub years: f64,
     pub mobility: f64,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=p_watch — people's land operations, run after geology each epoch.
 pub struct Operations {
     pub watch: Command<Field, f64>,
     pub epoch: Command<Field>,

@@ -12,6 +12,7 @@ use crate::{
 };
 use std::{io, rc::Rc};
 
+// Arconis: docs/architecture/subsystems.arconis#item=pp_meet — records land that drowned, buried, scoured or struck people.
 pub struct Seen {
     laid: Band<f64>,
     stripped: Band<f64>,

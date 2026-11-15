@@ -10,6 +10,7 @@ pub const PRESENTATION: &str = include_str!("presentation.json");
 pub fn catalogue() -> io::Result<Vec<Value>> {
     Ok(serde_json::from_str(PRESENTATION)?)
 }
+// Arconis: docs/architecture/subsystems.arconis#item=w_controls — supplies the cartography step-question descriptors to the editor.
 pub fn controls() -> io::Result<Vec<Value>> {
     Ok(catalogue()?
         .iter()

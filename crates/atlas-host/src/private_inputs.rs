@@ -13,6 +13,7 @@ pub struct CompletedInputs {
     pub revision: u64,
     pub catalog_id: String,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=numerical — captured inputs in the private generation schema.
 pub struct PrivateInputs {
     db: RefCell<Client>,
 }

@@ -2,6 +2,7 @@ use super::{operations, Composition, Sequence};
 use std::io;
 
 impl Composition<'_, '_> {
+    // Arconis: docs/architecture/subsystems.arconis#item=lane_epoch — composes the epoch body that repeats for every epoch.
     pub(super) fn epoch(&self, inherited: bool) -> io::Result<Sequence> {
         let mut body = operations(&["atlas.begin-epoch"]);
         if !inherited {

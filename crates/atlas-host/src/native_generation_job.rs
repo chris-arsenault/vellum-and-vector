@@ -16,6 +16,7 @@ use atlas_map::{MapRef, RegionSelection};
 use serde_json::Value;
 use std::{fs, io, path::PathBuf, rc::Rc, sync::Arc};
 
+// Arconis: docs/architecture/subsystems.arconis#item=j_be_job — native job that prepares, runs, keeps inputs and publishes.
 pub struct NativeJob {
     pub submission: Submission,
     pub source: Option<MapRef>,

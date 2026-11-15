@@ -69,6 +69,7 @@ pub fn lithification() -> Command<Field, PhysicalContext> {
         },
     )
 }
+// Arconis: docs/architecture/subsystems.arconis#item=c_heat — bakes buried rock by heat into metamorphic rock.
 pub fn metamorphism(heat: Query<Field, AnswerBand>) -> Command<Field> {
     Field::material_command(
         "rock-metamorphism",

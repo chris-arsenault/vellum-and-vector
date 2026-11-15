@@ -20,6 +20,7 @@ interface Props {
   published(reference: MapRef): void;
   close(): void;
 }
+// Arconis: docs/architecture/subsystems.arconis#item=j_progress — progress panel with previews and cancel.
 export function FinishedGeneration({ context, initial, complete, published, close }: Props) {
   const [status, setStatus] = useState(initial);
   const [previews, setPreviews] = useState<Preview[]>([]);

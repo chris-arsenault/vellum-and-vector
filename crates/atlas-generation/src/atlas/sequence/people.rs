@@ -5,6 +5,7 @@ use crate::{
 };
 use std::io;
 
+// Arconis: docs/architecture/subsystems.arconis#item=eras — composes the human eras loop, settling people era by era.
 pub fn people(context: &Context<'_>, epochs: &[Epoch], eras: &[HumanEra]) -> io::Result<Sequence> {
     let earlier = epochs.len().saturating_sub(1);
     let present = eras
@@ -50,6 +51,7 @@ pub fn people(context: &Context<'_>, epochs: &[Epoch], eras: &[HumanEra]) -> io:
     sequence.extend(operations(&["human.population-present"]));
     Ok(sequence)
 }
+// Arconis: docs/architecture/subsystems.arconis#item=prep — prepares the map from settings, recipe and inputs.
 pub fn configured(
     catalogue: &Catalogue,
     context: &Context<'_>,

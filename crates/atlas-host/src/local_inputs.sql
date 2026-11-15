@@ -1,3 +1,4 @@
+-- Arconis: docs/architecture/subsystems.arconis#item=s_gen — SQLite tables of the private generation schema.
 CREATE TABLE IF NOT EXISTS generation_catalogs (
     map_id TEXT NOT NULL,
     revision TEXT NOT NULL,

@@ -43,6 +43,7 @@ pub(super) struct Prepared {
     geography: Vec<Value>,
     resources: Vec<Value>,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=j_bw_job — browser job that prepares, runs, keeps inputs and publishes.
 #[wasm_bindgen]
 pub struct BrowserJob {
     private: LocalInputs,

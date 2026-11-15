@@ -1,4 +1,5 @@
 //! PostgreSQL/PostGIS finished-map storage. Private generation inputs use a separate capability.
+// Arconis: docs/architecture/subsystems.arconis#item=postgis — LAN backend map store beside the native generator.
 mod access;
 mod library;
 mod publication;

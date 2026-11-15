@@ -67,6 +67,7 @@ fn climb(
     }
     Ok(up)
 }
+// Arconis: docs/architecture/subsystems.arconis#item=pp_places — finds town zones from the population and built layers.
 pub fn dense_zones(
     field: &Field,
     support: &ReadBand<f64>,

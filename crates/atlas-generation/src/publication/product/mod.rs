@@ -22,6 +22,7 @@ struct Target<'a, P, A> {
     assets: &'a mut A,
 }
 impl Product<'_> {
+    // Arconis: docs/architecture/subsystems.arconis#item=j_publish — publishes the finished map's rasters, vectors and records.
     pub async fn publish(
         &self,
         publisher: &mut impl Publisher,

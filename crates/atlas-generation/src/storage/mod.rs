@@ -1,4 +1,5 @@
 //! Typed paged numerical state with host-owned disposable scratch.
+// Arconis: docs/architecture/subsystems.arconis#item=numerical — working numerical representation read and written by generation.
 mod band;
 mod band_list;
 mod cache;

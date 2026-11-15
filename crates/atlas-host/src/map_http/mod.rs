@@ -39,6 +39,7 @@ pub fn serve(server: Arc<Server>, services: Arc<Services>) -> io::Result<()> {
     }
     Ok(())
 }
+// Arconis: docs/architecture/subsystems.arconis#item=j_be_http — routes HTTP requests, including POST api/generation in CBOR.
 fn handle(request: &mut Request, services: &Services) -> io::Result<ResponseBox> {
     let path = request
         .url()

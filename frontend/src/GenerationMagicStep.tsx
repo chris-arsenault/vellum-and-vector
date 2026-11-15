@@ -6,6 +6,7 @@ import { setDraftMagicSystems } from "./generationDraftEpochs";
 import { updateFeature } from "./generationDraft";
 import { useWorkflowFields } from "./workflowFieldState";
 
+// Arconis: docs/architecture/subsystems.arconis#item=w4 — magic step: which systems run and their effects.
 export function GenerationMagicStep({ flow }: { flow: GenerationWorkflow }) {
   const systems = flow.draft.recipe.features!["magic.configured"].configuration!
     .magicSystems as unknown as MagicSystem[];

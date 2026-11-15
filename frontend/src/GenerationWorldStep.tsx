@@ -4,6 +4,7 @@ import { NumberField } from "./WorkflowFields";
 import { GenerationResolution } from "./GenerationResolution";
 import { setFeatureSetting } from "./generationDraft";
 
+// Arconis: docs/architecture/subsystems.arconis#item=w1 — map brief step: name, size, detail, boundary, seed.
 export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
   const { draft, change } = flow;
   const inherited = Boolean(flow.options.source);

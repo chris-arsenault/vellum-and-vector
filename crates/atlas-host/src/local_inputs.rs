@@ -1,4 +1,5 @@
 //! Browser-local completed inputs. This database is separate from the finished-map catalog.
+// Arconis: docs/architecture/subsystems.arconis#item=j_bw_inputs — browser inputs.sqlite holding captured private inputs.
 use crate::{generation_document::Document, numerical_resource::Scope};
 use atlas_generation::features::{
     network::{NetworkReader, NetworkWorkspace, Selection},

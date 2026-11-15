@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=pp_loose — pass settings, including one loose-people pass per epoch.
 #[derive(Clone, Copy)]
 pub struct Facts {
     pub years: f64,
@@ -41,6 +42,7 @@ impl Facts {
         }
     }
 }
+// Arconis: docs/architecture/subsystems.arconis#item=pp_era — sets how many settled passes the human era runs.
 pub fn passes_for(years: f64) -> usize {
     (years / 100.0).ceil().clamp(2.0, 6.0) as usize
 }

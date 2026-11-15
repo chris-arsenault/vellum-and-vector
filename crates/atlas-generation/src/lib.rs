@@ -1,4 +1,5 @@
 //! Generation contracts and computation. Published maps remain independent of this crate.
+// Arconis: docs/architecture/subsystems.arconis#item=generation — generation processes over the numerical representation.
 pub mod answers;
 pub mod atlas;
 pub mod bindings;

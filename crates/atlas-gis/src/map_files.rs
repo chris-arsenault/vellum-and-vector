@@ -5,6 +5,7 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
+// Arconis: docs/architecture/subsystems.arconis#item=gis — published raster and vector map files.
 #[derive(Clone)]
 pub struct MapFiles {
     directory: PathBuf,

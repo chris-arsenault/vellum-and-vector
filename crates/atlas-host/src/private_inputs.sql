@@ -1,3 +1,4 @@
+-- Arconis: docs/architecture/subsystems.arconis#item=s_gen — PostGIS tables of the private generation schema.
 DO $$ BEGIN
   IF to_regnamespace('generation') IS NULL THEN CREATE SCHEMA generation; END IF;
 END $$;

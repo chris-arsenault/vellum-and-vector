@@ -14,6 +14,7 @@ pub struct Work {
     pub post_glacial: Command<State, PhysicalContext>,
     pub history: Command<State, Vec<usize>>,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=m_climate — builds the magic phases where Fire and Pressure alter heat, water, rock.
 fn phase(
     input: Rc<Inputs>,
     current: Query<State, ()>,

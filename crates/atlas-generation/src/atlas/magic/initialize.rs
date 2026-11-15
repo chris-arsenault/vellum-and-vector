@@ -9,6 +9,7 @@ use crate::{
 };
 use std::{collections::BTreeSet, io, rc::Rc};
 
+// Arconis: docs/architecture/subsystems.arconis#item=m_init — sets up magic from the map's inputs.
 pub fn operation(
     configuration: Configuration,
     inputs: Rc<Inputs>,

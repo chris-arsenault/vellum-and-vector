@@ -70,6 +70,7 @@ pub async fn write_resources(
     }
     Ok(())
 }
+// Arconis: docs/architecture/subsystems.arconis#item=rg_parent — selection on a pinned parent map revision.
 pub struct Selection<'a> {
     pub parent: &'a MapDescriptor,
     pub selection: &'a RegionSelection,
@@ -100,6 +101,7 @@ impl Region<'_> {
     }
 }
 impl Selection<'_> {
+    // Arconis: docs/architecture/subsystems.arconis#item=rg_capture — captures the region once, refusing the parent's id.
     /// Features are composed records returned by a scoped GIS query for the pinned revision.
     pub fn capture(
         self,

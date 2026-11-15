@@ -20,6 +20,7 @@ pub struct Craft {
     pub name: &'static str,
     pub medium: S,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=pp_crafts — the seven magic crafts, each learned where its medium lies.
 pub const CRAFTS: [Craft; 7] = [
     Craft {
         system: "fire",
@@ -153,6 +154,7 @@ pub fn learning(owner: Rc<operations::Operations<Field>>) -> Command<Field, f64>
         },
     )
 }
+// Arconis: docs/architecture/subsystems.arconis#item=c_craft — registers each craft's rule break for the share who practise it.
 pub fn breaks(
     book: &mut QuestionBook<Field, &'static str>,
     dependencies: Vec<QueryDependency<Field>>,

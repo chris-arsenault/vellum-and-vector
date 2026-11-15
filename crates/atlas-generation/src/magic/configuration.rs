@@ -60,6 +60,7 @@ pub enum Carrier {
     People,
     Door,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=m_sys — when each magic system forms: climate, after ice, or society.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "kebab-case")]
 #[ts(rename = "MagicPhase")]

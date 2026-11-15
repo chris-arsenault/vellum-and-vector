@@ -30,6 +30,7 @@ const peopleFeatures = [
   },
 ];
 
+// Arconis: docs/architecture/subsystems.arconis#item=w5 — people step: age, cultures, politics, towns and roads.
 export function GenerationPeopleStep({ flow }: { flow: GenerationWorkflow }) {
   const features = flow.setup?.features ?? [];
   return (

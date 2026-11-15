@@ -14,6 +14,7 @@ export interface GenerationCall {
   request?: unknown;
 }
 export type GenerationTransport = (call: GenerationCall, options?: ReadOptions) => Promise<unknown>;
+// Arconis: docs/architecture/subsystems.arconis#item=j_facade — one generation call set used on both hosts.
 export class RpcGeneration<Configuration> implements GenerationService<Configuration> {
   constructor(private send: GenerationTransport) {}
   jobs(options?: ReadOptions) {

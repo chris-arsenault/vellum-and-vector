@@ -57,6 +57,7 @@ impl Ground {
     pub fn surface(&self, cell: usize, facet: Facet) -> io::Result<f64> {
         Ok(self.rock_surface(cell, facet)? + self.cover_depth(cell, facet)?)
     }
+    // Arconis: docs/architecture/subsystems.arconis#item=g_proj — projects a cell's columns to elevation and exposed rock.
     pub(super) fn project(&mut self, cell: usize) -> io::Result<()> {
         self.events.changed(cell)?;
         let share = self.share(cell, Facet::Cut)?;

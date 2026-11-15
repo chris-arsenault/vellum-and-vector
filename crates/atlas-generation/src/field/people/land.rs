@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=pp_found — founds the first people, only on an empty map.
 use super::{
     facts::*,
     questions::Questions,

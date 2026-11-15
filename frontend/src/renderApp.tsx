@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=view — frontend/src is the view and UI; it receives only GIS results through the facade.
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";

@@ -75,6 +75,7 @@ export interface SelectionRequest {
   featureIds?: string[];
 }
 
+// Arconis: docs/architecture/subsystems.arconis#item=facade — one reader contract for both hosts; reads GIS storage only, never numerical state.
 /** Finished-map reads. No workspace snapshot, numerical field or generation resource API. */
 export interface MapReader {
   open(reference: MapRef, options?: ReadOptions): Promise<MapDescriptor>;
@@ -148,6 +149,7 @@ export interface RelatedMaps {
   children: MapRef[];
 }
 
+// Arconis: docs/architecture/subsystems.arconis#item=facade — saved-map library half of the storage facade.
 export interface MapLibrary {
   list(cursor?: string, options?: ReadOptions): Promise<Page<SavedMap>>;
   open(mapId: string, options?: ReadOptions): Promise<SavedMapDocument>;

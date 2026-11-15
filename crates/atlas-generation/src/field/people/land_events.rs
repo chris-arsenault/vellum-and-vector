@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=pp_events — applies famine, disaster and siege while keeping frontiers.
 use super::{
     events::{dead_on, rounded, Event, Events},
     frontiers,

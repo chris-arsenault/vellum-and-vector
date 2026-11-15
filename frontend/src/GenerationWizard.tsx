@@ -64,6 +64,7 @@ function SetupWorkspace({ options }: { options: GenerationWorkflowOptions }) {
     </section>
   );
 }
+// Arconis: docs/architecture/subsystems.arconis#item=j_wizard — wizard submit: sends the reviewed setup, refusing unresolved errors.
 function useSetupGeneration(flow: GenerationWorkflow, errors: Record<string, string>) {
   return useMutation({
     mutationFn: async () => {
@@ -209,6 +210,7 @@ function invalid(flow: GenerationWorkflow, errors: Record<string, string>) {
     (!flow.prepared || flow.prepared.diagnostics.some((item) => item.severity === "error"))
   );
 }
+// Arconis: docs/architecture/subsystems.arconis#item=w_launch — launch button label: create, generate world or region, regenerate.
 function finalAction(flow: GenerationWorkflow) {
   if (flow.approach === "blank") return "Create world";
   return flow.options.selection

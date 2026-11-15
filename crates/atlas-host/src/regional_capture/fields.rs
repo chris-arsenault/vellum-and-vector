@@ -132,6 +132,7 @@ fn clip_collection(
     *values = captured;
     Ok(())
 }
+// Arconis: docs/architecture/subsystems.arconis#item=rg_fields — aliases parent number grids by reference, never copying them.
 fn alias(region: &Region<'_>, mut resource: Value, id: &str) -> io::Result<Value> {
     let original = string(&resource, "id")?.to_owned();
     if resource["state"] != "ready" {

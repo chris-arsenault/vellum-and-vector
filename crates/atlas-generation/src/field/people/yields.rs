@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=c_season — answers crop and herd yields from what the land feeds.
 use super::travel::length;
 use crate::{
     answers::{QuestionBook, Responder, ResponseKind},

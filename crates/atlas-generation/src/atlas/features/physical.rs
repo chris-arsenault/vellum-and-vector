@@ -14,6 +14,7 @@ enum Regional {
     Specialized(Slots),
 }
 type Predicate = fn(&str, &Context<'_>) -> bool;
+// Arconis: docs/architecture/subsystems.arconis#item=rg_disp — each feature chooses its regional handling: shared, captured or specialized.
 fn feature(id: &'static str, slots: Slots, regional: Regional) -> Feature {
     let alternatives = match &regional {
         Regional::Specialized(slots) => slots.as_slice(),

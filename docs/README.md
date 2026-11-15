@@ -1,15 +1,16 @@
 # Documentation
 
-| Document                                                              | Contents                                                                                                |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [Product contract](product-spec.md)                                   | Required behavior: maps, generation, magic, society, regions, inspection and presentation               |
-| [Materials and processes](../MATERIALS-AND-PROCESSES-ARCHITECTURE.md) | Working design for materials and processes, and the method for analysing interactions across the system |
-| [Generation workflows](generation-workflows.md)                       | How world and regional generation work: processes, epochs, physical, ecology, magic, society            |
-| [Generation modules](generation-modules.md)                           | Feature modules, recipes, process contracts, validity ledger and publication                            |
-| [LAN backend](lan-backend.md)                                         | Build, database roles, private HTTPS and persistent storage                                             |
-| [Backlog](backlog.md)                                                 | Open product and generation work                                                                        |
-| [Magic lore](lore/magic.md)                                           | Character, practice, cost and lore of the seven magic systems; one page per system in `lore/magic/`     |
-| [Lore pool](lore-pool/roll.py)                                        | Script and source pool for rolling adjacent lore for the magic systems                                  |
+| Document                                                              | Contents                                                                                                             |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| [Product contract](product-spec.md)                                   | Required behavior: maps, generation, magic, society, regions, inspection and presentation                            |
+| [Materials and processes](../MATERIALS-AND-PROCESSES-ARCHITECTURE.md) | Working design for materials and processes, and the method for analysing interactions across the system              |
+| [Generation workflows](generation-workflows.md)                       | How world and regional generation work: processes, epochs, physical, ecology, magic, society                         |
+| [Generation modules](generation-modules.md)                           | Feature modules, recipes, process contracts, validity ledger and publication                                         |
+| [LAN backend](lan-backend.md)                                         | Build, database roles, private HTTPS and persistent storage                                                          |
+| [Architecture canvas](architecture/subsystems.arconis)                | Source-linked Arconis diagrams on layers: platform, jobs, wizard, epochs, people, questions, ground, regions, schema |
+| [Backlog](backlog.md)                                                 | Open product and generation work                                                                                     |
+| [Magic lore](lore/magic.md)                                           | Character, practice, cost and lore of the seven magic systems; one page per system in `lore/magic/`                  |
+| [Lore pool](lore-pool/roll.py)                                        | Script and source pool for rolling adjacent lore for the magic systems                                               |
 
 ## Architecture decisions
 

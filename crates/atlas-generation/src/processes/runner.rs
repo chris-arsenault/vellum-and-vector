@@ -59,6 +59,7 @@ pub type FieldStage<'a, 'b> = Stage<'a, FieldGround<'b>>;
 type Submit = dyn Fn(&mut FieldStage<'_, '_>, &StageWork, &QueryValues) -> io::Result<()>;
 type Substeps = dyn Fn(&PhysicalContext) -> f64;
 
+// Arconis: docs/architecture/subsystems.arconis#item=q_runner — a process run within a group, together or in order.
 /// Bodies are only invoked by the dispatched group; callers compose executable references.
 pub struct StageProcess {
     id: &'static str,

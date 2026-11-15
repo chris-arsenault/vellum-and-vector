@@ -82,6 +82,7 @@ struct Landing {
     forcing: Option<Forcing>,
 }
 
+// Arconis: docs/architecture/subsystems.arconis#item=q_stage — queues ground transfers; nothing moves until settled.
 pub struct Stage<'a, G> {
     ground: &'a mut G,
     coverage: &'a mut Coverage,
@@ -313,6 +314,7 @@ impl<'a, G: StageGround> Stage<'a, G> {
             .push(source, [target as f64, volume]);
         Ok(())
     }
+    // Arconis: docs/architecture/subsystems.arconis#item=q_settle — settles queued demand, shared or sequential, and lands it.
     pub fn settle(&mut self) -> io::Result<BTreeMap<String, f64>> {
         let data = &mut self.data;
         let mesh = self.mesh;

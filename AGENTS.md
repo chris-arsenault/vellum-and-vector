@@ -78,6 +78,7 @@ composition stays in the frontend; do not put a rendering-preparation service be
 the data facade. Viewing requires neither a running generator nor private inputs.
 This supersedes interpretations that every geometry operation belongs to generation
 or that every presentation-related calculation must run in TypeScript.
+The diagram itself is [docs/architecture/subsystems.arconis](docs/architecture/subsystems.arconis).
 
 **Rust port — 2026-11-12 user direction:** Execute the finished-map/Rust plan. Preserve
 the established software architecture paradigms; numerical data structures may adapt.
@@ -363,3 +364,12 @@ itself says which is which.
   control, as in `crates/atlas-generation/src/atlas/configuration/cartography.rs`).
 - When code and durable documentation disagree, delete the documentation's
   claim rather than equalizing it; the code is the record.
+- Architecture diagrams live in one canvas, `docs/architecture/subsystems.arconis`,
+  edited with the [Arconis CLI](https://arconis.ahara.io/#cli)
+  (`node arconis.mjs --file <diagram> read`); ask the owner before downloading it.
+  Each diagram is a frame on its own layer; an overlay that extends a diagram gets its
+  own layer placed over that frame. Reuse the canvas's named styles.
+- Linked diagram items carry `source "path"` references, and each target has a
+  matching `// Arconis: <diagram>#item=<id> — <relationship>` comment beside the
+  relevant declaration. When you move, rename or delete a linked file or declaration,
+  update both sides in the same change.

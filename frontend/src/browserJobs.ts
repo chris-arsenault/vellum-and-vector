@@ -13,6 +13,7 @@ interface Job {
 }
 const browserCacheBytes = 256 * 1024 * 1024;
 
+// Arconis: docs/architecture/subsystems.arconis#item=j_bw_worker — worker job list with per-job cancel flag.
 /** Worker facade: UI observations and cancellation; Rust owns execution and storage. */
 export class BrowserJobs {
   private jobs = new Map<string, Job>();

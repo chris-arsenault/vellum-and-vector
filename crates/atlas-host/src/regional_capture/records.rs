@@ -7,6 +7,7 @@ use atlas_map::Geometry;
 use serde_json::json;
 use std::{collections::BTreeMap, io};
 
+// Arconis: docs/architecture/subsystems.arconis#item=rg_feat — clips feature records and gives them new source-naming ids.
 pub(super) fn capture(
     region: &Region<'_>,
     features: Vec<Feature>,

@@ -63,6 +63,7 @@ impl Composition<'_, '_> {
     fn drainage(&self, occurrence: &str) -> io::Result<Sequence> {
         self.slots(&["water.runoff", "water.routing"], occurrence, false, false)
     }
+    // Arconis: docs/architecture/subsystems.arconis#item=e2 — composes plate drift, mountains, volcanoes, impacts and landmarks.
     fn geology(&self, initial: bool) -> io::Result<Sequence> {
         let occurrence = if initial {
             "formation"
@@ -116,6 +117,7 @@ impl Composition<'_, '_> {
         }
     }
 }
+// Arconis: docs/architecture/subsystems.arconis#item=init — composes world-state setup, where magic and ecology start.
 pub fn physical(
     catalogue: &Catalogue,
     context: &Context<'_>,

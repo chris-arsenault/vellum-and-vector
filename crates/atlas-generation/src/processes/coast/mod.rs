@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=g_coast — waves wear the coast by abrasion and plucking.
 mod deposition;
 pub mod frame;
 use super::runner::{io_error, PhysicalContext};

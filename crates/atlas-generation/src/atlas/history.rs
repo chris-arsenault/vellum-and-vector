@@ -83,6 +83,7 @@ pub struct GenerationEpoch {
     pub parent_epoch: Option<String>,
     pub variables: serde_json::Map<String, serde_json::Value>,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=carry — holds the state carried forward from one epoch to the next.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct EpochHistory {
     pub path: Vec<String>,

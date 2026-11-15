@@ -148,6 +148,7 @@ impl State {
         self.clear_queries();
         Ok(())
     }
+    // Arconis: docs/architecture/subsystems.arconis#item=m_hist — records magic history: aged stored magic and place effects.
     pub fn apply_place_effects(&mut self) -> io::Result<()> {
         let mut ledger = std::mem::take(&mut self.place_effects.ledger);
         let result = (|| {

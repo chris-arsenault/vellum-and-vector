@@ -9,6 +9,7 @@ import {
 import { useWorkflowFields } from "./workflowFieldState";
 import { discardFeatureFieldEdits } from "./generationFieldEdits";
 
+// Arconis: docs/architecture/subsystems.arconis#item=w2 — land step choices: continents, oceans, terrain, shoreline, landmarks.
 export function CartographicDecisions({ flow }: { flow: GenerationWorkflow }) {
   const controls = visibleCartographicControls(Boolean(flow.options.source), flow.draft).filter(
     (item) => item.section === flow.stage && !item.system

@@ -11,6 +11,7 @@ import { generationFeatureAdapter } from "./generationFeatureAdapters";
 import { useWorkflowFields } from "./workflowFieldState";
 import { discardFeatureFieldEdits } from "./generationFieldEdits";
 
+// Arconis: docs/architecture/subsystems.arconis#item=w_adv — advanced settings editor: exact numbers, history, configuration.
 /** One requested editor, not a hidden catalogue of every feature's form. */
 export function GenerationTuning({ flow }: { flow: GenerationWorkflow }) {
   const heading = useRef<HTMLHeadingElement>(null);

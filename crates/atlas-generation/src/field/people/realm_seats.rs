@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=pp_realms — spreads realm allegiance outward from seats.
 use super::{
     identity_era::{apart, place},
     identity_reads::leading_of,

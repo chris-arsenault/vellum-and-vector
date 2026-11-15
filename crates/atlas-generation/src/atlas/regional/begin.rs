@@ -11,6 +11,7 @@ pub struct Capture {
     pub epochs: usize,
     pub rivers: Option<Rc<DrainageNetwork>>,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=rg_child — creates the child working state on the same lattice.
 pub fn operation(capture: Capture, magic: Option<Command<State>>) -> Command<State> {
     Command::with_inputs(
         "refinement.begin",

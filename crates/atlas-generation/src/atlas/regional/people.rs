@@ -9,6 +9,7 @@ use crate::{
 };
 use std::rc::Rc;
 
+// Arconis: docs/architecture/subsystems.arconis#item=rg_people — runs one people pass, keeping the parent's headcount.
 pub(super) fn effects(
     input: Rc<Inputs>,
     reads: &Reads,

@@ -19,6 +19,7 @@ pub struct Runtime {
     field: Projection<State, Field>,
 }
 impl Runtime {
+    // Arconis: docs/architecture/subsystems.arconis#item=m_carry — moves magic with the crust after each plate step.
     pub fn plate_magic_hook() -> Command<Field, crate::processes::runner::PhysicalContext> {
         let carry = Command::new(
             "atlas.carry-magic-crust",

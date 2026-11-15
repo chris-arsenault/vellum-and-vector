@@ -287,6 +287,7 @@ function Atlas({ context }: { context: FinishedContext }) {
     </>
   );
 }
+// Arconis: docs/architecture/subsystems.arconis#item=j_app — setup launch for creating, refining or regenerating a map.
 function AtlasSetup({ state }: { state: ReturnType<typeof useAtlas> }) {
   const { context, setSetup, setJob, setJobSelection } = state;
   const setup = state.setup!;

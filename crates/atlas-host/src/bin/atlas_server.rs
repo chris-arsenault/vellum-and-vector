@@ -9,6 +9,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     sync::{Arc, Mutex},
 };
+// Arconis: docs/architecture/subsystems.arconis#item=native_generator — native host that generates and publishes into PostGIS.
 fn main() -> io::Result<()> {
     let address: SocketAddr = env::var("ATLAS_BIND")
         .unwrap_or_else(|_| "127.0.0.1:4123".into())

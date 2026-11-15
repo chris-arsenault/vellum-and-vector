@@ -10,6 +10,7 @@ import { useWorkflowFields } from "./workflowFieldState";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { GenerationWorkload } from "./GenerationResolution";
 
+// Arconis: docs/architecture/subsystems.arconis#item=w_side — setup summary sidebar: workload and blocking issues.
 export function GenerationSetupSummary({ flow }: { flow: GenerationWorkflow }) {
   return (
     <aside className="setup-summary" aria-label="Setup summary">

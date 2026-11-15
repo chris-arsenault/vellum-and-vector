@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=pp_move — moves people toward room along the going.
 use super::{
     facts::PRESSURE,
     land::WorkInput,

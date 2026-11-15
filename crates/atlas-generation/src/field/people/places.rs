@@ -45,6 +45,7 @@ pub struct Adopted {
     pub abandoned: Option<String>,
     pub history: Vec<History>,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=pp_places — known towns and ruins; a town keeps its identity.
 #[derive(Default)]
 pub struct Places {
     next: usize,

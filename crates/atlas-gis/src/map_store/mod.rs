@@ -1,5 +1,6 @@
 //! Independent GIS records. No generation resource capability is held by this store.
 // owner-direction(2026-11-14): presentation reads only GIS storage, never numerical generation storage
+// Arconis: docs/architecture/subsystems.arconis#item=sqlite — SQLite/GEOS map store used by the browser workspace.
 mod access;
 pub mod codec;
 mod copy;

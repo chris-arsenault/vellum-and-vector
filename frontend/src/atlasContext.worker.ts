@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=wasm_generator — worker that runs WASM generation beside the browser map store.
 import { initializeEngine } from "@atlas/engine";
 import { Decoder } from "cbor-x";
 import { BrowserJobs } from "./browserJobs";

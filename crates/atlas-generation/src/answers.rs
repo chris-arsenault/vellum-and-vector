@@ -14,6 +14,7 @@ use std::{
 };
 
 pub type Response<S, K> = dyn for<'a> Fn(&S, usize, &mut Answers<'a, S, K>) -> ExecutionResult<f64>;
+// Arconis: docs/architecture/subsystems.arconis#item=q_kinds — the four ways a responder shapes an answer.
 pub enum ResponseKind<S, K> {
     Base(Box<Response<S, K>>),
     Add(Box<Response<S, K>>),
@@ -28,6 +29,7 @@ pub struct Responder<S, K> {
     pub kind: ResponseKind<S, K>,
     pub queries: Vec<QueryDependency<S>>,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=q_book — keeps each question's responders, one base per question.
 pub struct QuestionBook<S, K> {
     indices: BTreeMap<K, usize>,
     responders: Vec<Vec<Responder<S, K>>>,
@@ -284,6 +286,7 @@ impl<S: 'static, K: Copy + Ord> Answers<'_, S, K> {
         self.workspace.memo.set(index, value);
         Ok(value)
     }
+    // Arconis: docs/architecture/subsystems.arconis#item=q_compose — combines base, adds, scales and breaks into one answer.
     fn compose(&mut self, index: usize) -> ExecutionResult<f64> {
         self.resolve(index)?;
         let book = self.book;

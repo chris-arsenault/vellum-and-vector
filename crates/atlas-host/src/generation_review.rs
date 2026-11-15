@@ -34,6 +34,7 @@ impl Store for Descriptors<'_> {
     }
 }
 impl PreparedRequest {
+    // Arconis: docs/architecture/subsystems.arconis#item=j_review — checks the setup without reading numerical arrays.
     pub fn review(&self, spatial: &dyn SpatialKernel) -> io::Result<Value> {
         let request = &self.request;
         let frame = &self.geography.frame;

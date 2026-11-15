@@ -7,6 +7,7 @@ use crate::{
 };
 use std::{cell::RefCell, rc::Rc};
 
+// Arconis: docs/architecture/subsystems.arconis#item=pp_keep — one population pass; standing places age through it.
 /// The same owner operations execute loose, settled and inherited population passes.
 pub fn operation(
     questions: Rc<Questions>,

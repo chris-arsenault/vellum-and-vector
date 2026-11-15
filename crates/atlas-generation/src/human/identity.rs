@@ -20,6 +20,7 @@ impl Tradition {
     ];
     pub const SOCIAL: [Self; 4] = [Self::Tongue, Self::Faith, Self::Custom, Self::Allegiance];
 }
+// Arconis: docs/architecture/subsystems.arconis#item=pp_layers — one entry of the people's identity column.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct IdentityLayer {
     pub people: f64,

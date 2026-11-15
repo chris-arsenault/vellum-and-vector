@@ -8,6 +8,7 @@ use crate::{
 };
 use std::io;
 
+// Arconis: docs/architecture/subsystems.arconis#item=rg_develop — lists the material development steps: erosion, ice, sediment, coast.
 const DEVELOPMENT: &[&str] = &[
     "material.relaxation",
     "material.hillslopes",
@@ -37,6 +38,7 @@ fn invocation(
     }
     node
 }
+// Arconis: docs/architecture/subsystems.arconis#item=rg_refresh — refreshes climate, water and media reads for the child map.
 fn refresh(catalogue: &Catalogue, context: &Context<'_>, occurrence: &str) -> io::Result<Sequence> {
     let mut body = Vec::new();
     for slot in ["climate.ocean", "climate.circulation"] {
@@ -52,6 +54,7 @@ fn refresh(catalogue: &Catalogue, context: &Context<'_>, occurrence: &str) -> io
     }
     Ok(body)
 }
+// Arconis: docs/architecture/subsystems.arconis#item=rg_publish — composes the regional sequence ending in an independent child map.
 pub fn sequence(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
     let context = Context {
         policy: Policy::Regional,

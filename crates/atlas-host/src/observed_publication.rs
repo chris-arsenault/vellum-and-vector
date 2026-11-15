@@ -2,6 +2,7 @@
 use atlas_map::{MapDescriptor, MapLayer, MapRef, PublicationBatch, PublishedAsset, Publisher};
 use std::io;
 
+// Arconis: docs/architecture/subsystems.arconis#item=j_observed — publisher wrapper that reports visible map changes.
 pub struct Observed<'a, P, F> {
     pub publisher: &'a mut P,
     pub changed: F,

@@ -19,6 +19,7 @@ use crate::{
 };
 use std::{cell::RefCell, rc::Rc};
 
+// Arconis: docs/architecture/subsystems.arconis#item=rg_ground — holds the captured ground and relief, built once.
 pub struct CapturedGround {
     pub grid: Rc<Grid>,
     pub bedrock: NumericBand,

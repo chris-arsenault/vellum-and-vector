@@ -1,4 +1,5 @@
 //! Water dissolves soluble material through the same rock interaction and stage settlement.
+// Arconis: docs/architecture/subsystems.arconis#item=g_sol — water dissolves soluble rock through the solution mode.
 use super::runner::{io_error, StageProcess};
 use crate::{
     answers::AnswerBand,

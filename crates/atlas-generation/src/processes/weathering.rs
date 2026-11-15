@@ -30,6 +30,7 @@ pub struct Questions {
     pub warmth: Query<Field, AnswerBand>,
     pub frost: Query<Field, AnswerBand>,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=c_wet — weathering breaks rock down in place from wetness, warmth, frost.
 pub fn process(
     settings: &ResolvedSettings,
     passes: f64,

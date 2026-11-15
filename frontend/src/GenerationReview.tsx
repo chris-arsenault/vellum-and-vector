@@ -11,6 +11,7 @@ import { GenerationRecipeEditor } from "./GenerationRecipeEditor";
 import { SetupDisclosure } from "./SetupDisclosure";
 import type { MagicSystem } from "@atlas/context";
 
+// Arconis: docs/architecture/subsystems.arconis#item=w6 — review step listing every choice with a way back.
 export function GenerationReview({ flow }: { flow: GenerationWorkflow }) {
   const changed =
     flow.setup?.features.filter(

@@ -122,6 +122,7 @@ impl State {
         }
         Ok(())
     }
+    // Arconis: docs/architecture/subsystems.arconis#item=pp_publish — publishes places and their ways: roads, tracks, lanes.
     pub fn publish_places(
         &mut self,
         publication: &mut poi::publication::Publication,

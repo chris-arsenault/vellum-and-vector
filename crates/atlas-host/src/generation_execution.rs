@@ -26,6 +26,7 @@ pub struct Services<'a> {
     pub completed_at: fn() -> String,
 }
 
+// Arconis: docs/architecture/subsystems.arconis#item=j_run — the one generation core both hosts call.
 pub async fn run(
     submission: Submission,
     operation: &str,

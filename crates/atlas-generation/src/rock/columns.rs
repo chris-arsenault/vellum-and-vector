@@ -38,6 +38,7 @@ impl Column {
         }
     }
 }
+// Arconis: docs/architecture/subsystems.arconis#item=g_columns — per-cell rock layers in intact and cut shares, plus loose cover.
 pub struct RockColumns {
     layers: [Vec<LayerBands>; 4],
     cargo: CargoStore,

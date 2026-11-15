@@ -7,6 +7,7 @@ use atlas_map::{
 use std::io;
 
 impl Publisher for MapStore {
+    // Arconis: docs/architecture/subsystems.arconis#item=j_bw_store — opens a publication in the browser SQLite/GEOS map store.
     fn begin(
         &mut self,
         map: &MapDescriptor,

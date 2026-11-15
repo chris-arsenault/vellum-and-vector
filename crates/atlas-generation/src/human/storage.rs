@@ -21,6 +21,7 @@ pub(super) fn unit(value: f64) -> f64 {
         0.0
     }
 }
+// Arconis: docs/architecture/subsystems.arconis#item=pp_layers — names the people's stored layers: population, farmland, pasture, built, standing.
 #[derive(Clone, Copy)]
 pub enum HumanField {
     Layer(LayerId),

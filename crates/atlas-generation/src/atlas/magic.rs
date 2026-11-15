@@ -42,6 +42,7 @@ impl Inputs {
             .collect()
     }
 }
+// Arconis: docs/architecture/subsystems.arconis#item=m_post — magic operations including post-glacial systems and coastal forcing.
 pub struct Operations {
     pub current: Query<State, ()>,
     pub climate: Query<State, ()>,

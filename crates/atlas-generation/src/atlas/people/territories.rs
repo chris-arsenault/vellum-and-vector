@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=pp_regions — builds culture shares, realms and territorial claims.
 use super::{shapes, Occurrence, Operation};
 use crate::{
     atlas::state::State,

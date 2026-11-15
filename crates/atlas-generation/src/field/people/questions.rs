@@ -92,6 +92,7 @@ impl Questions {
         }
     }
 }
+// Arconis: docs/architecture/subsystems.arconis#item=r_harm — registers base answers, including harm from what strikes.
 pub fn rules(book: &mut QuestionBook<Field, &'static str>) -> ExecutionResult<()> {
     for (key, by) in [
         ("harm", "what strikes"),

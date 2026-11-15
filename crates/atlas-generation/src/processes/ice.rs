@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=c_ice — glaciers wear the bed they move over.
 use super::runner::{io_error, PhysicalContext};
 use crate::{
     answers::AnswerBand,

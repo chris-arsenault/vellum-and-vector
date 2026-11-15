@@ -35,6 +35,7 @@ fn site(field: &Field, place: &Place, river: &RiverReader<'_>) -> io::Result<Opt
     }
     Ok(best)
 }
+// Arconis: docs/architecture/subsystems.arconis#item=pp_works — tries dam sites on rivers where water can be held.
 pub fn trials(field: &Field, places: &Places, works: &Works) -> io::Result<Vec<Trial>> {
     let water = field.water.borrow();
     let reader = water.river_reader();

@@ -1,6 +1,7 @@
 //! Feature extraction and publication: numerical outputs and generated records become GIS products.
 //! This stage runs during map production. View requests read the resulting GIS store and never
 //! invoke extraction or open its numerical inputs.
+// Arconis: docs/architecture/subsystems.arconis#item=extraction — feature extraction reads numerical outputs and writes GIS.
 pub mod catalogue;
 pub mod channels;
 pub mod descriptor;

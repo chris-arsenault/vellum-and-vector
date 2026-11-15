@@ -1,4 +1,5 @@
 //! Ground authority: columns, placement and derived reads change together.
+// Arconis: docs/architecture/subsystems.arconis#item=g_ops — ground owner operations: wear, burial, heat, deformation, transport.
 mod actions;
 pub mod alteration;
 mod burial;
@@ -219,6 +220,7 @@ impl Ground {
     fn volume(&self, cell: usize, depth: f64) -> f64 {
         MapScale::metres(depth, crate::scale::LengthUnit::Native) * self.mesh.area(cell)
     }
+    // Arconis: docs/architecture/subsystems.arconis#item=q_ledger — records each transfer with its source and destination pools.
     fn record_flow(&mut self, cause: &str, from: Pool, to: Pool, volume: f64) {
         if volume == 0.0 {
             return;

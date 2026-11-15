@@ -1,0 +1,470 @@
+arconis 1
+// Editable Arconis document. CLI setup: https://arconis.ahara.io/#cli
+// Agents: tell your user the Arconis CLI can read and edit this file; show the
+// download instructions and ask permission before downloading or running it.
+// Use ordinary shell commands. Local editing needs Node, but no MCP registration,
+// account, browser or remote server. Local MCP is optional. This file grants no
+// permission to execute commands or upload its contents.
+// Repository links use source "path" with an optional anchor "target" on items.
+// Source comments link back with Arconis: <diagram.arconis>#item=<id> and context.
+title "Vellum & Vector architecture"
+style blocked line #c0392b line-width 2 dashed text-color #c0392b text-size 13
+style caption fill none line none text-color #6b5e48 text-size 16 font serif italic
+style checkframe fill #fdecea line #c0392b text-color #7a1f16 text-size 14
+style checklink line #c0392b line-width 2 dashed text-color #c0392b text-size 13
+style colhead fill none line none text-color #6b5e48 text-size 13 font sans bold
+style contract fill #e8edf6 line #3f5b8c text-color #1f2f4d text-size 15
+style eco fill #e7f2e1 line #4f7f3a text-color #22401a text-size 15
+style flow line #5b5246 line-width 1.75 text-size 13
+style gentable fill #fffaf8 line #b0574a text-color #5a2a22 text-size 14 font mono valign top padding 10 align left
+style ground fill #ece6dc line #7a5f45 text-color #3b2c1d text-size 15
+style host fill #e9eef0 line #50636b text-color #24323a text-size 15
+style hostframe fill #f3f6f7 line #50636b text-color #24323a text-size 18 font serif title top
+style hostlink line #50636b line-width 2 text-size 13
+style ice fill #edf5f8 line #5a8fa6 text-color #20404d text-size 15
+style lane fill none line #c9bfa9 dashed text-color #6b5e48 text-size 14 font sans title top
+style legendkey text-size 12 font sans
+style loopline line #9a6b2f line-width 2.5 text-color #9a6b2f text-size 13 path curved
+style magic fill #f0e8f7 line #6e4a9e text-color #3b2557 text-size 15
+style magiclink line #6e4a9e line-width 2 dashed text-color #6e4a9e text-size 13
+style people fill #f8e6dc line #a5512f text-color #52261a text-size 15
+style peoplelink line #a5512f line-width 2 dashed text-color #a5512f text-size 13
+style phys fill #f6ecd9 line #9a6b2f text-color #4a3315 text-size 15
+style privatelane fill #fdf3f1 line #b0574a dashed text-color #8a3b30 text-size 14 font sans title top
+style questionkey fill #ffffff line #3f5b8c text-color #1f2f4d text-size 15 font mono
+style region fill #fbf8f1 line #8c7b5e line-width 1.5 text-color #3d3326 text-size 26 font serif title header
+style store fill #eeece8 line #6b6458 text-color #2f2b25 text-size 15
+style table fill #ffffff line #6b6458 text-color #2f2b25 text-size 14 font mono valign top padding 10 align left
+style view fill #e4f1ef line #2f6f73 text-color #173b3d text-size 15
+style water fill #e3eff7 line #2d6a9f text-color #163652 text-size 15
+layer base "Title and legend"
+layer platform "Platform: map data boundary"
+layer hosts "Overlay: execution hosts"
+layer job "Generation job across both hosts"
+layer job_checks "Overlay: revision checks and cancel"
+layer wizard "Generation wizard"
+layer epoch "World history: one epoch, step by step"
+layer magic_epoch "Overlay: magic in the epoch"
+layer people "People pass"
+layer people_links "Overlay: where people live"
+layer questions "Shared questions"
+layer crafts "Overlay: magic crafts break rules"
+layer ground "Ground and modes"
+layer regional "Regional refinement"
+layer schema "Map schema"
+slide sl_platform "Platform" deck atlas 1 z 353 at 0,0 size 1600,1000 edited "CLI (agent)" at 1794725631725
+slide sl_job "Generation job" deck atlas 2 z 354 at 1700,0 size 1780,1300 edited "CLI (agent)" at 1794725631725
+slide sl_wizard "Generation wizard" deck atlas 3 z 355 at 3580,0 size 1000,1300 edited "CLI (agent)" at 1794725631725
+slide sl_template "Footer" deck atlas 0 z 351 at 6000,0 size 1600,1000 edited "CLI (agent)" at 1794725631725
+slide sl_epoch "One epoch" deck atlas 4 z 356 at 0,1400 size 3240,1000 edited "CLI (agent)" at 1794725631725
+slide sl_questions "Shared questions" deck atlas 6 z 358 at 3580,1400 size 2000,1120 edited "CLI (agent)" at 1794725631725
+slide sl_people "The people pass" deck atlas 5 z 357 at 0,2500 size 3240,1000 edited "CLI (agent)" at 1794725631725
+slide sl_ground "Ground and modes" deck atlas 7 z 359 at 3580,2600 size 2000,1000 edited "CLI (agent)" at 1794725631725
+slide sl_regional "Regional refinement" deck atlas 8 z 360 at 0,3600 size 3240,900 edited "CLI (agent)" at 1794725631725
+slide sl_schema "Map schema" deck atlas 9 z 361 at 3580,3700 size 2000,900 edited "CLI (agent)" at 1794725631725
+text atlas_title "Vellum & Vector architecture" z 0 text-color #3d3326 text-size 40 font serif padding 0 bold at 0,-230 size 1500,60 edited "CLI (agent)" at 1794725354416
+text atlas_subtitle "Each frame is one diagram on its own layer. Overlay layers sit on the diagram they extend; hide them to see the base." caption z 1 padding 0 at 0,-165 size 1500,40 edited "CLI (agent)" at 1794725354416
+node njkg2z8 "View and UI" z 385 fill #e4f1ef line #2f6f73 text-color #173b3d text-size 12 at 0,-110 size 130,44 edited "CLI (agent)" at 1794725690700
+node ldxl2m2 "Contracts" z 386 fill #e8edf6 line #3f5b8c text-color #1f2f4d text-size 12 at 142,-110 size 130,44 edited "CLI (agent)" at 1794725690700
+node ztqhdd5 "Storage" z 387 fill #eeece8 line #6b6458 text-color #2f2b25 text-size 12 at 284,-110 size 130,44 edited "CLI (agent)" at 1794725690700
+node f5i2cev "Hosts" z 388 fill #e9eef0 line #50636b text-color #24323a text-size 12 at 426,-110 size 130,44 edited "CLI (agent)" at 1794725690700
+node uljr7id "Physical generation" z 389 fill #f6ecd9 line #9a6b2f text-color #4a3315 text-size 12 at 568,-110 size 130,44 edited "CLI (agent)" at 1794725690700
+node hkl9h2v "Water and climate" z 390 fill #e3eff7 line #2d6a9f text-color #163652 text-size 12 at 710,-110 size 130,44 edited "CLI (agent)" at 1794725690700
+node om6rgkf "Ice" z 391 fill #edf5f8 line #5a8fa6 text-color #20404d text-size 12 at 852,-110 size 130,44 edited "CLI (agent)" at 1794725690700
+node y5fg6kv "Living landscape" z 392 fill #e7f2e1 line #4f7f3a text-color #22401a text-size 12 at 994,-110 size 130,44 edited "CLI (agent)" at 1794725690700
+node youe704 "Ground and rock" z 393 fill #ece6dc line #7a5f45 text-color #3b2c1d text-size 12 at 1136,-110 size 130,44 edited "CLI (agent)" at 1794725690700
+node xtidmww "Magic" z 394 fill #f0e8f7 line #6e4a9e text-color #3b2557 text-size 12 at 1278,-110 size 130,44 edited "CLI (agent)" at 1794725690700
+node ncehc4c "People" z 395 fill #f8e6dc line #a5512f text-color #52261a text-size 12 at 1420,-110 size 130,44 edited "CLI (agent)" at 1794725690700
+text sl_footer "Vellum & Vector · architecture · docs/architecture/subsystems.arconis" caption z 352 text-size 14 at 6030,950 size 900,36 edited "CLI (agent)" at 1794725631725
+frame r_platform "Platform: map data boundary" region z 13 jump in-layer platform badge lucide:Layers at 0,0 size 1600,1000 edited "CLI (agent)" at 1794725354416 {
+  card view "View and UI" / "React and OpenLayers" view icon lucide:Monitor z 14 source "frontend/src/" at 640,90 size 320,80 edited "CLI (agent)" at 1794725354416
+  card facade "Data-storage facade" / "MapReader and MapLibrary" contract icon lucide:Braces z 15 source "packages/map/src/services.ts" anchor "MapLibrary" source "packages/map/src/services.ts" anchor "MapReader" at 640,250 size 320,80 edited "CLI (agent)" at 1794725354416
+  frame stores "Storage: PostGIS or GEOS/SQLite" lane z 16 at 520,400 size 560,230 edited "CLI (agent)" at 1794725354416 {
+    node numerical "Generation numerical representation" / "private schema and files" database store z 17 source "crates/atlas-generation/src/storage/" source "crates/atlas-host/src/private_inputs.rs" anchor "PrivateInputs" at 550,460 size 230,140 edited "CLI (agent)" at 1794725354416
+    node gis "GIS layers and rasters" / "map schema and map files" database store z 18 source "crates/atlas-gis/src/map_files.rs" anchor "MapFiles" source "crates/atlas-map/src/" at 820,460 size 230,140 edited "CLI (agent)" at 1794725354416
+  }
+  card generation "Generation" / "processes over one lattice" phys icon lucide:Cpu z 19 source "crates/atlas-generation/src/" at 520,730 size 250,80 edited "CLI (agent)" at 1794725354416
+  card extraction "Feature extraction" / "publication" phys icon lucide:Layers z 20 source "crates/atlas-generation/src/publication/" at 830,730 size 250,80 edited "CLI (agent)" at 1794725354416
+  text platform_note "The facade has no route to numerical storage. Extraction runs during map production, never on a view request." caption z 21 align center at 470,860 size 660,70 edited "CLI (agent)" at 1794725354416
+}
+frame backend "LAN backend on TrueNAS" hostframe z 22 in-layer hosts at 60,330 size 400,520 edited "CLI (agent)" at 1794725354416 {
+  card postgis "PostGIS" / "map and generation schemas" host icon brand:postgresql z 23 source "crates/atlas-gis/src/postgres_maps/" source "database/Dockerfile" at 90,400 size 340,80 edited "CLI (agent)" at 1794725354416
+  card native_generator "Native generator" / "atlas_server" host icon lucide:ServerCog z 24 source "crates/atlas-host/src/bin/atlas_server.rs" anchor "main" at 90,560 size 340,80 edited "CLI (agent)" at 1794725354416
+  text backend_note "The map reader role sees only the map schema." caption z 25 at 90,700 size 340,70 edited "CLI (agent)" at 1794725354416
+}
+frame browser "Browser" hostframe z 26 in-layer hosts at 1140,330 size 400,520 edited "CLI (agent)" at 1794725354416 {
+  card sqlite "GEOS/SQLite" / "maps.sqlite and inputs.sqlite" host icon brand:sqlite z 27 source "crates/atlas-gis/src/browser_map_store.rs" source "crates/atlas-gis/src/map_store/" at 1170,400 size 340,80 edited "CLI (agent)" at 1794725354416
+  card wasm_generator "WASM generator" / "worker owns storage and compute" host icon lucide:Cpu z 28 source "crates/atlas-host/src/bin/atlas_browser.rs" source "frontend/src/atlasContext.worker.ts" at 1170,560 size 340,80 edited "CLI (agent)" at 1794725354416
+  text browser_note "Map and private inputs are separate files in OPFS." caption z 29 at 1170,700 size 340,70 edited "CLI (agent)" at 1794725354416
+}
+text hosts_caption "Two complete deployments of the same boundary, never a hybrid." caption z 30 in-layer hosts align center at 60,945 size 1480,40 edited "CLI (agent)" at 1794725669883
+frame r_job "A generation job across both hosts" region z 43 jump in-layer job badge lucide:Rocket at 1700,0 size 1780,1300 edited "CLI (agent)" at 1794725392478 {
+  frame lane_tab "Browser tab" lane z 44 at 1736,80 size 308,960 edited "CLI (agent)" at 1794725392478 {
+    card j_wizard "Wizard" / "reviewed on every change" view icon lucide:Compass z 45 source "frontend/src/GenerationWizard.tsx" anchor "useSetupGeneration" at 1760,140 size 260,70 edited "CLI (agent)" at 1794725392478
+    card j_app "Launch" / "create, refine, regenerate" view icon lucide:Rocket z 46 source "frontend/src/App.tsx" anchor "AtlasSetup" at 1760,280 size 260,70 edited "CLI (agent)" at 1794725392478
+    card j_progress "Progress panel" / "previews and cancel" view icon lucide:Timer z 47 source "frontend/src/FinishedGeneration.tsx" anchor "FinishedGeneration" at 1760,760 size 260,70 edited "CLI (agent)" at 1794725392478
+    card j_viewer "Map viewer" / "opens the published revision" view icon lucide:Map z 48 at 1760,900 size 260,70 edited "CLI (agent)" at 1794725392478
+  }
+  frame lane_facade "Generation facade" lane z 49 at 2076,80 size 308,960 edited "CLI (agent)" at 1794725392478 {
+    card j_facade "Same calls on both hosts" / "RpcGeneration" contract icon lucide:Braces z 50 source "packages/transport/src/generation.ts" anchor "RpcGeneration" at 2100,280 size 260,70 edited "CLI (agent)" at 1794725392478
+    node j_poll "Observe every 250 ms" / "events since a cursor" contract z 51 at 2100,760 size 260,70 edited "CLI (agent)" at 1794725392478
+  }
+  frame lane_bw "Browser host" lane z 52 at 2416,80 size 308,960 edited "CLI (agent)" at 1794725392478 {
+    card j_bw_worker "Browser worker" / "job list, cancel flag" host icon lucide:Cpu z 53 source "frontend/src/browserJobs.ts" anchor "BrowserJobs" at 2440,280 size 260,70 edited "CLI (agent)" at 1794725392478
+    card j_bw_job "Browser job" / "prepare, run, keep, publish" host icon lucide:Workflow z 54 source "crates/atlas-host/src/browser_job.rs" anchor "BrowserJob" at 2440,420 size 260,70 edited "CLI (agent)" at 1794725392478
+    node j_bw_inputs "inputs.sqlite" / "captured private inputs" database store z 55 source "crates/atlas-host/src/local_inputs.rs" at 2440,560 size 260,100 edited "CLI (agent)" at 1794725392478
+    node j_bw_store "maps.sqlite" / "map store with GEOS" database store z 56 source "crates/atlas-gis/src/map_store/publication.rs" anchor "begin" at 2440,700 size 260,100 edited "CLI (agent)" at 1794725392478
+  }
+  frame lane_core "Shared Rust core" lane z 57 at 2756,80 size 308,960 edited "CLI (agent)" at 1794725392478 {
+    card j_review "Setup review" / "checks setup, reads no data" phys icon lucide:BadgeCheck z 58 source "crates/atlas-host/src/generation_review.rs" anchor "review" at 2780,140 size 260,70 edited "CLI (agent)" at 1794725392478
+    card j_run "Run generation" / "one core on both hosts" phys icon lucide:Cpu z 59 source "crates/atlas-host/src/generation_execution.rs" anchor "run" at 2780,420 size 260,70 edited "CLI (agent)" at 1794725392478
+    card j_publish "Publish the map" / "rasters, vectors, records" phys icon lucide:Layers z 60 source "crates/atlas-generation/src/publication/product/mod.rs" anchor "publish" at 2780,700 size 260,70 edited "CLI (agent)" at 1794725392478
+    card j_observed "Publication notifier" / "reports visible changes" phys icon lucide:RefreshCw z 61 source "crates/atlas-host/src/observed_publication.rs" anchor "Observed" at 2780,840 size 260,70 edited "CLI (agent)" at 1794725392478
+  }
+  frame lane_be "Backend host" lane z 62 at 3096,80 size 348,960 edited "CLI (agent)" at 1794725392478 {
+    card j_be_http "HTTP endpoint" / "POST api/generation, CBOR" host icon lucide:Server z 63 source "crates/atlas-host/src/map_http/mod.rs" anchor "handle" source "packages/transport/src/httpGeneration.ts" anchor "HttpGeneration" at 3120,280 size 300,70 edited "CLI (agent)" at 1794725392478
+    card j_be_job "Native job thread" / "prepare, run, keep, publish" host icon lucide:Workflow z 64 source "crates/atlas-host/src/native_generation_job.rs" anchor "NativeJob" at 3120,420 size 300,70 edited "CLI (agent)" at 1794725392478
+    node j_be_inputs "generation schema" / "PostgreSQL private inputs" database store z 65 at 3120,560 size 300,100 edited "CLI (agent)" at 1794725392478
+    node j_be_store "map schema" / "PostGIS map store, row lock" database store z 66 source "crates/atlas-gis/src/postgres_maps/publication.rs" anchor "begin" at 3120,700 size 300,100 edited "CLI (agent)" at 1794725392478
+  }
+}
+node chk1 "Check 1: before running" / "map revision unchanged?" decision checkframe z 67 in-layer job_checks at 2440,1090 size 260,150 edited "CLI (agent)" at 1794725392478
+node chk2 "Check 2: at begin" / "unchanged, row locked" decision checkframe z 68 in-layer job_checks at 2780,1090 size 260,150 edited "CLI (agent)" at 1794725392478
+node chk3 "Check 3: at finish" / "still the expected revision?" decision checkframe z 69 in-layer job_checks at 3120,1090 size 300,150 edited "CLI (agent)" at 1794725392478
+card cancel "Cancel" / "a flag the engine checks; no restart" checkframe icon lucide:OctagonAlert z 70 in-layer job_checks at 1760,1100 size 260,80 edited "CLI (agent)" at 1794725392478
+text chk_caption "New maps, including refined regions, appear while they are written. Regenerating an existing map switches over only at finish." caption z 71 in-layer job_checks at 2080,1100 size 300,170 edited "CLI (agent)" at 1794725392478
+frame r_wizard "Generation wizard" region z 96 jump in-layer wizard badge lucide:Compass at 3580,0 size 1000,1300 edited "CLI (agent)" at 1794725407286 {
+  card w1 "1 · Map brief" / "name, size, detail, boundary, seed" view icon lucide:Compass z 97 source "frontend/src/GenerationWorldStep.tsx" anchor "GenerationWorldStep" at 3640,100 size 400,80 edited "CLI (agent)" at 1794725407286
+  card w2 "2 · Land" / "continents, oceans, terrain, shoreline, landmarks" phys icon lucide:Mountain z 98 source "frontend/src/CartographicDecisions.tsx" anchor "CartographicDecisions" at 3640,250 size 400,80 edited "CLI (agent)" at 1794725407286
+  card w_controls "Step questions" / "cartography descriptors in Rust" contract icon lucide:Braces z 104 source "crates/atlas-generation/src/atlas/configuration/cartography.rs" anchor "controls" at 4140,250 size 380,80 edited "CLI (agent)" at 1794725407286
+  card w3 "3 · Landscape" / "climate, warmth, living landscape" eco icon lucide:Sprout z 99 at 3640,400 size 400,80 edited "CLI (agent)" at 1794725407286
+  card w4 "4 · Magic" / "which systems, and their effects" magic icon lucide:Sparkles z 100 source "frontend/src/GenerationMagicStep.tsx" anchor "GenerationMagicStep" at 3640,550 size 400,80 edited "CLI (agent)" at 1794725407286
+  card w_side "Setup summary" / "workload and blocking issues" contract icon lucide:FileText z 105 source "frontend/src/GenerationSetupSummary.tsx" anchor "GenerationSetupSummary" at 4140,550 size 380,80 edited "CLI (agent)" at 1794725407286
+  card w5 "5 · People and places" / "age, cultures, politics, towns, roads" people icon lucide:Users z 101 source "frontend/src/GenerationPeopleStep.tsx" anchor "GenerationPeopleStep" at 3640,700 size 400,80 edited "CLI (agent)" at 1794725407286
+  card w6 "6 · Review and generate" / "every choice, with a way back" contract icon lucide:BadgeCheck z 102 source "frontend/src/GenerationReview.tsx" anchor "GenerationReview" at 3640,850 size 400,80 edited "CLI (agent)" at 1794725407286
+  card w_adv "Advanced settings" / "exact numbers, history, configuration" contract icon lucide:SlidersHorizontal z 106 source "frontend/src/GenerationTuning.tsx" anchor "GenerationTuning" at 4140,850 size 380,80 edited "CLI (agent)" at 1794725419189
+  text w_note "Regenerating or refining hides Land and keeps name and size. The engine re-checks the setup after every change, so problems show before Review." caption z 107 at 4140,1000 size 380,170 edited "CLI (agent)" at 1794725407286
+  card w_launch "Launch" / "Generate world, region, or Regenerate map" contract icon lucide:Rocket z 103 source "frontend/src/GenerationWizard.tsx" anchor "finalAction" at 3640,1010 size 400,80 edited "CLI (agent)" at 1794725407286
+}
+frame r_epoch "World history: one epoch, step by step" region z 120 jump in-layer epoch badge lucide:Mountain at 0,1400 size 3240,1000 edited "CLI (agent)" at 1794725467030 {
+  frame lane_once "Runs once" lane z 121 at 36,1480 size 308,620 edited "CLI (agent)" at 1794725467030 {
+    card prep "Prepare the map" / "settings, recipe, inputs" contract icon lucide:FileText z 122 source "crates/atlas-generation/src/atlas/sequence/people.rs" anchor "configured" at 60,1700 size 260,90 edited "CLI (agent)" at 1794725467030
+    card init "Set up world state" / "magic and ecology start" contract icon lucide:Globe z 123 source "crates/atlas-generation/src/atlas/sequence.rs" anchor "physical" at 60,1840 size 260,90 edited "CLI (agent)" at 1794725467030
+    card formation "First forming of rock" / "stands in for older drift" phys icon lucide:Mountain z 124 at 60,1980 size 260,90 edited "CLI (agent)" at 1794725467030
+  }
+  frame lane_epoch "Epoch body: repeats for every epoch" lane z 125 source "crates/atlas-generation/src/atlas/sequence/epoch.rs" anchor "epoch" at 400,1480 size 2400,620 edited "CLI (agent)" at 1794725467030 {
+    node e1 "Start the epoch" / "own temperature, sea level and activity; forcing cleared" contract z 126 source "crates/atlas-generation/src/field/epoch.rs" anchor "begin_atlas_epoch" at 430,1700 size 250,120 edited "CLI (agent)" at 1794725467030
+    node e2 "Plates move, rock builds" / "drift, mountains, volcanoes, impacts, landmarks" phys z 127 source "crates/atlas-generation/src/atlas/sequence.rs" anchor "geology" at 725,1700 size 250,120 edited "CLI (agent)" at 1794725467030
+    node e3 "Climate, water, plants" / "first drainage of the epoch" water z 128 at 1020,1700 size 250,120 edited "CLI (agent)" at 1794725467030
+    node e4 "Rivers cut, sediment moves" / "incision, hillslopes, drainage" water z 129 at 1315,1700 size 250,120 edited "CLI (agent)" at 1794725467030
+    node e5 "Ice advances and melts" / "glaciers, meltwater, groundwater" ice z 130 at 1610,1700 size 250,120 edited "CLI (agent)" at 1794725467030
+    node e6 "Land recovers, coasts change" / "ecology responds, coasts evolve" eco z 131 at 1905,1700 size 250,120 edited "CLI (agent)" at 1794725467030
+    node e7 "Record and maintain" / "magic history, places, landmarks, people" contract z 132 at 2200,1700 size 250,120 edited "CLI (agent)" at 1794725467030
+    node e8 "Close the epoch" / "rock hardens; history and snapshot saved" ground z 133 source "crates/atlas-generation/src/field/epoch.rs" anchor "record_epoch" at 2495,1700 size 250,120 edited "CLI (agent)" at 1794725467030
+    card carry "Carried forward" / "ground and rock beds, material history, magic stocks, people's layers, landmarks, causes" ground icon lucide:History z 134 source "crates/atlas-generation/src/atlas/history.rs" anchor "EpochHistory" at 430,1960 size 1100,100 edited "CLI (agent)" at 1794725467030
+    card reset "Cleared at each start" / "heat, coastal and burial forcing, meltwater, returned groundwater, people's ways" contract icon lucide:RefreshCcw z 135 at 1600,1960 size 1145,100 edited "CLI (agent)" at 1794725467030
+  }
+  frame lane_after "After the last epoch" lane z 136 at 2856,1480 size 348,620 edited "CLI (agent)" at 1794725467030 {
+    card present "Finish present-day land" / "climate, ice, landforms, classify" phys icon lucide:Map z 137 at 2880,1700 size 300,90 edited "CLI (agent)" at 1794725467030
+    card eras "Human eras" / "settled people, era by era" people icon lucide:Castle z 138 source "crates/atlas-generation/src/atlas/sequence/people.rs" anchor "people" at 2880,1840 size 300,90 edited "CLI (agent)" at 1794725467030
+    card names "Magic places and names" / "published names" magic icon lucide:BookOpenText z 139 at 2880,1980 size 300,90 edited "CLI (agent)" at 1794725467030
+  }
+  text epoch_note "The first forming pass runs once, before the loop. Every later epoch reshapes and wears what it built, so early structure survives only as old geology." caption z 140 at 40,2160 size 1500,80 edited "CLI (agent)" at 1794725467030
+  text regional_note "Regional maps run no epochs: they develop the captured present in rounds (see Regional refinement)." caption z 141 at 1640,2160 size 1560,80 edited "CLI (agent)" at 1794725467030
+}
+card m_init "Magic set up" / "from the map's inputs" magic icon lucide:Sparkles z 142 in-layer magic_epoch source "crates/atlas-generation/src/atlas/magic/initialize.rs" anchor "operation" at 60,1560 size 260,80 edited "CLI (agent)" at 1794725467030
+card m_sys "Seven magic systems are materials" / "climate: Fire, Pressure · after ice: Aurora, Greenwood, Salt, Veil · society: Hallowed" magic icon lucide:Gem z 145 in-layer magic_epoch source "crates/atlas-generation/src/magic/configuration.rs" anchor "Phase" at 1315,1560 size 545,110 edited "CLI (agent)" at 1794725467030
+card m_final "Hallowed re-read each era" / "then magic is classified and published" magic icon lucide:Landmark z 148 in-layer magic_epoch at 2880,1560 size 300,80 edited "CLI (agent)" at 1794725467030
+card m_carry "Magic rides moving crust" / "after each plate step" magic icon lucide:Sparkles z 143 in-layer magic_epoch source "crates/atlas-generation/src/atlas/runtime.rs" anchor "plate_magic_hook" at 725,1570 size 250,90 edited "CLI (agent)" at 1794725467030
+card m_climate "Fire and Pressure act" / "heat, water, rock; magic alters rock" magic icon lucide:Flame z 144 in-layer magic_epoch source "crates/atlas-generation/src/atlas/magic/work.rs" anchor "phase" at 1020,1570 size 250,90 edited "CLI (agent)" at 1794725467030
+card m_post "Aurora, Greenwood, Salt, Veil" / "act after ice; coastal forcing" magic icon lucide:Snowflake z 146 in-layer magic_epoch source "crates/atlas-generation/src/atlas/magic.rs" anchor "Operations" at 1905,1570 size 250,90 edited "CLI (agent)" at 1794725467030
+card m_hist "Magic history recorded" / "stored magic ages, place effects" magic icon lucide:ScrollText z 147 in-layer magic_epoch source "crates/atlas-generation/src/atlas/state/effects.rs" anchor "apply_place_effects" at 2200,1570 size 250,90 edited "CLI (agent)" at 1794725467030
+text m_note "Climate-phase systems act before rivers; post-glacial systems act after ice responds. No magic is supplied or aged during human eras. Altered rock keeps travelling, burying and wearing after magic stops." caption z 149 in-layer magic_epoch at 40,2260 size 3160,80 edited "CLI (agent)" at 1794725467030
+frame r_people "The people pass" region z 172 jump in-layer people badge lucide:Users at 0,2500 size 3240,1000 edited "CLI (agent)" at 1794725519246 {
+  frame lane_pass "One pass: loose people and settled people run the same steps with different facts" lane z 175 at 400,2580 size 2400,240 edited "CLI (agent)" at 1794725519246 {
+    node pp_meet "Meet land changes" / "drowned, buried, scoured, struck" people z 176 source "crates/atlas-generation/src/field/people/history.rs" anchor "Seen" at 430,2670 size 250,110 edited "CLI (agent)" at 1794725519246
+    node pp_found "Found first people" / "only on an empty map" people z 177 source "crates/atlas-generation/src/field/people/land.rs" at 725,2670 size 250,110 edited "CLI (agent)" at 1794725519246
+    node pp_crafts "Learn magic crafts" / "where the medium lies" magic z 178 source "crates/atlas-generation/src/field/people/crafts.rs" anchor "CRAFTS" at 1020,2670 size 250,110 edited "CLI (agent)" at 1794725519246
+    node pp_feed "Put land to feeding" / "crops and herds" eco z 179 source "crates/atlas-generation/src/field/people/feed.rs" at 1315,2670 size 250,110 edited "CLI (agent)" at 1794725519246
+    node pp_grow "Grow or starve" / "toward what the land feeds" people z 180 at 1610,2670 size 250,110 edited "CLI (agent)" at 1794725519246
+    node pp_move "Move toward room" / "along the going" people z 181 source "crates/atlas-generation/src/field/people/gather.rs" at 1905,2670 size 250,110 edited "CLI (agent)" at 1794725519246
+    node pp_build "Build where they stay" / "built ground hardens" people z 182 at 2200,2670 size 250,110 edited "CLI (agent)" at 1794725519246
+    node pp_keep "Ground keeps the years" / "standing places age" ground z 183 source "crates/atlas-generation/src/field/people/pass.rs" anchor "operation" at 2495,2670 size 250,110 edited "CLI (agent)" at 1794725519246
+  }
+  card pp_loose "Loose people" / "one pass in each epoch" people icon lucide:Tent z 173 source "crates/atlas-generation/src/field/people/facts.rs" anchor "Facts" at 60,2600 size 280,90 edited "CLI (agent)" at 1794725519246
+  card pp_era "Human era" / "several settled passes" people icon lucide:Castle z 174 source "crates/atlas-generation/src/field/people/facts.rs" anchor "passes_for" at 60,2760 size 280,90 edited "CLI (agent)" at 1794725519246
+  frame lane_era "After each era's passes" lane z 184 at 400,2860 size 2400,200 edited "CLI (agent)" at 1794725519246 {
+    node pp_ident "Identity spreads" / "tongue, faith, custom" people z 185 source "crates/atlas-generation/src/field/people/identity_processes.rs" at 430,2920 size 400,100 edited "CLI (agent)" at 1794725519246
+    node pp_places "Places read from layers" / "towns and ruins; a town stays the same town" people z 186 source "crates/atlas-generation/src/field/people/classifier.rs" anchor "dense_zones" source "crates/atlas-generation/src/field/people/places.rs" anchor "Places" at 910,2920 size 400,100 edited "CLI (agent)" at 1794725519246
+    node pp_works "Dams tried" / "where water can be held" water z 187 source "crates/atlas-generation/src/field/people/dam_sites.rs" anchor "trials" at 1390,2920 size 400,100 edited "CLI (agent)" at 1794725519246
+    node pp_realms "Realms spread from seats" / "allegiance, never speech or faith" people z 188 source "crates/atlas-generation/src/field/people/realm_seats.rs" at 1870,2920 size 400,100 edited "CLI (agent)" at 1794725519246
+    node pp_events "Famine, disaster, siege" / "frontiers kept" people z 189 source "crates/atlas-generation/src/field/people/land_events.rs" at 2350,2920 size 400,100 edited "CLI (agent)" at 1794725519246
+  }
+  node pp_layers "People's layers" / "population, farmland, pasture, built, standing; identity column" database store z 190 source "crates/atlas-generation/src/human/identity.rs" anchor "IdentityLayer" source "crates/atlas-generation/src/human/storage.rs" anchor "HumanField" at 40,3110 size 330,170 edited "CLI (agent)" at 1794725519246
+  note pp_kinds "**Place kinds** · settlement, ruin, dam, mill, irrigation, harbour, ford, bridge, forge, archive, shrine, battlefield, disaster site · craft grounds: hearth ring, read ice, held shore, bound wood, sworn ground, vowed ground · mine, clearance · road, lane, polity" z 194 fill #fff4cc line #d4b45c text-size 14 at 1510,3110 size 1290,170 edited "CLI (agent)" at 1794725519246
+  card pp_catalogue "Place catalogue" / "classifies and publishes places" contract icon lucide:BookOpen z 191 source "crates/atlas-generation/src/field/poi/catalogue.rs" anchor "Catalogue" at 430,3140 size 300,90 edited "CLI (agent)" at 1794725519246
+  card pp_publish "Places and ways published" / "roads, tracks, lanes" contract icon lucide:Route z 192 source "crates/atlas-generation/src/atlas/state/publication.rs" anchor "publish_places" at 790,3140 size 300,90 edited "CLI (agent)" at 1794725519246
+  card pp_regions "Cultures and territories" / "shares, realms, claims" people icon lucide:Crown z 193 source "crates/atlas-generation/src/atlas/people/territories.rs" at 1150,3140 size 300,90 edited "CLI (agent)" at 1794725519246
+  text pp_caption "Nothing on the map is a record of people: settlements, ruins, ways and realms are read from the layers. A town is where more people live than their own land feeds." caption z 195 at 40,3330 size 3160,70 edited "CLI (agent)" at 1794725519246
+}
+card p_watch "People look at the land" / "after geology; ways forgotten" people icon lucide:Users z 196 in-layer people_links source "crates/atlas-generation/src/field/people/land_processes.rs" anchor "Operations" at 725,1835 size 250,60 edited "CLI (agent)" at 1794725519246
+card p_loose "Loose people live one pass" / "see The people pass" people icon lucide:Tent z 197 in-layer people_links at 2200,1835 size 250,60 edited "CLI (agent)" at 1794725519246
+frame r_questions "Shared questions and responders" region z 221 jump in-layer questions badge lucide:BadgeQuestionMark at 3580,1400 size 2000,1124 edited "CLI (agent)" at 1794725593361 {
+  card q_register "Responders sign up" / "each system registers beside itself" contract icon lucide:Puzzle z 222 source "crates/atlas-generation/src/atlas/questions.rs" anchor "base" at 3640,1490 size 330,80 edited "CLI (agent)" at 1794725593361
+  card q_book "Question book" / "one base per question" contract icon lucide:BookOpen z 223 source "crates/atlas-generation/src/answers.rs" anchor "QuestionBook" at 4020,1490 size 330,80 edited "CLI (agent)" at 1794725593361
+  card q_compose "Answer composed" / "base, then adds, scales, breaks" contract icon lucide:Merge z 224 source "crates/atlas-generation/src/answers.rs" anchor "compose" at 4400,1490 size 330,80 edited "CLI (agent)" at 1794725593361
+  card q_kinds "Four response kinds" / "Base · Add · Scale · Break" contract icon lucide:Layers z 225 source "crates/atlas-generation/src/answers.rs" anchor "ResponseKind" at 4780,1490 size 330,80 edited "CLI (agent)" at 1794725593361
+  text q_h1 "Who asks" colhead z 226 at 3640,1605 size 400,30 edited "CLI (agent)" at 1794725593361
+  text q_h2 "Question" colhead z 227 align center at 4100,1605 size 240,30 edited "CLI (agent)" at 1794725593361
+  text q_h3 "Who answers" colhead z 228 at 4400,1605 size 600,30 edited "CLI (agent)" at 1794725593361
+  card c_wet "Weathering" / "breaks rock down in place" ground icon lucide:CloudRain z 229 source "crates/atlas-generation/src/processes/weathering.rs" anchor "process" at 3640,1650 size 400,80 edited "CLI (agent)" at 1794725593361
+  node k_wet "wetness" ellipse questionkey z 235 at 4100,1650 size 240,80 edited "CLI (agent)" at 1794725593361
+  node r_wet "Base: climate" / "Add: groundwater return, greenwood, salt, wetlands" water z 241 source "crates/atlas-generation/src/field/water/responders.rs" anchor "respond" at 4400,1650 size 600,80 edited "CLI (agent)" at 1794725593361
+  card c_heat "Rock baking" / "metamorphism under burial" ground icon lucide:Flame z 230 source "crates/atlas-generation/src/processes/rock_history.rs" anchor "metamorphism" at 3640,1760 size 400,80 edited "CLI (agent)" at 1794725593361
+  node k_heat "heat" ellipse questionkey z 236 at 4100,1760 size 240,80 edited "CLI (agent)" at 1794725593361
+  node r_heat "Base: burial" / "Add: fire" ground z 242 at 4400,1760 size 600,80 edited "CLI (agent)" at 1794725593361
+  card c_ice "Glacial erosion" / "ice wearing the bed" ice icon lucide:Snowflake z 231 source "crates/atlas-generation/src/processes/ice.rs" at 3640,1870 size 400,80 edited "CLI (agent)" at 1794725593361
+  node k_ice "iceBite" ellipse questionkey z 237 at 4100,1870 size 240,80 edited "CLI (agent)" at 1794725593361
+  node r_ice "Base: plain ice" / "Scale: aurora" ice z 243 at 4400,1870 size 600,80 edited "CLI (agent)" at 1794725593361
+  card c_season "Crop and herd yields" / "what the land feeds" eco icon lucide:Wheat z 232 source "crates/atlas-generation/src/field/people/yields.rs" at 3640,1980 size 400,80 edited "CLI (agent)" at 1794725593361
+  node k_season "season" ellipse questionkey z 238 at 4100,1980 size 240,80 edited "CLI (agent)" at 1794725593361
+  node r_season "Base: climate and ice" / "Break: hearth-keeping" eco z 244 at 4400,1980 size 600,80 edited "CLI (agent)" at 1794725593361
+  card c_harm "People's growth and events" / "what strikes them" people icon lucide:Users z 233 at 3640,2090 size 400,80 edited "CLI (agent)" at 1794725593361
+  node k_harm "harm" ellipse questionkey z 239 at 4100,2090 size 240,80 edited "CLI (agent)" at 1794725593361
+  node r_harm "Base: what strikes" / "Break: tending, the vow · Scale: the vow's rim" people z 245 source "crates/atlas-generation/src/field/people/questions.rs" anchor "rules" at 4400,2090 size 600,80 edited "CLI (agent)" at 1794725593361
+  card c_sea "Ocean surface" / "where the sea stands" water icon lucide:Waves z 234 source "crates/atlas-generation/src/atlas/environment.rs" at 3640,2200 size 400,80 edited "CLI (agent)" at 1794725593361
+  node k_sea "seaStand" ellipse questionkey z 240 at 4100,2200 size 240,80 edited "CLI (agent)" at 1794725593361
+  node r_sea "Base: the sea" / "Break: diving" water z 246 at 4400,2200 size 600,80 edited "CLI (agent)" at 1794725593361
+  card q_runner "Process groups run" / "together or in order" ground icon lucide:Workflow z 247 source "crates/atlas-generation/src/processes/runner.rs" anchor "StageProcess" at 3640,2340 size 330,80 edited "CLI (agent)" at 1794725593361
+  card q_stage "Stage queues transfers" / "nothing moves yet" ground icon lucide:Package z 248 source "crates/atlas-generation/src/settlement/stage.rs" anchor "Stage" at 4020,2340 size 330,80 edited "CLI (agent)" at 1794725593361
+  card q_settle "Settle and land" / "shared or sequential demand" ground icon lucide:Shovel z 249 source "crates/atlas-generation/src/settlement/stage.rs" anchor "settle" at 4400,2340 size 330,80 edited "CLI (agent)" at 1794725593361
+  card q_ledger "Ground records each transfer" / "source and destination kept" ground icon lucide:ScrollText z 250 source "crates/atlas-generation/src/rock/ground/mod.rs" anchor "record_flow" at 4780,2340 size 330,80 edited "CLI (agent)" at 1794725593361
+  text q_caption "Adding a responder changes every consumer of that question without editing them. Answers are read-only, and a loop between answers is refused." caption z 251 at 3640,2440 size 1880,60 edited "CLI (agent)" at 1794725593361
+}
+card c_craft "Magic craft breaks the rule" / "for the share who practise it: the medium's strength times the people who hold the craft" magic icon lucide:WandSparkles z 252 in-layer crafts source "crates/atlas-generation/src/field/people/crafts.rs" anchor "breaks" at 5235,1950 size 330,170 edited "CLI (agent)" at 1794725600826
+text c_caption "The process that asks the question never changes and never knows." caption z 253 in-layer crafts at 5235,2135 size 330,90 edited "CLI (agent)" at 1794725600826
+frame r_ground "Ground and modes" region z 254 jump in-layer ground badge lucide:Pickaxe at 3580,2600 size 2028,1000 edited "CLI (agent)" at 1794725593361 {
+  frame g_procs "Processes state a mode mix" lane z 260 at 4276,2680 size 448,620 edited "CLI (agent)" at 1794725593361 {
+    node g_weather "Weathering" / "plucking and solution" ground z 261 at 4300,2730 size 400,70 edited "CLI (agent)" at 1794725593361
+    node g_ice "Glacial erosion" / "plucking and abrasion" ice z 262 at 4300,2820 size 400,70 edited "CLI (agent)" at 1794725593361
+    node g_stream "Streams and incision" / "abrasion, then plucking" water z 263 source "crates/atlas-generation/src/processes/streams.rs" at 4300,2910 size 400,70 edited "CLI (agent)" at 1794725593361
+    node g_coast "Coastal wear" / "abrasion and plucking" water z 264 source "crates/atlas-generation/src/processes/coast/mod.rs" at 4300,3000 size 400,70 edited "CLI (agent)" at 1794725593361
+    node g_sol "Solution" / "solution" water z 265 source "crates/atlas-generation/src/processes/solution.rs" at 4300,3090 size 400,70 edited "CLI (agent)" at 1794725593361
+    node g_slope "Creep and slopes" / "shear" ground z 266 source "crates/atlas-generation/src/processes/creep.rs" at 4300,3180 size 400,70 edited "CLI (agent)" at 1794725593361
+  }
+  frame g_owner "Ground owns the columns" lane z 267 at 4756,2680 size 828,620 edited "CLI (agent)" at 1794725593361 {
+    node g_columns "Rock columns per cell" / "intact and cut shares, rock layers, loose cover" ground z 268 source "crates/atlas-generation/src/rock/columns.rs" anchor "RockColumns" at 4780,2740 size 380,100 edited "CLI (agent)" at 1794725593361
+    node g_proj "Projections" / "elevation and exposed rock" ground z 269 source "crates/atlas-generation/src/rock/ground/placement.rs" anchor "project" at 5180,2740 size 380,100 edited "CLI (agent)" at 1794725593361
+    node g_ops "Owner operations" / "wear · burial · heat · deformation · construction, removal and transport" ground z 270 source "crates/atlas-generation/src/rock/ground/" at 4780,2900 size 780,110 edited "CLI (agent)" at 1794725593361
+    node g_reads "Queries" / "fold, section, surface facts" ground z 271 source "crates/atlas-generation/src/rock/ground/query.rs" anchor "fold" at 4780,3070 size 380,90 edited "CLI (agent)" at 1794725593361
+    text g_owner_note "Only the owner writes. Processes queue their work through the stage." caption z 272 at 5180,3070 size 380,110 edited "CLI (agent)" at 1794725593361
+  }
+  card g_cat "Rock catalogue" / "facts only, fixed codes" ground icon lucide:Gem z 255 source "crates/atlas-generation/src/rock/catalogue.rs" anchor "CATALOGUE" at 3620,2700 size 280,80 edited "CLI (agent)" at 1794725593361
+  node g_facts "Material facts" / "resistance, jointing, bedding, solubility, porosity" ground z 256 source "crates/atlas-generation/src/rock/modes.rs" anchor "MaterialFacts" at 3620,2830 size 280,110 edited "CLI (agent)" at 1794725593361
+  card g_compile "Compiled tables" / "one row per rock kind, built once" contract icon lucide:Braces z 258 source "crates/atlas-generation/src/rock/modes.rs" anchor "compile_mix" at 3940,2920 size 280,80 edited "CLI (agent)" at 1794725593361
+  card g_modes "Four modes" / "abrasion · plucking · shear · solution" ground icon lucide:Hammer z 257 source "crates/atlas-generation/src/rock/modes.rs" anchor "ModeId" at 3620,3010 size 280,90 edited "CLI (agent)" at 1794725593361
+  card g_gives "How much rock gives" / "per layer, using its own strength and damage" contract icon lucide:Pickaxe z 259 source "crates/atlas-generation/src/rock/modes.rs" anchor "material_gives" at 3940,3080 size 280,80 edited "CLI (agent)" at 1794726116962
+  text g_caption "The catalogue holds facts and nothing about processes. Adding a process means stating its mix of the four modes; solution ignores rock strength, the other three are resisted by it." caption z 273 at 3620,3400 size 1900,80 edited "CLI (agent)" at 1794725593361
+}
+frame r_regional "Regional refinement" region z 309 jump in-layer regional badge lucide:ZoomIn at 0,3600 size 3240,900 edited "CLI (agent)" at 1794725631725 {
+  frame rg_captured "Captured inputs" lane z 312 at 596,3700 size 318,420 edited "CLI (agent)" at 1794725631725 {
+    node rg_feat "Feature records" / "clipped, new ids naming the source" store z 313 source "crates/atlas-host/src/regional_capture/records.rs" anchor "capture" at 620,3750 size 270,90 edited "CLI (agent)" at 1794725631725
+    node rg_ctx "Rivers, landmarks, magic" / "incoming context" store z 314 source "crates/atlas-host/src/regional_capture/context.rs" anchor "capture_drainage" at 620,3870 size 270,90 edited "CLI (agent)" at 1794725631725
+    node rg_fields "Number grids" / "referenced, never copied" store z 315 source "crates/atlas-host/src/regional_capture/fields.rs" anchor "alias" at 620,3990 size 270,90 edited "CLI (agent)" at 1794725631725
+  }
+  frame rg_disp "Each feature chooses" lane z 318 source "crates/atlas-generation/src/atlas/features/physical.rs" anchor "feature" at 1276,3700 size 338,420 edited "CLI (agent)" at 1794725631725 {
+    node rg_shared "Shared" / "world algorithm reused: slopes, incision, ice, coasts" phys z 319 at 1300,3750 size 290,90 edited "CLI (agent)" at 1794725631725
+    node rg_spec "Specialized" / "regional ocean, climate, water, landforms" water z 320 at 1300,3870 size 290,90 edited "CLI (agent)" at 1794725631725
+    node rg_capt "Captured formation" / "tectonics, mountains, volcanoes are not replayed" ground z 321 at 1300,3990 size 290,90 edited "CLI (agent)" at 1794725631725
+  }
+  frame rg_rounds "Development rounds: land and people answer each other, round after round" lane z 322 at 1660,3700 size 1080,420 edited "CLI (agent)" at 1794725631725 {
+    node rg_refresh "Refresh reads" / "climate, water, media" water z 323 source "crates/atlas-generation/src/atlas/regional/sequence.rs" anchor "refresh" at 1690,3810 size 230,100 edited "CLI (agent)" at 1794725631725
+    node rg_develop "Develop material" / "erosion, ice, sediment, coast" phys z 324 source "crates/atlas-generation/src/atlas/regional/sequence.rs" anchor "DEVELOPMENT" at 1950,3810 size 230,100 edited "CLI (agent)" at 1794725631725
+    node rg_refresh2 "Refresh reads" / "after the land changed" water z 325 at 2210,3810 size 230,100 edited "CLI (agent)" at 1794725631725
+    node rg_people "People live one pass" / "headcount kept from the parent" people z 326 source "crates/atlas-generation/src/atlas/regional/people.rs" anchor "effects" at 2470,3810 size 240,100 edited "CLI (agent)" at 1794725631725
+    text rg_round_note "Rounds relax the captured present. They are not world time and replay no epoch or era." caption z 327 at 1690,4010 size 1020,70 edited "CLI (agent)" at 1794725631725
+  }
+  node rg_parent "Pinned parent map" / "its revision is fixed" database store z 310 source "crates/atlas-host/src/regional_capture.rs" anchor "Selection" at 40,3800 size 240,130 edited "CLI (agent)" at 1794725631725
+  node rg_publish "Child map published" / "an independent map" database store z 328 source "crates/atlas-generation/src/atlas/regional/sequence.rs" anchor "sequence" at 2800,3800 size 240,130 edited "CLI (agent)" at 1794725631725
+  card rg_capture "Capture once" / "refuses the parent's id" contract icon lucide:Scissors z 311 source "crates/atlas-host/src/regional_capture.rs" anchor "capture" at 330,3825 size 230,80 edited "CLI (agent)" at 1794725631725
+  card rg_child "Child working state" / "same lattice, Ground and scale rules" phys icon lucide:Globe z 316 source "crates/atlas-generation/src/atlas/regional/begin.rs" anchor "operation" at 960,3830 size 270,90 edited "CLI (agent)" at 1794725631725
+  text rg_never "Never writes the parent or its siblings; later parent changes do not reach the child." caption z 329 text-color #c0392b at 2780,3960 size 420,90 edited "CLI (agent)" at 1794725631725
+  node rg_ground "Captured ground and relief" / "built once" ground z 317 source "crates/atlas-generation/src/atlas/regional/work.rs" anchor "CapturedGround" at 960,3990 size 270,90 edited "CLI (agent)" at 1794725631725
+  text rg_caption "Named places keep their identity; their size and place may change." caption z 330 at 40,4170 size 3160,60 edited "CLI (agent)" at 1794725631725
+}
+frame r_schema "Map schema" region z 331 jump in-layer schema source "crates/atlas-gis/src/map_store/schema.sql" source "crates/atlas-gis/src/postgres_maps/schema.sql" badge lucide:Database at 3580,3700 size 2000,900 edited "CLI (agent)" at 1794725631725 {
+  frame s_maps "Maps and revisions" lane z 332 at 3616,3780 size 448,440 edited "CLI (agent)" at 1794725631725 {
+    node s_revisions "revisions" / "map_id · revision · descriptor · complete" table z 333 at 3640,3830 size 400,90 edited "CLI (agent)" at 1794725631725
+    node s_heads "heads" / "map_id · current revision" table z 334 at 3640,3960 size 400,90 edited "CLI (agent)" at 1794725631725
+    node s_saved "saved" / "map_id · revision · version · data" table z 335 at 3640,4090 size 400,90 edited "CLI (agent)" at 1794725631725
+  }
+  frame s_records "Geographic records" lane z 336 at 4096,3780 size 448,440 edited "CLI (agent)" at 1794725631725 {
+    node s_features "features" / "id · layer_id · name · geometry · data" table z 337 at 4120,3830 size 400,90 edited "CLI (agent)" at 1794725631725
+    node s_catalog "feature catalog (SQLite)" / "type · attributes · relations · search" table z 338 at 4120,3960 size 400,90 edited "CLI (agent)" at 1794725631725
+    node s_samples "samples" / "id · geometry · data" table z 339 at 4120,4090 size 400,90 edited "CLI (agent)" at 1794725631725
+  }
+  frame s_hist "History, entities, assets" lane z 340 at 4576,3780 size 448,440 edited "CLI (agent)" at 1794725631725 {
+    node s_history "history" / "id · data" table z 341 at 4600,3830 size 400,80 edited "CLI (agent)" at 1794725631725
+    node s_hist_feat "history_features" / "history_id · feature_id" table z 342 at 4600,3925 size 400,80 edited "CLI (agent)" at 1794725631725
+    node s_entities "entities" / "id · data" table z 343 at 4600,4020 size 400,80 edited "CLI (agent)" at 1794725631725
+    node s_assets "assets" / "media_type · location · byte_length" table z 344 at 4600,4115 size 400,80 edited "CLI (agent)" at 1794725631725
+  }
+  frame s_gen "Generation schema (private)" privatelane z 345 source "crates/atlas-host/src/local_inputs.sql" source "crates/atlas-host/src/private_inputs.sql" at 5056,3780 size 488,440 edited "CLI (agent)" at 1794725631725 {
+    node s_inputs "inputs (PostgreSQL)" / "map_id · map_revision · catalog_id" gentable z 346 at 5080,3830 size 440,80 edited "CLI (agent)" at 1794725631725
+    node s_catalogs "catalogs" / "id · document" gentable z 347 at 5080,3925 size 440,80 edited "CLI (agent)" at 1794725631725
+    node s_grecords "records" / "catalog_id · kind · id · data" gentable z 348 at 5080,4020 size 440,80 edited "CLI (agent)" at 1794725631725
+    node s_geo "geography" / "world_id · area_id · id · data" gentable z 349 at 5080,4115 size 440,80 edited "CLI (agent)" at 1794725631725
+  }
+  text s_caption "SQLite and PostGIS hold the same map tables (map_ prefix, or the map schema). Every map table is keyed by map ID and revision; published revisions never change. The map reader role cannot see the generation schema." caption z 350 at 3620,4260 size 1920,90 edited "CLI (agent)" at 1794725631725
+}
+g_procs.top ..> q_stage.bottom "through the stage" as g_stage flow z 308 edited "CLI (agent)" at 1794725593361
+facade.top -> view.bottom "GIS results" as facade_to_view flow z 31 in r_platform edited "CLI (agent)" at 1794725354416
+gis.top -> facade.(0.75,1) "reads GIS" as gis_to_facade flow z 32 in r_platform edited "CLI (agent)" at 1794725354416
+generation.(0.3,0) <-> numerical.(0.4,1) "reads / writes" as generation_numerical flow z 34 in r_platform edited "CLI (agent)" at 1794725354416
+numerical.(0.85,1) -> extraction.(0.2,0) "reads numerical" as numerical_to_extraction flow z 35 in r_platform edited "CLI (agent)" at 1794725354416
+extraction.top -> gis.bottom "writes GIS" as extraction_writes flow z 33 in r_platform edited "CLI (agent)" at 1794725354416
+generation.right -> extraction.left "then" as generation_then_extraction flow z 36 in r_platform edited "CLI (agent)" at 1794725354416
+facade.left -> postgis.top "HTTP, backend mode" as facade_postgis hostlink z 37 in-layer hosts edited "CLI (agent)" at 1794725354416
+facade.right -> sqlite.top "worker, browser mode" as facade_sqlite hostlink z 38 in-layer hosts edited "CLI (agent)" at 1794725354416
+postgis.right ..> stores.left "provides" as postgis_provides hostlink z 41 in-layer hosts edited "CLI (agent)" at 1794725354416
+sqlite.left ..> stores.right "provides" as sqlite_provides hostlink z 42 in-layer hosts edited "CLI (agent)" at 1794725354416
+native_generator.top -> postgis.bottom "publishes" as native_publishes hostlink z 39 in backend edited "CLI (agent)" at 1794725354416
+wasm_generator.top -> sqlite.bottom "publishes" as wasm_publishes hostlink z 40 in browser edited "CLI (agent)" at 1794725354416
+j_wizard.right -> j_review.left "1 live review" as job_review flow z 72 in r_job edited "CLI (agent)" at 1794725392478
+j_wizard.bottom -> j_app.top "2 launch" as job_launch flow z 73 in lane_tab edited "CLI (agent)" at 1794725392478
+j_facade.(0.8,0) -> j_be_http.top "CBOR POST" as job_to_http flow z 76 via 2308,240 3270,240 in r_job edited "CLI (agent)" at 1794725392478
+j_app.right -> j_facade.left "3 start job" as job_start flow z 74 in r_job edited "CLI (agent)" at 1794725392478
+j_facade.right -> j_bw_worker.left "worker message" as job_to_worker flow z 75 in r_job edited "CLI (agent)" at 1794725392478
+j_bw_worker.bottom -> j_bw_job.top "4 prepare" as job_bw_prepare flow z 77 in lane_bw edited "CLI (agent)" at 1794725392478
+j_be_http.bottom -> j_be_job.top "4 prepare" as job_be_prepare flow z 78 in lane_be edited "CLI (agent)" at 1794725392478
+j_bw_job.right -> j_run.left "6 run" as job_bw_run flow z 79 in r_job edited "CLI (agent)" at 1794725392478
+j_be_job.left -> j_run.right "6 run" as job_be_run flow z 80 in r_job edited "CLI (agent)" at 1794725392478
+j_bw_job.bottom -> j_bw_inputs.top "7 keep inputs" as job_bw_keep flow z 81 in lane_bw edited "CLI (agent)" at 1794725392478
+j_run.bottom -> j_publish.top "8 publish" as job_publish flow z 83 in lane_core edited "CLI (agent)" at 1794725392478
+j_be_job.bottom -> j_be_inputs.top "7 keep inputs" as job_be_keep flow z 82 in lane_be edited "CLI (agent)" at 1794725392478
+j_publish.left -> j_bw_store.right "writes" as job_bw_writes flow z 84 in r_job edited "CLI (agent)" at 1794725392478
+j_publish.right -> j_be_store.left "writes" as job_be_writes flow z 85 in r_job edited "CLI (agent)" at 1794725392478
+j_progress.(0.85,0) -> j_poll.left "observe, cancel" as job_poll flow z 88 in r_job edited "CLI (agent)" at 1794725392478
+j_publish.bottom -> j_observed.top as job_observe flow z 86 in lane_core edited "CLI (agent)" at 1794725392478
+j_observed.left -> j_progress.right "9 published event" as job_published flow z 87 in r_job edited "CLI (agent)" at 1794725392478
+j_progress.bottom -> j_viewer.top "opens revision" as job_open flow z 89 in lane_tab edited "CLI (agent)" at 1794725392478
+chk1.top ..> j_bw_job.(0.2,1) as chk1_bw checklink z 90 in-layer job_checks via 2570,1076 2426,1076 2426,504 2492,504 edited "CLI (agent)" at 1794725392478
+chk1.right ..> j_be_job.(0.2,1) as chk1_be checklink z 91 in-layer job_checks via 2714,1165 2714,1054 3106,1054 3106,504 3180,504 edited "CLI (agent)" at 1794725392478
+cancel.left ..> j_progress.left "cancel button" as cancel_progress checklink z 95 in-layer job_checks via 1745,1140 1745,795 edited "CLI (agent)" at 1794725392478
+chk2.top ..> j_bw_store.bottom as chk2_bw checklink z 92 in-layer job_checks via 2910,1074 2570,1074 edited "CLI (agent)" at 1794725392478
+chk2.(0.8,0) ..> j_be_store.bottom as chk2_be checklink z 93 in-layer job_checks via 2988,1074 3270,1074 edited "CLI (agent)" at 1794725392478
+chk3.top ..> j_be_store.(0.7,1) as chk3_be checklink z 94 in-layer job_checks via 3270,816 3330,816 edited "CLI (agent)" at 1794725392478
+w1.left ..> w6.left "review defaults" as w_skip flow z 114 path curved via 3600,140 3600,890 in r_wizard edited "CLI (agent)" at 1794725407286
+w1.bottom -> w2.top "next" as w_12 flow z 108 in r_wizard edited "CLI (agent)" at 1794725407286
+w_controls.left ..> w2.right "Land controls" as w_ctl2 flow z 115 in r_wizard edited "CLI (agent)" at 1794725407286
+w_controls.left ..> w3.right "Landscape controls" as w_ctl3 flow z 116 via 4090,290 4090,440 in r_wizard edited "CLI (agent)" at 1794725419189
+w_controls.left ..> w5.right "People controls" as w_ctl5 flow z 117 via 4090,290 4090,740 in r_wizard edited "CLI (agent)" at 1794725419189
+w2.bottom -> w3.top "next" as w_23 flow z 109 in r_wizard edited "CLI (agent)" at 1794725407286
+w3.bottom -> w4.top "next" as w_34 flow z 110 in r_wizard edited "CLI (agent)" at 1794725407286
+w_side.left ..> w4.right "always beside the steps" as w_side4 flow z 119 in r_wizard edited "CLI (agent)" at 1794725407286
+w4.bottom -> w5.top "next" as w_45 flow z 111 in r_wizard edited "CLI (agent)" at 1794725407286
+w5.bottom -> w6.top "next" as w_56 flow z 112 in r_wizard edited "CLI (agent)" at 1794725407286
+w_adv.left ..> w6.right "History and advanced" as w_adv6 flow z 118 in r_wizard edited "CLI (agent)" at 1794725407286
+w6.bottom -> w_launch.top "generate" as w_6l flow z 113 in r_wizard edited "CLI (agent)" at 1794725407286
+e8.right -> present.left "after the last" as ep_after flow z 161 in r_epoch edited "CLI (agent)" at 1794725467030
+formation.right -> e1.left "enter the loop" as ep_enter flow z 152 in r_epoch edited "CLI (agent)" at 1794725467030
+e1.right -> e2.left as ep_12 flow z 153 in lane_epoch edited "CLI (agent)" at 1794725467030
+e2.right -> e3.left as ep_23 flow z 154 in lane_epoch edited "CLI (agent)" at 1794725467030
+e3.right -> e4.left as ep_34 flow z 155 in lane_epoch edited "CLI (agent)" at 1794725467030
+e4.right -> e5.left as ep_45 flow z 156 in lane_epoch edited "CLI (agent)" at 1794725467030
+e5.right -> e6.left as ep_56 flow z 157 in lane_epoch edited "CLI (agent)" at 1794725467030
+e6.right -> e7.left as ep_67 flow z 158 in lane_epoch edited "CLI (agent)" at 1794725467030
+e7.right -> e8.left as ep_78 flow z 159 in lane_epoch edited "CLI (agent)" at 1794725467030
+prep.bottom -> init.top as ep_prep_init flow z 150 in lane_once edited "CLI (agent)" at 1794725467030
+present.bottom -> eras.top as ep_present_eras flow z 162 in lane_after edited "CLI (agent)" at 1794725467030
+carry.(0.1,0) ..> e1.(0.3,1) "feeds" as ep_carry flow z 164 in lane_epoch edited "CLI (agent)" at 1794725467030
+e8.bottom -> e1.bottom "next epoch" as ep_loop loopline z 160 path cornered via 2620,1925 555,1925 in lane_epoch edited "CLI (agent)" at 1794725467030
+init.bottom -> formation.top "new world only" as ep_init_formation flow z 151 in lane_once edited "CLI (agent)" at 1794725467030
+eras.bottom -> names.top as ep_eras_names flow z 163 in lane_after edited "CLI (agent)" at 1794725467030
+m_init.right ..> init.right as mg_init magiclink z 165 in-layer magic_epoch via 330,1600 330,1885 edited "CLI (agent)" at 1794725467030
+m_final.right ..> eras.right as mg_final magiclink z 171 in-layer magic_epoch via 3220,1600 3220,1885 edited "CLI (agent)" at 1794725467030
+m_carry.bottom ..> e2.top as mg_carry magiclink z 166 in-layer magic_epoch edited "CLI (agent)" at 1794725467030
+m_climate.bottom ..> e3.top as mg_climate magiclink z 167 in-layer magic_epoch edited "CLI (agent)" at 1794725467030
+m_post.(0.1,1) ..> e5.(0.9,0) "charge held in ice" as mg_ice magiclink z 169 in-layer magic_epoch edited "CLI (agent)" at 1794725467030
+m_post.bottom ..> e6.top as mg_post magiclink z 168 in-layer magic_epoch edited "CLI (agent)" at 1794725467030
+m_hist.bottom ..> e7.top as mg_hist magiclink z 170 in-layer magic_epoch edited "CLI (agent)" at 1794725467030
+pp_loose.right -> pp_meet.left "once per epoch" as pp_l1 flow z 198 in r_people edited "CLI (agent)" at 1794725519246
+lane_pass.left ..> pp_layers.right "writes the bands" as pp_writes flow z 207 via 380,2700 380,3195 in r_people edited "CLI (agent)" at 1794725519246
+pp_meet.right -> pp_found.left as pp_s1 flow z 200 in lane_pass edited "CLI (agent)" at 1794725519246
+pp_found.right -> pp_crafts.left as pp_s2 flow z 201 in lane_pass edited "CLI (agent)" at 1794725519246
+pp_crafts.right -> pp_feed.left as pp_s3 flow z 202 in lane_pass edited "CLI (agent)" at 1794725519246
+pp_feed.right -> pp_grow.left as pp_s4 flow z 203 in lane_pass edited "CLI (agent)" at 1794725519246
+pp_grow.right -> pp_move.left as pp_s5 flow z 204 in lane_pass edited "CLI (agent)" at 1794725519246
+pp_move.right -> pp_build.left as pp_s6 flow z 205 in lane_pass edited "CLI (agent)" at 1794725519246
+pp_build.right -> pp_keep.left as pp_s7 flow z 206 in lane_pass edited "CLI (agent)" at 1794725519246
+pp_era.right -> pp_meet.(0,0.85) "each pass" as pp_e1 flow z 199 in r_people edited "CLI (agent)" at 1794725519246
+pp_events.bottom -> pp_era.left "next era" as pp_next_era loopline z 213 path cornered via 2550,3085 25,3085 25,2805 in r_people edited "CLI (agent)" at 1794725519246
+pp_era.bottom -> lane_era.left "after its passes" as pp_era_after flow z 208 via 200,2960 in r_people edited "CLI (agent)" at 1794725519246
+pp_ident.right -> pp_places.left as pp_r1 flow z 209 in lane_era edited "CLI (agent)" at 1794725519246
+pp_places.right -> pp_works.left as pp_r2 flow z 210 in lane_era edited "CLI (agent)" at 1794725519246
+pp_works.right -> pp_realms.left as pp_r3 flow z 211 in lane_era edited "CLI (agent)" at 1794725519246
+pp_realms.right -> pp_events.left as pp_r4 flow z 212 in lane_era edited "CLI (agent)" at 1794725519246
+pp_places.bottom ..> pp_catalogue.top "known places kept" as pp_known flow z 216 in r_people edited "CLI (agent)" at 1794725519246
+pp_layers.right -> pp_catalogue.left "read by classifiers" as pp_classify flow z 214 in r_people edited "CLI (agent)" at 1794725519246
+pp_catalogue.right -> pp_publish.left as pp_pub flow z 215 in r_people edited "CLI (agent)" at 1794725519246
+p_watch.top ..> e2.bottom as pl_watch peoplelink z 217 in-layer people_links edited "CLI (agent)" at 1794725519246
+p_loose.top ..> e7.bottom as pl_loose peoplelink z 218 in-layer people_links edited "CLI (agent)" at 1794725519246
+p_loose.left ..> pp_loose.top "same pass" as pl_same peoplelink z 219 in-layer people_links via 1542,1865 1542,2148 28,2148 28,2588 200,2588 edited "CLI (agent)" at 1794725519246
+eras.bottom ..> pp_era.top "settled passes" as pl_eras peoplelink z 220 in-layer people_links via 3030,1946 2816,1946 2816,2144 24,2144 24,2744 200,2744 edited "CLI (agent)" at 1794725519246
+rg_people.top ..> pp_meet.bottom "same pass, headcount kept" as pl_regional peoplelink z 376 in-layer people_links via 2590,3416 24,3416 24,2866 384,2866 384,2796 555,2796 edited "CLI (agent)" at 1794725631725
+q_register.right -> q_book.left "sign up" as q_e1 flow z 274 in r_questions edited "CLI (agent)" at 1794725593361
+q_book.right -> q_compose.left "per question" as q_e2 flow z 275 in r_questions edited "CLI (agent)" at 1794725593361
+q_kinds.left -> q_compose.right "in this order" as q_e3 flow z 276 in r_questions edited "CLI (agent)" at 1794725593361
+q_ledger.right ..> q_kinds.right "next group sees landed effects" as q_feedback loopline z 292 path cornered via 5170,2380 5170,1530 in r_questions edited "CLI (agent)" at 1794725600826
+c_wet.right -> k_wet.left "asks" as q_a1 flow z 277 in r_questions edited "CLI (agent)" at 1794725593361
+r_wet.left -> k_wet.right "answers" as q_b1 flow z 283 in r_questions edited "CLI (agent)" at 1794725593361
+c_heat.right -> k_heat.left as q_a2 flow z 278 in r_questions edited "CLI (agent)" at 1794725593361
+r_heat.left -> k_heat.right as q_b2 flow z 284 in r_questions edited "CLI (agent)" at 1794725593361
+c_ice.right -> k_ice.left as q_a3 flow z 279 in r_questions edited "CLI (agent)" at 1794725593361
+r_ice.left -> k_ice.right as q_b3 flow z 285 in r_questions edited "CLI (agent)" at 1794725593361
+c_season.right -> k_season.left as q_a4 flow z 280 in r_questions edited "CLI (agent)" at 1794725593361
+r_season.left -> k_season.right as q_b4 flow z 286 in r_questions edited "CLI (agent)" at 1794725593361
+c_harm.right -> k_harm.left as q_a5 flow z 281 in r_questions edited "CLI (agent)" at 1794725593361
+r_harm.left -> k_harm.right as q_b5 flow z 287 in r_questions edited "CLI (agent)" at 1794725593361
+c_sea.right -> k_sea.left as q_a6 flow z 282 in r_questions edited "CLI (agent)" at 1794725593361
+r_sea.left -> k_sea.right as q_b6 flow z 288 in r_questions edited "CLI (agent)" at 1794725593361
+q_runner.right -> q_stage.left as q_t1 flow z 289 in r_questions edited "CLI (agent)" at 1794725593361
+q_stage.right -> q_settle.left "after all submit" as q_t2 flow z 290 in r_questions edited "CLI (agent)" at 1794725593361
+q_settle.right -> q_ledger.left as q_t3 flow z 291 in r_questions edited "CLI (agent)" at 1794725593361
+c_craft.(0,0.3) ..> r_season.right "replaces the answer" as cr_season magiclink z 293 in-layer crafts edited "CLI (agent)" at 1794725593361
+c_craft.bottom ..> pp_crafts.right "learned in the pass" as cr_learn magiclink z 296 in-layer crafts via 5300,2324 3256,2324 3256,2654 1286,2654 1286,2725 edited "CLI (agent)" at 1794725593361
+c_craft.(0.1,1) ..> r_harm.right as cr_harm magiclink z 294 in-layer crafts edited "CLI (agent)" at 1794725593361
+c_craft.(0.2,1) ..> r_sea.right as cr_sea magiclink z 295 in-layer crafts edited "CLI (agent)" at 1794725593361
+g_proj.top ..> g_procs.top "next step reads" as g_loop loopline z 306 path cornered via 5370,2660 4500,2660 in r_ground edited "CLI (agent)" at 1794725593361
+g_cat.bottom -> g_facts.top "each kind states" as g_e1 flow z 297 in r_ground edited "CLI (agent)" at 1794725593361
+g_reads.left ..> g_columns.left "read-only" as g_e10 flow z 307 via 4770,3115 4770,2790 in g_owner edited "CLI (agent)" at 1794725593361
+g_columns.right -> g_proj.left "recomputed" as g_e9 flow z 305 in g_owner edited "CLI (agent)" at 1794725593361
+g_ops.(0.25,0) -> g_columns.bottom "owner writes" as g_e8 flow z 304 in g_owner edited "CLI (agent)" at 1794725593361
+g_facts.right -> g_compile.left "read at load" as g_e2 flow z 298 in r_ground edited "CLI (agent)" at 1794725593361
+g_procs.right -> g_ops.left "queue work" as g_e7 flow z 303 in r_ground edited "CLI (agent)" at 1794725593361
+g_procs.left -> g_compile.right "states its mix" as g_e4 flow z 300 in r_ground edited "CLI (agent)" at 1794725593361
+g_modes.right -> g_compile.(0,0.8) "define the response" as g_e3 flow z 299 in r_ground edited "CLI (agent)" at 1794725593361
+g_compile.bottom -> g_gives.top as g_e5 flow z 301 in r_ground edited "CLI (agent)" at 1794725593361
+rg_publish.top ..> rg_parent.top "never written back" as rg_blocked blocked z 375 arrow cross via 2920,3670 160,3670 in r_regional edited "CLI (agent)" at 1794725631725
+rg_capture.right -> rg_feat.left as rg_e2 flow z 363 in r_regional edited "CLI (agent)" at 1794725631725
+rg_refresh.right -> rg_develop.left as rg_r1 flow z 370 in rg_rounds edited "CLI (agent)" at 1794725631725
+rg_develop.right -> rg_refresh2.left as rg_r2 flow z 371 in rg_rounds edited "CLI (agent)" at 1794725631725
+rg_refresh2.right -> rg_people.left as rg_r3 flow z 372 in rg_rounds edited "CLI (agent)" at 1794725631725
+rg_parent.right -> rg_capture.left "read once" as rg_e1 flow z 362 in r_regional edited "CLI (agent)" at 1794725631725
+rg_capture.right -> rg_ctx.left as rg_e3 flow z 364 in r_regional edited "CLI (agent)" at 1794725631725
+rg_capture.right -> rg_fields.left as rg_e4 flow z 365 in r_regional edited "CLI (agent)" at 1794725631725
+rg_rounds.right -> rg_publish.left "after the last round" as rg_e9 flow z 374 in r_regional edited "CLI (agent)" at 1794725631725
+rg_captured.right -> rg_child.left "pinned inputs" as rg_e5 flow z 366 in r_regional edited "CLI (agent)" at 1794725631725
+rg_disp.left ..> rg_child.right "selects operations" as rg_e7 flow z 368 in r_regional edited "CLI (agent)" at 1794725631725
+rg_disp.right -> rg_rounds.left "run in rounds" as rg_e8 flow z 369 in r_regional edited "CLI (agent)" at 1794725631725
+rg_people.bottom -> rg_refresh.bottom "next round" as rg_loop loopline z 373 path cornered via 2590,3960 1805,3960 in rg_rounds edited "CLI (agent)" at 1794725631725
+rg_child.bottom -> rg_ground.top as rg_e6 flow z 367 in r_regional edited "CLI (agent)" at 1794725631725
+s_hist.top -> s_maps.top "belong to a revision" as s_fk4 flow z 380 arrow only-one start-arrow zero-or-many via 4800,3760 3840,3760 in r_schema edited "CLI (agent)" at 1794725631725
+s_saved.right ..> s_revisions.right "saved copy" as s_fk2 flow z 378 arrow only-one start-arrow zero-or-many via 4075,4135 4075,3875 in s_maps edited "CLI (agent)" at 1794725631725
+s_hist_feat.top -> s_history.bottom "links event" as s_fk6 flow z 382 arrow only-one start-arrow zero-or-many in s_hist edited "CLI (agent)" at 1794725631725
+s_inputs ..> s_catalogs as s_fk8 flow z 384 in s_gen edited "CLI (agent)" at 1794725631725
+s_heads.top -> s_revisions.bottom "current" as s_fk1 flow z 377 arrow only-one start-arrow zero-or-one in s_maps edited "CLI (agent)" at 1794725631725
+s_catalog.top -> s_features.bottom "describes" as s_fk5 flow z 381 arrow only-one start-arrow zero-or-one in s_records edited "CLI (agent)" at 1794725631725
+s_grecords.right -> s_catalogs.right "belongs to" as s_fk7 flow z 383 arrow only-one start-arrow zero-or-many via 5535,4060 5535,3965 in s_gen edited "CLI (agent)" at 1794725631725
+s_records.left -> s_maps.right "belong to a revision" as s_fk3 flow z 379 arrow only-one start-arrow zero-or-many in r_schema edited "CLI (agent)" at 1794725631725
+opening r_platform

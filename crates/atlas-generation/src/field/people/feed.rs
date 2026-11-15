@@ -1,3 +1,4 @@
+// Arconis: docs/architecture/subsystems.arconis#item=pp_feed — puts land to crops and herds to feed people.
 use super::{
     facts::*,
     land::{mix, WorkInput},

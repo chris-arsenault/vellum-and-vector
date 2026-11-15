@@ -2,6 +2,7 @@ use crate::{map_files::MapFiles, map_store::MapStore, sql::Database};
 use atlas_map::MapRef;
 use std::{io, rc::Rc};
 use wasm_bindgen::prelude::*;
+// Arconis: docs/architecture/subsystems.arconis#item=sqlite — WASM bindings the facade reaches through the worker.
 #[wasm_bindgen]
 impl MapStore {
     #[wasm_bindgen(js_name = contains)]

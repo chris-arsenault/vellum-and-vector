@@ -1,4 +1,5 @@
 //! Port of rock/modes.ts. Definitions compile once into packed per-kind responses.
+// Arconis: docs/architecture/subsystems.arconis#item=g_modes — the four ways rock gives: abrasion, plucking, shear, solution.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(usize)]
 pub enum ModeId {
@@ -19,6 +20,7 @@ impl ModeMix {
     }
 }
 
+// Arconis: docs/architecture/subsystems.arconis#item=g_facts — per-kind resistance, jointing, bedding, solubility and porosity.
 /// Kind facts come from the owning catalogue, not from a process formula.
 #[derive(Clone, Copy)]
 pub struct MaterialFacts {
@@ -87,6 +89,7 @@ pub struct CompiledMix {
     pub ward_holds: f64,
     pub fabric_response: f64,
 }
+// Arconis: docs/architecture/subsystems.arconis#item=g_compile — builds a mode mix's per-kind table once.
 /// Catalogue order is its dense material code order; no second kind catalogue is kept here.
 pub fn compile_mix(
     kinds: &[MaterialFacts],
@@ -139,6 +142,7 @@ pub struct MaterialResponse {
     pub grain: [f64; 2],
     pub bed_slope: [f64; 2],
 }
+// Arconis: docs/architecture/subsystems.arconis#item=g_gives — looks up how much a layer's rock gives.
 /// The complete retained constituents answer together; no kind or system switch in a process.
 pub fn material_gives(
     mix: &CompiledMix,

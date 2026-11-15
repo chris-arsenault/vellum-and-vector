@@ -59,6 +59,7 @@ pub const SOFTEST_ROCK: f64 = 250.0;
 pub const HARDEST_ROCK: f64 = 4000.0;
 pub const PERMEABLE_FROM: f64 = 0.3;
 
+// Arconis: docs/architecture/subsystems.arconis#item=g_cat — the rock catalogue: facts per kind under fixed codes.
 pub static CATALOGUE: [RockKind; KIND_COUNT] = [
     kind!(
         0,

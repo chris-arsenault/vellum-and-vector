@@ -7,6 +7,7 @@ pub trait CatalogueState<Schedule>: super::carry::CarryState<Schedule> {
     fn settlement_places(&self) -> io::Result<Vec<super::values::Place>>;
 }
 
+// Arconis: docs/architecture/subsystems.arconis#item=pp_catalogue — the one place catalogue that classifies and publishes places.
 pub struct Catalogue<S, Schedule> {
     entries: Vec<Entry<S, Schedule>>,
     index: Vec<usize>,
