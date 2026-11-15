@@ -46,7 +46,7 @@ pub struct Size {
     pub length: f64,
     pub members: f64,
 }
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct Sizes {
     // hpc-exempt: persistent place identities, not a cell-indexed numerical field.
     kept: RefCell<BTreeMap<String, Size>>,

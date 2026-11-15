@@ -24,6 +24,42 @@ interface OwnerDirection {
 }
 const directions: readonly OwnerDirection[] = [
   {
+    direction: "GIS and numerical data must stay in sync including deletion",
+    given: "2026-11-15",
+    marks: [
+      "crates/atlas-host/src/native_jobs/contexts.rs",
+      "crates/atlas-host/src/browser_workspace/contexts.rs",
+    ],
+    test: [
+      "crates/atlas-host/tests/postgres_maps.rs",
+      "crates/atlas-host/tests/context_retention.rs",
+    ],
+  },
+  {
+    direction: "list worlds, regions, generations, including orphans; weave it into the UI",
+    given: "2026-11-15",
+    marks: ["frontend/src/FinishedMapLibrary.tsx"],
+    test: "frontend/tests/selectionStorage.test.ts",
+  },
+  {
+    direction: "limited checkpoints only; do not chase arbitrary resume points",
+    given: "2026-11-15",
+    marks: ["crates/atlas-generation/src/atlas/dispatch/run/checkpoint.rs"],
+    test: "crates/atlas-generation/src/atlas/dispatch/run/checkpoint.rs",
+  },
+  {
+    direction: "only one checkpoint per job - overwrite data, not new",
+    given: "2026-11-15",
+    marks: ["crates/atlas-host/src/job_files.rs"],
+    test: "crates/atlas-host/src/job_files.rs",
+  },
+  {
+    direction: "old data either works in the current format or does not load; no migrations",
+    given: "2026-11-15",
+    marks: ["crates/atlas-gis/src/stored.rs"],
+    test: "crates/atlas-gis/src/stored.rs",
+  },
+  {
     direction: "regional refinement is a modal with only changeable selections",
     given: "2026-11-15",
     marks: ["frontend/src/RegionalGeneration.tsx"],

@@ -1,6 +1,7 @@
 //! Private generation surface projection. Finished-map readers never receive these bands.
 pub mod cargo;
 pub mod channels;
+mod checkpoint;
 pub mod local_magic;
 mod local_material;
 mod magic;

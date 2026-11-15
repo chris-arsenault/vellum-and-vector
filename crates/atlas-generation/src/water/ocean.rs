@@ -11,7 +11,7 @@ use crate::{
 };
 use std::io;
 
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct OceanDatum {
     pub base_level: f64,
     pub base_volume: f64,

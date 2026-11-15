@@ -322,6 +322,15 @@ pub struct RiverProjection {
     pub(super) spines: Band<u8>,
 }
 impl RiverProjection {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("river-orders", &mut self.orders)?;
+        archive.band("river-months", &mut self.months)?;
+        archive.band("river-small-channels", &mut self.small_channels)?;
+        archive.band("river-spines", &mut self.spines)
+    }
     pub(super) fn inherit(
         &mut self,
         cell: usize,

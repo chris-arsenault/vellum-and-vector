@@ -9,6 +9,7 @@ const suppliedServices = async (): Promise<ContextServices<{ seed: number }>> =>
   navigation: {} as MapNavigation,
   library: {} as MapLibrary,
   generation: {} as GenerationService<{ seed: number }>,
+  contexts: {} as ContextServices<{ seed: number }>["contexts"],
   dispose: async () => {},
 });
 

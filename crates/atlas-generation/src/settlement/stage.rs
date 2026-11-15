@@ -9,7 +9,7 @@ use crate::{
 };
 use std::{collections::BTreeMap, io, rc::Rc};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Pool {
     Rock,
     Soil,

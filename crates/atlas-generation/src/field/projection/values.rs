@@ -14,6 +14,41 @@ pub enum Values {
     I8(Band<i8>),
 }
 impl Values {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+        coverage: &mut Coverage,
+    ) -> io::Result<()> {
+        let mut kind = match self {
+            Self::F64(_) => "f64",
+            Self::F32(_) => "f32",
+            Self::I32(_) => "i32",
+            Self::U32(_) => "u32",
+            Self::U8(_) => "u8",
+            Self::I8(_) => "i8",
+        }
+        .to_owned();
+        archive.value("kind", &mut kind)?;
+        if archive.loading() {
+            *self = match kind.as_str() {
+                "f64" => Self::F64(coverage.scratch(0, 0.0)),
+                "f32" => Self::F32(coverage.scratch(0, 0.0)),
+                "i32" => Self::I32(coverage.scratch(0, 0)),
+                "u32" => Self::U32(coverage.scratch(0, 0)),
+                "u8" => Self::U8(coverage.scratch(0, 0)),
+                "i8" => Self::I8(coverage.scratch(0, 0)),
+                _ => return Err(io::Error::other("Unsupported checkpoint sample type")),
+            };
+        }
+        match self {
+            Self::F64(band) => archive.allocated_band("values", band, coverage),
+            Self::F32(band) => archive.allocated_band("values", band, coverage),
+            Self::I32(band) => archive.allocated_band("values", band, coverage),
+            Self::U32(band) => archive.allocated_band("values", band, coverage),
+            Self::U8(band) => archive.allocated_band("values", band, coverage),
+            Self::I8(band) => archive.allocated_band("values", band, coverage),
+        }
+    }
     pub fn snapshot(&self, coverage: &mut Coverage) -> io::Result<Self> {
         Ok(match self {
             Self::F64(v) => Self::F64(coverage.copy_band(v)?),

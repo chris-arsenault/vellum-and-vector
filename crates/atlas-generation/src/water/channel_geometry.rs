@@ -25,6 +25,15 @@ pub struct ChannelView {
     pub orders: ReadBand<u32>,
 }
 impl ChannelGeometry {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("channel-width", &mut self.width)?;
+        archive.band("channel-depth", &mut self.depth)?;
+        archive.band("channel-strength", &mut self.strength)?;
+        archive.band("channel-orders", &mut self.orders)
+    }
     pub(super) fn inherit_dimensions(
         &mut self,
         cell: usize,

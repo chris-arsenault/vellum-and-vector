@@ -26,6 +26,14 @@ pub struct FlowRoutingView {
     pub basins: ReadBand<i32>,
 }
 impl FlowRouting {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("routing-targets", &mut self.targets)?;
+        archive.band("routing-edges", &mut self.edges)?;
+        archive.band("routing-basins", &mut self.basins)
+    }
     pub(super) fn inherit_basin(&mut self, cell: usize, basin: i32) -> io::Result<()> {
         self.basins.set(cell, basin)
     }

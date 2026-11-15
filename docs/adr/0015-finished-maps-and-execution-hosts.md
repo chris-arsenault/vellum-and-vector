@@ -128,8 +128,8 @@ Compose stack supplies PostGIS while the TrueNAS catalog PostgreSQL app remains 
 No public route or RDS dependency is part of this installation. The old C# and TypeScript
 backends, historical migrations and deployment scripts are removed, not adapted.
 
-Manual authoring and undo remain deferred and preserved. This decision adds no execution
-checkpoints, restart/recovery, format conversion, numerical replay checks or output caps.
+Manual authoring and undo remain deferred and preserved. Format conversion, numerical
+replay checks and output caps remain excluded.
 
 The owner's 2026-11-15 usability direction makes a completed server map available
 without Save. The backend library lists complete published heads and overlays stored
@@ -139,6 +139,28 @@ contract. Browser maps retain explicit-save behavior. Job progress can be closed
 without cancellation, and completed jobs link directly to their map. Native jobs log
 start, stop and epoch durations without numerical detail.
 
-The later correction excludes resume when it adds performance or storage cost.
-No checkpoints are persisted; a service restart ends running jobs. Completed map
-durability is separate from execution recovery.
+Limited recovery uses owner mementos at completed schedule boundaries: world formation,
+outer physical epochs and human eras, regional initialization and completed rounds,
+and pre-publication. The host atomically replaces one private checkpoint per job.
+It retains the effective request and captured parent inputs, and restores the owners
+through their existing commands. Services, indexes and disposable caches are rebuilt.
+The latest committed boundary survives replacement failure; interrupted segments are
+recomputed. Resume is explicit, and publication keeps one intended map revision.
+This has bounded write and temporary replacement-space costs; it is not free recovery.
+
+Context management is a separate host capability from GIS viewing. The existing library
+organizes worlds, regions and jobs, including incomplete and incompatible records.
+Browser job results stay in the retained catalog independently of their job metadata;
+explicit Save still records browser views and selections. Deleting a job does not delete
+its completed map. Deleting a parent alone leaves independent children accessible.
+Rust coordinates GIS and numerical reference removal, following resource aliases before
+reclaiming shared bytes. A retained deletion intent makes unfinished cross-store cleanup
+visible and retryable. Active jobs prevent removal of their inputs. Browser Web Locks
+coordinate active worker lifetimes across tabs; storage decisions remain in Rust.
+
+Repository codecs stamp format metadata and try their current readers on stored data.
+A different format revision alone does not reject data. Required shape and meaning
+still must match; there are no converters, per-version readers or automatic resets.
+GIS loading, refinement and checkpoint resumption validate their own capabilities.
+An incompatible numerical record therefore cannot force GIS viewing to open numerical
+storage, and unreadable retained references prevent unsafe file reclamation.

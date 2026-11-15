@@ -7,6 +7,7 @@ use crate::{
 use serde_json::Value;
 use std::io;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct ContinuingRiver {
     pub id: String,
     pub course: usize,

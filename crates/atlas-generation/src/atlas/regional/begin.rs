@@ -5,6 +5,7 @@ use crate::{
 };
 use std::rc::Rc;
 
+#[derive(Clone)]
 pub struct Capture {
     pub domains: Vec<String>,
     pub parent_span: f64,

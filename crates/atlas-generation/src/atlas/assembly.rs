@@ -43,6 +43,8 @@ pub struct Operations {
     regional_magic: crate::execution::Command<State>,
     people_input: Rc<people::Inputs>,
     publication: Rc<people::Publication>,
+    recovery_initialize: Option<crate::execution::Command<State>>,
+    regional_input: Option<Rc<regional::work::Inputs>>,
 }
 impl Operations {
     /// Regional settings must be bound before constructing the shared physical operations.
@@ -148,7 +150,13 @@ impl Operations {
         registration::world::register(&mut registry, &world, &publication)?;
         registration::ecology::register(&mut registry, &ecology)?;
         registration::people::register(&mut registry, &people)?;
-        registration::magic::register(&mut registry, &magic, &magic_work, &systems, initialize)?;
+        registration::magic::register(
+            &mut registry,
+            &magic,
+            &magic_work,
+            &systems,
+            initialize.clone(),
+        )?;
         registration::landmarks::register(&mut registry, &landmarks)?;
         super::relief::register(&mut registry, relief_inputs)?;
         super::local_magic::register(&mut registry, input.local_magic, epochs)?;
@@ -160,6 +168,8 @@ impl Operations {
             regional_magic,
             people_input: input.people,
             publication,
+            recovery_initialize: features.enabled("magic.configured").then_some(initialize),
+            regional_input: None,
         };
         if let Some(region) = input.regional {
             operations.regional(runtime, features, region)?;
@@ -177,30 +187,38 @@ impl Operations {
             .fixed
             .extend(runtime.executor.state().physical.protection.ecology_fixed());
         let reads = self.physical.regional_reads(runtime, &self.magic, features);
+        let regional_input = Rc::new(regional::work::Inputs {
+            seed: input.seed,
+            captured: input.ground,
+            causes: input.causes,
+            publication: self.publication.places.clone(),
+            outcomes: RefCell::new(input.outcomes),
+            parameters: self.people_input.parameters.clone(),
+            ecology: input.ecology,
+            authority: input.authority,
+            people: regional::work::People {
+                land: self.people.land.clone(),
+                questions: self.physical.people.clone(),
+                record: self.people.record.clone(),
+                settings: input.places,
+                parent: input.parent_people,
+            },
+            progress: self.people_input.progress.clone(),
+        });
+        self.regional_input = Some(regional_input.clone());
         let work = regional::work::Work::new(
-            Rc::new(regional::work::Inputs {
-                seed: input.seed,
-                captured: input.ground,
-                causes: input.causes,
-                publication: self.publication.places.clone(),
-                outcomes: RefCell::new(input.outcomes),
-                parameters: self.people_input.parameters.clone(),
-                ecology: input.ecology,
-                authority: input.authority,
-                people: regional::work::People {
-                    land: self.people.land.clone(),
-                    questions: self.physical.people.clone(),
-                    record: self.people.record.clone(),
-                    settings: input.places,
-                    parent: input.parent_people,
-                },
-                progress: self.people_input.progress.clone(),
-            }),
+            regional_input,
             self.physical.environment.clone(),
             &reads,
             &self.magic,
             runtime.field_projection(),
         );
+        self.recovery_initialize = Some(regional::begin::operation(
+            input.capture.clone(),
+            features
+                .enabled("magic.configured")
+                .then(|| self.regional_magic.clone()),
+        ));
         registration::regional::initialize(
             &mut self.registry,
             input.capture,
@@ -209,6 +227,28 @@ impl Operations {
                 .then(|| self.regional_magic.clone()),
         )?;
         registration::regional::register(&mut self.registry, &reads, &work, &self.physical.native)
+    }
+
+    pub(crate) fn restore_bindings(&self, runtime: &mut Runtime) -> ExecutionResult<()> {
+        self.physical.initialize(runtime, false)?;
+        if let Some(initialize) = &self.recovery_initialize {
+            runtime.executor.run(initialize)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn checkpoint(
+        &self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.value(
+            "published-places",
+            &mut *self.publication.places.borrow_mut(),
+        )?;
+        if let Some(input) = &self.regional_input {
+            archive.value("regional-outcomes", &mut *input.outcomes.borrow_mut())?;
+        }
+        Ok(())
     }
 }
 pub struct Region {

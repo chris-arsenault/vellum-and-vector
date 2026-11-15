@@ -1,4 +1,5 @@
 //! Browser-local completed inputs. This database is separate from the finished-map catalog.
+mod inventory;
 // Arconis: docs/architecture/subsystems.arconis#item=j_bw_inputs — browser inputs.sqlite holding captured private inputs.
 use crate::{generation_document::Document, numerical_resource::Scope};
 use atlas_generation::features::{
@@ -37,7 +38,8 @@ impl LocalInputs {
                         reference.revision.as_str().into(),
                     ];
                     let Some(data) = self.db.value("SELECT document FROM imported.generation_catalogs WHERE map_id=? AND revision=?", &values)? else { continue; };
-                    let document: Document = serde_json::from_str(data.text()?)?;
+                    let document: Document =
+                        crate::generation_document::FORMAT.parse(data.text()?)?;
                     self.db.execute("INSERT OR IGNORE INTO generation_catalogs SELECT * FROM imported.generation_catalogs WHERE map_id=? AND revision=?", &values)?;
                     self.db.execute("INSERT OR IGNORE INTO generation_records SELECT * FROM imported.generation_records WHERE map_id=? AND revision=?", &values)?;
                     for field in document.world["fields"].as_array().into_iter().flatten() {
@@ -66,7 +68,7 @@ impl LocalInputs {
                 ],
             )?
             .ok_or_else(|| io::Error::other("This map revision has no completed inputs"))?;
-        Ok(serde_json::from_str(value.text()?)?)
+        crate::generation_document::FORMAT.parse(value.text()?)
     }
     pub fn store(
         &self,
@@ -81,13 +83,16 @@ impl LocalInputs {
                 "Retain completed inputs for their own map",
             ));
         }
+        if self.contains(reference)? {
+            return Ok(());
+        }
         sql::transaction(self.db.as_ref(), || {
             self.db.execute(
                 "INSERT INTO generation_catalogs VALUES(?,?,?)",
                 &[
                     reference.map_id.as_str().into(),
                     reference.revision.as_str().into(),
-                    serde_json::to_string(document)?.into(),
+                    crate::generation_document::FORMAT.text(document)?.into(),
                 ],
             )?;
             for feature in features.values(FeatureSelection::default())? {

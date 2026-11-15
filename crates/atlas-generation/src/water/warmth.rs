@@ -18,6 +18,12 @@ pub struct WarmthInputs<'a> {
     pub forcing: &'a ReadBand<f64>,
 }
 impl RiverWarmth {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("river-warmth", &mut self.warmth)
+    }
     pub(super) fn inherit(&mut self, cell: usize, value: f64) -> io::Result<()> {
         self.warmth.set(cell, value)
     }

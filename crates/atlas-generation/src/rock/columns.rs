@@ -47,6 +47,20 @@ pub struct RockColumns {
     count: usize,
 }
 impl RockColumns {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.label("rock-columns")?;
+        for column in &mut self.layers {
+            for layer in column {
+                layer.checkpoint(archive)?;
+            }
+        }
+        self.cargo.checkpoint(archive)?;
+        archive.band("cargo-cells", &mut self.cargo_cells)?;
+        archive.band("column-revisions", &mut self.revisions)
+    }
     pub fn view(&self, column: Column, slot: usize) -> super::layer_bands::ReadLayerBands {
         self.layers[column as usize][slot].read_only()
     }

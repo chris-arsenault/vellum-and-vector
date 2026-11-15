@@ -10,7 +10,7 @@ use crate::{
 use std::io;
 
 /// Water and retained ground material are deliberately absent: their owners accept operations.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Medium {
     Shared(Scalar),
     Code(CellCode),
@@ -85,6 +85,29 @@ pub struct Contributions {
     entries: Vec<Contribution>,
 }
 impl Contributions {
+    pub(crate) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+        coverage: &mut Coverage,
+    ) -> io::Result<()> {
+        let mut count = self.entries.len();
+        archive.value("contributions", &mut count)?;
+        if archive.loading() {
+            self.entries = (0..count)
+                .map(|_| Contribution {
+                    medium: Medium::SoilDepth,
+                    desired: coverage.allocate(0.0),
+                    applied: None,
+                })
+                .collect();
+        }
+        for entry in &mut self.entries {
+            archive.value("medium", &mut entry.medium)?;
+            archive.band("desired", &mut entry.desired)?;
+            archive.optional_band("applied", &mut entry.applied, coverage)?;
+        }
+        Ok(())
+    }
     pub fn begin(&mut self) -> io::Result<()> {
         for entry in &mut self.entries {
             for cell in 0..entry.desired.len() {

@@ -5,6 +5,7 @@ use crate::{
     scale::{LengthUnit, MapScale, RelativeMeasure},
 };
 use std::io;
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Media {
     pub insolation: Vec<f64>,
     pub pooling: Vec<f64>,

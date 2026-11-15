@@ -83,6 +83,67 @@ fn postgis_publication_queries_saves_and_reader_boundary() -> Result<(), Box<dyn
         .is_err());
     assert!(restricted.execute("DELETE FROM map.heads", &[]).is_err());
     http_facade(&url, &reader_url)?;
+    let child = store.find_head("child")?.unwrap();
+    store.delete_map("island")?;
+    store.open(&child)?.require_complete()?;
+    assert!(store.inventory()?.iter().any(|m| !m.complete));
+    assert!(store
+        .inventory()?
+        .iter()
+        .all(|m| m.reference.map_id != "island"));
+    context_deletion(&url, &child)?;
+    Ok(())
+}
+fn context_deletion(url: &str, child: &MapRef) -> Result<(), Box<dyn std::error::Error>> {
+    use atlas_host::{
+        context_inventory::{Call, Target},
+        job_files::JobFiles,
+        native_jobs::{Jobs, Settings},
+        record_store::Workspace,
+    };
+    let root = std::env::temp_dir().join(format!("atlas-contexts-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&root)?;
+    let resources = root.join("resources");
+    let files = JobFiles::new(&resources.join(".jobs"), "finished-job")?;
+    files.write("status.json", &json!({"jobId":"finished-job","state":"completed","step":"Map published","progress":1,"result":child,"message":null,"details":null}))?;
+    let records = Workspace::create(root.join("records.sqlite"))?;
+    let inputs = PrivateInputs::connect(url)?;
+    let document = serde_json::from_value(
+        json!({"world":{"version":1,"fields":[]},"scope":{"worldId":"world","areaId":child.map_id,"spaceId":"surface","footprint":shape(),"crsId":"planar-metres","resolution":1,"revision":1,"time":"present"},"coverage":[],"fieldPatches":[]}),
+    )?;
+    inputs.store(
+        child,
+        &document,
+        &records.features(),
+        &records.networks(),
+        &[],
+    )?;
+    let jobs = Jobs::new(Settings {
+        database_url: url.into(),
+        generation_url: url.into(),
+        resources,
+        scratch: root.join("scratch"),
+        assets: atlas_gis::map_files::MapFiles::new(root.join("assets")),
+        memory: atlas_generation::storage::MemoryBudget::new(1024 * 1024),
+    })?;
+    jobs.contexts(Call::Delete(Target::Job {
+        id: "finished-job".into(),
+    }))?;
+    assert!(PostgresMaps::connect(url)?.open(child).is_ok());
+    assert!(inputs.document(child).is_ok());
+    jobs.contexts(Call::Delete(Target::Map {
+        id: child.map_id.clone(),
+        descendants: false,
+    }))?;
+    assert!(PostgresMaps::connect(url)?.open(child).is_err());
+    assert!(inputs.document(child).is_err());
+    assert!(jobs.contexts(Call::List)?["cleanup"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    drop(records);
+    drop(jobs);
+    std::fs::remove_dir_all(root)?;
     Ok(())
 }
 fn http_facade(writer: &str, reader: &str) -> Result<(), Box<dyn std::error::Error>> {

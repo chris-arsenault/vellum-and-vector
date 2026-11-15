@@ -8,7 +8,7 @@ use crate::{
     water::{network::RiverReader, WaterView},
 };
 use std::io;
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Situation {
     Coast,
     Lake,
@@ -25,6 +25,7 @@ impl Situation {
         }
     }
 }
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Seat {
     pub feature_id: String,
     pub cell: usize,

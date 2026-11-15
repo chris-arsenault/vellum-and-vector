@@ -208,6 +208,24 @@ pub struct HumanLayers {
     pub(super) mesh: Rc<TriangularLattice>,
 }
 impl HumanLayers {
+    pub(crate) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+        coverage: &mut Coverage,
+    ) -> io::Result<()> {
+        archive.label("human-layers")?;
+        archive.bands("layers", &mut self.bands.layers)?;
+        archive.bands("remains", &mut self.bands.remains)?;
+        archive.band("ruin-tongue", &mut self.bands.ruin_tongue)?;
+        for bands in &mut self.bands.identity {
+            archive.band("people", &mut bands.people)?;
+            archive.band("hardness", &mut bands.hardness)?;
+            archive.band("age", &mut bands.age)?;
+            archive.bands("traditions", &mut bands.traditions)?;
+        }
+        archive.bands("human-records", &mut self.records)?;
+        archive.optional_band("place-kept", &mut self.place_kept, coverage)
+    }
     pub(crate) fn restore_authored(
         &mut self,
         name: &str,

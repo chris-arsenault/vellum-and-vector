@@ -40,6 +40,24 @@ impl MapFiles {
     pub fn ensure_directory(&self) -> io::Result<()> {
         fs::create_dir_all(&self.directory)
     }
+    pub fn locations(&self) -> io::Result<Vec<String>> {
+        self.ensure_directory()?;
+        fs::read_dir(&self.directory)?
+            .filter_map(|e| match e {
+                Ok(e) if e.path().is_file() => {
+                    Some(Ok(e.file_name().to_string_lossy().into_owned()))
+                }
+                Ok(_) => None,
+                Err(e) => Some(Err(e)),
+            })
+            .collect()
+    }
+    pub fn remove(&self, location: &str) -> io::Result<()> {
+        match fs::remove_file(self.path(location)?) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        }
+    }
 }
 pub fn asset_path(reference: &MapRef, id: &str) -> String {
     let encode = |s: &str| {

@@ -163,6 +163,38 @@ fn magic_target(band: &MagicBand) -> place_effects::Target<'_> {
     }
 }
 impl MagicContributions {
+    pub(crate) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+        coverage: &mut crate::storage::Coverage,
+    ) -> io::Result<()> {
+        let mut count = self.applied.len();
+        archive.value("magic-contributions", &mut count)?;
+        if archive.loading() {
+            self.applied = (0..count)
+                .map(|_| Applied {
+                    target: MagicBand::Stock {
+                        system: String::new(),
+                        stock: String::new(),
+                    },
+                    cells: Vec::new(),
+                    marked: BitSet::new(coverage.len()),
+                    values: coverage.allocate(0.0),
+                })
+                .collect();
+        }
+        for applied in &mut self.applied {
+            archive.value("target", &mut applied.target)?;
+            archive.value("cells", &mut applied.cells)?;
+            archive.band("values", &mut applied.values)?;
+            if archive.loading() {
+                for &cell in &applied.cells {
+                    applied.marked.add(cell);
+                }
+            }
+        }
+        Ok(())
+    }
     pub fn apply(
         &mut self,
         field: &mut Field,

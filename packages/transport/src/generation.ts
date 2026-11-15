@@ -64,6 +64,9 @@ export class RpcGeneration<Configuration> implements GenerationService<Configura
   cancel(jobId: string, options?: ReadOptions) {
     return this.call<GenerationStatus>("cancel", { job_id: jobId }, options);
   }
+  resume(jobId: string, options?: ReadOptions) {
+    return this.call<GenerationStatus>("resume", { job_id: jobId }, options);
+  }
   async *observe(jobId: string, options?: ReadOptions): AsyncIterable<GenerationEvent> {
     let after = 0;
     while (true) {
@@ -77,7 +80,11 @@ export class RpcGeneration<Configuration> implements GenerationService<Configura
         yield event;
       }
       after = page.next;
-      if (page.status.state !== "running") return;
+      if (page.status.state !== "running") {
+        if (page.status.recovery || page.events.length === 0)
+          yield { kind: "status", status: page.status };
+        return;
+      }
       await new Promise<void>((resolve, reject) => {
         const abort = () => {
           clearTimeout(timer);

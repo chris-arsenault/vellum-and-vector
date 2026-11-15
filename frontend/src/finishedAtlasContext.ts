@@ -8,6 +8,8 @@ import {
   httpMapLibrary,
   httpMapNavigation,
   HttpGeneration,
+  RpcContextManagement,
+  httpContextManagement,
 } from "@atlas/transport";
 import { AtlasContextClient } from "./AtlasContextClient";
 
@@ -43,6 +45,9 @@ export function openFinishedAtlas<Configuration>(mode: AtlasMode, backendUrl?: s
         generation: new RpcGeneration<Configuration>((call, options) =>
           worker.request({ service: "generation", call }, options)
         ),
+        contexts: new RpcContextManagement((call, options) =>
+          worker.request({ service: "contexts", call }, options)
+        ),
         dispose: () => worker.close(),
       };
     },
@@ -54,6 +59,7 @@ export function openFinishedAtlas<Configuration>(mode: AtlasMode, backendUrl?: s
         library: httpMapLibrary(backendUrl),
         navigation: httpMapNavigation(backendUrl),
         generation: new HttpGeneration<Configuration>(backendUrl),
+        contexts: httpContextManagement(backendUrl),
         dispose: () => Promise.resolve(),
       };
     },

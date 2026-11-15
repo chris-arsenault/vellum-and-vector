@@ -20,15 +20,18 @@ pub fn repulsion(mesh: &TriangularLattice, center: usize, reach: f64) -> Vec<(us
         })
         .collect()
 }
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Lake {
     pub cells: Vec<usize>,
     pub level: f64,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Entry {
     pub cell: usize,
     pub discharge: f64,
     pub catchment: f64,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Network {
     pub tree: Tree,
     pub area: Vec<f64>,

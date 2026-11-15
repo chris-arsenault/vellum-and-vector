@@ -84,7 +84,7 @@ pub trait Naming {
     /// Later names use this newly founded entity's naming culture in the host vocabulary.
     fn remember(&self, entity: &Entity) -> io::Result<()>;
 }
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct Traditions {
     pub known: Vec<Tradition>,
 }

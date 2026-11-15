@@ -124,18 +124,8 @@ impl<S: Sink, C: GenerationControl, O: Observations> Publication<'_, S, C, O> {
             landmarks: serde_json::to_value(&state.physical.landmarks).map_err(io::Error::other)?,
             drainage: serde_json::to_value(&state.drainage).map_err(io::Error::other)?,
         };
-        if let Err(error) = self.write_resources(state, &mut result).await {
-            for resource in result.resources.iter().rev() {
-                self.sink
-                    .remove(
-                        resource["id"].as_str().ok_or_else(|| {
-                            io::Error::other("Completed resources have an identity")
-                        })?,
-                    )
-                    .await?;
-            }
-            return Err(error);
-        }
+        // Completed immutable resources remain available to a publication retry.
+        self.write_resources(state, &mut result).await?;
         Ok(result)
     }
     async fn write_resources(

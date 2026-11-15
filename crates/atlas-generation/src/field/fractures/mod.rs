@@ -17,7 +17,7 @@ use crate::{
 use settings::Settings;
 use std::{io, rc::Rc};
 
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Fault {
     pub id: String,
     pub coordinates: Vec<[f64; 2]>,

@@ -24,6 +24,7 @@ function useJobObservation({ context, initial, complete, published }: Props) {
   const [status, setStatus] = useState(initial);
   const [previews, setPreviews] = useState<Preview[]>([]);
   const [error, setError] = useState<unknown>(null);
+  const [attempt, setAttempt] = useState(0);
   const completed = useRef(complete);
   const changed = useRef(published);
   useEffect(() => {
@@ -52,13 +53,22 @@ function useJobObservation({ context, initial, complete, published }: Props) {
       if (!controller.signal.aborted) setError(error);
     });
     return () => controller.abort();
-  }, [context, initial.jobId]);
-  return { status, previews, error, setError };
+  }, [context, initial.jobId, attempt]);
+  const resume = async () => {
+    try {
+      setError(null);
+      setStatus(await context.generation.resume(initial.jobId));
+      setAttempt((value) => value + 1);
+    } catch (error) {
+      setError(error);
+    }
+  };
+  return { status, previews, error, setError, resume };
 }
 // Arconis: docs/architecture/subsystems.arconis#item=j_progress — progress panel with previews and cancel.
 export function FinishedGeneration(props: Props) {
   const { context, complete, close } = props;
-  const { status, previews, error, setError } = useJobObservation(props);
+  const { status, previews, error, setError, resume } = useJobObservation(props);
   return (
     <section className="finished-generation" aria-label="Generation job">
       <GenerationTiming status={status} />
@@ -66,6 +76,7 @@ export function FinishedGeneration(props: Props) {
       <p>{status.state}</p>
       <progress aria-label="Generation progress" value={status.progress ?? undefined} max={1} />
       {status.message && <p>{status.message}</p>}
+      <JobRecovery status={status} resume={resume} />
       {status.state === "running" && (
         <button onClick={() => void context.generation.cancel(status.jobId).catch(setError)}>
           Cancel generation
@@ -92,6 +103,22 @@ export function FinishedGeneration(props: Props) {
       )}
       <ErrorMessage error={error} />
     </section>
+  );
+}
+function JobRecovery({ status, resume }: { status: GenerationStatus; resume(): Promise<void> }) {
+  if (["running", "completed"].includes(status.state)) return null;
+  return (
+    <div>
+      <p>
+        {status.recovery?.checkpoint
+          ? `Resume from: ${status.recovery.checkpoint}`
+          : "No completed checkpoint is available. This job can restart from the beginning."}
+      </p>
+      {status.recovery?.problem && <p>{status.recovery.problem}</p>}
+      <button disabled={!!status.recovery?.problem} onClick={() => void resume()}>
+        {status.recovery?.checkpoint ? "Resume generation" : "Restart from beginning"}
+      </button>
+    </div>
   );
 }
 function GenerationTiming({ status }: { status: GenerationStatus }) {

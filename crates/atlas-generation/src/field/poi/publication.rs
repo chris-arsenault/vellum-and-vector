@@ -16,13 +16,13 @@ pub trait PublicationState<Schedule>: super::realized::RealizationState + Sized 
     fn contracted(&self, feature: &str) -> bool;
     fn latest_wild_observation(&self) -> &[super::wild_history::Observation];
 }
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Published {
     pub kind: Kind,
     pub place: Place,
     pub feature_id: String,
 }
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct Publication {
     pub written: Vec<Published>,
 }

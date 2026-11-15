@@ -123,7 +123,7 @@ pub fn stands_for<S: CarryState<Schedule>, Schedule>(
     }
     Ok(())
 }
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct Outcomes {
     // hpc-exempt: reporting counts keyed by outcome, not numerical simulation cells.
     lines: BTreeMap<String, usize>,

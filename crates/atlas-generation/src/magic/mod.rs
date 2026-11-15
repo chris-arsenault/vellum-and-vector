@@ -2,6 +2,7 @@
 pub const PRESENTATION: &str = include_str!("presentation.json");
 pub mod carriers;
 pub mod channels;
+mod checkpoint;
 pub mod classification;
 pub mod configuration;
 pub mod confluences;

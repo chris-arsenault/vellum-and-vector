@@ -1,7 +1,7 @@
 use super::{contract::Variety, values::Place};
 // hpc-exempt: one chosen variety per named place identity, retained across query refreshes.
 use std::{cell::RefCell, collections::BTreeMap, io};
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct Varieties {
     // hpc-exempt: immutable choice for each place, never numerical terrain state.
     chosen: RefCell<BTreeMap<String, String>>,

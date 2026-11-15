@@ -141,6 +141,12 @@ pub struct Transfer {
     pub volume: f64,
 }
 impl WaterLedger {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> std::io::Result<()> {
+        archive.value("water-ledger", &mut self.volumes)
+    }
     /// Existing progress text observes transfers; it does not validate or constrain the solver.
     pub fn account_line(&self) -> String {
         let moves = self.transfers();

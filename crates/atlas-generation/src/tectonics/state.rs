@@ -5,7 +5,7 @@ use crate::{
     spatial::{SpatialKernel, SpatialResult},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Province {
     pub position: [f64; 2],
     pub priority: f64,
@@ -13,7 +13,7 @@ pub struct Province {
     pub ocean_plate: usize,
     pub motion: [f64; 2],
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Site {
     pub province: Province,
     pub id: usize,
@@ -26,14 +26,14 @@ pub struct Site {
     pub block: usize,
     pub pull: [f64; 2],
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Plate {
     pub id: usize,
     pub position: [f64; 2],
     pub motion: [f64; 2],
     pub spin: f64,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Bond {
     pub a: usize,
     pub b: usize,
@@ -44,19 +44,19 @@ pub struct Bond {
     pub active: bool,
     pub suture: bool,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub enum TransitionKind {
     Split,
     Weld,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Transition {
     pub kind: TransitionKind,
     pub at_myr: f64,
     pub plates: Vec<usize>,
     pub sites: Vec<usize>,
 }
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct State {
     pub sites: Vec<Site>,
     pub plates: Vec<Plate>,
@@ -69,6 +69,7 @@ pub struct State {
     pub rate: f64,
     pub seed: i32,
     pub transitions: Vec<Transition>,
+    #[serde(skip)]
     bond_lookup: Vec<Option<usize>>,
 }
 pub fn plate_of(mesh: &TriangularLattice, sites: &[Site], id: usize) -> Plate {

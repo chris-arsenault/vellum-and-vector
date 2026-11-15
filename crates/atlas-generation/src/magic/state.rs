@@ -14,7 +14,7 @@ use crate::{
     transport::{TransportShares, TRANSPORT_WEIGHT_SCALE},
 };
 use std::io;
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct LocatedSource {
     pub origin: String,
     pub id: String,
@@ -23,7 +23,7 @@ pub struct LocatedSource {
     pub radius: f64,
     pub strength: f64,
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct Door {
     pub a: usize,
     pub b: usize,

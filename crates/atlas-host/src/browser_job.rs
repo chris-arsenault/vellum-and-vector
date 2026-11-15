@@ -17,7 +17,7 @@ use serde_json::Value;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
-#[derive(Deserialize)]
+#[derive(serde::Serialize, Deserialize)]
 #[serde(tag = "method", content = "request", rename_all = "camelCase")]
 pub enum Action {
     Create(Configuration),
@@ -30,11 +30,12 @@ pub enum Action {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Run {
-    action: Action,
+    action: Option<Action>,
     operation: String,
     revision: String,
     cache_bytes: usize,
 }
+#[derive(serde::Serialize, Deserialize)]
 pub(super) struct Prepared {
     submission: Submission,
     expected: Option<MapRef>,
@@ -53,6 +54,10 @@ pub struct BrowserJob {
     output: NativeResources,
     assets: MapFiles,
     scratch: std::path::PathBuf,
+    pub(crate) running: Option<(
+        Rc<std::cell::RefCell<std::collections::BTreeSet<String>>>,
+        String,
+    )>,
 }
 #[wasm_bindgen]
 impl BrowserJob {
@@ -77,6 +82,7 @@ impl BrowserJob {
             output: NativeResources::new(resources.into()),
             assets: MapFiles::new(assets),
             scratch: scratch.into(),
+            running: None,
         })
     }
     pub async fn run(
@@ -84,13 +90,105 @@ impl BrowserJob {
         request: &str,
         host: BrowserGenerationHost,
     ) -> Result<String, JsValue> {
+        let request: Run = serde_json::from_str(request).map_err(error)?;
+        let files = crate::job_files::JobFiles::new(
+            std::path::Path::new(super::browser_workspace::JOBS),
+            &request.operation,
+        )
+        .map_err(error)?;
+        let started = js_sys::Date::now();
+        let result = self.execute(request, host).await;
+        if let Some(mut status) = files
+            .read::<atlas_generation::GenerationStatus>("status.json")
+            .map_err(error)?
+        {
+            if let Some(details) = &mut status.details {
+                details.finished_at = Some(crate::job_files::now());
+                details.elapsed_seconds += (js_sys::Date::now() - started) / 1000.0;
+            }
+            match &result {
+                Ok(reference) => {
+                    status.result = Some(serde_json::from_str(reference).map_err(error)?);
+                    status.state = atlas_generation::GenerationState::Completed;
+                    status.step = "Map published".into();
+                    status.progress = Some(1.0);
+                }
+                Err(message) => {
+                    status.state = atlas_generation::GenerationState::Interrupted;
+                    status.message = Some(format!("{message:?}"));
+                }
+            }
+            files.write("status.json", &status).map_err(error)?;
+            if status.state == atlas_generation::GenerationState::Completed {
+                crate::context_files::retire_job_inputs(&files).map_err(error)?;
+            }
+        }
+        if let Some((running, id)) = &self.running {
+            running.borrow_mut().remove(id);
+        }
+        result
+    }
+}
+impl BrowserJob {
+    async fn execute(
+        &mut self,
+        request: Run,
+        host: BrowserGenerationHost,
+    ) -> Result<String, JsValue> {
         let Run {
             action,
             operation,
             revision,
             cache_bytes,
-        } = serde_json::from_str(request).map_err(error)?;
-        let prepared = self.prepare(action, &operation)?;
+        } = request;
+        let mut recovery = crate::job_files::JobFiles::new(
+            std::path::Path::new(super::browser_workspace::JOBS),
+            &operation,
+        )
+        .map_err(error)?;
+        let prepared = match recovery.read::<Prepared>("captured.json").map_err(error)? {
+            Some(prepared) => {
+                let source = Workspace::open(Rc::new(
+                    Database::open(recovery.directory.join("records.sqlite")).map_err(error)?,
+                ))
+                .map_err(error)?;
+                self.records.copy_sources(&source).map_err(error)?;
+                prepared
+            }
+            None => {
+                let action = action
+                    .or(recovery.read("action.json").map_err(error)?)
+                    .ok_or_else(|| error("Saved job request is missing"))?;
+                let prepared = self.prepare(action, &operation)?;
+                crate::regional_capture::write_resources(&prepared.resources, &mut self.output)
+                    .await
+                    .map_err(error)?;
+                let source = Workspace::open(Rc::new(
+                    Database::open(recovery.directory.join("records.sqlite")).map_err(error)?,
+                ))
+                .map_err(error)?;
+                source.copy_sources(&self.records).map_err(error)?;
+                recovery.write("captured.json", &prepared).map_err(error)?;
+                prepared
+            }
+        };
+        let intended = MapRef {
+            map_id: prepared.submission.input.area_id.clone(),
+            revision: revision.clone(),
+        };
+        if self
+            .maps
+            .find_head(&intended.map_id)
+            .map_err(error)?
+            .as_ref()
+            == Some(&intended)
+            && self.maps.open(&intended).map_err(error)?.state
+                == atlas_map::PublicationState::Complete
+        {
+            recovery.retire_checkpoint().map_err(error)?;
+            return serde_json::to_string(&intended).map_err(error);
+        }
+        self.maps.restart_publication(&intended).map_err(error)?;
         if self
             .maps
             .find_head(&prepared.submission.input.area_id)
@@ -99,9 +197,6 @@ impl BrowserJob {
         {
             return Err(error("The map revision changed before generation started"));
         }
-        crate::regional_capture::write_resources(&prepared.resources, &mut self.output)
-            .await
-            .map_err(error)?;
         if cache_bytes == 0 {
             return Err(error("Generation requires a positive block-cache budget"));
         }
@@ -118,6 +213,7 @@ impl BrowserJob {
             prepared.submission,
             &operation,
             generation_execution::Services {
+                recovery: Some(&mut recovery),
                 resources: self.resources.clone(),
                 spatial,
                 cache: BlockCache::new(
@@ -169,12 +265,13 @@ impl BrowserJob {
                 &host,
             )
             .await;
-        if result.is_err() {
-            self.private.unbind(&reference).map_err(error)?;
-        }
         result?;
+        recovery.retire_checkpoint().map_err(error)?;
         serde_json::to_string(&reference).map_err(error)
     }
+}
+#[wasm_bindgen]
+impl BrowserJob {
     pub async fn review(&self, action: &str, operation: &str) -> Result<String, JsValue> {
         let mut action: Action = serde_json::from_str(action).map_err(error)?;
         let configuration = match &mut action {

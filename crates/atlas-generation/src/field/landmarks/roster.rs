@@ -26,6 +26,7 @@ pub const MAGIC_MIX: [Kind; 5] = [
     Kind::AuroraVault,
     Kind::SaltPan,
 ];
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Entry {
     pub ordinal: usize,
     pub kind: Kind,

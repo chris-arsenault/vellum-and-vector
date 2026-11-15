@@ -17,7 +17,7 @@ use crate::{
 };
 use std::{io, rc::Rc};
 
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct Evidence {
     pub courses: Vec<CapturedCourse>,
     pub lakes: Vec<Lake>,

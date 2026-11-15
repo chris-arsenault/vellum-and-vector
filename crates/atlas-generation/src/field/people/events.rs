@@ -22,7 +22,7 @@ pub struct Event {
     pub magnitude: f64,
     pub causes: Vec<String>,
 }
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct Events {
     next: usize,
     pub known: Vec<Event>,

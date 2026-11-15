@@ -128,6 +128,7 @@ export interface MapReader {
 }
 
 export interface SavedMap {
+  problem?: string;
   reference: MapRef;
   name: string;
   savedAt: string;

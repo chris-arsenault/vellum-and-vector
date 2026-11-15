@@ -22,6 +22,22 @@ pub struct Changes {
     at_least: Band<f64>,
 }
 impl Changes {
+    pub(crate) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.value("cells", &mut self.cells)?;
+        archive.band("add", &mut self.add)?;
+        archive.band("at-most", &mut self.at_most)?;
+        archive.band("at-least", &mut self.at_least)?;
+        if archive.loading() {
+            self.present = BitSet::new(self.add.len());
+            for &cell in &self.cells {
+                self.present.add(cell);
+            }
+        }
+        Ok(())
+    }
     pub fn kept_line_targets(&self) -> crate::human::operations::KeptLineTargets {
         crate::human::operations::KeptLineTargets {
             add: self.add.read_only(),

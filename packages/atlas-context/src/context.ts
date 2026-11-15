@@ -1,5 +1,6 @@
 import type { MapLibrary, MapReader, MapNavigation } from "@atlas/map";
 import type { GenerationService } from "./generation";
+import type { ContextManagement } from "./management";
 
 export type AtlasMode = "browser" | "backend";
 export interface ContextServices<Configuration> {
@@ -7,6 +8,7 @@ export interface ContextServices<Configuration> {
   navigation: MapNavigation;
   library: MapLibrary;
   generation: GenerationService<Configuration>;
+  contexts: ContextManagement;
   dispose(): Promise<void>;
 }
 // owner-direction(2026-11-12): only pure browser or pure backend is supported

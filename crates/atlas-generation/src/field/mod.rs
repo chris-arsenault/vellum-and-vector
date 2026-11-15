@@ -1,6 +1,7 @@
 //! A run's shared physical channels and its canonical owner packages use one coverage.
 pub mod absence;
 pub mod advection;
+mod checkpoint;
 pub mod climate;
 pub mod coastal_detail;
 mod continental_margins;

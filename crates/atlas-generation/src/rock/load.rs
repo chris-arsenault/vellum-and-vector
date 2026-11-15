@@ -22,6 +22,18 @@ pub struct MaterialLoad {
     projection: Option<SupplyProjection>,
 }
 impl MaterialLoad {
+    pub(crate) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.label("material-load")?;
+        self.bands.checkpoint(archive)?;
+        self.cargo.checkpoint(archive)?;
+        if let Some(projection) = &mut self.projection {
+            archive.band("supply-projection", &mut projection.band)?;
+        }
+        Ok(())
+    }
     pub fn view(&self) -> super::layer_bands::ReadLayerBands {
         self.bands.read_only()
     }

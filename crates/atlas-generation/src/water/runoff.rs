@@ -63,6 +63,14 @@ pub fn bare(tree: f64, grass: f64, wetland: f64) -> f64 {
     1.0 - (tree + grass + wetland).min(1.0)
 }
 impl Runoff {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("runoff-mean", &mut self.mean)?;
+        archive.band("runoff-flood", &mut self.flood)?;
+        archive.band("runoff-dry", &mut self.dry)
+    }
     pub(super) fn inherit_mean(&mut self, cell: usize, value: f64) -> io::Result<()> {
         self.mean.set(cell, value)
     }

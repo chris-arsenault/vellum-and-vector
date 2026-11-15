@@ -50,7 +50,11 @@ fn handle(request: &mut Request, services: &Services) -> io::Result<ResponseBox>
     if request.method() == &Method::Post
         && matches!(
             path.as_str(),
-            "/api/maps/read" | "/api/maps/navigation" | "/api/maps/library" | "/api/generation"
+            "/api/maps/read"
+                | "/api/maps/navigation"
+                | "/api/maps/library"
+                | "/api/generation"
+                | "/api/contexts"
         )
     {
         if !request
@@ -61,6 +65,19 @@ fn handle(request: &mut Request, services: &Services) -> io::Result<ResponseBox>
             return Ok(Response::empty(415).boxed());
         }
         let body = match path.as_str() {
+            "/api/contexts" => {
+                let call: crate::context_inventory::Call = decode_request(request)?;
+                let result = services
+                    .jobs
+                    .as_ref()
+                    .ok_or_else(|| {
+                        io::Error::other("Context management is not configured on this server")
+                    })?
+                    .contexts(call)?;
+                let mut bytes = Vec::new();
+                ciborium::into_writer(&result, &mut bytes).map_err(io::Error::other)?;
+                bytes
+            }
             "/api/generation" => {
                 let call: crate::native_jobs::Call = decode_request(request)?;
                 let result = services

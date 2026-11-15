@@ -29,6 +29,18 @@ impl PrivateInputs {
                 "Retain completed inputs for their own map",
             ));
         }
+        if self
+            .db
+            .borrow_mut()
+            .query_opt(
+                "SELECT 1 FROM generation.inputs WHERE map_id=$1 AND map_revision=$2",
+                &[&reference.map_id, &reference.revision],
+            )
+            .map_err(io::Error::other)?
+            .is_some()
+        {
+            return self.read(reference);
+        }
         let input = CompletedInputs {
             reference: reference.clone(),
             world_id: scope.world_id.clone(),
@@ -43,7 +55,10 @@ impl PrivateInputs {
         transaction
             .execute(
                 "INSERT INTO generation.catalogs VALUES($1,$2)",
-                &[&input.catalog_id, &serde_json::to_value(document)?],
+                &[
+                    &input.catalog_id,
+                    &crate::generation_document::FORMAT.write(document)?,
+                ],
             )
             .map_err(io::Error::other)?;
         for feature in features.values(FeatureSelection::default())? {
@@ -115,8 +130,7 @@ impl PrivateInputs {
             )
             .map_err(io::Error::other)?
             .ok_or_else(|| io::Error::other("Completed generation document is missing"))?;
-        serde_json::from_value(row.try_get("document").map_err(io::Error::other)?)
-            .map_err(io::Error::other)
+        crate::generation_document::FORMAT.read(row.try_get("document").map_err(io::Error::other)?)
     }
     pub fn load_records(
         &self,

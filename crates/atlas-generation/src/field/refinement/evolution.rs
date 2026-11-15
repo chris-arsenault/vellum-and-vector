@@ -4,6 +4,7 @@ use crate::{
     lattice::{Membership, TriangularLattice},
 };
 use std::io;
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Tree {
     pub receiver: Vec<i32>,
     pub order: Vec<usize>,

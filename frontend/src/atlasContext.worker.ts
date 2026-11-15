@@ -3,7 +3,7 @@ import { initializeEngine } from "@atlas/engine";
 import { Decoder } from "cbor-x";
 import { BrowserJobs } from "./browserJobs";
 import type { AtlasCall, AtlasRequest, AtlasReply } from "./atlasContextProtocol";
-import { cborOptions, type MapCall } from "@atlas/transport";
+import { cborOptions, type MapCall, type ContextCall } from "@atlas/transport";
 
 const decoder = new Decoder(cborOptions);
 let current: ReturnType<typeof open> | undefined;
@@ -32,13 +32,24 @@ async function operate(operation: AtlasCall): Promise<unknown> {
       return read(workspace, operation.call);
     case "library":
       return navigator.locks.request("atlas-saved-maps", () =>
-        decoder.decode(maps.library(JSON.stringify(operation.call)))
+        navigator.locks.request("atlas-context-mutation", { mode: "shared" }, () =>
+          decoder.decode(maps.library(JSON.stringify(operation.call)))
+        )
       );
     case "navigation":
       return decoder.decode(await maps.navigate(JSON.stringify(operation.call)));
     case "generation":
       return jobs.call(operation.call);
+    case "contexts":
+      return manage(workspace, operation.call);
   }
+}
+function manage(workspace: Awaited<ReturnType<typeof open>>, call: ContextCall) {
+  if (call.method === "list") return JSON.parse(workspace.maps.contexts(JSON.stringify(call)));
+  return navigator.locks.request("atlas-context-mutation", { ifAvailable: true }, (lock) => {
+    if (!lock) throw new Error("Stop active browser generation jobs before removing stored data.");
+    return JSON.parse(workspace.maps.contexts(JSON.stringify(call)));
+  });
 }
 async function read(workspace: Awaited<ReturnType<typeof open>>, call: MapCall) {
   const request = JSON.stringify(call);

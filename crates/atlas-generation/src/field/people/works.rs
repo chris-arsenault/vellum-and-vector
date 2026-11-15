@@ -11,7 +11,7 @@ pub struct Work {
     pub failed: Option<String>,
     pub holds: usize,
 }
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct Works {
     next: usize,
     pub known: Vec<Work>,

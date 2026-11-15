@@ -17,6 +17,7 @@ use serde_json::Value;
 use std::{fs, io, path::PathBuf, rc::Rc, sync::Arc};
 
 // Arconis: docs/architecture/subsystems.arconis#item=j_be_job — native job that prepares, runs, keeps inputs and publishes.
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct NativeJob {
     pub submission: Submission,
     pub source: Option<MapRef>,
@@ -24,6 +25,11 @@ pub struct NativeJob {
     pub parent: Option<MapRef>,
     pub operation: String,
     pub selection: Option<(RegionSelection, String)>,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+struct CapturedJob {
+    request: NativeJob,
+    geography: Vec<Value>,
 }
 pub struct Services<'a> {
     pub maps: &'a mut PostgresMaps,
@@ -42,6 +48,18 @@ impl NativeJob {
         observations: impl Observations,
         progress: Progress,
     ) -> io::Result<MapRef> {
+        let intended = MapRef {
+            map_id: self.submission.input.area_id.clone(),
+            revision: self.operation.clone(),
+        };
+        if services.maps.find_head(&intended.map_id)?.as_ref() == Some(&intended)
+            && services.maps.open(&intended)?.state == atlas_map::PublicationState::Complete
+        {
+            crate::job_files::JobFiles::new(&services.resources.join(".jobs"), &self.operation)?
+                .retire_checkpoint()?;
+            return Ok(intended);
+        }
+        services.maps.restart_publication(&intended)?;
         if services.maps.find_head(&self.submission.input.area_id)? != self.expected {
             return Err(io::Error::other(
                 "The map revision changed before generation started",
@@ -52,12 +70,17 @@ impl NativeJob {
         let _cleanup = Directory(directory.clone());
         fs::create_dir_all(&services.resources)?;
         let workspace = Workspace::create(directory.join("records.sqlite"))?;
-        if let Some(reference) = &self.source {
-            services.inputs.load_records(
-                reference,
-                &mut workspace.source_features(),
-                &mut workspace.source_networks(),
-            )?;
+        let mut recovery =
+            crate::job_files::JobFiles::new(&services.resources.join(".jobs"), &self.operation)?;
+        let captured: Option<CapturedJob> = recovery.read("captured.json")?;
+        if captured.is_none() {
+            if let Some(reference) = &self.source {
+                services.inputs.load_records(
+                    reference,
+                    &mut workspace.source_features(),
+                    &mut workspace.source_networks(),
+                )?;
+            }
         }
         let spatial = Rc::new(
             NativeGeos::new(
@@ -68,31 +91,54 @@ impl NativeJob {
             .map_err(io::Error::other)?,
         );
         let resources = Rc::new(NativeResources::new(services.resources.clone()));
-        let (job, workspace, captured_geography) = self
-            .capture(
-                &services,
-                workspace,
-                &directory,
-                &resources,
-                spatial.as_ref(),
-            )
-            .await?;
+        let (job, workspace, captured_geography) = if let Some(captured) = captured {
+            let source = Workspace::open(Rc::new(atlas_gis::sql::Database::open(
+                recovery.directory.join("inputs.sqlite"),
+            )?))?;
+            workspace.copy_sources(&source)?;
+            (captured.request, workspace, captured.geography)
+        } else {
+            let (job, workspace, geography) = self
+                .capture(
+                    &services,
+                    workspace,
+                    &directory,
+                    &resources,
+                    spatial.as_ref(),
+                )
+                .await?;
+            let source = Workspace::open(Rc::new(atlas_gis::sql::Database::open(
+                recovery.directory.join("inputs.sqlite"),
+            )?))?;
+            source.copy_sources(&workspace)?;
+            let captured = CapturedJob {
+                request: job,
+                geography,
+            };
+            recovery.write("captured.json", &captured)?;
+            (captured.request, workspace, captured.geography)
+        };
         let cache = BlockCache::with_memory(
             services.memory.clone(),
             BlockScratch::new(NativeScratch::create_new(directory.join("work.blocks"))?),
         );
-        job.execute(
-            services,
-            control,
-            (observations, progress),
-            (workspace, captured_geography),
-            Runtime {
-                resources,
-                cache,
-                spatial,
-            },
-        )
-        .await
+        let result = job
+            .execute(
+                services,
+                control,
+                (observations, progress, &mut recovery),
+                (workspace, captured_geography),
+                Runtime {
+                    resources,
+                    cache,
+                    spatial,
+                },
+            )
+            .await;
+        if result.is_ok() {
+            recovery.retire_checkpoint()?;
+        }
+        result
     }
     async fn capture(
         mut self,
@@ -143,11 +189,11 @@ impl NativeJob {
         self,
         mut services: Services<'_>,
         control: &impl GenerationControl,
-        observations: (impl Observations, Progress),
+        observations: (impl Observations, Progress, &mut crate::job_files::JobFiles),
         captured: (Workspace, Vec<Value>),
         runtime: Runtime,
     ) -> io::Result<MapRef> {
-        let (observations, progress) = observations;
+        let (observations, progress, recovery) = observations;
         let (workspace, mut captured_geography) = captured;
         let Runtime {
             resources,
@@ -158,6 +204,7 @@ impl NativeJob {
             self.submission,
             &self.operation,
             generation_execution::Services {
+                recovery: Some(recovery),
                 resources: resources.clone(),
                 cache: cache.clone(),
                 spatial: spatial.clone(),
@@ -174,7 +221,7 @@ impl NativeJob {
         .await?;
         let reference = MapRef {
             map_id: finished.snapshot.scope.located.area_id.clone(),
-            revision: uuid::Uuid::new_v4().to_string(),
+            revision: self.operation.clone(),
         };
         captured_geography.extend(finished.output.geography.iter().cloned());
         services.inputs.store(
@@ -202,9 +249,6 @@ impl NativeJob {
             control,
         )
         .await;
-        if published.is_err() {
-            services.inputs.unbind(&reference)?;
-        }
         published
     }
 }

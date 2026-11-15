@@ -43,4 +43,5 @@ export interface GenerationService<Configuration> {
   status(jobId: string, options?: ReadOptions): Promise<GenerationStatus>;
   observe(jobId: string, options?: ReadOptions): AsyncIterable<GenerationEvent>;
   cancel(jobId: string, options?: ReadOptions): Promise<GenerationStatus>;
+  resume(jobId: string, options?: ReadOptions): Promise<GenerationStatus>;
 }

@@ -1,4 +1,5 @@
-use super::{from_json, to_json, PostgresMaps};
+use super::PostgresMaps;
+use crate::stored::{read_map, MAP};
 use atlas_map::{
     LayerSource, MapDescriptor, MapLayer, MapRef, PublicationBatch, PublicationState,
     PublishedAsset, Publisher,
@@ -29,7 +30,7 @@ impl Publisher for PostgresMaps {
         self.transaction(|| {
             self.lock(&map.reference.map_id)?;
             if self.find_head(&map.reference.map_id)?.as_ref()!=expected {return Err(io::Error::other("The map revision changed"));}
-            self.execute("INSERT INTO map.revisions(map_id,revision,descriptor,expected_revision) VALUES($1,$2,$3,$4)",&[&map.reference.map_id,&map.reference.revision,&to_json(map)?,&expected.map(|r|r.revision.as_str())])?;
+            self.execute("INSERT INTO map.revisions(map_id,revision,descriptor,expected_revision) VALUES($1,$2,$3,$4)",&[&map.reference.map_id,&map.reference.revision,&MAP.write(map)?,&expected.map(|r|r.revision.as_str())])?;
             if progressive {self.set_head(&map.reference)?;}
             Ok(())
         })
@@ -63,7 +64,7 @@ impl Publisher for PostgresMaps {
             self.write_asset(reference, asset)?;
             self.execute(
                 "UPDATE map.revisions SET descriptor=$3 WHERE map_id=$1 AND revision=$2",
-                &[&reference.map_id, &reference.revision, &to_json(&map)?],
+                &[&reference.map_id, &reference.revision, &MAP.write(&map)?],
             )?;
             Ok(())
         })
@@ -75,7 +76,7 @@ impl Publisher for PostgresMaps {
             let current=self.find_head(&reference.map_id)?.map(|r|r.revision);
             if current.as_ref()!=Some(&reference.revision) && current!=expected {return Err(io::Error::other("The map changed during publication"));}
             self.require_assets(&map)?;map.state=PublicationState::Complete;
-            self.execute("UPDATE map.revisions SET complete=true,descriptor=$3 WHERE map_id=$1 AND revision=$2",&[&reference.map_id,&reference.revision,&to_json(&map)?])?;
+            self.execute("UPDATE map.revisions SET complete=true,descriptor=$3 WHERE map_id=$1 AND revision=$2",&[&reference.map_id,&reference.revision,&MAP.write(&map)?])?;
             self.set_head(reference)
         })
     }
@@ -95,6 +96,41 @@ impl Publisher for PostgresMaps {
     }
 }
 impl PostgresMaps {
+    /// A retry may replace its own incomplete publication, preserving a prior complete head.
+    pub fn restart_publication(&self, reference: &MapRef) -> io::Result<()> {
+        self.transaction(|| {
+            self.lock(&reference.map_id)?;
+            let Some(row) = self
+                .query(
+                    "SELECT complete FROM map.revisions WHERE map_id=$1 AND revision=$2",
+                    &[&reference.map_id, &reference.revision],
+                )?
+                .into_iter()
+                .next()
+            else {
+                return Ok(());
+            };
+            if row
+                .try_get::<_, bool>("complete")
+                .map_err(io::Error::other)?
+            {
+                return Err(io::Error::other("Cannot restart a completed publication"));
+            }
+            self.execute(
+                "DELETE FROM map.saved WHERE map_id=$1 AND revision=$2",
+                &[&reference.map_id, &reference.revision],
+            )?;
+            self.execute(
+                "DELETE FROM map.heads WHERE map_id=$1 AND revision=$2",
+                &[&reference.map_id, &reference.revision],
+            )?;
+            self.execute(
+                "DELETE FROM map.revisions WHERE map_id=$1 AND revision=$2",
+                &[&reference.map_id, &reference.revision],
+            )?;
+            Ok(())
+        })
+    }
     fn pending(&self, r: &MapRef) -> io::Result<(MapDescriptor, Option<String>)> {
         let row=self.query("SELECT descriptor,expected_revision,complete FROM map.revisions WHERE map_id=$1 AND revision=$2 FOR UPDATE",&[&r.map_id,&r.revision])?.into_iter().next().ok_or_else(||io::Error::other("Map publication is not open"))?;
         if row
@@ -104,7 +140,7 @@ impl PostgresMaps {
             return Err(io::Error::other("Map publication is not open"));
         }
         Ok((
-            from_json(row.try_get("descriptor").map_err(io::Error::other)?)?,
+            read_map(row.try_get("descriptor").map_err(io::Error::other)?)?,
             row.try_get("expected_revision").map_err(io::Error::other)?,
         ))
     }

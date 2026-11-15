@@ -48,8 +48,11 @@ viewing reads the map facade. Preserve explicit local saves, independent childre
 all presentation and inspection behavior, and the existing architecture paradigms.
 See [ADR 0015](docs/adr/0015-finished-maps-and-execution-hosts.md).
 The browser worker uses the shared Rust WASM producer; the native application adapter
-uses the same core. Do not add generation recovery, restart mechanisms, a hybrid mode
-or an incomplete substitute generator.
+uses the same core. Do not add a hybrid mode or an incomplete substitute generator.
+The owner's 2026-11-15 direction adds limited checkpoint recovery and context management:
+one replaced checkpoint per job at completed schedule boundaries, explicit Resume,
+coordinated GIS/numerical deletion, and optimistic current-format loading without migrations.
+Do not extend recovery to arbitrary process or solver positions.
 
 **Language and storage boundary — 2026-11-14 user correction:** Active TypeScript is
 limited to UI, view code and the local/remote facade. Generation preparation, naming,
@@ -148,8 +151,9 @@ history where the map behavior needs them.
 Implement actual geography and magical feedback through that common context;
 let those processes establish the interfaces they need. Keep numerical fields in
 the execution host's private resources and working storage, completed geographic history
-in the GIS catalog, and generation status in host memory. There is
-no saved execution state, restart or recovery.
+in the GIS catalog. The host retains job requests and one private checkpoint at the
+supported completed boundaries; live progress remains in memory. Restore owner state
+through its existing commands and rebuild disposable query caches and bindings.
 
 Preserve completed history while ordinary edits change the present. Apply the
 same identity, boundary and authored-protection rules to every process result,
@@ -157,8 +161,10 @@ and publish validated regeneration geography atomically. Per the user's
 2026-10-24 direction, initial generation progressively installs streamed output
 and shows independent epoch previews; interrupted delivery stays incomplete.
 
-Browser generation runs in a Web Worker and ends when the tab closes. Native generation
-runs on the backend and survives a client disconnect, but not a service restart.
+Browser generation runs in a Web Worker and stops when the tab closes. Native generation
+runs on the backend and survives a client disconnect. After a host restart, interrupted
+jobs wait for explicit Resume from their latest supported checkpoint, or a labelled
+restart from the beginning when no checkpoint exists.
 Pure generation modules remain independent of both host adapters.
 
 Every map, world or region, is a generation state whose geography is the same

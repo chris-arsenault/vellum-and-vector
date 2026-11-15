@@ -4,7 +4,7 @@ use std::cell::{RefCell, RefMut};
 
 macro_rules! fields {
     ($name:ident, $sample:ty, $($field:ident = $initial:expr),+ $(,)?) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
         #[repr(usize)]
         pub enum $name { $($field),+ }
         impl $name {
@@ -188,6 +188,25 @@ pub struct SharedFields {
     flags: [Band<u8>; Flag::ALL.len()],
 }
 impl SharedFields {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> std::io::Result<()> {
+        archive.label("shared-fields")?;
+        for field in Scalar::ALL {
+            archive.band(field.name(), self.scalar_mut(*field))?;
+        }
+        for field in CellCode::ALL {
+            archive.band(field.name(), self.code_mut(*field))?;
+        }
+        for field in FloatField::ALL {
+            archive.band(field.name(), self.float_mut(*field))?;
+        }
+        for field in Flag::ALL {
+            archive.band(field.name(), self.flag_mut(*field))?;
+        }
+        Ok(())
+    }
     pub fn new(coverage: &mut Coverage) -> Self {
         Self {
             scalars: std::array::from_fn(|at| {

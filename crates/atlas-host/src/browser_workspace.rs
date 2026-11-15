@@ -1,4 +1,4 @@
-//! Browser application ownership: disposable working catalogs and explicit durable saves.
+//! Browser application ownership: working views, retained job results and explicit saves.
 use crate::{browser_job::BrowserJob, local_inputs::LocalInputs};
 use atlas_gis::{
     map_files::MapFiles,
@@ -7,13 +7,16 @@ use atlas_gis::{
     sql::Database,
 };
 use atlas_map::MapRef;
-use std::{io, path::PathBuf, rc::Rc};
+use std::{cell::RefCell, collections::BTreeSet, io, path::PathBuf, rc::Rc};
 use wasm_bindgen::prelude::*;
 
 const SAVED_MAPS: &str = "/atlas/maps.sqlite";
 const SAVED_INPUTS: &str = "/atlas/inputs.sqlite";
 const RESOURCES: &str = "/atlas/generation-resources";
 const ASSETS: &str = "/atlas/map-assets";
+pub(crate) const JOBS: &str = "/atlas/generation-jobs";
+mod contexts;
+mod jobs;
 
 #[wasm_bindgen]
 pub struct BrowserWorkspace {
@@ -21,6 +24,7 @@ pub struct BrowserWorkspace {
     directory: PathBuf,
     map_path: String,
     input_path: String,
+    running: Rc<RefCell<BTreeSet<String>>>,
 }
 #[wasm_bindgen]
 impl BrowserWorkspace {
@@ -41,6 +45,7 @@ impl BrowserWorkspace {
             directory,
             map_path,
             input_path,
+            running: Default::default(),
         })
     }
     pub fn read(&self, request: &str) -> Result<Vec<u8>, JsValue> {
@@ -74,19 +79,7 @@ impl BrowserWorkspace {
         if let Some(reference) = reference {
             let reference: MapRef = serde_json::from_str(&reference).map_err(error)?;
             self.ensure(&reference).map_err(error)?;
-            let inputs =
-                LocalInputs::open(Rc::new(Database::open(&self.input_path).map_err(error)?))
-                    .map_err(error)?;
-            if !inputs.contains(&reference).map_err(error)? {
-                let saved =
-                    LocalInputs::open(Rc::new(Database::open(SAVED_INPUTS).map_err(error)?))
-                        .map_err(error)?;
-                saved.document(&reference).map_err(error)?;
-                drop(saved);
-                inputs
-                    .copy_from(SAVED_INPUTS, &[reference])
-                    .map_err(error)?;
-            }
+            self.ensure_inputs(&reference).map_err(error)?;
         }
         let directory = self.directory.join(uuid::Uuid::new_v4().to_string());
         std::fs::create_dir_all(&directory).map_err(error)?;
@@ -116,7 +109,12 @@ impl BrowserWorkspace {
         let saved = self.saved()?;
         match call {
             LibraryCall::Save((request,)) => {
+                self.ensure(&request.reference)?;
                 let references = self.maps.save_references(&request)?;
+                for reference in &references {
+                    // A GIS-only imported map can be saved without private inputs.
+                    self.copy_available_inputs(reference)?;
+                }
                 if std::path::Path::new(&self.input_path).exists() {
                     let inputs = LocalInputs::open(Rc::new(Database::open(SAVED_INPUTS)?))?;
                     inputs.copy_from(&self.input_path, &references)?;

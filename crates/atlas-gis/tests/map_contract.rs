@@ -90,6 +90,166 @@ fn malformed_input_returns_a_typed_failure() {
 }
 
 #[test]
+fn deleting_parent_keeps_independent_child_and_lists_incomplete_revisions() {
+    use atlas_gis::{map_store::MapStore, sql::Database};
+    use atlas_map::{PublicationState, Publisher};
+    let mut store =
+        MapStore::open_database(std::rc::Rc::new(Database::open(":memory:").unwrap())).unwrap();
+    let mut parent: MapDescriptor = serde_json::from_value(supplied_map()).unwrap();
+    parent.layers.clear();
+    parent.state = PublicationState::Incomplete;
+    store.begin(&parent, None, false).unwrap();
+    store.finish(&parent.reference).unwrap();
+    let mut child = parent.clone();
+    child.reference.map_id = "child".into();
+    child.parent = Some(parent.reference.clone());
+    store.begin(&child, None, false).unwrap();
+    store.finish(&child.reference).unwrap();
+    let mut incomplete = parent.clone();
+    incomplete.reference.map_id = "unfinished".into();
+    store.begin(&incomplete, None, false).unwrap();
+    assert_eq!(
+        store
+            .inventory()
+            .unwrap()
+            .iter()
+            .filter(|m| !m.complete)
+            .count(),
+        1
+    );
+    store.delete_map(&parent.reference.map_id).unwrap();
+    assert!(store
+        .open(&child.reference)
+        .unwrap()
+        .require_complete()
+        .is_ok());
+    assert_eq!(
+        store.related(&child.reference).unwrap().parent,
+        Some(parent.reference)
+    );
+    store.delete_map("islands").unwrap(); // Metadata cleanup is safe to retry.
+    assert_eq!(store.inventory().unwrap().len(), 2);
+}
+
+#[test]
+fn incompatible_saved_map_stays_listed_and_does_not_hide_other_maps() {
+    use atlas_gis::{
+        map_store::{MapStore, SaveRequest},
+        sql::Database,
+        stored,
+    };
+    use atlas_map::{PublicationState, Publisher};
+    use std::rc::Rc;
+    let db = Rc::new(Database::open(":memory:").unwrap());
+    let mut store = MapStore::open_database(db.clone()).unwrap();
+    let mut map: MapDescriptor = serde_json::from_value(supplied_map()).unwrap();
+    map.layers.clear();
+    map.state = PublicationState::Incomplete;
+    store.begin(&map, None, false).unwrap();
+    store.finish(&map.reference).unwrap();
+    store
+        .save(
+            SaveRequest {
+                reference: map.reference.clone(),
+                expected_version: None,
+                navigation: Default::default(),
+                settings: Default::default(),
+            },
+            "today".into(),
+        )
+        .unwrap();
+    let mut old = stored::MAP
+        .write(&store.open(&map.reference).unwrap())
+        .unwrap();
+    old["_atlasFormat"]["revision"] = json!(0);
+    db.execute("UPDATE maps SET descriptor=?", &[old.to_string().into()])
+        .unwrap();
+    assert!(store.find_saved("islands").unwrap().is_some());
+    old["spaces"][0]["metresPerUnit"] = json!(-1);
+    db.execute("UPDATE maps SET descriptor=?", &[old.to_string().into()])
+        .unwrap();
+    assert!(store.find_saved("islands").is_err());
+    let listed = store.list_saved("").unwrap();
+    assert_eq!(listed.items[0].reference, map.reference);
+    assert!(listed.items[0].problem.is_some());
+    assert!(db
+        .value("SELECT descriptor FROM maps", &[])
+        .unwrap()
+        .is_some());
+}
+
+#[test]
+fn publication_retry_keeps_one_identity_and_preserves_completed_maps() {
+    use atlas_gis::{map_store::MapStore, sql::Database};
+    use atlas_map::{PublicationState, Publisher};
+    let mut store =
+        MapStore::open_database(std::rc::Rc::new(Database::open(":memory:").unwrap())).unwrap();
+    let mut map: MapDescriptor = serde_json::from_value(supplied_map()).unwrap();
+    map.layers.clear();
+    map.state = PublicationState::Incomplete;
+    store.begin(&map, None, true).unwrap();
+    store.restart_publication(&map.reference).unwrap();
+    store.begin(&map, None, true).unwrap();
+    store.finish(&map.reference).unwrap();
+    assert_eq!(store.inventory().unwrap().len(), 1);
+    assert!(store.restart_publication(&map.reference).is_err());
+    assert!(store
+        .open(&map.reference)
+        .unwrap()
+        .require_complete()
+        .is_ok());
+}
+
+#[test]
+fn deleting_child_detaches_saved_selection_without_deleting_its_shape() {
+    use atlas_gis::{
+        map_store::{MapStore, SaveRequest},
+        sql::Database,
+    };
+    use atlas_map::{PublicationState, Publisher};
+    let mut store =
+        MapStore::open_database(std::rc::Rc::new(Database::open(":memory:").unwrap())).unwrap();
+    let mut parent: MapDescriptor = serde_json::from_value(supplied_map()).unwrap();
+    parent.layers.clear();
+    parent.state = PublicationState::Incomplete;
+    store.begin(&parent, None, false).unwrap();
+    store.finish(&parent.reference).unwrap();
+    let mut child = parent.clone();
+    child.reference.map_id = "child".into();
+    child.parent = Some(parent.reference.clone());
+    store.begin(&child, None, false).unwrap();
+    store.finish(&child.reference).unwrap();
+    let shape = json!({"type":"Polygon","coordinates":[[[0,60],[30,60],[30,90],[0,90],[0,60]]]});
+    let navigation = serde_json::from_value(json!({
+        "version":1, "regions":[{
+            "id":"selection", "name":"Child region", "spaceId":"surface",
+            "parentId":null, "geometry":shape, "child":child.reference
+        }], "views":[]
+    }))
+    .unwrap();
+    store
+        .save(
+            SaveRequest {
+                reference: parent.reference.clone(),
+                expected_version: None,
+                navigation,
+                settings: Default::default(),
+            },
+            "today".into(),
+        )
+        .unwrap();
+    store.delete_map("child").unwrap();
+    let saved = store.find_saved("islands").unwrap().unwrap();
+    assert_eq!(saved.navigation.regions.len(), 1);
+    assert_eq!(
+        saved.navigation.regions[0].geometry,
+        serde_json::from_value(shape).unwrap()
+    );
+    assert!(saved.navigation.regions[0].child.is_none());
+    assert_eq!(saved.navigation.version, 2);
+}
+
+#[test]
 fn saved_gis_reads_and_spatial_queries_need_no_generator_or_private_store() {
     use atlas_gis::{
         map_files::MapFiles, map_protocol::ReadCall, map_store::MapStore, sql::Database,

@@ -23,10 +23,28 @@ impl Workspace {
             revision: Cell::new(0),
         });
         for table in ["working_features", "source_features"] {
-            features::create(&database, table)?;
+            if database
+                .connection
+                .value(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                    &[table.into()],
+                )?
+                .is_none()
+            {
+                features::create(&database, table)?;
+            }
         }
         for table in ["working_networks", "source_networks"] {
-            networks::create(&database, table)?;
+            if database
+                .connection
+                .value(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                    &[table.into()],
+                )?
+                .is_none()
+            {
+                networks::create(&database, table)?;
+            }
         }
         Ok(Self(database))
     }
@@ -64,6 +82,25 @@ impl Workspace {
         self.0
             .connection
             .batch("DELETE FROM source_features; DELETE FROM source_networks;")
+    }
+    pub fn copy_sources(&self, source: &Workspace) -> io::Result<()> {
+        use atlas_generation::features::{
+            network::{NetworkReader, NetworkWorkspace},
+            FeatureReader, FeatureWorkspace,
+        };
+        sql::transaction(&self.0.connection, || {
+            self.clear_source()?;
+            for item in source.source_features().values(Default::default())? {
+                self.source_features().put(item?)?;
+            }
+            for item in source.source_networks().nodes()? {
+                self.source_networks().put_node(item?)?;
+            }
+            for item in source.source_networks().reaches(Default::default())? {
+                self.source_networks().put_reach(item?)?;
+            }
+            Ok(())
+        })
     }
 }
 fn get<T: DeserializeOwned>(

@@ -17,6 +17,7 @@ export type GenerationStatus = {
   result: MapRef | null;
   message: string | null;
   details?: GenerationDetails;
+  recovery?: RecoveryStatus;
 };
 
 export type GenerationDetails = {
@@ -26,6 +27,14 @@ export type GenerationDetails = {
   finishedAt: string | null;
   elapsedSeconds: number;
   epochs: Array<EpochDuration>;
+};
+
+export type RecoveryStatus = {
+  /**
+   * None means the job must restart before its first checkpoint.
+   */
+  checkpoint: string | null;
+  problem: string | null;
 };
 
 export type EpochDuration = { name: string; seconds: number };

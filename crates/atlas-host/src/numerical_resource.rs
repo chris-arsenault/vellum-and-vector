@@ -101,6 +101,11 @@ pub struct Opened {
     pub metadata: Value,
     pub snapshot: Rc<dyn Snapshot>,
 }
+pub const FORMAT: atlas_gis::stored::Format = atlas_gis::stored::Format {
+    kind: "numerical-resource",
+    revision: 1,
+    semantics: "zarr3-located-typed-arrays",
+};
 /// The application prepares local descriptor/array handles before synchronous generation.
 pub trait Store {
     fn describe(&self, id: &str) -> io::Result<Descriptor>;
@@ -123,7 +128,7 @@ impl WorkingSet {
     }
     fn describe(&self, id: &str) -> io::Result<Descriptor> {
         let resource = self.store.describe(id)?;
-        if resource.id != id || resource.schema_version != 1 || resource.state != State::Ready {
+        if resource.id != id || resource.state != State::Ready {
             return Err(io::Error::other(
                 "Load a completed current-format numerical resource",
             ));

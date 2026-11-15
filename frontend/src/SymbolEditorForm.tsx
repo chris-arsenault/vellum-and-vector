@@ -52,7 +52,6 @@ export default function SymbolEditorForm({
       <ConfigProvider getPopupContainer={() => container.current!}>
         <GeoStylerContext.Provider value={symbolContext(data)}>
           {/* GeoStyler's style prop is symbol data, not a CSS style object. */}
-          {/* eslint-disable-next-line ahara/no-inline-styles */}
           <Style style={symbols} onStyleChange={setSymbols} disableClassification />
         </GeoStylerContext.Provider>
       </ConfigProvider>

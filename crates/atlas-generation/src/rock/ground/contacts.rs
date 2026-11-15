@@ -7,15 +7,18 @@ use crate::{
 };
 use std::io;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Reference {
     pub position: [f64; 2],
     pub land: f64,
     pub cut: f64,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Beds {
     pub land: Vec<MaterialLayer>,
     pub cut: Vec<MaterialLayer>,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Plan {
     pub cells: Vec<usize>,
     pub reference: Reference,

@@ -1,6 +1,7 @@
 //! PostgreSQL/PostGIS finished-map storage. Private generation inputs use a separate capability.
 // Arconis: docs/architecture/subsystems.arconis#item=postgis — LAN backend map store beside the native generator.
 mod access;
+mod inventory;
 mod library;
 mod publication;
 mod queries;
@@ -40,7 +41,7 @@ impl PostgresMaps {
             .into_iter()
             .next()
             .ok_or_else(|| io::Error::other("Map revision was not found"))?;
-        from_json(row.try_get("descriptor").map_err(io::Error::other)?)
+        crate::stored::read_map(row.try_get("descriptor").map_err(io::Error::other)?)
     }
     pub fn find_head(&self, id: &str) -> io::Result<Option<MapRef>> {
         self.query("SELECT revision FROM map.heads WHERE map_id=$1", &[&id])?

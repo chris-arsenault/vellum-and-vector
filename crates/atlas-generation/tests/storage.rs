@@ -39,6 +39,27 @@ fn cache(blocks: usize) -> SharedCache {
 }
 
 #[test]
+fn checkpoint_restores_blocks_through_existing_owner_bindings() {
+    use atlas_generation::checkpoint::Archive;
+    let mut owner = Band::new(BLOCK_CELLS + 3, 0.0f64, cache(1));
+    let reader = owner.read_only();
+    owner.set(BLOCK_CELLS + 2, 73.0).unwrap();
+    let mut bytes = Vec::new();
+    Archive::Save(&mut bytes)
+        .band("ground", &mut owner)
+        .unwrap();
+    owner.set(BLOCK_CELLS + 2, 0.0).unwrap();
+    Archive::Load(&mut bytes.as_slice())
+        .band("ground", &mut owner)
+        .unwrap();
+    assert_eq!(reader.get(BLOCK_CELLS + 2).unwrap(), 73.0);
+    let mut wrong_shape = Band::new(1, 0.0f64, cache(1));
+    assert!(Archive::Load(&mut bytes.as_slice())
+        .band("ground", &mut wrong_shape)
+        .is_err());
+}
+
+#[test]
 fn spill_reload_and_snapshots_keep_independent_values() {
     let cache = cache(1);
     let mut band = Band::new(BLOCK_CELLS * 3, 0.0, cache.clone());

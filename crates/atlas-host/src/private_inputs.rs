@@ -1,5 +1,6 @@
 //! Completed generation captures. This capability is never supplied to map readers.
 mod documents;
+mod inventory;
 use atlas_map::MapRef;
 use postgres::{Client, NoTls};
 use serde::{Deserialize, Serialize};

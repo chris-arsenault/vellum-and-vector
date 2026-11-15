@@ -30,7 +30,9 @@ impl MapStore {
                 continue;
             }
             if let Some(parent) = self.open(&reference)?.parent {
-                pending.push(parent);
+                if self.contains(&parent)? {
+                    pending.push(parent);
+                }
             }
             result.push(reference);
         }
@@ -45,7 +47,7 @@ impl MapStore {
                     "SELECT data FROM imported.map_saved WHERE map_id=? AND revision=?",
                     &reference_values(reference),
                 )? {
-                    let saved: SavedMapDocument = serde_json::from_str(data.text()?)?;
+                    let saved: SavedMapDocument = crate::stored::VIEW.parse(data.text()?)?;
                     for region in saved.navigation.regions {
                         if let Some(child) = region.child {
                             self.copy_map(&child, &mut seen)?;
@@ -110,12 +112,23 @@ impl MapStore {
                 &values,
             )?
             .ok_or_else(|| io::Error::other("Saved map revision was not found"))?;
-        let map: MapDescriptor = serde_json::from_str(descriptor.text()?)?;
+        let map: MapDescriptor =
+            crate::stored::read_map(serde_json::from_str(descriptor.text()?)?)?;
         if map.state != PublicationState::Complete {
             return Err(io::Error::other("Complete the map before saving it"));
         }
         if let Some(parent) = &map.parent {
-            self.copy_map(parent, seen)?;
+            // Independent children remain usable after their parent is deleted.
+            if self
+                .db
+                .value(
+                    "SELECT 1 FROM imported.maps WHERE map_id=? AND revision=?",
+                    &reference_values(parent),
+                )?
+                .is_some()
+            {
+                self.copy_map(parent, seen)?;
+            }
         }
         if self
             .db

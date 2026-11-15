@@ -1,4 +1,5 @@
-//! Run-local sequence traversal; completed history and publication observations are the only boundaries.
+//! Sequence traversal with recovery only at explicitly supported completed boundaries.
+mod checkpoint;
 use super::{Input, Registry};
 use crate::{
     atlas::{
@@ -77,7 +78,7 @@ impl<'a> Run<'a> {
             parents: Rc::default(),
         })
     }
-    /// Hosts yield and serialize an epoch observation before calling again. Nothing here is persisted.
+    /// Hosts yield and serialize an epoch observation before calling again.
     pub fn advance(
         &mut self,
         runtime: &mut Runtime,

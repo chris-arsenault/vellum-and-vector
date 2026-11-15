@@ -11,11 +11,13 @@ use crate::{
     storage::ReadBand,
 };
 use std::io;
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Cone {
     pub cell: usize,
     pub radius: f64,
     pub height: f64,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Character {
     pub grain_x: Vec<f64>,
     pub grain_y: Vec<f64>,

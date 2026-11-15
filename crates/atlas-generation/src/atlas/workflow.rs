@@ -8,6 +8,7 @@ use super::{
     state::State,
     validation::{Ownership, SurfaceRules},
 };
+use crate::checkpoint::{Archive, Recovery};
 use crate::{
     control::{ControlError, GenerationControl, GenerationProgress},
     execution::{ExecutionError, ExecutionResult},
@@ -86,11 +87,12 @@ impl Generation {
             ownership,
         })
     }
-    /// No stage index or execution checkpoint is accepted. Only completed geography leaves a run.
+    /// Private recovery is separate from completed GIS publication and UI observations.
     pub async fn run(
         mut self,
         control: &impl GenerationControl,
         output: &mut impl Output,
+        mut recovery: Option<&mut dyn Recovery>,
     ) -> ExecutionResult<Runtime> {
         control.check().map_err(control_error)?;
         let mut observer = Observations {
@@ -107,9 +109,51 @@ impl Generation {
             self.products,
             &mut self.runtime,
         )?;
+        if let Some(reader) = recovery
+            .as_mut()
+            .map(|recovery| recovery.open())
+            .transpose()?
+            .flatten()
+        {
+            self.operations.restore_bindings(&mut self.runtime)?;
+            let mut reader = reader;
+            transfer(
+                &mut Archive::Load(&mut reader),
+                &mut run,
+                &mut self.runtime,
+                &self.operations,
+            )?;
+            observer.validate(self.runtime.executor.state())?;
+        }
         loop {
             control.cooperate().await.map_err(control_error)?;
-            match run.advance(&mut self.runtime, &mut observer)? {
+            let event = run.advance(&mut self.runtime, &mut observer)?;
+            let point = run.checkpoint_point().filter(|point| {
+                *point != crate::checkpoint::Point::Publication || matches!(event, Event::Finished)
+            });
+            if let (Some(point), Some(recovery)) = (point, recovery.as_mut()) {
+                if let Err(error) = recovery.replace(&point, &mut |writer| {
+                    transfer(
+                        &mut Archive::Save(writer),
+                        &mut run,
+                        &mut self.runtime,
+                        &self.operations,
+                    )
+                    .map_err(|error| std::io::Error::other(format!("{error:?}")))
+                }) {
+                    observer.output.diagnostic(&Diagnostic {
+                        code: "checkpoint_failed".into(),
+                        message: format!("Could not replace recovery checkpoint: {error}"),
+                        severity: super::history::Severity::Warning,
+                        invocation: "checkpoint".into(),
+                        resource: None,
+                        process: "checkpoint".into(),
+                        epochs: Vec::new(),
+                        outcome: super::history::Outcome::Failed,
+                    })?;
+                }
+            }
+            match event {
                 Event::Epoch { ancestry } => {
                     observer
                         .output
@@ -129,6 +173,36 @@ impl Generation {
             control.check().map_err(control_error)?;
         }
     }
+}
+fn transfer(
+    archive: &mut Archive<'_>,
+    run: &mut Run<'_>,
+    runtime: &mut Runtime,
+    operations: &Operations,
+) -> ExecutionResult<()> {
+    archive.format("atlas-checkpoint:owner-state", 1)?;
+    archive.label(if cfg!(target_endian = "little") {
+        "little-endian"
+    } else {
+        "big-endian"
+    })?;
+    run.checkpoint(archive)?;
+    let mut invocation = runtime.executor.invocation();
+    archive.value("invocation", &mut invocation)?;
+    if archive.loading() {
+        runtime.executor.set_invocation(invocation);
+    }
+    let inner = match archive {
+        Archive::Save(writer) => Archive::Save(&mut **writer),
+        Archive::Load(reader) => Archive::Load(&mut **reader),
+    };
+    runtime.executor.run_with(
+        &State::checkpoint_operation(),
+        &std::cell::RefCell::new(inner),
+    )?;
+    operations.checkpoint(archive)?;
+    archive.label("checkpoint-complete")?;
+    Ok(())
 }
 struct Observations<'a, C, O> {
     control: &'a C,

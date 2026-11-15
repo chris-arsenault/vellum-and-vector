@@ -1,7 +1,7 @@
 //! Detached contact slabs and mixing; canonical cells remain in owned typed bands.
 use super::cargo::{blend, CargoMixture, MaterialCargo};
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MaterialLayer {
     pub kind: usize,
     pub depth: f64,

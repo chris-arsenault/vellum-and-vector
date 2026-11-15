@@ -108,6 +108,7 @@ describe("Rust crate dependency boundary", () => {
                 "atlas-names",
                 "serde",
                 "serde_json",
+                "ciborium", // Value encoding for owner mementos; no host or storage service.
                 "ts-rs",
                 "bytemuck",
                 "tiff",

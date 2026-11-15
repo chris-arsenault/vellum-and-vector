@@ -15,6 +15,7 @@ use crate::{
     storage::{Band, ReadBand},
 };
 use std::io;
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct Lengths {
     elevation: f64,
     continentality: f64,
@@ -61,6 +62,35 @@ pub struct Capture {
     lengths: Lengths,
 }
 impl Capture {
+    pub(crate) fn checkpoint_new(coverage: &mut crate::storage::Coverage) -> Self {
+        Self {
+            temperature: coverage.allocate(0.0),
+            rainfall: coverage.allocate(0.0),
+            snowfall: coverage.allocate(0.0),
+            moisture: coverage.allocate(0.0),
+            wind_x: coverage.allocate(0.0),
+            wind_y: coverage.allocate(0.0),
+            ocean_distance: coverage.allocate(0.0),
+            heat: coverage.allocate(0.0),
+            fog: coverage.allocate(0.0),
+            lengths: Lengths::default(),
+        }
+    }
+    pub(crate) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("temperature", &mut self.temperature)?;
+        archive.band("rainfall", &mut self.rainfall)?;
+        archive.band("snowfall", &mut self.snowfall)?;
+        archive.band("moisture", &mut self.moisture)?;
+        archive.band("wind-x", &mut self.wind_x)?;
+        archive.band("wind-y", &mut self.wind_y)?;
+        archive.band("ocean-distance", &mut self.ocean_distance)?;
+        archive.band("heat", &mut self.heat)?;
+        archive.band("fog", &mut self.fog)?;
+        archive.value("lengths", &mut self.lengths)
+    }
     pub fn new(field: &Field, p: &Settings) -> io::Result<Self> {
         let lengths = Lengths::new(p, field.scale.cells(1.0))?;
         let mut coverage = field.coverage.borrow_mut();

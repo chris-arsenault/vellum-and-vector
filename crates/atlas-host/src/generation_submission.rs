@@ -14,7 +14,7 @@ use serde::Deserialize;
 use serde_json::json;
 use std::io;
 
-#[derive(Deserialize)]
+#[derive(serde::Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Submission {
     pub source: Document,

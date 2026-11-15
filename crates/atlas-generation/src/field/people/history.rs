@@ -19,7 +19,15 @@ pub struct Seen {
     struck: Band<f64>,
 }
 impl Seen {
-    fn new(field: &Field) -> Self {
+    pub(crate) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("laid", &mut self.laid)?;
+        archive.band("stripped", &mut self.stripped)?;
+        archive.band("struck", &mut self.struck)
+    }
+    pub(crate) fn new(field: &Field) -> Self {
         let kept = || field.coverage.borrow_mut().allocate(0.0);
         Self {
             laid: kept(),

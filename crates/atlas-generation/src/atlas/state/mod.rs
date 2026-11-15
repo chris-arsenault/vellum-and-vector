@@ -1,4 +1,6 @@
 //! One generation run's records and owner packages. Map readers receive only published products.
+mod checkpoint;
+mod checkpoint_records;
 mod ecology;
 mod effects;
 mod extraction;
@@ -184,6 +186,7 @@ pub struct Physical {
     pub landmark_roster: Option<Vec<field::landmarks::roster::Entry>>,
     pub settings: Settings,
 }
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct LakeSurface {
     pub id: String,
     pub geometry: Geometry,

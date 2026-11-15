@@ -34,11 +34,13 @@ is separate from undo.
 **Current implementation scope — updated 2026-11-15:** Support pure browser or pure
 LAN backend execution, with computation and storage together. One Rust engine runs
 on both hosts. The browser UI reads finished GIS maps; numerical generation inputs
-have separate storage and lifetimes. Browser saves explicitly retain maps and their
-captured refinement inputs. Completed server worlds and child maps are retained
+have separate storage and lifetimes. Completed browser jobs retain maps and captured
+refinement inputs; explicit Save stores view and selection changes. Server worlds and child maps are retained
 automatically and discoverable in Server maps; presentation preferences save automatically.
-Browser jobs stop with the tab; backend jobs belong to the service.
-Neither host provides execution recovery. [ADR 0015](adr/0015-finished-maps-and-execution-hosts.md)
+Browser jobs stop with the tab; backend jobs belong to the service. Both retain their
+latest supported checkpoint for explicit resumption. The library groups worlds,
+regions and jobs, and exposes unattached or incompatible records for deletion.
+[ADR 0015](adr/0015-finished-maps-and-execution-hosts.md)
 supersedes older browser-only and hosted-service assumptions. MCP and geographic
 authoring remain deferred.
 
@@ -959,8 +961,18 @@ Server logs record job start, terminal outcome and elapsed duration, plus comple
 epoch durations. Closing progress does not cancel a job; Cancel generation does.
 Epoch previews are separate from published map revisions. In backend mode, the library
 lists server jobs so another client can observe them after the original browser closes.
-Jobs remain in server memory; restarting the service ends them. In browser mode,
-generation runs in a worker and stops when its tab closes.
+Job requests and one replaced checkpoint remain on their execution host. A service
+restart or browser-mode tab closure interrupts execution; Resume continues from the
+latest supported completed boundary. Before the first checkpoint, the UI offers
+Restart from beginning. Jobs never resume automatically. Successful publication
+retires the checkpoint; deleting a job leaves its completed map accessible.
+
+The library shows worlds with their regions and work, including incomplete maps,
+abandoned refinements and unattached records. Deleting a parent alone preserves its
+independent children. Deletion removes GIS and private references together and retains
+shared bytes needed by surviving maps or jobs. Incompatible data stays listed and
+deletable. The current reader attempts older data without format migrations or
+automatic erasure; an incompatible capability reports why it cannot load.
 
 Regional refinement opens a modal over the current map with editable name, detail,
 seed and applicable generation controls. Inherited world dimensions, boundary and

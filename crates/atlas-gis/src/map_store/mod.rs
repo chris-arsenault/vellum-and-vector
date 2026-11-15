@@ -6,6 +6,7 @@ pub mod codec;
 mod copy;
 mod export;
 mod interactions;
+pub(crate) mod inventory;
 pub(crate) mod library;
 mod navigation;
 mod operations;
@@ -22,6 +23,7 @@ use crate::sql::{column, Database, Value};
 pub use access::MapAccess;
 use atlas_map::{Bounds, MapDescriptor, MapRef, MapSpace};
 pub use interactions::{InspectionRequest, SelectionRequest};
+pub use inventory::MapEntry;
 pub use library::{RelatedMaps, SaveRequest, SavedMap, SavedMapDocument};
 pub use navigation::RegionOperation;
 pub use operations::Operation;
@@ -59,7 +61,7 @@ impl MapStore {
                 &reference_values(reference),
             )?
             .ok_or_else(|| io::Error::other("Map revision was not found"))?;
-        serde_json::from_str(value.text()?).map_err(io::Error::other)
+        crate::stored::read_map(serde_json::from_str(value.text()?)?)
     }
     pub fn find_head(&self, map_id: &str) -> io::Result<Option<MapRef>> {
         self.db

@@ -12,3 +12,5 @@ export { HttpGeneration } from "./httpGeneration";
 export { RpcGeneration } from "./generation";
 export type { GenerationCall, GenerationTransport } from "./generation";
 export { cborOptions } from "./cbor";
+export { RpcContextManagement, httpContextManagement } from "./contexts";
+export type { ContextCall } from "./contexts";

@@ -4,10 +4,12 @@ Current execution follows [ADR 0015](adr/0015-finished-maps-and-execution-hosts.
 The shared Rust engine resolves scoped private inputs on its execution host: browser
 WASM with local storage, or native compute with the LAN database and files. Initial
 generation displays independent epoch previews and publishes GIS map products.
-Browser saves explicitly retain completed maps and their separate refinement inputs.
+Completed browser jobs retain their maps and separate refinement inputs. Browser Save
+explicitly stores view and selection changes.
 The server retains completed worlds and children automatically; the library reads
-published map heads without requiring saved view preferences. Execution does not
-restart or recover; presentation reads only the published GIS map.
+published map heads without requiring saved view preferences. Interrupted work resumes
+only through an explicit action at a supported completed boundary. Presentation reads
+only the published GIS map.
 
 ## Geographic regional refinement
 
@@ -1027,12 +1029,20 @@ through refinement and regeneration.
 The worker receives configuration, seed, scope and a workspace connection. It
 resolves generation inputs through the catalog and opens selected field channels
 from immutable resources without sending samples through the catalog worker.
-Status, stage progress and failure diagnostics live in memory. Terminating the
-browser worker cancels generation. Closing or reloading the browser-mode tab discards
-unsaved session state. Native server jobs continue after a browser disconnects and
-log start, terminal outcome, total duration and completed epoch durations. Server
-restart ends running jobs; checkpoint persistence is excluded because of its runtime
-and storage cost. Published worlds and children remain discoverable after restart.
+Live progress remains in memory; requests, captured inputs and the latest checkpoint
+are retained on the execution host. Closing a browser tab or restarting the native
+service interrupts its jobs. They remain discoverable and wait for explicit Resume.
+Unsaved browser view changes remain session-local. Native jobs continue through a
+client disconnect and log start, terminal outcome, duration and completed epoch times.
+
+The scheduler permits checkpoints after world formation, outer physical epochs and
+human eras, regional initialization and complete regional rounds, and before final
+publication. Each existing owner transfers its continuing state through its mutation
+boundary. Numerical blocks stream to one atomically replaced file; bindings, indexes
+and disposable caches are rebuilt. Interrupted segments repeat from the preceding
+supported boundary. No solver, per-process, nested-epoch or timer checkpoints exist.
+Publication retries retain the intended result identity and reuse committed immutable
+resources. Successful publication removes recovery data.
 
 Numerical working storage belongs to the execution worker. A run owns its initial
 state's working parts; a caller that needs that state afterwards builds another.

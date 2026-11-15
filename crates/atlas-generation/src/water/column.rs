@@ -66,6 +66,22 @@ impl WaterColumnView {
     }
 }
 impl WaterColumn {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.label("water-column")?;
+        for (index, store) in self.stores.iter_mut().enumerate() {
+            archive.band(&format!("store-{index}"), &mut store.contents)?;
+        }
+        archive.band("surface", &mut self.surface)?;
+        archive.band("kind", &mut self.kind)?;
+        archive.band("body", &mut self.body)?;
+        archive.bands("year", &mut self.year)?;
+        archive.band("lake-outlet", &mut self.lake_outlet)?;
+        archive.band("lake-overflow", &mut self.lake_overflow)?;
+        archive.band("lake-memory", &mut self.lake_memory)
+    }
     pub(super) fn transport_memory(
         &mut self,
         plan: &crate::transport::scatter::ScalarTransport<'_>,

@@ -77,6 +77,15 @@ pub struct ReadLayerBands {
 impl crate::execution::QueryValue for ReadLayerBands {}
 
 impl LayerBands {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("kind", &mut self.kind)?;
+        archive.band("secondary-kind", &mut self.secondary_kind)?;
+        archive.band("mixed", &mut self.mixed)?;
+        archive.bands("material-scalars", &mut self.scalars)
+    }
     pub(super) fn depth(&self, cell: usize) -> io::Result<f64> {
         self.scalars[MaterialScalar::Depth as usize].get(cell)
     }

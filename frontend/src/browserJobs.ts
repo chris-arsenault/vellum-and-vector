@@ -45,14 +45,14 @@ export class BrowserJobs {
         return JSON.parse(
           this.engine.choose_generation_configuration(JSON.stringify(call.request))
         );
-      case "configuration":
-        return this.configuration(call.request as MapRef);
       case "review":
         return this.review(call.request as GenerationAction<unknown>);
       case "create":
       case "refine":
       case "regenerate":
         return this.start(call as GenerationAction<unknown>);
+      case "resume":
+        return this.resume((call.request as { job_id: string }).job_id);
       default:
         return this.observation(call);
     }
@@ -77,19 +77,45 @@ export class BrowserJobs {
       job.free();
     }
   }
-  private observation(call: GenerationCall) {
-    if (call.method === "jobs") return [...this.jobs.values()].map((job) => job.status);
+  private async observation(call: GenerationCall) {
+    if (call.method === "configuration") return this.configuration(call.request as MapRef);
+    if (call.method === "jobs")
+      return (await this.stored()).map((status) =>
+        this.jobs.get(status.jobId)?.status.state === "running"
+          ? this.jobs.get(status.jobId)!.status
+          : status
+      );
     const request = call.request as { job_id: string; after: number };
     const job = this.jobs.get(request.job_id);
-    if (!job) throw new Error("Generation job was not found.");
-    switch (call.method) {
+    if (!job) {
+      const status = (await this.stored()).find((status) => status.jobId === request.job_id);
+      if (!status) throw new Error("Generation job was not found.");
+      return call.method === "observe" ? { events: [], next: 0, status } : status;
+    }
+    return this.observeLive(call.method, request.after, job);
+  }
+  private async stored() {
+    const statuses = JSON.parse(this.workspace.generation_jobs()) as GenerationStatus[];
+    const held = new Set((await navigator.locks.query()).held?.map((lock) => lock.name));
+    return statuses.map((status) =>
+      held.has(`atlas-job-${status.jobId}`)
+        ? { ...status, state: "running" as const, step: "Running in a browser tab" }
+        : status
+    );
+  }
+  private resume(id: string) {
+    if (this.jobs.get(id)?.status.state === "running")
+      throw new Error("This job is already running.");
+    return this.holdJob(() => JSON.parse(this.workspace.resume_status(id)) as GenerationStatus, id);
+  }
+  private observeLive(method: string, after: number, job: Job) {
+    switch (method) {
       case "cancel":
         if (job.status.state === "running") job.controller.abort();
         return job.status;
       case "status":
         return job.status;
       case "observe": {
-        const after = request.after;
         if (!Number.isInteger(after) || after < 0 || after > job.events.length)
           throw new Error("Unknown generation event cursor.");
         return { events: job.events.slice(after), next: job.events.length, status: job.status };
@@ -99,14 +125,31 @@ export class BrowserJobs {
     }
   }
   private start(action: GenerationAction<unknown>) {
-    const status: GenerationStatus = {
-      jobId: uuid(),
-      state: "running",
-      step: "Preparing map",
-      progress: null,
-      result: null,
-      message: null,
-    };
+    return this.holdJob(
+      () => JSON.parse(this.workspace.start_job(JSON.stringify(action))) as GenerationStatus
+    );
+  }
+  private holdJob(start: () => GenerationStatus, existingId?: string): Promise<GenerationStatus> {
+    // Web Locks coordinate worker lifetimes across tabs; Rust still owns every storage write.
+    return new Promise((resolve, reject) => {
+      void navigator.locks
+        .request("atlas-context-mutation", { mode: "shared" }, async () => {
+          const status = existingId ? undefined : start();
+          await navigator.locks.request(
+            `atlas-job-${existingId ?? status!.jobId}`,
+            { ifAvailable: true },
+            async (lock) => {
+              if (!lock) throw new Error("This job is running in another browser tab.");
+              const running = status ?? start();
+              resolve(this.launch(running));
+              await this.jobs.get(running.jobId)!.done;
+            }
+          );
+        })
+        .catch(reject);
+    });
+  }
+  private launch(status: GenerationStatus) {
     const job: Job = {
       status,
       events: [{ kind: "status", status }],
@@ -114,23 +157,22 @@ export class BrowserJobs {
       done: Promise.resolve(),
     };
     this.jobs.set(status.jobId, job);
-    job.done = this.run(job, action);
+    job.done = this.run(job);
     return status;
   }
-  private async run(job: Job, action: GenerationAction<unknown>) {
+  private async run(job: Job) {
     const status = (change: Partial<GenerationStatus>) => {
       job.status = { ...job.status, ...change };
       job.events.push({ kind: "status", status: job.status });
     };
     let run: ReturnType<Workspace["job"]> | undefined;
     try {
-      run = this.workspace.job(parent(action));
+      run = this.workspace.retained_job(job.status.jobId);
       const result = JSON.parse(
         await run.run(
           JSON.stringify({
-            action,
             operation: job.status.jobId,
-            revision: uuid(),
+            revision: job.status.jobId,
             cacheBytes: browserCacheBytes,
           }),
           observations(job, status)
@@ -144,6 +186,10 @@ export class BrowserJobs {
       });
     } finally {
       run?.free();
+      const stored = (JSON.parse(this.workspace.generation_jobs()) as GenerationStatus[]).find(
+        (status) => status.jobId === job.status.jobId
+      );
+      if (stored) status(stored);
     }
   }
 }

@@ -1,5 +1,5 @@
 //! Explicit time and work bindings shared by map and physical process invocation.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Invocation {
     pub world_seed: i32,
     pub epoch_index: i32,

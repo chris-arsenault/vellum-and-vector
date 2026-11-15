@@ -10,6 +10,8 @@ pub mod browser_inputs;
 pub mod browser_job;
 #[cfg(target_arch = "wasm32")]
 pub mod browser_workspace;
+pub mod context_files;
+pub mod context_inventory;
 pub mod finished_map;
 pub mod generation_application;
 pub mod generation_bindings;
@@ -27,6 +29,7 @@ pub mod generation_submission;
 pub mod generation_world;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod host_memory;
+pub mod job_files;
 pub mod local_inputs;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod map_http;

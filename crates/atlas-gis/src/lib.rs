@@ -15,6 +15,7 @@ pub mod native_map_geometry;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod postgres_maps;
 pub mod sql;
+pub mod stored;
 
 use atlas_map::{MapDescriptor, MapError, MapErrorCode, MapValidation};
 

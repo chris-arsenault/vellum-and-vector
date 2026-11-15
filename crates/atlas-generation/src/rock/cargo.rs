@@ -6,7 +6,7 @@ use crate::{
 use std::io;
 
 /// Detached parcel-local columns, never one object or reservoir allocation per map cell.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MaterialCargo {
     keys: Vec<i32>,
     hosts: Vec<i32>,
@@ -204,6 +204,17 @@ pub struct CargoStore {
     free: u32,
 }
 impl CargoStore {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("cargo-heads", &mut self.heads)?;
+        archive.value("cargo-keys", &mut self.keys)?;
+        archive.value("cargo-hosts", &mut self.hosts)?;
+        archive.value("cargo-densities", &mut self.densities)?;
+        archive.value("cargo-next", &mut self.next)?;
+        archive.value("cargo-free", &mut self.free)
+    }
     pub(super) fn has(&self, slot: usize) -> io::Result<bool> {
         Ok(self.heads.get(slot)? != 0)
     }

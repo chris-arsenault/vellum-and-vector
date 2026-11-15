@@ -102,6 +102,14 @@ pub struct ProductLedger {
     providers: BTreeMap<String, String>,
 }
 impl ProductLedger {
+    pub(crate) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> std::io::Result<()> {
+        archive.value("facts", &mut self.facts)?;
+        archive.value("invalidators", &mut self.invalidators)?;
+        archive.value("providers", &mut self.providers)
+    }
     pub fn new(
         facts: impl IntoIterator<Item = String>,
         definitions: impl IntoIterator<Item = ProductDefinition>,

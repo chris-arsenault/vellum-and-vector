@@ -24,6 +24,7 @@ pub struct Services<'a> {
     pub records: &'a Workspace,
     pub progress: Progress,
     pub completed_at: fn() -> String,
+    pub recovery: Option<&'a mut dyn atlas_generation::checkpoint::Recovery>,
 }
 
 // Arconis: docs/architecture/subsystems.arconis#item=j_run — the one generation core both hosts call.
@@ -42,6 +43,7 @@ pub async fn run(
         records,
         progress,
         completed_at,
+        recovery,
     } = services;
     let prepared = submission
         .request(spatial.as_ref())?
@@ -84,7 +86,7 @@ pub async fn run(
     prepared
         .prepare(host)
         .map_err(|e| io::Error::other(format!("{e:?}")))?
-        .run(control, &mut output)
+        .run(control, &mut output, recovery)
         .await
         .map_err(|e| io::Error::other(format!("{e:?}")))?;
     let result = output

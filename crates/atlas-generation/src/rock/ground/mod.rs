@@ -3,6 +3,7 @@
 mod actions;
 pub mod alteration;
 mod burial;
+mod checkpoint;
 mod collision;
 pub mod contacts;
 pub mod crust;
@@ -86,13 +87,14 @@ pub trait GroundEvents {
     ) -> io::Result<()>;
     fn changed(&mut self, cell: usize) -> io::Result<()>;
 }
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Transfer {
     pub cause: String,
     pub from: Pool,
     pub to: Pool,
     pub volume: f64,
 }
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct CrustBudget {
     pub ocean_created: f64,
     pub ocean_consumed: f64,

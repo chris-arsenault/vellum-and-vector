@@ -36,7 +36,7 @@ impl NativeResources {
 }
 impl Store for NativeResources {
     fn describe(&self, id: &str) -> io::Result<Descriptor> {
-        Ok(serde_json::from_slice(&fs::read(
+        crate::numerical_resource::FORMAT.read(serde_json::from_slice(&fs::read(
             self.directory(id)?.join("resource.json"),
         )?)?)
     }

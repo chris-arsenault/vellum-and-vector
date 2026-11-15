@@ -60,6 +60,8 @@ export function installScenarioBoundary({ rendering, generation = false }: Scena
           const job = window.generationFixtureJobs?.find(
             (job) => job.jobId === call.request?.job_id
           );
+          if (call.method === "resume" && job)
+            return Object.assign(job, { state: "running", step: "Resuming latest checkpoint" });
           return call.method === "observe" && job
             ? { events: [{ kind: "status", status: job }], status: job, next: 1 }
             : null;
@@ -91,10 +93,9 @@ export function installScenarioBoundary({ rendering, generation = false }: Scena
             );
             return;
           }
-          if (call && ["create", "refine", "regenerate"].includes(call.method))
+          if (call && ["create", "refine", "regenerate", "resume"].includes(call.method))
             throw new Error("UI scenarios must supply job output, never run real generation.");
-          if (Array.isArray(options)) send(value, options);
-          else send(value, options);
+          send(value, Array.isArray(options) ? { transfer: options } : options);
         };
       }
       return worker;

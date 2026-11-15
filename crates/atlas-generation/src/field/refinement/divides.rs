@@ -1,5 +1,6 @@
 use crate::lattice::TriangularLattice;
 use std::io;
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Drainage {
     pub receiver: Vec<i32>,
     pub order: Vec<usize>,

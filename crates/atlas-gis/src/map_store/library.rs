@@ -1,4 +1,4 @@
-use super::{json, queries::PAGE_SIZE, reference_values, MapStore, Page};
+use super::{queries::PAGE_SIZE, reference_values, MapStore, Page};
 use crate::sql::{column, transaction};
 use atlas_map::{MapNavigationState, MapRef, PublicationState};
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,8 @@ pub struct SavedMap {
     pub name: String,
     pub saved_at: String,
     pub version: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub problem: Option<String>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,7 +39,7 @@ pub struct RelatedMaps {
 impl MapStore {
     pub fn list_saved(&self, cursor: &str) -> io::Result<Page<SavedMap>> {
         let rows = self.db.query(
-            "SELECT data FROM map_saved WHERE map_id>? ORDER BY map_id LIMIT ?",
+            "SELECT map_id,revision,data FROM map_saved WHERE map_id>? ORDER BY map_id LIMIT ?",
             &[cursor.into(), ((PAGE_SIZE + 1) as i64).into()],
         )?;
         let more = rows.len() > PAGE_SIZE;
@@ -45,9 +47,15 @@ impl MapStore {
             .iter()
             .take(PAGE_SIZE)
             .map(|row| {
-                serde_json::from_str::<SavedMapDocument>(column(row, "data")?.text()?)
-                    .map(|saved| saved.summary)
-                    .map_err(io::Error::other)
+                let reference = MapRef {
+                    map_id: column(row, "map_id")?.text()?.into(),
+                    revision: column(row, "revision")?.text()?.into(),
+                };
+                let raw = column(row, "data")?.text()?;
+                let result = crate::stored::VIEW
+                    .parse::<SavedMapDocument>(raw)
+                    .and_then(|saved| self.open(&reference).map(|_| saved.summary));
+                Ok(result.unwrap_or_else(|error| SavedMap::unavailable(reference, raw, error)))
             })
             .collect::<io::Result<Vec<_>>>()?;
         let next = more
@@ -60,8 +68,12 @@ impl MapStore {
             "SELECT data FROM map_saved WHERE map_id=?",
             &[map_id.into()],
         )?;
-        data.map(|data| serde_json::from_str(data.text()?).map_err(io::Error::other))
-            .transpose()
+        data.map(|data| {
+            let saved: SavedMapDocument = crate::stored::VIEW.parse(data.text()?)?;
+            self.open(&saved.summary.reference)?;
+            Ok(saved)
+        })
+        .transpose()
     }
     pub fn save(&self, request: SaveRequest, saved_at: String) -> io::Result<SavedMapDocument> {
         transaction(self.db.as_ref(), || self.save_inner(request, saved_at))
@@ -90,7 +102,7 @@ impl MapStore {
         let mut values = reference_values(&map.reference);
         values.extend([
             i64::try_from(version).map_err(io::Error::other)?.into(),
-            json(&saved)?,
+            crate::stored::VIEW.text(&saved)?.into(),
         ]);
         self.db.execute("INSERT INTO map_saved VALUES(?,?,?,?) ON CONFLICT(map_id) DO UPDATE SET revision=excluded.revision,version=excluded.version,data=excluded.data", &values)?;
         self.set_head(&map.reference)?;
@@ -139,8 +151,22 @@ pub(crate) fn saved_document(
             name: map.name.clone(),
             saved_at,
             version,
+            problem: None,
         },
         navigation: request.navigation,
         settings: request.settings,
     })
+}
+
+impl SavedMap {
+    pub(crate) fn unavailable(reference: MapRef, raw: &str, error: io::Error) -> Self {
+        let value: serde_json::Value = serde_json::from_str(raw).unwrap_or_default();
+        Self {
+            name: value["name"].as_str().unwrap_or(&reference.map_id).into(),
+            saved_at: value["savedAt"].as_str().unwrap_or_default().into(),
+            version: value["version"].as_u64().unwrap_or_default(),
+            reference,
+            problem: Some(error.to_string()),
+        }
+    }
 }

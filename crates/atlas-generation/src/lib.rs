@@ -3,6 +3,7 @@
 pub mod answers;
 pub mod atlas;
 pub mod bindings;
+pub mod checkpoint;
 pub mod climate;
 pub mod composition;
 pub mod contours;
@@ -73,6 +74,17 @@ pub struct GenerationStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub details: Option<GenerationDetails>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub recovery: Option<RecoveryStatus>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecoveryStatus {
+    /// None means the job must restart before its first checkpoint.
+    pub checkpoint: Option<String>,
+    pub problem: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -107,6 +119,7 @@ pub fn declarations() -> String {
         GenerationState::decl(&cfg),
         GenerationStatus::decl(&cfg),
         GenerationDetails::decl(&cfg),
+        RecoveryStatus::decl(&cfg),
         EpochDuration::decl(&cfg),
         control::GenerationProgress::decl(&cfg),
         publication::raster::RasterGrid::decl(&cfg),

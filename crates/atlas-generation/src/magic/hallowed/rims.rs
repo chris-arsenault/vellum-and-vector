@@ -19,6 +19,14 @@ pub struct Rims {
     pub(super) rim_label: Band<i32>,
 }
 impl Rims {
+    pub(crate) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("rim", &mut self.rim)?;
+        archive.band("ward-label", &mut self.ward_label)?;
+        archive.band("rim-label", &mut self.rim_label)
+    }
     pub fn new(coverage: &mut Coverage) -> Self {
         Self {
             rim: coverage.allocate(0.0),

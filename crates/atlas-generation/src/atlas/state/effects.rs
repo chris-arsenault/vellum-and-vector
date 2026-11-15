@@ -27,6 +27,27 @@ pub(super) struct Memory {
     ledger: Contributions,
 }
 impl Memory {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+        coverage: &mut crate::storage::Coverage,
+    ) -> io::Result<()> {
+        let water = &mut *self.water.borrow_mut();
+        archive.band("withdrawal", &mut water.withdrawal)?;
+        archive.band("transmission", &mut water.transmission)?;
+        archive.band("soil-wetting", &mut water.soil_wetting)?;
+        archive.band("soil-held", &mut water.soil_held)?;
+        let mut grades = self.grades.is_some();
+        archive.value("grades", &mut grades)?;
+        if archive.loading() {
+            self.grades = grades.then(|| Changes::new(coverage, coverage.len()));
+        }
+        if let Some(grades) = &mut self.grades {
+            grades.checkpoint(archive)?;
+        }
+        self.magic.checkpoint(archive, coverage)?;
+        self.ledger.checkpoint(archive, coverage)
+    }
     pub fn new(field: &Field) -> Self {
         Self {
             water: Rc::new(RefCell::new(WaterInfluences::for_field(field))),

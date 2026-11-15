@@ -1,4 +1,4 @@
-use super::{json, reference_values, MapStore};
+use super::{reference_values, MapStore};
 use crate::sql::{column, transaction, Value};
 use atlas_map::{
     LayerSource, MapDescriptor, MapLayer, MapRef, PublicationBatch, PublicationState,
@@ -34,7 +34,7 @@ impl Publisher for MapStore {
             }
             let mut values = reference_values(&map.reference);
             values.extend([
-                json(map)?,
+                crate::stored::MAP.text(map)?.into(),
                 expected.map_or(Value::Null, |expected| expected.revision.clone().into()),
             ]);
             self.db.execute(
@@ -76,7 +76,11 @@ impl Publisher for MapStore {
             self.write_asset(reference, asset)?;
             self.db.execute(
                 "UPDATE maps SET descriptor=? WHERE map_id=? AND revision=?",
-                &[vec![json(&map)?], reference_values(reference)].concat(),
+                &[
+                    vec![crate::stored::MAP.text(&map)?.into()],
+                    reference_values(reference),
+                ]
+                .concat(),
             )?;
             Ok(())
         })
@@ -100,7 +104,11 @@ impl Publisher for MapStore {
             map.state = PublicationState::Complete;
             self.db.execute(
                 "UPDATE maps SET complete=1,descriptor=? WHERE map_id=? AND revision=?",
-                &[vec![json(&map)?], reference_values(reference)].concat(),
+                &[
+                    vec![crate::stored::MAP.text(&map)?.into()],
+                    reference_values(reference),
+                ]
+                .concat(),
             )?;
             self.set_head(reference)
         })
@@ -120,6 +128,35 @@ impl Publisher for MapStore {
     }
 }
 impl MapStore {
+    pub fn restart_publication(&self, reference: &MapRef) -> io::Result<()> {
+        crate::sql::transaction(&self.db, || {
+            let values = [
+                reference.map_id.as_str().into(),
+                reference.revision.as_str().into(),
+            ];
+            let Some(complete) = self.db.value(
+                "SELECT complete FROM maps WHERE map_id=? AND revision=?",
+                &values,
+            )?
+            else {
+                return Ok(());
+            };
+            if complete.integer()? != 0 {
+                return Err(io::Error::other("Cannot restart a completed publication"));
+            }
+            self.db.execute(
+                "DELETE FROM map_saved WHERE map_id=? AND revision=?",
+                &values,
+            )?;
+            self.db.execute(
+                "DELETE FROM map_heads WHERE map_id=? AND revision=?",
+                &values,
+            )?;
+            self.db
+                .execute("DELETE FROM maps WHERE map_id=? AND revision=?", &values)?;
+            Ok(())
+        })
+    }
     pub(super) fn set_head(&self, reference: &MapRef) -> io::Result<()> {
         self.db.execute("INSERT INTO map_heads VALUES(?,?) ON CONFLICT(map_id) DO UPDATE SET revision=excluded.revision", &reference_values(reference))?;
         Ok(())
@@ -137,7 +174,7 @@ impl MapStore {
         if column(&row, "complete")?.integer()? != 0 {
             return Err(io::Error::other("Map publication is not open"));
         }
-        serde_json::from_str(column(&row, "descriptor")?.text()?).map_err(io::Error::other)
+        crate::stored::read_map(serde_json::from_str(column(&row, "descriptor")?.text()?)?)
     }
     pub(super) fn write_asset(&self, reference: &MapRef, asset: PublishedAsset) -> io::Result<()> {
         if asset.id.is_empty()

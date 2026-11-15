@@ -44,6 +44,13 @@ impl MeltInputs<'_> {
     }
 }
 impl Meltwater {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("melt-external", &mut self.external)?;
+        archive.band("melt-glacial", &mut self.glacial)
+    }
     pub fn clear_glacial(&mut self) -> io::Result<()> {
         for cell in 0..self.glacial.len() {
             self.glacial.set(cell, 0.0)?;

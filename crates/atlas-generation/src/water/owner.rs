@@ -64,6 +64,40 @@ pub struct WaterView {
     pub base_sea_level: f64,
 }
 impl Water {
+    pub(crate) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.label("water")?;
+        self.column.borrow_mut().checkpoint(archive)?;
+        archive.value("ocean", &mut self.ocean)?;
+        self.groundwater.checkpoint(archive)?;
+        self.melt.checkpoint(archive)?;
+        archive.band("drainage-parents", &mut self.drainage.parents)?;
+        archive.band("drainage-ranks", &mut self.drainage.ranks)?;
+        archive.band("drainage-elevations", &mut self.drainage.elevations)?;
+        archive.band("drainage-guidance", &mut self.drainage.guidance)?;
+        archive.value("drainage-fill", &mut self.drainage.flood_fill_total)?;
+        archive.value(
+            "drainage-flat-fill",
+            &mut self.drainage.flood_flat_fill_total,
+        )?;
+        archive.value("drainage-decisions", &mut self.drainage.decision_total)?;
+        archive.value("drainage-ties", &mut self.drainage.tie_decision_total)?;
+        self.routing.checkpoint(archive)?;
+        archive.band("flow-mean", &mut self.flow.mean)?;
+        archive.band("flow-flood", &mut self.flow.flood)?;
+        archive.band("flow-perennial", &mut self.flow.perennial)?;
+        archive.band("flow-months", &mut self.flow.flowing_months)?;
+        archive.band("flow-catchment", &mut self.flow.catchment)?;
+        archive.band("flow-seepage", &mut self.flow.seepage)?;
+        self.projection.checkpoint(archive)?;
+        self.channels.checkpoint(archive)?;
+        self.warmth.checkpoint(archive)?;
+        self.runoff.checkpoint(archive)?;
+        archive.value("reaches", &mut self.rivers)?;
+        self.ledger.checkpoint(archive)
+    }
     pub fn new(
         mesh: Rc<TriangularLattice>,
         scale: MapScale,

@@ -37,6 +37,7 @@ pub struct Resources {
 }
 /// The host writes local resource bytes and publishes a ready descriptor only after completion.
 pub trait Sink {
+    fn committed(&self, id: &str) -> io::Result<Option<Value>>;
     fn create(&mut self, id: &str) -> impl Future<Output = io::Result<()>>;
     fn write(&mut self, id: &str, path: &str, bytes: &[u8])
         -> impl Future<Output = io::Result<()>>;
@@ -184,7 +185,7 @@ impl Resource {
                 .ok_or_else(|| io::Error::other("Field summaries require a field"))?
                 .extend(summaries.clone());
         }
-        Ok(value)
+        crate::numerical_resource::FORMAT.write(&value)
     }
     pub async fn write(
         &self,
@@ -193,6 +194,18 @@ impl Resource {
     ) -> io::Result<Value> {
         let id = &self.definition.descriptor.id;
         control.check().map_err(control_error)?;
+        if let Some(existing) = sink.committed(id)? {
+            let descriptor: Descriptor =
+                crate::numerical_resource::FORMAT.read(existing.clone())?;
+            if descriptor.scope != self.definition.descriptor.scope
+                || descriptor.bounds != self.definition.descriptor.bounds
+            {
+                return Err(io::Error::other(
+                    "Existing output resource belongs to a different scope",
+                ));
+            }
+            return Ok(existing);
+        }
         sink.create(id).await?;
         let result = self.write_created(sink, control).await;
         if result.is_err() {

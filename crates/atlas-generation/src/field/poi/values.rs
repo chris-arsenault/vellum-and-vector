@@ -41,7 +41,7 @@ pub struct HostLink {
     pub host: AreaKind,
     pub host_id: String,
 }
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Place {
     pub hosted_by: Option<HostLink>,
     pub id: String,
@@ -90,7 +90,7 @@ pub enum Moment {
     Magic,
     Society,
 }
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub enum MagicBand {
     Channel {
         system: String,
@@ -101,7 +101,7 @@ pub enum MagicBand {
         stock: String,
     },
 }
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub enum MagicChannel {
     Intensity,
     Source,

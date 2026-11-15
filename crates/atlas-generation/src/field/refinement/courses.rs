@@ -17,6 +17,7 @@ pub struct CarriedCourse {
     pub discharge: f64,
     pub order: f64,
 }
+#[derive(Serialize, Deserialize)]
 pub struct CapturedCourse {
     pub feature: Feature,
     pub cells: Vec<usize>,

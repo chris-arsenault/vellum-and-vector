@@ -47,6 +47,15 @@ pub(super) fn run(action: Action, settings: Settings, job: Job) {
             }
         }
     });
+    if let Err(error) = job.status().and_then(|status| {
+        job.files.write("status.json", &status)?;
+        if status.state == GenerationState::Completed {
+            crate::context_files::retire_job_inputs(&job.files)?;
+        }
+        Ok(())
+    }) {
+        eprintln!("Failed to retain generation job status: {error}");
+    }
     log(&job, "stopped");
 }
 // owner-direction(2026-11-15): high-level generation logs include start, stop and duration
@@ -63,7 +72,14 @@ fn execute(action: Action, settings: Settings, job: &Job) -> io::Result<atlas_ma
     let mut maps = PostgresMaps::connect(&settings.database_url)?;
     let inputs = PrivateInputs::connect(&settings.generation_url)?;
     let operation = job.status()?.job_id;
-    let request = prepare(action, &maps, &inputs, operation)?;
+    let request = match job.files.read::<NativeJob>("request.json")? {
+        Some(request) => request,
+        None => {
+            let request = prepare(action, &maps, &inputs, operation)?;
+            job.files.write("request.json", &request)?;
+            request
+        }
+    };
     let reporting = job.clone();
     let control = NativeControl::new(job.token.clone(), move |progress| {
         let _ = reporting.update(|status| {
@@ -209,6 +225,13 @@ impl Observations for Observer {
                     });
                 }
             })?;
+            if let Err(error) = self
+                .job
+                .status()
+                .and_then(|status| self.job.files.write("status.json", &status))
+            {
+                eprintln!("Failed to retain epoch timing: {error}");
+            }
             eprintln!(
                 "{}",
                 json!({"event":"generation.epoch.completed","jobId":self.job.status()?.job_id,"epoch":name,"seconds":seconds})

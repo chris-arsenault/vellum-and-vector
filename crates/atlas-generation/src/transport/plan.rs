@@ -23,6 +23,31 @@ pub struct TransportPlan {
     deformation: [Band<f64>; 4],
 }
 impl TransportPlan {
+    pub(crate) fn empty(coverage: &mut Coverage) -> Self {
+        Self {
+            offsets: coverage.scratch(0, 0),
+            targets: coverage.scratch(0, 0),
+            weights: coverage.scratch(0, 0.0),
+            arrivals: coverage.scratch(0, 0.0),
+            dominant: coverage.scratch(0, 0),
+            deformation: std::array::from_fn(|_| coverage.scratch(0, 0.0)),
+        }
+    }
+    pub(crate) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+        coverage: &mut Coverage,
+    ) -> io::Result<()> {
+        archive.allocated_band("offsets", &mut self.offsets, coverage)?;
+        archive.allocated_band("targets", &mut self.targets, coverage)?;
+        archive.allocated_band("weights", &mut self.weights, coverage)?;
+        archive.allocated_band("arrivals", &mut self.arrivals, coverage)?;
+        archive.allocated_band("dominant", &mut self.dominant, coverage)?;
+        for (index, band) in self.deformation.iter_mut().enumerate() {
+            archive.allocated_band(&format!("deformation-{index}"), band, coverage)?;
+        }
+        Ok(())
+    }
     pub fn history(&self) -> HistoryTransport {
         HistoryTransport {
             shares: TransportShares {

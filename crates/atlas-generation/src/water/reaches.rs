@@ -2,12 +2,12 @@
 use super::balance::MONTHS;
 use std::{cell::OnceCell, rc::Rc};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FormerCourse {
     pub cells: Vec<usize>,
     pub left_in: f64,
 }
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Reach {
     pub(super) id: usize,
     pub(super) cells: Vec<usize>,
@@ -145,7 +145,7 @@ pub enum Regime {
     Seasonal,
     Dry,
 }
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct BoundaryEntry {
     pub cell: usize,
     pub monthly: [f64; MONTHS],
@@ -157,10 +157,11 @@ pub struct BoundaryEntry {
 /// use atlas_generation::water::reaches::ReachStore;
 /// fn mutate(store: &mut ReachStore) { store.get(1).unwrap().monthly[0] = 20.0; }
 /// ```
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct ReachStore {
     // Stable monotonically allocated IDs also preserve the source Map's insertion order.
     records: Vec<Option<Reach>>,
+    #[serde(skip)]
     index: OnceCell<Rc<ReachIndex>>,
     pub(super) entries: Vec<BoundaryEntry>,
 }

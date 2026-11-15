@@ -143,6 +143,7 @@ function useAtlas(context: FinishedContext) {
     setJobSelection,
     setLore,
     setLibrary,
+    setOpened,
     observe(job: GenerationStatus) {
       setJobSelection(null);
       setJob(job);
@@ -227,7 +228,10 @@ function Atlas({ context }: { context: FinishedContext }) {
         <FinishedMapLibrary
           context={context}
           close={() => setLibrary(false)}
-          open={(saved) => open(saved.reference, saved)}
+          open={(reference, saved) => open(reference, saved)}
+          retained={(ids) => {
+            if (state.opened && !ids.has(state.opened.reference.mapId)) state.setOpened(null);
+          }}
           observe={(job) => {
             if (job.state === "completed" && job.result) void open(job.result);
             else state.observe(job);

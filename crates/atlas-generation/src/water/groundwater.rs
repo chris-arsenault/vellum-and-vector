@@ -93,6 +93,17 @@ struct GroundwaterWork {
     arriving: Band<f64>,
 }
 impl Groundwater {
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+    ) -> io::Result<()> {
+        archive.band("groundwater-targets", &mut self.targets)?;
+        archive.band("groundwater-exchange", &mut self.exchange)?;
+        archive.band("groundwater-recharge", &mut self.recharge)?;
+        archive.band("groundwater-outflow", &mut self.outflow)?;
+        archive.band("groundwater-returned", &mut self.returned)?;
+        archive.value("groundwater-interval", &mut self.interval)
+    }
     pub fn new(coverage: &mut Coverage) -> Self {
         Self {
             targets: coverage.allocate(0),

@@ -35,7 +35,7 @@ fn main() -> io::Result<()> {
                 scratch: required("ATLAS_GENERATION_SCRATCH")?.into(),
                 assets: files.clone(),
                 memory: atlas_host::host_memory::generation_budget()?,
-            }))
+            })?)
         }
         Err(env::VarError::NotPresent) => None,
         Err(error) => return Err(io::Error::other(error)),

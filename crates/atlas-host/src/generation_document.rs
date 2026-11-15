@@ -25,6 +25,12 @@ use std::{
     io,
 };
 
+pub const FORMAT: atlas_gis::stored::Format = atlas_gis::stored::Format {
+    kind: "generation-inputs",
+    revision: 1,
+    semantics: "independent-map-metre-resources",
+};
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Document {

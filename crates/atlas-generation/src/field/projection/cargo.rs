@@ -14,6 +14,26 @@ pub struct Cargo {
     records: Band<f64>,
 }
 impl Cargo {
+    pub(super) fn empty(coverage: &mut Coverage) -> Self {
+        Self {
+            keys: Vec::new(),
+            released_to: Vec::new(),
+            slots: Vec::new(),
+            offsets: coverage.scratch(0, 0),
+            records: coverage.scratch(0, 0.0),
+        }
+    }
+    pub(super) fn checkpoint(
+        &mut self,
+        archive: &mut crate::checkpoint::Archive<'_>,
+        coverage: &mut Coverage,
+    ) -> io::Result<()> {
+        archive.value("keys", &mut self.keys)?;
+        archive.value("released-to", &mut self.released_to)?;
+        archive.value("slots", &mut self.slots)?;
+        archive.allocated_band("offsets", &mut self.offsets, coverage)?;
+        archive.allocated_band("records", &mut self.records, coverage)
+    }
     pub fn offsets(&self) -> ReadBand<u32> {
         self.offsets.read_only()
     }

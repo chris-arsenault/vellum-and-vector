@@ -182,10 +182,7 @@ impl Inputs {
 }
 fn describe(store: &dyn Store, source: &Reference) -> io::Result<Descriptor> {
     let descriptor = store.describe(&source.resource_id)?;
-    if descriptor.id != source.resource_id
-        || descriptor.schema_version != 1
-        || descriptor.state != State::Ready
-    {
+    if descriptor.id != source.resource_id || descriptor.state != State::Ready {
         return Err(io::Error::other(
             "Load a completed current-format numerical resource",
         ));

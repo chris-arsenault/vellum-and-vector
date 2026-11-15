@@ -1,6 +1,6 @@
 //! Custody metadata names material inventories; quantities remain in their owning columns.
 use super::{cargo::MaterialCargo, material::MaterialLayer};
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct CargoIdentities {
     names: Vec<String>,
     released: Vec<i32>,
