@@ -62,8 +62,6 @@ pub(super) fn serve(root: &Path, url: &str) -> io::Result<ResponseBox> {
     };
     Ok(response
         .with_header(header("Content-Type", media)?)
-        .with_header(header("Cross-Origin-Opener-Policy", "same-origin")?)
-        .with_header(header("Cross-Origin-Embedder-Policy", "require-corp")?)
         .with_header(header(
             "Cache-Control",
             if relative.starts_with("assets") {

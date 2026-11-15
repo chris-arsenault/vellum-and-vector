@@ -11,3 +11,4 @@ export { httpMapLibrary } from "./httpMapLibrary";
 export { HttpGeneration } from "./httpGeneration";
 export { RpcGeneration } from "./generation";
 export type { GenerationCall, GenerationTransport } from "./generation";
+export { cborOptions } from "./cbor";

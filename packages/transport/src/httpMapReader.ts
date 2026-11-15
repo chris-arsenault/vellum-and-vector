@@ -1,10 +1,11 @@
 import { Decoder, Encoder } from "cbor-x";
 import { RpcMapReader } from "./mapReader";
+import { cborOptions } from "./cbor";
 
 /** Map products cross the wire; binary responses stay binary rather than JSON byte arrays. */
 export function httpMapReader(baseUrl: string) {
   const encoder = new Encoder({ useRecords: false }),
-    decoder = new Decoder({ useRecords: false });
+    decoder = new Decoder(cborOptions);
   const endpoint = new URL("api/maps/read", baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   return new RpcMapReader(async (call, options) => {
     const response = await fetch(endpoint, {

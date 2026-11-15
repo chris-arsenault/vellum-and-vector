@@ -1,9 +1,10 @@
 import { Decoder, Encoder } from "cbor-x";
 import { RpcMapNavigation } from "./mapNavigation";
+import { cborOptions } from "./cbor";
 
 export function httpMapNavigation(baseUrl: string) {
   const encoder = new Encoder({ useRecords: false }),
-    decoder = new Decoder({ useRecords: false });
+    decoder = new Decoder(cborOptions);
   const endpoint = new URL("api/maps/navigation", baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   return new RpcMapNavigation(async (call, options) => {
     const response = await fetch(endpoint, {

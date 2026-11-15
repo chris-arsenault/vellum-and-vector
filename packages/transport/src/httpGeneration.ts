@@ -1,11 +1,12 @@
 import { Decoder, Encoder } from "cbor-x";
 import { RpcGeneration } from "./generation";
+import { cborOptions } from "./cbor";
 
 export class HttpGeneration<Configuration> extends RpcGeneration<Configuration> {
   constructor(baseUrl: string) {
     const endpoint = new URL("api/generation", baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
     const encoder = new Encoder({ useRecords: false });
-    const decoder = new Decoder({ useRecords: false });
+    const decoder = new Decoder(cborOptions);
     super(async (call, options) => {
       const response = await fetch(endpoint, {
         method: "POST",

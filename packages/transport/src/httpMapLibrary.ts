@@ -1,9 +1,10 @@
 import { Decoder, Encoder } from "cbor-x";
 import { RpcMapLibrary } from "./mapLibrary";
+import { cborOptions } from "./cbor";
 
 export function httpMapLibrary(baseUrl: string) {
   const encoder = new Encoder({ useRecords: false }),
-    decoder = new Decoder({ useRecords: false });
+    decoder = new Decoder(cborOptions);
   const endpoint = new URL("api/maps/library", baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
   return new RpcMapLibrary(async (call, options) => {
     const response = await fetch(endpoint, {

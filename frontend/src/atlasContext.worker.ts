@@ -2,9 +2,9 @@ import { initializeEngine } from "@atlas/engine";
 import { Decoder } from "cbor-x";
 import { BrowserJobs } from "./browserJobs";
 import type { AtlasCall, AtlasRequest, AtlasReply } from "./atlasContextProtocol";
-import type { MapCall } from "@atlas/transport";
+import { cborOptions, type MapCall } from "@atlas/transport";
 
-const decoder = new Decoder({ useRecords: false });
+const decoder = new Decoder(cborOptions);
 let current: ReturnType<typeof open> | undefined;
 async function open() {
   const engine = await initializeEngine();
