@@ -1,31 +1,56 @@
 services:
+  # owner-direction(2026-11-15): create a custom Docker image and place it in Compose for now.
+  database:
+    image: ghcr.io/chris-arsenault/vellum-and-vector/database:${IMAGE_TAG:-latest}
+    build: ./database
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: atlas_admin
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: "${ATLAS_DATABASE_PASSWORD:?}"
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=trust"
+      ATLAS_MAP_PASSWORD: "${ATLAS_MAP_PASSWORD:?}"
+      ATLAS_MAP_READER_PASSWORD: "${ATLAS_MAP_READER_PASSWORD:?}"
+      ATLAS_GENERATION_PASSWORD: "${ATLAS_GENERATION_PASSWORD:?}"
+    ports: ["127.0.0.1:54328:5432"]
+    volumes: ["atlas-postgres:/var/lib/postgresql"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "PGPASSWORD=$$POSTGRES_PASSWORD psql -h 127.0.0.1 -U atlas_admin -d vellum_maps -c 'SELECT PostGIS_Version()' >/dev/null",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
   atlas:
-    image: ghcr.io/chris-arsenault/vellum-and-vector:${IMAGE_TAG:-latest}
+    image: ghcr.io/chris-arsenault/vellum-and-vector/atlas:${IMAGE_TAG:-latest}
+    depends_on:
+      database:
+        condition: service_healthy
     network_mode: host
     restart: unless-stopped
     environment:
       # The executable rejects wildcard and public bind addresses.
       ATLAS_BIND: "${ATLAS_LAN_IP:-192.168.66.3}:${ATLAS_PORT:-4123}"
-      ATLAS_MAP_DATABASE_URL: "${ATLAS_MAP_DATABASE_URL:?Set the map writer connection}"
-      ATLAS_MAP_READER_URL: "${ATLAS_MAP_READER_URL:?Set the map reader connection}"
-      ATLAS_GENERATION_DATABASE_URL: "${ATLAS_GENERATION_DATABASE_URL:?Set the generation writer connection}"
+      ATLAS_MAP_DATABASE_URL: "postgresql://atlas_maps:${ATLAS_MAP_PASSWORD:?}@127.0.0.1:54328/vellum_maps"
+      ATLAS_MAP_READER_URL: "postgresql://atlas_map_reader:${ATLAS_MAP_READER_PASSWORD:?}@127.0.0.1:54328/vellum_maps"
+      ATLAS_GENERATION_DATABASE_URL: "postgresql://atlas_generation:${ATLAS_GENERATION_PASSWORD:?}@127.0.0.1:54328/vellum_generation"
       ATLAS_MAP_ASSETS: /data/maps
       ATLAS_GENERATION_RESOURCES: /data/generation
       ATLAS_GENERATION_SCRATCH: /scratch
       ATLAS_FRONTEND: /opt/atlas/frontend
-      ATLAS_TLS_CERTIFICATE: /certificates/certificate.pem
-      ATLAS_TLS_PRIVATE_KEY: /certificates/private-key.pem
     volumes:
       - atlas-data:/data
       - atlas-scratch:/scratch
-      - "${ATLAS_TLS_CERTIFICATE:?Set the existing LAN certificate path}:/certificates/certificate.pem:ro"
-      - "${ATLAS_TLS_PRIVATE_KEY:?Set the existing LAN private key path}:/certificates/private-key.pem:ro"
     healthcheck:
-      test: ["CMD-SHELL", "curl --fail --silent --insecure https://$$ATLAS_BIND/health"]
+      test: ["CMD-SHELL", "curl --fail --silent http://$$ATLAS_BIND/health"]
       interval: 30s
       timeout: 5s
       retries: 3
 
 volumes:
+  atlas-postgres:
   atlas-data:
   atlas-scratch:

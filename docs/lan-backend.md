@@ -3,25 +3,32 @@
 The backend runs the shared Rust generator and stores both completed generation inputs
 and published maps on TrueNAS. The browser reads published GIS products through the
 HTTP facade. The same service serves the backend-mode frontend, so other home devices
-open `https://<private-TrueNAS-name>:4123/` without a separate frontend origin.
+open `http://<private-TrueNAS-name>:4123/` without a separate frontend origin.
 
-The Ahara Infra TrueNAS database registration provisions `vellum_maps` with PostGIS
-and its `map` schema, and `vellum_generation` with its private `generation` schema on
-the existing TrueNAS PostgreSQL instance. Each database has independent writer and
-reader roles. The application uses the map writer, map reader and generation writer;
-viewing uses only the map reader. The service creates tables through their respective
-writers. No runtime database-administrator connection is needed.
+The Compose `database` service uses the custom image in `database/`, based on
+PostgreSQL 18 with PostGIS. Its first-start initializer creates `vellum_maps` with
+PostGIS and its `map` schema, and `vellum_generation` with its private `generation`
+schema. The application uses independent map-writer, map-reader and generation-writer
+logins. The reader cannot write maps or connect to the generation database. The service
+creates tables through the writers. PostgreSQL requires password authentication for
+network connections, with separate credentials for the administrator and each application role.
+The database port is bound only to host loopback at `127.0.0.1:54328`, which the
+host-networked Rust service uses. The shared TrueNAS PostgreSQL app is independent.
 
-`platform.yml` enables the shared CI/CD TrueNAS deployment. Before deploying the
-Komodo stack, the workflow invokes the registered database provisioner and resolves
-the three connections from `secret-paths.yml`. The Ahara Infra registration and
-provisioner must be deployed before this application's first deployment.
-`.env.example` contains placeholders for local configuration. In Sulion, use
-`with-cred --` for secret-backed commands rather than writing credentials into files.
-Other installations can supply ordinary environment variables.
+`platform.yml` enables the shared CI/CD TrueNAS deployment and publishes the `atlas`
+and `database` images. Project Terraform generates the four database passwords and stores
+them as SSM SecureString parameters under `/ahara/vellum-and-vector/database/`.
+The shared deployment resolves the paths in `secret-paths.yml` through the Komodo proxy
+and injects credentials into Compose. No manually supplied deployment passwords or LAN
+certificates are needed. The project deployer has scoped SSM write permission for these paths.
+The shared TrueNAS provisioner must have Vellum removed from its registration before
+deploying this Compose stack; the removal does not delete previously created databases.
+`.env.example` supplies placeholders for local configuration checks and optional address
+and port overrides; deployed credentials come from the platform.
 
-CI builds the declared `atlas_server` binary into `dist/` and the ordinary frontend
-into `frontend/dist/`. The Dockerfile packages those outputs. The native server sets
+CI builds the declared `atlas_server` binary into `atlas/dist/`. The frontend build
+also stages its output in `atlas/frontend/dist/`. `atlas/Dockerfile` packages those outputs.
+The native server sets
 backend mode in the served HTML; static hosting declares browser mode. Backend mode
 uses the same-origin HTTP facade and does not initialize a local generation worker.
 An unavailable backend remains an error rather than selecting a different host.
@@ -30,29 +37,28 @@ For a local packaging check on Linux with the native and WASM toolchains install
 
 ```sh
 make build-lan
-docker build -t vellum-and-vector:local .
+docker build -t vellum-and-vector:local atlas
+docker build -t vellum-database:local database
 ```
 
 Build the executable for the container architecture and Ubuntu 26.04 runtime,
 matching the shared CI job's native build environment.
 Deployment uses the existing Ahara CI image publication and Komodo stack workflow.
-Compose consumes the GHCR image at `IMAGE_TAG`; it does not compile on TrueNAS.
-
-Use an existing certificate for the LAN hostname, trusted by the home devices, and its
-PEM private key. Compose mounts them read-only; certificate issuance and renewal stay
-with the existing LAN certificate service. HTTPS is needed for browser APIs such as
-creating map and view identities. Loopback development can use the executable's HTTP mode.
+Compose consumes both GHCR images at `IMAGE_TAG`; it does not compile Rust on TrueNAS.
+For a local database-only check, supply temporary credentials through environment variables
+and run `docker compose up --build database`. In Sulion, use `with-cred --` for commands
+that consume provisioned credentials; other installations use their normal credential environment.
+The frontend creates identifiers without requiring HTTPS-only browser APIs.
 
 Compose uses persistent Docker volumes on TrueNAS for data and disposable scratch,
-initialized with the image's application-user ownership. The existing certificate
-paths still need deployment configuration: the repository has placeholders, and the
-actual TrueNAS paths have not been verified. Configure them through the deployment
-source, since the shared action replaces Komodo's environment on each deployment.
+initialized with the image's application-user ownership.
 The private TrueNAS bind address
 defaults to `192.168.66.3`; `ATLAS_LAN_IP` can override it. The service
 refuses wildcard or public bind addresses. This
 installation has no public proxy route, cloud database or RDS dependency.
 
+The `atlas-postgres` volume retains the PostgreSQL cluster across container recreation.
+Initialization runs only on an empty volume.
 Back up both atlas databases together with the `atlas-data` volume. `maps/` contains
 published GIS assets; `generation/` contains the private immutable resources needed for
 later refinement. Scratch is disposable and is not a checkpoint. Stopping the service

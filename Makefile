@@ -61,8 +61,8 @@ build:
 # Run on Linux with CMake and a C++ compiler for bundled GEOS; Docker packages outputs.
 build-lan: wasm-engine
 	cargo build -p atlas-host --release --bin atlas_server
-	mkdir -p dist
-	cp target/release/atlas_server dist/atlas_server
+	mkdir -p atlas/dist
+	cp target/release/atlas_server atlas/dist/atlas_server
 	pnpm --dir frontend run build
 
 test-postgis:

@@ -1,4 +1,11 @@
-import type { MagicOrigin, MagicPropagation, MagicRenewal, MagicSource, MagicSystem } from "@atlas/context";
+import type {
+  MagicOrigin,
+  MagicPropagation,
+  MagicRenewal,
+  MagicSource,
+  MagicSystem,
+} from "@atlas/context";
+import { v4 as uuid } from "uuid";
 import { magicRenewals } from "./magicChoices";
 import { MagicRuleEditor } from "./MagicRuleEditor";
 import { NumberField as NumberSetting } from "./WorkflowFields";
@@ -41,7 +48,7 @@ export function MagicSystemsEditor({
                 ...systems,
                 {
                   ...structuredClone(system),
-                  id: crypto.randomUUID(),
+                  id: uuid(),
                   name: `${system.name} variant`,
                 },
               ])

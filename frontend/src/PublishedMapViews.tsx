@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { v4 as uuid } from "uuid";
 import type { MapDescriptor, MapView } from "@atlas/map";
 import type { PublishedNavigationState } from "./usePublishedNavigation";
 import type { PublishedPresentation } from "./PublishedMapView";
@@ -26,7 +27,7 @@ export function PublishedMapViews({ map, saved, regionId, value, open }: Props) 
         className="save-map-view"
         onSubmit={(event) => {
           event.preventDefault();
-          const id = crypto.randomUUID();
+          const id = uuid();
           void saved
             .commit({
               kind: "putView",

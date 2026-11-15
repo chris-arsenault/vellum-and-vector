@@ -110,6 +110,8 @@ and owner marks. `make test-architecture` runs these with Rust documentation che
 Archived TypeScript tests remain optional reference material rather than a normal CI path.
 
 Backend development uses TrueNAS compute, its PostgreSQL/PostGIS database and local files.
+Per the owner's 2026-11-15 correction, a custom database image in this application's
+Compose stack supplies PostGIS while the TrueNAS catalog PostgreSQL app remains separate.
 No public route or RDS dependency is part of this installation. The old C# and TypeScript
 backends, historical migrations and deployment scripts are removed, not adapted.
 

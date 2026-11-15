@@ -282,7 +282,7 @@ Current state: Independent atlas-gis extracted; callers updated directly; render
 
 ### 10. Local LAN packaging foundation
 
-Provide native/frontend image, Compose and schema/role setup using existing platform mechanisms, with separate map/private capabilities and LAN HTTPS. Retain this completed package work without treating it as deployed.
+Provide native/frontend image, Compose and schema/role setup using existing platform mechanisms, with separate map/private capabilities and LAN HTTP. Retain this completed package work without treating it as deployed.
 
 Current state: Earlier local image/startup and restricted-role checks are recorded. Package must be rebuilt for the corrected runtime and integrated into CI/CD in phase 17; TrueNAS deployment is unverified.
 
@@ -326,11 +326,11 @@ Current state: Complete. The recorded Draft configuration, using a freshly gener
 
 ### 17. Integrate CI/CD and verify LAN deployment
 
-Integrate existing Ahara image/prebuild, database provisioning and Komodo deployment; rebuild corrected native plus single WASM frontend artifacts. Validate local PostGIS, persistent files, reader roles, scratch/memory and LAN HTTPS. Verify deployment from actual CI logs and two home clients.
+Integrate existing Ahara image/prebuild and Komodo deployment; rebuild corrected native plus single WASM frontend artifacts. Validate the custom Compose PostGIS service, persistent files, reader roles, scratch/memory and LAN HTTP. Generate database credentials through project Terraform and deliver them through SSM and Komodo; no manually supplied passwords or LAN certificates. Verify deployment from actual CI logs and two home clients.
 
-Current state: CI declares the native binary artifact, builds production WASM and supplied-map artifacts before the existing three-browser action, and gates the shared pipeline on those browser jobs. TrueNAS deployment is enabled in platform.yml; secret-paths.yml maps the three provisioned connections. Ahara Infra source registers the existing Komodo deployment permission and separate maps/generation databases, with PostGIS and named schema grants. The provisioner's explicit permission check, lint and full infrastructure make ci pass. The image now matches CI's Ubuntu 24.04 runtime, explicitly installs executable permissions and initializes persistent data/scratch volumes for its non-root user. The rebuilt image can write both volumes, initializes two isolated test databases through the three application roles, serves backend-mode HTML and answers its health check. Infrastructure deployment, actual LAN certificate paths and durable configuration, stack activation and home-client verification remain open. The intended credential path previously returned exit 66 / 403 Forbidden with no secret unlocked for this terminal; the owner has not indicated it was fixed, and no retry or alternate credential was attempted. The shared deploy action replaces Komodo's environment, so manually entered certificate paths would not survive deployment. No manual deployment substitute, public route or RDS.
+Current state: CI builds the native executable and production WASM/frontend artifacts, then publishes the `atlas` and `database` images through the existing multi-image pipeline. The native runtime matches Ubuntu 26.04. Compose owns PostgreSQL/PostGIS and persistent volumes, with authenticated map-writer, map-reader and generation-writer roles. Terraform generates passwords and stores them as SSM SecureStrings; `secret-paths.yml` connects them to Komodo deployment. Ahara Infra grants scoped SSM write permission. The application serves HTTP on the private LAN. AWS access works through explicit `with-cred`. CI/CD publication, stack activation and home-client verification remain open.
 
-Review follow-up, 2026-11-15: the previous CI log confirms GHCR publication was denied because the caller lacked package-write permission. That permission is now declared, and image publication passes. The shared native build and runtime image both use Ubuntu 26.04, superseding the earlier runtime note above. Run 43662957714 passes validation, frontend deployment and image publication, then fails database provisioning with `ensure_database failed for maps: db error`, before Komodo activation. The underlying PostgreSQL error is absent from CI output and remains unverified. GitHub CI access works through its prescribed broker path, independently of the previously denied AWS/TrueNAS inspection credential needed for provisioner logs. TLS configuration and actual LAN verification also remain open.
+Review follow-up, 2026-11-15: GHCR publication passes after declaring package-write permission. The owner requested a custom database image because the shared TrueNAS image lacks PostGIS. The later credential clarification requires automatic provisioning, not removal of authentication; the temporary passwordless configuration was never deployed. Ahara Infra removes only Vellum's shared provisioning registration; the existing shared database is unchanged. Earlier local initialization, PostGIS, access restrictions, persistence and application startup checks passed. Authenticated provisioning and LAN HTTP frontend are being verified before publication.
 
 ### 18. Finalize migration documentation and close
 
@@ -386,7 +386,7 @@ These are agent choices or technical uncertainties, not new owner requirements:
 - Tiled GeoTIFF/overviews, geographic records and compatible band grouping must satisfy
   the real presentation and inspection inventory. Change the encoding if evidence warrants
   it without dropping behavior or inventing a custom format unnecessarily.
-- PostGIS and local HTTPS mechanisms must be verified on the intended TrueNAS installation.
+- PostGIS and LAN HTTP must be verified on the intended TrueNAS installation.
   The existing local package and earlier restricted-role tests do not establish that state.
 - Current application build and fixture gaps remain open. Earlier completion claims for
   viewer integration and saves are not carried forward as current end-to-end verification.

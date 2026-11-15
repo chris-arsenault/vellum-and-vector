@@ -6,6 +6,10 @@ test("reviews creator choices through the selected host without running generati
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  // LAN HTTP does not expose randomUUID; creator controls must still work.
+  await page.addInitScript(() => {
+    Object.defineProperty(crypto, "randomUUID", { value: undefined, configurable: true });
+  });
   await page.goto("/");
   await page.getByRole("button", { name: "New world", exact: true }).click();
   await page.getByLabel("World name").fill("Wizard world");

@@ -1,4 +1,5 @@
 import type { MainModule } from "@atlas/engine";
+import { v4 as uuid } from "uuid";
 import type { GenerationAction, GenerationEvent, GenerationStatus } from "@atlas/context";
 import type { MapRef } from "@atlas/map";
 import type { GenerationCall } from "@atlas/transport";
@@ -70,7 +71,7 @@ export class BrowserJobs {
   private async review(action: GenerationAction<unknown>) {
     const job = this.workspace.job(parent(action));
     try {
-      return JSON.parse(await job.review(JSON.stringify(action), crypto.randomUUID()));
+      return JSON.parse(await job.review(JSON.stringify(action), uuid()));
     } finally {
       job.free();
     }
@@ -98,7 +99,7 @@ export class BrowserJobs {
   }
   private start(action: GenerationAction<unknown>) {
     const status: GenerationStatus = {
-      jobId: crypto.randomUUID(),
+      jobId: uuid(),
       state: "running",
       step: "Preparing map",
       progress: null,
@@ -128,7 +129,7 @@ export class BrowserJobs {
           JSON.stringify({
             action,
             operation: job.status.jobId,
-            revision: crypto.randomUUID(),
+            revision: uuid(),
             cacheBytes: browserCacheBytes,
           }),
           observations(job, status)

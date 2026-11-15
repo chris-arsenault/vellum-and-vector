@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { v4 as uuid } from "uuid";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { AtlasContext } from "@atlas/context";
 import type {
@@ -156,7 +157,7 @@ function useGenerationSetup(
   const create = async () => {
     try {
       const draft = await generationDefaults(context);
-      setSetup({ draft: { ...draft, worldId: crypto.randomUUID() } });
+      setSetup({ draft: { ...draft, worldId: uuid() } });
     } catch (error) {
       setError(error);
     }

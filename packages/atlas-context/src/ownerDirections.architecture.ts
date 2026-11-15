@@ -24,6 +24,16 @@ interface OwnerDirection {
 }
 const directions: readonly OwnerDirection[] = [
   {
+    direction: "create our own secrets and use them through the Ahara platform",
+    given: "2026-11-15",
+    marks: ["infrastructure/terraform/database.tf"],
+  },
+  {
+    direction: "create a custom Docker image and place it in Compose for now",
+    given: "2026-11-15",
+    marks: ["compose.yaml"],
+  },
+  {
     direction:
       "viewer and generator are independent clients of GIS storage through data boundaries, not language boundaries",
     given: "2026-11-14",

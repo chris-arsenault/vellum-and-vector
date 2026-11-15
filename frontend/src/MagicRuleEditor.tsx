@@ -1,4 +1,5 @@
 import type { MagicCondition, MagicFeatureRule, MagicSystem } from "@atlas/context";
+import { v4 as uuid } from "uuid";
 import { magicPhysicalFields } from "./magicChoices";
 import { CodeField, NumberField } from "./WorkflowFields";
 import { useWorkflowFields } from "./workflowFieldState";
@@ -49,7 +50,7 @@ export function MagicRuleEditor({
             features: [
               ...system.features,
               {
-                id: crypto.randomUUID(),
+                id: uuid(),
                 name: "New landmark",
                 priority: 1,
                 seeds: [[{ field: "intensity", min: 500 }]],

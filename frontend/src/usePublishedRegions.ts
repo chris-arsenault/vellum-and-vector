@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { v4 as uuid } from "uuid";
 import { useQuery } from "@tanstack/react-query";
 import type {
   Bounds,
@@ -225,7 +226,7 @@ function regionActions(
   return {
     save: async (name: string) => {
       if (!draft) return;
-      const id = context.editingId ?? crypto.randomUUID();
+      const id = context.editingId ?? uuid();
       await options.saved.commit(
         {
           kind: "putRegion",
