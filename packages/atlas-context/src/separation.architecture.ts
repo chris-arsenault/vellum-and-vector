@@ -74,6 +74,7 @@ const presentationPackages = new Set([
   "geostyler-openlayers-parser",
   "geotiff",
   "react",
+  "uuid",
   "@tanstack/react-query",
   "antd",
 ]);
