@@ -89,11 +89,8 @@ function useAtlas(context: FinishedContext) {
     enabled: !!opened,
     queryFn: ({ signal }) => context.maps.open(opened!.reference, { signal }),
   });
-  const { setup, setSetup, create, refine, regenerate } = useGenerationSetup(
-    context,
-    map.data,
-    setError
-  );
+  const generation = useGenerationSetup(context, map.data, setError);
+  const { setSetup } = generation;
   const open = async (reference: MapRef, saved?: SavedMapDocument) => {
     const request = ++opening.current;
     try {
@@ -126,19 +123,15 @@ function useAtlas(context: FinishedContext) {
   return {
     context,
     opened,
-    setup,
+    ...generation,
     job,
     lore,
     library,
     error,
     map,
-    create,
-    refine,
-    regenerate,
     open,
     complete,
     published,
-    setSetup,
     setJob,
     setJobSelection,
     setLore,
