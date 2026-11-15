@@ -5,7 +5,7 @@ use crate::{
     features::{publication::Named, records::Entity},
     spatial::SpatialKernel,
 };
-use atlas_map::Bounds;
+use atlas_map::{Bounds, Geometry, Position};
 use atlas_names::{random::Random, Culture, Names};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -22,7 +22,7 @@ pub struct Configuration {
 pub struct Naming {
     // owner-direction(2026-11-14): naming belongs in Rust; TypeScript is UI, view code and facade
     config: Configuration,
-    origins: Vec<[f64; 2]>,
+    origins: Vec<Geometry>,
     // hpc-exempt: language entity attributes used to select a naming vocabulary.
     entities: RefCell<BTreeMap<String, Entity>>,
     spatial: Rc<dyn SpatialKernel>,
@@ -50,7 +50,12 @@ impl Naming {
         let origins = Names::atlas()
             .cultures
             .iter()
-            .map(|_| [w + random.sample() * (e - w), s + random.sample() * (n - s)])
+            .map(|_| Geometry::Point {
+                coordinates: Position::xy(
+                    w + random.sample() * (e - w),
+                    s + random.sample() * (n - s),
+                ),
+            })
             .collect();
         Self {
             config,
@@ -59,7 +64,11 @@ impl Naming {
             spatial,
         }
     }
-    fn culture_at(&self, position: [f64; 2], language: Option<&str>) -> &'static Culture {
+    fn culture_at(
+        &self,
+        position: [f64; 2],
+        language: Option<&str>,
+    ) -> io::Result<&'static Culture> {
         let names = Names::atlas();
         let entities = self.entities.borrow();
         let configured = language
@@ -72,22 +81,19 @@ impl Naming {
             .iter()
             .find(|c| Some(c.id.as_str()) == configured)
         {
-            return culture;
+            return Ok(culture);
         }
         let nearest = self
-            .origins
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                let distance = |p: &[f64; 2]| (p[0] - position[0]).hypot(p[1] - position[1]);
-                distance(a).total_cmp(&distance(b))
-            })
-            .expect("Atlas naming cultures")
-            .0;
-        &names.cultures[nearest]
+            .spatial
+            .index(&self.origins)
+            .map_err(io::Error::other)?
+            .nearest(Position::xy(position[0], position[1]))
+            .map_err(io::Error::other)?
+            .ok_or_else(|| io::Error::other("Atlas naming cultures need origins"))?;
+        Ok(&names.cultures[nearest])
     }
     fn name(&self, request: Request<'_>) -> io::Result<Named> {
-        let culture = self.culture_at(request.position, request.language);
+        let culture = self.culture_at(request.position, request.language)?;
         let seed = json!([
             VERSION,
             self.config.seed,

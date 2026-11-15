@@ -22,6 +22,20 @@ fn fixed_detail_uses_area_and_profile_without_a_cell_count() {
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
 #[cfg_attr(not(target_arch = "wasm32"), test)]
+fn standard_region_has_default_world_cell_count_at_seven_land_regions() {
+    use atlas_generation::atlas::resolution::{Profile, Quality};
+    let world_area = MapScale::REFERENCE_WIDTH * MapScale::REFERENCE_HEIGHT;
+    let world_cells = world_area / Quality::Standard.cell_span(Profile::World).powi(2);
+    let regional_area = world_area * 0.35 / 7.0;
+    let regional_cells = regional_area / Quality::Standard.regional_span(1).unwrap().powi(2);
+    assert!((0.95..1.05).contains(&(regional_cells / world_cells)));
+    assert!(
+        Quality::Standard.regional_span(2).unwrap() < Quality::Standard.regional_span(1).unwrap()
+    );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
 fn nested_declarations_resolve_fractions_and_preserve_unmeasured_settings() {
     let scale = MapScale::new(400.0, 300.0, 10.0).unwrap();
     let measure = json!({"kind":"relative-measure", "fraction":0.1,

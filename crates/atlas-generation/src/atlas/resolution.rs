@@ -43,6 +43,7 @@ impl Quality {
         )
         .sqrt()
     }
+    // owner-direction(2026-11-12): a standard region has roughly the cells of the default standard world, at 7-ish land regions in a world.
     pub fn regional_span(self, level: u32) -> Result<f64, &'static str> {
         if level == 0 {
             return Err("Choose a positive regional scale level");

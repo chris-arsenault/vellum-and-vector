@@ -3,6 +3,9 @@ use super::{error, Choices, Input};
 use serde_json::{json, Value};
 use std::{collections::BTreeSet, io};
 
+// The bundled catalogue carries the restless-motion and balanced-terrain defaults.
+// owner-direction(2026-11-07): plate travel needs to be much bigger; a few cells of travel is not enough.
+// owner-direction(2026-11-09, restated 2026-11-12): the default is a good mix of very mountainous parts and large stretches of relatively flat land.
 pub const PRESENTATION: &str = include_str!("presentation.json");
 pub fn catalogue() -> io::Result<Vec<Value>> {
     Ok(serde_json::from_str(PRESENTATION)?)

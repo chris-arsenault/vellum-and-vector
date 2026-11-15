@@ -147,7 +147,7 @@ impl traditions::Naming for Naming {
     }
     fn culture(&self, position: traditions::Position) -> io::Result<Value> {
         Ok(self
-            .culture_at([position.x, position.y], None)
+            .culture_at([position.x, position.y], None)?
             .id
             .clone()
             .into())

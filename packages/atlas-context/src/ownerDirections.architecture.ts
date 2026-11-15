@@ -50,6 +50,8 @@ const directions: readonly OwnerDirection[] = [
     test: [
       "archive/typescript/remaining-runtime/packages/storage-browser/src/mapPublication.test.ts",
       "archive/typescript/remaining-runtime/packages/storage-browser/src/mapNavigation.test.ts",
+      "crates/atlas-host/tests/postgres_maps.rs",
+      "frontend/tests/selectionStorage.test.ts",
     ],
   },
   {
@@ -152,7 +154,7 @@ const directions: readonly OwnerDirection[] = [
       "archive/typescript/retired-adapters/packages/generation/src/water/water.architecture.ts",
       "crates/atlas-generation/src/water/owner.rs",
     ],
-    test: "archive/typescript/retired-adapters/packages/generation/src/water/water.architecture.ts",
+    test: "packages/atlas-context/src/rustFoundations.architecture.ts",
   },
   {
     direction: "add the river-mouth sediment deposition process back",
@@ -174,7 +176,7 @@ const directions: readonly OwnerDirection[] = [
       "archive/typescript/retired-adapters/packages/generation/src/water/reachEvolution.ts",
       "crates/atlas-generation/src/water/evolution.rs",
     ],
-    test: "archive/typescript/packages/generation/src/water/reachEvolution.test.ts",
+    test: "crates/atlas-generation/src/water/network_tests.rs",
   },
   {
     direction: "water gets an actual column of water, carried and inherited as one package",
@@ -183,7 +185,7 @@ const directions: readonly OwnerDirection[] = [
       "archive/typescript/retired-adapters/packages/generation/src/water/column.ts",
       "crates/atlas-generation/src/water/column.rs",
     ],
-    test: "archive/typescript/packages/generation/src/water/column.test.ts",
+    test: "crates/atlas-generation/src/water/column_tests.rs",
   },
   {
     direction: "a cell's own yield, however large, never makes it a river",
@@ -192,7 +194,7 @@ const directions: readonly OwnerDirection[] = [
       "archive/typescript/retired-adapters/packages/generation/src/water/riverSize.ts",
       "crates/atlas-generation/src/water/network.rs",
     ],
-    test: "archive/typescript/packages/generation/src/water/riverSize.test.ts",
+    test: "crates/atlas-generation/tests/river_significance.rs",
   },
   {
     direction:
@@ -208,7 +210,10 @@ const directions: readonly OwnerDirection[] = [
     direction:
       "numerical accuracy and reproducibility are not goals of this repository, and guarding them is forbidden",
     given: "2026-11-13",
-    marks: ["archive/typescript/retired-adapters/packages/generation/src/world/validation.ts"],
+    marks: [
+      "archive/typescript/retired-adapters/packages/generation/src/world/validation.ts",
+      "crates/atlas-generation/src/atlas/validation.rs",
+    ],
     test: "archive/typescript/packages/generation/src/world/riverValidation.test.ts",
   },
   {
@@ -246,8 +251,11 @@ const directions: readonly OwnerDirection[] = [
   {
     direction: "plate travel needs to be much bigger; a few cells of travel is not enough",
     given: "2026-11-07",
-    marks: ["archive/typescript/retired-adapters/packages/generation/src/terrainCartography.ts"],
-    test: "archive/typescript/frontend/src/cartographicDraft.test.ts",
+    marks: [
+      "archive/typescript/retired-adapters/packages/generation/src/terrainCartography.ts",
+      "crates/atlas-generation/src/atlas/configuration/cartography.rs",
+    ],
+    test: "crates/atlas-host/src/generation_application.rs",
   },
   {
     direction: "plate travel is a share of the world's size, not a fixed distance",
@@ -262,7 +270,11 @@ const directions: readonly OwnerDirection[] = [
     direction:
       "the default is a good mix of very mountainous parts and large stretches of relatively flat land",
     given: "2026-11-09, restated 2026-11-12",
-    marks: ["archive/typescript/retired-adapters/packages/generation/src/terrainCartography.ts"],
+    marks: [
+      "archive/typescript/retired-adapters/packages/generation/src/terrainCartography.ts",
+      "crates/atlas-generation/src/atlas/configuration/cartography.rs",
+    ],
+    test: "crates/atlas-host/src/generation_application.rs",
   },
   {
     // Magic and terrain settings are entered as shares of the map; cell size is not.
@@ -277,8 +289,11 @@ const directions: readonly OwnerDirection[] = [
     direction:
       "a standard region has roughly the cells of the default standard world, at 7-ish land regions in a world",
     given: "2026-11-12",
-    marks: ["archive/typescript/packages/domain/src/regionalScale.ts"],
-    test: "archive/typescript/packages/domain/src/regionalScale.test.ts",
+    marks: [
+      "archive/typescript/packages/domain/src/regionalScale.ts",
+      "crates/atlas-generation/src/atlas/resolution.rs",
+    ],
+    test: "crates/atlas-generation/tests/scale_settings.rs",
   },
   {
     // Covers world detail levels and the regional ladder (confirmed 2026-11-12).
@@ -303,6 +318,7 @@ const read = (path: string) => readFileSync(join(root, path), "utf8");
 describe("the owner's directions are still carried by the code", () => {
   for (const entry of directions)
     it(entry.direction, () => {
+      expect(entry.marks.some((path) => !path.startsWith("archive/"))).toBe(true);
       for (const path of entry.marks) expect(read(path), path).toContain(mark(entry));
       const tests = typeof entry.test === "string" ? [entry.test] : (entry.test ?? []);
       for (const path of tests) expect(existsSync(join(root, path)), path).toBe(true);

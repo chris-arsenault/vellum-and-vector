@@ -156,6 +156,32 @@ pub fn normalize_generation_configuration(value: &str) -> Result<String, String>
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn default_choices_keep_balanced_terrain_and_restless_motion() -> io::Result<()> {
+        let input = Configuration::default_configuration()?
+            .normalize()?
+            .input("root")?;
+        let controls = cartography::controls()?;
+        for (id, choice) in [("terrain", "balanced"), ("continental-motion", "restless")] {
+            let control = controls.iter().find(|control| control["id"] == id).unwrap();
+            assert_eq!(control["defaultChoice"], choice);
+            assert_eq!(
+                cartography::selected(control, &input.features)?,
+                Some(choice.into())
+            );
+        }
+        let quiet =
+            Configuration::default_configuration()?.choose("continental-motion", "quiet")?;
+        let restless =
+            Configuration::default_configuration()?.choose("continental-motion", "restless")?;
+        let quiet = quiet.input("root")?.settings.unwrap();
+        let restless = restless.input("root")?.settings.unwrap();
+        for (quiet, restless) in quiet.epochs.iter().zip(&restless.epochs) {
+            assert!(restless.plate_travel > quiet.plate_travel);
+            assert_eq!(restless.tectonics, quiet.tectonics);
+        }
+        Ok(())
+    }
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn creator_review_uses_contracts_without_opening_numerical_inputs() -> io::Result<()> {

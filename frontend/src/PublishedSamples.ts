@@ -43,7 +43,7 @@ export class PublishedSamples {
     const samples = names.map((id) => {
       const index = source.bands.findIndex((band) => band.id === id);
       if (index < 0) throw new Error(`Map raster ${layer.id} is missing ${id}.`);
-      return index;
+      return source.bandIndices[index] - 1;
     });
     const tiff = await this.open(source.assetId);
     const space = mapSpace(this.map, layer.spaceId);

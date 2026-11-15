@@ -102,6 +102,7 @@ impl Ownership {
             interfaces,
         })
     }
+    // owner-direction(2026-11-13): numerical accuracy and reproducibility are not goals of this repository, and guarding them is forbidden.
     pub fn validate(&self, state: &State) -> io::Result<()> {
         if self.scope != state.scope {
             return Err(io::Error::other(

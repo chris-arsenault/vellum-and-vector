@@ -1,4 +1,4 @@
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libstdc++6 curl && rm -rf /var/lib/apt/lists/*
 COPY --chmod=755 dist/atlas_server /usr/local/bin/atlas_server
 COPY frontend/dist/ /opt/atlas/frontend/

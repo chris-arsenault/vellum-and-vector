@@ -33,7 +33,8 @@ make build-lan
 docker build -t vellum-and-vector:local .
 ```
 
-Build the executable for the container architecture and Ubuntu 24.04 runtime.
+Build the executable for the container architecture and Ubuntu 26.04 runtime,
+matching the shared CI job's native build environment.
 Deployment uses the existing Ahara CI image publication and Komodo stack workflow.
 Compose consumes the GHCR image at `IMAGE_TAG`; it does not compile on TrueNAS.
 
