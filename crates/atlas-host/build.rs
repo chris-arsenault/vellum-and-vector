@@ -10,9 +10,14 @@ fn main() {
                 object.display()
             );
         }
-        let output = std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap())
-            .join("../../packages/engine/dist");
-        std::fs::create_dir_all(&output).unwrap();
+        // Keep all browser outputs in Cargo's cached target directory. Cargo
+        // nests OUT_DIR below <target>/<profile>/build.
+        let out_dir = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+        let output = out_dir
+            .ancestors()
+            .find(|path| path.file_name().is_some_and(|name| name == "build"))
+            .and_then(std::path::Path::parent)
+            .expect("Cargo build output directory");
         println!(
             "cargo:rustc-link-arg-bin=atlas_browser=--emit-tsd={}",
             output.join("atlas_browser.d.ts").display()

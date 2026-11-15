@@ -11,54 +11,8 @@ permissions:
   actions: read
   packages: write
 jobs:
-  browser-engine:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v6
-      - run: bash scripts/ci-browser-engine.sh
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-      - run: corepack enable && corepack prepare pnpm@10.29.3 --activate
-      - run: pnpm install --frozen-lockfile
-      - run: make test-architecture
-      - uses: actions/upload-artifact@v4
-        with:
-          name: browser-engine
-          include-hidden-files: true
-          path: |
-            packages/engine/dist/
-            .artifacts/browser-fixture.json
-  browser:
-    needs: browser-engine
-    runs-on: ubuntu-24.04
-    strategy:
-      fail-fast: false
-      matrix:
-        engine: [chromium, firefox, webkit]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v4
-        with:
-          name: browser-engine
-      - uses: chris-arsenault/ahara/.github/actions/browser-tests@main
-        with:
-          engine: ${{ matrix.engine }}
-          config: '{"enabled":true,"directory":"frontend","runtime":"container","verify":false,"release":false}'
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: browser-${{ matrix.engine }}
-          path: frontend/test-results/
   ci:
-    needs: browser
     uses: chris-arsenault/ahara/.github/workflows/ci.yml@main
     with:
-      rust_extra_ci_commands: |
-        sudo apt-get update
-        sudo apt-get install -y cmake ninja-build
-        cargo test --workspace
-        cargo clippy --workspace --all-targets -- -D warnings
-        cargo test -p atlas-host --features integration-tests --test postgres_maps
-        bash scripts/ci-browser-engine.sh
+      rust_extra_ci_commands: bash scripts/ci-browser-engine.sh
     secrets: inherit

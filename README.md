@@ -273,8 +273,8 @@ the Emscripten SDK before building. It compiles the Rust standard library with
 shared-memory support for WasmFS's OPFS worker, using one wasm32 target.
 `make test-rust` runs native explicit-input contracts and compile-fail architecture
 examples. Existing Playwright scenarios exercise the production WASM engine using
-supplied GIS maps. CI prepares that engine and fixture before running the three
-browser jobs. The standalone wasm-bindgen test runner is not a CI gate: its
+supplied GIS maps. Run `make browser-fixture` before those local scenarios;
+the browser CI matrix is disabled. The standalone wasm-bindgen test runner is not a CI gate: its
 Emscripten test binaries currently contain duplicate closure exports and cannot run.
 The test sources remain available; the existing browser fixture rules still apply.
 
@@ -333,8 +333,10 @@ local diagnostic output from node tests belongs in ignored `.artifacts/`.
 
 ## Deployment
 
-CI prepares the Rust browser artifact before the existing Chromium, Firefox and WebKit
-jobs, then runs Ahara's shared Rust/TypeScript checks and frontend deployment on `main`.
+CI uses Ahara's shared Rust/TypeScript workflow and frontend deployment on `main`.
+Its existing Rust hook builds the browser artifact once after cache restoration,
+before TypeScript checks. Architecture checks run with the ordinary frontend suite.
+There are no separate browser build or browser matrix jobs.
 `platform.yml` declares the `rust`, `typescript` and `terraform` stacks and has no
 `migrations` entry. The active Terraform root uses
 Ahara's website module to serve `frontend/dist` at

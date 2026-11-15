@@ -3,7 +3,7 @@ prefix: vellum-and-vector
 stack: [rust, typescript, terraform]
 rust_dir: .
 typescript_dir: frontend
-# The caller workflow supplies compiled Rust artifacts to the same browser action.
+# Browser scenarios remain available locally; CI uses the shared Rust/TypeScript job.
 browser_tests: false
 truenas: true
 images:

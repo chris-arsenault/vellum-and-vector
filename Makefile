@@ -31,7 +31,7 @@ contracts:
 wasm-engine:
 	cargo +nightly build -Zbuild-std=std,panic_abort -p atlas-host --bin atlas_browser --release --target wasm32-unknown-emscripten
 	mkdir -p packages/engine/dist
-	cp target/wasm32-unknown-emscripten/release/atlas_browser.js target/wasm32-unknown-emscripten/release/atlas_browser.wasm packages/engine/dist/
+	cp target/wasm32-unknown-emscripten/release/atlas_browser.js target/wasm32-unknown-emscripten/release/atlas_browser.wasm target/wasm32-unknown-emscripten/release/atlas_browser.d.ts packages/engine/dist/
 
 test-rust:
 	cargo test --workspace
