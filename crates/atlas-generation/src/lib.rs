@@ -116,7 +116,12 @@ pub fn declarations() -> String {
         m::Relative::decl(&cfg),
         m::System::decl(&cfg),
         magic::parameters::Parameters::decl(&cfg),
-        magic::parameters::Overrides::decl(&cfg),
+        // The parameters! macro gives Overrides exactly Parameters' fields, all optional.
+        format!(
+            "type {} = Partial<{}>;",
+            magic::parameters::Overrides::name(&cfg),
+            magic::parameters::Parameters::name(&cfg),
+        ),
         c::Effects::decl(&cfg),
         c::Hazard::decl(&cfg),
         c::GroundMaterial::decl(&cfg),

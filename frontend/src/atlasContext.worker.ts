@@ -49,8 +49,7 @@ async function read(workspace: Awaited<ReturnType<typeof open>>, call: MapCall) 
     path: string[];
   };
   let directory = await navigator.storage.getDirectory();
-  for (const part of asset.path.slice(0, -1))
-    directory = await directory.getDirectoryHandle(part);
+  for (const part of asset.path.slice(0, -1)) directory = await directory.getDirectoryHandle(part);
   const handle = await directory.getFileHandle(asset.path.at(-1)!);
   const url = URL.createObjectURL(await handle.getFile());
   const source = { mediaType: asset.mediaType, url };

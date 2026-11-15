@@ -18,6 +18,9 @@ and the TypeScript storage facade. There is no numerical-store route from that f
 
 PostGIS on TrueNAS and GEOS/SQLite in the browser are alternative complete deployments,
 never a hybrid. Both use this same subsystem layout.
+
+![Owner-supplied execution hosts: the TypeScript view and storage facade read PostGIS beside native Rust on TrueNAS, or GEOS/SQLite beside Rust WASM in the browser.](../architecture/execution-hosts.png)
+
 The data facade exposes map records, assets, inspection, spatial queries and map
 navigation. It does not expose numerical fields, process state or a renderer-specific
 preparation service. The view chooses styles, symbol placement and composition from
@@ -104,6 +107,13 @@ The retained architecture has these implementation homes:
 | Finished-map ownership                                  | `atlas-map` defines GIS contracts independently of generation. `atlas-generation/publication` produces them; `atlas-gis` owns SQLite/PostGIS, GIS queries and map files. |
 
 Rust visibility and compile-fail checks enforce owner and invocation capabilities.
+Feature-owned schedules and epoch composition live in `atlas`, `composition` and
+`sequence`. `settlement` and `transport` retain source, destination, pool and facet
+meaning when owners apply material changes. `flow_graph` and `reconstruction` own
+flow ordering, captured samples and shared spatial mappings. The numerical `hpc`
+module includes packed queues and lists, heaps, membership stamps, grouping,
+union-find and integer-pair lookup; these remain the basis for indexed numerical work.
+
 The active `rustFoundations.architecture.ts`, `separation.architecture.ts` and
 `ownerDirections.architecture.ts` guards cover source adoption, dependency direction
 and owner marks. `make test-architecture` runs these with Rust documentation checks.

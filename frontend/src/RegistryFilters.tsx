@@ -1,5 +1,9 @@
 import { useState } from "react";
-import type { MapColumn as RegistryColumn, MapRegistryQuery as RegistryQuery, MapRegistryPage } from "@atlas/map";
+import type {
+  MapColumn as RegistryColumn,
+  MapRegistryQuery as RegistryQuery,
+  MapRegistryPage,
+} from "@atlas/map";
 type RegistryFacets = MapRegistryPage["facets"];
 type AttributeFilter = RegistryQuery["attributes"][number];
 

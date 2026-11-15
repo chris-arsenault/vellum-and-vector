@@ -83,6 +83,9 @@ describe("Rust foundation architecture", () => {
       1
     );
   });
+});
+
+describe("Rust crate dependency boundary", () => {
   it("map and generation crates depend on values, not host adapters or services", () => {
     const metadata = JSON.parse(
       execFileSync("cargo", ["metadata", "--locked", "--no-deps", "--format-version", "1"], {

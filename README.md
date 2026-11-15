@@ -353,7 +353,8 @@ that registration before the initial product push. Later pushes to `main` use
 the shared CI workflow to test, build and deploy the frontend automatically.
 The retired backend Terraform is removed. The replacement backend package uses the same
 frontend with the native service and the TrueNAS database. Its CI/CD and Komodo setup is
-described in the [LAN guide](docs/lan-backend.md); live deployment remains unfinished.
+described in the [LAN guide](docs/lan-backend.md). Open <http://192.168.66.3:4123/> on the
+home LAN to use backend storage and computation across devices.
 It has no public route. Publishing user data or using a hosted
 presentation service requires explicit authorization.
 
