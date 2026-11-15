@@ -89,18 +89,16 @@ do not establish what an algorithm actually did.
   identity together; generic scalar transport does not average these facts independently. The transport
   policy covers movement, new crust and rift blending; specific identity and return-pool rules
   handle their respective cases. It is not a general history-event dispatcher.
-- **Actual observations.** Optional callbacks expose before-run, after-run and settled field
-  states. A simultaneous settlement identifies its group, since individual effects compete.
-  `explainAnswer` evaluates one cell's current base, additive and scaling contributions without
-  changing the cached inputs used by a running group. The harness samples selected bands at a
-  world coordinate, alongside captured answer values and explanations of current facts. World
-  and regional execution share the observer adapter, without adding world validation to regional
-  operations. Samples survive a failed run.
+- **Actual observations.** Optional ground observers watch column changes during a run; they
+  are not world history. A simultaneous settlement identifies its group, since individual
+  effects compete. `QuestionBook::point` evaluates one cell's current answer without refreshing
+  queries or the cached inputs used by a running group.
 
 ## Consequences
 
 To add a process, implement its entry, add any plain settings to the profile and place its step in
-the selected feature's operations. A step used in several places can live in `world/sequence.ts`.
+the selected feature's operations. A step used in several places can live in
+`crates/atlas-generation/src/atlas/sequence.rs`.
 Bind new specialist operations in that entry. A new shared influence registers a
 responder and loads its module; existing consumers remain unchanged. A new material uses the
 existing mode vocabulary unless a real process needs another mode.

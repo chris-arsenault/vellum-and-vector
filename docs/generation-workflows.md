@@ -78,8 +78,8 @@ class reads and display interpolation locate canonical coordinates in that chart
 Regional development uses the same selected feature definitions and process runner as
 world generation. Features choose shared algorithms, a regional specialization, or
 captured formation that should not be replayed. The coordinator in
-`regional/sequence.ts` orders those contributions; `regional/schedule.ts` implements
-the local operations. [ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)
+`crates/atlas-generation/src/atlas/regional/sequence.rs` orders those contributions;
+`atlas/regional/work.rs` implements the local operations. [ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)
 records the ownership boundaries. Disabling a feature removes its operations from
 both policies rather than leaving a second regional implementation active.
 
@@ -291,8 +291,8 @@ country's spare food are all reaches, and spare food is divided among the
 hungers that reach it.
 
 The same pass runs with different facts. Inside every geological epoch the
-land's cumulative records are read before the epoch's processes and again
-after; what was laid down, stripped off or struck in between buries, bares or
+land's cumulative records are read after the epoch's geology and again at the
+epoch's end; what was laid down, stripped off or struck in between buries, bares or
 wrecks the layers, water over a cell buries it and ice scours it. People then
 live one loose pass without farming or building. Ways and kept lines are
 forgotten when an epoch begins; nothing else is deleted between epochs. After
@@ -550,13 +550,13 @@ or several causal positions in one sequence.
 ### Initial-world configuration
 
 The new-world wizard resolves one versioned JSON recipe before creating and
-generating the world. `generationRecipeSchema` validates the seed, quality,
+generating the world. Recipe resolution validates the seed, quality,
 domains, feature-owned parameters and complete physical/ecological,
-human and magical settings. `atlasParameterDefinitions` owns creator parameter
-defaults, limits, units and display labels; the nested domain schemas
-own ecological and magical settings.
+human and magical settings. `crates/atlas-generation/src/atlas/configuration` owns
+creator parameter defaults, limits, units and display labels, including the ecological
+and magical settings.
 
-`prepareAtlasGeneration` binds those inputs to the configured causal sequence,
+Preparation binds those inputs to the configured causal sequence,
 checks actual registry contracts and produces ordered diagnostics. The reviewed
 configuration travels to the worker and must match the resolved inputs. Complete
 settings participate in configuration identity and remain inspectable in the
@@ -587,7 +587,8 @@ Feature-owned cartographic descriptors compose existing settings and selections
 into curated choices for land, landscape and human geography. Independent
 choices preserve unrelated inputs; advanced departures appear as Custom. Exact
 controls and rich history/system editors remain available on request, with closed
-forms unmounted. `projectGenerationSetup` supplies editable
+forms unmounted. The read-only setup projection in `atlas/configuration/presentation.rs`
+supplies editable
 controls, inherited restrictions and diagnostic owner IDs without copying the
 execution contract into the UI. One canonical draft owns shared epochs, ecology
 regimes, configured magic and cultural eras.
@@ -1009,9 +1010,9 @@ cause and sites none ([ADR 0008](adr/0008-regional-refinement-is-conditioned-amp
 ## Fact validity and selected generation
 
 The configured order expresses causal dependencies. Required facts detect an
-invalid order or a missing refresh. Fact validity includes world revision,
-extent, located space, resolution and time. Identify stale or missing inputs
-with the affected process, fact and scope.
+invalid order or a missing refresh. Each product contract names what a step
+requires, produces and invalidates; the product ledger reports a required product
+as missing, stale (invalidated by a later writer) or available.
 
 Selected-domain generation uses valid retained inputs and the configured
 producers/refreshes needed for its requested results. Existing valid geography
@@ -1090,15 +1091,15 @@ fits carries `// hpc-exempt: <reason>` on its line or the line before.
 
 The host finalizes private immutable numerical resources, sharing masks and topology
 by reference. Extraction separately publishes GIS records and assets; the viewer receives
-only those map products. The GIS catalog installs batches progressively during initial
-generation. Interrupted delivery remains incomplete. Generation processes do not know
-about browser messaging.
+only those map products. A new map, whether a world or a refined region, becomes current
+when its publication begins, and its batches appear as they are written. Interrupted
+delivery remains incomplete. Generation processes do not know about browser messaging.
 
-Regeneration stages record batches in disposable SQLite storage before applying
-them in one catalog transaction. Check world revision and field ownership. If
-intervening edits changed the world, keep
-the edits and report the out-of-date generation result. No automatic retry occurs.
-Domain processes remain independent of the browser adapter.
+Regeneration writes a new, incomplete revision of the same map. The map's current
+revision must still be the one regeneration started from when the job starts, when
+publication begins and when it finishes; only then does the new revision become
+current. Otherwise publication fails and the earlier revision stays current. No
+automatic retry occurs. Domain processes remain independent of the browser adapter.
 
 ## Physical kernel and atlas adapter
 
@@ -1114,10 +1115,11 @@ steps update private numerical arrays; projection and feature extraction update
 GIS state. Numerical checks cover ranges and flow topology,
 river coverage and grounding. GIS validation runs when spatial state changes,
 at completed epoch boundaries and before publication. Authored samples are also
-composed into the native workspace before physical consumers run. Per-layer
-validation is consolidated in `layerValidation.ts`.
+composed into the native workspace before physical consumers run. Map ownership and
+record checks live in `crates/atlas-generation/src/atlas/validation.rs`.
 
-`physicalProfile` holds the defaults, and `atlasPhysicalProfile` adapts them to a map:
+The physical profile in `atlas/configuration/profile.rs` holds the defaults and adapts
+them to a map:
 
 - Geological controls declare relative dimensions and resolve once against the
   map's frame through `MapScale`; initial sites remain sampling-independent.
@@ -1157,7 +1159,7 @@ validation is consolidated in `layerValidation.ts`.
   includes a cold age independently of terrain selection.
 
 Detail presets select a fixed ground area per cell; a world's dimensions decide
-its cell count. `resolution.ts` owns the presets and workload
+its cell count. `crates/atlas-generation/src/atlas/resolution.rs` owns the presets and workload
 calculation shared by setup and generation. Setup shows live estimates for every preset and warns
 above the default world's Standard workload. This warning does not limit map
 size or detail. Numerical boundary support adds halo cells.
@@ -1214,9 +1216,9 @@ separately from plume chains. Constructed rock moves and loads the crust after
 activity stops. Shelf exposure, basin opening and closure can therefore change
 connections without drawing a new coastline template.
 
-Independently owned regional maps dispatch to `regional/workflow.ts`, which
-composes the world's registered initialization, projection and extraction with the
-regional schedule described above.
+Independently owned regional maps are assembled in `atlas/application/region.rs`,
+which composes the world's registered initialization, projection and extraction with
+the regional schedule described above.
 
 ### Latitude climate
 
@@ -1224,7 +1226,7 @@ The climate steps implement a latitude-organised climate; the coefficients are
 declared in code.
 
 - `ocean-currents`: belt-driven drift turned along coasts into gyres
-  (`oceanGyres.ts`). Western boundaries are intensified and upwelling forms on
+  (`field/climate/currents/gyres.rs`). Western boundaries are intensified and upwelling forms on
   subtropical eastern boundaries. A sea-surface anomaly is carried along the current
   from its source latitudes. Eddy mixing applies only where opposing drifts meet, so
   a cell boundary forms a front instead of a step.
@@ -1235,10 +1237,10 @@ declared in code.
   not air temperature. A seasonal half-range grows with latitude and continentality.
   Wind follows Hadley, Ferrel and polar cells by latitude, with terrain
   deflection, belt speed, crest exposure, lee shelter and gap channelling
-  (`windTerrain.ts`).
+  (`field/climate/wind.rs`).
   Air columns march downwind in one ordered pass
-  (`airColumn.ts`). They gather moisture over the sea and rain out with distance and
-  uplift; pressure-belt rainout comes from `belts.ts`. Marine heat, maritime
+  (`field/climate/air.rs`). They gather moisture over the sea and rain out with distance
+  and uplift; pressure-belt rainout comes from the climate settings' rain belts. Marine heat, maritime
   character and magical heat travel with the air; air relaxes toward part of the
   magical forcing beneath it with travel, and that heat spreads across the wind.
   Column precipitation takes the epoch multiplier, in fractional
@@ -1275,8 +1277,7 @@ patch without a world frame sits at the mid latitude.
 
 **Rainfall regimes.** The `rainfall` setting scales moisture supply (column
 saturation and the precipitation baseline), not rain output. Its Dry, Mixed and
-Wet anchors live in one table, `rainfallRegimes`, read by the setup choice and the
-Arid and Wet world presets. Each anchor is fitted to its own outcome: Dry stays
+Wet anchors are each fitted to their own outcome: Dry stays
 desert and steppe; Mixed gives Earth-like equatorial, tropical-margin, dry-belt and
 westerly-coast rainfall; Wet is wetter than Mixed everywhere. Ecology reads plant
 water as the aridity index, precipitation over a temperature-dependent potential
@@ -1285,7 +1286,7 @@ evaporation, not column humidity.
 ### River centrelines
 
 The physical lattice is the drainage solver, but its triangle-centre edges
-are not the published river geometry. `riverPaths.ts` removes cell-scale stair
+are not the published river geometry. `field/river_drawing/paths.rs` removes cell-scale stair
 steps along the dominant upstream/downstream path, keeping each relaxed node
 inside its original triangle. All reaches use the same junction position.
 Headwaters and water outlets remain fixed. Cubic segments follow the resulting
@@ -1324,7 +1325,7 @@ working/captured inputs from the GIS map read by presentation, inspection and ex
 ## Geographic significance at every scale
 
 Publication recognizes coherent places before evaluating their significance.
-The domain judgments in `worldSignificance.ts` combine physical extent with
+The domain judgments in `field/significance.rs` combine physical extent with
 breadth, occupation, relief, contrast, network role or supported authority as
 appropriate to each kind. They do not impose a feature quota or named coverage.
 Resolution controls evidence precision; zoom does not reveal a hidden local
@@ -1391,7 +1392,7 @@ Dispersal takes physical travel time and responds to terrain, wind speed and
 direction, waterborne transport and configured migration strength. Ice
 interrupts colonization.
 
-Propagules also cross the sea (`ecologyCrossing.ts`). Grass and wetland groups
+Propagules also cross the sea (`ecology/crossing.rs`). Grass and wetland groups
 travel with the wind; tree groups raft on currents. Arrival time grows
 exponentially with the effective distance over the carrier's reach; the carrier
 shortens distances downwind or down-current and islands act as stepping stones.

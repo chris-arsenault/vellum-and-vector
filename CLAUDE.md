@@ -35,15 +35,15 @@ overlapping thematic layers and located templates.
 | `frontend/src`                           | React/OpenLayers editor, browser workspace client and generation worker |
 | `frontend/tests`                         | Browser UI wiring tests on fixture worlds                               |
 | `packages/transport`                     | Local/remote GIS and generation facades                                 |
-| `packages/engine`                        | Generated WASM artifact and browser initialization binding               |
+| `packages/engine`                        | Generated WASM artifact and browser initialization binding              |
 | `archive/typescript`                     | Unused TypeScript reference generator, tests and development harness    |
 | `crates/atlas-names`                     | Name generation (PolyForm Noncommercial license)                        |
 | `infrastructure/terraform`               | Frontend-only Ahara website hosting                                     |
 | `packages/map`, `packages/atlas-context` | Finished-map values and separate map/generation service contracts       |
-| `crates/atlas-host`                      | Job lifecycle, private input retention and native/browser composition  |
-| `crates/atlas-generation`                | Numerical generation and finished-map extraction/publication           |
-| `crates/atlas-gis`                       | Independent SQLite/PostGIS storage, GIS queries and map files          |
-| `crates/atlas-map`                       | Published-map and spatial contracts                                    |
+| `crates/atlas-host`                      | Job lifecycle, private input retention and native/browser composition   |
+| `crates/atlas-generation`                | Numerical generation and finished-map extraction/publication            |
+| `crates/atlas-gis`                       | Independent SQLite/PostGIS storage, GIS queries and map files           |
+| `crates/atlas-map`                       | Published-map and spatial contracts                                     |
 | `docs/adr`                               | Current spatial, generation, storage and platform decisions             |
 
 ## Architecture patterns
@@ -61,8 +61,9 @@ GIS/domain-backed process contract, profile-selected sequences, parameters and
 epoch cycles. Steps declare the bands they need and write, and processes shape land
 through declared contracts ([ADR 0011](docs/adr/0011-processes-couple-through-keys-and-a-ledger.md)).
 Workers report progress and can be terminated; there are no restart or recovery
-mechanisms. Initial generation installs streamed output progressively;
-regeneration publishes after validation and a world-revision check.
+mechanisms. A new map, world or refined region, shows its output as it is published;
+regeneration's revision becomes current only after validation and a check that the
+map's current revision has not changed.
 
 ## Development commands
 

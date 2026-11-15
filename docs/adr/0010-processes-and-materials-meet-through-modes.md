@@ -46,8 +46,11 @@ Give the interaction its own representation.
 - Production fields and named Coverage lookups expose live read-only ground views. Bulk reads and
   snapshots give independent storage. Import boundaries restore packages, then derive their projections;
   ordinary process helpers cannot acquire writable backing or call internal column setters.
-- What wears the land is a `GroundProcess` module with its own settings and scale rule. Feature operations
-  compose its executable steps at explicit causal slots, as ADR 0011 describes.
+- What wears the land is a process module in `crates/atlas-generation/src/processes` with its own
+  settings. A staged process is a `StageProcess` that declares its query dependencies, its substep
+  count from the physical context (its scale rule) and the changes it submits; a process that
+  settles during its own run is a plain command. Feature operations compose these steps at explicit
+  causal slots, as ADR 0011 describes.
 
 ## Alternatives
 
@@ -55,8 +58,8 @@ Give the interaction its own representation.
 - **Rules in each process.** Nothing keeps processes consistent, and a material can never be an exception.
 - **Classic Visitor with a method per kind.** Each new kind edits every process.
 - **Entity Component System.** Per-cell bands already exist, so it would be a rebuild for no new behaviour.
-- **Every generation step a plugin.** Most steps share no structure worth a contract; `GenerationModule`
-  already owns which capabilities run.
+- **Every generation step a plugin.** Most steps share no structure worth a contract; the feature
+  `Catalogue` already owns which capabilities run.
 
 ## Consequences
 

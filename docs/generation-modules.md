@@ -1,38 +1,36 @@
 # Generation modules and recipes
 
-Generation runs in a browser worker through the same TypeScript modules in the
-editor and worker. A recipe contains plain data. Process implementations, schemas
-and publication factories stay in the application and are rebound before the
-worker executes the reviewed recipe.
+Generation runs in the shared Rust engine, `crates/atlas-generation`, as WASM in a
+browser worker or natively on the LAN backend. A recipe contains plain data. Process
+implementations, settings and publication declarations stay in the engine and are
+rebound before the reviewed recipe executes.
 
 ## Capability ownership
 
-`GenerationModule` registers its feature definitions, process factories and output
-definitions together. The application composition root is
-`packages/generation/src/atlasModules.ts`; the registry and executor do not contain
-per-feature execution switches. A module can contribute to an existing physical
-slot or the public `present.products`, `present.people` and
-`present.after-people` slots. A new causal phase requires a deliberate profile
-extension.
+The feature `Catalogue` in `crates/atlas-generation/src/atlas/features` lists every
+`Feature` with its domains, requirements, parameters, owned processes, native steps
+and slots; the registry and executor do not contain per-feature execution switches.
+A feature can contribute to an existing physical slot or the public
+`present.products`, `present.people` and `present.after-people` slots. A new causal
+phase requires a deliberate profile extension.
 
-`GenerationFeature` describes a delivered capability. It owns numeric parameter
-definitions, an optional Zod schema for nested configuration, dependencies and
-actual operation contributions. Invocation ownership binds that feature's
-settings into the process's declared parameters. The feature is separate from
-`AtlasFeature`, which identifies a located geographic object, and from the domain
-traits used to constrain geography.
+A `Feature` describes a delivered capability. It names its parameters, dependencies
+and owned processes, and contributes actual operations. Invocation ownership binds
+that feature's settings into the process's declared parameters. The feature is
+separate from a published map feature, which identifies a located geographic object,
+and from the domain traits used to constrain geography.
 
-Each feature declares its supported `slots` from `generationSlots.ts` and returns
-its operations from `contribute`. Contributions outside the feature's declared
-process list fail. The profile owns causal positions; feature implementations own
+Each feature declares its supported `slots` and returns its operations from its
+contribution function. Contributions outside the feature's declared process list
+fail. The profile owns causal positions; feature implementations own
 what they contribute there. Ecology, configured magic and located magic use this
 same path. Before/after model-pass slots supply explicit process/context bindings
 for interleaving influences without a feature switch in the sequence builder.
 
-`conditionalRequires` derives requirements from the resolved configuration and
-actual source context. A requirement can carry a configuration-relative
-`Diagnostic.field` path. Preparation, dependency repair and field navigation use
-those declarations. Independent interaction rules in disabled magic containers
+Configured magic derives further requirements from its systems' effects and
+interaction rules (`atlas/configuration/magic.rs`). A diagnostic can carry a
+configuration-relative `field` path, the feature and its path within that feature's
+configuration. Preparation and field navigation use those paths. Independent interaction rules in disabled magic containers
 participate in dependency discovery because they also participate in execution.
 
 Glacial sculpting owns erosion, deposition and glacial relief classification as
@@ -54,8 +52,9 @@ The JSON recipe schema accepts version 2 with feature selection and owned settin
 ```
 
 This object is the recipe's `features` member. The request also selects its area,
-seed, quality and domains. `prepareAtlasGeneration` resolves and validates the
-complete request before execution. The resulting configuration includes the
+seed, quality and domains. Preparation resolves and validates the complete request
+before execution; preflight (`atlas/dispatch/preflight.rs`) walks the product
+contracts without running simulation work. The resulting configuration includes the
 named sequence, effective settings, seed, feature configurations and publication
 descriptors. Sending a different request with the reviewed configuration fails.
 
@@ -67,15 +66,14 @@ Conflicting legacy selections for operations of one coupled feature are rejected
 Unknown feature IDs, unowned parameters and invalid nested configuration fail
 validation.
 
-An optional feature-owned `configurationBinding` projects nested values into the
-existing world-settings representation. It returns a patch over declared
-`fields`; `epochFields` permits changing only named fields of existing epochs,
-preserving every other value and the clock's identity/order. Adapters receive
-clones, and undeclared patches fail. The clock owns epoch insertion/removal;
-ecology owns ecological regimes and magic owns activity. New modules can keep
-their configuration entirely in resolved feature bindings without adding world
-settings. Selection-only catalog calls need no world history; execution
-preparation binds complete configuration before composing a recipe.
+Nested configuration binds into the world settings in a fixed owner order
+(`atlas/configuration/bindings.rs`): the physical lifecycle, living ecology, configured
+magic, then cultures. Each owner's supplied values extend its defaults and are
+validated against the settings the preceding owners completed. A feature without a
+binding rejects nested configuration. The clock owns epoch insertion/removal;
+ecology owns ecological regimes and magic owns activity. A new feature with nested
+configuration adds its binding there. Selection-only catalog calls need no world
+history; execution preparation binds complete configuration before composing a recipe.
 
 Disabling a feature either omits its complete behavior or yields a dependency
 diagnostic naming the consumer and missing input. Magical coastal modification
@@ -124,7 +122,8 @@ with Ocean geography while retaining its existing compatibility ownership. Linke
 epoch views likewise share one clock value; physical rainfall is editable with
 climate even when living ecology is off because precipitation consumes that value.
 
-`projectGenerationSetup` reads the prepared request and registry. It exposes
+The setup projection (`atlas/configuration/presentation.rs`) reads the prepared request
+and registry. It exposes
 context and feature applicability, editable settings/configuration and invocation
 IDs used to locate real diagnostics. The prepared request remains the authority
 for execution, dependency diagnostics and publications. The setup projection
@@ -143,16 +142,14 @@ source snapshot, inherited definitions and the reviewed source version.
 
 ## Process execution and validity
 
-`ProcessBehavior` supplies executable initialization, model-pass, elapsed,
-transfer, material-transformation, forcing-contributor and extraction interfaces.
-Elapsed behavior receives explicit years. Ecology runs two half-epoch responses,
+Every operation is a command of one kind: initialization, work, elapsed, event or
+publication. Elapsed commands receive explicit years. Ecology runs two half-epoch responses,
 then full-duration burial; present classification adds no biological age. Native
 land-ice passes remain repeated state-changing passes. Configured magical history
 advances once per epoch; located-source storage uses elapsed years.
 
-Every process binds a behavior. Material transformation awaits both transformation and balance, including
-asynchronous failure. Behaviors remain trusted operations over shared mutable
-state, rather than a runtime capability sandbox.
+Every process binds a command. Commands remain trusted operations over shared
+mutable state, rather than a runtime capability sandbox.
 
 One `ProductLedger` drives prerequisite checks, preflight and execution. For world
 steps a product is a band, `field:<band>`, recorded as written when a selected step
@@ -187,7 +184,7 @@ one.
 A module declares field or geographic publications with complete layer metadata.
 Fields include units and intensive, extensive or categorical quantity semantics.
 Geographic declarations identify supported kinds and network output. Native
-channel conversion remains in `world/atlasChannels.ts`; module publication
+channel conversion remains in `field/projection/channels.rs`; feature publication
 definitions select its bindings before final projection.
 
 The candidate publisher validates registered products, installs compatible new
@@ -195,8 +192,8 @@ layers, creates field resources and coverage, and marks generated area layers.
 Unknown channels or geographic outputs fail instead of falling into a default
 layer. Inactive known buffers can remain inherited working inputs without being
 published. Existing compatible layer styling and authored protection remain
-authoritative. The editor publishes the complete candidate only after worker
-completion and the existing world-version check.
+authoritative. A replacement revision becomes current only after the run completes
+and the map's current revision is still the one it started from.
 
 Configured magic's source/propagation declarations hold their operations,
 requirements, applicable parameters and displayed choices together. Adding a
@@ -212,14 +209,6 @@ system-specific code is permitted. Read
 and [ADR 0007](adr/0007-magic-systems-are-materials.md). No system is reduced to
 generic effects and Canonry's named setting lore is not imported. No speculative
 extension framework or universal spell-composition language exists.
-
-An existing module-composition fixture executes an extensive inventory through
-two epochs, changes its configuration, disables it and publishes a new layer.
-It tests the shared runner, not completeness of the magic systems.
-A separate bundled worker runs the complete
-recipe using the production worker handler and real structured-clone messages;
-the Node test bridge supplies the browser messaging API, while browser journeys
-exercise the actual browser worker.
 
 Located-source heat, cold, coastal pressure and erosion resistance have physical
 consumers. Uplift, gravity, fertility and luminous sources currently publish

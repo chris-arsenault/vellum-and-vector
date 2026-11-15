@@ -83,6 +83,6 @@ processes it changes.
 - A coarse value is a share of the ground beneath it. A finer map moves people to where its land
   suits them, so a town gains a shape there. Built ground and remains inherited as an even
   share do not yet gather the same way.
-- Architecture tests in `packages/generation/src/human` and
-  `packages/generation/src/regional` hold the boundaries: one writer, no human band named
-  outside people's code, one publisher of places, and no people model in the regional namespace.
+- Rust visibility and the compile-fail checks in `crates/atlas-generation/src/human/storage.rs`
+  keep one writer of the human layers. `rustFoundations.architecture.ts` requires every human
+  owner mutation to pass through the registered command boundary.

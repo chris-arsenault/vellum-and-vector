@@ -140,5 +140,5 @@ terrain, current water and coasts, retained material and transformed inherited
 structure. Passing contracts alone does not establish geographic quality.
 
 Implementation lives in the feature definitions, shared owners and
-`packages/generation/src/regional`. Parameters remain in code; this record describes
+`crates/atlas-generation/src/atlas/regional`. Parameters remain in code; this record describes
 responsibilities and boundaries rather than a second schedule.
