@@ -16,6 +16,7 @@ test("reviews creator choices through the selected host without running generati
   await tuneGeneration(page, "Climate");
   await page.getByLabel("Baseline temperature · °C", { exact: true }).fill("21");
   await configureHistory();
+  await expect(page.getByText("Configuration ready to review.", { exact: true })).toBeVisible();
   const editor = await recipeEditor(page);
   const recipe = JSON.parse(await editor.inputValue());
   expect(recipe.seed).toBe(73);
