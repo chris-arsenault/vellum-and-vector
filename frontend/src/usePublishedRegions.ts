@@ -108,6 +108,8 @@ export function usePublishedRegions(options: Options) {
     parentId,
     enter,
     cancel,
+    /** Drops an unfinished outline, its dividing lines and any pending boundary request. */
+    discard: d.clear,
     select: (next: string | null) => {
       cancel();
       setId(next);

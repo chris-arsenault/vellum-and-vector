@@ -53,8 +53,8 @@ function useFinishedMap(props: Props) {
   );
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [selected, select] = useState<PublishedFeature | null>(null);
-  const [tool, setTool] = useState<PublishedTool>("inspect");
-  const [panel, setPanel] = useState("regions");
+  const [tool, setRegionTool] = useState<PublishedTool>("inspect");
+  const [panel, showPanel] = useState("regions");
   const navigation = usePublishedNavigation(map, context.navigation);
   const regions = usePublishedRegions({
     map,
@@ -62,10 +62,11 @@ function useFinishedMap(props: Props) {
     navigation: context.navigation,
     saved: navigation,
     tool,
-    setTool,
+    setTool: setRegionTool,
     enterMap: props.open,
     initialRegionId: appearance.ancestry.at(-1),
   });
+  const { setTool, setPanel } = regionScoped(tool, regions, setRegionTool, showPanel);
   const value = usePublishedRegionPresentation(appearance, regions);
   const outline = regions.draft?.candidate.geometry ?? regions.region?.geometry;
   const selection: RegionSelection | null = outline
@@ -105,6 +106,28 @@ function useFinishedMap(props: Props) {
     setError,
     inspect,
     refine,
+  };
+}
+/**
+ * An unfinished region outline belongs to the region tools in the regions panel: choosing
+ * another tool discards it, and leaving the panel ends region selection.
+ */
+function regionScoped(
+  tool: PublishedTool,
+  regions: ReturnType<typeof usePublishedRegions>,
+  setTool: (tool: PublishedTool) => void,
+  showPanel: (panel: string) => void
+) {
+  return {
+    setTool: (next: PublishedTool) => {
+      if (!next.startsWith("region-")) regions.discard();
+      setTool(next);
+    },
+    setPanel: (next: string) => {
+      if (next !== "regions" && tool.startsWith("region-")) regions.cancel();
+      else if (next !== "regions") regions.discard();
+      showPanel(next);
+    },
   };
 }
 function regionSelection(

@@ -16,7 +16,13 @@ import { LoreEncyclopedia } from "./LoreEncyclopedia";
 import { ErrorMessage } from "./ErrorMessage";
 import type { GenerationStatus } from "@atlas/context";
 import { Brand } from "./Brand";
-import { attachChild, childSelection, useRecovery, type JobTarget } from "./regionalJobs";
+import {
+  childSelection,
+  requireIdle,
+  useJobResults,
+  useRecovery,
+  type JobTarget,
+} from "./regionalJobs";
 
 export type FinishedContext = AtlasContext<GenerationDraft>;
 interface Setup {
@@ -28,6 +34,8 @@ interface Setup {
 interface Jobs {
   start(status: GenerationStatus, target: JobTarget | null): void;
   open(reference: MapRef): Promise<void>;
+  /** The map open now; asynchronous steps check it before acting on a map. */
+  current(): MapRef | null;
 }
 interface Opened {
   instance: number;
@@ -77,6 +85,7 @@ export function App() {
 function useAtlas(context: FinishedContext) {
   const cache = useQueryClient();
   const opening = useRef(0);
+  const current = useRef<MapRef | null>(null);
   const [opened, setOpened] = useState<Opened | null>(null);
   const [job, setJob] = useState<GenerationStatus | null>(null);
   const [jobTarget, setJobTarget] = useState<JobTarget | null>(null);
@@ -94,6 +103,7 @@ function useAtlas(context: FinishedContext) {
       const stored = saved ?? (await context.library.find(reference.mapId)) ?? undefined;
       if (request !== opening.current) return;
       if (saved) cache.setQueryData(["map-navigation", reference], saved.navigation);
+      current.current = reference;
       setOpened({ reference, saved: stored, instance: request });
       // Refinement controls stay open over the child map they belong to.
       setSetup((setup) =>
@@ -104,28 +114,23 @@ function useAtlas(context: FinishedContext) {
       if (request === opening.current) setError(error);
     }
   };
-  const start = (status: GenerationStatus, target: JobTarget | null) => {
-    setJob(status);
-    setJobTarget(target);
+  const jobs: Jobs = {
+    start: (status, target) => {
+      results.restart();
+      setJob(status);
+      setJobTarget(target);
+    },
+    open,
+    current: () => current.current,
   };
-  const generation = useGenerationSetup(context, map.data, setError, { start, open });
+  const generation = useGenerationSetup(context, map.data, setError, jobs);
   const { setSetup } = generation;
-  const complete = async (reference: MapRef) => {
-    const target = jobTarget;
-    try {
-      await attachChild(context, cache, target?.selection ?? null, reference);
-    } catch (error) {
-      setError(error);
-    }
-    await open(reference);
-    if (!target?.creates) return;
-    setJob(null);
-    await generation.offer(reference, target.selection);
-  };
-  const published = async (reference: MapRef) => {
-    await cache.invalidateQueries({ queryKey: ["finished-map", reference] });
-    if (!sameMap(opened?.reference, reference)) await open(reference);
-  };
+  const results = useJobResults({
+    ...{ context, cache, target: jobTarget, current: jobs.current, open, setError },
+    ...{ offer: generation.offer, close: () => setJob(null) },
+  });
+  const { start } = jobs;
+  const { complete, published } = results;
   return {
     context,
     opened,
@@ -176,7 +181,8 @@ function useGenerationSetup(
         context.generation.configuration(child),
         context.maps.open(child),
       ]);
-      setSetup({ draft, parent, selection });
+      // The controls belong over the child; if another map opened meanwhile, they are not shown.
+      if (jobs.current()?.mapId === child.mapId) setSetup({ draft, parent, selection });
     } catch (error) {
       setError(error);
     }
@@ -310,6 +316,7 @@ function AtlasSetup({ state }: { state: ReturnType<typeof useAtlas> }) {
     source: setup.parent,
     onCancel: () => setSetup(null),
     onGenerate: async (draft) => {
+      if (setup.parent) await requireIdle(context, setup.parent.reference);
       const status = setup.parent
         ? await context.generation.regenerate(setup.parent.reference, draft)
         : await context.generation.create(draft);

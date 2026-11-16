@@ -75,8 +75,32 @@ test("@generation refinement creates the child map and edits a modal over it", a
 });
 
 test("@generation a cancelled refinement reopens its settings over the child", async ({ page }) => {
-  const { dialog } = await refineCoastalReach(page);
+  const { created, dialog } = await refineCoastalReach(page);
   await includeSuppliedInputsOnly(dialog);
+  // A cancel takes effect when the job stops; until then the child takes no second job.
+  await page.evaluate((parent) => {
+    window.generationFixtureJobs = [
+      {
+        jobId: "stopping-job",
+        state: "running",
+        step: "Cancelling",
+        progress: null,
+        result: null,
+        message: null,
+        details: {
+          name: "Coastal reach",
+          parent,
+          startedAt: "2026-11-16T00:00:00Z",
+          finishedAt: null,
+          elapsedSeconds: 3,
+          epochs: [],
+        },
+      },
+    ];
+  }, created);
+  await dialog.getByRole("button", { name: "Generate region", exact: true }).click();
+  await expect(dialog).toContainText("This map is still generating");
+  expect(await page.evaluate(() => window.generationCalls)).not.toContain("regenerate");
   await page.evaluate(() => {
     window.generationFixtureJobs = [
       {
