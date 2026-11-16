@@ -10,9 +10,6 @@ fn world_and_region_share_addresses_centroids_and_reciprocal_neighbors() {
         .unwrap();
     assert_eq!(lattice.origin(), [140.0, 230.0]);
     for cell in 0..lattice.len() {
-        if lattice.membership(cell) == Membership::NoData {
-            continue;
-        }
         let (u, v, i) = lattice.address(cell);
         assert_eq!(lattice.address_cell(u, v, i), Some(cell));
         let [x, y] = lattice.position(cell);
@@ -23,6 +20,115 @@ fn world_and_region_share_addresses_centroids_and_reciprocal_neighbors() {
             }
         }
     }
+}
+
+// Owner direction 2026-11-16: a map has no outside. Every addressable cell is a map cell;
+// beyond the bounds only boundary support exists, one crossing for each missing neighbour.
+const MAP: Bounds = Bounds(100.0, 200.0, 180.0, 260.0);
+fn covers(x: f64, _: f64) -> bool {
+    x <= 165.0
+}
+fn padded_map() -> TriangularLattice {
+    WorldLatticeOptions::default()
+        .build(MAP, 400.0, 12.0, covers)
+        .unwrap()
+}
+fn on_map(lattice: &TriangularLattice, [x, y]: [f64; 2]) -> bool {
+    let [x, y] = [x + lattice.origin()[0], y + lattice.origin()[1]];
+    (MAP.0..=MAP.2).contains(&x) && (MAP.1..=MAP.3).contains(&y) && covers(x, y)
+}
+fn missing_neighbours(lattice: &TriangularLattice) -> Vec<(usize, usize)> {
+    (0..lattice.len())
+        .flat_map(|cell| (0..3).map(move |side| (cell, side)))
+        .filter(|&(cell, side)| lattice.neighbor(cell, side).is_none())
+        .collect()
+}
+
+#[test]
+fn a_map_addresses_only_its_own_cells() {
+    let lattice = padded_map();
+    assert!(!lattice.is_empty());
+    for cell in 0..lattice.len() {
+        assert!(on_map(&lattice, lattice.position(cell)), "cell {cell}");
+        let open = (0..3).any(|side| lattice.neighbor(cell, side).is_none());
+        assert_eq!(lattice.boundary(cell), open);
+        assert!((0..3)
+            .filter_map(|side| lattice.neighbor(cell, side))
+            .all(|next| next < lattice.len()));
+    }
+    let window = lattice.window_cells(Bounds(0.0, 0.0, 400.0, 400.0));
+    assert_eq!(window.len(), lattice.len());
+}
+
+#[test]
+fn a_point_beyond_the_map_has_no_cell() {
+    let lattice = padded_map();
+    let [ox, oy] = lattice.origin();
+    let spacing = lattice.spacing();
+    for [x, y] in [[MAP.0, 230.0], [140.0, MAP.1], [140.0, MAP.3]] {
+        let cell = lattice.cell_at(x - ox, y - oy).expect("on the bounds");
+        assert!(lattice.boundary(cell));
+    }
+    for [x, y] in [
+        [MAP.2 + 3.0 * spacing, 230.0],
+        [140.0, MAP.1 - 3.0 * spacing],
+        [MAP.0 - spacing, MAP.3 + spacing],
+        [165.0 + 3.0 * spacing, 230.0],
+    ] {
+        assert_eq!(lattice.cell_at(x - ox, y - oy), None, "{x},{y}");
+        let clamped = lattice.edge_cell(x - ox, y - oy).unwrap();
+        assert!(lattice.boundary(clamped));
+    }
+}
+
+#[test]
+fn boundary_support_crosses_exactly_the_map_edge() {
+    let lattice = padded_map();
+    let edge = missing_neighbours(&lattice);
+    let support = lattice.support();
+    let crossings = support
+        .crossings()
+        .iter()
+        .map(|crossing| (crossing.cell, crossing.edge))
+        .collect::<Vec<_>>();
+    assert!(!edge.is_empty());
+    assert_eq!(crossings, edge);
+    for crossing in support.crossings() {
+        let count = edge.iter().filter(|(cell, _)| *cell == crossing.cell);
+        assert_eq!(support.crossings_of(crossing.cell).len(), count.count());
+        assert!(crossing_is_beyond(&lattice, crossing));
+    }
+    for ghost in support.ghosts() {
+        assert!(!on_map(&lattice, ghost.position) && lattice.boundary(ghost.owner));
+    }
+}
+fn crossing_is_beyond(lattice: &TriangularLattice, crossing: &Crossing) -> bool {
+    let support = lattice.support();
+    !on_map(lattice, crossing.position)
+        && crossing.length > 0.0
+        && crossing.face > 0.0
+        && support.ghosts()[crossing.slot].position == crossing.position
+        && support
+            .ghost(GhostChannel::Elevation, crossing.slot)
+            .is_none()
+}
+
+#[test]
+fn ghost_values_are_captured_once_per_ghost() {
+    let mut lattice = padded_map();
+    let count = lattice.support().ghosts().len();
+    let values = (0..count).map(|slot| slot as f64).collect();
+    lattice
+        .capture_ghosts(GhostChannel::Elevation, values)
+        .unwrap();
+    let slot = lattice.support().crossings()[0].slot;
+    assert_eq!(
+        lattice.support().ghost(GhostChannel::Elevation, slot),
+        Some(slot as f64)
+    );
+    assert!(lattice
+        .capture_ghosts(GhostChannel::Elevation, Vec::new())
+        .is_err());
 }
 
 #[test]

@@ -1,9 +1,5 @@
 use crate::features::{Feature, FeatureReader, FeatureSelection};
-use crate::{
-    hpc::BitSet,
-    lattice::{Membership, TriangularLattice},
-    water::reaches::ReachStore,
-};
+use crate::{hpc::BitSet, lattice::TriangularLattice, water::reaches::ReachStore};
 use atlas_map::{Geometry, Position};
 use serde::{Deserialize, Serialize};
 // hpc-exempt: removed feature identities in the private catalog.
@@ -92,12 +88,8 @@ pub fn line_parts(geometry: &Geometry) -> Vec<&[Position]> {
     }
 }
 pub fn cell_at(mesh: &TriangularLattice, world: [f64; 2]) -> Option<usize> {
-    let bounds = mesh.bounds();
     let origin = mesh.origin();
-    mesh.cell_at(
-        mesh.delta_x(world[0] - origin[0]).clamp(bounds.0, bounds.2),
-        (world[1] - origin[1]).clamp(bounds.1, bounds.3),
-    )
+    mesh.cell_at(mesh.delta_x(world[0] - origin[0]), world[1] - origin[1])
 }
 pub fn course_cells(mesh: &TriangularLattice, geometry: &Geometry, span: f64) -> Vec<usize> {
     let step = span / 2.0;
@@ -113,7 +105,7 @@ pub fn course_cells(mesh: &TriangularLattice, geometry: &Geometry, span: f64) ->
                 let Some(cell) = cell_at(mesh, [ax + (bx - ax) * t, ay + (by - ay) * t]) else {
                     continue;
                 };
-                if mesh.membership(cell) == Membership::Content && seen.add(cell) {
+                if seen.add(cell) {
                     cells.push(cell);
                 }
             }

@@ -1,7 +1,6 @@
 use super::{shared::Scalar as S, Field};
 use crate::{
     execution::{ExecutionError, Query, QueryDependency},
-    lattice::Membership,
     noise::hash_unit,
     processes::runner::PhysicalContext,
     rock::ground::GroundField,
@@ -54,9 +53,6 @@ fn candidates(field: &Field, p: &Settings) -> io::Result<[Vec<usize>; 4]> {
         .map_err(io::Error::other)?
         .value();
     for cell in 0..field.mesh.len() {
-        if field.mesh.membership(cell) != Membership::Content {
-            continue;
-        }
         if field.water.borrow().kind_at(cell)? == 1 {
             result[0].push(cell);
             continue;

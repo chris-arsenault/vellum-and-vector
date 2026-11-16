@@ -24,23 +24,19 @@ impl Coverage {
         for (block, length) in lengths.iter_mut().enumerate() {
             let values = key.block_copy(block)?;
             let start = block * BLOCK_CELLS;
-            let live: Vec<_> = (0..values.len())
-                .filter(|&offset| self.live(start + offset, key.len()))
-                .collect();
-            let ordered_keys: Vec<_> = live.iter().map(|&offset| values[offset]).collect();
-            let order = radix_order(&[NumericKey::Float(&ordered_keys)], direction)
-                .map_err(io::Error::other)?;
+            let order =
+                radix_order(&[NumericKey::Float(&values)], direction).map_err(io::Error::other)?;
             cells.with_block_mut(block, |into| {
                 for (n, &index) in order.iter().enumerate() {
-                    into[n] = live[index] as u32;
+                    into[n] = index as u32;
                 }
             })?;
             keys.with_block_mut(block, |into| {
                 for (n, &index) in order.iter().enumerate() {
-                    into[n] = values[live[index]];
+                    into[n] = values[index];
                 }
             })?;
-            *length = live.len();
+            *length = values.len();
             if *length > 0 {
                 heap.push(block as u32, [keys.get(start)?]);
             }

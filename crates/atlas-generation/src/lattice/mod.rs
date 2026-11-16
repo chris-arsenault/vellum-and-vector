@@ -1,11 +1,13 @@
 //! Shared triangular topology for world and region; no regional representation fork.
+mod boundary;
 pub mod fans;
 pub mod sampling;
 mod triangular;
 mod window;
 mod world;
+pub use boundary::{BoundarySupport, Crossing, Ghost, GhostChannel};
 pub use triangular::{
-    LatticeInput, Membership, PeriodicFrame, TriangularFrame, TriangularLattice, TRIANGLE_AREA,
+    LatticeInput, PeriodicFrame, TriangularFrame, TriangularLattice, TRIANGLE_AREA,
 };
 pub use world::{world_shape, WorldLatticeOptions};
 

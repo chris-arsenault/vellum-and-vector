@@ -4,7 +4,6 @@ use super::{
 };
 use crate::{
     execution::{Command, CommandKind, ExecutionError, QueryDependency},
-    lattice::Membership,
     noise::mesh_noise,
     processes::runner::PhysicalContext,
     scale::RelativeMeasure,
@@ -94,7 +93,7 @@ impl Field {
                 .set(cell, 0.0)?;
             let flag = self.shared.code(C::FeatureFlags).get(cell)? & !6;
             self.shared.code_mut(C::FeatureFlags).set(cell, flag)?;
-            if water.get(cell)? != 1 || self.mesh.membership(cell) != Membership::Content {
+            if water.get(cell)? != 1 {
                 continue;
             }
             let [x, y] = self.mesh.position(cell);
@@ -118,7 +117,7 @@ impl Field {
                 .set(cell, value)?;
         }
         for cell in 0..self.mesh.len() {
-            if water.get(cell)? == 1 && self.mesh.membership(cell) == Membership::Content {
+            if water.get(cell)? == 1 {
                 self.freeze_cell(p, c, cell, exposure)?;
             }
         }

@@ -6,7 +6,6 @@ use super::{
 use crate::{
     field::Field,
     hpc::{BitSet, Direction, MultiKeyHeap},
-    lattice::Membership,
     storage::Band,
     water::{
         captured::DrainageReach,
@@ -121,17 +120,13 @@ pub fn basin_discharges(field: &Field) -> io::Result<Band<f64>> {
     }
     Ok(discharge)
 }
-pub fn drawn(field: &Field, world: bool, records: &[ReachMembers]) -> Vec<JoinedRiver> {
+pub fn drawn(world: bool, records: &[ReachMembers]) -> Vec<JoinedRiver> {
     river_join::join(
         &records
             .iter()
             .map(|record| ReachOnMap {
                 downstream: record.reach.downstream,
-                in_frame: world
-                    || record
-                        .members
-                        .iter()
-                        .any(|&cell| field.mesh.membership(cell) == Membership::Content),
+                in_frame: world || !record.members.is_empty(),
                 course: if record.kept.drawn() {
                     record.kept.river()
                 } else {
@@ -159,14 +154,12 @@ pub fn rivers_of(state: &impl RiverState) -> io::Result<Rc<Vec<River>>> {
         let kind = water.read_only().column.kind;
         let mut rivers = Vec::new();
         let mut ranked = MultiKeyHeap::new([Direction::Descending], Direction::Ascending);
-        for river in drawn(field, state.world_geography(), &records) {
+        for river in drawn(state.world_geography(), &records) {
             let mut cells = Vec::new();
             for part in river.parts {
                 for (n, index) in part.into_iter().enumerate() {
                     for &cell in records[index].members.iter().skip(usize::from(n > 0)) {
-                        if field.mesh.membership(cell) == Membership::Content
-                            && reader.order_at(cell, kind.get(cell)?) > 0
-                        {
+                        if reader.order_at(cell, kind.get(cell)?) > 0 {
                             cells.push(cell);
                         }
                     }

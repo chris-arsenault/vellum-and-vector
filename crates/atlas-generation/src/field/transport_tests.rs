@@ -85,6 +85,7 @@ fn one_dispatched_move_preserves_quantities_and_complete_owner_packages() {
     let weights = coverage.scratch(count, SCALE);
     let mut arrivals = coverage.scratch(count, 0.0);
     let mut dominant = coverage.scratch(count, -1i32);
+    let inflow = coverage.scratch(count, 0.0);
     for source in 0..count {
         let target = match source {
             0 => 1,
@@ -108,6 +109,7 @@ fn one_dispatched_move_preserves_quantities_and_complete_owner_packages() {
             targets: targets.read_only(),
             weights: weights.read_only(),
             dominant: dominant.read_only(),
+            inflow: inflow.read_only(),
         },
         arrivals: arrivals.read_only(),
     };
@@ -196,12 +198,14 @@ fn convergence_publishes_consumed_crust_into_the_canonical_history() {
     dominant.set(2, 0).unwrap();
     let mut arrivals = coverage.scratch(count, 0.0);
     arrivals.set(2, arrival * SCALE).unwrap();
+    let inflow = coverage.scratch(count, 0.0);
     let plan = HistoryTransport {
         shares: TransportShares {
             offsets: offsets.read_only(),
             targets: targets.read_only(),
             weights: weights.read_only(),
             dominant: dominant.read_only(),
+            inflow: inflow.read_only(),
         },
         arrivals: arrivals.read_only(),
     };

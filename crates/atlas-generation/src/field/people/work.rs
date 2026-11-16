@@ -7,7 +7,6 @@ use super::{
 use crate::{
     execution::{CommandContext, ExecutionResult, Query},
     field::Field,
-    lattice::Membership,
     scale::{AreaUnit, MapScale},
     storage::{Band, ReadBand},
 };
@@ -21,8 +20,7 @@ pub struct Work {
     pub market: Band<f64>,
 }
 pub fn habitable(field: &Field, cell: usize) -> io::Result<bool> {
-    Ok(field.mesh.membership(cell) == Membership::Content
-        && field.water.borrow().kind_at(cell)? == 0)
+    Ok(field.water.borrow().kind_at(cell)? == 0)
 }
 pub fn km2(field: &Field, cell: usize) -> f64 {
     MapScale::area_units(

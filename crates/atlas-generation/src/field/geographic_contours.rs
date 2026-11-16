@@ -234,7 +234,7 @@ pub fn ocean_footprint(state: &impl MapState) -> io::Result<Option<Geometry>> {
         )?;
     }
     let read = |cell| depths.get(cell);
-    let cells = fans::live(mesh).collect::<Vec<_>>();
+    let cells = (0..mesh.len()).collect::<Vec<_>>();
     let mut trace = Linear::new(state.geometry_precision(), 0.0);
     for &cell in &cells {
         for triangle in fans::cell_fans(mesh, cell, &read)? {

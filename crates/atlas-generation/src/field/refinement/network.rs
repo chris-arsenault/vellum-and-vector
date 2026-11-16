@@ -2,9 +2,12 @@
 use super::{
     basins,
     evolution::{drainage_tree, Tree},
-    topology::{distance, frame_edge, within},
+    topology::{distance, within},
 };
-use crate::lattice::{Membership, TriangularLattice};
+use crate::{
+    lattice::{GhostChannel, TriangularLattice},
+    scale::{LengthUnit, MapScale},
+};
 use std::io;
 pub const SECONDS_PER_YEAR: f64 = 365.25 * 24.0 * 3600.0;
 /// Drainage costs around a captured peak or cone, in the source breadth-first order.
@@ -50,6 +53,8 @@ pub struct Captured<'a> {
     pub lakes: &'a [Lake],
     pub entries: &'a [Entry],
     pub inherited: &'a [f64],
+    /// Sea level in metres, the datum of the captured base.
+    pub datum: f64,
     pub retained_river: &'a [u8],
     pub span: f64,
     pub basin_depth: f64,
@@ -71,7 +76,14 @@ impl Network {
         forcing: Forcing<'_>,
     ) -> io::Result<Self> {
         let n = mesh.len();
-        let sea = basins::connected_sea(mesh, &base, captured.ocean);
+        let support = mesh.support();
+        let sea = basins::connected_sea(mesh, &base, captured.ocean, |crossing| {
+            support
+                .ghost(GhostChannel::Elevation, crossing.slot)
+                .map_or(base[crossing.cell], |height| {
+                    MapScale::metres(height, LengthUnit::Native) - captured.datum
+                })
+        });
         let mut lake = vec![-1; n];
         for (index, held) in captured.lakes.iter().enumerate() {
             for &cell in &held.cells {
@@ -156,7 +168,7 @@ impl Network {
             if self.sink[cell] != 0 && !closed(cell)? {
                 self.sink[cell] = 0;
             }
-            if self.sea[cell] != 0 || mesh.membership(cell) != Membership::Content {
+            if self.sea[cell] != 0 {
                 continue;
             }
             if let Some(level) = self.root_level(
@@ -203,7 +215,7 @@ impl Network {
         self.area.fill(0.0);
         self.flow.fill(0.0);
         for &cell in &self.tree.order {
-            let content = mesh.content_area(cell);
+            let content = mesh.area(cell);
             self.area[cell] = content + self.inflow_catchment[cell];
             self.flow[cell] = (runoff_mm(cell)? / 1000.0).max(0.0) * content / SECONDS_PER_YEAR
                 + self.inflow[cell];
@@ -229,26 +241,20 @@ fn edge_exits(mesh: &TriangularLattice, inherited: &[f64], retained: &[u8]) -> V
     (0..mesh.len())
         .map(|cell| {
             u8::from(
-                frame_edge(mesh, cell) && (retained[cell] != 0 || descends(mesh, inherited, cell)),
+                mesh.boundary(cell) && (retained[cell] != 0 || descends(mesh, inherited, cell)),
             )
         })
         .collect()
 }
+/// The parent's ground beyond the edge is no higher; a world's edge clamps to its own cell.
 fn descends(mesh: &TriangularLattice, inherited: &[f64], cell: usize) -> bool {
-    let mut exterior = false;
-    for edge in 0..3 {
-        let Some(next) = mesh.neighbor(cell, edge) else {
-            continue;
-        };
-        if mesh.membership(next) == Membership::Content {
-            continue;
-        }
-        exterior = true;
-        if inherited[next] <= inherited[cell] {
-            return true;
-        }
-    }
-    !exterior && mesh.boundary(cell)
+    let support = mesh.support();
+    support.crossings_of(cell).iter().any(|crossing| {
+        support
+            .ghost(GhostChannel::Elevation, crossing.slot)
+            .unwrap_or(inherited[cell])
+            <= inherited[cell]
+    })
 }
 pub fn repel(mesh: &TriangularLattice, cost: &mut [f64], center: usize, reach: f64) {
     for cell in within(mesh, center, reach * 2.5) {

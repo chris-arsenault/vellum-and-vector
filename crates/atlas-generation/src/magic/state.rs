@@ -4,7 +4,7 @@ use super::{
     inventory::{hosts, Inventory},
 };
 use crate::{
-    lattice::{Membership, TriangularLattice},
+    lattice::TriangularLattice,
     rock::{
         ground::{Ground, InventoryAccess},
         load::MaterialLoad,
@@ -401,9 +401,6 @@ impl MagicField {
             ..Budget::default()
         };
         for cell in 0..mesh.len() {
-            if mesh.membership(cell) != Membership::Content {
-                continue;
-            }
             let area = mesh.area(cell);
             budget.created += self.channels.band(Channel::Source).get(cell)? * area;
             budget.stored += self.channels.band(Channel::Stored).get(cell)? * area;

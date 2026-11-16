@@ -3,7 +3,6 @@ use super::{environment::environment, groups::living_carbon, unit, Forcing, Habi
 use crate::{
     field::shared::Scalar as S,
     hpc::IntPairIndex,
-    lattice::Membership,
     noise::hash_unit,
     spatial::{SpatialIndex, SpatialKernel},
     storage::{Band, Coverage},
@@ -65,8 +64,7 @@ pub fn causes(
     Ok(ignite)
 }
 fn burnable(map: &Habitat<'_>, cell: usize) -> io::Result<bool> {
-    Ok(map.mesh.membership(cell) == Membership::Content
-        && map.water.column.kind.get(cell)? == 0
+    Ok(map.water.column.kind.get(cell)? == 0
         && map.get(S::IceThickness, cell)? < map.length(2.5e-7)?)
 }
 fn seat_edges(

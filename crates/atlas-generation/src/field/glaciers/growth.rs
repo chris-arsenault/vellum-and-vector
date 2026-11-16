@@ -1,7 +1,6 @@
 use super::{surface::Surface, Settings};
 use crate::{
     field::{shared::Scalar as S, Field},
-    lattice::Membership,
     metric::search::physical_distance,
     processes::runner::PhysicalContext,
     scale::{LengthUnit, MapScale, RelativeMeasure},
@@ -187,9 +186,7 @@ pub(super) fn run(field: &mut Field, p: &Settings, c: &PhysicalContext) -> io::R
         }
         let value = balance(field, &surface, p, cell)?;
         field.shared.scalar_mut(S::IceBalance).set(cell, value)?;
-        if field.water().column.kind.get(cell)? == 0
-            && field.mesh.membership(cell) == Membership::Content
-        {
+        if field.water().column.kind.get(cell)? == 0 {
             land += 1;
         }
     }

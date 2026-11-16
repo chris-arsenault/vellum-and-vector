@@ -3,10 +3,7 @@ use super::{
     courses::cell_at,
     topology::distance,
 };
-use crate::{
-    lattice::Membership,
-    water::{network::RiverReader, WaterView},
-};
+use crate::water::{network::RiverReader, WaterView};
 use std::io;
 #[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Situation {
@@ -112,8 +109,7 @@ impl Field {
         })
     }
     pub fn usable_seat(&self, cell: usize) -> io::Result<bool> {
-        Ok(self.mesh.membership(cell) == Membership::Content
-            && self.water().column.kind.get(cell)? == 0
+        Ok(self.water().column.kind.get(cell)? == 0
             && self.shared.scalar(Scalar::Slope).get(cell)? <= 0.12
             && self.shared.scalar(Scalar::Temperature).get(cell)? / 10.0 - 30.0 >= -5.0)
     }

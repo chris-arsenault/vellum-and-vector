@@ -28,12 +28,6 @@ impl<'a> ImportGeometry<'a> {
             mask,
         }
     }
-    pub fn point_cell(&self, position: Position) -> SpatialResult<Option<usize>> {
-        if !self.spatial.covers_points(&self.mask, &[position])?[0] {
-            return Ok(None);
-        }
-        Ok(self.cell(position))
-    }
     pub fn cell(&self, position: Position) -> Option<usize> {
         let [x, y, _] = position.coordinates();
         let [ox, oy] = self.mesh.origin();

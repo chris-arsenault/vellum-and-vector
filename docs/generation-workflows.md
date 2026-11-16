@@ -1197,7 +1197,8 @@ Detail presets select a fixed ground area per cell; a world's dimensions decide
 its cell count. `crates/atlas-generation/src/atlas/resolution.rs` owns the presets and workload
 calculation shared by setup and generation. Setup shows live estimates for every preset and warns
 above the default world's Standard workload. This warning does not limit map
-size or detail. Numerical boundary support adds halo cells.
+size or detail. Cell counts cover only the map: a map has no outside, and the
+numerical boundary support beyond its edge holds ghost positions, never cells.
 
 All qualities execute the physical processes and configured epochs. Generation
 cost increases with numerical detail and process workload. Scratch bands and the

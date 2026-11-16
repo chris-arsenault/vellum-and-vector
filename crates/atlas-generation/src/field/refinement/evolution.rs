@@ -1,7 +1,7 @@
 use super::topology::{distance, Neighborhood};
 use crate::{
     hpc::{BitSet, Direction, KeyedHeap},
-    lattice::{Membership, TriangularLattice},
+    lattice::TriangularLattice,
 };
 use std::io;
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -40,11 +40,7 @@ pub fn drainage_tree(
         }
         tree.order.push(cell);
         for &next in around.of(cell) {
-            if settled.has(next)
-                || roots[next] != 0
-                || sea[next] != 0
-                || mesh.membership(next) != Membership::Content
-            {
+            if settled.has(next) || roots[next] != 0 || sea[next] != 0 {
                 continue;
             }
             let climb = (height[next] - height[cell]).max(0.0);

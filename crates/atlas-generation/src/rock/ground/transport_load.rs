@@ -35,6 +35,10 @@ impl Ground {
         self.record_flow(cause, Pool::Load, Pool::Sea, volume);
         Ok(())
     }
+    /// Load arriving from beyond the map edge, the reverse of `carry_out`.
+    pub fn carry_in(&mut self, volume: f64, cause: &str) {
+        self.record_flow(cause, Pool::Sea, Pool::Load, volume);
+    }
     pub fn transport_load(
         &mut self,
         plan: &TransportShares,
@@ -48,10 +52,13 @@ impl Ground {
                 continue;
             }
             let retained = distribute(&mut arriving, source, plan, &material)?;
-            let lost = material.depth * (1.0 - retained).max(0.0);
+            // Ground arriving from beyond the edge rides this row but is not this cell's own.
+            let inflow = plan.inflow.get(source)?;
+            let lost = material.depth * (1.0 - (retained - inflow)).max(0.0);
             if lost > 0.0 {
                 self.carry_out(lost, "plates", None, None)?;
             }
+            self.carry_in(material.depth * inflow, "plates");
         }
         for cell in 0..self.mesh.len() {
             current.clear(cell)?;

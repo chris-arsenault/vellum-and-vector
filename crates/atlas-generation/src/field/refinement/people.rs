@@ -14,7 +14,6 @@ use crate::{
         poi::reads,
         Field,
     },
-    lattice::Membership,
     reconstruction::Grid,
     storage::{Band, ReadBand},
 };
@@ -30,21 +29,18 @@ pub fn enabled(domains: &[String]) -> bool {
 }
 pub fn people_on(field: &Field) -> io::Result<f64> {
     (0..field.mesh.len()).try_fold(0.0, |sum, cell| {
-        Ok(sum + field.people.people(cell)? * field.mesh.content_area(cell) / 1e6)
+        Ok(sum + field.people.people(cell)? * field.mesh.area(cell) / 1e6)
     })
 }
 fn feeds(field: &Field, yield_per_km2: &ReadBand<f64>) -> io::Result<f64> {
     (0..field.mesh.len()).try_fold(0.0, |sum, cell| {
-        Ok(sum + yield_per_km2.get(cell)? * field.mesh.content_area(cell) / 1e6)
+        Ok(sum + yield_per_km2.get(cell)? * field.mesh.area(cell) / 1e6)
     })
 }
 fn parent_groups(field: &Field, parent: &Grid) -> io::Result<Band<i32>> {
     let mut groups = field.coverage.borrow_mut().allocate(-1);
     let [ox, oy] = field.mesh.origin();
     for cell in 0..field.mesh.len() {
-        if field.mesh.membership(cell) != Membership::Content {
-            continue;
-        }
         let [x, y] = field.mesh.position(cell);
         groups.set(
             cell,

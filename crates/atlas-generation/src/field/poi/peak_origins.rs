@@ -13,7 +13,6 @@ use super::{
 use crate::{
     field::{refinement::topology::distance, significance::measure},
     hpc::{BitSet, Direction, KeyedHeap},
-    lattice::Membership,
     noise::hash_unit,
     prominence::Prominence,
     rock::ground::GroundField,
@@ -54,10 +53,7 @@ fn candidates(state: &impl State) -> io::Result<Rc<Vec<usize>>> {
         let least = least(state)?;
         let mut ranked = KeyedHeap::new([Direction::Descending], Direction::Ascending);
         for cell in 0..field.mesh.len() {
-            if field.mesh.membership(cell) == Membership::Content
-                && field.water().column.kind.get(cell)? == 0
-                && rise.rise.get(cell)? >= least
-            {
+            if field.water().column.kind.get(cell)? == 0 && rise.rise.get(cell)? >= least {
                 ranked.push(cell as u32, [rise.rise.get(cell)?]);
             }
         }

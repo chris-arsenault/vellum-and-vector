@@ -3,7 +3,6 @@ use super::{site_strength, Context, Environment};
 use crate::{
     field::shared::Scalar as F,
     hpc::{BitSet, Direction, MultiKeyHeap, SmallIntSet},
-    lattice::Membership,
     magic::{
         channels::Channel as C,
         inventory::{exposure, hosts, Inventory},
@@ -75,9 +74,7 @@ fn candidates(
     let p = field.origin_parameters(context.origin);
     let mut maximum: f64 = 0.0;
     for cell in 0..env.mesh.len() {
-        if env.mesh.membership(cell) != Membership::NoData {
-            maximum = maximum.max(env.scalar(F::HeatSourceDensity, cell)?);
-        }
+        maximum = maximum.max(env.scalar(F::HeatSourceDensity, cell)?);
     }
     let radius = p.source_spacing / 2.0;
     let mut heap = MultiKeyHeap::new([Direction::Descending; 2], Direction::Ascending);
@@ -87,9 +84,6 @@ fn candidates(
         None => Box::new(0..env.mesh.len()),
     };
     for cell in cells {
-        if env.mesh.membership(cell) != Membership::Content {
-            continue;
-        }
         let density = env.scalar(F::HeatSourceDensity, cell)?;
         if density < p.source_threshold
             || env.water.column.kind.get(cell)? == 1

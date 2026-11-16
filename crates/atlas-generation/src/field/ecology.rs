@@ -10,7 +10,6 @@ use crate::{
         Habitat,
     },
     execution::{Command, CommandKind, Query, QueryDependency},
-    lattice::Membership,
     magic::state::MagicField,
     spatial::SpatialKernel,
 };
@@ -81,22 +80,15 @@ pub fn develop_child<'a>(
     )
 }
 pub fn classify_child(dependencies: Vec<QueryDependency<Field>>) -> Query<Field, ()> {
-    classify("regional.ecology-present", dependencies, true)
+    classify("regional.ecology-present", dependencies)
 }
 pub fn classify_world(dependencies: Vec<QueryDependency<Field>>) -> Query<Field, ()> {
-    classify("atlas.ecology-present", dependencies, false)
+    classify("atlas.ecology-present", dependencies)
 }
-fn classify(
-    name: &str,
-    dependencies: Vec<QueryDependency<Field>>,
-    content_only: bool,
-) -> Query<Field, ()> {
+fn classify(name: &str, dependencies: Vec<QueryDependency<Field>>) -> Query<Field, ()> {
     Query::new(name, dependencies, move |field: &Field, _| {
         let mut codes = field.shared.derive_code(CellCode::BiomeCodes);
         for cell in 0..field.mesh.len() {
-            if content_only && field.mesh.membership(cell) != Membership::Content {
-                continue;
-            }
             let environment =
                 ecology::environment::environment(field, cell, &ecology::Forcing::default())?;
             codes.set(

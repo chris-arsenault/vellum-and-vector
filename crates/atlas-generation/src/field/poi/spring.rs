@@ -13,7 +13,6 @@ use super::{
 use crate::{
     field::{
         geographic_regions::{self, Components},
-        refinement::topology::frame_edge,
         shared::Scalar,
         significance::measure,
     },
@@ -62,7 +61,7 @@ fn natural(state: &impl RiverState, cell: usize) -> io::Result<bool> {
     if field.water.borrow().kind_at(cell)? != 0
         || reads::magic_rule(state, "greenwood", "oasis", cell)?
         || spring_water(state, cell)? != Form::Natural
-        || frame_edge(&field.mesh, cell)
+        || field.mesh.boundary(cell)
         || field.shared.scalar(Scalar::IceThickness).get(cell)? > 0.0
         || field.water.borrow().glacial_melt(cell)? > 0.0
         || reads::celsius(field, cell)? <= 0.0

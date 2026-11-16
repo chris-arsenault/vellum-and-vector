@@ -58,7 +58,7 @@ impl State {
         paths.water = self.river_water()?;
         let discharges = river_courses::basin_discharges(self.field())?;
         let mut records = river_courses::kept_reaches(self.field())?;
-        for river in river_courses::drawn(self.field(), self.scope.world_geography, &records) {
+        for river in river_courses::drawn(self.scope.world_geography, &records) {
             let parts = river
                 .parts
                 .iter()

@@ -1,21 +1,10 @@
 //! Local walks on the same triangular lattice used by all generation.
-use crate::{
-    hpc::BitSet,
-    lattice::{Membership, TriangularLattice},
-};
+use crate::{hpc::BitSet, lattice::TriangularLattice};
 
 pub fn distance(mesh: &TriangularLattice, a: usize, b: usize) -> f64 {
     let [x, y] = mesh.position(a);
     let [nx, ny] = mesh.position(b);
     mesh.delta_x(nx - x).hypot(ny - y)
-}
-pub fn frame_edge(mesh: &TriangularLattice, cell: usize) -> bool {
-    mesh.membership(cell) == Membership::Content
-        && (mesh.boundary(cell)
-            || (0..3).any(|edge| {
-                mesh.neighbor(cell, edge)
-                    .is_some_and(|next| mesh.membership(next) == Membership::Halo)
-            }))
 }
 pub fn components(
     mesh: &TriangularLattice,
@@ -24,7 +13,7 @@ pub fn components(
 ) {
     let mut seen = BitSet::new(mesh.len());
     for start in 0..mesh.len() {
-        if seen.has(start) || mesh.membership(start) != Membership::Content || !includes(start) {
+        if seen.has(start) || !includes(start) {
             continue;
         }
         let mut cells = vec![start];
@@ -35,8 +24,7 @@ pub fn components(
                 let Some(next) = mesh.neighbor(cells[head], edge) else {
                     continue;
                 };
-                if !seen.has(next) && mesh.membership(next) == Membership::Content && includes(next)
-                {
+                if !seen.has(next) && includes(next) {
                     seen.add(next);
                     cells.push(next);
                 }

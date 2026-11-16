@@ -108,7 +108,7 @@ impl Field {
             if plate == 0 {
                 continue;
             }
-            let area = self.mesh.content_area(cell);
+            let area = self.mesh.area(cell);
             if let Some(held) = areas.iter_mut().find(|a| a.0 == plate) {
                 held.1 += area;
             } else {

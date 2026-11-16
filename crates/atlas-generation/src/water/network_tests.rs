@@ -1,7 +1,7 @@
 use super::{network::*, reaches::*};
 use crate::transport::TransportShares;
 use crate::{
-    lattice::{Membership, TriangularLattice, WorldLatticeOptions},
+    lattice::{TriangularLattice, WorldLatticeOptions},
     storage::*,
 };
 use atlas_map::Bounds;
@@ -30,10 +30,7 @@ pub(super) fn fixture() -> (Rc<TriangularLattice>, Coverage, [usize; 3]) {
             .unwrap(),
     );
     let b = (0..mesh.len())
-        .find(|&cell| {
-            mesh.membership(cell) == Membership::Content
-                && (0..3).all(|edge| mesh.neighbor(cell, edge).is_some())
-        })
+        .find(|&cell| (0..3).all(|edge| mesh.neighbor(cell, edge).is_some()))
         .unwrap();
     let a = mesh.neighbor(b, 0).unwrap();
     let c = mesh.neighbor(b, 1).unwrap();
@@ -167,6 +164,7 @@ fn ground_transport_moves_profiles_and_history_without_reconstructing_rivers_fro
     let mut targets = coverage.scratch(count, -1i32);
     let weights = coverage.scratch(count, 1_000_000.0);
     let dominant = coverage.scratch(count, -1i32);
+    let inflow = coverage.scratch(count, 0.0);
     for cell in 0..=count {
         offsets.set(cell, cell as u32).unwrap();
     }
@@ -180,6 +178,7 @@ fn ground_transport_moves_profiles_and_history_without_reconstructing_rivers_fro
                 targets: targets.read_only(),
                 weights: weights.read_only(),
                 dominant: dominant.read_only(),
+                inflow: inflow.read_only(),
             },
             count,
         )

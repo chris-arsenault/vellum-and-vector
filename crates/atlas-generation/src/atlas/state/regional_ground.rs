@@ -129,6 +129,7 @@ impl State {
                     lakes: &regional.evidence.lakes,
                     entries: &regional.evidence.entries,
                     inherited: &inherited,
+                    datum,
                     retained_river: &retained,
                     span: field.scale().cells(1.0),
                     basin_depth: field

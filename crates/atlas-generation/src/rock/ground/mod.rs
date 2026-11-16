@@ -100,6 +100,9 @@ pub struct CrustBudget {
     pub ocean_consumed: f64,
     pub continental_exported: f64,
     pub ocean_exported: f64,
+    /// Crust arriving across the map edge, copied from the edge column (zero-gradient inflow).
+    pub continental_imported: f64,
+    pub ocean_imported: f64,
     pub continental_adjustment: f64,
     pub ocean_adjustment: f64,
 }

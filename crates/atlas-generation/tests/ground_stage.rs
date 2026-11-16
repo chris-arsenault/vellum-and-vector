@@ -1,5 +1,5 @@
 use atlas_generation::{
-    lattice::{Membership, WorldLatticeOptions},
+    lattice::WorldLatticeOptions,
     rock::{
         cargo_identity::CargoIdentities, catalogue::*, coarsening::Fold, columns::*, ground::*,
         load::MaterialLoad, ModeId, ModeMix,
@@ -83,9 +83,7 @@ fn fixture_with(configure: impl FnOnce(&mut GroundStorage, &mut RockColumns, &[u
     let mut columns = RockColumns::new(&mut coverage);
     let mut identities = CargoIdentities::default();
     let kept = identities.declare("kept vein", Some("fire")).unwrap();
-    let cells: Vec<_> = (0..mesh.len())
-        .filter(|&cell| mesh.membership(cell) == Membership::Content)
-        .collect();
+    let cells: Vec<_> = (0..mesh.len()).collect();
     for cell in 0..mesh.len() {
         storage
             .initialize(GroundField::BedrockElevation, cell, MapScale::native(100.0))
@@ -435,11 +433,13 @@ fn sediment_motion_moves_actual_material_and_releases_custody() {
     let targets = f.coverage.scratch(1, target as i32);
     let weights = f.coverage.scratch(1, 750000.0);
     let dominant = f.coverage.allocate(-1i32);
+    let inflow = f.coverage.allocate(0.0);
     let plan = TransportShares {
         offsets: offsets.read_only(),
         targets: targets.read_only(),
         weights: weights.read_only(),
         dominant: dominant.read_only(),
+        inflow: inflow.read_only(),
     };
     f.ground
         .transport_load(&plan, &mut f.load, &mut f.coverage)

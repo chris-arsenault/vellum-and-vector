@@ -137,8 +137,23 @@ never occurs in practice, and `block_live`/`block_count` have no callers.
 three deliberate readers, `Sampler` and transport inflow → remove the skip-only
 checks → update ADR 0003's live-block claim and the generation guide.
 
-**Sequencing:** the performance work has landed. Start after the surface raster
-work (section 6) is committed, because both touch `atlas-generation`.
+**Done.**
+
+- `lattice/triangular.rs` numbers map cells only, through a two-way site table.
+- `lattice/boundary.rs` holds `BoundarySupport`: crossings point at ghost sites
+  covering the frame padding, each ghost owned by its nearest edge cell; ghost
+  elevation is captured from the parent on regions and clamped on worlds.
+- Ported: `descends`, `connected_sea`, the `Sampler`, climate wrap, inheritance and
+  crust transport. Crust arriving across the edge is booked as inflow
+  (`TransportShares::inflow`, crust budget `*_imported`, ground flow Sea → Load), not
+  as the edge cell's retained ground.
+- 79 `membership()` lines removed; `refinement/courses.rs` no longer clamps outside
+  points onto the edge.
+
+**Open:** `cell_at` maps points inside the bounds but past the outermost centroids
+onto the nearest map cell within two spacings. Region footprints are rectangles, so
+this matters only for non-rectangular charts. Edge effects (outlets, inflow crust,
+zero-flux smoothing on the map edge) are unseen on a generated map.
 
 ## 2. Refinement creates the child map before generation
 
@@ -169,20 +184,34 @@ Refining an already refined region opened its child.
 **Owner direction (2026-11-16):** create the real child map, open it, and show the
 refinement modal over it. Not a preview substitute.
 
-**Remedy**
+**Design (read, no new job type or facade method)**
 
-- "Refine this region" creates the child map: the child area with its true footprint
-  (`Selection::footprint`) and the parent's geography captured into it, published so
-  the child opens showing what will be refined. This splits area creation out of the
-  job's capture step (`crates/atlas-host/src/regional_capture.rs:106-188`), which
-  today rejects an existing child id; generation then runs on the existing child.
-- The app opens the child and shows the refinement modal over it. Closing the modal
-  leaves the user in the unrefined child, as the old flow did; refining an existing
-  child opens it.
-- Show the real footprint size, not the selection's bounding box.
-- The owner direction marked 2026-11-15 ("regional refinement is a modal with only
-  changeable selections", `RegionalGeneration.tsx:39`) stays. Update its entry to
-  record that the modal opens over the created child map (2026-11-16).
+- "Refine this region" runs the existing Refine job, which stops after its capture
+  step. It stores and publishes the captured document as the child map: the parent's
+  geography clipped to the true footprint, at the parent's sample density. A
+  `creates_child` flag on the prepared job (`browser_job.rs`,
+  `native_generation_job.rs`) skips generation. Publish reads the starting records
+  that capture wrote.
+- The app opens the child on publish, attaches it to the region and shows the
+  `RegionalGeneration` modal over it. Generate runs the existing Regenerate action on
+  the child: its configuration comes from the parent's last run and the child's real
+  bounds, which also fixes the wrong size the modal showed.
+- Refine on a region that already has a child opens that child with the same modal.
+- `AttachChild` (`atlas-map regions/state.rs`) accepts a newer revision of the same
+  child, so the region follows the refined revision.
+- The owner direction of 2026-10-24 that initial generation streams its output
+  stays. A child whose only revision is its capture has not been generated, so its
+  first refinement publishes progressively, as a new region did before, replacing the
+  capture revision. Later regenerations stay atomic.
+- Marks: keep the 2026-11-15 modal direction; add the 2026-11-16 direction ("when
+  refining a region, create the child map first, drop the user into it, then offer the
+  refinement controls"); update `frontend/tests/regionalGeneration.test.ts`.
+
+**Risk:** no path has yet published a map whose fields are all inherited from the
+parent; check profile layer filters and named entities without child features.
+
+**Sequencing:** after the lattice work (section 1) is committed; both build the
+host and engine crates.
 
 ## 3. Regular wiggle on roads and some rivers
 

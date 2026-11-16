@@ -5,7 +5,6 @@ use crate::{
         poi::map_records::{self, Record},
         significance::measure,
     },
-    lattice::Membership,
     water::{reaches::Reach, significance::RIVER_LENGTH},
 };
 use atlas_map::{Geometry, Position};
@@ -15,7 +14,6 @@ use std::io;
 fn line_of(state: &State, cells: &[usize]) -> io::Result<Vec<Position>> {
     let mut line = cells
         .iter()
-        .filter(|&&cell| state.field().mesh().membership(cell) == Membership::Content)
         .map(|&cell| {
             let [x, y, _] = map_records::native_position(state, cell)?.coordinates();
             Ok(Position::xy((x + 0.5).floor(), (y + 0.5).floor()))

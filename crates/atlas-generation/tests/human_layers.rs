@@ -1,7 +1,7 @@
 use atlas_generation::{
     execution::Executor,
     human::{catalogue::*, identity::*, operations::*, HumanField as F, HumanLayers, HumanSeed},
-    lattice::{Membership, WorldLatticeOptions},
+    lattice::WorldLatticeOptions,
     storage::*,
 };
 use atlas_map::Bounds;
@@ -60,9 +60,7 @@ impl Fixture {
         Self {
             runtime: Executor::new(State { layers, coverage }),
             ops: Operations::new(|state| (&mut state.layers, &mut state.coverage)),
-            cells: (0..mesh.len())
-                .filter(|&cell| mesh.membership(cell) == Membership::Content)
-                .collect(),
+            cells: (0..mesh.len()).collect(),
             floats: Vec::new(),
             integers: Vec::new(),
             mesh,
@@ -329,7 +327,8 @@ fn crust_carriage_moves_population_remains_and_whole_identity_columns_together()
     let mut offsets = Band::new(f.mesh.len() + 1, 0u32, cache.clone());
     let mut targets = Band::new(2, f.cells[2] as i32, cache.clone());
     let weights = Band::new(2, 1_000_000.0, cache.clone());
-    let dominant = Band::new(f.mesh.len(), -1, cache);
+    let dominant = Band::new(f.mesh.len(), -1, cache.clone());
+    let inflow = Band::new(f.mesh.len(), 0.0, cache);
     let mut count = 0;
     for cell in 0..f.mesh.len() {
         offsets.set(cell, count).unwrap();
@@ -347,6 +346,7 @@ fn crust_carriage_moves_population_remains_and_whole_identity_columns_together()
                 targets: targets.read_only(),
                 weights: weights.read_only(),
                 dominant: dominant.read_only(),
+                inflow: inflow.read_only(),
             },
         )
         .unwrap();

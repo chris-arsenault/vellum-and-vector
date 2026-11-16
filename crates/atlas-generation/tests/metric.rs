@@ -1,5 +1,5 @@
 use atlas_generation::{
-    lattice::{Membership, TriangularLattice, WorldLatticeOptions},
+    lattice::{TriangularLattice, WorldLatticeOptions},
     metric::{operator::Operator, search::physical_distance, smoothing::smooth},
     storage::*,
 };
@@ -85,8 +85,7 @@ fn spread(samples: f64, resident: bool) {
     for cell in 0..mesh.len() {
         assert!(
             result.get(cell).unwrap().is_finite(),
-            "Non-finite cell {cell}, membership {:?}",
-            mesh.membership(cell)
+            "Non-finite cell {cell}"
         );
     }
 }
@@ -107,7 +106,7 @@ fn inactive_gap_stops_diffusion_between_components() {
     let mut values = coverage.allocate(0.0);
     for cell in 0..mesh.len() {
         let x = mesh.position(cell)[0];
-        if mesh.membership(cell) != Membership::NoData && x.abs() > 5.0 {
+        if x.abs() > 5.0 {
             active.set(cell, 1).unwrap();
         }
         values

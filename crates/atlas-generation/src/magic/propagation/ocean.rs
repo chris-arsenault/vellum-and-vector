@@ -1,7 +1,7 @@
 use super::beams::{trace, Ray};
 use crate::{
     hpc::{radix_order, BitSet, Direction, KeyedHeap, NumericKey},
-    lattice::{Membership, TriangularLattice},
+    lattice::TriangularLattice,
     magic::{
         channels::Channel as C,
         sources::{Context, Environment},
@@ -27,8 +27,7 @@ fn measure(env: &Environment<'_>, fraction: f64, dimension: i32) -> io::Result<f
 pub fn coastline_length(env: &Environment<'_>) -> io::Result<f64> {
     let mut length = 0.0;
     for cell in 0..env.mesh.len() {
-        if env.mesh.membership(cell) != Membership::Content || env.water.column.kind.get(cell)? != 1
-        {
+        if env.water.column.kind.get(cell)? != 1 {
             continue;
         }
         for edge in 0..3 {
@@ -44,9 +43,8 @@ pub fn coastline_length(env: &Environment<'_>) -> io::Result<f64> {
 pub fn ocean_area(env: &Environment<'_>) -> io::Result<f64> {
     let mut area = 0.0;
     for cell in 0..env.mesh.len() {
-        if env.mesh.membership(cell) == Membership::Content && env.water.column.kind.get(cell)? == 1
-        {
-            area += env.mesh.content_area(cell);
+        if env.water.column.kind.get(cell)? == 1 {
+            area += env.mesh.area(cell);
         }
     }
     Ok(area)
@@ -80,7 +78,7 @@ pub fn coast_distances_on(
     let mut distances = coverage.scratch(mesh.len(), f64::INFINITY);
     let mut queue = KeyedHeap::new([Direction::Ascending], Direction::Ascending);
     for cell in 0..mesh.len() {
-        if mesh.membership(cell) != Membership::Content || !coastal(mesh, water, cell)? {
+        if !coastal(mesh, water, cell)? {
             continue;
         }
         let start = mesh.cell_width().min(mesh.cell_height()) / 2.0;
@@ -135,8 +133,7 @@ fn sources(
         else {
             continue;
         };
-        if env.mesh.membership(cell) != Membership::Content || env.water.column.kind.get(cell)? != 1
-        {
+        if env.water.column.kind.get(cell)? != 1 {
             continue;
         }
         if let (Some(distances), Some(reach)) = (&distances, coastal) {
@@ -172,10 +169,7 @@ pub fn propagate(
     let p = field.origin_parameters(context.origin);
     for cell in 0..env.mesh.len() {
         let strength = source.get(cell)?;
-        if env.mesh.membership(cell) != Membership::Content
-            || strength == 0.0
-            || env.water.column.kind.get(cell)? != 1
-        {
+        if strength == 0.0 || env.water.column.kind.get(cell)? != 1 {
             continue;
         }
         for ray in 0..p.ray_count.ceil() as usize {

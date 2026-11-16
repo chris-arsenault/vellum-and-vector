@@ -389,6 +389,13 @@ const directions: readonly OwnerDirection[] = [
     given: "2026-11-16",
     marks: ["frontend/src/rasterStyles.ts"],
   },
+  {
+    direction:
+      "a map has no outside; cells beyond the bounds are not normally addressable and exist only as boundary support for numerical calculation",
+    given: "2026-11-16",
+    marks: ["crates/atlas-generation/src/lattice/triangular.rs"],
+    test: "crates/atlas-generation/tests/lattice.rs",
+  },
 ];
 
 const root = join(__dirname, "../../..");

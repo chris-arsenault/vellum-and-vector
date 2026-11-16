@@ -9,7 +9,6 @@ use crate::{
     features::{records::Attributes, Feature},
     field::{events::Event, geographic_contours},
     hpc::BitSet,
-    lattice::Membership,
     spatial::Predicate,
 };
 use atlas_map::{Geometry, Position};
@@ -37,10 +36,7 @@ pub fn places(
                 let Some(anchor) = mesh.cell_at(event.x, event.y) else {
                     continue;
                 };
-                let cells = sites::within(mesh, anchor, reach(event))
-                    .into_iter()
-                    .filter(|&cell| mesh.membership(cell) == Membership::Content)
-                    .collect::<Vec<_>>();
+                let cells = sites::within(mesh, anchor, reach(event));
                 if cells.is_empty() {
                     continue;
                 }

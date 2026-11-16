@@ -4,7 +4,7 @@ use super::{
     region_partition,
     significance::measure,
 };
-use crate::{hpc::SmallIntSet, lattice::Membership, storage::Band};
+use crate::{hpc::SmallIntSet, storage::Band};
 use atlas_map::Geometry;
 use std::io;
 fn label_contour(
@@ -121,7 +121,7 @@ pub fn components(
     let mesh = &field.mesh;
     let mut labels = field.coverage.borrow_mut().allocate(-1);
     for cell in 0..mesh.len() {
-        if mesh.membership(cell) == Membership::Content && includes(cell)? {
+        if includes(cell)? {
             labels.set(cell, -2)?;
         }
     }

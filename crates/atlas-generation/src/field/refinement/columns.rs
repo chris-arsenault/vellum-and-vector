@@ -1,7 +1,6 @@
 use super::super::{schema::NumericBand, Field};
 use crate::{
     hpc::{group_by_label, BitSet},
-    lattice::Membership,
     reconstruction::Grid,
     rock::{
         catalogue,
@@ -60,8 +59,7 @@ impl Field {
         let mut donors = vec![-1; self.mesh.len()];
         let origin = self.mesh.origin();
         for (cell, donor) in donors.iter_mut().enumerate() {
-            if self.mesh.membership(cell) != Membership::Content
-                || water.column.kind.get(cell)? == 1
+            if water.column.kind.get(cell)? == 1
                 || (valleys_only && ground.share(cell, Facet::Cut)? <= 0.0)
             {
                 continue;

@@ -7,7 +7,6 @@ use super::{
 use crate::{
     execution::{Query, QueryDependency},
     flow_graph,
-    lattice::Membership,
     rock::ground::GroundField as G,
     water::column::{Store, NO_WATER_SURFACE},
 };
@@ -220,7 +219,7 @@ impl Field {
             )?;
             for &cell in reach.cells() {
                 require(
-                    cell < self.mesh.len() && self.mesh.membership(cell) != Membership::NoData,
+                    cell < self.mesh.len(),
                     "Retained river has a cell outside this map",
                 )?;
             }

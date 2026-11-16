@@ -1,6 +1,6 @@
 use super::super::Field;
 use crate::{
-    lattice::{sampling::Sampler, Membership, TriangularLattice},
+    lattice::{sampling::Sampler, TriangularLattice},
     noise::fractal_noise,
     scale::{LengthUnit, MapScale, RelativeMeasure},
     storage::ReadBand,
@@ -17,7 +17,6 @@ pub struct Adjacency {
 impl Adjacency {
     pub fn new(mesh: &TriangularLattice) -> Self {
         let step = (0..mesh.len())
-            .filter(|&i| mesh.membership(i) == Membership::Content)
             .map(|_| mesh.cell_width().min(mesh.cell_height()))
             .fold(f64::INFINITY, f64::min);
         let mut result = Self {

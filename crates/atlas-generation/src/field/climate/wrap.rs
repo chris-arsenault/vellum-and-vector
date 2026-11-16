@@ -1,5 +1,5 @@
 use super::{Field, Settings};
-use crate::{lattice::Membership, storage::Band};
+use crate::storage::Band;
 use std::io;
 pub(super) fn edges(field: &Field, p: &Settings) -> Option<[f64; 2]> {
     if p.wrap_longitude == 0 {
@@ -9,9 +9,6 @@ pub(super) fn edges(field: &Field, p: &Settings) -> Option<[f64; 2]> {
     let tolerance = (east - west) * 0.01;
     let (mut low, mut high) = (f64::INFINITY, f64::NEG_INFINITY);
     for cell in 0..field.mesh.len() {
-        if field.mesh.membership(cell) != Membership::Content {
-            continue;
-        }
         let x = field.mesh.position(cell)[0] + field.mesh.origin()[0];
         low = low.min(x);
         high = high.max(x);

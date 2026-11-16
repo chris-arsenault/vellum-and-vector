@@ -1,7 +1,7 @@
 //! Source-indexed plate overlap and donor deformation from world/transportPlan.ts.
 use super::{
-    overlap::triangle_overlap, DeformationBands, HistoryTransport, TransportShares,
-    TRANSPORT_WEIGHT_SCALE as SCALE,
+    overlap::{ghost_overlap, triangle_overlap},
+    DeformationBands, HistoryTransport, TransportShares, TRANSPORT_WEIGHT_SCALE as SCALE,
 };
 use crate::{
     field::shared::SharedFields,
@@ -20,6 +20,7 @@ pub struct TransportPlan {
     weights: Band<f64>,
     arrivals: Band<f64>,
     dominant: Band<i32>,
+    inflow: Band<f64>,
     deformation: [Band<f64>; 4],
 }
 impl TransportPlan {
@@ -30,6 +31,7 @@ impl TransportPlan {
             weights: coverage.scratch(0, 0.0),
             arrivals: coverage.scratch(0, 0.0),
             dominant: coverage.scratch(0, 0),
+            inflow: coverage.scratch(0, 0.0),
             deformation: std::array::from_fn(|_| coverage.scratch(0, 0.0)),
         }
     }
@@ -43,6 +45,7 @@ impl TransportPlan {
         archive.allocated_band("weights", &mut self.weights, coverage)?;
         archive.allocated_band("arrivals", &mut self.arrivals, coverage)?;
         archive.allocated_band("dominant", &mut self.dominant, coverage)?;
+        archive.allocated_band("inflow", &mut self.inflow, coverage)?;
         for (index, band) in self.deformation.iter_mut().enumerate() {
             archive.allocated_band(&format!("deformation-{index}"), band, coverage)?;
         }
@@ -55,6 +58,7 @@ impl TransportPlan {
                 targets: self.targets.read_only(),
                 weights: self.weights.read_only(),
                 dominant: self.dominant.read_only(),
+                inflow: self.inflow.read_only(),
             },
             arrivals: self.arrivals.read_only(),
         }
@@ -156,6 +160,7 @@ pub fn build(
 ) -> io::Result<TransportPlan> {
     let mut offsets = coverage.scratch(mesh.len() + 1, 0u32);
     let mut deformation = std::array::from_fn(|_| coverage.allocate(0.0));
+    let mut inflow = coverage.allocate(0.0);
     let mut builder = Builder {
         mesh,
         targets: BandList::default(),
@@ -176,6 +181,12 @@ pub fn build(
             band.set(cell, value)?;
         }
         builder.scatter(cell, center, &motion)?;
+        for ghost in mesh.support().owned_by(cell) {
+            for (target, share) in ghost_overlap(mesh, ghost, &motion) {
+                builder.add(cell, target, share * SCALE)?;
+                inflow.set(cell, inflow.get(cell)? + share)?;
+            }
+        }
     }
     offsets.set(
         mesh.len(),
@@ -189,6 +200,7 @@ pub fn build(
         weights,
         arrivals: builder.arrivals,
         dominant: builder.dominant,
+        inflow,
         deformation,
     };
     plan.offsets.retain();
@@ -196,6 +208,7 @@ pub fn build(
     plan.weights.retain();
     plan.arrivals.retain();
     plan.dominant.retain();
+    plan.inflow.retain();
     for band in &mut plan.deformation {
         band.retain();
     }

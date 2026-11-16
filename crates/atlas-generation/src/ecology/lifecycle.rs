@@ -8,7 +8,6 @@ use super::{
 };
 use crate::{
     field::shared::{CellCode, Scalar as S},
-    lattice::Membership,
     rock::ground::GroundField as G,
     scale::{LengthUnit, MapScale},
     storage::{Coverage, ReadBand},
@@ -63,11 +62,8 @@ fn remember(map: &mut Habitat<'_>) -> io::Result<()> {
     }
     Ok(())
 }
-pub fn classify(map: &mut Habitat<'_>, content_only: bool) -> io::Result<()> {
+pub fn classify(map: &mut Habitat<'_>) -> io::Result<()> {
     for cell in 0..map.mesh.len() {
-        if content_only && map.mesh.membership(cell) != Membership::Content {
-            continue;
-        }
         let code = biomes::classify(map, cell, &environment(map, cell, &Forcing::default())?)?;
         map.fields
             .code_mut(CellCode::BiomeCodes)
@@ -91,7 +87,7 @@ pub fn present(
         growth::update_tree_cover(map, cell)?;
     }
     restore_all(map, restore)?;
-    classify(map, false)
+    classify(map)
 }
 fn present_stress(e: &Environment) -> f64 {
     if e.frozen || e.submerged {

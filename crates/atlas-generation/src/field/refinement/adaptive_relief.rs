@@ -2,7 +2,6 @@
 use crate::{
     execution::{Command, CommandKind},
     field::{inheritance::resources::Resource, Field},
-    lattice::Membership,
     noise::fractal_noise,
     reconstruction::{Interpolator, Layout},
     rock::ground::queries::{surface_response, SurfaceResponse},
@@ -67,9 +66,6 @@ pub fn synthesize<'a>() -> Command<Field, Input<'a>> {
             let mut square = 0.0;
             // owner-direction(2026-10-29): child elevation and coastline may change freely, including at their edges
             for cell in 0..field.mesh.len() {
-                if field.mesh.membership(cell) != Membership::Content {
-                    continue;
-                }
                 let [x, y] = field.mesh.position(cell);
                 let x = ox + x;
                 let y = oy + y;

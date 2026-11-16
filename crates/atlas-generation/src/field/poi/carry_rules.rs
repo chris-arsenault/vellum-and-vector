@@ -3,7 +3,7 @@ use super::{
     state::State,
     values::{Carried, Cost, Place, Unrealized},
 };
-use crate::{features::Feature, hpc::BitSet, lattice::Membership};
+use crate::{features::Feature, hpc::BitSet};
 use atlas_map::{Geometry, Position};
 use std::io;
 
@@ -31,16 +31,12 @@ fn covered_cells(state: &impl State, feature: &Feature, cell: usize) -> io::Resu
         return Ok(vec![cell]);
     }
     let mesh = &state.field()?.mesh;
-    let cells = mesh
-        .window_cells(
-            state
-                .spatial()
-                .bounds(&feature.geometry)
-                .map_err(io::Error::other)?,
-        )
-        .into_iter()
-        .filter(|&cell| mesh.membership(cell) == Membership::Content)
-        .collect::<Vec<_>>();
+    let cells = mesh.window_cells(
+        state
+            .spatial()
+            .bounds(&feature.geometry)
+            .map_err(io::Error::other)?,
+    );
     let [ox, oy] = mesh.origin();
     let points = cells
         .iter()
@@ -64,9 +60,6 @@ pub fn where_it_lands(state: &impl State, feature: &Feature) -> io::Result<Optio
     let Some(cell) = locating_cell(state, feature)? else {
         return Ok(None);
     };
-    if state.field()?.mesh.membership(cell) != Membership::Content {
-        return Ok(None);
-    }
     Ok(Some(Carried {
         feature: feature.clone(),
         cell,

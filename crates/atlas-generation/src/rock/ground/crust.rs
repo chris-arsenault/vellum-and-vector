@@ -127,9 +127,14 @@ impl Ground {
                 )?;
                 retained += share;
             }
-            let exported_area = self.volume(source, (1.0 - retained).max(0.0));
+            // Ground arriving from beyond the edge rides this row but is not this cell's own.
+            let inflow = plan.inflow.get(source)?;
+            let exported_area = self.volume(source, (1.0 - (retained - inflow)).max(0.0));
             self.crust_budget.continental_exported += (amounts[0] + amounts[2]) * exported_area;
             self.crust_budget.ocean_exported += amounts[1] * exported_area;
+            let imported_area = self.volume(source, inflow);
+            self.crust_budget.continental_imported += (amounts[0] + amounts[2]) * imported_area;
+            self.crust_budget.ocean_imported += amounts[1] * imported_area;
         }
         Ok(result)
     }

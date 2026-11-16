@@ -30,11 +30,7 @@ pub fn inflows(field: &Field, cell: usize) -> io::Result<Vec<usize>> {
     Ok(cells)
 }
 pub fn area_of(field: &Field, place: &Place) -> f64 {
-    place
-        .cells
-        .iter()
-        .map(|&cell| field.mesh.content_area(cell))
-        .sum()
+    place.cells.iter().map(|&cell| field.mesh.area(cell)).sum()
 }
 pub fn dryness_around(state: &impl State, place: &Place, radius: f64) -> io::Result<f64> {
     let field = state.field()?;

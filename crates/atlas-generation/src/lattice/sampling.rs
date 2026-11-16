@@ -42,7 +42,8 @@ impl Cache {
     ) -> io::Result<f64> {
         let [x, y] = mesh.point(point[0], point[1]);
         let Some(cell) = mesh.cell_at(x, y) else {
-            return Ok(0.0);
+            // Beyond the map the value clamps to the edge cell's own.
+            return mesh.edge_cell(x, y).map_or(Ok(0.0), read);
         };
         let barycentric = mesh.barycentric(cell, [x, y]);
         let minimum = barycentric

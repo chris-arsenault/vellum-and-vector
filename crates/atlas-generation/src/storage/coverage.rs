@@ -1,5 +1,5 @@
 use super::{band::Allocation, Band, ReadBand, Sample, SharedCache};
-use crate::lattice::{Membership, TriangularLattice, BLOCK_CELLS};
+use crate::lattice::{TriangularLattice, BLOCK_CELLS};
 use std::{
     io,
     rc::{Rc, Weak},
@@ -79,20 +79,8 @@ impl Coverage {
             !band.released()
         });
     }
-    pub(crate) fn live(&self, cell: usize, length: usize) -> bool {
-        match &self.layout {
-            Layout::Lattice(lattice) if length == lattice.len() => {
-                lattice.membership(cell) != Membership::NoData
-            }
-            _ => true,
-        }
-    }
-    pub fn for_each_cell(&self, mut visit: impl FnMut(usize)) {
-        for cell in 0..self.len() {
-            if self.live(cell, self.len()) {
-                visit(cell);
-            }
-        }
+    pub fn for_each_cell(&self, visit: impl FnMut(usize)) {
+        (0..self.len()).for_each(visit);
     }
     pub fn reduce<T: Sample, R>(
         &self,
@@ -103,10 +91,7 @@ impl Coverage {
         for block in 0..band.len().div_ceil(BLOCK_CELLS) {
             let values = band.block_copy(block)?;
             for (offset, value) in values.into_iter().enumerate() {
-                let cell = block * BLOCK_CELLS + offset;
-                if self.live(cell, band.len()) {
-                    seed = fold(seed, value, cell);
-                }
+                seed = fold(seed, value, block * BLOCK_CELLS + offset);
             }
         }
         Ok(seed)

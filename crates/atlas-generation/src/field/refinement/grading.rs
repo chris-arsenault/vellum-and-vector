@@ -1,6 +1,6 @@
 use super::{super::Field, topology::distance};
 use crate::{
-    lattice::{Membership, TriangularLattice},
+    lattice::TriangularLattice,
     rock::{ground::GroundField, material::MaterialLayer},
     scale::{LengthUnit, MapScale},
     settlement::stage::Pool,
@@ -112,7 +112,7 @@ impl Field {
         let targets = targets
             .iter()
             .filter_map(|t| match water.get(t.cell) {
-                Ok(0) if self.mesh.membership(t.cell) == Membership::Content => Some(Ok(Target {
+                Ok(0) => Some(Ok(Target {
                     cell: t.cell,
                     gradient: t.gradient,
                 })),

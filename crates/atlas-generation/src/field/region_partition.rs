@@ -6,7 +6,6 @@ use super::{
 };
 use crate::{
     hpc::{Direction, KeyedHeap},
-    lattice::Membership,
     rock::ground::GroundField,
     scale::{LengthUnit, MapScale},
     storage::Band,
@@ -20,8 +19,8 @@ pub fn land_area(field: &Field) -> io::Result<f64> {
     let water = field.water();
     let mut area = 0.0;
     for cell in 0..field.mesh.len() {
-        if field.mesh.membership(cell) == Membership::Content && water.column.kind.get(cell)? == 0 {
-            area += field.mesh.content_area(cell);
+        if water.column.kind.get(cell)? == 0 {
+            area += field.mesh.area(cell);
         }
     }
     Ok(area)

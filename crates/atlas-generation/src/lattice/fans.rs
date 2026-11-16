@@ -1,5 +1,5 @@
 //! Full interpolation support and directed cell fans for geographic contours.
-use super::{sampling::vertex_members, Membership, TriangularLattice};
+use super::{sampling::vertex_members, TriangularLattice};
 use crate::{contours::Sample, hpc::SmallIntSet};
 use std::io;
 pub fn support(mesh: &TriangularLattice, members: &[usize]) -> Vec<usize> {
@@ -21,9 +21,6 @@ pub fn support(mesh: &TriangularLattice, members: &[usize]) -> Vec<usize> {
         }
     }
     result
-}
-pub fn live(mesh: &TriangularLattice) -> impl Iterator<Item = usize> + '_ {
-    (0..mesh.len()).filter(|&cell| mesh.membership(cell) != Membership::NoData)
 }
 pub fn face_neighbor(mesh: &TriangularLattice, cell: usize, opposite: usize) -> usize {
     mesh.neighbor(

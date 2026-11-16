@@ -15,7 +15,6 @@ use crate::{
     features::Feature,
     field::{refinement::topology::distance, shared::Scalar, significance::measure},
     hpc::BitSet,
-    lattice::Membership,
     magic::{
         channels::Channel,
         state::{Door, MagicField},
@@ -224,8 +223,7 @@ fn frame_cell(s: &impl State, x: f64, y: f64) -> Option<usize> {
     let field = s.physical()?;
     let mesh = &field.mesh;
     let [ox, oy] = mesh.origin();
-    let cell = mesh.cell_at(x - ox, y - oy)?;
-    (mesh.membership(cell) == Membership::Content).then_some(cell)
+    mesh.cell_at(x - ox, y - oy)
 }
 fn carry(s: &impl State, feature: &Feature) -> io::Result<Option<Carried>> {
     Ok(

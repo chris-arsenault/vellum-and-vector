@@ -52,14 +52,9 @@ pub(super) fn seed() -> FieldSeed {
 #[test]
 fn travel_takes_and_withdraws_offered_non_adjacent_steps() {
     use super::people::country::spread;
-    use crate::{
-        lattice::Membership,
-        links::{Link, Offers},
-    };
+    use crate::links::{Link, Offers};
     let field = seed().finish(Box::<GroundObservers>::default()).unwrap();
-    let cells: Vec<_> = (0..field.mesh().len())
-        .filter(|&cell| field.mesh().membership(cell) == Membership::Content)
-        .collect();
+    let cells: Vec<_> = (0..field.mesh().len()).collect();
     let first = cells[0];
     let far = *cells.last().unwrap();
     let step = |a, b| {

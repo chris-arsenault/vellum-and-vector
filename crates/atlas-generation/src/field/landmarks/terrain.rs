@@ -6,7 +6,7 @@ use super::{
 use crate::{
     field::Field,
     hpc::{radix_order, Direction, NumericKey, SmallIntSet},
-    lattice::{sampling::Sampler, Membership},
+    lattice::sampling::Sampler,
     metric::search::physical_distance,
     rock::ground::GroundField as G,
     scale::{LengthUnit, MapScale},
@@ -30,8 +30,7 @@ impl<'a> Terrain<'a> {
         let mut flows = Vec::new();
         let water = field.water();
         for cell in 0..field.mesh.len() {
-            if field.mesh.membership(cell) == Membership::Content
-                && water.column.kind.get(cell)? == 0
+            if water.column.kind.get(cell)? == 0
                 && on_river(field, cell)?
                 && height(field, cell)? > length(field, 0.00000125)?
             {

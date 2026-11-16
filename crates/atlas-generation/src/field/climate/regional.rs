@@ -8,7 +8,6 @@ use crate::{
         shared::Scalar as S,
         Field,
     },
-    lattice::Membership,
     rock::ground::GroundField,
     scale::{LengthUnit, MapScale, RelativeMeasure},
     scale_settings::RelativeOverrides,
@@ -136,9 +135,6 @@ impl Capture {
         let (gx, gy) = gradients(field)?;
         let height = field.ground().view(GroundField::Elevation);
         for cell in 0..field.mesh.len() {
-            if field.mesh.membership(cell) != Membership::Content {
-                continue;
-            }
             let delta = MapScale::metres(
                 height.get(cell)? - inherited_height.get(cell)?,
                 LengthUnit::Native,
@@ -187,9 +183,6 @@ impl Capture {
     fn deflect_wind(&self, field: &Field, p: &Settings) -> io::Result<()> {
         let terrain = Terrain::new(field, p)?;
         for cell in 0..field.mesh.len() {
-            if field.mesh.membership(cell) != Membership::Content {
-                continue;
-            }
             let x = self.wind_x.get(cell)? / 1000.0;
             let y = self.wind_y.get(cell)? / 1000.0;
             let speed = x.hypot(y);

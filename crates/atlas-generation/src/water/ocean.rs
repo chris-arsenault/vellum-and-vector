@@ -58,7 +58,7 @@ impl OceanInputs<'_> {
         let mut volume = 0.0;
         for cell in 0..self.mesh.len() {
             if self.grounded_ice.get(cell)? != 0 {
-                volume += self.ice_thickness.get(cell)? * self.mesh.content_area(cell) * 0.917;
+                volume += self.ice_thickness.get(cell)? * self.mesh.area(cell) * 0.917;
             }
         }
         Ok(volume)
@@ -67,7 +67,7 @@ impl OceanInputs<'_> {
         let mut volume = 0.0;
         visit_connected(self.mesh, self.elevation, level, coverage, |cell| {
             volume += MapScale::metres(level - self.elevation.get(cell)?, LengthUnit::Native)
-                * self.mesh.content_area(cell);
+                * self.mesh.area(cell);
             Ok(())
         })?;
         Ok(volume)
@@ -125,7 +125,7 @@ impl OceanDatum {
         let owned = !self.initialized || self.base_volume > 0.0;
         if owned && formation.crust_forming && formation.completed_epochs == 0 {
             let area: f64 = (0..input.mesh.len())
-                .map(|cell| input.mesh.content_area(cell))
+                .map(|cell| input.mesh.area(cell))
                 .sum();
             self.base_level = (input.connected_level(area * formation.coverage, coverage)?
                 + MapScale::native(formation.sea_level * formation.elevation_scale))
