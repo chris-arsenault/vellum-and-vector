@@ -10,7 +10,8 @@ export type PublishedTool =
   | "region-pick"
   | "region-outline"
   | "region-cut"
-  | "region-edit";
+  | "region-edit"
+  | "measure";
 export interface PublishedMapEvents {
   inspected(value: Inspection): void;
   position(value: Position): void;

@@ -8,6 +8,7 @@ import { defaultCartographicPresentation } from "./cartographicPresentation";
 import { defaultRasterPresentation } from "./rasterDefaults";
 import { publishedStyles, publishedDrawnStyles } from "./publishedAppearance";
 import { socialFieldChannel } from "./fieldDepiction";
+import { defaultRealScalePresentation, realScaleStyles } from "./realScale";
 
 export interface PublishedStyleContext {
   map: MapDescriptor;
@@ -16,13 +17,15 @@ export interface PublishedStyleContext {
   change(value: PublishedPresentation): void;
 }
 export function initialPublishedPresentation(map: MapDescriptor): PublishedPresentation {
+  const styles = publishedStyles(map);
   return {
-    styles: publishedStyles(map),
+    styles: map.realScale ? realScaleStyles(styles) : styles,
     rasterStyles: null,
     raster: defaultRasterPresentation(),
     drawing: defaultCartographicPresentation(),
     footprint: map.footprint,
     ancestry: [],
+    ...(map.realScale ? { realScale: defaultRealScalePresentation() } : {}),
   };
 }
 export function publishedRasterDescription(layer: MapLayer): RasterDescription {

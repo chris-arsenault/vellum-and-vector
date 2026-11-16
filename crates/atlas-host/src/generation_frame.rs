@@ -126,6 +126,9 @@ impl Geography {
             .compact_bounds(&footprint, spatial)
             .map_err(io::Error::other)?;
         let span = match (&area.parent_id, &area.map) {
+            (Some(_), Some(map)) if map.real_scale.is_some() => {
+                map.real_scale.map_or(0.0, |real| real.cell_span())
+            }
             (Some(_), Some(map)) => input
                 .quality
                 .regional_span(map.refinement_level.max(1))

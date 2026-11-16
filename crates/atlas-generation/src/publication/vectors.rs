@@ -88,7 +88,11 @@ impl Vectors<'_> {
                 })
             })
             .collect::<SpatialResult<_>>()?;
-        let footprint = feature.footprint.and_then(|shape| match shape {
+        let shape = match feature.footprint {
+            Some(shape) => Some(shape),
+            None => self.widened(&feature.geometry, &feature.attributes)?,
+        };
+        let footprint = shape.and_then(|shape| match shape {
             Geometry::Polygon { coordinates } => Some(RegionGeometry::Polygon(coordinates)),
             Geometry::MultiPolygon { coordinates } => {
                 Some(RegionGeometry::MultiPolygon(coordinates))
@@ -110,6 +114,37 @@ impl Vectors<'_> {
             relations,
             causes: feature.causes,
         })
+    }
+    /// On a real-scale map, a line that states a full width at each vertex (`widths`) covers
+    /// the ground of that width; its footprint is that ground (ADR 0016). World and regional
+    /// courses keep their widths as attributes only.
+    fn widened(
+        &self,
+        geometry: &Geometry,
+        attributes: &crate::features::records::Attributes,
+    ) -> SpatialResult<Option<Geometry>> {
+        let real_scale = self
+            .registry
+            .context
+            .area(self.area)?
+            .map
+            .as_ref()
+            .is_some_and(|map| map.real_scale.is_some());
+        let (true, Geometry::LineString { coordinates }, Some(widths)) = (
+            real_scale,
+            geometry,
+            attributes.get("widths").and_then(|w| w.as_array()),
+        ) else {
+            return Ok(None);
+        };
+        let widths: Option<Vec<f64>> = widths.iter().map(serde_json::Value::as_f64).collect();
+        // A clipped or redrawn course whose widths no longer match its vertices keeps its line.
+        match widths {
+            Some(widths) if widths.len() == coordinates.len() => {
+                atlas_map::hexes::width_outline(coordinates, &widths, self.registry.spatial)
+            }
+            _ => Ok(None),
+        }
     }
     pub fn catalogue(&self, layer_id: &str) -> SpatialResult<LayerCatalog> {
         let catalogue = &self.registry.catalogue;

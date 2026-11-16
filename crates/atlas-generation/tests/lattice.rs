@@ -69,3 +69,43 @@ fn geographic_size_uses_map_area_while_precision_and_cell_support_stay_explicit(
     assert_eq!(MapScale::native(1.0), 1024.0);
     assert!(RelativeMeasure::new(0.1, 1, 0.0, LengthUnit::Metre).is_err());
 }
+
+#[test]
+fn hexes_group_whole_triangles_and_hold_six_n_squared() {
+    use atlas_generation::lattice::hexes::{grid, hex_of, triangle_corners};
+    use std::collections::BTreeMap;
+    let (width, height) = (60.0, 40.0);
+    let samples = width * height / TRIANGLE_AREA;
+    let lattice = WorldLatticeOptions::default()
+        .build(Bounds(0.0, 0.0, width, height), samples, 0.0, |_, _| true)
+        .unwrap();
+    assert!((lattice.spacing() - 1.0).abs() < 1e-9);
+    let [ox, oy] = lattice.origin();
+    let whole = |hexes: &atlas_map::hexes::HexGrid, cell: usize| {
+        let hex = hex_of(hexes, &lattice, cell);
+        let [cx, cy] = lattice.position(cell);
+        let centre = [cx + ox, cy + oy];
+        triangle_corners(&lattice, cell).into_iter().all(|[x, y]| {
+            hexes.hex_at([x + (centre[0] - x) * 1e-6, y + (centre[1] - y) * 1e-6]) == hex
+        })
+    };
+    for edges in 1..=3 {
+        let hexes = grid(&lattice, edges).unwrap();
+        let n = f64::from(edges);
+        assert!((hexes.across_flats() - 3.0 * n * lattice.spacing()).abs() < 1e-9);
+        let mut counts = BTreeMap::new();
+        for cell in (0..lattice.len()).filter(|&c| lattice.membership(c) != Membership::NoData) {
+            *counts.entry(hex_of(&hexes, &lattice, cell)).or_insert(0) += 1;
+            assert!(whole(&hexes, cell), "triangle {cell} crosses a hex side");
+        }
+        let inside = |[x, y]: [f64; 2]| x > 1.0 && x < width - 1.0 && y > 1.0 && y < height - 1.0;
+        let interior: Vec<_> = counts
+            .iter()
+            .filter(|(hex, _)| hexes.corners(**hex).into_iter().all(inside))
+            .collect();
+        assert!(!interior.is_empty());
+        for (hex, count) in interior {
+            assert_eq!(*count, 6 * edges * edges, "hex {hex:?} at side {edges}");
+        }
+    }
+}

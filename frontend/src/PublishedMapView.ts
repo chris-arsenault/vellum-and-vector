@@ -5,6 +5,7 @@ import type { Bounds, MapDescriptor, MapEntity, MapFeature, MapReader } from "@a
 import { terrainLayerId } from "@atlas/map";
 import type { CartographicPresentation, LayerStyle } from "./types";
 import type { RasterPresentation } from "./types";
+import type { RealScalePresentation } from "./realScale";
 import type { PublishedMapEngine } from "./publishedMapEngine";
 import { publishedScene } from "./publishedScene";
 import { PublishedSamples } from "./PublishedSamples";
@@ -24,6 +25,8 @@ export interface PublishedPresentation {
   drawing: CartographicPresentation;
   footprint: Geometry;
   ancestry: string[];
+  /** Present on real-scale maps (ADR 0016). */
+  realScale?: RealScalePresentation;
 }
 interface Scene {
   bounds: Bounds;
@@ -109,8 +112,10 @@ export class PublishedMapView {
       view: presentation.drawing,
       footprint: presentation.footprint,
       ancestry: presentation.ancestry,
+      realScale: presentation.realScale,
     };
     if (!drawn) {
+      this.engine.scale.setUnits(presentation.realScale?.units === "feet" ? "imperial" : "metric");
       if (this.rasterPresentation !== presentation.raster) {
         await this.engine.rasters.update(presentation.raster);
         this.rasterPresentation = presentation.raster;

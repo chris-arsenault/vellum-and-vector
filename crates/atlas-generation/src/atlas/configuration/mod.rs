@@ -181,7 +181,10 @@ impl Resolved {
             .as_str()
             .unwrap()
             .to_owned();
-        let sequence = if frame.regional {
+        let real_scale = frame.regional && frame.profile.real_scale();
+        let sequence = if real_scale {
+            super::regional::sequence::real_scale(&catalogue, &context)?
+        } else if frame.regional {
             super::regional::sequence::sequence(&catalogue, &context)?
         } else {
             super::sequence::configured(
@@ -189,12 +192,13 @@ impl Resolved {
                 &context,
                 &self.settings.epochs,
                 &self.settings.human_eras,
-                &profile,
                 frame.inherited,
             )?
         };
         Ok(Configuration {
-            id: if frame.regional {
+            id: if real_scale {
+                "real-scale".into()
+            } else if frame.regional {
                 "regional-bidirectional-refinement".into()
             } else {
                 format!("atlas:{profile}")

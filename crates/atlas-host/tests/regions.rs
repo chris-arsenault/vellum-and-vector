@@ -348,8 +348,14 @@ fn regional_capture_preserves_selected_depth_and_leaves_room_for_coasts() {
         id: &id,
         name: "Coast",
         operation: "capture",
+        real_scale: None,
     }
-    .capture(document, vec![], &Empty, &kernel)
+    .capture(
+        serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap(),
+        vec![],
+        &Empty,
+        &kernel,
+    )
     .unwrap();
     let area = &captured.document.world["areas"][&id];
     assert_eq!(area["map"]["refinementLevel"], 2);
@@ -359,4 +365,37 @@ fn regional_capture_preserves_selected_depth_and_leaves_room_for_coasts() {
         Bounds(8.0, 8.0, 32.0, 32.0)
     );
     assert_eq!(area["frame"]["origin"]["x"], 20.0);
+
+    // A real-scale child is a 4:3 frame of the chosen hexes across, centred on the selection,
+    // outside the regional ladder.
+    let real = atlas_generation::features::context::RealScaleMap {
+        kind: atlas_map::RealScaleKind::Ground,
+        hex_size: atlas_generation::atlas::resolution::HexSize::OneAndHalfMetres,
+        hexes_across: 20,
+        triangles_per_edge: 2,
+    };
+    let point = atlas_map::RegionSelection {
+        region_path: vec![],
+        ..selection
+    };
+    let id = uuid::Uuid::new_v4().to_string();
+    let captured = Selection {
+        parent: &input.map,
+        selection: &point,
+        id: &id,
+        name: "Glen",
+        operation: "real-scale",
+        real_scale: Some(real),
+    }
+    .capture(document, vec![], &Empty, &kernel)
+    .unwrap();
+    let area = &captured.document.world["areas"][&id];
+    assert_eq!(area["profile"], "local");
+    assert_eq!(area["map"]["refinementLevel"], 0);
+    assert_eq!(area["map"]["realScale"]["hexSize"], "1.5m");
+    assert_eq!(area["map"]["realScale"]["trianglesPerEdge"], 2);
+    assert_eq!(
+        kernel.bounds(&captured.document.scope.footprint).unwrap(),
+        Bounds(5.0, 8.75, 35.0, 31.25)
+    );
 }

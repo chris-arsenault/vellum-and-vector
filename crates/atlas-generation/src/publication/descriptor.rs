@@ -1,11 +1,15 @@
 use crate::{
     atlas::resolution::Profile,
-    features::{chart::Chart, context::Context},
+    features::{
+        chart::Chart,
+        context::{Context, RealScaleMap},
+    },
     scale::{LengthUnit, MapScale, RelativeMeasure},
     spatial::{SpatialKernel, SpatialResult},
 };
 use atlas_map::{
-    MapDescriptor, MapFrame, MapRef, MapSpace, PublicationState, RegionGeometry, RegionScale,
+    CreatorLayer, MapDescriptor, MapFrame, MapRef, MapSpace, PublicationState, RealScale,
+    RegionGeometry, RegionScale,
 };
 // hpc-exempt: coordinate-space identities in the map lineage, not cell membership.
 use std::collections::BTreeSet;
@@ -58,6 +62,7 @@ impl Descriptor<'_> {
                 subdivision: 7.0,
                 minimum_width,
                 enabled: area.profile != Profile::Interior
+                    && !area.profile.real_scale()
                     && area.context.as_deref() != Some("cave")
                     && area.frame.floor.is_none(),
             },
@@ -67,6 +72,11 @@ impl Descriptor<'_> {
             parent: self.parent.clone(),
             state: PublicationState::Incomplete,
             layers: Vec::new(),
+            real_scale: area
+                .map
+                .as_ref()
+                .and_then(|map| map.real_scale)
+                .map(|real| real_scale(&real, bounds)),
         })
     }
     fn spaces(&self, spatial: &dyn SpatialKernel) -> SpatialResult<Vec<MapSpace>> {
@@ -107,6 +117,22 @@ impl Descriptor<'_> {
             });
         }
         Ok(spaces)
+    }
+}
+/// The published hex grid centres a hex on the map frame's centre, which is also the
+/// shared lattice's origin, so the hexes group whole triangles (ADR 0016).
+pub fn real_scale(real: &RealScaleMap, frame: atlas_map::Bounds) -> RealScale {
+    RealScale {
+        kind: real.kind,
+        hex_size: real.hex_size.label().into(),
+        across_flats: real.hex_size.across_flats(),
+        feet: real.hex_size.feet(),
+        origin: [(frame.0 + frame.2) / 2.0, (frame.1 + frame.3) / 2.0],
+        triangles_per_edge: real.triangles_per_edge,
+        creator_layers: vec![CreatorLayer {
+            id: "base".into(),
+            name: "Base layer".into(),
+        }],
     }
 }
 pub fn profile_name(profile: Profile) -> &'static str {

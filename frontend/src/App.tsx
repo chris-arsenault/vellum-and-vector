@@ -20,8 +20,9 @@ import { FinishedMapLibrary } from "./FinishedMapLibrary";
 import { FinishedGeneration } from "./FinishedGeneration";
 import { LoreEncyclopedia } from "./LoreEncyclopedia";
 import { ErrorMessage } from "./ErrorMessage";
-import type { GenerationStatus } from "@atlas/context";
+import type { GenerationStatus, RealScaleChoice } from "@atlas/context";
 import { bounds } from "./presentation";
+import { realScaleFrame } from "./realScale";
 import { Brand } from "./Brand";
 
 export type FinishedContext = AtlasContext<GenerationDraft>;
@@ -29,6 +30,7 @@ interface Setup {
   draft: GenerationDraft;
   parent?: MapDescriptor;
   selection?: RegionSelection;
+  realScale?: RealScaleChoice;
 }
 interface Opened {
   instance: number;
@@ -158,12 +160,13 @@ function useGenerationSetup(
       setError(error);
     }
   };
-  const refine = async (selection: RegionSelection, name: string) => {
+  const refine = async (selection: RegionSelection, name: string, realScale?: RealScaleChoice) => {
     try {
       await generationDefaults(context);
       const draft = await context.generation.configuration(selection.parent);
       const [w, s, e, n] = bounds(selection.geometry);
-      setSetup({ draft: { ...draft, name, width: e - w, height: n - s }, parent: map, selection });
+      const size = realScale ? realScaleFrame(realScale) : { width: e - w, height: n - s };
+      setSetup({ draft: { ...draft, name, ...size }, parent: map, selection, realScale });
     } catch (error) {
       setError(error);
     }
@@ -258,7 +261,7 @@ function AtlasContent({ state }: { state: ReturnType<typeof useAtlas> }) {
       create={() => void state.create()}
       lore={() => state.setLore(true)}
       library={() => state.setLibrary(true)}
-      refine={(selection, name) => void state.refine(selection, name)}
+      refine={(selection, name, realScale) => void state.refine(selection, name, realScale)}
       regenerate={() => void state.regenerate()}
     />
   );
@@ -294,10 +297,15 @@ function AtlasSetup({ state }: { state: ReturnType<typeof useAtlas> }) {
     service: context.generation,
     source: setup.parent,
     selection: setup.selection,
+    realScale: setup.realScale,
     onCancel: () => setSetup(null),
     onGenerate: async (draft) => {
       const status = setup.selection
-        ? await context.generation.refine({ selection: setup.selection, configuration: draft })
+        ? await context.generation.refine({
+            selection: setup.selection,
+            configuration: draft,
+            ...(setup.realScale ? { realScale: setup.realScale } : {}),
+          })
         : setup.parent
           ? await context.generation.regenerate(setup.parent.reference, draft)
           : await context.generation.create(draft);

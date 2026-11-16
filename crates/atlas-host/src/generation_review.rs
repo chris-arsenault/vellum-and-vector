@@ -123,6 +123,10 @@ impl PreparedRequest {
         let mut choices = Vec::new();
         for quality in [Quality::Draft, Quality::Standard, Quality::Fine] {
             let span = match region {
+                // A real-scale map keeps the detail it was opened at.
+                Some(map) if map.real_scale.is_some() => {
+                    map.real_scale.map_or(0.0, |real| real.cell_span())
+                }
                 Some(map) => quality
                     .regional_span(map.refinement_level.max(1))
                     .map_err(io::Error::other)?,

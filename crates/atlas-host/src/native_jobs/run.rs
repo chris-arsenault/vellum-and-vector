@@ -173,7 +173,11 @@ pub(super) fn prepare(
                 Some(parent.clone()),
                 None,
                 Some(parent),
-                Some((request.selection, name)),
+                Some(crate::regional_capture::Child {
+                    selection: request.selection,
+                    name,
+                    real_scale: request.real_scale,
+                }),
                 document,
                 area,
             )

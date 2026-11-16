@@ -1,5 +1,6 @@
-//! Shared triangular topology for world and region; no regional representation fork.
+//! Shared triangular topology for every map; no regional representation fork.
 pub mod fans;
+pub mod hexes;
 pub mod sampling;
 mod triangular;
 mod window;

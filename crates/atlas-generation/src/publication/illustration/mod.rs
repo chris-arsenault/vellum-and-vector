@@ -47,7 +47,12 @@ pub fn records(
             .filter(|f| f.kind == "lake")
             .map(|f| f.geometry.clone()),
     );
-    let water = spatial.union_all(&water)?;
+    // An inland map can hold no sea or lake at all.
+    let water = if water.is_empty() {
+        None
+    } else {
+        spatial.union_all(&water)?
+    };
     let mut result = oceans
         .into_iter()
         .map(|geometry| IllustrationGeometry {

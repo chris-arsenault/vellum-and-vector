@@ -36,16 +36,8 @@ export function createPublishedMap(
     visible: false,
     declutter: true,
   });
-  const furniture = new VectorLayer({
-    source: new VectorSource({ wrapX: false }),
-    visible: false,
-    className: "cartographic-sheet",
-  });
+  const furniture = sheetFurniture();
   const mask = new VectorLayer({ source: new VectorSource({ wrapX }), visible: false });
-  furniture.on("postrender", (event) => {
-    const sheet = furniture.get("sheet");
-    if (sheet) drawSheet(event, sheet);
-  });
   target.tabIndex = 0;
   const map = new OLMap({
     target,
@@ -65,7 +57,8 @@ export function createPublishedMap(
       resolution: (descriptor.bounds[2] - descriptor.bounds[0]) / 800,
     }),
   });
-  map.addControl(new ScaleLine({ units: "metric" }));
+  const scale = new ScaleLine({ units: "metric", bar: !!descriptor.realScale });
+  map.addControl(scale);
   const close = () => {
     rasters.close();
     vectors.close();
@@ -83,11 +76,24 @@ export function createPublishedMap(
     drawing,
     furniture,
     mask,
+    scale,
     close,
   };
 }
 export type PublishedMapEngine = ReturnType<typeof createPublishedMap>;
 
+function sheetFurniture() {
+  const furniture = new VectorLayer({
+    source: new VectorSource({ wrapX: false }),
+    visible: false,
+    className: "cartographic-sheet",
+  });
+  furniture.on("postrender", (event) => {
+    const sheet = furniture.get("sheet");
+    if (sheet) drawSheet(event, sheet);
+  });
+  return furniture;
+}
 function selectionLayer(wrapX: boolean) {
   return new VectorLayer({
     source: new VectorSource({ wrapX }),

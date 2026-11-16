@@ -2,6 +2,7 @@
 // owner-direction(2026-11-12): map and generation use separate schemas
 // Arconis: docs/architecture/subsystems.arconis#item=gis — published GIS layer, raster and record contracts.
 mod geometry;
+pub mod hexes;
 mod layers;
 mod navigation;
 mod people;
@@ -49,6 +50,46 @@ pub struct MapDescriptor {
     pub parent: Option<MapRef>,
     pub state: PublicationState,
     pub layers: Vec<MapLayer>,
+    /// Present on real-scale maps: their hex grid and creator layers (ADR 0016).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub real_scale: Option<RealScale>,
+}
+
+/// What a real-scale map is: outdoor ground (caves included) or a building's floors.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum RealScaleKind {
+    Ground,
+    Structure,
+}
+
+/// A real-scale map's hex grid. Hexes are pointy-topped; `origin` is one hex centre.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RealScale {
+    pub kind: RealScaleKind,
+    /// The creator's chosen hex size label, such as `1.5m`.
+    pub hex_size: String,
+    pub across_flats: f64,
+    pub feet: f64,
+    pub origin: [f64; 2],
+    pub triangles_per_edge: u32,
+    pub creator_layers: Vec<CreatorLayer>,
+}
+impl RealScale {
+    pub fn grid(&self) -> Result<hexes::HexGrid, &'static str> {
+        hexes::HexGrid::from_across_flats(self.across_flats, self.origin)
+    }
+}
+
+/// A named collection a creator makes on a real-scale map; features name theirs in
+/// `creatorLayer`, and the first layer receives features that name none.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreatorLayer {
+    pub id: String,
+    pub name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -76,6 +117,9 @@ pub fn declarations() -> String {
         serde_json::Value::decl(&cfg),
         MapRef::decl(&cfg),
         MapDescriptor::decl(&cfg),
+        RealScaleKind::decl(&cfg),
+        RealScale::decl(&cfg),
+        CreatorLayer::decl(&cfg),
         RegionScale::decl(&cfg),
         MapRegion::decl(&cfg),
         MapView::decl(&cfg),

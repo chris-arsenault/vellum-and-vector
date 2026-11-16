@@ -9,6 +9,7 @@ import {
 } from "@atlas/map";
 import type { DrawingGeometry } from "./drawingGeometry";
 import type { CartographicPresentation, LayerStyle } from "./types";
+import type { RealScalePresentation } from "./realScale";
 import type { Geometry } from "geojson";
 import { publishedAppearance, publishedFeature, vectorFamily } from "./publishedAppearance";
 import { PublishedSamples } from "./PublishedSamples";
@@ -26,6 +27,8 @@ export interface PublishedDrawing {
   styles: LayerStyle[];
   footprint: Geometry;
   ancestry: string[];
+  /** Present on real-scale maps (ADR 0016). */
+  realScale?: RealScalePresentation;
 }
 /** Legend and terrain marks share precisely the same published feature classifications. */
 export function publishedDrawingContent(input: PublishedDrawing, drawing: DrawingGeometry) {

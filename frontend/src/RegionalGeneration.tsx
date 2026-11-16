@@ -14,6 +14,8 @@ import { SettingControl } from "./GenerationTuning";
 import { featureControlSettings } from "./generationWorkflowPresentation";
 import { discardFeatureFieldEdits } from "./generationFieldEdits";
 import type { SetupFeature, GenerationRecipe } from "./generationTypes";
+import type { RealScaleChoice } from "@atlas/context";
+import { formatDistance, hexSizes } from "./realScale";
 import "./generationWizard.css";
 
 export function RegionalGeneration(options: GenerationWorkflowOptions) {
@@ -27,7 +29,7 @@ export function RegionalGeneration(options: GenerationWorkflowOptions) {
     <dialog
       ref={dialog}
       className="refinement-dialog"
-      aria-label="Refine region"
+      aria-label={options.realScale ? "Open a real-scale map" : "Refine region"}
       onCancel={options.onCancel}
     >
       <WorkflowFieldProvider>
@@ -50,16 +52,16 @@ function RegionalForm({ options }: { options: GenerationWorkflowOptions }) {
       }}
     >
       <header className="saved-maps-heading">
-        <h2>Refine region</h2>
+        <h2>{options.realScale ? "Open a real-scale map" : "Refine region"}</h2>
         <button type="button" onClick={options.onCancel} aria-label="Close refinement">
           ×
         </button>
       </header>
       <p>
-        {flow.draft.width / 1000} × {flow.draft.height / 1000} km from {options.source?.name}. This
-        creates an independent map; the parent stays unchanged.
+        {options.realScale ? realScaleSummary(options.realScale, flow.draft) : regionSummary(flow)}{" "}
+        from {options.source?.name}. This creates an independent map; the parent stays unchanged.
       </p>
-      <RegionalBrief flow={flow} />
+      <RegionalBrief flow={flow} label={options.realScale ? "Map name" : "Region name"} />
       <details>
         <summary>Generation settings</summary>
         {flow.setup?.features.map((feature) => (
@@ -76,18 +78,29 @@ function RegionalForm({ options }: { options: GenerationWorkflowOptions }) {
           className="primary"
           disabled={generate.isPending || invalidSetup(flow, fields.errors)}
         >
-          {generate.isPending ? "Starting…" : "Generate region"}
+          {generate.isPending
+            ? "Starting…"
+            : options.realScale
+              ? "Generate map"
+              : "Generate region"}
         </button>
       </footer>
     </form>
   );
 }
-function RegionalBrief({ flow }: { flow: GenerationWorkflow }) {
+const regionSummary = (flow: GenerationWorkflow) =>
+  `${flow.draft.width / 1000} × ${flow.draft.height / 1000} km`;
+function realScaleSummary(choice: RealScaleChoice, size: { width: number; height: number }) {
+  const hex = hexSizes.find((entry) => entry.value === choice.hexSize)!;
+  const kind = choice.kind === "ground" ? "ground map" : "building-floors map";
+  return `A ${hex.metres} m (${hex.feet} ft) hex ${kind}, ${formatDistance(size.width, "metres")} × ${formatDistance(size.height, "metres")},`;
+}
+function RegionalBrief({ flow, label }: { flow: GenerationWorkflow; label: string }) {
   const { draft, change } = flow;
   return (
     <div className="setup-world-grid">
       <label>
-        Region name
+        {label}
         <input
           required
           value={draft.name}

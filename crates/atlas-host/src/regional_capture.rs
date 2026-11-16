@@ -7,12 +7,15 @@ pub use map::capture;
 mod records;
 use crate::{generation_document::Document, generation_frame::Geography};
 use atlas_generation::{
+    atlas::resolution::Quality,
     features::{
+        context::RealScaleMap,
         network::{Node, Reach},
         Feature,
     },
     identity::semantic_id,
     spatial::{Overlay, SpatialKernel},
+    RealScaleChoice,
 };
 use atlas_map::{regions::polygon, Geometry, MapDescriptor, RegionSelection};
 use serde_json::{json, Value};
@@ -70,6 +73,24 @@ pub async fn write_resources(
     }
     Ok(())
 }
+/// A child map a job will capture: its selection, name and, for real-scale maps, the choices.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct Child {
+    pub selection: RegionSelection,
+    pub name: String,
+    pub real_scale: Option<RealScaleChoice>,
+}
+impl Child {
+    /// The captured real-scale record, laid at this job's detail.
+    pub fn real_scale(&self, quality: Quality) -> Option<RealScaleMap> {
+        self.real_scale.map(|choice| RealScaleMap {
+            kind: choice.kind,
+            hex_size: choice.hex_size,
+            hexes_across: choice.hexes_across,
+            triangles_per_edge: quality.triangles_per_hex_edge(),
+        })
+    }
+}
 // Arconis: docs/architecture/subsystems.arconis#item=rg_parent — selection on a pinned parent map revision.
 pub struct Selection<'a> {
     pub parent: &'a MapDescriptor,
@@ -77,6 +98,7 @@ pub struct Selection<'a> {
     pub id: &'a str,
     pub name: &'a str,
     pub operation: &'a str,
+    pub real_scale: Option<RealScaleMap>,
 }
 pub struct Region<'a> {
     world: &'a str,
@@ -126,7 +148,12 @@ impl Selection<'_> {
         area["id"] = self.id.into();
         area["name"] = self.name.trim().into();
         area["parentId"] = parent.as_str().into();
-        area["profile"] = "region".into();
+        area["profile"] = match self.real_scale.map(|real| real.kind) {
+            None => "region",
+            Some(atlas_map::RealScaleKind::Ground) => "local",
+            Some(atlas_map::RealScaleKind::Structure) => "interior",
+        }
+        .into();
         area["footprint"] = json!(region.footprint);
         area["version"] = 1.into();
         area["spaceId"] = self.selection.space_id.clone().into();
@@ -153,6 +180,9 @@ impl Selection<'_> {
         // owner-direction(2026-10-29): later parent changes leave children's captured inputs unchanged.
         area["map"] = json!({"sourceAreaId":parent,"sourceRevision":geography.version,
             "sourceMap":self.parent.reference,"refinementLevel":self.refinement_level(spatial)?,"extent":region.footprint});
+        if let Some(real) = &self.real_scale {
+            area["map"]["realScale"] = serde_json::to_value(real)?;
+        }
         let owners = geography
             .context()
             .geography_areas(parent)

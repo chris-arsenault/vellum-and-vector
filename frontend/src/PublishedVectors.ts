@@ -15,6 +15,8 @@ import {
   type PublishedFeature,
 } from "./publishedAppearance";
 import { settlementPriority } from "./settlementStyles";
+import { isRealScaleLayer, type RealScalePresentation } from "./realScale";
+import { realScaleStyle } from "./realScaleStyles";
 import { typeStyle } from "./typeStyles";
 import type { DrawingGeography } from "./publishedAppearance";
 
@@ -38,16 +40,19 @@ export class PublishedVectors {
       footprint?: Geometry;
       geography?: DrawingGeography;
       features: Map<string, DrawingFeature>;
-    }
+    },
+    realScale?: RealScalePresentation
   ) {
     const sequence = ++this.sequence;
     const scene = records.map(publishedFeature);
     this.syncLayers(styles);
     this.syncFeatures(scene);
     const appearance = publishedAppearance(this.descriptor, entities);
+    const real = drawing?.view.mode === "drawn" ? undefined : realScale;
     await Promise.all(
       styles.map(async (style) => {
         const layer = this.layers.get(style.layerId)!;
+        if (this.realScaleStyle(layer, style, real)) return;
         const parsed = drawing?.view.mode === "drawn" ? undefined : await symbolStyle(layer, style);
         if (sequence !== this.sequence) return;
         layer.setStyle(
@@ -63,6 +68,13 @@ export class PublishedVectors {
         );
       })
     );
+  }
+  /** Real-scale kinds take their own ground, line-width and hex styles (ADR 0016). */
+  private realScaleStyle(layer: VectorLayer, style: LayerStyle, view?: RealScalePresentation) {
+    if (!view || !isRealScaleLayer(style.layerId)) return false;
+    const first = this.descriptor.realScale?.creatorLayers[0]?.id ?? "";
+    layer.setStyle(realScaleStyle(style, view, first));
+    return true;
   }
   private syncLayers(styles: LayerStyle[]) {
     for (const style of styles) {

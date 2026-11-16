@@ -50,6 +50,20 @@ use ts_rs::TS;
 pub struct RefinementRequest<Configuration> {
     pub selection: RegionSelection,
     pub configuration: Configuration,
+    /// Present when the child is a real-scale map opened at the selection's centre.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub real_scale: Option<RealScaleChoice>,
+}
+
+/// The creator's choices for a real-scale child map (ADR 0016).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RealScaleChoice {
+    pub kind: atlas_map::RealScaleKind,
+    pub hex_size: atlas::resolution::HexSize,
+    /// How many hexes span the map from west to east; the map is a 4:3 frame.
+    pub hexes_across: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -116,6 +130,8 @@ pub fn declarations() -> String {
     let cfg = ts_rs::Config::default();
     [
         RefinementRequest::<()>::decl(&cfg),
+        RealScaleChoice::decl(&cfg),
+        atlas::resolution::HexSize::decl(&cfg),
         GenerationState::decl(&cfg),
         GenerationStatus::decl(&cfg),
         GenerationDetails::decl(&cfg),

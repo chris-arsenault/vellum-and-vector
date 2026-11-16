@@ -636,6 +636,69 @@
       "Templates",
       "Structures and interiors",
       "Structures"
+    ],
+    [
+      "stream",
+      "rivers",
+      "Streams and brooks",
+      "Water and coasts",
+      "Watercourses"
+    ],
+    [
+      "trail",
+      "roads",
+      "Trails and paths",
+      "Transport and water infrastructure",
+      "Routes"
+    ],
+    [
+      "field",
+      "plots",
+      "Fields",
+      "Plots and fields",
+      "Land use"
+    ],
+    [
+      "yard",
+      "plots",
+      "Yards and gardens",
+      "Plots and fields",
+      "Land use"
+    ],
+    [
+      "tree",
+      "objects",
+      "Single trees",
+      "Objects and clutter",
+      "Plants"
+    ],
+    [
+      "boulder",
+      "objects",
+      "Boulders",
+      "Objects and clutter",
+      "Stone"
+    ],
+    [
+      "log",
+      "objects",
+      "Fallen logs",
+      "Objects and clutter",
+      "Wood"
+    ],
+    [
+      "rubble",
+      "objects",
+      "Rubble",
+      "Objects and clutter",
+      "Debris"
+    ],
+    [
+      "hex",
+      "hexes",
+      "Hexes",
+      "Hex grid",
+      "Hexes"
     ]
   ],
   "landmarks": {

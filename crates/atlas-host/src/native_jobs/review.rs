@@ -40,7 +40,9 @@ pub(super) fn review(settings: &Settings, mut action: Action) -> io::Result<Valu
     )
     .map_err(io::Error::other)?;
     let mut captured = Vec::new();
-    if let Some((selection, name)) = job.selection.take() {
+    if let Some(child) = job.selection.take() {
+        let real_scale = child.real_scale(job.submission.input.quality);
+        let (selection, name) = (child.selection, child.name);
         let directory = settings.scratch.join(operation);
         fs::create_dir_all(&directory)?;
         let _cleanup = Directory(directory.clone());
@@ -58,6 +60,7 @@ pub(super) fn review(settings: &Settings, mut action: Action) -> io::Result<Valu
                 id: &job.submission.input.area_id,
                 name: &name,
                 operation: &job.operation,
+                real_scale,
             },
             job.submission.source,
             &crate::private_inputs::CaptureInputs {

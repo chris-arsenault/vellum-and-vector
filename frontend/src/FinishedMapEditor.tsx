@@ -28,6 +28,9 @@ import type { PublishedTool } from "./publishedInteractions";
 import type { PublishedPresentation } from "./PublishedMapView";
 import { ErrorMessage } from "./ErrorMessage";
 import { download } from "./download";
+import { RealScaleControls } from "./RealScaleControls";
+import { RealScaleOpen } from "./RealScaleOpen";
+import type { RealScaleChoice } from "@atlas/context";
 import "./mapSettings.css";
 
 interface Props {
@@ -38,7 +41,7 @@ interface Props {
   create(): void;
   lore(): void;
   library(): void;
-  refine(selection: RegionSelection, name: string): void;
+  refine(selection: RegionSelection, name: string, realScale?: RealScaleChoice): void;
   regenerate(): void;
 }
 // owner-direction(2026-11-14): presentation reads only GIS map storage, never numerical generation storage.
@@ -183,9 +186,9 @@ function FinishedCanvas({ model }: { model: Model }) {
     <main className="map-workspace">
       <RelatedMaps {...props} />
       <nav aria-label="Map tools">
-        {(["pan", "inspect", "inspect-cell"] as const).map((id) => (
+        {mapTools(map).map((id) => (
           <button key={id} aria-pressed={tool === id} onClick={() => setTool(id)}>
-            {id === "inspect-cell" ? "Inspect place" : id === "inspect" ? "Inspect feature" : "Pan"}
+            {toolNames[id]}
           </button>
         ))}
       </nav>
@@ -204,6 +207,18 @@ function FinishedCanvas({ model }: { model: Model }) {
     </main>
   );
 }
+const mapTools = (map: MapDescriptor): PublishedTool[] => [
+  "pan",
+  "inspect",
+  "inspect-cell",
+  ...(map.realScale ? (["measure"] as const) : []),
+];
+const toolNames: Record<string, string> = {
+  pan: "Pan",
+  inspect: "Inspect feature",
+  "inspect-cell": "Inspect place",
+  measure: "Measure",
+};
 function FinishedControls({ model }: { model: Model }) {
   const {
     map,
@@ -235,6 +250,7 @@ function FinishedControls({ model }: { model: Model }) {
       )}
       {panel === "appearance" && (
         <>
+          <RealScaleControls map={map} value={value} change={change} />
           <PublishedAppearance map={map} reader={context.maps} value={value} change={change} />
           {value.drawing.mode === "drawn" && (
             <PublishedSheetPanel map={map} reader={context.maps} value={value} change={change} />
@@ -272,7 +288,8 @@ function FinishedControls({ model }: { model: Model }) {
   );
 }
 function FinishedInspection({ model }: { model: Model }) {
-  const { map, context, inspection, setInspection, selected, select, setPanel, regions } = model;
+  const { props, map, context, inspection, setInspection, selected, select, setPanel, regions } =
+    model;
   return (
     <aside className="right-panel selection-sidebar">
       <button
@@ -284,6 +301,13 @@ function FinishedInspection({ model }: { model: Model }) {
         Close inspection
       </button>
       <PublishedCellInspection map={map} inspection={inspection} />
+      {inspection && map.state === "complete" && (
+        <RealScaleOpen
+          map={map}
+          inspection={inspection}
+          open={(selection, choice, name) => props.refine(selection, name, choice)}
+        />
+      )}
       {selected && (
         <PublishedFeatureInformation
           map={map}

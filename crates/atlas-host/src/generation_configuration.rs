@@ -1,9 +1,6 @@
 //! Resolve creator choices before framing a new map; completed geography keeps its history.
 use crate::generation_request::Request;
-use atlas_generation::atlas::{
-    configuration::{self, Resolved},
-    resolution::Profile,
-};
+use atlas_generation::atlas::configuration::{self, Resolved};
 use std::io;
 
 pub fn resolve(request: &mut Request) -> io::Result<Resolved> {
@@ -14,10 +11,7 @@ pub fn resolve(request: &mut Request) -> io::Result<Resolved> {
         .ok_or_else(|| configuration::error("generation_area", "Choose an existing mapped area"))?
         .area;
     let regional = area.map.is_some();
-    if area.parent_id.is_some()
-        && !regional
-        && !matches!(area.profile, Profile::Site | Profile::Interior)
-    {
+    if area.parent_id.is_some() && !regional {
         return Err(configuration::error(
             "regional_pipeline",
             "Capture the region as an independent map before generating it",

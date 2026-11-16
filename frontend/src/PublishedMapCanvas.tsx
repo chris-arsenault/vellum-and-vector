@@ -9,6 +9,7 @@ import { ErrorMessage } from "./ErrorMessage";
 import { sheetPadding } from "./drawnSheet";
 import { bounds } from "./presentation";
 import { installPublishedRegions, type PublishedRegionEvents } from "./publishedRegionInteractions";
+import { installMeasure } from "./realScaleMeasure";
 
 interface Props {
   map: MapDescriptor;
@@ -69,10 +70,7 @@ function MapCanvas(props: Props) {
     return installPublishedInteractions(viewer.engine, reader, tool, () => ({
       inspected: callbacks.current.onInspection,
       error: setError,
-      position: ([x, y]) => {
-        if (coordinates.current)
-          coordinates.current.textContent = `${(x * viewer.engine.space.metresPerUnit).toFixed(2)}, ${(y * viewer.engine.space.metresPerUnit).toFixed(2)} m`;
-      },
+      position: (position) => showCoordinates(coordinates.current, viewer, position),
     }));
   }, [viewer, reader, tool]);
   useEffect(() => {
@@ -80,6 +78,7 @@ function MapCanvas(props: Props) {
       return installPublishedRegions(viewer.engine, tool, () => callbacks.current.regionEvents);
   }, [viewer, tool]);
   useEffect(() => showSelection(viewer, selection, map), [viewer, selection, map]);
+  const measured = useMeasure(viewer, tool, callbacks);
   return (
     <div className={`map-frame${presentation.drawing.mode === "drawn" ? " drawn-map" : ""}`}>
       <div
@@ -96,9 +95,40 @@ function MapCanvas(props: Props) {
       <output className="coordinates" ref={coordinates}>
         Map coordinates · metres
       </output>
+      {measured}
       <div className="map-instruction">{instructions[tool]} · Esc: cancel</div>
       <ErrorMessage error={error} />
     </div>
+  );
+}
+function showCoordinates(
+  output: HTMLOutputElement | null,
+  viewer: PublishedMapView,
+  [x, y]: number[]
+) {
+  const metres = viewer.engine.space.metresPerUnit;
+  if (output) output.textContent = `${(x * metres).toFixed(2)}, ${(y * metres).toFixed(2)} m`;
+}
+/** The temporary measuring tool on real-scale maps and its read-out. */
+function useMeasure(
+  viewer: PublishedMapView | null,
+  tool: PublishedTool,
+  callbacks: { current: Props }
+) {
+  const [measured, setMeasured] = useState("");
+  useEffect(() => {
+    if (viewer && tool === "measure")
+      return installMeasure(
+        viewer.engine,
+        () => callbacks.current.presentation.realScale?.units ?? "metres",
+        setMeasured
+      );
+  }, [viewer, tool, callbacks]);
+  if (tool !== "measure") return null;
+  return (
+    <output className="measured-distance" aria-label="Measured distance">
+      {measured}
+    </output>
   );
 }
 const instructions: Record<PublishedTool, string> = {
@@ -109,6 +139,7 @@ const instructions: Record<PublishedTool, string> = {
   "region-outline": "Draw a region; double-click or press Enter to finish",
   "region-cut": "Draw a dividing line; double-click to finish",
   "region-edit": "Drag outline vertices to adjust the boundary",
+  measure: "Click points to measure; double-click to finish",
 };
 function showSelection(
   viewer: PublishedMapView | null,

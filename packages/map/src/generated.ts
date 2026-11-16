@@ -21,7 +21,28 @@ export type MapDescriptor = {
   parent: MapRef | null;
   state: PublicationState;
   layers: Array<MapLayer>;
+  /**
+   * Present on real-scale maps: their hex grid and creator layers (ADR 0016).
+   */
+  realScale?: RealScale;
 };
+
+export type RealScaleKind = "ground" | "structure";
+
+export type RealScale = {
+  kind: RealScaleKind;
+  /**
+   * The creator's chosen hex size label, such as `1.5m`.
+   */
+  hexSize: string;
+  acrossFlats: number;
+  feet: number;
+  origin: [number, number];
+  trianglesPerEdge: number;
+  creatorLayers: Array<CreatorLayer>;
+};
+
+export type CreatorLayer = { id: string; name: string };
 
 export type RegionScale = {
   level: number;

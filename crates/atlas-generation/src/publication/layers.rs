@@ -149,6 +149,23 @@ const VOCABULARY: &[Entry] = &[
         "built",
     ),
     (
+        "plots",
+        "Plots and fields",
+        "built",
+        "vector",
+        "#c8c27a",
+        "",
+    ),
+    (
+        "objects",
+        "Objects and clutter",
+        "physical",
+        "vector",
+        "#8f7f6a",
+        "",
+    ),
+    ("hexes", "Hex grid", "custom", "vector", "#5b5b5b", ""),
+    (
         "sovereignty",
         "Sovereignty",
         "political",
@@ -213,6 +230,8 @@ const VOCABULARY: &[Entry] = &[
         "",
     ),
 ];
+/// Layers that exist only where things are their real size (ADR 0016).
+const REAL_SCALE_ONLY: &[&str] = &["plots", "objects", "hexes"];
 // hpc-exempt: the map layer catalogue is sparse metadata keyed by layer identity.
 pub fn builtin() -> BTreeMap<String, Layer> {
     VOCABULARY
@@ -231,13 +250,17 @@ pub fn builtin() -> BTreeMap<String, Layer> {
                     color: color.into(),
                     representation: representation.into(),
                     representations: Some(representations),
-                    profiles: vec![
-                        Profile::World,
-                        Profile::Region,
-                        Profile::Local,
-                        Profile::Site,
-                        Profile::Interior,
-                    ],
+                    profiles: if REAL_SCALE_ONLY.contains(&id) {
+                        vec![Profile::Local, Profile::Site, Profile::Interior]
+                    } else {
+                        vec![
+                            Profile::World,
+                            Profile::Region,
+                            Profile::Local,
+                            Profile::Site,
+                            Profile::Interior,
+                        ]
+                    },
                     generator: (!generator.is_empty()).then(|| generator.into()),
                     facts: Some(facts(id).iter().map(|s| (*s).into()).collect()),
                     // hpc-exempt: named GIS attribute declarations for this layer.

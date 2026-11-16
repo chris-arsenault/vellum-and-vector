@@ -57,16 +57,12 @@ pub fn configured(
     context: &Context<'_>,
     epochs: &[Epoch],
     eras: &[HumanEra],
-    profile: &str,
     inherited: bool,
 ) -> io::Result<Sequence> {
     let mut body = operations(&["atlas.prepare"]);
-    if profile != "interior" {
-        body.extend(physical(catalogue, context, epochs, inherited)?);
-    }
+    body.extend(physical(catalogue, context, epochs, inherited)?);
     for slot in ["present.products", "present.people", "present.after-people"] {
         if slot == "present.people"
-            && !["site", "interior"].contains(&profile)
             && ["human.cultures", "human.politics", "built.layout"]
                 .iter()
                 .any(|id| context.enabled(id))

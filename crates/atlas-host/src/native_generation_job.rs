@@ -12,7 +12,7 @@ use atlas_generation::{
     storage::{BlockCache, BlockScratch, MemoryBudget, SharedCache},
 };
 use atlas_gis::{geometry::NativeGeos, map_files::MapFiles, postgres_maps::PostgresMaps};
-use atlas_map::{MapRef, RegionSelection};
+use atlas_map::MapRef;
 use serde_json::Value;
 use std::{fs, io, path::PathBuf, rc::Rc, sync::Arc};
 
@@ -24,7 +24,7 @@ pub struct NativeJob {
     pub expected: Option<MapRef>,
     pub parent: Option<MapRef>,
     pub operation: String,
-    pub selection: Option<(RegionSelection, String)>,
+    pub selection: Option<regional_capture::Child>,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 struct CapturedJob {
@@ -148,17 +148,18 @@ impl NativeJob {
         resources: &NativeResources,
         spatial: &NativeGeos,
     ) -> io::Result<(Self, Workspace, Vec<Value>)> {
-        let Some((selection, name)) = self.selection.take() else {
+        let Some(child) = self.selection.take() else {
             return Ok((self, workspace, Vec::new()));
         };
-        let parent = services.maps.open(&selection.parent)?;
+        let parent = services.maps.open(&child.selection.parent)?;
         let captured = regional_capture::capture(
             regional_capture::Selection {
                 parent: &parent,
-                selection: &selection,
+                selection: &child.selection,
                 id: &self.submission.input.area_id,
-                name: &name,
+                name: &child.name,
                 operation: &self.operation,
+                real_scale: child.real_scale(self.submission.input.quality),
             },
             self.submission.source,
             &crate::private_inputs::CaptureInputs {

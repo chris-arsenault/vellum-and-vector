@@ -45,7 +45,8 @@ export async function updatePublishedDrawing(
           geography: content.geography,
           features: new Map(products.features.map((feature) => [feature.id, feature])),
         }
-      : undefined
+      : undefined,
+    input.realScale
   );
   if (engine.drawing.get("input") !== input) return;
   for (const [id, layer] of engine.vectors.layers) {

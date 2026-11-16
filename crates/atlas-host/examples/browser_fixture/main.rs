@@ -1,4 +1,5 @@
 //! Port of the supplied 25-sample browser fixture. No generation process runs.
+mod real_scale;
 mod records;
 mod samples;
 use atlas_generation::{
@@ -12,9 +13,9 @@ use atlas_gis::{
     sql::Database,
 };
 use atlas_host::{
-    finished_map, generation_world::CreateWorld, local_inputs::LocalInputs, native::NativeScratch,
-    native_control::NativeControl, native_map_assets::NativeMapAssets,
-    native_resources::NativeResources, record_store::Workspace,
+    finished_map, generation_document::Document, generation_world::CreateWorld,
+    local_inputs::LocalInputs, native::NativeScratch, native_control::NativeControl,
+    native_map_assets::NativeMapAssets, native_resources::NativeResources, record_store::Workspace,
 };
 use atlas_map::{regions::rectangle, Bounds, MapRef};
 use serde_json::json;
@@ -63,6 +64,7 @@ async fn publish(root: &Path) -> io::Result<()> {
         BlockScratch::new(NativeScratch::create_new(root.join("scratch.blocks"))?),
     );
     let spatial = NativeGeos::new(1e-6).map_err(io::Error::other)?;
+    let mut child_document: Document = serde_json::from_value(serde_json::to_value(&document)?)?;
     let product = finished_map::Request::from_document(document, reference.clone(), None, None)?
         .prepare(
             Rc::new(NativeResources::new(root.join("generation"))),
@@ -72,25 +74,56 @@ async fn publish(root: &Path) -> io::Result<()> {
             &spatial,
         )?;
     let mut maps = MapStore::open_database(Rc::new(Database::open(root.join("maps.sqlite"))?))?;
-    let mut assets = NativeMapAssets::new(MapFiles::new(root.join("map-assets")), cache);
+    let mut assets = NativeMapAssets::new(MapFiles::new(root.join("map-assets")), cache.clone());
+    let control = NativeControl::new(CancellationToken::default(), |_| {});
     product
         .publish(
             &records.features(),
             &spatial,
             &mut maps,
             &mut assets,
-            &NativeControl::new(CancellationToken::default(), |_| {}),
+            &control,
         )
         .await?;
-    maps.save(
-        SaveRequest {
-            reference: reference.clone(),
-            expected_version: None,
-            navigation: maps.access().read_navigation(&reference)?,
-            settings: Default::default(),
-        },
-        "2026-11-14T00:00:00Z".into(),
-    )?;
+    real_scale::child(&mut child_document, &reference)?;
+    let child_records = Workspace::create(root.join("child-records.sqlite"))?;
+    real_scale::install(&mut child_records.features())?;
+    let child = MapRef {
+        map_id: real_scale::CHILD.into(),
+        revision: "published".into(),
+    };
+    finished_map::Request::from_document(
+        child_document,
+        child.clone(),
+        None,
+        Some(reference.clone()),
+    )?
+    .prepare(
+        Rc::new(NativeResources::new(root.join("generation"))),
+        cache,
+        &[],
+        &child_records.features(),
+        &spatial,
+    )?
+    .publish(
+        &child_records.features(),
+        &spatial,
+        &mut maps,
+        &mut assets,
+        &control,
+    )
+    .await?;
+    for saved in [&reference, &child] {
+        maps.save(
+            SaveRequest {
+                reference: saved.clone(),
+                expected_version: None,
+                navigation: maps.access().read_navigation(saved)?,
+                settings: Default::default(),
+            },
+            "2026-11-14T00:00:00Z".into(),
+        )?;
+    }
     drop(maps);
     let mut files =
         vec![json!({"path":["maps.sqlite"], "bytes":fs::read(root.join("maps.sqlite"))?})];

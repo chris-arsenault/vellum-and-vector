@@ -1,4 +1,5 @@
 mod assets;
+pub mod hexes;
 pub mod inputs;
 mod raster_group;
 mod rasters;

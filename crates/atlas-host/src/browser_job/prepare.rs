@@ -67,7 +67,11 @@ impl BrowserJob {
                     Some(parent.clone()),
                     None,
                     Some(parent),
-                    Some((request.selection, name)),
+                    Some(crate::regional_capture::Child {
+                        selection: request.selection,
+                        name,
+                        real_scale: request.real_scale,
+                    }),
                     document,
                     area,
                 )
@@ -100,7 +104,8 @@ impl BrowserJob {
         Ok(prepared)
     }
     fn capture(&self, mut prepared: Prepared, operation: &str) -> Result<Prepared, JsValue> {
-        let (selection, name) = prepared.selection.take().unwrap();
+        let child = prepared.selection.take().unwrap();
+        let (selection, name) = (&child.selection, &child.name);
         let map = self.maps.open(&selection.parent).map_err(error)?;
         let geography: Geography =
             serde_json::from_value(prepared.submission.source.world.clone()).map_err(error)?;
@@ -108,10 +113,11 @@ impl BrowserJob {
             NativeGeos::new(geography.reference.precision.unwrap_or(1e-6)).map_err(error)?;
         let capture = regional_capture::Selection {
             parent: &map,
-            selection: &selection,
+            selection,
             id: &prepared.submission.input.area_id,
-            name: &name,
+            name,
             operation,
+            real_scale: child.real_scale(prepared.submission.input.quality),
         };
         let captured = regional_capture::capture(
             capture,

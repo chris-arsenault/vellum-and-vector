@@ -47,16 +47,46 @@ impl Product<'_> {
         assets: &mut impl Assets,
         control: &impl GenerationControl,
     ) -> io::Result<()> {
+        let mut marks = map.real_scale.as_ref().map(|_| Vec::new());
+        let mut hex_layer = None;
         for layer in &map.layers {
-            self.vector_layer(map, layer, publisher, assets, control)
+            if layer.id == "vector:hexes" {
+                hex_layer = Some(layer);
+                continue;
+            }
+            let features = self.vectors.presented(
+                layer
+                    .id
+                    .strip_prefix("vector:")
+                    .unwrap_or(layer.id.as_str()),
+            );
+            let features = features.map_err(io::Error::other)?.map(|feature| {
+                let feature = self.vectors.record(feature.map_err(io::Error::other)?);
+                feature.map_err(io::Error::other)
+            });
+            self.vector_layer(map, layer, features, &mut marks, publisher, assets, control)
+                .await?;
+        }
+        if let (Some(real), Some(layer), Some(sources)) = (&map.real_scale, hex_layer, &marks) {
+            let spatial = self.vectors.registry.spatial;
+            // The descriptor's bounds stay compact across a cylinder seam.
+            let frame = map.bounds;
+            let area = self.descriptor.area;
+            let hexes = super::hexes::hex_features(real, frame, area, sources, spatial)?
+                .into_iter()
+                .map(|feature| self.vectors.record(feature).map_err(io::Error::other));
+            self.vector_layer(map, layer, hexes, &mut None, publisher, assets, control)
                 .await?;
         }
         Ok(())
     }
+    #[allow(clippy::too_many_arguments)]
     async fn vector_layer(
         &self,
         map: &MapDescriptor,
         layer: &MapLayer,
+        features: impl Iterator<Item = io::Result<MapFeature>>,
+        marks: &mut Option<Vec<(atlas_map::Geometry, &'static str)>>,
         publisher: &mut impl Publisher,
         assets: &mut impl Assets,
         control: &impl GenerationControl,
@@ -64,19 +94,15 @@ impl Product<'_> {
         let LayerSource::Vector(source) = &layer.source else {
             return Ok(());
         };
-        let id = layer
-            .id
-            .strip_prefix("vector:")
-            .ok_or_else(|| io::Error::other("Unknown vector layer"))?;
         let mut writer = assets.create(&source.asset_id, &source.media_type)?;
         writer.write_all(b"{\"type\":\"FeatureCollection\",\"features\":[")?;
         let mut first = true;
         let mut batch = PublicationBatch::default();
-        for feature in self.vectors.presented(id).map_err(io::Error::other)? {
-            let feature = self
-                .vectors
-                .record(feature.map_err(io::Error::other)?)
-                .map_err(io::Error::other)?;
+        for feature in features {
+            let feature = feature?;
+            if let Some(marks) = marks {
+                marks.extend(super::hexes::mark_shape(&feature));
+            }
             write_record(&mut writer, &vector_record(&feature), &mut first)?;
             batch.features.push(feature);
             if batch.features.len() == BATCH_SIZE {

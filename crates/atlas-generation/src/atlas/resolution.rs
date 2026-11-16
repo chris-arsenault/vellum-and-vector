@@ -29,7 +29,7 @@ impl Profile {
 }
 /// The hex sizes a real-scale map can be drawn at, measured across flats.
 // owner-direction(2026-11-16): replace the previous real scale resolutions with the updated list
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize, ts_rs::TS)]
 pub enum HexSize {
     #[serde(rename = "1.5m")]
     OneAndHalfMetres,
@@ -75,6 +75,25 @@ impl HexSize {
         }
     }
 }
+/// The lattice cell span when `edges` triangle edges make one side of a `hex`.
+pub fn real_scale_span(hex: HexSize, edges: u32) -> f64 {
+    // A hex of side s spans s√3 across flats; its triangles have side s/n and their
+    // centres sit side/√3 apart, so the centre spacing is across-flats / 3n.
+    let spacing = hex.across_flats() / (3.0 * f64::from(edges.max(1)));
+    TRIANGLE_AREA.sqrt() * spacing
+}
+impl HexSize {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::OneAndHalfMetres => "1.5m",
+            Self::ThreeMetres => "3m",
+            Self::TenMetres => "10m",
+            Self::ThirtyMetres => "30m",
+            Self::HundredMetres => "100m",
+            Self::ThreeHundredMetres => "300m",
+        }
+    }
+}
 impl Quality {
     // owner-direction(2026-11-12): the resolutions are fixed; a detail level is not a cell count.
     pub fn cell_area_km2(self, profile: Profile) -> Result<f64, &'static str> {
@@ -108,10 +127,7 @@ impl Quality {
     /// The shared triangular lattice's cell span for a real-scale map at this hex size.
     // owner-direction(2026-11-16): no hex lattice; the hex is a representation for resolution built from a triangle sub-lattice
     pub fn real_scale_span(self, hex: HexSize) -> f64 {
-        // A hex of side s spans s√3 across flats; its triangles have side s/n and their
-        // centres sit side/√3 apart, so the centre spacing is across-flats / 3n.
-        let spacing = hex.across_flats() / (3.0 * f64::from(self.triangles_per_hex_edge()));
-        TRIANGLE_AREA.sqrt() * spacing
+        real_scale_span(hex, self.triangles_per_hex_edge())
     }
     // owner-direction(2026-11-12): a standard region has roughly the cells of the default standard world, at 7-ish land regions in a world.
     pub fn regional_span(self, level: u32) -> Result<f64, &'static str> {

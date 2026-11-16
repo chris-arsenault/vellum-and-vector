@@ -40,7 +40,7 @@ pub(super) struct Prepared {
     submission: Submission,
     expected: Option<MapRef>,
     parent: Option<MapRef>,
-    selection: Option<(RegionSelection, String)>,
+    selection: Option<crate::regional_capture::Child>,
     geography: Vec<Value>,
     resources: Vec<Value>,
 }

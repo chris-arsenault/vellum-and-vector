@@ -12,7 +12,7 @@ fn main() -> std::io::Result<()> {
     fs::write(
         generation,
         format!(
-            "{header}import type {{ MapRef, RegionSelection, RasterBand, Bounds, Geometry }} from '@atlas/map';\n\n{}\n",
+            "{header}import type {{ MapRef, RegionSelection, RasterBand, Bounds, Geometry, RealScaleKind }} from '@atlas/map';\n\n{}\n",
             atlas_generation::declarations()
         ),
     )?;

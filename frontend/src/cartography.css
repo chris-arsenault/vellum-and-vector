@@ -23,8 +23,9 @@
   background: #dce8d5;
   border-color: #6f8a65;
 }
+/* The panel buttons sit over the bar's left end, so map links keep to its right end. */
 .breadcrumbs {
-  padding-left: 190px;
+  justify-content: flex-end;
 }
 .map-drawer {
   position: absolute;
@@ -718,9 +719,6 @@
   }
   .map-navigation button {
     padding: 7px 11px;
-  }
-  .breadcrumbs {
-    padding-left: 164px;
   }
   .map-toolbar {
     gap: 5px;

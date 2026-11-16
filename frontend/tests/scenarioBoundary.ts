@@ -2,7 +2,13 @@ import type { GenerationStatus } from "@atlas/context";
 
 interface SuppliedCall {
   method: string;
-  request?: { recipe?: unknown; job_id?: string; selection?: unknown; configuration?: unknown };
+  request?: {
+    recipe?: unknown;
+    job_id?: string;
+    selection?: unknown;
+    configuration?: unknown;
+    realScale?: unknown;
+  };
 }
 interface ScenarioOptions {
   rendering: boolean;
@@ -16,6 +22,7 @@ declare global {
     generationCalls: string[];
     generationFixtureJobs?: GenerationStatus[];
     generationFixtureSelection?: unknown;
+    generationFixtureRealScale?: unknown;
   }
 }
 
@@ -75,6 +82,7 @@ export function installScenarioBoundary({ rendering, generation = false }: Scena
               call.method === "refine" ? call.request!.configuration : call.request!.recipe
             );
             window.generationFixtureSelection = structuredClone(call.request!.selection);
+            window.generationFixtureRealScale = structuredClone(call.request!.realScale);
             return completed;
           }
           if (call.method === "observe" && call.request?.job_id === completed.jobId)

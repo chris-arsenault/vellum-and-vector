@@ -107,8 +107,8 @@ placed and rotated independently of triangles and hexes. Bottom to top:
 | ------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | Ground              | Triangle detail published as rasters                       | Relief, exposed rock, soil and cover tone, magic prevalence                                                                   |
 | Water               | Centrelines with width at each vertex; outlines where wide | Brook widening into a pool and narrowing at a ford; pond; wide river banks                                                    |
+| Plots and fields    | Outlines                                                   | Fields, gardens, yards, building plots (beneath ways, so a path through a field shows)                                        |
 | Ways                | Centrelines with width at each vertex and a class          | Trail, track, road, street, alley; a road pinching at a gate                                                                  |
-| Plots and fields    | Outlines                                                   | Fields, gardens, yards, building plots                                                                                        |
 | Structures          | Outlines; walls as lines with thickness                    | Houses turned to their street, bridges, curtain walls, fences                                                                 |
 | Objects and clutter | Outlines with rotation                                     | Single trees, boulders, fallen logs, rubble, scree, wreckage, magic debris (glassed shards, salt plates), furniture and decor |
 | Hex grid and marks  | Derived from the layers above                              | Water, ford, road, wall, building, cover, difficult ground                                                                    |
@@ -263,8 +263,81 @@ holding one shape of every layer (a widening stream, a pinched road, a rotated h
 scatter of logs) draws in order, marks its hexes and exports.
 Evidence: units for hex membership (each triangle in exactly one hex, 6n² per hex), frames
 and hex marking from shapes; UI tests on a fixture map with supplied shapes.
-[DECISION, blocking M1 UI] Whether regional nesting stops where real-scale maps begin
-(recommendation: stop at about 450 m cell span and offer a ground map instead).
+Regional nesting decision (2026-11-16, agent): left unchanged. Regions keep nesting as today
+and a real-scale map opens from any world, regional or real-scale map, so no existing
+behaviour changes. The owner can still choose to stop nesting later.
+
+#### M1 execution steps
+
+Path facts (survey 2026-11-16): the child kind is set only at `regional_capture.rs:129`
+(`profile = "region"`); the span at `generation_frame.rs:128-137` and
+`generation_review.rs:117-130`; the sequence by `generation_request.rs:143,169` and
+`configuration/mod.rs:184-202`; the descriptor in `publication/descriptor.rs:44-61`;
+`RegionGeometry` is polygon-only; no sequence publishes only captured context;
+`browser_fixture` publishes supplied records without a sequence. `SpatialKernel` lives in
+`atlas-map`, implemented in `atlas-gis`, so hex marks computed there serve publication and
+later editing alike.
+
+1. Hex geometry in `atlas-map` — pointy hex grid in world coordinates (address, centre,
+   corners, polygons covering a footprint), hex marks from shapes through the spatial
+   kernel, and the outline of a line with a width at each vertex. Generation keeps only
+   the lattice adapter (`lattice/hexes.rs`). Verify: units.
+2. Contracts — `RealScaleChoice {kind, hexSize, hexesAcross}` on `RefinementRequest`;
+   `realScale` on the child's map ownership; a `realScale` block on `MapDescriptor` (kind,
+   hex size in metres and feet, hex radius and origin, triangles per edge, creator layers);
+   `make contracts`. Verify: build, typecheck.
+3. Capture — a real-scale footprint: a rectangle of the chosen hexes across, 4:3, centred on
+   the selection's interior point, inside the parent chart; profile `local` (ground) or
+   `interior` (structure); no regional-ladder check. Verify: units on the footprint.
+4. Frame, span and sequence — `real_scale_span` for the frame and review; a real-scale
+   sequence: initialize, refinement begin/clear/context/relief, refresh, classify, project,
+   features, names (M2 extends it); remove the dead "site"/"interior" special cases.
+   Verify: a real-scale job runs in the browser on the numerical fixture parent.
+5. Publication — real-scale layers `plots` and `objects`; footprints for lines with widths;
+   the published `hexes` layer with marks from every layer and the dominant ground class;
+   descriptor block; GeoJSON export carries hexes. Verify: units on marks; fixture export.
+6. Frontend — "Open a real-scale map" on a map: click a point, modal with kind, hex size,
+   size, detail, seed and name; hex grid and fill view; draw order by kind; scale bar,
+   measure, metres/feet; creator-layer show/hide; parent/child navigation. Verify: UI tests.
+7. Fixture and UI tests — `browser_fixture` supplies a real-scale ground map with one shape
+   of every layer (widening stream, pinched road, rotated house, scattered logs); UI tests
+   open it, check order, hex grid and fill view, measure, metres/feet, layer hide, export;
+   one `@generation` test submits a real-scale request.
+
+#### M1 results and deviations
+
+Independent review (2026-11-16): code-level checks all pass; hex alignment confirmed from code
+(lattice origin = frame centre = published hex origin; spacing = across-flats / 3n with no
+column or row rounding on non-wrapping frames). Fixed after review: width outlines ran on every
+map and could fail publication (now real-scale only, skipped when widths and vertices
+disagree); hex frame and origin used plain bounds across a cylinder seam (now the compact
+descriptor bounds); region tools were offered on real-scale maps (now disabled); no Rust limit
+on hexes across (now 10–200); review showed per-detail spans the frame ignored (a real-scale
+map now keeps the detail it was opened at); the default creator layer reads "Base layer";
+the setup applicability entry for structures names real-scale profiles.
+
+Accepted deviations, each with its owning milestone: the dominant ground class per hex
+waits for real-scale cover (M2); the creator-layer lock and editing controls are authoring
+(M5); the hex ladder's metres, feet and uses are repeated in `frontend/src/realScale.ts` for
+the setup form (view vocabulary; the request carries only the generated `HexSize` label);
+a native job
+request saved before this change does not load (current-format rule); the breadcrumb bar now
+right-aligns its map links because the panel buttons covered them.
+
+The owner directed on 2026-11-16 to generate the world a check needs. Verification world:
+`frontend/.artifacts/verify/` (persistent browser profile with the saved "Verification
+world", 4,000 × 3,000 km Draft, seed 42; driver `drive.mjs`), reused by every later check.
+No region was kept: the first region attempt took whatever outline the click offered without
+checking its size and was stopped; real-scale maps open straight from the world. A driver
+region step must check the outline's size first.
+
+Real run (browser engine, 100 m hexes, 50 across, Draft, opened on land from the world):
+completed and published in 800 s. Capture, the real-scale sequence, the hex layer, the grid
+over the map, the scale bar and the parent link all work. Two findings carried to M2:
+(1) the land is the parent's 28 km cells enlarged into a few flat blocks with straight
+cliff-like walls between them, so real-scale ground generation is the whole of M2's work;
+(2) every process step takes about a minute whatever it does, and publication of 36 raster
+layers about 2.5 minutes, so a fixed per-step cost dominates; find and fix it in M2.
 
 ### M2 — Generated ground [depends on M1]
 
@@ -360,5 +433,14 @@ M5 `5fda49be`, M6 `1efeed9a`, M7 `f589e3e5`, M8 `27bdbe5c`. M9 has no sub-plan.
 
 ## Current state
 
-Planning complete; no implementation. Next action: attach sub-plan M0 (`ef117bfc`),
-expand its steps, execute.
+M0 committed (`4645641`). M1 in progress (sub-plan `e5fb308e`): steps 1–7 implemented in the
+working tree (hex geometry in `atlas-map/src/hexes.rs`, lattice adapter, contracts, capture,
+span and `real-scale` sequence, publication of widths, plots, objects and the hex layer,
+frontend presentation, open flow, fixture glen map, unit and UI tests). Next: run the UI
+tests on a rebuilt engine, a real-scale generation in the browser on the fixture parent, then
+the independent review and commit.
+
+Build environment (this machine): native Rust needs
+`PATH=/nix/store/9xdayymn5yh1c98hg12d13d3ir0sxd4x-cmake-4.4.4/bin:$PATH`; the browser engine
+also needs `source /home/sulion/repos/vellum-and-vector/.artifacts/emsdk-toolchain/emsdk_env.sh`
+before `make wasm-engine`.

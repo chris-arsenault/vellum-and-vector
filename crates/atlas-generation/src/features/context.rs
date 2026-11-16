@@ -25,6 +25,23 @@ pub struct MapOwnership {
     pub refinement_level: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extent: Option<Geometry>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub real_scale: Option<RealScaleMap>,
+}
+/// A real-scale map's captured choices: its kind, hex size and the detail it was laid at.
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RealScaleMap {
+    pub kind: atlas_map::RealScaleKind,
+    pub hex_size: crate::atlas::resolution::HexSize,
+    pub hexes_across: u32,
+    pub triangles_per_edge: u32,
+}
+impl RealScaleMap {
+    /// The shared lattice's cell span for this map.
+    pub fn cell_span(&self) -> f64 {
+        crate::atlas::resolution::real_scale_span(self.hex_size, self.triangles_per_edge)
+    }
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
