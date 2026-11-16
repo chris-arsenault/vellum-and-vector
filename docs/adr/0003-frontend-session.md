@@ -80,8 +80,8 @@ working map and report stage progress. The physical world is a coverage of typed
 over a block-major lattice: a band is blocks of one native typed-array type, a read is
 two indexings, and a block cache keeps blocks resident within the worker's budget and
 spills them to worker-owned scratch beyond it, owning process lifetimes, release and
-retention either way. Every map, world or region, is the same triangular lattice at
-its own cell span. A cell id is a lattice address: neighbours, position and area are
+retention either way. Every map, world, region or real-scale
+([ADR 0016](0016-real-scale-maps.md)), is the same triangular lattice at its own cell span. A cell id is a lattice address: neighbours, position and area are
 arithmetic on the id, so no adjacency is stored, and the periodic seam and polar rows
 are modular arithmetic. Cells close in space are close in id, so block residency
 follows a frontier's working set. A membership band marks each cell as content, halo

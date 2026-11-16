@@ -14,7 +14,6 @@ use crate::{
     },
     processes::runner::PhysicalContext,
 };
-pub use built::Layout;
 use std::{cell::RefCell, rc::Rc};
 pub use water::Publication;
 
@@ -29,7 +28,6 @@ pub struct Occurrence {
     pub random: Random,
 }
 pub struct Inputs {
-    pub layout: Layout,
     pub parameters: AtlasParameters,
     pub progress: super::regional::work::Progress,
 }

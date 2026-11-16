@@ -63,7 +63,6 @@ pub struct Region {
     pub last_era: Option<String>,
 }
 struct Binding {
-    profile: Profile,
     has_parent: bool,
     inherited: bool,
     parameters: AtlasParameters,
@@ -87,7 +86,6 @@ pub fn prepare(
     let cache = construction.cache.clone();
     let prepared = workspace::prepare(construction)?;
     let binding = Binding {
-        profile,
         has_parent,
         parameters,
         cache,
@@ -176,11 +174,6 @@ fn owners(
     binding: &Binding,
     input: OwnerInputs<'_, '_>,
 ) -> ExecutionResult<assembly::Inputs> {
-    let layout = match binding.profile {
-        Profile::Site => people::Layout::Site,
-        Profile::Interior => people::Layout::Interior,
-        _ => people::Layout::Settlements,
-    };
     let inherited_channels = binding
         .captured
         .inputs
@@ -221,7 +214,6 @@ fn owners(
             authority: input.authority,
         }),
         people: Rc::new(people::Inputs {
-            layout,
             parameters: binding.parameters.clone(),
             progress: input.progress.clone(),
         }),

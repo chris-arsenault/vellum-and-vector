@@ -32,6 +32,15 @@ behavior. Generation, regional selection and refinement, inspection, presentatio
 explicit local saves and export remain active scope. Completed causal generation
 history is separate from undo.
 
+**Real-scale maps — 2026-11-16 owner direction:** Manual authoring and undo are now in
+scope for real-scale maps only (ground, caves, settlements, building floors); World and
+Region maps stay deferred as above. Land is generated for every real-scale kind and the
+creator builds on it with ordinary GIS editing; the first edit makes the published 2D
+layers that map's authority. Hexes are a representation built from the shared triangular
+lattice, never a lattice of their own. A parent's major landmarks are the only facts a
+real-scale child must show and roughly agree with. See
+[ADR 0016](docs/adr/0016-real-scale-maps.md).
+
 Current user direction and the product contract define required behavior. These
 instructions and the [ADRs](docs/adr/0001-spatial-authority.md) record implementation
 direction. Distinguish explicitly agreed boundaries from agent-derived choices;
@@ -167,11 +176,13 @@ jobs wait for explicit Resume from their latest supported checkpoint, or a label
 restart from the beginning when no checkpoint exists.
 Pure generation modules remain independent of both host adapters.
 
-Every map, world or region, is a generation state whose geography is the same
+Every map, world, region or real-scale, is a generation state whose geography is the same
 physical field on the same triangular lattice class at its own cell span. Fix
 world code in place when it fails on a region; do not add a regional grid,
 channel vocabulary, unit table, bridge or adapter
 ([ADR 0008](docs/adr/0008-regional-refinement-is-conditioned-amplification.md)).
+Real-scale hexes group that lattice's triangles; they are not a second grid
+([ADR 0016](docs/adr/0016-real-scale-maps.md)).
 Geographic significance, the rule that decides what a map names and outlines,
 is one rule for every map, judged at that map's scale
 ([ADR 0005](docs/adr/0005-scale-contract.md)).

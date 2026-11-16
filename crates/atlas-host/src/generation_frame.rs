@@ -130,7 +130,10 @@ impl Geography {
                 .quality
                 .regional_span(map.refinement_level.max(1))
                 .map_err(io::Error::other)?,
-            _ => input.quality.cell_span(area.profile),
+            _ => input
+                .quality
+                .cell_span(area.profile)
+                .map_err(io::Error::other)?,
         };
         let interior = interior(selected, &footprint, bounds, span, spatial)?;
         let space = context

@@ -126,7 +126,7 @@ impl PreparedRequest {
                 Some(map) => quality
                     .regional_span(map.refinement_level.max(1))
                     .map_err(io::Error::other)?,
-                None => quality.cell_span(frame.profile),
+                None => quality.cell_span(frame.profile).map_err(io::Error::other)?,
             };
             let cells = (area / (span * span)).ceil();
             choices.push(serde_json::json!({"quality":quality,"cellAreaKm2":span * span / 1e6,"cells":cells,"aboveDefault":cells > 60_000.0}));

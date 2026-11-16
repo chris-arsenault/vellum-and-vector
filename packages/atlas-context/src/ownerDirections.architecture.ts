@@ -378,6 +378,19 @@ const directions: readonly OwnerDirection[] = [
       "crates/atlas-generation/tests/scale_settings.rs",
     ],
   },
+  {
+    direction: "replace the previous real scale resolutions with the updated list",
+    given: "2026-11-16",
+    marks: ["crates/atlas-generation/src/atlas/resolution.rs"],
+    test: "crates/atlas-generation/tests/scale_settings.rs",
+  },
+  {
+    direction:
+      "no hex lattice; the hex is a representation for resolution built from a triangle sub-lattice",
+    given: "2026-11-16",
+    marks: ["crates/atlas-generation/src/atlas/resolution.rs"],
+    test: "crates/atlas-generation/tests/scale_settings.rs",
+  },
 ];
 
 const root = join(__dirname, "../../..");

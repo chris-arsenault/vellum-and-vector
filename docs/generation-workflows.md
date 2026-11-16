@@ -541,11 +541,14 @@ Conditional work must supply the facts required by the subsequent sequence.
 | ------------ | ------------------------------------------------------------------------------------------------------- |
 | World        | Initialize broad geography; evolve physical/magical epochs; derive present features and human geography |
 | Region/Local | Capture the parent's present and completed history; develop finer present geography in rounds           |
-| Site         | Resolve terrain/access; evolve settlement and construction; derive parcels, structures and connections  |
-| Cave         | Resolve substrate, fractures, water and inherited epochs; evolve dissolution, collapse and deposits     |
-| Interior     | Bind a located frame/access; lay out spaces; apply occupation/change episodes and derive furnishings    |
+| Ground       | Capture parent context; generate real-scale land, water, cover and ways; derive hex marks               |
+| Settlement   | On a ground map, generate streets, plots and buildings from the people living there                     |
+| Cave         | Resolve substrate, fractures, water and magic; generate passages, chambers and surface entrances        |
+| Structure    | Bind a located frame and access to a building; capture outside context; floors are drawn by hand        |
 
-These are configurations of the same process model. An arbitrary registered
+These are configurations of the same process model. Real-scale kinds run on the shared
+triangular lattice at a span set by their hex size and detail
+([ADR 0016](adr/0016-real-scale-maps.md)). An arbitrary registered
 process participates through the common contract, including at several profiles
 or several causal positions in one sequence.
 
@@ -1174,8 +1177,9 @@ them to a map:
   clock's temperature, ice, water forcing and elapsed times. The default clock
   includes a cold age independently of terrain selection.
 
-Detail presets select a fixed ground area per cell; a world's dimensions decide
-its cell count. `crates/atlas-generation/src/atlas/resolution.rs` owns the presets and workload
+Detail presets select a fixed ground area per cell on World and Region maps; a world's
+dimensions decide its cell count. On a real-scale map the creator's hex size is fixed and
+the detail preset sets how many triangle edges make one hex side. `crates/atlas-generation/src/atlas/resolution.rs` owns the presets and workload
 calculation shared by setup and generation. Setup shows live estimates for every preset and warns
 above the default world's Standard workload. This warning does not limit map
 size or detail. Numerical boundary support adds halo cells.
@@ -1458,7 +1462,7 @@ habitat changes forage and animal passage. Magical feature conditions can inspec
 living cover, soil water, toxicity and animal biomass.
 
 Land, climate, water and life generate on every map; magic and people are the
-selectable domains, and only a building interior has no geography. When a map is
+selectable domains, and only a building's floors have no generated land. When a map is
 generated again, obsolete generated ecological regions are replaced and
 authored/protected features stay authoritative. The shared
 geographic identity matcher associates ecological polygons after resampling, so

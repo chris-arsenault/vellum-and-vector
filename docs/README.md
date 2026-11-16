@@ -31,6 +31,7 @@
 | [0013](adr/0013-plates-travel-far-apart-from-strength.md)            | Plates travel far, as a share of the map, and separately from each epoch's tectonic strength                              |
 | [0014](adr/0014-water-is-a-column-and-a-lasting-network.md)          | Water is one owned column on every cell and a river network that lasts; processes are recorded transfers (in progress)    |
 | [0015](adr/0015-finished-maps-and-execution-hosts.md)                | Finished maps and private generation schemas; pure browser or LAN backend execution                                       |
+| [0016](adr/0016-real-scale-maps.md)                                  | Real-scale maps: hexes built from the shared triangles, generated land, GIS authoring on real scale only                  |
 
 Files named `*-PLAN.md` in this directory are working copies of open plans and
 are deleted when their plan closes; see the

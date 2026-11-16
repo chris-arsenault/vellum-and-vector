@@ -102,8 +102,9 @@ and region hierarchy to move between them.
 
 Double-click or press Enter to finish an outline or dividing line. Escape cancels
 the unfinished selection. Hold Space to pan, or choose **Pan** for drag navigation.
-Manual feature editing, drawing, field painting, templates and undo are deferred;
-their implementations remain in the repository for a later design.
+Manual feature editing, drawing, field painting, templates and undo are deferred for
+World and Region maps; their implementations remain in the repository for a later design.
+Real-scale maps add their own GIS authoring ([ADR 0016](docs/adr/0016-real-scale-maps.md)).
 
 Open **Appearance** to switch between the **Surface**, **Topographic** and
 **Relief** base maps. Surface, the default, paints natural and magical surface classes under the
@@ -227,8 +228,8 @@ mountain construction, volcanism, impacts, flexure, continental margins, ocean
 currents, atmospheric transport, water-budget lakes, capture drainage, rivers,
 sediment, grounded glaciers, coasts and landforms. Atlas profile
 and unit adaptations are described in the [generation design](docs/generation-workflows.md#physical-port-and-atlas-adapter).
-Cultural prevalence, political territory/claims/control and basic settlement,
-site and interior layouts remain atlas-specific processes.
+Cultural prevalence, political territory/claims/control and settlement layout remain
+atlas-specific processes.
 
 The old C# and TypeScript backends, migrations and deployment scripts are removed.
 `crates/atlas-map` defines the finished-map contract. `crates/atlas-gis` owns

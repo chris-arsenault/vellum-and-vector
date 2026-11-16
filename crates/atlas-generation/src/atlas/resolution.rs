@@ -1,5 +1,8 @@
 //! Fixed physical detail levels shared by both execution hosts.
-use crate::scale::{AreaUnit, MapScale};
+use crate::{
+    lattice::TRIANGLE_AREA,
+    scale::{AreaUnit, MapScale},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -18,30 +21,97 @@ pub enum Profile {
     Site,
     Interior,
 }
+impl Profile {
+    /// Real-scale maps take their cell size from a chosen hex size, not from a fixed area.
+    pub fn real_scale(self) -> bool {
+        matches!(self, Self::Local | Self::Site | Self::Interior)
+    }
+}
+/// The hex sizes a real-scale map can be drawn at, measured across flats.
+// owner-direction(2026-11-16): replace the previous real scale resolutions with the updated list
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
+pub enum HexSize {
+    #[serde(rename = "1.5m")]
+    OneAndHalfMetres,
+    #[serde(rename = "3m")]
+    ThreeMetres,
+    #[serde(rename = "10m")]
+    TenMetres,
+    #[serde(rename = "30m")]
+    ThirtyMetres,
+    #[serde(rename = "100m")]
+    HundredMetres,
+    #[serde(rename = "300m")]
+    ThreeHundredMetres,
+}
+impl HexSize {
+    pub const ALL: [Self; 6] = [
+        Self::OneAndHalfMetres,
+        Self::ThreeMetres,
+        Self::TenMetres,
+        Self::ThirtyMetres,
+        Self::HundredMetres,
+        Self::ThreeHundredMetres,
+    ];
+    pub fn across_flats(self) -> f64 {
+        match self {
+            Self::OneAndHalfMetres => 1.5,
+            Self::ThreeMetres => 3.0,
+            Self::TenMetres => 10.0,
+            Self::ThirtyMetres => 30.0,
+            Self::HundredMetres => 100.0,
+            Self::ThreeHundredMetres => 300.0,
+        }
+    }
+    /// The familiar tabletop size in feet, for display beside the metres.
+    pub fn feet(self) -> f64 {
+        match self {
+            Self::OneAndHalfMetres => 5.0,
+            Self::ThreeMetres => 10.0,
+            Self::TenMetres => 30.0,
+            Self::ThirtyMetres => 100.0,
+            Self::HundredMetres => 330.0,
+            Self::ThreeHundredMetres => 1000.0,
+        }
+    }
+}
 impl Quality {
     // owner-direction(2026-11-12): the resolutions are fixed; a detail level is not a cell count.
-    pub fn cell_area_km2(self, profile: Profile) -> f64 {
+    pub fn cell_area_km2(self, profile: Profile) -> Result<f64, &'static str> {
         let world = match self {
             Self::Draft => 800.0,
             Self::Standard => 200.0,
             Self::Fine => 50.0,
         };
-        world
-            * match profile {
-                Profile::World => 1.0,
-                Profile::Region => 0.01,
-                Profile::Local => 0.0001,
-                Profile::Site => 0.000001,
-                Profile::Interior => 0.00000001,
-            }
+        match profile {
+            Profile::World => Ok(world),
+            Profile::Region => Ok(world * 0.01),
+            _ => Err("A real-scale map takes its cell size from its hex size"),
+        }
     }
-    pub fn cell_span(self, profile: Profile) -> f64 {
-        MapScale::area_units(
-            self.cell_area_km2(profile),
+    pub fn cell_span(self, profile: Profile) -> Result<f64, &'static str> {
+        Ok(MapScale::area_units(
+            self.cell_area_km2(profile)?,
             AreaUnit::SquareKilometre,
             AreaUnit::SquareMetre,
         )
-        .sqrt()
+        .sqrt())
+    }
+    /// How many triangle edges make one side of a hex. A hex holds six times its square.
+    pub fn triangles_per_hex_edge(self) -> u32 {
+        match self {
+            Self::Draft => 1,
+            Self::Standard => 2,
+            Self::Fine => 3,
+        }
+    }
+    /// The shared triangular lattice's cell span for a real-scale map at this hex size.
+    // owner-direction(2026-11-16): no hex lattice; the hex is a representation for resolution built from a triangle sub-lattice
+    pub fn real_scale_span(self, hex: HexSize) -> f64 {
+        // A hex of side s spans s√3 across flats; its triangles have side s/n and their
+        // centres sit side/√3 apart, so the centre spacing is across-flats / 3n.
+        let spacing = hex.across_flats() / (3.0 * f64::from(self.triangles_per_hex_edge()));
+        TRIANGLE_AREA.sqrt() * spacing
     }
     // owner-direction(2026-11-12): a standard region has roughly the cells of the default standard world, at 7-ish land regions in a world.
     pub fn regional_span(self, level: u32) -> Result<f64, &'static str> {

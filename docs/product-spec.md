@@ -31,6 +31,17 @@ Generation, regional selection and refinement, inspection, presentation, explici
 local saves and export remain active scope. Completed causal generation history
 is separate from undo.
 
+**Real-scale maps — 2026-11-16 owner direction:** Ground maps (outdoor land and caves),
+settlement plans on ground maps (streets, plots, buildings, addresses) and structure maps
+(building floors) are real-scale map kinds, drawn as hexes built from the shared
+triangular lattice at a creator-chosen hex size. Their land is generated from captured
+parent context; only the parent's major landmarks must appear and roughly agree.
+Manual authoring and undo are in scope for these maps only, as ordinary GIS editing of
+their 2D layers, which become the map's authority at the first edit. Interiors are mostly
+drawn by hand and show the outside context, especially magic prevalence. This supersedes
+the Local, Site and Interior rows of section 4.1 and the deferral of authoring for these
+maps. See [ADR 0016](adr/0016-real-scale-maps.md).
+
 **Current implementation scope — updated 2026-11-15:** Support pure browser or pure
 LAN backend execution, with computation and storage together. One Rust engine runs
 on both hosts. The browser UI reads finished GIS maps; numerical generation inputs
@@ -42,7 +53,7 @@ latest supported checkpoint for explicit resumption. The library groups worlds,
 regions and jobs, and exposes unattached or incompatible records for deletion.
 [ADR 0015](adr/0015-finished-maps-and-execution-hosts.md)
 supersedes older browser-only and hosted-service assumptions. MCP and geographic
-authoring remain deferred.
+authoring of World and Region maps remain deferred.
 
 **Regional refinement and map authority — 2026-10-26:** Geographic regions can
 nest arbitrarily within the existing map type. Refinement elaborates retained
@@ -188,7 +199,9 @@ These are **defaults**, not strict size bands. A cave network may be geographica
 
 This table retains the broader design baseline. Current geographic refinement uses
 World and recursively nested Region maps. It does not advance through this table
-or switch to another map type when a selected region becomes small.
+or switch to another map type when a selected region becomes small. Local, Site and
+Interior are realized as the real-scale map kinds of
+[ADR 0016](adr/0016-real-scale-maps.md), opened explicitly from a parent map.
 
 ### 4.2 Hierarchy invariants — accepted/baseline
 
@@ -591,7 +604,7 @@ identity and outline; it does not load and copy every numerical layer.
 5. **Refine:** Develop finer surface geography through dedicated regional algorithms without repeating the world's history or advancing time.
 6. **Validate:** Check product ownership, located space, identity and authored protection without requiring outline containment or parent-height agreement.
 7. **Publish:** Install the finer map as one coherent regional operation; preserve its source map and existing drawings.
-8. **Present:** Explore and export the separate map. Manual authoring remains deferred.
+8. **Present:** Explore and export the separate map. Manual authoring of regional maps remains deferred.
 
 ### 9.4 Allowed and disallowed examples
 
@@ -648,7 +661,7 @@ No whole-region freeze or inverse simulation follows from a local edit.
 
 A generator declares: supported creation profiles; inputs and prerequisites; causal facts read/produced/invalidated; spatial extent and required halo; history/epoch assumptions; deterministic seed inputs; configurable quality/cost; result feature types; validation checks; and which outputs may be protected or selectively regenerated.
 
-Physical geography generates on every map: a world runs its full geological history, and a child map refines the terrain it inherits. Magic and human domains are selectable on top of it. A building interior has no geography of its own, so a layout generator runs there alone and never recalculates continental tectonics. Generators may require recomputing specifically affected derived data or fail when their input state is inconsistent.
+Physical geography generates on every map: a world runs its full geological history, and a child map refines the terrain it inherits. Magic and human domains are selectable on top of it. A building's floors have no generated land of their own: they are mostly drawn by hand over the outside context they capture, and never recalculate continental tectonics. Generators may require recomputing specifically affected derived data or fail when their input state is inconsistent.
 
 ### 10.2 Physical geography — Canonry reuse target
 
@@ -1052,7 +1065,7 @@ Potential implementations include PostGIS for authoritative spatial features and
 
 The Canonry engine provides domain-neutral physical layers and domain-specific magical layers. The replacement/extension should preserve the **causal contracts and algorithms**, not assume its Godot UI, hex runtime kernel, fixed-size simulation buffers, or icebound setting belong in the atlas product.
 
-Current Canonry generation uses a global algebraic microtriangle lattice; its hex cells are later projections. That separation is useful. The atlas runs every map, world and region, on the same triangular lattice at that map's own cell span ([ADR 0003](adr/0003-frontend-session.md), [ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)). It must satisfy reciprocal adjacency, projection integrity, boundary constraints, physically coherent hydrology, and deterministic cross-scale results.
+Current Canonry generation uses a global algebraic microtriangle lattice; its hex cells are later projections. That separation is useful. The atlas runs every map, world, region or real-scale, on the same triangular lattice at that map's own cell span ([ADR 0003](adr/0003-frontend-session.md), [ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)); real-scale hexes group its triangles ([ADR 0016](adr/0016-real-scale-maps.md)). It must satisfy reciprocal adjacency, projection integrity, boundary constraints, physically coherent hydrology, and deterministic cross-scale results.
 
 Canonry's full-generation pipeline was designed for globally constructed fields and may take minutes. Selected-area refinement with halo constraints, local fields, cross-level summaries, and edit-aware invalidation is a new subsystem, not a trivial interface wrapper.
 

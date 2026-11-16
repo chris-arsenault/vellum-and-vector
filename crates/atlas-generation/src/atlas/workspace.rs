@@ -37,11 +37,12 @@ pub struct Frame<'a> {
 }
 impl Frame<'_> {
     pub fn cell_span(&self) -> io::Result<f64> {
-        let fixed_span = self.quality.cell_span(self.profile);
-        let span = if self.has_parent {
-            self.child_resolution.unwrap_or(fixed_span)
-        } else {
-            fixed_span
+        let span = match self.child_resolution.filter(|_| self.has_parent) {
+            Some(span) => span,
+            None => self
+                .quality
+                .cell_span(self.profile)
+                .map_err(io::Error::other)?,
         };
         if !span.is_finite() || span <= 0.0 {
             return Err(io::Error::other("Workspace requires a positive cell span"));
