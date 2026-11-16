@@ -263,13 +263,16 @@ impl BrowserJob {
         let records = self.records.features();
         let result = self
             .publish(
-                crate::finished_map::Request::from_document(
-                    finished.snapshot,
-                    reference.clone(),
-                    prepared.expected,
-                    prepared.parent,
-                )
-                .map_err(error)?,
+                (
+                    crate::finished_map::Request::from_document(
+                        finished.snapshot,
+                        reference.clone(),
+                        prepared.expected,
+                        prepared.parent,
+                    )
+                    .map_err(error)?,
+                    None,
+                ),
                 cache_bytes,
                 &host,
                 &records,

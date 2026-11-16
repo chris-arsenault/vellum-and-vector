@@ -16,7 +16,7 @@ pub struct RasterPlane {
     pub resampling: Resampling,
     pub values: Band<f32>,
 }
-#[derive(Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RasterGrid {
     pub width: u32,

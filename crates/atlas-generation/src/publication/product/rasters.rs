@@ -111,6 +111,9 @@ impl Product<'_> {
         scratch: &RefCell<Coverage>,
         control: &impl GenerationControl,
     ) -> io::Result<()> {
+        if let Some(parent) = self.parent_rasters {
+            return self.cropped_rasters(map, parent, target, control).await;
+        }
         let mut preparation = RasterPreparation {
             scratch,
             grids: Vec::new(),

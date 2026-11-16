@@ -1,4 +1,5 @@
 mod assets;
+mod cropped;
 pub mod inputs;
 mod raster_group;
 mod rasters;
@@ -18,6 +19,8 @@ pub struct Product<'a> {
     pub fields: Fields<'a>,
     pub numerical: &'a [inputs::Field],
     pub history: &'a [EpochHistory],
+    /// A captured child copies these published rasters instead of sampling its fields.
+    pub parent_rasters: Option<&'a super::crop::ParentRasters>,
 }
 struct Target<'a, P, A> {
     publisher: &'a mut P,

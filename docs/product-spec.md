@@ -276,9 +276,12 @@ references, and GIS exports include region metadata.
 An explicit Refine action links a finer mapped area to the existing region
 subject. Refine first creates the child map, the parent's geography captured
 within the child's extent, and opens it; the refinement controls appear as a modal
-over the child, and Generate refines that child. Its first refinement shows its
-output as it publishes; later regenerations replace it when complete. Refine on a
-region that already has a child opens that child with the same controls. The
+over the child, and Generate refines that child. The created child shows the
+parent's published layers cropped to its footprint until it is refined. Its first
+refinement shows its output as it publishes; later regenerations replace it when
+complete. A cancelled or failed refinement leaves the child at the revision it
+started from and offers its settings again; a map takes one job at a time. Refine
+on a region that already has a child opens that child with the same controls. The
 subject retains its original source and hierarchy; its nearest
 refined ancestor supplies procedural context. A child remains a geographic map
 at every nesting depth. A fixed physical resolution ladder follows its captured

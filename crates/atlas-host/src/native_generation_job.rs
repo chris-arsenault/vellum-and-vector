@@ -247,7 +247,7 @@ impl NativeJob {
             self.parent,
         )?;
         let published = publish(
-            map,
+            (map, None),
             &mut services,
             &workspace.features(),
             Runtime {
@@ -281,14 +281,19 @@ impl NativeJob {
             &workspace.source_networks(),
             &geography,
         )?;
+        let parent = self
+            .parent
+            .clone()
+            .ok_or_else(|| io::Error::other("A captured child belongs to a parent map"))?;
         let map = finished_map::Request::from_document(
             self.submission.source,
             reference,
             self.expected,
             self.parent,
         )?;
+        let copied = Some(&parent);
         publish(
-            map,
+            (map, copied),
             &mut services,
             &workspace.source_features(),
             runtime,
@@ -302,8 +307,9 @@ struct Runtime {
     cache: SharedCache,
     spatial: Rc<NativeGeos>,
 }
+/// `copied` names the parent whose published rasters a captured child crops.
 async fn publish(
-    map: finished_map::Request,
+    (map, copied): (finished_map::Request, Option<&MapRef>),
     services: &mut Services<'_>,
     records: &crate::record_store::Features,
     runtime: Runtime,
@@ -328,13 +334,18 @@ async fn publish(
                 .geography(&descriptor.scope, &field.geography_id)?,
         )?);
     }
-    let product = map.prepare(
+    let mut product = map.prepare(
         resources,
         cache.clone(),
         &geography,
         records,
         spatial.as_ref(),
     )?;
+    if let Some(parent) = copied {
+        let rasters =
+            finished_map::parent_rasters(services.maps.access(), &services.assets, parent)?;
+        product = product.with_parent_rasters(rasters);
+    }
     publication_timing(&reference, "prepare-map", started);
     let mut assets = NativeMapAssets::new(services.assets.clone(), cache);
     let started = std::time::Instant::now();

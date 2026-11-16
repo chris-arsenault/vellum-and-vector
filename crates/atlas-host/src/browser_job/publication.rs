@@ -30,6 +30,10 @@ impl BrowserJob {
             )
             .map_err(error)?;
         host.work_progress(0.0, "Preparing finished map publication");
+        let parent = prepared
+            .parent
+            .clone()
+            .ok_or_else(|| error("A captured child belongs to a parent map"))?;
         let request = finished_map::Request::from_document(
             prepared.submission.source,
             reference.clone(),
@@ -37,11 +41,13 @@ impl BrowserJob {
             prepared.parent,
         )
         .map_err(error)?;
-        self.publish(request, cache_bytes, host, &records).await
+        self.publish((request, Some(parent)), cache_bytes, host, &records)
+            .await
     }
+    /// `copied` names the parent whose published rasters a captured child crops.
     pub(super) async fn publish(
         &mut self,
-        request: finished_map::Request,
+        (request, copied): (finished_map::Request, Option<MapRef>),
         cache_bytes: usize,
         host: &BrowserGenerationHost,
         records: &Features,
@@ -74,9 +80,14 @@ impl BrowserJob {
         let spatial = NativeGeos::new(request.world.geography.reference.precision.unwrap_or(1e-6))
             .map_err(error)?;
         host.work_progress(0.0, "Preparing map layers");
-        let product = request
+        let mut product = request
             .prepare(resources, cache, &geography, records, &spatial)
             .map_err(error)?;
+        if let Some(parent) = copied {
+            let rasters = finished_map::parent_rasters(self.maps.access(), &self.assets, &parent)
+                .map_err(error)?;
+            product = product.with_parent_rasters(rasters);
+        }
         product
             .publish(
                 records,

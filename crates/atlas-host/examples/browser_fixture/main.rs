@@ -136,6 +136,13 @@ pub async fn publish_map(root: &Path, stores: &mut Stores, map: Published) -> io
         &map.geography,
     )?;
     let resources = Rc::new(NativeResources::new(root.join("generation")));
+    let files = MapFiles::new(root.join("map-assets"));
+    // A captured child crops its parent's published rasters, as Refine publishes it.
+    let parent_rasters = map
+        .parent
+        .as_ref()
+        .map(|parent| finished_map::parent_rasters(stores.maps.access(), &files, parent))
+        .transpose()?;
     let request =
         finished_map::Request::from_document(map.document, map.reference, None, map.parent)?;
     let mut geography = Vec::new();
@@ -150,15 +157,17 @@ pub async fn publish_map(root: &Path, stores: &mut Stores, map: Published) -> io
                 .geography(&descriptor.scope, &field.geography_id)?,
         )?);
     }
-    let product = request.prepare(
+    let mut product = request.prepare(
         resources,
         stores.cache.clone(),
         &geography,
         &map.features,
         &stores.spatial,
     )?;
-    let mut assets =
-        NativeMapAssets::new(MapFiles::new(root.join("map-assets")), stores.cache.clone());
+    if let Some(rasters) = parent_rasters {
+        product = product.with_parent_rasters(rasters);
+    }
+    let mut assets = NativeMapAssets::new(files, stores.cache.clone());
     product
         .publish(
             &map.features,

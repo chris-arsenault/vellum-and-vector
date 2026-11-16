@@ -13,6 +13,7 @@ use atlas_generation::{
     magic::{configuration::System, confluences::configuration::Confluence},
     publication::{
         catalogue::Catalogue,
+        crop::ParentRasters,
         descriptor::Descriptor,
         fields::Fields,
         placed::{self, MagicSource},
@@ -91,6 +92,7 @@ pub struct PreparedMap {
     context: Context,
     numerical: Vec<Field>,
     placed: Vec<Feature>,
+    parent_rasters: Option<ParentRasters>,
 }
 impl Request {
     pub fn from_document(
@@ -260,6 +262,7 @@ impl Request {
             context,
             numerical,
             placed,
+            parent_rasters: None,
         })
     }
 }
@@ -314,9 +317,44 @@ impl PreparedMap {
             },
             numerical: &self.numerical,
             history: &self.request.history,
+            parent_rasters: self.parent_rasters.as_ref(),
         };
         product.publish(publisher, assets, &scratch, control).await
     }
+    /// A captured child shows its parent's published rasters, cropped rather than resampled.
+    pub fn with_parent_rasters(mut self, rasters: ParentRasters) -> Self {
+        self.parent_rasters = Some(rasters);
+        self
+    }
+}
+/// The parent's published raster layers and their asset files, for a captured child's map.
+pub fn parent_rasters(
+    maps: &dyn atlas_gis::map_store::MapAccess,
+    files: &atlas_gis::map_files::MapFiles,
+    parent: &MapRef,
+) -> io::Result<ParentRasters> {
+    let descriptor = maps.open(parent)?;
+    let mut locations = std::collections::BTreeMap::new();
+    let mut layers = Vec::new();
+    for layer in descriptor.layers {
+        if let atlas_map::LayerSource::Raster(source) = &layer.source {
+            let asset = maps.asset(parent, &source.asset_id)?;
+            locations.insert(source.asset_id.clone(), files.path(&asset.location)?);
+            layers.push(layer);
+        }
+    }
+    Ok(ParentRasters {
+        layers,
+        open: Box::new(move |id: &str| {
+            let path = locations
+                .get(id)
+                .ok_or_else(|| io::Error::other("The parent map has no such raster"))?;
+            Ok(
+                Box::new(std::io::BufReader::new(std::fs::File::open(path)?))
+                    as Box<dyn atlas_generation::publication::crop::ReadSeek>,
+            )
+        }),
+    })
 }
 #[cfg(test)]
 mod tests {

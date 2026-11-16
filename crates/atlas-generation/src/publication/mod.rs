@@ -4,6 +4,7 @@
 // Arconis: docs/architecture/subsystems.arconis#item=extraction — feature extraction reads numerical outputs and writes GIS.
 pub mod catalogue;
 pub mod channels;
+pub mod crop;
 pub mod descriptor;
 pub mod fields;
 pub mod geographies;
