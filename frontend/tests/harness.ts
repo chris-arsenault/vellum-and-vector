@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, type Page } from "@playwright/test";
-export { openFixtureMap, openSavedFixture } from "./preparedMaps";
+export { fixtureChild, openFixtureMap, openSavedFixture } from "./preparedMaps";
 export const canvas = (page: Page) => page.getByRole("application", { name: "World map canvas" });
 export function pageErrors(page: Page) {
   const errors: string[] = [];

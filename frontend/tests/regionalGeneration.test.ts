@@ -1,8 +1,12 @@
 import { expect, test } from "./uiTest";
-import { chooseOutline, openFixtureMap } from "./harness";
+import { chooseOutline, fixtureChild, openFixtureMap } from "./harness";
 
 test("@generation refinement creates the child map and edits a modal over it", async ({ page }) => {
-  const parent = await openFixtureMap(page);
+  await openFixtureMap(page);
+  const created = await fixtureChild(page);
+  await page.evaluate((child) => {
+    window.generationFixtureChild = child;
+  }, created);
   await chooseOutline(page, "Coastal reach");
   await page.getByRole("button", { name: "Refine this region", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Refine region", exact: true });
@@ -42,10 +46,7 @@ test("@generation refinement creates the child map and edits a modal over it", a
     name: "Northern coast",
     recipe: { quality: "draft", seed: 82 },
   });
-  const child = (await page.evaluate(() => window.generationFixtureReference)) as {
-    mapId: string;
-  };
-  expect(child.mapId).not.toBe(parent.mapId);
+  expect(await page.evaluate(() => window.generationFixtureReference)).toEqual(created);
   const calls = await page.evaluate(() => window.generationCalls);
   expect(calls.filter((call) => call === "refine")).toHaveLength(1);
   expect(calls.filter((call) => call === "regenerate")).toHaveLength(1);

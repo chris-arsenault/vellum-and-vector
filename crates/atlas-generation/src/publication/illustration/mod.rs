@@ -47,7 +47,11 @@ pub fn records(
             .filter(|f| f.kind == "lake")
             .map(|f| f.geometry.clone()),
     );
-    let water = spatial.union_all(&water)?;
+    // A landlocked map without lakes has no water to cut from its shapes.
+    let water = match water.is_empty() {
+        true => None,
+        false => spatial.union_all(&water)?,
+    };
     let mut result = oceans
         .into_iter()
         .map(|geometry| IllustrationGeometry {

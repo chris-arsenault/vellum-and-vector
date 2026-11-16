@@ -19,7 +19,7 @@ impl NativeResources {
     pub fn new(root: PathBuf) -> Self {
         Self { root }
     }
-    pub(crate) fn directory(&self, id: &str) -> io::Result<PathBuf> {
+    pub fn directory(&self, id: &str) -> io::Result<PathBuf> {
         if id.is_empty() || [".", ".."].contains(&id) || id.contains('/') {
             return Err(io::Error::other("Resource needs a path-safe identity"));
         }

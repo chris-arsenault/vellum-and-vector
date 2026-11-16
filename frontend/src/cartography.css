@@ -26,6 +26,10 @@
 .breadcrumbs {
   padding-left: 190px;
 }
+/* The workspace panel buttons share this row's left side; the map trail sits at its right. */
+.breadcrumbs > :first-child {
+  margin-left: auto;
+}
 .map-drawer {
   position: absolute;
   z-index: 11;
