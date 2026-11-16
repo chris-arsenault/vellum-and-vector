@@ -180,7 +180,7 @@ fn transfer(
     runtime: &mut Runtime,
     operations: &Operations,
 ) -> ExecutionResult<()> {
-    archive.format("atlas-checkpoint:owner-state", 1)?;
+    archive.format("atlas-checkpoint:owner-state", 2)?;
     archive.label(if cfg!(target_endian = "little") {
         "little-endian"
     } else {

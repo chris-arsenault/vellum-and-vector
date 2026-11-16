@@ -57,7 +57,7 @@ fn candidates(field: &Field, p: &Settings) -> io::Result<[Vec<usize>; 4]> {
         if field.mesh.membership(cell) != Membership::Content {
             continue;
         }
-        if field.water().column.kind.get(cell)? == 1 {
+        if field.water.borrow().kind_at(cell)? == 1 {
             result[0].push(cell);
             continue;
         }
@@ -150,7 +150,7 @@ fn paint(field: &Field, position: [f64; 2], radius: f64, strength: f64) -> io::R
 }
 fn run(field: &Field, p: &Settings, seed: i32) -> io::Result<()> {
     for cell in 0..field.mesh.len() {
-        let amount = if field.water().column.kind.get(cell)? == 1 {
+        let amount = if field.water.borrow().kind_at(cell)? == 1 {
             (field.shared.scalar(S::OceanCurrentHeat).get(cell)? * p.ocean_current_warmth_strength
                 / 1000.0)
                 .trunc()

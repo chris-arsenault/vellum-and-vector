@@ -74,6 +74,30 @@ impl Water {
     pub fn mean_runoff(&self, cell: usize) -> io::Result<f64> {
         self.runoff.mean_at(cell)
     }
+    pub fn glacial_melt(&self, cell: usize) -> io::Result<f64> {
+        self.melt.glacial_at(cell)
+    }
+    pub fn groundwater_return(&self, cell: usize) -> io::Result<f64> {
+        self.groundwater.returned_at(cell)
+    }
+    pub fn groundwater_return_rate(&self, cell: usize) -> io::Result<f64> {
+        self.groundwater.return_rate_at(cell)
+    }
+    pub fn kinds(&self) -> ReadBand<u8> {
+        self.column.borrow().kinds()
+    }
+    pub fn column(&self) -> WaterColumnView {
+        self.column.borrow().read_only()
+    }
+    pub fn runoff(&self) -> RunoffView {
+        self.runoff.read_only()
+    }
+    pub fn store(&self, store: super::column::Store) -> super::stores::StoreView {
+        self.column.borrow().store_view(store)
+    }
+    pub fn channel_strength(&self, cell: usize) -> io::Result<f64> {
+        self.channels.strength_at(cell)
+    }
     pub(crate) fn checkpoint(
         &mut self,
         archive: &mut crate::checkpoint::Archive<'_>,

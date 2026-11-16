@@ -52,7 +52,7 @@ impl Practice {
             .min(1.0))
     }
     fn requires(self, state: &impl CommunityState, cell: usize) -> io::Result<bool> {
-        Ok(state.field()?.water().column.kind.get(cell)? == 0
+        Ok(state.field()?.water.borrow().kind_at(cell)? == 0
             && (self == Self::Forge || held(state, cell)?)
             && settled::near_town(
                 state,

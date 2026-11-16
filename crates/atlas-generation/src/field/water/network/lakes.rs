@@ -13,7 +13,12 @@ use crate::{
     },
 };
 use std::{io, rc::Rc};
-fn loss(field: &Field, climate: &Climate, cell: usize) -> io::Result<f64> {
+fn loss(
+    field: &Field,
+    climate: &Climate,
+    water: &crate::water::WaterView,
+    cell: usize,
+) -> io::Result<f64> {
     let read = |name| field.shared.scalar(name).get(cell);
     let latitude = climate
         .latitude()
@@ -28,7 +33,6 @@ fn loss(field: &Field, climate: &Climate, cell: usize) -> io::Result<f64> {
     .demand
     .iter()
     .sum();
-    let water = field.water();
     Ok(open_water_loss(
         demand,
         read(S::Rainfall)?,
@@ -40,12 +44,12 @@ fn loss(field: &Field, climate: &Climate, cell: usize) -> io::Result<f64> {
 }
 pub(super) fn losses(field: &Field, p: &Settings, climate: &Climate) -> io::Result<[f64; 2]> {
     let mut result = [0.0; 2];
-    let water = field.water().column.kind;
+    let water = field.water();
     for cell in 0..field.mesh.len() {
-        if water.get(cell)? != 2 {
+        if water.column.kind.get(cell)? != 2 {
             continue;
         }
-        result[0] += depth_discharge(loss(field, climate, cell)?, field.mesh.area(cell));
+        result[0] += depth_discharge(loss(field, climate, &water, cell)?, field.mesh.area(cell));
         result[1] += depth_discharge(p.lake_infiltration_loss, field.mesh.area(cell));
     }
     Ok(result)
@@ -63,7 +67,7 @@ fn run(field: &Field, input: Inputs<'_>) -> io::Result<()> {
     // Compute demand before acquiring the water writer; its runoff and monthly stores are inputs.
     let mut losses = field.coverage.borrow_mut().scratch(field.mesh.len(), 0.0);
     for cell in 0..field.mesh.len() {
-        losses.set(cell, loss(field, input.climate, cell)?)?;
+        losses.set(cell, loss(field, input.climate, &water, cell)?)?;
     }
     let p = input.settings;
     field.water.borrow_mut().lake_basins_with_passage(

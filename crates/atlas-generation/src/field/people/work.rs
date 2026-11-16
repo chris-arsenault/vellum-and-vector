@@ -22,7 +22,7 @@ pub struct Work {
 }
 pub fn habitable(field: &Field, cell: usize) -> io::Result<bool> {
     Ok(field.mesh.membership(cell) == Membership::Content
-        && field.water().column.kind.get(cell)? == 0)
+        && field.water.borrow().kind_at(cell)? == 0)
 }
 pub fn km2(field: &Field, cell: usize) -> f64 {
     MapScale::area_units(

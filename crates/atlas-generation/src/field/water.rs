@@ -79,12 +79,12 @@ impl WaterOperations {
                 |water, receipt: &MeltReceipt| water.receive_melt(receipt.cell, receipt.depth),
             ),
             column: Query::new("water.column", vec![], |field: &Field, _| {
-                Ok(field.water().column)
+                Ok(field.water.borrow().column())
             }),
             runoff: Query::new("runoff", vec![], |field: &Field, _| {
                 let mut water = field.water.try_borrow_mut().map_err(failure)?;
                 water.project_runoff().map_err(failure)?;
-                Ok(water.read_only().runoff)
+                Ok(water.runoff())
             }),
         }
     }

@@ -715,6 +715,9 @@ use owning operations for construction, displacement, wear and deformation. Live
 Coverage readers provide scoped bulk access without writable aliases. Native kernels borrow
 resident arrays; paged storage uses the same access contract. Multi-donor remapping decodes captured
 donor columns once per operation and shares those immutable slabs across receiving cells.
+Receiver donor and contact-section buffers are reused across the pass. Each material layer
+owns a packed scalar allocation with separate read-only channel ranges; installation borrows
+it once and releases it before ground observers run. Snapshots still detach on mutation.
 Bed deformation changes orientation in the owning bands without reconstructing unrelated
 material or cargo. Surface projection reads only the material properties it displays.
 Published and imported material

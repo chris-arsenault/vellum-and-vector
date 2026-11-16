@@ -51,7 +51,7 @@ fn adaptive(vectors: &mut Vec<Vector>, t: &Topology) {
     }
     let mut bounds = Vector::linear("cellBounds", t.boxes.clone().into(), Group::Cells, 4);
     bounds.array.shape = vec![t.leaves.len() * 4];
-    bounds.values = Values::Bounds(t.clone());
+    bounds.values = Values::Bounds(Box::new(t.clone()));
     vectors.push(bounds);
 }
 pub fn tree(

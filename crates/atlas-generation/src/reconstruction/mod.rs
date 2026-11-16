@@ -21,7 +21,7 @@ use topology::Topology;
 #[derive(Clone)]
 pub enum Layout {
     Raster { width: usize, height: usize },
-    Adaptive(Topology),
+    Adaptive(Box<Topology>),
 }
 #[derive(Clone)]
 pub struct Grid {

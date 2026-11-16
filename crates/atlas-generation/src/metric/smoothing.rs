@@ -36,6 +36,13 @@ fn conserve_components(
     let n = input.len();
     let mut visited = coverage.scratch(n, 0u8);
     let mut queue = coverage.scratch(n, 0u32);
+    let input = input.read_values()?;
+    let areas = matrix.areas.read_values()?;
+    let offsets = matrix.offsets.read_values()?;
+    let neighbors = matrix.neighbors.read_values()?;
+    let mut result = result.write_values()?;
+    let mut visited = visited.write_values()?;
+    let mut queue = queue.write_values()?;
     for start in 0..n {
         if visited.get(start)? != 0 {
             continue;
@@ -48,11 +55,11 @@ fn conserve_components(
         let mut head = 0;
         while head < tail {
             let i = queue.get(head)? as usize;
-            let cell_area = matrix.areas.get(i)?;
+            let cell_area = areas.get(i)?;
             imbalance += (input.get(i)? - result.get(i)?) * cell_area;
             area += cell_area;
-            for at in matrix.offsets.get(i)?..matrix.offsets.get(i + 1)? {
-                let j = matrix.neighbors.get(at as usize)? as usize;
+            for at in offsets.get(i)?..offsets.get(i + 1)? {
+                let j = neighbors.get(at as usize)? as usize;
                 if visited.get(j)? != 0 {
                     continue;
                 }
@@ -77,21 +84,36 @@ fn solve(
     let n = input.len();
     let mut result = coverage.scratch(n, 0.0);
     let mut projected = coverage.scratch(n, 0.0);
-    for i in 0..n {
-        result.set(i, input.get(i)?)?;
+    {
+        let input = input.read_values()?;
+        let mut result = result.write_values()?;
+        for i in 0..n {
+            result.set(i, input.get(i)?)?;
+        }
     }
     level.matrix.product(&result.read_only(), &mut projected)?;
     let mut rhs = coverage.scratch(n, 0.0);
     let mut residual = coverage.scratch(n, 0.0);
     let mut direction = coverage.scratch(n, 0.0);
-    for i in 0..n {
-        let value = input.get(i)? * level.matrix.areas.get(i)?;
-        rhs.set(i, value)?;
-        residual.set(i, value - projected.get(i)?)?;
+    {
+        let input = input.read_values()?;
+        let areas = level.matrix.areas.read_values()?;
+        let projected = projected.read_values()?;
+        let mut rhs = rhs.write_values()?;
+        let mut residual = residual.write_values()?;
+        for i in 0..n {
+            let value = input.get(i)? * areas.get(i)?;
+            rhs.set(i, value)?;
+            residual.set(i, value - projected.get(i)?)?;
+        }
     }
     let preconditioned = level.apply(&residual.read_only())?;
-    for i in 0..n {
-        direction.set(i, preconditioned.get(i)?)?;
+    {
+        let preconditioned = preconditioned.read_values()?;
+        let mut direction = direction.write_values()?;
+        for i in 0..n {
+            direction.set(i, preconditioned.get(i)?)?;
+        }
     }
     let mut error = dot(&residual.read_only(), &direction.read_only())?;
     let tolerance = (norm(&level.matrix, &rhs)? * 1e-12).max(1e-12);
@@ -150,21 +172,24 @@ impl Smoother {
         let n = self.level.matrix.count;
         let mut local = coverage.scratch(n, 0.0);
         let mut result = coverage.scratch(input.len(), 0.0);
-        for i in 0..input.len() {
-            result.set(i, input.get(i)?)?;
-        }
-        for i in 0..n {
-            local.set(
-                i,
-                input.get(
-                    self.level
-                        .matrix
-                        .cells
-                        .as_ref()
-                        .expect("Fine matrix owns its cells")
-                        .get(i)? as usize,
-                )?,
-            )?;
+        {
+            let count = input.len();
+            let input = input.read_values()?;
+            let cells = self
+                .level
+                .matrix
+                .cells
+                .as_ref()
+                .expect("Fine matrix owns its cells")
+                .read_values()?;
+            let mut result = result.write_values()?;
+            let mut local = local.write_values()?;
+            for i in 0..count {
+                result.set(i, input.get(i)?)?;
+            }
+            for i in 0..n {
+                local.set(i, input.get(cells.get(i)? as usize)?)?;
+            }
         }
         let solved = solve(&mut self.level, &local.read_only(), coverage)?;
         let cells = self
@@ -173,8 +198,13 @@ impl Smoother {
             .cells
             .as_ref()
             .expect("Fine matrix owns its cells");
-        for i in 0..n {
-            result.set(cells.get(i)? as usize, solved.get(i)?)?;
+        {
+            let cells = cells.read_values()?;
+            let solved = solved.read_values()?;
+            let mut result = result.write_values()?;
+            for i in 0..n {
+                result.set(cells.get(i)? as usize, solved.get(i)?)?;
+            }
         }
         Ok(result)
     }

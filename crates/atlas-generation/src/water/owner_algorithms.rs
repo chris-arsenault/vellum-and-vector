@@ -54,7 +54,7 @@ impl Water {
         self.drainage.condition(
             Conditioning {
                 mesh: &self.mesh,
-                water_kind: &self.column.borrow().read_only().kind,
+                water_kind: &self.column.borrow().kinds(),
                 incoming: incoming.as_ref(),
                 ..input
             },
@@ -66,7 +66,7 @@ impl Water {
             GuidanceInputs {
                 mesh: &self.mesh,
                 scale: &self.scale,
-                water_kind: &self.column.borrow().read_only().kind,
+                water_kind: &self.column.borrow().kinds(),
                 ..input
             },
             &self.rivers,
@@ -248,7 +248,7 @@ impl Water {
                 scale: &self.scale,
                 targets: &routing.targets,
                 orders: &self.projection.orders(),
-                kind: &self.column.borrow().read_only().kind,
+                kind: &self.column.borrow().kinds(),
                 basins: &routing.basins,
                 flow: &self.flow.read_only().mean,
                 ..input
@@ -275,7 +275,7 @@ impl Water {
                 scale: &self.scale,
                 targets: &self.routing.read_only().targets,
                 orders: &self.projection.orders(),
-                kind: &self.column.borrow().read_only().kind,
+                kind: &self.column.borrow().kinds(),
                 forcing,
             },
             coverage,

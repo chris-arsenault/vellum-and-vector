@@ -21,6 +21,12 @@ pub enum MaterialScalar {
     Altered,
 }
 const SCALARS: usize = 13;
+fn check_cell(cell: usize, count: usize) -> io::Result<()> {
+    if cell >= count {
+        return Err(io::Error::other("Material cell outside layer"));
+    }
+    Ok(())
+}
 impl MaterialScalar {
     pub const ALL: [Self; SCALARS] = [
         Self::Depth,
@@ -59,7 +65,8 @@ pub struct LayerBands {
     kind: Band<u32>,
     secondary_kind: Band<u32>,
     mixed: Band<u32>,
-    scalars: [Band<f64>; SCALARS],
+    scalars: Band<f64>,
+    count: usize,
 }
 
 /// Operation-scoped borrows of the owner's material schema.
@@ -67,11 +74,13 @@ pub(super) struct LayerValues<'a> {
     kind: ReadValues<'a, u32>,
     secondary_kind: ReadValues<'a, u32>,
     mixed: ReadValues<'a, u32>,
-    scalars: Vec<ReadValues<'a, f64>>,
+    scalars: ReadValues<'a, f64>,
+    count: usize,
 }
 impl LayerValues<'_> {
     pub(super) fn depth(&self, cell: usize) -> io::Result<f64> {
-        self.scalars[MaterialScalar::Depth as usize].get(cell)
+        check_cell(cell, self.count)?;
+        self.scalars.get(cell)
     }
     pub(super) fn read(
         &self,
@@ -83,7 +92,7 @@ impl LayerValues<'_> {
                 self.kind.get(cell)?,
                 self.secondary_kind.get(cell)?,
                 self.mixed.get(cell)?,
-                |property| self.scalars[property as usize].get(cell),
+                |property| self.scalars.get(property as usize * self.count + cell),
             )?,
             catalogue,
         )
@@ -111,14 +120,16 @@ impl LayerBands {
         cell: usize,
         catalogue: &[MaterialFacts],
     ) -> io::Result<MaterialLayer> {
+        let scalars = self.scalars.read_values()?;
+        let get = |property: MaterialScalar| scalars.get(property as usize * self.count + cell);
         with_catalogue(
             MaterialLayer {
                 kind: self.kind.get(cell)? as usize,
                 secondary_kind: self.secondary_kind.get(cell)? as usize,
-                strength: self.scalars[MaterialScalar::Strength as usize].get(cell)?,
-                consolidation: self.scalars[MaterialScalar::Consolidation as usize].get(cell)?,
-                grain_x: self.scalars[MaterialScalar::GrainX as usize].get(cell)?,
-                grain_y: self.scalars[MaterialScalar::GrainY as usize].get(cell)?,
+                strength: get(MaterialScalar::Strength)?,
+                consolidation: get(MaterialScalar::Consolidation)?,
+                grain_x: get(MaterialScalar::GrainX)?,
+                grain_y: get(MaterialScalar::GrainY)?,
                 ..MaterialLayer::default()
             },
             catalogue,
@@ -126,6 +137,8 @@ impl LayerBands {
     }
     pub(super) fn transform(&mut self, cell: usize, f: [f64; 4]) -> io::Result<()> {
         use super::ground::deformation::{deform_fabric, deform_slope};
+        check_cell(cell, self.count)?;
+        let mut scalars = self.scalars.write_values()?;
         for (x, y, transform) in [
             (
                 MaterialScalar::GrainX,
@@ -139,12 +152,12 @@ impl LayerBands {
             ),
         ] {
             let [vx, vy] = transform(
-                self.scalars[x as usize].get(cell)?,
-                self.scalars[y as usize].get(cell)?,
+                scalars.get(x as usize * self.count + cell)?,
+                scalars.get(y as usize * self.count + cell)?,
                 f,
             );
-            self.scalars[x as usize].set(cell, vx)?;
-            self.scalars[y as usize].set(cell, vy)?;
+            scalars.set(x as usize * self.count + cell, vx)?;
+            scalars.set(y as usize * self.count + cell, vy)?;
         }
         Ok(())
     }
@@ -155,18 +168,20 @@ impl LayerBands {
         epoch: f64,
         revisions: &mut crate::storage::WriteValues<'_, f64>,
     ) -> io::Result<()> {
-        let [depth, _, _, _, _, _, slope_x, slope_y, _, _, _, _, altered] = &mut self.scalars;
-        let depth = depth.read_values()?;
-        let mut slope_x = slope_x.write_values()?;
-        let mut slope_y = slope_y.write_values()?;
-        let mut altered = altered.write_values()?;
+        if gradients.len() != self.count {
+            return Err(io::Error::other("Material gradients must cover the layer"));
+        }
+        let mut scalars = self.scalars.write_values()?;
+        let x_at = MaterialScalar::BedSlopeX as usize * self.count;
+        let y_at = MaterialScalar::BedSlopeY as usize * self.count;
+        let age_at = MaterialScalar::Altered as usize * self.count;
         for (cell, &[x, y]) in gradients.iter().enumerate() {
-            if (x == 0.0 && y == 0.0) || !includes(cell)? || depth.get(cell)? <= 0.0 {
+            if (x == 0.0 && y == 0.0) || !includes(cell)? || scalars.get(cell)? <= 0.0 {
                 continue;
             }
-            slope_x.set(cell, slope_x.get(cell)? + x)?;
-            slope_y.set(cell, slope_y.get(cell)? + y)?;
-            altered.set(cell, epoch)?;
+            scalars.set(x_at + cell, scalars.get(x_at + cell)? + x)?;
+            scalars.set(y_at + cell, scalars.get(y_at + cell)? + y)?;
+            scalars.set(age_at + cell, epoch)?;
             revisions.set(cell, revisions.get(cell)? + 1.0)?;
         }
         Ok(())
@@ -176,11 +191,8 @@ impl LayerBands {
             kind: self.kind.read_values()?,
             secondary_kind: self.secondary_kind.read_values()?,
             mixed: self.mixed.read_values()?,
-            scalars: self
-                .scalars
-                .iter()
-                .map(Band::read_values)
-                .collect::<io::Result<_>>()?,
+            scalars: self.scalars.read_values()?,
+            count: self.count,
         })
     }
     pub(super) fn checkpoint(
@@ -190,10 +202,11 @@ impl LayerBands {
         archive.band("kind", &mut self.kind)?;
         archive.band("secondary-kind", &mut self.secondary_kind)?;
         archive.band("mixed", &mut self.mixed)?;
-        archive.bands("material-scalars", &mut self.scalars)
+        archive.band("packed-material-scalars", &mut self.scalars)
     }
     pub(super) fn depth(&self, cell: usize) -> io::Result<f64> {
-        self.scalars[MaterialScalar::Depth as usize].get(cell)
+        check_cell(cell, self.count)?;
+        self.scalars.get(cell)
     }
     pub(super) fn read(
         &self,
@@ -203,19 +216,29 @@ impl LayerBands {
         with_catalogue(self.read_raw(cell)?, catalogue)
     }
     pub(super) fn read_raw(&self, cell: usize) -> io::Result<MaterialLayer> {
+        let scalars = self.scalars.read_values()?;
         read_material(
             self.kind.get(cell)?,
             self.secondary_kind.get(cell)?,
             self.mixed.get(cell)?,
-            |property| self.scalars[property as usize].get(cell),
+            |property| scalars.get(property as usize * self.count + cell),
         )
     }
     pub fn new(coverage: &mut Coverage) -> Self {
+        let count = coverage.len();
+        let mut scalars = coverage.scratch(
+            count
+                .checked_mul(SCALARS)
+                .expect("Material scalar address overflow"),
+            0.0,
+        );
+        scalars.retain();
         Self {
             kind: coverage.allocate(0),
             secondary_kind: coverage.allocate(0),
             mixed: coverage.allocate(0),
-            scalars: std::array::from_fn(|_| coverage.allocate(0.0)),
+            scalars,
+            count,
         }
     }
     pub fn read_only(&self) -> ReadLayerBands {
@@ -223,14 +246,21 @@ impl LayerBands {
             kind: self.kind.read_only(),
             secondary_kind: self.secondary_kind.read_only(),
             mixed: self.mixed.read_only(),
-            scalars: std::array::from_fn(|i| self.scalars[i].read_only()),
+            scalars: std::array::from_fn(|i| {
+                self.scalars
+                    .read_only()
+                    .slice(i * self.count..(i + 1) * self.count)
+                    .expect("Material channel range")
+            }),
         }
     }
     pub(super) fn set_depth(&mut self, cell: usize, depth: f64) -> io::Result<()> {
-        self.scalars[MaterialScalar::Depth as usize].set(cell, depth)
+        check_cell(cell, self.count)?;
+        self.scalars.set(cell, depth)
     }
     /// A field constructor hands this capability to its owner, never to the public field view.
     pub fn write(&mut self, cell: usize, material: &MaterialLayer) -> io::Result<()> {
+        check_cell(cell, self.count)?;
         let kind = u32::try_from(material.kind)
             .map_err(|_| io::Error::other("Material code exceeds its representation"))?;
         let secondary = u32::try_from(material.secondary_kind)
@@ -259,27 +289,21 @@ impl LayerBands {
             material.formed_max,
             material.altered,
         ];
-        for (band, value) in self.scalars.iter_mut().zip(values) {
-            band.set(cell, value)?;
+        let mut scalars = self.scalars.write_values()?;
+        for (property, value) in values.into_iter().enumerate() {
+            scalars.set(property * self.count + cell, value)?;
         }
         self.kind.set(cell, kind)?;
         self.secondary_kind.set(cell, secondary)?;
         self.mixed.set(cell, material.mixed as u32)
     }
     pub fn snapshot(&self, coverage: &mut Coverage) -> io::Result<Self> {
-        let scalars = self
-            .scalars
-            .iter()
-            .map(|band| coverage.copy_band(band))
-            .collect::<io::Result<Vec<_>>>()?;
         Ok(Self {
             kind: coverage.copy_band(&self.kind)?,
             secondary_kind: coverage.copy_band(&self.secondary_kind)?,
             mixed: coverage.copy_band(&self.mixed)?,
-            scalars: scalars
-                .try_into()
-                .ok()
-                .expect("Fixed material scalar schema"),
+            scalars: coverage.copy_band(&self.scalars)?,
+            count: self.count,
         })
     }
 }

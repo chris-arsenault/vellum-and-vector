@@ -26,10 +26,16 @@ struct Arrival {
     cut: f64,
     deformation: [f64; 4],
 }
-struct Section<'a> {
+struct Section {
     weight: f64,
     top: f64,
-    layers: &'a [MaterialLayer],
+    start: usize,
+    length: usize,
+}
+impl Section {
+    fn layers<'a>(&self, source: &'a [MaterialLayer]) -> &'a [MaterialLayer] {
+        &source[self.start..self.start + self.length]
+    }
 }
 struct RemapSource<'a> {
     columns: ColumnValues<'a>,
@@ -57,7 +63,7 @@ impl<'a> RemapSource<'a> {
             return Ok(());
         }
         for column in Column::ALL {
-            let mut layers = Vec::new();
+            let start = self.layers.len();
             for slot in 0..column.size() {
                 if self.columns.depth(source, column, slot)? <= 0.0 {
                     continue;
@@ -68,13 +74,12 @@ impl<'a> RemapSource<'a> {
                     deform_fabric(layer.grain_x, layer.grain_y, deformation);
                 [layer.bed_slope_x, layer.bed_slope_y] =
                     deform_slope(layer.bed_slope_x, layer.bed_slope_y, deformation);
-                layers.push(layer);
+                self.layers.push(layer);
             }
             let at = source * 4 + column as usize;
-            let layers = finite_cargo_basement(layers, column.finite());
-            self.starts[at] = self.layers.len();
-            self.lengths[at] = layers.len();
-            self.layers.extend(layers);
+            finite_cargo_basement(&mut self.layers, start, column.finite());
+            self.starts[at] = start;
+            self.lengths[at] = self.layers.len() - start;
         }
         Ok(())
     }
@@ -89,8 +94,9 @@ fn incoming(
     cell: usize,
     arrivals: &GroundArrivals,
     deformation: &DeformationBands,
-) -> io::Result<Vec<Arrival>> {
-    let mut donors = Vec::new();
+    donors: &mut Vec<Arrival>,
+) -> io::Result<()> {
+    donors.clear();
     let mut area = 0.0;
     for at in arrivals.offsets.get(cell)?..arrivals.offsets.get(cell + 1)? {
         let weight = arrivals.weights.get(at as usize)?;
@@ -106,10 +112,10 @@ fn incoming(
         });
         area += weight;
     }
-    for donor in &mut donors {
+    for donor in donors {
         donor.weight /= area;
     }
-    Ok(donors)
+    Ok(())
 }
 fn share(donor: &Arrival, column: Column) -> f64 {
     if matches!(column, Column::Cut | Column::CutLoose) {
@@ -122,9 +128,9 @@ fn rock_height(held: &HeldRock, donor: &Arrival, cut: bool) -> io::Result<f64> {
     Ok(held.get(F::BedrockElevation, donor.source)?
         + (donor.cut - f64::from(cut)) * held.get(F::GroundCutDepth, donor.source)?)
 }
-fn finite_cargo_basement(mut layers: Vec<MaterialLayer>, finite: bool) -> Vec<MaterialLayer> {
-    if finite || layers.last().is_none_or(|last| last.cargo.is_none()) {
-        return layers;
+fn finite_cargo_basement(layers: &mut Vec<MaterialLayer>, start: usize, finite: bool) {
+    if finite || layers.len() == start || layers.last().is_none_or(|last| last.cargo.is_none()) {
+        return;
     }
     let mut last = layers.pop().unwrap();
     if last.depth > 1.0 {
@@ -136,16 +142,16 @@ fn finite_cargo_basement(mut layers: Vec<MaterialLayer>, finite: bool) -> Vec<Ma
     last.depth = 1.0;
     last.cargo = None;
     layers.push(last);
-    layers
 }
-fn sections<'a>(
+fn sections(
     held: &HeldRock,
-    source: &'a RemapSource<'_>,
+    source: &RemapSource<'_>,
     donors: &[Arrival],
     column: Column,
-) -> io::Result<Vec<Section<'a>>> {
+    result: &mut Vec<Section>,
+) -> io::Result<()> {
     let mut area = 0.0;
-    let mut result = Vec::new();
+    result.clear();
     for donor in donors {
         let weight = donor.weight * share(donor, column);
         if weight <= 0.0 {
@@ -164,14 +170,15 @@ fn sections<'a>(
                 donor,
                 matches!(column, Column::Cut | Column::CutLoose),
             )? + cover,
-            layers,
+            start: source.starts[donor.source * 4 + column as usize],
+            length: layers.len(),
         });
         area += weight;
     }
-    for section in &mut result {
+    for section in result {
         section.weight /= area;
     }
-    Ok(result)
+    Ok(())
 }
 fn next_contact(
     sections: &[Section],
@@ -183,7 +190,7 @@ fn next_contact(
 ) -> f64 {
     let mut next = f64::INFINITY;
     for (i, section) in sections.iter().enumerate() {
-        let last = section.layers.len().saturating_sub(usize::from(!finite));
+        let last = section.length.saturating_sub(usize::from(!finite));
         if above < tops[i] {
             next = next.min(tops[i]);
         } else if indices[i] < last {
@@ -194,16 +201,17 @@ fn next_contact(
 }
 fn slab(
     mixture: &mut MaterialMixture,
-    sections: &[Section],
+    input: (&[Section], &[MaterialLayer]),
     indices: &[usize],
     tops: &[f64],
     above: f64,
     thickness: f64,
 ) -> io::Result<Option<MaterialLayer>> {
+    let (sections, source) = input;
     mixture.reset();
     let (mut occupied, mut marker) = (0.0, 0.0);
     for (i, section) in sections.iter().enumerate() {
-        let Some(layer) = section.layers.get(indices[i]) else {
+        let Some(layer) = section.layers(source).get(indices[i]) else {
             continue;
         };
         if above < tops[i] {
@@ -242,6 +250,7 @@ struct Sweep {
 }
 fn sweep<'a>(
     sections: &[Section],
+    source: &[MaterialLayer],
     finite: bool,
     mixture: &mut MaterialMixture,
     scratch: &'a mut Sweep,
@@ -266,7 +275,7 @@ fn sweep<'a>(
         tops.push(top);
         bottoms.push(
             top + section
-                .layers
+                .layers(source)
                 .first()
                 .map_or(f64::INFINITY, |layer| layer.depth),
         );
@@ -274,7 +283,14 @@ fn sweep<'a>(
     let mut above = 0.0;
     loop {
         let next = next_contact(sections, indices, tops, bottoms, finite, above);
-        if let Some(layer) = slab(mixture, sections, indices, tops, above, next - above)? {
+        if let Some(layer) = slab(
+            mixture,
+            (sections, source),
+            indices,
+            tops,
+            above,
+            next - above,
+        )? {
             if next.is_finite() {
                 append(layers, layer);
             } else if !finite {
@@ -285,12 +301,12 @@ fn sweep<'a>(
             break;
         }
         for (i, section) in sections.iter().enumerate() {
-            if indices[i] < section.layers.len().saturating_sub(usize::from(!finite))
+            if indices[i] < section.length.saturating_sub(usize::from(!finite))
                 && bottoms[i] <= next
             {
                 indices[i] += 1;
                 bottoms[i] += section
-                    .layers
+                    .layers(source)
                     .get(indices[i])
                     .map_or(f64::INFINITY, |layer| layer.depth);
             }
@@ -307,6 +323,8 @@ pub struct GroundRemapper<'a> {
     mixture: MaterialMixture,
     sweep: Sweep,
     contacts: Contacts,
+    donors: Vec<Arrival>,
+    sections: Vec<Section>,
 }
 impl<'a> GroundRemapper<'a> {
     pub fn form_opening(&mut self, cell: usize) -> io::Result<()> {
@@ -326,10 +344,18 @@ impl<'a> GroundRemapper<'a> {
             mixture: MaterialMixture::new(KIND_COUNT),
             sweep: Sweep::default(),
             contacts: Contacts::default(),
+            donors: Vec::new(),
+            sections: Vec::new(),
         })
     }
     pub fn place(&mut self, cell: usize, arrivals: &GroundArrivals) -> io::Result<()> {
-        let donors = incoming(self.held, cell, arrivals, self.deformation)?;
+        let mut donors = std::mem::take(&mut self.donors);
+        let result = incoming(self.held, cell, arrivals, self.deformation, &mut donors)
+            .and_then(|()| self.place_donors(cell, &donors));
+        self.donors = donors;
+        result
+    }
+    fn place_donors(&mut self, cell: usize, donors: &[Arrival]) -> io::Result<()> {
         if donors.is_empty() {
             return Ok(());
         }
@@ -341,18 +367,18 @@ impl<'a> GroundRemapper<'a> {
                 donors[0].deformation,
             );
         }
-        self.observe(cell, &donors, TransferPhase::Before)?;
-        for donor in &donors {
+        self.observe(cell, donors, TransferPhase::Before)?;
+        for donor in donors {
             self.source
                 .prepare(&self.ground.identities, donor.source, donor.deformation)?;
         }
         for column in Column::ALL {
-            self.install(cell, &donors, column)?;
+            self.install(cell, donors, column)?;
         }
-        self.place_facets(cell, &donors)?;
+        self.place_facets(cell, donors)?;
         self.order_facets(cell)?;
         self.ground.project(cell)?;
-        self.observe(cell, &donors, TransferPhase::After)
+        self.observe(cell, donors, TransferPhase::After)
     }
     fn observe(&self, cell: usize, donors: &[Arrival], phase: TransferPhase) -> io::Result<()> {
         for donor in donors {
@@ -371,9 +397,10 @@ impl<'a> GroundRemapper<'a> {
         Ok(())
     }
     fn install(&mut self, cell: usize, donors: &[Arrival], column: Column) -> io::Result<()> {
-        let sections = sections(self.held, &self.source, donors, column)?;
+        sections(self.held, &self.source, donors, column, &mut self.sections)?;
         let layers = sweep(
-            &sections,
+            &self.sections,
+            &self.source.layers,
             column.finite(),
             &mut self.mixture,
             &mut self.sweep,
@@ -467,10 +494,16 @@ impl<'a> GroundRemapper<'a> {
         if donor.cut <= 0.0 || donor.cut >= 1.0 {
             return Ok(true);
         }
-        let cover = |column| {
-            self.held
-                .layers(donor.source, column)
-                .map(|layers| layers.iter().map(|layer| layer.depth).sum::<f64>())
+        let cover = |column: Column| {
+            (0..column.size()).try_fold(0.0, |sum, slot| {
+                Ok::<_, io::Error>(
+                    sum + self
+                        .source
+                        .columns
+                        .depth(donor.source, column, slot)?
+                        .max(0.0),
+                )
+            })
         };
         Ok(
             rock_height(self.held, donor, false)? + cover(Column::Loose)?

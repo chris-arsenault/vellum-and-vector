@@ -1,5 +1,5 @@
 use super::operator::Operator;
-use crate::storage::{Band, Coverage, ReadValues};
+use crate::storage::{Band, Coverage, ReadValues, WriteValues};
 use std::io;
 
 pub(super) fn aggregate(
@@ -41,6 +41,13 @@ struct Gather {
     value: Band<f64>,
     columns: Vec<u32>,
 }
+struct GatherValues<'a> {
+    heads: ReadValues<'a, i32>,
+    next: ReadValues<'a, i32>,
+    mark: WriteValues<'a, i32>,
+    value: WriteValues<'a, f64>,
+    columns: &'a mut Vec<u32>,
+}
 impl Gather {
     fn new(coverage: &mut Coverage, groups: &Band<i32>, count: usize) -> io::Result<Self> {
         let mut heads = coverage.scratch(count, -1i32);
@@ -64,14 +71,21 @@ impl Gather {
             columns: Vec::new(),
         })
     }
+    fn values(&mut self) -> io::Result<GatherValues<'_>> {
+        Ok(GatherValues {
+            heads: self.heads.read_values()?,
+            next: self.next.read_values()?,
+            mark: self.mark.write_values()?,
+            value: self.value.write_values()?,
+            columns: &mut self.columns,
+        })
+    }
+}
+impl GatherValues<'_> {
     fn row(&mut self, matrix: &MatrixValues<'_>, a: usize) -> io::Result<f64> {
-        let heads = self.heads.read_values()?;
-        let next = self.next.read_values()?;
-        let mut mark = self.mark.write_values()?;
-        let mut value = self.value.write_values()?;
         let mut area = 0.0;
         self.columns.clear();
-        let mut i = heads.get(a)?;
+        let mut i = self.heads.get(a)?;
         while i >= 0 {
             let row = i as usize;
             area += matrix.areas.get(row)?;
@@ -81,14 +95,15 @@ impl Gather {
                 if a == b {
                     continue;
                 }
-                if mark.get(b)? != a as i32 {
-                    mark.set(b, a as i32)?;
-                    value.set(b, 0.0)?;
+                if self.mark.get(b)? != a as i32 {
+                    self.mark.set(b, a as i32)?;
+                    self.value.set(b, 0.0)?;
                     self.columns.push(b as u32);
                 }
-                value.set(b, value.get(b)? + matrix.weights.get(at)?)?;
+                self.value
+                    .set(b, self.value.get(b)? + matrix.weights.get(at)?)?;
             }
-            i = next.get(row)?;
+            i = self.next.get(row)?;
         }
         Ok(area)
     }
@@ -100,6 +115,7 @@ pub(super) fn operator(
     coverage: &mut Coverage,
 ) -> io::Result<Operator> {
     let mut row = Gather::new(coverage, groups, count)?;
+    let mut row = row.values()?;
     let matrix = MatrixValues {
         areas: matrix.areas.read_values()?,
         offsets: matrix.offsets.read_values()?,
@@ -133,13 +149,12 @@ pub(super) fn operator(
         let mut weights = weights.write_values()?;
         for a in 0..count {
             let area = row.row(&matrix, a)?;
-            let value = row.value.read_values()?;
             let start = offsets.get(a)? as usize;
             let mut sum = area;
             areas.set(a, area)?;
             for (offset, &j) in row.columns.iter().enumerate() {
                 let at = start + offset;
-                let weight = value.get(j as usize)?;
+                let weight = row.value.get(j as usize)?;
                 neighbors.set(at, j)?;
                 weights.set(at, weight)?;
                 sum += weight;

@@ -224,6 +224,7 @@ impl NativeJob {
             revision: self.operation.clone(),
         };
         captured_geography.extend(finished.output.geography.iter().cloned());
+        let started = std::time::Instant::now();
         services.inputs.store(
             &reference,
             &finished.snapshot,
@@ -231,6 +232,7 @@ impl NativeJob {
             &workspace.networks(),
             &captured_geography,
         )?;
+        publication_timing(&reference, "retain-inputs", started);
         let map = finished_map::Request::from_document(
             finished.snapshot,
             reference.clone(),
@@ -264,6 +266,8 @@ async fn publish(
     runtime: Runtime,
     control: &impl GenerationControl,
 ) -> io::Result<MapRef> {
+    let reference = map.reference.clone();
+    let started = std::time::Instant::now();
     let Runtime {
         resources,
         cache,
@@ -288,8 +292,10 @@ async fn publish(
         &workspace.features(),
         spatial.as_ref(),
     )?;
+    publication_timing(&reference, "prepare-map", started);
     let mut assets = NativeMapAssets::new(services.assets.clone(), cache);
-    product
+    let started = std::time::Instant::now();
+    let result = product
         .publish(
             &workspace.features(),
             spatial.as_ref(),
@@ -301,7 +307,16 @@ async fn publish(
             &mut assets,
             control,
         )
-        .await
+        .await;
+    publication_timing(&reference, "publish-map", started);
+    result
+}
+fn publication_timing(reference: &MapRef, stage: &str, started: std::time::Instant) {
+    eprintln!(
+        "{}",
+        serde_json::json!({"event":"generation.publication", "mapId":reference.map_id,
+        "revision":reference.revision, "stage":stage, "seconds":started.elapsed().as_secs_f64()})
+    );
 }
 struct Directory(PathBuf);
 impl Drop for Directory {

@@ -59,12 +59,12 @@ pub fn spring_water(state: &impl State, cell: usize) -> io::Result<Form> {
 }
 fn natural(state: &impl RiverState, cell: usize) -> io::Result<bool> {
     let field = state.field()?;
-    if field.water().column.kind.get(cell)? != 0
+    if field.water.borrow().kind_at(cell)? != 0
         || reads::magic_rule(state, "greenwood", "oasis", cell)?
         || spring_water(state, cell)? != Form::Natural
         || frame_edge(&field.mesh, cell)
         || field.shared.scalar(Scalar::IceThickness).get(cell)? > 0.0
-        || field.water().melt.glacial.get(cell)? > 0.0
+        || field.water.borrow().glacial_melt(cell)? > 0.0
         || reads::celsius(field, cell)? <= 0.0
     {
         return Ok(false);

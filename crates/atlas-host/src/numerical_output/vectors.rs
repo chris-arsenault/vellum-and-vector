@@ -28,7 +28,7 @@ impl Group {
 }
 pub enum Values {
     Band(NumericBand),
-    Bounds(Topology),
+    Bounds(Box<Topology>),
 }
 pub struct Vector {
     pub array: Array,

@@ -106,7 +106,7 @@ pub fn exposure_beside(state: &impl State, cell: usize) -> io::Result<f64> {
     Ok(most)
 }
 pub fn held_under(state: &impl State, cells: &[usize], depth: f64) -> io::Result<Vec<FieldChange>> {
-    let value = state.field()?.water().effective_sea_level - MapScale::native(depth);
+    let value = state.field()?.water.borrow().effective_sea_level() - MapScale::native(depth);
     Ok(cells
         .iter()
         .map(|&cell| {
@@ -121,8 +121,8 @@ pub fn held_under(state: &impl State, cells: &[usize], depth: f64) -> io::Result
 pub fn depth(state: &impl State, cell: usize) -> io::Result<f64> {
     state
         .field()?
-        .water()
-        .column
+        .water
+        .borrow()
         .store(Store::Standing)
         .held(cell)
 }
