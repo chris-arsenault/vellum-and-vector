@@ -3,6 +3,7 @@ mod adaptive;
 pub mod build;
 pub mod classes;
 mod corner_values;
+mod cubic;
 pub mod extrema;
 mod fit;
 pub mod grid_build;
@@ -109,7 +110,7 @@ impl<'a> Interpolator<'a> {
         read: &dyn Fn(usize) -> io::Result<f64>,
     ) -> io::Result<f64> {
         match &self.grid.layout {
-            Layout::Raster { width, .. } => {
+            Layout::Raster { width, height } => {
                 let mapping::Location {
                     cell: i,
                     x: tx,
@@ -118,8 +119,14 @@ impl<'a> Interpolator<'a> {
                 if self.discrete {
                     return read(i + usize::from(tx >= 0.5) + usize::from(ty >= 0.5) * width);
                 }
-                Ok((1.0 - ty) * ((1.0 - tx) * read(i)? + tx * read(i + 1)?)
-                    + ty * ((1.0 - tx) * read(i + width)? + tx * read(i + width + 1)?))
+                let cells = cubic::window(i, *width, *height);
+                let mut values = [[0.0; 4]; 4];
+                for (row, cells) in values.iter_mut().zip(cells) {
+                    for (value, cell) in row.iter_mut().zip(cells) {
+                        *value = read(cell)?;
+                    }
+                }
+                Ok(cubic::sample(&values, tx, ty))
             }
             Layout::Adaptive(_) => match &mut self.adaptive {
                 Some(sampler) => Ok(sampler.patch(at.cell, read)?.sample(at.x, at.y)),

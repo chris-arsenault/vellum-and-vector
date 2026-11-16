@@ -94,16 +94,51 @@ the edge; towns and roads are the visible cases.
 - NoData cells (closed poles) get the same treatment.
 - The 74 scattered `membership()` checks become unnecessary and are removed.
 
-**First step:** inventory which numerical kernels actually read outside cells
-(edge stencils in `metric/` smoothing, multigrid and gradients, advection, water
-outflow, climate) and what each needs from the boundary. That sets the boundary
-support API. Do not assume every physical process needs it.
+**Inventory (read, 2026-11-16).** The outside cells take part in the simulation
+today:
 
-**Sequencing:** the running performance work has uncommitted changes in
-`metric/coarse.rs`, `metric/multigrid.rs`, `metric/smoothing.rs` and
-`field/advection/*`, the kernels this touches. Start after that work lands. Build the
-new lattice addressing as a replacement behind a failing guard test, not as patches
-on the old mask.
+- They are ordinary unknowns in smoothing and multigrid (`metric/operator.rs`).
+- Water outlets are `boundary(cell)`, which is the outer halo ring, not the map edge.
+- Rain on halo cells adds to rivers inside the map (`water/year_routing.rs:136-141`).
+- Crust moves through them (`transport/overlap.rs`, `transport/plan.rs`).
+- The `Sampler` catches probes just past the edge on them.
+- Inheritance writes them.
+
+Only three functions select outside cells on purpose: `refinement/topology.rs`
+`frame_edge`, `refinement/network.rs` `descends` and `refinement/basins.rs`
+`connected_sea`. About 60 `membership()` checks exist only to skip them. `NoData`
+never occurs in practice, and `block_live`/`block_count` have no callers.
+
+**Design**
+
+- `TriangularLattice` keeps its site arithmetic private and exposes a dense
+  content-only numbering through a two-way table (cell → site, site → cell or none),
+  numbered in site order. `len()` is the map cell count; `neighbor()` returns `None`
+  across the map edge; `cell_at`, `address_cell` and `window_cells` return map cells
+  only; `area()` and `content_area()` merge; `Membership` leaves the public API.
+- `BoundarySupport` is owned by the lattice: one entry per edge crossing (map cell,
+  edge, ghost position, lengths, slot), with read-only ghost values per channel by
+  slot. On regions, inheritance fills ghosts from the parent; on worlds the stated
+  rule is clamp-to-edge (the edge cell's own value).
+- Consumers:
+  - Water outlets, ocean seeds, metric smoothing and gradients already treat a missing
+    neighbour as an edge; they move onto the map edge unchanged. Regional inflow
+    already arrives through `BoundaryRivers`; halo rain is dropped.
+  - `descends` and `connected_sea` read ghost values.
+  - The `Sampler` clamps to the edge.
+  - Crust entering from outside is the edge cell's column (zero-gradient inflow);
+    crust leaving is carried out as now.
+- Old checkpoints hold lattice-length bands and will not load. That follows the
+  owner direction of 2026-11-15, "old data either works in the current format or
+  does not load; no migrations".
+
+**Order:** failing guard test (`len() == content count`, no neighbour off the map,
+`cell_at` outside is `None`) → dense numbering and `BoundarySupport` → port the
+three deliberate readers, `Sampler` and transport inflow → remove the skip-only
+checks → update ADR 0003's live-block claim and the generation guide.
+
+**Sequencing:** the performance work has landed. Start after the surface raster
+work (section 6) is committed, because both touch `atlas-generation`.
 
 ## 2. Refinement creates the child map before generation
 
@@ -329,19 +364,25 @@ also shows a horizontal seam of blocky artifacts.
   linear sampling at 256-pixel TIFF tile edges could seam; that would usually show on
   both axes. Needs a look at a real map with `interpolate: false`.
 
-**Remedy**
+**Correction (owner 2026-11-16):** the squares are a lack of interpolation, not
+pixel density. Read: rectangular maps capture fields on a regular sample raster
+(`Layout::Raster`, `atlas/initial.rs`). On that layout:
 
-- Publish surface detail at a density that zoom does not magnify heavily (raise the
-  pixels per sample in `sampling::grid`, scale-relative), keeping class choice on the
-  smooth reconstruction path (`publication/sampling/channel.rs:94-114`); store paint
-  bands as 8-bit to offset file size. A frontend-only change cannot restore the old
-  look, because the published file holds no detail finer than 2 pixels per sample.
-- Alternative to weigh at implementation: restore per-zoom class reconstruction from
-  the published samples, as the old tiles did, instead of a single baked raster.
-- Seam: if confirmed at tile edges, publish a 1-pixel overlap or read the GeoTIFF
-  through a data-tile source with a gutter.
-- Coordinate with the performance work: this touches publication, which that work
-  also measures.
+- Continuous fields were bilinear (`reconstruction/mod.rs` `sample_mapped`). Bilinear
+  height has a constant slope inside each sample square, so hillshade drawn from it
+  came out one flat shade per sample.
+- Classes took the single winner of the four corner samples
+  (`reconstruction/classes.rs` `raster`), so each sample was one flat colour.
+
+The adaptive layout already reconstructs with smooth Hermite patches, including
+per-class membership patches; the raster layout had no equivalent.
+
+**Remedy (done):** `reconstruction/cubic.rs` adds a Catmull-Rom 4×4 window. Raster
+continuous fields use it, clamped to the four surrounding samples so it adds no peaks
+or pits. Raster classes take the strongest cubic membership, so boundaries curve
+between samples. Publication density is unchanged.
+
+**Open:** the horizontal seam is unverified on a real map.
 
 ## 7. Ice fields hide everything on the topo map
 

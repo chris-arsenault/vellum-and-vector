@@ -72,6 +72,8 @@ fn run(field: &Field, input: Inputs<'_>) -> io::Result<()> {
         losses.set(cell, loss(field, input.climate, &water, cell)?)?;
     }
     let p = input.settings;
+    // Ice is read where present, not declared: water passes before the first ice step
+    // run with no ice, and the step contract has no optional input.
     let ice = field.shared.scalar(S::IceThickness);
     field.water.borrow_mut().lake_basins_with_passage(
         LakeInputs {

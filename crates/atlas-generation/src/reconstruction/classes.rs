@@ -1,5 +1,5 @@
 //! Class winners and family margins use the same regular or adaptive membership patches.
-use super::{adaptive::Adaptive, Grid, Layout};
+use super::{adaptive::Adaptive, cubic, Grid, Layout};
 use crate::{
     field::schema::NumericBand,
     hpc::SmallIntSet,
@@ -137,6 +137,21 @@ impl<'a> Sampler<'a> {
         }
         Ok(())
     }
+    /// Class codes of a 4×4 window, with `None` for inactive samples, and the classes present.
+    fn window_codes(&self, cells: [[usize; 4]; 4]) -> io::Result<(cubic::Codes, SmallIntSet)> {
+        let mut codes = [[None; 4]; 4];
+        let mut candidates = SmallIntSet::default();
+        for (row, cells) in codes.iter_mut().zip(cells) {
+            for (code, cell) in row.iter_mut().zip(cells) {
+                if self.source.active.get(cell)? != 0 {
+                    let value = self.source.values.get(cell)? as i32;
+                    *code = Some(value);
+                    candidates.add(value);
+                }
+            }
+        }
+        Ok((codes, candidates))
+    }
     fn raster(
         &self,
         width: usize,
@@ -160,34 +175,21 @@ impl<'a> Sampler<'a> {
         let y = (gy.floor() as usize).min(height - 2);
         let (tx, ty) = (gx - x as f64, gy - y as f64);
         let at = y * width + x;
-        let mut codes = [0; 4];
-        let mut mask = [0; 4];
-        for (corner, cell) in [at, at + 1, at + width, at + width + 1]
-            .into_iter()
-            .enumerate()
-        {
-            codes[corner] = self.source.values.get(cell)? as i32;
-            mask[corner] = self.source.active.get(cell)?;
-        }
-        let weights = [
-            (1.0 - tx) * (1.0 - ty),
-            tx * (1.0 - ty),
-            (1.0 - tx) * ty,
-            tx * ty,
-        ];
-        let nearest =
-            codes[((gy + 0.5).floor() as usize - y) * 2 + (gx + 0.5).floor() as usize - x];
+        // Each class's membership is reconstructed with the same cubic window as continuous
+        // fields; the strongest wins, so boundaries curve between samples instead of
+        // following sample squares.
+        let cells = cubic::window(at, width, height);
+        let (codes, candidates) = self.window_codes(cells)?;
+        let (wx, wy) = (cubic::weights(tx), cubic::weights(ty));
+        let nearest = self
+            .source
+            .values
+            .get(cells[1 + usize::from(ty >= 0.5)][1 + usize::from(tx >= 0.5)])?
+            as i32;
         let (mut best, mut best_weight, mut inside, mut outside) =
             (nearest, f64::NEG_INFINITY, 0.0f64, 0.0f64);
-        for at in 0..4 {
-            if mask[at] == 0 {
-                continue;
-            }
-            let code = codes[at];
-            let weight = (0..4)
-                .filter(|&n| mask[n] != 0 && codes[n] == code)
-                .map(|n| weights[n])
-                .sum::<f64>();
+        for &code in candidates.items() {
+            let weight = cubic::membership(&codes, code, wx, wy);
             if let Some(includes) = includes {
                 if includes(code) {
                     inside = inside.max(weight);
