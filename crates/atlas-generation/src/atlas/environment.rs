@@ -186,6 +186,7 @@ impl Environment {
         let dams = field::people::waterworks::dams();
         let lakes = Field::lake_basins(
             network.clone(),
+            glacier.clone(),
             climate.clone(),
             network_questions.clone(),
             Some(dams.clone()),

@@ -67,29 +67,42 @@ fn climb(
     }
     Ok(up)
 }
+/// Town people are the people gathered above the density of the country around them
+/// (`background`, the travel-reach average). Poor ground with few people is countryside,
+/// however little it feeds; a concentration on good, connected ground is a town. Cells
+/// climb to their people peak; peaks that sit under one rise of the travel-reach
+/// background are one gathering and form one town, anchored on its densest cell.
 // Arconis: docs/architecture/subsystems.arconis#item=pp_places — finds town zones from the population and built layers.
 pub fn dense_zones(
     field: &Field,
-    support: &ReadBand<f64>,
+    background: &ReadBand<f64>,
     least: f64,
     people: Option<&ReadBand<f64>>,
 ) -> io::Result<Vec<DenseZone>> {
     let living = field.people.view(HumanField::Layer(LayerId::Population));
     let people = people.unwrap_or(&living);
-    let town = |cell| Ok::<_, io::Error>((people.get(cell)? - support.get(cell)?).max(0.0));
-    let tops = climb(
-        field,
-        |cell| Ok(people.get(cell)? > 0.0 && town(cell)? > 0.05 * people.get(cell)?),
-        people,
-    )?;
-    let groups = group_by_label(&tops, field.mesh.len());
+    let town = |cell| Ok::<_, io::Error>((people.get(cell)? - background.get(cell)?).max(0.0));
+    let qualifies = |cell| Ok(people.get(cell)? > 0.0 && town(cell)? > 0.05 * people.get(cell)?);
+    let peaks = climb(field, qualifies, people)?;
+    let rises = climb(field, qualifies, background)?;
+    let gathering: Vec<i32> = peaks
+        .iter()
+        .map(|&peak| if peak < 0 { -1 } else { rises[peak as usize] })
+        .collect();
+    let groups = group_by_label(&gathering, field.mesh.len());
     let built = field.people.view(HumanField::Layer(LayerId::BuiltUp));
     let works = field.people.view(HumanField::Layer(LayerId::Standing));
     let mut zones = Vec::new();
-    for anchor in 0..groups.count() {
-        let cells = groups.members_of(anchor);
+    for label in 0..groups.count() {
+        let cells = groups.members_of(label);
         if cells.is_empty() {
             continue;
+        }
+        let mut anchor = cells[0];
+        for &cell in cells {
+            if people.get(cell)? > people.get(anchor)? {
+                anchor = cell;
+            }
         }
         let mut zone = DenseZone {
             anchor,

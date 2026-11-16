@@ -378,6 +378,17 @@ const directions: readonly OwnerDirection[] = [
       "crates/atlas-generation/tests/scale_settings.rs",
     ],
   },
+  {
+    direction:
+      "the agreement clause is that major landmarks in a parent map must appear and roughly agree with a child map; that is it",
+    given: "2026-11-16",
+    marks: ["crates/atlas-generation/src/field/refinement/people.rs"],
+  },
+  {
+    direction: "on a topo map, ice fields must not block everything else out",
+    given: "2026-11-16",
+    marks: ["frontend/src/rasterStyles.ts"],
+  },
 ];
 
 const root = join(__dirname, "../../..");

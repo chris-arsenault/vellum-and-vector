@@ -2,9 +2,10 @@ use super::{filled, permeability, Answers, Climate, Questions, Settings};
 use crate::{
     climate::air_year,
     execution::{Query, QueryDependency},
-    field::{shared::Scalar as S, Field},
+    field::{glaciers, shared::Scalar as S, Field},
     processes::runner::PhysicalContext,
     rock::ground::GroundField,
+    scale::MapScale,
     storage::ReadBand,
     water::{
         lake_stage::{depth_discharge, open_water_loss, LakeCriteria, StageInputs},
@@ -56,6 +57,7 @@ pub(super) fn losses(field: &Field, p: &Settings, climate: &Climate) -> io::Resu
 }
 struct Inputs<'a> {
     settings: &'a Settings,
+    glacier: &'a glaciers::Settings,
     climate: &'a Climate,
     context: &'a PhysicalContext,
     answers: Answers,
@@ -70,6 +72,7 @@ fn run(field: &Field, input: Inputs<'_>) -> io::Result<()> {
         losses.set(cell, loss(field, input.climate, &water, cell)?)?;
     }
     let p = input.settings;
+    let ice = field.shared.scalar(S::IceThickness);
     field.water.borrow_mut().lake_basins_with_passage(
         LakeInputs {
             stage: StageInputs {
@@ -78,6 +81,10 @@ fn run(field: &Field, input: Inputs<'_>) -> io::Result<()> {
                 parents: &water.drainage.parents,
                 open_water_loss: &|cell| losses.get(cell),
                 infiltration_loss: p.lake_infiltration_loss,
+                held_by_ice: &|cell| {
+                    let ice = MapScale::native(ice.get(cell)?);
+                    Ok((ice * input.glacier.glacier_grounding_fraction / 1000.0).trunc())
+                },
             },
             drainage: &water.drainage,
             scale: &field.scale,
@@ -108,6 +115,7 @@ fn run(field: &Field, input: Inputs<'_>) -> io::Result<()> {
 impl Field {
     pub fn lake_basins(
         p: Rc<Settings>,
+        glacier: Rc<glaciers::Settings>,
         climate: Rc<Climate>,
         questions: Questions,
         dams: Option<Query<Self, ReadBand<u8>>>,
@@ -130,6 +138,7 @@ impl Field {
                 field,
                 Inputs {
                     settings: &p,
+                    glacier: &glacier,
                     climate: &climate,
                     context: &c,
                     answers,

@@ -110,8 +110,10 @@ pub fn respond(
             queries: dependencies,
             kind: ResponseKind::Base(Box::new(|field, cell, answers| {
                 Ok(if field.water.borrow().kind_at(cell)? == 0 {
+                    // Steep grazing carries fewer animals; herds tolerate slope better than crops.
                     5.0 * read(field, S::GrassCover, cell)?
                         * answers.ask("season")?
+                        * (-4.0 * read(field, S::Slope, cell)?).exp()
                         * quickened(field, cell, 0.5)?
                 } else {
                     0.0

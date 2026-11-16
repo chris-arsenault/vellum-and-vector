@@ -9,6 +9,8 @@ const variable = (name: string): Expr => ["var", name];
 const mask: Expr = [">", band(2), 0.99];
 /** Terrain band order after `terrainTile`: see `terrainSampleBands`. */
 const terrainBand = { relative: 3, water: 4, ice: 5, east: 10, north: 11 };
+/** Ice is a partial tint: the ice band is thickness in kilometres, full tint from 500 m. */
+const iceTint = { strength: 0.5, fullThickness: 0.5, color: "#d3e4ec" };
 type ClassColor = { code: number; color: string };
 function classMatch(value: Expr, classes: ClassColor[], fallback: Expr): Expr {
   if (!classes.length) return fallback;
@@ -126,14 +128,20 @@ export function terrainStyle(view: RasterPresentation): Style {
     surfaced(sea),
     surfaced(landColor()),
   ];
-  const ice: Expr = ["clamp", ["*", band(terrainBand.ice), 1.5], 0, 1];
+  // owner-direction(2026-11-16): on a topo map, ice fields must not block everything else out
+  // Ice tints the terrain beneath, so elevation colour, hillshade and contours stay readable.
+  const ice: Expr = [
+    "*",
+    iceTint.strength,
+    ["clamp", ["/", band(terrainBand.ice), iceTint.fullThickness], 0, 1],
+  ];
   return {
     variables: terrainVariables(view),
     brightness: ["-", ["*", 0.55, light], 0.4],
     color: [
       "case",
       mask,
-      terrainContours(["interpolate", ["linear"], ice, 0, color, 1, "#e2ede8"], slope),
+      terrainContours(["interpolate", ["linear"], ice, 0, color, 1, iceTint.color], slope),
       ["color", 0, 0, 0, 0],
     ],
   };
