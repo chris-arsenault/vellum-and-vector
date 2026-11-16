@@ -1,15 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { v4 as uuid } from "uuid";
-import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AtlasContext } from "@atlas/context";
-import type {
-  MapRef,
-  SavedMapDocument,
-  RegionSelection,
-  MapDescriptor,
-  MapNavigationState,
-  MapRegion,
-} from "@atlas/map";
+import type { MapRef, SavedMapDocument, RegionSelection, MapDescriptor } from "@atlas/map";
 import { executionMode, openFinishedAtlas } from "./finishedAtlasContext";
 import { installGenerationPresentation } from "./generationPresentation";
 import type { GenerationDraft } from "./generationDraft";
@@ -23,6 +16,7 @@ import { LoreEncyclopedia } from "./LoreEncyclopedia";
 import { ErrorMessage } from "./ErrorMessage";
 import type { GenerationStatus } from "@atlas/context";
 import { Brand } from "./Brand";
+import { attachChild, childSelection, useRecovery, type JobTarget } from "./regionalJobs";
 
 export type FinishedContext = AtlasContext<GenerationDraft>;
 interface Setup {
@@ -30,11 +24,6 @@ interface Setup {
   parent?: MapDescriptor;
   /** The region whose created child `parent` is; its controls open as a modal over that map. */
   selection?: RegionSelection;
-}
-/** The region a job's map belongs to; `creates` marks the job that creates the child. */
-interface JobTarget {
-  selection: RegionSelection;
-  creates: boolean;
 }
 interface Jobs {
   start(status: GenerationStatus, target: JobTarget | null): void;
@@ -154,6 +143,7 @@ function useAtlas(context: FinishedContext) {
     setLore,
     setLibrary,
     setOpened,
+    ...useRecovery(jobTarget, { close: () => setJob(null), open, refine: generation.refine }),
     observe(job: GenerationStatus) {
       start(job, null);
       setLibrary(false);
@@ -168,6 +158,7 @@ function useGenerationSetup(
   setError: (error: unknown) => void,
   jobs: Jobs
 ) {
+  const cache = useQueryClient();
   const [setup, setSetup] = useState<Setup | null>(null);
   const create = async () => {
     try {
@@ -211,7 +202,7 @@ function useGenerationSetup(
     if (!map) return;
     try {
       // A refined child regenerates through the refinement modal over itself.
-      const selection = await childSelection(context, map);
+      const selection = await childSelection(context, cache, map);
       if (selection) return await offer(map.reference, selection);
       await generationDefaults(context);
       setSetup({ draft: await context.generation.configuration(map.reference), parent: map });
@@ -221,29 +212,6 @@ function useGenerationSetup(
   };
   return { setup, setSetup, create, refine, offer, regenerate };
 }
-/** The parent's region whose child is `map`, as a refinement selection; null for a world. */
-async function childSelection(
-  context: FinishedContext,
-  map: MapDescriptor
-): Promise<RegionSelection | null> {
-  if (!map.parent) return null;
-  const state = await context.navigation.read(map.parent);
-  const region = state.regions.find((each) => each.child?.mapId === map.reference.mapId);
-  if (!region) return null;
-  const regionPath: MapRegion[] = [];
-  for (let at: MapRegion | undefined = region; at;) {
-    regionPath.unshift(at);
-    const parentId: string | null = at.parentId;
-    at = state.regions.find((each) => each.id === parentId);
-  }
-  return {
-    parent: map.parent,
-    spaceId: region.spaceId,
-    geometry: region.geometry,
-    featureIds: [],
-    regionPath,
-  };
-}
 async function generationDefaults(context: FinishedContext) {
   const [features, choices] = await Promise.all([
     context.generation.presentation(),
@@ -252,32 +220,6 @@ async function generationDefaults(context: FinishedContext) {
   const draft = await context.generation.validate(choices[0].values);
   installGenerationPresentation(features, draft);
   return draft;
-}
-async function attachChild(
-  context: FinishedContext,
-  cache: QueryClient,
-  selection: RegionSelection | null,
-  reference: MapRef
-) {
-  const selected = selection?.regionPath.at(-1);
-  if (selection && selected) {
-    const key = ["map-navigation", selection.parent];
-    // The parent's regions may have left the cache while its child generated.
-    const state =
-      cache.getQueryData<MapNavigationState>(key) ??
-      (await cache.fetchQuery({
-        queryKey: key,
-        queryFn: ({ signal }) => context.navigation.read(selection.parent, { signal }),
-      }));
-    if (state) {
-      const next = await context.navigation.commit(selection.parent, state, {
-        kind: "attachChild",
-        data: { region_id: selected.id, child: reference },
-      });
-      cache.setQueryData(key, next);
-    }
-  }
-  await cache.invalidateQueries({ queryKey: ["related-maps"] });
 }
 function Atlas({ context }: { context: FinishedContext }) {
   const state = useAtlas(context);
@@ -310,6 +252,8 @@ function Atlas({ context }: { context: FinishedContext }) {
           complete={(reference) => void state.complete(reference)}
           published={(reference) => void state.published(reference)}
           close={() => setJob(null)}
+          adjust={state.adjust}
+          stopped={state.stopped}
         />
       )}
     </>
@@ -369,7 +313,8 @@ function AtlasSetup({ state }: { state: ReturnType<typeof useAtlas> }) {
       const status = setup.parent
         ? await context.generation.regenerate(setup.parent.reference, draft)
         : await context.generation.create(draft);
-      start(status, setup.selection ? { selection: setup.selection, creates: false } : null);
+      const child = setup.parent?.reference;
+      start(status, setup.selection ? { selection: setup.selection, creates: false, child } : null);
       setSetup(null);
     },
   };

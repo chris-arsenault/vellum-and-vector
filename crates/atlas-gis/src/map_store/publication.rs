@@ -112,18 +112,19 @@ impl Publisher for MapStore {
             self.set_head(reference)
         })
     }
+    /// A new map keeps the output it streamed. Any other unfinished revision is removed, and a
+    /// streamed one puts back the revision it replaced, so the map can be generated again.
     fn discard(&mut self, reference: &MapRef) -> io::Result<()> {
-        transaction(self.db.as_ref(), || {
-            self.pending(reference)?;
-            if self.find_head(&reference.map_id)?.as_ref() == Some(reference) {
-                return Ok(());
-            }
-            self.db.execute(
-                "DELETE FROM maps WHERE map_id=? AND revision=?",
-                &reference_values(reference),
-            )?;
-            Ok(())
-        })
+        self.pending(reference)?;
+        let expected = self.db.value(
+            "SELECT expected_revision FROM maps WHERE map_id=? AND revision=?",
+            &reference_values(reference),
+        )?;
+        let streamed = self.find_head(&reference.map_id)?.as_ref() == Some(reference);
+        if streamed && expected.is_none_or(|value| value == Value::Null) {
+            return Ok(());
+        }
+        self.restart_publication(reference)
     }
 }
 impl MapStore {

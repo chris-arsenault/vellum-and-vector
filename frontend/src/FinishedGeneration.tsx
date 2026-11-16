@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { GenerationStatus } from "@atlas/context";
 import type { MapRef } from "@atlas/map";
 import type { FinishedContext } from "./App";
@@ -19,18 +19,38 @@ interface Props {
   complete(reference: MapRef): void;
   published(reference: MapRef): void;
   close(): void;
+  /** Reopens the settings that started this job, when it stopped before finishing. */
+  adjust?(): void;
+  /** Called once when the job is cancelled or fails. */
+  stopped?(): void;
 }
-function useJobObservation({ context, initial, complete, published }: Props) {
+/** Completion and stopping each notify once, however many times the status repeats. */
+function useStatusChanges({ complete, stopped }: Props) {
+  const handlers = useRef({ complete, stopped });
+  const ended = useRef<GenerationStatus["state"] | null>(null);
+  useEffect(() => {
+    handlers.current = { complete, stopped };
+  }, [complete, stopped]);
+  return useCallback((status: GenerationStatus) => {
+    if (status.state === "running") ended.current = null;
+    if (status.state === "running" || ended.current === status.state) return;
+    ended.current = status.state;
+    if (status.state === "completed") {
+      if (status.result) handlers.current.complete(status.result);
+    } else handlers.current.stopped?.();
+  }, []);
+}
+function useJobObservation(props: Props) {
+  const { context, initial, published } = props;
   const [status, setStatus] = useState(initial);
   const [previews, setPreviews] = useState<Preview[]>([]);
   const [error, setError] = useState<unknown>(null);
   const [attempt, setAttempt] = useState(0);
-  const completed = useRef(complete);
   const changed = useRef(published);
+  const ended = useStatusChanges(props);
   useEffect(() => {
-    completed.current = complete;
     changed.current = published;
-  }, [complete, published]);
+  }, [published]);
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
@@ -45,15 +65,14 @@ function useJobObservation({ context, initial, complete, published }: Props) {
         else if (event.kind === "published") changed.current(event.reference);
         else {
           setStatus(event.status);
-          if (event.status.state === "completed" && event.status.result)
-            completed.current(event.status.result);
+          ended(event.status);
         }
       }
     })().catch((error: unknown) => {
       if (!controller.signal.aborted) setError(error);
     });
     return () => controller.abort();
-  }, [context, initial.jobId, attempt]);
+  }, [context, initial.jobId, attempt, ended]);
   const resume = async () => {
     try {
       setError(null);
@@ -82,9 +101,7 @@ export function FinishedGeneration(props: Props) {
           Cancel generation
         </button>
       )}
-      {status.state === "completed" && status.result && (
-        <button onClick={() => complete(status.result!)}>Open map</button>
-      )}
+      <JobOutcome status={status} complete={complete} adjust={props.adjust} />
       <button onClick={close}>
         {status.state === "running" ? "Close progress" : "Close generation"}
       </button>
@@ -104,6 +121,20 @@ export function FinishedGeneration(props: Props) {
       <ErrorMessage error={error} />
     </section>
   );
+}
+function JobOutcome({
+  status,
+  complete,
+  adjust,
+}: {
+  status: GenerationStatus;
+  complete(reference: MapRef): void;
+  adjust?(): void;
+}) {
+  if (status.state === "completed")
+    return status.result && <button onClick={() => complete(status.result!)}>Open map</button>;
+  if (status.state === "running" || !adjust) return null;
+  return <button onClick={adjust}>Change settings</button>;
 }
 function JobRecovery({ status, resume }: { status: GenerationStatus; resume(): Promise<void> }) {
   if (["running", "completed"].includes(status.state)) return null;

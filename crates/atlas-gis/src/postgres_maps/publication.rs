@@ -79,19 +79,20 @@ impl Publisher for PostgresMaps {
             self.set_head(reference)
         })
     }
+    /// A new map keeps the output it streamed. Any other unfinished revision is removed, and a
+    /// streamed one puts back the revision it replaced, so the map can be generated again.
     fn discard(&mut self, reference: &MapRef) -> io::Result<()> {
-        self.transaction(|| {
-            self.lock(&reference.map_id)?;
-            self.pending(reference)?;
-            if self.find_head(&reference.map_id)?.as_ref() == Some(reference) {
-                return Ok(());
-            }
-            self.execute(
-                "DELETE FROM map.revisions WHERE map_id=$1 AND revision=$2",
-                &[&reference.map_id, &reference.revision],
-            )?;
-            Ok(())
-        })
+        let keep =
+            self.transaction(|| {
+                self.lock(&reference.map_id)?;
+                let (_, expected) = self.pending(reference)?;
+                Ok(expected.is_none()
+                    && self.find_head(&reference.map_id)?.as_ref() == Some(reference))
+            })?;
+        if keep {
+            return Ok(());
+        }
+        self.restart_publication(reference)
     }
 }
 impl PostgresMaps {
