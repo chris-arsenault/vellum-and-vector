@@ -26,6 +26,27 @@ use atlas_map::{Geometry, Position};
 use serde_json::json;
 use std::io;
 
+/// Triangle centres alternate between two offset rows, so a chain of route cells
+/// zigzags with a one-cell period. A [1, 2, 1] / 4 neighbour average cancels that
+/// alternation exactly while keeping the route's larger bends and its two ends.
+fn straightened(line: Vec<Position>) -> Vec<Position> {
+    if line.len() <= 2 {
+        return line;
+    }
+    let mut out = Vec::with_capacity(line.len());
+    out.push(line[0]);
+    for triple in line.windows(3) {
+        let [ax, ay, _] = triple[0].coordinates();
+        let [bx, by, _] = triple[1].coordinates();
+        let [cx, cy, _] = triple[2].coordinates();
+        out.push(Position::xy(
+            (ax + 2.0 * bx + cx) / 4.0,
+            (ay + 2.0 * by + cy) / 4.0,
+        ));
+    }
+    out.push(*line.last().unwrap());
+    out
+}
 fn course(mut line: Vec<Position>) -> Vec<Position> {
     for _ in 0..2 {
         if line.len() <= 2 {
@@ -71,7 +92,7 @@ fn drawn(field: &Field, runs: &[Vec<usize>]) -> Geometry {
                 })
                 .collect::<Vec<_>>();
             unwrap(&mut line, field.mesh.periodic_width());
-            course(line)
+            course(straightened(line))
         })
         .collect();
     if lines.len() == 1 {
@@ -327,4 +348,20 @@ pub fn publish(
         writer.write(features, networks, drawn, protected)?;
     }
     Ok(())
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn straightening_removes_the_lattice_zigzag() {
+        let zigzag: Vec<_> = (0..9)
+            .map(|i| Position::xy(f64::from(i), if i % 2 == 0 { -0.3 } else { 0.3 }))
+            .collect();
+        let line = straightened(zigzag);
+        for point in &line[1..line.len() - 1] {
+            assert!(point.coordinates()[1].abs() < 1e-12);
+        }
+        assert_eq!(line[0].coordinates()[1], -0.3);
+    }
 }
