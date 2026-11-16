@@ -712,7 +712,12 @@ by each share's actual cover. Converted rock becomes loose material beneath that
 
 Elevation, mean sediment depth and exposed-rock summaries are read-only projections. Solvers
 use owning operations for construction, displacement, wear and deformation. Live field and
-Coverage readers provide bulk copies without writable aliases. Published and imported material
+Coverage readers provide scoped bulk access without writable aliases. Native kernels borrow
+resident arrays; paged storage uses the same access contract. Multi-donor remapping decodes captured
+donor columns once per operation and shares those immutable slabs across receiving cells.
+Bed deformation changes orientation in the owning bands without reconstructing unrelated
+material or cargo. Surface projection reads only the material properties it displays.
+Published and imported material
 properties select one donor package together; placement may interpolate independently.
 
 Columns have bounded capacity. Coarsening preserves the surface cap and rock basement but loses
@@ -735,9 +740,15 @@ the newly built rock along with the older terrain. Ground resamples placement, b
 occupied facets together from retained arriving area. A sweep through actual contact altitudes
 combines the material present at each interval; empty space contributes no rock. Bounded columns
 coarsen the resulting contacts. This represents unresolved lateral mixing and can blur small features.
-Only absent surviving coverage forms new ground. Actual convergent area overlap stacks
-material at its receiver; categorical sampling never creates collision material. The source's local
-motion transforms its retained bedding and fabric. A collision piles rock up,
+Surface columns with no surviving donor coverage form new ground. Partial arrivals project
+the surviving donor stratigraphy across the receiving cell; crust-volume transport separately
+fills uncovered area with oceanic crust. The columns do not locate that new basalt as a separate
+subcell patch. Actual convergent area overlap stacks
+material at its receiver; categorical sampling never creates collision material. Non-convergent
+overlap blends donor stratigraphy without invoking collision stacking. The source's local
+motion transforms its retained bedding and fabric. Faults, moving events and landmark capture
+points follow the sampled velocity field through the same stepped point motion; plumes stay
+stationary. Cell footprints use the source province's mechanical transform. A collision piles rock up,
 and only part of what rode on a sinking slab comes back. Continent
 floats: where it rides up on ocean, the ocean goes down under it and the continent keeps its area, and
 only continent meeting continent is shortened. Sinking ocean pulls its plate after it, so an ocean keeps
@@ -1055,7 +1066,12 @@ Plate advection transports carried fields one at a time through reusable scratch
 space. It resolves category provenance before updating source fractions and
 strengths, retaining historical maxima and new-crust rules. Ground reconstructs placement and
 complete material sections from the same retained areas, with finite cover and occupied-facet weights.
-Each transfer reuses donor orientation calculations in temporary typed scratch.
+Multi-donor remapping borrows the captured column bands and decodes each donor's occupied layers
+once, including cargo and transformed orientation. Receiving columns borrow those temporary
+slabs; sweep and contact-reduction buffers are reused across receivers. Compaction moves
+retained beds without copying their cargo.
+Short detached cargo lists use inline numeric storage and grow onto the heap when needed;
+this does not limit their contents or change the saved representation.
 Contact-aligned mixtures collect all contributing materials before projecting into
 the column's constituent slots; they retain weighted properties and history.
 Continental shortening and oceanic subduction use the same area-retention rule for
@@ -1317,6 +1333,8 @@ directed source spans. The feature, network, clipping, inspection and
 export paths consume this one geometry. Flow targets, water budgets, erosion
 and authored geometry are unchanged, so the smoothing removes lattice artifacts
 without changing the terrain.
+Clipping a channel into its receiving water prepares that water geometry once and
+reuses the spatial adapter's point predicate throughout the adaptive endpoint search.
 
 ### Inland work-area drainage
 

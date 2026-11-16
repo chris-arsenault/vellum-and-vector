@@ -31,12 +31,18 @@ impl NativeGeos {
         operation: Overlay,
     ) -> SpatialResult<Vec<Option<Geometry>>> {
         let mask = self.read(mask)?;
+        let prepared = mask.to_prepared_geom().map_err(|e| e.to_string())?;
         values
             .iter()
             .map(|value| {
                 let input = self.read(value)?;
                 let result = match operation {
-                    Overlay::Intersection => input.intersection_prec(&mask, self.precision),
+                    Overlay::Intersection => {
+                        if prepared.covers(&input).map_err(|e| e.to_string())? {
+                            return Self::json(input);
+                        }
+                        input.intersection_prec(&mask, self.precision)
+                    }
                     Overlay::Difference => input.difference_prec(&mask, self.precision),
                     Overlay::Union => input.union_prec(&mask, self.precision),
                 }
@@ -58,6 +64,9 @@ impl NativeGeos {
                 let input = self.read(value)?;
                 if !prepared.intersects(&input).map_err(|e| e.to_string())? {
                     return Ok(0.0);
+                }
+                if prepared.covers(&input).map_err(|e| e.to_string())? {
+                    return input.area().map_err(|e| e.to_string());
                 }
                 input
                     .intersection_prec(&mask, self.precision)

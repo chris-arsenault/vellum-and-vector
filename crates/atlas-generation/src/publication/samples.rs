@@ -50,23 +50,44 @@ impl Samples<'_> {
         )
         .map_err(io::Error::other)?;
         Ok((0..self.resource.active.len())
-            .filter_map(move |index| self.sample(index, &footprint, spatial).transpose()))
+            .step_by(128)
+            .flat_map(move |start| match self.batch(start, &footprint, spatial) {
+                Ok(samples) => samples.into_iter().map(Ok).collect::<Vec<_>>(),
+                Err(error) => vec![Err(error)],
+            }))
+    }
+    fn batch(
+        &self,
+        start: usize,
+        footprint: &Geometry,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<Vec<MapSample>> {
+        let end = (start + 128).min(self.resource.active.len());
+        let cells = (start..end)
+            .map(|index| {
+                let [w, s, e, n] = cell_bounds(&self.resource.grid, index)?;
+                Ok(rectangle(Bounds(w, s, e, n)))
+            })
+            .collect::<io::Result<Vec<_>>>()?;
+        let shapes = spatial
+            .overlays(footprint, &cells, Overlay::Intersection)
+            .map_err(io::Error::other)?;
+        (start..end)
+            .zip(shapes)
+            .filter_map(|(index, shape)| {
+                shape.and_then(|shape| self.sample(index, shape, spatial).transpose())
+            })
+            .collect()
     }
     fn sample(
         &self,
         index: usize,
-        footprint: &Geometry,
+        shape: Geometry,
         spatial: &dyn SpatialKernel,
     ) -> io::Result<Option<MapSample>> {
         let grid = &self.resource.grid;
         let [w, s, e, n] = cell_bounds(grid, index)?;
         let bounds = Bounds(w, s, e, n);
-        let Some(shape) = spatial
-            .overlay(footprint, &rectangle(bounds), Overlay::Intersection)
-            .map_err(io::Error::other)?
-        else {
-            return Ok(None);
-        };
         let shape = self
             .chart
             .as_ref()

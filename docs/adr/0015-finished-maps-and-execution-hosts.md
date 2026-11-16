@@ -70,6 +70,12 @@ sample span, independent of capture-tree subdivisions. Browser sources use immut
 Files; backend sources use HTTP ranges. Neither path copies private numerical resources
 into the viewer. Stored point attributes refer to the map's band metadata rather than
 repeating that metadata in every record.
+Publication groups GIS sample clipping around a shared footprint and uses prepared coverage
+to avoid intersecting fully covered cells. Category legends stop searching once a category
+has positive-area coverage, respecting holes and overlay precedence. Native asset files use
+buffered writes and are flushed and synced before their published metadata is returned.
+PostGIS accepts feature and sample batches within the publication transaction, preserving
+per-record validation and canonical geometry while avoiding a database round trip per record.
 
 Private generation inputs belong to a separate schema and file namespace. Refinement
 resolves the selected map revision to its captured inputs on the execution host. Children

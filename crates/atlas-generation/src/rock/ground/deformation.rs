@@ -4,7 +4,6 @@ use super::{
     Ground, GroundField as F,
 };
 use crate::{
-    rock::columns::Column,
     scale::{LengthUnit, MapScale, RelativeMeasure},
     settlement::removal::Facet,
     storage::{Coverage, ReadBand},
@@ -41,15 +40,7 @@ pub fn deform_slope(x: f64, y: f64, f: [f64; 4]) -> [f64; 2] {
 }
 impl Ground {
     pub fn transform(&mut self, cell: usize, f: [f64; 4]) -> io::Result<()> {
-        for column in Column::ALL {
-            for slot in 0..column.size() {
-                let mut layer = self.columns.read_raw_layer(cell, column, slot)?;
-                [layer.grain_x, layer.grain_y] = deform_fabric(layer.grain_x, layer.grain_y, f);
-                [layer.bed_slope_x, layer.bed_slope_y] =
-                    deform_slope(layer.bed_slope_x, layer.bed_slope_y, f);
-                self.columns.set_layer(cell, column, slot, &layer)?;
-            }
-        }
+        self.columns.transform(cell, f)?;
         self.project(cell)
     }
     pub fn deform(
@@ -101,40 +92,16 @@ impl Ground {
         }
         self.project(cell)
     }
-    fn tilt_beds(&mut self, cell: usize, [x, y]: [f64; 2]) -> io::Result<()> {
-        if x == 0.0 && y == 0.0 {
-            return Ok(());
-        }
-        for column in Column::ALL {
-            let facet = if matches!(column, Column::Cut | Column::CutLoose) {
-                Facet::Cut
-            } else {
-                Facet::Land
-            };
-            if self.share(cell, facet)? <= 0.0 {
-                continue;
-            }
-            for slot in 0..column.size() {
-                if self.columns.depth(cell, column, slot)? <= 0.0 {
-                    continue;
-                }
-                let mut layer = self.columns.read_raw_layer(cell, column, slot)?;
-                layer.bed_slope_x += x;
-                layer.bed_slope_y += y;
-                layer.altered = self.epoch;
-                self.columns.set_layer(cell, column, slot, &layer)?;
-            }
-        }
-        Ok(())
-    }
     fn bend(&mut self, movement: &ReadBand<f64>) -> io::Result<()> {
+        let movement = movement.read_values()?;
+        let mut gradients = Vec::with_capacity(self.mesh.len());
         for cell in 0..self.mesh.len() {
-            let gradient = self.mesh.gradient(cell, &|cell| {
+            gradients.push(self.mesh.gradient(cell, &|cell| {
                 Ok(MapScale::metres(movement.get(cell)?, LengthUnit::Native))
-            })?;
-            self.tilt_beds(cell, gradient)?;
+            })?);
         }
-        Ok(())
+        let shares = self.view(F::GroundCutShare);
+        self.columns.tilt_field(&gradients, &shares, self.epoch)
     }
     pub fn displace_field(&mut self, movement: &ReadBand<f64>, cause: &str) -> io::Result<()> {
         self.bend(movement)?;

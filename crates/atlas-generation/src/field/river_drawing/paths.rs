@@ -352,48 +352,59 @@ impl Trace<'_> {
                 .get(&self.water.column.body.get(last)?)
         };
         let level = self.water.column.surface.get(last)?;
-        let wet = |point: Point| -> io::Result<bool> {
-            if let Some(shape) = shape {
-                let [ox, oy] = self.field.mesh.origin();
-                let x = self.field.mesh.point(point[0], point[1])[0];
-                Ok(spatial
-                    .covers_points(shape, &[Position::xy(x + ox, point[1] + oy)])
-                    .map_err(io::Error::other)?[0])
-            } else {
+        if let Some(shape) = shape {
+            spatial
+                .with_point_coverage(shape, &mut |covers| {
+                    let [ox, oy] = self.field.mesh.origin();
+                    trim_receiving(stations, receiving, |point| {
+                        let x = self.field.mesh.point(point[0], point[1])[0];
+                        covers(Position::xy(x + ox, point[1] + oy)).map_err(io::Error::other)
+                    })
+                    .map_err(|e| e.to_string())
+                })
+                .map_err(io::Error::other)
+        } else {
+            trim_receiving(stations, receiving, |point| {
                 Ok(level.is_finite() && self.paths.elevation_at(self.field, point)? < level)
-            }
-        };
-        for n in 0..stations.len() - 1 {
-            let (a, b) = (&stations[n], &stations[n + 1]);
-            if b.segment < receiving - 1 || !wet(b.point)? {
-                continue;
-            }
-            let (mut low, mut high) = (0.0, 1.0);
-            while (high - low) * (b.point[0] - a.point[0]).hypot(b.point[1] - a.point[1]) > 1e-6 {
-                let middle = (low + high) / 2.0;
-                if wet(curves::mix(a.point, b.point, middle))? {
-                    high = middle;
-                } else {
-                    low = middle;
-                }
-            }
-            let fraction = (low + high) / 2.0;
-            let start = if a.segment == b.segment {
-                a.fraction
-            } else {
-                0.0
-            };
-            let end = Station {
-                point: curves::mix(a.point, b.point, fraction),
-                segment: b.segment,
-                fraction: start + (b.fraction - start) * fraction,
-            };
-            stations.truncate(n + 1);
-            stations.push(end);
-            break;
+            })
         }
-        Ok(())
     }
+}
+fn trim_receiving(
+    stations: &mut Vec<Station>,
+    receiving: usize,
+    wet: impl Fn(Point) -> io::Result<bool>,
+) -> io::Result<()> {
+    for n in 0..stations.len() - 1 {
+        let (a, b) = (&stations[n], &stations[n + 1]);
+        if b.segment < receiving - 1 || !wet(b.point)? {
+            continue;
+        }
+        let (mut low, mut high) = (0.0, 1.0);
+        while (high - low) * (b.point[0] - a.point[0]).hypot(b.point[1] - a.point[1]) > 1e-6 {
+            let middle = (low + high) / 2.0;
+            if wet(curves::mix(a.point, b.point, middle))? {
+                high = middle;
+            } else {
+                low = middle;
+            }
+        }
+        let fraction = (low + high) / 2.0;
+        let start = if a.segment == b.segment {
+            a.fraction
+        } else {
+            0.0
+        };
+        let end = Station {
+            point: curves::mix(a.point, b.point, fraction),
+            segment: b.segment,
+            fraction: start + (b.fraction - start) * fraction,
+        };
+        stations.truncate(n + 1);
+        stations.push(end);
+        break;
+    }
+    Ok(())
 }
 fn corridor(field: &Field, i: usize, j: usize, a: Point, d: Point) -> Point {
     let pi = field.mesh.position(i);

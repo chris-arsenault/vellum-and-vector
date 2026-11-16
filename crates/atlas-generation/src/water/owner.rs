@@ -64,6 +64,16 @@ pub struct WaterView {
     pub base_sea_level: f64,
 }
 impl Water {
+    /// Scalar queries do not construct views of unrelated water stores.
+    pub fn kind_at(&self, cell: usize) -> io::Result<u8> {
+        self.column.borrow().kind_at(cell)
+    }
+    pub fn effective_sea_level(&self) -> f64 {
+        self.ocean.effective_level
+    }
+    pub fn mean_runoff(&self, cell: usize) -> io::Result<f64> {
+        self.runoff.mean_at(cell)
+    }
     pub(crate) fn checkpoint(
         &mut self,
         archive: &mut crate::checkpoint::Archive<'_>,

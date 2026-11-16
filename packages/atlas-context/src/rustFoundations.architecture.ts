@@ -109,6 +109,7 @@ describe("Rust crate dependency boundary", () => {
                 "serde",
                 "serde_json",
                 "ciborium", // Value encoding for owner mementos; no host or storage service.
+                "smallvec", // Inline numeric parcel storage; no host capability.
                 "ts-rs",
                 "bytemuck",
                 "tiff",

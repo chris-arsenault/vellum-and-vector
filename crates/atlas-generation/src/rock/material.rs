@@ -85,7 +85,7 @@ fn cargo_hosts(
         i32::try_from(kind).expect("Catalogue material codes fit the cargo host representation");
     let secondary = i32::try_from(secondary)
         .expect("Catalogue material codes fit the cargo host representation");
-    cargo.and_then(|cargo| cargo.aggregate_hosts(kind, secondary))
+    cargo.and_then(|cargo| cargo.into_aggregate_hosts(kind, secondary))
 }
 
 /// Explicit contribution depths avoid copying a material merely to change its mixing weight.

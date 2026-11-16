@@ -5,7 +5,7 @@ use super::{
 };
 use crate::{
     rock::{
-        columns::{Column, RockColumns},
+        columns::{Column, ColumnValues, RockColumns},
         material::MaterialLayer,
     },
     storage::{Band, Coverage},
@@ -44,16 +44,8 @@ struct Donor {
     columns: [Option<Vec<MaterialLayer>>; 4],
 }
 impl HeldRock {
-    pub(super) fn depth(&self, cell: usize, column: Column, slot: usize) -> io::Result<f64> {
-        self.columns.depth(cell, column, slot)
-    }
-    pub(super) fn orientation(
-        &self,
-        cell: usize,
-        column: Column,
-        slot: usize,
-    ) -> io::Result<[f64; 4]> {
-        self.columns.orientation(cell, column, slot)
+    pub(super) fn read_columns(&self) -> io::Result<ColumnValues<'_>> {
+        self.columns.read_values()
     }
     pub fn get(&self, field: F, cell: usize) -> io::Result<f64> {
         self.fields

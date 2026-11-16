@@ -34,7 +34,7 @@ pub fn respond(
             by: "the sea".into(),
             queries: vec![],
             kind: ResponseKind::Base(Box::new(|field, _, _| {
-                Ok(field.water().effective_sea_level)
+                Ok(field.water.borrow().effective_sea_level())
             })),
         },
     )?;
@@ -44,7 +44,7 @@ pub fn respond(
             by: "climate".into(),
             queries: vec![runoff.clone()],
             kind: ResponseKind::Base(Box::new(|field, cell, _| {
-                field.water().runoff.mean.get(cell).map_err(failure)
+                field.water.borrow().mean_runoff(cell).map_err(failure)
             })),
         },
     )?;
@@ -54,10 +54,8 @@ pub fn respond(
             by: "climate".into(),
             queries: vec![runoff],
             kind: ResponseKind::Base(Box::new(move |field, cell, _| {
-                Ok(
-                    field.water().runoff.mean.get(cell).map_err(failure)?
-                        / (reference_runoff * 2.0),
-                )
+                Ok(field.water.borrow().mean_runoff(cell).map_err(failure)?
+                    / (reference_runoff * 2.0))
             })),
         },
     )?;

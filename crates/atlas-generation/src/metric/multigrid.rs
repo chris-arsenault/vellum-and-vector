@@ -118,14 +118,19 @@ impl Level {
         Ok(())
     }
     fn cycle(&mut self) -> io::Result<()> {
-        for i in 0..self.x.len() {
-            self.x.set(i, 0.0)?;
+        {
+            let mut x = self.x.write_values()?;
+            for i in 0..self.matrix.count {
+                x.set(i, 0.0)?;
+            }
         }
         match &self.solver {
             Solver::Diagonal => {
-                for i in 0..self.x.len() {
-                    self.x
-                        .set(i, self.rhs.get(i)? / self.matrix.diagonal.get(i)?)?;
+                let rhs = self.rhs.read_values()?;
+                let diagonal = self.matrix.diagonal.read_values()?;
+                let mut x = self.x.write_values()?;
+                for i in 0..self.matrix.count {
+                    x.set(i, rhs.get(i)? / diagonal.get(i)?)?;
                 }
                 return Ok(());
             }
@@ -138,21 +143,32 @@ impl Level {
         let Solver::Coarse { groups, level } = &mut self.solver else {
             unreachable!()
         };
-        for i in 0..level.rhs.len() {
-            level.rhs.set(i, 0.0)?;
-        }
-        for i in 0..groups.len() {
-            let group = groups.get(i)? as usize;
-            level.rhs.set(
-                group,
-                level.rhs.get(group)? + self.rhs.get(i)? - self.scratch.get(i)?,
-            )?;
+        let count = groups.len();
+        let groups = groups.read_values()?;
+        {
+            let mut coarse_rhs = level.rhs.write_values()?;
+            let rhs = self.rhs.read_values()?;
+            let scratch = self.scratch.read_values()?;
+            for i in 0..level.matrix.count {
+                coarse_rhs.set(i, 0.0)?;
+            }
+            for i in 0..count {
+                let group = groups.get(i)? as usize;
+                coarse_rhs.set(
+                    group,
+                    coarse_rhs.get(group)? + rhs.get(i)? - scratch.get(i)?,
+                )?;
+            }
         }
         level.cycle()?;
-        for i in 0..groups.len() {
-            self.x
-                .set(i, self.x.get(i)? + level.x.get(groups.get(i)? as usize)?)?;
+        {
+            let coarse_x = level.x.read_values()?;
+            let mut x = self.x.write_values()?;
+            for i in 0..count {
+                x.set(i, x.get(i)? + coarse_x.get(groups.get(i)? as usize)?)?;
+            }
         }
+        drop(groups);
         self.smooth()
     }
 }

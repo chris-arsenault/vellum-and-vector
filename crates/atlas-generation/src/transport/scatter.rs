@@ -12,18 +12,23 @@ pub fn area_weights(
     area: impl Fn(usize) -> f64,
 ) -> io::Result<Band<f64>> {
     let mut weights = coverage.scratch(plan.weights.len(), 0.0);
+    let offsets = plan.offsets.read_values()?;
+    let targets = plan.targets.read_values()?;
+    let shares = plan.weights.read_values()?;
+    let mut output = weights.write_values()?;
     for source in 0..plan.offsets.len() - 1 {
-        for offset in plan.offsets.get(source)?..plan.offsets.get(source + 1)? {
+        for offset in offsets.get(source)?..offsets.get(source + 1)? {
             let offset = offset as usize;
-            let target = plan.targets.get(offset)?;
+            let target = targets.get(offset)?;
             if target >= 0 {
-                weights.set(
+                output.set(
                     offset,
-                    plan.weights.get(offset)? * area(source) / area(target as usize),
+                    shares.get(offset)? * area(source) / area(target as usize),
                 )?;
             }
         }
     }
+    drop(output);
     Ok(weights)
 }
 pub fn accumulate(
@@ -32,14 +37,21 @@ pub fn accumulate(
     scratch: &mut Band<f64>,
     area_weights: Option<&ReadBand<f64>>,
 ) -> io::Result<()> {
-    for cell in 0..scratch.len() {
+    let count = scratch.len();
+    let sources = values.len();
+    let mut scratch = scratch.write_values()?;
+    let values = values.read_values()?;
+    let offsets = plan.offsets.read_values()?;
+    let targets = plan.targets.read_values()?;
+    let area_weights = area_weights.map(ReadBand::read_values).transpose()?;
+    for cell in 0..count {
         scratch.set(cell, 0.0)?;
     }
-    for source in 0..values.len() {
+    for source in 0..sources {
         let value = values.get(source)?;
-        for offset in plan.offsets.get(source)?..plan.offsets.get(source + 1)? {
+        for offset in offsets.get(source)?..offsets.get(source + 1)? {
             let offset = offset as usize;
-            let target = plan.targets.get(offset)?;
+            let target = targets.get(offset)?;
             if target < 0 {
                 continue;
             }
@@ -47,7 +59,7 @@ pub fn accumulate(
             let prior = scratch.get(target)?;
             scratch.set(
                 target,
-                if let Some(weights) = area_weights {
+                if let Some(weights) = &area_weights {
                     prior + value * weights.get(offset)?
                 } else {
                     prior.max(value)
@@ -88,7 +100,12 @@ impl ScalarTransport<'_> {
                 Some(self.weights)
             },
         )?;
-        for target in 0..values.len() {
+        let count = values.len();
+        let scratch = scratch.read_values()?;
+        let arrivals = self.arrivals.read_values()?;
+        let boundaries = self.boundaries.read_values()?;
+        let mut values = values.write_values()?;
+        for target in 0..count {
             let sum = scratch.get(target)?;
             values.set(
                 target,
@@ -99,8 +116,8 @@ impl ScalarTransport<'_> {
                     arrived(
                         kind,
                         sum,
-                        self.arrivals.get(target)?,
-                        self.boundaries.get(target)?,
+                        arrivals.get(target)?,
+                        boundaries.get(target)?,
                         0.0,
                     )
                 },

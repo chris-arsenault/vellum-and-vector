@@ -25,7 +25,7 @@ fn write(field: &Field, name: Scalar, cell: usize, value: f64) -> io::Result<()>
     field.shared.derive_scalar(name).set(cell, value)
 }
 fn ocean(field: &Field, cell: usize) -> io::Result<bool> {
-    Ok(field.water().column.kind.get(cell)? == 1)
+    Ok(field.water.borrow().kind_at(cell)? == 1)
 }
 fn height(field: &Field, cell: usize) -> io::Result<f64> {
     if ocean(field, cell)? {

@@ -232,6 +232,19 @@ impl SpatialKernel for NativeGeos {
             })
             .collect()
     }
+    fn with_point_coverage(
+        &self,
+        mask: &Geometry,
+        visit: &mut dyn FnMut(&atlas_map::spatial::PointCoverage<'_>) -> SpatialResult<()>,
+    ) -> SpatialResult<()> {
+        let mask = self.read(mask)?;
+        let prepared = mask.to_prepared_geom().map_err(|e| e.to_string())?;
+        visit(&|point| {
+            prepared
+                .covers(&self.native_point(point)?)
+                .map_err(|e| e.to_string())
+        })
+    }
     fn node_lines(&self, value: &Geometry) -> SpatialResult<Option<Geometry>> {
         Self::json(
             self.read(value)?

@@ -161,9 +161,14 @@ fn resident_fields_borrow_contiguous_values_and_keep_snapshot_ownership() {
     }
     let mut copy = band.snapshot().unwrap();
     {
+        let captured = band.read_values().unwrap();
         let mut values = copy.write_values().unwrap();
         values.set(BLOCK_CELLS + 1, 7).unwrap();
         assert_eq!(values.get(BLOCK_CELLS + 1).unwrap(), 7);
+        assert_eq!(
+            captured.get(BLOCK_CELLS + 1).unwrap(),
+            (BLOCK_CELLS + 1) as u32
+        );
     }
     assert!(band.write_values().is_err());
     assert_eq!(view.get(BLOCK_CELLS + 1).unwrap(), (BLOCK_CELLS + 1) as u32);

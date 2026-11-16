@@ -38,7 +38,12 @@ fn publishes_physical_shores_display_height_and_gradients() {
             )
             .unwrap();
     }
-    let field = Resource::new(
+    let mut classes = storage.allocate(0.0);
+    let patch_classes = storage.allocate(2.0).read_only();
+    for i in 0..25 {
+        classes.set(i, if i % 5 >= 2 { 1.0 } else { 0.0 }).unwrap();
+    }
+    let mut field = Resource::new(
         Rc::new(Grid {
             bounds: [0.0, 0.0, 100.0, 100.0],
             periodic_width: None,
@@ -49,18 +54,36 @@ fn publishes_physical_shores_display_height_and_gradients() {
             measures: storage.allocate(625.0).read_only(),
         }),
         storage.allocate(1u8).read_only(),
-        BTreeMap::from([(
-            "Elevation".into(),
-            Channel {
-                values: heights.read_only().into(),
-                unit: "native-length".into(),
-                quantity: Quantity::Intensive,
-            },
-        )]),
+        BTreeMap::from([
+            (
+                "Elevation".into(),
+                Channel {
+                    values: heights.read_only().into(),
+                    unit: "native-length".into(),
+                    quantity: Quantity::Intensive,
+                },
+            ),
+            (
+                "PhysicalMaterial".into(),
+                Channel {
+                    values: classes.read_only().into(),
+                    unit: "category".into(),
+                    quantity: Quantity::Category,
+                },
+            ),
+        ]),
         None,
         storage,
     );
     let footprint = rectangle(Bounds(0.0, 0.0, 100.0, 100.0));
+    let spatial = NativeGeos::new(1e-6).unwrap();
+    let entities = BTreeMap::new();
+    let fields = fields::Fields {
+        entities: &entities,
+        systems: &[],
+        confluences: &[],
+    };
+    assert_category_presence(&mut field, patch_classes, &fields, &spatial);
     let ocean = rectangle(Bounds(0.0, 0.0, 20.0, 100.0));
     let source = Source {
         field: &field,
@@ -77,13 +100,6 @@ fn publishes_physical_shores_display_height_and_gradients() {
     };
     let grid = sampling::grid(&source).unwrap();
     assert_eq!((grid.width, grid.height), (8, 8));
-    let spatial = NativeGeos::new(1e-6).unwrap();
-    let entities = BTreeMap::new();
-    let fields = fields::Fields {
-        entities: &entities,
-        systems: &[],
-        confluences: &[],
-    };
     let input = fields::input(&fields, &source, "terrain".into(), &spatial).unwrap();
     assert_eq!(input.planes[0].band.display.factor, 1.0 / 1024.0);
     assert_eq!(input.planes[4].band.id, "sample-span");
@@ -109,6 +125,44 @@ fn publishes_physical_shores_display_height_and_gradients() {
     bytes.set_position(0);
     assert_map_pixels(bytes);
 }
+fn assert_category_presence(
+    field: &mut Resource,
+    patch_classes: atlas_generation::storage::ReadBand<f64>,
+    fields: &fields::Fields<'_>,
+    spatial: &NativeGeos,
+) {
+    let footprint = rectangle(Bounds(0.0, 0.0, 100.0, 100.0));
+    let present = |resource: &Resource, shape: &atlas_map::Geometry| {
+        fields::inspection_band(fields, resource, "PhysicalMaterial", shape, spatial)
+            .unwrap()
+            .categories
+            .into_iter()
+            .filter(|c| c.present)
+            .map(|c| c.value)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(present(field, &footprint), vec![0, 1]);
+    // Class 1 starts at x=37.5. Boundary contact alone does not put it in the legend.
+    assert_eq!(
+        present(field, &rectangle(Bounds(0.0, 0.0, 37.5, 100.0))),
+        vec![0]
+    );
+    assert_eq!(
+        present(field, &rectangle(Bounds(37.0, 0.0, 38.0, 100.0))),
+        vec![0, 1]
+    );
+    let mut patch = field.clone();
+    patch.channels.get_mut("PhysicalMaterial").unwrap().values = patch_classes.into();
+    field
+        .overlays
+        .push(atlas_generation::field::inheritance::resources::Overlay {
+            footprint: rectangle(Bounds(37.5, 0.0, 100.0, 100.0)),
+            channels: vec!["PhysicalMaterial".into()],
+            resource: Rc::new(patch),
+        });
+    assert_eq!(present(field, &footprint), vec![0, 2]);
+}
+
 fn assert_map_pixels(bytes: Cursor<Vec<u8>>) {
     let mut decoder = tiff::decoder::Decoder::new(bytes).unwrap();
     let mut plane = |band| {

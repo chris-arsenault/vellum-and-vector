@@ -175,6 +175,19 @@ impl<T: Sample> BandState<T> {
         let value = block.data.borrow().values.as_ref().expect("Loaded block")[offset];
         Ok(value)
     }
+    fn read_values(self: &Rc<Self>) -> io::Result<ReadValues<'_, T>> {
+        self.check()?;
+        if self.block_cells != self.length || self.length == 0 {
+            return Ok(ReadValues::Paged(ReadBand {
+                state: self.clone(),
+            }));
+        }
+        let pin = self.pin(0)?;
+        let values = Ref::map(self.blocks[0].data.borrow(), |data| {
+            data.values.as_ref().expect("Loaded field").as_slice()
+        });
+        Ok(ReadValues::Resident(ReadBlock { values, _pin: pin }))
+    }
     fn address(&self, index: usize) -> (usize, usize) {
         // Native resident fields are contiguous: direct access must not calculate
         // a page number and remainder for every numerical value.
@@ -213,7 +226,7 @@ pub struct ReadBand<T: Sample> {
 /// A kernel borrows once. Resident reads index the field directly without repeated borrow checks.
 pub enum ReadValues<'a, T: Sample> {
     Resident(ReadBlock<'a, T>),
-    Paged(&'a ReadBand<T>),
+    Paged(ReadBand<T>),
 }
 /// Owner-only bulk mutation. Native resident fields keep one exclusive borrow per kernel.
 pub enum WriteValues<'a, T: Sample> {
@@ -293,21 +306,16 @@ impl<T: Sample> ReadBand<T> {
         Ok(ReadBlock { values, _pin: pin })
     }
     pub fn read_values(&self) -> io::Result<ReadValues<'_, T>> {
-        self.state.check()?;
-        if self.state.block_cells != self.len() || self.is_empty() {
-            return Ok(ReadValues::Paged(self));
-        }
-        let pin = self.state.pin(0)?;
-        let values = Ref::map(self.state.blocks[0].data.borrow(), |data| {
-            data.values.as_ref().expect("Loaded field").as_slice()
-        });
-        Ok(ReadValues::Resident(ReadBlock { values, _pin: pin }))
+        self.state.read_values()
     }
     pub fn with_block<R>(&self, block: usize, read: impl FnOnce(&[T]) -> R) -> io::Result<R> {
         Ok(read(&self.read_block(block)?))
     }
 }
 impl<T: Sample> Band<T> {
+    pub fn read_values(&self) -> io::Result<ReadValues<'_, T>> {
+        self.state.read_values()
+    }
     pub fn new(length: usize, initial: T, cache: SharedCache) -> Self {
         Self::build(length, initial, cache, None, false)
     }

@@ -8,11 +8,12 @@ use crate::{
         upload::{PublicationPlane, RasterPublicationInput},
     },
     reconstruction::grid_build::cell_bounds,
-    spatial::{Overlay, SpatialKernel},
+    spatial::{Overlay, Predicate, SpatialKernel},
 };
 use atlas_map::{regions::rectangle, Bounds, Category, Geometry, RasterBand};
 // hpc-exempt: distinct categorical codes in map legends, not cell membership.
-use std::{collections::BTreeSet, io};
+use std::collections::{BTreeMap, BTreeSet};
+use std::io;
 
 pub fn layer_id(channel: &str) -> String {
     if channel == "Elevation" {
@@ -229,24 +230,47 @@ fn collect(
     let (Some(remaining), Some(values)) = (remaining, field.channels.get(channel)) else {
         return Ok(());
     };
-    for start in (0..values.values.len()).step_by(4096) {
-        let mut cells = Vec::new();
-        let mut codes = Vec::new();
-        for i in start..(start + 4096).min(values.values.len()) {
-            let code = values.values.get(i)?;
-            if field.active.get(i)? == 0 || !code.is_finite() || result.contains(&(code as i32)) {
-                continue;
-            }
-            let [w, s, e, n] = cell_bounds(&field.grid, i)?;
-            cells.push(rectangle(Bounds(w, s, e, n)));
-            codes.push(code as i32);
+    let complete = spatial
+        .relation(
+            &remaining,
+            &rectangle(Bounds(w, s, e, n)),
+            Predicate::Covers,
+        )
+        .map_err(io::Error::other)?;
+    let active = field.active.read_values()?;
+    let values = values.values.read_values()?;
+    // hpc-exempt: legend categories index packed candidate cell IDs, not cell objects.
+    let mut candidates: BTreeMap<i32, Vec<usize>> = BTreeMap::new();
+    for i in 0..field.active.len() {
+        let code = values.get(i)?;
+        if active.get(i)? == 0 || !code.is_finite() || result.contains(&(code as i32)) {
+            continue;
         }
-        let areas = spatial
-            .intersection_areas(&remaining, &cells)
-            .map_err(io::Error::other)?;
-        for (code, area) in codes.into_iter().zip(areas) {
-            if area > 0.0 {
+        if complete {
+            result.insert(code as i32);
+        } else {
+            candidates.entry(code as i32).or_default().push(i);
+        }
+    }
+    for (code, indices) in candidates {
+        // A legend needs one positive-area cell, not the clipped area of every cell.
+        // Small batches retain mask reuse without thousands of redundant intersections.
+        for batch in indices.chunks(64) {
+            let cells = batch
+                .iter()
+                .map(|&i| {
+                    let [w, s, e, n] = cell_bounds(&field.grid, i)?;
+                    Ok(rectangle(Bounds(w, s, e, n)))
+                })
+                .collect::<io::Result<Vec<_>>>()?;
+            if spatial
+                .intersection_areas(&remaining, &cells)
+                .map_err(io::Error::other)?
+                .into_iter()
+                .any(|area| area > 0.0)
+            {
                 result.insert(code);
+                break;
             }
         }
     }

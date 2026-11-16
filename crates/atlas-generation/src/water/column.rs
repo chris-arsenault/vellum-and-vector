@@ -66,6 +66,9 @@ impl WaterColumnView {
     }
 }
 impl WaterColumn {
+    pub(super) fn kind_at(&self, cell: usize) -> io::Result<u8> {
+        self.kind.get(cell)
+    }
     pub(super) fn checkpoint(
         &mut self,
         archive: &mut crate::checkpoint::Archive<'_>,

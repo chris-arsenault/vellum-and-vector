@@ -3,7 +3,7 @@ use super::{
     cargo::CargoStore,
     catalogue,
     coarsening::{coarsen_one, same_material, ObserveFold},
-    layer_bands::LayerBands,
+    layer_bands::{LayerBands, LayerValues},
     material::{blend_layers, MaterialLayer},
 };
 use crate::storage::{Band, Coverage};
@@ -46,7 +46,77 @@ pub struct RockColumns {
     revisions: Band<f64>,
     count: usize,
 }
+pub(crate) struct ColumnValues<'a> {
+    layers: Vec<LayerValues<'a>>,
+    cargo: &'a CargoStore,
+    count: usize,
+}
+impl ColumnValues<'_> {
+    pub(crate) fn depth(&self, cell: usize, column: Column, slot: usize) -> io::Result<f64> {
+        self.layers[column.offset() + slot].depth(cell)
+    }
+    pub(crate) fn layer(
+        &self,
+        cell: usize,
+        column: Column,
+        slot: usize,
+    ) -> io::Result<MaterialLayer> {
+        let at = column.offset() + slot;
+        let mut layer = self.layers[at].read(cell, catalogue::facts())?;
+        layer.cargo = self.cargo.get(at * self.count + cell)?;
+        Ok(layer)
+    }
+}
 impl RockColumns {
+    pub(super) fn surface_material(
+        &self,
+        cell: usize,
+        column: Column,
+    ) -> io::Result<MaterialLayer> {
+        self.layers[column as usize][0].surface_material(cell, catalogue::facts())
+    }
+    pub(super) fn transform(&mut self, cell: usize, deformation: [f64; 4]) -> io::Result<()> {
+        for layer in self.layers.iter_mut().flatten() {
+            layer.transform(cell, deformation)?;
+        }
+        self.revisions.set(cell, self.revisions.get(cell)? + 24.0)
+    }
+    pub(super) fn tilt_field(
+        &mut self,
+        gradients: &[[f64; 2]],
+        cut_share: &crate::storage::ReadBand<f64>,
+        epoch: f64,
+    ) -> io::Result<()> {
+        let shares = cut_share.read_values()?;
+        let mut revisions = self.revisions.write_values()?;
+        for column in Column::ALL {
+            let cut = matches!(column, Column::Cut | Column::CutLoose);
+            for layer in &mut self.layers[column as usize] {
+                layer.tilt_field(
+                    gradients,
+                    |cell| {
+                        let share = shares.get(cell)?.clamp(0.0, 1.0);
+                        Ok(if cut { share > 0.0 } else { share < 1.0 })
+                    },
+                    epoch,
+                    &mut revisions,
+                )?;
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn read_values(&self) -> io::Result<ColumnValues<'_>> {
+        Ok(ColumnValues {
+            layers: self
+                .layers
+                .iter()
+                .flatten()
+                .map(LayerBands::read_values)
+                .collect::<io::Result<_>>()?,
+            cargo: &self.cargo,
+            count: self.count,
+        })
+    }
     pub(super) fn checkpoint(
         &mut self,
         archive: &mut crate::checkpoint::Archive<'_>,
@@ -63,14 +133,6 @@ impl RockColumns {
     }
     pub fn view(&self, column: Column, slot: usize) -> super::layer_bands::ReadLayerBands {
         self.layers[column as usize][slot].read_only()
-    }
-    pub(super) fn orientation(
-        &self,
-        cell: usize,
-        column: Column,
-        slot: usize,
-    ) -> io::Result<[f64; 4]> {
-        self.layers[column as usize][slot].orientation(cell)
     }
     pub fn new(coverage: &mut Coverage) -> Self {
         let count = coverage.len();

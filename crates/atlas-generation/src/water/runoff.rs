@@ -63,6 +63,9 @@ pub fn bare(tree: f64, grass: f64, wetland: f64) -> f64 {
     1.0 - (tree + grass + wetland).min(1.0)
 }
 impl Runoff {
+    pub(super) fn mean_at(&self, cell: usize) -> io::Result<f64> {
+        self.mean.get(cell)
+    }
     pub(super) fn checkpoint(
         &mut self,
         archive: &mut crate::checkpoint::Archive<'_>,

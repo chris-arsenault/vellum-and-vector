@@ -292,3 +292,55 @@ fn bulk_masks_preserve_operand_direction_and_select_faces_without_publishing_all
     crossings.sort_by(|a, b| a.coordinates()[0].total_cmp(&b.coordinates()[0]));
     assert_eq!(crossings, [Position::xy(0.0, 2.0), Position::xy(4.0, 2.0)]);
 }
+
+#[test]
+fn intersection_area_distinguishes_covered_cells_holes_and_boundary_contacts() {
+    let spatial = NativeGeos::new(0.001).unwrap();
+    let mask = polygon(0.0, 0.0, 4.0);
+    assert_eq!(
+        spatial
+            .intersection_areas(&mask, &[polygon(1.0, 1.0, 1.0), polygon(4.0, 0.0, 1.0)])
+            .unwrap(),
+        [1.0, 0.0]
+    );
+    assert_eq!(
+        spatial
+            .intersection_areas(
+                &polygon_with_hole(),
+                &[
+                    polygon(1.25, 1.25, 0.5),
+                    polygon(0.0, 0.0, 2.0),
+                    polygon(0.0, 0.0, 0.5),
+                ]
+            )
+            .unwrap(),
+        [0.0, 3.0, 0.25]
+    );
+}
+
+fn polygon_with_hole() -> Geometry {
+    let mut value = polygon(0.0, 0.0, 4.0);
+    let Geometry::Polygon { coordinates } = &mut value else {
+        panic!("Polygon fixture")
+    };
+    let Geometry::Polygon { coordinates: hole } = polygon(1.0, 1.0, 2.0) else {
+        panic!("Polygon fixture")
+    };
+    coordinates.push(hole[0].clone());
+    value
+}
+
+#[test]
+fn adaptive_coverage_reuses_the_mask_with_holes_and_precision() {
+    let spatial = NativeGeos::new(0.001).unwrap();
+    spatial
+        .with_point_coverage(&polygon_with_hole(), &mut |covers| {
+            assert!(covers(Position::xy(0.5, 0.5))?);
+            assert!(!covers(Position::xy(2.0, 2.0))?);
+            assert!(covers(Position::xy(1.0, 2.0))?);
+            assert!(covers(Position::xy(-0.0001, 0.5))?);
+            assert!(!covers(Position::xy(-0.01, 0.5))?);
+            Ok(())
+        })
+        .unwrap();
+}

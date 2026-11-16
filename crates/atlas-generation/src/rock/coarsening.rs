@@ -60,7 +60,8 @@ pub fn coarsen_one(
     layers.remove(best + 1);
     Ok(())
 }
-struct Contacts {
+#[derive(Default)]
+pub(crate) struct Contacts {
     next: Vec<Option<usize>>,
     above: Vec<f64>,
     equivalent: Vec<bool>,
@@ -68,22 +69,22 @@ struct Contacts {
     basement: bool,
 }
 impl Contacts {
-    fn new(layers: &[MaterialLayer], basement: bool) -> Self {
+    fn reset(&mut self, layers: &[MaterialLayer], basement: bool) {
         let size = layers.len();
-        let mut result = Self {
-            next: (0..size).map(|i| (i + 1 < size).then_some(i + 1)).collect(),
-            above: vec![0.0; size],
-            equivalent: vec![false; size],
-            thickness: vec![0.0; size],
-            basement,
-        };
+        self.next.clear();
+        self.next
+            .extend((0..size).map(|i| (i + 1 < size).then_some(i + 1)));
+        self.above.resize(size, 0.0);
+        self.equivalent.resize(size, false);
+        self.thickness.resize(size, 0.0);
+        self.basement = basement;
+        self.above[0] = 0.0;
         for i in 0..size {
             if i > 0 {
-                result.above[i] = result.above[i - 1] + layers[i - 1].depth;
+                self.above[i] = self.above[i - 1] + layers[i - 1].depth;
             }
-            result.update(layers, i);
+            self.update(layers, i);
         }
-        result
     }
     fn update(&mut self, layers: &[MaterialLayer], upper: usize) {
         let Some(lower) = self.next[upper] else {
@@ -128,7 +129,7 @@ impl Contacts {
         let mut at = Some(0);
         while let Some(index) = at {
             if count != index {
-                layers[count] = layers[index].clone();
+                layers.swap(count, index);
             }
             count += 1;
             at = self.next[index];
@@ -161,6 +162,36 @@ impl Contacts {
         }
         Ok(())
     }
+    pub(crate) fn coarsen(
+        &mut self,
+        layers: &mut Vec<MaterialLayer>,
+        size: usize,
+        basement: bool,
+        observe: &mut ObserveFold<'_>,
+    ) -> io::Result<()> {
+        if layers.len() < 24 {
+            while layers.len() > size {
+                coarsen_one(layers, basement, observe)?;
+            }
+            return Ok(());
+        }
+        self.bulk(layers, size, basement, observe)
+    }
+    fn bulk(
+        &mut self,
+        layers: &mut Vec<MaterialLayer>,
+        size: usize,
+        basement: bool,
+        observe: &mut ObserveFold<'_>,
+    ) -> io::Result<()> {
+        if layers.len() <= size {
+            return Ok(());
+        }
+        self.reset(layers, basement);
+        let result = self.reduce(layers, size, observe);
+        self.compact(layers);
+        result
+    }
 }
 pub fn coarsen_bulk(
     layers: &mut Vec<MaterialLayer>,
@@ -168,13 +199,7 @@ pub fn coarsen_bulk(
     basement: bool,
     observe: &mut ObserveFold<'_>,
 ) -> io::Result<()> {
-    if layers.len() <= size {
-        return Ok(());
-    }
-    let mut contacts = Contacts::new(layers, basement);
-    let result = contacts.reduce(layers, size, observe);
-    contacts.compact(layers);
-    result
+    Contacts::default().bulk(layers, size, basement, observe)
 }
 pub fn coarsen_package(
     layers: &mut Vec<MaterialLayer>,
@@ -182,11 +207,5 @@ pub fn coarsen_package(
     basement: bool,
     observe: &mut ObserveFold<'_>,
 ) -> io::Result<()> {
-    if layers.len() >= 24 {
-        return coarsen_bulk(layers, size, basement, observe);
-    }
-    while layers.len() > size {
-        coarsen_one(layers, basement, observe)?;
-    }
-    Ok(())
+    Contacts::default().coarsen(layers, size, basement, observe)
 }

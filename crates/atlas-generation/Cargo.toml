@@ -11,6 +11,7 @@ atlas-names.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ciborium = "0.2"
+smallvec = { version = "1", features = ["serde", "union"] }
 ts-rs.workspace = true
 tiff = { version = "0.11", default-features = false, features = ["deflate"] }
 uuid = { version = "1", features = ["v5"] }

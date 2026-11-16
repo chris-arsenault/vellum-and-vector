@@ -1012,10 +1012,12 @@ fn physical_displacement_bends_contacts_while_translation_keeps_their_dip() {
     near(layer.bed_slope_x, 0.2);
     near(layer.bed_slope_y, -0.3);
     assert_eq!(layer.formed_min, 4.0);
+    let cargo = layer.cargo.clone();
     f.ground.transform(cell, [0.0, -1.0, 1.0, 0.0]).unwrap();
     let layer = &f.ground.section(cell, Facet::Land).unwrap()[0].material;
     near(layer.bed_slope_x, 0.3);
     near(layer.bed_slope_y, 0.2);
+    assert_eq!(layer.cargo, cargo);
 }
 #[test]
 fn top_down_solvent_stops_at_insoluble_cap_and_surface_queries_read_real_loose_material() {

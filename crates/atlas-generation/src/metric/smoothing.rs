@@ -103,15 +103,25 @@ fn solve(
             .matrix
             .product(&direction.read_only(), &mut projected)?;
         let alpha = error / dot(&direction.read_only(), &projected.read_only())?;
-        for i in 0..n {
-            result.set(i, result.get(i)? + alpha * direction.get(i)?)?;
-            residual.set(i, residual.get(i)? - alpha * projected.get(i)?)?;
+        {
+            let mut result = result.write_values()?;
+            let mut residual = residual.write_values()?;
+            let direction = direction.read_values()?;
+            let projected = projected.read_values()?;
+            for i in 0..n {
+                result.set(i, result.get(i)? + alpha * direction.get(i)?)?;
+                residual.set(i, residual.get(i)? - alpha * projected.get(i)?)?;
+            }
         }
         let preconditioned = level.apply(&residual.read_only())?;
         let next = dot(&residual.read_only(), &preconditioned)?;
         let beta = next / error;
-        for i in 0..n {
-            direction.set(i, preconditioned.get(i)? + beta * direction.get(i)?)?;
+        {
+            let mut direction = direction.write_values()?;
+            let preconditioned = preconditioned.read_values()?;
+            for i in 0..n {
+                direction.set(i, preconditioned.get(i)? + beta * direction.get(i)?)?;
+            }
         }
         error = next;
     }

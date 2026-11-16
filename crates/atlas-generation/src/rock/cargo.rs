@@ -3,14 +3,16 @@ use crate::{
     hpc::IntPairIndex,
     storage::{Band, Coverage},
 };
+use smallvec::SmallVec;
 use std::io;
 
 /// Detached parcel-local columns, never one object or reservoir allocation per map cell.
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MaterialCargo {
-    keys: Vec<i32>,
-    hosts: Vec<i32>,
-    densities: Vec<f64>,
+    // Detached contact parcels keep short cargo lists inline; larger lists grow normally.
+    keys: SmallVec<[i32; 4]>,
+    hosts: SmallVec<[i32; 4]>,
+    densities: SmallVec<[f64; 4]>,
 }
 impl MaterialCargo {
     pub fn from_entries(entries: impl IntoIterator<Item = (i32, i32, f64)>) -> Self {
@@ -48,6 +50,12 @@ impl MaterialCargo {
         }
         mixture.finish(1.0)
     }
+    pub(super) fn into_mapped_keys(self, key_at: impl Fn(i32) -> i32) -> Option<Self> {
+        if self.keys.iter().all(|&key| key_at(key) == key) {
+            return Some(self);
+        }
+        self.map_keys(key_at)
+    }
     pub fn without(&self, key: i32) -> Self {
         Self::from_entries(self.entries().filter(|(held, _, _)| *held != key))
     }
@@ -80,6 +88,17 @@ impl MaterialCargo {
             mixture.add_entry(key, if host == a || host == b { host } else { 0 }, density);
         }
         mixture.finish(1.0)
+    }
+    pub(super) fn into_aggregate_hosts(self, a: i32, b: i32) -> Option<Self> {
+        if self
+            .hosts
+            .iter()
+            .all(|&host| host == 0 || host == a || host == b)
+        {
+            Some(self)
+        } else {
+            self.aggregate_hosts(a, b)
+        }
     }
     /// Selective extraction takes constituent cargo; aggregate cargo follows the parcel share.
     pub fn partition(&self, kind: i32, host_share: f64, taken_share: f64) -> CargoPartition {

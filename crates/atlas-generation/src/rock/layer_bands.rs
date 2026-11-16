@@ -1,6 +1,6 @@
 //! One fixed material schema bound to typed columns; read views never expose owner writers.
 use super::{material::MaterialLayer, MaterialFacts};
-use crate::storage::{Band, Coverage, ReadBand};
+use crate::storage::{Band, Coverage, ReadBand, ReadValues};
 use std::io;
 
 #[derive(Clone, Copy)]
@@ -62,6 +62,34 @@ pub struct LayerBands {
     scalars: [Band<f64>; SCALARS],
 }
 
+/// Operation-scoped borrows of the owner's material schema.
+pub(super) struct LayerValues<'a> {
+    kind: ReadValues<'a, u32>,
+    secondary_kind: ReadValues<'a, u32>,
+    mixed: ReadValues<'a, u32>,
+    scalars: Vec<ReadValues<'a, f64>>,
+}
+impl LayerValues<'_> {
+    pub(super) fn depth(&self, cell: usize) -> io::Result<f64> {
+        self.scalars[MaterialScalar::Depth as usize].get(cell)
+    }
+    pub(super) fn read(
+        &self,
+        cell: usize,
+        catalogue: &[MaterialFacts],
+    ) -> io::Result<MaterialLayer> {
+        with_catalogue(
+            read_material(
+                self.kind.get(cell)?,
+                self.secondary_kind.get(cell)?,
+                self.mixed.get(cell)?,
+                |property| self.scalars[property as usize].get(cell),
+            )?,
+            catalogue,
+        )
+    }
+}
+
 /// Only detached slabs or immutable band capabilities leave the material owner.
 /// ```compile_fail
 /// use atlas_generation::rock::layer_bands::ReadLayerBands;
@@ -77,6 +105,84 @@ pub struct ReadLayerBands {
 impl crate::execution::QueryValue for ReadLayerBands {}
 
 impl LayerBands {
+    /// Surface projection needs neither chronology nor detached cargo parcels.
+    pub(super) fn surface_material(
+        &self,
+        cell: usize,
+        catalogue: &[MaterialFacts],
+    ) -> io::Result<MaterialLayer> {
+        with_catalogue(
+            MaterialLayer {
+                kind: self.kind.get(cell)? as usize,
+                secondary_kind: self.secondary_kind.get(cell)? as usize,
+                strength: self.scalars[MaterialScalar::Strength as usize].get(cell)?,
+                consolidation: self.scalars[MaterialScalar::Consolidation as usize].get(cell)?,
+                grain_x: self.scalars[MaterialScalar::GrainX as usize].get(cell)?,
+                grain_y: self.scalars[MaterialScalar::GrainY as usize].get(cell)?,
+                ..MaterialLayer::default()
+            },
+            catalogue,
+        )
+    }
+    pub(super) fn transform(&mut self, cell: usize, f: [f64; 4]) -> io::Result<()> {
+        use super::ground::deformation::{deform_fabric, deform_slope};
+        for (x, y, transform) in [
+            (
+                MaterialScalar::GrainX,
+                MaterialScalar::GrainY,
+                deform_fabric as fn(f64, f64, [f64; 4]) -> [f64; 2],
+            ),
+            (
+                MaterialScalar::BedSlopeX,
+                MaterialScalar::BedSlopeY,
+                deform_slope,
+            ),
+        ] {
+            let [vx, vy] = transform(
+                self.scalars[x as usize].get(cell)?,
+                self.scalars[y as usize].get(cell)?,
+                f,
+            );
+            self.scalars[x as usize].set(cell, vx)?;
+            self.scalars[y as usize].set(cell, vy)?;
+        }
+        Ok(())
+    }
+    pub(super) fn tilt_field(
+        &mut self,
+        gradients: &[[f64; 2]],
+        includes: impl Fn(usize) -> io::Result<bool>,
+        epoch: f64,
+        revisions: &mut crate::storage::WriteValues<'_, f64>,
+    ) -> io::Result<()> {
+        let [depth, _, _, _, _, _, slope_x, slope_y, _, _, _, _, altered] = &mut self.scalars;
+        let depth = depth.read_values()?;
+        let mut slope_x = slope_x.write_values()?;
+        let mut slope_y = slope_y.write_values()?;
+        let mut altered = altered.write_values()?;
+        for (cell, &[x, y]) in gradients.iter().enumerate() {
+            if (x == 0.0 && y == 0.0) || !includes(cell)? || depth.get(cell)? <= 0.0 {
+                continue;
+            }
+            slope_x.set(cell, slope_x.get(cell)? + x)?;
+            slope_y.set(cell, slope_y.get(cell)? + y)?;
+            altered.set(cell, epoch)?;
+            revisions.set(cell, revisions.get(cell)? + 1.0)?;
+        }
+        Ok(())
+    }
+    pub(super) fn read_values(&self) -> io::Result<LayerValues<'_>> {
+        Ok(LayerValues {
+            kind: self.kind.read_values()?,
+            secondary_kind: self.secondary_kind.read_values()?,
+            mixed: self.mixed.read_values()?,
+            scalars: self
+                .scalars
+                .iter()
+                .map(Band::read_values)
+                .collect::<io::Result<_>>()?,
+        })
+    }
     pub(super) fn checkpoint(
         &mut self,
         archive: &mut crate::checkpoint::Archive<'_>,
@@ -103,15 +209,6 @@ impl LayerBands {
             self.mixed.get(cell)?,
             |property| self.scalars[property as usize].get(cell),
         )
-    }
-    pub(super) fn orientation(&self, cell: usize) -> io::Result<[f64; 4]> {
-        use MaterialScalar::{BedSlopeX, BedSlopeY, GrainX, GrainY};
-        Ok([
-            self.scalars[GrainX as usize].get(cell)?,
-            self.scalars[GrainY as usize].get(cell)?,
-            self.scalars[BedSlopeX as usize].get(cell)?,
-            self.scalars[BedSlopeY as usize].get(cell)?,
-        ])
     }
     pub fn new(coverage: &mut Coverage) -> Self {
         Self {

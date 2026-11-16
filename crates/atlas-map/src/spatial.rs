@@ -2,6 +2,7 @@
 use crate::{Bounds, Geometry, Position};
 use std::collections::BTreeSet;
 pub type SpatialResult<T> = Result<T, String>;
+pub type PointCoverage<'a> = dyn Fn(Position) -> SpatialResult<bool> + 'a;
 #[derive(Clone, Copy)]
 pub enum Predicate {
     Covers,
@@ -49,6 +50,12 @@ pub trait SpatialKernel {
     fn line_at(&self, line: &Geometry, fraction: f64) -> SpatialResult<Position>;
     fn interior_position(&self, value: &Geometry) -> SpatialResult<Position>;
     fn covers_points(&self, mask: &Geometry, points: &[Position]) -> SpatialResult<Vec<bool>>;
+    /// Reuse one prepared mask for adaptive queries whose next point depends on the result.
+    fn with_point_coverage(
+        &self,
+        mask: &Geometry,
+        visit: &mut dyn FnMut(&PointCoverage<'_>) -> SpatialResult<()>,
+    ) -> SpatialResult<()>;
     fn node_lines(&self, value: &Geometry) -> SpatialResult<Option<Geometry>>;
     fn polygonize(&self, value: &Geometry) -> SpatialResult<Vec<Geometry>>;
     fn clip_trace(&self, value: &Geometry, mask: &Geometry) -> SpatialResult<Option<Geometry>>;
