@@ -4,6 +4,7 @@ import type {
   Inspection,
   MapDescriptor,
   MapRef,
+  MapRegion,
   RegionSelection,
   SavedMapDocument,
 } from "@atlas/map";
@@ -38,7 +39,7 @@ interface Props {
   create(): void;
   lore(): void;
   library(): void;
-  refine(selection: RegionSelection, name: string): void;
+  refine(selection: RegionSelection, name: string, child?: MapRef): void;
   regenerate(): void;
 }
 // owner-direction(2026-11-14): presentation reads only GIS map storage, never numerical generation storage.
@@ -81,19 +82,8 @@ function useFinishedMap(props: Props) {
     setInspection(next);
     select(next.features[0] ? publishedFeature(next.features[0]) : null);
   };
-  const refine = (region: import("@atlas/map").MapRegion) =>
-    props.refine(
-      {
-        parent: map.reference,
-        spaceId: region.spaceId,
-        geometry: region.geometry,
-        featureIds: [],
-        regionPath: regions.ancestry.map((id) =>
-          regions.regions.find((region) => region.id === id)!
-        ),
-      },
-      region.name
-    );
+  const refine = (region: MapRegion) =>
+    props.refine(regionSelection(map, region, regions), region.name, region.child ?? undefined);
   return {
     props,
     map,
@@ -115,6 +105,19 @@ function useFinishedMap(props: Props) {
     setError,
     inspect,
     refine,
+  };
+}
+function regionSelection(
+  map: MapDescriptor,
+  region: MapRegion,
+  regions: ReturnType<typeof usePublishedRegions>
+): RegionSelection {
+  return {
+    parent: map.reference,
+    spaceId: region.spaceId,
+    geometry: region.geometry,
+    featureIds: [],
+    regionPath: regions.ancestry.map((id) => regions.regions.find((region) => region.id === id)!),
   };
 }
 type Model = ReturnType<typeof useFinishedMap>;

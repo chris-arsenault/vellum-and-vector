@@ -25,6 +25,8 @@ pub struct NativeJob {
     pub parent: Option<MapRef>,
     pub operation: String,
     pub selection: Option<(RegionSelection, String)>,
+    /// Refinement publishes the captured child; Regenerate on that child generates it.
+    pub creates_child: bool,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 struct CapturedJob {
@@ -195,6 +197,11 @@ impl NativeJob {
     ) -> io::Result<MapRef> {
         let (observations, progress, recovery) = observations;
         let (workspace, mut captured_geography) = captured;
+        if self.creates_child {
+            return self
+                .publish_capture(services, (workspace, captured_geography), runtime, control)
+                .await;
+        }
         let Runtime {
             resources,
             spatial,
@@ -242,7 +249,7 @@ impl NativeJob {
         let published = publish(
             map,
             &mut services,
-            &workspace,
+            &workspace.features(),
             Runtime {
                 resources,
                 cache,
@@ -253,6 +260,42 @@ impl NativeJob {
         .await;
         published
     }
+    /// Retain and publish the captured child as its first revision. Nothing is generated: the
+    /// map carries the parent's geography within the child's footprint and the starting records.
+    async fn publish_capture(
+        self,
+        mut services: Services<'_>,
+        captured: (Workspace, Vec<Value>),
+        runtime: Runtime,
+        control: &impl GenerationControl,
+    ) -> io::Result<MapRef> {
+        let (workspace, geography) = captured;
+        let reference = MapRef {
+            map_id: self.submission.input.area_id.clone(),
+            revision: self.operation.clone(),
+        };
+        services.inputs.store(
+            &reference,
+            &self.submission.source,
+            &workspace.source_features(),
+            &workspace.source_networks(),
+            &geography,
+        )?;
+        let map = finished_map::Request::from_document(
+            self.submission.source,
+            reference,
+            self.expected,
+            self.parent,
+        )?;
+        publish(
+            map,
+            &mut services,
+            &workspace.source_features(),
+            runtime,
+            control,
+        )
+        .await
+    }
 }
 struct Runtime {
     resources: Rc<NativeResources>,
@@ -262,7 +305,7 @@ struct Runtime {
 async fn publish(
     map: finished_map::Request,
     services: &mut Services<'_>,
-    workspace: &Workspace,
+    records: &crate::record_store::Features,
     runtime: Runtime,
     control: &impl GenerationControl,
 ) -> io::Result<MapRef> {
@@ -289,7 +332,7 @@ async fn publish(
         resources,
         cache.clone(),
         &geography,
-        &workspace.features(),
+        records,
         spatial.as_ref(),
     )?;
     publication_timing(&reference, "prepare-map", started);
@@ -297,7 +340,7 @@ async fn publish(
     let started = std::time::Instant::now();
     let result = product
         .publish(
-            &workspace.features(),
+            records,
             spatial.as_ref(),
             &mut crate::observed_publication::Observed {
                 publisher: services.maps,

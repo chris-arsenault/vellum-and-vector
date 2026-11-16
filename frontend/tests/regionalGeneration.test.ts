@@ -1,13 +1,16 @@
 import { expect, test } from "./uiTest";
-import { canvas, chooseOutline, openFixtureMap } from "./harness";
+import { chooseOutline, openFixtureMap } from "./harness";
 
-test("@generation regional refinement edits a modal over the retained map", async ({ page }) => {
+test("@generation refinement creates the child map and edits a modal over it", async ({ page }) => {
   const parent = await openFixtureMap(page);
   await chooseOutline(page, "Coastal reach");
-  await canvas(page).evaluate((element) => element.setAttribute("data-retained-map", "yes"));
   await page.getByRole("button", { name: "Refine this region", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Refine region", exact: true });
   await expect(dialog).toBeVisible();
+  // The created child is the open map beneath the modal, before anything is generated.
+  await expect(page.locator(".app-header strong")).toHaveText("Coastal reach");
+  await expect(page.locator("nav.breadcrumbs")).toContainText("Parent map");
+  await expect(dialog).toContainText("Generating refines Coastal reach");
   await expect(dialog.getByRole("button", { name: "Generate region", exact: true })).toBeDisabled();
   await expect(dialog.getByLabel("Refinement validation")).toContainText(
     "requires field:CrustThickness"
@@ -17,13 +20,6 @@ test("@generation regional refinement edits a modal over the retained map", asyn
   await expect(dialog.getByLabel("Width · km", { exact: true })).toHaveCount(0);
   await expect(dialog.getByRole("navigation", { name: "Generation steps" })).toHaveCount(0);
   await expect(dialog.locator("input:disabled, select:disabled, input[readonly]")).toHaveCount(0);
-  await expect(page.locator('[data-retained-map="yes"]')).toHaveCount(1);
-  await dialog.getByLabel("Region name", { exact: true }).fill("Discarded edit");
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Coastal reach", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
-  await expect(dialog.getByLabel("Region name", { exact: true })).toHaveValue("Coastal reach");
   await dialog.getByLabel("Region name", { exact: true }).fill("Northern coast");
   await dialog.getByLabel("Detail level", { exact: true }).selectOption("draft");
   await dialog.getByLabel("Generation seed", { exact: true }).fill("82");
@@ -46,8 +42,18 @@ test("@generation regional refinement edits a modal over the retained map", asyn
     name: "Northern coast",
     recipe: { quality: "draft", seed: 82 },
   });
-  expect(await page.evaluate(() => window.generationFixtureSelection)).toMatchObject({ parent });
-  expect(
-    await page.evaluate(() => window.generationCalls.filter((call) => call === "refine"))
-  ).toHaveLength(1);
+  const child = (await page.evaluate(() => window.generationFixtureReference)) as {
+    mapId: string;
+  };
+  expect(child.mapId).not.toBe(parent.mapId);
+  const calls = await page.evaluate(() => window.generationCalls);
+  expect(calls.filter((call) => call === "refine")).toHaveLength(1);
+  expect(calls.filter((call) => call === "regenerate")).toHaveLength(1);
+  await expect(page.locator(".app-header strong")).toHaveText("Coastal reach");
+  await page.getByRole("button", { name: "Parent map", exact: true }).click();
+  await expect(page.locator(".app-header strong")).toHaveText("Published island");
+  const regions = page.getByRole("region", { name: "Map regions", exact: true });
+  await expect(regions.getByRole("button", { name: /^Coastal reach/ })).toContainText(
+    "Open finer map"
+  );
 });

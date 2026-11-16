@@ -49,8 +49,18 @@ pub struct Request {
     pub reference: MapRef,
     pub expected: Option<MapRef>,
     pub parent: Option<MapRef>,
+    pub progressive: bool,
     pub field_patches: Vec<FieldPatch>,
     pub history: Vec<EpochHistory>,
+}
+/// Initial generation installs streamed output; regenerating generated geography is atomic.
+/// A child whose only revision is its capture has not been generated, so its first completed
+/// run streams too, replacing the capture revision.
+pub fn progressive(world: &serde_json::Value, area: &str, expected: Option<&MapRef>) -> bool {
+    expected.is_none()
+        || world["generations"].as_array().map_or(0, |runs| {
+            runs.iter().filter(|run| run["areaId"] == area).count()
+        }) <= 1
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct WaterBody {
@@ -90,6 +100,7 @@ impl Request {
         parent: Option<MapRef>,
     ) -> io::Result<Self> {
         Ok(Self {
+            progressive: progressive(&document.world, &reference.map_id, expected.as_ref()),
             world: serde_json::from_value(document.world)?,
             area_id: reference.map_id.clone(),
             reference,
@@ -280,6 +291,7 @@ impl PreparedMap {
                 precision: reference.precision.unwrap_or(1e-6),
             },
             expected: self.request.expected.as_ref(),
+            progressive: self.request.progressive,
             vectors: Vectors {
                 registry: Registry {
                     context: &self.context,
@@ -304,5 +316,36 @@ impl PreparedMap {
             history: &self.request.history,
         };
         product.publish(publisher, assets, &scratch, control).await
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn only_new_and_first_generated_maps_stream() {
+        let captured = MapRef {
+            map_id: "child".into(),
+            revision: "captured".into(),
+        };
+        let world = |runs: &[&str]| {
+            serde_json::json!({"generations": runs.iter()
+                .map(|area| serde_json::json!({"areaId": area})).collect::<Vec<_>>()})
+        };
+        assert!(progressive(&world(&["world"]), "child", None));
+        assert!(progressive(
+            &world(&["world", "child"]),
+            "child",
+            Some(&captured)
+        ));
+        assert!(!progressive(
+            &world(&["world", "child", "child"]),
+            "child",
+            Some(&captured)
+        ));
+        assert!(!progressive(
+            &world(&["world", "world"]),
+            "world",
+            Some(&captured)
+        ));
     }
 }

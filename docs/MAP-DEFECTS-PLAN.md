@@ -207,11 +207,24 @@ refinement modal over it. Not a preview substitute.
   refining a region, create the child map first, drop the user into it, then offer the
   refinement controls"); update `frontend/tests/regionalGeneration.test.ts`.
 
-**Risk:** no path has yet published a map whose fields are all inherited from the
-parent; check profile layer filters and named entities without child features.
+**Done** as designed. Additional points:
 
-**Sequencing:** after the lattice work (section 1) is committed; both build the
-host and engine crates.
+- Map stores accept a streamed revision over an existing head; the host's
+  `finished_map::progressive` decides (a new map, or the first generated run of a
+  map). Restarting an interrupted stream restores the head it replaced, in both
+  stores.
+- Regenerate on a refined child opens the refinement modal over it
+  (`App.tsx` `childSelection`), so Generate also re-attaches the parent's region.
+
+**Open:**
+
+- The Playwright test (`frontend/tests/regionalGeneration.test.ts`) and the
+  first publish of an all-inherited child are unverified until CI builds the browser
+  engine (no Emscripten locally). The PostGIS restart path is untested locally.
+- A region whose stored child points at an older revision, from before this change,
+  opens that revision.
+- The cancel-and-reopen check left the browser test; closing the modal leaves the
+  user on the child, and Regenerate reopens it.
 
 ## 3. Regular wiggle on roads and some rivers
 

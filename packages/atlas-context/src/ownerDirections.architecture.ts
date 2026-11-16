@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- one entry per owner direction; the list grows with each direction. */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -58,6 +59,13 @@ const directions: readonly OwnerDirection[] = [
     given: "2026-11-15",
     marks: ["crates/atlas-gis/src/stored.rs"],
     test: "crates/atlas-gis/src/stored.rs",
+  },
+  {
+    direction:
+      "when refining a region, create the child map first, drop the user into it, then offer the refinement controls",
+    given: "2026-11-16",
+    marks: ["frontend/src/App.tsx"],
+    test: "frontend/tests/regionalGeneration.test.ts",
   },
   {
     direction: "regional refinement is a modal with only changeable selections",

@@ -8,6 +8,7 @@ import type {
   RegionSelection,
   MapDescriptor,
   MapNavigationState,
+  MapRegion,
 } from "@atlas/map";
 import { executionMode, openFinishedAtlas } from "./finishedAtlasContext";
 import { installGenerationPresentation } from "./generationPresentation";
@@ -21,14 +22,23 @@ import { FinishedGeneration } from "./FinishedGeneration";
 import { LoreEncyclopedia } from "./LoreEncyclopedia";
 import { ErrorMessage } from "./ErrorMessage";
 import type { GenerationStatus } from "@atlas/context";
-import { bounds } from "./presentation";
 import { Brand } from "./Brand";
 
 export type FinishedContext = AtlasContext<GenerationDraft>;
 interface Setup {
   draft: GenerationDraft;
   parent?: MapDescriptor;
+  /** The region whose created child `parent` is; its controls open as a modal over that map. */
   selection?: RegionSelection;
+}
+/** The region a job's map belongs to; `creates` marks the job that creates the child. */
+interface JobTarget {
+  selection: RegionSelection;
+  creates: boolean;
+}
+interface Jobs {
+  start(status: GenerationStatus, target: JobTarget | null): void;
+  open(reference: MapRef): Promise<void>;
 }
 interface Opened {
   instance: number;
@@ -80,7 +90,7 @@ function useAtlas(context: FinishedContext) {
   const opening = useRef(0);
   const [opened, setOpened] = useState<Opened | null>(null);
   const [job, setJob] = useState<GenerationStatus | null>(null);
-  const [jobSelection, setJobSelection] = useState<RegionSelection | null>(null);
+  const [jobTarget, setJobTarget] = useState<JobTarget | null>(null);
   const [lore, setLore] = useState(false);
   const [library, setLibrary] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -89,8 +99,6 @@ function useAtlas(context: FinishedContext) {
     enabled: !!opened,
     queryFn: ({ signal }) => context.maps.open(opened!.reference, { signal }),
   });
-  const generation = useGenerationSetup(context, map.data, setError);
-  const { setSetup } = generation;
   const open = async (reference: MapRef, saved?: SavedMapDocument) => {
     const request = ++opening.current;
     try {
@@ -98,27 +106,36 @@ function useAtlas(context: FinishedContext) {
       if (request !== opening.current) return;
       if (saved) cache.setQueryData(["map-navigation", reference], saved.navigation);
       setOpened({ reference, saved: stored, instance: request });
-      setSetup(null);
+      // Refinement controls stay open over the child map they belong to.
+      setSetup((setup) =>
+        setup?.selection && sameMap(setup.parent?.reference, reference) ? setup : null
+      );
       setLibrary(false);
     } catch (error) {
       if (request === opening.current) setError(error);
     }
   };
+  const start = (status: GenerationStatus, target: JobTarget | null) => {
+    setJob(status);
+    setJobTarget(target);
+  };
+  const generation = useGenerationSetup(context, map.data, setError, { start, open });
+  const { setSetup } = generation;
   const complete = async (reference: MapRef) => {
+    const target = jobTarget;
     try {
-      await attachChild(context, cache, jobSelection, reference);
+      await attachChild(context, cache, target?.selection ?? null, reference);
     } catch (error) {
       setError(error);
     }
     await open(reference);
+    if (!target?.creates) return;
+    setJob(null);
+    await generation.offer(reference, target.selection);
   };
   const published = async (reference: MapRef) => {
     await cache.invalidateQueries({ queryKey: ["finished-map", reference] });
-    if (
-      opened?.reference.mapId !== reference.mapId ||
-      opened.reference.revision !== reference.revision
-    )
-      await open(reference);
+    if (!sameMap(opened?.reference, reference)) await open(reference);
   };
   return {
     context,
@@ -133,21 +150,23 @@ function useAtlas(context: FinishedContext) {
     complete,
     published,
     setJob,
-    setJobSelection,
+    start,
     setLore,
     setLibrary,
     setOpened,
     observe(job: GenerationStatus) {
-      setJobSelection(null);
-      setJob(job);
+      start(job, null);
       setLibrary(false);
     },
   };
 }
+const sameMap = (map: MapRef | undefined, reference: MapRef) =>
+  map?.mapId === reference.mapId && map.revision === reference.revision;
 function useGenerationSetup(
   context: FinishedContext,
   map: MapDescriptor | undefined,
-  setError: (error: unknown) => void
+  setError: (error: unknown) => void,
+  jobs: Jobs
 ) {
   const [setup, setSetup] = useState<Setup | null>(null);
   const create = async () => {
@@ -158,12 +177,32 @@ function useGenerationSetup(
       setError(error);
     }
   };
-  const refine = async (selection: RegionSelection, name: string) => {
+  /** Show the refinement modal over the opened child; Generate regenerates that child. */
+  const offer = async (child: MapRef, selection: RegionSelection) => {
     try {
       await generationDefaults(context);
+      const [draft, parent] = await Promise.all([
+        context.generation.configuration(child),
+        context.maps.open(child),
+      ]);
+      setSetup({ draft, parent, selection });
+    } catch (error) {
+      setError(error);
+    }
+  };
+  // owner-direction(2026-11-16): when refining a region, create the child map first, drop the user into it, then offer the refinement controls
+  const refine = async (selection: RegionSelection, name: string, child?: MapRef) => {
+    try {
+      if (child) {
+        await jobs.open(child);
+        return await offer(child, selection);
+      }
       const draft = await context.generation.configuration(selection.parent);
-      const [w, s, e, n] = bounds(selection.geometry);
-      setSetup({ draft: { ...draft, name, width: e - w, height: n - s }, parent: map, selection });
+      const status = await context.generation.refine({
+        selection,
+        configuration: { ...draft, name },
+      });
+      jobs.start(status, { selection, creates: true });
     } catch (error) {
       setError(error);
     }
@@ -171,13 +210,39 @@ function useGenerationSetup(
   const regenerate = async () => {
     if (!map) return;
     try {
+      // A refined child regenerates through the refinement modal over itself.
+      const selection = await childSelection(context, map);
+      if (selection) return await offer(map.reference, selection);
       await generationDefaults(context);
       setSetup({ draft: await context.generation.configuration(map.reference), parent: map });
     } catch (error) {
       setError(error);
     }
   };
-  return { setup, setSetup, create, refine, regenerate };
+  return { setup, setSetup, create, refine, offer, regenerate };
+}
+/** The parent's region whose child is `map`, as a refinement selection; null for a world. */
+async function childSelection(
+  context: FinishedContext,
+  map: MapDescriptor
+): Promise<RegionSelection | null> {
+  if (!map.parent) return null;
+  const state = await context.navigation.read(map.parent);
+  const region = state.regions.find((each) => each.child?.mapId === map.reference.mapId);
+  if (!region) return null;
+  const regionPath: MapRegion[] = [];
+  for (let at: MapRegion | undefined = region; at;) {
+    regionPath.unshift(at);
+    const parentId: string | null = at.parentId;
+    at = state.regions.find((each) => each.id === parentId);
+  }
+  return {
+    parent: map.parent,
+    spaceId: region.spaceId,
+    geometry: region.geometry,
+    featureIds: [],
+    regionPath,
+  };
 }
 async function generationDefaults(context: FinishedContext) {
   const [features, choices] = await Promise.all([
@@ -197,7 +262,13 @@ async function attachChild(
   const selected = selection?.regionPath.at(-1);
   if (selection && selected) {
     const key = ["map-navigation", selection.parent];
-    const state = cache.getQueryData<MapNavigationState>(key);
+    // The parent's regions may have left the cache while its child generated.
+    const state =
+      cache.getQueryData<MapNavigationState>(key) ??
+      (await cache.fetchQuery({
+        queryKey: key,
+        queryFn: ({ signal }) => context.navigation.read(selection.parent, { signal }),
+      }));
     if (state) {
       const next = await context.navigation.commit(selection.parent, state, {
         kind: "attachChild",
@@ -258,7 +329,7 @@ function AtlasContent({ state }: { state: ReturnType<typeof useAtlas> }) {
       create={() => void state.create()}
       lore={() => state.setLore(true)}
       library={() => state.setLibrary(true)}
-      refine={(selection, name) => void state.refine(selection, name)}
+      refine={(selection, name, child) => void state.refine(selection, name, child)}
       regenerate={() => void state.regenerate()}
     />
   );
@@ -287,22 +358,18 @@ function AtlasWelcome({ state }: { state: ReturnType<typeof useAtlas> }) {
 }
 // Arconis: docs/architecture/subsystems.arconis#item=j_app — setup launch for creating, refining or regenerating a map.
 function AtlasSetup({ state }: { state: ReturnType<typeof useAtlas> }) {
-  const { context, setSetup, setJob, setJobSelection } = state;
+  const { context, setSetup, start } = state;
   const setup = state.setup!;
   const options: GenerationWorkflowOptions = {
     initial: setup.draft,
     service: context.generation,
     source: setup.parent,
-    selection: setup.selection,
     onCancel: () => setSetup(null),
     onGenerate: async (draft) => {
-      const status = setup.selection
-        ? await context.generation.refine({ selection: setup.selection, configuration: draft })
-        : setup.parent
-          ? await context.generation.regenerate(setup.parent.reference, draft)
-          : await context.generation.create(draft);
-      setJob(status);
-      setJobSelection(setup.selection ?? null);
+      const status = setup.parent
+        ? await context.generation.regenerate(setup.parent.reference, draft)
+        : await context.generation.create(draft);
+      start(status, setup.selection ? { selection: setup.selection, creates: false } : null);
       setSetup(null);
     },
   };
@@ -311,7 +378,7 @@ function AtlasSetup({ state }: { state: ReturnType<typeof useAtlas> }) {
     <main className="setup-page">
       <header className="setup-page-header">
         <Brand />
-        <h1>{setup.selection ? "Refine region" : setup.parent ? "Regenerate map" : "New world"}</h1>
+        <h1>{setup.parent ? "Regenerate map" : "New world"}</h1>
       </header>
       <GenerationWizard key={setup.draft.worldId + setup.draft.name} {...options} />
     </main>

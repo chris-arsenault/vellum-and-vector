@@ -201,6 +201,52 @@ fn publication_retry_keeps_one_identity_and_preserves_completed_maps() {
 }
 
 #[test]
+fn progressive_revision_replaces_its_expected_head_and_atomic_waits_for_finish() {
+    use atlas_gis::{map_store::MapStore, sql::Database};
+    use atlas_map::{PublicationState, Publisher};
+    let mut store =
+        MapStore::open_database(std::rc::Rc::new(Database::open(":memory:").unwrap())).unwrap();
+    let mut captured: MapDescriptor = serde_json::from_value(supplied_map()).unwrap();
+    captured.layers.clear();
+    captured.state = PublicationState::Incomplete;
+    store.begin(&captured, None, true).unwrap();
+    store.finish(&captured.reference).unwrap();
+    let mut refined = captured.clone();
+    refined.reference.revision = "refined".into();
+    store
+        .begin(&refined, Some(&captured.reference), true)
+        .unwrap();
+    assert_eq!(
+        store.find_head(&captured.reference.map_id).unwrap(),
+        Some(refined.reference.clone())
+    );
+    // An interrupted stream restarts from the head it replaced.
+    store.restart_publication(&refined.reference).unwrap();
+    assert_eq!(
+        store.find_head(&captured.reference.map_id).unwrap(),
+        Some(captured.reference.clone())
+    );
+    store
+        .begin(&refined, Some(&captured.reference), true)
+        .unwrap();
+    store.finish(&refined.reference).unwrap();
+    let mut regenerated = captured.clone();
+    regenerated.reference.revision = "regenerated".into();
+    store
+        .begin(&regenerated, Some(&refined.reference), false)
+        .unwrap();
+    assert_eq!(
+        store.find_head(&captured.reference.map_id).unwrap(),
+        Some(refined.reference.clone())
+    );
+    store.finish(&regenerated.reference).unwrap();
+    assert_eq!(
+        store.find_head(&captured.reference.map_id).unwrap(),
+        Some(regenerated.reference)
+    );
+}
+
+#[test]
 fn deleting_child_detaches_saved_selection_without_deleting_its_shape() {
     use atlas_gis::{
         map_store::{MapStore, SaveRequest},

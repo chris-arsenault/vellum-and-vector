@@ -39,10 +39,11 @@ pub fn change_navigation(
                 .iter_mut()
                 .find(|region| region.id == region_id)
                 .ok_or("Choose an existing region")?;
+            // A newer revision of the same child replaces the one the region follows.
             if region
                 .child
                 .as_ref()
-                .is_some_and(|current| *current != child)
+                .is_some_and(|current| current.map_id != child.map_id)
             {
                 return Err("Open the region's existing finer map".into());
             }

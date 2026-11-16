@@ -2,7 +2,12 @@ import type { GenerationStatus } from "@atlas/context";
 
 interface SuppliedCall {
   method: string;
-  request?: { recipe?: unknown; job_id?: string; selection?: unknown; configuration?: unknown };
+  request?: {
+    recipe?: unknown;
+    job_id?: string;
+    configuration?: unknown;
+    reference?: unknown;
+  };
 }
 interface ScenarioOptions {
   rendering: boolean;
@@ -15,7 +20,7 @@ declare global {
     generationFixtureInput?: unknown;
     generationCalls: string[];
     generationFixtureJobs?: GenerationStatus[];
-    generationFixtureSelection?: unknown;
+    generationFixtureReference?: unknown;
   }
 }
 
@@ -31,6 +36,9 @@ export function assertGenerationScenario() {
 export function installScenarioBoundary({ rendering, generation = false }: ScenarioOptions) {
   window.atlasScenario = { rendering, generation };
   window.generationCalls = [];
+  // Refinement only creates the child map from captured parent geography, so a declared
+  // generation scenario runs it for real. Every other job's output must be supplied.
+  const unsupplied = ["create", "regenerate", "resume", generation || "refine"];
   const NativeWorker = window.Worker;
   window.Worker = new Proxy(NativeWorker, {
     construct(target, args) {
@@ -70,11 +78,11 @@ export function installScenarioBoundary({ rendering, generation = false }: Scena
           if (!generation || !call) return null;
           const reply = jobReply(call);
           if (reply) return reply;
-          if (["create", "refine"].includes(call.method)) {
+          if (["create", "regenerate"].includes(call.method)) {
             window.generationFixtureInput = structuredClone(
-              call.method === "refine" ? call.request!.configuration : call.request!.recipe
+              call.method === "regenerate" ? call.request!.configuration : call.request!.recipe
             );
-            window.generationFixtureSelection = structuredClone(call.request!.selection);
+            window.generationFixtureReference = structuredClone(call.request!.reference);
             return completed;
           }
           if (call.method === "observe" && call.request?.job_id === completed.jobId)
@@ -93,7 +101,7 @@ export function installScenarioBoundary({ rendering, generation = false }: Scena
             );
             return;
           }
-          if (call && ["create", "refine", "regenerate", "resume"].includes(call.method))
+          if (call && unsupplied.includes(call.method))
             throw new Error("UI scenarios must supply job output, never run real generation.");
           send(value, Array.isArray(options) ? { transfer: options } : options);
         };

@@ -56,8 +56,8 @@ function RegionalForm({ options }: { options: GenerationWorkflowOptions }) {
         </button>
       </header>
       <p>
-        {flow.draft.width / 1000} × {flow.draft.height / 1000} km from {options.source?.name}. This
-        creates an independent map; the parent stays unchanged.
+        {flow.draft.width / 1000} × {flow.draft.height / 1000} km. Generating refines{" "}
+        {options.source?.name}, an independent map; its parent stays unchanged.
       </p>
       <RegionalBrief flow={flow} />
       <details>

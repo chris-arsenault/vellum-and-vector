@@ -90,6 +90,7 @@ impl BrowserJob {
             },
             expected,
             parent,
+            creates_child: selection.is_some(),
             selection,
             geography: Vec::new(),
             resources: Vec::new(),

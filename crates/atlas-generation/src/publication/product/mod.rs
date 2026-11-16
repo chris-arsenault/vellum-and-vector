@@ -12,6 +12,8 @@ use std::{cell::RefCell, io};
 pub struct Product<'a> {
     pub descriptor: Descriptor<'a>,
     pub expected: Option<&'a MapRef>,
+    /// Install output as it is written, replacing `expected` at once, rather than at finish.
+    pub progressive: bool,
     pub vectors: Vectors<'a>,
     pub fields: Fields<'a>,
     pub numerical: &'a [inputs::Field],
@@ -39,7 +41,7 @@ impl Product<'_> {
             self.numerical,
         )?;
         let mut map = self.prepare(&selected, assets)?;
-        publisher.begin(&map, self.expected, self.expected.is_none())?;
+        publisher.begin(&map, self.expected, self.progressive)?;
         let result = self
             .write(
                 &mut map,
