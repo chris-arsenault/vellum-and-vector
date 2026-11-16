@@ -1,4 +1,4 @@
-.PHONY: ci lint format format-check typecheck test test-architecture test-perf test-browser terraform-fmt-check build dev rust-check test-rust contracts wasm-engine build-lan test-postgis
+.PHONY: ci lint format format-check typecheck test test-architecture test-perf test-browser terraform-fmt-check build dev rust-check test-rust contracts wasm-engine build-lan test-postgis local-up local-down local-world local-real local-resume
 
 ci: lint format-check typecheck test test-architecture rust-check terraform-fmt-check
 
@@ -70,3 +70,20 @@ test-postgis:
 
 dev:
 	pnpm dev
+
+# Local atlas for verification (docs/local-atlas.md): database and native server on loopback,
+# one kept world, real-scale maps opened from it. AT is in world metres, e.g. AT=500000,375000.
+local-up:
+	scripts/local-atlas.sh up
+
+local-down:
+	scripts/local-atlas.sh down
+
+local-world:
+	node scripts/local-atlas.mjs world
+
+local-real:
+	node scripts/local-atlas.mjs real --at $(AT) --hex $(or $(HEX),100m) --across $(or $(ACROSS),50) --kind $(or $(KIND),ground)
+
+local-resume:
+	node scripts/local-atlas.mjs resume $(JOB)

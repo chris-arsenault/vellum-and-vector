@@ -267,6 +267,10 @@ make test-browser
 The browser tests start and stop their own temporary Vite server. The production
 build is `frontend/dist/` and includes its generation worker.
 
+Checks that need a generated map use the [local atlas](docs/local-atlas.md): the native
+server and its database on loopback, with one kept verification world (`make local-up`,
+`make local-world`, `make local-real`). It needs Docker, Rust and CMake.
+
 `crates/atlas-map` owns independent published-map values, `atlas-generation` owns the
 generator and publisher, `atlas-names` owns naming, `atlas-gis` owns GIS storage and
 queries, and `atlas-host` supplies application composition for both hosts.

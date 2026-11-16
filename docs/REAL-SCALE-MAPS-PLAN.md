@@ -324,12 +324,12 @@ a native job
 request saved before this change does not load (current-format rule); the breadcrumb bar now
 right-aligns its map links because the panel buttons covered them.
 
-The owner directed on 2026-11-16 to generate the world a check needs. Verification world:
-`frontend/.artifacts/verify/` (persistent browser profile with the saved "Verification
-world", 4,000 × 3,000 km Draft, seed 42; driver `drive.mjs`), reused by every later check.
-No region was kept: the first region attempt took whatever outline the click offered without
-checking its size and was stopped; real-scale maps open straight from the world. A driver
-region step must check the outline's size first.
+The owner directed on 2026-11-16 to generate the world a check needs, then (same day) to
+make the harness and local world a real thing and generate natively, with the browser for
+UI only. Verification world: the local atlas ([docs/local-atlas.md](local-atlas.md)), a
+kept 1,000 × 750 km Draft world, seed 42, generated natively in about a minute; real-scale
+maps open straight from it with `make local-real`. The earlier browser profile, its driver
+and the 4,000 × 3,000 km browser world are deleted.
 
 Real run (browser engine, 100 m hexes, 50 across, Draft, opened on land from the world):
 completed and published in 800 s. Capture, the real-scale sequence, the hex layer, the grid
@@ -383,13 +383,10 @@ first real-scale sequence skipped the development rounds that cut valleys and st
    (`rock/columns.rs:148`). Rock beds and their cargo took different donors once contacts
    bent; the bend now lives in the grid's one nearest-donor lookup (`Grid::sample_index`), so
    every categorical import of a child cell comes from one donor.
-7. A 300 m, 80-hex (24 × 18 km) map failed on submission in the browser with
-   "Uncaught [object WebAssembly.Exception]"; natively it runs. Native trace: ~655 MB added
-   while preparing, ~1.3 GB peak, while the engine was capped at 2 GB and keeps job scratch
-   (including the block spill file) in in-memory WasmFS under `/tmp`; an allocation failure
-   there throws an uncaught C++ `std::bad_alloc`. Change: the engine may grow to 4 GB
-   (`.cargo/config.toml` `-sMAXIMUM_MEMORY=4GB`). Follow-up for the backlog: put job scratch
-   on OPFS with per-tab cleanup.
+7. Open, not pursued now (owner 2026-11-16: no performance work, especially for browser
+   generation): a 300 m, 80-hex (24 × 18 km) map failed on submission in the browser with
+   "Uncaught [object WebAssembly.Exception]"; natively it runs. Unverified theory from a
+   native trace: the browser engine runs out of its 2 GB memory. No change was kept.
 8. Full 100 m run failed after `refinement.places` with "Band index out of range": the cave
    step read the surface raster mask by lattice cell (`atlas/state/caves.rs`); it now tests
    land on the water column like place finding. The cave layers lacked publication
@@ -402,6 +399,11 @@ first real-scale sequence skipped the development rounds that cut valleys and st
 10. Outside this plan, reported to the owner: a 4,000 × 3,000 km Draft world, seed 42, fails
     natively at HEAD with "Rivers: Geometry collapses at its declared precision", while the
     same world generates in the browser.
+11. First local-atlas run (native, 100 m hexes, 50 across, Draft, centred on the town
+    Ajarma): completed in 480 s. Published 2,171 hexes, 4 rivers, 4 roads and 23 streets,
+    99 buildings with 99 yards, 853 fields, 1 square, 3 wards and a wall; 897 raster layers.
+    Findings: no caves and no underground space; the hex layer's catalogue counts 0 hexes
+    while 2,171 are published.
 
 #### M2 places: true size and key — steps
 

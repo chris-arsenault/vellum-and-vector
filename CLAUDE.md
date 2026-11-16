@@ -70,3 +70,6 @@ map's current revision has not changed.
 
 Use `pnpm dev`, `make ci`, `make build` and `make test-browser`, as documented in
 [README.md](README.md#local-development). No credentials, API or database are needed.
+Checks that need a generated map run natively on the [local atlas](docs/local-atlas.md)
+(`make local-up`, `make local-world`, `make local-real`) against its one kept world, never
+by generating in a browser.

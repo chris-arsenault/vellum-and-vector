@@ -326,6 +326,10 @@ itself says which is which.
   A large dimension entered to test a form is configuration, not permission to
   generate that world. Test physical algorithms and people's operations and
   classifiers in Vitest, on small explicit fields.
+- A check that needs a generated map runs natively on the
+  [local atlas](docs/local-atlas.md): its one kept world, and real-scale maps opened from
+  it with `make local-real`. A failed job resumes with `make local-resume` after the fix.
+  Do not generate in a browser to verify generation, and do not write another driver.
 - Start ordinary browser scenarios with `openFixtureMap` from `tests/harness.ts`.
   It reuses completed map catalogs and numerical resources across scenarios, then
   restores independent copies into their isolated browser contexts. Reuse the

@@ -12,7 +12,6 @@ rustflags = [
   "-Clink-arg=-sMODULARIZE",
   "-Clink-arg=-sEXPORT_ES6",
   "-Clink-arg=-sALLOW_MEMORY_GROWTH",
-  "-Clink-arg=-sMAXIMUM_MEMORY=4GB",
   "-Clink-arg=-sSTACK_SIZE=2097152",
   "-Clink-arg=-sSTACK_OVERFLOW_CHECK=2",
 ]
