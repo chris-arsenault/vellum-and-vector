@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { realScaleDirections, type OwnerDirection } from "./ownerDirections.realScale";
 
 /**
  * Whose direction the code carries (AGENTS.md, "Whose direction the code carries").
@@ -13,15 +14,6 @@ import { describe, expect, it } from "vitest";
  * Do not edit an entry, its mark or its test on your own judgement: ask the owner. When the
  * owner gives a direction, add its mark, its entry and, where a test can state it, its test.
  */
-interface OwnerDirection {
-  /** The direction, in the owner's terms. */
-  direction: string;
-  given: string;
-  /** Files, from the repository root, whose marked line carries the direction. */
-  marks: readonly string[];
-  /** The test that fails if the behaviour is undone, where one can state it. */
-  test?: string | readonly string[];
-}
 const directions: readonly OwnerDirection[] = [
   {
     direction: "GIS and numerical data must stay in sync including deletion",
@@ -378,19 +370,7 @@ const directions: readonly OwnerDirection[] = [
       "crates/atlas-generation/tests/scale_settings.rs",
     ],
   },
-  {
-    direction: "replace the previous real scale resolutions with the updated list",
-    given: "2026-11-16",
-    marks: ["crates/atlas-generation/src/atlas/resolution.rs"],
-    test: "crates/atlas-generation/tests/scale_settings.rs",
-  },
-  {
-    direction:
-      "no hex lattice; the hex is a representation for resolution built from a triangle sub-lattice",
-    given: "2026-11-16",
-    marks: ["crates/atlas-generation/src/atlas/resolution.rs"],
-    test: "crates/atlas-generation/tests/scale_settings.rs",
-  },
+  ...realScaleDirections,
 ];
 
 const root = join(__dirname, "../../..");

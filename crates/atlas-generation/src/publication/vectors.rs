@@ -117,34 +117,36 @@ impl Vectors<'_> {
     }
     /// On a real-scale map, a line that states a full width at each vertex (`widths`) covers
     /// the ground of that width; its footprint is that ground (ADR 0016). World and regional
-    /// courses keep their widths as attributes only.
+    /// courses keep their widths as attributes only. A point place about a hex across or more
+    /// covers its true size (`trueSize`).
     fn widened(
         &self,
         geometry: &Geometry,
         attributes: &crate::features::records::Attributes,
     ) -> SpatialResult<Option<Geometry>> {
-        let real_scale = self
+        let Some(real) = self
             .registry
             .context
             .area(self.area)?
             .map
             .as_ref()
-            .is_some_and(|map| map.real_scale.is_some());
-        let (true, Geometry::LineString { coordinates }, Some(widths)) = (
-            real_scale,
-            geometry,
-            attributes.get("widths").and_then(|w| w.as_array()),
-        ) else {
+            .and_then(|map| map.real_scale)
+        else {
             return Ok(None);
         };
-        let widths: Option<Vec<f64>> = widths.iter().map(serde_json::Value::as_f64).collect();
         // A clipped or redrawn course whose widths no longer match its vertices keeps its line.
-        match widths {
-            Some(widths) if widths.len() == coordinates.len() => {
-                atlas_map::hexes::width_outline(coordinates, &widths, self.registry.spatial)
-            }
-            _ => Ok(None),
+        if let Some(shape) = atlas_map::hexes::widened_footprint(
+            geometry,
+            attributes.get("widths"),
+            self.registry.spatial,
+        )? {
+            return Ok(Some(shape));
         }
+        Ok(super::key::sized_footprint(
+            geometry,
+            attributes.get("trueSize"),
+            real.hex_size.across_flats(),
+        ))
     }
     pub fn catalogue(&self, layer_id: &str) -> SpatialResult<LayerCatalog> {
         let catalogue = &self.registry.catalogue;

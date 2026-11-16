@@ -274,7 +274,7 @@ fn entry<S: CatalogueState<Schedule> + LandscapeState + 'static, Schedule: 'stat
         publication: Publication { statement: Must::Value("Publish coherent biome provinces on ecology, outlined by class margins and named from their means.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(move |state: &S, place: &Place| cover_landscape::record(state, cover.kind(), cover.family(), place, || cover.found(state)))) },
         across_maps, event: None,
         roles: Roles {
-            true_size: Slot::Unwritten, variety: Slot::Unwritten, appearance: Slot::Unwritten, account: Slot::Unwritten,
+            true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(cover.kind()),
             fields: shared::fields("Cover controls soil retention, infiltration, runoff and evaporation through their existing owners."), movement, others: others(cover),
             people: People { statement: Must::Value("Forest supplies timber, gathering and game; grass supplies grazing and open trade; barren ground exposes stone and threatens dry crossings.".into()), offers: Slot::Value(Rc::new(move |state, place| offers(cover, state, place))), threatens: Slot::Value(Rc::new(move |state, place| threatens(cover, state, place))) },
             time: ThroughTime { statement: Must::Value("Damage opens canopy, saplings close grassland, and water on soil greens barren ground.".into()), fate: Slot::Value(Rc::new(move |state, place| fate(cover, state, place))) },

@@ -16,7 +16,7 @@ import {
 } from "./publishedAppearance";
 import { settlementPriority } from "./settlementStyles";
 import { isRealScaleLayer, type RealScalePresentation } from "./realScale";
-import { realScaleStyle } from "./realScaleStyles";
+import { groundColours, realScaleStyle } from "./realScaleStyles";
 import { typeStyle } from "./typeStyles";
 import type { DrawingGeography } from "./publishedAppearance";
 
@@ -73,7 +73,7 @@ export class PublishedVectors {
   private realScaleStyle(layer: VectorLayer, style: LayerStyle, view?: RealScalePresentation) {
     if (!view || !isRealScaleLayer(style.layerId)) return false;
     const first = this.descriptor.realScale?.creatorLayers[0]?.id ?? "";
-    layer.setStyle(realScaleStyle(style, view, first));
+    layer.setStyle(realScaleStyle(style, view, first, groundColours(this.descriptor)));
     return true;
   }
   private syncLayers(styles: LayerStyle[]) {

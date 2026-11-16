@@ -4,6 +4,7 @@ pub mod landmarks;
 pub mod magic;
 pub mod people;
 pub mod regional;
+pub mod town;
 pub mod world;
 use super::{Process, Registry};
 use crate::atlas::physical::Physical;

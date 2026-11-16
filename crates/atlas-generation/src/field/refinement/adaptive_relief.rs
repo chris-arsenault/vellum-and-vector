@@ -54,7 +54,10 @@ pub fn synthesize<'a>() -> Command<Field, Input<'a>> {
                 })?;
             let mut coverage = field.coverage.borrow_mut();
             let mut sampler = Interpolator::new(&input.parent.grid, false, &mut coverage);
-            let span = parent_span(input.parent);
+            // A real-scale map can sit inside one parent cell: its relief varies at its own
+            // size at most, never at the parent's cell span (ADR 0016).
+            let atlas_map::Bounds(w, s, e, n) = field.mesh.bounds();
+            let span = parent_span(input.parent).min((e - w).max(n - s));
             if !span.is_finite() || span <= 0.0 {
                 return Err(
                     io::Error::other("Captured elevation requires a positive resolution").into(),

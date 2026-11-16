@@ -13,11 +13,13 @@ interface Props {
   saved?: SavedMapDocument;
   value: PublishedPresentation;
   navigation: MapNavigationState | null;
+  /** Edits applied to a real-scale map; the saved count tells whether they are saved. */
+  edits: number;
 }
-export function FinishedSave({ context, map, saved, value, navigation }: Props) {
+export function FinishedSave({ context, map, saved, value, navigation, edits }: Props) {
   const cache = useQueryClient();
   const [stored, setStored] = useState(saved);
-  const clean = matchesSavedView(map, stored, value, navigation);
+  const clean = matchesSavedView(map, stored, value, navigation, edits);
   const save = useMutation({
     mutationFn: async () => {
       if (!navigation) throw new Error("Wait for map regions and views to load.");
@@ -25,7 +27,7 @@ export function FinishedSave({ context, map, saved, value, navigation }: Props) 
         reference: map.reference,
         expectedVersion: stored?.version ?? null,
         navigation,
-        settings: { presentation: value as unknown as JsonValue },
+        settings: { presentation: value as unknown as JsonValue, edits },
       });
     },
     onSuccess: (saved) => {
@@ -70,11 +72,13 @@ function matchesSavedView(
   map: MapDescriptor,
   saved: SavedMapDocument | undefined,
   value: PublishedPresentation,
-  navigation: MapNavigationState | null
+  navigation: MapNavigationState | null,
+  edits: number
 ) {
   return (
     saved?.reference.revision === map.reference.revision &&
     sameValue(value, saved.settings.presentation ?? initialPublishedPresentation(map)) &&
-    navigation?.version === saved.navigation.version
+    navigation?.version === saved.navigation.version &&
+    (saved.settings.edits ?? 0) === edits
   );
 }

@@ -71,6 +71,8 @@ pub struct Work {
     pub magic_map: Operation,
     pub identity: Operation,
     pub places: Operation,
+    /// Caves beneath a real-scale ground map (`processes/caves`).
+    pub caves: Operation,
 }
 pub(super) fn command(
     name: &str,
@@ -157,6 +159,12 @@ impl Work {
         let ecology_develop = development::ecology(input.clone(), environment, reads, field);
         let place_effects = people::effects(input.clone(), reads, field);
         let places = people::publish(input.clone(), reads, field);
+        let caves = command(
+            "caves",
+            CommandKind::Publish,
+            vec![reads.water.dependency()],
+            |state, _| Ok(state.publish_caves()?),
+        );
         let publish_magic = magic.project.clone();
         let magic_map = Command::with_inputs(
             "refinement.magic-map",
@@ -199,6 +207,7 @@ impl Work {
             magic_map,
             identity,
             places,
+            caves,
         }
     }
 }

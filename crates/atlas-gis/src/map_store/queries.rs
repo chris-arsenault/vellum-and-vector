@@ -19,6 +19,9 @@ pub struct FeatureQuery {
     pub layer_ids: Option<Vec<String>>,
     pub text: Option<String>,
     pub cursor: Option<String>,
+    /// Bounds meet a feature's footprint as well as its geometry, as hex marks do.
+    #[serde(default)]
+    pub footprints: bool,
 }
 #[derive(Serialize, Deserialize)]
 pub struct Page<T> {
@@ -128,7 +131,13 @@ impl MapStore {
             values.push(text.clone().into());
         }
         values.push(((PAGE_SIZE + 1) as i64).into());
-        self.db.query(&format!("SELECT f.* FROM map_features f JOIN map_feature_bounds b ON b.row_id=f.row_id WHERE {} ORDER BY f.id LIMIT ?", clauses.join(" AND ")), &values)
+        // Catalogue bounds hold a feature's geometry and footprint together.
+        let index = if query.footprints {
+            "map_catalog_bounds"
+        } else {
+            "map_feature_bounds"
+        };
+        self.db.query(&format!("SELECT f.* FROM map_features f JOIN {index} b ON b.row_id=f.row_id WHERE {} ORDER BY f.id LIMIT ?", clauses.join(" AND ")), &values)
     }
     pub fn entities(&self, reference: &MapRef, ids: &[String]) -> io::Result<Vec<MapEntity>> {
         self.open(reference)?;

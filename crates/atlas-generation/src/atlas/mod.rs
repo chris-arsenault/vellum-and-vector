@@ -27,6 +27,7 @@ pub mod runtime;
 pub mod sequence;
 pub mod state;
 pub mod terrain;
+pub mod town;
 pub mod validation;
 pub mod workflow;
 pub mod workspace;

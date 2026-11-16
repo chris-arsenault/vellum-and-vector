@@ -201,7 +201,7 @@ fn roles<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Roles<S>
             of: Rc::new(|state, place| Ok(fall_shape::choose_form(state, place)?.name().into())),
         }),
         appearance: Slot::Unwritten,
-        account: Slot::Unwritten,
+        account: super::true_sizes::account(Kind::Waterfall),
         fields: fields(),
         movement: movement(),
         others: others(),

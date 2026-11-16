@@ -343,7 +343,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
             unrealized: Slot::Value(Rc::new(where_it_stands)), settle: Slot::Value(Rc::new(where_it_stands)), schedule: Slot::NotApplicable("Realized ground supplies the fall without a separate step."),
         }, event: None,
         roles: Roles {
-            true_size: Slot::Unwritten, variety: Slot::Unwritten, appearance: Slot::Unwritten, account: Slot::Unwritten,
+            true_size: super::true_sizes::sited(&super::true_sizes::RIVER_MOUTH), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::RiverMouth),
             fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(),
             naming: Naming { statement: Must::Value("People name it after the river and towns take the mouth's name.".into()), named_by: Slot::Value(Rc::new(places::naming_culture_near)), takes_name_from: Slot::NotApplicable("The river is not a place in this catalogue."), lends_name_to: Slot::Value(vec![near(Kind::Settlement, 8.0)]), term: Slot::Unwritten },
         },

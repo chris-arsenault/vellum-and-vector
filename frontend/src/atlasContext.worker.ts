@@ -36,13 +36,21 @@ async function operate(operation: AtlasCall): Promise<unknown> {
           decoder.decode(maps.library(JSON.stringify(operation.call)))
         )
       );
-    case "navigation":
-      return decoder.decode(await maps.navigate(JSON.stringify(operation.call)));
     case "generation":
       return jobs.call(operation.call);
     case "contexts":
       return manage(workspace, operation.call);
+    default:
+      return decoder.decode(await geography(workspace, operation));
   }
+}
+/** Region navigation and real-scale editing run on the working map catalog. */
+function geography(
+  { maps }: Awaited<ReturnType<typeof open>>,
+  operation: Extract<AtlasCall, { service: "navigation" | "editing" }>
+) {
+  const request = JSON.stringify(operation.call);
+  return operation.service === "editing" ? maps.edit(request) : maps.navigate(request);
 }
 function manage(workspace: Awaited<ReturnType<typeof open>>, call: ContextCall) {
   if (call.method === "list") return JSON.parse(workspace.maps.contexts(JSON.stringify(call)));

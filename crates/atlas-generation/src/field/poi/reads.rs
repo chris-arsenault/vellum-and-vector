@@ -32,6 +32,14 @@ pub fn discharge(field: &Field, cell: usize) -> io::Result<f64> {
         .river_reader()
         .water_at(cell, false, water.read_only().flow.mean.get(cell)?))
 }
+/// The river's channel width at a cell in metres, zero where no reach is resolved.
+pub fn river_width(field: &Field, cell: usize) -> io::Result<f64> {
+    let water = field.water.borrow();
+    Ok(water
+        .river_reader()
+        .sample(cell, crate::water::network::RiverSample::Width, 0.0)
+        .max(0.0))
+}
 pub fn has_channel(field: &Field, cell: usize) -> io::Result<bool> {
     let water = field.water.borrow();
     Ok(water

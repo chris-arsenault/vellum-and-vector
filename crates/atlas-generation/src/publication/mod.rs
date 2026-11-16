@@ -11,6 +11,7 @@ pub mod geotiff;
 pub mod history;
 pub mod illustration;
 pub mod inspection;
+pub mod key;
 pub mod layers;
 pub mod placed;
 pub mod product;

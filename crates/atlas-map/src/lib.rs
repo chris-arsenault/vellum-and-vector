@@ -1,6 +1,7 @@
 //! Published map values. This crate has no generation, storage or execution dependency.
 // owner-direction(2026-11-12): map and generation use separate schemas
 // Arconis: docs/architecture/subsystems.arconis#item=gis — published GIS layer, raster and record contracts.
+pub mod authoring;
 mod geometry;
 pub mod hexes;
 mod layers;
@@ -76,6 +77,11 @@ pub struct RealScale {
     pub origin: [f64; 2],
     pub triangles_per_edge: u32,
     pub creator_layers: Vec<CreatorLayer>,
+    /// Manual edits applied to the published layers. The first edit makes those layers the
+    /// map's authority: generation no longer replaces an authored map (ADR 0016).
+    // owner-direction(2026-11-16): when the user is authoring a map goes from the numerically in depth representation to a 2d representation of it
+    #[serde(default)]
+    pub edits: u32,
 }
 impl RealScale {
     pub fn grid(&self) -> Result<hexes::HexGrid, &'static str> {
@@ -90,6 +96,14 @@ impl RealScale {
 pub struct CreatorLayer {
     pub id: String,
     pub name: String,
+    /// A locked layer refuses pointer edits to its features; locking is shared, hiding is not.
+    #[serde(default)]
+    pub locked: bool,
+}
+impl RealScale {
+    pub fn authored(&self) -> bool {
+        self.edits > 0
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -178,6 +192,9 @@ pub fn declarations() -> String {
         MapErrorCode::decl(&cfg),
         MapValidation::decl(&cfg),
     ]
+    .into_iter()
+    .chain(authoring::declarations(&cfg))
+    .collect::<Vec<_>>()
     .join("\n\n")
     .replace("type ", "export type ")
 }

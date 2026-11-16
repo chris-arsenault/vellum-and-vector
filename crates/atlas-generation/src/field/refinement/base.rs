@@ -13,6 +13,8 @@ pub struct Adjacency {
     weights: Vec<f64>,
     rate: Vec<f64>,
     step: f64,
+    /// The frame's longer side: diffusion this far has spread across the whole frame.
+    extent: f64,
 }
 impl Adjacency {
     pub fn new(mesh: &TriangularLattice) -> Self {
@@ -20,12 +22,14 @@ impl Adjacency {
             .filter(|&i| mesh.membership(i) == Membership::Content)
             .map(|_| mesh.cell_width().min(mesh.cell_height()))
             .fold(f64::INFINITY, f64::min);
+        let atlas_map::Bounds(w, s, e, n) = mesh.bounds();
         let mut result = Self {
             offsets: Vec::with_capacity(mesh.len() + 1),
             neighbors: Vec::new(),
             weights: Vec::new(),
             rate: vec![0.0; mesh.len()],
             step,
+            extent: (e - w).max(n - s),
         };
         for cell in 0..mesh.len() {
             result.offsets.push(result.neighbors.len());
@@ -55,6 +59,14 @@ impl Adjacency {
         if sigma <= 0.0 {
             return;
         }
+        // A smoothing length tied to the parent's cell span can exceed a small frame (a
+        // real-scale map sits inside one parent cell, ADR 0016). Diffusion that long has
+        // levelled the whole frame to the quantity it conserves, so take that level directly
+        // instead of stepping (sigma / step)^2 passes across a parent-span distance.
+        if within.is_none() && sigma >= self.extent {
+            self.level(values);
+            return;
+        }
         let passes = (4.0 * sigma * sigma / (self.step * self.step))
             .ceil()
             .max(1.0) as usize;
@@ -73,6 +85,26 @@ impl Adjacency {
                     }
                 }
                 values[cell] = previous[cell] + self.rate[cell] * flux;
+            }
+        }
+    }
+    /// The steady state of `smooth`: each pass conserves the sum of value / rate over the
+    /// diffusing cells (the weights are symmetric), so they settle at its weighted mean.
+    fn level(&self, values: &mut [f64]) {
+        let (mut sum, mut weight) = (0.0, 0.0);
+        for (value, rate) in values.iter().zip(&self.rate) {
+            if *rate > 0.0 {
+                sum += value / rate;
+                weight += 1.0 / rate;
+            }
+        }
+        if weight <= 0.0 {
+            return;
+        }
+        let level = sum / weight;
+        for (value, rate) in values.iter_mut().zip(&self.rate) {
+            if *rate > 0.0 {
+                *value = level;
             }
         }
     }

@@ -6,3 +6,4 @@ export { mapSpace, mapPosition, mapBounds } from "./coordinates";
 export { collectPages } from "./interactions";
 export type * from "./registry";
 export type { MapNavigation, NavigationOperations } from "./navigation";
+export type { MapEditing } from "./editing";

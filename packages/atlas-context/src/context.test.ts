@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { MapLibrary, MapReader, MapNavigation } from "@atlas/map";
+import type { MapEditing, MapLibrary, MapReader, MapNavigation } from "@atlas/map";
 import type { GenerationService } from "./generation";
 import { createAtlasContext, type ContextServices } from "./context";
 
@@ -7,6 +7,7 @@ import { createAtlasContext, type ContextServices } from "./context";
 const suppliedServices = async (): Promise<ContextServices<{ seed: number }>> => ({
   maps: {} as MapReader,
   navigation: {} as MapNavigation,
+  editing: {} as MapEditing,
   library: {} as MapLibrary,
   generation: {} as GenerationService<{ seed: number }>,
   contexts: {} as ContextServices<{ seed: number }>["contexts"],

@@ -20,6 +20,8 @@ use std::{
 };
 
 const BATCH_SIZE: usize = 128;
+/// The published surface class a real-scale hex reports as its ground.
+const SURFACE: &str = "finalSurface";
 fn write_record(
     writer: &mut impl Write,
     value: &impl Serialize,
@@ -43,17 +45,28 @@ impl Product<'_> {
     pub(super) async fn vectors(
         &self,
         map: &MapDescriptor,
+        selected: &Selected<'_>,
         publisher: &mut impl Publisher,
         assets: &mut impl Assets,
         control: &impl GenerationControl,
     ) -> io::Result<()> {
         let mut marks = map.real_scale.as_ref().map(|_| Vec::new());
+        let mut cave_marks = marks.clone();
         let mut hex_layer = None;
+        let key = crate::publication::key::map_key(&self.vectors, map)?;
         for layer in &map.layers {
             if layer.id == "vector:hexes" {
                 hex_layer = Some(layer);
                 continue;
             }
+            if layer.id == super::underground::CAVE_HEXES {
+                continue;
+            }
+            let layer_marks = if crate::publication::layers::underground(&layer.id) {
+                &mut cave_marks
+            } else {
+                &mut marks
+            };
             let features = self.vectors.presented(
                 layer
                     .id
@@ -61,27 +74,68 @@ impl Product<'_> {
                     .unwrap_or(layer.id.as_str()),
             );
             let features = features.map_err(io::Error::other)?.map(|feature| {
-                let feature = self.vectors.record(feature.map_err(io::Error::other)?);
-                feature.map_err(io::Error::other)
+                let mut feature = self
+                    .vectors
+                    .record(feature.map_err(io::Error::other)?)
+                    .map_err(io::Error::other)?;
+                if let Some(number) = key.get(&feature.id) {
+                    feature
+                        .attributes
+                        .insert("keyNumber".into(), (*number).into());
+                }
+                // A feature lives in its layer's located space (the surface or underground).
+                feature.space_id.clone_from(&layer.space_id);
+                Ok(feature)
             });
-            self.vector_layer(map, layer, features, &mut marks, publisher, assets, control)
-                .await?;
+            self.vector_layer(
+                map,
+                layer,
+                features,
+                layer_marks,
+                publisher,
+                assets,
+                control,
+            )
+            .await?;
         }
+        self.cave_hexes(map, &cave_marks, publisher, assets, control)
+            .await?;
         if let (Some(real), Some(layer), Some(sources)) = (&map.real_scale, hex_layer, &marks) {
             let spatial = self.vectors.registry.spatial;
             // The descriptor's bounds stay compact across a cylinder seam.
             let frame = map.bounds;
             let area = self.descriptor.area;
-            let hexes = super::hexes::hex_features(real, frame, area, sources, spatial)?
-                .into_iter()
-                .map(|feature| self.vectors.record(feature).map_err(io::Error::other));
+            let groups = selected.groups();
+            let surface = groups
+                .iter()
+                .find(|(resource, _)| resource.channels.contains_key(SURFACE));
+            let labels = map
+                .layers
+                .iter()
+                .find(|layer| layer.id == fields::layer_id(SURFACE))
+                .and_then(|layer| match &layer.source {
+                    LayerSource::Raster(source) => {
+                        source.bands.first().map(|band| band.categories.as_slice())
+                    }
+                    _ => None,
+                })
+                .unwrap_or(&[]);
+            let ground = surface.map(|(resource, _)| super::hexes::Ground {
+                resource,
+                channel: SURFACE,
+                labels,
+            });
+            let hexes =
+                super::hexes::hex_features(real, frame, area, sources, ground.as_ref(), spatial)?
+                    .into_iter()
+                    .map(|feature| self.vectors.record(feature).map_err(io::Error::other));
             self.vector_layer(map, layer, hexes, &mut None, publisher, assets, control)
                 .await?;
         }
         Ok(())
     }
     #[allow(clippy::too_many_arguments)]
-    async fn vector_layer(
+    pub(super) async fn vector_layer(
         &self,
         map: &MapDescriptor,
         layer: &MapLayer,

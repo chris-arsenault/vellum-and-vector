@@ -2,48 +2,60 @@
 //! (ADR 0016). Marks are recomputed from published shapes, never from private generation data.
 use crate::features::{Feature, State};
 use atlas_map::{
-    hexes::{marks, MarkSource},
+    hexes::{marks, Hex, HexGrid, MarkSource},
     spatial::SpatialKernel,
-    Bounds, Geometry, MapFeature, RealScale,
+    Bounds, Geometry, RealScale,
 };
 use serde_json::{json, Map, Value};
 // hpc-exempt: a hex's marks are a few named shares, not cell-indexed numerical storage.
 use std::{collections::BTreeMap, io};
 
-/// The play mark a published layer leaves on the hexes it covers or crosses.
-pub fn mark_of(layer_id: &str) -> Option<&'static str> {
-    match layer_id.strip_prefix("vector:").unwrap_or(layer_id) {
-        "rivers" | "lakes" | "oceans" | "waterworks" => Some("water"),
-        "roads" => Some("way"),
-        "plots" => Some("plot"),
-        "structures" | "ruins" => Some("structure"),
-        "objects" => Some("object"),
-        _ => None,
+// Publication and editing share one set of mark rules, held with the hex contract.
+pub use atlas_map::hexes::{fill, mark_shape};
+/// The map's own surface, read once per hex: the class covering most of the hex's triangles.
+pub struct Ground<'a> {
+    pub resource: &'a crate::field::inheritance::resources::Resource,
+    pub channel: &'a str,
+    pub labels: &'a [atlas_map::Category],
+}
+/// The surface class covering most of each hex, as its published label.
+pub fn ground_classes(
+    grid: &HexGrid,
+    hexes: &[Hex],
+    ground: &Ground<'_>,
+) -> io::Result<Vec<Option<String>>> {
+    let Some(channel) = ground.resource.channels.get(ground.channel) else {
+        return Ok(vec![None; hexes.len()]);
+    };
+    let values = channel.values.read_values()?;
+    // hpc-exempt: hex addresses of the map's few thousand hexes, not cell-indexed storage.
+    let index: BTreeMap<Hex, usize> = hexes.iter().enumerate().map(|(i, h)| (*h, i)).collect();
+    // hpc-exempt: a few surface classes per hex.
+    let mut counts: Vec<BTreeMap<i64, usize>> = vec![BTreeMap::new(); hexes.len()];
+    let active = &ground.resource.active;
+    for cell in 0..active.len() {
+        if active.get(cell)? == 0 {
+            continue;
+        }
+        if let Some(&i) = index.get(&grid.hex_at(ground.resource.grid.position(cell)?)) {
+            *counts[i].entry(values.get(cell)? as i64).or_default() += 1;
+        }
     }
-}
-/// The ground a published feature covers: its footprint when it has one, else its geometry.
-pub fn mark_shape(feature: &MapFeature) -> Option<(Geometry, &'static str)> {
-    let mark = mark_of(&feature.layer_id)?;
-    let shape = feature
-        .footprint
-        .as_ref()
-        .map(atlas_map::regions::as_geometry)
-        .unwrap_or_else(|| feature.geometry.clone());
-    Some((shape, mark))
-}
-/// The mark that covers most of a hex; areas outrank a line or point only when they cover more.
-// hpc-exempt: a hex's marks are a few named shares, not cell-indexed numerical storage.
-pub fn fill(marks: &BTreeMap<String, f64>) -> Option<&str> {
-    marks
-        .iter()
-        .max_by(|a, b| a.1.total_cmp(b.1))
-        .map(|(mark, _)| mark.as_str())
+    Ok(counts
+        .into_iter()
+        .map(|classes| {
+            let (class, _) = classes.into_iter().max_by_key(|(_, count)| *count)?;
+            let label = ground.labels.iter().find(|c| i64::from(c.value) == class);
+            Some(label.map_or_else(|| class.to_string(), |c| c.label.clone()))
+        })
+        .collect())
 }
 pub fn hex_features(
     real: &RealScale,
     frame: Bounds,
     area: &str,
     sources: &[(Geometry, &'static str)],
+    ground: Option<&Ground<'_>>,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Vec<Feature>> {
     let grid = real.grid().map_err(io::Error::other)?;
@@ -53,15 +65,21 @@ pub fn hex_features(
         .map(|(geometry, mark)| MarkSource { geometry, mark })
         .collect();
     let marked = marks(&grid, &hexes, &sources, spatial).map_err(io::Error::other)?;
+    let grounds = match ground {
+        Some(ground) => ground_classes(&grid, &hexes, ground)?,
+        None => vec![None; hexes.len()],
+    };
     Ok(hexes
         .into_iter()
         .zip(marked)
-        .map(|(hex, marks)| {
+        .zip(grounds)
+        .map(|((hex, marks), ground)| {
             let mut attributes = Map::new();
             attributes.insert("q".into(), hex.q.into());
             attributes.insert("r".into(), hex.r.into());
             attributes.insert("fill".into(), fill(&marks).map_or(Value::Null, Into::into));
             attributes.insert("marks".into(), json!(marks));
+            attributes.insert("ground".into(), ground.map_or(Value::Null, Into::into));
             attributes.insert("nameStatus".into(), "label".into());
             Feature {
                 map_only: None,

@@ -1,14 +1,18 @@
-import type { MapDescriptor } from "@atlas/map";
+import type { MapDescriptor, MapReader } from "@atlas/map";
 import type { PublishedPresentation } from "./PublishedMapView";
 import { defaultRealScalePresentation, hexLabel, type RealScalePresentation } from "./realScale";
+import { RealScaleKey } from "./RealScaleKey";
+import { RealScaleLevel } from "./RealScaleLevel";
 
 interface Props {
   map: MapDescriptor;
+  reader: MapReader;
   value: PublishedPresentation;
   change(value: PublishedPresentation): void;
 }
-/** View choices for a real-scale map: how hexes show, which units, which creator layers. */
-export function RealScaleControls({ map, value, change }: Props) {
+/** View choices for a real-scale map: how hexes show, which units, which creator layers,
+ * and the numbered key of its places. */
+export function RealScaleControls({ map, reader, value, change }: Props) {
   const real = map.realScale;
   if (!real) return null;
   const view = value.realScale ?? defaultRealScalePresentation();
@@ -20,6 +24,7 @@ export function RealScaleControls({ map, value, change }: Props) {
       <p>
         {real.kind === "ground" ? "Ground map" : "Building floors"} · {hexLabel(real, view.units)}
       </p>
+      <RealScaleLevel map={map} view={view} set={set} />
       <fieldset>
         <legend>Hexes</legend>
         {(["grid", "fill"] as const).map((hexView) => (
@@ -67,6 +72,7 @@ export function RealScaleControls({ map, value, change }: Props) {
           </label>
         ))}
       </fieldset>
+      <RealScaleKey map={map} reader={reader} />
     </section>
   );
 }

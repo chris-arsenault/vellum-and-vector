@@ -231,7 +231,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
             settle: Slot::NotApplicable("Only ice and sea change the trough, not a round's water."), schedule: Slot::NotApplicable("The landform reads it without another refinement step."),
         }, event: None,
         roles: Roles {
-            true_size: Slot::Unwritten, variety: Slot::Unwritten, appearance: Slot::Unwritten, account: Slot::Unwritten,
+            true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Fjord),
             fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(),
             naming: Naming { statement: Must::Value("Shore people name the fjord; its head town takes its name.".into()), named_by: Slot::Value(Rc::new(places::naming_culture_near)), takes_name_from: Slot::NotApplicable("The town takes the fjord's name."), lends_name_to: Slot::Value(vec![near(Kind::Settlement, 8.0), near(Kind::Harbour, 3.0)]), term: Slot::Unwritten },
         },

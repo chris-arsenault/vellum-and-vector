@@ -3,10 +3,12 @@ import {
   RpcMapReader,
   RpcMapLibrary,
   RpcMapNavigation,
+  RpcMapEditing,
   RpcGeneration,
   httpMapReader,
   httpMapLibrary,
   httpMapNavigation,
+  httpMapEditing,
   HttpGeneration,
   RpcContextManagement,
   httpContextManagement,
@@ -42,6 +44,9 @@ export function openFinishedAtlas<Configuration>(mode: AtlasMode, backendUrl?: s
         navigation: new RpcMapNavigation((call, options) =>
           worker.request({ service: "navigation", call }, options)
         ),
+        editing: new RpcMapEditing((call, options) =>
+          worker.request({ service: "editing", call }, options)
+        ),
         generation: new RpcGeneration<Configuration>((call, options) =>
           worker.request({ service: "generation", call }, options)
         ),
@@ -58,6 +63,7 @@ export function openFinishedAtlas<Configuration>(mode: AtlasMode, backendUrl?: s
         maps,
         library: httpMapLibrary(backendUrl),
         navigation: httpMapNavigation(backendUrl),
+        editing: httpMapEditing(backendUrl),
         generation: new HttpGeneration<Configuration>(backendUrl),
         contexts: httpContextManagement(backendUrl),
         dispose: () => Promise.resolve(),

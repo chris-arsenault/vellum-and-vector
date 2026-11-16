@@ -5,7 +5,7 @@ use super::{
 use crate::{
     control::GenerationControl,
     publication::{
-        fields, geotiff,
+        descriptor, fields, geotiff, layers,
         sampling::{self, Lake, Source},
         upload::RasterPublication,
     },
@@ -13,7 +13,8 @@ use crate::{
     storage::Coverage,
 };
 use atlas_map::{
-    AttributeSource, LayerCatalog, LayerSource, MapDescriptor, MapLayer, Publisher, VectorSource,
+    AttributeSource, LayerCatalog, LayerSource, MapDescriptor, MapLayer, MapSpace, Publisher,
+    VectorSource,
 };
 // hpc-exempt: map-layer metadata and named lake geometries, not numerical field storage.
 use std::{cell::RefCell, collections::BTreeMap, io};
@@ -37,6 +38,7 @@ impl Product<'_> {
             .area(self.descriptor.area)
             .map_err(io::Error::other)?
             .profile;
+        let underground = self.underground(&map)?;
         for layer in self
             .vectors
             .registry
@@ -45,10 +47,15 @@ impl Product<'_> {
             .values()
             .filter(|l| l.profiles.contains(&profile) && l.vector())
         {
+            let space_id = match (layers::underground(&layer.id), &underground) {
+                (false, _) => map.primary_space_id.clone(),
+                (true, Some(space)) => space.id.clone(),
+                (true, None) => continue,
+            };
             map.layers.push(MapLayer {
                 id: format!("vector:{}", layer.id),
                 name: layer.name.clone(),
-                space_id: map.primary_space_id.clone(),
+                space_id,
                 bounds: map.bounds,
                 attribution: Vec::new(),
                 catalog: self
@@ -61,6 +68,7 @@ impl Product<'_> {
                 }),
             });
         }
+        map.spaces.extend(underground);
         let mut bands = Vec::new();
         for (channel, field) in &selected.channels {
             if channel.starts_with("magicApplied:")
@@ -102,6 +110,23 @@ impl Product<'_> {
             });
         }
         Ok(map)
+    }
+    /// A real-scale map with caves publishes its underground space; a map without caves
+    /// publishes no underground layers.
+    fn underground(&self, map: &MapDescriptor) -> io::Result<Option<MapSpace>> {
+        if map.real_scale.is_none() {
+            return Ok(None);
+        }
+        let mut caves = self.vectors.presented("caves").map_err(io::Error::other)?;
+        if caves
+            .next()
+            .transpose()
+            .map_err(io::Error::other)?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        Ok(descriptor::underground_space(map))
     }
     pub(super) async fn rasters(
         &self,

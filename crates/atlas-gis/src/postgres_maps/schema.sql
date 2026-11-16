@@ -92,6 +92,17 @@ CREATE TABLE IF NOT EXISTS map.assets (
   PRIMARY KEY (map_id, revision, id),
   FOREIGN KEY (map_id, revision) REFERENCES map.revisions ON DELETE CASCADE
 );
+-- Undo steps of an authored real-scale map; data holds the features before and after.
+CREATE TABLE IF NOT EXISTS map.edits (
+  map_id text NOT NULL,
+  revision text NOT NULL,
+  sequence integer NOT NULL,
+  label text NOT NULL,
+  undone boolean NOT NULL,
+  data jsonb NOT NULL,
+  PRIMARY KEY (map_id, revision, sequence),
+  FOREIGN KEY (map_id, revision) REFERENCES map.revisions ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS map.entities (
   map_id text NOT NULL,
   revision text NOT NULL,

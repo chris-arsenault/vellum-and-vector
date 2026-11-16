@@ -30,11 +30,14 @@ import { ErrorMessage } from "./ErrorMessage";
 import { download } from "./download";
 import { RealScaleControls } from "./RealScaleControls";
 import { RealScaleOpen } from "./RealScaleOpen";
+import { shownSpace } from "./realScale";
+import { RealScaleEditor } from "./RealScaleEditor";
+import { useRealScaleAuthoring, type AuthoringSession } from "./useRealScaleAuthoring";
 import type { RealScaleChoice } from "@atlas/context";
 import "./mapSettings.css";
 
 interface Props {
-  context: Pick<AtlasContext<unknown>, "maps" | "library" | "navigation" | "mode">;
+  context: Pick<AtlasContext<unknown>, "maps" | "library" | "navigation" | "editing" | "mode">;
   map: MapDescriptor;
   saved?: SavedMapDocument;
   open(reference: MapRef): void;
@@ -123,12 +126,22 @@ function useFinishedMap(props: Props) {
 type Model = ReturnType<typeof useFinishedMap>;
 export function FinishedMapEditor(props: Props) {
   const model = useFinishedMap(props);
+  const authoring = useRealScaleAuthoring(props.map, props.context.editing);
+  const editing = model.tool === "edit" && !!props.map.realScale;
   return (
     <div className="app-shell finished-atlas">
       <FinishedHeader model={model} />
-      <FinishedCanvas model={model} />
+      <FinishedCanvas model={model} authoring={authoring} />
       {model.panel && <FinishedControls model={model} />}
-      {(model.inspection || model.selected) && <FinishedInspection model={model} />}
+      {editing ? (
+        <RealScaleEditor
+          session={authoring}
+          reader={props.context.maps}
+          units={model.value.realScale?.units ?? "metres"}
+        />
+      ) : (
+        (model.inspection || model.selected) && <FinishedInspection model={model} />
+      )}
     </div>
   );
 }
@@ -141,10 +154,19 @@ function FinishedHeader({ model }: { model: Model }) {
         <Brand />
         <strong>{map.name}</strong>
         <button onClick={props.create}>+ New world</button>
-        <button onClick={props.regenerate} disabled={map.state !== "complete"}>
+        <button
+          onClick={props.regenerate}
+          disabled={map.state !== "complete" || !!map.realScale?.edits}
+          title={map.realScale?.edits ? "Edited by hand; regenerating would replace it" : undefined}
+        >
           Regenerate map
         </button>
-        <FinishedSave {...props} value={value} navigation={navigation.state} />
+        <FinishedSave
+          {...props}
+          value={value}
+          navigation={navigation.state}
+          edits={map.realScale?.edits ?? 0}
+        />
         <button onClick={props.library}>
           {context.mode === "backend" ? "Server maps" : "Saved maps"}
         </button>
@@ -180,7 +202,7 @@ function FinishedHeader({ model }: { model: Model }) {
     </>
   );
 }
-function FinishedCanvas({ model }: { model: Model }) {
+function FinishedCanvas({ model, authoring }: { model: Model; authoring: AuthoringSession }) {
   const { props, map, context, value, tool, setTool, selection, inspect, regions, error } = model;
   return (
     <main className="map-workspace">
@@ -195,13 +217,14 @@ function FinishedCanvas({ model }: { model: Model }) {
       <PublishedMapCanvas
         map={map}
         reader={context.maps}
-        spaceId={map.primarySpaceId}
+        spaceId={shownSpace(map, value.realScale)}
         presentation={value}
         tool={tool}
         selection={selection}
         onInspection={inspect}
         regionEvents={regions}
         onEngine={() => {}}
+        authoring={map.realScale ? authoring : undefined}
       />
       <ErrorMessage error={error} />
     </main>
@@ -211,13 +234,14 @@ const mapTools = (map: MapDescriptor): PublishedTool[] => [
   "pan",
   "inspect",
   "inspect-cell",
-  ...(map.realScale ? (["measure"] as const) : []),
+  ...(map.realScale ? (["measure", "edit"] as const) : []),
 ];
 const toolNames: Record<string, string> = {
   pan: "Pan",
   inspect: "Inspect feature",
   "inspect-cell": "Inspect place",
   measure: "Measure",
+  edit: "Edit map",
 };
 function FinishedControls({ model }: { model: Model }) {
   const {
@@ -250,7 +274,7 @@ function FinishedControls({ model }: { model: Model }) {
       )}
       {panel === "appearance" && (
         <>
-          <RealScaleControls map={map} value={value} change={change} />
+          <RealScaleControls map={map} reader={context.maps} value={value} change={change} />
           <PublishedAppearance map={map} reader={context.maps} value={value} change={change} />
           {value.drawing.mode === "drawn" && (
             <PublishedSheetPanel map={map} reader={context.maps} value={value} change={change} />

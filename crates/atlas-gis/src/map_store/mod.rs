@@ -4,6 +4,7 @@
 mod access;
 pub mod codec;
 mod copy;
+mod edits;
 mod export;
 mod interactions;
 pub(crate) mod inventory;

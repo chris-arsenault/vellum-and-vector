@@ -1,327 +1,51 @@
 {
   "features": [
-    [
-      "peak",
-      "geology",
-      "Peaks",
-      "Terrain and geology",
-      "Relief"
-    ],
-    [
-      "range",
-      "geology",
-      "Mountain ranges",
-      "Terrain and geology",
-      "Relief"
-    ],
-    [
-      "valley",
-      "geology",
-      "Valleys",
-      "Terrain and geology",
-      "Relief"
-    ],
-    [
-      "pass",
-      "geology",
-      "Mountain passes",
-      "Terrain and geology",
-      "Relief"
-    ],
-    [
-      "gorge",
-      "geology",
-      "Gorges",
-      "Terrain and geology",
-      "Relief"
-    ],
-    [
-      "hill",
-      "geology",
-      "Hills",
-      "Terrain and geology",
-      "Relief"
-    ],
-    [
-      "ridge",
-      "geology",
-      "Ridges",
-      "Terrain and geology",
-      "Relief"
-    ],
-    [
-      "escarpment",
-      "geology",
-      "Escarpments",
-      "Terrain and geology",
-      "Relief"
-    ],
-    [
-      "plateau",
-      "geology",
-      "Plateaus",
-      "Terrain and geology",
-      "Relief"
-    ],
-    [
-      "dome",
-      "geology",
-      "Domes",
-      "Terrain and geology",
-      "Volcanic and impact"
-    ],
-    [
-      "spring",
-      "geology",
-      "Springs",
-      "Water and coasts",
-      "Watercourses"
-    ],
-    [
-      "riverMouth",
-      "geology",
-      "River mouths",
-      "Water and coasts",
-      "Watercourses"
-    ],
-    [
-      "headland",
-      "geology",
-      "Headlands",
-      "Water and coasts",
-      "Coasts"
-    ],
-    [
-      "bay",
-      "geology",
-      "Bays",
-      "Water and coasts",
-      "Coasts"
-    ],
-    [
-      "strait",
-      "geology",
-      "Straits",
-      "Water and coasts",
-      "Coasts"
-    ],
-    [
-      "cirque",
-      "geology",
-      "Cirques",
-      "Terrain and geology",
-      "Glacial landforms"
-    ],
-    [
-      "moraine",
-      "geology",
-      "Moraine fields",
-      "Terrain and geology",
-      "Glacial landforms"
-    ],
-    [
-      "volcano",
-      "geology",
-      "Volcanoes",
-      "Terrain and geology",
-      "Volcanic and impact"
-    ],
-    [
-      "crater",
-      "geology",
-      "Craters",
-      "Terrain and geology",
-      "Volcanic and impact"
-    ],
-    [
-      "caldera",
-      "geology",
-      "Calderas",
-      "Terrain and geology",
-      "Volcanic and impact"
-    ],
-    [
-      "landmark",
-      "geology",
-      "Landmark",
-      "Terrain and geology",
-      "Landmarks"
-    ],
-    [
-      "landmark",
-      "magic",
-      "Landmark",
-      "Magic",
-      "Landmarks"
-    ],
-    [
-      "fault",
-      "faults",
-      "Fault traces",
-      "Terrain and geology",
-      "Tectonics"
-    ],
-    [
-      "waterfall",
-      "geology",
-      "Waterfalls",
-      "Water and coasts",
-      "Watercourses"
-    ],
-    [
-      "river",
-      "rivers",
-      "Rivers",
-      "Water and coasts",
-      "Watercourses"
-    ],
-    [
-      "lake",
-      "lakes",
-      "Lakes",
-      "Water and coasts",
-      "Water bodies"
-    ],
-    [
-      "ocean",
-      "oceans",
-      "Oceans and seas",
-      "Water and coasts",
-      "Water bodies"
-    ],
-    [
-      "fjord",
-      "geology",
-      "Fjords",
-      "Water and coasts",
-      "Water bodies"
-    ],
-    [
-      "forest",
-      "ecology",
-      "Forests",
-      "Ecology",
-      "Biomes"
-    ],
-    [
-      "grassland",
-      "ecology",
-      "Grasslands",
-      "Ecology",
-      "Biomes"
-    ],
-    [
-      "wetland",
-      "ecology",
-      "Wetlands",
-      "Ecology",
-      "Biomes"
-    ],
-    [
-      "barren",
-      "ecology",
-      "Barren land",
-      "Ecology",
-      "Biomes"
-    ],
-    [
-      "ember",
-      "ecology",
-      "Ember groves",
-      "Ecology",
-      "Magic-shaped landscapes"
-    ],
-    [
-      "thaw",
-      "ecology",
-      "Thaw meadows",
-      "Ecology",
-      "Magic-shaped landscapes"
-    ],
-    [
-      "rime",
-      "ecology",
-      "Rime forests",
-      "Ecology",
-      "Magic-shaped landscapes"
-    ],
-    [
-      "glow",
-      "ecology",
-      "Glow-lichen barrens",
-      "Ecology",
-      "Magic-shaped landscapes"
-    ],
-    [
-      "fog",
-      "ecology",
-      "Fog coasts",
-      "Ecology",
-      "Magic-shaped landscapes"
-    ],
-    [
-      "deepwood",
-      "ecology",
-      "Deepwoods",
-      "Ecology",
-      "Magic-shaped landscapes"
-    ],
-    [
-      "wending",
-      "ecology",
-      "Wending fens",
-      "Ecology",
-      "Magic-shaped landscapes"
-    ],
-    [
-      "well",
-      "ecology",
-      "Well meadows",
-      "Ecology",
-      "Magic-shaped landscapes"
-    ],
-    [
-      "barrow",
-      "ecology",
-      "Barrow heaths",
-      "Ecology",
-      "Magic-shaped landscapes"
-    ],
-    [
-      "settlement",
-      "settlements",
-      "Settlements",
-      "Settlements and sites",
-      "Inhabited places"
-    ],
-    [
-      "settlement",
-      "ruins",
-      "Ruins and abandoned settlements",
-      "Settlements and sites",
-      "Ruins"
-    ],
-    [
-      "poi",
-      "pois",
-      "Places of interest",
-      "Settlements and sites",
-      "Named sites"
-    ],
-    [
-      "road",
-      "roads",
-      "Roads and routes",
-      "Transport and water infrastructure",
-      "Routes"
-    ],
-    [
-      "lane",
-      "roads",
-      "Shipping lanes",
-      "Transport and water infrastructure",
-      "Routes"
-    ],
+    ["peak", "geology", "Peaks", "Terrain and geology", "Relief"],
+    ["range", "geology", "Mountain ranges", "Terrain and geology", "Relief"],
+    ["valley", "geology", "Valleys", "Terrain and geology", "Relief"],
+    ["pass", "geology", "Mountain passes", "Terrain and geology", "Relief"],
+    ["gorge", "geology", "Gorges", "Terrain and geology", "Relief"],
+    ["hill", "geology", "Hills", "Terrain and geology", "Relief"],
+    ["ridge", "geology", "Ridges", "Terrain and geology", "Relief"],
+    ["escarpment", "geology", "Escarpments", "Terrain and geology", "Relief"],
+    ["plateau", "geology", "Plateaus", "Terrain and geology", "Relief"],
+    ["dome", "geology", "Domes", "Terrain and geology", "Volcanic and impact"],
+    ["spring", "geology", "Springs", "Water and coasts", "Watercourses"],
+    ["riverMouth", "geology", "River mouths", "Water and coasts", "Watercourses"],
+    ["headland", "geology", "Headlands", "Water and coasts", "Coasts"],
+    ["bay", "geology", "Bays", "Water and coasts", "Coasts"],
+    ["strait", "geology", "Straits", "Water and coasts", "Coasts"],
+    ["cirque", "geology", "Cirques", "Terrain and geology", "Glacial landforms"],
+    ["moraine", "geology", "Moraine fields", "Terrain and geology", "Glacial landforms"],
+    ["volcano", "geology", "Volcanoes", "Terrain and geology", "Volcanic and impact"],
+    ["crater", "geology", "Craters", "Terrain and geology", "Volcanic and impact"],
+    ["caldera", "geology", "Calderas", "Terrain and geology", "Volcanic and impact"],
+    ["landmark", "geology", "Landmark", "Terrain and geology", "Landmarks"],
+    ["landmark", "magic", "Landmark", "Magic", "Landmarks"],
+    ["fault", "faults", "Fault traces", "Terrain and geology", "Tectonics"],
+    ["waterfall", "geology", "Waterfalls", "Water and coasts", "Watercourses"],
+    ["river", "rivers", "Rivers", "Water and coasts", "Watercourses"],
+    ["lake", "lakes", "Lakes", "Water and coasts", "Water bodies"],
+    ["ocean", "oceans", "Oceans and seas", "Water and coasts", "Water bodies"],
+    ["fjord", "geology", "Fjords", "Water and coasts", "Water bodies"],
+    ["forest", "ecology", "Forests", "Ecology", "Biomes"],
+    ["grassland", "ecology", "Grasslands", "Ecology", "Biomes"],
+    ["wetland", "ecology", "Wetlands", "Ecology", "Biomes"],
+    ["barren", "ecology", "Barren land", "Ecology", "Biomes"],
+    ["ember", "ecology", "Ember groves", "Ecology", "Magic-shaped landscapes"],
+    ["thaw", "ecology", "Thaw meadows", "Ecology", "Magic-shaped landscapes"],
+    ["rime", "ecology", "Rime forests", "Ecology", "Magic-shaped landscapes"],
+    ["glow", "ecology", "Glow-lichen barrens", "Ecology", "Magic-shaped landscapes"],
+    ["fog", "ecology", "Fog coasts", "Ecology", "Magic-shaped landscapes"],
+    ["deepwood", "ecology", "Deepwoods", "Ecology", "Magic-shaped landscapes"],
+    ["wending", "ecology", "Wending fens", "Ecology", "Magic-shaped landscapes"],
+    ["well", "ecology", "Well meadows", "Ecology", "Magic-shaped landscapes"],
+    ["barrow", "ecology", "Barrow heaths", "Ecology", "Magic-shaped landscapes"],
+    ["settlement", "settlements", "Settlements", "Settlements and sites", "Inhabited places"],
+    ["settlement", "ruins", "Ruins and abandoned settlements", "Settlements and sites", "Ruins"],
+    ["poi", "pois", "Places of interest", "Settlements and sites", "Named sites"],
+    ["road", "roads", "Roads and routes", "Transport and water infrastructure", "Routes"],
+    ["lane", "roads", "Shipping lanes", "Transport and water infrastructure", "Routes"],
     [
       "harbor",
       "transportSites",
@@ -329,20 +53,8 @@
       "Transport and water infrastructure",
       "Transport sites"
     ],
-    [
-      "pass",
-      "transportSites",
-      "Passes",
-      "Transport and water infrastructure",
-      "Transport sites"
-    ],
-    [
-      "ford",
-      "transportSites",
-      "Fords",
-      "Transport and water infrastructure",
-      "Transport sites"
-    ],
+    ["pass", "transportSites", "Passes", "Transport and water infrastructure", "Transport sites"],
+    ["ford", "transportSites", "Fords", "Transport and water infrastructure", "Transport sites"],
     [
       "bridge",
       "transportSites",
@@ -350,125 +62,23 @@
       "Transport and water infrastructure",
       "Transport sites"
     ],
-    [
-      "mill",
-      "waterworks",
-      "Mills",
-      "Transport and water infrastructure",
-      "Waterworks"
-    ],
-    [
-      "dam",
-      "waterworks",
-      "Dams",
-      "Transport and water infrastructure",
-      "Waterworks"
-    ],
-    [
-      "weir",
-      "waterworks",
-      "Weirs",
-      "Transport and water infrastructure",
-      "Waterworks"
-    ],
-    [
-      "irrigation",
-      "waterworks",
-      "Irrigation",
-      "Transport and water infrastructure",
-      "Waterworks"
-    ],
-    [
-      "clearance",
-      "landUse",
-      "Clearance",
-      "Land use and extraction",
-      "Land use"
-    ],
-    [
-      "burning",
-      "landUse",
-      "Burning",
-      "Land use and extraction",
-      "Land use"
-    ],
-    [
-      "hunting",
-      "landUse",
-      "Hunting",
-      "Land use and extraction",
-      "Land use"
-    ],
-    [
-      "conservation",
-      "landUse",
-      "Conservation",
-      "Land use and extraction",
-      "Land use"
-    ],
-    [
-      "tapping",
-      "magicPractices",
-      "Fire tapping",
-      "Land use and extraction",
-      "Extraction"
-    ],
-    [
-      "quarrying",
-      "magicPractices",
-      "Crystal quarrying",
-      "Land use and extraction",
-      "Extraction"
-    ],
-    [
-      "hearthRing",
-      "magicPractices",
-      "Hearth rings",
-      "Society and culture",
-      "Magic practices"
-    ],
-    [
-      "readIce",
-      "magicPractices",
-      "Read ice",
-      "Society and culture",
-      "Magic practices"
-    ],
-    [
-      "heldShore",
-      "magicPractices",
-      "Held shores",
-      "Society and culture",
-      "Magic practices"
-    ],
-    [
-      "boundWood",
-      "magicPractices",
-      "Bound woods",
-      "Society and culture",
-      "Magic practices"
-    ],
-    [
-      "swornGround",
-      "magicPractices",
-      "Sworn ground",
-      "Society and culture",
-      "Magic practices"
-    ],
-    [
-      "vowedGround",
-      "magicPractices",
-      "Vowed ground",
-      "Society and culture",
-      "Magic practices"
-    ],
-    [
-      "fire-forge",
-      "magicPractices",
-      "Fire forges",
-      "Society and culture",
-      "Magic practices"
-    ],
+    ["mill", "waterworks", "Mills", "Transport and water infrastructure", "Waterworks"],
+    ["dam", "waterworks", "Dams", "Transport and water infrastructure", "Waterworks"],
+    ["weir", "waterworks", "Weirs", "Transport and water infrastructure", "Waterworks"],
+    ["irrigation", "waterworks", "Irrigation", "Transport and water infrastructure", "Waterworks"],
+    ["clearance", "landUse", "Clearance", "Land use and extraction", "Land use"],
+    ["burning", "landUse", "Burning", "Land use and extraction", "Land use"],
+    ["hunting", "landUse", "Hunting", "Land use and extraction", "Land use"],
+    ["conservation", "landUse", "Conservation", "Land use and extraction", "Land use"],
+    ["tapping", "magicPractices", "Fire tapping", "Land use and extraction", "Extraction"],
+    ["quarrying", "magicPractices", "Crystal quarrying", "Land use and extraction", "Extraction"],
+    ["hearthRing", "magicPractices", "Hearth rings", "Society and culture", "Magic practices"],
+    ["readIce", "magicPractices", "Read ice", "Society and culture", "Magic practices"],
+    ["heldShore", "magicPractices", "Held shores", "Society and culture", "Magic practices"],
+    ["boundWood", "magicPractices", "Bound woods", "Society and culture", "Magic practices"],
+    ["swornGround", "magicPractices", "Sworn ground", "Society and culture", "Magic practices"],
+    ["vowedGround", "magicPractices", "Vowed ground", "Society and culture", "Magic practices"],
+    ["fire-forge", "magicPractices", "Fire forges", "Society and culture", "Magic practices"],
     [
       "aurora-archive",
       "magicPractices",
@@ -483,223 +93,53 @@
       "Society and culture",
       "Magic practices"
     ],
-    [
-      "forge",
-      "magicPractices",
-      "Forges",
-      "Society and culture",
-      "Magic practices"
-    ],
-    [
-      "archive",
-      "magicPractices",
-      "Archives",
-      "Society and culture",
-      "Magic practices"
-    ],
-    [
-      "shrine",
-      "magicPractices",
-      "Shrines",
-      "Society and culture",
-      "Magic practices"
-    ],
-    [
-      "mine",
-      "landUse",
-      "Mines",
-      "Land use and extraction",
-      "Extraction"
-    ],
-    [
-      "battlefield",
-      "historicalEvents",
-      "Battlefields",
-      "History",
-      "Events"
-    ],
-    [
-      "institution",
-      "institutions",
-      "Institutions",
-      "Society and culture",
-      "Communities"
-    ],
-    [
-      "culturalOrigin",
-      "cultures",
-      "Cultural communities",
-      "Society and culture",
-      "Communities"
-    ],
-    [
-      "languageCenter",
-      "languages",
-      "Language centers",
-      "Society and culture",
-      "Communities"
-    ],
-    [
-      "religiousCenter",
-      "religions",
-      "Religious centers",
-      "Society and culture",
-      "Communities"
-    ],
-    [
-      "sovereignty",
-      "sovereignty",
-      "Sovereignty",
-      "Politics",
-      "Territories"
-    ],
-    [
-      "politicalRegion",
-      "sovereignty",
-      "Geographic provinces",
-      "Politics",
-      "Territories"
-    ],
-    [
-      "jurisdiction",
-      "administration",
-      "Administration",
-      "Politics",
-      "Territories"
-    ],
-    [
-      "administration",
-      "administration",
-      "Authored administration",
-      "Politics",
-      "Territories"
-    ],
-    [
-      "claim",
-      "claims",
-      "Territorial claims",
-      "Politics",
-      "Territories"
-    ],
-    [
-      "control",
-      "control",
-      "Effective control",
-      "Politics",
-      "Territories"
-    ],
-    [
-      "societyEvent",
-      "historicalEvents",
-      "Events and disasters",
-      "History",
-      "Events"
-    ],
-    [
-      "building",
-      "structures",
-      "Buildings",
-      "Structures and interiors",
-      "Structures"
-    ],
-    [
-      "room",
-      "structures",
-      "Rooms",
-      "Structures and interiors",
-      "Spaces"
-    ],
-    [
-      "wall",
-      "structures",
-      "Walls",
-      "Structures and interiors",
-      "Components"
-    ],
-    [
-      "door",
-      "structures",
-      "Doors",
-      "Structures and interiors",
-      "Connections"
-    ],
-    [
-      "furniture",
-      "structures",
-      "Furnishings",
-      "Structures and interiors",
-      "Components"
-    ],
-    [
-      "template",
-      "structures",
-      "Templates",
-      "Structures and interiors",
-      "Structures"
-    ],
-    [
-      "stream",
-      "rivers",
-      "Streams and brooks",
-      "Water and coasts",
-      "Watercourses"
-    ],
-    [
-      "trail",
-      "roads",
-      "Trails and paths",
-      "Transport and water infrastructure",
-      "Routes"
-    ],
-    [
-      "field",
-      "plots",
-      "Fields",
-      "Plots and fields",
-      "Land use"
-    ],
-    [
-      "yard",
-      "plots",
-      "Yards and gardens",
-      "Plots and fields",
-      "Land use"
-    ],
-    [
-      "tree",
-      "objects",
-      "Single trees",
-      "Objects and clutter",
-      "Plants"
-    ],
-    [
-      "boulder",
-      "objects",
-      "Boulders",
-      "Objects and clutter",
-      "Stone"
-    ],
-    [
-      "log",
-      "objects",
-      "Fallen logs",
-      "Objects and clutter",
-      "Wood"
-    ],
-    [
-      "rubble",
-      "objects",
-      "Rubble",
-      "Objects and clutter",
-      "Debris"
-    ],
-    [
-      "hex",
-      "hexes",
-      "Hexes",
-      "Hex grid",
-      "Hexes"
-    ]
+    ["forge", "magicPractices", "Forges", "Society and culture", "Magic practices"],
+    ["archive", "magicPractices", "Archives", "Society and culture", "Magic practices"],
+    ["shrine", "magicPractices", "Shrines", "Society and culture", "Magic practices"],
+    ["mine", "landUse", "Mines", "Land use and extraction", "Extraction"],
+    ["battlefield", "historicalEvents", "Battlefields", "History", "Events"],
+    ["institution", "institutions", "Institutions", "Society and culture", "Communities"],
+    ["culturalOrigin", "cultures", "Cultural communities", "Society and culture", "Communities"],
+    ["languageCenter", "languages", "Language centers", "Society and culture", "Communities"],
+    ["religiousCenter", "religions", "Religious centers", "Society and culture", "Communities"],
+    ["sovereignty", "sovereignty", "Sovereignty", "Politics", "Territories"],
+    ["politicalRegion", "sovereignty", "Geographic provinces", "Politics", "Territories"],
+    ["jurisdiction", "administration", "Administration", "Politics", "Territories"],
+    ["administration", "administration", "Authored administration", "Politics", "Territories"],
+    ["claim", "claims", "Territorial claims", "Politics", "Territories"],
+    ["control", "control", "Effective control", "Politics", "Territories"],
+    ["societyEvent", "historicalEvents", "Events and disasters", "History", "Events"],
+    ["building", "structures", "Buildings", "Structures and interiors", "Structures"],
+    ["room", "structures", "Rooms", "Structures and interiors", "Spaces"],
+    ["wall", "structures", "Walls", "Structures and interiors", "Components"],
+    ["door", "structures", "Doors", "Structures and interiors", "Connections"],
+    ["furniture", "structures", "Furnishings", "Structures and interiors", "Components"],
+    ["template", "structures", "Templates", "Structures and interiors", "Structures"],
+    ["stream", "rivers", "Streams and brooks", "Water and coasts", "Watercourses"],
+    ["trail", "roads", "Trails and paths", "Transport and water infrastructure", "Routes"],
+    ["field", "plots", "Fields", "Plots and fields", "Land use"],
+    ["yard", "plots", "Yards and gardens", "Plots and fields", "Land use"],
+    ["square", "plots", "Squares and markets", "Plots and fields", "Open spaces"],
+    ["street", "roads", "Streets and lanes", "Transport and water infrastructure", "Streets"],
+    ["bridge", "structures", "Bridges", "Structures and interiors", "Structures"],
+    ["gate", "structures", "Gates", "Structures and interiors", "Connections"],
+    ["ward", "settlements", "Wards", "Settlements and sites", "Wards"],
+    ["tree", "objects", "Single trees", "Objects and clutter", "Plants"],
+    ["boulder", "objects", "Boulders", "Objects and clutter", "Stone"],
+    ["log", "objects", "Fallen logs", "Objects and clutter", "Wood"],
+    ["rubble", "objects", "Rubble", "Objects and clutter", "Debris"],
+    ["hex", "hexes", "Hexes", "Hex grid", "Hexes"],
+    ["cave", "caves", "Caves", "Caves and underground", "Caves"],
+    ["dissolvedPassage", "caves", "Dissolved passages", "Caves and underground", "Passages"],
+    ["fissure", "caves", "Fissures", "Caves and underground", "Passages"],
+    ["lavaTube", "caves", "Lava tubes", "Caves and underground", "Passages"],
+    ["thermalPassage", "caves", "Thermal passages", "Caves and underground", "Passages"],
+    ["chamber", "caves", "Chambers", "Caves and underground", "Spaces"],
+    ["shaft", "caves", "Shafts", "Caves and underground", "Connections"],
+    ["caveMouth", "caveEntrances", "Cave mouths", "Caves and underground", "Entrances"],
+    ["sinkhole", "caveEntrances", "Sinkholes", "Caves and underground", "Entrances"],
+    ["skylight", "caveEntrances", "Lava tube skylights", "Caves and underground", "Entrances"],
+    ["hex", "caveHexes", "Cave hexes", "Cave hex grid", "Hexes"]
   ],
   "landmarks": {
     "volcanic-mountain": "Volcanic mountain",

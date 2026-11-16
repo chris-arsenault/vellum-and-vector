@@ -350,6 +350,88 @@ Acceptance: on a real map, a forest map at 100 m and a glen at 1.5 m read as rea
 streams with banks, clearings, trails and named places at plausible size. Judged on the map.
 Evidence: units for each step's pure functions; visual review of generated maps.
 
+#### M2 ground — steps (coordinator)
+
+Baseline (M1 run): the land was the parent's 28 km cells enlarged into flat blocks with
+straight walls. Causes read from code: categorical parent values (rock kinds, cover) were
+copied from the nearest parent raster cell, so contacts followed the parent grid; relief
+synthesis scaled its noise and amplitude to the parent span (28 km) on a 5 km map, and its
+amplitude follows each cell's rock response, which jumped at those straight contacts; the
+first real-scale sequence skipped the development rounds that cut valleys and streams.
+
+1. Irregular contacts: categorical captured values meet along deterministic warped
+   contacts (`reconstruction/mod.rs` `contact_donor`), for every captured map. Verify: unit
+   `tests/contacts.rs`.
+2. Relief synthesis on a real-scale map varies at the map's own size at most
+   (`adaptive_relief.rs`; unchanged for regions, whose frames span many parent cells).
+3. Real-scale maps run the full regional development sequence (`real_scale()` in
+   `atlas/regional/sequence.rs`), so runoff, courses, incision, hillslopes and sediment
+   shape the fine land; rivers keep their per-vertex widths, which publication turns into
+   banks on real-scale maps.
+4. Each hex publishes its `ground`: the surface class covering most of its triangles
+   (`product/hexes.rs` `ground_classes`); the fill view colours unmarked hexes by it.
+5. Performance blocker, fixed. Profiled natively with perf in a container (owner's
+   direction): 96–97% of samples in `Adjacency::smooth` (`field/refinement/base.rs`), whose
+   sweep count grows with (σ / child step)², with σ tied to the parent span (media 0.5×,
+   captured base 0.15×, character 0.6×); the `refinement.media` query is rebuilt by most
+   steps. Fix: when σ is at least the frame's longer side, smoothing goes straight to the
+   level the sweeps converge on (the weighted mean of value ÷ rate, which each sweep
+   conserves); regions take the unchanged path. Native re-measure: 100 m × 50 hexes 300 s
+   (was ~800 s), 1.5 m × 30 hexes 130 s (was unbounded). Remaining: `refinement.context`
+   12 s at 100 m (σ just under the frame), parent capture 12 s, publication tail 51 s.
+6. Failure found during profiling, fixed: "Cargo must arrive with an occupied material bed"
+   (`rock/columns.rs:148`). Rock beds and their cargo took different donors once contacts
+   bent; the bend now lives in the grid's one nearest-donor lookup (`Grid::sample_index`), so
+   every categorical import of a child cell comes from one donor.
+7. A 300 m, 80-hex (24 × 18 km) map failed on submission in the browser with
+   "Uncaught [object WebAssembly.Exception]"; natively it runs. Native trace: ~655 MB added
+   while preparing, ~1.3 GB peak, while the engine was capped at 2 GB and keeps job scratch
+   (including the block spill file) in in-memory WasmFS under `/tmp`; an allocation failure
+   there throws an uncaught C++ `std::bad_alloc`. Change: the engine may grow to 4 GB
+   (`.cargo/config.toml` `-sMAXIMUM_MEMORY=4GB`). Follow-up for the backlog: put job scratch
+   on OPFS with per-tab cleanup.
+8. Full 100 m run failed after `refinement.places` with "Band index out of range": the cave
+   step read the surface raster mask by lattice cell (`atlas/state/caves.rs`); it now tests
+   land on the water column like place finding. The cave layers lacked publication
+   bindings (`publication/geographies.rs`). Natively the job then completes with caves,
+   names and the settlement step.
+9. Regression from this work, fixed: world generation failed natively with "Layer does not
+   support map profile" because bindings for real-scale-only layers belong to features a
+   world also runs; documents now install only layers their profile carries
+   (`atlas-host/src/generation_document.rs`).
+10. Outside this plan, reported to the owner: a 4,000 × 3,000 km Draft world, seed 42, fails
+    natively at HEAD with "Rivers: Geometry collapses at its declared precision", while the
+    same world generates in the browser.
+
+#### M2 places: true size and key — steps
+
+1. True sizes in the catalogue (`field/poi/true_sizes.rs`, bound from each entry's
+   `true_size` slot). A place drawn as a point (a site, a work, a settlement) takes a
+   real-world reference size with a long tail (least, typical, largest in metres), or
+   its own facts where it has them: a summit's prominence, a crossing's river width, a
+   settlement's people. A place drawn from its cells (cover, landforms, magic coverage,
+   lakes, wetlands) takes the extent those cells cover on this map. A kind with no
+   bodily size states why (`Slot::NotApplicable`). One record is one place except falls,
+   which keep their member count. Verify: units on the long tail, cell extent, crossing
+   and settlement sizes.
+2. Map-key account (`account` slot, same module): a short plain sentence on why the place
+   is here, from its origin's statement when it has one, its river width or people where
+   they matter, else its kind's reason. Publication writes `account` as "what, size, why"
+   from the entry name, variety, true size and that sentence. Verify: unit on the size
+   phrase.
+3. Real-scale publication: a point place whose true size is at least about a hex across
+   publishes an outline of that size as its footprint; every place carries `keyNumber`,
+   numbered in reading order (north to south by hex row, then west to east). Verify:
+   units on the outline and the reading order.
+4. Frontend: a "Map key" list in the real-scale panel (number, name, account) read from
+   published features only. Verify: tsc, eslint, vitest.
+
+Result (2026-11-16, steps 1–4 implemented, not yet judged on a generated map): every
+catalogue entry fills both slots. Compass deviation and interference lattice are
+`NotApplicable` (field effects with no body). Open: a true-size outline lies east to west
+(no bearing is recorded for a place); the key text states metres whatever the viewer's
+units; a settlement's footprint is its built ground from people, before M4's plots.
+
 ### M3 — Generated underground [depends on M2]
 
 Scope: underground spaces from rock, fractures, water and magic: passages, chambers,
@@ -357,6 +439,44 @@ levels, shafts and entrances located on the surface.
 Acceptance: a cave under karst rock reads as dissolved passages; under other rock it reads
 as fissures or lava tubes; entrances sit on the ground map.
 Evidence: units; visual review.
+
+#### M3 execution steps
+
+Path facts (survey 2026-11-16): a cell's rock section to depth is `Ground::section`
+(top/bottom in native units, catalogue facts per kind: solubility, jointing, resistance,
+family); groundwater routes cell to cell (`GroundwaterView::targets`, `recharge`) and the
+surface flow has `routing.targets`; fractures are `Scalar::FractureConductance`; volcanic
+ground is `Scalar::VolcanicConstructionHistory`; Fire's `vein` and `basalt` rules and
+Greenwood's `sinkhole` rule are readable per cell; a published feature's space comes from
+its layer, and the GIS store refuses a feature whose layer is in another space.
+
+Design: one process, `processes/caves`, reads the real-scale map's own ground and writes one
+underground located space under the ground map. Each land cell's host is the first bed within
+cave reach whose catalogue facts open it: soluble rock dissolves (along the groundwater's own
+routing, so passages branch toward springs), volcanic igneous ground or Fire's basalt keeps
+lava tubes (one stem down the surface flow), fractured hard rock opens fissures and Fire's
+vein opens thermal passages (both along the component's long axis). Greenwood's sinkhole
+ground dissolves whatever the rock. Chambers sit at passage confluences and fracture
+intersections; levels are depth bands below the surface; shafts sit where a dissolved branch
+begins under the surface; entrances (cave mouths, sinkholes, tube skylights) are where a
+passage meets the ground. Each connected host component is one named cave.
+
+1. Process — `processes/caves/` (`host.rs` host from beds and facts, `network.rs`
+   accumulation, branches, stem and axis on explicit graphs, `shape.rs` smoothing, chamber
+   outlines and levels, `settings.rs` labelled controls). Verify: units on explicit inputs.
+2. State adapter and registration — `atlas/state/caves.rs` reads the field into the process
+   input and writes features (`caves` layer: cave, passages by form with `widths`, chambers,
+   shafts; `caveEntrances` layer: entrances with a relation to their passage); command
+   `refinement.caves` in `regional/work.rs` and `registration/regional.rs`; the coordinator
+   adds it to `real_scale()` before `atlas.names`.
+3. Publication — `caves`, `caveEntrances` and `caveHexes` in `layers.rs` REAL_SCALE_ONLY and
+   `catalogue.json`; an underground space (`<primary>:underground`, floor `underground`) in
+   the descriptor when the map has caves; underground layers publish in that space; features
+   take their layer's space; `caveHexes` marks hexes from cave shapes. Verify: units on the
+   space and marks.
+4. Frontend — a Level choice (surface or underground) in `RealScaleControls.tsx` when the
+   descriptor has an underground space; the canvas shows the chosen space; cave layers in
+   `realScaleOrder` and `realScaleStyles.ts`. Verify: tsc, eslint, vitest.
 
 ### M4 — Generated settlement [depends on M2]
 
@@ -369,6 +489,43 @@ Acceptance: a generated village and a town on a real map have named streets, add
 buildings and fields that read as a place.
 Evidence: units for network, plotting and numbering; visual review.
 
+#### M4 execution steps
+
+Path facts (survey 2026-11-16): a real-scale child holds the parent's settlement points and
+roads clipped to its frame as generated records in its own area (`regional_capture/records.rs`),
+with their story attributes (`settlementPopulation`, `settlementRole`, `siteKind`, `history`,
+`namingCulture`; roads carry `roadClass`, `strategic` and an "A–B" label). People, farmland and
+pasture shares are inherited layers on the triangles (`human/catalogue.rs`). Records are written
+through `map_records::generated` and `State::write_feature`; the vocabulary of kinds is
+`publication/catalogue.json`; names come from `atlas-names` work terms through `MapNaming`.
+The real-scale sequence (`atlas/regional/sequence.rs::real_scale`) belongs to the coordinator,
+so the process is registered and the coordinator adds its invocation.
+
+1. Process `real-scale.settlement` in `atlas/town/`, registered by
+   `atlas/dispatch/registration/town.rs` with a `layout` setting (`story` or a forced layout),
+   joined to assembly and the regional catalogue. Verify: build.
+2. Story and layout (pure): size from the settlement's people; layout from its ways, river or
+   pass site, seat role, strategic roads and how many eras it has been a town; a forced setting
+   wins. Verify: units.
+3. Ground raster (pure): the plan's working grid marking water, steep and outside ground from
+   the triangles, and owning streets, squares and plots so shapes never overlap. Verify: units.
+4. Network (pure): main streets grow from the ways entering the frame through the seat (or a
+   through-way along the contour when none enters); lanes fill between them by layout (organic
+   branching, grid, radial rings, linear back lanes, walled ring with gates); bridges where a
+   main street crosses narrow water, ending at wide water; widths per vertex with a pinch at gates.
+   Verify: units.
+5. Plots, buildings, uses and addresses (pure): plots front streets on both sides, nearest the
+   centre first, until the settlement's households and trades are housed; one building per plot
+   turned to its street; uses by size and role (temple, hall, market hall, inn, tavern, smithy,
+   mill, trades, warehouse, keep, houses); addresses odd on the left and even on the right from
+   the end nearest the centre; fields beyond the built edge until the frame's farmland and pasture
+   shares are met. Verify: units for slots, numbering, demand and assignment.
+6. Wards (pure grouping by sector between main streets, inside and outside a wall) and
+   publication: named streets (`roads`/`street` with `widths` and `roadClass`), the square,
+   yards and fields (`plots`), buildings, bridges, wall and gates (`structures`), wards
+   (`settlements`/`ward`), names from the settlement's naming culture. Verify: units, clippy,
+   architecture checks; the coordinator runs the real-map check.
+
 ### M5 — Real-scale authoring foundation [depends on M1]
 
 Scope: the generated→authored switch; Rust authoring commands over GIS features (create,
@@ -379,6 +536,81 @@ retention. World and regional maps stay read-only.
 Acceptance: dragging a river's vertices on a ground map keeps one river feature with its
 attributes, and its bridge stays on it; undo restores it; the map reloads with the edit.
 Evidence: units for commands and topology; UI tests for draw, modify, undo and save.
+
+#### M5 execution steps
+
+Path facts (survey 2026-11-16): presentation reads vectors through `features` queries, never
+the GeoJSON vector assets; the browser keeps a temporary working catalog and **Save map**
+copies revisions into the saved catalog (`map_store/copy.rs` skips revisions it already
+holds); the LAN store lists heads, so a server map is retained without Save (owner mark
+2026-11-15); `mark_of`, `mark_shape` and `fill` live in generation publication, which
+`atlas-gis` must not import; the catalogue has no bridge kind; region navigation already
+shows the facade pattern (`map_protocol/navigation.rs`, `RpcMapNavigation`).
+
+Design: an authored map keeps its map id and revision, so children, saves and navigation keep
+pointing at it. Each edit rewrites the touched feature rows of that revision in one
+transaction, recomputes their footprints and the marks of every hex the old or new shapes
+touch, and appends an undo step holding the features before and after. Undo and redo apply
+a step's other side through the same path. The descriptor's `realScale.edits` counts edits;
+a non-zero count is the generated→authored switch, and publication refuses to replace an
+authored map. The browser's Save replaces the saved copy of an authored revision; the LAN
+store writes edits straight to PostGIS.
+
+1. Contracts in `atlas-map` — `authoring` module: the edit commands (create, reshape,
+   transform, duplicate, delete, attributes, paste style, lock, creator-layer add, rename,
+   lock, move to, merge down, delete), steps and outcome; `realScale.edits` and creator-layer
+   `locked`; mark rules and footprints moved from generation into `hexes.rs`; a bridge kind in
+   the catalogue. `make contracts`. Verify: build.
+2. Pure command logic in `atlas-map` — applying a command to loaded features: validation
+   (real-scale only, layer shape, frame, widths, locks, catalogue type), widths carried along
+   reshaped lines by linear reference, affine transforms with rotation, junction relations
+   (a bridge spans the water and carries the way it crosses; a line end joins the line it
+   is snapped to) and their following when a host line moves. Verify: units.
+3. Storage in `atlas-gis` — an edit store over SQLite and PostGIS (edit-step tables, feature
+   rewrites, descriptor update), the orchestration that loads targets, dependents and hexes
+   and writes the change with re-marked hexes, undo/redo/history, the editing call protocol,
+   footprint-aware feature bounds, authored replacement on browser save, the publication
+   refusal. Verify: units on an in-memory store.
+4. Hosts and facades — `BrowserWorkspace.edit`, LAN `api/maps/editing`, `MapEditing` in
+   `@atlas/map`, RPC and HTTP transports, the worker service and context wiring.
+   Verify: typecheck.
+5. Frontend authoring — an Edit tool set on real-scale maps only: select (Alt-click steps
+   down), vertex modify, draw by layer and kind with keep-tool, snapping to ways, water and
+   the hex grid, move with alignment guides, rotate and scale handles, delete, duplicate,
+   select same kind, copy/paste style, lock; a property panel (position, angle, size, then
+   the kind's attributes with widths per vertex; fields take arithmetic and units); creator
+   layer controls; a history list with undo and redo; a command palette doubling as the
+   shortcut sheet; Regenerate disabled once authored. Verify: lint, typecheck, units of the
+   pure helpers.
+6. Fixture and UI tests — a bridge on the trail over the burn in `browser_fixture`; UI tests
+   for draw, modify (drag a vertex of Glen burn: one feature, widths kept, bridge on it),
+   undo, history, layers and save across reload.
+
+#### M5 results and deviations
+
+Steps 1–6 implemented in the working tree (2026-11-16), not yet reviewed or committed. Checks:
+`crates/atlas-gis/tests/authoring.rs` (8 units: drag keeps identity, widths and the bridge;
+inserted vertex width; snapped join follows; validation, locks and read-only world maps;
+regeneration refused; layer commands with undo; save replaces the saved copy), clippy, frontend
+typecheck, lint and unit suite, architecture checks, and `tests/realScaleAuthoring.test.ts`
+(the acceptance drag, undo, redo, Save and reload; draw, angle and size fields, layers,
+lock, merge down, the command palette and Ctrl+Z). The `@generation` scenario in
+`tests/realScale.test.ts` fails on generation-dependency alerts from the in-progress real-scale
+sequence, not on authoring.
+
+Review fixes (2026-11-16): `finish` refuses a regeneration over a map authored while it ran;
+Save replaces the saved copy of every authored map it copies, children and parents included;
+hexes and other non-drawable layers refuse edits; locked layers refuse attribute edits, moves
+into them, drawing into them and undo/redo over them; followers and crossings over a new or
+reshaped line re-read their junctions; edits need the map's head revision; hex snapping uses
+hex centres; a bridge's `rotation` follows its way; owner marks quote the owner's words;
+pure shape units in `crates/atlas-gis/tests/authoring_shapes.rs` and `atlas-map`.
+
+Deviations: the PostGIS edit store compiles but has no integration run here (no container
+runtime); find and filter, jump points and an opening view are not built (the Arconis list tags
+them M5, the milestone scope does not name them); GeoJSON vector assets written
+at publication are not rewritten by edits, since presentation and export read feature records;
+children of an authored map keep pointing at the same revision because edits keep it.
 
 ### M6 — Land and cave tools [depends on M3, M5]
 

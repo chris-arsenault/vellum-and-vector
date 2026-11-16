@@ -119,6 +119,29 @@ impl Descriptor<'_> {
         Ok(spaces)
     }
 }
+/// The located space beneath a ground map that holds its caves (ADR 0001): the surface's
+/// planar frame, one floor down, so a cave and its entrances share coordinates.
+pub fn underground_space(map: &MapDescriptor) -> Option<MapSpace> {
+    let surface = map
+        .spaces
+        .iter()
+        .find(|space| space.id == map.primary_space_id)?;
+    Some(MapSpace {
+        id: format!("{}:underground", surface.id),
+        parent_space_id: Some(surface.id.clone()),
+        bounds: map.bounds,
+        metres_per_unit: surface.metres_per_unit,
+        precision: surface.precision,
+        periodic_width: None,
+        frame: MapFrame {
+            origin: surface.frame.origin,
+            rotation: surface.frame.rotation,
+            floor: Some(UNDERGROUND_FLOOR.into()),
+        },
+    })
+}
+/// The floor name of a ground map's underground space.
+pub const UNDERGROUND_FLOOR: &str = "underground";
 /// The published hex grid centres a hex on the map frame's centre, which is also the
 /// shared lattice's origin, so the hexes group whole triangles (ADR 0016).
 pub fn real_scale(real: &RealScaleMap, frame: atlas_map::Bounds) -> RealScale {
@@ -132,7 +155,9 @@ pub fn real_scale(real: &RealScaleMap, frame: atlas_map::Bounds) -> RealScale {
         creator_layers: vec![CreatorLayer {
             id: "base".into(),
             name: "Base layer".into(),
+            locked: false,
         }],
+        edits: 0,
     }
 }
 pub fn profile_name(profile: Profile) -> &'static str {
@@ -142,5 +167,33 @@ pub fn profile_name(profile: Profile) -> &'static str {
         Profile::Local => "local",
         Profile::Site => "site",
         Profile::Interior => "interior",
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_ground_maps_caves_lie_one_floor_under_its_surface_frame() {
+        let space = |id: &str, parent: Option<&str>| {
+            serde_json::json!({"id":id, "parentSpaceId":parent, "bounds":[0.0, 0.0, 300.0, 200.0],
+                "metresPerUnit":1.0, "precision":0.01, "periodicWidth":null,
+                "frame":{"origin":[0.0, 0.0, 0.0], "rotation":0.0, "floor":null}})
+        };
+        let mut map: MapDescriptor = serde_json::from_value(serde_json::json!({
+            "reference":{"mapId":"glen", "revision":"1"}, "worldId":"world", "name":"Glen",
+            "primarySpaceId":"glen", "profile":"local",
+            "regionScale":{"level":1, "nextArea":1.0, "subdivision":7.0, "minimumWidth":1.0, "enabled":false},
+            "footprint":{"type":"Polygon", "coordinates":[[[0.0, 0.0], [300.0, 0.0], [300.0, 200.0], [0.0, 0.0]]]},
+            "bounds":[0.0, 0.0, 300.0, 200.0], "spaces":[space("world", None), space("glen", Some("world"))],
+            "parent":null, "state":"incomplete", "layers":[]
+        }))
+        .unwrap();
+        let caves = underground_space(&map).unwrap();
+        assert_eq!(caves.id, "glen:underground");
+        assert_eq!(caves.parent_space_id.as_deref(), Some("glen"));
+        assert_eq!(caves.frame.floor.as_deref(), Some(UNDERGROUND_FLOOR));
+        assert_eq!(caves.bounds, map.bounds);
+        map.spaces.push(caves);
+        map.validate().unwrap();
     }
 }

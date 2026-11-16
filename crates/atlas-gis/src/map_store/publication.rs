@@ -32,6 +32,9 @@ impl Publisher for MapStore {
             if self.find_head(&map.reference.map_id)?.as_ref() != expected {
                 return Err(io::Error::other("The map revision changed"));
             }
+            if let Some(expected) = expected {
+                crate::authoring::refuse_authored(&self.open(expected)?)?;
+            }
             let mut values = reference_values(&map.reference);
             values.extend([
                 crate::stored::MAP.text(map)?.into(),
@@ -99,6 +102,13 @@ impl Publisher for MapStore {
             let head = self.find_head(&reference.map_id)?.map(|head| head.revision);
             if head.as_deref() != Some(&reference.revision) && head != expected {
                 return Err(io::Error::other("The map changed during publication"));
+            }
+            // An edit made while this regeneration ran keeps the revision but authors the map.
+            if let Some(revision) = &expected {
+                crate::authoring::refuse_authored(&self.open(&MapRef {
+                    map_id: reference.map_id.clone(),
+                    revision: revision.clone(),
+                })?)?;
             }
             self.require_assets(&map)?;
             map.state = PublicationState::Complete;

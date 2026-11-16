@@ -163,43 +163,15 @@ pub fn sequence(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequ
     body.push(invoke("atlas.names", Values::new()));
     Ok(body)
 }
-/// A real-scale map (ADR 0016) develops its captured surface once on the fine lattice and
-/// publishes it; real-scale water, cover, ways and places join this sequence as they exist.
+/// A real-scale map (ADR 0016) develops its land with the same processes as a region: the
+/// development rounds cut its valleys and streams at the fine span from the captured
+/// surface. Real-scale steps (settlement layout and the like) follow the regional body.
 pub fn real_scale(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
-    let context = Context {
-        policy: Policy::Regional,
-        ..context.clone()
-    };
-    let group =
-        |slot, occurrence: &str| catalogue.compose(slot, occurrence, &context, &work_span(0.5));
-    let mut body = [
-        "atlas.initialize",
-        "refinement.begin",
-        "refinement.clear-products",
-        "refinement.context",
-        "refinement.relief",
-    ]
-    .iter()
-    .map(|id| invoke(id, Values::new()))
-    .collect::<Sequence>();
-    body.extend(group("terrain.refinement", "detail")?);
-    body.extend(group("initialize.ecology", "detail")?);
-    body.extend(refresh(catalogue, &context, "final")?);
-    for slot in ["present.landforms", "present.ecology"] {
-        body.extend(group(slot, "final")?);
-    }
-    body.push(invoke("refinement.refresh", Values::new()));
-    body.extend(group("present.classify", "final")?);
-    body.extend(
-        [
-            "atlas.project",
-            "atlas.features",
-            "atlas.magic-places",
-            "refinement.identity",
-            "atlas.names",
-        ]
-        .iter()
-        .map(|id| invoke(id, Values::new())),
-    );
+    let mut body = sequence(catalogue, context)?;
+    // Caves open in the map's own rock before the closing names step, so they are named.
+    let names = body.len() - 1;
+    body.insert(names, invoke("refinement.caves", Values::new()));
+    // Lays streets, plots and buildings from the settlements and ways the child recorded.
+    body.push(invoke("real-scale.settlement", Values::new()));
     Ok(body)
 }

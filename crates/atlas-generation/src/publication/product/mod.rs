@@ -4,6 +4,7 @@ pub mod inputs;
 mod raster_group;
 mod rasters;
 mod records;
+mod underground;
 use super::{descriptor::Descriptor, fields::Fields, vectors::Vectors};
 use crate::{atlas::history::EpochHistory, control::GenerationControl, storage::Coverage};
 pub use assets::Assets;
@@ -70,7 +71,7 @@ impl Product<'_> {
     ) -> io::Result<()> {
         self.rasters(map, selected, target, scratch, control)
             .await?;
-        self.vectors(map, target.publisher, target.assets, control)
+        self.vectors(map, selected, target.publisher, target.assets, control)
             .await?;
         self.records(map, selected, target.publisher, control)
             .await?;

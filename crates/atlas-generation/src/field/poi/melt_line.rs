@@ -179,6 +179,6 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Aurora's charged ice meets a thaw it cannot hold back.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Aurora's rule reads charge, ice and warmth."), suitability: Slot::NotApplicable("Thaw and charge decide its site."), places: Must::Value(Rc::new(found)) },
         publication: Publication { statement: Must::Value("Publish as Aurora's melt class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(|state: &S, place: &Place| records::rule(state, place, "aurora", "melt"))) },
         across_maps: across_maps(), event: None,
-        roles: Roles { true_size: Slot::Unwritten, variety: Slot::Unwritten, appearance: Slot::Unwritten, account: Slot::Unwritten, fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(), naming: naming() },
+        roles: Roles { true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::MeltLine), fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(), naming: naming() },
     }
 }

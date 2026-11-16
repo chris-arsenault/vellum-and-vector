@@ -1,0 +1,250 @@
+//! The plan's working grid: which ground is water, steep or outside the map, and which street,
+//! square or plot already holds each cell, so laid shapes never overlap.
+use super::geometry::{add, at, distance, line_length, scale, sub, Point};
+
+pub const FREE: u32 = 0;
+pub const WATER: u32 = 1;
+pub const STEEP: u32 = 2;
+pub const OUTSIDE: u32 = 3;
+pub const SQUARE: u32 = 4;
+pub const WALL: u32 = 5;
+pub const FIELD: u32 = 6;
+pub const PLOT: u32 = 7;
+/// The first owner a street can take; street `i` owns `FIRST_STREET + i`.
+pub const FIRST_STREET: u32 = 8;
+
+pub struct Ground {
+    pub origin: Point,
+    pub cell: f64,
+    pub columns: usize,
+    pub rows: usize,
+    owners: Vec<u32>,
+}
+/// A turned rectangle given by its corners (closed ring of five points).
+pub struct Rectangle<'a>(pub &'a [Point]);
+impl Rectangle<'_> {
+    fn contains(&self, p: Point) -> bool {
+        let r = self.0;
+        let (a, b, d) = (r[0], r[1], r[3]);
+        let ab = sub(b, a);
+        let ad = sub(d, a);
+        let ap = sub(p, a);
+        let u = (ap[0] * ab[0] + ap[1] * ab[1]) / (ab[0] * ab[0] + ab[1] * ab[1]);
+        let v = (ap[0] * ad[0] + ap[1] * ad[1]) / (ad[0] * ad[0] + ad[1] * ad[1]);
+        (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v)
+    }
+    fn bounds(&self) -> [f64; 4] {
+        self.0.iter().fold(
+            [f64::MAX, f64::MAX, f64::MIN, f64::MIN],
+            |[w, s, e, n], p| [w.min(p[0]), s.min(p[1]), e.max(p[0]), n.max(p[1])],
+        )
+    }
+    fn centre(&self) -> Point {
+        scale(add(self.0[0], self.0[2]), 0.5)
+    }
+    /// The middle and the corners drawn in far enough that the grid cell holding each one
+    /// has its centre inside the rectangle, so neighbours that only touch never clash.
+    fn samples(&self, cell: f64) -> [Point; 5] {
+        let r = self.0;
+        let shortest = distance(r[0], r[1]).min(distance(r[1], r[2])).max(1e-9);
+        let inset = (1.42 * cell / shortest).min(0.45);
+        let m = self.centre();
+        [
+            m,
+            add(r[0], scale(sub(m, r[0]), inset)),
+            add(r[1], scale(sub(m, r[1]), inset)),
+            add(r[2], scale(sub(m, r[2]), inset)),
+            add(r[3], scale(sub(m, r[3]), inset)),
+        ]
+    }
+}
+impl Ground {
+    /// A free grid over `bounds` (west, south, east, north) at `cell` metres.
+    pub fn new(bounds: [f64; 4], cell: f64) -> Self {
+        let columns = ((bounds[2] - bounds[0]) / cell).ceil().max(1.0) as usize;
+        let rows = ((bounds[3] - bounds[1]) / cell).ceil().max(1.0) as usize;
+        Self {
+            origin: [bounds[0], bounds[1]],
+            cell,
+            columns,
+            rows,
+            owners: vec![FREE; columns * rows],
+        }
+    }
+    pub fn index(&self, p: Point) -> Option<usize> {
+        let x = ((p[0] - self.origin[0]) / self.cell).floor();
+        let y = ((p[1] - self.origin[1]) / self.cell).floor();
+        (x >= 0.0 && y >= 0.0 && (x as usize) < self.columns && (y as usize) < self.rows)
+            .then(|| y as usize * self.columns + x as usize)
+    }
+    pub fn centre(&self, index: usize) -> Point {
+        [
+            self.origin[0] + ((index % self.columns) as f64 + 0.5) * self.cell,
+            self.origin[1] + ((index / self.columns) as f64 + 0.5) * self.cell,
+        ]
+    }
+    pub fn count(&self) -> usize {
+        self.owners.len()
+    }
+    pub fn owner(&self, p: Point) -> u32 {
+        self.index(p).map_or(OUTSIDE, |i| self.owners[i])
+    }
+    pub fn owner_at(&self, index: usize) -> u32 {
+        self.owners[index]
+    }
+    /// Marks ground the terrain withholds (water, steep, outside); later marks never clear it.
+    pub fn withhold(&mut self, index: usize, mark: u32) {
+        if self.owners[index] == FREE || (mark == WATER && self.owners[index] != OUTSIDE) {
+            self.owners[index] = mark;
+        }
+    }
+    pub fn is_water(&self, p: Point) -> bool {
+        self.owner(p) == WATER
+    }
+    fn cells_in(&self, rectangle: &Rectangle<'_>) -> Vec<usize> {
+        let [w, s, e, n] = rectangle.bounds();
+        let column = |x: f64| ((x - self.origin[0]) / self.cell).floor().max(0.0) as usize;
+        let row = |y: f64| ((y - self.origin[1]) / self.cell).floor().max(0.0) as usize;
+        let mut cells = Vec::new();
+        for y in row(s)..=row(n).min(self.rows.saturating_sub(1)) {
+            for x in column(w)..=column(e).min(self.columns.saturating_sub(1)) {
+                let index = y * self.columns + x;
+                if rectangle.contains(self.centre(index)) {
+                    cells.push(index);
+                }
+            }
+        }
+        cells
+    }
+    /// Whether a rectangle lies on free ground, or ground its own street holds, everywhere
+    /// the grid can see: at cell centres inside it and near its corners and middle.
+    pub fn open(&self, rectangle: &Rectangle<'_>, street: u32) -> bool {
+        let fits = |owner: u32| owner == FREE || owner == street;
+        let corners = rectangle
+            .samples(self.cell)
+            .into_iter()
+            .all(|p| fits(self.owner(p)));
+        corners
+            && self
+                .cells_in(rectangle)
+                .into_iter()
+                .all(|i| fits(self.owners[i]))
+    }
+    /// Gives the free cells of a rectangle to `owner`.
+    pub fn take(&mut self, rectangle: &Rectangle<'_>, owner: u32) {
+        let cells = self.cells_in(rectangle);
+        for p in rectangle.samples(self.cell) {
+            if let Some(i) = self.index(p) {
+                self.claim(i, owner);
+            }
+        }
+        for i in cells {
+            self.claim(i, owner);
+        }
+    }
+    fn claim(&mut self, index: usize, owner: u32) {
+        if self.owners[index] == FREE {
+            self.owners[index] = owner;
+        }
+    }
+    /// Gives a street's free ground, `width` metres wide along its line, to `owner`.
+    pub fn take_line(&mut self, points: &[Point], width: f64, owner: u32) {
+        let step = self.cell / 2.0;
+        let total = line_length(points);
+        let mut along = 0.0;
+        while along <= total {
+            if let Some((p, d)) = at(points, along) {
+                let across = [-d[1], d[0]];
+                let mut side = -width / 2.0;
+                while side <= width / 2.0 {
+                    if let Some(i) = self.index(add(p, scale(across, side))) {
+                        self.claim(i, owner);
+                    }
+                    side += step;
+                }
+            }
+            along += step;
+        }
+    }
+    /// Runs of a line over water, as (start, end) metres along it.
+    pub fn wet_runs(&self, points: &[Point]) -> Vec<(f64, f64)> {
+        let step = self.cell / 2.0;
+        let total = line_length(points);
+        let mut runs = Vec::new();
+        let mut open: Option<f64> = None;
+        let mut along = 0.0;
+        while along <= total + step {
+            let t = along.min(total);
+            let wet = at(points, t).is_some_and(|(p, _)| self.is_water(p));
+            match (wet, open) {
+                (true, None) => open = Some(t),
+                (false, Some(start)) => {
+                    runs.push((start, t));
+                    open = None;
+                }
+                _ => {}
+            }
+            along += step;
+        }
+        if let Some(start) = open {
+            runs.push((start, total));
+        }
+        runs
+    }
+    /// How far a line runs before it meets ground whose owner `stops` it.
+    pub fn reach(&self, points: &[Point], stops: impl Fn(u32) -> bool) -> f64 {
+        let step = self.cell / 2.0;
+        let total = line_length(points);
+        let mut along = 0.0;
+        while along <= total {
+            if at(points, along).is_some_and(|(p, _)| stops(self.owner(p))) {
+                return along;
+            }
+            along += step;
+        }
+        total
+    }
+}
+/// Whether a point is nearer than `range` to any listed point.
+pub fn near_any(p: Point, points: &[Point], range: f64) -> bool {
+    points.iter().any(|q| distance(p, *q) < range)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::atlas::town::geometry::rectangle;
+    #[test]
+    fn rectangles_take_ground_once_and_respect_their_own_street() {
+        let mut ground = Ground::new([0.0, 0.0, 100.0, 100.0], 2.0);
+        let street = FIRST_STREET;
+        ground.take_line(&[[0.0, 50.0], [100.0, 50.0]], 6.0, street);
+        assert_eq!(ground.owner([40.0, 51.0]), street);
+        let plot = rectangle([20.0, 53.0], [1.0, 0.0], [0.0, 1.0], 8.0, 20.0);
+        assert!(ground.open(&Rectangle(&plot), street));
+        assert!(!ground.open(&Rectangle(&plot), street + 1));
+        ground.take(&Rectangle(&plot), street);
+        let crossing = rectangle([22.0, 60.0], [0.0, 1.0], [1.0, 0.0], 8.0, 20.0);
+        assert!(!ground.open(&Rectangle(&crossing), street + 1));
+        let beyond = rectangle([60.0, 55.0], [1.0, 0.0], [0.0, 1.0], 8.0, 20.0);
+        assert!(ground.open(&Rectangle(&beyond), street + 1));
+        assert_eq!(ground.owner([-1.0, 5.0]), OUTSIDE);
+    }
+    #[test]
+    fn water_runs_and_reach_are_measured_along_a_line() {
+        let mut ground = Ground::new([0.0, 0.0, 100.0, 20.0], 1.0);
+        for i in 0..ground.count() {
+            let [x, _] = ground.centre(i);
+            if (40.0..50.0).contains(&x) {
+                ground.withhold(i, WATER);
+            }
+        }
+        let line = [[0.0, 10.0], [100.0, 10.0]];
+        let runs = ground.wet_runs(&line);
+        assert_eq!(runs.len(), 1);
+        assert!((runs[0].0 - 40.0).abs() <= 1.0 && (runs[0].1 - 50.0).abs() <= 1.0);
+        let reach = ground.reach(&line, |owner| owner == WATER);
+        assert!((reach - 40.0).abs() <= 1.0);
+        assert!(near_any([0.0, 0.0], &[[3.0, 4.0]], 5.1));
+    }
+}

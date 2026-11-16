@@ -5,7 +5,7 @@
 //! and editing compute the same hexes and marks from published shapes alone.
 use crate::{
     spatial::{Predicate, SpatialKernel, SpatialResult},
-    Bounds, Geometry, Position,
+    Bounds, Geometry, MapFeature, Position,
 };
 use serde::{Deserialize, Serialize};
 // hpc-exempt: marks are a few named shares per hex, keyed by layer kind.
@@ -154,6 +154,56 @@ pub fn marks(
         }
     }
     Ok(result)
+}
+/// The play mark a published layer leaves on the hexes it covers or crosses.
+pub fn mark_of(layer_id: &str) -> Option<&'static str> {
+    match layer_id.strip_prefix("vector:").unwrap_or(layer_id) {
+        "rivers" | "lakes" | "oceans" | "waterworks" => Some("water"),
+        "roads" => Some("way"),
+        "plots" => Some("plot"),
+        "structures" | "ruins" => Some("structure"),
+        "objects" => Some("object"),
+        // Cave shapes mark the underground grid; an entrance marks the surface hex it opens in.
+        "caves" | "caveEntrances" => Some("cave"),
+        _ => None,
+    }
+}
+/// The ground a published feature covers: its footprint when it has one, else its geometry.
+pub fn mark_shape(feature: &MapFeature) -> Option<(Geometry, &'static str)> {
+    let mark = mark_of(&feature.layer_id)?;
+    let shape = feature
+        .footprint
+        .as_ref()
+        .map(crate::regions::as_geometry)
+        .unwrap_or_else(|| feature.geometry.clone());
+    Some((shape, mark))
+}
+/// The mark that covers most of a hex; areas outrank a line or point only when they cover more.
+pub fn fill(marks: &BTreeMap<String, f64>) -> Option<&str> {
+    marks
+        .iter()
+        .max_by(|a, b| a.1.total_cmp(b.1))
+        .map(|(mark, _)| mark.as_str())
+}
+/// The ground a line covers when it states a full width at each vertex (`widths`); a line
+/// whose widths no longer match its vertices, or any other shape, has no footprint.
+pub fn widened_footprint(
+    geometry: &Geometry,
+    widths: Option<&serde_json::Value>,
+    spatial: &dyn SpatialKernel,
+) -> SpatialResult<Option<Geometry>> {
+    let (Geometry::LineString { coordinates }, Some(widths)) =
+        (geometry, widths.and_then(|w| w.as_array()))
+    else {
+        return Ok(None);
+    };
+    let widths: Option<Vec<f64>> = widths.iter().map(serde_json::Value::as_f64).collect();
+    match widths {
+        Some(widths) if widths.len() == coordinates.len() => {
+            width_outline(coordinates, &widths, spatial)
+        }
+        _ => Ok(None),
+    }
 }
 fn is_area(geometry: &Geometry) -> bool {
     matches!(

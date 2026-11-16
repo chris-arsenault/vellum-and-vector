@@ -259,6 +259,6 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Fire conduits, ridges or plumes bring heat to the sea floor; Fire's rule grows and keeps the vent.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Fire's rule reads sea and heat."), suitability: Slot::NotApplicable("Heat rises where crust permits."), places: Must::Value(Rc::new(found)) },
         publication: Publication { statement: Must::Value("Publish as Fire's vent class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(|state: &S, place: &Place| records::rule(state, place, "fire", "vent"))) },
         across_maps: across_maps(), event: None,
-        roles: Roles { true_size: Slot::Unwritten, variety: Slot::Unwritten, appearance: Slot::Unwritten, account: Slot::Unwritten, fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(), naming: naming() },
+        roles: Roles { true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Vent), fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(), naming: naming() },
     }
 }

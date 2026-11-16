@@ -129,6 +129,7 @@ const COMMANDS: &[(&str, CommandSelect, bool)] = &[
     ("magic-map", |w| &w.magic_map, false),
     ("identity", |w| &w.identity, false),
     ("places", |w| &w.places, false),
+    ("caves", |w| &w.caves, false),
 ];
 pub fn specifications(native: &[ProductContract]) -> io::Result<Vec<Specification>> {
     let mut result = vec![begin_specification()];

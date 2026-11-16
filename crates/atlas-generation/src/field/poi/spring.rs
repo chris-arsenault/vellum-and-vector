@@ -377,7 +377,7 @@ pub fn entry<S: CatalogueState<Schedule> + RiverState + 'static, Schedule: 'stat
             schedule: Slot::NotApplicable("Drainage cost draws the network; no additional step."),
         }, event: None,
         roles: Roles {
-            true_size: Slot::Unwritten, variety: Slot::Unwritten, appearance: Slot::Unwritten, account: Slot::Unwritten,
+            true_size: super::true_sizes::sited(&super::true_sizes::SPRING), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Spring),
             fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(),
             naming: Naming { statement: Must::Value("Those who drink from it name it; towns and shrines take its name.".into()), named_by: Slot::Value(Rc::new(places::naming_culture_near)), takes_name_from: Slot::NotApplicable("The spring predates its dependants."), lends_name_to: Slot::Value(vec![near(Kind::Settlement, 6.0), near(Kind::Shrine, 2.0)]), term: Slot::Unwritten },
         },

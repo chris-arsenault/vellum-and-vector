@@ -226,7 +226,9 @@ impl Operations {
                 .enabled("magic.configured")
                 .then(|| self.regional_magic.clone()),
         )?;
-        registration::regional::register(&mut self.registry, &reads, &work, &self.physical.native)
+        registration::regional::register(&mut self.registry, &reads, &work, &self.physical.native)?;
+        registration::town::register(&mut self.registry)?;
+        Ok(())
     }
 
     pub(crate) fn restore_bindings(&self, runtime: &mut Runtime) -> ExecutionResult<()> {

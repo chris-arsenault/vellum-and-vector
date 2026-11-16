@@ -49,6 +49,27 @@ const GROUPS: &[Group] = &[
         ],
         false,
     ),
+    // Caves open in a real-scale map's own rock beside its other landforms (ADR 0016).
+    (
+        "physical.landforms",
+        "caves",
+        &[
+            "cave",
+            "dissolvedPassage",
+            "fissure",
+            "lavaTube",
+            "thermalPassage",
+            "chamber",
+            "shaft",
+        ],
+        false,
+    ),
+    (
+        "physical.landforms",
+        "caveEntrances",
+        &["caveMouth", "sinkhole", "skylight"],
+        false,
+    ),
     ("physical.river-networks", "rivers", &["river"], true),
     (
         "ecology.living",
@@ -83,7 +104,12 @@ const GROUPS: &[Group] = &[
     ("human.politics", "control", &["control"], false),
     ("human.politics", "administration", &["jurisdiction"], false),
     ("human.politics", "claims", &["claim"], false),
-    ("built.layout", "settlements", &["settlement"], false),
+    (
+        "built.layout",
+        "settlements",
+        &["settlement", "ward"],
+        false,
+    ),
     ("built.layout", "ruins", &["settlement"], false),
     (
         "built.layout",
@@ -123,13 +149,22 @@ const GROUPS: &[Group] = &[
         false,
     ),
     ("built.layout", "historicalEvents", &["societyEvent"], false),
-    ("built.layout", "roads", &["road", "lane"], true),
+    ("built.layout", "roads", &["road", "lane", "street"], true),
     (
         "built.layout",
         "structures",
-        &["building", "room", "door", "furniture", "wall"],
+        &[
+            "building",
+            "room",
+            "door",
+            "furniture",
+            "wall",
+            "bridge",
+            "gate",
+        ],
         false,
     ),
+    ("built.layout", "plots", &["field", "yard", "square"], false),
 ];
 pub fn bindings(input: &Inputs<'_>, inherited_layers: &[String]) -> Vec<Binding> {
     let humans = ["human.cultures", "human.politics", "built.layout"]

@@ -126,8 +126,21 @@ impl Preparation {
                     .map(|b| b.layer),
             )
             .collect();
+        // Bindings for real-scale layers (plots, caves) belong to features a world also runs;
+        // a map installs only the layers its profile carries.
+        let profile = result
+            .context
+            .area(&result.document.scope.located.area_id)
+            .map_err(io::Error::other)?
+            .profile;
+        let definitions = atlas_generation::publication::layers::publication();
         for id in selected {
-            result.install_layer(id)?;
+            if definitions
+                .get(id)
+                .is_none_or(|layer| layer.profiles.contains(&profile))
+            {
+                result.install_layer(id)?;
+            }
         }
         Ok(result)
     }

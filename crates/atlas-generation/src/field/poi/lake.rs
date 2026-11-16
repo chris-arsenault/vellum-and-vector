@@ -440,7 +440,7 @@ pub fn entry<S: CatalogueState<Schedule> + LakeState + 'static, Schedule: 'stati
             settle: Slot::NotApplicable("Routing holds the captured level."), schedule: Slot::Value(schedule(Rc::new(captured_lakes))),
         }, event: None,
         roles: Roles {
-            true_size: Slot::Unwritten, variety: Slot::Unwritten, appearance: Slot::Unwritten, account: Slot::Unwritten,
+            true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Lake),
             fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(),
             naming: Naming { statement: Must::Value("Shore people name it; reservoirs may take dam names and towns borrow lake names.".into()), named_by: Slot::Value(Rc::new(places::naming_culture_near)), takes_name_from: Slot::Value(vec![NameRelation { relation: near(Kind::Dam, 8.0), chance: None }]), lends_name_to: Slot::Value(vec![near(Kind::Settlement, 8.0)]), term: Slot::Unwritten },
         },

@@ -109,6 +109,24 @@ impl MapNaming for Naming {
             &feature.attributes,
         )
     }
+    fn work(
+        &self,
+        _: &Scope,
+        key: &str,
+        work: &str,
+        position: [f64; 2],
+        culture: Option<&str>,
+    ) -> io::Result<Named> {
+        self.name(Request {
+            key,
+            kind: "societyWork",
+            subkind: Some(work),
+            term: Some(work),
+            position,
+            language: culture,
+            era: None,
+        })
+    }
     fn community(
         &self,
         _: &Scope,

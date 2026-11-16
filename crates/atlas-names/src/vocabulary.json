@@ -63,6 +63,23 @@
     "weir": "Weir|Fish Weir|Breakwater|Tide Trap|Stone Weir|Fish Walls|Shoal Works|Trap Wall",
     "ford": "Ford|Shallows|Crossing|Wade|Stepping Stones|Gravel Ford|Low Water|Causeway",
     "bridge": "Bridge|Span|Arches|Crossing|Stone Bridge|Timber Bridge|Great Bridge|Footbridge",
-    "mill": "Mill|Watermill|Millrace|Grindstone|Mill Leat|Fulling Mill|Sawmill|Mill Pond"
+    "mill": "Mill|Watermill|Millrace|Grindstone|Mill Leat|Fulling Mill|Sawmill|Mill Pond",
+    "street": "Street|Street|Street|Row|Gate|Way|Hill|Side",
+    "road": "Road|Road|Way|Lane|Track|Causeway|Drove|Highway",
+    "lane": "Lane|Lane|Alley|Wynd|Close|Court|Passage|Walk",
+    "square": "Square|Market|Market Place|Cross|Green|Place|Plaza|Commons",
+    "ward": "Ward|Quarter|End|Side|Town|Gate|Rise|Fields",
+    "gate": "Gate|Gate|Bar|Port|Arch|Postern|Gatehouse|Tower",
+    "household": "Household|House|Family|Hearth|Home|Cottage|Kin|Folk",
+    "workshop": "Workshop|Works|Shop|Yard|Workhouse|Atelier|Sheds|Stalls",
+    "inn": "Inn|Arms|Rest|Lodge|Hostel|Coaching Inn|Crossing Inn|Hostelry",
+    "tavern": "Tavern|Alehouse|Taproom|Cellar|Bar|Tap|Ale Hall|Drinking House",
+    "smithy": "Smithy|Forge|Smithy|Anvil|Ironworks|Farriery|Smith's Yard|Hammer",
+    "temple": "Temple|Shrine|Chapel|Sanctuary|House of Prayer|Fane|Oratory|Kirk",
+    "hall": "Hall|Moot Hall|Guildhall|Town Hall|Court House|Council House|Tolbooth|Assembly Hall",
+    "marketHall": "Market Hall|Market House|Exchange|Cloth Hall|Corn Hall|Butter Cross|Arcade|Covered Market",
+    "warehouse": "Warehouse|Storehouse|Granary|Stores|Depot|Wharfhouse|Sheds|Barns",
+    "keep": "Keep|Castle|Tower|Citadel|Hold|Bastion|Stronghold|Donjon",
+    "barracks": "Barracks|Guardhouse|Garrison|Muster Hall|Watch House|Armoury|Quarters|Fort"
   }
 }

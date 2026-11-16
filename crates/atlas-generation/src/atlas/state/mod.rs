@@ -1,4 +1,5 @@
 //! One generation run's records and owner packages. Map readers receive only published products.
+mod caves;
 mod checkpoint;
 mod checkpoint_records;
 mod ecology;
@@ -163,6 +164,16 @@ pub trait Naming {
         attributes: &Attributes,
     ) -> io::Result<Option<Named>>;
     fn feature(&self, scope: &Scope, feature: &Feature) -> io::Result<Option<Named>>;
+    /// A settlement's own work (a street, ward, household or business) named in that
+    /// settlement's naming culture, with the work's term such as Lane or Arms.
+    fn work(
+        &self,
+        scope: &Scope,
+        key: &str,
+        work: &str,
+        position: [f64; 2],
+        culture: Option<&str>,
+    ) -> io::Result<Named>;
     fn community(
         &self,
         scope: &Scope,

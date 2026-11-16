@@ -1,4 +1,4 @@
-import type { MapLibrary, MapReader, MapNavigation } from "@atlas/map";
+import type { MapEditing, MapLibrary, MapReader, MapNavigation } from "@atlas/map";
 import type { GenerationService } from "./generation";
 import type { ContextManagement } from "./management";
 
@@ -6,6 +6,8 @@ export type AtlasMode = "browser" | "backend";
 export interface ContextServices<Configuration> {
   maps: MapReader;
   navigation: MapNavigation;
+  /** Real-scale authoring; world and regional maps refuse edits. */
+  editing: MapEditing;
   library: MapLibrary;
   generation: GenerationService<Configuration>;
   contexts: ContextManagement;

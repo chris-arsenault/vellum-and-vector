@@ -144,7 +144,11 @@ fn conditions(
             .map(|v| params.bind(v))
             .collect::<Vec<_>>()
             .join(",");
-        clauses.push(format!("geometry && ST_MakeEnvelope({args},0)"));
+        clauses.push(if query.footprints {
+            format!("(geometry && ST_MakeEnvelope({args},0) OR (jsonb_typeof(data->'footprint')='object' AND ST_SetSRID(ST_GeomFromGeoJSON(data->>'footprint'),0) && ST_MakeEnvelope({args},0)))")
+        } else {
+            format!("geometry && ST_MakeEnvelope({args},0)")
+        });
     }
     if let Some(shape) = &query.geometry {
         clauses.push(format!(

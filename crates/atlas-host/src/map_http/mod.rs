@@ -1,6 +1,6 @@
 pub mod assets;
 mod static_files;
-use atlas_gis::map_protocol::{LibraryCall, NavigationCall, ReadCall};
+use atlas_gis::map_protocol::{EditingCall, LibraryCall, NavigationCall, ReadCall};
 use atlas_gis::{map_files::MapFiles, postgres_maps::PostgresMaps};
 use atlas_map::MapRef;
 use std::{
@@ -52,6 +52,7 @@ fn handle(request: &mut Request, services: &Services) -> io::Result<ResponseBox>
             path.as_str(),
             "/api/maps/read"
                 | "/api/maps/navigation"
+                | "/api/maps/editing"
                 | "/api/maps/library"
                 | "/api/generation"
                 | "/api/contexts"
@@ -98,6 +99,11 @@ fn handle(request: &mut Request, services: &Services) -> io::Result<ResponseBox>
                 futures::executor::block_on(
                     call.execute(lock(&services.reader)?.access(), &services.files),
                 )?
+            }
+            // A server map is retained as it is edited; no Save is needed.
+            "/api/maps/editing" => {
+                let call: EditingCall = decode_request(request)?;
+                call.execute(lock(&services.writer)?.edits())?
             }
             _ => {
                 let call: LibraryCall = decode_request(request)?;

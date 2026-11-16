@@ -138,8 +138,10 @@ impl Publication {
         feature
             .attributes
             .insert("poi".into(), entry.id.as_str().into());
+        let mut size_text = None;
         if let Some(size) = entry.roles.true_size.value() {
             let size_value = (size.size)(state, place)?;
+            size_text = super::true_sizes::size_text(&size_value);
             feature
                 .attributes
                 .insert("trueSize".into(), serde_json::to_value(size_value)?);
@@ -163,7 +165,42 @@ impl Publication {
                 feature.attributes.insert("variety".into(), value.into());
             }
         }
+        if let Some(account) = entry.roles.account.value() {
+            let text = Self::key_text(state, entry, place, feature, size_text, account)?;
+            feature.attributes.insert("account".into(), text.into());
+        }
         Ok(())
+    }
+    /// The map-key entry: what the place is, its true size, and why it is here — its origin's
+    /// statement when it was claimed by one, otherwise its own account.
+    fn key_text<S: super::state::State, Schedule>(
+        state: &S,
+        entry: &Entry<S, Schedule>,
+        place: &Place,
+        feature: &Feature,
+        size: Option<String>,
+        account: &super::contract::OnPlace<S, String>,
+    ) -> io::Result<String> {
+        let origin = place.origin.as_deref().and_then(|id| {
+            entry
+                .existence
+                .origins
+                .value()?
+                .iter()
+                .find(|origin| origin.id == id)
+        });
+        let why = match origin {
+            Some(origin) => origin.statement.clone(),
+            None => account(state, place)?,
+        };
+        let what = match feature.attributes.get("variety").and_then(|v| v.as_str()) {
+            Some(variety) => format!("{} ({variety})", entry.name),
+            None => entry.name.clone(),
+        };
+        Ok(match size {
+            Some(size) => format!("{what}, {size}. {why}"),
+            None => format!("{what}. {why}"),
+        })
     }
     pub fn late<S: PublicationState<Schedule>, Schedule>(
         &mut self,

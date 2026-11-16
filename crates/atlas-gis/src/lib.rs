@@ -1,6 +1,7 @@
 //! GIS storage and queries shared by the viewer and publisher.
 //! This component cannot open numerical generation state or execute the generator.
 // owner-direction(2026-11-14): viewer and generator are independent clients of GIS storage through data boundaries, not language boundaries
+pub mod authoring;
 #[cfg(target_arch = "wasm32")]
 pub mod browser_map_store;
 pub mod geometry;

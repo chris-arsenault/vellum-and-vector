@@ -69,11 +69,11 @@ test("@generation a real-scale map opens from an inspected place", async ({ page
     "Crust and material load response",
     "Continental margins and marine deposits",
   ]) {
-    const summary = dialog.locator("summary").filter({ hasText: new RegExp("^" + label + "$") });
-    if (await summary.count()) {
-      await summary.click();
-      await dialog.getByRole("checkbox", { name: "Include " + label, exact: true }).uncheck();
-    }
+    await dialog
+      .locator("summary")
+      .filter({ hasText: new RegExp("^" + label + "$") })
+      .click();
+    await dialog.getByRole("checkbox", { name: "Include " + label, exact: true }).uncheck();
   }
   await dialog.getByRole("button", { name: "Generate map", exact: true }).click();
   await expect(dialog).toHaveCount(0);

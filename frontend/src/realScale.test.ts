@@ -1,6 +1,15 @@
 import { expect, it } from "vitest";
 import type { LayerStyle } from "./types";
-import { formatDistance, realScaleFrame, realScaleStyles } from "./realScale";
+import type { MapDescriptor, MapSpace } from "@atlas/map";
+import {
+  defaultRealScalePresentation,
+  formatDistance,
+  isHexLayer,
+  realScaleFrame,
+  realScaleStyles,
+  shownSpace,
+  undergroundSpace,
+} from "./realScale";
 
 const style = (layerId: string): LayerStyle => ({
   layerId,
@@ -26,6 +35,29 @@ it("draws real-scale kinds top first, from hexes down to water, and shows them",
   ]);
   expect(styles.find((entry) => entry.layerId === "vector:rivers")?.visible).toBe(true);
   expect(styles.find((entry) => entry.layerId === "vector:settlements")?.visible).toBe(false);
+});
+
+it("shows the caves' underground space only on a map that has one", () => {
+  const space = (id: string, parentSpaceId: string | null, floor: string | null) =>
+    ({ id, parentSpaceId, frame: { origin: [0, 0, 0], rotation: 0, floor } }) as MapSpace;
+  const map = {
+    primarySpaceId: "glen",
+    spaces: [space("world", null, null), space("glen", "world", null)],
+  } as MapDescriptor;
+  expect(undergroundSpace(map)).toBeUndefined();
+  expect(shownSpace(map, { ...defaultRealScalePresentation(), space: "glen:underground" })).toBe(
+    "glen"
+  );
+  const caves = {
+    ...map,
+    spaces: [...map.spaces, space("glen:underground", "glen", "underground")],
+  };
+  expect(undergroundSpace(caves)?.id).toBe("glen:underground");
+  expect(shownSpace(caves, { ...defaultRealScalePresentation(), space: "glen:underground" })).toBe(
+    "glen:underground"
+  );
+  expect(shownSpace(caves)).toBe("glen");
+  expect([isHexLayer("caveHexes"), isHexLayer("caves")]).toEqual([true, false]);
 });
 
 it("states distances in the reader's units", () => {

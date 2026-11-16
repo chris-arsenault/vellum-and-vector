@@ -10,6 +10,8 @@ import { sheetPadding } from "./drawnSheet";
 import { bounds } from "./presentation";
 import { installPublishedRegions, type PublishedRegionEvents } from "./publishedRegionInteractions";
 import { installMeasure } from "./realScaleMeasure";
+import { useRealScaleEditing } from "./useRealScaleEditing";
+import type { AuthoringSession } from "./useRealScaleAuthoring";
 
 interface Props {
   map: MapDescriptor;
@@ -21,6 +23,8 @@ interface Props {
   onInspection(value: Inspection): void;
   regionEvents: PublishedRegionEvents;
   onEngine(value: PublishedMapEngine | null): void;
+  /** The edit session of a real-scale map; world and regional maps have none. */
+  authoring?: AuthoringSession;
 }
 export function PublishedMapCanvas(props: Props) {
   return (
@@ -79,6 +83,7 @@ function MapCanvas(props: Props) {
   }, [viewer, tool]);
   useEffect(() => showSelection(viewer, selection, map), [viewer, selection, map]);
   const measured = useMeasure(viewer, tool, callbacks);
+  useRealScaleEditing(viewer, tool, props.authoring);
   return (
     <div className={`map-frame${presentation.drawing.mode === "drawn" ? " drawn-map" : ""}`}>
       <div
@@ -140,6 +145,7 @@ const instructions: Record<PublishedTool, string> = {
   "region-cut": "Draw a dividing line; double-click to finish",
   "region-edit": "Drag outline vertices to adjust the boundary",
   measure: "Click points to measure; double-click to finish",
+  edit: "Click a shape to select it; drag to move; Ctrl+K lists commands",
 };
 function showSelection(
   viewer: PublishedMapView | null,

@@ -2,7 +2,7 @@
 use crate::{browser_job::BrowserJob, local_inputs::LocalInputs};
 use atlas_gis::{
     map_files::MapFiles,
-    map_protocol::{LibraryCall, NavigationCall, ReadCall},
+    map_protocol::{EditingCall, LibraryCall, NavigationCall, ReadCall},
     map_store::{codec, MapAccess, MapStore},
     sql::Database,
 };
@@ -69,6 +69,12 @@ impl BrowserWorkspace {
         call.execute(self.maps.access(), &MapFiles::new(ASSETS))
             .await
             .map_err(error)
+    }
+    /// Real-scale authoring writes the working catalog; **Save map** keeps it across reloads.
+    pub fn edit(&self, request: &str) -> Result<Vec<u8>, JsValue> {
+        let call: EditingCall = serde_json::from_str(request).map_err(error)?;
+        self.ensure(call.reference()).map_err(error)?;
+        call.execute(self.maps.edits()).map_err(error)
     }
     pub fn library(&self, request: &str) -> Result<Vec<u8>, JsValue> {
         let call: LibraryCall = serde_json::from_str(request).map_err(error)?;

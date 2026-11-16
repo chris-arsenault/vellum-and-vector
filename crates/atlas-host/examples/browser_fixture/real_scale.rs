@@ -1,6 +1,6 @@
 //! A supplied real-scale ground map under the island, holding one shape of every layer kind:
-//! a stream that widens into a pool, a trail pinched at a gate, a turned house, a field, a tree
-//! and scattered logs (ADR 0016). No generation process runs.
+//! a stream that widens into a pool, a trail pinched at a gate, a bridge where they cross, a
+//! turned house, a field, a tree and scattered logs (ADR 0016). No generation process runs.
 use atlas_generation::features::FeatureWorkspace;
 use atlas_host::generation_document::Document;
 use atlas_map::{regions::rectangle, Bounds, MapRef};
@@ -92,7 +92,18 @@ pub fn install(records: &mut impl FeatureWorkspace) -> io::Result<()> {
         turned(47.0, 44.0, 2.0, 2.0, 0.0),
         json!({"rotation":0}),
     );
-    let mut all = vec![stream, trail, house, field, tree];
+    // A plank bridge where the trail crosses the burn, attached to both by its junctions.
+    let mut bridge = record(
+        "glen-bridge",
+        "structures",
+        "bridge",
+        "Plank bridge",
+        turned(55.68, 50.29, 1.8, 3.0, -3.2),
+        json!({"rotation":-3.2}),
+    );
+    bridge["relations"] = json!([{"targetId":"glen-stream","kind":"spans"},
+        {"targetId":"glen-trail","kind":"carries"}]);
+    let mut all = vec![stream, trail, house, field, tree, bridge];
     for (i, (x, y, angle)) in [(60.0, 45.0, 20.0), (61.5, 46.2, 75.0), (62.4, 44.6, 140.0)]
         .into_iter()
         .enumerate()

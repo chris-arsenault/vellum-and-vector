@@ -9,6 +9,8 @@ export interface RealScalePresentation {
   units: "metres" | "feet";
   /** Creator layers hidden in this view. */
   hidden: string[];
+  /** The located space shown: the surface, or the underground space holding the caves. */
+  space?: string;
 }
 export const defaultRealScalePresentation = (): RealScalePresentation => ({
   hexView: "grid",
@@ -26,9 +28,25 @@ export const realScaleOrder = [
   "roads",
   "structures",
   "ruins",
+  "caves",
   "objects",
+  "caveEntrances",
   "hexes",
+  "caveHexes",
 ];
+/** Real-scale hex layers: the surface grid and the caves' grid in the underground space. */
+export const isHexLayer = (layerId: string) => ["hexes", "caveHexes"].includes(layerId);
+
+/** A ground map's underground space, where its caves are published. */
+export const undergroundSpace = (map: MapDescriptor) =>
+  map.spaces.find(
+    (space) => space.parentSpaceId === map.primarySpaceId && space.frame.floor === "underground"
+  );
+/** The located space a view shows; a space the map does not have shows the surface. */
+export function shownSpace(map: MapDescriptor, view?: RealScalePresentation) {
+  const space = view?.space;
+  return space && map.spaces.some((entry) => entry.id === space) ? space : map.primarySpaceId;
+}
 const rank = (layerId: string) => realScaleOrder.indexOf(vectorFamily(layerId));
 
 /** The first style draws on top, so real-scale kinds sort top first and show by default. */

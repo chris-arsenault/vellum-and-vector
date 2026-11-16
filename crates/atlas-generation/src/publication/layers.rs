@@ -166,6 +166,30 @@ const VOCABULARY: &[Entry] = &[
     ),
     ("hexes", "Hex grid", "custom", "vector", "#5b5b5b", ""),
     (
+        "caves",
+        "Caves and passages",
+        "physical",
+        "vector",
+        "#7a6a58",
+        "",
+    ),
+    (
+        "caveEntrances",
+        "Cave entrances",
+        "physical",
+        "vector",
+        "#3b2f25",
+        "",
+    ),
+    (
+        "caveHexes",
+        "Cave hex grid",
+        "custom",
+        "vector",
+        "#5b5b5b",
+        "",
+    ),
+    (
         "sovereignty",
         "Sovereignty",
         "political",
@@ -231,7 +255,19 @@ const VOCABULARY: &[Entry] = &[
     ),
 ];
 /// Layers that exist only where things are their real size (ADR 0016).
-const REAL_SCALE_ONLY: &[&str] = &["plots", "objects", "hexes"];
+const REAL_SCALE_ONLY: &[&str] = &[
+    "plots",
+    "objects",
+    "hexes",
+    "caves",
+    "caveEntrances",
+    "caveHexes",
+];
+/// Layers published in the ground map's underground space rather than on its surface.
+const UNDERGROUND: &[&str] = &["caves", "caveHexes"];
+pub fn underground(layer_id: &str) -> bool {
+    UNDERGROUND.contains(&layer_id.strip_prefix("vector:").unwrap_or(layer_id))
+}
 // hpc-exempt: the map layer catalogue is sparse metadata keyed by layer identity.
 pub fn builtin() -> BTreeMap<String, Layer> {
     VOCABULARY

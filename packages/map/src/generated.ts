@@ -40,9 +40,21 @@ export type RealScale = {
   origin: [number, number];
   trianglesPerEdge: number;
   creatorLayers: Array<CreatorLayer>;
+  /**
+   * Manual edits applied to the published layers. The first edit makes those layers the
+   * map's authority: generation no longer replaces an authored map (ADR 0016).
+   */
+  edits: number;
 };
 
-export type CreatorLayer = { id: string; name: string };
+export type CreatorLayer = {
+  id: string;
+  name: string;
+  /**
+   * A locked layer refuses pointer edits to its features; locking is shared, hiding is not.
+   */
+  locked: boolean;
+};
 
 export type RegionScale = {
   level: number;
@@ -440,3 +452,44 @@ export type MapErrorCode =
 
 export type MapValidation =
   { status: "valid"; value: MapDescriptor } | { status: "invalid"; value: MapError };
+
+export type EditCommand =
+  | {
+      command: "create";
+      layerId: string;
+      kind: string;
+      name: string | null;
+      geometry: Geometry;
+      attributes: { [key in string]: JsonValue };
+      creatorLayer: string | null;
+    }
+  | { command: "reshape"; id: string; geometry: Geometry }
+  | { command: "transform"; ids: Array<string>; transform: Transform }
+  | { command: "duplicate"; ids: Array<string>; offset: [number, number] }
+  | { command: "delete"; ids: Array<string> }
+  | {
+      command: "setAttributes";
+      ids: Array<string>;
+      name: string | null;
+      attributes: { [key in string]: JsonValue };
+    }
+  | { command: "pasteStyle"; source: string; ids: Array<string> }
+  | { command: "addLayer"; name: string }
+  | { command: "renameLayer"; id: string; name: string }
+  | { command: "lockLayer"; id: string; locked: boolean }
+  | { command: "moveToLayer"; ids: Array<string>; layer: string }
+  | { command: "mergeDown"; id: string }
+  | { command: "deleteLayer"; id: string };
+
+export type Transform = {
+  translate: [number, number];
+  rotate: number;
+  scale: number;
+  about: [number, number];
+};
+
+export type EditOutcome = { map: MapDescriptor; changed: Array<string>; history: EditHistory };
+
+export type EditHistory = { steps: Array<EditStep> };
+
+export type EditStep = { sequence: number; label: string; undone: boolean };

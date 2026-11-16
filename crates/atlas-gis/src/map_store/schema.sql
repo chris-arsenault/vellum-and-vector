@@ -60,6 +60,13 @@ CREATE TABLE IF NOT EXISTS map_assets (
   PRIMARY KEY(map_id,revision,id),
   FOREIGN KEY(map_id,revision) REFERENCES maps(map_id,revision) ON DELETE CASCADE
 );
+-- Undo steps of an authored real-scale map; data holds the features before and after.
+CREATE TABLE IF NOT EXISTS map_edits (
+  map_id TEXT NOT NULL, revision TEXT NOT NULL, sequence INTEGER NOT NULL, label TEXT NOT NULL,
+  undone INTEGER NOT NULL, data BLOB NOT NULL,
+  PRIMARY KEY(map_id,revision,sequence),
+  FOREIGN KEY(map_id,revision) REFERENCES maps(map_id,revision) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS map_entities (
   map_id TEXT NOT NULL, revision TEXT NOT NULL, id TEXT NOT NULL, data BLOB NOT NULL,
   PRIMARY KEY(map_id,revision,id),

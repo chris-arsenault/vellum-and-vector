@@ -205,6 +205,6 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Greenwood aquifer water rises on open soluble rock before cover grows.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Greenwood's rule reads aquifer and cover."), suitability: Slot::NotApplicable("The aquifer rises where rock permits."), places: Must::Value(Rc::new(found)) },
         publication: Publication { statement: Must::Value("Publish as Greenwood's oasis class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(|state: &S, place: &Place| records::rule(state, place, "greenwood", "oasis"))) },
         across_maps: across_maps(), event: None,
-        roles: Roles { true_size: Slot::Unwritten, variety: Slot::Unwritten, appearance: Slot::Unwritten, account: Slot::Unwritten, fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(), naming: naming() },
+        roles: Roles { true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Oasis), fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(), naming: naming() },
     }
 }

@@ -4,14 +4,14 @@ mod candidates;
 mod districts;
 mod geometry;
 mod state;
-pub use geometry::{as_geometry, polygon, rectangle, translate};
+pub use geometry::{as_geometry, as_region, point, polygon, rectangle, translate};
 
 use crate::spatial::{Overlay, Predicate, SpatialKernel, SpatialResult};
 use crate::{
     Geometry, MapDescriptor, MapNavigationState, MapRegion, Position, RegionCandidate,
     RegionChoices, RegionDrawing, RegionDrawingResult, RegionQuery,
 };
-use geometry::{boundary_lines, point};
+use geometry::boundary_lines;
 use serde::{Deserialize, Serialize};
 pub use state::{change_navigation, validate_navigation};
 use ts_rs::TS;

@@ -54,7 +54,7 @@ impl MapStore {
     ) -> io::Result<EncodedGeometry> {
         self.geometry.encode(shape, space(map, space_id)?.precision)
     }
-    fn write_feature(&self, map: &MapDescriptor, feature: MapFeature) -> io::Result<()> {
+    pub(super) fn write_feature(&self, map: &MapDescriptor, feature: MapFeature) -> io::Result<()> {
         feature.validate_people().map_err(io::Error::other)?;
         let layer = map
             .layers

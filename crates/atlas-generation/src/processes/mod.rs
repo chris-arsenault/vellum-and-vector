@@ -1,4 +1,5 @@
 //! Configured physical processes submit work through the shared owners and dispatcher.
+pub mod caves;
 pub mod coast;
 pub mod creep;
 pub mod fluvial;

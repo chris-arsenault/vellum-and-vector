@@ -30,14 +30,63 @@ pub struct Grid {
     pub layout: Layout,
     pub measures: ReadBand<f64>,
 }
+/// Categorical donors (rock kinds, cover classes) meet along irregular contacts, as real
+/// contacts do, instead of along the donor grid's straight cell edges: a sample moves by a
+/// deterministic warp of up to this share of the local donor spacing before the nearest
+/// donor is chosen. Finer maps see the contact's finer bends.
+const CONTACT_WARP: f64 = 0.4;
+const CONTACT_OCTAVES: usize = 6;
 impl Grid {
+    /// The donor a point takes its categorical values from. Every categorical import (rock
+    /// beds, their cargo, cover, people, activity) uses this one lookup, so a child cell's
+    /// categorical facts always come from one donor.
+    pub fn sample_index(&self, point: [f64; 2]) -> io::Result<usize> {
+        let spacing = self.donor_spacing(self.nearest_index(point)?)?;
+        let warp = |salt| {
+            CONTACT_WARP
+                * spacing
+                * crate::noise::fractal_noise(point[0], point[1], salt, spacing, CONTACT_OCTAVES)
+        };
+        self.nearest_index([point[0] + warp(0x7c01), point[1] + warp(0x7c02)])
+    }
+    fn donor_spacing(&self, cell: usize) -> io::Result<f64> {
+        Ok(match &self.layout {
+            Layout::Raster { width, height } => {
+                let [w, s, e, n] = self.bounds;
+                ((e - w) / (width - 1).max(1) as f64).max((n - s) / (height - 1).max(1) as f64)
+            }
+            Layout::Adaptive(topology) => {
+                let [w, s, e, n] = topology.cell(cell)?;
+                (e - w).max(n - s)
+            }
+        })
+    }
+    /// The chart point a precomputed donor location stands for.
+    pub fn located_point(&self, at: mapping::Location) -> io::Result<[f64; 2]> {
+        Ok(match &self.layout {
+            Layout::Raster { width, height } => {
+                let [w, s, e, n] = self.bounds;
+                let dx = (e - w) / (width - 1).max(1) as f64;
+                let dy = (n - s) / (height - 1).max(1) as f64;
+                let (ix, iy) = (at.cell % width, at.cell / width);
+                [
+                    w + (ix as f64 + at.x) * dx,
+                    s + (iy.min(height.saturating_sub(1)) as f64 + at.y) * dy,
+                ]
+            }
+            Layout::Adaptive(topology) => {
+                let [w, s, e, n] = topology.cell(at.cell)?;
+                [w + at.x * (e - w), s + at.y * (n - s)]
+            }
+        })
+    }
     fn sample_bounds(&self) -> [f64; 4] {
         match &self.layout {
             Layout::Adaptive(topology) => topology.bounds,
             Layout::Raster { .. } => self.bounds,
         }
     }
-    pub fn sample_index(&self, point: [f64; 2]) -> io::Result<usize> {
+    fn nearest_index(&self, point: [f64; 2]) -> io::Result<usize> {
         let p = self.chart(point);
         let [west, south, east, north] = self.sample_bounds();
         let p = [p[0].clamp(west, east), p[1].clamp(south, north)];
@@ -101,6 +150,9 @@ impl<'a> Interpolator<'a> {
         point: [f64; 2],
         read: &dyn Fn(usize) -> io::Result<f64>,
     ) -> io::Result<f64> {
+        if self.discrete {
+            return read(self.grid.sample_index(point)?);
+        }
         self.sample_mapped(self.grid.locate(point)?, read)
     }
     pub fn sample_mapped(
@@ -108,6 +160,9 @@ impl<'a> Interpolator<'a> {
         at: mapping::Location,
         read: &dyn Fn(usize) -> io::Result<f64>,
     ) -> io::Result<f64> {
+        if self.discrete {
+            return read(self.grid.sample_index(self.grid.located_point(at)?)?);
+        }
         match &self.grid.layout {
             Layout::Raster { width, .. } => {
                 let mapping::Location {
@@ -115,9 +170,6 @@ impl<'a> Interpolator<'a> {
                     x: tx,
                     y: ty,
                 } = at;
-                if self.discrete {
-                    return read(i + usize::from(tx >= 0.5) + usize::from(ty >= 0.5) * width);
-                }
                 Ok((1.0 - ty) * ((1.0 - tx) * read(i)? + tx * read(i + 1)?)
                     + ty * ((1.0 - tx) * read(i + width)? + tx * read(i + width + 1)?))
             }

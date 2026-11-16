@@ -30,6 +30,9 @@ impl Publisher for PostgresMaps {
         self.transaction(|| {
             self.lock(&map.reference.map_id)?;
             if self.find_head(&map.reference.map_id)?.as_ref()!=expected {return Err(io::Error::other("The map revision changed"));}
+            if let Some(expected) = expected {
+                crate::authoring::refuse_authored(&self.open(expected)?)?;
+            }
             self.execute("INSERT INTO map.revisions(map_id,revision,descriptor,expected_revision) VALUES($1,$2,$3,$4)",&[&map.reference.map_id,&map.reference.revision,&MAP.write(map)?,&expected.map(|r|r.revision.as_str())])?;
             if progressive {self.set_head(&map.reference)?;}
             Ok(())
@@ -75,6 +78,13 @@ impl Publisher for PostgresMaps {
             let (mut map,expected)=self.pending(reference)?;
             let current=self.find_head(&reference.map_id)?.map(|r|r.revision);
             if current.as_ref()!=Some(&reference.revision) && current!=expected {return Err(io::Error::other("The map changed during publication"));}
+            // An edit made while this regeneration ran keeps the revision but authors the map.
+            if let Some(revision) = &expected {
+                crate::authoring::refuse_authored(&self.open(&MapRef {
+                    map_id: reference.map_id.clone(),
+                    revision: revision.clone(),
+                })?)?;
+            }
             self.require_assets(&map)?;map.state=PublicationState::Complete;
             self.execute("UPDATE map.revisions SET complete=true,descriptor=$3 WHERE map_id=$1 AND revision=$2",&[&reference.map_id,&reference.revision,&MAP.write(&map)?])?;
             self.set_head(reference)
