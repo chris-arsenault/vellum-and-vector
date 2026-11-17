@@ -6,7 +6,7 @@ import { readPublishedHistory } from "./publishedHistory";
 
 type Context = Pick<AtlasContext<unknown>, "maps" | "library">;
 
-/** The links to a map's parent and its child maps. */
+/** Named child maps, independent of the current region selection. */
 export function RelatedMaps({
   context,
   map,
@@ -18,19 +18,24 @@ export function RelatedMaps({
 }) {
   const related = useQuery({
     queryKey: ["related-maps", map.reference],
-    queryFn: () => context.library.related(map.reference),
+    queryFn: async () => {
+      const related = await context.library.related(map.reference);
+      return Promise.all(related.children.map((child) => context.maps.open(child)));
+    },
   });
   return (
-    <nav className="breadcrumbs" aria-label="Map navigation">
-      {related.data?.parent && (
-        <button onClick={() => open(related.data!.parent!)}>Parent map</button>
-      )}
-      <span>{map.name}</span>
-      {related.data?.children.map((child, i) => (
-        <button key={child.mapId} onClick={() => open(child)}>
-          Child map {i + 1}
+    <nav className="region-list related-map-list" aria-label="Regional maps">
+      <h3>Regional maps</h3>
+      {related.isPending && <p role="status">Loading regional maps…</p>}
+      {related.data?.map((child) => (
+        <button key={child.reference.mapId} onClick={() => open(child.reference)}>
+          <span>{child.name}</span>
+          <small>Open map →</small>
         </button>
       ))}
+      {related.data?.length === 0 && (
+        <p className="hint">No regional maps created from this map.</p>
+      )}
       <ErrorMessage error={related.error} />
     </nav>
   );

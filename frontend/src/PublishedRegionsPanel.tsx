@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { MapDescriptor, MapRegion } from "@atlas/map";
 import type { PublishedRegionsState } from "./usePublishedRegions";
 import type { PublishedNavigationState } from "./usePublishedNavigation";
-import type { PublishedTool } from "./publishedInteractions";
 import { ErrorMessage } from "./ErrorMessage";
 import "./regions.css";
 
@@ -10,28 +9,32 @@ interface Props {
   map: MapDescriptor;
   regions: PublishedRegionsState;
   saved: PublishedNavigationState;
-  tool: PublishedTool;
-  setTool(tool: PublishedTool): void;
   refine(region: MapRegion): void;
+  refineSelection(name?: string): void;
 }
 export function PublishedRegionsPanel(props: Props) {
-  const { map, regions: state, tool, saved } = props;
-  const choosing = tool.startsWith("region-");
+  const { regions: state, saved } = props;
   return (
     <section className="regions-panel" aria-label="Map regions">
-      <p className="eyebrow">{choosing ? "CHOOSE A REGION" : "SELECTED REGION"}</p>
-      <h2>{state.region?.name ?? map.name}</h2>
-      {!state.region && (
-        <p>
-          Choose the part of this map you want to explore. Selecting a region does not generate or
-          change geography.
-        </p>
-      )}
-      {state.region && !choosing && <SelectedRegion {...props} />}
-      <RegionSelection {...props} />
-      <ErrorMessage error={state.error ?? saved.error} />
-      {!!state.cuts.length && <button onClick={state.cancel}>Clear dividing lines</button>}
       <RegionList {...props} />
+      <div className="region-selection-details">
+        <p className="eyebrow">SELECTION PROPERTIES</p>
+        {state.draft ? (
+          <RegionDraft key={state.draft.id} {...props} />
+        ) : state.region ? (
+          <>
+            <h2>{state.region.name}</h2>
+            <SelectedRegion {...props} />
+          </>
+        ) : (
+          <p>
+            Use the selection toolbar to click a boundary, draw a polygon or drag a lasso.
+            Right-click a selection for actions.
+          </p>
+        )}
+        <ErrorMessage error={state.error ?? saved.error} />
+        {!!state.cuts.length && <button onClick={state.cancel}>Clear dividing lines</button>}
+      </div>
     </section>
   );
 }
@@ -55,87 +58,56 @@ function SelectedRegion(props: Props) {
     </>
   );
 }
-function RegionSelection(props: Props) {
-  const { regions: state, tool, map, saved } = props;
-  return state.draft && tool !== "region-pick" ? (
-    <RegionDraft key={state.editingId ?? "new"} {...props} />
-  ) : tool.startsWith("region-") ? (
-    <RegionTools {...props} />
-  ) : (
-    <button disabled={!map.regionScale.enabled || !saved.state} onClick={state.begin}>
-      {state.region ? "Choose a smaller region" : "Choose a region"}
-    </button>
-  );
-}
-function RegionList({ regions: state }: Props) {
-  const children = state.regions.filter((region) => region.parentId === state.id);
+// owner-direction(2026-11-17): clearly list all regions of the current map
+function RegionList({ regions: state, map, saved }: Props) {
   return (
     <>
-      <h3>{state.region ? "Region navigation" : "Chosen regions"}</h3>
+      <h3>
+        Regions in {map.name} <small>({state.regions.length})</small>
+      </h3>
       <nav aria-label="Region hierarchy" className="region-list">
-        {state.region && (
-          <button onClick={() => state.enter(state.region!.parentId)}>↑ Parent region</button>
-        )}
-        {children.map((region) => (
-          <button key={region.id} onClick={() => state.enter(region.id)}>
-            {region.name}
-            <small>
-              {state.regions.filter((child) => child.parentId === region.id).length} subregions
-              {region.child ? " · Open finer map" : ""}
-            </small>
-          </button>
-        ))}
+        <button
+          aria-current={state.id === null ? "location" : undefined}
+          onClick={() => state.select(null)}
+        >
+          Entire map
+        </button>
+        <RegionBranches state={state} parentId={null} />
       </nav>
-      {!children.length && <p className="hint">No smaller regions chosen here yet.</p>}
+      {!saved.state && !saved.error && <p role="status">Loading regions…</p>}
+      {saved.state && !state.regions.length && (
+        <p className="hint">No regions chosen yet. Choose a region on the map to begin.</p>
+      )}
     </>
   );
 }
-function RegionTools({ regions, tool, setTool }: Props) {
-  const tools: { tool: PublishedTool; name: string; detail: string }[] = [
-    {
-      tool: "region-pick",
-      name: "Use an existing boundary",
-      detail: "Pick a region enclosed by geography or territory.",
-    },
-    {
-      tool: "region-outline",
-      name: "Trace a custom outline",
-      detail: "Choose an area without an existing boundary.",
-    },
-    {
-      tool: "region-cut",
-      name: "Divide along a line",
-      detail: "Combine your line with rivers, shores or the current boundary.",
-    },
-  ];
+function RegionBranches({
+  state,
+  parentId,
+}: {
+  state: PublishedRegionsState;
+  parentId: string | null;
+}) {
   return (
-    <>
-      <div className="region-tool-options" role="group" aria-label="Region tools">
-        {tools.map((choice) => (
-          <button
-            key={choice.tool}
-            aria-label={choice.name}
-            aria-pressed={tool === choice.tool}
-            onClick={() => setTool(choice.tool)}
-          >
-            <strong>{choice.name}</strong>
-            <small>{choice.detail}</small>
-          </button>
+    <ul>
+      {state.regions
+        .filter((region) => region.parentId === parentId)
+        .map((region) => (
+          <li key={region.id}>
+            <button
+              aria-current={state.id === region.id ? "location" : undefined}
+              onClick={() => state.select(region.id)}
+            >
+              <span>{region.name}</span>
+              <small>{region.child ? "Regional map available" : "Select region"}</small>
+            </button>
+            <RegionBranches state={state} parentId={region.id} />
+          </li>
         ))}
-      </div>
-      <p role="status">
-        {regions.cuts.length
-          ? "Click the side of the dividing line you want to keep."
-          : "Choose a boundary or draw an outline. Double-click to finish drawing."}{" "}
-        Press Escape to cancel.
-      </p>
-      <button className="quiet" onClick={regions.cancel}>
-        Cancel region selection
-      </button>
-    </>
+    </ul>
   );
 }
-function RegionDraft({ regions, saved, map, tool, setTool }: Props) {
+function RegionDraft({ regions, saved, map, refineSelection }: Props) {
   const draft = regions.draft!;
   const [name, setName] = useState(draft.candidate.name === "Region" ? "" : draft.candidate.name);
   return (
@@ -147,14 +119,10 @@ function RegionDraft({ regions, saved, map, tool, setTool }: Props) {
       }}
     >
       <h3>Selected outline</h3>
-      <p>
-        {regions.editingId
-          ? "Keeping this outline updates the same region."
-          : `Keep this outline as a region within ${regions.region?.name ?? map.name}.`}
-      </p>
+      <p>Refine this selection, or keep it as a named region in {map.name}.</p>
       <p>{regions.area(draft.candidate.geometry)} km²</p>
       <p className="hint">
-        Drag outline vertices to adjust the boundary. Minimum useful width:{" "}
+        Minimum useful width:{" "}
         {(
           map.regionScale.minimumWidth *
           map.spaces.find((space) => space.id === map.primarySpaceId)!.metresPerUnit
@@ -185,14 +153,10 @@ function RegionDraft({ regions, saved, map, tool, setTool }: Props) {
           onChange={(event) => setName(event.target.value)}
         />
       </label>
-      <button className="primary" disabled={saved.pending}>
-        Keep region
+      <button type="button" disabled={saved.pending} onClick={() => refineSelection(name)}>
+        Refine this selection
       </button>
-      {tool !== "region-edit" && (
-        <button type="button" onClick={() => setTool("region-edit")}>
-          Adjust selected outline
-        </button>
-      )}
+      <button disabled={saved.pending}>Keep region</button>
       <button type="button" onClick={regions.cancel}>
         Discard outline
       </button>

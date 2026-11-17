@@ -28,7 +28,7 @@ export function RegionalGeneration(options: GenerationWorkflowOptions) {
     <dialog
       ref={dialog}
       className="refinement-dialog"
-      aria-label={options.source?.realScale ? "Open a real-scale map" : "Refine region"}
+      aria-label={dialogWords(options, options.initial).title}
       onCancel={options.onCancel}
     >
       <WorkflowFieldProvider>
@@ -42,7 +42,8 @@ function RegionalForm({ options }: { options: GenerationWorkflowOptions }) {
   const flow = useGenerationWorkflow(options);
   const fields = useWorkflowFields();
   const generate = useSetupGeneration(flow, fields.errors);
-  const words = wording(options.source?.realScale, flow.draft);
+  const regional = !!options.source?.parent;
+  const labels = dialogWords(options, flow.draft);
   return (
     <form
       className="setup-workspace"
@@ -52,16 +53,18 @@ function RegionalForm({ options }: { options: GenerationWorkflowOptions }) {
       }}
     >
       <header className="saved-maps-heading">
-        <h2>{words.title}</h2>
+        <h2>{labels.title}</h2>
         <button type="button" onClick={options.onCancel} aria-label="Close refinement">
           ×
         </button>
       </header>
       <p>
-        {words.summary}. Generating refines {options.source?.name}, an independent map; its parent
-        stays unchanged.
+        {labels.summary}.{" "}
+        {regional
+          ? `Generating refines ${options.source?.name}, an independent map; its parent stays unchanged.`
+          : `Regenerate ${options.source?.name} within its current map boundary.`}
       </p>
-      <RegionalBrief flow={flow} label={words.name} />
+      <RegionalBrief flow={flow} label={labels.name} />
       <details>
         <summary>Generation settings</summary>
         {flow.setup?.features.map((feature) => (
@@ -72,13 +75,13 @@ function RegionalForm({ options }: { options: GenerationWorkflowOptions }) {
       <ErrorMessage error={generate.error ?? flow.error} />
       <footer className="setup-actions">
         <button type="button" onClick={options.onCancel}>
-          Cancel refinement
+          {labels.cancel}
         </button>
         <button
           className="primary"
           disabled={generate.isPending || invalidSetup(flow, fields.errors)}
         >
-          {generate.isPending ? "Starting…" : words.generate}
+          {generate.isPending ? "Starting…" : labels.generate}
         </button>
       </footer>
     </form>
@@ -170,4 +173,17 @@ function RegionalIssues({ flow }: { flow: GenerationWorkflow }) {
       )}
     </div>
   );
+}
+
+function dialogWords(options: GenerationWorkflowOptions, draft: GenerationWorkflow["draft"]) {
+  const words = wording(options.source?.realScale, draft);
+  return options.source?.parent || options.source?.realScale
+    ? { ...words, cancel: "Cancel refinement" }
+    : {
+        ...words,
+        title: "Regenerate map",
+        name: "Map name",
+        generate: "Regenerate map",
+        cancel: "Cancel regeneration",
+      };
 }

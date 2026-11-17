@@ -149,7 +149,7 @@ fn dividing_lines_snap_to_existing_edges_and_pick_the_clicked_side() {
         .unwrap());
 }
 #[test]
-fn committed_siblings_are_navigated_and_excluded_from_new_outlines() {
+fn saved_regions_can_be_selected_and_do_not_cut_holes_in_temporary_selections() {
     let (mut input, query, kernel) = supplied();
     input
         .navigation
@@ -175,13 +175,20 @@ fn committed_siblings_are_navigated_and_excluded_from_new_outlines() {
         .unwrap()
         .candidate
         .unwrap();
-    assert!(!kernel
+    assert!(kernel
         .relation(
             &shape(&drawn.geometry),
             &rectangle(11.0, 11.0, 19.0, 29.0),
-            Predicate::Intersects
+            Predicate::Covers
         )
         .unwrap());
+    assert!(change_navigation(
+        &input.map,
+        &input.navigation,
+        NavigationChange::PutRegion(kept("overlapping", Bounds(10.0, 10.0, 30.0, 30.0))),
+        &kernel,
+    )
+    .is_err());
 }
 #[test]
 fn saved_views_and_refined_children_retain_region_identity_and_outline() {

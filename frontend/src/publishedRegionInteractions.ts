@@ -2,6 +2,7 @@ import Draw from "ol/interaction/Draw.js";
 import Modify from "ol/interaction/Modify.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import { unByKey } from "ol/Observable.js";
+import { primaryAction } from "ol/events/condition.js";
 import type { Bounds, Geometry, Position } from "@atlas/map";
 import type { PublishedMapEngine } from "./publishedMapEngine";
 import type { PublishedTool } from "./publishedInteractions";
@@ -27,8 +28,15 @@ export function installPublishedRegions(
     if (tool === "region-pick") events().pick(event.coordinate as Position, extent());
   });
   const drawing =
-    tool === "region-outline" || tool === "region-cut"
-      ? new Draw({ type: tool === "region-cut" ? "LineString" : "Polygon" })
+    tool === "region-outline" || tool === "region-lasso" || tool === "region-cut"
+      ? new Draw({
+          type: tool === "region-cut" ? "LineString" : "Polygon",
+          condition: primaryAction,
+          freehandCondition: (event) =>
+            tool === "region-lasso" &&
+            "button" in event.originalEvent &&
+            event.originalEvent.button !== 2,
+        })
       : null;
   const modify =
     tool === "region-edit" ? new Modify({ source: engine.selection.getSource()! }) : null;

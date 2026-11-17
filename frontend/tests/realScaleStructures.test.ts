@@ -7,12 +7,12 @@ interface Exported {
   atlas: { footprint: { coordinates: Point[][] } };
 }
 const navigation = (page: Page) =>
-  page.getByRole("navigation", { name: "Map navigation", exact: true });
+  page.getByRole("navigation", { name: "Regional maps", exact: true });
 async function openGlen(page: Page) {
   await navigation(page)
-    .getByRole("button", { name: /Child map 1$/ })
+    .getByRole("button", { name: /^Supplied glen/ })
     .click();
-  await expect(navigation(page).getByText("Supplied glen", { exact: true })).toBeVisible();
+  await expect(page.locator(".app-header strong")).toHaveText("Supplied glen");
 }
 async function startEditing(page: Page) {
   await page
@@ -71,7 +71,7 @@ async function openInnFloors(page: Page) {
   const building = editor.getByRole("region", { name: "Building", exact: true });
   await expect(building.getByLabel("Address", { exact: true })).toHaveText("1 Drovers' Trail");
   await building.getByRole("button", { name: "Open floors", exact: true }).click();
-  await expect(navigation(page).getByText("The Rowan Inn", { exact: true })).toBeVisible();
+  await expect(page.locator(".app-header strong")).toHaveText("The Rowan Inn");
 }
 
 test("an inn opens to its floors, which show the magic and the place outside", async ({ page }) => {
@@ -93,8 +93,8 @@ test("an inn opens to its floors, which show the magic and the place outside", a
   await expect(outside.getByLabel("Settlement", { exact: true })).toHaveText("Glenhead");
   // The ground map keeps the floors as its child and reopens the same map.
   await page.getByRole("button", { name: "Parent map", exact: true }).click();
-  await expect(navigation(page).getByText("Supplied glen", { exact: true })).toBeVisible();
-  await expect(navigation(page).getByRole("button", { name: /Child map/ })).toHaveCount(1);
+  await expect(page.locator(".app-header strong")).toHaveText("Supplied glen");
+  await expect(navigation(page).getByRole("button", { name: /^The Rowan Inn/ })).toHaveCount(1);
 });
 
 test("a creator draws the inn's rooms and connects the cellar trapdoor to a cave", async ({
@@ -144,7 +144,7 @@ test("a creator draws the inn's rooms and connects the cellar trapdoor to a cave
   await expect(history(editor)).toContainText("Connect Cellar trapdoor to Rowan passage");
   await expect(connections).toContainText("Rowan passage (another map)");
   await connections.getByRole("button", { name: "Go to Rowan passage", exact: true }).click();
-  await expect(navigation(page).getByText("Supplied glen", { exact: true })).toBeVisible();
+  await expect(page.locator(".app-header strong")).toHaveText("Supplied glen");
   await page.getByRole("button", { name: "Appearance", exact: true }).click();
   const level = page
     .getByRole("region", { name: "Real-scale map", exact: true })
@@ -165,7 +165,7 @@ test("saving the ground map keeps the inn's drawn floors across a reload", async
     ]
   );
   await page.getByRole("button", { name: "Parent map", exact: true }).click();
-  await expect(navigation(page).getByText("Supplied glen", { exact: true })).toBeVisible();
+  await expect(page.locator(".app-header strong")).toHaveText("Supplied glen");
   // The new, drawn floors are the glen's unsaved changes; its Save keeps them.
   const status = page.locator(".map-storage [role=status]");
   await expect(status).toHaveText("Unsaved changes");
@@ -175,9 +175,9 @@ test("saving the ground map keeps the inn's drawn floors across a reload", async
   await openSavedFixture(page);
   await openGlen(page);
   await navigation(page)
-    .getByRole("button", { name: /Child map/ })
+    .getByRole("button", { name: /^The Rowan Inn/ })
     .click();
-  await expect(navigation(page).getByText("The Rowan Inn", { exact: true })).toBeVisible();
+  await expect(page.locator(".app-header strong")).toHaveText("The Rowan Inn");
   const floors = await exportMap(page);
   const names = floors.features.map(
     (entry: { properties: { name?: string } }) => entry.properties.name

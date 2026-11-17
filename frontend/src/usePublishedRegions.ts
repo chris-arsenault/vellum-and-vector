@@ -22,12 +22,11 @@ interface Options {
   navigation: MapNavigation;
   reader: MapReader;
   saved: PublishedNavigationState;
-  tool: PublishedTool;
   setTool(tool: PublishedTool): void;
-  enterMap(reference: import("@atlas/map").MapRef): void;
   initialRegionId?: string | null;
 }
 interface Draft {
+  id: string;
   candidate: RegionCandidate;
   candidates: RegionCandidate[];
   version: number;
@@ -55,7 +54,17 @@ function useRegionDraft() {
       if (current === request.current) setError(asError(error));
     }
   };
-  return { draft, editingId, cuts, error, clear, attempt, setDraft, setCuts, setEditingId };
+  return {
+    draft,
+    editingId,
+    cuts,
+    error,
+    clear,
+    attempt,
+    setDraft,
+    setCuts,
+    setEditingId,
+  };
 }
 type RegionDraftState = ReturnType<typeof useRegionDraft>;
 export function usePublishedRegions(options: Options) {
@@ -66,16 +75,13 @@ export function usePublishedRegions(options: Options) {
   const ancestry = useMemo(() => regionAncestry(regions, id), [regions, id]);
   const region = regions.find((region) => region.id === id) ?? null;
   const areas = useRegionAreas(options, regions, draft);
-  const parentId = editingId ? region!.parentId : id;
+  const parentId = editingId ? region!.parentId : null;
   const cancel = () => {
     d.clear();
-    options.setTool("inspect");
   };
   const enter = (next: string | null) => {
-    const target = regions.find((region) => region.id === next);
     cancel();
-    if (target?.child) options.enterMap(target.child);
-    else setId(next);
+    setId(next);
   };
   const query = (position: Position | null, viewport: Bounds): RegionQuery => ({
     spaceId: options.map.primarySpaceId,
@@ -114,16 +120,10 @@ export function usePublishedRegions(options: Options) {
       cancel();
       setId(next);
     },
-    footprint: region?.geometry ?? options.map.footprint,
     ancestry,
     ...actions,
     choose: (candidate: RegionCandidate) => {
       if (draft) setDraft({ ...draft, candidate });
-      options.setTool("region-edit");
-    },
-    begin: () => {
-      cancel();
-      options.setTool("region-pick");
     },
     ...regionDrawing(options, d, query, enter, region),
   };
@@ -177,11 +177,11 @@ function regionDrawing(
           if (!result.candidates.length)
             throw new Error("No region here. Draw an outline or a dividing line.");
           d.setDraft({
+            id: uuid(),
             candidate: result.candidates[0],
             candidates: result.candidates,
             version: result.version,
           });
-          options.setTool("region-edit");
         };
       }),
     draw: (geometry: Geometry, viewport: Bounds, tolerance: number) =>
@@ -197,6 +197,7 @@ function regionDrawing(
           d.setDraft(
             result.candidate
               ? {
+                  id: uuid(),
                   candidate: {
                     ...result.candidate,
                     name: d.editingId ? region!.name : result.candidate.name,
@@ -206,7 +207,7 @@ function regionDrawing(
                 }
               : null
           );
-          options.setTool(geometry.type.includes("LineString") ? "region-pick" : "region-edit");
+          if (geometry.type.includes("LineString")) options.setTool("region-pick");
         };
       }),
   };
@@ -261,6 +262,7 @@ function regionActions(
       context.cancel();
       context.setEditingId(region.id);
       context.setDraft({
+        id: uuid(),
         candidate: { name: region.name, geometry: region.geometry },
         candidates: [],
         version: options.saved.state.version,
@@ -275,8 +277,9 @@ export function usePublishedRegionPresentation(
   regions: PublishedRegionsState
 ) {
   return useMemo(
-    () => ({ ...value, footprint: regions.footprint, ancestry: regions.ancestry }),
-    [value, regions.footprint, regions.ancestry]
+    // owner-direction(2026-11-17): a selection is temporary geography to act on, not a permanent map scope
+    () => ({ ...value, ancestry: regions.ancestry }),
+    [value, regions.ancestry]
   );
 }
 const emptyRegions: MapRegion[] = [];

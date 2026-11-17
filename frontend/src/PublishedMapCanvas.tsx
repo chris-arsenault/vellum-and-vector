@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Feature from "ol/Feature.js";
 import GeoJSON from "ol/format/GeoJSON.js";
-import type { Inspection, MapDescriptor, MapReader, RegionSelection } from "@atlas/map";
+import type { Geometry, Inspection, MapDescriptor, MapReader, RegionSelection } from "@atlas/map";
 import { createPublishedMap, type PublishedMapEngine } from "./publishedMapEngine";
 import { PublishedMapView, type PublishedPresentation } from "./PublishedMapView";
 import { installPublishedInteractions, type PublishedTool } from "./publishedInteractions";
@@ -20,6 +20,7 @@ interface Props {
   presentation: PublishedPresentation;
   tool: PublishedTool;
   selection: RegionSelection | null;
+  highlight?: Geometry;
   onInspection(value: Inspection): void;
   regionEvents: PublishedRegionEvents;
   onEngine(value: PublishedMapEngine | null): void;
@@ -85,7 +86,7 @@ function MapCanvas(props: Props) {
     if (viewer)
       return installPublishedRegions(viewer.engine, tool, () => callbacks.current.regionEvents);
   }, [viewer, tool]);
-  useEffect(() => showSelection(viewer, selection, map), [viewer, selection, map]);
+  useHighlight(viewer, selection, props.highlight);
   const measured = useMeasure(viewer, tool, callbacks);
   useRealScaleEditing(viewer, tool, props.authoring);
   return (
@@ -146,24 +147,27 @@ const instructions: Record<PublishedTool, string> = {
   "inspect-cell": "Click to inspect this place",
   "region-pick": "Click inside a geographic or territorial boundary",
   "region-outline": "Draw a region; double-click or press Enter to finish",
+  "region-lasso": "Drag around an area to select it",
   "region-cut": "Draw a dividing line; double-click to finish",
   "region-edit": "Drag outline vertices to adjust the boundary",
   measure: "Click points to measure; double-click to finish",
   edit: "Click a shape to select it; drag to move; Ctrl+K lists commands",
 };
-function showSelection(
+function useHighlight(
   viewer: PublishedMapView | null,
   selection: RegionSelection | null,
-  map: MapDescriptor
+  highlight: Geometry | undefined
 ) {
+  useEffect(
+    () => showSelection(viewer, selection?.geometry ?? highlight),
+    [viewer, selection, highlight]
+  );
+}
+function showSelection(viewer: PublishedMapView | null, geometry: Geometry | undefined) {
   if (!viewer) return;
   const source = viewer.engine.selection.getSource()!;
   source.clear();
-  if (
-    selection?.parent.mapId === map.reference.mapId &&
-    selection.parent.revision === map.reference.revision
-  )
-    source.addFeature(new Feature({ geometry: new GeoJSON().readGeometry(selection.geometry)! }));
+  if (geometry) source.addFeature(new Feature({ geometry: new GeoJSON().readGeometry(geometry)! }));
 }
 function fit(viewer: PublishedMapView | null, presentation: PublishedPresentation) {
   if (!viewer) return;

@@ -3,6 +3,14 @@
   grid-template-columns: 512px 420px;
   gap: 1rem;
 }
+.published-fixture > .selection-toolbar {
+  grid-row: auto;
+}
+.published-fixture > .feature-registry,
+.published-fixture > .feature-information {
+  min-width: 0;
+  overflow: auto;
+}
 .published-fixture-map {
   position: sticky;
   top: 0;

@@ -14,7 +14,7 @@ export async function exportMap(page: Page) {
 }
 export async function chooseOutline(page: Page, name: string) {
   const regions = page.getByRole("region", { name: "Map regions", exact: true });
-  await regions.getByRole("button", { name: "Choose a region", exact: true }).click();
+  await page.getByRole("button", { name: "Select boundary", exact: true }).click();
   await canvas(page).click();
   await expect(regions.getByRole("heading", { name: "Selected outline" })).toBeVisible();
   await regions.getByLabel("Region name", { exact: true }).fill(name);

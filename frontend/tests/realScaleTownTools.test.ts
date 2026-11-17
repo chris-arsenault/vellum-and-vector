@@ -20,10 +20,9 @@ interface Exported {
 }
 async function openVillage(page: Page) {
   await openFixtureMap(page);
-  const navigation = page.getByRole("navigation", { name: "Map navigation", exact: true });
-  // Children list by map id: the glen, the captured coastal reach, then the village.
-  await navigation.getByRole("button", { name: /Child map 3$/ }).click();
-  await expect(navigation.getByText("Supplied village", { exact: true })).toBeVisible();
+  const navigation = page.getByRole("navigation", { name: "Regional maps", exact: true });
+  await navigation.getByRole("button", { name: /^Supplied village/ }).click();
+  await expect(page.locator(".app-header strong")).toHaveText("Supplied village");
 }
 async function startEditing(page: Page) {
   await page

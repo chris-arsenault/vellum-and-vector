@@ -17,6 +17,48 @@ import { realScaleDirections, type OwnerDirection } from "./ownerDirections.real
  */
 const directions: readonly OwnerDirection[] = [
   {
+    direction: "temporary selections are independent of saved regions",
+    given: "2026-11-17",
+    marks: ["crates/atlas-map/src/regions/mod.rs"],
+    test: "crates/atlas-host/tests/regions.rs",
+  },
+  {
+    direction: "group parent navigation and regeneration with the current map's controls",
+    given: "2026-11-17",
+    marks: ["frontend/src/FinishedMapBar.tsx"],
+    test: "frontend/tests/regionalGeneration.test.ts",
+  },
+  {
+    direction: "selection types are tools in a toolbar; select first, then act",
+    given: "2026-11-17",
+    marks: ["frontend/src/PublishedSelectionToolbar.tsx"],
+    test: "frontend/tests/regionSelection.test.ts",
+  },
+  {
+    direction: "right-click a selection to refine it",
+    given: "2026-11-17",
+    marks: ["frontend/src/MapSelectionMenu.tsx"],
+    test: "frontend/tests/regionalGeneration.test.ts",
+  },
+  {
+    direction: "a selection is temporary geography to act on, not a permanent map scope",
+    given: "2026-11-17",
+    marks: ["frontend/src/usePublishedRegions.ts"],
+    test: "frontend/tests/regionSelection.test.ts",
+  },
+  {
+    direction: "clearly list all regions of the current map",
+    given: "2026-11-17",
+    marks: ["frontend/src/PublishedRegionsPanel.tsx"],
+    test: "frontend/tests/regionSelection.test.ts",
+  },
+  {
+    direction: "regenerate map opens a modal over the current map",
+    given: "2026-11-17",
+    marks: ["frontend/src/App.tsx"],
+    test: "frontend/tests/regionalGeneration.test.ts",
+  },
+  {
     direction: "the deployed version must look like the approved surface screenshots",
     given: "2026-11-17",
     marks: ["crates/atlas-generation/src/publication/sampling/paint.rs"],

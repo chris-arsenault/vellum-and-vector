@@ -963,7 +963,9 @@ Whether later edits to a template propagate to existing instances is **not accep
 ### 13.1 Primary editing environment
 
 - Main map canvas with pan, zoom, selection, geographic area refinement, and layer-aware inspection.
-- Visible parent/child breadcrumb and geographic context; users can jump between creation levels without losing location.
+- A fixed map command bar groups parent navigation, regeneration, saving and export. Regeneration opens a modal over the current map.
+- Docked workspace panels sit beside the canvas. The Regions panel lists the current map's complete region hierarchy and named regional maps; selecting a region keeps the hierarchy available for navigation.
+- Persistent selection tools offer feature clicks, geographic boundaries, polygons, freehand lassos and dividing lines. A selection exposes properties and actions without changing the viewed map's scope. Right-click offers refinement directly; keeping a named region is optional. New selections replace the previous selection, and Escape or Clear selection dismisses it.
 - Layer panel supporting overlays, ordering, visibility, opacity, style, and scale-filtering.
 - Feature/entity inspector exposing attributes, relationships, source, history, provenance, and current generation state.
 - Creation tools appropriate to the current profile and selected layer; manual tools remain fast.

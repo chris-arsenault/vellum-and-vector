@@ -62,14 +62,14 @@ function FeatureLocation({
         )}
       </dl>
       <div className="selection-next">
-        <h3>Explore this place in more detail</h3>
+        <h3>Selection actions</h3>
         <p>
           {enclosed
-            ? "Use this boundary as a region, then refine the geography inside it."
-            : "Choose a geographic region around this feature to add finer detail."}
+            ? "Create a regional map from this feature’s boundary."
+            : "Draw a selection around this feature to create a regional map."}
         </p>
         <button className="primary" onClick={() => region(enclosed ? footprint : undefined)}>
-          {enclosed ? "Use boundary as region" : "Choose surrounding region"}
+          {enclosed ? "Refine this selection" : "Select surrounding area"}
         </button>
       </div>
     </>

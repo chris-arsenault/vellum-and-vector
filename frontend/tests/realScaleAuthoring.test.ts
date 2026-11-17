@@ -12,9 +12,9 @@ interface Exported {
   }[];
 }
 async function openGlen(page: Page) {
-  const navigation = page.getByRole("navigation", { name: "Map navigation", exact: true });
-  await navigation.getByRole("button", { name: /Child map 1$/ }).click();
-  await expect(navigation.getByText("Supplied glen", { exact: true })).toBeVisible();
+  const navigation = page.getByRole("navigation", { name: "Regional maps", exact: true });
+  await navigation.getByRole("button", { name: /^Supplied glen/ }).click();
+  await expect(page.locator(".app-header strong")).toHaveText("Supplied glen");
 }
 async function startEditing(page: Page) {
   // A child map opens with its regions panel showing; it would cover the glen's west side.

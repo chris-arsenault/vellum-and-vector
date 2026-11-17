@@ -4,9 +4,9 @@ import { canvas, exportMap, fixtureChild, openFixtureMap } from "./harness";
 
 async function openGlen(page: Page) {
   await openFixtureMap(page);
-  const navigation = page.getByRole("navigation", { name: "Map navigation", exact: true });
-  await navigation.getByRole("button", { name: /Child map 1$/ }).click();
-  await expect(navigation.getByText("Supplied glen", { exact: true })).toBeVisible();
+  const navigation = page.getByRole("navigation", { name: "Regional maps", exact: true });
+  await navigation.getByRole("button", { name: /^Supplied glen/ }).click();
+  await expect(page.locator(".app-header strong")).toHaveText("Supplied glen");
 }
 
 test("a real-scale map shows its hexes, units and creator layers and returns to its parent", async ({

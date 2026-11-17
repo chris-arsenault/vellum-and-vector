@@ -3,7 +3,7 @@ import View from "ol/View.js";
 import Projection from "ol/proj/Projection.js";
 import VectorLayer from "ol/layer/Vector.js";
 import VectorSource from "ol/source/Vector.js";
-import { Fill, Stroke, Style } from "ol/style.js";
+import { Circle, Fill, Stroke, Style } from "ol/style.js";
 import { ScaleLine } from "ol/control.js";
 import { defaults as defaultInteractions } from "ol/interaction/defaults.js";
 import { mapSpace, type MapDescriptor, type MapReader } from "@atlas/map";
@@ -100,6 +100,11 @@ function selectionLayer(wrapX: boolean) {
     style: new Style({
       stroke: new Stroke({ color: "#f8d589", width: 3, lineDash: [8, 5] }),
       fill: new Fill({ color: "#f8d58933" }),
+      image: new Circle({
+        radius: 8,
+        fill: new Fill({ color: "#f8d58955" }),
+        stroke: new Stroke({ color: "#f8d589", width: 2 }),
+      }),
     }),
   });
 }

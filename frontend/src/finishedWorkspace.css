@@ -1,0 +1,286 @@
+.finished-atlas.app-shell {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  grid-template-columns: 340px minmax(0, 1fr) 310px;
+  grid-template-rows: 48px 44px 36px 36px minmax(0, 1fr);
+}
+.finished-atlas .app-header {
+  gap: 8px;
+  padding: 0 12px;
+  overflow-x: auto;
+}
+.finished-atlas .app-header > strong {
+  margin-right: auto;
+  padding: 0 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 90px;
+}
+.finished-atlas .app-header .brand {
+  flex-shrink: 0;
+}
+.finished-atlas .app-header button,
+.finished-map-bar button {
+  white-space: nowrap;
+  border-radius: 2px;
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.finished-map-bar {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  background: #263436;
+  border-bottom: 1px solid #43504e;
+  overflow-x: auto;
+}
+.finished-map-location,
+.finished-map-actions,
+.finished-map-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.finished-map-location span {
+  font-size: 11px;
+  color: #b6c0b8;
+  white-space: nowrap;
+}
+.finished-map-actions,
+.finished-map-tools {
+  border-left: 1px solid #56615b;
+  padding-left: 12px;
+}
+.finished-map-tools {
+  margin-left: auto;
+}
+.finished-map-bar .map-storage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.finished-map-bar .map-storage > span {
+  font-size: 11px;
+  color: #b6c0b8;
+}
+.finished-atlas .map-navigation {
+  position: static;
+  grid-row: 4;
+  grid-column: 1 / -1;
+  background: #e5e9e2;
+  border-bottom: 1px solid #bac4b5;
+  gap: 0;
+  overflow-x: auto;
+  z-index: auto;
+}
+.finished-atlas .map-navigation button {
+  border: 0;
+  border-right: 1px solid #c8d0c2;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  font-size: 12px;
+  padding: 6px 16px;
+}
+.finished-atlas .map-navigation button[aria-expanded="true"] {
+  background: #f8faf5;
+  border-bottom-color: #536f4c;
+}
+.finished-atlas .map-workspace {
+  grid-row: 5;
+  grid-column: 1 / -1;
+}
+.finished-atlas:has(.map-drawer) .map-workspace {
+  grid-column-start: 2;
+}
+.finished-atlas:has(.selection-sidebar, .authoring-panel) .map-workspace {
+  grid-column-end: 3;
+}
+.finished-atlas .map-drawer {
+  position: static;
+  grid-row: 5;
+  grid-column: 1;
+  width: auto;
+  height: auto;
+  max-height: none;
+  min-height: 0;
+  border: 0;
+  border-right: 1px solid #bac4b5;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.finished-atlas .drawer-heading {
+  position: static;
+  min-height: 34px;
+}
+.finished-panel-content {
+  padding: 12px;
+  overflow: auto;
+  min-height: 0;
+}
+.finished-atlas .map-drawer h2,
+.finished-atlas .map-drawer summary {
+  color: #273d32;
+}
+.finished-atlas .map-drawer .eyebrow,
+.finished-atlas .map-drawer small {
+  color: #52634c;
+  opacity: 1;
+}
+.finished-atlas .selection-sidebar,
+.finished-atlas .authoring-panel {
+  grid-row: 5;
+  grid-column: 3;
+}
+.finished-atlas .authoring-panel {
+  overflow: auto;
+  padding: 12px;
+}
+.finished-atlas .regions-panel > h3 {
+  margin: 0;
+}
+.finished-atlas .region-list ul {
+  display: grid;
+  gap: 3px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.finished-atlas .region-list ul ul:not(:empty) {
+  margin: 3px 0 0 12px;
+  padding-left: 8px;
+  border-left: 1px solid #c5cebe;
+}
+.finished-atlas .region-list button {
+  width: 100%;
+  min-height: 30px;
+}
+.finished-atlas .region-list button span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.finished-atlas .region-list button small {
+  flex-shrink: 0;
+}
+.finished-atlas .region-list [aria-current="location"] {
+  background: #dce8d5;
+  border-color: #819577;
+  font-weight: 600;
+}
+.finished-atlas .region-selection-details,
+.finished-atlas .related-map-list {
+  border-top: 1px solid #cbd4c5;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.selection-toolbar {
+  grid-row: 3;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  overflow-x: auto;
+  background: #e5e9e2;
+  color: #273d32;
+  border-bottom: 1px solid #bac4b5;
+}
+.selection-toolbar > span {
+  margin-right: 8px;
+  font-size: 11px;
+}
+.real-scale-map-tools {
+  display: flex;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid #bac4b5;
+}
+.selection-toolbar button {
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 2px;
+  background: #f8faf5;
+  border-color: #bac4b5;
+  color: #273d32;
+  font-size: 12px;
+}
+.selection-toolbar button[aria-pressed="true"] {
+  background: #cadbc4;
+  border-color: #536f4c;
+  color: #24372b;
+}
+.selection-surface {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.selection-context-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 4px;
+  width: 226px;
+  background: #f8faf5;
+  color: #273d32;
+  border: 1px solid #8d9d85;
+  box-shadow: 0 4px 16px #0003;
+}
+.selection-context-menu:popover-open {
+  display: grid;
+}
+.selection-context-menu button {
+  border: 0;
+  border-radius: 0;
+  text-align: left;
+  padding: 6px 10px;
+  background: transparent;
+  color: #273d32;
+}
+.selection-context-menu button:hover,
+.selection-context-menu button:focus-visible {
+  background: #dce8d5;
+}
+@media (max-width: 1000px) {
+  .finished-atlas.app-shell {
+    grid-template-columns: 280px minmax(0, 1fr) 270px;
+  }
+}
+@media (max-width: 700px) {
+  .finished-atlas.app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .finished-atlas .map-workspace,
+  .finished-atlas:has(.map-drawer) .map-workspace,
+  .finished-atlas:has(.selection-sidebar, .authoring-panel) .map-workspace {
+    grid-column: 1;
+  }
+  .finished-atlas .map-drawer,
+  .finished-atlas .selection-sidebar,
+  .finished-atlas .authoring-panel {
+    position: absolute;
+    top: 164px;
+    bottom: 0;
+    width: min(300px, calc(100% - 48px));
+    max-height: none;
+    z-index: 15;
+  }
+  .finished-atlas .map-drawer {
+    left: 0;
+  }
+  .finished-atlas .selection-sidebar,
+  .finished-atlas .authoring-panel {
+    right: 0;
+  }
+}

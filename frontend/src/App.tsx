@@ -244,7 +244,7 @@ function Atlas({ context }: { context: FinishedContext }) {
     <>
       <AtlasContent state={state} />
       <ErrorMessage error={error ?? map.error} />
-      {setup?.selection && <AtlasSetup state={state} />}
+      {setup?.parent && <AtlasSetup state={state} />}
       {library && (
         <FinishedMapLibrary
           context={context}
@@ -276,7 +276,7 @@ function Atlas({ context }: { context: FinishedContext }) {
 }
 function AtlasContent({ state }: { state: ReturnType<typeof useAtlas> }) {
   const { setup, map, opened, context } = state;
-  if (setup && !setup.selection) return <AtlasSetup state={state} />;
+  if (setup && !setup.parent) return <AtlasSetup state={state} />;
   if (!map.data || !opened) return <AtlasWelcome state={state} />;
   return (
     <FinishedMapEditor
@@ -336,7 +336,8 @@ function AtlasSetup({ state }: { state: ReturnType<typeof useAtlas> }) {
       setSetup(null);
     },
   };
-  if (setup.selection) return <RegionalGeneration {...options} />;
+  // owner-direction(2026-11-17): regenerate map opens a modal over the current map
+  if (setup.parent) return <RegionalGeneration {...options} />;
   return (
     <main className="setup-page">
       <header className="setup-page-header">

@@ -116,7 +116,7 @@ async function checkControls(page: import("./uiTest").Page) {
 }
 async function checkNavigation(page: import("./uiTest").Page) {
   const regions = page.getByRole("region", { name: "Map regions", exact: true });
-  await regions.getByRole("button", { name: "Choose a region", exact: true }).click();
+  await page.getByRole("button", { name: "Select boundary", exact: true }).click();
   await page
     .getByRole("application", { name: "World map canvas" })
     .click({ position: { x: 256, y: 256 } });
@@ -132,7 +132,7 @@ async function checkNavigation(page: import("./uiTest").Page) {
   await page.getByRole("button", { name: "Save map view", exact: true }).click();
   const view = page.getByRole("button", { name: "Island sheet view", exact: true });
   await expect(view).toBeVisible();
-  await regions.getByRole("button", { name: "↑ Parent region", exact: true }).click();
+  await regions.getByRole("button", { name: "Entire map", exact: true }).click();
   await expect(regions.getByRole("button", { name: /Named island/ })).toBeVisible();
   await view.click();
   await expect(regions.getByRole("heading", { name: "Named island", exact: true })).toBeVisible();
@@ -141,7 +141,9 @@ async function checkNavigation(page: import("./uiTest").Page) {
   await page.getByLabel("Remove Island sheet view", { exact: true }).click();
   await regions.getByRole("button", { name: "Remove region", exact: true }).click();
   await expect(
-    regions.getByText("No smaller regions chosen here yet.", { exact: true })
+    regions.getByText("No regions chosen yet. Choose a region on the map to begin.", {
+      exact: true,
+    })
   ).toBeVisible();
 }
 async function checkRegistry(page: import("./uiTest").Page) {

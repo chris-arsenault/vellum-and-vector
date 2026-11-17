@@ -9,6 +9,7 @@ import type {
 import { usePublishedNavigation } from "../src/usePublishedNavigation";
 import { usePublishedRegions, usePublishedRegionPresentation } from "../src/usePublishedRegions";
 import { PublishedRegionsPanel } from "../src/PublishedRegionsPanel";
+import { PublishedSelectionToolbar } from "../src/PublishedSelectionToolbar";
 import { PublishedMapViews } from "../src/PublishedMapViews";
 import type { PublishedTool } from "../src/publishedInteractions";
 import { PublishedMapCanvas } from "../src/PublishedMapCanvas";
@@ -43,9 +44,7 @@ export function PublishedMapUi({ map, reader, navigation }: Props) {
     reader,
     navigation,
     saved,
-    tool,
     setTool,
-    enterMap: () => setError("Unexpected map navigation"),
   });
   const outline = regions.draft?.candidate.geometry ?? regions.region?.geometry;
   const value = usePublishedRegionPresentation(appearance, regions);
@@ -79,9 +78,15 @@ export function PublishedMapUi({ map, reader, navigation }: Props) {
         map={map}
         regions={regions}
         saved={saved}
+        refine={() => setError("Unexpected refinement")}
+        refineSelection={() => setError("Unexpected refinement")}
+      />
+      <PublishedSelectionToolbar
         tool={tool}
         setTool={setTool}
-        refine={() => setError("Unexpected refinement")}
+        clear={() => regions.select(null)}
+        selected={!!outline}
+        enabled
       />
       <PublishedMapViews
         map={map}

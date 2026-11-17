@@ -9,6 +9,7 @@ export type PublishedTool =
   | "inspect-cell"
   | "region-pick"
   | "region-outline"
+  | "region-lasso"
   | "region-cut"
   | "region-edit"
   | "measure"

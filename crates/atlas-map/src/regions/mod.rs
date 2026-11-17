@@ -96,24 +96,11 @@ impl<'a> RegionContext<'a> {
         })
     }
     fn available(&self, shape: &Geometry) -> SpatialResult<Option<Geometry>> {
-        let mut clipped = self
+        // owner-direction(2026-11-17): temporary selections are independent of saved regions
+        Ok(self
             .kernel
             .overlay(shape, &self.parent, Overlay::Intersection)?
-            .and_then(polygon);
-        for sibling in &self.siblings {
-            let Some(shape) = clipped else {
-                return Ok(None);
-            };
-            clipped = self
-                .kernel
-                .overlay(
-                    &shape,
-                    &geometry::as_geometry(&sibling.geometry),
-                    Overlay::Difference,
-                )?
-                .and_then(polygon);
-        }
-        Ok(clipped)
+            .and_then(polygon))
     }
     fn split(&self, shape: &Geometry) -> SpatialResult<Vec<Geometry>> {
         if self.query.cuts.is_empty() {
