@@ -53,12 +53,15 @@ function footprintGeometry(footprint: unknown) {
 function label(feature: PublishedFeature, resolution: number) {
   if (!feature.name || resolution > 2 || feature.attributes.nameStatus === "label")
     return undefined;
+  const line = feature.geometry.type.includes("Line");
   return new Text({
     text: feature.name,
     font: "12px serif",
     fill: new Fill({ color: "#2b2620" }),
     stroke: new Stroke({ color: "#fffaf0", width: 3 }),
-    overflow: true,
+    placement: line ? "line" : "point",
+    overflow: false,
+    padding: [2, 4, 2, 4],
   });
 }
 /** Ground class labels to the published surface legend's colours. */

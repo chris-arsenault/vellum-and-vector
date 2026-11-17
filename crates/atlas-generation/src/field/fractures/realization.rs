@@ -64,9 +64,15 @@ impl Field {
                 let mut readings = Vec::with_capacity(trace.len());
                 for point in &trace {
                     let [x, y, _] = point.coordinates();
-                    let cell = self.mesh.cell_at(x, y).ok_or_else(|| {
-                        io::Error::other("Captured fault sample lies outside lattice")
-                    })?;
+                    // Resampling snaps clipped endpoints to geometry precision, which may
+                    // place an edge sample just beyond the frame. Read its boundary support.
+                    let cell = self
+                        .mesh
+                        .cell_at(x, y)
+                        .or_else(|| self.mesh.edge_cell(x, y))
+                        .ok_or_else(|| {
+                            io::Error::other("Captured fault sample lies outside lattice")
+                        })?;
                     readings.push(opening(self, cell)?);
                 }
                 let mut conductance = self.shared.derive_scalar(Scalar::FractureConductance);

@@ -50,6 +50,41 @@ pub(super) fn seed() -> FieldSeed {
     )
 }
 #[test]
+fn captured_grid_projects_categories_and_values_past_the_child_boundary() {
+    use super::projection::sampling::Interpolation;
+    use crate::storage::Coverage;
+
+    let mesh = WorldLatticeOptions::default()
+        .build(Bounds(0.0, 0.0, 100.0, 100.0), 16.0, 0.0, |_, _| true)
+        .unwrap();
+    let points = [mesh.position(0), [500.0, 500.0], [-500.0, -500.0]];
+    assert!(mesh.cell_at(points[1][0], points[1][1]).is_none());
+    let mut coverage = Coverage::samples(
+        points.len(),
+        BlockCache::new(1_000_000, BlockScratch::new(MemoryFile::default())),
+    );
+    let projection =
+        Interpolation::new(&mesh, points.len(), |i| Ok(points[i]), &mut coverage).unwrap();
+    for discrete in [true, false] {
+        let mut values = vec![0.0; points.len()];
+        projection
+            .project(
+                &|cell| {
+                    assert!(cell < mesh.len(), "Only map cells can supply samples");
+                    Ok(7.0)
+                },
+                discrete,
+                |start, block| {
+                    values[start..start + block.len()].copy_from_slice(block);
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert!(values.iter().all(|value| (*value - 7.0).abs() < 1e-9));
+    }
+}
+
+#[test]
 fn travel_takes_and_withdraws_offered_non_adjacent_steps() {
     use super::people::country::spread;
     use crate::links::{Link, Offers};

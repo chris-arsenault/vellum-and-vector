@@ -1,6 +1,6 @@
 //! Plots fronting the streets and the building on each.
 use super::{
-    geometry::{add, at, distance, left, rectangle, scale, Point},
+    geometry::{add, at, distance, dot, left, rectangle, scale, Point},
     ground::{Ground, Rectangle, FIRST_STREET},
     network::{Class, Street},
     story::Size,
@@ -24,31 +24,51 @@ pub struct Slot {
     pub frontage: f64,
     pub depth: f64,
 }
-use super::settings::{MAIN_STREET_PULL, PITCH_FILL};
+use super::settings::{
+    BUILDING_ENVELOPE_MIN, DEPTH_VARIATION, FRONTAGE_VARIATION, MAIN_STREET_PULL, PITCH_FILL,
+};
 /// Every plot place along both sides of a street, from its start.
 pub fn slots(index: usize, street: &Street, frontage: f64, depth: f64) -> Vec<Slot> {
     let length = street.length();
     let mut result = Vec::new();
     for side in [Side::Left, Side::Right] {
         let sign = if side == Side::Left { 1.0 } else { -1.0 };
-        let mut along = street.width().max(frontage) / 2.0;
-        while along + frontage / 2.0 <= length {
-            if let Some((p, d)) = at(&street.points, along) {
+        let mut cursor = (street.width() - frontage).max(0.0) / 2.0;
+        let mut ordinal = 0;
+        while cursor < length {
+            let sample = |salt| {
+                crate::noise::hash_unit(
+                    index as i32 ^ salt,
+                    street.points[0][0] + ordinal as f64,
+                    street.points[0][1] + sign,
+                )
+            };
+            let pitch = frontage * (1.0 + FRONTAGE_VARIATION * (2.0 * sample(0x5711) - 1.0));
+            let parcel_depth = depth * (1.0 + DEPTH_VARIATION * (2.0 * sample(0x2d31) - 1.0));
+            if cursor + pitch > length {
+                break;
+            }
+            let along = cursor + pitch / 2.0;
+            let straight_front = at(&street.points, cursor)
+                .zip(at(&street.points, cursor + pitch))
+                .is_some_and(|((_, a), (_, b))| dot(a, b) >= 1.0 - 1e-9);
+            if let Some((p, d)) = at(&street.points, along).filter(|_| straight_front) {
                 let inward = scale(left(d), sign);
                 let front = add(p, scale(inward, street.width() / 2.0 + VERGE));
                 result.push(Slot {
                     street: index,
                     side,
                     along,
-                    corners: rectangle(front, d, inward, frontage * PITCH_FILL, depth),
+                    corners: rectangle(front, d, inward, pitch * PITCH_FILL, parcel_depth),
                     front,
                     direction: d,
                     inward,
-                    frontage,
-                    depth,
+                    frontage: pitch,
+                    depth: parcel_depth,
                 });
             }
-            along += frontage;
+            cursor += pitch;
+            ordinal += 1;
         }
     }
     result
@@ -96,8 +116,19 @@ pub fn growth(centre: Point, streets: &[Street]) -> impl Fn(&Slot) -> f64 + '_ {
 /// The building on a plot, at its street edge and turned to the street.
 pub fn building(slot: &Slot, use_: Use, size: Size) -> Vec<Point> {
     let (width, depth) = fitted(use_, size, slot.frontage, slot.depth);
+    let fit = |salt| {
+        BUILDING_ENVELOPE_MIN
+            + (1.0 - BUILDING_ENVELOPE_MIN)
+                * crate::noise::hash_unit(salt, slot.front[0], slot.front[1])
+    };
     let front = add(slot.front, scale(slot.inward, setback(size)));
-    rectangle(front, slot.direction, slot.inward, width, depth)
+    rectangle(
+        front,
+        slot.direction,
+        slot.inward,
+        width * fit(0x1921),
+        depth * fit(0x5123),
+    )
 }
 /// A barn behind a farmhouse, where the plot is deep enough for one.
 pub fn barn(slot: &Slot, size: Size) -> Option<Vec<Point>> {
@@ -132,8 +163,9 @@ mod tests {
         let street = street();
         let all = slots(0, &street, 8.0, 24.0);
         let left = all.iter().filter(|s| s.side == Side::Left).count();
-        assert_eq!(left, all.len() - left);
-        assert_eq!(left, 12);
+        assert!(left > 0 && left < all.len());
+        assert!(all.windows(2).any(|s| s[0].frontage != s[1].frontage));
+        assert!(all.windows(2).any(|s| s[0].depth != s[1].depth));
         assert!(all
             .iter()
             .all(|s| (s.front[1].abs() - (4.0 + VERGE)).abs() < 1e-9));
@@ -151,7 +183,7 @@ mod tests {
         assert!((nearest - (4.0 + VERGE + 0.3)).abs() < 1e-9);
         let temple = building(&slot, Use::Temple, Size::Town);
         let deepest = temple.iter().map(|p| p[1].abs()).fold(0.0, f64::max);
-        assert!(deepest <= 4.0 + VERGE + 24.0);
+        assert!(deepest <= 4.0 + VERGE + slot.depth);
         let farm = slots(0, &street(), 30.0, 40.0).remove(0);
         assert!(barn(&farm, Size::Farmstead).is_some());
         let shallow = slots(0, &street(), 6.0, 20.0).remove(0);

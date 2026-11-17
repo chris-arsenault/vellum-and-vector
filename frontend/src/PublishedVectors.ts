@@ -48,11 +48,10 @@ export class PublishedVectors {
     this.syncLayers(styles);
     this.syncFeatures(scene);
     const appearance = publishedAppearance(this.descriptor, entities);
-    const real = drawing?.view.mode === "drawn" ? undefined : realScale;
     await Promise.all(
       styles.map(async (style) => {
         const layer = this.layers.get(style.layerId)!;
-        if (this.realScaleStyle(layer, style, real)) return;
+        if (this.realScaleStyle(layer, style, realScale)) return;
         const parsed = drawing?.view.mode === "drawn" ? undefined : await symbolStyle(layer, style);
         if (sequence !== this.sequence) return;
         layer.setStyle(

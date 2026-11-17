@@ -202,9 +202,12 @@ impl Selection<'_> {
             .iter()
             .map(|feature| Ok((feature.id.clone(), region.id("feature", &feature.id)?)))
             .collect::<io::Result<_>>()?;
-        records::capture(&region, features, &ids, &mut result)?;
-        context::capture(&region, &owners, &ids, &mut result)?;
-        fields::capture(&region, &owners, source, &mut result)?;
+        records::capture(&region, features, &ids, &mut result)
+            .map_err(|error| io::Error::other(format!("Capturing records: {error}")))?;
+        context::capture(&region, &owners, &ids, &mut result)
+            .map_err(|error| io::Error::other(format!("Capturing context: {error}")))?;
+        fields::capture(&region, &owners, source, &mut result)
+            .map_err(|error| io::Error::other(format!("Capturing fields: {error}")))?;
         result.document.world["areas"][self.id] = area;
         result.document.scope.located.area_id = self.id.into();
         result.document.scope.located.space_id = self.selection.space_id.clone();

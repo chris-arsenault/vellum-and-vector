@@ -107,13 +107,20 @@ pub fn lane(
             } else {
                 offset(points, by)
             };
-            ground.reach(&line, &stops)
+            let reach = ground.reach(&line, &stops);
+            if reach >= line_length(&line) {
+                line_length(points)
+            } else {
+                reach
+            }
         })
         .fold(f64::INFINITY, f64::min);
-    let points = resample(
-        &cut(points, (reach - class.width(size)).max(0.0)),
-        VERTEX_STEP,
-    );
+    let end = if reach < line_length(points) {
+        (reach - class.width(size)).max(0.0)
+    } else {
+        reach
+    };
+    let points = resample(&cut(points, end), VERTEX_STEP);
     (line_length(&points) >= least).then(|| Street::new(points, class, size))
 }
 /// Where a line first meets a closed ring, as a point.

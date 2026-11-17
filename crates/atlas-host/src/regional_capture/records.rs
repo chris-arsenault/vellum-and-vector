@@ -25,9 +25,13 @@ pub(super) fn capture(
             feature.geometry,
             Geometry::Polygon { .. } | Geometry::MultiPolygon { .. }
         ) {
-            region.polygon(&feature.geometry)?
+            region.polygon(&feature.geometry).map_err(|error| {
+                io::Error::other(format!("{} {} geometry: {error}", feature.kind, feature.id))
+            })?
         } else {
-            region.clip(&feature.geometry)?
+            region.clip(&feature.geometry).map_err(|error| {
+                io::Error::other(format!("{} {} geometry: {error}", feature.kind, feature.id))
+            })?
         };
         let Some(shape) = shape else {
             continue;
@@ -39,7 +43,14 @@ pub(super) fn capture(
         feature.footprint = feature
             .footprint
             .as_ref()
-            .map(|f| region.polygon(f))
+            .map(|f| {
+                region.polygon(f).map_err(|error| {
+                    io::Error::other(format!(
+                        "{} {} footprint: {error}",
+                        feature.kind, feature.id
+                    ))
+                })
+            })
             .transpose()?
             .flatten();
         feature.detail.clear();

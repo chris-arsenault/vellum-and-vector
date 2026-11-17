@@ -31,6 +31,9 @@ make local-world     # reuse the kept world, or create it: 1,000 × 750 km Draft
 node scripts/local-atlas.mjs places              # the world's settlements and positions
 make local-real AT=Ajarma HEX=100m ACROSS=50     # a real-scale map at a settlement
 make local-real AT=500000,375000 HEX=300m        # or at a point in world metres
+node scripts/local-atlas.mjs region --at Amadir --width 120000 --name Amadir-country
+node scripts/local-atlas.mjs region --parent Amadir-country --at Amadir --width 20000 --name Amadir-district
+node scripts/local-atlas.mjs real --parent Amadir-district --at Amadir --hex 30m --across 100 --name Amadir-town
 make local-resume    # after fixing a failed step: make local-up, then resume the job
 make local-down      # stop the server and database; the world stays
 ```
@@ -47,8 +50,11 @@ land can be judged without a whole map:
 stops the job after that picture (about half a minute), and `--until "round 1"` after the
 first round of development.
 
-A name is one map: a new run deletes the earlier map of that name and its finished jobs
-before it starts. `--name` sets the name; it defaults to the kind, hex size and width.
+`region` selects a rectangle of `--width` metres with a 4:3 aspect ratio. Both `region`
+and `real` capture a child, then generate it using its captured configuration. `--parent`
+uses the completed map in that result folder; without it, the kept world is the parent.
+Settlement names are resolved on that parent, so subsequent selections follow its geography.
+`--name` sets the result folder; choose a new name for each run to preserve earlier results.
 A finished map is saved to the server library and reported in
 `.artifacts/local-atlas/maps/<name>/`:
 

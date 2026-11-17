@@ -10,7 +10,7 @@ use atlas_generation::{
         workspace::inputs::Selection,
     },
     publication::channels,
-    spatial::{Predicate, SpatialKernel},
+    spatial::SpatialKernel,
 };
 use serde_json::Value;
 use std::{collections::BTreeSet, io};
@@ -47,9 +47,7 @@ impl PreparedRequest {
         let mut inherited = BTreeSet::new();
         for field in &request.capture.fields {
             if selection.accepts(&field.area, &field.space, field.input)
-                && spatial
-                    .relation(&field.footprint, &frame.scope.footprint, Predicate::Covers)
-                    .map_err(io::Error::other)?
+                && selection.supports(field.input, &field.footprint, spatial)?
             {
                 inherited.extend(field.source.channels.iter().cloned());
             }

@@ -2,7 +2,7 @@
 //! the captured settlement records and the ways that enter the frame.
 use super::{
     geometry::{add, angle, at, cut, distance, left, line_length, rest, scale, sub, unit, Point},
-    ground::{Ground, OUTSIDE, STEEP, WATER},
+    ground::{Ground, Rectangle, FREE, OUTSIDE, STEEP, WATER},
     network::{Arm, VERTEX_STEP},
     plan::Seat,
     story::Story,
@@ -10,7 +10,7 @@ use super::{
 use crate::{
     atlas::state::State,
     features::{Feature, FeatureReader, FeatureSelection},
-    field::{poi::reads::has_channel, refinement::courses::cell_at, shared::Scalar, Field},
+    field::{refinement::courses::cell_at, shared::Scalar, Field},
     human::{catalogue::LayerId, HumanField},
     rock::ground::GroundField,
     spatial::SpatialKernel,
@@ -19,7 +19,9 @@ use atlas_map::{Geometry, Position};
 use serde_json::Value;
 use std::io;
 
-use super::settings::{FINEST_CELL, MOST_CELLS_ACROSS, STEEP_SLOPE, UNSTATED_WAY_WIDTH};
+use super::settings::{
+    square_half, FINEST_CELL, MOST_CELLS_ACROSS, STEEP_SLOPE, UNSTATED_WAY_WIDTH,
+};
 
 pub struct Site {
     pub bounds: [f64; 4],
@@ -115,13 +117,14 @@ fn ways(features: &dyn FeatureReader, area: &str) -> io::Result<Vec<(Vec<Point>,
     }
     Ok(result)
 }
-/// Water and steep ground per triangle.
+/// Standing water and steep ground per triangle. Channels reserve their drawn footprint in
+/// `read`, so a narrow river does not withhold the entire triangle that carries it.
 fn marks(field: &Field) -> io::Result<Vec<u32>> {
     let slope = field.shared().scalar(Scalar::Slope);
     let kind = field.water().column.kind;
     (0..field.mesh().len())
         .map(|cell| {
-            Ok(if kind.get(cell)? != 0 || has_channel(field, cell)? {
+            Ok(if kind.get(cell)? != 0 {
                 WATER
             } else if slope.get(cell)? > STEEP_SLOPE {
                 STEEP
@@ -213,6 +216,51 @@ fn number(attributes: &crate::features::records::Attributes, key: &str) -> Optio
 fn text<'a>(feature: &'a Feature, key: &str) -> Option<&'a str> {
     feature.attributes.get(key).and_then(Value::as_str)
 }
+/// A coarse settlement point need not be a buildable street origin. Keep it when its
+/// square fits; otherwise use the nearest candidate whose square stays on open ground.
+pub fn town_centre(
+    centre: Point,
+    half: f64,
+    candidates: &[Point],
+    ground: &Ground,
+    spatial: &dyn SpatialKernel,
+) -> io::Result<Point> {
+    let fits = |point: Point| {
+        let square = super::geometry::rectangle(
+            [point[0], point[1] - half],
+            [1.0, 0.0],
+            [0.0, 1.0],
+            half * 2.0,
+            half * 2.0,
+        );
+        ground.open(&Rectangle(&square), FREE)
+    };
+    if fits(centre) {
+        return Ok(centre);
+    }
+    let sites: Vec<_> = candidates
+        .iter()
+        .copied()
+        .filter(|&point| fits(point))
+        .map(|point| Geometry::Point {
+            coordinates: Position::xy(point[0], point[1]),
+        })
+        .collect();
+    if sites.is_empty() {
+        return Ok(centre);
+    }
+    let index = spatial.index(&sites).map_err(io::Error::other)?;
+    let nearest = index
+        .nearest(Position::xy(centre[0], centre[1]))
+        .map_err(io::Error::other)?;
+    Ok(match nearest.map(|i| &sites[i]) {
+        Some(Geometry::Point { coordinates }) => {
+            let [x, y, _] = coordinates.coordinates();
+            [x, y]
+        }
+        _ => centre,
+    })
+}
 fn seats(
     state: &State,
     bounds: [f64; 4],
@@ -220,6 +268,14 @@ fn seats(
     ground: &Ground,
 ) -> io::Result<Vec<Seat>> {
     let mut seats = Vec::new();
+    let mesh = state.field().mesh();
+    let origin = mesh.origin();
+    let candidates: Vec<_> = (0..mesh.len())
+        .map(|cell| {
+            let p = mesh.position(cell);
+            [p[0] + origin[0], p[1] + origin[1]]
+        })
+        .collect();
     for feature in state.records.features.values(FeatureSelection {
         area_id: Some(&state.scope.area),
         layer_id: Some("settlements"),
@@ -234,7 +290,9 @@ fn seats(
         if !inside || text(&feature, "status") == Some("abandoned") {
             continue;
         }
-        seats.push(seat(state, &feature, [x, y], roads, ground, bounds)?);
+        let half = square_half(story(&feature, 0, false).size()).max(ground.cell);
+        let centre = town_centre([x, y], half, &candidates, ground, state.spatial.as_ref())?;
+        seats.push(seat(state, &feature, centre, roads, ground, bounds)?);
     }
     // hpc-exempt: orders the frame's few settlements, largest first.
     seats.sort_by(|a, b| b.story.people.total_cmp(&a.story.people));

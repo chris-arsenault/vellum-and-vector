@@ -4,7 +4,7 @@
 use atlas_generation::{
     atlas::town::{
         ground::{Ground, WATER},
-        site::water_shapes,
+        site::{town_centre, water_shapes},
     },
     features::Feature,
 };
@@ -49,4 +49,34 @@ fn a_drawn_river_is_water_across_its_full_width_and_a_pool_by_its_outline() {
     assert!(!ground.is_water([30.0, 61.5]), "beyond its bank");
     assert!(ground.is_water([50.5, 85.5]), "in the pool");
     assert!(!ground.is_water([50.5, 75.5]));
+}
+
+#[test]
+fn a_town_centre_uses_the_nearest_open_square_without_building_in_water_or_on_slopes() {
+    use atlas_generation::atlas::town::ground::STEEP;
+    let spatial = NativeGeos::new(1e-9).unwrap();
+    let mut ground = Ground::new([0.0, 0.0, 200.0, 200.0], 1.0);
+    for cell in 0..ground.count() {
+        let [x, y] = ground.centre(cell);
+        if (90.0..110.0).contains(&x) {
+            ground.withhold(cell, WATER);
+        } else if x < 90.0 && y < 120.0 {
+            ground.withhold(cell, STEEP);
+        }
+    }
+    let candidates = [
+        [80.0, 100.0],
+        [100.0, 140.0],
+        [115.0, 100.0],
+        [140.0, 100.0],
+    ];
+    // The nearer candidates are steep, in the river, or too close to its bank for a square.
+    assert_eq!(
+        town_centre([100.0, 100.0], 20.0, &candidates, &ground, &spatial).unwrap(),
+        [140.0, 100.0]
+    );
+    assert_eq!(
+        town_centre([140.0, 150.0], 20.0, &candidates, &ground, &spatial).unwrap(),
+        [140.0, 150.0]
+    );
 }

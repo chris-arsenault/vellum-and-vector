@@ -168,6 +168,22 @@ fn intersects(region: &Region<'_>, shape: &Geometry) -> io::Result<bool> {
         .map_err(io::Error::other)
 }
 fn touches(region: &Region<'_>, coordinates: &[Position]) -> io::Result<bool> {
+    // A carried former course can collapse onto one parent cell. It still has a
+    // location, but repeated profile vertices do not make a valid spatial line.
+    if let Some(first) = coordinates.first() {
+        let xy = first.coordinates();
+        if coordinates
+            .iter()
+            .all(|point| point.coordinates()[..2] == xy[..2])
+        {
+            return intersects(
+                region,
+                &Geometry::Point {
+                    coordinates: *first,
+                },
+            );
+        }
+    }
     match coordinates {
         [] => Ok(false),
         [point] => intersects(
@@ -184,6 +200,7 @@ fn touches(region: &Region<'_>, coordinates: &[Position]) -> io::Result<bool> {
         ),
     }
 }
+
 fn capture_water(region: &Region<'_>, mut water: RetainedNetwork) -> io::Result<RetainedNetwork> {
     let mut reaches = Vec::new();
     for reach in water.reaches {
@@ -222,4 +239,28 @@ fn capture_water(region: &Region<'_>, mut water: RetainedNetwork) -> io::Result<
         .filter_map(|(entry, inside)| inside.then_some(entry))
         .collect();
     Ok(water)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atlas_gis::geometry::NativeGeos;
+    use atlas_map::{regions::rectangle, Bounds};
+
+    #[test]
+    fn a_collapsed_former_course_has_point_coverage_without_becoming_an_invalid_line() {
+        let spatial = NativeGeos::new(1e-6).unwrap();
+        let region = Region {
+            world: "world",
+            area: "child",
+            parent: "parent",
+            operation: "capture",
+            footprint: rectangle(Bounds(0.0, 0.0, 100.0, 100.0)),
+            version: 1,
+            spatial: &spatial,
+        };
+        assert!(touches(&region, &[Position::xy(50.0, 50.0); 4]).unwrap());
+        assert!(!touches(&region, &[Position::xy(150.0, 50.0); 3]).unwrap());
+        assert!(!touches(&region, &[]).unwrap());
+    }
 }

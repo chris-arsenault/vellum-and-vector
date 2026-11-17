@@ -91,3 +91,72 @@ fn lake_members_route_toward_the_outlet_and_share_its_land_basin() {
     assert!(read.edges.get(a).unwrap() >= 0);
     assert_eq!(read.basins.get(c).unwrap(), 0);
 }
+
+#[test]
+fn a_retained_bed_cannot_reverse_a_lakes_spill_escape() {
+    let (mesh, mut coverage, [a, b, c]) = fixture();
+    let mut kind = coverage.allocate(1u8);
+    kind.set(a, 2).unwrap();
+    kind.set(b, 2).unwrap();
+    kind.set(c, 0).unwrap();
+    let bodies = coverage.allocate(2i32);
+    let mut outlets = coverage.allocate(-1i32);
+    outlets.set(b, c as i32).unwrap();
+    let mut drainage = Drainage::new(&mut coverage);
+    drainage.elevations.set(c, 110.0).unwrap();
+    drainage.elevations.set(b, 100.0).unwrap();
+    let mut rivers = ReachStore::default();
+    rivers.add(vec![c, b]);
+    let mut routing = FlowRouting::new(&mut coverage);
+    routing
+        .route(
+            RoutingInputs {
+                mesh: &mesh,
+                water_kind: &kind.read_only(),
+                water_body: &bodies.read_only(),
+                lake_outlets: &outlets.read_only(),
+                drainage: &drainage.read_only(),
+                open_outlet: &|cell| cell == c,
+                seed: 1,
+            },
+            &rivers,
+            &mut coverage,
+        )
+        .unwrap();
+    let read = routing.read_only();
+    assert_eq!(read.targets.get(b).unwrap(), c as i32);
+    assert_eq!(read.targets.get(c).unwrap(), -1);
+}
+
+#[test]
+fn a_lake_cut_by_the_frame_drains_outside_instead_of_back_into_itself() {
+    let (mesh, mut coverage, [a, b, c]) = fixture();
+    let mut kind = coverage.allocate(1u8);
+    kind.set(a, 2).unwrap();
+    kind.set(b, 2).unwrap();
+    kind.set(c, 0).unwrap();
+    let bodies = coverage.allocate(2i32);
+    let mut outlets = coverage.allocate(-1i32);
+    outlets.set(b, c as i32).unwrap();
+    let mut drainage = Drainage::new(&mut coverage);
+    drainage.parents.set(c, a as i32).unwrap();
+    let mut routing = FlowRouting::new(&mut coverage);
+    routing
+        .route(
+            RoutingInputs {
+                mesh: &mesh,
+                water_kind: &kind.read_only(),
+                water_body: &bodies.read_only(),
+                lake_outlets: &outlets.read_only(),
+                drainage: &drainage.read_only(),
+                open_outlet: &|cell| cell == a,
+                seed: 1,
+            },
+            &ReachStore::default(),
+            &mut coverage,
+        )
+        .unwrap();
+    let read = routing.read_only();
+    assert_eq!(read.targets.get(a).unwrap(), -1);
+    assert_eq!(read.targets.get(b).unwrap(), a as i32);
+}

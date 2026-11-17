@@ -76,6 +76,7 @@ export function changePublishedDrawing(
   ) {
     if (value.drawing.mode !== "drawn") rasterStyles = styles;
     styles = publishedDrawnStyles(map, drawing.subject);
+    if (map.realScale) styles = realScaleStyles(styles);
   } else if (drawing.mode === "raster" && value.drawing.mode !== "raster") {
     styles = rasterStyles ?? publishedStyles(map);
     rasterStyles = null;

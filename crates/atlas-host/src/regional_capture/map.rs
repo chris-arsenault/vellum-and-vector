@@ -43,7 +43,12 @@ pub fn capture(
         let page = maps.features(&selection.parent.reference, &query)?;
         for published in page.items {
             if let Some(feature) = records.get(&published.id)? {
-                if let Some(composed) = present(&composition, &feature).map_err(io::Error::other)? {
+                if let Some(composed) = present(&composition, &feature).map_err(|error| {
+                    io::Error::other(format!(
+                        "Composing captured {} {}: {error}",
+                        feature.kind, feature.id
+                    ))
+                })? {
                     features.push(composed);
                 }
             }

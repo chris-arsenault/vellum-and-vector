@@ -38,12 +38,22 @@ impl Interpolation {
             for i in 0..length {
                 let p = position(start + i)?;
                 let [x, y] = mesh.point(p[0], p[1]);
-                let Some(cell) = mesh.cell_at(x, y) else {
+                let cell = mesh.cell_at(x, y);
+                let Some(donor) = cell.or_else(|| mesh.edge_cell(x, y)) else {
                     continue;
                 };
-                samples[i] = i32::try_from(cell)
+                samples[i] = i32::try_from(donor)
                     .map_err(|_| io::Error::other("Projection donor exceeds int32"))?;
                 let row = i * STRIDE;
+                // Captured rectangular grids can extend beyond the child map. Project those
+                // samples from its boundary support, as class-membership capture does; do not
+                // require an addressable terrain cell outside the map.
+                let Some(cell) = cell else {
+                    degree[i] = 1;
+                    cells[row] = samples[i];
+                    weights[row] = 1.0;
+                    continue;
+                };
                 degree[i] = fan_weights(
                     mesh,
                     cell,

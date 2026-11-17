@@ -237,24 +237,6 @@ async function world(fresh) {
   await report(reference, join(reports, "world"));
 }
 
-/**
- * A name is one map in the local atlas: a new run deletes the earlier maps of that name and
- * its finished jobs, so the library and the pictures show the run just made.
- */
-async function replace(name) {
-  const inventory = await call("contexts", { method: "list" });
-  for (const map of inventory.maps.filter((entry) => entry.name === name && entry.parent))
-    await call("contexts", {
-      method: "delete",
-      request: { kind: "map", id: map.reference.mapId, descendants: true },
-    });
-  const finished = inventory.jobs.filter(
-    (job) => job.details?.name === name && job.state !== "running"
-  );
-  for (const job of finished)
-    await call("contexts", { method: "delete", request: { kind: "job", id: job.jobId } });
-}
-
 /** A tiny outline around the point; the engine centres the real-scale frame on it. */
 function pointSelection(map, [x, y]) {
   const d = 1e-3;
@@ -303,7 +285,9 @@ async function places() {
 const hexMetres = { "1.5m": 1.5, "3m": 3, "10m": 10, "30m": 30, "100m": 100, "300m": 300 };
 
 async function realScale(options) {
-  const { reference } = await readJson(worldFile).catch(() => {
+  const { reference } = await readJson(
+    options.parent ? join(reports, "maps", options.parent, "map.json") : worldFile
+  ).catch(() => {
     throw new Error("No kept world; run make local-world");
   });
   const parent = await call("maps/read", { method: "open", args: [reference] });
@@ -313,13 +297,31 @@ async function realScale(options) {
     hexSize: options.hex,
     hexesAcross: Number(options.across),
   };
-  const width = choice.hexesAcross * hexMetres[choice.hexSize];
+  const width = options.width
+    ? Number(options.width)
+    : choice.hexesAcross * hexMetres[choice.hexSize];
   const name = options.name ?? `${choice.kind} ${choice.hexSize} ${choice.hexesAcross}`;
-  await replace(name);
+  const directory = join(reports, "maps", name.replace(/[^\w.-]+/g, "-"));
+  if (await readJson(join(directory, "map.json")).catch(() => null))
+    throw new Error(`A result named ${name} already exists; choose a new --name`);
   const configuration = await call("generation", { method: "configuration", request: reference });
   Object.assign(configuration, { name, width, height: width * 0.75 });
   configuration.recipe.quality = options.detail;
-  const request = { selection: pointSelection(parent, at), configuration, realScale: choice };
+  const selection = pointSelection(parent, at);
+  if (options.width) {
+    const half = Number(options.width) / 2;
+    const [x, y] = at;
+    selection.geometry.coordinates = [
+      [
+        [x - half, y - half * 0.75],
+        [x + half, y - half * 0.75],
+        [x + half, y + half * 0.75],
+        [x - half, y + half * 0.75],
+        [x - half, y - half * 0.75],
+      ],
+    ];
+  }
+  const request = { selection, configuration, ...(options.width ? {} : { realScale: choice }) };
   const review = await call("generation", {
     method: "review",
     request: { method: "refine", request },
@@ -328,8 +330,19 @@ async function realScale(options) {
   if (errors.length) throw new Error(JSON.stringify(errors, null, 2));
   if (review.input.settings) configuration.recipe.settings = review.input.settings;
   const status = await call("generation", { method: "refine", request });
-  const result = await follow(status, { kind: "real", name }, options.until);
-  await finish(result, name);
+  const captured = await follow(status, { kind: "real", name });
+  await save(captured);
+  const developed = await call("generation", { method: "configuration", request: captured });
+  developed.recipe.quality = options.detail;
+  const regeneration = { reference: captured, configuration: developed };
+  const developmentReview = await call("generation", {
+    method: "review",
+    request: { method: "regenerate", request: regeneration },
+  });
+  const failures = developmentReview.diagnostics.filter((item) => item.severity === "error");
+  if (failures.length) throw new Error(JSON.stringify(failures, null, 2));
+  const running = await call("generation", { method: "regenerate", request: regeneration });
+  await finish(await follow(running, { kind: "real", name }, options.until), name);
 }
 async function finish(result, name) {
   await save(result);
@@ -374,12 +387,22 @@ const { positionals, values } = parseArgs({
     name: { type: "string" },
     detail: { type: "string", default: "draft" },
     until: { type: "string" },
+    parent: { type: "string" },
+    width: { type: "string" },
   },
 });
 /** Pictures of a kept map in the frontend the server hosts: default, hex fill, caves. */
 async function view(name) {
   const directory = join(reports, "maps", name);
-  const { name: title } = await readJson(join(directory, "map.json"));
+  const map = await readJson(join(directory, "map.json"));
+  const title = map.name;
+  const ancestors = [];
+  let parent = map.parent;
+  while (parent) {
+    const ancestor = await call("maps/read", { method: "open", args: [parent] });
+    ancestors.unshift(ancestor.name);
+    parent = ancestor.parent;
+  }
   const playwright = createRequire(new URL("../frontend/package.json", import.meta.url));
   const { chromium } = playwright("@playwright/test");
   const browser = await chromium.launch({ headless: true });
@@ -390,9 +413,10 @@ async function view(name) {
     await page.getByRole("button", { name: "Server maps", exact: true }).click();
     // Child maps are listed under their parent's entry.
     const library = page.getByRole("dialog");
-    const world = library.getByRole("button", { name: /^Regions and jobs for/ }).first();
-    await world.waitFor();
-    await world.click();
+    for (const ancestor of ancestors)
+      await library
+        .getByRole("button", { name: `Regions and jobs for ${ancestor}`, exact: true })
+        .click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: new RegExp(`^${title}`) })
@@ -422,12 +446,45 @@ async function view(name) {
       await page.getByLabel(label, { exact: true }).check();
       await settled();
     };
-    await hexView("Grid over the map");
+    if (map.realScale) {
+      await hexView("Grid over the map");
+      const surface = page
+        .getByRole("region", { name: "Real-scale map", exact: true })
+        .getByRole("radio", { name: "Surface", exact: true });
+      if (await surface.count()) await surface.check();
+      await settled();
+    }
     await picture("map.png");
+    await page.getByRole("button", { name: "Appearance", exact: true }).click();
+    await page.getByRole("radio", { name: "Drawn map", exact: true }).check();
+    await page
+      .getByRole("combobox", { name: "Map theme", exact: true })
+      .selectOption("infrastructure");
+    await page.getByLabel("Sheet legend", { exact: true }).check();
+    await settled();
+    const downloading = page.waitForEvent("download", { timeout: 90_000 });
+    await page.getByRole("button", { name: "Download map PNG", exact: true }).click();
+    await (await downloading).saveAs(join(directory, "sheet.png"));
+    await picture("drawn-map.png");
+    if (!map.realScale) return;
+    await page.getByRole("button", { name: "Appearance", exact: true }).click();
+    await page.getByRole("radio", { name: "Raster investigation", exact: true }).check();
+    await page.getByRole("button", { name: "Close panel", exact: true }).click();
     await hexView("Fill each hex by what covers it");
     await settled();
     await picture("hex-fill.png");
     await hexView("Grid over the map");
+    await page.getByRole("button", { name: "Close panel", exact: true }).click();
+    const exported = await readJson(join(directory, "map.geojson"));
+    if (exported.features.some((feature) => feature.properties.kind === "building")) {
+      await page.getByRole("button", { name: "Fit map", exact: true }).click();
+      const box = await canvas.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.wheel(0, -300);
+      await settled();
+      await picture("streets.png");
+    }
+    await page.getByRole("button", { name: "Appearance", exact: true }).click();
     const caves = page.getByLabel("Caves", { exact: true });
     if (await caves.count()) {
       await caves.check();
@@ -468,6 +525,7 @@ async function history(name) {
 const [command, argument] = positionals;
 if (command === "world") await world(values.fresh);
 else if (command === "real" && values.at && hexMetres[values.hex]) await realScale(values);
+else if (command === "region" && values.at && values.width) await realScale(values);
 else if (command === "resume") await resume(argument);
 else if (command === "places") await places();
 else if (command === "view" && argument) await view(argument);
@@ -487,6 +545,8 @@ else if (command === "summary" && argument) {
                                     [--detail draft|standard|fine] [--name name]
                                     [--until "<stage picture label, e.g. Initial regional detail>"]
   node scripts/local-atlas.mjs resume [jobId]
+  node scripts/local-atlas.mjs region --at Town --width metres --name name [--parent map-folder]
+real and region accept --parent to refine a previously generated map instead of the world.
 --at is in world metres; hex sizes: ${Object.keys(hexMetres).join(", ")}`);
   process.exit(2);
 }

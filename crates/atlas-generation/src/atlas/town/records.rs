@@ -112,6 +112,9 @@ fn count_unhoused(state: &mut State, plan: &Plan) -> io::Result<()> {
     };
     seat.attributes
         .insert("unhoused".into(), json!(plan.unhoused));
+    seat.geometry = Geometry::Point {
+        coordinates: Position::xy(plan.seat.centre[0], plan.seat.centre[1]),
+    };
     state.write_feature(seat).map(|_| ())
 }
 /// Published streets: their record identity and name, by street index.

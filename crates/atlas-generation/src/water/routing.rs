@@ -121,11 +121,6 @@ impl FlowRouting {
             self.edges.set(cell, -1)?;
             self.basins.set(cell, 0)?;
         }
-        let lakes = LakeMembership::read(input.water_kind, input.water_body)?;
-        let mut ranks = coverage.scratch(input.mesh.len(), -1);
-        for members in lakes.bodies() {
-            self.route_lake(&input, members, &mut ranks)?;
-        }
         retain_routes(
             rivers,
             &RiverTerrain {
@@ -137,6 +132,13 @@ impl FlowRouting {
             &input.drainage.ranks,
             &mut self.targets,
         )?;
+        // Lake spills own their escape corridors. A retained bed must not redirect
+        // one of those corridors back into the lake after its outlet is established.
+        let lakes = LakeMembership::read(input.water_kind, input.water_body)?;
+        let mut ranks = coverage.scratch(input.mesh.len(), -1);
+        for members in lakes.bodies() {
+            self.route_lake(&input, members, &mut ranks)?;
+        }
         for cell in 0..input.mesh.len() {
             if let Ok(target) = usize::try_from(self.targets.get(cell)?) {
                 let edge = (0..3).find(|&edge| input.mesh.neighbor(cell, edge) == Some(target));
@@ -168,18 +170,7 @@ impl FlowRouting {
         members: &[usize],
         ranks: &mut Band<i32>,
     ) -> io::Result<()> {
-        let mut root = None;
-        for &cell in members {
-            if input.lake_outlets.get(cell)? >= 0 {
-                root = Some(cell);
-                break;
-            }
-        }
-        let outlet = match root {
-            Some(root) => input.lake_outlets.get(root)?,
-            None => -1,
-        };
-        let root = root.unwrap_or_else(|| stable_root(input, members));
+        let (root, outlet) = lake_root(input, members)?;
         lake_ranks(input, root, ranks)?;
         self.targets.set(root, outlet)?;
         self.outlet_escape(input, outlet)?;
@@ -221,6 +212,22 @@ impl FlowRouting {
         }
         Ok(())
     }
+}
+fn lake_root(input: &RoutingInputs<'_>, members: &[usize]) -> io::Result<(usize, i32)> {
+    // A captured lake cut by an open frame already drains beyond that frame.
+    // Routing it back to a captured inland spill can return through the same lake.
+    for &cell in members {
+        if (input.open_outlet)(cell) && input.drainage.parents.get(cell)? < 0 {
+            return Ok((cell, -1));
+        }
+    }
+    for &cell in members {
+        let outlet = input.lake_outlets.get(cell)?;
+        if outlet >= 0 {
+            return Ok((cell, outlet));
+        }
+    }
+    Ok((stable_root(input, members), -1))
 }
 fn stable_root(input: &RoutingInputs<'_>, members: &[usize]) -> usize {
     let (mut selected, mut best) = (members[0], -f64::MAX);

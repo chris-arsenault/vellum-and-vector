@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { expect, test } from "./uiTest";
 import { canvas, exportMap, fixtureChild, openFixtureMap } from "./harness";
 
@@ -8,6 +9,34 @@ async function openGlen(page: Page) {
   await navigation.getByRole("button", { name: /^Supplied glen/ }).click();
   await expect(page.locator(".app-header strong")).toHaveText("Supplied glen");
 }
+
+test("@rendering a drawn real-scale sheet shows filled building footprints", async ({ page }) => {
+  await openGlen(page);
+  await page.getByRole("button", { name: "Appearance", exact: true }).click();
+  await page.getByRole("radio", { name: "Drawn map", exact: true }).check();
+  await page.getByLabel("Map theme", { exact: true }).selectOption("infrastructure");
+  await page.getByLabel("Image width · px", { exact: true }).fill("1200");
+  await page.getByLabel("Image height · px", { exact: true }).fill("900");
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download map PNG", exact: true }).click();
+  const bytes = await readFile((await (await downloading).path())!);
+  const roofPixels = await page.evaluate(async (encoded) => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${encoded}`;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext("2d")!;
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, image.width, image.height).data;
+    let roofs = 0;
+    for (let at = 0; at < pixels.length; at += 4)
+      if (pixels[at] === 154 && pixels[at + 1] === 116 && pixels[at + 2] === 88) roofs++;
+    return roofs;
+  }, bytes.toString("base64"));
+  expect(roofPixels).toBeGreaterThan(500);
+});
 
 test("a real-scale map shows its hexes, units and creator layers and returns to its parent", async ({
   page,

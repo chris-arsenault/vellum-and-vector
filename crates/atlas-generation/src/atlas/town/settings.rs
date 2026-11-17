@@ -42,6 +42,11 @@ pub const GROWN_LANE_DEPTHS: f64 = 4.0;
 pub const PACKING: f64 = 0.45;
 /// Plots are drawn this share of their pitch wide, so neighbours only touch.
 pub const PITCH_FILL: f64 = 0.98;
+/// Ordinary parcel frontage and depth vary around their settlement-size reference.
+pub const FRONTAGE_VARIATION: f64 = 0.3;
+pub const DEPTH_VARIATION: f64 = 0.2;
+/// Buildings use this range of their fitted envelope rather than repeating one footprint.
+pub const BUILDING_ENVELOPE_MIN: f64 = 0.8;
 /// A plot on a main street counts as this share of its distance from the centre, so a place
 /// fills its main streets before its lanes.
 pub const MAIN_STREET_PULL: f64 = 0.85;

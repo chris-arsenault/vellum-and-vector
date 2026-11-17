@@ -45,6 +45,7 @@ pub fn source_order(coverage: &mut Coverage, sources: &ReadBand<i32>) -> io::Res
     Ok(SourceOrder { order, boundary })
 }
 
+#[track_caller]
 pub fn target_order(coverage: &mut Coverage, targets: &ReadBand<i32>) -> io::Result<Band<u32>> {
     let n = targets.len();
     let mut indegree = coverage.scratch(n, 0u32);
@@ -76,7 +77,16 @@ pub fn target_order(coverage: &mut Coverage, targets: &ReadBand<i32>) -> io::Res
         }
     }
     if count != n {
-        return Err(io::Error::other("Flow routing contains a cycle"));
+        let mut edges = Vec::new();
+        for cell in 0..n {
+            if indegree.get(cell)? > 0 && edges.len() < 12 {
+                edges.push((cell, targets.get(cell)?));
+            }
+        }
+        return Err(io::Error::other(format!(
+            "Flow routing contains a cycle at {}: {edges:?}",
+            std::panic::Location::caller()
+        )));
     }
     Ok(order)
 }
@@ -96,6 +106,7 @@ pub fn gather_down(
     }
     Ok(())
 }
+#[track_caller]
 pub fn gathered(
     coverage: &mut Coverage,
     targets: &ReadBand<i32>,

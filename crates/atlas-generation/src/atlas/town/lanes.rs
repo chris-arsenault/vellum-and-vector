@@ -102,20 +102,22 @@ fn branches(
     while along < end {
         if let Some((p, d)) = at(&street.points, along) {
             let side = if jitter.sample() < 0.5 { 1.0 } else { -1.0 };
-            let from = add(p, scale(left(d), side * street.width() / 2.0));
-            let direction = angle(d) + side * jitter.around(FRAC_PI_2, 0.35);
-            let length = (branching.reach - along * branching.taper).max(2.0 * lay.depth)
-                * jitter.around(1.0, 0.3);
-            let points = bent(from, direction, length, jitter);
-            if let Some(lane) = lane(
-                &points,
-                branching.class,
-                lay.size,
-                ground,
-                stops_branch(owner),
-                lay.depth,
-            ) {
-                network.add(lane, ground);
+            for side in [side, -side] {
+                let from = add(p, scale(left(d), side * street.width() / 2.0));
+                let direction = angle(d) + side * jitter.around(FRAC_PI_2, 0.35);
+                let length = (branching.reach - along * branching.taper).max(2.0 * lay.depth)
+                    * jitter.around(1.0, 0.3);
+                let points = bent(from, direction, length, jitter);
+                if let Some(lane) = lane(
+                    &points,
+                    branching.class,
+                    lay.size,
+                    ground,
+                    stops_branch(owner),
+                    lay.depth,
+                ) {
+                    network.add(lane, ground);
+                }
             }
         }
         along += branching.spacing * jitter.around(1.0, 0.3);
@@ -126,6 +128,7 @@ fn branches(
 fn organic(network: &mut Network, lay: &Lay, ground: &mut Ground, jitter: &mut Jitter, limit: f64) {
     let mains = network.mains();
     let town = lay.size >= Size::Town;
+    cross_streets(network, lay, ground, jitter, limit);
     let first = Branching {
         class: if town { Class::Street } else { Class::Lane },
         limit,
@@ -153,6 +156,68 @@ fn organic(network: &mut Network, lay: &Lay, ground: &mut Ground, jitter: &mut J
     for parent in mains..network.streets.len() {
         branches(network, parent, lay, ground, jitter, &second);
     }
+}
+/// Join the approaches before growing frontage lanes. Each connector starts and ends on
+/// actual main-street vertices, so bends in the approaches do not leave detached rings.
+fn cross_streets(
+    network: &mut Network,
+    lay: &Lay,
+    ground: &mut Ground,
+    jitter: &mut Jitter,
+    limit: f64,
+) {
+    let mains = network.mains();
+    if mains < 2 {
+        return;
+    }
+    let spacing = 2.0 * lay.depth + Class::Street.width(lay.size);
+    let mut along = lay.square + spacing;
+    while along < limit {
+        let mut ends: Vec<_> = network.streets[..mains]
+            .iter()
+            .filter_map(|street| point_on_main(street, along * jitter.around(1.0, 0.12)))
+            .map(|point| (angle(sub(point, lay.centre)), point))
+            .collect();
+        // hpc-exempt: orders the town's few main-street connection points, not field cells.
+        ends.sort_by(|a, b| a.0.total_cmp(&b.0));
+        if ends.len() >= 2 {
+            for i in 0..ends.len() {
+                let (a, start) = ends[i];
+                let (mut b, finish) = ends[(i + 1) % ends.len()];
+                if b <= a {
+                    b += TAU;
+                }
+                let radius = (super::geometry::distance(start, lay.centre)
+                    + super::geometry::distance(finish, lay.centre))
+                    / 2.0;
+                let mut points = vec![start];
+                for share in [1.0 / 3.0, 2.0 / 3.0] {
+                    points.push(add(
+                        lay.centre,
+                        scale(
+                            heading(a + (b - a) * share),
+                            radius * jitter.around(1.0, 0.12),
+                        ),
+                    ));
+                }
+                points.push(finish);
+                if let Some(street) = lane(
+                    &points,
+                    Class::Street,
+                    lay.size,
+                    ground,
+                    stops_lane,
+                    lay.depth,
+                ) {
+                    network.add(street, ground);
+                }
+            }
+        }
+        along += spacing * jitter.around(1.0, 0.2);
+    }
+}
+fn point_on_main(street: &Street, along: f64) -> Option<Point> {
+    super::network::point_on(street, along).map(|(point, _)| point)
 }
 /// One round of growth when the streets so far cannot house everyone: short side lanes
 /// branch from every street laid since `from` where its frontage is still open, and end where
@@ -336,6 +401,41 @@ fn walled(network: &mut Network, lay: &Lay, ground: &mut Ground, jitter: &mut Ji
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cross_streets_join_the_actual_main_street_lines_at_both_ends() {
+        let mut ground = Ground::new([-400.0, -400.0, 400.0, 400.0], 2.0);
+        let mut network = Network::default();
+        for end in [[300.0, 0.0], [-300.0, 0.0]] {
+            network.add(
+                Street::new(vec![[0.0, 0.0], end], Class::Main, Size::Town),
+                &mut ground,
+            );
+        }
+        let lay = Lay {
+            centre: [0.0, 0.0],
+            size: Size::Town,
+            radius: 250.0,
+            depth: 24.0,
+            square: 20.0,
+        };
+        cross_streets(
+            &mut network,
+            &lay,
+            &mut ground,
+            &mut Jitter::new("cross streets"),
+            250.0,
+        );
+        assert!(network.streets.len() > 2);
+        for street in &network.streets[2..] {
+            let start = street.points[0];
+            let end = *street.points.last().unwrap();
+            assert!(start[1].abs() < 1e-9 && end[1].abs() < 1e-9);
+            assert!(
+                start[0] * end[0] < 0.0,
+                "a connector joins opposite approaches"
+            );
+        }
+    }
     fn town(layout: Layout) -> (Network, Option<Wall>) {
         let mut ground = Ground::new([-400.0, -400.0, 400.0, 400.0], 2.0);
         let lay = Lay {

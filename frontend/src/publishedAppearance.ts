@@ -98,6 +98,7 @@ function typeOverride(value: MapFeatureTypeStyle): FeatureTypeStyle {
 }
 export function publishedDrawnStyles(map: MapDescriptor, subject: string): LayerStyle[] {
   const layers = publishedStyles(map, subject);
+  if (map.realScale) return layers.map((layer) => ({ ...layer, opacity: 1 }));
   const faults =
     map.layers
       .find((layer) => vectorFamily(layer.id) === "geology")

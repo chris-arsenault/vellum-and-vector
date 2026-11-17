@@ -22,6 +22,33 @@ pub struct Selection<'a> {
     pub ancestors: &'a [String],
 }
 impl Selection<'_> {
+    /// Pinned parent context seeds the child's added margin through the resource sampler's
+    /// existing edge support. Ordinary present fields still need complete coverage.
+    pub fn supports(
+        &self,
+        input: bool,
+        footprint: &Geometry,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<bool> {
+        if self.owned_geography && input {
+            let overlap = spatial
+                .overlay(
+                    footprint,
+                    &self.scope.footprint,
+                    crate::spatial::Overlay::Intersection,
+                )
+                .map_err(io::Error::other)?;
+            return overlap.map_or(Ok(false), |shape| {
+                spatial
+                    .area(&shape)
+                    .map(|area| area > 0.0)
+                    .map_err(io::Error::other)
+            });
+        }
+        spatial
+            .relation(footprint, &self.scope.footprint, Predicate::Covers)
+            .map_err(io::Error::other)
+    }
     pub fn accepts(&self, area: &str, space: &str, input: bool) -> bool {
         space == self.scope.space
             && if self.owned_geography {
@@ -58,9 +85,7 @@ impl Selection<'_> {
         let mut chosen: BTreeMap<String, &Record> = BTreeMap::new();
         for record in records {
             if !self.accepts(&record.area, &record.space, record.input)
-                || !spatial
-                    .relation(&record.footprint, &self.scope.footprint, Predicate::Covers)
-                    .map_err(io::Error::other)?
+                || !self.supports(record.input, &record.footprint, spatial)?
             {
                 continue;
             }

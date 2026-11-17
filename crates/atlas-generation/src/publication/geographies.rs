@@ -19,7 +19,7 @@ const GROUPS: &[Group] = &[
     ("physical.landmarks", "geology", &["landmark"], false),
     ("physical.landmarks", "magic", &["landmark"], false),
     ("physical.fractures", "faults", &["fault"], false),
-    ("water.routing", "lakes", &["lake"], false),
+    ("water.routing", "lakes", &["lake", "pool"], false),
     ("ocean.geography", "oceans", &["ocean"], false),
     (
         "physical.landforms",
@@ -46,6 +46,8 @@ const GROUPS: &[Group] = &[
             "placer",
             "saltPan",
             "killingGround",
+            "outcrop",
+            "cliff",
         ],
         false,
     ),
@@ -150,6 +152,13 @@ const GROUPS: &[Group] = &[
     ),
     ("built.layout", "historicalEvents", &["societyEvent"], false),
     ("built.layout", "roads", &["road", "lane", "street"], true),
+    ("built.layout", "roads", &["trail"], false),
+    (
+        "ecology.living",
+        "objects",
+        &["tree", "shrub", "boulder", "reeds"],
+        false,
+    ),
     (
         "built.layout",
         "structures",
@@ -206,4 +215,59 @@ pub fn bindings(input: &Inputs<'_>, inherited_layers: &[String]) -> Vec<Binding>
             .collect(),
     });
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::atlas::features::{Selected, Selection};
+    // hpc-exempt: publication test channel-name metadata, not numerical field state.
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn real_scale_products_have_publication_bindings() {
+        let selection = [
+            "water.routing",
+            "physical.landforms",
+            "built.layout",
+            "ecology.living",
+        ]
+        .into_iter()
+        .map(|id| {
+            (
+                id.into(),
+                Selected {
+                    enabled: true,
+                    ..Default::default()
+                },
+            )
+        })
+        .collect::<Selection>();
+        let input = Inputs {
+            selection: &selection,
+            systems: &[],
+            confluences: &[],
+            sources: &[],
+            // hpc-exempt: publication test channel-name metadata, not numerical field state.
+            inherited: &BTreeSet::new(),
+        };
+        let bindings = bindings(&input, &[]);
+        for (layer, kind) in [
+            ("lakes", "pool"),
+            ("geology", "outcrop"),
+            ("geology", "cliff"),
+            ("roads", "trail"),
+            ("objects", "tree"),
+            ("objects", "shrub"),
+            ("objects", "boulder"),
+            ("objects", "reeds"),
+        ] {
+            let product = bindings
+                .iter()
+                .find(|binding| binding.layer == layer && binding.kinds.iter().any(|k| k == kind))
+                .unwrap_or_else(|| panic!("Missing publication binding for {kind} on {layer}"));
+            assert!(product.publish);
+            assert!(!product.network);
+        }
+    }
 }
