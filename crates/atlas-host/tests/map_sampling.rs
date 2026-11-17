@@ -39,9 +39,11 @@ fn publishes_physical_shores_display_height_and_gradients() {
             .unwrap();
     }
     let mut classes = storage.allocate(0.0);
+    let mut surfaces = storage.allocate(0.0);
     let patch_classes = storage.allocate(2.0).read_only();
     for i in 0..25 {
         classes.set(i, if i % 5 >= 2 { 1.0 } else { 0.0 }).unwrap();
+        surfaces.set(i, f64::from(i % 5 + i / 5 >= 4)).unwrap();
     }
     let mut field = Resource::new(
         Rc::new(Grid {
@@ -55,6 +57,22 @@ fn publishes_physical_shores_display_height_and_gradients() {
         }),
         storage.allocate(1u8).read_only(),
         BTreeMap::from([
+            (
+                "finalSurface".into(),
+                Channel {
+                    values: surfaces.read_only().into(),
+                    unit: "category".into(),
+                    quantity: Quantity::Category,
+                },
+            ),
+            (
+                "naturalSurface".into(),
+                Channel {
+                    values: surfaces.read_only().into(),
+                    unit: "category".into(),
+                    quantity: Quantity::Category,
+                },
+            ),
             (
                 "Elevation".into(),
                 Channel {
@@ -84,7 +102,19 @@ fn publishes_physical_shores_display_height_and_gradients() {
         confluences: &[],
     };
     assert_category_presence(&mut field, patch_classes, &fields, &spatial);
+    let _evidence_owner = install_retained_contributions(&mut field, cache.clone());
     let ocean = rectangle(Bounds(0.0, 0.0, 20.0, 100.0));
+    let colors = ["#206020", "#c0a060"]
+        .into_iter()
+        .enumerate()
+        .map(|(value, color)| atlas_map::Category {
+            value: value as i32,
+            label: format!("Cover {value}"),
+            color: Some(color.into()),
+            present: true,
+            surface: None,
+        })
+        .collect::<Vec<_>>();
     let source = Source {
         field: &field,
         channel: "Elevation",
@@ -93,17 +123,25 @@ fn publishes_physical_shores_display_height_and_gradients() {
         wrap: None,
         water: None,
         ice: None,
-        surface: None,
-        colors: &[],
+        surface: Some(&field),
+        colors: &colors,
         ocean: Some(&ocean),
         lakes: &[],
     };
     let grid = sampling::grid(&source).unwrap();
-    assert_eq!((grid.width, grid.height), (8, 8));
+    assert_eq!((grid.width, grid.height), (64, 64));
     let input = fields::input(&fields, &source, "terrain".into(), &spatial).unwrap();
     assert_eq!(input.planes[0].band.display.factor, 1.0 / 1024.0);
     assert_eq!(input.planes[4].band.id, "sample-span");
     assert_eq!(input.planes[8].band.id, "east-gradient");
+    assert!(
+        input.planes[5]
+            .band
+            .categories
+            .iter()
+            .any(|c| c.value == 1 && c.present),
+        "Retained neighbouring classes belong in the published legend"
+    );
     let mut output = RasterPublication::new(input, Coverage::samples(0, cache.clone())).unwrap();
     let working = RefCell::new(Coverage::samples(25, cache));
     let control = NativeControl::new(CancellationToken::default(), |_| {});
@@ -125,6 +163,35 @@ fn publishes_physical_shores_display_height_and_gradients() {
     bytes.set_position(0);
     assert_map_pixels(bytes);
 }
+fn install_retained_contributions(
+    field: &mut Resource,
+    cache: atlas_generation::storage::SharedCache,
+) -> Coverage {
+    // The nearest donor is cover 0, while its retained neighbours favour cover 1.
+    // Publication must use those contributions instead of inventing a blended colour.
+    let mut evidence_storage = Coverage::samples(0, cache);
+    let donors = evidence_storage.scratch(25, 0.0f64).read_only();
+    for name in ["finalSurface", "naturalSurface"] {
+        field.channels.get_mut(name).unwrap().values = donors.clone().into();
+    }
+    let mut evidence = evidence_storage.scratch(
+        25 * atlas_generation::field::projection::support::STRIDE,
+        0.0,
+    );
+    for cell in 0..25 {
+        let at = cell * atlas_generation::field::projection::support::STRIDE;
+        evidence.set(at, 0.0).unwrap();
+        evidence.set(at + 1, 0.25).unwrap();
+        evidence.set(at + 2, 1.0).unwrap();
+        evidence.set(at + 3, 0.75).unwrap();
+    }
+    field.surface_support = Some(atlas_generation::field::projection::support::ReadSupport {
+        final_surface: evidence.read_only(),
+        natural: evidence.read_only(),
+    });
+    evidence_storage
+}
+
 fn assert_category_presence(
     field: &mut Resource,
     patch_classes: atlas_generation::storage::ReadBand<f64>,
@@ -173,11 +240,22 @@ fn assert_map_pixels(bytes: Cursor<Vec<u8>>) {
     };
     let water = plane(2);
     assert_eq!(water[0], 1.0); // Positive ground remains covered by the published ocean geometry.
-    assert_eq!(water[4], 0.0);
-    assert_eq!(plane(7)[4], 1131.25);
-    assert_eq!(plane(8)[4], 10.0);
-    assert_eq!(plane(14)[4], 0.0);
-    assert_eq!(plane(15)[4], 1.0);
+    let center = 32 * 64 + 32;
+    assert_eq!(water[center], 0.0);
+    assert_eq!(plane(7)[center], 853.90625);
+    assert_eq!(plane(8)[center], 10.0);
+    assert_eq!(plane(14)[center], 1.0);
+    assert_eq!(plane(15)[center], 1.0);
+    let classes = plane(5);
+    let red = plane(11);
+    let pixels = (0..64)
+        .flat_map(|y| (0..64).map(move |x| y * 64 + x))
+        .collect::<Vec<_>>();
+    assert!(pixels.iter().all(|&i| classes[i] == 1.0));
+    assert!(
+        pixels.iter().all(|&i| red[i] == 192.0),
+        "Surface paint must use the winning retained class before choosing its colour"
+    );
 }
 
 #[test]
@@ -256,5 +334,86 @@ fn capture_layout_depends_on_footprint_not_map_profile() {
             );
             assert!(!captured.inputs.surface.active.is_empty());
         }
+    }
+}
+
+#[test]
+fn retained_contributions_reconstruct_both_sample_layouts() {
+    use atlas_generation::reconstruction::{build, classes, grid_build};
+    let path =
+        std::env::temp_dir().join(format!("atlas-class-layouts-{}.blocks", std::process::id()));
+    let cache = BlockCache::resident(
+        8_000_000,
+        BlockScratch::new(NativeScratch::create_new(path).unwrap()),
+    );
+    let spatial = NativeGeos::new(1e-6).unwrap();
+    let bounds = [0.0, 0.0, 100.0, 100.0];
+    let footprint = rectangle(Bounds(0.0, 0.0, 100.0, 100.0));
+    let adaptive = build::adaptive(
+        bounds,
+        build::Sampling {
+            minimum_size: 50.0,
+            maximum_size: 50.0,
+        },
+        |_, _| Ok(true),
+        cache.clone(),
+    )
+    .unwrap();
+    for layout in [
+        Layout::Raster {
+            width: 2,
+            height: 2,
+        },
+        Layout::Adaptive(Box::new(adaptive)),
+    ] {
+        let mut sampled = grid_build::create(
+            grid_build::Frame {
+                bounds,
+                footprint: &footprint,
+                periodic_width: None,
+                precision: 1e-6,
+            },
+            layout,
+            &spatial,
+            cache.clone(),
+        )
+        .unwrap();
+        let count = sampled.active.len();
+        let mut evidence = sampled.coverage.scratch(
+            count * atlas_generation::field::projection::support::STRIDE,
+            0.0,
+        );
+        for cell in 0..count {
+            let x = sampled.grid.position(cell).unwrap()[0] / 100.0;
+            let at = cell * atlas_generation::field::projection::support::STRIDE;
+            evidence.set(at, 0.0).unwrap();
+            evidence.set(at + 1, 1.0 - x).unwrap();
+            evidence.set(at + 2, 1.0).unwrap();
+            evidence.set(at + 3, x).unwrap();
+        }
+        let values = sampled.coverage.allocate(0.0f64).read_only().into();
+        let source = classes::Surface {
+            grid: &sampled.grid,
+            values,
+            active: sampled.active.read_only(),
+            support: Some(evidence.read_only()),
+            overlays: Vec::new(),
+        };
+        let scratch = RefCell::new(Coverage::samples(0, cache.clone()));
+        let mut sampler = classes::Sampler::new(&source, &scratch);
+        assert_eq!(sampler.sample([25.0, 50.0], None).unwrap(), 0.0);
+        assert_eq!(sampler.sample([75.0, 50.0], None).unwrap(), 1.0);
+        assert!(
+            sampler
+                .sample([25.0, 50.0], Some(&|code| code == 1))
+                .unwrap()
+                < 0.0
+        );
+        assert!(
+            sampler
+                .sample([75.0, 50.0], Some(&|code| code == 1))
+                .unwrap()
+                > 0.0
+        );
     }
 }

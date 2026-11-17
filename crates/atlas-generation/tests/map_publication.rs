@@ -290,3 +290,51 @@ fn gradients_use_map_units_and_publication_observes_cancellation() {
     .unwrap_err();
     assert!(error.to_string().contains("Cancelled"));
 }
+
+#[test]
+fn terrain_overview_rebuilds_slopes_and_pixel_span_at_its_own_scale() {
+    check_terrain_overview("");
+}
+
+#[test]
+fn grouped_terrain_overview_rebuilds_slopes_and_pixel_span() {
+    check_terrain_overview("Elevation:");
+}
+
+fn check_terrain_overview(prefix: &str) {
+    let mut storage = storage();
+    let grid = RasterGrid {
+        width: 4,
+        height: 4,
+        bounds: Bounds(0.0, 0.0, 8.0, 12.0),
+    };
+    let mut raster = MapRaster::new(
+        grid,
+        [
+            "display-height",
+            "east-gradient",
+            "north-gradient",
+            "sample-span",
+        ]
+        .map(|id| plane(&format!("{prefix}{id}"), Resampling::Mean))
+        .to_vec(),
+        &mut storage,
+    )
+    .unwrap();
+    for cell in 0..16 {
+        raster.coverage.set(cell, 1.0).unwrap();
+        raster.planes[0]
+            .values
+            .set(cell, ((cell % 4) * 2 + (cell / 4) * 6) as f32)
+            .unwrap();
+        raster.planes[1].values.set(cell, 99.0).unwrap();
+        raster.planes[2].values.set(cell, 99.0).unwrap();
+        raster.planes[3].values.set(cell, 2.0).unwrap();
+    }
+    let overview = ready(raster.overview(&mut storage, &Control(false))).unwrap();
+    for cell in 0..4 {
+        assert_eq!(overview.planes[1].values.get(cell).unwrap(), 1.0);
+        assert_eq!(overview.planes[2].values.get(cell).unwrap(), -2.0);
+        assert_eq!(overview.planes[3].values.get(cell).unwrap(), 4.0);
+    }
+}

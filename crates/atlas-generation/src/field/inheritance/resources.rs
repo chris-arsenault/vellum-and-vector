@@ -29,6 +29,7 @@ pub struct Resource {
     // hpc-exempt: current-format resource channel names; values retain typed storage.
     pub channels: BTreeMap<String, Channel>,
     pub cargo: Option<Cargo>,
+    pub surface_support: Option<crate::field::projection::support::ReadSupport>,
     pub overlays: Vec<Overlay>,
     _coverage: Rc<Coverage>,
 }
@@ -55,6 +56,7 @@ impl Resource {
             active,
             channels,
             cargo,
+            surface_support: None,
             overlays: Vec::new(),
             _coverage: Rc::new(coverage),
         }

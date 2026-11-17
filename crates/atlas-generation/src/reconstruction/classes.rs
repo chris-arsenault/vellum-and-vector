@@ -1,4 +1,5 @@
 //! Class winners and family margins use the same regular or adaptive membership patches.
+mod weighted;
 use super::{adaptive::Adaptive, cubic, Grid, Layout};
 use crate::{
     field::schema::NumericBand,
@@ -13,6 +14,7 @@ pub struct Surface<'a> {
     pub grid: &'a Grid,
     pub values: NumericBand,
     pub active: ReadBand<u8>,
+    pub support: Option<ReadBand<f64>>,
     pub overlays: Vec<Overlay<'a>>,
 }
 #[derive(Clone)]
@@ -29,6 +31,14 @@ pub struct Sampler<'a> {
     candidate_lengths: Vec<usize>,
     candidate_codes: Vec<i32>,
     overlays: Vec<Sampler<'a>>,
+    window: RefCell<Option<ClassWindow>>,
+    support_window: RefCell<Option<weighted::Window>>,
+}
+#[derive(Clone)]
+struct ClassWindow {
+    cells: [[usize; 4]; 4],
+    codes: cubic::Codes,
+    candidates: smallvec::SmallVec<[i32; 16]>,
 }
 impl<'a> Sampler<'a> {
     pub fn new(source: &Surface<'a>, coverage: &'a RefCell<Coverage>) -> Self {
@@ -44,6 +54,8 @@ impl<'a> Sampler<'a> {
             candidate_starts: vec![usize::MAX; leaves],
             candidate_lengths: vec![0; leaves],
             candidate_codes: Vec::new(),
+            window: RefCell::new(None),
+            support_window: RefCell::new(None),
             overlays: source
                 .overlays
                 .iter()
@@ -93,12 +105,7 @@ impl<'a> Sampler<'a> {
                     let patch = self.patches.entry(code).or_insert_with(|| {
                         Adaptive::new(topology, &mut self.coverage.borrow_mut())
                     });
-                    let value = patch.sample(point, &|cell| {
-                        Ok(f64::from(
-                            self.source.active.get(cell)? != 0
-                                && self.source.values.get(cell)? as i32 == code,
-                        ))
-                    })?;
+                    let value = patch.sample(point, &|cell| self.source.membership(cell, code))?;
                     if let Some(includes) = includes {
                         if includes(code) {
                             inside = inside.max(value);
@@ -121,7 +128,13 @@ impl<'a> Sampler<'a> {
     }
     fn visit(&self, cell: usize, rings: usize, codes: &mut SmallIntSet) -> io::Result<()> {
         if self.source.active.get(cell)? != 0 {
-            codes.add(self.source.values.get(cell)? as i32);
+            if let Some(evidence) = &self.source.support {
+                crate::field::projection::support::visit(evidence, cell, |code, _| {
+                    codes.add(code);
+                })?;
+            } else {
+                codes.add(self.source.values.get(cell)? as i32);
+            }
         }
         if rings > 0 {
             let Layout::Adaptive(topology) = &self.source.grid.layout else {
@@ -138,18 +151,31 @@ impl<'a> Sampler<'a> {
         Ok(())
     }
     /// Class codes of a 4×4 window, with `None` for inactive samples, and the classes present.
-    fn window_codes(&self, cells: [[usize; 4]; 4]) -> io::Result<(cubic::Codes, SmallIntSet)> {
+    fn window_codes(
+        &self,
+        cells: [[usize; 4]; 4],
+    ) -> io::Result<(cubic::Codes, smallvec::SmallVec<[i32; 16]>)> {
+        if let Some(window) = self.window.borrow().as_ref().filter(|w| w.cells == cells) {
+            return Ok((window.codes, window.candidates.clone()));
+        }
         let mut codes = [[None; 4]; 4];
-        let mut candidates = SmallIntSet::default();
+        let mut candidates = smallvec::SmallVec::new();
         for (row, cells) in codes.iter_mut().zip(cells) {
             for (code, cell) in row.iter_mut().zip(cells) {
                 if self.source.active.get(cell)? != 0 {
                     let value = self.source.values.get(cell)? as i32;
                     *code = Some(value);
-                    candidates.add(value);
+                    if !candidates.contains(&value) {
+                        candidates.push(value);
+                    }
                 }
             }
         }
+        *self.window.borrow_mut() = Some(ClassWindow {
+            cells,
+            codes,
+            candidates: candidates.clone(),
+        });
         Ok((codes, candidates))
     }
     fn raster(
@@ -186,9 +212,12 @@ impl<'a> Sampler<'a> {
             .values
             .get(cells[1 + usize::from(ty >= 0.5)][1 + usize::from(tx >= 0.5)])?
             as i32;
+        if self.source.support.is_some() {
+            return self.weighted_raster(cells, tx, ty, nearest, includes);
+        }
         let (mut best, mut best_weight, mut inside, mut outside) =
             (nearest, f64::NEG_INFINITY, 0.0f64, 0.0f64);
-        for &code in candidates.items() {
+        for &code in &candidates {
             let weight = cubic::membership(&codes, code, wx, wy);
             if let Some(includes) = includes {
                 if includes(code) {

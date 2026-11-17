@@ -136,11 +136,21 @@ pub fn inspection_band(
 fn range(field: &Resource, channel: &str) -> io::Result<(f64, f64)> {
     fn include(field: &Resource, channel: &str, range: &mut (f64, f64)) -> io::Result<()> {
         if let Some(values) = field.channels.get(channel) {
+            let support = field
+                .surface_support
+                .as_ref()
+                .and_then(|s| s.channel(channel));
             for i in 0..values.values.len() {
                 let value = values.values.get(i)?;
                 if field.active.get(i)? != 0 && value.is_finite() {
                     range.0 = range.0.min(value);
                     range.1 = range.1.max(value);
+                    if let Some(support) = &support {
+                        crate::field::projection::support::visit(support, i, |code, _| {
+                            range.0 = range.0.min(f64::from(code));
+                            range.1 = range.1.max(f64::from(code));
+                        })?;
+                    }
                 }
             }
         }
@@ -239,17 +249,26 @@ fn collect(
         .map_err(io::Error::other)?;
     let active = field.active.read_values()?;
     let values = values.values.read_values()?;
+    let support = field
+        .surface_support
+        .as_ref()
+        .and_then(|s| s.channel(channel));
     // hpc-exempt: legend categories index packed candidate cell IDs, not cell objects.
     let mut candidates: BTreeMap<i32, Vec<usize>> = BTreeMap::new();
     for i in 0..field.active.len() {
         let code = values.get(i)?;
-        if active.get(i)? == 0 || !code.is_finite() || result.contains(&(code as i32)) {
+        if active.get(i)? == 0 || !code.is_finite() {
             continue;
         }
-        if complete {
-            result.insert(code as i32);
-        } else {
-            candidates.entry(code as i32).or_default().push(i);
+        for code in class_codes(code, support.as_ref(), i)? {
+            if result.contains(&code) {
+                continue;
+            }
+            if complete {
+                result.insert(code);
+            } else {
+                candidates.entry(code).or_default().push(i);
+            }
         }
     }
     for (code, indices) in candidates {
@@ -275,4 +294,19 @@ fn collect(
         }
     }
     Ok(())
+}
+fn class_codes(
+    value: f64,
+    evidence: Option<&crate::storage::ReadBand<f64>>,
+    cell: usize,
+) -> io::Result<smallvec::SmallVec<[i32; 8]>> {
+    let mut result = smallvec::smallvec![value as i32];
+    if let Some(evidence) = evidence {
+        crate::field::projection::support::visit(evidence, cell, |code, _| {
+            if !result.contains(&code) {
+                result.push(code);
+            }
+        })?;
+    }
+    Ok(result)
 }

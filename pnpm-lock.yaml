@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  ol@10.11.0:
+    hash: 4a614036692635c172b62474949ef9379d37ec6bdd5c4b4157e3b7f90175a9ad
+    path: patches/ol@10.11.0.patch
+
 importers:
 
   .:
@@ -70,10 +75,10 @@ importers:
         version: 1.6.8
       geostyler:
         specifier: 18.6.0
-        version: 18.6.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(geotiff@3.1.0-beta.0)(ol@10.11.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+        version: 18.6.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(geotiff@3.1.0-beta.0)(ol@10.11.0(patch_hash=4a614036692635c172b62474949ef9379d37ec6bdd5c4b4157e3b7f90175a9ad))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       geostyler-openlayers-parser:
         specifier: 5.8.0
-        version: 5.8.0(ol@10.11.0)
+        version: 5.8.0(ol@10.11.0(patch_hash=4a614036692635c172b62474949ef9379d37ec6bdd5c4b4157e3b7f90175a9ad))
       geostyler-style:
         specifier: 11.1.0
         version: 11.1.0
@@ -82,7 +87,7 @@ importers:
         version: 3.1.0-beta.0
       ol:
         specifier: 10.11.0
-        version: 10.11.0
+        version: 10.11.0(patch_hash=4a614036692635c172b62474949ef9379d37ec6bdd5c4b4157e3b7f90175a9ad)
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -5108,12 +5113,12 @@ snapshots:
       '@types/mapbox-gl': 3.5.0
       geostyler-style: 10.5.0
 
-  geostyler-openlayers-parser@5.8.0(ol@10.11.0):
+  geostyler-openlayers-parser@5.8.0(ol@10.11.0(patch_hash=4a614036692635c172b62474949ef9379d37ec6bdd5c4b4157e3b7f90175a9ad)):
     dependencies:
       '@turf/centroid': 7.4.0
       css-font-parser: 2.0.1
       geostyler-style: 13.1.0
-      ol: 10.11.0
+      ol: 10.11.0(patch_hash=4a614036692635c172b62474949ef9379d37ec6bdd5c4b4157e3b7f90175a9ad)
 
   geostyler-qgis-parser@4.1.0:
     dependencies:
@@ -5144,7 +5149,7 @@ snapshots:
       fast-xml-parser: 4.5.7
       geostyler-data: 1.1.0
 
-  geostyler@18.6.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(geotiff@3.1.0-beta.0)(ol@10.11.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
+  geostyler@18.6.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(geotiff@3.1.0-beta.0)(ol@10.11.0(patch_hash=4a614036692635c172b62474949ef9379d37ec6bdd5c4b4157e3b7f90175a9ad))(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
       '@ant-design/icons': 5.6.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@dnd-kit/core': 6.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -5168,14 +5173,14 @@ snapshots:
       geostyler-data: 1.1.0
       geostyler-geojson-parser: 2.0.0
       geostyler-mapbox-parser: 6.2.0
-      geostyler-openlayers-parser: 5.8.0(ol@10.11.0)
+      geostyler-openlayers-parser: 5.8.0(ol@10.11.0(patch_hash=4a614036692635c172b62474949ef9379d37ec6bdd5c4b4157e3b7f90175a9ad))
       geostyler-qgis-parser: 4.1.0
       geostyler-sld-parser: 8.5.0
       geostyler-style: 11.1.0
       geostyler-wfs-parser: 3.0.1
       lodash-es: 4.18.1
       monaco-editor: 0.52.2
-      ol: 10.11.0
+      ol: 10.11.0(patch_hash=4a614036692635c172b62474949ef9379d37ec6bdd5c4b4157e3b7f90175a9ad)
       proj4: 2.22.0(geotiff@3.1.0-beta.0)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
@@ -6049,7 +6054,7 @@ snapshots:
 
   obug@2.2.1: {}
 
-  ol@10.11.0:
+  ol@10.11.0(patch_hash=4a614036692635c172b62474949ef9379d37ec6bdd5c4b4157e3b7f90175a9ad):
     dependencies:
       '@types/rbush': 4.0.0
       earcut: 3.2.4

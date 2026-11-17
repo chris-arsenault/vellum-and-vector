@@ -1,0 +1,51 @@
+diff --git a/source/GeoTIFF.js b/source/GeoTIFF.js
+--- a/source/GeoTIFF.js
++++ b/source/GeoTIFF.js
+@@ -462,2 +462,3 @@
+  * the linear interpolation is used to resample the data.  If false, nearest neighbor is used.
++ * @property {number} [gutter=0] Neighbour pixels to read around each tile for interpolation.
+  */
+@@ -486,2 +487,3 @@
+       transition: options.transition,
++      gutter: options.gutter,
+       interpolate: options.interpolate !== false,
+@@ -980,2 +982,7 @@
+     const sourceTileSize = this.getTileSize(z);
++    const gutter = this.getGutterForProjection(this.getProjection());
++    const readSize = [
++      sourceTileSize[0] + 2 * gutter,
++      sourceTileSize[1] + 2 * gutter,
++    ];
+     const sourceCount = this.sourceImagery_.length;
+@@ -990,4 +997,4 @@
+-        Math.round(x * (sourceTileSize[0] * resolutionFactor)),
+-        Math.round(y * (sourceTileSize[1] * resolutionFactor)),
+-        Math.round((x + 1) * (sourceTileSize[0] * resolutionFactor)),
+-        Math.round((y + 1) * (sourceTileSize[1] * resolutionFactor)),
++        Math.round((x * sourceTileSize[0] - gutter) * resolutionFactor),
++        Math.round((y * sourceTileSize[1] - gutter) * resolutionFactor),
++        Math.round(((x + 1) * sourceTileSize[0] + gutter) * resolutionFactor),
++        Math.round(((y + 1) * sourceTileSize[1] + gutter) * resolutionFactor),
+@@ -1050,2 +1057,2 @@
+-        width: sourceTileSize[0],
+-        height: sourceTileSize[1],
++        width: readSize[0],
++        height: readSize[1],
+@@ -1077,2 +1084,2 @@
+-        width: sourceTileSize[0],
+-        height: sourceTileSize[1],
++        width: readSize[0],
++        height: readSize[1],
+@@ -1089,1 +1096,1 @@
+-          .then(this.composeTile_.bind(this, sourceTileSize))
++          .then(this.composeTile_.bind(this, readSize))
+diff --git a/source/GeoTIFF.d.ts b/source/GeoTIFF.d.ts
+--- a/source/GeoTIFF.d.ts
++++ b/source/GeoTIFF.d.ts
+@@ -188,2 +188,6 @@
+     interpolate?: boolean | undefined;
++    /**
++     * Neighbour pixels to read around each tile for interpolation.
++     */
++    gutter?: number | undefined;
+ };

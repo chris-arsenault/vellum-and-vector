@@ -1,6 +1,6 @@
 //! Shared fan weights from world/atlasSampling.ts; identities keep their complete donor.
 use crate::{
-    lattice::{sampling::vertex_members, TriangularLattice, BLOCK_CELLS},
+    lattice::{sampling::fan_weights, TriangularLattice, BLOCK_CELLS},
     storage::{Band, Coverage, ReadBand, Sample},
 };
 use std::io;
@@ -44,7 +44,7 @@ impl Interpolation {
                 samples[i] = i32::try_from(cell)
                     .map_err(|_| io::Error::other("Projection donor exceeds int32"))?;
                 let row = i * STRIDE;
-                degree[i] = fan(
+                degree[i] = fan_weights(
                     mesh,
                     cell,
                     [x, y],
@@ -104,48 +104,6 @@ impl Interpolation {
         }
         Ok(())
     }
-}
-fn fan(
-    mesh: &TriangularLattice,
-    cell: usize,
-    p: [f64; 2],
-    cells: &mut [i32],
-    weights: &mut [f64],
-) -> usize {
-    let barycentric = mesh.barycentric(cell, p);
-    let minimum = barycentric
-        .into_iter()
-        .fold(f64::INFINITY, f64::min)
-        .max(0.0);
-    let maximum = barycentric.into_iter().fold(f64::NEG_INFINITY, f64::max);
-    let middle = 1.0 - minimum - maximum;
-    let center = 3.0 * minimum;
-    let vertex = (maximum - middle).max(0.0);
-    let face = (2.0 * (middle - minimum)).max(0.0);
-    let corner = barycentric.iter().position(|&v| v == maximum).unwrap();
-    let opposite = (0..3)
-        .min_by(|&a, &b| barycentric[a].total_cmp(&barycentric[b]))
-        .unwrap();
-    let edge = if mesh.inverted(cell) && opposite > 0 {
-        3 - opposite
-    } else {
-        opposite
-    };
-    cells[0] = cell as i32;
-    cells[1] = mesh.neighbor(cell, edge).unwrap_or(cell) as i32;
-    weights[0] = center + face / 2.0;
-    weights[1] = face / 2.0;
-    let members = vertex_members(mesh, cell, corner);
-    let count = members.len() + 2;
-    for (i, &member) in members.iter().enumerate() {
-        cells[i + 2] = member as i32;
-        weights[i + 2] = vertex / members.len() as f64;
-    }
-    let sum: f64 = weights[..count].iter().sum();
-    for weight in &mut weights[..count] {
-        *weight /= sum;
-    }
-    count
 }
 pub(super) fn write_range<T: Sample>(
     band: &mut Band<T>,

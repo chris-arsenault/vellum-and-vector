@@ -3,8 +3,8 @@
 Working copy for Sulion plan `5c9c7528-0352-4486-ad6c-dd75d60f12bd`. The owner
 reviewed world and refined-region maps and reported the defects below. This file
 records each defect's code-proven cause, what remains unverified and the remedy, so
-implementation covers every item rather than the most recent. Implementation waits
-for the owner's go-ahead and does not interrupt the running performance work. When
+implementation covers every item rather than the most recent. The owner authorized
+all surface-raster deliverables; unrelated work retains its existing scope. When
 the plan closes, durable mechanisms move to the generation guide, an ADR or the
 backlog, and this file is deleted.
 
@@ -372,59 +372,54 @@ road, few chains between towns, a few long straight lines.
 - Land ways may keep riding river cells: valley roads follow rivers, and the cheap
   river cost models towpaths and boats. Not changed.
 
-## 6. Surface base map renders as blurry squares
+## 6. Surface raster publication
 
-World and regional maps; much worse than before the Rust migration. One screenshot
-also shows a horizontal seam of blocky artifacts.
+**Release verification open:** the owner rejected the earlier broad-blend comparison
+and approved the retained-contribution appearance. Normal native publication and
+real browser generation now use that reconstruction; deployment remains to verify.
 
-**Read**
+The owner's reference, `paste-2026-11-03_16-05-48-594Z`, sets the initial quality
+bar: crisp geographic colour regions without the current square blocks. Its
+remaining resolution artifacts are acceptable temporarily, not artifacts to
+reproduce. Preserve responsive GIS-only viewing while meeting that bar.
 
-- Class channels are captured from the nearest lattice cell
-  (`field/projection/sampling.rs:78-84`) on a raster at lattice cell span
-  (`atlas/initial.rs:49-53`).
-- Publication fixes the map raster at 2 display pixels per sample
-  (`publication/sampling/mod.rs:33-35`, from `e59323a`, 2026-11-14). Class sampling
-  (`reconstruction/classes.rs:140-208`) picks a weighted majority of the four
-  surrounding samples; pixel centres at 0.25 and 0.75 make each sample a 2×2 square.
-  Class colours are baked into bands at that density (`publication/sampling/tile.rs`).
-- The frontend loads that single GeoTIFF with `interpolate: true` for terrain
-  (`frontend/src/publishedRaster.ts:37-45`), so zooming magnifies 2×2 squares and
-  blurs their edges.
-- Before the migration (`7f48a4d` and earlier, now
-  `archive/typescript/frontend/src/numericTiles.ts:195-227`), a worker built
-  256-pixel tiles at screen resolution for every zoom; class came from smooth class
-  reconstruction per screen pixel, and the shader chose colour from the class code.
-  The source had a 1-pixel gutter.
-- Regional cells were earlier cut from 262,144 to 65,536 for render speed
-  (`ea1eabd9` phase 6), which doubles the sample size on regions.
-- The other session's uncommitted changes to `publication/samples.rs` and
-  `publication/fields/metadata.rs` only batch GEOS calls and do not touch this.
+The owner preferred the retained-contribution prototype. Rejecting it solely for
+remaining facets applied a stricter bar than requested. Larger same-map comparisons
+now separate the reconstruction's cost from the cost of higher raster density.
+Normal publication now retains the contributions in private resources and reconstructs
+them before choosing class colours. The shared native/WASM producer uses the approved
+display detail. Release verification remains open.
 
-**Unverified**
+Band isolation confirms that the blocks remain in surface paint without water or
+relief shading. Evaluating the archived four-corner class winner on the same
+captured samples at higher display density also retains the broad patchwork.
+This isolates class sampling; it does not reproduce the old application's full
+generation or rendering. The earlier fixed-image explanation is insufficient,
+and extra density or live tiles are not established remedies for these shapes.
+That earlier comparison did not resolve the regression. Retaining class contributions
+before the nearest-label projection supplies the missing source-shape information.
 
-- The horizontal seam. Candidate: OpenLayers' GeoTIFF source has no gutter, so
-  linear sampling at 256-pixel TIFF tile edges could seam; that would usually show on
-  both axes. Needs a look at a real map with `interpolate: false`.
+Independent review found a missed production caller: grouped terrain bands carry
+an `Elevation:` prefix, so overview relief reconstruction previously skipped
+finished-map assets. The lookup now recognizes that namespace. A regression test
+using grouped bands fails before the correction and passes afterward. A separate
+comparison of the same complete GIS asset confirms that tile gutters remove a
+visible contour discontinuity. These are specific relief/seam repairs; neither
+establishes that the surface-colour mosaic is fixed. The incomplete republishing
+example was removed; the pyramid diagnostic now reads the original GIS base image.
 
-**Correction (owner 2026-11-16):** the squares are a lack of interpolation, not
-pixel density. Read: rectangular maps capture fields on a regular sample raster
-(`Layout::Raster`, `atlas/initial.rs`). On that layout:
+Surface delivery selects crisp class colours from retained membership contributions
+at terrain-specific display density. Inspection IDs remain discrete. Raster
+overviews rebuild relief from their reduced heights; neighbouring tile pixels
+support continuous GPU interpolation. The immutable GIS viewer and independent
+child crop path remain in place. The durable mechanism is recorded in
+[ADR 0015](adr/0015-finished-maps-and-execution-hosts.md).
 
-- Continuous fields were bilinear (`reconstruction/mod.rs` `sample_mapped`). Bilinear
-  height has a constant slope inside each sample square, so hillshade drawn from it
-  came out one flat shade per sample.
-- Classes took the single winner of the four corner samples
-  (`reconstruction/classes.rs` `raster`), so each sample was one flat colour.
-
-The adaptive layout already reconstructs with smooth Hermite patches, including
-per-class membership patches; the raster layout had no equivalent.
-
-**Remedy (done):** `reconstruction/cubic.rs` adds a Catmull-Rom 4×4 window. Raster
-continuous fields use it, clamped to the four surrounding samples so it adds no peaks
-or pits. Raster classes take the strongest cubic membership, so boundaries curve
-between samples. Publication density is unchanged.
-
-**Open:** the horizontal seam is unverified on a real map.
+The source/history investigation is complete. Retained world and refined-region
+inputs were reused for visual and publication checks; no generation algorithm,
+simulation resolution or regional refinement sampling change belongs to this fix.
+Existing published maps retain their old bytes until explicitly republished.
+Other defects in this backlog retain their own scope and status.
 
 ## 7. Ice fields hide everything on the topo map
 

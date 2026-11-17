@@ -48,11 +48,15 @@ pub async fn install(document: &mut Document, root: PathBuf) -> io::Result<()> {
         .iter()
         .map(|(name, _, _, _)| ((*name).into(), json!(name)))
         .collect();
-    let descriptor = json!({"schemaVersion":1,"id":id,"revision":1,"scope":document.scope.located,
+    let support = support(&mut store, id).await?;
+    let mut descriptor = json!({"schemaVersion":1,"id":id,"revision":1,"scope":document.scope.located,
         "crsId":document.scope.crs_id,"bounds":[0,0,100,100],"precision":1e-6,"layout":"regular",
         "sampling":{"width":5,"height":5},"state":"ready",
         "field":{"id":id,"scope":document.scope,"layoutResourceId":id,"geographyId":id,"channels":channels},
         "arrays":arrays.iter().map(|(name,unit,quantity,dtype)| json!({"name":name,"unit":unit,"quantity":quantity,"dtype":dtype,"shape":[5,5],"chunkShape":[5,5]})).collect::<Vec<_>>()});
+    descriptor["field"]["surfaceSupport"] =
+        json!({"finalSurface":"surface_contributions","natural":"natural_contributions"});
+    descriptor["arrays"].as_array_mut().unwrap().extend(support);
     store
         .write(id, "resource.json", &serde_json::to_vec(&descriptor)?)
         .await?;
@@ -60,6 +64,34 @@ pub async fn install(document: &mut Document, root: PathBuf) -> io::Result<()> {
         "layerId":"geology","algorithm":"supplied","source":{"kind":"run","id":"supplied"},
         "samples":25,"channels":channels.keys().collect::<Vec<_>>(),"resourceId":id,"state":"generated"}]);
     Ok(())
+}
+async fn support(store: &mut NativeResources, id: &str) -> io::Result<Vec<serde_json::Value>> {
+    let mut arrays = Vec::new();
+    for name in ["surface_contributions", "natural_contributions"] {
+        let metadata = json!({"zarr_format":3,"node_type":"array","shape":[400],"data_type":"float64","chunk_grid":{"name":"regular","configuration":{"chunk_shape":[400]}},"chunk_key_encoding":{"name":"default","configuration":{"separator":"/"}},"fill_value":0,"codecs":[{"name":"bytes","configuration":{"endian":"little"}}],"attributes":{}});
+        store
+            .write(
+                id,
+                &format!("{name}/zarr.json"),
+                &serde_json::to_vec(&metadata)?,
+            )
+            .await?;
+        let bytes = (0..400)
+            .flat_map(|i| {
+                let value: f64 = match i % 16 {
+                    0 => 32.0,
+                    1 => 0.75,
+                    2 => 31.0,
+                    3 => 0.25,
+                    _ => 0.0,
+                };
+                value.to_le_bytes()
+            })
+            .collect::<Vec<_>>();
+        store.write(id, &format!("{name}/c/0"), &bytes).await?;
+        arrays.push(json!({"name":name,"unit":"topology","quantity":"topology","dtype":"float64","shape":[400],"chunkShape":[400]}));
+    }
+    Ok(arrays)
 }
 fn value(name: &str, i: usize) -> f64 {
     match name {

@@ -64,6 +64,17 @@ Tiles derive from those GIS products; deleting a tile cache does not require gen
 resources to rebuild it. Presentation, inspection and export read GIS storage only.
 Surface display colors are published separately from category IDs, so raster interpolation
 blends colors without inventing categories. Class identities remain available for inspection.
+Private captures retain class contributions from the physical lattice alongside discrete
+inspection categories. These auxiliary arrays are not channels in the map catalogue.
+Publication reconstructs the contributions on the existing regular or adaptive field,
+chooses the winning class, then applies natural colours and magical tints. It does not
+blend the colours of competing classes across a numerical cell. Terrain has its own
+publication density, independent of the simulation lattice and inspection rasters.
+Overview colours retain premultiplied coverage, while height gradients are rebuilt from
+each overview's display height. Sun, exaggeration and contours remain view controls.
+The OpenLayers GeoTIFF source reads neighbouring pixels for continuous interpolation
+across tile edges. A dependency patch exposes the standard data-tile gutter through
+GeoTIFF reads; the viewer continues to consume only published GIS bands.
 Compatible overlays share planar GeoTIFF assets while retaining independent layer metadata,
 band addresses and appearance controls. Their display grid follows the map's declared
 sample span, independent of capture-tree subdivisions. Browser sources use immutable OPFS

@@ -17,9 +17,7 @@ pub struct Sampler<'a> {
     value: Reading<'a>,
     sea: Option<Reading<'a>>,
     ice: Option<Reading<'a>>,
-    surface: Option<Reading<'a>>,
-    natural: Option<Reading<'a>>,
-    colors: super::colors::Colors,
+    paint: super::paint::Paint<'a>,
     lakes: Box<dyn SpatialIndex + 'a>,
 }
 fn reading<'a>(
@@ -49,9 +47,7 @@ impl<'a> Sampler<'a> {
             value: Reading::new(source.field, source.channel, storage, spatial)?,
             sea: reading(source.water, "EffectiveSeaLevel", storage, spatial)?,
             ice: reading(source.ice, "IceThickness", storage, spatial)?,
-            surface: reading(source.surface, "finalSurface", storage, spatial)?,
-            natural: reading(source.surface, "naturalSurface", storage, spatial)?,
-            colors: super::colors::Colors::new(source.colors)?,
+            paint: super::paint::Paint::new(source, storage, spatial)?,
             lakes: spatial.index(&shapes).map_err(io::Error::other)?,
         })
     }
@@ -82,8 +78,7 @@ impl<'a> Sampler<'a> {
         }
         let sea = values(&mut self.sea, points, step, spatial, 0.0)?;
         let ice = values(&mut self.ice, points, step, spatial, 0.0)?;
-        let surface = values(&mut self.surface, points, step, spatial, -1.0)?;
-        let natural = values(&mut self.natural, points, step, spatial, -1.0)?;
+        let (surface, natural) = self.paint.codes(points, step, spatial)?;
         let marine = self
             .source
             .ocean
@@ -105,7 +100,7 @@ impl<'a> Sampler<'a> {
                 marine.as_ref().map_or(height < sea[i], |mask| mask[i])
             };
             let pixel = &mut result[i * 16..i * 16 + 16];
-            let color = self.colors.pixel(surface[i], natural[i]);
+            let color = self.paint.pixel(surface[i], natural[i]);
             pixel.copy_from_slice(&[
                 height as f32,
                 MapScale::metres(height - sea[i], LengthUnit::Native) as f32,
@@ -196,23 +191,29 @@ fn gradients(values: &mut [f32], width: usize, height: usize) {
             if values[at + 15] == 0.0 {
                 continue;
             }
-            let step = 2.0 * values[at + 4];
+            let step = f64::from(values[at + 4]);
             if step <= 0.0 {
                 continue;
             }
             let sample = |cell: usize| {
                 if values[cell * 16 + 15] > 0.99 {
-                    values[cell * 16 + 7]
+                    Some(values[cell * 16 + 7])
                 } else {
-                    values[at + 7]
+                    None
                 }
             };
-            let east = (sample(row * width + (col + 1).min(width - 1))
-                - sample(row * width + col.saturating_sub(1)))
-                / step;
-            let north = (sample(row.saturating_sub(1) * width + col)
-                - sample((row + 1).min(height - 1) * width + col))
-                / step;
+            let east = super::super::terrain::difference(
+                values[at + 7],
+                sample(row * width + col.saturating_sub(1)),
+                sample(row * width + (col + 1).min(width - 1)),
+                step,
+            );
+            let north = super::super::terrain::difference(
+                values[at + 7],
+                sample((row + 1).min(height - 1) * width + col),
+                sample(row.saturating_sub(1) * width + col),
+                step,
+            );
             values[at + 8] = east;
             values[at + 9] = north;
         }

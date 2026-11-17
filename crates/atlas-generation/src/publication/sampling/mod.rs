@@ -2,6 +2,7 @@
 mod channel;
 mod colors;
 mod display;
+mod paint;
 mod prepared;
 pub use prepared::Prepared;
 mod tile;
@@ -30,9 +31,17 @@ pub struct Source<'a> {
     pub ocean: Option<&'a Geometry>,
     pub lakes: &'a [Lake],
 }
-/// Two display pixels per declared map sample span, independent of capture-tree subdivisions.
+/// Surface boundaries need finer display support than inspection rasters.
+const TERRAIN_PIXELS_PER_SPAN: f64 = 16.0;
+const INSPECTION_PIXELS_PER_SPAN: f64 = 2.0;
+/// Display density does not change the simulation lattice or its captured samples.
 pub fn grid(source: &Source<'_>) -> io::Result<RasterGrid> {
-    let span = display_span(source.field)? / 2.0;
+    let density = if source.channel == "Elevation" {
+        TERRAIN_PIXELS_PER_SPAN
+    } else {
+        INSPECTION_PIXELS_PER_SPAN
+    };
+    let span = display_span(source.field)? / density;
     let Bounds(w, s, e, n) = source.bounds;
     let width = ((e - w) / span).ceil();
     let height = ((n - s) / span).ceil();

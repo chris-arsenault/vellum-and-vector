@@ -53,3 +53,39 @@ impl Colors {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atlas_map::SurfaceAppearance;
+
+    fn palette() -> Colors {
+        let categories = [
+            (0, "#00ff00", 1.0, false, false),
+            (1, "#ff0000", 0.25, true, false),
+            (2, "#0000ff", 1.0, false, true),
+        ]
+        .map(|(value, color, tint, magic, bathymetric)| Category {
+            value,
+            label: format!("Cover {value}"),
+            color: Some(color.into()),
+            present: true,
+            surface: Some(SurfaceAppearance {
+                bathymetric,
+                tint,
+                system: magic.then(|| "fire".into()),
+                system_name: None,
+            }),
+        });
+        Colors::new(&categories).unwrap()
+    }
+    #[test]
+    fn magical_tint_is_applied_after_choosing_the_natural_class() {
+        let color = palette().pixel(1.0, 0.0);
+        assert_eq!(color, [63.75, 191.25, 0.0, 1.0]);
+    }
+    #[test]
+    fn bathymetric_classes_keep_the_water_ramp() {
+        assert_eq!(palette().pixel(2.0, 2.0), [0.0; 4]);
+    }
+}

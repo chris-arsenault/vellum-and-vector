@@ -4,7 +4,7 @@ use crate::{
     control::GenerationControl,
     reconstruction::{
         mapping::{Location, Mapping},
-        Grid,
+        Grid, Layout,
     },
     spatial::SpatialKernel,
     storage::{Band, Coverage},
@@ -71,6 +71,11 @@ impl Prepared {
         Ok(result)
     }
     fn add_grid(&mut self, grid: &Rc<Grid>, storage: &mut Coverage) -> io::Result<()> {
+        // Regular-grid locations are arithmetic; retaining one per display pixel wastes
+        // memory as presentation density grows. Adaptive searches still share mappings.
+        if matches!(grid.layout, Layout::Raster { .. }) {
+            return Ok(());
+        }
         if self.mappings.iter().any(|(held, _)| Rc::ptr_eq(held, grid)) {
             return Ok(());
         }

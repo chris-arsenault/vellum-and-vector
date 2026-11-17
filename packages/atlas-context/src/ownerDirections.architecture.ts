@@ -25,6 +25,12 @@ interface OwnerDirection {
 }
 const directions: readonly OwnerDirection[] = [
   {
+    direction: "the deployed version must look like the approved surface screenshots",
+    given: "2026-11-17",
+    marks: ["crates/atlas-generation/src/publication/sampling/paint.rs"],
+    test: "crates/atlas-host/tests/map_sampling.rs",
+  },
+  {
     direction: "GIS and numerical data must stay in sync including deletion",
     given: "2026-11-15",
     marks: [
