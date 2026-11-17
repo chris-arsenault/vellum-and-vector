@@ -3,11 +3,11 @@
 //! wards (ADR 0016's settlement plan layers).
 use super::{
     addresses::address,
+    fields::Field,
     geometry::{add, angle, cut, distance, rectangle, resample, rest, scale, sub, unit, Point},
     lanes::WALL_THICKNESS,
     network::{Class, Street},
     plan::{Plan, Plot},
-    plots::Field,
     story::Size,
     uses::Use,
 };

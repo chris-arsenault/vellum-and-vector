@@ -12,6 +12,8 @@ use std::io;
 
 pub struct Capture<'a> {
     pub epochs: usize,
+    /// The parent's cell span, which bends carried river courses.
+    pub parent_span: f64,
     pub rivers: Option<&'a DrainageNetwork>,
     pub spatial: &'a dyn SpatialKernel,
     pub identity: &'a dyn Fn(&str) -> Option<RiverIdentity>,
@@ -38,6 +40,7 @@ pub fn initialize<'a>() -> Command<Field, Capture<'a>> {
                             mesh: &field.mesh,
                             spatial: input.spatial,
                             elevation: &|cell| heights.get(cell).map_err(|error| error.to_string()),
+                            bend: input.parent_span,
                         },
                         input.identity,
                     )

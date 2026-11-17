@@ -2,16 +2,29 @@
 // frontend does: one kept verification world, real-scale maps opened from it, and a summary
 // of what each map contains. See docs/local-atlas.md.
 import { createRequire } from "node:module";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { basename, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { deflateSync } from "node:zlib";
 
 const require = createRequire(new URL("../packages/transport/package.json", import.meta.url));
 const { Encoder, Decoder } = require("cbor-x");
 const encoder = new Encoder({ useRecords: false });
 const decoder = new Decoder({ useRecords: false, int64AsNumber: true });
-const home = process.env.ATLAS_LOCAL_HOME ?? join(homedir(), ".local/share/vellum-local-atlas");
+// One atlas for every worktree, kept in the main checkout; reports and pictures go to the
+// checkout running the check, so they sit under its root.
+const checkout = fileURLToPath(new URL("..", import.meta.url));
+const main = resolve(
+  checkout,
+  execFileSync("git", ["-C", checkout, "rev-parse", "--git-common-dir"], {
+    encoding: "utf8",
+  }).trim(),
+  ".."
+);
+const home = resolve(process.env.ATLAS_LOCAL_HOME ?? join(main, ".artifacts/local-atlas"));
+const reports = join(checkout, ".artifacts/local-atlas");
 const origin = `http://127.0.0.1:${process.env.ATLAS_LOCAL_PORT ?? 44138}`;
 const worldFile = join(home, "world.json");
 const lastJobFile = join(home, "last-job.json");
@@ -32,26 +45,105 @@ const readJson = async (path) => JSON.parse(await readFile(path, "utf8"));
 const writeJson = (path, value) => writeFile(path, JSON.stringify(value, null, 2));
 const clock = (started) => `${Math.round((performance.now() - started) / 1000)}s`.padStart(6);
 
-/** Follows a job to its end, printing each step with the time since the job started. */
-async function follow(status, record) {
+/** An RGB PNG; `pixel(x, y)` returns [r, g, b] with y counted from the top. */
+function png(width, height, pixel) {
+  const rows = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) rows.set(pixel(x, y), y * (width * 3 + 1) + 1 + x * 3);
+  const table = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (bytes) => {
+    let c = 0xffffffff;
+    for (const byte of bytes) c = table[(c ^ byte) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const out = Buffer.alloc(body.length + 8);
+    out.writeUInt32BE(data.length, 0);
+    body.copy(out, 4);
+    out.writeUInt32BE(crc(body), body.length + 4);
+    return out;
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header.set([8, 2, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", header),
+    chunk("IDAT", deflateSync(rows)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+/**
+ * Saves a job preview (each world epoch, and the start and each round of regional
+ * development) as a shaded elevation picture, sea and lakes blue, scaled 4×.
+ */
+async function savePreview(event, index) {
+  const { grid, ancestry } = JSON.parse(new TextDecoder().decode(new Uint8Array(event.map.bytes)));
+  const label = (ancestry ?? []).map((epoch) => epoch.id).join(" ") || "final";
+  const { width, height, channels, active } = grid;
+  const elevation = channels.Elevation.values;
+  const water = channels["Water Kind Codes"]?.values ?? channels.WaterKindCodes?.values;
+  const land = elevation.filter((value, cell) => active[cell] && Number.isFinite(value));
+  const low = Math.min(...land);
+  const high = Math.max(...land);
+  const scale = 4;
+  const at = (x, y) => (height - 1 - Math.floor(y / scale)) * width + Math.floor(x / scale);
+  const bytes = png(width * scale, height * scale, (x, y) => {
+    const cell = at(x, y);
+    if (!active[cell]) return [40, 40, 40];
+    const shade = Math.round((255 * (elevation[cell] - low)) / Math.max(high - low, 1e-9));
+    return water && water[cell] > 0 ? [60, 110, 200 - shade / 4] : [shade, shade, shade];
+  });
+  const name = `${String(index).padStart(2, "0")}-${label.replace(/[^\w]+/g, "-")}.png`;
+  await mkdir(join(reports, "previews"), { recursive: true });
+  await writeFile(join(reports, "previews", name), bytes);
+  return { file: name, label, lowest: low, highest: high };
+}
+
+/**
+ * Follows a job to its end, printing each step with the time since the job started. With
+ * `until`, the job is cancelled once a preview whose label contains it is saved.
+ */
+async function follow(status, record, until) {
   const started = performance.now();
   await writeJson(lastJobFile, { jobId: status.jobId, ...record });
+  await rm(join(reports, "previews"), { recursive: true, force: true });
+  const previews = [];
   const log = [];
   const print = (line) => (console.log(line), log.push(line));
   let after = 0;
   let step = "";
   while (status.state === "running") {
     await new Promise((resolve) => setTimeout(resolve, 1000));
+    // A server busy publishing can be slow to answer; a dropped poll is retried.
     const page = await call("generation", {
       method: "observe",
       request: { job_id: status.jobId, after },
-    });
+    }).catch((error) => (print(`${clock(started)} poll failed, retrying: ${error}`), null));
+    if (!page) continue;
     after = page.next;
     status = page.status;
     if (status.step && status.step !== step) print(`${clock(started)} ${(step = status.step)}`);
+    for (const event of page.events) {
+      if (event.kind !== "preview") continue;
+      const preview = await savePreview(event, previews.length);
+      previews.push(preview);
+      print(`${clock(started)} picture ${join(reports, "previews", preview.file)}`);
+      if (until && preview.label.includes(until))
+        status = await call("generation", { method: "cancel", request: { job_id: status.jobId } });
+    }
   }
   print(`${clock(started)} ${status.state} ${status.message ?? ""}`);
   await writeFile(join(home, "last-job-steps.txt"), log.join("\n") + "\n");
+  await writeJson(join(home, "last-job-previews.json"), previews);
+  if (until && status.state === "cancelled") process.exit(0);
   if (status.state !== "completed") {
     console.log(`Fix the cause, then make local-up and make local-resume (job ${status.jobId}).`);
     process.exit(1);
@@ -142,7 +234,25 @@ async function world(fresh) {
   const reference = await follow(status, { kind: "world" });
   await save(reference);
   await writeJson(worldFile, { reference });
-  await report(reference, join(home, "world"));
+  await report(reference, join(reports, "world"));
+}
+
+/**
+ * A name is one map in the local atlas: a new run deletes the earlier maps of that name and
+ * its finished jobs, so the library and the pictures show the run just made.
+ */
+async function replace(name) {
+  const inventory = await call("contexts", { method: "list" });
+  for (const map of inventory.maps.filter((entry) => entry.name === name && entry.parent))
+    await call("contexts", {
+      method: "delete",
+      request: { kind: "map", id: map.reference.mapId, descendants: true },
+    });
+  const finished = inventory.jobs.filter(
+    (job) => job.details?.name === name && job.state !== "running"
+  );
+  for (const job of finished)
+    await call("contexts", { method: "delete", request: { kind: "job", id: job.jobId } });
 }
 
 /** A tiny outline around the point; the engine centres the real-scale frame on it. */
@@ -205,6 +315,7 @@ async function realScale(options) {
   };
   const width = choice.hexesAcross * hexMetres[choice.hexSize];
   const name = options.name ?? `${choice.kind} ${choice.hexSize} ${choice.hexesAcross}`;
+  await replace(name);
   const configuration = await call("generation", { method: "configuration", request: reference });
   Object.assign(configuration, { name, width, height: width * 0.75 });
   configuration.recipe.quality = options.detail;
@@ -217,26 +328,38 @@ async function realScale(options) {
   if (errors.length) throw new Error(JSON.stringify(errors, null, 2));
   if (review.input.settings) configuration.recipe.settings = review.input.settings;
   const status = await call("generation", { method: "refine", request });
-  const result = await follow(status, { kind: "real", name });
+  const result = await follow(status, { kind: "real", name }, options.until);
   await finish(result, name);
 }
 async function finish(result, name) {
   await save(result);
-  const directory = join(home, "maps", name.replace(/[^\w.-]+/g, "-"));
+  const directory = join(reports, "maps", name.replace(/[^\w.-]+/g, "-"));
   await report(result, directory);
   await writeFile(join(directory, "steps.txt"), await readFile(join(home, "last-job-steps.txt")));
+  const previews = await readJson(join(home, "last-job-previews.json")).catch(() => []);
+  for (const { file } of previews)
+    await copyFile(join(reports, "previews", file), join(directory, `preview-${basename(file)}`));
+  await writeJson(join(directory, "previews.json"), previews);
 }
 
 async function resume(jobId) {
   const last = await readJson(lastJobFile).catch(() => ({}));
   const id = jobId ?? last.jobId;
   if (!id) throw new Error("No job to resume");
-  const status = await call("generation", { method: "resume", request: { job_id: id } });
-  const result = await follow(status, last.jobId === id ? last : { kind: "real", name: id });
+  const current = await call("generation", { method: "status", request: { job_id: id } });
+  // A job that completed while its driver was gone only needs its report.
+  const status =
+    current.state === "completed"
+      ? current
+      : await call("generation", { method: "resume", request: { job_id: id } });
+  const result =
+    status.state === "completed"
+      ? status.result
+      : await follow(status, last.jobId === id ? last : { kind: "real", name: id });
   if (last.kind === "world") {
     await save(result);
     await writeJson(worldFile, { reference: result });
-    await report(result, join(home, "world"));
+    await report(result, join(reports, "world"));
   } else await finish(result, last.name ?? id);
 }
 
@@ -250,11 +373,12 @@ const { positionals, values } = parseArgs({
     at: { type: "string" },
     name: { type: "string" },
     detail: { type: "string", default: "draft" },
+    until: { type: "string" },
   },
 });
 /** Pictures of a kept map in the frontend the server hosts: default, hex fill, caves. */
 async function view(name) {
-  const directory = join(home, "maps", name);
+  const directory = join(reports, "maps", name);
   const { name: title } = await readJson(join(directory, "map.json"));
   const playwright = createRequire(new URL("../frontend/package.json", import.meta.url));
   const { chromium } = playwright("@playwright/test");
@@ -315,23 +439,53 @@ async function view(name) {
   }
 }
 
+/** Saves raster layers of a kept map as GeoTIFFs beside its report, e.g. raster:Elevation. */
+async function raster(name, layerIds) {
+  const directory = join(reports, "maps", name);
+  const map = await readJson(join(directory, "map.json"));
+  for (const id of layerIds) {
+    const layer = map.layers.find((entry) => entry.id === id && entry.source.kind === "raster");
+    if (!layer) throw new Error(`No raster layer ${id}`);
+    const { mapId, revision } = map.reference;
+    const url = `${origin}/api/maps/${mapId}/${revision}/assets/${layer.source.data.assetId}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`${id}: ${response.status} ${await response.text()}`);
+    const file = join(directory, `${id.replace(/[^\w.-]+/g, "-")}.tif`);
+    await writeFile(file, new Uint8Array(await response.arrayBuffer()));
+    console.log(file);
+  }
+}
+
+/** Writes what each process recorded doing to a kept map, in run order. */
+async function history(name) {
+  const directory = join(reports, "maps", name);
+  const { reference } = await readJson(join(directory, "map.json"));
+  const entries = await call("maps/read", { method: "history", args: [reference, null] });
+  await writeJson(join(directory, "history.json"), entries);
+  console.log(join(directory, "history.json"));
+}
+
 const [command, argument] = positionals;
 if (command === "world") await world(values.fresh);
 else if (command === "real" && values.at && hexMetres[values.hex]) await realScale(values);
 else if (command === "resume") await resume(argument);
 else if (command === "places") await places();
 else if (command === "view" && argument) await view(argument);
+else if (command === "history" && argument) await history(argument);
+else if (command === "raster" && argument && positionals[2])
+  await raster(argument, positionals.slice(2));
 else if (command === "summary" && argument) {
-  const directory = join(home, "maps", argument);
+  const directory = join(reports, "maps", argument);
   await report((await readJson(join(directory, "map.json"))).reference, directory);
 } else {
   console.error(`Usage:
   node scripts/local-atlas.mjs world [--fresh]
   node scripts/local-atlas.mjs places
-  node scripts/local-atlas.mjs summary|view <map folder under ${join(home, "maps")}>`);
+  node scripts/local-atlas.mjs summary|view <map folder under ${join(reports, "maps")}>`);
   console.error(`
   node scripts/local-atlas.mjs real --at x,y [--hex 100m] [--across 50] [--kind ground|structure]
                                     [--detail draft|standard|fine] [--name name]
+                                    [--until "<stage picture label, e.g. Initial regional detail>"]
   node scripts/local-atlas.mjs resume [jobId]
 --at is in world metres; hex sizes: ${Object.keys(hexMetres).join(", ")}`);
   process.exit(2);

@@ -10,6 +10,9 @@ pub fn sub(a: Point, b: Point) -> Point {
 pub fn scale(a: Point, by: f64) -> Point {
     [a[0] * by, a[1] * by]
 }
+pub fn dot(a: Point, b: Point) -> f64 {
+    a[0] * b[0] + a[1] * b[1]
+}
 pub fn length(a: Point) -> f64 {
     a[0].hypot(a[1])
 }

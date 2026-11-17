@@ -20,9 +20,56 @@ pub struct Ground {
     pub rows: usize,
     owners: Vec<u32>,
 }
+/// A shape laid on the ground: what it covers, its extent and the points the grid checks.
+pub trait Shape {
+    fn contains(&self, p: Point) -> bool;
+    fn bounds(&self) -> [f64; 4];
+    fn samples(&self, cell: f64) -> Vec<Point>;
+}
+/// A convex outline given as a closed ring, either winding.
+pub struct Convex<'a>(pub &'a [Point]);
+impl Shape for Convex<'_> {
+    fn contains(&self, p: Point) -> bool {
+        let r = self.0;
+        let side = |a: Point, b: Point| {
+            let (ab, ap) = (sub(b, a), sub(p, a));
+            ab[0] * ap[1] - ab[1] * ap[0]
+        };
+        let sides = r.windows(2).map(|w| side(w[0], w[1]));
+        let (mut left, mut right) = (false, false);
+        for s in sides {
+            left |= s > 0.0;
+            right |= s < 0.0;
+        }
+        !(left && right)
+    }
+    fn bounds(&self) -> [f64; 4] {
+        extent(self.0)
+    }
+    /// The middle and every corner drawn a cell and a half toward it.
+    fn samples(&self, cell: f64) -> Vec<Point> {
+        let corners = &self.0[..self.0.len().saturating_sub(1)];
+        let m = scale(
+            corners.iter().fold([0.0, 0.0], |a, &p| add(a, p)),
+            1.0 / corners.len().max(1) as f64,
+        );
+        let mut points = vec![m];
+        for &c in corners {
+            let reach = distance(c, m).max(1e-9);
+            points.push(add(c, scale(sub(m, c), (1.42 * cell / reach).min(0.45))));
+        }
+        points
+    }
+}
+fn extent(points: &[Point]) -> [f64; 4] {
+    points.iter().fold(
+        [f64::MAX, f64::MAX, f64::MIN, f64::MIN],
+        |[w, s, e, n], p| [w.min(p[0]), s.min(p[1]), e.max(p[0]), n.max(p[1])],
+    )
+}
 /// A turned rectangle given by its corners (closed ring of five points).
 pub struct Rectangle<'a>(pub &'a [Point]);
-impl Rectangle<'_> {
+impl Shape for Rectangle<'_> {
     fn contains(&self, p: Point) -> bool {
         let r = self.0;
         let (a, b, d) = (r[0], r[1], r[3]);
@@ -34,22 +81,16 @@ impl Rectangle<'_> {
         (0.0..=1.0).contains(&u) && (0.0..=1.0).contains(&v)
     }
     fn bounds(&self) -> [f64; 4] {
-        self.0.iter().fold(
-            [f64::MAX, f64::MAX, f64::MIN, f64::MIN],
-            |[w, s, e, n], p| [w.min(p[0]), s.min(p[1]), e.max(p[0]), n.max(p[1])],
-        )
-    }
-    fn centre(&self) -> Point {
-        scale(add(self.0[0], self.0[2]), 0.5)
+        extent(self.0)
     }
     /// The middle and the corners drawn in far enough that the grid cell holding each one
     /// has its centre inside the rectangle, so neighbours that only touch never clash.
-    fn samples(&self, cell: f64) -> [Point; 5] {
+    fn samples(&self, cell: f64) -> Vec<Point> {
         let r = self.0;
         let shortest = distance(r[0], r[1]).min(distance(r[1], r[2])).max(1e-9);
         let inset = (1.42 * cell / shortest).min(0.45);
-        let m = self.centre();
-        [
+        let m = scale(add(r[0], r[2]), 0.5);
+        vec![
             m,
             add(r[0], scale(sub(m, r[0]), inset)),
             add(r[1], scale(sub(m, r[1]), inset)),
@@ -101,7 +142,7 @@ impl Ground {
     pub fn is_water(&self, p: Point) -> bool {
         self.owner(p) == WATER
     }
-    fn cells_in(&self, rectangle: &Rectangle<'_>) -> Vec<usize> {
+    fn cells_in(&self, rectangle: &impl Shape) -> Vec<usize> {
         let [w, s, e, n] = rectangle.bounds();
         let column = |x: f64| ((x - self.origin[0]) / self.cell).floor().max(0.0) as usize;
         let row = |y: f64| ((y - self.origin[1]) / self.cell).floor().max(0.0) as usize;
@@ -116,9 +157,9 @@ impl Ground {
         }
         cells
     }
-    /// Whether a rectangle lies on free ground, or ground its own street holds, everywhere
+    /// Whether a shape lies on free ground, or ground its own street holds, everywhere
     /// the grid can see: at cell centres inside it and near its corners and middle.
-    pub fn open(&self, rectangle: &Rectangle<'_>, street: u32) -> bool {
+    pub fn open(&self, rectangle: &impl Shape, street: u32) -> bool {
         let fits = |owner: u32| owner == FREE || owner == street;
         let corners = rectangle
             .samples(self.cell)
@@ -130,8 +171,8 @@ impl Ground {
                 .into_iter()
                 .all(|i| fits(self.owners[i]))
     }
-    /// Gives the free cells of a rectangle to `owner`.
-    pub fn take(&mut self, rectangle: &Rectangle<'_>, owner: u32) {
+    /// Gives the free cells of a shape to `owner`.
+    pub fn take(&mut self, rectangle: &impl Shape, owner: u32) {
         let cells = self.cells_in(rectangle);
         for p in rectangle.samples(self.cell) {
             if let Some(i) = self.index(p) {

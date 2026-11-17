@@ -131,8 +131,8 @@ impl Generation {
             let point = run.checkpoint_point().filter(|point| {
                 *point != crate::checkpoint::Point::Publication || matches!(event, Event::Finished)
             });
-            if let (Some(point), Some(recovery)) = (point, recovery.as_mut()) {
-                if let Err(error) = recovery.replace(&point, &mut |writer| {
+            if let (Some(point), Some(recovery)) = (&point, recovery.as_mut()) {
+                if let Err(error) = recovery.replace(point, &mut |writer| {
                     transfer(
                         &mut Archive::Save(writer),
                         &mut run,
@@ -152,6 +152,24 @@ impl Generation {
                         outcome: super::history::Outcome::Failed,
                     })?;
                 }
+            }
+            // Regional development shows its land at the start and after each round, as a
+            // world shows it after each epoch.
+            if let Some(
+                point @ (crate::checkpoint::Point::RegionalDetail
+                | crate::checkpoint::Point::RegionalRound { .. }),
+            ) = &point
+            {
+                let stage = [super::history::GenerationEpoch {
+                    id: point.label(),
+                    duration: 0.0,
+                    parent_epoch: None,
+                    variables: Default::default(),
+                }];
+                observer
+                    .output
+                    .completed(self.runtime.executor.state(), Boundary::Epoch(&stage))
+                    .await?;
             }
             match event {
                 Event::Epoch { ancestry } => {

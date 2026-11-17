@@ -66,6 +66,7 @@ fn inherit(mesh: &TriangularLattice, input: &DrainageNetwork) -> ReachStore {
                 mesh,
                 spatial: &spatial,
                 elevation: &|_| Ok(80.0),
+                bend: 0.0,
             },
             |_| None,
         )
@@ -148,6 +149,7 @@ fn isolated_samples_keep_captured_entries_without_inventing_direction_or_supply(
                 mesh: &mesh,
                 spatial: &spatial,
                 elevation: &|_| Ok(999.0),
+                bend: 0.0,
             },
             |_| None,
         )
@@ -231,6 +233,7 @@ fn published_current_drainage_resolves_mean_profiles_and_feature_identity() {
                 mesh: &mesh,
                 spatial: &spatial,
                 elevation: &|_| Ok(50.0),
+                bend: 0.0,
             },
             |id| {
                 assert_eq!(id, "visible-reach");

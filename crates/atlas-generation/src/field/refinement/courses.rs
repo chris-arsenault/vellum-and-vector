@@ -32,6 +32,7 @@ pub fn captured_courses(
     // hpc-exempt: removed feature identities, not a numerical cell mask.
     removed: &BTreeSet<String>,
     span: f64,
+    bend: f64,
 ) -> io::Result<Vec<CapturedCourse>> {
     let mut rivers = source
         .values(FeatureSelection {
@@ -47,7 +48,7 @@ pub fn captured_courses(
         if removed.contains(&feature.id) {
             continue;
         }
-        let cells = course_cells(mesh, &feature.geometry, span);
+        let cells = course_cells(mesh, &feature.geometry, span, bend);
         if cells.is_empty() {
             continue;
         }
@@ -99,8 +100,16 @@ pub fn cell_at(mesh: &TriangularLattice, world: [f64; 2]) -> Option<usize> {
         (world[1] - origin[1]).clamp(bounds.1, bounds.3),
     )
 }
-pub fn course_cells(mesh: &TriangularLattice, geometry: &Geometry, span: f64) -> Vec<usize> {
-    let step = span / 2.0;
+/// The cells a carried course crosses, its positions bent as the carried river network is
+/// (`water::import_geometry::Bend`) by the parent's cell span `bend`.
+pub fn course_cells(
+    mesh: &TriangularLattice,
+    geometry: &Geometry,
+    span: f64,
+    bend: f64,
+) -> Vec<usize> {
+    let step = span / 4.0;
+    let bend = crate::water::import_geometry::Bend::new(bend, mesh);
     let mut seen = BitSet::new(mesh.len());
     let mut cells = Vec::new();
     for line in line_parts(geometry) {
@@ -110,7 +119,9 @@ pub fn course_cells(mesh: &TriangularLattice, geometry: &Geometry, span: f64) ->
             let steps = ((bx - ax).hypot(by - ay) / step).ceil().max(1.0) as usize;
             for s in 0..=steps {
                 let t = s as f64 / steps as f64;
-                let Some(cell) = cell_at(mesh, [ax + (bx - ax) * t, ay + (by - ay) * t]) else {
+                let point = [ax + (bx - ax) * t, ay + (by - ay) * t];
+                let bent = bend.at(point);
+                let Some(cell) = cell_at(mesh, bent) else {
                     continue;
                 };
                 if mesh.membership(cell) == Membership::Content && seen.add(cell) {

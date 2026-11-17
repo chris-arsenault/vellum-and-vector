@@ -15,7 +15,7 @@ pub mod evolution;
 mod exchange_tests;
 pub mod groundwater;
 pub mod guidance;
-mod import_geometry;
+pub(crate) mod import_geometry;
 pub(crate) use import_geometry::Stations;
 pub mod inherit;
 pub mod lake_stage;

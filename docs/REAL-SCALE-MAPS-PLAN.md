@@ -404,6 +404,42 @@ first real-scale sequence skipped the development rounds that cut valleys and st
     99 buildings with 99 yards, 853 fields, 1 square, 3 wards and a wall; 897 raster layers.
     Findings: no caves and no underground space; the hex layer's catalogue counts 0 hexes
     while 2,171 are published.
+12. The Ajarma map's river was a flat-floored trench about 1 km wide and 150 m deep along
+    the parent's straight river legs, filled as lake (573 of 2,171 hexes). The stage
+    pictures showed it already at "Initial regional detail", before any development round.
+    Cause: `place_inherited_valleys` gave every cell of the inherited valley the parent's
+    full cut depth. Fix: the cut tapers from the course outward with the same volume
+    (`refinement/valleys.rs` `shares`), so the valley has sloping sides and drains.
+13. Carried geometry was the parent's straight legs between cells 14 km apart. Fix: one
+    smooth bend scaled to the parent's span (`water/import_geometry.rs` `bent`) applied to
+    the carried river network, the captured river courses and, once at the start of
+    regional development, every captured record (places, ways, waters, outlines;
+    `regional_initialization.rs`), so a town stays on its river and its roads still meet it.
+    Open: the captured way network (nodes and reaches) is not bent.
+14. Settlement: main streets stopped at the trench and only 99 of about 4,000 homes found
+    plots. Fix: a place grows rounds of short side lanes while people wait for homes
+    (`town/plan.rs`, `town/lanes.rs` `grow`; a city whose ways in stop short houses 6,628 of
+    20,000 without growth and over 90% with it). Fields were one grid of identical
+    rectangles; now blocks of varied size around scattered seeds, cut back from ways, with
+    strips running back from the way near a place and enclosures and pasture further out
+    (`town/fields.rs`), at real size (blocks about 220 m, strips about 22 m).
+15. Local atlas additions: a picture of the land after each stage, `--until` to stop after
+    one (half a minute to judge the land before development), `raster` and `history`
+    commands, one map per name.
+16. Open: a 300 m × 80-hex map (24 × 18 km) took 53 minutes natively (three development
+    rounds of about 14 minutes each); Draft 100 m × 50 (5 × 3.75 km) takes about 8. The
+    slowest steps took 8–10 times as long for about 2.6 times the triangles. This matches
+    the smoothing cost found earlier: sweeps grow with the square of the parent span over
+    the triangle size, and the shortcut applies only when the parent span is at least the
+    frame, true at 5 km and false at 24 km. Not timely for normal server use; fixed after
+    the land is right (owner 2026-11-16: no performance work on something not yet useful).
+17. The 24 km map near Goshi Volcano published caves: 238 caves, 187 lava tubes, 51
+    fissures, 299 shafts, 364 entrances in an underground level. Two faults, fixed: caves
+    read the lattice's margin outside the frame, so entrances sat on and beyond the map's
+    edge (`atlas/state/caves.rs` now reads the map's own triangles only); with no settlement
+    in the frame, fields fell back to the map's centre as a place and covered the map with
+    about 4,000 blocks and a ring of strips (now a block is worked as often as its farmed
+    share says, scattered, never in strips; `town/fields.rs`).
 
 #### M2 places: true size and key — steps
 
@@ -627,13 +663,13 @@ Evidence: units; UI tests.
 ### M7 — Town tools [depends on M4, M5]
 
 Scope: street network builder (classes, junctions, names, renumbered addresses), building
-placement on plots with use and occupants, building art as map assets generated through
-OpenAI for now, find-by-address.
+placement on plots with use and occupants, building art from the art shipped with the app
+for each use, find-by-address.
 Acceptance: a creator lays out a new street off a generated one, places an inn, gets its
 address and art, and finds it by address.
-Evidence: units; UI tests with the art service stubbed.
-[DECISION, blocking M7 art] Where art generation runs: LAN backend with a brokered key
-only, or browser mode with a key the creator supplies.
+Evidence: units; UI tests.
+Owner 2026-11-17: there is no art-generation tool; building art is generated with OpenAI
+during development and shipped as assets, outside this plan's work.
 
 ### M8 — Structure maps and interior tools [depends on M5]
 

@@ -21,6 +21,8 @@ pub struct RiverInheritance<'a> {
     pub mesh: &'a TriangularLattice,
     pub spatial: &'a dyn SpatialKernel,
     pub elevation: &'a dyn Fn(usize) -> SpatialResult<f64>,
+    /// The parent's cell span, which bends the carried courses (`import_geometry::bent`).
+    pub bend: f64,
 }
 impl ReachStore {
     /// Install captured supply and independently owned courses once. Projection belongs to the field.
@@ -33,7 +35,7 @@ impl ReachStore {
         if self.reaches().next().is_some() || !self.entries.is_empty() || !input.input {
             return Ok(());
         }
-        let geometry = ImportGeometry::new(context.mesh, context.spatial);
+        let geometry = ImportGeometry::new(context.mesh, context.spatial, context.bend);
         if let Some(kept) = &input.kept {
             for entry in &kept.entries {
                 if let Some(cell) = geometry.point_cell(entry.position)? {

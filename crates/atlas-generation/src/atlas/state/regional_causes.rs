@@ -25,6 +25,7 @@ fn river() -> Cause<State> {
                 &state.scope.area,
                 &regional.removed_products,
                 state.field().scale().cells(1.0),
+                regional.parent_span,
             )?);
         }
         Ok(())

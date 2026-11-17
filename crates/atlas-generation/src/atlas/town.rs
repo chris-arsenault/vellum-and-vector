@@ -3,6 +3,7 @@
 //! The parent's settlement records are starting conditions: their people size the place and
 //! their story picks its layout; nothing is fitted back to them.
 pub mod addresses;
+pub mod fields;
 pub mod geometry;
 pub mod ground;
 pub mod lanes;
@@ -19,9 +20,9 @@ use crate::{
     execution::{Command, CommandKind},
     field::refinement::people,
 };
-use geometry::{sub, unit, Point};
+use fields::{fields, Country};
+use geometry::Point;
 use plan::Plan;
-use plots::{fields, Country};
 use std::io;
 use story::Layout;
 
@@ -61,39 +62,32 @@ fn lay_out(state: &mut State, forced: Option<Layout>) -> io::Result<()> {
     let fields = farm(state, &plans, site.bounds, &mut ground)?;
     records::publish(state, &plans, &fields)
 }
-/// Field blocks are pitched to the map: a wide map's fields are larger.
-fn field_size(bounds: [f64; 4]) -> (f64, f64) {
-    let side = (bounds[2] - bounds[0]).max(bounds[3] - bounds[1]);
-    let width = (side / 120.0).clamp(50.0, 250.0);
-    (width, 2.5 * width)
-}
+/// A field block's mean side and a ploughed strip's mean width, in metres: fields on a
+/// real-scale map are their real size whatever the map's extent.
+const FIELD_BLOCK: f64 = 220.0;
+const FIELD_STRIP: f64 = 22.0;
 fn farm(
     state: &State,
     plans: &[Plan],
     bounds: [f64; 4],
     ground: &mut ground::Ground,
-) -> io::Result<Vec<plots::Field>> {
-    let mut places = plans
+) -> io::Result<Vec<fields::Field>> {
+    let places = plans
         .iter()
         .map(|p| (p.seat.centre, p.built))
         .collect::<Vec<_>>();
-    if places.is_empty() {
-        places.push((
-            [(bounds[0] + bounds[2]) / 2.0, (bounds[1] + bounds[3]) / 2.0],
-            0.0,
-        ));
-    }
-    let axis = plans
-        .first()
-        .and_then(|p| p.streets.first())
-        .map_or([1.0, 0.0], |s| unit(sub(s.points[1], s.points[0])));
-    let (width, depth) = field_size(bounds);
+    let ways = plans
+        .iter()
+        .flat_map(|p| p.streets.iter().map(|s| s.points.clone()))
+        .collect::<Vec<_>>();
+    let key = plans.first().map_or("country", |p| p.seat.key.as_str());
     let country = Country {
         places: &places,
-        axis,
+        ways: &ways,
         bounds,
-        width,
-        depth,
+        block: FIELD_BLOCK,
+        strip: FIELD_STRIP,
+        key,
     };
     let field = state.field();
     let target = site::farmed(field)?;
@@ -106,12 +100,7 @@ fn farm(
 mod tests {
     use super::*;
     #[test]
-    fn fields_are_pitched_to_the_map() {
-        assert_eq!(field_size([0.0, 0.0, 300.0, 225.0]), (50.0, 125.0));
-        assert_eq!(
-            field_size([0.0, 0.0, 20_000.0, 15_000.0]).0,
-            20_000.0 / 120.0
-        );
+    fn every_layout_choice_parses() {
         for layout in &LAYOUTS[1..] {
             assert!(Layout::parse(layout).is_some());
         }

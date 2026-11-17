@@ -65,7 +65,9 @@ impl State {
         let [x, y] = mesh.position(cell);
         let [ox, oy] = mesh.origin();
         // Lattice cells carry their own water column; the surface mask is indexed by raster sample.
-        let land = water.column.kind.get(cell)? == 0;
+        // Only the map's own triangles hold caves; the lattice's margin lies outside the frame.
+        let land = mesh.membership(cell) == crate::lattice::Membership::Content
+            && water.column.kind.get(cell)? == 0;
         let host = if land {
             caves::host::host(&self.cave_beds(cell)?, &self.cave_signs(field, cell)?)
         } else {

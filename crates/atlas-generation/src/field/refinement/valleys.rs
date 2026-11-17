@@ -16,10 +16,14 @@ impl Scratch {
         }
     }
 }
+/// How much of the inherited cut depth each cell takes, in `order` from the course outward.
+/// The course takes the full depth and the valley sides shallow with the area already laid
+/// toward the course, `1 − a / reach`, so the valley has sloping sides and the same volume
+/// as `available` cells cut to the full depth: a valley, not a flat-floored trench.
 pub fn shares(
     order: &[usize],
     seeds: usize,
-    mut available: f64,
+    available: f64,
     area: impl Fn(usize) -> f64,
 ) -> Vec<f64> {
     let course_area: f64 = order.iter().take(seeds).map(|&cell| area(cell)).sum();
@@ -28,17 +32,25 @@ pub fn shares(
     } else {
         0.0
     };
+    let sides = available - course_share * course_area;
+    // The sides' triangular profile holds `reach / 2` of full-depth area.
+    let reach = 2.0 * sides.max(0.0);
+    let mut laid = 0.0;
     order
         .iter()
         .enumerate()
         .map(|(at, &cell)| {
-            let share = if at < seeds {
-                course_share
+            if at < seeds {
+                return course_share;
+            }
+            let a = area(cell);
+            let middle = laid + a / 2.0;
+            laid += a;
+            if reach <= 0.0 {
+                0.0
             } else {
-                (available / area(cell)).clamp(0.0, 1.0)
-            };
-            available -= share * area(cell);
-            share
+                (1.0 - middle / reach).clamp(0.0, 1.0)
+            }
         })
         .collect()
 }
@@ -146,4 +158,20 @@ pub fn stream_cells(
         seen.clear(cell);
     }
     steps
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shares;
+    #[test]
+    fn a_valley_is_deepest_on_its_course_and_shallows_outward_holding_its_volume() {
+        let order = (0..100).collect::<Vec<_>>();
+        let available = 20.0;
+        let result = shares(&order, 2, available, |_| 1.0);
+        assert_eq!(&result[..2], &[1.0, 1.0]);
+        assert!(result[2..].windows(2).all(|w| w[0] >= w[1]));
+        assert!(result[2] > 0.9 && result[30] > 0.0 && result[40] == 0.0);
+        let volume: f64 = result.iter().sum();
+        assert!((volume - available).abs() < 0.1, "{volume}");
+    }
 }

@@ -1,22 +1,25 @@
 # Local atlas
 
 The local atlas is the native server and its database on this machine, holding one kept
-verification world. Development checks that need a generated map use it: the world, and
-real-scale maps opened from the world. Browser tests cover the UI and use supplied fixture
-maps; they never generate.
+verification world that every worktree shares. Development checks that need a generated
+map use it: the world, and real-scale maps opened from the world. Browser tests cover the
+UI and use supplied fixture maps; they never generate.
 
 ## Parts
 
 - **Database:** the production image built from `database/`, in the container
-  `vellum-local-atlas-db`, on `127.0.0.1:54338`. The cluster lives in the Docker volume
+  `vellum-local-atlas-db`, on `127.0.0.1:54338`; the cluster lives in the Docker volume
   `vellum-local-atlas`.
-- **Server:** the native release `atlas_server`, built from the current checkout, on
-  `http://127.0.0.1:44138/`. It also serves `frontend/dist`.
-- **State:** `~/.local/share/vellum-local-atlas` holds the server's map files, generation
-  resources and scratch, its log, the database passwords, the kept world's reference and
-  each map's report. State sits outside any checkout, so every worktree and session shares
-  the same world. `ATLAS_LOCAL_HOME`, `ATLAS_LOCAL_PORT` and `ATLAS_LOCAL_DATABASE_PORT`
-  override the defaults.
+- **Server:** the native release `atlas_server`, built from the checkout that starts it, on
+  `http://127.0.0.1:44138/`. It also serves that checkout's `frontend/dist`.
+- **State:** the main checkout's git-ignored `.artifacts/local-atlas/` holds the server's
+  map files, generation resources and scratch, its log, the database passwords and the
+  kept world's reference.
+- **Reports:** each map's report, pictures and stage pictures are written under the
+  git-ignored `.artifacts/local-atlas/` of the checkout that ran the check.
+
+`ATLAS_LOCAL_HOME`, `ATLAS_LOCAL_PORT` and `ATLAS_LOCAL_DATABASE_PORT` override the
+defaults.
 
 The database passwords are made locally on first start. No external credential is needed.
 
@@ -36,22 +39,36 @@ make local-down      # stop the server and database; the world stays
 west to east; `KIND` is `ground` or `structure`. Each run prints every step with the
 seconds since the job started.
 
+Each job saves a picture of the land, shaded by height with water in blue, after every
+world epoch and at the start and after each round of regional development, in
+`.artifacts/local-atlas/previews/`; the run prints each path. A change to the
+land can be judged without a whole map:
+`node scripts/local-atlas.mjs real --at Ajarma --hex 100m --until "Initial regional detail"`
+stops the job after that picture (about half a minute), and `--until "round 1"` after the
+first round of development.
+
+A name is one map: a new run deletes the earlier map of that name and its finished jobs
+before it starts. `--name` sets the name; it defaults to the kind, hex size and width.
 A finished map is saved to the server library and reported in
-`~/.local/share/vellum-local-atlas/maps/<name>/`:
+`.artifacts/local-atlas/maps/<name>/`:
 
-| File          | Contents                                                        |
-| ------------- | --------------------------------------------------------------- |
-| `summary.txt` | The map's size, and every published feature kind with its count |
-| `map.geojson` | The GIS export                                                  |
-| `map.json`    | The map description                                             |
-| `steps.txt`   | Each step with its time                                         |
-| `*.png`       | Pictures from `node scripts/local-atlas.mjs view <name>`        |
+| File            | Contents                                                        |
+| --------------- | --------------------------------------------------------------- |
+| `summary.txt`   | The map's size, and every published feature kind with its count |
+| `map.geojson`   | The GIS export                                                  |
+| `map.json`      | The map description                                             |
+| `steps.txt`     | Each step with its time                                         |
+| `preview-*.png` | The job's pictures of the land after each stage                 |
+| `*.png`         | Pictures from `node scripts/local-atlas.mjs view <name>`        |
 
-`node scripts/local-atlas.mjs summary <name>` rewrites a map's report from the server.
+`node scripts/local-atlas.mjs summary <name>` rewrites a map's report from the server,
+`history <name>` writes what each process recorded doing (`history.json`), and
+`raster <name> <layer id>...` saves raster layers as GeoTIFFs, e.g. `terrain` (elevation
+and its companion bands) or `raster:finalSurface`.
 
 A failed job keeps its progress. Fix the cause, run `make local-up` to rebuild and
 restart the server, and `make local-resume` continues the last job from its last
-completed round.
+completed round. A job that completed while its driver was gone only gets its report.
 
 When generation code changes what a world stores, the kept world may no longer open.
 `node scripts/local-atlas.mjs world --fresh` creates a new one, and

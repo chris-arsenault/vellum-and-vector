@@ -14,7 +14,37 @@ pub struct CapturedRegion<'a> {
     pub epochs: usize,
     pub rivers: Option<&'a DrainageNetwork>,
 }
+/// Attribute marking a captured record already bent onto this map.
+const CARRIED: &str = "carriedOnto";
 impl State {
+    /// The parent drew its places, ways, waters and outlines at its own cell span; the child
+    /// sees each captured record through the same bend as the rivers it carries
+    /// (`water::import_geometry::Bend`), so a town stays on its river and its roads still
+    /// meet it. Each record is bent once.
+    fn bend_captured_records(&mut self, span: f64) -> std::io::Result<()> {
+        use crate::{features::FeatureSelection, water::import_geometry::Bend};
+        let bend = Bend::new(span, self.field().mesh());
+        let records = self
+            .records
+            .features
+            .values(FeatureSelection {
+                area_id: Some(&self.scope.area),
+                ..Default::default()
+            })?
+            .collect::<std::io::Result<Vec<_>>>()?;
+        for mut feature in records {
+            if feature.attributes.contains_key(CARRIED) {
+                continue;
+            }
+            feature.geometry = bend.geometry(&feature.geometry);
+            feature.footprint = feature.footprint.map(|f| bend.geometry(&f));
+            feature
+                .attributes
+                .insert(CARRIED.into(), serde_json::json!(self.scope.area));
+            self.records.features.put(feature)?;
+        }
+        Ok(())
+    }
     /// Apply captured context before constructing regional physical operation settings.
     pub fn begin_regional(
         &mut self,
@@ -22,6 +52,7 @@ impl State {
         profile: &ResolvedSettings,
     ) -> ExecutionResult<ResolvedSettings> {
         let regional = Regional::new(self.field(), input.domains, input.parent_span)?;
+        self.bend_captured_records(input.parent_span)?;
         let profile = profile
             .regional_profile(input.parent_span, self.field().scale())
             .map_err(std::io::Error::other)?;
@@ -62,6 +93,7 @@ impl State {
             &initialization::initialize(),
             &initialization::Capture {
                 epochs: input.epochs,
+                parent_span: input.parent_span,
                 rivers: input.rivers,
                 spatial: self.spatial.as_ref(),
                 identity: &identity,

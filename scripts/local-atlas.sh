@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Local atlas for verification: the production database image and the native server, on
-# loopback only. State lives outside any checkout, so every worktree and session shares one
-# kept verification world. See docs/local-atlas.md.
+# loopback only. One atlas and kept world serve every worktree: its state lives in the main
+# checkout's git-ignored `.artifacts/local-atlas/`. See docs/local-atlas.md.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-home="${ATLAS_LOCAL_HOME:-$HOME/.local/share/vellum-local-atlas}"
+main="$(cd "$(git -C "$root" rev-parse --git-common-dir)/.." && pwd)"
+home="${ATLAS_LOCAL_HOME:-$main/.artifacts/local-atlas}"
+mkdir -p "$home"
 database=vellum-local-atlas-db
 volume=vellum-local-atlas
 database_port="${ATLAS_LOCAL_DATABASE_PORT:-54338}"
@@ -55,7 +57,14 @@ database_up() {
 
 server_down() {
   if [[ -f "$home/server.pid" ]]; then
-    kill "$(cat "$home/server.pid")" 2>/dev/null || true
+    local pid
+    pid="$(cat "$home/server.pid")"
+    kill "$pid" 2>/dev/null || true
+    # Wait for it to exit, so its port is free for the next server.
+    for _ in $(seq 30); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 1
+    done
     rm -f "$home/server.pid"
   fi
 }

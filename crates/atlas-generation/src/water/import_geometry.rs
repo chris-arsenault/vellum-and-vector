@@ -4,13 +4,132 @@ use crate::{
 };
 use atlas_map::{Geometry, Position};
 
+/// Share of the parent's cell span a carried river wanders off the parent's straight legs.
+const WANDER: f64 = 0.08;
+const WANDER_OCTAVES: usize = 4;
+/// Where parent positions lie on a child map. The parent drew its rivers as straight legs
+/// between its own cells; the child bends every carried position by one smooth fractal
+/// displacement scaled to the parent's span, so carried courses wander and stay joined. The
+/// displacement is measured from the child's centre, which stays where the creator opened
+/// the map. A zero span leaves positions where they are.
+#[derive(Clone, Copy)]
+pub(crate) struct Bend {
+    span: f64,
+    anchor: [f64; 2],
+}
+impl Bend {
+    /// The bend a child on `mesh` gives positions from a parent of cell span `span`.
+    pub fn new(span: f64, mesh: &TriangularLattice) -> Self {
+        let atlas_map::Bounds(w, s, e, n) = mesh.bounds();
+        let [x, y] = mesh.origin();
+        Self::around(span, [x + (w + e) / 2.0, y + (s + n) / 2.0])
+    }
+    /// The bend that leaves `centre` where it is.
+    fn around(span: f64, centre: [f64; 2]) -> Self {
+        let mut bend = Self {
+            span,
+            anchor: [0.0, 0.0],
+        };
+        bend.anchor = bend.offset(centre);
+        bend
+    }
+    fn offset(&self, point: [f64; 2]) -> [f64; 2] {
+        let wander = |salt| {
+            WANDER
+                * self.span
+                * crate::noise::fractal_noise(point[0], point[1], salt, self.span, WANDER_OCTAVES)
+        };
+        [wander(0x5c01), wander(0x5c02)]
+    }
+    pub fn at(&self, point: [f64; 2]) -> [f64; 2] {
+        if self.span <= 0.0 {
+            return point;
+        }
+        let [dx, dy] = self.offset(point);
+        [
+            point[0] + dx - self.anchor[0],
+            point[1] + dy - self.anchor[1],
+        ]
+    }
+    /// A parent shape as the child sees it: every line and ring densified and every position
+    /// bent, so captured places, ways, waters and outlines move with the rivers.
+    pub fn geometry(&self, geometry: &Geometry) -> Geometry {
+        bent_geometry(geometry, self)
+    }
+}
+/// Legs of a carried line are cut this many times finer than the parent's span before they
+/// bend, so a straight parent leg wanders along its length and not only at its ends.
+const BEND_STEPS_PER_SPAN: f64 = 32.0;
+fn bent_geometry(geometry: &Geometry, bend: &Bend) -> Geometry {
+    let span = bend.span;
+    let point = |p: &Position| match *p {
+        Position::XY(xy) => Position::XY(bend.at(xy)),
+        Position::XYZ([x, y, z]) => {
+            let [x, y] = bend.at([x, y]);
+            Position::XYZ([x, y, z])
+        }
+    };
+    let between = |a: &Position, b: &Position, t: f64| match (*a, *b) {
+        (Position::XYZ(a), Position::XYZ(b)) => {
+            Position::XYZ([0, 1, 2].map(|i| a[i] + (b[i] - a[i]) * t))
+        }
+        _ => {
+            let ([ax, ay, _], [bx, by, _]) = (a.coordinates(), b.coordinates());
+            Position::xy(ax + (bx - ax) * t, ay + (by - ay) * t)
+        }
+    };
+    let line = |line: &[Position]| {
+        let step = span / BEND_STEPS_PER_SPAN;
+        let mut out = Vec::with_capacity(line.len());
+        for pair in line.windows(2) {
+            let ([ax, ay, _], [bx, by, _]) = (pair[0].coordinates(), pair[1].coordinates());
+            let parts = ((bx - ax).hypot(by - ay) / step).ceil().max(1.0) as usize;
+            for k in 0..parts {
+                out.push(point(&between(&pair[0], &pair[1], k as f64 / parts as f64)));
+            }
+        }
+        out.extend(line.last().map(point));
+        out
+    };
+    let rings = |rings: &[Vec<Position>]| rings.iter().map(|r| line(r)).collect::<Vec<_>>();
+    if span <= 0.0 {
+        return geometry.clone();
+    }
+    match geometry {
+        Geometry::Point { coordinates } => Geometry::Point {
+            coordinates: point(coordinates),
+        },
+        Geometry::MultiPoint { coordinates } => Geometry::MultiPoint {
+            coordinates: coordinates.iter().map(point).collect(),
+        },
+        Geometry::LineString { coordinates } => Geometry::LineString {
+            coordinates: line(coordinates),
+        },
+        Geometry::MultiLineString { coordinates } => Geometry::MultiLineString {
+            coordinates: rings(coordinates),
+        },
+        Geometry::Polygon { coordinates } => Geometry::Polygon {
+            coordinates: rings(coordinates),
+        },
+        Geometry::MultiPolygon { coordinates } => Geometry::MultiPolygon {
+            coordinates: coordinates.iter().map(|p| rings(p)).collect(),
+        },
+        Geometry::GeometryCollection { geometries } => Geometry::GeometryCollection {
+            geometries: geometries.iter().map(|g| bent_geometry(g, bend)).collect(),
+        },
+    }
+}
 pub(super) struct ImportGeometry<'a> {
     pub mesh: &'a TriangularLattice,
     pub spatial: &'a dyn SpatialKernel,
     pub mask: Geometry,
+    /// How carried positions bend onto this map.
+    pub bend: Bend,
 }
 impl<'a> ImportGeometry<'a> {
-    pub fn new(mesh: &'a TriangularLattice, spatial: &'a dyn SpatialKernel) -> Self {
+    /// `span` is the parent's cell span; zero on a map with no parent.
+    pub fn new(mesh: &'a TriangularLattice, spatial: &'a dyn SpatialKernel, span: f64) -> Self {
+        let bend = Bend::new(span, mesh);
         let b = mesh.bounds();
         let [x, y] = mesh.origin();
         let mask = Geometry::Polygon {
@@ -26,6 +145,7 @@ impl<'a> ImportGeometry<'a> {
             mesh,
             spatial,
             mask,
+            bend,
         }
     }
     pub fn point_cell(&self, position: Position) -> SpatialResult<Option<usize>> {
@@ -36,6 +156,7 @@ impl<'a> ImportGeometry<'a> {
     }
     pub fn cell(&self, position: Position) -> Option<usize> {
         let [x, y, _] = position.coordinates();
+        let [x, y] = self.bend.at([x, y]);
         let [ox, oy] = self.mesh.origin();
         self.mesh.cell_at(x - ox, y - oy)
     }
@@ -66,7 +187,8 @@ impl<'a> ImportGeometry<'a> {
                 coordinates: line.to_vec(),
             },
             0.0,
-            Some(self.mesh.spacing() / 3.0),
+            // Finer than a cell, so a bent line still steps between neighbouring cells.
+            Some(self.mesh.spacing() / 6.0),
         )?;
         match sampled {
             Geometry::LineString { coordinates } => {
@@ -150,5 +272,43 @@ impl Stations {
             .iter()
             .map(|&(at, fraction)| values[at] + (values[at + 1] - values[at]) * fraction)
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Bend;
+    use atlas_map::{Geometry, Position};
+    #[test]
+    fn a_bend_keeps_the_maps_centre_and_moves_nearby_positions_a_little_and_smoothly() {
+        let span = 14_000.0;
+        let centre = [666_667.0, 130_736.0];
+        let bend = Bend::around(span, centre);
+        let kept = bend.at(centre);
+        assert!((kept[0] - centre[0]).abs() < 1e-6 && (kept[1] - centre[1]).abs() < 1e-6);
+        let moved = |p: [f64; 2]| {
+            let q = bend.at(p);
+            (q[0] - p[0]).hypot(q[1] - p[1])
+        };
+        let far = [centre[0] + 5_000.0, centre[1] - 3_000.0];
+        assert!(moved(far) > 1.0 && moved(far) < 0.2 * span);
+        let next = [far[0] + 10.0, far[1]];
+        assert!((moved(next) - moved(far)).abs() < 5.0);
+    }
+    #[test]
+    fn a_straight_parent_leg_bends_along_its_length() {
+        let bend = Bend::around(14_000.0, [0.0, 0.0]);
+        let leg = Geometry::LineString {
+            coordinates: vec![Position::xy(-7_000.0, 0.0), Position::xy(7_000.0, 0.0)],
+        };
+        let Geometry::LineString { coordinates } = bend.geometry(&leg) else {
+            panic!("a line stays a line");
+        };
+        assert!(coordinates.len() > 30);
+        let off = coordinates
+            .iter()
+            .map(|p| p.coordinates()[1].abs())
+            .fold(0.0, f64::max);
+        assert!(off > 50.0, "the leg stayed straight: {off} m");
     }
 }

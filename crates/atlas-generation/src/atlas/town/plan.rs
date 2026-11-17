@@ -4,7 +4,7 @@ use super::{
     addresses::numbers,
     geometry::{add, cut, distance, rectangle, resample, rest, scale, sub, unit, Jitter, Point},
     ground::{Ground, Rectangle, PLOT, SQUARE},
-    lanes::{lanes, Lay, Network, Wall},
+    lanes::{grow, lanes, Lay, Network, Wall},
     network::{main_street, Arm, Class, Street, VERTEX_STEP},
     plots::{barn, building, growth, plot_size, slots, take, take_keyed, Side, Slot},
     story::{layout, Layout, Size, Story},
@@ -87,9 +87,24 @@ pub fn lay(seat: Seat, ground: &mut Ground, forced: Option<Layout>) -> Plan {
         }
     }
     let wall = lanes(layout, &mut network, &lay, ground, &mut jitter);
+    let mut placed = place_specials(&specials, &network.streets, &lay, ground);
+    // A place grows new lanes while people wait for homes and open ground remains.
+    let mut waiting = homes;
+    let mut grown_from = 0;
+    for round in 1..=GROWTH_ROUNDS + 1 {
+        let (housed, rest) = place_homes(waiting, &network.streets, &lay, ground);
+        placed.extend(housed);
+        waiting = rest;
+        if waiting.is_empty() || round > GROWTH_ROUNDS {
+            break;
+        }
+        let from = std::mem::replace(&mut grown_from, network.streets.len());
+        grow(&mut network, from, &lay, ground, &mut jitter, round);
+        if network.streets.len() == grown_from {
+            break;
+        }
+    }
     let mut streets = network.streets;
-    let mut placed = place_specials(&specials, &streets, &lay, ground);
-    placed.extend(place_homes(homes, &streets, &lay, ground));
     let built = placed
         .iter()
         .map(|(slot, _)| distance(slot.front, seat.centre) + slot.depth)
@@ -116,13 +131,16 @@ fn spread(size: Size, plots: usize) -> f64 {
         .sqrt()
         .max(2.0 * depth)
 }
-/// Houses and workshops take ordinary plots nearest the centre, main streets first.
+/// Rounds of new lanes a place may grow beyond its layout's own to house its people.
+const GROWTH_ROUNDS: usize = 6;
+/// Houses and workshops take ordinary plots nearest the centre, main streets first; returns
+/// those placed and those still waiting for a plot.
 fn place_homes(
     homes: Vec<Use>,
     streets: &[Street],
     lay: &Lay,
     ground: &mut Ground,
-) -> Vec<(Slot, Use)> {
+) -> (Vec<(Slot, Use)>, Vec<Use>) {
     let (frontage, depth) = plot_size(lay.size);
     let candidates = streets
         .iter()
@@ -136,7 +154,9 @@ fn place_homes(
         homes.len(),
         growth(lay.centre, streets),
     );
-    taken.into_iter().zip(homes).collect()
+    let mut homes = homes.into_iter();
+    let placed = taken.into_iter().zip(homes.by_ref()).collect();
+    (placed, homes.collect())
 }
 fn wards(streets: &[Street], centre: Point, wall: Option<&Wall>) -> Wards {
     let headings = streets
@@ -365,6 +385,17 @@ mod tests {
         assert!(plan.wards.is_none());
     }
     #[test]
+    fn a_city_whose_ways_in_stop_short_grows_lanes_until_its_people_are_housed() {
+        let mut ground = Ground::new([-2_500.0, -2_500.0, 2_500.0, 2_500.0], 2.0);
+        let mut short = seat(20_000.0, 3);
+        for arm in &mut short.arms {
+            arm.points[1] = scale(unit(arm.points[1]), 200.0);
+        }
+        let plan = lay(short, &mut ground, Some(Layout::Organic));
+        let housed: f64 = plan.plots.iter().map(|p| f64::from(p.occupants)).sum();
+        assert!(housed >= 0.9 * 20_000.0, "{housed} of 20000 housed");
+    }
+    #[test]
     fn a_town_has_wards_and_each_layout_houses_its_people() {
         for forced in [
             Layout::Organic,
@@ -376,12 +407,8 @@ mod tests {
             let mut ground = Ground::new([-1_500.0, -1_500.0, 1_500.0, 1_500.0], 1.5);
             let plan = lay(seat(3_000.0, 4), &mut ground, Some(forced));
             assert_eq!(plan.layout, forced);
-            let homes = plan
-                .plots
-                .iter()
-                .filter(|p| matches!(p.use_, Use::House | Use::Workshop(_)))
-                .count();
-            assert!(homes >= 400, "{forced:?}: {homes} homes");
+            let housed: f64 = plan.plots.iter().map(|p| f64::from(p.occupants)).sum();
+            assert!(housed >= 0.9 * 3_000.0, "{forced:?}: {housed} housed");
             let wards = plan.wards.as_ref().unwrap();
             assert!(plan.plots.iter().all(|p| p.ward < wards.count()));
             assert_eq!(plan.wall.is_some(), forced == Layout::Walled);

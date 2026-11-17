@@ -1,7 +1,7 @@
-//! Plots fronting the streets, the building on each, and the fields beyond the built edge.
+//! Plots fronting the streets and the building on each.
 use super::{
     geometry::{add, at, distance, left, rectangle, scale, Point},
-    ground::{Ground, Rectangle, FIELD, FIRST_STREET},
+    ground::{Ground, Rectangle, FIRST_STREET},
     network::{Class, Street},
     story::Size,
     uses::Use,
@@ -148,94 +148,6 @@ pub fn barn(slot: &Slot, size: Size) -> Option<Vec<Point>> {
         )
     })
 }
-/// A field and what it grows.
-pub struct Field {
-    pub corners: Vec<Point>,
-    pub pasture: bool,
-}
-/// The country around the built places: where they stand, how far they are built and how the
-/// fields are pitched.
-pub struct Country<'a> {
-    pub places: &'a [(Point, f64)],
-    pub axis: Point,
-    pub bounds: [f64; 4],
-    pub width: f64,
-    pub depth: f64,
-}
-const BALK: f64 = 4.0;
-/// Fields in blocks around the built places, nearest first, until `target` square metres are
-/// farmed; `share` gives the farmland and pasture shares at a point.
-pub fn fields(
-    country: &Country<'_>,
-    ground: &mut Ground,
-    target: f64,
-    share: impl Fn(Point) -> (f64, f64),
-) -> Vec<Field> {
-    let across = left(country.axis);
-    let area = country.width * country.depth;
-    let mut farmed = 0.0;
-    let mut result = Vec::new();
-    for (_, middle) in blocks(country) {
-        if farmed >= target {
-            break;
-        }
-        let (farm, pasture) = share(middle);
-        if farm + pasture <= 0.0 {
-            continue;
-        }
-        let front = add(middle, scale(across, -country.depth / 2.0));
-        let corners = rectangle(front, country.axis, across, country.width, country.depth);
-        if ground.open(&Rectangle(&corners), u32::MAX) {
-            ground.take(&Rectangle(&corners), FIELD);
-            farmed += area;
-            result.push(Field {
-                corners,
-                pasture: pasture > farm,
-            });
-        }
-    }
-    result
-}
-/// Middles of field blocks on the map beyond the built edges, nearest an edge first.
-fn blocks(country: &Country<'_>) -> Vec<(f64, Point)> {
-    let Some(&(origin, _)) = country.places.first() else {
-        return Vec::new();
-    };
-    let [w, s, e, n] = country.bounds;
-    let reach = (e - w).hypot(n - s);
-    let (step_a, step_b) = (country.width + BALK, country.depth + BALK);
-    let across = left(country.axis);
-    let mut candidates = Vec::new();
-    let (ia, ib) = (
-        (reach / step_a).ceil() as i64,
-        (reach / step_b).ceil() as i64,
-    );
-    for i in -ia..=ia {
-        for j in -ib..=ib {
-            let middle = add(
-                origin,
-                add(
-                    scale(country.axis, i as f64 * step_a),
-                    scale(across, j as f64 * step_b),
-                ),
-            );
-            if !(w..=e).contains(&middle[0]) || !(s..=n).contains(&middle[1]) {
-                continue;
-            }
-            let near = country
-                .places
-                .iter()
-                .map(|&(p, built)| distance(p, middle) - built)
-                .fold(f64::INFINITY, f64::min);
-            if near > country.depth / 2.0 {
-                candidates.push((near, middle));
-            }
-        }
-    }
-    // hpc-exempt: orders field blocks outward from the built edge.
-    candidates.sort_by(|a, b| a.0.total_cmp(&b.0));
-    candidates
-}
 
 #[cfg(test)]
 mod tests {
@@ -277,25 +189,5 @@ mod tests {
         assert!(barn(&farm, Size::Farmstead).is_some());
         let shallow = slots(0, &street(), 6.0, 20.0).remove(0);
         assert!(barn(&shallow, Size::City).is_none());
-    }
-    #[test]
-    fn fields_fill_outward_from_the_built_edge_until_the_farmland_is_met() {
-        let mut ground = Ground::new([0.0, 0.0, 1_000.0, 1_000.0], 5.0);
-        let country = Country {
-            places: &[([500.0, 500.0], 100.0)],
-            axis: [1.0, 0.0],
-            bounds: [0.0, 0.0, 1_000.0, 1_000.0],
-            width: 60.0,
-            depth: 150.0,
-        };
-        let fields = fields(&country, &mut ground, 60.0 * 150.0 * 10.0, |p| {
-            (1.0, if p[0] < 500.0 { 2.0 } else { 0.0 })
-        });
-        assert_eq!(fields.len(), 10);
-        assert!(fields.iter().any(|f| f.pasture) && fields.iter().any(|f| !f.pasture));
-        for field in &fields {
-            let middle = scale(add(field.corners[0], field.corners[2]), 0.5);
-            assert!(distance(middle, [500.0, 500.0]) > 100.0);
-        }
     }
 }

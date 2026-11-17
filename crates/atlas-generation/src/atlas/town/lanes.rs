@@ -154,6 +154,29 @@ fn organic(network: &mut Network, lay: &Lay, ground: &mut Ground, jitter: &mut J
         branches(network, parent, lay, ground, jitter, &second);
     }
 }
+/// One round of growth when the streets so far cannot house everyone: short side lanes, about
+/// two plot depths long, branch from every street laid since `from` and end where they meet
+/// another street, water, steep ground or the map's edge. Each round fills the blocks beside
+/// the last, so a place spreads as a net of lanes, not as long spokes.
+pub fn grow(
+    network: &mut Network,
+    from: usize,
+    lay: &Lay,
+    ground: &mut Ground,
+    jitter: &mut Jitter,
+    round: usize,
+) {
+    let branching = Branching {
+        class: Class::Lane,
+        limit: f64::MAX,
+        spacing: 2.0 * lay.depth + Class::Lane.width(lay.size),
+        reach: lay.depth * (4.0 + round as f64),
+        taper: 0.0,
+    };
+    for parent in from..network.streets.len() {
+        branches(network, parent, lay, ground, jitter, &branching);
+    }
+}
 /// A straight street through `middle`, as far each way as the ground lets it run.
 fn span(middle: Point, run: Point, half: f64, ground: &Ground) -> Vec<Point> {
     let ahead = ground.reach(&[middle, add(middle, scale(run, half))], stops_lane);
