@@ -118,7 +118,7 @@ impl FieldSeed {
             fire: self.shared.scalar(Scalar::FireActivity),
             fracture: self.shared.scalar(Scalar::FractureConductance),
             ward: self.shared.scalar(Scalar::Warding),
-            marine: water.borrow().read_only().column.kind,
+            marine: water.borrow().kinds(),
             root_hold: None,
             stiffening: None,
         };

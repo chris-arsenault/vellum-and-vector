@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./uiTest";
-import { canvas, exportMap, openFixtureMap } from "./harness";
+import { canvas, exportMap, fixtureChild, openFixtureMap } from "./harness";
 
 async function openGlen(page: Page) {
   await openFixtureMap(page);
@@ -59,28 +59,22 @@ test("@generation a real-scale map opens from an inspected place", async ({ page
   await section.getByLabel("Hex size", { exact: true }).selectOption("1.5m");
   await section.getByLabel("Size", { exact: true }).selectOption("30");
   await expect(section).toContainText("45.0 m × 33.8 m");
+  // Like a region, the real-scale map is captured first and opened; the supplied reply
+  // publishes the prepared child, and its refinement controls open over it.
+  const created = await fixtureChild(page);
+  await page.evaluate((child) => {
+    window.generationFixtureChild = child;
+  }, created);
   await section.getByRole("button", { name: "Set up real-scale map", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Open a real-scale map", exact: true });
-  await expect(dialog.getByRole("heading", { name: "Open a real-scale map" })).toBeVisible();
-  await expect(dialog).toContainText("A 1.5 m (5 ft) hex ground map, 45.0 m × 33.8 m");
-  await expect(dialog.getByLabel("Map name", { exact: true })).toHaveValue("Ambush glen");
-  await dialog.getByText("Generation settings", { exact: true }).click();
-  for (const label of [
-    "Crust and material load response",
-    "Continental margins and marine deposits",
-  ]) {
-    await dialog
-      .locator("summary")
-      .filter({ hasText: new RegExp("^" + label + "$") })
-      .click();
-    await dialog.getByRole("checkbox", { name: "Include " + label, exact: true }).uncheck();
-  }
-  await dialog.getByRole("button", { name: "Generate map", exact: true }).click();
-  await expect(dialog).toHaveCount(0);
-  expect(await page.evaluate(() => window.generationFixtureSelection)).toMatchObject({ parent });
-  expect(await page.evaluate(() => window.generationFixtureRealScale)).toEqual({
-    kind: "ground",
-    hexSize: "1.5m",
-    hexesAcross: 30,
+  await expect(page.getByRole("dialog")).toBeVisible();
+  const request = await page.evaluate(() => window.generationFixtureRequest);
+  expect(request?.selection).toMatchObject({ parent });
+  expect(request?.realScale).toEqual({ kind: "ground", hexSize: "1.5m", hexesAcross: 30 });
+  expect(await page.evaluate(() => window.generationFixtureInput)).toMatchObject({
+    name: "Ambush glen",
+    width: 45,
+    height: 33.75,
   });
+  const calls = await page.evaluate(() => window.generationCalls);
+  expect(calls.filter((call) => call === "refine")).toHaveLength(1);
 });

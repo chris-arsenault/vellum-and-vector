@@ -14,7 +14,6 @@ use crate::{
         poi::reads,
         Field,
     },
-    lattice::Membership,
     reconstruction::Grid,
     storage::{Band, ReadBand},
 };
@@ -30,21 +29,18 @@ pub fn enabled(domains: &[String]) -> bool {
 }
 pub fn people_on(field: &Field) -> io::Result<f64> {
     (0..field.mesh.len()).try_fold(0.0, |sum, cell| {
-        Ok(sum + field.people.people(cell)? * field.mesh.content_area(cell) / 1e6)
+        Ok(sum + field.people.people(cell)? * field.mesh.area(cell) / 1e6)
     })
 }
 fn feeds(field: &Field, yield_per_km2: &ReadBand<f64>) -> io::Result<f64> {
     (0..field.mesh.len()).try_fold(0.0, |sum, cell| {
-        Ok(sum + yield_per_km2.get(cell)? * field.mesh.content_area(cell) / 1e6)
+        Ok(sum + yield_per_km2.get(cell)? * field.mesh.area(cell) / 1e6)
     })
 }
 fn parent_groups(field: &Field, parent: &Grid) -> io::Result<Band<i32>> {
     let mut groups = field.coverage.borrow_mut().allocate(-1);
     let [ox, oy] = field.mesh.origin();
     for cell in 0..field.mesh.len() {
-        if field.mesh.membership(cell) != Membership::Content {
-            continue;
-        }
         let [x, y] = field.mesh.position(cell);
         groups.set(
             cell,
@@ -97,7 +93,9 @@ pub fn live(
         .and_then(|at| DEVELOPMENT_EXPOSURE.get(at))
         .copied()
         .unwrap_or(0.0);
-    executor.run(&operations.pass, &Facts::kept(years))?;
+    // owner-direction(2026-11-16): the agreement clause is that major landmarks in a parent map must appear and roughly agree with a child map; that is it
+    // The parent's people are starting conditions: regional people grow, starve and move like any settled pass.
+    executor.run(&operations.pass, &Facts::settled(years, 1.0))?;
     let season = executor.query(&questions.season)?.values();
     let land = format!(
         "Land on the map: {}",
@@ -229,6 +227,7 @@ pub fn record_places(
         )
         .map_err(io::Error::other)?
         .value();
+    let least = least_town(settings.child_span, settings.parent_span, settings.town);
     executor.run(
         record,
         &era_places::Setting {
@@ -239,11 +238,13 @@ pub fn record_places(
                 .last_era
                 .clone()
                 .unwrap_or_else(|| "present".into()),
-            least: least_town(settings.child_span, settings.parent_span, settings.town),
+            least,
             town: Some(settings.town),
             country: place_country::Setting {
                 range,
-                road_travellers: settings.road_traffic,
+                // A road is judged against the towns this map can show: the threshold
+                // scales with the regional town threshold, as the towns themselves do.
+                road_travellers: settings.road_traffic * (least / settings.town).min(1.0),
                 years: DEVELOPMENT_EXPOSURE.iter().sum(),
             },
         },

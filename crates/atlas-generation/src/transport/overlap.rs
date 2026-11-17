@@ -1,9 +1,13 @@
 //! Finite triangular control-volume overlap from world/triangleOverlap.ts.
-use crate::{hpc::SmallIntSet, lattice::TriangularLattice, tectonics::transport::SourceMotion};
+use crate::{
+    hpc::SmallIntSet,
+    lattice::{Ghost, TriangularLattice},
+    tectonics::transport::SourceMotion,
+};
 type Point = [f64; 2];
 
-fn triangle(mesh: &TriangularLattice, cell: usize, [x, y]: Point) -> [Point; 3] {
-    let sign = if mesh.inverted(cell) { 1.0 } else { -1.0 };
+fn triangle(mesh: &TriangularLattice, inverted: bool, [x, y]: Point) -> [Point; 3] {
+    let sign = if inverted { 1.0 } else { -1.0 };
     let sx = mesh.spacing();
     let sy = if mesh.closed_poles() {
         mesh.spacing_y()
@@ -51,7 +55,7 @@ fn covered(mesh: &TriangularLattice, cell: usize, polygon: &[Point], [x, y]: Poi
     if (cx - x).abs() > mesh.spacing() * 2.0 || (center[1] - y).abs() > mesh.spacing() * 2.0 {
         return 0.0;
     }
-    let target = triangle(mesh, cell, [cx, center[1]]);
+    let target = triangle(mesh, mesh.inverted(cell), [cx, center[1]]);
     let mut result = polygon.to_vec();
     for i in 0..3 {
         result = clip(&result, target[i], target[(i + 1) % 3]);
@@ -77,10 +81,37 @@ pub fn triangle_overlap(
             return None;
         }
     }
-    let Some(nearest) = mesh.cell_at(center[0], center[1]) else {
-        return Some(Vec::new());
+    Some(overlap_from(
+        mesh,
+        mesh.inverted(source),
+        mesh.position(source),
+        center,
+        motion,
+    ))
+}
+/// Zero-gradient inflow: a ghost beyond the edge carries its owner's column with its owner's
+/// motion; whatever it covers on the map arrives from that edge cell.
+pub fn ghost_overlap(
+    mesh: &TriangularLattice,
+    ghost: &Ghost,
+    motion: &SourceMotion<'_>,
+) -> Vec<(usize, f64)> {
+    let center = motion.move_point(mesh, ghost.position);
+    overlap_from(mesh, ghost.inverted, ghost.position, center, motion)
+}
+fn overlap_from(
+    mesh: &TriangularLattice,
+    inverted: bool,
+    position: Point,
+    center: Point,
+    motion: &SourceMotion<'_>,
+) -> Vec<(usize, f64)> {
+    // Material whose centre leaves the map still covers the edge cells it overlaps; the
+    // rest is carried out.
+    let Some(nearest) = mesh.edge_cell(center[0], center[1]) else {
+        return Vec::new();
     };
-    let polygon = triangle(mesh, source, mesh.position(source)).map(|p| motion.move_point(mesh, p));
+    let polygon = triangle(mesh, inverted, position).map(|p| motion.move_point(mesh, p));
     let source_area = area(&polygon);
     let mut queue = vec![nearest];
     let mut seen = SmallIntSet::default();
@@ -104,5 +135,5 @@ pub fn triangle_overlap(
         }
         head += 1;
     }
-    Some(result)
+    result
 }

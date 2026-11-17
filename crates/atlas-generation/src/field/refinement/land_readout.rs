@@ -1,7 +1,6 @@
 //! Existing regional progress observations over the map's dry content area.
 use crate::{
     field::{shared::Scalar as S, Field},
-    lattice::Membership,
     rock::ground::GroundField,
     scale::{LengthUnit, MapScale},
     storage::ReadBand,
@@ -19,9 +18,6 @@ impl Field {
         let mut land = 0.0;
         let mut all = 0.0;
         for cell in 0..self.mesh.len() {
-            if self.mesh.membership(cell) != Membership::Content {
-                continue;
-            }
             let area = self.mesh.area(cell);
             all += area;
             let kind = view.column.kind.get(cell)?;

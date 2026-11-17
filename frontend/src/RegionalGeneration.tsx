@@ -14,8 +14,7 @@ import { SettingControl } from "./GenerationTuning";
 import { featureControlSettings } from "./generationWorkflowPresentation";
 import { discardFeatureFieldEdits } from "./generationFieldEdits";
 import type { SetupFeature, GenerationRecipe } from "./generationTypes";
-import type { RealScaleChoice } from "@atlas/context";
-import { formatDistance, hexSizes } from "./realScale";
+import { wording } from "./regionalWording";
 import "./generationWizard.css";
 
 export function RegionalGeneration(options: GenerationWorkflowOptions) {
@@ -29,7 +28,7 @@ export function RegionalGeneration(options: GenerationWorkflowOptions) {
     <dialog
       ref={dialog}
       className="refinement-dialog"
-      aria-label={options.realScale ? "Open a real-scale map" : "Refine region"}
+      aria-label={options.source?.realScale ? "Open a real-scale map" : "Refine region"}
       onCancel={options.onCancel}
     >
       <WorkflowFieldProvider>
@@ -43,6 +42,7 @@ function RegionalForm({ options }: { options: GenerationWorkflowOptions }) {
   const flow = useGenerationWorkflow(options);
   const fields = useWorkflowFields();
   const generate = useSetupGeneration(flow, fields.errors);
+  const words = wording(options.source?.realScale, flow.draft);
   return (
     <form
       className="setup-workspace"
@@ -52,16 +52,16 @@ function RegionalForm({ options }: { options: GenerationWorkflowOptions }) {
       }}
     >
       <header className="saved-maps-heading">
-        <h2>{options.realScale ? "Open a real-scale map" : "Refine region"}</h2>
+        <h2>{words.title}</h2>
         <button type="button" onClick={options.onCancel} aria-label="Close refinement">
           ×
         </button>
       </header>
       <p>
-        {options.realScale ? realScaleSummary(options.realScale, flow.draft) : regionSummary(flow)}{" "}
-        from {options.source?.name}. This creates an independent map; the parent stays unchanged.
+        {words.summary}. Generating refines {options.source?.name}, an independent map; its parent
+        stays unchanged.
       </p>
-      <RegionalBrief flow={flow} label={options.realScale ? "Map name" : "Region name"} />
+      <RegionalBrief flow={flow} label={words.name} />
       <details>
         <summary>Generation settings</summary>
         {flow.setup?.features.map((feature) => (
@@ -78,22 +78,11 @@ function RegionalForm({ options }: { options: GenerationWorkflowOptions }) {
           className="primary"
           disabled={generate.isPending || invalidSetup(flow, fields.errors)}
         >
-          {generate.isPending
-            ? "Starting…"
-            : options.realScale
-              ? "Generate map"
-              : "Generate region"}
+          {generate.isPending ? "Starting…" : words.generate}
         </button>
       </footer>
     </form>
   );
-}
-const regionSummary = (flow: GenerationWorkflow) =>
-  `${flow.draft.width / 1000} × ${flow.draft.height / 1000} km`;
-function realScaleSummary(choice: RealScaleChoice, size: { width: number; height: number }) {
-  const hex = hexSizes.find((entry) => entry.value === choice.hexSize)!;
-  const kind = choice.kind === "ground" ? "ground map" : "building-floors map";
-  return `A ${hex.metres} m (${hex.feet} ft) hex ${kind}, ${formatDistance(size.width, "metres")} × ${formatDistance(size.height, "metres")},`;
 }
 function RegionalBrief({ flow, label }: { flow: GenerationWorkflow; label: string }) {
   const { draft, change } = flow;

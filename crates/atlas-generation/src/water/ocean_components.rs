@@ -50,7 +50,7 @@ impl OceanComponents {
     pub fn activate(&mut self, mesh: &TriangularLattice, cell: usize) -> io::Result<()> {
         self.parent.set(cell, cell as i32)?;
         self.sizes.set(cell, 1)?;
-        let content = mesh.content_area(cell);
+        let content = mesh.area(cell);
         self.contents.set(cell, content)?;
         let seed = self.seeds.get(cell)?;
         self.boundary.set(cell, seed)?;

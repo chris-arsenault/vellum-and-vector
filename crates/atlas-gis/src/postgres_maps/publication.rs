@@ -24,9 +24,8 @@ impl Publisher for PostgresMaps {
                 "Publication begins with an incomplete map",
             ));
         }
-        if progressive && expected.is_some() {
-            return Err(io::Error::other("Progressive publication is for a new map"));
-        }
+        // A progressive publication becomes the head at once, replacing any expected revision.
+        // The producer decides which maps stream; a regeneration of generated geography does not.
         self.transaction(|| {
             self.lock(&map.reference.map_id)?;
             if self.find_head(&map.reference.map_id)?.as_ref()!=expected {return Err(io::Error::other("The map revision changed"));}
@@ -90,29 +89,31 @@ impl Publisher for PostgresMaps {
             self.set_head(reference)
         })
     }
+    /// A new map keeps the output it streamed. Any other unfinished revision is removed, and a
+    /// streamed one puts back the revision it replaced, so the map can be generated again.
     fn discard(&mut self, reference: &MapRef) -> io::Result<()> {
-        self.transaction(|| {
-            self.lock(&reference.map_id)?;
-            self.pending(reference)?;
-            if self.find_head(&reference.map_id)?.as_ref() == Some(reference) {
-                return Ok(());
-            }
-            self.execute(
-                "DELETE FROM map.revisions WHERE map_id=$1 AND revision=$2",
-                &[&reference.map_id, &reference.revision],
-            )?;
-            Ok(())
-        })
+        let keep =
+            self.transaction(|| {
+                self.lock(&reference.map_id)?;
+                let (_, expected) = self.pending(reference)?;
+                Ok(expected.is_none()
+                    && self.find_head(&reference.map_id)?.as_ref() == Some(reference))
+            })?;
+        if keep {
+            return Ok(());
+        }
+        self.restart_publication(reference)
     }
 }
 impl PostgresMaps {
-    /// A retry may replace its own incomplete publication, preserving a prior complete head.
+    /// A retry may replace its own incomplete publication. A streamed revision that replaced
+    /// the head it expected puts that head back, so the resumed job finds its starting revision.
     pub fn restart_publication(&self, reference: &MapRef) -> io::Result<()> {
         self.transaction(|| {
             self.lock(&reference.map_id)?;
             let Some(row) = self
                 .query(
-                    "SELECT complete FROM map.revisions WHERE map_id=$1 AND revision=$2",
+                    "SELECT complete,expected_revision FROM map.revisions WHERE map_id=$1 AND revision=$2",
                     &[&reference.map_id, &reference.revision],
                 )?
                 .into_iter()
@@ -126,6 +127,15 @@ impl PostgresMaps {
             {
                 return Err(io::Error::other("Cannot restart a completed publication"));
             }
+            let expected: Option<String> = row
+                .try_get("expected_revision")
+                .map_err(io::Error::other)?;
+            let streamed = !self
+                .query(
+                    "SELECT 1 FROM map.heads WHERE map_id=$1 AND revision=$2",
+                    &[&reference.map_id, &reference.revision],
+                )?
+                .is_empty();
             self.execute(
                 "DELETE FROM map.saved WHERE map_id=$1 AND revision=$2",
                 &[&reference.map_id, &reference.revision],
@@ -138,6 +148,12 @@ impl PostgresMaps {
                 "DELETE FROM map.revisions WHERE map_id=$1 AND revision=$2",
                 &[&reference.map_id, &reference.revision],
             )?;
+            if let (true, Some(revision)) = (streamed, expected) {
+                self.set_head(&MapRef {
+                    map_id: reference.map_id.clone(),
+                    revision,
+                })?;
+            }
             Ok(())
         })
     }

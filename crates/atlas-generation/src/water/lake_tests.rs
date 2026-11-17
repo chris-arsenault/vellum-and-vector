@@ -29,6 +29,7 @@ fn stage_budget_floods_equal_floor_cells_together_and_keeps_partial_basins_close
         parents: &parents,
         open_water_loss: &|_| Ok(100.0),
         infiltration_loss: 0.0,
+        held_by_ice: &|_| Ok(0.0),
     };
     let depression = || Depression {
         id: 1,

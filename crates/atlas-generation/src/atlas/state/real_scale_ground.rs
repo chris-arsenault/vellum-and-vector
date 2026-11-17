@@ -13,7 +13,7 @@ use crate::{
         Feature, FeatureSelection,
     },
     field::shared::Scalar,
-    lattice::{hexes::triangle_corners, Membership},
+    lattice::hexes::triangle_corners,
     processes::ground::{
         cover::{self, Patch},
         exposure::{self, Ground},
@@ -110,8 +110,7 @@ impl State {
     /// Dry, ice-free land inside the map.
     pub(super) fn dry_land(&self, cell: usize) -> io::Result<bool> {
         let field = self.field();
-        Ok(field.mesh().membership(cell) == Membership::Content
-            && field.water().column.kind.get(cell)? == 0
+        Ok(field.water().column.kind.get(cell)? == 0
             && field.shared().scalar(Scalar::IceThickness).get(cell)? <= 0.0)
     }
     fn exposure_cell(&self, cell: usize) -> io::Result<Ground> {

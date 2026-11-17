@@ -21,6 +21,7 @@ import {
 } from "../src/publishedIllustrationData";
 import { updatePublishedDrawing } from "../src/publishedDrawing";
 import { PublishedMapUi } from "./publishedMapUi";
+import { publishedRasterEdge } from "./publishedRasterEdge";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -208,6 +209,17 @@ worker.onmessage = ({ data: message }) => {
   }
   if (message.closed) return;
   descriptor = message.map;
+  void publishedRasterEdge(
+    descriptor.layers.find((layer) => layer.id === "terrain")!,
+    settings
+  )
+    .then((pixels) => {
+      const section = document.createElement("section");
+      section.setAttribute("aria-label", "Interpolated tile edge");
+      section.textContent = JSON.stringify(pixels);
+      document.body.append(section);
+    })
+    .catch(failed);
   engine = createPublishedMap(host, descriptor, reader, descriptor.primarySpaceId, 1);
   engine.map.getView().setCenter([50, 50]);
   engine.map.getView().setResolution(100 / 512);

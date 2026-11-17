@@ -20,10 +20,10 @@ use crate::{
 use std::{io, rc::Rc};
 
 fn land(state: &impl State, cell: usize) -> io::Result<bool> {
-    Ok(state.field()?.water().column.kind.get(cell)? == 0)
+    Ok(state.field()?.water.borrow().kind_at(cell)? == 0)
 }
 fn sea(state: &impl State, cell: usize) -> io::Result<bool> {
-    Ok(state.field()?.water().column.kind.get(cell)? == 1)
+    Ok(state.field()?.water.borrow().kind_at(cell)? == 1)
 }
 fn land_share(state: &impl State, cell: usize) -> io::Result<f64> {
     let mut all = 0;

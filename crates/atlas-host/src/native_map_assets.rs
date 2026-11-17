@@ -6,7 +6,7 @@ use atlas_gis::map_files::MapFiles;
 use atlas_map::PublishedAsset;
 use std::{
     fs::{self, File, OpenOptions},
-    io::{self, Seek, SeekFrom, Write},
+    io::{self, BufWriter, Seek, SeekFrom, Write},
     path::PathBuf,
 };
 use uuid::Uuid;
@@ -21,7 +21,7 @@ impl NativeMapAssets {
     }
 }
 pub struct MapAssetWriter {
-    file: File,
+    file: BufWriter<File>,
     path: PathBuf,
     location: String,
     published: bool,
@@ -31,7 +31,8 @@ impl Write for MapAssetWriter {
         self.file.write(bytes)
     }
     fn flush(&mut self) -> io::Result<()> {
-        self.file.sync_all()
+        self.file.flush()?;
+        self.file.get_ref().sync_all()
     }
 }
 impl Seek for MapAssetWriter {
@@ -69,7 +70,7 @@ impl Assets for NativeMapAssets {
             .create_new(true)
             .open(&path)?;
         Ok(MapAssetWriter {
-            file,
+            file: BufWriter::new(file),
             path,
             location,
             published: false,
@@ -83,7 +84,7 @@ impl Assets for NativeMapAssets {
         mut writer: MapAssetWriter,
     ) -> io::Result<PublishedAsset> {
         writer.flush()?;
-        let byte_length = writer.file.metadata()?.len();
+        let byte_length = writer.file.get_ref().metadata()?.len();
         writer.published = true;
         Ok(PublishedAsset {
             id: id.into(),

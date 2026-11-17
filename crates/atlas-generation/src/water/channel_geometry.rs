@@ -26,6 +26,9 @@ pub struct ChannelView {
     pub orders: ReadBand<u32>,
 }
 impl ChannelGeometry {
+    pub fn strength_at(&self, cell: usize) -> io::Result<f64> {
+        self.strength.get(cell)
+    }
     pub(super) fn checkpoint(
         &mut self,
         archive: &mut crate::checkpoint::Archive<'_>,

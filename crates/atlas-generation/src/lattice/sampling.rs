@@ -2,6 +2,81 @@
 use super::TriangularLattice;
 use std::io;
 
+/// Class contributions on the physical field before rectangular capture chooses one donor.
+pub(crate) fn memberships(
+    mesh: &TriangularLattice,
+    point: [f64; 2],
+    read: impl Fn(usize) -> io::Result<i32>,
+) -> io::Result<smallvec::SmallVec<[(i32, f64); 8]>> {
+    let p = mesh.point(point[0], point[1]);
+    let Some(cell) = mesh.cell_at(p[0], p[1]) else {
+        return mesh.edge_cell(p[0], p[1]).map_or_else(
+            || Ok(smallvec::SmallVec::new()),
+            |cell| Ok(smallvec::smallvec![(read(cell)?, 1.0)]),
+        );
+    };
+    let mut cells = [0; 8];
+    let mut weights = [0.0; 8];
+    let count = fan_weights(mesh, cell, p, &mut cells, &mut weights);
+    let mut result: smallvec::SmallVec<[(i32, f64); 8]> = smallvec::SmallVec::new();
+    for (&cell, &weight) in cells[..count].iter().zip(&weights[..count]) {
+        if weight <= 0.0 {
+            continue;
+        }
+        let code = read(cell as usize)?;
+        if let Some((_, share)) = result.iter_mut().find(|(id, _)| *id == code) {
+            *share += weight;
+        } else {
+            result.push((code, weight));
+        }
+    }
+    Ok(result)
+}
+
+/// Existing projection fan, shared with direct class-evidence sampling.
+pub(crate) fn fan_weights(
+    mesh: &TriangularLattice,
+    cell: usize,
+    p: [f64; 2],
+    cells: &mut [i32],
+    weights: &mut [f64],
+) -> usize {
+    let barycentric = mesh.barycentric(cell, p);
+    let minimum = barycentric
+        .into_iter()
+        .fold(f64::INFINITY, f64::min)
+        .max(0.0);
+    let maximum = barycentric.into_iter().fold(f64::NEG_INFINITY, f64::max);
+    let middle = 1.0 - minimum - maximum;
+    let center = 3.0 * minimum;
+    let vertex = (maximum - middle).max(0.0);
+    let face = (2.0 * (middle - minimum)).max(0.0);
+    let corner = barycentric.iter().position(|&v| v == maximum).unwrap();
+    let opposite = (0..3)
+        .min_by(|&a, &b| barycentric[a].total_cmp(&barycentric[b]))
+        .unwrap();
+    let edge = if mesh.inverted(cell) && opposite > 0 {
+        3 - opposite
+    } else {
+        opposite
+    };
+    cells[0] = cell as i32;
+    cells[1] = mesh.neighbor(cell, edge).unwrap_or(cell) as i32;
+    weights[0] = center + face / 2.0;
+    weights[1] = face / 2.0;
+    let members = vertex_members(mesh, cell, corner);
+    let count = members.len() + 2;
+    for (i, &member) in members.iter().enumerate() {
+        cells[i + 2] = member as i32;
+        weights[i + 2] = vertex / members.len() as f64;
+    }
+    let sum: f64 = weights[..count].iter().sum();
+    for weight in &mut weights[..count] {
+        *weight /= sum;
+    }
+    count
+}
+
 pub struct Sampler<'a> {
     mesh: &'a TriangularLattice,
     cache: Cache,
@@ -42,7 +117,8 @@ impl Cache {
     ) -> io::Result<f64> {
         let [x, y] = mesh.point(point[0], point[1]);
         let Some(cell) = mesh.cell_at(x, y) else {
-            return Ok(0.0);
+            // Beyond the map the value clamps to the edge cell's own.
+            return mesh.edge_cell(x, y).map_or(Ok(0.0), read);
         };
         let barycentric = mesh.barycentric(cell, [x, y]);
         let minimum = barycentric

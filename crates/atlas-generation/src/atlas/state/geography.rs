@@ -14,7 +14,6 @@ use crate::{
     },
     hpc::BitSet,
     identity::semantic_id,
-    lattice::Membership,
     scale::{LengthUnit, MapScale},
     spatial::Overlay,
     water::{routing::LakeMembership, visibility::unwrap},
@@ -34,10 +33,7 @@ impl State {
         self.physical.lakes.clear();
         self.physical.lake_outlines.clear();
         for members in membership.bodies() {
-            if !members
-                .iter()
-                .any(|&cell| self.field().mesh().membership(cell) == Membership::Content)
-            {
+            if members.is_empty() {
                 continue;
             }
             let level = water.column.surface.get(members[0])?;

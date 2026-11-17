@@ -53,6 +53,7 @@ impl WaterColumn {
                     view.kind.get(cell)? == 0
                         && input.drainage.elevations.get(cell)?
                             - input.stage.elevation.get(cell)?
+                            - (input.stage.held_by_ice)(cell)?
                             >= MapScale::native(depth),
                 ),
             )?;

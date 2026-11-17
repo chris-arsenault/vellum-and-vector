@@ -287,7 +287,15 @@ references, and GIS exports include region metadata.
 ### 4.6 Refine a selected geographic region
 
 An explicit Refine action links a finer mapped area to the existing region
-subject. The subject retains its original source and hierarchy; its nearest
+subject. Refine first creates the child map, the parent's geography captured
+within the child's extent, and opens it; the refinement controls appear as a modal
+over the child, and Generate refines that child. The created child shows the
+parent's published layers cropped to its footprint until it is refined. Its first
+refinement shows its output as it publishes; later regenerations replace it when
+complete. A cancelled or failed refinement leaves the child at the revision it
+started from and offers its settings again; a map takes one job at a time. Refine
+on a region that already has a child opens that child with the same controls. The
+subject retains its original source and hierarchy; its nearest
 refined ancestor supplies procedural context. A child remains a geographic map
 at every nesting depth. A fixed physical resolution ladder follows its captured
 refinement level and requested detail. The default-world usable land calibrates
@@ -297,8 +305,7 @@ subregions. Geographic shape and coastal context vary the resulting sample count
 Regional setup offers detail, seed and inherited magic/people choices. It does
 not offer another physical or human history. Parent terrain must exist before
 detail generation; selection and cartographic framing remain usable without it.
-Returning from setup or cancelling a job retains the selected subject. Completed
-regional output arrives through the existing worker and atomic publication.
+Returning from setup or cancelling a job retains the selected subject.
 
 Terrain and water develop from parent context without locking inherited heights
 or shores. Refinement develops connected ridges, distinct summits, cols and
@@ -318,9 +325,9 @@ places respond to one another through shared media; established summits, rivers
 and towns shape their own surroundings and keep their identities. Known places
 keep their records and names. Smaller settlements, local ways, fords, bridges and
 mills are read from where the inherited people live on the finer land, by the
-same rules the world uses, and other POIs come from useful sites. The inherited
-people keep the number the parent gave them, less those whose ground the child's
-own water or ice covers. The child shows the cultural and political regions,
+same rules the world uses, and other POIs come from useful sites. The parent's
+people are starting conditions: on the finer land they grow, starve and move, and
+only major landmarks must agree with the parent. The child shows the cultural and political regions,
 ruins and events its parent recorded.
 
 Finer features and fields stay on their regional map. Creation captures context

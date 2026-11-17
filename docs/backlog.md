@@ -9,6 +9,28 @@ existing code.
 
 ## World generation
 
+- [ ] **32. Costly advection quality improvements — deferred.** Per the owner's
+      2026-11-16 direction, quality changes that would substantially slow generation
+      belong here rather than in the active performance and quality work. Candidates
+      include higher-order scalar transport, richer material mixtures or more retained
+      rock contacts, and geometry-based preservation of narrow transported features
+      where that requires substantial new work. These are proposals, not demonstrated
+      needs: visible remapping blur, loss of minor rock kinds and broken transported
+      corridors remain unverified. Revisit only with an observed map problem, a
+      concrete remedy and its expected or measured generation cost. Record any
+      confirmed gap, overlap or motion defect here if its remedy also incurs a
+      substantial slowdown; distinguish the defect from the deferred remedy. Retain
+      the shared lattice and forward overlap method in the current work. Particle,
+      moving-mesh and plate-local storage rewrites are not approved alternatives.
+      Partial openings currently add oceanic crust volume without retaining a separate
+      subcell basalt patch in the surface columns. Making that patch explicit would add
+      material facets and reconstruction work; first establish an unwanted map outcome.
+      Likewise, province-attached cell motion and sampled fault motion need an observed
+      detachment before replacing either representation. Mixed-bed flags record combining
+      parcels, not a count of distinct rock kinds. The current two-kind projection, bounded
+      contacts, dominant-donor corridors and polar fallback remain approximations to review
+      against visible geography, not numerical-accuracy defects to fix speculatively.
+
 - [ ] **1. Express every generation parameter in world units.** Distances,
       elevations, areas and physical rates are declared in world units inside the
       algorithms and their parameters, so changing sampling resolution never

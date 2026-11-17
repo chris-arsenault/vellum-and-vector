@@ -8,7 +8,6 @@ use super::{
 use crate::{
     execution::{Command, CommandContext, CommandKind, ExecutionError, ExecutionResult},
     hpc::BitSet,
-    lattice::sampling::Sampler,
     processes::runner::PhysicalContext,
     spatial::SpatialKernel,
     tectonics::{controls::plate_travel, fracture::Plume, integration},
@@ -80,11 +79,8 @@ impl Field {
         }
         Ok(())
     }
-    fn move_landmark_drainage(&mut self, plan: &TransportPlan, distance: f64) -> io::Result<()> {
+    fn move_landmark_drainage(&mut self, plan: &TransportPlan) -> io::Result<()> {
         let dominant = plan.history().shares.dominant;
-        let vx = self.shared.scalar(S::CrustMotionX);
-        let vy = self.shared.scalar(S::CrustMotionY);
-        let mut sampler = Sampler::new(&self.mesh);
         let mut previous = BitSet::new(self.mesh.len());
         for record in &mut self.landmark_ledger {
             previous.clear_all();
@@ -97,13 +93,6 @@ impl Field {
                 if source >= 0 && previous.has(source as usize) {
                     record.corridor.push(cell as u32);
                 }
-            }
-            if let Some(capture) = &mut record.capture {
-                let point = [capture.x, capture.y];
-                [capture.x, capture.y] = self.mesh.point(
-                    capture.x + sampler.sample(point, |i| vx.get(i))? * distance / 1000.0,
-                    capture.y + sampler.sample(point, |i| vy.get(i))? * distance / 1000.0,
-                );
             }
         }
         Ok(())
@@ -174,9 +163,7 @@ impl Advection {
         )
         .map_err(failure)?;
         field.transport_plan = None;
-        field
-            .move_landmark_drainage(&plan, distance)
-            .map_err(failure)?;
+        field.move_landmark_drainage(&plan).map_err(failure)?;
         scope.run(&self.history, &plan.history())?;
         let field = scope.state_mut();
         let dominant = plan.history().shares.dominant;

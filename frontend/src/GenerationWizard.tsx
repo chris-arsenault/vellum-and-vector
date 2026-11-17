@@ -188,12 +188,8 @@ function SetupActions({
     </footer>
   );
 }
-// Arconis: docs/architecture/subsystems.arconis#item=w_launch — launch button label: create, generate world or region, regenerate.
+// Arconis: docs/architecture/subsystems.arconis#item=w_launch — launch button label: create, generate world, regenerate.
 function finalAction(flow: GenerationWorkflow) {
   if (flow.approach === "blank") return "Create world";
-  return flow.options.selection
-    ? "Generate region"
-    : flow.options.source
-      ? "Regenerate map"
-      : "Generate world";
+  return flow.options.source ? "Regenerate map" : "Generate world";
 }

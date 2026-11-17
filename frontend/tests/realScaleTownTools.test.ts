@@ -21,7 +21,8 @@ interface Exported {
 async function openVillage(page: Page) {
   await openFixtureMap(page);
   const navigation = page.getByRole("navigation", { name: "Map navigation", exact: true });
-  await navigation.getByRole("button", { name: /Child map 2$/ }).click();
+  // Children list by map id: the glen, the captured coastal reach, then the village.
+  await navigation.getByRole("button", { name: /Child map 3$/ }).click();
   await expect(navigation.getByText("Supplied village", { exact: true })).toBeVisible();
 }
 async function startEditing(page: Page) {

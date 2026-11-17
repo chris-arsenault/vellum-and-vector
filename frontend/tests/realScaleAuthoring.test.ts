@@ -17,6 +17,9 @@ async function openGlen(page: Page) {
   await expect(navigation.getByText("Supplied glen", { exact: true })).toBeVisible();
 }
 async function startEditing(page: Page) {
+  // A child map opens with its regions panel showing; it would cover the glen's west side.
+  const close = page.getByRole("button", { name: "Close panel", exact: true });
+  if (await close.isVisible()) await close.click();
   await page
     .getByRole("navigation", { name: "Map tools" })
     .getByRole("button", { name: "Edit map" })

@@ -23,7 +23,7 @@ fn quickened(field: &Field, cell: usize, stilled: f64) -> io::Result<f64> {
 }
 fn river(field: &Field, cell: usize, orders: &ReadBand<u32>) -> io::Result<f64> {
     Ok(if orders.get(cell)? > 0 {
-        (field.water().channels.strength.get(cell)? / 1000.0).min(1.0)
+        (field.water.borrow().channel_strength(cell)? / 1000.0).min(1.0)
     } else {
         0.0
     })
@@ -32,7 +32,7 @@ fn shore_catch(field: &Field, cell: usize) -> io::Result<f64> {
     let mut seas = 0;
     let mut fauna = 0.0;
     let mut upwelling = 0.0f64;
-    let water = field.water().column.kind;
+    let water = field.water.borrow().kinds();
     for edge in 0..3 {
         let Some(next) = field.mesh.neighbor(cell, edge) else {
             continue;
@@ -77,14 +77,13 @@ pub fn respond(
             by: "soil, water and season".into(),
             queries: water_reads.clone(),
             kind: ResponseKind::Base(Box::new(move |field, cell, answers| {
-                let water = field.water();
-                if water.column.kind.get(cell)? != 0 {
+                if field.water.borrow().kind_at(cell)? != 0 {
                     return Ok(0.0);
                 }
                 let soil_depth = (field.ground().view(GroundField::SoilDepth).get(cell)?
                     / length(field, 1.25e-7)?)
                 .min(1.0);
-                let stored = water.column.store(Store::Soil);
+                let stored = field.water.borrow().store(Store::Soil);
                 let filled = soil::filled(stored.held(cell)?, stored.capacity(cell)?);
                 let wet = (read(field, S::Moisture, cell)? / 1000.0)
                     .max(river(
@@ -110,9 +109,11 @@ pub fn respond(
             by: "grass and season".into(),
             queries: dependencies,
             kind: ResponseKind::Base(Box::new(|field, cell, answers| {
-                Ok(if field.water().column.kind.get(cell)? == 0 {
+                Ok(if field.water.borrow().kind_at(cell)? == 0 {
+                    // Steep grazing carries fewer animals; herds tolerate slope better than crops.
                     5.0 * read(field, S::GrassCover, cell)?
                         * answers.ask("season")?
+                        * (-4.0 * read(field, S::Slope, cell)?).exp()
                         * quickened(field, cell, 0.5)?
                 } else {
                     0.0
@@ -126,7 +127,7 @@ pub fn respond(
             by: "woods, game and water".into(),
             queries: water_reads,
             kind: ResponseKind::Base(Box::new(move |field, cell, answers| {
-                if field.water().column.kind.get(cell)? != 0 {
+                if field.water.borrow().kind_at(cell)? != 0 {
                     return Ok(0.0);
                 }
                 let gathered = 2.0

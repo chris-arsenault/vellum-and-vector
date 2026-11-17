@@ -8,6 +8,7 @@ mod magic;
 mod material;
 mod protection;
 pub mod sampling;
+pub mod support;
 pub mod values;
 
 use super::{schema::NumericBand, shared::Scalar as S, Field};
@@ -40,6 +41,7 @@ pub struct Surface {
     // hpc-exempt: channel catalogue metadata; numerical samples live in typed bands.
     channels: BTreeMap<String, ProjectedChannel>,
     cargo: Option<cargo::Cargo>,
+    support: Option<support::Support>,
     coverage: Coverage,
     active: crate::storage::Band<u8>,
     input: Option<std::rc::Rc<crate::field::inheritance::resources::Resource>>,
@@ -51,6 +53,9 @@ pub struct Selection<'a> {
     pub derived: Option<&'a BTreeSet<String>>,
 }
 impl Surface {
+    pub fn support(&self) -> Option<support::ReadSupport> {
+        self.support.as_ref().map(support::Support::read)
+    }
     pub(crate) fn begin_process(&self) -> u64 {
         self.coverage.begin_process()
     }
@@ -143,6 +148,7 @@ impl Surface {
             // hpc-exempt: one entry per channel schema.
             channels: BTreeMap::new(),
             cargo: None,
+            support: None,
             coverage,
             active,
             input: None,

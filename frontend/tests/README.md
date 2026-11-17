@@ -39,7 +39,8 @@ contexts or another test's output. A retry or different test order must work.
   progress, cancellation or publication. A dedicated configuration-test file can
   instead declare `test.use({ generationLifecycle: "the boundary being tested" })`.
   Undeclared generation fixture requests fail. Real generation remains blocked
-  even with this declaration. Reuse a completed parent for regional jobs.
+  even with this declaration. Reuse a completed parent for regional jobs; a supplied
+  Refine reply publishes the fixture's prepared, unsaved "Coastal reach" child.
 - Keep supplied lifecycle responses in `scenarioBoundary.ts`. Do not add sleeps,
   larger worlds, timeout increases or parameter matrices to establish setup.
 - Retained `@deferred-authoring` scenarios keep their existing behavior for future

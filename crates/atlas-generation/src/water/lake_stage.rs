@@ -27,6 +27,10 @@ pub struct StageInputs<'a> {
     pub parents: &'a ReadBand<i32>,
     pub open_water_loss: &'a dyn Fn(usize) -> io::Result<f64>,
     pub infiltration_loss: f64,
+    /// Water depth, in elevation units, that grounded ice on a cell holds down. Water
+    /// stands as a lake only where it would float the ice; beneath grounded ice it stays
+    /// in the column and passes on.
+    pub held_by_ice: &'a dyn Fn(usize) -> io::Result<f64>,
 }
 pub struct LakeCriteria<'a> {
     pub minimum_area: f64,
@@ -200,7 +204,7 @@ pub fn solve_stage(
     let mut depth = 0.0f64;
     for &cell in &cells[..count] {
         let floor = input.elevation.get(cell)?;
-        if floor < surface {
+        if floor + (input.held_by_ice)(cell)? < surface {
             members.push(cell);
             depth = depth.max(surface - floor);
         }

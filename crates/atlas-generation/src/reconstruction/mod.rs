@@ -3,6 +3,7 @@ mod adaptive;
 pub mod build;
 pub mod classes;
 mod corner_values;
+mod cubic;
 pub mod extrema;
 mod fit;
 pub mod grid_build;
@@ -21,7 +22,7 @@ use topology::Topology;
 #[derive(Clone)]
 pub enum Layout {
     Raster { width: usize, height: usize },
-    Adaptive(Topology),
+    Adaptive(Box<Topology>),
 }
 #[derive(Clone)]
 pub struct Grid {
@@ -164,14 +165,20 @@ impl<'a> Interpolator<'a> {
             return read(self.grid.sample_index(self.grid.located_point(at)?)?);
         }
         match &self.grid.layout {
-            Layout::Raster { width, .. } => {
+            Layout::Raster { width, height } => {
                 let mapping::Location {
                     cell: i,
                     x: tx,
                     y: ty,
                 } = at;
-                Ok((1.0 - ty) * ((1.0 - tx) * read(i)? + tx * read(i + 1)?)
-                    + ty * ((1.0 - tx) * read(i + width)? + tx * read(i + width + 1)?))
+                let cells = cubic::window(i, *width, *height);
+                let mut values = [[0.0; 4]; 4];
+                for (row, cells) in values.iter_mut().zip(cells) {
+                    for (value, cell) in row.iter_mut().zip(cells) {
+                        *value = read(cell)?;
+                    }
+                }
+                Ok(cubic::sample(&values, tx, ty))
             }
             Layout::Adaptive(_) => match &mut self.adaptive {
                 Some(sampler) => Ok(sampler.patch(at.cell, read)?.sample(at.x, at.y)),

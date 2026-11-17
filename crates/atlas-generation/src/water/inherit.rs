@@ -38,7 +38,7 @@ impl ReachStore {
         let geometry = ImportGeometry::new(context.mesh, context.spatial, context.bend);
         if let Some(kept) = &input.kept {
             for entry in &kept.entries {
-                if let Some(cell) = geometry.point_cell(entry.position)? {
+                if let Some(cell) = geometry.cell(entry.position) {
                     self.entries.push(BoundaryEntry {
                         cell,
                         monthly: entry.monthly,
@@ -72,7 +72,7 @@ impl ReachStore {
         let (Some(downstream), Some(junction)) = (input.downstream, input.junction) else {
             return Ok(());
         };
-        let Some(cell) = geometry.point_cell(junction)? else {
+        let Some(cell) = geometry.cell(junction) else {
             return Ok(());
         };
         let receiving = imported.get(&downstream).and_then(|i| {
@@ -110,7 +110,7 @@ impl ReachStore {
             imported.ids.push(id);
         }
         if match input.junction {
-            Some(junction) => geometry.point_cell(junction)?.is_none(),
+            Some(junction) => geometry.cell(junction).is_none(),
             None => true,
         } {
             imported.outlet = None;
@@ -218,7 +218,7 @@ impl ReachStore {
         if input.course.len() != 1 {
             return Ok(None);
         }
-        let Some(cell) = geometry.point_cell(input.course[0])? else {
+        let Some(cell) = geometry.cell(input.course[0]) else {
             return Ok(None);
         };
         let id = self.initialize(input, vec![cell], geometry)?;

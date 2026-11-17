@@ -7,6 +7,7 @@ use crate::{
     numerical_input::{Alias, Array},
     numerical_resource::{
         Descriptor, Field, FieldScope, MaterialCargo, ResourceLayout, Sampling, State,
+        SurfaceSupport,
     },
 };
 use atlas_generation::{
@@ -128,6 +129,7 @@ impl Resources {
             geography_id: layout.descriptor.id.clone(),
             channels: BTreeMap::new(),
             material_cargo: None,
+            surface_support: None,
         };
         let mut vectors = Vec::new();
         for (index, name) in names.iter().enumerate() {
@@ -162,6 +164,29 @@ impl Resources {
                 ("material_records", cargo.records().into()),
             ] {
                 let vector = Vector::linear(name, values, vectors::Group::Cells, 1);
+                partitions::cargo(surface.grid().bounds, &mut definition.partitions, &vector);
+                definition.descriptor.arrays.push(vector.array.clone());
+                vectors.push(vector);
+            }
+        }
+        if let Some(support) = surface
+            .support()
+            .filter(|_| names.iter().any(|name| name == "finalSurface"))
+        {
+            field.surface_support = Some(SurfaceSupport {
+                final_surface: "surface_contributions".into(),
+                natural: "natural_contributions".into(),
+            });
+            for (name, values) in [
+                ("surface_contributions", support.final_surface),
+                ("natural_contributions", support.natural),
+            ] {
+                let vector = Vector::linear(
+                    name,
+                    values.into(),
+                    vectors::Group::Cells,
+                    atlas_generation::field::projection::support::STRIDE,
+                );
                 partitions::cargo(surface.grid().bounds, &mut definition.partitions, &vector);
                 definition.descriptor.arrays.push(vector.array.clone());
                 vectors.push(vector);

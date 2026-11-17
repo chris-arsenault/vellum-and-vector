@@ -11,11 +11,7 @@ use super::{
     network::repel,
     topology::distance,
 };
-use crate::{
-    lattice::{Membership, TriangularLattice},
-    spatial::SpatialKernel,
-    storage::Band,
-};
+use crate::{lattice::TriangularLattice, spatial::SpatialKernel, storage::Band};
 use std::io;
 pub fn course_weight(
     mesh: &TriangularLattice,
@@ -107,7 +103,7 @@ pub fn captured_landmarks(
             .supported(landmark.kind.reach(&landmark.parameters), 1.0);
         let distances = path_distance(field, &placed, kernel)?;
         for cell in 0..field.mesh.len() {
-            if field.mesh.membership(cell) == Membership::Content && distances.get(cell)? <= reach {
+            if distances.get(cell)? <= reach {
                 found.push(landmark.clone());
                 break;
             }
@@ -167,9 +163,6 @@ fn path_cost(
     let distances = path_distance(field, placed, kernel)?;
     let mut fracture = field.shared.derive_scalar(Scalar::FractureConductance);
     for (cell, cost) in cost.iter_mut().enumerate() {
-        if field.mesh.membership(cell) != Membership::Content {
-            continue;
-        }
         let distance = distances.get(cell)?;
         if distance > reach {
             continue;

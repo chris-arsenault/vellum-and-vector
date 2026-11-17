@@ -22,9 +22,6 @@ impl ReadHabitat for Field {
     }
     fn on_river(&self, cell: usize) -> io::Result<bool> {
         let water = self.water.borrow();
-        Ok(water
-            .river_reader()
-            .order_at(cell, water.read_only().column.kind.get(cell)?)
-            > 0)
+        Ok(water.river_reader().order_at(cell, water.kind_at(cell)?) > 0)
     }
 }

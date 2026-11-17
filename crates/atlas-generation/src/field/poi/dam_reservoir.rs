@@ -5,7 +5,6 @@ use crate::{
         Field,
     },
     hpc::BitSet,
-    lattice::Membership,
     rock::ground::GroundField,
     scale::MapScale,
 };
@@ -125,8 +124,7 @@ pub fn hold_reservoir(
     while head < queue.len() {
         let cell = queue[head];
         head += 1;
-        if field.mesh.membership(cell) != Membership::Content
-            || field.water().column.kind.get(cell)? == 1
+        if field.water().column.kind.get(cell)? == 1
             || field.ground().view(GroundField::Elevation).get(cell)? >= crest
         {
             continue;

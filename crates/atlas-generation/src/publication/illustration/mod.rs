@@ -47,11 +47,10 @@ pub fn records(
             .filter(|f| f.kind == "lake")
             .map(|f| f.geometry.clone()),
     );
-    // An inland map can hold no sea or lake at all.
-    let water = if water.is_empty() {
-        None
-    } else {
-        spatial.union_all(&water)?
+    // A landlocked map without lakes has no water to cut from its shapes.
+    let water = match water.is_empty() {
+        true => None,
+        false => spatial.union_all(&water)?,
     };
     let mut result = oceans
         .into_iter()

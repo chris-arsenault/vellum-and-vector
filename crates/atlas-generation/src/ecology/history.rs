@@ -2,7 +2,6 @@
 use super::Habitat;
 use crate::{
     field::shared::{CellCode, Scalar as S},
-    lattice::Membership,
     storage::ReadBand,
 };
 use std::io;
@@ -24,10 +23,7 @@ pub fn summarize(map: &Habitat<'_>) -> io::Result<Summary> {
         predators: 0.0,
     };
     for cell in 0..map.mesh.len() {
-        if map.mesh.membership(cell) != Membership::Content {
-            continue;
-        }
-        let area = map.mesh.content_area(cell);
+        let area = map.mesh.area(cell);
         let code = map.fields.code(CellCode::BiomeCodes).get(cell)? as usize;
         let entry = result
             .areas
@@ -86,9 +82,6 @@ pub fn transitions(map: &Habitat<'_>, before: &ReadBand<i32>) -> io::Result<Vec<
     let mut order = Vec::new();
     let mut seen = [false; 27 * 27];
     for cell in 0..map.mesh.len() {
-        if map.mesh.membership(cell) != Membership::Content {
-            continue;
-        }
         let was = before.get(cell)?;
         let now = map.fields.code(CellCode::BiomeCodes).get(cell)?;
         if was == 0 || was == now {
@@ -102,7 +95,7 @@ pub fn transitions(map: &Habitat<'_>, before: &ReadBand<i32>) -> io::Result<Vec<
             order.push(at);
             seen[at] = true;
         }
-        areas[at] += map.mesh.content_area(cell);
+        areas[at] += map.mesh.area(cell);
     }
     Ok(order
         .into_iter()

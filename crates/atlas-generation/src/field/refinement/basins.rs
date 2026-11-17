@@ -1,7 +1,7 @@
-use super::topology::{components, frame_edge, resolves};
+use super::topology::{components, resolves};
 use crate::{
     hpc::{BitSet, Direction, KeyedHeap},
-    lattice::{Membership, TriangularLattice},
+    lattice::{Crossing, TriangularLattice},
 };
 
 pub fn flood_levels(
@@ -33,14 +33,24 @@ pub fn flood_levels(
     }
     filled
 }
-pub fn connected_sea(mesh: &TriangularLattice, height: &[f64], captured_ocean: &[u8]) -> Vec<u8> {
+/// Low ground joins the sea from captured ocean or from an edge whose ghost beyond is low;
+/// `beyond` gives a crossing's ghost height on the same datum as `height`.
+pub fn connected_sea(
+    mesh: &TriangularLattice,
+    height: &[f64],
+    captured_ocean: &[u8],
+    beyond: impl Fn(&Crossing) -> f64,
+) -> Vec<u8> {
     let mut sea = vec![0; mesh.len()];
     let mut queue = Vec::new();
     for (cell, &value) in height.iter().enumerate() {
         if value <= 0.0
-            && (mesh.membership(cell) != Membership::Content
-                || mesh.boundary(cell)
-                || captured_ocean[cell] != 0)
+            && (captured_ocean[cell] != 0
+                || mesh
+                    .support()
+                    .crossings_of(cell)
+                    .iter()
+                    .any(|crossing| beyond(crossing) <= 0.0))
         {
             sea[cell] = 1;
             queue.push(cell);
@@ -74,9 +84,7 @@ pub fn captured_sinks(
     basin_depth: f64,
     span: f64,
 ) -> Sinks {
-    let filled = flood_levels(mesh, base, |i| {
-        sea[i] != 0 || mesh.boundary(i) || frame_edge(mesh, i)
-    });
+    let filled = flood_levels(mesh, base, |i| sea[i] != 0 || mesh.boundary(i));
     let depth: Vec<f64> = (0..mesh.len())
         .map(|i| {
             if sea[i] != 0 || lake[i] >= 0 {
@@ -119,9 +127,7 @@ pub fn lake_hollows(
     sea: &[u8],
     pool_depth: f64,
 ) -> Vec<u8> {
-    let filled = flood_levels(mesh, height, |i| {
-        sea[i] != 0 || mesh.boundary(i) || frame_edge(mesh, i)
-    });
+    let filled = flood_levels(mesh, height, |i| sea[i] != 0 || mesh.boundary(i));
     let mut held = vec![0; mesh.len()];
     components(
         mesh,

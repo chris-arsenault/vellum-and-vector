@@ -9,7 +9,7 @@ use super::{
     shared::{CellCode, Flag, FloatField, Scalar},
 };
 use crate::{
-    lattice::TriangularLattice,
+    lattice::{GhostChannel, TriangularLattice},
     reconstruction::{mapping::Mapping, resample::Sampler, Grid},
     spatial::SpatialKernel,
     storage::{Band, Coverage},
@@ -161,6 +161,54 @@ impl Inputs {
             }
         }
         Ok(sampled)
+    }
+    /// Boundary support beyond the child's edge, sampled from the parent like its cells.
+    pub fn sample_ghosts(
+        &self,
+        mesh: &mut TriangularLattice,
+        coverage: &mut Coverage,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<()> {
+        let [ox, oy] = mesh.origin();
+        let points = mesh
+            .support()
+            .ghosts()
+            .iter()
+            .map(|ghost| [ox + ghost.position[0], oy + ghost.position[1]])
+            .collect::<Vec<_>>();
+        for &ghost in GhostChannel::ALL {
+            let name = match ghost {
+                GhostChannel::Elevation => "Elevation",
+            };
+            let Some(channel) = channels::physical().into_iter().find(|c| c.name == name) else {
+                continue;
+            };
+            let source = self.source(name);
+            if !source.channels.contains_key(name) {
+                continue;
+            }
+            let extensive = channel.quantity == channels::Quantity::Extensive;
+            let mut sampler = Sampler::new(
+                source,
+                name,
+                channel.discrete || channel.quantity == channels::Quantity::Category,
+                extensive,
+                coverage,
+                spatial,
+            )?;
+            let values = sampler
+                .batch(&points, spatial)?
+                .into_iter()
+                .map(|value| {
+                    (value * if extensive { mesh.area(0) } else { 1.0 })
+                        .max(channel.minimum.unwrap_or(f64::NEG_INFINITY))
+                        .min(channel.maximum.unwrap_or(f64::INFINITY))
+                })
+                .collect();
+            mesh.capture_ghosts(ghost, values)
+                .map_err(io::Error::other)?;
+        }
+        Ok(())
     }
 }
 #[derive(Default)]

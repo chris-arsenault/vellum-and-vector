@@ -17,11 +17,11 @@ pub fn gradients(
         ));
     }
     let values = &raster.planes[height].values;
-    let sample = |cell, fallback| -> io::Result<f32> {
+    let sample = |cell| -> io::Result<Option<f32>> {
         Ok(if raster.coverage.get(cell)? > 0.99 {
-            values.get(cell)?
+            Some(values.get(cell)?)
         } else {
-            fallback
+            None
         })
     };
     let [dx, dy] = raster.grid.pixel_span();
@@ -40,12 +40,39 @@ pub fn gradients(
         let bottom = (row + 1).min(raster.grid.height as usize - 1) * width + col;
         east.set(
             cell,
-            ((f64::from(sample(right, z)?) - f64::from(sample(west, z)?)) / (2.0 * dx)) as f32,
+            difference(
+                z,
+                if col > 0 { sample(west)? } else { None },
+                if col + 1 < width {
+                    sample(right)?
+                } else {
+                    None
+                },
+                dx,
+            ),
         )?;
         north.set(
             cell,
-            ((f64::from(sample(top, z)?) - f64::from(sample(bottom, z)?)) / (2.0 * dy)) as f32,
+            difference(
+                z,
+                if row + 1 < raster.grid.height as usize {
+                    sample(bottom)?
+                } else {
+                    None
+                },
+                if row > 0 { sample(top)? } else { None },
+                dy,
+            ),
         )?;
     }
     Ok(())
+}
+pub(crate) fn difference(center: f32, before: Option<f32>, after: Option<f32>, step: f64) -> f32 {
+    let (delta, distance) = match (before, after) {
+        (Some(a), Some(b)) => (b - a, 2.0 * step),
+        (Some(a), None) => (center - a, step),
+        (None, Some(b)) => (b - center, step),
+        (None, None) => return 0.0,
+    };
+    (f64::from(delta) / distance) as f32
 }

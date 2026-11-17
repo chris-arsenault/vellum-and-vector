@@ -69,6 +69,7 @@ fn postgis_publication_queries_saves_and_reader_boundary() -> Result<(), Box<dyn
     assert_eq!(store.find_saved("island")?.unwrap().summary.version, 0);
     replacement(&mut store, &original)?;
     scoped_queries(&mut store)?;
+    sample_batches(&mut store)?;
     saves(&store)?;
     automatic_child(&mut store)?;
     interrupted(&mut store)?;
@@ -323,6 +324,46 @@ fn saves(store: &PostgresMaps) -> io::Result<()> {
     assert_eq!(store.list_saved("")?.items.len(), 1);
     assert!(store.save(request(), "tomorrow".into()).is_err());
     Ok(())
+}
+fn sample_batches(store: &mut PostgresMaps) -> io::Result<()> {
+    let mut map = map("samples");
+    map.reference.map_id = "sample-map".into();
+    store.begin(&map, None, true)?;
+    let sample = |id: &str, footprint: Value| {
+        json!({
+            "id":id,"spaceId":"surface","footprint":footprint,
+            "window":{"bounds":[0,0,10,10],"closedEast":true,"closedNorth":true},
+            "cellSpan":10,"center":[5,5],"measure":100,"active":true,
+            "attributes":[],"sections":[]
+        })
+    };
+    store.append(
+        &map.reference,
+        serde_json::from_value(json!({
+            "samples":[sample("a",shape()),sample("b",shape())]
+        }))?,
+    )?;
+    let found = store.samples_at(&map.reference, "surface", atlas_map::Position::xy(5.0, 5.0))?;
+    assert_eq!(
+        found.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+        ["a", "b"]
+    );
+    let invalid = json!({"type":"Polygon","coordinates":[[[0,0],[10,10],[10,0],[0,10],[0,0]]]});
+    assert!(store
+        .append(
+            &map.reference,
+            serde_json::from_value(json!({
+                "samples":[sample("c",shape()),sample("bad",invalid)]
+            }))?
+        )
+        .is_err());
+    assert_eq!(
+        store
+            .samples_at(&map.reference, "surface", atlas_map::Position::xy(5.0, 5.0))?
+            .len(),
+        2
+    );
+    store.discard(&map.reference)
 }
 fn automatic_child(store: &mut PostgresMaps) -> io::Result<()> {
     let parent = store.find_head("island")?.unwrap();

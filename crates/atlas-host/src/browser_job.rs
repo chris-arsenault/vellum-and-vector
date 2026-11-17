@@ -41,6 +41,8 @@ pub(super) struct Prepared {
     expected: Option<MapRef>,
     parent: Option<MapRef>,
     selection: Option<crate::regional_capture::Child>,
+    /// Refinement publishes the captured child; Regenerate on that child generates it.
+    creates_child: bool,
     geography: Vec<Value>,
     resources: Vec<Value>,
 }
@@ -200,6 +202,12 @@ impl BrowserJob {
         if cache_bytes == 0 {
             return Err(error("Generation requires a positive block-cache budget"));
         }
+        if prepared.creates_child {
+            self.publish_capture(prepared, &intended, cache_bytes, &host)
+                .await?;
+            recovery.retire_checkpoint().map_err(error)?;
+            return serde_json::to_string(&intended).map_err(error);
+        }
         let spatial = Rc::new(
             NativeGeos::new(
                 prepared.submission.source.world["reference"]["precision"]
@@ -252,17 +260,22 @@ impl BrowserJob {
             )
             .map_err(error)?;
         host.work_progress(0.0, "Preparing finished map publication");
+        let records = self.records.features();
         let result = self
             .publish(
-                crate::finished_map::Request::from_document(
-                    finished.snapshot,
-                    reference.clone(),
-                    prepared.expected,
-                    prepared.parent,
-                )
-                .map_err(error)?,
+                (
+                    crate::finished_map::Request::from_document(
+                        finished.snapshot,
+                        reference.clone(),
+                        prepared.expected,
+                        prepared.parent,
+                    )
+                    .map_err(error)?,
+                    None,
+                ),
                 cache_bytes,
                 &host,
+                &records,
             )
             .await;
         result?;

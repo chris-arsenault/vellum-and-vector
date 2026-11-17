@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import type { GenerationAction, GenerationService, RealScaleChoice } from "@atlas/context";
-import type { MapDescriptor, RegionSelection } from "@atlas/map";
+import type { GenerationAction, GenerationService } from "@atlas/context";
+import type { MapDescriptor } from "@atlas/map";
 import type { Diagnostic, Landmark, LocatedMagicSource } from "@atlas/context";
 import type { FeatureSelection, GenerationSetup, AtlasGenerationInput } from "./generationTypes";
 import { cartographicFeatureStage } from "./cartographicDraft";
@@ -21,26 +21,14 @@ export interface GenerationWorkflowOptions {
   initial: GenerationDraft;
   service: GenerationService<GenerationDraft>;
   source?: MapDescriptor;
-  selection?: RegionSelection;
-  /** Present when the selection opens a real-scale map (ADR 0016). */
-  realScale?: RealScaleChoice;
   onGenerate(draft: GenerationDraft, prepared: PreparedSetup): void | Promise<void>;
   onManual?(draft: GenerationDraft): void | Promise<void>;
   onCancel?(): void;
 }
 export function generationAction(
-  options: Pick<GenerationWorkflowOptions, "source" | "selection" | "realScale">,
+  options: Pick<GenerationWorkflowOptions, "source">,
   draft: GenerationDraft
 ): GenerationAction<GenerationDraft> {
-  if (options.selection)
-    return {
-      method: "refine",
-      request: {
-        selection: options.selection,
-        configuration: draft,
-        ...(options.realScale ? { realScale: options.realScale } : {}),
-      },
-    };
   if (options.source)
     return {
       method: "regenerate",
@@ -48,13 +36,7 @@ export function generationAction(
     };
   return { method: "create", request: draft };
 }
-function useDraftReview({
-  initial,
-  service,
-  source,
-  selection,
-  realScale,
-}: GenerationWorkflowOptions) {
+function useDraftReview({ initial, service, source }: GenerationWorkflowOptions) {
   const [draft, setDraft] = useState(initial);
   const [prepared, setPrepared] = useState<PreparedSetup | null>(null);
   const [previous, setPrevious] = useState<PreparedSetup | null>(null);
@@ -67,7 +49,7 @@ function useDraftReview({
   useEffect(() => {
     const current = ++revision.current;
     let active = true;
-    void service.review(generationAction({ source, selection, realScale }, draft)).then(
+    void service.review(generationAction({ source }, draft)).then(
       (value) => {
         if (!active || current !== revision.current) return;
         const review = value as PreparedSetup;
@@ -83,7 +65,7 @@ function useDraftReview({
     return () => {
       active = false;
     };
-  }, [draft, service, source, selection, realScale]);
+  }, [draft, service, source]);
   const change = (next: GenerationDraft) => {
     revision.current++;
     setPrepared(null);

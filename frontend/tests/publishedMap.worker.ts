@@ -15,7 +15,7 @@ self.onmessage = async ({ data }) => {
     return;
   }
   try {
-    const reference = await installFixtureMap();
+    const { reference } = await installFixtureMap();
     // Reopening only map tables and assets proves no generation resource is needed for viewing.
     const workspace = await openFinishedAtlas("browser");
     maps = workspace.maps;

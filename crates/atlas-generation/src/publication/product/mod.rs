@@ -1,4 +1,5 @@
 mod assets;
+mod cropped;
 pub mod hexes;
 pub mod inputs;
 mod raster_group;
@@ -14,10 +15,14 @@ use std::{cell::RefCell, io};
 pub struct Product<'a> {
     pub descriptor: Descriptor<'a>,
     pub expected: Option<&'a MapRef>,
+    /// Install output as it is written, replacing `expected` at once, rather than at finish.
+    pub progressive: bool,
     pub vectors: Vectors<'a>,
     pub fields: Fields<'a>,
     pub numerical: &'a [inputs::Field],
     pub history: &'a [EpochHistory],
+    /// A captured child copies these published rasters instead of sampling its fields.
+    pub parent_rasters: Option<&'a super::crop::ParentRasters>,
 }
 struct Target<'a, P, A> {
     publisher: &'a mut P,
@@ -41,7 +46,7 @@ impl Product<'_> {
             self.numerical,
         )?;
         let mut map = self.prepare(&selected, assets)?;
-        publisher.begin(&map, self.expected, self.expected.is_none())?;
+        publisher.begin(&map, self.expected, self.progressive)?;
         let result = self
             .write(
                 &mut map,

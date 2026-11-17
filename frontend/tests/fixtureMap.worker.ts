@@ -2,8 +2,7 @@ import { installFixtureMap } from "./fixturePublication.worker";
 
 self.onmessage = async () => {
   try {
-    const reference = await installFixtureMap();
-    self.postMessage({ reference });
+    self.postMessage({ maps: await installFixtureMap() });
   } catch (error) {
     self.postMessage({ error: String(error) });
   }

@@ -5,7 +5,7 @@ use super::{
     river_courses::{river_id_at, RiverState},
     values::HostLink,
 };
-use crate::{features::Feature, lattice::Membership, reconstruction::Grid};
+use crate::{features::Feature, reconstruction::Grid};
 use atlas_map::{Geometry, Position};
 use std::io;
 
@@ -81,7 +81,7 @@ pub fn hosted_cell(
         .filter(|reach| reach.drawn() && reach.river() == Some(link.host_id.as_str()))
     {
         for &cell in reach.cells() {
-            if field.mesh.membership(cell) == Membership::Content && kind.get(cell)? != 1 {
+            if kind.get(cell)? != 1 {
                 cells.push(cell);
             }
         }

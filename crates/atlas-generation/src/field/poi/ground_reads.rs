@@ -92,7 +92,7 @@ pub fn sediment(state: &impl State, cell: usize) -> io::Result<f64> {
     ))
 }
 pub fn land(state: &impl State, cell: usize) -> io::Result<bool> {
-    Ok(state.field()?.water().column.kind.get(cell)? == 0)
+    Ok(state.field()?.water.borrow().kind_at(cell)? == 0)
 }
 pub fn natural_bar(state: &impl State, cell: usize) -> io::Result<bool> {
     let field = state.field()?;

@@ -18,7 +18,6 @@ use crate::{
         significance::{measure, EXCEPTIONAL_LAKE_AREA, LAKE_DEPTH},
     },
     hpc::BitSet,
-    lattice::Membership,
     scale::{LengthUnit, MapScale},
     water::{
         column::{Store, NO_WATER_SURFACE},
@@ -60,11 +59,7 @@ fn found(state: &impl State) -> io::Result<Vec<Place>> {
             let depths = water.column.store(Store::Standing);
             let mut found = Vec::new();
             for members in membership.bodies() {
-                let cells: Vec<_> = members
-                    .iter()
-                    .copied()
-                    .filter(|&cell| field.mesh.membership(cell) == Membership::Content)
-                    .collect();
+                let cells: Vec<_> = members.to_vec();
                 let Some(&first) = cells.first() else {
                     continue;
                 };

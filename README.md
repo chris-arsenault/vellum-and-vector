@@ -351,9 +351,9 @@ There are no separate browser build or browser matrix jobs.
 `migrations` entry. The active Terraform root uses
 Ahara's website module to serve `frontend/dist` at
 <https://maps.ahara.io> through private S3 and CloudFront, with DNS and TLS.
-Ahara's OpenGraph origin serves the HTML shell with literal site metadata and
-`/og-image.png`; it has no database query configuration. This public frontend selects
-pure browser execution. It declares no application API, database or Cognito client.
+The built HTML supplies site metadata and explicitly selects pure browser execution.
+Serve it directly: a replacement HTML shell would discard its execution-host marker.
+The public frontend declares no application API, database or Cognito client.
 
 Generation logs its inputs and elapsed stage messages to the browser console,
 including validation, worker transfer and publication. **Generation jobs** shows

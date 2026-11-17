@@ -25,9 +25,8 @@ impl Publisher for MapStore {
                 "Publication begins with an incomplete map",
             ));
         }
-        if progressive && expected.is_some() {
-            return Err(io::Error::other("Progressive publication is for a new map"));
-        }
+        // A progressive publication becomes the head at once, replacing any expected revision.
+        // The producer decides which maps stream; a regeneration of generated geography does not.
         transaction(self.db.as_ref(), || {
             if self.find_head(&map.reference.map_id)?.as_ref() != expected {
                 return Err(io::Error::other("The map revision changed"));
@@ -123,18 +122,19 @@ impl Publisher for MapStore {
             self.set_head(reference)
         })
     }
+    /// A new map keeps the output it streamed. Any other unfinished revision is removed, and a
+    /// streamed one puts back the revision it replaced, so the map can be generated again.
     fn discard(&mut self, reference: &MapRef) -> io::Result<()> {
-        transaction(self.db.as_ref(), || {
-            self.pending(reference)?;
-            if self.find_head(&reference.map_id)?.as_ref() == Some(reference) {
-                return Ok(());
-            }
-            self.db.execute(
-                "DELETE FROM maps WHERE map_id=? AND revision=?",
-                &reference_values(reference),
-            )?;
-            Ok(())
-        })
+        self.pending(reference)?;
+        let expected = self.db.value(
+            "SELECT expected_revision FROM maps WHERE map_id=? AND revision=?",
+            &reference_values(reference),
+        )?;
+        let streamed = self.find_head(&reference.map_id)?.as_ref() == Some(reference);
+        if streamed && expected.is_none_or(|value| value == Value::Null) {
+            return Ok(());
+        }
+        self.restart_publication(reference)
     }
 }
 impl MapStore {
@@ -154,6 +154,11 @@ impl MapStore {
             if complete.integer()? != 0 {
                 return Err(io::Error::other("Cannot restart a completed publication"));
             }
+            let expected = self.db.value(
+                "SELECT expected_revision FROM maps WHERE map_id=? AND revision=?",
+                &values,
+            )?;
+            let streamed = self.find_head(&reference.map_id)?.as_ref() == Some(reference);
             self.db.execute(
                 "DELETE FROM map_saved WHERE map_id=? AND revision=?",
                 &values,
@@ -164,6 +169,14 @@ impl MapStore {
             )?;
             self.db
                 .execute("DELETE FROM maps WHERE map_id=? AND revision=?", &values)?;
+            // A streamed revision replaced the head it expected; restarting puts that head back
+            // so the resumed job finds the revision it started from.
+            if let (true, Some(Value::Text(revision))) = (streamed, expected) {
+                self.set_head(&MapRef {
+                    map_id: reference.map_id.clone(),
+                    revision,
+                })?;
+            }
             Ok(())
         })
     }

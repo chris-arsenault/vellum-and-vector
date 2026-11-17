@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import type {
   Inspection,
   MapDescriptor,
   MapRef,
+  MapRegion,
   RegionSelection,
   SavedMapDocument,
 } from "@atlas/map";
@@ -23,7 +23,7 @@ import { usePublishedNavigation } from "./usePublishedNavigation";
 import { usePublishedRegions, usePublishedRegionPresentation } from "./usePublishedRegions";
 import { initialPublishedPresentation } from "./publishedStyling";
 import { publishedFeature, type PublishedFeature } from "./publishedAppearance";
-import { readPublishedHistory } from "./publishedHistory";
+import { FinishedHistory, RelatedMaps } from "./FinishedMapPanels";
 import type { PublishedTool } from "./publishedInteractions";
 import type { PublishedPresentation } from "./PublishedMapView";
 import { ErrorMessage } from "./ErrorMessage";
@@ -45,7 +45,12 @@ interface Props {
   create(): void;
   lore(): void;
   library(): void;
-  refine(selection: RegionSelection, name: string, realScale?: RealScaleChoice): void;
+  refine(
+    selection: RegionSelection,
+    name: string,
+    child?: MapRef,
+    realScale?: RealScaleChoice
+  ): void;
   regenerate(): void;
 }
 // owner-direction(2026-11-14): presentation reads only GIS map storage, never numerical generation storage.
@@ -59,8 +64,8 @@ function useFinishedMap(props: Props) {
   );
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [selected, select] = useState<PublishedFeature | null>(null);
-  const [tool, setTool] = useState<PublishedTool>("inspect");
-  const [panel, setPanel] = useState("regions");
+  const [tool, setRegionTool] = useState<PublishedTool>("inspect");
+  const [panel, showPanel] = useState("regions");
   const navigation = usePublishedNavigation(map, context.navigation);
   const regions = usePublishedRegions({
     map,
@@ -68,10 +73,11 @@ function useFinishedMap(props: Props) {
     navigation: context.navigation,
     saved: navigation,
     tool,
-    setTool,
+    setTool: setRegionTool,
     enterMap: props.open,
     initialRegionId: appearance.ancestry.at(-1),
   });
+  const { setTool, setPanel } = regionScoped(tool, regions, setRegionTool, showPanel);
   const value = usePublishedRegionPresentation(appearance, regions);
   const outline = regions.draft?.candidate.geometry ?? regions.region?.geometry;
   const selection: RegionSelection | null = outline
@@ -88,19 +94,8 @@ function useFinishedMap(props: Props) {
     setInspection(next);
     select(next.features[0] ? publishedFeature(next.features[0]) : null);
   };
-  const refine = (region: import("@atlas/map").MapRegion) =>
-    props.refine(
-      {
-        parent: map.reference,
-        spaceId: region.spaceId,
-        geometry: region.geometry,
-        featureIds: [],
-        regionPath: regions.ancestry.map((id) =>
-          regions.regions.find((region) => region.id === id)!
-        ),
-      },
-      region.name
-    );
+  const refine = (region: MapRegion) =>
+    props.refine(regionSelection(map, region, regions), region.name, region.child ?? undefined);
   return {
     props,
     map,
@@ -122,6 +117,41 @@ function useFinishedMap(props: Props) {
     setError,
     inspect,
     refine,
+  };
+}
+/**
+ * An unfinished region outline belongs to the region tools in the regions panel: choosing
+ * another tool discards it, and leaving the panel ends region selection.
+ */
+function regionScoped(
+  tool: PublishedTool,
+  regions: ReturnType<typeof usePublishedRegions>,
+  setTool: (tool: PublishedTool) => void,
+  showPanel: (panel: string) => void
+) {
+  return {
+    setTool: (next: PublishedTool) => {
+      if (!next.startsWith("region-")) regions.discard();
+      setTool(next);
+    },
+    setPanel: (next: string) => {
+      if (next !== "regions" && tool.startsWith("region-")) regions.cancel();
+      else if (next !== "regions") regions.discard();
+      showPanel(next);
+    },
+  };
+}
+function regionSelection(
+  map: MapDescriptor,
+  region: MapRegion,
+  regions: ReturnType<typeof usePublishedRegions>
+): RegionSelection {
+  return {
+    parent: map.reference,
+    spaceId: region.spaceId,
+    geometry: region.geometry,
+    featureIds: [],
+    regionPath: regions.ancestry.map((id) => regions.regions.find((region) => region.id === id)!),
   };
 }
 type Model = ReturnType<typeof useFinishedMap>;
@@ -338,7 +368,7 @@ function FinishedInspection({ model }: { model: Model }) {
         <RealScaleOpen
           map={map}
           inspection={inspection}
-          open={(selection, choice, name) => props.refine(selection, name, choice)}
+          open={(selection, choice, name) => props.refine(selection, name, undefined, choice)}
         />
       )}
       {selected && (
@@ -356,44 +386,5 @@ function FinishedInspection({ model }: { model: Model }) {
         />
       )}
     </aside>
-  );
-}
-
-function RelatedMaps({ context, map, open }: Props) {
-  const related = useQuery({
-    queryKey: ["related-maps", map.reference],
-    queryFn: () => context.library.related(map.reference),
-  });
-  return (
-    <nav className="breadcrumbs" aria-label="Map navigation">
-      {related.data?.parent && (
-        <button onClick={() => open(related.data!.parent!)}>Parent map</button>
-      )}
-      <span>{map.name}</span>
-      {related.data?.children.map((child, i) => (
-        <button key={child.mapId} onClick={() => open(child)}>
-          Child map {i + 1}
-        </button>
-      ))}
-      <ErrorMessage error={related.error} />
-    </nav>
-  );
-}
-function FinishedHistory({ context, map }: Pick<Props, "context" | "map">) {
-  const history = useQuery({
-    queryKey: ["map-history", map.reference],
-    queryFn: ({ signal }) => readPublishedHistory(context.maps, map.reference, signal),
-  });
-  return (
-    <section aria-label="Completed history">
-      <h2>Completed history</h2>
-      {history.data?.map((entry) => (
-        <details key={entry.id}>
-          <summary>{entry.title}</summary>
-          <pre>{JSON.stringify(entry.attributes, null, 2)}</pre>
-        </details>
-      ))}
-      <ErrorMessage error={history.error} />
-    </section>
   );
 }

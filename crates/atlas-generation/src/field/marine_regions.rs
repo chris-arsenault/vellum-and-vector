@@ -136,7 +136,7 @@ impl Watershed {
                 breadth,
                 ocean: true,
             });
-            region.area += field.mesh.content_area(cell);
+            region.area += field.mesh.area(cell);
         }
         Ok(found)
     }
@@ -248,7 +248,7 @@ fn classify(
         }
         let at = index[id as usize];
         if water.column.store(Store::Standing).held(cell)? <= shelf_break {
-            shallow[at] += field.mesh.content_area(cell);
+            shallow[at] += field.mesh.area(cell);
         }
         for edge in 0..3 {
             if let Some(next) = field.mesh.neighbor(cell, edge) {

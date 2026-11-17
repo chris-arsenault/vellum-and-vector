@@ -39,6 +39,14 @@ impl Surface {
         if let Some(cargo) = &mut self.cargo {
             cargo.checkpoint(archive, &mut self.coverage)?;
         }
+        let mut support = self.support.is_some();
+        archive.value("surface-contributions", &mut support)?;
+        if archive.loading() {
+            self.support = support.then(|| super::support::Support::empty(&mut self.coverage));
+        }
+        if let Some(support) = &mut self.support {
+            support.checkpoint(archive, &mut self.coverage)?;
+        }
         Ok(())
     }
 }

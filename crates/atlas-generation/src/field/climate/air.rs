@@ -252,7 +252,7 @@ pub(super) fn moisture(field: &Field, p: &Settings) -> io::Result<()> {
             cell,
             (1000.0 * columns.storm.get(cell)?).round(),
         )?;
-        if field.water().column.kind.get(cell)? != 0 {
+        if field.water.borrow().kind_at(cell)? != 0 {
             write(field, S::Moisture, cell, 1000.0)?;
             continue;
         }

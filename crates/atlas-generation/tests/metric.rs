@@ -1,5 +1,5 @@
 use atlas_generation::{
-    lattice::{Membership, TriangularLattice, WorldLatticeOptions},
+    lattice::{TriangularLattice, WorldLatticeOptions},
     metric::{operator::Operator, search::physical_distance, smoothing::smooth},
     storage::*,
 };
@@ -62,7 +62,7 @@ fn excluded_faces_do_not_enter_the_operator() {
     matrix.product(&values.read_only(), &mut product).unwrap();
     assert_eq!(product.get(0).unwrap(), mesh.area(cell) * 7.0);
 }
-fn spread(samples: f64) {
+fn spread(samples: f64, resident: bool) {
     let mesh = Rc::new(
         WorldLatticeOptions::default()
             .build(Bounds(-20.0, -20.0, 20.0, 20.0), samples, 0.0, |_, _| true)
@@ -70,7 +70,11 @@ fn spread(samples: f64) {
     );
     let mut coverage = Coverage::new(
         mesh.clone(),
-        BlockCache::new(20_000_000, BlockScratch::new(File)),
+        if resident {
+            BlockCache::resident(20_000_000, BlockScratch::new(File))
+        } else {
+            BlockCache::new(20_000_000, BlockScratch::new(File))
+        },
     );
     let source = mesh.cell_at(0.0, 0.0).unwrap();
     let mut values = coverage.allocate(0.0);
@@ -81,18 +85,19 @@ fn spread(samples: f64) {
     for cell in 0..mesh.len() {
         assert!(
             result.get(cell).unwrap().is_finite(),
-            "Non-finite cell {cell}, membership {:?}",
-            mesh.membership(cell)
+            "Non-finite cell {cell}"
         );
     }
 }
 #[test]
 fn small_solve_spreads_a_supplied_peak() {
-    spread(16.0);
+    spread(16.0, false);
+    spread(16.0, true);
 }
 #[test]
 fn multigrid_solve_spreads_a_supplied_peak() {
-    spread(100.0);
+    spread(100.0, false);
+    spread(100.0, true);
 }
 #[test]
 fn inactive_gap_stops_diffusion_between_components() {
@@ -101,7 +106,7 @@ fn inactive_gap_stops_diffusion_between_components() {
     let mut values = coverage.allocate(0.0);
     for cell in 0..mesh.len() {
         let x = mesh.position(cell)[0];
-        if mesh.membership(cell) != Membership::NoData && x.abs() > 5.0 {
+        if x.abs() > 5.0 {
             active.set(cell, 1).unwrap();
         }
         values

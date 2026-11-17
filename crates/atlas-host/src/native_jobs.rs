@@ -271,7 +271,11 @@ impl Action {
                 &request.configuration.name,
                 Some(request.selection.parent.clone()),
             ),
-            Self::Regenerate { configuration, .. } => (&configuration.name, None),
+            // The regenerated map, as the browser host records it; a map takes one job at a time.
+            Self::Regenerate {
+                configuration,
+                reference,
+            } => (&configuration.name, Some(reference.clone())),
         };
         GenerationDetails {
             name: name.clone(),

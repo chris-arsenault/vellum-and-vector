@@ -72,8 +72,8 @@ pub(crate) fn network_cell(mesh: &TriangularLattice, [x, y]: [f64; 2]) -> Option
 /// The map's own triangle under a position already on this map, or none outside its frame.
 pub(crate) fn content_cell(mesh: &TriangularLattice, [x, y]: [f64; 2]) -> Option<usize> {
     let [ox, oy] = mesh.origin();
+    // The lattice addresses map cells only; a position outside the frame has none.
     mesh.cell_at(mesh.delta_x(x - ox), y - oy)
-        .filter(|&cell| mesh.membership(cell) == crate::lattice::Membership::Content)
 }
 /// Legs of a carried line are cut this many times finer than the parent's span before they
 /// bend, so a straight parent leg wanders along its length and not only at its ends.
@@ -165,14 +165,6 @@ impl<'a> ImportGeometry<'a> {
             mask,
             bend,
         }
-    }
-    /// A parent point's cell: bent first, then kept only when it lands inside the frame.
-    pub fn point_cell(&self, position: Position) -> SpatialResult<Option<usize>> {
-        let bent = self.bent(position);
-        if !self.spatial.covers_points(&self.mask, &[bent])?[0] {
-            return Ok(None);
-        }
-        Ok(self.at(bent))
     }
     /// The cell a parent position bends onto.
     pub fn cell(&self, position: Position) -> Option<usize> {

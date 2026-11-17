@@ -9,6 +9,7 @@ impl PostgresMaps {
         batch: PublicationBatch,
     ) -> io::Result<()> {
         let r = &map.reference;
+        let mut features = Vec::with_capacity(batch.features.len());
         for feature in batch.features {
             feature.validate_people().map_err(io::Error::other)?;
             let space = space(map, &feature.space_id)?;
@@ -32,9 +33,27 @@ impl PostgresMaps {
             let geometry = serde_json::to_string(&feature.geometry)?;
             let mut data = to_json(&feature)?;
             data.as_object_mut().unwrap().remove("geometry");
-            self.execute("INSERT INTO map.features VALUES($1,$2,$3,$4,$5,$6,map.canonical_geometry($7,$8),$9)",&[&r.map_id,&r.revision,&feature.id,&space.id,&feature.layer_id,&feature.name,&geometry,&space.precision,&data])?;
+            features.push(serde_json::json!({
+                "id": feature.id, "space": space.id, "layer": feature.layer_id,
+                "name": feature.name, "geometry": geometry, "precision": space.precision,
+                "data": data,
+            }));
+        }
+        if !features.is_empty() {
+            self.execute(
+                "INSERT INTO map.features SELECT $1,$2,r.id,r.space,r.layer,r.name,
+                 map.canonical_geometry(r.geometry,r.precision),r.data
+                 FROM jsonb_to_recordset($3) AS r(id text,space text,layer text,name text,
+                 geometry text,precision double precision,data jsonb)",
+                &[&r.map_id, &r.revision, &serde_json::Value::Array(features)],
+            )?;
         }
         let encoding = codec::Samples::new(map);
+        let mut ids = Vec::with_capacity(batch.samples.len());
+        let mut spaces = Vec::with_capacity(batch.samples.len());
+        let mut geometries = Vec::with_capacity(batch.samples.len());
+        let mut precisions = Vec::with_capacity(batch.samples.len());
+        let mut samples = Vec::with_capacity(batch.samples.len());
         for sample in batch.samples {
             sample.window.bounds.validate().map_err(io::Error::other)?;
             if sample.id.is_empty()
@@ -49,16 +68,26 @@ impl PostgresMaps {
                 ));
             }
             let space = space(map, &sample.space_id)?;
+            samples.push(encoding.encode(&sample)?);
+            geometries.push(serde_json::to_string(&sample.footprint)?);
+            ids.push(sample.id);
+            spaces.push(space.id.clone());
+            precisions.push(space.precision);
+        }
+        if !samples.is_empty() {
             self.execute(
-                "INSERT INTO map.samples VALUES($1,$2,$3,$4,map.canonical_geometry($5,$6),$7)",
+                "INSERT INTO map.samples SELECT $1,$2,r.id,r.space,
+                 map.canonical_geometry(r.geometry,r.precision),r.data
+                 FROM UNNEST($3::text[],$4::text[],$5::text[],$6::double precision[],
+                 $7::bytea[]) AS r(id,space,geometry,precision,data)",
                 &[
                     &r.map_id,
                     &r.revision,
-                    &sample.id,
-                    &space.id,
-                    &serde_json::to_string(&sample.footprint)?,
-                    &space.precision,
-                    &encoding.encode(&sample)?,
+                    &ids,
+                    &spaces,
+                    &geometries,
+                    &precisions,
+                    &samples,
                 ],
             )?;
         }

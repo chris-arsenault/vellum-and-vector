@@ -36,6 +36,10 @@ export function publishedRaster(
   const style = publishedStyle(raster, terrain, presentation, overlay);
   const source = new GeoTIFF({
     sources: [{ url: asset.url, bands }],
+    // Multiband tiles can exceed the default byte cache while parallel reads are pending.
+    sourceOptions: { cacheSize: 1024 },
+    // Read neighbouring pixels so magnified tile edges interpolate continuously.
+    gutter: 1,
     projection,
     normalize: false,
     convertToRGB: false,

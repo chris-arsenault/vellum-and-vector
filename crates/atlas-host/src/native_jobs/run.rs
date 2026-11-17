@@ -192,6 +192,7 @@ pub(super) fn prepare(
         expected,
         parent,
         operation,
+        creates_child: selection.is_some(),
         selection,
     })
 }

@@ -84,7 +84,9 @@ impl WorkingSet {
                     height: dimensions.height,
                 })
             }
-            ResourceLayout::Adaptive => Ok(Layout::Adaptive(self.topology(resource, samples)?)),
+            ResourceLayout::Adaptive => Ok(Layout::Adaptive(Box::new(
+                self.topology(resource, samples)?,
+            ))),
             ResourceLayout::Mesh => Err(io::Error::other(
                 "Captured surfaces require a regular or adaptive sampled field",
             )),

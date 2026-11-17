@@ -5,7 +5,6 @@ use super::{
 };
 use crate::{
     hpc::SmallIntSet,
-    lattice::Membership,
     rock::ground::GroundField,
     scale::{LengthUnit, MapScale, RelativeMeasure},
     storage::ReadBand,
@@ -140,10 +139,7 @@ fn cones(field: &Field, parent_span: f64) -> io::Result<Vec<Cone>> {
     let water = field.water().column.kind;
     for cell in 0..field.mesh.len() {
         let value = MapScale::metres(construction.get(cell)?, LengthUnit::Native);
-        if field.mesh.membership(cell) != Membership::Content
-            || value < floor
-            || water.get(cell)? == 1
-        {
+        if value < floor || water.get(cell)? == 1 {
             continue;
         }
         if !local_maximum(field, &construction, cell, window)? {

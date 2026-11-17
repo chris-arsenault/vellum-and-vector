@@ -14,7 +14,6 @@ use super::{
 use crate::{
     field::{shared::Scalar, significance::physical},
     hpc::{BitSet, Direction, MultiKeyHeap},
-    lattice::Membership,
     noise::hash_unit,
     rock::ground::queries::SurfaceResponse,
 };
@@ -38,10 +37,7 @@ pub fn steps_of(state: &impl RiverState) -> io::Result<Rc<Vec<usize>>> {
         let mut ranked = MultiKeyHeap::new([Direction::Descending], Direction::Ascending);
         for river in rivers_of(state)?.iter() {
             for &cell in &river.cells {
-                if field.mesh.membership(cell) == Membership::Content
-                    && !seen.has(cell)
-                    && field.with_landscape(|land| land.is_river_step(cell))?
-                {
+                if !seen.has(cell) && field.with_landscape(|land| land.is_river_step(cell))? {
                     seen.add(cell);
                     ranked.push(
                         cell as u32,

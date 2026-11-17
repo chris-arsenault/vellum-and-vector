@@ -12,7 +12,6 @@ use crate::{
     features::{Feature, FeatureReader, FeatureSelection},
     field::{poi::reads::has_channel, refinement::courses::cell_at, shared::Scalar, Field},
     human::{catalogue::LayerId, HumanField},
-    lattice::Membership,
     rock::ground::GroundField,
     spatial::SpatialKernel,
 };
@@ -148,7 +147,7 @@ fn ground(field: &Field, bounds: [f64; 4]) -> io::Result<Ground> {
     }
     for (cell, &mark) in marks.iter().enumerate() {
         let [x, y] = mesh.position(cell);
-        if mark != 0 && mesh.membership(cell) == Membership::Content {
+        if mark != 0 {
             if let Some(index) = ground.index([x + origin[0], y + origin[1]]) {
                 ground.withhold(index, mark);
             }
@@ -441,7 +440,7 @@ pub fn farmed(field: &Field) -> io::Result<f64> {
     let farmland = people.view(HumanField::Layer(LayerId::Farmland));
     let pasture = people.view(HumanField::Layer(LayerId::Pasture));
     (0..field.mesh().len()).try_fold(0.0, |sum, cell| {
-        Ok(sum + (farmland.get(cell)? + pasture.get(cell)?) * field.mesh().content_area(cell))
+        Ok(sum + (farmland.get(cell)? + pasture.get(cell)?) * field.mesh().area(cell))
     })
 }
 

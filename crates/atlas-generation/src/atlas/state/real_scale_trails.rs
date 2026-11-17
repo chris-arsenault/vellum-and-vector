@@ -51,9 +51,6 @@ impl State {
     /// Walking cost per metre through one triangle.
     fn walking_cost(&self, cell: usize) -> io::Result<f64> {
         let field = self.field();
-        if field.mesh().membership(cell) != crate::lattice::Membership::Content {
-            return Ok(f64::INFINITY);
-        }
         let shared = field.shared();
         let grade = shared.scalar(Scalar::Slope).get(cell)? / TRAIL_GRADE;
         let mut cost = 1.0

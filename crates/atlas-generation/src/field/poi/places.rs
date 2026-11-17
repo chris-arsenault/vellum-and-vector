@@ -9,7 +9,6 @@ use crate::{
     features::{Feature, FeatureSelection},
     field::{refinement::topology, Field},
     hpc::{BitSet, Direction, KeyedHeap},
-    lattice::Membership,
     magic::channels::Channel,
 };
 use std::{io, rc::Rc};
@@ -22,7 +21,7 @@ fn regions(
 ) -> io::Result<Vec<Place>> {
     let mut includes = BitSet::new(field.mesh.len());
     for cell in 0..field.mesh.len() {
-        if field.mesh.membership(cell) == Membership::Content && test(cell)? {
+        if test(cell)? {
             includes.add(cell);
         }
     }
@@ -96,7 +95,7 @@ pub fn cell_places(
         let field = state.field()?;
         let mut places = Vec::new();
         for cell in 0..field.mesh.len() {
-            if field.mesh.membership(cell) == Membership::Content && test(cell)? {
+            if test(cell)? {
                 places.push(Place::at(kind, cell, vec![cell]));
             }
         }
@@ -142,7 +141,7 @@ pub fn sited_places(
         let mut ranked = KeyedHeap::new([Direction::Descending], Direction::Ascending);
         let mut candidates = Vec::new();
         for cell in 0..field.mesh.len() {
-            if field.mesh.membership(cell) != Membership::Content || !requires(cell)? {
+            if !requires(cell)? {
                 continue;
             }
             let score = suitability(cell)?;

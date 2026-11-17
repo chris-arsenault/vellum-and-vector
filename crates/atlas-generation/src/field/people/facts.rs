@@ -35,12 +35,6 @@ impl Facts {
             grows: true,
         }
     }
-    pub fn kept(years: f64) -> Self {
-        Self {
-            grows: false,
-            ..Self::settled(years, 1.0)
-        }
-    }
 }
 // Arconis: docs/architecture/subsystems.arconis#item=pp_era — sets how many settled passes the human era runs.
 pub fn passes_for(years: f64) -> usize {

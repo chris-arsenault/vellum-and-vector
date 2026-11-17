@@ -68,9 +68,9 @@ impl Ground {
             0.0
         };
         let cover = (1.0 - share) * land_cover + share * cut_cover;
-        let land = self.columns.read_layer(cell, Column::Land, 0)?;
+        let land = self.columns.surface_material(cell, Column::Land)?;
         let cut = if share > 0.0 {
-            self.columns.read_layer(cell, Column::Cut, 0)?
+            self.columns.surface_material(cell, Column::Cut)?
         } else {
             land.clone()
         };

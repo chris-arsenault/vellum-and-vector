@@ -138,6 +138,11 @@ pub(super) fn advect(
             [event.x, event.y] = moved([event.x, event.y])?;
         }
     }
+    for record in &mut field.landmark_ledger {
+        if let Some(capture) = &mut record.capture {
+            [capture.x, capture.y] = moved([capture.x, capture.y])?;
+        }
+    }
     for fault in &mut field.faults {
         fault.coordinates = move_trace(mesh, kernel, &fault.coordinates, &mut moved)?;
     }

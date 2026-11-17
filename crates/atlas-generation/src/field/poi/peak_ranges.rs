@@ -72,7 +72,7 @@ pub fn groups(state: &impl RangeState) -> io::Result<Rc<Vec<Group>>> {
             let area: f64 = region
                 .members
                 .iter()
-                .map(|&cell| field.mesh.content_area(cell))
+                .map(|&cell| field.mesh.area(cell))
                 .sum();
             if area < state.range_minimum_area() {
                 continue;
@@ -90,10 +90,7 @@ pub fn groups(state: &impl RangeState) -> io::Result<Rc<Vec<Group>>> {
 }
 pub fn is_range(state: &impl RangeState, members: &[usize]) -> io::Result<bool> {
     let field = state.field()?;
-    let area: f64 = members
-        .iter()
-        .map(|&cell| field.mesh.content_area(cell))
-        .sum();
+    let area: f64 = members.iter().map(|&cell| field.mesh.area(cell)).sum();
     if area < state.range_minimum_area() {
         return Ok(false);
     }

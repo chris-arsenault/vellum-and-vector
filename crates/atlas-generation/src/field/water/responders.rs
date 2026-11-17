@@ -4,7 +4,6 @@ use crate::{
     execution::{ExecutionResult, QueryDependency},
     field::Field,
     scale::{LengthUnit, MapScale, RelativeMeasure},
-    water::groundwater::return_rate,
 };
 // Arconis: docs/architecture/subsystems.arconis#item=r_wet — wetness from climate, plus groundwater, greenwood, salt and wetlands.
 pub fn respond(
@@ -34,7 +33,7 @@ pub fn respond(
             by: "the sea".into(),
             queries: vec![],
             kind: ResponseKind::Base(Box::new(|field, _, _| {
-                Ok(field.water().effective_sea_level)
+                Ok(field.water.borrow().effective_sea_level())
             })),
         },
     )?;
@@ -44,7 +43,7 @@ pub fn respond(
             by: "climate".into(),
             queries: vec![runoff.clone()],
             kind: ResponseKind::Base(Box::new(|field, cell, _| {
-                field.water().runoff.mean.get(cell).map_err(failure)
+                field.water.borrow().mean_runoff(cell).map_err(failure)
             })),
         },
     )?;
@@ -54,10 +53,8 @@ pub fn respond(
             by: "climate".into(),
             queries: vec![runoff],
             kind: ResponseKind::Base(Box::new(move |field, cell, _| {
-                Ok(
-                    field.water().runoff.mean.get(cell).map_err(failure)?
-                        / (reference_runoff * 2.0),
-                )
+                Ok(field.water.borrow().mean_runoff(cell).map_err(failure)?
+                    / (reference_runoff * 2.0))
             })),
         },
     )?;
@@ -67,11 +64,11 @@ pub fn respond(
             by: "ice melt".into(),
             queries: vec![melt],
             kind: ResponseKind::Add(Box::new(|field, cell, _| {
-                let water = field.water();
-                if water.column.kind.get(cell).map_err(failure)? == 1 {
+                let water = field.water.borrow();
+                if water.kind_at(cell).map_err(failure)? == 1 {
                     Ok(0.0)
                 } else {
-                    water.melt.glacial.get(cell).map_err(failure)
+                    water.glacial_melt(cell).map_err(failure)
                 }
             })),
         },
@@ -82,9 +79,12 @@ pub fn respond(
             by: "groundwater springs".into(),
             queries: vec![],
             kind: ResponseKind::Add(Box::new(|field, cell, _| {
-                let ground = field.water().groundwater;
                 Ok(MapScale::in_units(
-                    return_rate(ground.returned.get(cell).map_err(failure)?, ground.interval),
+                    field
+                        .water
+                        .borrow()
+                        .groundwater_return_rate(cell)
+                        .map_err(failure)?,
                     LengthUnit::Millimetre,
                 ))
             })),
@@ -102,10 +102,9 @@ pub fn respond(
                     .map_err(failure)?
                     .value();
                 Ok(field
-                    .water()
-                    .groundwater
-                    .returned
-                    .get(cell)
+                    .water
+                    .borrow()
+                    .groundwater_return(cell)
                     .map_err(failure)?
                     / depth)
             })),

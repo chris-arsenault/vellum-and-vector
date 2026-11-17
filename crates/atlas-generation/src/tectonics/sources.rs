@@ -27,5 +27,5 @@ pub fn area_budget(budget: f64, area: f64, reference_area: f64) -> usize {
     }
 }
 pub fn medium_area(mesh: &TriangularLattice) -> f64 {
-    (0..mesh.len()).map(|cell| mesh.content_area(cell)).sum()
+    (0..mesh.len()).map(|cell| mesh.area(cell)).sum()
 }

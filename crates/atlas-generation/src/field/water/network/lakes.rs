@@ -2,9 +2,10 @@ use super::{filled, permeability, Answers, Climate, Questions, Settings};
 use crate::{
     climate::air_year,
     execution::{Query, QueryDependency},
-    field::{shared::Scalar as S, Field},
+    field::{glaciers, shared::Scalar as S, Field},
     processes::runner::PhysicalContext,
     rock::ground::GroundField,
+    scale::MapScale,
     storage::ReadBand,
     water::{
         lake_stage::{depth_discharge, open_water_loss, LakeCriteria, StageInputs},
@@ -13,7 +14,12 @@ use crate::{
     },
 };
 use std::{io, rc::Rc};
-fn loss(field: &Field, climate: &Climate, cell: usize) -> io::Result<f64> {
+fn loss(
+    field: &Field,
+    climate: &Climate,
+    water: &crate::water::WaterView,
+    cell: usize,
+) -> io::Result<f64> {
     let read = |name| field.shared.scalar(name).get(cell);
     let latitude = climate
         .latitude()
@@ -28,7 +34,6 @@ fn loss(field: &Field, climate: &Climate, cell: usize) -> io::Result<f64> {
     .demand
     .iter()
     .sum();
-    let water = field.water();
     Ok(open_water_loss(
         demand,
         read(S::Rainfall)?,
@@ -40,18 +45,19 @@ fn loss(field: &Field, climate: &Climate, cell: usize) -> io::Result<f64> {
 }
 pub(super) fn losses(field: &Field, p: &Settings, climate: &Climate) -> io::Result<[f64; 2]> {
     let mut result = [0.0; 2];
-    let water = field.water().column.kind;
+    let water = field.water();
     for cell in 0..field.mesh.len() {
-        if water.get(cell)? != 2 {
+        if water.column.kind.get(cell)? != 2 {
             continue;
         }
-        result[0] += depth_discharge(loss(field, climate, cell)?, field.mesh.area(cell));
+        result[0] += depth_discharge(loss(field, climate, &water, cell)?, field.mesh.area(cell));
         result[1] += depth_discharge(p.lake_infiltration_loss, field.mesh.area(cell));
     }
     Ok(result)
 }
 struct Inputs<'a> {
     settings: &'a Settings,
+    glacier: &'a glaciers::Settings,
     climate: &'a Climate,
     context: &'a PhysicalContext,
     answers: Answers,
@@ -63,9 +69,12 @@ fn run(field: &Field, input: Inputs<'_>) -> io::Result<()> {
     // Compute demand before acquiring the water writer; its runoff and monthly stores are inputs.
     let mut losses = field.coverage.borrow_mut().scratch(field.mesh.len(), 0.0);
     for cell in 0..field.mesh.len() {
-        losses.set(cell, loss(field, input.climate, cell)?)?;
+        losses.set(cell, loss(field, input.climate, &water, cell)?)?;
     }
     let p = input.settings;
+    // Ice is read where present, not declared: water passes before the first ice step
+    // run with no ice, and the step contract has no optional input.
+    let ice = field.shared.scalar(S::IceThickness);
     field.water.borrow_mut().lake_basins_with_passage(
         LakeInputs {
             stage: StageInputs {
@@ -74,6 +83,10 @@ fn run(field: &Field, input: Inputs<'_>) -> io::Result<()> {
                 parents: &water.drainage.parents,
                 open_water_loss: &|cell| losses.get(cell),
                 infiltration_loss: p.lake_infiltration_loss,
+                held_by_ice: &|cell| {
+                    let ice = MapScale::native(ice.get(cell)?);
+                    Ok((ice * input.glacier.glacier_grounding_fraction / 1000.0).trunc())
+                },
             },
             drainage: &water.drainage,
             scale: &field.scale,
@@ -104,6 +117,7 @@ fn run(field: &Field, input: Inputs<'_>) -> io::Result<()> {
 impl Field {
     pub fn lake_basins(
         p: Rc<Settings>,
+        glacier: Rc<glaciers::Settings>,
         climate: Rc<Climate>,
         questions: Questions,
         dams: Option<Query<Self, ReadBand<u8>>>,
@@ -126,6 +140,7 @@ impl Field {
                 field,
                 Inputs {
                     settings: &p,
+                    glacier: &glacier,
                     climate: &climate,
                     context: &c,
                     answers,

@@ -14,6 +14,8 @@ struct Supplied<'a> {
     height: usize,
     arrays: &'a [(&'a str, &'a str, &'a str, &'a str)],
     value: fn(&str, usize) -> f64,
+    /// Whether its surface classes carry retained class contributions for boundaries.
+    surface_support: bool,
 }
 const ARRAYS: [(&str, &str, &str, &str); 10] = [
     ("active", "mask", "topology", "uint8"),
@@ -47,6 +49,7 @@ pub async fn install(document: &mut Document, root: PathBuf) -> io::Result<()> {
         height: 5,
         arrays: &ARRAYS,
         value,
+        surface_support: true,
     };
     let field = island.write(document, root).await?;
     document.world["fields"] = json!([field]);
@@ -65,6 +68,7 @@ pub async fn install_glen(
         height: 5,
         arrays: &GLEN_ARRAYS,
         value: glen_value,
+        surface_support: false,
     };
     let field = glen.write(document, root).await?;
     document.world["fields"] = json!([field]);
@@ -104,11 +108,17 @@ impl Supplied<'_> {
             .iter()
             .map(|(name, _, _, _)| ((*name).into(), json!(name)))
             .collect();
-        let descriptor = json!({"schemaVersion":1,"id":id,"revision":1,"scope":document.scope.located,
+        let mut descriptor = json!({"schemaVersion":1,"id":id,"revision":1,"scope":document.scope.located,
             "crsId":document.scope.crs_id,"bounds":self.bounds,"precision":1e-6,"layout":"regular",
             "sampling":{"width":width,"height":height},"state":"ready",
             "field":{"id":id,"scope":document.scope,"layoutResourceId":id,"geographyId":id,"channels":channels},
             "arrays":self.arrays.iter().map(|(name,unit,quantity,dtype)| json!({"name":name,"unit":unit,"quantity":quantity,"dtype":dtype,"shape":[height,width],"chunkShape":[height,width]})).collect::<Vec<_>>()});
+        if self.surface_support {
+            let support = support(&mut store, id, width * height).await?;
+            descriptor["field"]["surfaceSupport"] =
+                json!({"finalSurface":"surface_contributions","natural":"natural_contributions"});
+            descriptor["arrays"].as_array_mut().unwrap().extend(support);
+        }
         store
             .write(id, "resource.json", &serde_json::to_vec(&descriptor)?)
             .await?;
@@ -116,6 +126,41 @@ impl Supplied<'_> {
             "layerId":"geology","algorithm":"supplied","source":{"kind":"run","id":"supplied"},
             "samples":width * height,"channels":channels.keys().collect::<Vec<_>>(),"resourceId":id,"state":"generated"}))
     }
+}
+/// Retained class contributions behind the surface classes: eight (class, share) slots per
+/// sample, every sample three parts its class and one part the next.
+async fn support(
+    store: &mut NativeResources,
+    id: &str,
+    samples: usize,
+) -> io::Result<Vec<serde_json::Value>> {
+    let length = samples * 16;
+    let mut arrays = Vec::new();
+    for name in ["surface_contributions", "natural_contributions"] {
+        let metadata = json!({"zarr_format":3,"node_type":"array","shape":[length],"data_type":"float64","chunk_grid":{"name":"regular","configuration":{"chunk_shape":[length]}},"chunk_key_encoding":{"name":"default","configuration":{"separator":"/"}},"fill_value":0,"codecs":[{"name":"bytes","configuration":{"endian":"little"}}],"attributes":{}});
+        store
+            .write(
+                id,
+                &format!("{name}/zarr.json"),
+                &serde_json::to_vec(&metadata)?,
+            )
+            .await?;
+        let bytes = (0..length)
+            .flat_map(|i| {
+                let value: f64 = match i % 16 {
+                    0 => 32.0,
+                    1 => 0.75,
+                    2 => 31.0,
+                    3 => 0.25,
+                    _ => 0.0,
+                };
+                value.to_le_bytes()
+            })
+            .collect::<Vec<_>>();
+        store.write(id, &format!("{name}/c/0"), &bytes).await?;
+        arrays.push(json!({"name":name,"unit":"topology","quantity":"topology","dtype":"float64","shape":[length],"chunkShape":[length]}));
+    }
+    Ok(arrays)
 }
 fn value(name: &str, i: usize) -> f64 {
     match name {

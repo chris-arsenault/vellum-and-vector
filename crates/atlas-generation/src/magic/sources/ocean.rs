@@ -1,7 +1,7 @@
 use super::{pressure_at_depth, Context, Environment};
 use crate::{
     hpc::{radix_order, Direction, NumericKey},
-    lattice::{Membership, TriangularLattice},
+    lattice::TriangularLattice,
     magic::{
         channels::Channel,
         propagation::ocean::ocean_area,
@@ -78,8 +78,7 @@ pub fn locate(
         else {
             continue;
         };
-        if env.mesh.membership(cell) != Membership::Content || env.water.column.kind.get(cell)? != 1
-        {
+        if env.water.column.kind.get(cell)? != 1 {
             continue;
         }
         scores.push(deep_site_score(env.mesh, env.scale, env.water, cell)?);

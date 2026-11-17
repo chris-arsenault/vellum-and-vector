@@ -89,12 +89,8 @@ pub fn line_parts(geometry: &Geometry) -> Vec<&[Position]> {
     }
 }
 pub fn cell_at(mesh: &TriangularLattice, world: [f64; 2]) -> Option<usize> {
-    let bounds = mesh.bounds();
     let origin = mesh.origin();
-    mesh.cell_at(
-        mesh.delta_x(world[0] - origin[0]).clamp(bounds.0, bounds.2),
-        (world[1] - origin[1]).clamp(bounds.1, bounds.3),
-    )
+    mesh.cell_at(mesh.delta_x(world[0] - origin[0]), world[1] - origin[1])
 }
 /// The cells a carried course crosses, its positions bent as the carried river network is
 /// (`water::import_geometry::Bend`) by the parent's cell span `bend`. A stretch that bends

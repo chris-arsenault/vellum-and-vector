@@ -101,7 +101,7 @@ pub fn nearby(field: &Field, craft: Craft, cell: usize) -> io::Result<f64> {
     Ok(held)
 }
 pub fn sea_held_off(field: &Field, cell: usize) -> io::Result<f64> {
-    let depth = field.water().effective_sea_level
+    let depth = field.water.borrow().effective_sea_level()
         - field.ground().view(GroundField::Elevation).get(cell)?;
     let holdable = field
         .scale

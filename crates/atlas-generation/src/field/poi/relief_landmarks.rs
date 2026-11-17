@@ -7,7 +7,6 @@ use crate::{
         placement, siting,
         terrain::Terrain,
     },
-    lattice::Membership,
     storage::Band,
 };
 use atlas_map::{Geometry, Position};
@@ -85,9 +84,6 @@ pub fn ground(
                 };
                 let radius = reach(placed);
                 for cell in 0..field.mesh.len() {
-                    if field.mesh.membership(cell) != Membership::Content {
-                        continue;
-                    }
                     let distance = match &hits {
                         Some(hits) => hits.distance.get(cell)?,
                         None => point_distance(state, placed.center, cell)?,

@@ -137,6 +137,7 @@ fn extent(
         .position(|id| *id == place.id)
         .map_or(-1, |at| at as i32);
     let class_surface = classes::Surface {
+        support: None,
         grid: state.surface_grid(),
         values: surface.codes.read_only().into(),
         active: state.surface_active(),

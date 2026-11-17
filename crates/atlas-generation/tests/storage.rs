@@ -114,6 +114,40 @@ fn pinning_survives_nested_block_work_over_budget() {
 }
 
 #[test]
+fn channel_slices_keep_bounds_live_reads_and_snapshot_isolation() {
+    check_channel_slice(cache(1));
+    check_channel_slice(BlockCache::resident(
+        BLOCK_CELLS * 8,
+        BlockScratch::new(SuppliedFile::default()),
+    ));
+}
+fn check_channel_slice(shared: SharedCache) {
+    let mut band = Band::new(BLOCK_CELLS * 2 + 7, 0u32, shared);
+    let view = band.read_only().slice(3..BLOCK_CELLS + 7).unwrap();
+    band.set(3, 11).unwrap();
+    band.set(BLOCK_CELLS + 3, 23).unwrap();
+    assert_eq!(view.get(0).unwrap(), 11);
+    assert_eq!(view.read_block(0).unwrap().len(), BLOCK_CELLS);
+    assert_eq!(&*view.read_block(1).unwrap(), &[23, 0, 0, 0]);
+    assert_eq!(view.read_values().unwrap().get(BLOCK_CELLS).unwrap(), 23);
+    check_channel_bounds(&view, &band.read_only());
+    let mut captured = band.snapshot().unwrap();
+    captured.set(3, 19).unwrap();
+    band.set(3, 17).unwrap();
+    assert_eq!(view.get(0).unwrap(), 17);
+    assert_eq!(captured.get(3).unwrap(), 19);
+    band.release();
+    assert!(view.read_values().is_err());
+}
+fn check_channel_bounds(view: &ReadBand<u32>, whole: &ReadBand<u32>) {
+    assert!(view.get(view.len()).is_err());
+    assert!(view.slice(0..view.len() + 1).is_err());
+    assert!(view.read_block(2).is_err());
+    assert!(!view.shares_storage(whole));
+    assert!(view.shares_storage(&view.clone()));
+}
+
+#[test]
 fn immutable_sources_need_separate_working_outputs() {
     let cache = cache(1);
     let mut input = Band::from_source(
@@ -161,9 +195,14 @@ fn resident_fields_borrow_contiguous_values_and_keep_snapshot_ownership() {
     }
     let mut copy = band.snapshot().unwrap();
     {
+        let captured = band.read_values().unwrap();
         let mut values = copy.write_values().unwrap();
         values.set(BLOCK_CELLS + 1, 7).unwrap();
         assert_eq!(values.get(BLOCK_CELLS + 1).unwrap(), 7);
+        assert_eq!(
+            captured.get(BLOCK_CELLS + 1).unwrap(),
+            (BLOCK_CELLS + 1) as u32
+        );
     }
     assert!(band.write_values().is_err());
     assert_eq!(view.get(BLOCK_CELLS + 1).unwrap(), (BLOCK_CELLS + 1) as u32);

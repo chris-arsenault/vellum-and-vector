@@ -1,7 +1,6 @@
 use super::{coast::shore_forcing, hold_ice, Forcing};
 use crate::{
     field::shared::Scalar as F,
-    lattice::Membership,
     magic::{
         channels::Channel as C,
         configuration::Source,
@@ -50,9 +49,6 @@ pub fn retain(
         for cell in 0..env.mesh.len() {
             let value = field.channels.band(C::Intensity).get(cell)?;
             retain_at(env, field, cell, epoch)?;
-            if env.mesh.membership(cell) != Membership::Content {
-                continue;
-            }
             if value > 0.0 {
                 active += env.mesh.area(cell);
             }

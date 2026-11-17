@@ -1,4 +1,5 @@
 import { expect, type BrowserContext, type Page } from "@playwright/test";
+import type { MapRef } from "@atlas/map";
 import { captureMap, restoreMap, type MapArchive } from "./mapArchive";
 import { installScenarioBoundary } from "./scenarioBoundary";
 
@@ -10,7 +11,7 @@ export async function storagePage(page: Page) {
 }
 /** Copy one completed GIS catalog and its assets into each isolated browser context. */
 export class PreparedMaps {
-  private archive: Promise<MapArchive> | undefined;
+  private archive: Promise<MapArchive & { child: MapRef }> | undefined;
   constructor(private context: () => Promise<BrowserContext>) {}
   get() {
     return (this.archive ??= this.prepare());
@@ -21,8 +22,8 @@ export class PreparedMaps {
       await context.addInitScript(installScenarioBoundary, { rendering: false, generation: false });
       const page = await context.newPage();
       await storagePage(page);
-      const reference = await page.evaluate(() => window.prepareFixtureMap());
-      return await captureMap(page, reference);
+      const { reference, child } = await page.evaluate(() => window.prepareFixtureMap());
+      return { ...(await captureMap(page, reference)), child };
     } finally {
       await context.close();
     }
@@ -37,6 +38,12 @@ export async function openFixtureMap(page: Page) {
   await page.goto("/");
   await openSavedFixture(page);
   return archive.reference;
+}
+/** The prepared, unsaved child map of "Coastal reach" for supplied Refine replies. */
+export async function fixtureChild(page: Page) {
+  const maps = prepared.get(page);
+  if (!maps) throw new Error("Import test from ./uiTest to reuse prepared maps.");
+  return (await maps.get()).child;
 }
 export async function openSavedFixture(page: Page) {
   await page.getByRole("button", { name: "Saved maps", exact: true }).click();

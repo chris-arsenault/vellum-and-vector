@@ -44,6 +44,9 @@ impl MeltInputs<'_> {
     }
 }
 impl Meltwater {
+    pub fn glacial_at(&self, cell: usize) -> io::Result<f64> {
+        self.glacial.get(cell)
+    }
     pub(super) fn checkpoint(
         &mut self,
         archive: &mut crate::checkpoint::Archive<'_>,

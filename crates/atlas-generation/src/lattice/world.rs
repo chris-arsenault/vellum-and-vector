@@ -71,34 +71,13 @@ impl WorldLatticeOptions {
         covers: impl Fn(&[atlas_map::Position]) -> Result<Vec<bool>, String>,
     ) -> Result<TriangularLattice, String> {
         self.build_using(bounds, samples, padding, |input| {
-            let probe = TriangularLattice::new(input, |_, _| true)?;
-            let [ox, oy] = probe.origin();
-            let points = (0..probe.len())
-                .map(|cell| {
-                    let [x, y] = probe.position(cell);
-                    atlas_map::Position::xy(x + ox, y + oy)
-                })
-                .collect::<Vec<_>>();
-            let included = covers(&points)?;
-            if included.len() != probe.len() {
-                return Err("Lattice point coverage returned an incomplete batch".into());
-            }
-            TriangularLattice::with_membership(
-                input,
-                |_, _| false,
-                |cell, _, _| {
-                    Some(
-                        if probe.membership(cell) == super::Membership::Content && included[cell] {
-                            super::Membership::Content
-                        } else if probe.membership(cell) == super::Membership::NoData {
-                            super::Membership::NoData
-                        } else {
-                            super::Membership::Halo
-                        },
-                    )
-                },
-            )
-            .map_err(str::to_owned)
+            TriangularLattice::classified(input, |points| {
+                let points = points
+                    .iter()
+                    .map(|&[x, y]| atlas_map::Position::xy(x, y))
+                    .collect::<Vec<_>>();
+                covers(&points)
+            })
         })
     }
     fn build_using<E: From<&'static str>>(
@@ -135,7 +114,7 @@ impl WorldLatticeOptions {
             })
         };
         let lattice = build(frame)?;
-        if lattice.content_count() > 0 {
+        if !lattice.is_empty() {
             return Ok(lattice);
         }
         let anchor = self
@@ -146,7 +125,7 @@ impl WorldLatticeOptions {
             anchor[1] - (bounds.1 + bounds.3) / 2.0,
         ];
         let lattice = build(frame)?;
-        if lattice.content_count() == 0 {
+        if lattice.is_empty() {
             return Err("World sampling needs a cell inside its footprint".into());
         }
         Ok(lattice)

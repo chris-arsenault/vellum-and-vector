@@ -13,7 +13,7 @@ use std::{cell::RefCell, io};
 
 enum Interpolation<'a> {
     Continuous(Interpolator<'a>),
-    Class(classes::Sampler<'a>),
+    Class(Box<classes::Sampler<'a>>),
 }
 pub struct Reading<'a> {
     source: &'a Resource,
@@ -43,15 +43,19 @@ impl<'a> Reading<'a> {
         let category = values.quantity == Quantity::Category
             || matches!(values.unit.as_str(), "category" | "cell-index");
         let interpolation = if category {
-            Interpolation::Class(classes::Sampler::new(
+            Interpolation::Class(Box::new(classes::Sampler::new(
                 &classes::Surface {
                     grid: &source.grid,
                     values: values.values.clone(),
                     active: source.active.clone(),
+                    support: source
+                        .surface_support
+                        .as_ref()
+                        .and_then(|support| support.channel(name)),
                     overlays: Vec::new(),
                 },
                 coverage,
-            ))
+            )))
         } else {
             Interpolation::Continuous(Interpolator::new(
                 &source.grid,

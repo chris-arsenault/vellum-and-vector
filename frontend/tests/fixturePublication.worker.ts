@@ -1,10 +1,14 @@
 import type { MapRef } from "@atlas/map";
 import fixture from "../../.artifacts/browser-fixture.json?raw";
 
-/** Restore the existing supplied map, published once by Rust before the browser suite. */
-export async function installFixtureMap() {
-  const archive = JSON.parse(fixture) as {
-    reference: MapRef;
+export interface FixtureMaps {
+  reference: MapRef;
+  /** The unsaved child of "Coastal reach" that a supplied Refine reply opens. */
+  child: MapRef;
+}
+/** Restore the existing supplied maps, published once by Rust before the browser suite. */
+export async function installFixtureMap(): Promise<FixtureMaps> {
+  const archive = JSON.parse(fixture) as FixtureMaps & {
     files: { path: string[]; bytes: number[] }[];
   };
   const root = await navigator.storage.getDirectory();
@@ -17,5 +21,5 @@ export async function installFixtureMap() {
     await writable.write(new Uint8Array(bytes));
     await writable.close();
   }
-  return archive.reference;
+  return { reference: archive.reference, child: archive.child };
 }

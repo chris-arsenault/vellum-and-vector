@@ -2,3 +2,5 @@
 packages:
   - frontend
   - packages/*
+patchedDependencies:
+  ol@10.11.0: patches/ol@10.11.0.patch

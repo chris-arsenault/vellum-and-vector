@@ -61,36 +61,27 @@ impl PrivateInputs {
                 ],
             )
             .map_err(io::Error::other)?;
-        for feature in features.values(FeatureSelection::default())? {
-            let feature = feature?;
-            record(
-                &mut transaction,
-                &input.catalog_id,
-                "feature",
-                &feature.id,
-                &serde_json::to_value(&feature)?,
-            )?;
-        }
-        for node in networks.nodes()? {
-            let node = node?;
-            record(
-                &mut transaction,
-                &input.catalog_id,
-                "node",
-                &node.id,
-                &serde_json::to_value(&node)?,
-            )?;
-        }
-        for reach in networks.reaches(Selection::default())? {
-            let reach = reach?;
-            record(
-                &mut transaction,
-                &input.catalog_id,
-                "reach",
-                &reach.id,
-                &serde_json::to_value(&reach)?,
-            )?;
-        }
+        records(
+            &mut transaction,
+            &input.catalog_id,
+            "feature",
+            features.values(FeatureSelection::default())?,
+            |feature| &feature.id,
+        )?;
+        records(
+            &mut transaction,
+            &input.catalog_id,
+            "node",
+            networks.nodes()?,
+            |node| &node.id,
+        )?;
+        records(
+            &mut transaction,
+            &input.catalog_id,
+            "reach",
+            networks.reaches(Selection::default())?,
+            |reach| &reach.id,
+        )?;
         for value in geography {
             let scope: Scope = serde_json::from_value(value["scope"].clone())?;
             let id = value["id"]
@@ -172,18 +163,24 @@ impl PrivateInputs {
             .map_err(io::Error::other)
     }
 }
-fn record(
+fn records<T: serde::Serialize>(
     transaction: &mut postgres::Transaction<'_>,
     catalog: &str,
     kind: &str,
-    id: &str,
-    data: &Value,
+    records: impl Iterator<Item = io::Result<T>>,
+    identity: impl Fn(&T) -> &str,
 ) -> io::Result<()> {
-    transaction
-        .execute(
-            "INSERT INTO generation.records VALUES($1,$2,$3,$4)",
-            &[&catalog, &kind, &id, data],
-        )
-        .map_err(io::Error::other)?;
+    let mut records = records.peekable();
+    while records.peek().is_some() {
+        let mut batch = Vec::with_capacity(128);
+        for record in records.by_ref().take(128) {
+            let record = record?;
+            batch.push(serde_json::json!({"id": identity(&record), "data": serde_json::to_value(&record)?}));
+        }
+        transaction.execute(
+            "INSERT INTO generation.records(catalog_id,kind,id,data) SELECT $1,$2,id,data FROM jsonb_to_recordset($3) AS records(id text,data jsonb)",
+            &[&catalog, &kind, &Value::Array(batch)],
+        ).map_err(io::Error::other)?;
+    }
     Ok(())
 }

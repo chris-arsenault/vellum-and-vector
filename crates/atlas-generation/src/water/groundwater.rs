@@ -93,6 +93,12 @@ struct GroundwaterWork {
     arriving: Band<f64>,
 }
 impl Groundwater {
+    pub fn returned_at(&self, cell: usize) -> io::Result<f64> {
+        self.returned.get(cell)
+    }
+    pub fn return_rate_at(&self, cell: usize) -> io::Result<f64> {
+        Ok(return_rate(self.returned.get(cell)?, self.interval))
+    }
     pub(super) fn checkpoint(
         &mut self,
         archive: &mut crate::checkpoint::Archive<'_>,

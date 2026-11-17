@@ -54,7 +54,7 @@ pub fn construct(
     } else {
         let widest = (e - w).max(n - s);
         let minimum_size = halved_width(widest, cell_span) * (1.0 + 1e-9);
-        Layout::Adaptive(build::adaptive(
+        Layout::Adaptive(Box::new(build::adaptive(
             bounds,
             Sampling {
                 minimum_size,
@@ -70,7 +70,7 @@ pub fn construct(
                     .map_err(io::Error::other)
             },
             cache.clone(),
-        )?)
+        )?))
     };
     let mut sampled = grid_build::create(
         grid_build::Frame {

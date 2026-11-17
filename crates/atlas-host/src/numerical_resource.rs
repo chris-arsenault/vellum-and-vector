@@ -49,6 +49,14 @@ pub struct Field {
     pub channels: BTreeMap<String, String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub material_cargo: Option<MaterialCargo>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_support: Option<SurfaceSupport>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SurfaceSupport {
+    pub final_surface: String,
+    pub natural: String,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -259,6 +267,14 @@ impl WorkingSet {
         let coverage = Coverage::samples(active.len(), self.cache.clone());
         let mut result = Resource::new(grid, active, channels, cargo, coverage);
         result.resolution = field.scope.resolution;
+        if let Some(support) = &field.surface_support {
+            let support = atlas_generation::field::projection::support::ReadSupport {
+                final_surface: self.f64(&resource, &support.final_surface)?,
+                natural: self.f64(&resource, &support.natural)?,
+            };
+            support.validate(result.active.len())?;
+            result.surface_support = Some(support);
+        }
         Ok(Rc::new(result))
     }
     fn cargo(&mut self, resource: &Descriptor) -> io::Result<Option<Cargo>> {

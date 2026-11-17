@@ -47,7 +47,7 @@ impl Arc {
     }
 }
 fn sea(field: &Field, cell: usize) -> io::Result<bool> {
-    Ok(field.water().column.kind.get(cell)? == 1)
+    Ok(field.water.borrow().kind_at(cell)? == 1)
 }
 fn circle(field: &Field, cell: usize, radius: f64) -> io::Result<Option<[bool; SAMPLES]>> {
     let mesh = &field.mesh;

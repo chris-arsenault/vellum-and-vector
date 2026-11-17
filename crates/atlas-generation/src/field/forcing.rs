@@ -134,7 +134,7 @@ impl Field {
     }
     pub fn captured_ocean_distance(&self, captured: &ReadBand<f64>) -> io::Result<()> {
         self.measure_ocean_distance(Some(&|cell| {
-            if super::refinement::topology::frame_edge(&self.mesh, cell) {
+            if self.mesh.boundary(cell) {
                 captured.get(cell)
             } else {
                 Ok(-1.0)

@@ -101,11 +101,13 @@ fn crust_transport_carries_stocks_lakes_and_the_established_water_year() {
         dominant.set(target as usize, i as i32).unwrap();
     }
     offsets.set(4, 4).unwrap();
+    let inflow = coverage.scratch(4, 0.0);
     let plan = TransportShares {
         offsets: offsets.read_only(),
         targets: targets.read_only(),
         weights: weights.read_only(),
         dominant: dominant.read_only(),
+        inflow: inflow.read_only(),
     };
     column.carry(&plan, &mut coverage, |_| 1.0).unwrap();
     let view = column.read_only();

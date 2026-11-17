@@ -11,6 +11,10 @@ pub struct TransportShares {
     pub targets: ReadBand<i32>,
     pub weights: ReadBand<f64>,
     pub dominant: ReadBand<i32>,
+    /// Share of each edge cell's row that is ground arriving from beyond the map edge
+    /// (boundary support moving with that cell), not the cell's own ground. Consumers
+    /// subtract it from what the cell retains and record it as inflow.
+    pub inflow: ReadBand<f64>,
 }
 pub struct HistoryTransport {
     pub shares: TransportShares,

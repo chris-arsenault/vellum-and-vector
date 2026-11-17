@@ -25,6 +25,8 @@ pub struct NativeJob {
     pub parent: Option<MapRef>,
     pub operation: String,
     pub selection: Option<regional_capture::Child>,
+    /// Refinement publishes the captured child; Regenerate on that child generates it.
+    pub creates_child: bool,
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 struct CapturedJob {
@@ -196,6 +198,11 @@ impl NativeJob {
     ) -> io::Result<MapRef> {
         let (observations, progress, recovery) = observations;
         let (workspace, mut captured_geography) = captured;
+        if self.creates_child {
+            return self
+                .publish_capture(services, (workspace, captured_geography), runtime, control)
+                .await;
+        }
         let Runtime {
             resources,
             spatial,
@@ -225,6 +232,7 @@ impl NativeJob {
             revision: self.operation.clone(),
         };
         captured_geography.extend(finished.output.geography.iter().cloned());
+        let started = std::time::Instant::now();
         services.inputs.store(
             &reference,
             &finished.snapshot,
@@ -232,6 +240,7 @@ impl NativeJob {
             &workspace.networks(),
             &captured_geography,
         )?;
+        publication_timing(&reference, "retain-inputs", started);
         let map = finished_map::Request::from_document(
             finished.snapshot,
             reference.clone(),
@@ -239,9 +248,9 @@ impl NativeJob {
             self.parent,
         )?;
         let published = publish(
-            map,
+            (map, None),
             &mut services,
-            &workspace,
+            &workspace.features(),
             Runtime {
                 resources,
                 cache,
@@ -252,19 +261,63 @@ impl NativeJob {
         .await;
         published
     }
+    /// Retain and publish the captured child as its first revision. Nothing is generated: the
+    /// map carries the parent's geography within the child's footprint and the starting records.
+    async fn publish_capture(
+        self,
+        mut services: Services<'_>,
+        captured: (Workspace, Vec<Value>),
+        runtime: Runtime,
+        control: &impl GenerationControl,
+    ) -> io::Result<MapRef> {
+        let (workspace, geography) = captured;
+        let reference = MapRef {
+            map_id: self.submission.input.area_id.clone(),
+            revision: self.operation.clone(),
+        };
+        services.inputs.store(
+            &reference,
+            &self.submission.source,
+            &workspace.source_features(),
+            &workspace.source_networks(),
+            &geography,
+        )?;
+        let parent = self
+            .parent
+            .clone()
+            .ok_or_else(|| io::Error::other("A captured child belongs to a parent map"))?;
+        let map = finished_map::Request::from_document(
+            self.submission.source,
+            reference,
+            self.expected,
+            self.parent,
+        )?;
+        let copied = Some(&parent);
+        publish(
+            (map, copied),
+            &mut services,
+            &workspace.source_features(),
+            runtime,
+            control,
+        )
+        .await
+    }
 }
 struct Runtime {
     resources: Rc<NativeResources>,
     cache: SharedCache,
     spatial: Rc<NativeGeos>,
 }
+/// `copied` names the parent whose published rasters a captured child crops.
 async fn publish(
-    map: finished_map::Request,
+    (map, copied): (finished_map::Request, Option<&MapRef>),
     services: &mut Services<'_>,
-    workspace: &Workspace,
+    records: &crate::record_store::Features,
     runtime: Runtime,
     control: &impl GenerationControl,
 ) -> io::Result<MapRef> {
+    let reference = map.reference.clone();
+    let started = std::time::Instant::now();
     let Runtime {
         resources,
         cache,
@@ -282,17 +335,24 @@ async fn publish(
                 .geography(&descriptor.scope, &field.geography_id)?,
         )?);
     }
-    let product = map.prepare(
+    let mut product = map.prepare(
         resources,
         cache.clone(),
         &geography,
-        &workspace.features(),
+        records,
         spatial.as_ref(),
     )?;
+    if let Some(parent) = copied {
+        let rasters =
+            finished_map::parent_rasters(services.maps.access(), &services.assets, parent)?;
+        product = product.with_parent_rasters(rasters);
+    }
+    publication_timing(&reference, "prepare-map", started);
     let mut assets = NativeMapAssets::new(services.assets.clone(), cache);
-    product
+    let started = std::time::Instant::now();
+    let result = product
         .publish(
-            &workspace.features(),
+            records,
             spatial.as_ref(),
             &mut crate::observed_publication::Observed {
                 publisher: services.maps,
@@ -302,7 +362,16 @@ async fn publish(
             &mut assets,
             control,
         )
-        .await
+        .await;
+    publication_timing(&reference, "publish-map", started);
+    result
+}
+fn publication_timing(reference: &MapRef, stage: &str, started: std::time::Instant) {
+    eprintln!(
+        "{}",
+        serde_json::json!({"event":"generation.publication", "mapId":reference.map_id,
+        "revision":reference.revision, "stage":stage, "seconds":started.elapsed().as_secs_f64()})
+    );
 }
 struct Directory(PathBuf);
 impl Drop for Directory {

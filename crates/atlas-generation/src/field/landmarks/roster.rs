@@ -7,7 +7,7 @@ use super::{
     terrain::Terrain,
 };
 pub use crate::identity::semantic_id;
-use crate::{field::Field, hpc::TopK, lattice::Membership, noise::hash_unit, scale::MapScale};
+use crate::{field::Field, hpc::TopK, noise::hash_unit, scale::MapScale};
 use atlas_map::{Geometry, Position};
 use std::io;
 pub const LANDSCAPE_MIX: [Kind; 7] = [
@@ -118,9 +118,7 @@ fn candidates(t: &Terrain<'_>, entry: &Entry, seed: i32) -> io::Result<Vec<usize
     let mut selected = TopK::new(600);
     let mut all = Vec::new();
     for cell in 0..t.field.mesh.len() {
-        if t.field.mesh.membership(cell) != Membership::Content
-            || t.field.water().column.kind.get(cell)? != water
-        {
+        if t.field.water().column.kind.get(cell)? != water {
             continue;
         }
         if entry.kind.system().is_some() {

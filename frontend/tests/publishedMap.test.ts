@@ -12,6 +12,14 @@ test(
       return JSON.parse(await page.locator("output").innerText()).pixels as number[];
     };
     const surface = await pixels("surface");
+    const edge = page.getByRole("region", { name: "Interpolated tile edge" });
+    await expect(edge).toBeVisible();
+    const colours = JSON.parse(await edge.innerText()) as number[];
+    expect(colours[3]).toBe(255);
+    expect(colours[7]).toBe(255);
+    expect(colours[0]).toBeGreaterThan(50);
+    expect(colours[4]).toBeLessThan(180);
+    expect(Math.abs(colours[0] - colours[4])).toBeLessThan(30);
     await page.getByRole("button", { name: "relief", exact: true }).click();
     const relief = await pixels("relief");
     await page.getByRole("button", { name: "topographic", exact: true }).click();

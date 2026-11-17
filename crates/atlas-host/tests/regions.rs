@@ -222,6 +222,34 @@ fn saved_views_and_refined_children_retain_region_identity_and_outline() {
         &kernel,
     )
     .unwrap();
+    let refined = MapRef {
+        map_id: "child".into(),
+        revision: "refined".into(),
+    };
+    input.navigation = change_navigation(
+        &input.map,
+        &input.navigation,
+        NavigationChange::AttachChild {
+            region_id: parent.id.clone(),
+            child: refined.clone(),
+        },
+        &kernel,
+    )
+    .unwrap();
+    assert_eq!(input.navigation.regions[0].child, Some(refined));
+    assert!(change_navigation(
+        &input.map,
+        &input.navigation,
+        NavigationChange::AttachChild {
+            region_id: parent.id.clone(),
+            child: MapRef {
+                map_id: "other".into(),
+                revision: "captured".into(),
+            },
+        },
+        &kernel,
+    )
+    .is_err());
     let mut changed = input.navigation.regions[0].clone();
     changed.geometry = region(rectangle(10.0, 10.0, 25.0, 30.0));
     assert!(change_navigation(

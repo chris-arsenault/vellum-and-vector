@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- one entry per owner direction; the list grows with each direction. */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -15,6 +16,12 @@ import { realScaleDirections, type OwnerDirection } from "./ownerDirections.real
  * owner gives a direction, add its mark, its entry and, where a test can state it, its test.
  */
 const directions: readonly OwnerDirection[] = [
+  {
+    direction: "the deployed version must look like the approved surface screenshots",
+    given: "2026-11-17",
+    marks: ["crates/atlas-generation/src/publication/sampling/paint.rs"],
+    test: "crates/atlas-host/tests/map_sampling.rs",
+  },
   {
     direction: "GIS and numerical data must stay in sync including deletion",
     given: "2026-11-15",
@@ -50,6 +57,13 @@ const directions: readonly OwnerDirection[] = [
     given: "2026-11-15",
     marks: ["crates/atlas-gis/src/stored.rs"],
     test: "crates/atlas-gis/src/stored.rs",
+  },
+  {
+    direction:
+      "when refining a region, create the child map first, drop the user into it, then offer the refinement controls",
+    given: "2026-11-16",
+    marks: ["frontend/src/App.tsx"],
+    test: "frontend/tests/regionalGeneration.test.ts",
   },
   {
     direction: "regional refinement is a modal with only changeable selections",
@@ -371,6 +385,24 @@ const directions: readonly OwnerDirection[] = [
     ],
   },
   ...realScaleDirections,
+  {
+    direction:
+      "the agreement clause is that major landmarks in a parent map must appear and roughly agree with a child map; that is it",
+    given: "2026-11-16",
+    marks: ["crates/atlas-generation/src/field/refinement/people.rs"],
+  },
+  {
+    direction: "on a topo map, ice fields must not block everything else out",
+    given: "2026-11-16",
+    marks: ["frontend/src/rasterStyles.ts"],
+  },
+  {
+    direction:
+      "a map has no outside; cells beyond the bounds are not normally addressable and exist only as boundary support for numerical calculation",
+    given: "2026-11-16",
+    marks: ["crates/atlas-generation/src/lattice/triangular.rs"],
+    test: "crates/atlas-generation/tests/lattice.rs",
+  },
 ];
 
 const root = join(__dirname, "../../..");

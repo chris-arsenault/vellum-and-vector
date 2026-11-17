@@ -14,7 +14,6 @@ use crate::{
         Field,
     },
     hpc::BitSet,
-    lattice::Membership,
     magic::{channels::Channel, place_effects, state::MagicField},
     storage::Band,
 };
@@ -257,9 +256,7 @@ pub fn grade_places(
     basin: &[u8],
 ) -> io::Result<()> {
     let water = field.water().column.kind;
-    let dry = |cell| -> io::Result<bool> {
-        Ok(field.mesh.membership(cell) == Membership::Content && water.get(cell)? == 0)
-    };
+    let dry = |cell| -> io::Result<bool> { Ok(water.get(cell)? == 0) };
     let mut targets = Vec::new();
     let mut index = vec![usize::MAX; field.mesh.len()];
     for &cell in &grades.cells {

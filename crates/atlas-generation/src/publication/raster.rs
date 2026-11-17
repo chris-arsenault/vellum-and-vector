@@ -16,7 +16,7 @@ pub struct RasterPlane {
     pub resampling: Resampling,
     pub values: Band<f32>,
 }
-#[derive(Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RasterGrid {
     pub width: u32,
@@ -124,7 +124,41 @@ impl MapRaster {
                 }
             }
         }
+        result.terrain_overview(storage)?;
         Ok(result)
+    }
+    fn terrain_overview(&mut self, storage: &mut Coverage) -> io::Result<()> {
+        // Finished-map assets namespace each group's bands; standalone terrain
+        // publications retain the same band IDs without the channel prefix.
+        let find = |id| {
+            self.planes.iter().position(|p| {
+                p.definition
+                    .id
+                    .strip_prefix("Elevation:")
+                    .unwrap_or(&p.definition.id)
+                    == id
+            })
+        };
+        let (Some(height), Some(east), Some(north), Some(span)) = (
+            find("display-height"),
+            find("east-gradient"),
+            find("north-gradient"),
+            find("sample-span"),
+        ) else {
+            return Ok(());
+        };
+        let count = self.grid.count()?;
+        let mut dx = storage.scratch(count, 0.0);
+        let mut dy = storage.scratch(count, 0.0);
+        super::terrain::gradients(self, height, &mut dx, &mut dy)?;
+        self.planes[east].values = dx;
+        self.planes[north].values = dy;
+        for cell in 0..count {
+            self.planes[span]
+                .values
+                .set(cell, self.grid.pixel_span()[0] as f32)?;
+        }
+        Ok(())
     }
 }
 struct Footprint {

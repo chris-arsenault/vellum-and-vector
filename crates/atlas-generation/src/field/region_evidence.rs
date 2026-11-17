@@ -31,7 +31,7 @@ pub fn region_evidence(
     let (mut total_strength, mut contrast, mut margin) = (0.0, 0.0, 0.0);
     let (mut low, mut high) = (f64::INFINITY, f64::NEG_INFINITY);
     for &cell in members {
-        let a = mesh.content_area(cell);
+        let a = mesh.area(cell);
         let position = mesh.position(cell);
         let dx = mesh.delta_x(position[0] - origin[0]);
         let dy = position[1] - origin[1];

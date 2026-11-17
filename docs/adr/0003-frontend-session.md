@@ -81,12 +81,17 @@ over a block-major lattice: a band is blocks of one native typed-array type, a r
 two indexings, and a block cache keeps blocks resident within the worker's budget and
 spills them to worker-owned scratch beyond it, owning process lifetimes, release and
 retention either way. Every map, world, region or real-scale
-([ADR 0016](0016-real-scale-maps.md)), is the same triangular lattice at its own cell span. A cell id is a lattice address: neighbours, position and area are
-arithmetic on the id, so no adjacency is stored, and the periodic seam and polar rows
-are modular arithmetic. Cells close in space are close in id, so block residency
-follows a frontier's working set. A membership band marks each cell as content, halo
-or nodata; blocks outside the halo are absent, and loops skip by per-block live
-counts rather than by cell order. A band snapshot copies only the blocks dirty in
+([ADR 0016](0016-real-scale-maps.md)), is the same triangular lattice at its own cell
+span. A map has no outside: cell ids number only the cells inside the
+map, in lattice-address order, through a two-way table between cells and addresses.
+Neighbours, position and area are arithmetic on a cell's address, so no adjacency is
+stored, and the periodic seam and polar rows are modular arithmetic. A neighbour across
+the map edge does not exist and a point beyond the map has no cell. Numerical kernels
+that need an edge condition read the lattice's boundary support explicitly: ghost
+sites cover the frame padding beyond the map, each owned by its nearest edge cell; each
+edge crossing points at a ghost, and one ghost may serve several crossings. Ghost values
+are read-only, captured from the parent or clamped to the owning edge cell. Cells close in space are close in id, so block residency follows a
+frontier's working set. A band snapshot copies only the blocks dirty in
 memory and shares spill slots with its source. Cells meet the vector catalog through
 label bands grouped by label. Grids and committed field inputs are
 coverages in the same cache; an input band

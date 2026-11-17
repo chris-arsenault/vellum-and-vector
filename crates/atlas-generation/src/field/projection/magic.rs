@@ -62,6 +62,22 @@ impl Surface {
                 surface: self,
                 field,
             },
-        )
+        )?;
+        if let Some(support) = &mut self.support {
+            support.project(
+                &self.grid,
+                field.mesh(),
+                &workspace.surfaces,
+                &mut self.coverage,
+            )?;
+        } else {
+            self.support = Some(super::support::Support::capture(
+                &self.grid,
+                field.mesh(),
+                &workspace.surfaces,
+                &mut self.coverage,
+            )?);
+        }
+        Ok(())
     }
 }

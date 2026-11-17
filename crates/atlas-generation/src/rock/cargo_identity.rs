@@ -43,19 +43,20 @@ impl CargoIdentities {
             .map(|&key| self.names[key as usize - 1].as_str())
     }
     pub fn release(&self, cargo: &MaterialCargo) -> Option<MaterialCargo> {
-        cargo.map_keys(|key| {
-            key.checked_sub(1)
-                .and_then(|i| usize::try_from(i).ok())
-                .and_then(|i| self.released.get(i))
-                .copied()
-                .unwrap_or(key)
-        })
+        cargo.map_keys(|key| self.released_key(key))
+    }
+    fn released_key(&self, key: i32) -> i32 {
+        key.checked_sub(1)
+            .and_then(|i| usize::try_from(i).ok())
+            .and_then(|i| self.released.get(i))
+            .copied()
+            .unwrap_or(key)
     }
     pub fn released_material(&self, mut material: MaterialLayer) -> MaterialLayer {
         material.cargo = material
             .cargo
-            .as_ref()
-            .and_then(|cargo| self.release(cargo));
+            .take()
+            .and_then(|cargo| cargo.into_mapped_keys(|key| self.released_key(key)));
         material
     }
 }

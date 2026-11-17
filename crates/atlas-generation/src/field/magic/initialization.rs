@@ -3,7 +3,6 @@ use crate::{
     execution::{Command, CommandKind},
     features::Feature,
     field::{forcing, poi::door::seed_captured_doors, projection::Surface, shared::Scalar, Field},
-    lattice::Membership,
     magic::{
         configuration::Source,
         inheritance::{Captured, Inheritance, Quantity},
@@ -102,10 +101,7 @@ fn inherit(
             {
                 let mesh = &field.mesh;
                 let [ox, oy] = mesh.origin();
-                seed_captured_doors(system, features, |x, y| {
-                    mesh.cell_at(x - ox, y - oy)
-                        .filter(|&cell| mesh.membership(cell) == Membership::Content)
-                });
+                seed_captured_doors(system, features, |x, y| mesh.cell_at(x - ox, y - oy));
             }
         }
     }

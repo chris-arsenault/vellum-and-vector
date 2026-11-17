@@ -1,5 +1,5 @@
 use atlas_generation::{
-    lattice::{Membership, WorldLatticeOptions},
+    lattice::WorldLatticeOptions,
     rock::{
         cargo_identity::CargoIdentities, catalogue::*, coarsening::Fold, columns::*, ground::*,
         load::MaterialLoad, ModeId, ModeMix,
@@ -83,9 +83,7 @@ fn fixture_with(configure: impl FnOnce(&mut GroundStorage, &mut RockColumns, &[u
     let mut columns = RockColumns::new(&mut coverage);
     let mut identities = CargoIdentities::default();
     let kept = identities.declare("kept vein", Some("fire")).unwrap();
-    let cells: Vec<_> = (0..mesh.len())
-        .filter(|&cell| mesh.membership(cell) == Membership::Content)
-        .collect();
+    let cells: Vec<_> = (0..mesh.len()).collect();
     for cell in 0..mesh.len() {
         storage
             .initialize(GroundField::BedrockElevation, cell, MapScale::native(100.0))
@@ -435,11 +433,13 @@ fn sediment_motion_moves_actual_material_and_releases_custody() {
     let targets = f.coverage.scratch(1, target as i32);
     let weights = f.coverage.scratch(1, 750000.0);
     let dominant = f.coverage.allocate(-1i32);
+    let inflow = f.coverage.allocate(0.0);
     let plan = TransportShares {
         offsets: offsets.read_only(),
         targets: targets.read_only(),
         weights: weights.read_only(),
         dominant: dominant.read_only(),
+        inflow: inflow.read_only(),
     };
     f.ground
         .transport_load(&plan, &mut f.load, &mut f.coverage)
@@ -1012,10 +1012,12 @@ fn physical_displacement_bends_contacts_while_translation_keeps_their_dip() {
     near(layer.bed_slope_x, 0.2);
     near(layer.bed_slope_y, -0.3);
     assert_eq!(layer.formed_min, 4.0);
+    let cargo = layer.cargo.clone();
     f.ground.transform(cell, [0.0, -1.0, 1.0, 0.0]).unwrap();
     let layer = &f.ground.section(cell, Facet::Land).unwrap()[0].material;
     near(layer.bed_slope_x, 0.3);
     near(layer.bed_slope_y, 0.2);
+    assert_eq!(layer.cargo, cargo);
 }
 #[test]
 fn top_down_solvent_stops_at_insoluble_cap_and_surface_queries_read_real_loose_material() {
