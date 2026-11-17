@@ -164,6 +164,7 @@ fn capture_layout_depends_on_footprint_not_map_profile() {
                 precision: 1e-6,
                 generation_domains: Default::default(),
                 contracted: Default::default(),
+                real_scale: None,
             };
             let path = std::env::temp_dir().join(format!(
                 "atlas-capture-{}-{profile:?}-{regular}.blocks",

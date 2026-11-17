@@ -5,11 +5,37 @@ use crate::{control::GenerationControl, features::Feature};
 use atlas_map::{Geometry, MapDescriptor, Publisher};
 use std::io;
 
-pub const CAVE_HEXES: &str = "vector:caveHexes";
+use atlas_map::underground::cave_hex_id as underground_hex_id;
+pub use atlas_map::underground::CAVE_HEXES;
 
+impl Product<'_> {
+    /// What authoring offers on a real-scale map: ground classes from the published surface
+    /// legend and exposed rock, cover classes, and the layers a first drawing opens.
+    pub(super) fn authoring_choices(
+        &self,
+        map: &mut MapDescriptor,
+        selected: &super::inputs::Selected<'_>,
+        latent_layers: Vec<atlas_map::MapLayer>,
+    ) {
+        use atlas_map::authoring::{choices, AuthoringChoices};
+        let Some(real) = map.real_scale.as_mut() else {
+            return;
+        };
+        let surface = if selected.channels.contains_key(super::records::SURFACE) {
+            self.fields.categories(super::records::SURFACE)
+        } else {
+            Vec::new()
+        };
+        real.authoring = AuthoringChoices {
+            ground_classes: choices::ground_classes(&surface),
+            cover_classes: choices::cover_classes(),
+            latent_layers,
+        };
+    }
+}
 /// A surface hex becomes its underground twin: same cell of the grid, its own identity.
 pub fn underground_hex(mut hex: Feature) -> Feature {
-    hex.id = format!("cave-{}", hex.id);
+    hex.id = underground_hex_id(&hex.id);
     hex.layer_id = "caveHexes".into();
     hex
 }
@@ -77,8 +103,45 @@ mod tests {
         );
         assert_eq!(cave.geometry, hex.geometry);
         assert!(crate::publication::layers::underground(CAVE_HEXES));
+        assert!(crate::publication::layers::underground(
+            atlas_map::underground::CAVE_WALLS
+        ));
         assert!(!crate::publication::layers::underground(
             "vector:caveEntrances"
         ));
+    }
+    /// Authoring opens the underground layers without the catalogue; their kinds must read
+    /// exactly as publication names them, or a drawn wall would not match a published one.
+    #[test]
+    fn authored_cave_layers_name_their_kinds_as_publication_does() {
+        let layers = crate::publication::layers::builtin();
+        let catalogue = crate::publication::catalogue::Catalogue {
+            layers: &layers,
+            systems: &[],
+            confluences: &[],
+        };
+        let none = Default::default();
+        // The catalogue also gives a wall its true thickness; the built layer's kind has none.
+        let wall = catalogue.describe("caveWalls", "caveWall", &none);
+        assert!(wall.true_size.is_some());
+        assert_eq!(
+            atlas_map::MapFeatureType {
+                true_size: None,
+                ..wall
+            },
+            atlas_map::underground::cave_wall_type()
+        );
+        // Every object kind a creator places has its true size in the catalogue.
+        for kind in catalogue.available("objects").values() {
+            assert!(kind.true_size.is_some(), "{}", kind.kind);
+        }
+        assert_eq!(
+            catalogue.describe("caveHexes", "hex", &none),
+            atlas_map::underground::cave_hex_type()
+        );
+        assert_eq!(
+            underground_hex_id("hex:a:1:2"),
+            atlas_map::underground::cave_hex_id("hex:a:1:2")
+        );
     }
 }

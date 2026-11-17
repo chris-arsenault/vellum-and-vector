@@ -39,6 +39,10 @@ impl Product<'_> {
             .map_err(io::Error::other)?
             .profile;
         let underground = self.underground(&map)?;
+        // A ground map without caves keeps the underground layers a creator draws into as
+        // latent ones: drawing the first cave wall opens the space they belong to (ADR 0016).
+        let latent_space = descriptor::underground_space(&map).filter(|_| map.real_scale.is_some());
+        let mut latent = Vec::new();
         for layer in self
             .vectors
             .registry
@@ -47,12 +51,16 @@ impl Product<'_> {
             .values()
             .filter(|l| l.profiles.contains(&profile) && l.vector())
         {
-            let space_id = match (layers::underground(&layer.id), &underground) {
-                (false, _) => map.primary_space_id.clone(),
-                (true, Some(space)) => space.id.clone(),
-                (true, None) => continue,
+            let drawn = atlas_map::authoring::shape_of(&layer.id).is_some();
+            let (space_id, is_latent) = match (layers::underground(&layer.id), &underground) {
+                (false, _) => (map.primary_space_id.clone(), false),
+                (true, Some(space)) => (space.id.clone(), false),
+                (true, None) => match &latent_space {
+                    Some(space) if drawn => (space.id.clone(), true),
+                    _ => continue,
+                },
             };
-            map.layers.push(MapLayer {
+            let published = MapLayer {
                 id: format!("vector:{}", layer.id),
                 name: layer.name.clone(),
                 space_id,
@@ -66,9 +74,15 @@ impl Product<'_> {
                     asset_id: assets.identity()?,
                     media_type: "application/geo+json".into(),
                 }),
-            });
+            };
+            if is_latent {
+                latent.push(published);
+            } else {
+                map.layers.push(published);
+            }
         }
         map.spaces.extend(underground);
+        self.authoring_choices(&mut map, selected, latent);
         let mut bands = Vec::new();
         for (channel, field) in &selected.channels {
             if channel.starts_with("magicApplied:")

@@ -131,6 +131,7 @@ dependencies = [
  "atlas-generation",
  "atlas-gis",
  "atlas-map",
+ "atlas-names",
  "cc",
  "chrono",
  "ciborium",

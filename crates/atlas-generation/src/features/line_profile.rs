@@ -146,3 +146,40 @@ impl<'a> Line<'a> {
         })
     }
 }
+/// One piece of a published line as plain points, with its share of each per-vertex value the
+/// line states.
+pub struct Piece {
+    pub points: Vec<[f64; 2]>,
+    /// The index of the piece's first vertex among all the line's vertices.
+    pub offset: usize,
+}
+/// A published line's pieces in drawing order.
+pub fn pieces(geometry: &Geometry) -> Vec<Piece> {
+    let mut offset = 0;
+    line_parts(geometry)
+        .into_iter()
+        .map(|part| {
+            let piece = Piece {
+                points: part
+                    .iter()
+                    .map(|p| {
+                        let [x, y, _] = p.coordinates();
+                        [x, y]
+                    })
+                    .collect(),
+                offset,
+            };
+            offset += part.len();
+            piece
+        })
+        .collect()
+}
+/// A per-vertex value the line states for every vertex of all its pieces, or none.
+pub fn vertex_values(attributes: &Attributes, name: &str, pieces: &[Piece]) -> Option<Vec<f64>> {
+    let values = attributes.get(name)?.as_array()?;
+    let count: usize = pieces.iter().map(|p| p.points.len()).sum();
+    if values.len() != count {
+        return None;
+    }
+    values.iter().map(serde_json::Value::as_f64).collect()
+}

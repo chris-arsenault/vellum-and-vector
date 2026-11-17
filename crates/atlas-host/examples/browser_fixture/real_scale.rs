@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 use std::io;
 
 pub const CHILD: &str = "4b0f6b52-6c1e-4f0b-9d5e-1f7f2f9b3a10";
-const FRAME: Bounds = Bounds(40.0, 40.0, 70.0, 62.5);
+pub const FRAME: Bounds = Bounds(40.0, 40.0, 70.0, 62.5);
 
 /// Turns a copy of the island's document into its real-scale child.
 pub fn child(document: &mut Document, parent: &MapRef) -> io::Result<()> {

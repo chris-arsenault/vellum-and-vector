@@ -7,6 +7,7 @@ use super::{
 use crate::{
     hpc::RecordQueue,
     lattice::TriangularLattice,
+    rock::catalogue::RockFamily,
     scale::{LengthUnit, MapScale, RelativeMeasure},
     storage::{Band, Coverage, ReadBand},
 };
@@ -74,6 +75,8 @@ pub struct ChannelInputs<'a> {
     pub slope: &'a ReadBand<f64>,
     pub flow: &'a ReadBand<f64>,
     pub standing: &'a dyn Fn(usize) -> io::Result<f64>,
+    /// The family of the bed a channel runs on at a cell.
+    pub bed: &'a dyn Fn(usize) -> io::Result<RockFamily>,
 }
 pub struct Dimensions {
     pub width: f64,
@@ -88,12 +91,23 @@ fn measure(scale: &MapScale, relative: f64, dimension: i8) -> io::Result<f64> {
         .map_err(io::Error::other)?
         .value())
 }
+/// A channel's width and depth. On a real-scale map a channel is its real size, from its
+/// discharge and its bed's rock family (`processes::ground::channels`); elsewhere it is a
+/// share of the map from discharge, gradient and bank strength.
 pub fn channel_dimensions(
     discharge: f64,
     slope: f64,
     bank: f64,
+    bed: RockFamily,
     scale: &MapScale,
 ) -> io::Result<Dimensions> {
+    if scale.real_size() {
+        let made = crate::processes::ground::channels::channel(discharge, bed);
+        return Ok(Dimensions {
+            width: made.width,
+            depth: made.depth,
+        });
+    }
     let q = discharge.max(0.0) / measure(scale, 1.5625e-20, 3)?;
     let gradient = slope.max(0.00001);
     Ok(Dimensions {
@@ -226,6 +240,7 @@ impl ChannelGeometry {
             flow,
             input.slope.get(cell)?,
             (input.standing)(cell)?,
+            (input.bed)(cell)?,
             input.scale,
         )?;
         reach.width[at] = dimensions.width;

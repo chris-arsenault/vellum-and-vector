@@ -1,5 +1,7 @@
 import { collectPages, type MapFeature, type MapReader } from "@atlas/map";
 import { defaultDraw, type AuthoringSession, type EditTool } from "./useRealScaleAuthoring";
+import { landActions } from "./realScaleLandActions";
+import { townActions } from "./realScaleTownActions";
 
 /** One name, one shortcut and one rule per editing action; the palette lists them all. */
 export interface EditAction {
@@ -143,6 +145,8 @@ export const editActions: EditAction[] = [
     blocked: () => null,
     run: ({ openPalette }) => openPalette(),
   },
+  ...landActions,
+  ...townActions,
 ];
 
 /** The shortcut a key press names, in the palette's spelling. */

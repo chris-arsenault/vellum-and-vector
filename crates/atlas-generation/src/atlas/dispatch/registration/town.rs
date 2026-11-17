@@ -5,6 +5,8 @@ use crate::{
 };
 use std::io;
 
+/// The creator's one choice is the layout; the process's layout controls are declared once in
+/// `atlas/town/settings.rs`.
 pub fn specification() -> io::Result<Specification> {
     let mut spec = Specification::new("real-scale.settlement", "atlas:workspace", "", false);
     spec.parameters = serde_json::from_value(serde_json::json!({

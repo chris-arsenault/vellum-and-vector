@@ -16,9 +16,18 @@ import type { EditCommand, EditOutcome, Geometry } from "@atlas/map";
 import type { PublishedMapEngine } from "./publishedMapEngine";
 import type { PublishedFeature } from "./publishedAppearance";
 import { vectorFamily } from "./publishedAppearance";
-import { drawShape, type AuthoringState } from "./useRealScaleAuthoring";
+import { drawShape, type AuthoringState, type EditTool } from "./useRealScaleAuthoring";
 import { installSelectionDrag } from "./realScaleDrag";
 import { overlayStyle } from "./realScaleOverlay";
+import { installBuilding, installStreet } from "./realScaleTown";
+import {
+  findHex,
+  followSpace,
+  installHexes,
+  installPlace,
+  installScatter,
+  installWidthHandles,
+} from "./realScaleLandEditing";
 
 /** What the canvas asks of the edit session; every change runs as a Rust edit command. */
 export interface EditingEvents {
@@ -26,6 +35,7 @@ export interface EditingEvents {
   select(ids: string[]): void;
   command(command: EditCommand): Promise<EditOutcome | undefined>;
   drawn(): void;
+  showSpace(spaceId: string): void;
 }
 const format = new GeoJSON();
 export const toGeometry = (geometry: OLGeometry) =>
@@ -42,7 +52,7 @@ export function findFeature(engine: PublishedMapEngine, id: string): Feature | u
     const feature = layer.getSource()?.getFeatureById(id);
     if (feature) return feature as Feature;
   }
-  return undefined;
+  return findHex(engine, id);
 }
 /** Editable features under a pixel, top first. */
 export function hits(engine: PublishedMapEngine, pixel: Pixel) {
@@ -66,16 +76,38 @@ export function installRealScaleEditing(engine: PublishedMapEngine, events: Edit
   });
   engine.map.addLayer(overlay);
   const cleanups = [installKeys(engine, events)];
-  if (state.tool !== "draw") cleanups.push(installSelect(engine, events));
-  if (state.tool === "select") cleanups.push(installSelectionDrag(engine, overlay, events));
-  if (state.tool === "points") cleanups.push(installPoints(engine, selected, events));
-  if (state.tool === "draw") cleanups.push(installDraw(engine, events));
+  for (const install of toolInteractions[state.tool])
+    cleanups.push(install({ engine, overlay, selected, events }));
   return () => {
     for (const cleanup of cleanups) cleanup();
     engine.map.removeLayer(overlay);
     overlay.getSource()?.clear(true);
   };
 }
+interface ToolScope {
+  engine: PublishedMapEngine;
+  overlay: VectorLayer;
+  selected: Feature[];
+  events: EditingEvents;
+}
+type Install = (scope: ToolScope) => () => void;
+const select: Install = ({ engine, events }) => installSelect(engine, events);
+/** The canvas interactions each tool installs. */
+const toolInteractions: Record<EditTool, Install[]> = {
+  select: [select, ({ engine, overlay, events }) => installSelectionDrag(engine, overlay, events)],
+  points: [
+    select,
+    ({ engine, selected, events }) => installPoints(engine, selected, events),
+    ({ engine, overlay, selected, events }) =>
+      installWidthHandles(engine, overlay, selected[0], events),
+  ],
+  draw: [({ engine, events }) => installDraw(engine, events)],
+  place: [({ engine, events }) => installPlace(engine, events)],
+  scatter: [({ engine, events }) => installScatter(engine, events)],
+  hexes: [({ engine, events }) => installHexes(engine, events)],
+  street: [({ engine, events }) => installStreet(engine, events)],
+  building: [({ engine, events }) => installBuilding(engine, events)],
+};
 function installKeys(engine: PublishedMapEngine, events: EditingEvents) {
   const key = (event: KeyboardEvent) => {
     if (event.key === "Escape") events.select([]);
@@ -108,7 +140,7 @@ function installSelect(engine: PublishedMapEngine, events: EditingEvents) {
   return () => unByKey(click);
 }
 /** Snap new and moved points to water, ways and, when chosen, the hex grid. */
-function installSnaps(engine: PublishedMapEngine, hexes: boolean) {
+export function installSnaps(engine: PublishedMapEngine, hexes: boolean) {
   const sources = [...engine.vectors.layers.entries()]
     .filter(([id]) => drawShape(id) === "line")
     .flatMap(([, layer]) => layer.getSource() ?? []);
@@ -156,7 +188,7 @@ function installPoints(engine: PublishedMapEngine, selected: Feature[], events: 
 /** Draw a new shape of the chosen layer and kind into the chosen creator layer. */
 function installDraw(engine: PublishedMapEngine, events: EditingEvents) {
   const { draw: choice, target, snapHexes } = events.state();
-  const shape = choice ? drawShape(choice.layerId) : null;
+  const shape = choice ? drawShape(choice.layerId, choice.kind) : null;
   if (!choice || !shape) return () => {};
   const draw = new Draw({ type: shape === "line" ? "LineString" : "Polygon" });
   draw.on("drawend", (event) => {
@@ -169,11 +201,15 @@ function installDraw(engine: PublishedMapEngine, events: EditingEvents) {
         kind: choice.kind,
         name: choice.name.trim() || null,
         geometry,
-        attributes: shape === "line" ? { widths: Array(points).fill(choice.width) } : {},
+        attributes: {
+          ...choice.attributes,
+          ...(shape === "line" ? { widths: Array(points).fill(choice.width) } : {}),
+        },
         creatorLayer: target || null,
       })
       .then((outcome) => {
         if (outcome) events.select(outcome.changed);
+        followSpace(engine, events, choice.layerId)(outcome);
       });
     events.drawn();
   });

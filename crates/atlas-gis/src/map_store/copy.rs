@@ -14,15 +14,39 @@ impl MapStore {
             )?
             .is_some())
     }
-    pub fn save_references(&self, request: &SaveRequest) -> io::Result<Vec<MapRef>> {
-        let mut pending = vec![request.reference.clone()];
-        pending.extend(
+    /// The floors maps of buildings on a map (structure maps whose parent it is), in the
+    /// catalog `schema` names (`main` or `imported`). They are kept with the map that holds
+    /// the buildings, as region children are (ADR 0016).
+    fn floors_of(&self, schema: &str, reference: &MapRef) -> io::Result<Vec<MapRef>> {
+        let rows = self.db.query(&format!("SELECT m.map_id,m.revision FROM {schema}.maps m JOIN {schema}.map_heads h USING(map_id,revision) WHERE json_extract(descriptor,'$.parent.mapId')=? AND json_extract(descriptor,'$.parent.revision')=? AND json_extract(descriptor,'$.realScale.site.buildingId') IS NOT NULL ORDER BY m.map_id"), &reference_values(reference))?;
+        rows.iter()
+            .map(|row| {
+                Ok(MapRef {
+                    map_id: column(row, "map_id")?.text()?.into(),
+                    revision: column(row, "revision")?.text()?.into(),
+                })
+            })
+            .collect()
+    }
+    /// A saved map, its region children and the floors maps of the buildings on each.
+    fn kept_with(&self, schema: &str, request: &SaveRequest) -> io::Result<Vec<MapRef>> {
+        let mut kept = vec![request.reference.clone()];
+        kept.extend(
             request
                 .navigation
                 .regions
                 .iter()
                 .filter_map(|region| region.child.clone()),
         );
+        let mut floors = Vec::new();
+        for reference in &kept {
+            floors.extend(self.floors_of(schema, reference)?);
+        }
+        kept.extend(floors);
+        Ok(kept)
+    }
+    pub fn save_references(&self, request: &SaveRequest) -> io::Result<Vec<MapRef>> {
+        let mut pending = self.kept_with("main", request)?;
         let mut seen = BTreeSet::new();
         let mut result = Vec::new();
         while let Some(reference) = pending.pop() {
@@ -68,11 +92,8 @@ impl MapStore {
         attached(self.db.as_ref(), source, || {
             transaction(self.db.as_ref(), || {
                 let mut seen = BTreeSet::new();
-                self.copy_map(&request.reference, &mut seen, true)?;
-                for region in &request.navigation.regions {
-                    if let Some(child) = &region.child {
-                        self.copy_map(child, &mut seen, true)?;
-                    }
+                for kept in self.kept_with("imported", &request)? {
+                    self.copy_map(&kept, &mut seen, true)?;
                 }
                 self.save_inner(request, time)
             })

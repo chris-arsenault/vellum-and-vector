@@ -38,6 +38,23 @@ pub struct MapFeatureType {
     pub count: u32,
     pub geometries: Vec<GeometryType>,
     pub footprints: bool,
+    /// The real size of one thing of this kind, from the catalogue's true-size slot, for
+    /// kinds a creator places or draws at their size (an object, a stream's width).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub true_size: Option<KindSize>,
+}
+
+/// A kind's real size in metres: its breadth across with a long tail (least, typical,
+/// largest), how many times longer than wide one runs, and whether its outline is round.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KindSize {
+    pub least: f64,
+    pub typical: f64,
+    pub largest: f64,
+    pub elongation: f64,
+    pub round: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

@@ -24,19 +24,10 @@ export function RealScaleOpen({ map, inspection, open }: Props) {
         Map name
         <input value={name} onChange={(event) => setName(event.target.value)} />
       </label>
-      <label>
-        Kind
-        <select
-          aria-label="Kind"
-          value={choice.kind}
-          onChange={(event) =>
-            setChoice({ ...choice, kind: event.target.value as RealScaleChoice["kind"] })
-          }
-        >
-          <option value="ground">Ground: outdoors, caves, towns</option>
-          <option value="structure">Building floors</option>
-        </select>
-      </label>
+      <p>
+        A ground map: outdoors, caves and towns. A building&apos;s floors open from the building on
+        a real-scale map.
+      </p>
       <label>
         Hex size
         <select

@@ -470,6 +470,118 @@ catalogue entry fills both slots. Compass deviation and interference lattice are
 (no bearing is recorded for a place); the key text states metres whatever the viewer's
 units; a settlement's footprint is its built ground from people, before M4's plots.
 
+#### M2 ground detail — steps
+
+Path facts (survey 2026-11-17, corrected in review): published river `widths` come from the
+reach store's `channel_dimensions` (`water/channel_geometry.rs`), whose coefficients are
+relative measures resolved by the field's `MapScale`. That scale is built from the world's
+reference domain on every map, children included (`atlas/workspace.rs`,
+`generation_frame.rs`), so width was about 9,000·√(Q / world span): 9·√Q m on the 1,000 km
+local atlas and 4.5·√Q on the 4,000 km reference world, whatever the bed. An earlier note
+here gave 127·√Q, wrongly taking the child's frame as the span. Discharge is mean m³/s
+(`ledger::depth_rate_to_discharge`). The generation state did not know its map was
+real-scale: `Scope.real_scale` now carries the captured `RealScaleMap` (set in
+`atlas-host/src/generation_frame.rs`), and the field's scale is marked real-size from it
+(`MapScale::at_real_size`).
+
+Design: one pure process family, `processes/ground/` (labelled settings in `settings.rs`,
+one module per step, explicit inputs in metres), with state adapters in
+`atlas/state/real_scale_{water,ground,trails}.rs`. Five commands on the common interface
+(`registration/ground.rs`) join `real_scale()`. Pools and rock run right after
+`atlas.features`. Trails, crossings and cover follow `real-scale.settlement`, so they see the
+town's streets and bridges.
+
+1. Channels at real size — on a real-scale map `channel_dimensions` sizes every channel cell
+   with the one relation in `processes/ground/channels.rs`: width = a·√Q with `a` a rock-family
+   fact in the rock catalogue (`RockFamily::channel_width_per_root_discharge`: loose 4.5, broken
+   4.0, sedimentary 3.5, ice and metamorphic 3.0, igneous 2.8) for the top bed of the cell's
+   section (`queries::bed_family`); depth = Q / (width · 0.7·Q^0.1). The drawn rivers,
+   catalogue fords and bridges, trails, caves and incision all read those widths. Verify:
+   `channels.rs` and `channel_tests.rs` units.
+2. `real-scale.pools` — a new POI kind `pool` (water group, `field/poi/pool.rs`, true size
+   and account filled) published at a new `Moment::Ground`. It finds pools on the drawn
+   channels: slack where the stretch's gradient (4 widths) is below 0.35 of its reach's (40
+   widths), at confluences, and on the outside of bends tighter than 3 widths, with pools at
+   least 5 widths apart. A pool is 2.5 × 1.5 widths and twice the channel depth, published in
+   `lakes`. Verify: `pools.rs` units on explicit beds, bends and junctions.
+3. `real-scale.rock` — triangles with loose cover under 0.3 m or a slope over 0.7 (repose)
+   join into `outcrop` polygons (union of triangles, with the commonest rock), and long
+   narrow bands steeper than 1.4 into `cliff` lines with height. These go in `geology`. An
+   outcrop marks its hexes `rock` (`atlas-map` `mark_shape`). A hex more than half rock takes
+   the ground "Exposed rock" (`product/hexes.rs` `hex_ground`). Verify: `exposure.rs` units,
+   `hex_ground` unit.
+4. `real-scale.trails` — least-cost walks (Dijkstra over the triangles) from settlements,
+   cave entrances, springs, peaks, waterfalls, magic practice sites, mines and buildings
+   farther than 20 m from any way. Each walk runs to the nearest way or settlement, nearest
+   first. Cost per metre is 1 + (grade/0.15)² + 2·tree cover + 3·wetland. Water multiplies it
+   by 40, or by 3 where the channel is shallower than 1 m. A laid trail's triangles cost 0.4,
+   and a later trail is cut where it meets an earlier one (`joins`). Width runs from 1 m to
+   2 m with the number of trails walking it. Trails are `trail` in `roads`, in the roads
+   network. Verify: `trails.rs` units on a small lattice.
+5. `real-scale.crossings` — every road, street, track or trail meeting a drawn channel, and
+   no bridge or ford within 10 m plus 2 widths: shallower than 1 m gives a `ford` point
+   (`transportSites`). Deeper gives a `bridge` (`structures`) on roads and streets, spanning
+   the channel and its abutments. Both relate `crosses` to the river and `carries` to the way,
+   with true size and account. Verify: `crossings.rs` units on explicit lines.
+6. `real-scale.cover` — on maps with hexes of 10 m or less, Poisson-disc scatter per
+   triangle from its shares. Trees come from tree cover, shrubs from scrub surfaces, boulders
+   from exposed rock and scree, reeds from wetland. Spacing and density are declared per
+   kind; sizes follow a long tail between the catalogue's own least, typical and largest
+   (`catalogue.json` `sizes`, `true_size`); nothing is placed on ways, water or buildings. Objects layer kinds
+   `tree`, `shrub`, `boulder`, `reeds`. Verify: `cover.rs` units on spacing, density and
+   sizes.
+7. Catalogue and view — `catalogue.json` gains `outcrop`, `cliff`, `pool`, `shrub`, `reeds`.
+   `realScaleStyles.ts` adds the `rock` mark colour and per-kind colours for plants and
+   stones. Verify: tsc, eslint, prettier.
+
+Results (2026-11-17, implemented, not run on a generated map by direction): 21 new
+`processes::ground` units and the `hex_ground` unit pass. `cargo test -p atlas-generation
+--lib` passed before review; after it, only the town agent's in-progress
+`town::plan` test fails. Also passing: `atlas-host --test real_scale`, the sequence, place-size and
+publication tests, the architecture checks and clippy on `atlas-generation`. Workspace
+clippy stops on other agents' in-progress `atlas-map` and `atlas-host/tests/structure_maps.rs`.
+
+Review fixes (2026-11-17):
+
+- **Channels.** The separate drawn-river rewrite step is gone. The water model sizes channels
+  at real size itself (step 1), so catalogue crossings take their size and key text from the
+  real width.
+- **Carried places.** `captured_place` keeps the captured facts but takes the bent shape,
+  footprint and `representative` from the working record (`carry::located`).
+  `bend_record` bends the `representative` too.
+- **Bend guard.** A record bends again when `carriedOnto` names another map.
+- **Bend, then clip.** The network bends a course and then clips it to the frame
+  (`ImportGeometry::clipped`), with stations read along the bent course. Captured courses
+  drop positions outside the frame instead of clamping them (`Bend::cell`). Captured records
+  are re-clipped to the frame after the bend, and those taken wholly outside are removed;
+  contracted features keep their shape.
+- **Pools.** A junction makes a pool only within 2 widths of its piece, and pool ids name
+  the piece.
+- **Caves.** Chamber outlines are clipped to the frame (`shape::clip_ring`).
+- **Real-size thresholds.** On real-scale maps these existence thresholds are real sizes
+  (`significance::physical`): pass col rise 20 m; ridge, valley and gorge course 300 m with
+  15 m relief; plateau, dome, cirque and moraine area 5 ha with 15 m relief; lake area
+  2,000 m², or 300 m² when 3 m deep or feeding 0.1 m³/s; waterfall drop 3 m or breadth 15 m;
+  great fall 20 m; peak prominence 15 m least, 30 m in a range, 60 m alone, 30 m for a sea
+  mark, 100 m for a horn's col.
+- **Thresholds left relative.** Fjord, volcano, crater and exceptional ice thresholds, and
+  magical course length. These landforms either outsize a real-scale frame or arrive carried
+  from the parent. Placement spacing and reach in cells are resolution, not size.
+
+Tests added (all pass): one parent point lands on the same child cell for the network
+lookup, a captured course, a bent record and a carried place, on a real lattice from
+`Bend::new`. Further tests cover the once-per-map guard, clipping instead of clamping, the
+same-kind clip, real-size channels, the catalogue bed fact, per-piece junctions and ids,
+the chamber clip and `physical`.
+
+Deviations and open items: real-scale fords and bridges are way structures, like the town's bridges, not
+catalogue places, so the key does not number them. A deep crossing on a track or trail gets
+no structure. Shrub cover is read from surface classes, since no shrub share exists. Without
+a magic workspace there are no scrub or scree shares. The rock and cliff thresholds, trail
+costs and cover densities are judged only by units; on a generated map they are unverified,
+including how much of a coarse map turns to outcrop and how long trails take in the browser
+engine.
+
 ### M3 — Generated underground [depends on M2]
 
 Scope: underground spaces from rock, fractures, water and magic: passages, chambers,
@@ -660,6 +772,89 @@ Acceptance: the owner's examples work: moving a river; a drawn cave wall that sh
 rock it cuts.
 Evidence: units; UI tests.
 
+#### M6 execution steps
+
+Path facts (survey 2026-11-17): published samples carry each channel either under its own
+raster layer (`raster:<channel>`, band `value`) or as a band of the `inspection` layer, so the
+rock under a point is `RockLayerKind0` and magic coverage is `magic:<system>:coverage[:<rule>]`;
+rock solubility lived only in the generation rock catalogue; a map without caves publishes no
+underground space or cave layers; hexes refused every edit (`shape_of` is `None` for them) and
+the edit path queried the primary space only (M8 made it space-aware during this work).
+
+Design: the tools are Rust edit commands and attribute edits over published features; the
+frontend only draws, picks and sends them. Water and ways use the M5 Create/Reshape path with a
+starting width from a chosen size; per-point widths are edited in the panel or by a width
+handle beside each point. A placed object is `Place` (an outline of its kind's real size,
+turned and scaled); a scatter is `Scatter` (Poisson-disc points from a seed inside the drawn
+outline, each object its own feature, one undo step). A hex accepts only `SetAttributes` of
+`ground` (a surface class) and `cover` (open, light, heavy, blocking); re-marking writes only
+`fill` and `marks`, so the classes stay. Cave walls are lines in a `caveWalls` layer in the
+underground space; drawing the first one adds the space, the wall and cave-hex layers and a
+copy of the surface hex grid in the same step (undo closes it again). A wall drawn or moved
+reads the published samples along it: the rock classes it meets, flowstone where a class is
+`soluble` (published on rock categories by the cave process's own dissolution rule), seams
+where Fire's vein coverage is above zero, rime where Aurora's coverage is.
+
+1. Contracts in `atlas-map`: `EditCommand::Place` and `::Scatter`; `Category.soluble`;
+   `underground.rs` (the underground space shared with generation, the authored wall and
+   cave-hex layers, `opened`); `authoring/objects.rs` (object sizes and outlines, seeded
+   Poisson-disc points), `authoring/placing.rs` (Place, Scatter, hex classes),
+   `authoring/context.rs` (wall context from samples); `caveWalls` in `shape_of` and `mark_of`.
+   Verify: units for spacing, repeatability, outlines and context on explicit samples.
+2. Generation: rock categories publish `soluble`; the `caveWalls` layer (underground,
+   real-scale only) and the `caveWall` and `cart` kinds in the catalogue; a unit checks the
+   authored layer kinds read exactly as publication names them.
+3. Store in `atlas-gis`: `authoring/caves.rs` (opening the underground on a first wall,
+   reading samples along a wall); hex layers among a command's readable targets; hexes the
+   change creates are marked with it; a space the change opens reads as empty. Verify:
+   `tests/authoring_land.rs`.
+4. Frontend: a Land tools bar and palette entries with shortcuts (R river or stream, T trail
+   or path, O object, S scatter, W cave wall, H hexes); size choices for water and ways;
+   object kind, turn, scale, spacing and seed; hex selection by click, Shift-click and box with
+   a ground and cover panel; width handles in Edit points; the cave wall's rock and features in
+   the property panel; the view moves to the Caves level after the first wall; the canvas
+   remounts when the map gains a located space.
+5. Fixture: the glen has its own supplied field (limestone west of x 55, granite east, Aurora
+   coverage in the north-east, a Fire vein cell), published as samples through the normal
+   finished-map path. UI tests in `frontend/tests/realScaleLandTools.test.ts`.
+
+#### M6 results and deviations
+
+Steps 1–5 implemented in the working tree (2026-11-17), not yet reviewed or committed. Checks:
+`atlas-map` units (scatter spacing and fill, seed repeatability, object outlines, wall context
+on explicit samples in both published forms); the generation unit that authored cave layers
+name their kinds as publication does; `crates/atlas-gis/tests/authoring_land.rs` (7 units:
+place, scatter spacing/repeat/one-step undo and the spacing refusal, hex ground and cover kept
+through re-marking and restored by undo, hexes refusing every other edit, the first wall
+opening the underground and marking its grid, limestone/granite walls with flowstone, seams and
+rime and a moved wall reading again, undo closing the underground and redo reopening it);
+workspace clippy; contracts regenerated; frontend typecheck and ESLint;
+`frontend/tests/realScaleLandTools.test.ts` (draw a river with sizes and a point width, move
+it as one feature with its widths; set two hexes' cover and ground, box-select, undo; draw a
+path that joins Drovers' trail; place a cart and scatter rubble, undo the scatter; draw a cave
+wall from the surface, land on the Caves level and see Limestone and flowstone).
+
+Deviations: width handles are built but have no UI test (the panel's point widths are
+tested); the glen fixture gained an underground space from M8's inn cave during this work, so
+the UI test does not exercise opening the underground (the store units do); the history names
+a drawn wall by its kind id ("Draw caveWall"), as M5 names every unnamed shape; the
+`caveWalls` layer is published empty on generated maps that have caves, so walls drawn there go
+into it without opening anything.
+
+Review fixes (2026-11-17): redo of a first cave wall re-marks the reopened grid (hex re-marking
+reads the step's own layout); a map publishes its authoring choices on `realScale.authoring`:
+ground classes (its surface legend and exposed rock, with colours), cover classes (with tints)
+and latent layers (a ground map without caves publishes its cave-wall layer as latent), so the
+hex panel offers only published classes, Rust refuses any other, and the fill view draws ground
+and a cover tint; hexes belong to no creator layer, and undo/redo do not hold features of a
+layer the step itself opens or closes; object outlines and line starting widths come from the
+catalogue's true size (`"sizes"` in `catalogue.json`, published as `trueSize` on feature types),
+and the authoring size table is gone; a wall cuts the bed at its depth (its own `depth`, else
+the nearest generated cave's, else the first rock bed under the loose cover), read every metre
+along it (finer where the samples are); the TypeScript cave-wall layer, width presets and cover
+list are gone. Open: the ground process keeps its own across ladders for tree, shrub, boulder and
+reeds (`processes/ground/settings.rs`); the catalogue sizes repeat those values.
+
 ### M7 — Town tools [depends on M4, M5]
 
 Scope: street network builder (classes, junctions, names, renumbered addresses), building
@@ -671,6 +866,104 @@ Evidence: units; UI tests.
 Owner 2026-11-17: there is no art-generation tool; building art is generated with OpenAI
 during development and shipped as assets, outside this plan's work.
 
+#### M7 execution steps
+
+Path facts (survey 2026-11-17): generated streets are `roads`/`street` features with
+`widths`, `roadClass` and `settlement`, each starting at the end nearest the settlement's
+centre (`town/network.rs`); buildings carry `use`, `occupants`, `storeys`, `household` or
+`business` (the keeper, also the feature's name), `address`, `addressNumber`, `street`,
+`streetId`, `ward` and a `fronts` relation to their street; yards carry the same address keys
+and are named by their address line (`town/records.rs`). Generated names come from
+`atlas-names` work terms (`street`, `lane`, `inn`, `household`…) in the settlement's
+`namingCulture`. `atlas-gis` must not depend on `atlas-names` (architecture check), so naming
+is supplied to the map store by the host.
+
+Design: the settlement vocabulary generation lays towns with (sizes by people, street classes
+and widths, building uses with footprints, occupants and storeys, plot sizes, setback, fill,
+house numbering) moves to `atlas-map/src/town/`; generation re-exports it, so one rule serves
+both. Two commands, `DrawStreet` and `PlaceBuilding`, read the authorable features around them
+and the map's settlements (`EditTargets::Around`). The map store then names unnamed new
+streets and buildings through a `TownNames` host service and renumbers every street the
+change touches, in the same undo step. Addresses run odd on the left and even on the right
+from a street's first point; a building takes the number of the plot its centre stands in.
+
+1. Shared vocabulary in `atlas-map/src/town/` (`mod.rs`, `uses.rs`, `addresses.rs`), with
+   address parsing and street-name matching; generation's `story.rs`, `network.rs`,
+   `uses.rs`, `plots.rs` and `addresses.rs` re-export it. Verify: atlas-map units, generation
+   town units.
+2. Commands in `atlas-map/src/authoring/town.rs` and `frontage.rs`: a street's ends within a
+   hex of a way move onto it and the way gains a vertex there (junction); a side street begins
+   at its junction, else at the end nearer the settlement's centre; width from class at the
+   settlement's size. A building fronts the street of the empty plot it is placed in, else the
+   nearest street within 40 m, turned to it at the use's fitted footprint on a plot of its own
+   (clipped at the map's edge); it refuses to stand on another building. Verify: units.
+3. Store completion in `atlas-gis/src/authoring/town.rs`: naming, refronting moved, new and
+   orphaned buildings and plots, renumbering touched streets; `EditOutcome.created` lists what
+   an edit made. Verify: `crates/atlas-gis/tests/town_tools.rs`.
+4. Find by address: `ReadCall::FindAddress` (`atlas-gis/src/map_protocol/addresses.rs`) over
+   published features; `MapReader.findAddress` in `@atlas/map` and the transport. Verify: unit,
+   typecheck.
+5. Host naming: `atlas-host/src/town_names.rs` implements `TownNames` with `atlas-names`; the
+   browser workspace and LAN service pass it to editing calls. Verify: unit.
+6. Frontend: Town tools (Draw a street, Place a building) with class, use and optional name;
+   the building panel (`RealScaleBuilding.tsx`: use, occupants, storeys, keeper, address, the
+   shipped art for its use or a placeholder); the shipped art index
+   `frontend/public/building-art/manifest.json` (no images are shipped yet); Find address in
+   the editor, which selects the match and centres the view; palette entries and shortcuts L,
+   B and F. Verify: lint, typecheck, `buildingArt.test.ts`.
+7. Fixture and UI tests: a "Supplied village" child of the island (`browser_fixture/town.rs`:
+   High Street and Mill Lane, four addressed houses, an empty inn site);
+   `frontend/tests/realScaleTownTools.test.ts`.
+
+#### M7 results and deviations
+
+Steps 1–7 implemented in the working tree (2026-11-17), not yet reviewed or committed. Checks:
+atlas-map units (numbering after an insert, address parsing, street-name matching, classes,
+uses, fitted footprints, side-street orientation, plot sizes), generation town units (27 pass
+after the move), `crates/atlas-gis/tests/town_tools.rs` (8 pass: junction vertex with its
+width, renumbering, a lane joining High Street with class width and a name and its undo, an
+inn on the empty plot taking 4 High Street and moving the house beyond it to 6 and back on
+undo, a smithy fronting Mill Lane on a plot clipped at the map's edge and refused where a
+house stands, a moved house readdressed to Mill Lane, a deleted plot renumbering the next,
+find by number and street, by street alone and by a street's first word), the host naming
+unit, clippy on the touched crates, `make contracts`, architecture checks, frontend
+typecheck, lint, `buildingArt.test.ts`, and both UI tests in `realScaleTownTools.test.ts`
+(lane drawn off High Street, named and joined at a new vertex; inn placed with its address and
+art placeholder, the next house renumbered; Mill Lane then the inn found by address; undo;
+palette entries and the L, B and F shortcuts).
+
+Deviations and open points: a street's ends join the ways they meet by a shared vertex on
+the way and a `joins` relation; the way is not cut into two features, so a named street
+keeps one identity and one run of numbers. Only a drawn street's ends join; a street crossing
+another in its middle does not make a crossroads. The building-use list and street classes
+are repeated in `frontend/src/realScaleTown.ts` for the choice lists (view vocabulary; Rust
+validates both). No art is shipped, so the manifest is empty and every use shows the
+placeholder without asking for a file. Found by the UI test, outside M7: pressing Escape on
+the canvas while editing runs the region tools' cancel (`publishedRegionInteractions.ts`),
+which switches the map tool to Inspect and closes the editor.
+
+Review fixes (2026-11-17), M4 and M7, each with a unit test that failed before it:
+
+- Settlement (M4): lanes grown to house waiting people start only where a street's frontage is
+  open and stop at plots; a lane's line and both edges are tested, its ground reaches half a
+  cell past its edges and ends, and it takes the mouth from the street it leaves, so no street
+  runs through a building (the 20,000-person city test asserts none). Growth has no round cap:
+  it goes on while people wait and a lane can be laid; people left are published as
+  `unhoused` on the settlement record. A special building with no place leaves its people to
+  ordinary homes. Drawn channels at their published widths, and lakes and pools by outline,
+  are water on the plan grid. Fields keep clear of every way on the map, marked on the grid,
+  with or without a settlement. The layout controls are declared once in
+  `atlas/town/settings.rs`; the shared vocabulary (bridge span included) stays in
+  `atlas_map::town`.
+- Town tools (M7): a new plot records the street it fronts and its building is addressed
+  there; a building on an existing plot is fitted to it; a new plot is cut back from water,
+  ways and other plots; the store refuses a placed, moved or reshaped building on water, a
+  way, another building or another plot, and a street through a building or across water wider
+  than its settlement bridges; a drawn street gets a bridge over narrower water. A moved
+  street is checked but gets no new bridge. Renumbering keeps the numbers of plots on locked
+  layers and numbers the rest around them. The art direction is an owner mark on
+  `buildingArt.ts`.
+
 ### M8 — Structure maps and interior tools [depends on M5]
 
 Scope: structure map created from a building footprint, inheriting frontage, door and
@@ -680,6 +973,87 @@ features at the site, the parent's place record); connections to caves and other
 Acceptance: the inn from M7 opens to a ground floor and cellar the creator draws, the
 cellar trapdoor connects to a cave, and the inn shows the local magic prevalence.
 Evidence: units; UI tests.
+
+#### M8 execution steps
+
+Path facts (survey 2026-11-17): a `structure` real-scale request captured profile `interior`
+and then ran the whole real-scale ground sequence (relief, water, caves, settlement), so it
+generated land inside a building. Located spaces are bound one-to-one to layers (the GIS store
+refuses a feature whose layer is in another space), so each level needs its own layers.
+Authoring read and re-marked the primary space only. Town buildings carry `use`, `storeys`,
+`address`, `street`, `ward`, `settlement` and a `fronts` relation to their street, but no
+frontage attribute. The parent's catalogue copies of `structures`, `objects` and `hexes` list
+every vocabulary kind, so a structure map can copy them without importing generation.
+
+Design: a structure map is made by the host that owns the catalogue from the building's
+published record (`atlas-host/src/structure_maps.rs`, `EditingCall`-side `openFloors`), with
+no generation job: its only generated content is the shell, a pure function of the footprint
+(`atlas-map/src/structure/shell.rs`). The frame is the footprint plus two hexes at 1.5 m; the
+ground floor is the building's own located space and keeps the plain layer ids; every other
+level is a space `<primary>:level:<n>` (floor `level:<n>`) with layers `<id>@<n>` named
+"Structures · Cellar". The map's descriptor parent is the ground map, so it lists as its
+child, and `realScale.site` records the building. A second Open floors returns the same map.
+Real-scale structure requests through generation are refused at capture.
+
+1. Shell and levels (pure, `atlas-map/src/structure/`): counter-clockwise footprint, the
+   front wall is the edge nearest the fronted street (else the longest), one outer wall per
+   edge on every level as a line with a 0.6 m thickness, the street door across the middle of
+   the ground floor's front wall with an `in` relation to it, levels −1 (cellar) to storeys−1,
+   hexes per level marked by the walls. Verify: units in `structure/tests.rs` and
+   `atlas-host/tests/structure_maps.rs`.
+2. Authoring across spaces (`atlas-gis/src/authoring/`): queries read every space holding
+   the requested layers; junctions stay in a feature's own space; each space's hex layer is
+   re-marked from that space's shapes; `Draft.spaces` / `EditSide.spaces` carry a change of
+   spaces and layers that undo restores (shared with M6's cave opening). Layer families strip
+   an `@<level>` suffix; `wall` in `structures` is a line (`shape_of_kind`).
+3. Level and connection commands: `AddLevel { below }` (copies the neighbouring level's outer
+   walls, new hexes), `RemoveLevel { spaceId }` (never the ground floor; takes its features),
+   `Connect`/`Disconnect` (stair, ladder, trapdoor, door: `leadsTo` held by both ends on
+   different levels; `connectsTo` with target `<map id>#<feature id>` checked against the
+   other map by the store). Catalogue kinds `window`, `stair`, `ladder`, `trapdoor`, `decor`;
+   real sizes for placing them. Verify: units with undo.
+4. Outside context: `ReadCall::Site` (`atlas-gis/src/map_protocol/site.rs`) reads the parent's
+   building record, the samples under the footprint (the nearest ancestor in the same space
+   that publishes samples) and the magic-layer features within 150 m; `site_context` averages
+   each system's published coverage band (`magic:<system>:coverage`, as a band or a raster
+   layer of its own). Verify: units on explicit samples.
+5. Frontend: Open floors in the Building panel; level choice (top floor first) in the view
+   and Show / Add floor above / Add cellar below / Remove in the editor; a Connections panel
+   for connection kinds with Go to (same map: level and centre; other map: opens it at the
+   feature's level); "Outside this building" in the real-scale panel; walls draw as lines.
+   Verify: tsc, eslint, vitest on touched files.
+6. Fixture and UI tests: the glen gains "The Rowan Inn" (two storeys, fronting the drovers'
+   trail) and "Rowan passage" in its underground; `tests/realScaleStructures.test.ts`.
+
+#### M8 results and deviations
+
+Steps 1–6 implemented in the working tree (2026-11-17), not yet reviewed or committed. Checks:
+`atlas-map` units (`structure/tests.rs`, 7), `atlas-host/tests/structure_maps.rs` (5: shell
+with front wall, door and marked hexes; levels from storeys; add and remove levels with undo;
+stair and cave connections with refusals; outside context on explicit samples), the existing
+authoring units (`authoring`, `authoring_shapes`, `authoring_land`), clippy on `atlas-map` and
+`atlas-host`, contracts, architecture checks, frontend typecheck, eslint and vitest on touched
+files, and `tests/realScaleStructures.test.ts` (2 passed on a rebuilt engine and fixture).
+
+Deviation from the brief, agent decision: a structure map is not produced by a generation
+job. Its generated content is the shell only, computed in Rust from published GIS, so the
+catalogue host builds and publishes it directly; this also makes Open floors immediate and
+lets the UI test open real floors instead of a supplied reply. Open: the reciprocal link on
+the cave side (a parent feature does not list the trapdoors that reach it); doors and windows
+are outlines placed on walls without cutting the wall line; level names are fixed by number.
+
+Review fixes (2026-11-17): deleting a stair or removing its level lets go of the landing in
+the same undoable step (`atlas-gis/src/authoring/links.rs`), and Disconnect lets go of a link
+whose target, on this map or another, is gone; walls are lines to the junction code (a drawn
+wall's end joins the wall it meets and follows it); the connection rule lives in Rust
+(landings on another level; on another map caves and a building's doors, stairs and
+trapdoors) and the connect list is a Rust query (`ReadCall::Connections`); shell settings,
+level names and connection kinds are declared once in `atlas-map/src/structure/structure.json`
+and exported to the view as `structureVocabulary`; saving a ground map keeps its floors maps
+and saving a floors map keeps its parent (`map_store/copy.rs`); in the browser, new or edited
+floors are the ground map's unsaved changes (its saved view records them, `structureSave.ts`),
+so the creator is prompted to Save. Units in
+`atlas-host/tests/structure_maps.rs` (10) and a save-and-reload UI test.
 
 ### M9 — Close-out [depends on M0–M8]
 

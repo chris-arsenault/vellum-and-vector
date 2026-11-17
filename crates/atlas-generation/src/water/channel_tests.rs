@@ -62,13 +62,15 @@ fn channel_profiles_follow_the_reachs_own_flow_and_shoaling_changes_the_kept_dep
                 slope: &slope.read_only(),
                 flow: &flow.read_only(),
                 standing: &|_| Ok(1.0),
+                bed: &|_| Ok(crate::rock::catalogue::RockFamily::Loose),
             },
             &mut rivers,
             &mut projection,
             &mut coverage,
         )
         .unwrap();
-    let expected = channel_dimensions(2.0, 0.001, 1.0, &scale).unwrap();
+    let loose = crate::rock::catalogue::RockFamily::Loose;
+    let expected = channel_dimensions(2.0, 0.001, 1.0, loose, &scale).unwrap();
     assert!((channels.read_only().width.get(a).unwrap() - expected.width).abs() < 1e-9);
     assert_eq!(
         rivers.get(id).unwrap().width()[0],
@@ -83,6 +85,21 @@ fn channel_profiles_follow_the_reachs_own_flow_and_shoaling_changes_the_kept_dep
         expected.depth / 2.0
     );
     assert_ne!(projection.spines().get(a).unwrap(), 0);
+}
+#[test]
+fn a_real_scale_map_sizes_its_channels_at_real_size_from_their_bed() {
+    use crate::rock::catalogue::RockFamily;
+    // The world's span sets the relative width, whatever the real-scale map's own size.
+    let world = MapScale::new(1_000_000.0, 750_000.0, 3.0).unwrap();
+    let relative = channel_dimensions(4.0, 0.001, 1.0, RockFamily::Loose, &world).unwrap();
+    let real = world.at_real_size(true);
+    let alluvial = channel_dimensions(4.0, 0.001, 1.0, RockFamily::Loose, &real).unwrap();
+    let bedrock = channel_dimensions(4.0, 0.001, 1.0, RockFamily::Igneous, &real).unwrap();
+    let made = crate::processes::ground::channels::channel(4.0, RockFamily::Loose);
+    assert_eq!((alluvial.width, alluvial.depth), (made.width, made.depth));
+    assert!((alluvial.width - 9.0).abs() < 1e-9);
+    assert!(bedrock.width < alluvial.width);
+    assert!((relative.width - alluvial.width).abs() > 1.0);
 }
 #[test]
 fn river_warmth_follows_flow_and_stops_before_the_sea() {

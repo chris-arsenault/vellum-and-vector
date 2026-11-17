@@ -1,5 +1,6 @@
 //! Registration composes owner operations; recipes remain the only runtime schedule.
 pub mod ecology;
+pub mod ground;
 pub mod landmarks;
 pub mod magic;
 pub mod people;

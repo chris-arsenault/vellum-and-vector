@@ -3,6 +3,7 @@ import type { PublishedPresentation } from "./PublishedMapView";
 import { defaultRealScalePresentation, hexLabel, type RealScalePresentation } from "./realScale";
 import { RealScaleKey } from "./RealScaleKey";
 import { RealScaleLevel } from "./RealScaleLevel";
+import { RealScaleSite } from "./RealScaleSite";
 
 interface Props {
   map: MapDescriptor;
@@ -25,6 +26,7 @@ export function RealScaleControls({ map, reader, value, change }: Props) {
         {real.kind === "ground" ? "Ground map" : "Building floors"} · {hexLabel(real, view.units)}
       </p>
       <RealScaleLevel map={map} view={view} set={set} />
+      <RealScaleSite map={map} reader={reader} units={view.units} />
       <fieldset>
         <legend>Hexes</legend>
         {(["grid", "fill"] as const).map((hexView) => (

@@ -12,7 +12,7 @@ use crate::{
         events::Event,
         region_evidence::{region_evidence, Evidence},
         shared::Scalar,
-        significance::{self, measure, Extent},
+        significance::{self, measure, physical, Extent},
     },
     magic::{channels::Channel, configuration::Cartography, state::MagicField},
     scale::{LengthUnit, MapScale},
@@ -44,28 +44,60 @@ const EXCEPTIONAL_ICE_CHARGE: f64 = 0.8;
 const MAGICAL_COURSE_LENGTH: f64 = 0.025;
 const MAGICAL_COURSE_COVERAGE: f64 = 0.5;
 const FALLS_WIDTH: f64 = 0.000125;
+// Real sizes on a real-scale map (ADR 0016), where a place exists by its own size rather than
+// by its share of the world: a col a walker climbs to, a valley or ridge a few hundred metres
+// long, a pond, a step in a stream.
+/// A pass's col rise, metres.
+const REAL_RISE: f64 = 20.0;
+/// A ridge's, escarpment's, valley's or gorge's length and relief, metres.
+const REAL_COURSE_LENGTH: f64 = 300.0;
+const REAL_COURSE_RELIEF: f64 = 15.0;
+/// A plateau's, dome's, cirque's or moraine's area (square metres) and relief (metres).
+const REAL_COMPLEX_AREA: f64 = 50_000.0;
+const REAL_COMPLEX_RELIEF: f64 = 15.0;
+/// A lake by area alone, square metres; a smaller water down to the exceptional area is a lake
+/// when it is deep or feeds a stream (metres; cubic metres a second).
+const REAL_LAKE_AREA: f64 = 2_000.0;
+const REAL_EXCEPTIONAL_LAKE_AREA: f64 = 300.0;
+const REAL_LAKE_DEPTH: f64 = 3.0;
+const REAL_OUTLET_DISCHARGE: f64 = 0.1;
+/// A waterfall's drop or breadth, metres.
+const REAL_FALLS_DROP: f64 = 3.0;
+const REAL_FALLS_WIDTH: f64 = 15.0;
 fn evidence(state: &impl RealizationState, place: &Place) -> io::Result<Evidence> {
     region_evidence(state.field()?, &place.cells, |_| Ok(1.0), |_| true)
 }
 fn course(state: &impl RealizationState, place: &Place) -> io::Result<bool> {
     let e = evidence(state, place)?;
     let scale = &state.field()?.scale;
-    Ok(e.span >= measure(scale, COURSE_LENGTH, 1, 1.0)?
-        && e.relief >= measure(scale, COURSE_RELIEF, 1, 0.5)?)
+    Ok(
+        e.span >= physical(scale, COURSE_LENGTH, 1, 1.0, REAL_COURSE_LENGTH)?
+            && e.relief >= physical(scale, COURSE_RELIEF, 1, 0.5, REAL_COURSE_RELIEF)?,
+    )
 }
 fn complex(state: &impl RealizationState, place: &Place) -> io::Result<bool> {
     let e = evidence(state, place)?;
     let scale = &state.field()?.scale;
-    Ok(e.area >= measure(scale, COMPLEX_AREA, 2, 1.0)?
-        && e.relief >= measure(scale, COMPLEX_RELIEF, 1, 0.5)?)
+    Ok(
+        e.area >= physical(scale, COMPLEX_AREA, 2, 1.0, REAL_COMPLEX_AREA)?
+            && e.relief >= physical(scale, COMPLEX_RELIEF, 1, 0.5, REAL_COMPLEX_RELIEF)?,
+    )
 }
 fn lake(state: &impl RealizationState, place: &Place) -> io::Result<bool> {
     let field = state.field()?;
+    let scale = &field.scale;
     let area = evidence(state, place)?.area;
-    if area >= measure(&field.scale, LAKE_AREA, 2, 1.0)? {
+    if area >= physical(scale, LAKE_AREA, 2, 1.0, REAL_LAKE_AREA)? {
         return Ok(true);
     }
-    if area < measure(&field.scale, significance::EXCEPTIONAL_LAKE_AREA, 2, 1.0)? {
+    let least = physical(
+        scale,
+        significance::EXCEPTIONAL_LAKE_AREA,
+        2,
+        1.0,
+        REAL_EXCEPTIONAL_LAKE_AREA,
+    )?;
+    if area < least {
         return Ok(false);
     }
     let depth = field.water().column.store(Store::Standing).contents();
@@ -75,8 +107,15 @@ fn lake(state: &impl RealizationState, place: &Place) -> io::Result<bool> {
         flow = flow.max(reads::discharge(field, cell)?);
     }
     Ok(
-        deepest >= measure(&field.scale, significance::LAKE_DEPTH, 1, 0.5)?
-            || flow >= measure(&field.scale, significance::OUTLET_DISCHARGE, 3, 1.0)?,
+        deepest >= physical(scale, significance::LAKE_DEPTH, 1, 0.5, REAL_LAKE_DEPTH)?
+            || flow
+                >= physical(
+                    scale,
+                    significance::OUTLET_DISCHARGE,
+                    3,
+                    1.0,
+                    REAL_OUTLET_DISCHARGE,
+                )?,
     )
 }
 fn event<'a>(state: &'a impl RealizationState, place: &Place) -> io::Result<Option<&'a Event>> {
@@ -148,7 +187,8 @@ fn gate(state: &impl RealizationState, kind: Kind, place: &Place) -> io::Result<
     match kind {
         Pass => {
             let cols = state.held().get("relief:keyCols", || field.key_cols())?;
-            Ok(cols.get(place.anchor)? >= MapScale::native(measure(&field.scale, RISE, 1, 0.5)?))
+            let rise = physical(&field.scale, RISE, 1, 0.5, REAL_RISE)?;
+            Ok(cols.get(place.anchor)? >= MapScale::native(rise))
         }
         Ridge | Escarpment | Valley | Gorge => course(state, place),
         Plateau | Dome | Cirque | Moraine => complex(state, place),
@@ -159,10 +199,15 @@ fn gate(state: &impl RealizationState, kind: Kind, place: &Place) -> io::Result<
                 return Ok(true);
             }
             let size = fall_size::of(state, place)?;
-            Ok(
-                size.height >= measure(&field.scale, significance::FALLS_DROP, 1, 0.5)?
-                    || size.width >= measure(&field.scale, FALLS_WIDTH, 1, 1.0)?,
-            )
+            let drop = physical(
+                &field.scale,
+                significance::FALLS_DROP,
+                1,
+                0.5,
+                REAL_FALLS_DROP,
+            )?;
+            let width = physical(&field.scale, FALLS_WIDTH, 1, 1.0, REAL_FALLS_WIDTH)?;
+            Ok(size.height >= drop || size.width >= width)
         }
         Fjord => {
             let e = evidence(state, place)?;

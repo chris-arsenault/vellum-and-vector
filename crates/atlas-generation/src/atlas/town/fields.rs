@@ -27,13 +27,7 @@ pub struct Country<'a> {
     pub strip: f64,
     pub key: &'a str,
 }
-/// Ground left unploughed between neighbouring blocks, and between a block and a way.
-const BALK: f64 = 4.0;
-const VERGE: f64 = 5.0;
-/// Blocks this many block sides beyond a built edge are still worked in strips.
-const STRIP_REACH: f64 = 3.0;
-/// Share of scattered seeds left out, so neighbouring blocks merge into larger ones.
-const MERGED: f64 = 0.3;
+use super::settings::{BALK, FIELD_VERGE as VERGE, MERGED, STRIP_REACH};
 
 /// Fields outward from the built edges until `target` square metres are farmed; `share`
 /// gives the farmland and pasture shares at a point.

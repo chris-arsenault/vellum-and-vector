@@ -59,6 +59,9 @@ impl Catalogue {
         if regional {
             result.extend(registration::regional::specifications(&native)?)?;
             result.insert(registration::town::specification()?)?;
+            for specification in registration::ground::specifications() {
+                result.insert(specification)?;
+            }
         }
         Ok(result)
     }

@@ -67,4 +67,13 @@ export class RpcMapReader implements MapReader {
   export(reference: MapRef, format: string, options?: ReadOptions) {
     return this.call("export", [reference, format], options);
   }
+  findAddress(reference: MapRef, text: string, options?: ReadOptions) {
+    return this.call("findAddress", [reference, text], options);
+  }
+  site(reference: MapRef, options?: ReadOptions) {
+    return this.call("site", [reference], options);
+  }
+  connections(reference: MapRef, featureId: string, options?: ReadOptions) {
+    return this.call("connections", [reference, featureId], options);
+  }
 }

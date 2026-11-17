@@ -16,6 +16,16 @@ fn category(value: &vocabulary::Category) -> Category {
             system: None,
             system_name: None,
         }),
+        soluble: None,
+    }
+}
+/// A rock class says whether groundwater dissolves it, by the rule the cave process opens
+/// dissolved passages with, so tools reading the published rock agree with generated caves.
+fn rock_category(value: &vocabulary::Category) -> Category {
+    let facts = crate::rock::catalogue::kind_of_code(value.code.max(0) as usize).facts;
+    Category {
+        soluble: Some(facts.solubility >= crate::processes::caves::settings::SOLUBLE_FROM),
+        ..category(value)
     }
 }
 fn classed(code: i32, label: String) -> Category {
@@ -52,10 +62,11 @@ impl Fields<'_> {
                         color: None,
                         present: false,
                         surface: None,
+                        soluble: None,
                     })
                     .collect()
             }
-            "SurfaceMaterial" => return words.rock.iter().map(category).collect(),
+            "SurfaceMaterial" => return words.rock.iter().map(rock_category).collect(),
             "BiomeCodes" => {
                 return words
                     .biomes
@@ -84,7 +95,7 @@ impl Fields<'_> {
             return Vec::new();
         };
         if classes == "rock" {
-            return words.rock.iter().map(category).collect();
+            return words.rock.iter().map(rock_category).collect();
         }
         let mut values = vec![classed(0, "None".into())];
         if classes == "craft" {
@@ -135,6 +146,7 @@ impl Fields<'_> {
                         .find(|s| s.id == system)
                         .map(|s| s.name.clone()),
                 }),
+                soluble: None,
             });
             code += 1;
         };

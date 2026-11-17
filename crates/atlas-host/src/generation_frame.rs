@@ -179,6 +179,7 @@ impl Geography {
                 })
                 .collect(),
             contracted: contracted.clone(),
+            real_scale: area.map.as_ref().and_then(|map| map.real_scale),
         };
         Ok(Prepared {
             frame: MapFrame {

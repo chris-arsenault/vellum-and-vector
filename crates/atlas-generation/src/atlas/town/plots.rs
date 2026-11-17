@@ -6,12 +6,9 @@ use super::{
     story::Size,
     uses::Use,
 };
+use atlas_map::town::{fitted, setback, VERGE};
+pub use atlas_map::town::{plot_size, Side};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Side {
-    Left,
-    Right,
-}
 /// A place for a plot on one side of a street.
 #[derive(Clone, Debug)]
 pub struct Slot {
@@ -27,20 +24,7 @@ pub struct Slot {
     pub frontage: f64,
     pub depth: f64,
 }
-/// Ground left between the street's edge and a plot.
-const VERGE: f64 = 0.5;
-/// Plots are drawn a little narrower than their pitch so neighbours only touch.
-const PITCH_FILL: f64 = 0.98;
-/// Frontage and depth of an ordinary plot in metres, by the size of the place.
-pub fn plot_size(size: Size) -> (f64, f64) {
-    match size {
-        Size::Farmstead => (30.0, 40.0),
-        Size::Hamlet => (20.0, 35.0),
-        Size::Village => (14.0, 30.0),
-        Size::Town => (8.0, 24.0),
-        Size::City => (6.0, 20.0),
-    }
-}
+use super::settings::{MAIN_STREET_PULL, PITCH_FILL};
 /// Every plot place along both sides of a street, from its start.
 pub fn slots(index: usize, street: &Street, frontage: f64, depth: f64) -> Vec<Slot> {
     let length = street.length();
@@ -106,29 +90,12 @@ pub fn take_keyed(
 pub fn growth(centre: Point, streets: &[Street]) -> impl Fn(&Slot) -> f64 + '_ {
     move |slot| {
         let main = streets[slot.street].class == Class::Main;
-        distance(slot.front, centre) * if main { 0.85 } else { 1.0 }
-    }
-}
-fn setback(size: Size) -> f64 {
-    match size {
-        Size::City | Size::Town => 0.3,
-        Size::Village => 2.0,
-        Size::Hamlet | Size::Farmstead => 4.0,
-    }
-}
-fn fill(size: Size) -> f64 {
-    match size {
-        Size::City | Size::Town => 0.96,
-        Size::Village => 0.7,
-        Size::Hamlet => 0.55,
-        Size::Farmstead => 0.5,
+        distance(slot.front, centre) * if main { MAIN_STREET_PULL } else { 1.0 }
     }
 }
 /// The building on a plot, at its street edge and turned to the street.
 pub fn building(slot: &Slot, use_: Use, size: Size) -> Vec<Point> {
-    let (wide, deep) = use_.footprint(size);
-    let width = wide.min(slot.frontage * fill(size));
-    let depth = deep.min(slot.depth * 0.8);
+    let (width, depth) = fitted(use_, size, slot.frontage, slot.depth);
     let front = add(slot.front, scale(slot.inward, setback(size)));
     rectangle(front, slot.direction, slot.inward, width, depth)
 }

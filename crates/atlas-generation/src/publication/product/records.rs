@@ -21,7 +21,7 @@ use std::{
 
 const BATCH_SIZE: usize = 128;
 /// The published surface class a real-scale hex reports as its ground.
-const SURFACE: &str = "finalSurface";
+pub(super) const SURFACE: &str = "finalSurface";
 fn write_record(
     writer: &mut impl Write,
     value: &impl Serialize,

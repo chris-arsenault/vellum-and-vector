@@ -3,13 +3,31 @@
 //! Commands are planned here as pure changes over loaded features; the map store loads the
 //! features a command names, writes the change in one transaction and keeps the undo steps.
 //! World and regional maps stay read-only.
+mod buildings;
+pub mod choices;
+mod clearance;
+pub mod context;
+mod frontage;
 mod junctions;
+mod levels;
+pub mod objects;
+mod placing;
 mod plan;
 mod shapes;
+mod town;
 
+pub use choices::{AuthoringChoices, HexClass};
+pub use clearance::{building_clear, covered, is_water, plot_under, street_clear};
+pub use frontage::{
+    frontage, holds_address, insert_junction, is_building, is_street, is_way, is_yard, readdress,
+    renumber, street_of, Frontage, ADDRESS_KEYS, FRONTAGE_REACH, FRONTS,
+};
 pub use junctions::{attach, crosses, follow, is_junction, junctions, CARRIES, JOINS, SPANS};
+pub use levels::{level_name, unlinked};
+pub use placing::is_hex_layer;
 pub use plan::{plan, Draft, EditTargets};
 pub use shapes::{carry_widths, footprint, transform_geometry, widths_at};
+pub use town::{Settlement, NAMING_WORK, PLACING_REACH};
 
 use crate::{CreatorLayer, Geometry, MapDescriptor, MapFeature, RealScale};
 use serde::{Deserialize, Serialize};
@@ -86,6 +104,63 @@ pub enum EditCommand {
     DeleteLayer {
         id: String,
     },
+    /// One object of a catalogue kind at its real size, centred on `at`, turned `rotation`
+    /// degrees counter-clockwise and scaled by `scale`.
+    Place {
+        layer_id: String,
+        kind: String,
+        name: Option<String>,
+        at: [f64; 2],
+        rotation: f64,
+        scale: f64,
+        creator_layer: Option<String>,
+    },
+    /// Fill an outline with objects of one kind, no two closer than `spacing` metres. Each
+    /// object is its own feature and the whole scatter is one undo step; the same seed lays
+    /// the same objects.
+    Scatter {
+        layer_id: String,
+        kind: String,
+        outline: Geometry,
+        spacing: f64,
+        seed: u32,
+        creator_layer: Option<String>,
+    },
+    /// A street of a class (`mainStreet`, `street`, `lane`, `alley`) with the class's width;
+    /// its ends join the ways they meet. Unnamed, it is named from the settlement's culture.
+    DrawStreet {
+        road_class: String,
+        geometry: Geometry,
+        name: Option<String>,
+        creator_layer: Option<String>,
+    },
+    /// A building of a use placed at a point, fronting the nearest street on a plot of its
+    /// own, or on the empty plot the point falls in. Unnamed, its keeper is named.
+    PlaceBuilding {
+        building_use: String,
+        at: [f64; 2],
+        name: Option<String>,
+        creator_layer: Option<String>,
+    },
+    /// On a structure map: a new floor above the top level, or a cellar below the lowest,
+    /// with the outer walls of the level next to it.
+    AddLevel {
+        below: bool,
+    },
+    /// On a structure map: remove a level (never the ground floor) and all drawn on it.
+    RemoveLevel {
+        space_id: String,
+    },
+    /// Link a stair, ladder or trapdoor to its landing on another level, or to a feature on
+    /// another map.
+    Connect {
+        id: String,
+        target: crate::structure::ConnectionTarget,
+    },
+    Disconnect {
+        id: String,
+        target: crate::structure::ConnectionTarget,
+    },
 }
 
 /// Translate after rotating (degrees counter-clockwise) and scaling about `about`.
@@ -104,6 +179,10 @@ pub struct Transform {
 pub struct EditOutcome {
     pub map: MapDescriptor,
     pub changed: Vec<String>,
+    /// Features the edit made, in the order the command made them (a placed building, then
+    /// its plot), so the editor can select what was made.
+    #[serde(default)]
+    pub created: Vec<String>,
     pub history: EditHistory,
 }
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
@@ -126,6 +205,26 @@ pub struct EditStep {
 pub struct EditSide {
     pub features: Vec<MapFeature>,
     pub layers: Option<Vec<CreatorLayer>>,
+    /// The map's located spaces and published layers, when the step changed them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spaces: Option<SpaceLayout>,
+}
+/// A map's located spaces and published layers, as one edit leaves them: a structure map's
+/// levels, or a ground map's underground space opened by its first cave wall. Layers that
+/// stay keep their feature counts; layers new to the map count the features the edit adds.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SpaceLayout {
+    pub spaces: Vec<crate::MapSpace>,
+    pub layers: Vec<crate::MapLayer>,
+}
+impl SpaceLayout {
+    pub fn of(map: &MapDescriptor) -> Self {
+        Self {
+            spaces: map.spaces.clone(),
+            layers: map.layers.clone(),
+        }
+    }
 }
 /// A stored undo step. Undo writes `before` over `after`; redo writes `after` again.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -150,15 +249,35 @@ pub enum Shape {
     Line,
     Area,
 }
+/// The kind of layer a published layer id names: without the `vector:` prefix and without
+/// the `@<level>` suffix that a structure map's upper floors and cellars carry, so
+/// `vector:structures@-1` (a cellar's walls and doors) is a `structures` layer.
+pub fn family(layer_id: &str) -> &str {
+    let id = layer_id.strip_prefix("vector:").unwrap_or(layer_id);
+    id.split_once('@').map_or(id, |(family, _)| family)
+}
+/// The shape one kind takes in a layer. Walls are lines with a thickness at each vertex
+/// (`widths`) even in the structures layer, whose buildings, doors and furniture are outlines.
+pub fn shape_of_kind(layer_id: &str, kind: &str) -> Option<Shape> {
+    match (family(layer_id), kind) {
+        ("structures", "wall") => Some(Shape::Line),
+        _ => shape_of(layer_id),
+    }
+}
 pub fn shape_of(layer_id: &str) -> Option<Shape> {
-    match layer_id.strip_prefix("vector:").unwrap_or(layer_id) {
-        "rivers" | "roads" | "waterworks" => Some(Shape::Line),
+    match family(layer_id) {
+        "rivers" | "roads" | "waterworks" | "caveWalls" => Some(Shape::Line),
         "lakes" | "oceans" | "plots" | "structures" | "ruins" | "objects" => Some(Shape::Area),
         _ => None,
     }
 }
 /// The creator layer a feature belongs to; features that name none belong to the first.
+/// A hex grid is derived from the map, not drawn into a creator layer, so a hex belongs to
+/// none and no creator-layer lock holds it.
 pub fn creator_layer<'a>(feature: &'a MapFeature, real: &'a RealScale) -> &'a str {
+    if is_hex_layer(&feature.layer_id) {
+        return "";
+    }
     feature
         .attributes
         .get("creatorLayer")
@@ -185,5 +304,7 @@ pub fn declarations(cfg: &ts_rs::Config) -> Vec<String> {
         EditOutcome::decl(cfg),
         EditHistory::decl(cfg),
         EditStep::decl(cfg),
+        AuthoringChoices::decl(cfg),
+        HexClass::decl(cfg),
     ]
 }

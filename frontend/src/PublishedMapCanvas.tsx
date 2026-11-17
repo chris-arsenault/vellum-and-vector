@@ -28,7 +28,11 @@ interface Props {
 }
 export function PublishedMapCanvas(props: Props) {
   return (
-    <MapCanvas key={`${props.map.reference.mapId}:${props.map.reference.revision}`} {...props} />
+    // An edit that opens a located space (a cave level) gives the canvas a new space to show.
+    <MapCanvas
+      key={`${props.map.reference.mapId}:${props.map.reference.revision}:${props.map.spaces.map((space) => space.id).join(",")}`}
+      {...props}
+    />
   );
 }
 function MapCanvas(props: Props) {

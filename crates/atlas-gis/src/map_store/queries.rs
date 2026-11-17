@@ -9,7 +9,7 @@ use std::{collections::BTreeSet, io};
 
 pub(super) const PAGE_SIZE: usize = 256;
 pub(super) const WINDOW: &str = "b.max_x>=? AND b.min_x<=? AND b.max_y>=? AND b.min_y<=?";
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureQuery {
     pub space_id: String,

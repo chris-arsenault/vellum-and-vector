@@ -111,7 +111,7 @@ pub fn widths_at(
         .map(|fraction| interpolate(&known, widths, fraction))
         .collect())
 }
-fn interpolate(fractions: &[f64], widths: &[f64], fraction: f64) -> f64 {
+pub(super) fn interpolate(fractions: &[f64], widths: &[f64], fraction: f64) -> f64 {
     for k in 1..fractions.len() {
         if fraction <= fractions[k] {
             let span = fractions[k] - fractions[k - 1];

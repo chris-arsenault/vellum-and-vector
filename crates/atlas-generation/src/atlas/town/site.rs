@@ -20,16 +20,14 @@ use atlas_map::{Geometry, Position};
 use serde_json::Value;
 use std::io;
 
-/// Slope (rise over run) beyond which nobody builds or ploughs.
-const STEEP_SLOPE: f64 = 0.35;
-/// The plan's grid cell: fine enough for town plots, coarser only on very wide maps.
-const FINEST_CELL: f64 = 1.5;
-const MOST_CELLS_ACROSS: f64 = 1_600.0;
+use super::settings::{FINEST_CELL, MOST_CELLS_ACROSS, STEEP_SLOPE, UNSTATED_WAY_WIDTH};
 
 pub struct Site {
     pub bounds: [f64; 4],
     pub ground: Ground,
     pub seats: Vec<Seat>,
+    /// Every way on the map (captured roads, tracks and trails) with its widest width.
+    pub ways: Vec<(Vec<Point>, f64)>,
 }
 pub fn bounds(state: &State) -> io::Result<[f64; 4]> {
     let atlas_map::Bounds(w, s, e, n) = state
@@ -40,14 +38,83 @@ pub fn bounds(state: &State) -> io::Result<[f64; 4]> {
 }
 pub fn read(state: &State) -> io::Result<Site> {
     let bounds = bounds(state)?;
-    let ground = ground(state.field(), bounds)?;
-    let roads = roads(state.records.features.as_ref(), &state.scope.area)?;
+    let mut ground = ground(state.field(), bounds)?;
+    let features = state.records.features.as_ref();
+    let water = drawn_water(features, &state.scope.area, state.spatial.as_ref())?;
+    ground.mark_shapes(&water, WATER, state.spatial.as_ref())?;
+    let roads = roads(features, &state.scope.area)?;
     let seats = seats(state, bounds, &roads, &ground)?;
     Ok(Site {
         bounds,
         ground,
         seats,
+        ways: ways(features, &state.scope.area)?,
     })
+}
+/// The ground the map's drawn water covers: each channel at its full width at every vertex
+/// (written by `real-scale.channels`), and lakes and pools by their outlines.
+fn drawn_water(
+    features: &dyn FeatureReader,
+    area: &str,
+    spatial: &dyn SpatialKernel,
+) -> io::Result<Vec<Geometry>> {
+    let mut found = Vec::new();
+    for layer in ["rivers", "lakes"] {
+        for feature in features.values(FeatureSelection {
+            area_id: Some(area),
+            layer_id: Some(layer),
+            kind: None,
+        })? {
+            found.push(feature?);
+        }
+    }
+    water_shapes(&found, spatial)
+}
+/// The outline of each water feature: a channel widened to its width at every vertex, a lake
+/// or pool as drawn. A channel with no widths stated covers only the triangles it runs on.
+pub fn water_shapes(
+    features: &[Feature],
+    spatial: &dyn SpatialKernel,
+) -> io::Result<Vec<Geometry>> {
+    let mut shapes = Vec::new();
+    for feature in features {
+        match &feature.geometry {
+            Geometry::Polygon { .. } | Geometry::MultiPolygon { .. } => {
+                shapes.push(feature.geometry.clone())
+            }
+            line => shapes.extend(
+                atlas_map::hexes::widened_footprint(
+                    line,
+                    feature.attributes.get("widths"),
+                    spatial,
+                )
+                .map_err(io::Error::other)?,
+            ),
+        }
+    }
+    Ok(shapes)
+}
+/// Every line in the roads layer except sea lanes, with its widest stated width.
+fn ways(features: &dyn FeatureReader, area: &str) -> io::Result<Vec<(Vec<Point>, f64)>> {
+    let mut result = Vec::new();
+    for feature in features.values(FeatureSelection {
+        area_id: Some(area),
+        layer_id: Some("roads"),
+        kind: None,
+    })? {
+        let feature = feature?;
+        if feature.attributes.get("wayKind").and_then(Value::as_str) == Some("sea") {
+            continue;
+        }
+        let width = feature
+            .attributes
+            .get("widths")
+            .and_then(Value::as_array)
+            .and_then(|w| w.iter().filter_map(Value::as_f64).reduce(f64::max))
+            .unwrap_or(UNSTATED_WAY_WIDTH);
+        result.extend(lines(&feature.geometry).into_iter().map(|l| (l, width)));
+    }
+    Ok(result)
 }
 /// Water and steep ground per triangle.
 fn marks(field: &Field) -> io::Result<Vec<u32>> {

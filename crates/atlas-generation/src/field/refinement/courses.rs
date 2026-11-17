@@ -1,9 +1,5 @@
 use crate::features::{Feature, FeatureReader, FeatureSelection};
-use crate::{
-    hpc::BitSet,
-    lattice::{Membership, TriangularLattice},
-    water::reaches::ReachStore,
-};
+use crate::{hpc::BitSet, lattice::TriangularLattice, water::reaches::ReachStore};
 use atlas_map::{Geometry, Position};
 use serde::{Deserialize, Serialize};
 // hpc-exempt: removed feature identities in the private catalog.
@@ -101,7 +97,8 @@ pub fn cell_at(mesh: &TriangularLattice, world: [f64; 2]) -> Option<usize> {
     )
 }
 /// The cells a carried course crosses, its positions bent as the carried river network is
-/// (`water::import_geometry::Bend`) by the parent's cell span `bend`.
+/// (`water::import_geometry::Bend`) by the parent's cell span `bend`. A stretch that bends
+/// outside the frame is clipped away, as the network clips it, never held at the edge.
 pub fn course_cells(
     mesh: &TriangularLattice,
     geometry: &Geometry,
@@ -120,11 +117,7 @@ pub fn course_cells(
             for s in 0..=steps {
                 let t = s as f64 / steps as f64;
                 let point = [ax + (bx - ax) * t, ay + (by - ay) * t];
-                let bent = bend.at(point);
-                let Some(cell) = cell_at(mesh, bent) else {
-                    continue;
-                };
-                if mesh.membership(cell) == Membership::Content && seen.add(cell) {
+                if let Some(cell) = bend.cell(mesh, point).filter(|&cell| seen.add(cell)) {
                     cells.push(cell);
                 }
             }

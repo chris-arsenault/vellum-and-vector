@@ -3,7 +3,7 @@
 use super::{other, EditStore};
 use crate::map_store::FeatureQuery;
 use atlas_map::{
-    authoring::{editable, Draft},
+    authoring::{editable, is_hex_layer, Draft},
     hexes::{fill, mark_of, mark_shape, marks, Hex, MarkSource},
     spatial::SpatialKernel,
     Bounds, MapDescriptor, MapFeature,
@@ -13,30 +13,78 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 
+/// Each located space keeps its own hex grid (the surface, the caves, each level of a
+/// building), so a changed shape re-marks the hexes of its own space only. A space the
+/// change removes, or whose hexes it removes, has nothing left to re-mark.
 pub(super) fn remarked(
     store: &dyn EditStore,
     map: &MapDescriptor,
     draft: &Draft,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Vec<MapFeature>> {
-    let Some(layer) = map.layers.iter().find(|layer| layer.id == "vector:hexes") else {
-        return Ok(Vec::new());
-    };
+    let spaces: BTreeSet<&str> = draft
+        .before
+        .iter()
+        .chain(&draft.after)
+        .filter(|feature| mark_of(&feature.layer_id).is_some())
+        .map(|feature| feature.space_id.as_str())
+        .collect();
+    // The layers as they stand after the change: a step that opens or closes a space (and
+    // its replay by undo or redo) brings its own layout.
+    let layers = draft
+        .spaces
+        .as_ref()
+        .map_or(&map.layers, |layout| &layout.layers);
+    let mut all = Vec::new();
+    for space in spaces {
+        let layer = layers
+            .iter()
+            .find(|layer| layer.space_id == space && is_hex_layer(&layer.id));
+        if let Some(layer) = layer {
+            all.extend(remarked_in(store, map, layers, draft, layer, spatial)?);
+        }
+    }
+    Ok(all)
+}
+fn remarked_in(
+    store: &dyn EditStore,
+    map: &MapDescriptor,
+    layers: &[atlas_map::MapLayer],
+    draft: &Draft,
+    layer: &atlas_map::MapLayer,
+    spatial: &dyn SpatialKernel,
+) -> io::Result<Vec<MapFeature>> {
+    let space = layer.space_id.as_str();
     let grid = editable(map).map_err(other)?.grid().map_err(other)?;
+    let removed = |id: &str| {
+        draft.before.iter().any(|f| f.id == id) && !draft.after.iter().any(|f| f.id == id)
+    };
     let mut hexes = BTreeMap::new();
     for (shape, _) in draft
         .before
         .iter()
         .chain(&draft.after)
+        .filter(|feature| feature.space_id == space)
         .filter_map(mark_shape)
     {
+        let reach = spatial.bounds(&shape).map_err(other)?;
         let query = FeatureQuery {
-            bounds: Some(spatial.bounds(&shape).map_err(other)?),
+            space_id: space.into(),
+            bounds: Some(reach),
             layer_ids: Some(vec![layer.id.clone()]),
             ..Default::default()
         };
         for hex in store.all(map, query)? {
-            hexes.insert(hex.id.clone(), hex);
+            if !removed(&hex.id) {
+                hexes.insert(hex.id.clone(), hex);
+            }
+        }
+        // Hexes the change creates, such as the grid of an underground space a first cave
+        // wall opens, are not stored yet and are marked with the shapes drawn over them.
+        for hex in draft.after.iter().filter(|hex| hex.layer_id == layer.id) {
+            if overlaps(spatial.bounds(&hex.geometry).map_err(other)?, reach) {
+                hexes.insert(hex.id.clone(), hex.clone());
+            }
         }
     }
     let mut hexes: Vec<MapFeature> = hexes.into_values().collect();
@@ -57,11 +105,12 @@ pub(super) fn remarked(
     let around = store.all(
         map,
         FeatureQuery {
+            space_id: space.into(),
             bounds: Some(area),
             layer_ids: Some(
-                map.layers
+                layers
                     .iter()
-                    .filter(|layer| mark_of(&layer.id).is_some())
+                    .filter(|layer| layer.space_id == space && mark_of(&layer.id).is_some())
                     .map(|layer| layer.id.clone())
                     .collect(),
             ),
@@ -72,7 +121,12 @@ pub(super) fn remarked(
     let shapes: Vec<_> = around
         .iter()
         .filter(|feature| !changed.contains(feature.id.as_str()))
-        .chain(&draft.after)
+        .chain(
+            draft
+                .after
+                .iter()
+                .filter(|feature| feature.space_id == space),
+        )
         .filter_map(mark_shape)
         .collect();
     let sources: Vec<_> = shapes
@@ -98,6 +152,9 @@ fn address(hex: &MapFeature) -> Option<Hex> {
         q: read("q")?,
         r: read("r")?,
     })
+}
+fn overlaps(Bounds(w, s, e, n): Bounds, Bounds(bw, bs, be, bn): Bounds) -> bool {
+    w <= be && bw <= e && s <= bn && bs <= n
 }
 fn covered(hexes: &[MapFeature], spatial: &dyn SpatialKernel) -> io::Result<Option<Bounds>> {
     let mut area: Option<Bounds> = None;

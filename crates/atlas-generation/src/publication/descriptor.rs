@@ -119,29 +119,9 @@ impl Descriptor<'_> {
         Ok(spaces)
     }
 }
-/// The located space beneath a ground map that holds its caves (ADR 0001): the surface's
-/// planar frame, one floor down, so a cave and its entrances share coordinates.
-pub fn underground_space(map: &MapDescriptor) -> Option<MapSpace> {
-    let surface = map
-        .spaces
-        .iter()
-        .find(|space| space.id == map.primary_space_id)?;
-    Some(MapSpace {
-        id: format!("{}:underground", surface.id),
-        parent_space_id: Some(surface.id.clone()),
-        bounds: map.bounds,
-        metres_per_unit: surface.metres_per_unit,
-        precision: surface.precision,
-        periodic_width: None,
-        frame: MapFrame {
-            origin: surface.frame.origin,
-            rotation: surface.frame.rotation,
-            floor: Some(UNDERGROUND_FLOOR.into()),
-        },
-    })
-}
-/// The floor name of a ground map's underground space.
-pub const UNDERGROUND_FLOOR: &str = "underground";
+/// The located space beneath a ground map that holds its caves (ADR 0001), shared with
+/// authoring, which opens it when a creator draws the first cave wall.
+pub use atlas_map::underground::{underground_space, UNDERGROUND_FLOOR};
 /// The published hex grid centres a hex on the map frame's centre, which is also the
 /// shared lattice's origin, so the hexes group whole triangles (ADR 0016).
 pub fn real_scale(real: &RealScaleMap, frame: atlas_map::Bounds) -> RealScale {
@@ -158,6 +138,8 @@ pub fn real_scale(real: &RealScaleMap, frame: atlas_map::Bounds) -> RealScale {
             locked: false,
         }],
         edits: 0,
+        site: None,
+        authoring: Default::default(),
     }
 }
 pub fn profile_name(profile: Profile) -> &'static str {

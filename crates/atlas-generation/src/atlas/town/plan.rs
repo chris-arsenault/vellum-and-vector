@@ -7,8 +7,9 @@ use super::{
     lanes::{grow, lanes, Lay, Network, Wall},
     network::{main_street, Arm, Class, Street, VERTEX_STEP},
     plots::{barn, building, growth, plot_size, slots, take, take_keyed, Side, Slot},
+    settings::{square_half, PACKING},
     story::{layout, Layout, Size, Story},
-    uses::{ordinary, special, Needs, Prefers, Use},
+    uses::{household, ordinary, prefers, special, Needs, Prefers, Use},
     wards::Wards,
 };
 
@@ -41,16 +42,8 @@ pub struct Plan {
     pub wards: Option<Wards>,
     /// How far from the centre the place is built.
     pub built: f64,
-}
-/// Share of a place's ground its plots take; the rest is streets, yards and gaps.
-const PACKING: f64 = 0.45;
-fn square_half(size: Size) -> f64 {
-    match size {
-        Size::City => 30.0,
-        Size::Town => 20.0,
-        Size::Village => 12.0,
-        Size::Hamlet | Size::Farmstead => 0.0,
-    }
+    /// People still waiting for a home when the place's open ground was used up.
+    pub unhoused: u32,
 }
 fn needs(story: &Story, layout: Layout) -> Needs {
     Needs {
@@ -68,13 +61,12 @@ pub fn lay(seat: Seat, ground: &mut Ground, forced: Option<Layout>) -> Plan {
     let layout = layout(&seat.story, forced);
     let needs = needs(&seat.story, layout);
     let specials = special(&needs);
-    let housed: f64 = specials.iter().map(|u| u.occupants(size)).sum();
-    let homes = ordinary(&needs, housed);
+    let planned: f64 = specials.iter().map(|u| u.occupants(size)).sum();
     let (_, depth) = plot_size(size);
     let lay = Lay {
         centre: seat.centre,
         size,
-        radius: spread(size, homes.len() + specials.len()),
+        radius: spread(size, ordinary(&needs, planned).len() + specials.len()),
         depth,
         square: square_half(size),
     };
@@ -88,22 +80,17 @@ pub fn lay(seat: Seat, ground: &mut Ground, forced: Option<Layout>) -> Plan {
     }
     let wall = lanes(layout, &mut network, &lay, ground, &mut jitter);
     let mut placed = place_specials(&specials, &network.streets, &lay, ground);
-    // A place grows new lanes while people wait for homes and open ground remains.
-    let mut waiting = homes;
-    let mut grown_from = 0;
-    for round in 1..=GROWTH_ROUNDS + 1 {
-        let (housed, rest) = place_homes(waiting, &network.streets, &lay, ground);
-        placed.extend(housed);
-        waiting = rest;
-        if waiting.is_empty() || round > GROWTH_ROUNDS {
-            break;
-        }
-        let from = std::mem::replace(&mut grown_from, network.streets.len());
-        grow(&mut network, from, &lay, ground, &mut jitter, round);
-        if network.streets.len() == grown_from {
-            break;
-        }
-    }
+    // The people of a special building that found no place live in ordinary homes instead.
+    let housed: f64 = placed.iter().map(|(_, u)| u.occupants(size)).sum();
+    let waiting = settle(
+        ordinary(&needs, housed),
+        &mut network,
+        &lay,
+        ground,
+        &mut jitter,
+    );
+    placed.extend(waiting.placed);
+    let unhoused = (waiting.left as f64 * household(size)).round() as u32;
     let mut streets = network.streets;
     let built = placed
         .iter()
@@ -122,7 +109,63 @@ pub fn lay(seat: Seat, ground: &mut Ground, forced: Option<Layout>) -> Plan {
         wall,
         wards,
         built,
+        unhoused,
     }
+}
+/// Homes placed and homes still waiting once the open ground is used.
+struct Settled {
+    placed: Vec<(Slot, Use)>,
+    left: usize,
+}
+/// While the streets laid so far front fewer open plots than there are homes to build, the
+/// place grows new lanes from its newest streets, whose frontage is still open, through open
+/// ground; growth ends when no new lane can be laid. Homes then take plots nearest the centre.
+fn settle(
+    homes: Vec<Use>,
+    network: &mut Network,
+    lay: &Lay,
+    ground: &mut Ground,
+    jitter: &mut Jitter,
+) -> Settled {
+    let (mut from, mut round) = (0, 0);
+    let mut placed = Vec::new();
+    let mut waiting = homes;
+    loop {
+        let mut grown = false;
+        while open_plots(&network.streets, lay, ground) < waiting.len() {
+            round += 1;
+            let before = network.streets.len();
+            grow(network, from, lay, ground, jitter, round);
+            if network.streets.len() == before {
+                break;
+            }
+            (from, grown) = (before, true);
+        }
+        let (housed, rest) = place_homes(waiting, &network.streets, lay, ground);
+        placed.extend(housed);
+        waiting = rest;
+        // Plots counted open can overlap; while people wait and lanes still grow, go on.
+        if waiting.is_empty() || !grown {
+            break;
+        }
+    }
+    Settled {
+        placed,
+        left: waiting.len(),
+    }
+}
+/// How many ordinary plots the streets still front on open ground.
+fn open_plots(streets: &[Street], lay: &Lay, ground: &Ground) -> usize {
+    let (frontage, depth) = plot_size(lay.size);
+    streets
+        .iter()
+        .enumerate()
+        .flat_map(|(i, s)| slots(i, s, frontage, depth))
+        .filter(|slot| {
+            let street = super::ground::FIRST_STREET + slot.street as u32;
+            ground.open(&Rectangle(&slot.corners), street)
+        })
+        .count()
 }
 /// How far from its centre a place of this many plots means to spread.
 fn spread(size: Size, plots: usize) -> f64 {
@@ -131,8 +174,6 @@ fn spread(size: Size, plots: usize) -> f64 {
         .sqrt()
         .max(2.0 * depth)
 }
-/// Rounds of new lanes a place may grow beyond its layout's own to house its people.
-const GROWTH_ROUNDS: usize = 6;
 /// Houses and workshops take ordinary plots nearest the centre, main streets first; returns
 /// those placed and those still waiting for a plot.
 fn place_homes(
@@ -223,7 +264,7 @@ fn place_specials(
     let (frontage, depth) = plot_size(lay.size);
     let mut placed = Vec::new();
     for &use_ in specials {
-        let Some(prefers) = use_.prefers() else {
+        let Some(prefers) = prefers(use_) else {
             continue;
         };
         let (wide, deep) = use_.footprint(lay.size);
@@ -394,6 +435,81 @@ mod tests {
         let plan = lay(short, &mut ground, Some(Layout::Organic));
         let housed: f64 = plan.plots.iter().map(|p| f64::from(p.occupants)).sum();
         assert!(housed >= 0.9 * 20_000.0, "{housed} of 20000 housed");
+        assert_eq!(crossed(&plan), 0, "streets run through buildings");
+    }
+    #[test]
+    fn people_a_full_site_cannot_house_are_counted_not_dropped() {
+        let mut ground = Ground::new([-150.0, -150.0, 150.0, 150.0], 1.5);
+        let plan = lay(seat(3_000.0, 2), &mut ground, Some(Layout::Organic));
+        let homes = plan
+            .plots
+            .iter()
+            .filter(|p| matches!(p.use_, Use::House | Use::Workshop(_)))
+            .count();
+        let needs = needs(&plan.seat.story, plan.layout);
+        let housed: f64 = plan
+            .plots
+            .iter()
+            .filter(|p| !matches!(p.use_, Use::House | Use::Workshop(_) | Use::Barn))
+            .map(|p| p.use_.occupants(plan.size))
+            .sum();
+        let wanted = ordinary(&needs, housed).len();
+        assert!(plan.unhoused > 0, "a 300 m site cannot house 3000 people");
+        let left = f64::from(plan.unhoused) / household(plan.size);
+        assert_eq!((homes as f64 + left).round() as usize, wanted);
+    }
+    #[test]
+    fn people_of_a_special_building_with_no_place_live_in_ordinary_homes() {
+        let mut ground = Ground::new([-1_500.0, -1_500.0, 1_500.0, 1_500.0], 1.5);
+        let mut by_water = seat(400.0, 2);
+        by_water.story.waterside = true;
+        let plan = lay(by_water, &mut ground, None);
+        assert!(
+            !plan.plots.iter().any(|p| p.use_ == Use::Mill),
+            "no water for a mill"
+        );
+        let needs = needs(&plan.seat.story, plan.layout);
+        let all: f64 = special(&needs).iter().map(|u| u.occupants(plan.size)).sum();
+        let built: f64 = plan
+            .plots
+            .iter()
+            .filter(|p| !matches!(p.use_, Use::House | Use::Workshop(_) | Use::Barn))
+            .map(|p| p.use_.occupants(plan.size))
+            .sum();
+        assert!(built < all);
+        let homes = plan
+            .plots
+            .iter()
+            .filter(|p| matches!(p.use_, Use::House | Use::Workshop(_)))
+            .count();
+        assert_eq!(homes, ordinary(&needs, built).len());
+        assert!(homes > ordinary(&needs, all).len());
+    }
+    /// Streets whose line or edges pass through a building.
+    fn crossed(plan: &Plan) -> usize {
+        use crate::atlas::town::{
+            geometry::{at, left},
+            ground::{Rectangle, Shape},
+        };
+        let through = |street: &Street| {
+            let mut along = 0.0;
+            while along <= street.length() {
+                let (p, d) = at(&street.points, along).unwrap();
+                for side in [-0.5, 0.0, 0.5] {
+                    let q = add(p, scale(left(d), side * street.width() * 0.95));
+                    if plan
+                        .plots
+                        .iter()
+                        .any(|plot| Rectangle(&plot.building).contains(q))
+                    {
+                        return true;
+                    }
+                }
+                along += 0.5;
+            }
+            false
+        };
+        plan.streets.iter().filter(|s| through(s)).count()
     }
     #[test]
     fn a_town_has_wards_and_each_layout_houses_its_people() {

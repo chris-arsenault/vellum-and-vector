@@ -1,47 +1,13 @@
 //! A settlement's street network: main streets carry the ways that enter it, lanes fill
 //! between them, and a main street bridges narrow water and ends at wide water.
 use super::{
-    geometry::{at, cut, distance, line_length, resample, Point},
-    ground::{Ground, FIRST_STREET, OUTSIDE, SQUARE, STEEP, WALL, WATER},
+    geometry::{at, cut, distance, line_length, offset, resample, Point},
+    ground::{Ground, FIRST_STREET, OUTSIDE, PLOT, SQUARE, STEEP, WALL, WATER},
     story::Size,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Class {
-    /// A way as it runs through the built place.
-    Main,
-    /// The same way beyond the built edge, out through the fields.
-    Road,
-    Street,
-    Lane,
-    Alley,
-}
-impl Class {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Main => "mainStreet",
-            Self::Road => "road",
-            Self::Street => "street",
-            Self::Lane => "lane",
-            Self::Alley => "alley",
-        }
-    }
-    /// The full width in metres of a street of this class in a place of `size`.
-    pub fn width(self, size: Size) -> f64 {
-        match (self, size) {
-            (Self::Main, Size::Farmstead | Size::Hamlet) => 4.0,
-            (Self::Main, Size::Village) => 6.0,
-            (Self::Main, Size::Town) => 8.0,
-            (Self::Main, Size::City) => 10.0,
-            (Self::Road, Size::Town | Size::City) => 5.0,
-            (Self::Road, _) => 4.0,
-            (Self::Street, Size::Town | Size::City) => 6.0,
-            (Self::Street, _) => 5.0,
-            (Self::Lane, _) => 3.5,
-            (Self::Alley, _) => 2.5,
-        }
-    }
-}
+/// Street classes and their widths, shared with the town tools.
+pub use atlas_map::town::StreetClass as Class;
 /// A way entering the settlement, from its centre outward, and the place it leads to.
 #[derive(Clone, Debug)]
 pub struct Arm {
@@ -84,17 +50,8 @@ impl Street {
         }
     }
 }
-/// Vertex spacing of generated streets, in metres, so widths can vary along them.
-pub const VERTEX_STEP: f64 = 10.0;
-/// The longest water a place of this size bridges; wider water ends its streets.
-pub fn bridge_span(size: Size) -> f64 {
-    match size {
-        Size::Farmstead | Size::Hamlet => 12.0,
-        Size::Village => 30.0,
-        Size::Town => 80.0,
-        Size::City => 160.0,
-    }
-}
+pub use super::settings::VERTEX_STEP;
+pub use atlas_map::town::bridge_span;
 /// Whether ground stops a lane: water, steep ground, the map's edge, a square or a wall.
 pub fn stops_lane(owner: u32) -> bool {
     matches!(owner, WATER | STEEP | OUTSIDE | SQUARE | WALL)
@@ -125,12 +82,13 @@ pub fn main_street(arm: &Arm, reach: f64, size: Size, ground: &Ground) -> Option
     street.bridges = bridges;
     Some(street)
 }
-/// Whether ground stops a lane branching from street `parent`: what stops any lane, and any
-/// other street, so branches end in T-junctions.
+/// Whether ground stops a lane branching from street `parent`: what stops any lane, a plot,
+/// and any other street, so branches end in T-junctions and never run through a house.
 pub fn stops_branch(parent: u32) -> impl Fn(u32) -> bool {
-    move |owner| stops_lane(owner) || (owner >= FIRST_STREET && owner != parent)
+    move |owner| stops_lane(owner) || owner == PLOT || (owner >= FIRST_STREET && owner != parent)
 }
-/// A lane along `points` until ground `stops` it; shorter than `least` metres, it is not laid.
+/// A lane along `points` until ground `stops` its line or either of its edges; shorter than
+/// `least` metres, it is not laid.
 pub fn lane(
     points: &[Point],
     class: Class,
@@ -139,7 +97,19 @@ pub fn lane(
     stops: impl Fn(u32) -> bool,
     least: f64,
 ) -> Option<Street> {
-    let reach = ground.reach(points, stops);
+    // The lane's line and both its edges must stay clear, so it never clips a plot's corner.
+    let edge = class.width(size) / 2.0;
+    let reach = [0.0, edge, -edge]
+        .into_iter()
+        .map(|by| {
+            let line = if by == 0.0 {
+                points.to_vec()
+            } else {
+                offset(points, by)
+            };
+            ground.reach(&line, &stops)
+        })
+        .fold(f64::INFINITY, f64::min);
     let points = resample(
         &cut(points, (reach - class.width(size)).max(0.0)),
         VERTEX_STEP,

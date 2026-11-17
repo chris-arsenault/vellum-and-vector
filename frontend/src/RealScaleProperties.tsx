@@ -2,6 +2,9 @@ import { useState } from "react";
 import type { JsonValue, MapFeature, Position } from "@atlas/map";
 import type { AuthoringSession } from "./useRealScaleAuthoring";
 import { parseAngle, parseLength, showLength, type LengthUnits } from "./realScaleFields";
+import { CaveWallFacts } from "./RealScaleLandTools";
+import { BuildingFacts } from "./RealScaleBuilding";
+import { RealScaleConnections } from "./RealScaleConnections";
 
 interface Props {
   session: AuthoringSession;
@@ -16,6 +19,9 @@ const shapeKeys = new Set([
   "locked",
   "placeId",
   "nameStatus",
+  // A cave wall's depth and what it read there have their own fields.
+  "depth",
+  "cutDepth",
 ]);
 
 function points(feature: MapFeature): Position[] {
@@ -56,7 +62,10 @@ export function RealScaleProperties({ session, selected, units }: Props) {
       {feature.geometry.type === "LineString" && (
         <LinePoints session={session} feature={feature} units={units} />
       )}
+      <BuildingFacts feature={feature} />
+      <RealScaleConnections session={session} feature={feature} />
       <KindAttributes session={session} feature={feature} />
+      <CaveWallFacts session={session} feature={feature} />
       {feature.attributes.locked === true && <p>Locked against pointer edits</p>}
     </section>
   );

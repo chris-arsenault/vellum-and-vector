@@ -152,6 +152,7 @@ fn geotiff_metadata_retains_unicode_category_labels() {
             color: Some("#123456".into()),
             present: true,
             surface: None,
+            soluble: None,
         });
     let mut output = Cursor::new(Vec::new());
     ready(geotiff::write(

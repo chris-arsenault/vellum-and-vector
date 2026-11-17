@@ -21,6 +21,7 @@ serde.workspace = true
 atlas-map.workspace = true
 atlas-gis.workspace = true
 atlas-generation.workspace = true
+atlas-names.workspace = true
 serde_json.workspace = true
 ts-rs.workspace = true
 ciborium = "0.2"

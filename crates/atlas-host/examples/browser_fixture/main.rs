@@ -2,6 +2,8 @@
 mod real_scale;
 mod records;
 mod samples;
+mod structure;
+mod town;
 use atlas_generation::{
     control::CancellationToken,
     storage::{BlockCache, BlockScratch},
@@ -65,6 +67,7 @@ async fn publish(root: &Path) -> io::Result<()> {
     );
     let spatial = NativeGeos::new(1e-6).map_err(io::Error::other)?;
     let mut child_document: Document = serde_json::from_value(serde_json::to_value(&document)?)?;
+    let mut village_document: Document = serde_json::from_value(serde_json::to_value(&document)?)?;
     let product = finished_map::Request::from_document(document, reference.clone(), None, None)?
         .prepare(
             Rc::new(NativeResources::new(root.join("generation"))),
@@ -86,8 +89,17 @@ async fn publish(root: &Path) -> io::Result<()> {
         )
         .await?;
     real_scale::child(&mut child_document, &reference)?;
+    let Bounds(w, s, e, n) = real_scale::FRAME;
+    samples::install_glen(&mut child_document, root.join("generation"), [w, s, e, n]).await?;
+    let glen_geography = finished_map::FieldGeography {
+        id: samples::GLEN_FIELD.into(),
+        scope: child_document.scope.located.clone(),
+        ocean: Some(None),
+        lakes: Vec::new(),
+    };
     let child_records = Workspace::create(root.join("child-records.sqlite"))?;
     real_scale::install(&mut child_records.features())?;
+    structure::install(&mut child_records.features())?;
     let child = MapRef {
         map_id: real_scale::CHILD.into(),
         revision: "published".into(),
@@ -100,8 +112,8 @@ async fn publish(root: &Path) -> io::Result<()> {
     )?
     .prepare(
         Rc::new(NativeResources::new(root.join("generation"))),
-        cache,
-        &[],
+        cache.clone(),
+        &[glen_geography],
         &child_records.features(),
         &spatial,
     )?
@@ -113,7 +125,35 @@ async fn publish(root: &Path) -> io::Result<()> {
         &control,
     )
     .await?;
-    for saved in [&reference, &child] {
+    town::child(&mut village_document, &reference)?;
+    let village_records = Workspace::create(root.join("village-records.sqlite"))?;
+    town::install(&mut village_records.features())?;
+    let village = MapRef {
+        map_id: town::VILLAGE.into(),
+        revision: "published".into(),
+    };
+    finished_map::Request::from_document(
+        village_document,
+        village.clone(),
+        None,
+        Some(reference.clone()),
+    )?
+    .prepare(
+        Rc::new(NativeResources::new(root.join("generation"))),
+        cache,
+        &[],
+        &village_records.features(),
+        &spatial,
+    )?
+    .publish(
+        &village_records.features(),
+        &spatial,
+        &mut maps,
+        &mut assets,
+        &control,
+    )
+    .await?;
+    for saved in [&reference, &child, &village] {
         maps.save(
             SaveRequest {
                 reference: saved.clone(),

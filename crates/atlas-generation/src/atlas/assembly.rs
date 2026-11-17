@@ -228,6 +228,7 @@ impl Operations {
         )?;
         registration::regional::register(&mut self.registry, &reads, &work, &self.physical.native)?;
         registration::town::register(&mut self.registry)?;
+        registration::ground::register(&mut self.registry)?;
         Ok(())
     }
 

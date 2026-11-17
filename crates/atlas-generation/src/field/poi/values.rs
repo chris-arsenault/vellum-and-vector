@@ -89,6 +89,8 @@ pub enum Moment {
     Geography,
     Magic,
     Society,
+    /// A real-scale map's channels are drawn at their real size (ADR 0016).
+    Ground,
 }
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub enum MagicBand {

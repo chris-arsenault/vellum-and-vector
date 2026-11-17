@@ -18,6 +18,15 @@ struct Vocabulary {
     features: Vec<[String; 5]>,
     // hpc-exempt: named feature classifications and layer presentation metadata, not numerical field storage.
     landmarks: BTreeMap<String, String>,
+    /// True sizes of kinds a creator places or draws at their size, keyed `layer:kind`; the
+    /// one definition authoring reads from the published feature types.
+    #[serde(default)]
+    // hpc-exempt: named feature classifications and layer presentation metadata, not numerical field storage.
+    sizes: BTreeMap<String, atlas_map::KindSize>,
+}
+/// The catalogue's true size of a kind in a layer, when it has one.
+pub fn true_size(layer: &str, kind: &str) -> Option<atlas_map::KindSize> {
+    vocabulary().sizes.get(&format!("{layer}:{kind}")).copied()
 }
 fn vocabulary() -> &'static Vocabulary {
     static VALUE: OnceLock<Vocabulary> = OnceLock::new();
@@ -79,6 +88,7 @@ impl Catalogue<'_> {
             count: 0,
             geometries: Vec::new(),
             footprints: false,
+            true_size: true_size(layer, kind),
         }
     }
     fn magic(

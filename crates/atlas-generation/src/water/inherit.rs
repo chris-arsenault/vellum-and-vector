@@ -171,7 +171,9 @@ impl ReachStore {
             .iter()
             .map(|&cell| geometry.position(cell))
             .collect();
-        let stations = Stations::new(geometry.spatial, &input.course, &target)?;
+        // Cells lie where the bent course runs; profiles are read along that same course.
+        let course = geometry.bent_course(&input.course);
+        let stations = Stations::new(geometry.spatial, &course, &target)?;
         for month in 0..MONTHS {
             let profile: Vec<_> = input
                 .course
@@ -193,7 +195,7 @@ impl ReachStore {
         if !input.dry
             && geometry.spatial.line_fraction(
                 &Geometry::LineString {
-                    coordinates: input.course.clone(),
+                    coordinates: course,
                 },
                 line[0],
             )? > 0.0

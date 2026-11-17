@@ -18,6 +18,13 @@ pub enum EditTargets {
     Ids(Vec<String>),
     /// Every authorable feature: layer commands find their members by creator layer.
     Authorable,
+    /// Authorable features in the primary space within these bounds, and the map's
+    /// settlements: town tools read the streets, plots and buildings around them.
+    Around(crate::Bounds),
+    /// Every feature in one located space, hexes included: a structure map's level.
+    Space(String),
+    /// Every feature in the layers of one family, across all spaces (`structures`).
+    Family(&'static str),
     Nothing,
 }
 impl EditCommand {
@@ -34,9 +41,29 @@ impl EditCommand {
                 EditTargets::Ids([vec![source.clone()], ids.clone()].concat())
             }
             MergeDown { .. } | DeleteLayer { .. } => EditTargets::Authorable,
-            Create { .. } | AddLayer { .. } | RenameLayer { .. } | LockLayer { .. } => {
-                EditTargets::Nothing
+            Create { .. }
+            | Place { .. }
+            | Scatter { .. }
+            | AddLayer { .. }
+            | RenameLayer { .. }
+            | LockLayer { .. } => EditTargets::Nothing,
+            DrawStreet { geometry, .. } => {
+                let points: Vec<[f64; 2]> = vertices(geometry)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|p| [p.coordinates()[0], p.coordinates()[1]])
+                    .collect();
+                EditTargets::Around(super::town::town_bounds(&points, super::PLACING_REACH))
             }
+            PlaceBuilding { at, .. } => {
+                EditTargets::Around(super::town::town_bounds(&[*at], super::PLACING_REACH))
+            }
+            AddLevel { .. } => EditTargets::Family("structures"),
+            RemoveLevel { space_id } => EditTargets::Space(space_id.clone()),
+            Connect { id, target } | Disconnect { id, target } => match target.map_id {
+                Some(_) => EditTargets::Ids(vec![id.clone()]),
+                None => EditTargets::Ids(vec![id.clone(), target.feature_id.clone()]),
+            },
         }
     }
 }
@@ -49,6 +76,8 @@ pub struct Draft {
     pub before: Vec<MapFeature>,
     pub after: Vec<MapFeature>,
     pub layers: Option<Vec<CreatorLayer>>,
+    /// The map's spaces and published layers after the change, when it adds or removes some.
+    pub spaces: Option<super::SpaceLayout>,
 }
 /// Attributes that belong to a shape or its place in the map rather than to its kind.
 const SHAPE_KEYS: [&str; 6] = [
@@ -114,17 +143,84 @@ pub fn plan(
         MoveToLayer { ids, layer } => edit.move_to_layer(ids, layer),
         MergeDown { id } => edit.merge_down(id),
         DeleteLayer { id } => edit.delete_layer(id),
+        Place {
+            layer_id,
+            kind,
+            name,
+            at,
+            rotation,
+            scale,
+            creator_layer,
+        } => edit.place(
+            new_id(),
+            super::placing::Placing {
+                layer_id,
+                kind,
+                name: name.as_deref(),
+                creator: creator_layer.as_deref(),
+            },
+            *at,
+            *rotation,
+            *scale,
+        ),
+        Scatter {
+            layer_id,
+            kind,
+            outline,
+            spacing,
+            seed,
+            creator_layer,
+        } => edit.scatter(
+            super::placing::Placing {
+                layer_id,
+                kind,
+                name: None,
+                creator: creator_layer.as_deref(),
+            },
+            outline,
+            *spacing,
+            *seed,
+            new_id,
+        ),
+        DrawStreet {
+            road_class,
+            geometry,
+            name,
+            creator_layer,
+        } => edit.draw_street(
+            new_id,
+            road_class,
+            geometry,
+            name.as_deref(),
+            creator_layer.as_deref(),
+        ),
+        PlaceBuilding {
+            building_use,
+            at,
+            name,
+            creator_layer,
+        } => edit.place_building(
+            (new_id(), new_id()),
+            building_use,
+            *at,
+            name.as_deref(),
+            creator_layer.as_deref(),
+        ),
+        AddLevel { below } => super::levels::add_level(map, targets, *below, spatial),
+        RemoveLevel { space_id } => super::levels::remove_level(map, targets, space_id),
+        Connect { id, target } => super::levels::connect(map, targets, id, target, true),
+        Disconnect { id, target } => super::levels::connect(map, targets, id, target, false),
     }
 }
 
-struct Planner<'a> {
-    map: &'a MapDescriptor,
-    real: &'a RealScale,
-    targets: &'a [MapFeature],
-    spatial: &'a dyn SpatialKernel,
+pub(super) struct Planner<'a> {
+    pub(super) map: &'a MapDescriptor,
+    pub(super) real: &'a RealScale,
+    pub(super) targets: &'a [MapFeature],
+    pub(super) spatial: &'a dyn SpatialKernel,
 }
 impl Planner<'_> {
-    fn find(&self, id: &str) -> Result<&MapFeature, String> {
+    pub(super) fn find(&self, id: &str) -> Result<&MapFeature, String> {
         self.targets
             .iter()
             .find(|feature| feature.id == id)
@@ -167,9 +263,16 @@ impl Planner<'_> {
             .position(|layer| layer.id == id)
             .ok_or_else(|| "That creator layer is not on this map".into())
     }
-    /// A geometry in canonical form, of the layer's shape and inside the map's frame.
-    fn shaped(&self, layer_id: &str, geometry: &Geometry) -> Result<Geometry, String> {
-        let shape = shape_of(layer_id).ok_or("Features cannot be drawn in this layer")?;
+    /// A geometry in canonical form, of the kind's shape in its layer (a wall is a line even
+    /// among outlines) and inside the map's frame.
+    pub(super) fn shaped_kind(
+        &self,
+        layer_id: &str,
+        kind: &str,
+        geometry: &Geometry,
+    ) -> Result<Geometry, String> {
+        let shape =
+            super::shape_of_kind(layer_id, kind).ok_or("Features cannot be drawn in this layer")?;
         let fits = match (shape, geometry) {
             (Shape::Line, Geometry::LineString { coordinates }) => coordinates.len() >= 2,
             (Shape::Area, Geometry::Polygon { .. } | Geometry::MultiPolygon { .. }) => true,
@@ -191,7 +294,7 @@ impl Planner<'_> {
         Ok(canonical)
     }
     #[allow(clippy::too_many_arguments)]
-    fn create(
+    pub(super) fn create(
         &self,
         id: String,
         layer_id: &str,
@@ -213,7 +316,7 @@ impl Planner<'_> {
             .iter()
             .find(|entry| entry.kind == kind)
             .ok_or_else(|| format!("{kind} is not a kind of {}", layer.name))?;
-        let geometry = self.shaped(layer_id, drawn)?;
+        let geometry = self.shaped_kind(layer_id, kind, drawn)?;
         let mut feature = MapFeature {
             id,
             space_id: layer.space_id.clone(),
@@ -262,7 +365,7 @@ impl Planner<'_> {
     fn reshape(&self, id: &str, geometry: &Geometry) -> Result<Draft, String> {
         let feature = self.movable(&[id.into()])?[0];
         let mut next = feature.clone();
-        next.geometry = self.shaped(&feature.layer_id, geometry)?;
+        next.geometry = self.shaped_kind(&feature.layer_id, &feature.kind, geometry)?;
         if let Some(widths) = numbers(feature.attributes.get("widths")) {
             let carried = carry_widths(&feature.geometry, &widths, &next.geometry, self.spatial)?;
             next.attributes.insert("widths".into(), rounded(&carried));
@@ -272,6 +375,7 @@ impl Planner<'_> {
             before: vec![feature.clone()],
             after: vec![next],
             layers: None,
+            spaces: None,
         })
     }
     fn transform(&self, ids: &[String], transform: &Transform) -> Result<Draft, String> {
@@ -283,7 +387,7 @@ impl Planner<'_> {
         for feature in &features {
             let mut next = (*feature).clone();
             let moved = transform_geometry(&feature.geometry, transform);
-            next.geometry = self.shaped(&feature.layer_id, &moved)?;
+            next.geometry = self.shaped_kind(&feature.layer_id, &feature.kind, &moved)?;
             if let Some(widths) = numbers(feature.attributes.get("widths")) {
                 if vertices(&next.geometry).map(<[_]>::len) != Some(widths.len()) {
                     let carried = widths_at(&feature.geometry, &widths, &moved, self.spatial)?;
@@ -305,6 +409,7 @@ impl Planner<'_> {
             before: features.into_iter().cloned().collect(),
             after,
             layers: None,
+            spaces: None,
         })
     }
     fn duplicate(
@@ -328,8 +433,9 @@ impl Planner<'_> {
             copy.attributes.remove("placeId");
             copy.attributes.remove("locked");
             copy.catalog.origin = "Authored".into();
-            copy.geometry = self.shaped(
+            copy.geometry = self.shaped_kind(
                 &feature.layer_id,
+                &feature.kind,
                 &transform_geometry(&feature.geometry, &shift),
             )?;
             after.push(copy);
@@ -354,6 +460,9 @@ impl Planner<'_> {
         name: Option<&str>,
         attributes: &BTreeMap<String, Value>,
     ) -> Result<Draft, String> {
+        if let Some(draft) = self.hex_classes(ids, name, attributes)? {
+            return Ok(draft);
+        }
         let features = self.open_layers(ids)?;
         let mut after = Vec::new();
         for feature in &features {
@@ -369,6 +478,7 @@ impl Planner<'_> {
             before: features.into_iter().cloned().collect(),
             after,
             layers: None,
+            spaces: None,
         })
     }
     /// Apply attribute values; null removes. Shape-bound values are checked against the shape.
@@ -429,6 +539,7 @@ impl Planner<'_> {
             before: features.into_iter().cloned().collect(),
             after,
             layers: None,
+            spaces: None,
         })
     }
     fn add_layer(&self, id: String, name: &str) -> Result<Draft, String> {
@@ -495,6 +606,7 @@ impl Planner<'_> {
             before: features.into_iter().cloned().collect(),
             after,
             layers: None,
+            spaces: None,
         })
     }
     fn members(&self, id: &str) -> Vec<&MapFeature> {
@@ -530,6 +642,7 @@ impl Planner<'_> {
             before: members.into_iter().cloned().collect(),
             after,
             layers: Some(next),
+            spaces: None,
         })
     }
     fn delete_layer(&self, id: &str) -> Result<Draft, String> {
@@ -548,6 +661,7 @@ impl Planner<'_> {
             before: self.members(id).into_iter().cloned().collect(),
             after: Vec::new(),
             layers: Some(next),
+            spaces: None,
         })
     }
 }
@@ -574,7 +688,8 @@ fn rounded(widths: &[f64]) -> Value {
 }
 /// Outlines record their turn; a rotated outline's angle stays in 0–360°.
 pub(super) fn turn(feature: &mut MapFeature, degrees: f64) {
-    if degrees == 0.0 || shape_of(&feature.layer_id) != Some(Shape::Area) {
+    if degrees == 0.0 || super::shape_of_kind(&feature.layer_id, &feature.kind) != Some(Shape::Area)
+    {
         return;
     }
     let current = feature
@@ -587,7 +702,7 @@ pub(super) fn turn(feature: &mut MapFeature, degrees: f64) {
         .attributes
         .insert("rotation".into(), ((next * 100.0).round() / 100.0).into());
 }
-fn title(feature: &MapFeature) -> String {
+pub(super) fn title(feature: &MapFeature) -> String {
     feature.name.clone().unwrap_or_else(|| feature.kind.clone())
 }
 fn titles(features: &[&MapFeature]) -> String {

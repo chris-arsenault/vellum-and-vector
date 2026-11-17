@@ -77,6 +77,11 @@ fn with_channels<T>(
         (layer.strength / BASELINE_ROCK).clamp(0.6, 1.6)
     }));
     let standing = average(standing);
+    let bed = |cell| {
+        Ok(crate::rock::ground::queries::bed_family(
+            &ground.section(cell, crate::settlement::removal::Facet::Land)?,
+        ))
+    };
     apply(ChannelInputs {
         mesh: &field.mesh,
         scale: &field.scale,
@@ -89,6 +94,7 @@ fn with_channels<T>(
         slope: &field.shared.scalar(S::Slope),
         flow: &water.flow.mean,
         standing: &|cell| ground.fold(cell, &standing, None),
+        bed: &bed,
     })
 }
 impl Field {

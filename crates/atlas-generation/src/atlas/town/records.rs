@@ -100,8 +100,19 @@ pub fn publish(state: &mut State, plans: &[Plan], fields: &[Field]) -> io::Resul
         crossings(state, plan, &naming, &streets)?;
         wall(state, plan, &naming, &streets)?;
         publish_wards(state, plan, &wards)?;
+        count_unhoused(state, plan)?;
     }
     publish_fields(state, fields)
+}
+/// The settlement's record says how many of its people found no home once its ground was
+/// used, rather than dropping them.
+fn count_unhoused(state: &mut State, plan: &Plan) -> io::Result<()> {
+    let Some(mut seat) = state.records.features.get(&plan.seat.key)? else {
+        return Ok(());
+    };
+    seat.attributes
+        .insert("unhoused".into(), json!(plan.unhoused));
+    state.write_feature(seat).map(|_| ())
 }
 /// Published streets: their record identity and name, by street index.
 type Published = Vec<(String, String)>;

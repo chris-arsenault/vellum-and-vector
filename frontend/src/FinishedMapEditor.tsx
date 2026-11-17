@@ -30,8 +30,9 @@ import { ErrorMessage } from "./ErrorMessage";
 import { download } from "./download";
 import { RealScaleControls } from "./RealScaleControls";
 import { RealScaleOpen } from "./RealScaleOpen";
-import { shownSpace } from "./realScale";
+import { defaultRealScalePresentation, shownSpace } from "./realScale";
 import { RealScaleEditor } from "./RealScaleEditor";
+import { StructureProvider, useStructureServices } from "./structureServices";
 import { useRealScaleAuthoring, type AuthoringSession } from "./useRealScaleAuthoring";
 import type { RealScaleChoice } from "@atlas/context";
 import "./mapSettings.css";
@@ -126,23 +127,31 @@ function useFinishedMap(props: Props) {
 type Model = ReturnType<typeof useFinishedMap>;
 export function FinishedMapEditor(props: Props) {
   const model = useFinishedMap(props);
-  const authoring = useRealScaleAuthoring(props.map, props.context.editing);
+  const authoring = useRealScaleAuthoring(props.map, props.context.editing, (space) =>
+    model.change((value) => ({
+      ...value,
+      realScale: { ...(value.realScale ?? defaultRealScalePresentation()), space },
+    }))
+  );
   const editing = model.tool === "edit" && !!props.map.realScale;
+  const structure = useStructureServices(props, authoring);
   return (
-    <div className="app-shell finished-atlas">
-      <FinishedHeader model={model} />
-      <FinishedCanvas model={model} authoring={authoring} />
-      {model.panel && <FinishedControls model={model} />}
-      {editing ? (
-        <RealScaleEditor
-          session={authoring}
-          reader={props.context.maps}
-          units={model.value.realScale?.units ?? "metres"}
-        />
-      ) : (
-        (model.inspection || model.selected) && <FinishedInspection model={model} />
-      )}
-    </div>
+    <StructureProvider value={structure}>
+      <div className="app-shell finished-atlas">
+        <FinishedHeader model={model} />
+        <FinishedCanvas model={model} authoring={authoring} />
+        {model.panel && <FinishedControls model={model} />}
+        {editing ? (
+          <RealScaleEditor
+            session={authoring}
+            reader={props.context.maps}
+            units={model.value.realScale?.units ?? "metres"}
+          />
+        ) : (
+          (model.inspection || model.selected) && <FinishedInspection model={model} />
+        )}
+      </div>
+    </StructureProvider>
   );
 }
 function FinishedHeader({ model }: { model: Model }) {

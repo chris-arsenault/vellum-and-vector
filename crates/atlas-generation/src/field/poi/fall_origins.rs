@@ -12,7 +12,7 @@ use super::{
     water_reads::flow_target,
 };
 use crate::{
-    field::{shared::Scalar, significance::measure},
+    field::{shared::Scalar, significance::physical},
     hpc::{BitSet, Direction, MultiKeyHeap},
     lattice::Membership,
     noise::hash_unit,
@@ -22,6 +22,8 @@ use std::{io, rc::Rc};
 
 const FALLS_APART: f64 = 3.0;
 const GREAT_HEIGHT: f64 = 0.000025;
+/// A great fall's drop on a real-scale map, metres.
+const REAL_GREAT_HEIGHT: f64 = 20.0;
 const LEDGE_CONTRAST: f64 = 150.0;
 const FAULTED: f64 = 0.35;
 const HANGING_SHARE: f64 = 4.0;
@@ -91,7 +93,14 @@ pub fn carried<S: CarryState<Schedule>, Schedule>(
     Ok(found)
 }
 fn great(state: &impl RiverState, claimed: &Claims) -> io::Result<Vec<Found>> {
-    let bar = measure(&state.field()?.scale, GREAT_HEIGHT, 1, 0.5)?;
+    // On a real-scale map a great fall is a real height a party stops to look at.
+    let bar = physical(
+        &state.field()?.scale,
+        GREAT_HEIGHT,
+        1,
+        0.5,
+        REAL_GREAT_HEIGHT,
+    )?;
     among(state, claimed, |cell, _| {
         Ok(fall_size::at_cell(state, cell)?.height >= bar)
     })

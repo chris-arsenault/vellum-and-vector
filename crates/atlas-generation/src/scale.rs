@@ -85,6 +85,8 @@ pub struct MapScale {
     height: f64,
     cell_span: f64,
     span: f64,
+    /// A real-scale map (ADR 0016): physical sizes are real metres, not shares of the map.
+    real_size: bool,
 }
 impl MapScale {
     pub const REFERENCE_WIDTH: f64 = 4_000_000.0;
@@ -106,7 +108,18 @@ impl MapScale {
             height,
             cell_span,
             span,
+            real_size: false,
         })
+    }
+    /// The same scale on a real-scale map, where a thing's physical size is its real size.
+    /// Relative declarations still resolve as before; only sizes declared with a real value
+    /// (`field::significance::physical`) read the difference.
+    pub fn at_real_size(mut self, real: bool) -> Self {
+        self.real_size = real;
+        self
+    }
+    pub fn real_size(&self) -> bool {
+        self.real_size
     }
     pub fn resolve(&self, measure: RelativeMeasure) -> Result<ResolvedMeasure, &'static str> {
         let basis =

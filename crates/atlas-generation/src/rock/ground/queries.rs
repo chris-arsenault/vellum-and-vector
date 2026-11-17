@@ -3,6 +3,15 @@ use super::{
     SectionLayer,
 };
 use crate::rock::{catalogue, material::MaterialLayer, material_gives, ModeId, ModeMix};
+/// The family of the material at the top of a land section: what a channel cut there runs
+/// on. A section with no land column lies under standing water, whose floor is loose sediment.
+pub fn bed_family(section: &[SectionLayer]) -> catalogue::RockFamily {
+    section
+        .first()
+        .map_or(catalogue::RockFamily::Loose, |layer| {
+            catalogue::kind_of_code(layer.material.kind).family
+        })
+}
 pub fn section_exposure(
     section: &[SectionLayer],
     reach: f64,

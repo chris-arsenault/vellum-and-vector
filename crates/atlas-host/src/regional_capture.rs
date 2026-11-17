@@ -228,6 +228,13 @@ impl Selection<'_> {
                 "Select a pinned parent map and a new named child in its located space",
             ));
         }
+        // A building's floors hold only its shell, made from the building's record by the
+        // map store (`structure_maps`); there is no land to generate for them.
+        if self.real_scale.map(|real| real.kind) == Some(atlas_map::RealScaleKind::Structure) {
+            return Err(io::Error::other(
+                "Building floors open from a building: select it on a real-scale ground map and choose Open floors",
+            ));
+        }
         Ok(())
     }
 }

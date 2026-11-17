@@ -29,6 +29,11 @@ fn crossing(kind: &str) -> bool {
 pub fn crosses(feature: &MapFeature) -> bool {
     crossing(&feature.kind) && shape_of(&feature.layer_id) == Some(Shape::Area)
 }
+/// A wall: a line with a thickness in a structures layer.
+fn is_wall(feature: &MapFeature) -> bool {
+    super::shape_of_kind(&feature.layer_id, &feature.kind) == Some(Shape::Line)
+        && super::family(&feature.layer_id) == "structures"
+}
 /// A feature's junctions as (line, kind) pairs, in a stable order.
 pub fn junctions(feature: &MapFeature) -> Vec<(&str, &str)> {
     let mut pairs: Vec<_> = feature
@@ -72,12 +77,22 @@ pub fn attach(
         }
         return Ok(());
     }
-    let Some(points) = vertices(&feature.geometry).filter(|_| crossed(&feature.layer_id).is_some())
+    // Ways and water join ways and water; a wall's end joins the wall it is drawn against.
+    let wall = is_wall(feature);
+    let Some(points) =
+        vertices(&feature.geometry).filter(|_| wall || crossed(&feature.layer_id).is_some())
     else {
         return Ok(());
     };
     let ends = [points[0], points[points.len() - 1]];
-    for line in others.filter(|line| crossed(&line.layer_id).is_some()) {
+    let joins = |line: &MapFeature| {
+        if wall {
+            is_wall(line)
+        } else {
+            crossed(&line.layer_id).is_some()
+        }
+    };
+    for line in others.filter(|line| joins(line)) {
         for end in ends {
             if spatial.distance(&point(end), &line.geometry)? <= tolerance
                 && !feature.relations.iter().any(|r| r.target_id == line.id)

@@ -26,7 +26,9 @@ pub struct Network {
 impl Network {
     pub fn add(&mut self, street: Street, ground: &mut Ground) -> u32 {
         let owner = FIRST_STREET + self.streets.len() as u32;
-        ground.take_line(&street.points, street.width(), owner);
+        // Half a cell wider each side than the street, so a plot whose cells look free never
+        // reaches over the street's edge between the grid's samples.
+        ground.take_line(&street.points, street.width() + ground.cell, owner);
         self.streets.push(street);
         owner
     }
@@ -42,10 +44,8 @@ pub struct Wall {
     pub ring: Vec<Point>,
     pub gates: Vec<Point>,
 }
-/// Full thickness of a town wall in metres.
-pub const WALL_THICKNESS: f64 = 3.0;
-const GATE_WIDTH: f64 = 4.0;
-const WALL_SIDES: usize = 14;
+pub use super::settings::WALL_THICKNESS;
+use super::settings::{GATE_WIDTH, GROWN_LANE_DEPTHS, WALL_SIDES};
 /// Lays the layout's lanes after the main streets, returning the wall a walled place builds.
 pub fn lanes(
     layout: Layout,
@@ -154,10 +154,11 @@ fn organic(network: &mut Network, lay: &Lay, ground: &mut Ground, jitter: &mut J
         branches(network, parent, lay, ground, jitter, &second);
     }
 }
-/// One round of growth when the streets so far cannot house everyone: short side lanes, about
-/// two plot depths long, branch from every street laid since `from` and end where they meet
-/// another street, water, steep ground or the map's edge. Each round fills the blocks beside
-/// the last, so a place spreads as a net of lanes, not as long spokes.
+/// One round of growth when the streets so far cannot house everyone: short side lanes
+/// branch from every street laid since `from` where its frontage is still open, and end where
+/// they meet a plot, another street, water, steep ground or the map's edge, so a grown lane
+/// never runs through a house. Each round fills the blocks beside the last, so a place spreads
+/// as a net of lanes, not as long spokes.
 pub fn grow(
     network: &mut Network,
     from: usize,
@@ -170,7 +171,7 @@ pub fn grow(
         class: Class::Lane,
         limit: f64::MAX,
         spacing: 2.0 * lay.depth + Class::Lane.width(lay.size),
-        reach: lay.depth * (4.0 + round as f64),
+        reach: lay.depth * (GROWN_LANE_DEPTHS + round as f64),
         taper: 0.0,
     };
     for parent in from..network.streets.len() {

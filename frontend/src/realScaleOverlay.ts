@@ -27,7 +27,16 @@ const scale = new Style({
     stroke: new Stroke({ color: "#f39c12", width: 2 }),
   }),
 });
-const roles: Record<string, Style> = { preview, guide, rotate, scale };
+/** A line point's width handle, dragged across the line to widen or narrow it there. */
+const width = new Style({
+  image: new RegularShape({
+    points: 3,
+    radius: 6,
+    fill: new Fill({ color: "#ffffff" }),
+    stroke: new Stroke({ color: "#2980b9", width: 2 }),
+  }),
+});
+const roles: Record<string, Style> = { preview, guide, rotate, scale, width };
 export function overlayStyle(feature: FeatureLike) {
   const role = feature.get("editRole") as string | undefined;
   return (role && roles[role]) || selection;

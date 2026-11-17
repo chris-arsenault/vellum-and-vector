@@ -1,5 +1,8 @@
 use super::read::reference;
-use crate::{authoring::EditStore, map_store::codec};
+use crate::{
+    authoring::{EditStore, TownNames},
+    map_store::codec,
+};
 use atlas_map::{authoring::EditCommand, MapRef};
 use serde::Deserialize;
 use std::io;
@@ -19,10 +22,11 @@ impl EditingCall {
             Self::Edit(r, _) | Self::Undo((r,)) | Self::Redo((r,)) | Self::History((r,)) => r,
         }
     }
-    pub fn execute(self, store: &dyn EditStore) -> io::Result<Vec<u8>> {
+    /// Run the call; new streets and buildings the creator left unnamed are named by `names`.
+    pub fn execute(self, store: &dyn EditStore, names: &dyn TownNames) -> io::Result<Vec<u8>> {
         reference(self.reference())?;
         match self {
-            Self::Edit(r, command) => codec::encode(&store.edit(&r, &command)?),
+            Self::Edit(r, command) => codec::encode(&store.edit_named(&r, &command, names)?),
             Self::Undo((r,)) => codec::encode(&store.undo(&r)?),
             Self::Redo((r,)) => codec::encode(&store.redo(&r)?),
             Self::History((r,)) => codec::encode(&store.edit_history(&r)?),

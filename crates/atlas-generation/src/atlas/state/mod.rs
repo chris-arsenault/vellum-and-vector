@@ -15,6 +15,9 @@ mod native;
 mod oceans;
 mod publication;
 mod reads;
+mod real_scale_ground;
+mod real_scale_trails;
+mod real_scale_water;
 mod regional_causes;
 mod regional_climate;
 mod regional_ecology;
@@ -87,6 +90,9 @@ pub struct Scope {
     pub generation_domains: BTreeMap<String, String>,
     // hpc-exempt: captured feature contracts, not cell membership.
     pub contracted: BTreeSet<String>,
+    /// A real-scale map's captured choices (ADR 0016); none on world and regional maps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub real_scale: Option<crate::features::context::RealScaleMap>,
 }
 impl Scope {
     pub fn validate_ancestry(&self) -> io::Result<()> {

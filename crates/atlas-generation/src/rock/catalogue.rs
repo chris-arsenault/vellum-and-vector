@@ -10,6 +10,20 @@ pub enum RockFamily {
     Loose,
     Ice,
 }
+impl RockFamily {
+    /// How wide a channel on a bed of this family runs per square root of its discharge, in
+    /// metres per (cubic metre a second)^½: loose alluvium spreads its banks widest and
+    /// massive bedrock holds them narrowest.
+    pub fn channel_width_per_root_discharge(self) -> f64 {
+        match self {
+            Self::Loose => 4.5,
+            Self::Broken => 4.0,
+            Self::Sedimentary => 3.5,
+            Self::Ice | Self::Metamorphic => 3.0,
+            Self::Igneous => 2.8,
+        }
+    }
+}
 pub struct RockKind {
     pub id: &'static str,
     pub code: usize,

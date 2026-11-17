@@ -157,7 +157,7 @@ pub fn marks(
 }
 /// The play mark a published layer leaves on the hexes it covers or crosses.
 pub fn mark_of(layer_id: &str) -> Option<&'static str> {
-    match layer_id.strip_prefix("vector:").unwrap_or(layer_id) {
+    match crate::authoring::family(layer_id) {
         "rivers" | "lakes" | "oceans" | "waterworks" => Some("water"),
         "roads" => Some("way"),
         "plots" => Some("plot"),
@@ -165,12 +165,22 @@ pub fn mark_of(layer_id: &str) -> Option<&'static str> {
         "objects" => Some("object"),
         // Cave shapes mark the underground grid; an entrance marks the surface hex it opens in.
         "caves" | "caveEntrances" => Some("cave"),
+        // A drawn cave wall marks the underground hexes it runs through.
+        "caveWalls" => Some("wall"),
         _ => None,
     }
 }
+/// The mark exposed rock leaves, and the ground class of a hex it covers for the most part.
+pub const ROCK_MARK: &str = "rock";
+pub const EXPOSED_ROCK: &str = "Exposed rock";
 /// The ground a published feature covers: its footprint when it has one, else its geometry.
+/// Outcrops mark the rock they bare, whatever layer holds them.
 pub fn mark_shape(feature: &MapFeature) -> Option<(Geometry, &'static str)> {
-    let mark = mark_of(&feature.layer_id)?;
+    let mark = if feature.kind == "outcrop" {
+        ROCK_MARK
+    } else {
+        mark_of(&feature.layer_id)?
+    };
     let shape = feature
         .footprint
         .as_ref()

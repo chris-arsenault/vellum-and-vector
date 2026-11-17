@@ -168,10 +168,28 @@ pub fn sequence(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequ
 /// surface. Real-scale steps (settlement layout and the like) follow the regional body.
 pub fn real_scale(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
     let mut body = sequence(catalogue, context)?;
+    // Once the map's rivers are drawn at their real width, pools form on them and bare rock
+    // shows.
+    let drawn = body
+        .iter()
+        .position(|node| matches!(node, SequenceNode::Process { id, .. } if id == "atlas.features"))
+        .ok_or_else(|| io::Error::other("The regional sequence draws the map's features"))?;
+    for (at, id) in ["real-scale.pools", "real-scale.rock"].iter().enumerate() {
+        body.insert(drawn + 1 + at, invoke(id, Values::new()));
+    }
     // Caves open in the map's own rock before the closing names step, so they are named.
     let names = body.len() - 1;
     body.insert(names, invoke("refinement.caves", Values::new()));
     // Lays streets, plots and buildings from the settlements and ways the child recorded.
     body.push(invoke("real-scale.settlement", Values::new()));
+    // Trails join the places no way reaches to the ways, streets included; every way then
+    // crosses water at a ford or bridge; plants and stones stand clear of all of it.
+    for id in [
+        "real-scale.trails",
+        "real-scale.crossings",
+        "real-scale.cover",
+    ] {
+        body.push(invoke(id, Values::new()));
+    }
     Ok(body)
 }

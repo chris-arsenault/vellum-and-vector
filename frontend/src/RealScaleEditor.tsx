@@ -4,7 +4,12 @@ import { collectPages, type MapReader } from "@atlas/map";
 import { ErrorMessage } from "./ErrorMessage";
 import { RealScaleProperties } from "./RealScaleProperties";
 import { RealScaleLayers } from "./RealScaleLayers";
+import { RealScaleLevels } from "./RealScaleLevels";
 import { RealScaleCommandPalette } from "./RealScaleCommandPalette";
+import { LandOptions, LandToolBar } from "./RealScaleLandTools";
+import { AddressSearch, TownOptions, TownToolBar } from "./RealScaleTown";
+import { RealScaleHexClasses } from "./RealScaleHexClasses";
+import { isHex, withLatentLayers } from "./realScaleLandTools";
 import { actionFor, chooseTool, editActions, type ActionContext } from "./realScaleActions";
 import type { LengthUnits } from "./realScaleFields";
 import {
@@ -25,14 +30,21 @@ function useSelectedFeatures(session: AuthoringSession, reader: MapReader) {
   const query = useQuery({
     queryKey: ["edited-features", map.reference, state.selected, map.realScale?.edits ?? 0],
     enabled: state.selected.length > 0,
-    queryFn: ({ signal }) =>
-      collectPages((cursor) =>
-        reader.features(
-          map.reference,
-          { spaceId: map.primarySpaceId, featureIds: state.selected, cursor },
-          { signal }
+    // A selection can lie on the surface, in the caves or on a building's level.
+    queryFn: async ({ signal }) =>
+      (
+        await Promise.all(
+          map.spaces.map((space) =>
+            collectPages((cursor) =>
+              reader.features(
+                map.reference,
+                { spaceId: space.id, featureIds: state.selected, cursor },
+                { signal }
+              )
+            )
+          )
         )
-      ),
+      ).flat(),
   });
   return state.selected.length ? (query.data ?? []) : [];
 }
@@ -67,10 +79,20 @@ export function RealScaleEditor({ session, reader, units }: Props) {
         Edits change this map&apos;s published layers; generation no longer replaces it.
       </p>
       <ToolBar session={session} />
+      <LandToolBar session={session} />
+      <TownToolBar session={session} />
       {session.state.tool === "draw" && <DrawOptions session={session} />}
+      <LandOptions session={session} />
+      <TownOptions session={session} />
+      <AddressSearch session={session} reader={reader} />
       <ActionBar context={context} />
       <ErrorMessage error={session.error} />
-      <RealScaleProperties session={session} selected={selected} units={units} />
+      {selected.length && selected.every(isHex) ? (
+        <RealScaleHexClasses session={session} hexes={selected} />
+      ) : (
+        <RealScaleProperties session={session} selected={selected} units={units} />
+      )}
+      <RealScaleLevels session={session} />
       <RealScaleLayers session={session} />
       <EditHistory session={session} />
       {palette && <RealScaleCommandPalette context={context} close={() => setPalette(false)} />}
@@ -114,7 +136,7 @@ function DrawOptions({ session }: { session: AuthoringSession }) {
   const { map, state, set } = session;
   const choice = state.draw;
   if (!choice) return <p>This map has no layer to draw into.</p>;
-  const layers = authorableLayers(map);
+  const layers = withLatentLayers(map, authorableLayers(map));
   const kinds = layers.find((layer) => layer.id === choice.layerId)?.catalog.featureTypes ?? [];
   const change = (next: Partial<typeof choice>) => set({ draw: { ...choice, ...next } });
   return (
@@ -153,7 +175,7 @@ function DrawOptions({ session }: { session: AuthoringSession }) {
         Name
         <input value={choice.name} onChange={(event) => change({ name: event.target.value })} />
       </label>
-      {drawShape(choice.layerId) === "line" && (
+      {drawShape(choice.layerId, choice.kind) === "line" && (
         <label>
           Width (m)
           <input

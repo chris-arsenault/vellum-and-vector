@@ -70,6 +70,54 @@ pub fn outline(centre: [f64; 2], radius: f64, sides: usize) -> Vec<[f64; 2]> {
     ring.push(ring[0]);
     ring
 }
+/// A closed ring cut to a rectangular frame `[west, south, east, north]`, closed again; empty
+/// when nothing of it lies inside. A chamber beneath an edge triangle reaches past the map's
+/// edge, and the map holds only the part inside.
+pub fn clip_ring(ring: &[[f64; 2]], frame: [f64; 4]) -> Vec<[f64; 2]> {
+    // Each frame edge keeps the side `inside` says and cuts a crossing at `cut`.
+    type Side = (
+        fn([f64; 2], [f64; 4]) -> bool,
+        fn([f64; 2], [f64; 2], [f64; 4]) -> [f64; 2],
+    );
+    let sides: [Side; 4] = [
+        (|p, f| p[0] >= f[0], |a, b, f| cut_x(a, b, f[0])),
+        (|p, f| p[0] <= f[2], |a, b, f| cut_x(a, b, f[2])),
+        (|p, f| p[1] >= f[1], |a, b, f| cut_y(a, b, f[1])),
+        (|p, f| p[1] <= f[3], |a, b, f| cut_y(a, b, f[3])),
+    ];
+    let mut points: Vec<[f64; 2]> = ring.to_vec();
+    if points.len() > 1 && points.first() == points.last() {
+        points.pop();
+    }
+    for (inside, cut) in sides {
+        let input = std::mem::take(&mut points);
+        for (at, &current) in input.iter().enumerate() {
+            let previous = input[(at + input.len() - 1) % input.len()];
+            match (inside(previous, frame), inside(current, frame)) {
+                (true, true) => points.push(current),
+                (true, false) => points.push(cut(previous, current, frame)),
+                (false, true) => {
+                    points.push(cut(previous, current, frame));
+                    points.push(current);
+                }
+                (false, false) => {}
+            }
+        }
+    }
+    if points.len() < 3 {
+        return Vec::new();
+    }
+    points.push(points[0]);
+    points
+}
+fn cut_x(a: [f64; 2], b: [f64; 2], x: f64) -> [f64; 2] {
+    let t = (x - a[0]) / (b[0] - a[0]);
+    [x, a[1] + (b[1] - a[1]) * t]
+}
+fn cut_y(a: [f64; 2], b: [f64; 2], y: f64) -> [f64; 2] {
+    let t = (y - a[1]) / (b[1] - a[1]);
+    [a[0] + (b[0] - a[0]) * t, y]
+}
 /// Cave levels are depth bands below the ground; level one lies nearest the surface.
 pub fn level(depth: f64) -> u32 {
     (depth.max(0.0) / LEVEL_DEPTH).floor() as u32 + 1
@@ -83,6 +131,20 @@ mod tests {
             width,
             depth: width * 10.0,
         }
+    }
+    #[test]
+    fn a_chamber_at_the_edge_is_cut_to_the_frame() {
+        let ring = outline([0.0, 50.0], 10.0, 12);
+        let cut = clip_ring(&ring, [0.0, 0.0, 100.0, 100.0]);
+        assert_eq!(cut.first(), cut.last());
+        assert!(cut.iter().all(|p| p[0] >= -1e-9 && p[0] <= 100.0));
+        assert!(cut.iter().any(|p| p[0] > 9.0));
+        assert!(clip_ring(&outline([-50.0, 50.0], 10.0, 12), [0.0, 0.0, 100.0, 100.0]).is_empty());
+        let inside = outline([50.0, 50.0], 10.0, 12);
+        assert_eq!(
+            clip_ring(&inside, [0.0, 0.0, 100.0, 100.0]).len(),
+            inside.len()
+        );
     }
     #[test]
     fn smoothing_keeps_the_ends_and_carries_widths_and_depths() {

@@ -71,6 +71,11 @@ pub struct Category {
     pub color: Option<String>,
     pub surface: Option<SurfaceAppearance>,
     pub present: bool,
+    /// For a rock class: whether moving groundwater dissolves this rock into passages (karst),
+    /// published so tools that cut rock can read it without the rock catalogue.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub soluble: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]

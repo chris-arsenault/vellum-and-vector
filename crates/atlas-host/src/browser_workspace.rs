@@ -51,6 +51,13 @@ impl BrowserWorkspace {
     pub fn read(&self, request: &str) -> Result<Vec<u8>, JsValue> {
         let call: ReadCall = serde_json::from_str(request).map_err(error)?;
         self.ensure(call.reference()).map_err(error)?;
+        // A building's outside context reads its parent map, which a reload may not have
+        // copied into the working catalog yet.
+        if let ReadCall::Site((reference,)) | ReadCall::Connections(reference, _) = &call {
+            if let Some(parent) = self.maps.access().open(reference).map_err(error)?.parent {
+                self.ensure(&parent).map_err(error)?;
+            }
+        }
         if let ReadCall::Source(reference, id) = call {
             let asset = self.maps.access().asset(&reference, &id).map_err(error)?;
             MapFiles::new(ASSETS).path(&asset.location).map_err(error)?;
@@ -72,9 +79,18 @@ impl BrowserWorkspace {
     }
     /// Real-scale authoring writes the working catalog; **Save map** keeps it across reloads.
     pub fn edit(&self, request: &str) -> Result<Vec<u8>, JsValue> {
+        if let Some(call) = crate::structure_maps::StructureCall::parse(request) {
+            self.ensure(call.reference()).map_err(error)?;
+            let mut maps = self.maps.clone();
+            let opened = call
+                .execute(&mut maps, &MapFiles::new(ASSETS))
+                .map_err(error)?;
+            return codec::encode(&opened).map_err(error);
+        }
         let call: EditingCall = serde_json::from_str(request).map_err(error)?;
         self.ensure(call.reference()).map_err(error)?;
-        call.execute(self.maps.edits()).map_err(error)
+        call.execute(self.maps.edits(), &crate::town_names::AtlasNames)
+            .map_err(error)
     }
     pub fn library(&self, request: &str) -> Result<Vec<u8>, JsValue> {
         let call: LibraryCall = serde_json::from_str(request).map_err(error)?;

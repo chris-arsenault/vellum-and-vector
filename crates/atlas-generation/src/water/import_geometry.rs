@@ -56,6 +56,24 @@ impl Bend {
     pub fn geometry(&self, geometry: &Geometry) -> Geometry {
         bent_geometry(geometry, self)
     }
+    /// The child triangle a parent position lands on: bent, then looked up inside the map's own
+    /// triangles. A position that bends outside the frame lands on none. The river network,
+    /// captured courses, captured records and carried places all locate through this.
+    pub fn cell(&self, mesh: &TriangularLattice, parent: [f64; 2]) -> Option<usize> {
+        content_cell(mesh, self.at(parent))
+    }
+}
+/// The lattice cell the carried river network takes for a position already bent onto this
+/// map; the network keeps only positions inside its frame mask.
+pub(crate) fn network_cell(mesh: &TriangularLattice, [x, y]: [f64; 2]) -> Option<usize> {
+    let [ox, oy] = mesh.origin();
+    mesh.cell_at(x - ox, y - oy)
+}
+/// The map's own triangle under a position already on this map, or none outside its frame.
+pub(crate) fn content_cell(mesh: &TriangularLattice, [x, y]: [f64; 2]) -> Option<usize> {
+    let [ox, oy] = mesh.origin();
+    mesh.cell_at(mesh.delta_x(x - ox), y - oy)
+        .filter(|&cell| mesh.membership(cell) == crate::lattice::Membership::Content)
 }
 /// Legs of a carried line are cut this many times finer than the parent's span before they
 /// bend, so a straight parent leg wanders along its length and not only at its ends.
@@ -148,39 +166,55 @@ impl<'a> ImportGeometry<'a> {
             bend,
         }
     }
+    /// A parent point's cell: bent first, then kept only when it lands inside the frame.
     pub fn point_cell(&self, position: Position) -> SpatialResult<Option<usize>> {
-        if !self.spatial.covers_points(&self.mask, &[position])?[0] {
+        let bent = self.bent(position);
+        if !self.spatial.covers_points(&self.mask, &[bent])?[0] {
             return Ok(None);
         }
-        Ok(self.cell(position))
+        Ok(self.at(bent))
     }
+    /// The cell a parent position bends onto.
     pub fn cell(&self, position: Position) -> Option<usize> {
+        self.at(self.bent(position))
+    }
+    fn bent(&self, position: Position) -> Position {
         let [x, y, _] = position.coordinates();
         let [x, y] = self.bend.at([x, y]);
-        let [ox, oy] = self.mesh.origin();
-        self.mesh.cell_at(x - ox, y - oy)
+        Position::xy(x, y)
+    }
+    /// The cell under a position already bent onto this map.
+    fn at(&self, bent: Position) -> Option<usize> {
+        let [x, y, _] = bent.coordinates();
+        network_cell(self.mesh, [x, y])
+    }
+    /// A parent course with each vertex bent and no vertex added, so per-vertex profiles still
+    /// line up with it.
+    pub fn bent_course(&self, course: &[Position]) -> Vec<Position> {
+        course.iter().map(|p| self.bent(*p)).collect()
     }
     pub fn position(&self, cell: usize) -> Position {
         let [x, y] = self.mesh.position(cell);
         let [ox, oy] = self.mesh.origin();
         Position::xy(x + ox, y + oy)
     }
+    /// A parent course as this map holds it: bent first, then clipped to the frame, so a river
+    /// that bends into the map is kept and one that bends out of it is cut where it leaves.
     pub fn clipped(&self, course: &[Position]) -> SpatialResult<Vec<Vec<Position>>> {
         if course.len() < 2 {
             return Ok(Vec::new());
         }
-        let result = self.spatial.clip_trace(
-            &Geometry::LineString {
-                coordinates: course.to_vec(),
-            },
-            &self.mask,
-        )?;
+        let bent = self.bend.geometry(&Geometry::LineString {
+            coordinates: course.to_vec(),
+        });
+        let result = self.spatial.clip_trace(&bent, &self.mask)?;
         let mut lines = Vec::new();
         if let Some(result) = result {
             line_parts(result, &mut lines);
         }
         Ok(lines)
     }
+    /// The cells along a line already bent and clipped onto this map (`clipped`).
     pub fn sampled(&self, line: &[Position]) -> SpatialResult<Vec<Option<usize>>> {
         let sampled = self.spatial.resample_trace(
             &Geometry::LineString {
@@ -192,7 +226,7 @@ impl<'a> ImportGeometry<'a> {
         )?;
         match sampled {
             Geometry::LineString { coordinates } => {
-                Ok(coordinates.iter().map(|p| self.cell(*p)).collect())
+                Ok(coordinates.iter().map(|p| self.at(*p)).collect())
             }
             _ => Err("River resampling must return a directed line".into()),
         }

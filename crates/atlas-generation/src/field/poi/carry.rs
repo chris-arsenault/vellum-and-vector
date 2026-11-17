@@ -22,6 +22,9 @@ pub struct CarriedPlace {
     pub carried: Carried,
     pub place: Place,
 }
+/// A carried place as captured, located where this map holds it: the captured record's facts
+/// with the working record's shape, footprint and representative point, which the child bent
+/// onto its own rivers (`regional_initialization::bend_record`).
 pub fn captured_place<S: CarryState<Schedule>, Schedule>(
     state: &S,
     feature: &Feature,
@@ -31,7 +34,23 @@ pub fn captured_place<S: CarryState<Schedule>, Schedule>(
         .map(|reader| reader.get(&feature.id))
         .transpose()?
         .flatten()
-        .unwrap_or_else(|| feature.clone()))
+        .map_or_else(|| feature.clone(), |source| located(source, feature)))
+}
+/// The captured `source` record placed where the `working` record stands on this map.
+pub fn located(mut source: Feature, working: &Feature) -> Feature {
+    source.geometry.clone_from(&working.geometry);
+    source.footprint.clone_from(&working.footprint);
+    match working.attributes.get("representative") {
+        Some(point) => {
+            source
+                .attributes
+                .insert("representative".into(), point.clone());
+        }
+        None => {
+            source.attributes.remove("representative");
+        }
+    }
+    source
 }
 fn captured_kind(feature: &Feature) -> Option<Kind> {
     if feature

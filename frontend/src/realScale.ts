@@ -29,6 +29,7 @@ export const realScaleOrder = [
   "structures",
   "ruins",
   "caves",
+  "caveWalls",
   "objects",
   "caveEntrances",
   "hexes",

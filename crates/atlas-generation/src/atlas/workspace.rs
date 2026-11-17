@@ -166,7 +166,8 @@ pub fn construct(input: Construction<'_>) -> ExecutionResult<Prepared> {
     let profile = profile(&input)?;
     let mesh = Rc::new(lattice(&input, &profile)?);
     let scale = MapScale::from_bounds(frame_bounds(input.frame.scope), mesh.spacing())
-        .map_err(io::Error::other)?;
+        .map_err(io::Error::other)?
+        .at_real_size(input.frame.scope.real_scale.is_some());
     let mut seed = FieldSeed::new(mesh.clone(), scale, input.cache.clone());
     let inherited = input.inputs.surface.channels.contains_key("Elevation");
     let mut imported = Coverage::new(mesh.clone(), input.cache.clone());

@@ -5,6 +5,7 @@ interface Arguments {
   undo: [MapRef];
   redo: [MapRef];
   history: [MapRef];
+  openFloors: [MapRef, string];
 }
 type Method = keyof Arguments;
 export type EditingCall = { [M in Method]: { method: M; args: Arguments[M] } }[Method];
@@ -25,6 +26,9 @@ export class RpcMapEditing implements MapEditing {
   }
   redo(reference: MapRef, options?: ReadOptions) {
     return this.call("redo", [reference], options);
+  }
+  openFloors(parent: MapRef, buildingId: string, options?: ReadOptions) {
+    return this.call("openFloors", [parent, buildingId], options);
   }
   history(reference: MapRef, options?: ReadOptions) {
     return this.call("history", [reference], options);

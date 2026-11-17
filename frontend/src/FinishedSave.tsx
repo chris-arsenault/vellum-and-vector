@@ -6,6 +6,7 @@ import type { PublishedPresentation } from "./PublishedMapView";
 import { initialPublishedPresentation } from "./publishedStyling";
 import { sameValue } from "./values";
 import { ErrorMessage } from "./ErrorMessage";
+import { useSavedFloors } from "./structureSave";
 
 interface Props {
   context: Pick<FinishedContext, "mode" | "library">;
@@ -19,7 +20,9 @@ interface Props {
 export function FinishedSave({ context, map, saved, value, navigation, edits }: Props) {
   const cache = useQueryClient();
   const [stored, setStored] = useState(saved);
-  const clean = matchesSavedView(map, stored, value, navigation, edits);
+  // A ground map's building floors are kept with it; new or edited floors are unsaved changes.
+  const { floors, unchanged, reading } = useSavedFloors(map, stored);
+  const clean = unchanged && matchesSavedView(map, stored, value, navigation, edits);
   const save = useMutation({
     mutationFn: async () => {
       if (!navigation) throw new Error("Wait for map regions and views to load.");
@@ -27,7 +30,7 @@ export function FinishedSave({ context, map, saved, value, navigation, edits }: 
         reference: map.reference,
         expectedVersion: stored?.version ?? null,
         navigation,
-        settings: { presentation: value as unknown as JsonValue, edits },
+        settings: { presentation: value as unknown as JsonValue, edits, floors },
       });
     },
     onSuccess: (saved) => {
@@ -36,8 +39,9 @@ export function FinishedSave({ context, map, saved, value, navigation, edits }: 
     },
   });
   const persist = save.mutate;
-  const automatic =
-    context.mode === "backend" && !clean && navigation !== null && map.state === "complete";
+  // Save waits while the building floors are read, so it records them as they stand.
+  const ready = navigation !== null && map.state === "complete" && !reading;
+  const automatic = context.mode === "backend" && !clean && ready;
   // owner-direction(2026-11-15): server maps and their view preferences do not require a Save action
   useEffect(() => {
     if (!automatic || save.isPending || save.isError) return;
@@ -48,10 +52,7 @@ export function FinishedSave({ context, map, saved, value, navigation, edits }: 
     <div className="map-storage">
       <span role="status">{storageLabel(context.mode, save.isPending, !!stored, clean)}</span>
       {(context.mode === "browser" || save.isError) && (
-        <button
-          disabled={save.isPending || navigation === null || map.state !== "complete"}
-          onClick={() => save.mutate()}
-        >
+        <button disabled={save.isPending || !ready} onClick={() => save.mutate()}>
           {saveLabel(context.mode, save.isPending)}
         </button>
       )}

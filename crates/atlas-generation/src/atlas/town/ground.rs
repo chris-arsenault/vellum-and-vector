@@ -10,8 +10,10 @@ pub const SQUARE: u32 = 4;
 pub const WALL: u32 = 5;
 pub const FIELD: u32 = 6;
 pub const PLOT: u32 = 7;
+/// A way on the map that is not one of the settlement's streets: a captured road or trail.
+pub const WAY: u32 = 8;
 /// The first owner a street can take; street `i` owns `FIRST_STREET + i`.
-pub const FIRST_STREET: u32 = 8;
+pub const FIRST_STREET: u32 = 9;
 
 pub struct Ground {
     pub origin: Point,
@@ -139,6 +141,54 @@ impl Ground {
             self.owners[index] = mark;
         }
     }
+    /// The cells whose centres lie within `bounds` (west, south, east, north).
+    pub fn cells_within(&self, [w, s, e, n]: [f64; 4]) -> Vec<usize> {
+        let column = |x: f64| ((x - self.origin[0]) / self.cell - 0.5).ceil().max(0.0) as usize;
+        let row = |y: f64| ((y - self.origin[1]) / self.cell - 0.5).ceil().max(0.0) as usize;
+        let last = |v: f64, origin: f64, count: usize| {
+            (((v - origin) / self.cell - 0.5).floor() as i64).min(count as i64 - 1)
+        };
+        let (east, north) = (
+            last(e, self.origin[0], self.columns),
+            last(n, self.origin[1], self.rows),
+        );
+        let mut cells = Vec::new();
+        for y in row(s) as i64..=north {
+            for x in column(w) as i64..=east {
+                cells.push(y as usize * self.columns + x as usize);
+            }
+        }
+        cells
+    }
+    /// Withholds every cell whose centre one of the shapes covers, as water or steep ground.
+    pub fn mark_shapes(
+        &mut self,
+        shapes: &[atlas_map::Geometry],
+        mark: u32,
+        spatial: &dyn crate::spatial::SpatialKernel,
+    ) -> std::io::Result<()> {
+        for shape in shapes {
+            let atlas_map::Bounds(w, s, e, n) =
+                spatial.bounds(shape).map_err(std::io::Error::other)?;
+            let cells = self.cells_within([w, s, e, n]);
+            let centres: Vec<atlas_map::Position> = cells
+                .iter()
+                .map(|&i| {
+                    let [x, y] = self.centre(i);
+                    atlas_map::Position::xy(x, y)
+                })
+                .collect();
+            let covered = spatial
+                .covers_points(shape, &centres)
+                .map_err(std::io::Error::other)?;
+            for (index, inside) in cells.into_iter().zip(covered) {
+                if inside {
+                    self.withhold(index, mark);
+                }
+            }
+        }
+        Ok(())
+    }
     pub fn is_water(&self, p: Point) -> bool {
         self.owner(p) == WATER
     }
@@ -188,17 +238,24 @@ impl Ground {
             self.owners[index] = owner;
         }
     }
-    /// Gives a street's free ground, `width` metres wide along its line, to `owner`.
+    /// Gives a street's free ground, `width` metres wide along its line and half a cell past
+    /// each end, to `owner`. A street also takes the cells another street holds there, so a
+    /// side street's mouth belongs to it and no plot of the street it leaves stands in it.
     pub fn take_line(&mut self, points: &[Point], width: f64, owner: u32) {
         let step = self.cell / 2.0;
         let total = line_length(points);
-        let mut along = 0.0;
-        while along <= total {
-            if let Some((p, d)) = at(points, along) {
+        let mut along = -step;
+        while along <= total + step {
+            let on = along.clamp(0.0, total);
+            if let Some((p, d)) = at(points, on) {
+                let p = add(p, scale(d, along - on));
                 let across = [-d[1], d[0]];
                 let mut side = -width / 2.0;
                 while side <= width / 2.0 {
                     if let Some(i) = self.index(add(p, scale(across, side))) {
+                        if owner >= FIRST_STREET && self.owners[i] >= FIRST_STREET {
+                            self.owners[i] = owner;
+                        }
                         self.claim(i, owner);
                     }
                     side += step;

@@ -8,7 +8,32 @@ fn main() -> std::io::Result<()> {
     let generation = root.join("packages/atlas-context/src/generated.ts");
     fs::create_dir_all(map.parent().expect("map output parent"))?;
     fs::create_dir_all(generation.parent().expect("generation output parent"))?;
-    fs::write(map, format!("{header}{}\n", atlas_map::declarations()))?;
+    let core = atlas_map::declarations();
+    let editing = atlas_map::editing_declarations();
+    // Each file imports the other's names it uses; type-only imports may go both ways.
+    fs::write(
+        &map,
+        format!(
+            "{header}{}{core}\n",
+            imports(&editing, &core, "./generatedEditing")
+        ),
+    )?;
+    fs::write(
+        map.with_file_name("generatedEditing.ts"),
+        format!(
+            "{header}{}{editing}\n",
+            imports(&core, &editing, "./generated")
+        ),
+    )?;
+    // The structure-map vocabulary (level names, connection kinds and reach, shell settings)
+    // is declared once in Rust and served to the view as data.
+    fs::write(
+        map.with_file_name("generatedStructure.ts"),
+        format!(
+            "{header}export const structureVocabulary = {} as const;\n",
+            atlas_map::structure::VOCABULARY.trim()
+        ),
+    )?;
     fs::write(
         generation,
         format!(
@@ -17,4 +42,23 @@ fn main() -> std::io::Result<()> {
         ),
     )?;
     Ok(())
+}
+/// The names declared in `from` that `user` mentions, imported from module `path`.
+fn imports(from: &str, user: &str, path: &str) -> String {
+    let words = user
+        .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .collect::<std::collections::BTreeSet<_>>();
+    let used = from
+        .split("export type ")
+        .skip(1)
+        .filter_map(|rest| {
+            rest.split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .next()
+        })
+        .filter(|name| words.contains(name))
+        .collect::<Vec<_>>();
+    if used.is_empty() {
+        return String::new();
+    }
+    format!("import type {{ {} }} from \"{path}\";\n\n", used.join(", "))
 }

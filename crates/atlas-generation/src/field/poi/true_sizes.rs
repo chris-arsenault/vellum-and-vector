@@ -383,6 +383,7 @@ pub fn reason(kind: Kind) -> &'static str {
         Vent => "Heat and water breaking out of the ground.",
         Oasis => "Green, watered ground in dry country.",
         MeltLine => "Where Aurora's cold gives way to thaw.",
+        Pool => "Deep, slow water in a stream.",
         Headland => "High ground running out into the sea.",
         Bay => "Water held in a curve of the coast.",
         Strait => "A narrow passage of sea between two shores.",

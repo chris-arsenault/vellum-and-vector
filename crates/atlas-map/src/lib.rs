@@ -13,6 +13,9 @@ mod records;
 pub mod regions;
 pub mod spatial;
 mod spatial_query;
+pub mod structure;
+pub mod town;
+pub mod underground;
 mod validation;
 
 pub use geometry::*;
@@ -82,6 +85,13 @@ pub struct RealScale {
     // owner-direction(2026-11-16): when the user is authoring a map goes from the numerically in depth representation to a 2d representation of it
     #[serde(default)]
     pub edits: u32,
+    /// On a structure map: the building on the parent map whose floors it holds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub site: Option<structure::StructureSite>,
+    /// The hex classes and latent layers authoring offers and accepts on this map.
+    #[serde(default)]
+    pub authoring: authoring::AuthoringChoices,
 }
 impl RealScale {
     pub fn grid(&self) -> Result<hexes::HexGrid, &'static str> {
@@ -160,6 +170,7 @@ pub fn declarations() -> String {
         LayerCatalog::decl(&cfg),
         DisplayUnit::decl(&cfg),
         MapFeatureType::decl(&cfg),
+        KindSize::decl(&cfg),
         MagicDepiction::decl(&cfg),
         GeometryType::decl(&cfg),
         PropertyType::decl(&cfg),
@@ -192,9 +203,18 @@ pub fn declarations() -> String {
         MapErrorCode::decl(&cfg),
         MapValidation::decl(&cfg),
     ]
-    .into_iter()
-    .chain(authoring::declarations(&cfg))
-    .collect::<Vec<_>>()
     .join("\n\n")
     .replace("type ", "export type ")
+}
+/// The real-scale editing, town and structure contracts, generated into their own file so
+/// each generated file stays within the lint's size limit.
+pub fn editing_declarations() -> String {
+    let cfg = ts_rs::Config::default();
+    [town::AddressMatch::decl(&cfg)]
+        .into_iter()
+        .chain(authoring::declarations(&cfg))
+        .chain(structure::declarations(&cfg))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+        .replace("type ", "export type ")
 }

@@ -1,0 +1,30 @@
+{
+  "shell": {
+    "outerWall": 0.6,
+    "streetDoor": 1.2,
+    "frameMarginHexes": 2,
+    "hexSize": "1.5m",
+    "about": "Metres, except the margin in hexes. A timber-framed or rubble outer wall of a house, inn or hall; the street door in the middle of the front wall, never more than half the wall; ground kept around the footprint inside the frame; floors open at tabletop squares."
+  },
+  "levels": {
+    "names": {
+      "-1": "Cellar",
+      "0": "Ground floor",
+      "1": "First floor",
+      "2": "Second floor",
+      "3": "Third floor"
+    },
+    "cellar": "Cellar {n}",
+    "floor": "Floor {n}",
+    "lowest": -5,
+    "highest": 12,
+    "about": "What a creator calls each level; deeper cellars and higher floors are numbered."
+  },
+  "connections": {
+    "kinds": ["stair", "ladder", "trapdoor", "door", "gate", "shaft", "caveMouth", "sinkhole"],
+    "landings": ["stair", "ladder", "trapdoor", "shaft"],
+    "reachesLayers": ["caves", "caveEntrances", "caveWalls"],
+    "reachesStructures": ["building", "door", "gate", "stair", "ladder", "trapdoor"],
+    "about": "Kinds that carry people between levels or maps. On another map a connection reaches a cave (its passages, chambers, mouths and walls) or a building's doors, stairs and trapdoors; on its own map, a stair, ladder, trapdoor or shaft on another level (its landing)."
+  }
+}

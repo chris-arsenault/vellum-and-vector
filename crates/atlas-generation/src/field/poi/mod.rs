@@ -54,6 +54,7 @@ pub mod peak_origins;
 pub mod peak_ranges;
 pub mod place_geometry;
 pub mod places;
+pub mod pool;
 pub mod practised_ground;
 pub mod pressure_seas;
 pub mod publication;

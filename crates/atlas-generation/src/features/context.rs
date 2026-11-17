@@ -29,7 +29,7 @@ pub struct MapOwnership {
     pub real_scale: Option<RealScaleMap>,
 }
 /// A real-scale map's captured choices: its kind, hex size and the detail it was laid at.
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RealScaleMap {
     pub kind: atlas_map::RealScaleKind,

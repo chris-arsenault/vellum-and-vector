@@ -50,3 +50,5 @@ pub mod observed_publication;
 pub mod private_inputs;
 pub mod record_store;
 pub mod regional_capture;
+pub mod structure_maps;
+pub mod town_names;

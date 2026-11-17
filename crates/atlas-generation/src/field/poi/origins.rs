@@ -40,6 +40,7 @@ pub fn reached(state: &impl State, moment: Moment) -> bool {
         Moment::Geography => true,
         Moment::Magic => state.magic().is_some(),
         Moment::Society => state.regional() || state.places_recorded(),
+        Moment::Ground => state.regional(),
     }
 }
 pub fn spaced_among(

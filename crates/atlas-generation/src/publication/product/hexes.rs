@@ -2,7 +2,7 @@
 //! (ADR 0016). Marks are recomputed from published shapes, never from private generation data.
 use crate::features::{Feature, State};
 use atlas_map::{
-    hexes::{marks, Hex, HexGrid, MarkSource},
+    hexes::{marks, Hex, HexGrid, MarkSource, EXPOSED_ROCK, ROCK_MARK},
     spatial::SpatialKernel,
     Bounds, Geometry, RealScale,
 };
@@ -50,6 +50,16 @@ pub fn ground_classes(
         })
         .collect())
 }
+/// A hex whose triangles are mostly bare rock is exposed rock, whatever surface class the
+/// rest of it holds.
+// hpc-exempt: one hex's named mark shares.
+pub fn hex_ground(marks: &BTreeMap<String, f64>, surface: Option<String>) -> Option<String> {
+    if marks.get(ROCK_MARK).is_some_and(|share| *share > 0.5) {
+        Some(EXPOSED_ROCK.into())
+    } else {
+        surface
+    }
+}
 pub fn hex_features(
     real: &RealScale,
     frame: Bounds,
@@ -79,6 +89,7 @@ pub fn hex_features(
             attributes.insert("r".into(), hex.r.into());
             attributes.insert("fill".into(), fill(&marks).map_or(Value::Null, Into::into));
             attributes.insert("marks".into(), json!(marks));
+            let ground = hex_ground(&marks, ground);
             attributes.insert("ground".into(), ground.map_or(Value::Null, Into::into));
             attributes.insert("nameStatus".into(), "label".into());
             Feature {
@@ -103,4 +114,25 @@ pub fn hex_features(
             }
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_hex_mostly_bare_rock_is_exposed_rock() {
+        // hpc-exempt: one hex's named mark shares.
+        let marks = |rock: f64| BTreeMap::from([(ROCK_MARK.to_owned(), rock)]);
+        let surface = || Some("Grassland".to_owned());
+        assert_eq!(
+            hex_ground(&marks(0.7), surface()).as_deref(),
+            Some(EXPOSED_ROCK)
+        );
+        assert_eq!(
+            hex_ground(&marks(0.3), surface()).as_deref(),
+            Some("Grassland")
+        );
+        // hpc-exempt: an empty hex's marks.
+        assert_eq!(hex_ground(&BTreeMap::new(), None), None);
+    }
 }

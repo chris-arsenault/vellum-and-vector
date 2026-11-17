@@ -26,7 +26,7 @@ test-architecture:
 
 contracts:
 	cargo run -p atlas-host --bin export_contracts
-	pnpm exec prettier --write packages/map/src/generated.ts packages/atlas-context/src/generated.ts
+	pnpm exec prettier --write packages/map/src/generated.ts packages/map/src/generatedEditing.ts packages/map/src/generatedStructure.ts packages/atlas-context/src/generated.ts
 
 wasm-engine:
 	cargo +nightly build -Zbuild-std=std,panic_abort -p atlas-host --bin atlas_browser --release --target wasm32-unknown-emscripten

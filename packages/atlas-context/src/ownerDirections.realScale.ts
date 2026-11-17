@@ -43,4 +43,11 @@ export const realScaleDirections: readonly OwnerDirection[] = [
     marks: ["crates/atlas-map/src/authoring/plan.rs"],
     test: ["crates/atlas-gis/tests/authoring.rs", "frontend/tests/realScaleAuthoring.test.ts"],
   },
+  {
+    direction:
+      "there are no tools for art generation. we will ship assets that we genrate in development with open ai",
+    given: "2026-11-17",
+    marks: ["frontend/src/buildingArt.ts"],
+    test: "frontend/src/buildingArt.test.ts",
+  },
 ];

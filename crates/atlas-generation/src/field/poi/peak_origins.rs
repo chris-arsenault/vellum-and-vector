@@ -11,7 +11,10 @@ use super::{
     values::Found,
 };
 use crate::{
-    field::{refinement::topology::distance, significance::measure},
+    field::{
+        refinement::topology::distance,
+        significance::{measure, physical},
+    },
     hpc::{BitSet, Direction, KeyedHeap},
     lattice::Membership,
     noise::hash_unit,
@@ -32,12 +35,21 @@ pub fn metres(state: &impl State, cell: usize) -> io::Result<f64> {
         LengthUnit::Native,
     ))
 }
+// Prominence a summit needs on a real-scale map (ADR 0016), metres: a knoll anyone would name,
+// a summit within a range, a lone hill, a sea mark seen from the water, and the rise of a col
+// beneath a horn.
+const REAL_LEAST: f64 = 15.0;
+const REAL_HIGH: f64 = 30.0;
+const REAL_LONE: f64 = 60.0;
+const REAL_SEA_MARK: f64 = 30.0;
+const REAL_HORN: f64 = 100.0;
 fn least(state: &impl State) -> io::Result<f64> {
-    Ok(MapScale::native(measure(
+    Ok(MapScale::native(physical(
         &state.field()?.scale,
         0.0000125,
         1,
         1.0,
+        REAL_LEAST,
     )?))
 }
 fn at(anchor: usize) -> Found {
@@ -122,7 +134,7 @@ fn carried<S: CatalogueState<Schedule>, Schedule>(state: &S) -> io::Result<Vec<F
 }
 fn high(state: &impl RangeState, claimed: &Claims) -> io::Result<Vec<Found>> {
     let field = state.field()?;
-    let threshold = measure(&field.scale, 0.0001, 1, 0.5)?;
+    let threshold = physical(&field.scale, 0.0001, 1, 0.5, REAL_HIGH)?;
     let mut bars = field.coverage.borrow_mut().allocate(f64::NAN);
     for group in peak_ranges::groups(state)?.iter() {
         let bar = threshold.max(0.25 * group.relief);
@@ -140,7 +152,7 @@ fn high(state: &impl RangeState, claimed: &Claims) -> io::Result<Vec<Found>> {
 }
 fn lone(state: &impl RangeState, claimed: &Claims) -> io::Result<Vec<Found>> {
     let field = state.field()?;
-    let threshold = measure(&field.scale, 0.000225, 1, 0.5)?;
+    let threshold = physical(&field.scale, 0.000225, 1, 0.5, REAL_LONE)?;
     let mut in_range = BitSet::new(field.mesh.len());
     for group in peak_ranges::groups(state)?.iter() {
         for &cell in &group.members {
@@ -157,7 +169,7 @@ fn lone(state: &impl RangeState, claimed: &Claims) -> io::Result<Vec<Found>> {
 }
 fn sea_marks(state: &impl State, claimed: &Claims) -> io::Result<Vec<Found>> {
     let field = state.field()?;
-    let threshold = measure(&field.scale, 0.000075, 1, 0.5)?;
+    let threshold = physical(&field.scale, 0.000075, 1, 0.5, REAL_SEA_MARK)?;
     origins::spaced_among(
         state,
         claimed,
@@ -204,7 +216,7 @@ fn cols(state: &impl State) -> io::Result<Vec<(usize, f64)>> {
 fn horns(state: &impl State, claimed: &Claims) -> io::Result<Vec<Found>> {
     let field = state.field()?;
     let reach = field.scale.cells(4.0);
-    let bar = MapScale::native(measure(&field.scale, 0.0003, 1, 0.5)?);
+    let bar = MapScale::native(physical(&field.scale, 0.0003, 1, 0.5, REAL_HORN)?);
     let mut taken: Vec<_> = claimed.cells().collect();
     let mut found = Vec::new();
     for (col, rise) in cols(state)? {

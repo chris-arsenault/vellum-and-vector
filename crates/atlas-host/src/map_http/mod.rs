@@ -102,8 +102,22 @@ fn handle(request: &mut Request, services: &Services) -> io::Result<ResponseBox>
             }
             // A server map is retained as it is edited; no Save is needed.
             "/api/maps/editing" => {
-                let call: EditingCall = decode_request(request)?;
-                call.execute(lock(&services.writer)?.edits())?
+                let value: serde_json::Value = decode_request(request)?;
+                if let Some(call) = crate::structure_maps::StructureCall::parse_value(value.clone())
+                {
+                    let opened = call.execute(&mut *lock(&services.writer)?, &services.files)?;
+                    let mut bytes = Vec::new();
+                    ciborium::into_writer(&opened, &mut bytes).map_err(io::Error::other)?;
+                    return Ok(Response::from_data(bytes)
+                        .with_header(header("Content-Type", "application/cbor")?)
+                        .with_header(header("Cache-Control", "no-store")?)
+                        .boxed());
+                }
+                let call: EditingCall = serde_json::from_value(value).map_err(io::Error::other)?;
+                call.execute(
+                    lock(&services.writer)?.edits(),
+                    &crate::town_names::AtlasNames,
+                )?
             }
             _ => {
                 let call: LibraryCall = decode_request(request)?;

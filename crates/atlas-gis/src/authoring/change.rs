@@ -4,8 +4,8 @@ use super::{other, EditStore};
 use crate::map_store::FeatureQuery;
 use atlas_map::{
     authoring::{
-        attach, crosses, editable, follow, footprint, is_junction, junctions, shape_of, Draft,
-        Shape,
+        attach, crosses, editable, family, follow, footprint, is_junction, junctions, shape_of,
+        shape_of_kind, Draft, Shape,
     },
     spatial::SpatialKernel,
     Bounds, MapDescriptor, MapFeature,
@@ -33,6 +33,10 @@ pub(super) fn complete(scope: &Scope<'_>, mut draft: Draft) -> io::Result<Draft>
     scope.crossings_over(&mut draft, tolerance)?;
     Ok(draft)
 }
+/// A line by its kind: a wall is one even in the structures layer of outlines.
+fn is_line(feature: &MapFeature) -> bool {
+    shape_of_kind(&feature.layer_id, &feature.kind) == Some(Shape::Line)
+}
 /// Whether a changed feature now has a new shape (or is new).
 fn reshaped(draft: &Draft, feature: &MapFeature) -> bool {
     draft
@@ -57,7 +61,7 @@ impl Scope<'_> {
         let mut queue: Vec<(MapFeature, Option<MapFeature>)> = draft
             .before
             .iter()
-            .filter(|old| shape_of(&old.layer_id) == Some(Shape::Line))
+            .filter(|old| is_line(old))
             .filter_map(|old| {
                 let new = draft.after.iter().find(|new| new.id == old.id);
                 (new.is_none_or(|new| new.geometry != old.geometry))
@@ -67,7 +71,7 @@ impl Scope<'_> {
         while let Some((old, new)) = queue.pop() {
             for dependent in self.dependents(draft, &old, tolerance)? {
                 let next = self.followed(draft, &dependent, &old, new.as_ref())?;
-                let line = shape_of(&next.layer_id) == Some(Shape::Line);
+                let line = is_line(&next);
                 if line && next.geometry != dependent.geometry {
                     queue.push((dependent.clone(), Some(next.clone())));
                 }
@@ -83,11 +87,12 @@ impl Scope<'_> {
         let lines: Vec<MapFeature> = draft
             .after
             .iter()
-            .filter(|f| shape_of(&f.layer_id) == Some(Shape::Line) && reshaped(draft, f))
+            .filter(|f| is_line(f) && reshaped(draft, f))
             .cloned()
             .collect();
         for line in lines {
             let query = FeatureQuery {
+                space_id: line.space_id.clone(),
                 bounds: Some(self.near(&line.geometry, tolerance)?),
                 layer_ids: Some(super::authorable(self.map)),
                 ..Default::default()
@@ -154,6 +159,7 @@ impl Scope<'_> {
         let around = self.store.all(
             self.map,
             FeatureQuery {
+                space_id: host.space_id.clone(),
                 bounds: Some(self.near(&host.geometry, tolerance)?),
                 layer_ids: Some(super::authorable(self.map)),
                 footprints: true,
@@ -171,20 +177,23 @@ impl Scope<'_> {
             })
             .collect())
     }
-    /// Line features a shape may meet, as they will stand after the change.
+    /// Line features in the same located space a shape may meet, as they will stand after
+    /// the change; a cellar wall never joins a line on the floor above.
     fn lines_near(
         &self,
         draft: &Draft,
         feature: &MapFeature,
         tolerance: f64,
     ) -> io::Result<Vec<MapFeature>> {
+        // Line layers, and the structures layers whose walls are lines among outlines.
         let layers: Vec<String> = super::authorable(self.map)
             .into_iter()
-            .filter(|id| shape_of(id) == Some(Shape::Line))
+            .filter(|id| shape_of(id) == Some(Shape::Line) || family(id) == "structures")
             .collect();
         let found = self.store.all(
             self.map,
             FeatureQuery {
+                space_id: feature.space_id.clone(),
                 bounds: Some(self.near(&feature.geometry, tolerance)?),
                 layer_ids: Some(layers.clone()),
                 ..Default::default()
@@ -199,9 +208,10 @@ impl Scope<'_> {
             draft
                 .after
                 .iter()
-                .filter(|line| layers.contains(&line.layer_id))
+                .filter(|line| layers.contains(&line.layer_id) && line.space_id == feature.space_id)
                 .cloned(),
         );
+        lines.retain(is_line);
         Ok(lines)
     }
     /// A feature as it will stand: its changed version, else the stored one.
@@ -241,6 +251,9 @@ pub(super) fn descriptor(mut map: MapDescriptor, draft: &Draft) -> io::Result<Ma
     if let Some(layers) = &draft.layers {
         real.creator_layers = layers.clone();
     }
+    if let Some(layout) = &draft.spaces {
+        relayout(&mut map, layout);
+    }
     let kept = |list: &[MapFeature], id: &str| list.iter().any(|feature| feature.id == id);
     let removed = draft.before.iter().filter(|f| !kept(&draft.after, &f.id));
     let created = draft.after.iter().filter(|f| !kept(&draft.before, &f.id));
@@ -256,4 +269,25 @@ pub(super) fn descriptor(mut map: MapDescriptor, draft: &Draft) -> io::Result<Ma
         }
     }
     Ok(map)
+}
+/// Take a change's spaces and layers. A layer the map already had keeps its feature counts,
+/// which the change's own deltas then adjust; a new layer starts from nothing, so the
+/// features the change creates in it are what it counts.
+fn relayout(map: &mut MapDescriptor, layout: &atlas_map::authoring::SpaceLayout) {
+    let layers = layout
+        .layers
+        .iter()
+        .map(|layer| {
+            let mut next = layer.clone();
+            let old = map.layers.iter().find(|old| old.id == layer.id);
+            for kind in &mut next.catalog.feature_types {
+                kind.count = old
+                    .and_then(|old| old.catalog.feature_types.iter().find(|k| k.id == kind.id))
+                    .map_or(0, |k| k.count);
+            }
+            next
+        })
+        .collect();
+    map.spaces.clone_from(&layout.spaces);
+    map.layers = layers;
 }

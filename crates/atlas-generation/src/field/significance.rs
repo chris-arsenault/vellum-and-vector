@@ -12,6 +12,22 @@ pub fn measure(scale: &MapScale, fraction: f64, dimension: i32, exponent: f64) -
         .map_err(io::Error::other)?
         .value())
 }
+/// A physical size a place must reach to exist: a share of the map on world and regional
+/// maps, and `real` (metres, or square or cubic metres by `dimension`) on a real-scale map,
+/// where things stand at their real size (ADR 0016).
+pub fn physical(
+    scale: &MapScale,
+    fraction: f64,
+    dimension: i32,
+    exponent: f64,
+    real: f64,
+) -> io::Result<f64> {
+    if scale.real_size() {
+        Ok(real)
+    } else {
+        measure(scale, fraction, dimension, exponent)
+    }
+}
 pub struct Extent {
     pub area: f64,
     pub span: f64,
@@ -130,4 +146,17 @@ pub fn independence(evidence: &IndependenceEvidence) -> Judgment {
         && evidence.capacity >= evidence.residents
         && evidence.years >= INDEPENDENT_BASE_YEARS;
     decision(viable && (evidence.connected_residents >= INDEPENDENT_REGIONAL_RESIDENTS || (evidence.institution && evidence.residents >= INDEPENDENT_INSTITUTION_RESIDENTS)), "sustained independent authority with a viable population and institutional or regional base")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_physical_size_is_real_on_a_real_scale_map_and_relative_elsewhere() {
+        let world = MapScale::new(1_000_000.0, 750_000.0, 1_000.0).unwrap();
+        let relative = physical(&world, 0.0000125, 1, 1.0, 30.0).unwrap();
+        assert!((relative - measure(&world, 0.0000125, 1, 1.0).unwrap()).abs() < 1e-9);
+        let real = world.at_real_size(true);
+        assert_eq!(physical(&real, 0.0000125, 1, 1.0, 30.0).unwrap(), 30.0);
+    }
 }

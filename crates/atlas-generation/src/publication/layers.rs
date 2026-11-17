@@ -190,6 +190,14 @@ const VOCABULARY: &[Entry] = &[
         "",
     ),
     (
+        "caveWalls",
+        "Cave walls",
+        "physical",
+        "vector",
+        "#4a3c30",
+        "",
+    ),
+    (
         "sovereignty",
         "Sovereignty",
         "political",
@@ -262,9 +270,10 @@ const REAL_SCALE_ONLY: &[&str] = &[
     "caves",
     "caveEntrances",
     "caveHexes",
+    "caveWalls",
 ];
 /// Layers published in the ground map's underground space rather than on its surface.
-const UNDERGROUND: &[&str] = &["caves", "caveHexes"];
+const UNDERGROUND: &[&str] = &["caves", "caveHexes", "caveWalls"];
 pub fn underground(layer_id: &str) -> bool {
     UNDERGROUND.contains(&layer_id.strip_prefix("vector:").unwrap_or(layer_id))
 }

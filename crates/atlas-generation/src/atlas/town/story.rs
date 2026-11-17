@@ -1,35 +1,7 @@
 //! A settlement's story decides how big it is and how its streets were laid out.
 
-/// How big a place is, read from its people. Village, town and city are one kind at
-/// different density (ADR 0016).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Size {
-    Farmstead,
-    Hamlet,
-    Village,
-    Town,
-    City,
-}
-// People at or above which a place counts as each size.
-const HAMLET_PEOPLE: f64 = 30.0;
-const VILLAGE_PEOPLE: f64 = 150.0;
-const TOWN_PEOPLE: f64 = 1_000.0;
-const CITY_PEOPLE: f64 = 8_000.0;
-impl Size {
-    pub fn of(people: f64) -> Self {
-        if people >= CITY_PEOPLE {
-            Self::City
-        } else if people >= TOWN_PEOPLE {
-            Self::Town
-        } else if people >= VILLAGE_PEOPLE {
-            Self::Village
-        } else if people >= HAMLET_PEOPLE {
-            Self::Hamlet
-        } else {
-            Self::Farmstead
-        }
-    }
-}
+/// How big a place is; the town tools share it (`atlas_map::town`).
+pub use atlas_map::town::Size;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Layout {
     Organic,

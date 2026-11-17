@@ -1,3 +1,4 @@
+import type { ConnectionCandidate, SiteContext, AddressMatch } from "./generatedEditing";
 import type {
   Bounds,
   Geometry,
@@ -125,6 +126,16 @@ export interface MapReader {
     options?: ReadOptions
   ): Promise<boolean[][]>;
   export(reference: MapRef, format: string, options?: ReadOptions): Promise<MapAsset>;
+  /** Buildings at an address ("12 Mill Lane"), or streets by name, from published features. */
+  findAddress(reference: MapRef, text: string, options?: ReadOptions): Promise<AddressMatch[]>;
+  /** A building's floors map: magic prevalence, magic features and place record outside it. */
+  site(reference: MapRef, options?: ReadOptions): Promise<SiteContext>;
+  /** What a stair, ladder or trapdoor may connect to, by the map store's connection rule. */
+  connections(
+    reference: MapRef,
+    featureId: string,
+    options?: ReadOptions
+  ): Promise<ConnectionCandidate[]>;
 }
 
 export interface SavedMap {

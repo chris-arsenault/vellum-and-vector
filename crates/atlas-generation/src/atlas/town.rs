@@ -11,7 +11,8 @@ pub mod network;
 pub mod plan;
 pub mod plots;
 mod records;
-mod site;
+pub mod settings;
+pub mod site;
 pub mod story;
 pub mod uses;
 pub mod wards;
@@ -59,19 +60,33 @@ fn lay_out(state: &mut State, forced: Option<Layout>) -> io::Result<()> {
         .into_iter()
         .map(|seat| plan::lay(seat, &mut ground, forced))
         .collect::<Vec<_>>();
-    let fields = farm(state, &plans, site.bounds, &mut ground)?;
+    let field = state.field();
+    let target = site::farmed(field)?;
+    let fields = farm(
+        &plans,
+        &site.ways,
+        site.bounds,
+        &mut ground,
+        (target, &|p: Point| {
+            site::shares(field, p).unwrap_or((0.0, 0.0))
+        }),
+    );
     records::publish(state, &plans, &fields)
 }
-/// A field block's mean side and a ploughed strip's mean width, in metres: fields on a
-/// real-scale map are their real size whatever the map's extent.
-const FIELD_BLOCK: f64 = 220.0;
-const FIELD_STRIP: f64 = 22.0;
+/// How many square metres to farm, and the farmland and pasture shares at a point.
+type Farmed<'a> = (f64, &'a dyn Fn(Point) -> (f64, f64));
+/// Fields around the places, kept clear of every way on the map: the settlements' streets and
+/// the captured roads, tracks and trails, which are marked on the grid first.
 fn farm(
-    state: &State,
     plans: &[Plan],
+    map_ways: &[(Vec<Point>, f64)],
     bounds: [f64; 4],
     ground: &mut ground::Ground,
-) -> io::Result<Vec<fields::Field>> {
+    (target, share): Farmed<'_>,
+) -> Vec<fields::Field> {
+    for (line, width) in map_ways {
+        ground.take_line(line, *width, ground::WAY);
+    }
     let places = plans
         .iter()
         .map(|p| (p.seat.centre, p.built))
@@ -79,26 +94,43 @@ fn farm(
     let ways = plans
         .iter()
         .flat_map(|p| p.streets.iter().map(|s| s.points.clone()))
+        .chain(map_ways.iter().map(|(line, _)| line.clone()))
         .collect::<Vec<_>>();
     let key = plans.first().map_or("country", |p| p.seat.key.as_str());
     let country = Country {
         places: &places,
         ways: &ways,
         bounds,
-        block: FIELD_BLOCK,
-        strip: FIELD_STRIP,
+        block: settings::FIELD_BLOCK,
+        strip: settings::FIELD_STRIP,
         key,
     };
-    let field = state.field();
-    let target = site::farmed(field)?;
-    Ok(fields(&country, ground, target, |p: Point| {
-        site::shares(field, p).unwrap_or((0.0, 0.0))
-    }))
+    fields(&country, ground, target, share)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn fields_keep_clear_of_a_captured_trail_where_no_settlement_stands() {
+        let trail = vec![[0.0, 1_000.0], [2_000.0, 1_000.0]];
+        let mut ground = ground::Ground::new([0.0, 0.0, 2_000.0, 2_000.0], 5.0);
+        let everywhere = |_: Point| (1.0, 0.0);
+        let fields = farm(
+            &[],
+            &[(trail, 3.0)],
+            [0.0, 0.0, 2_000.0, 2_000.0],
+            &mut ground,
+            (f64::MAX, &everywhere),
+        );
+        assert!(!fields.is_empty());
+        for field in &fields {
+            let ys = field.corners.iter().map(|p| p[1] - 1_000.0);
+            let (low, high) = ys.fold((f64::MAX, f64::MIN), |(l, h), y| (l.min(y), h.max(y)));
+            assert!(low >= 0.0 || high <= 0.0, "a field spans the trail");
+        }
+        assert_eq!(ground.owner([700.0, 1_000.0]), ground::WAY);
+    }
     #[test]
     fn every_layout_choice_parses() {
         for layout in &LAYOUTS[1..] {

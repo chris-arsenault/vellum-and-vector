@@ -26,6 +26,11 @@ pub enum ReadCall {
     Asset(MapRef, String),
     Source(MapRef, String),
     Export(MapRef, String),
+    FindAddress(MapRef, String),
+    /// A structure map's outside context, read from its parent's published GIS.
+    Site((MapRef,)),
+    /// What a connection feature may lead to, by the Rust connection rule.
+    Connections(MapRef, String),
 }
 impl ReadCall {
     pub fn reference(&self) -> &MapRef {
@@ -33,6 +38,8 @@ impl ReadCall {
             Self::Open((r,))
             | Self::Layers((r,))
             | Self::Illustration((r,))
+            | Self::Site((r,))
+            | Self::Connections(r, _)
             | Self::Entities(r, _)
             | Self::Registry(r, _)
             | Self::Settlement(r, _)
@@ -45,7 +52,8 @@ impl ReadCall {
             | Self::Areas(r, _, _)
             | Self::Asset(r, _)
             | Self::Source(r, _)
-            | Self::Export(r, _) => r,
+            | Self::Export(r, _)
+            | Self::FindAddress(r, _) => r,
         }
     }
     pub fn execute(self, maps: &dyn MapAccess, files: &MapFiles) -> io::Result<Vec<u8>> {
@@ -95,6 +103,11 @@ impl ReadCall {
                 codec::encode(
                     &serde_json::json!({"mediaType":a.media_type,"url":asset_path(&r,&id)}),
                 )
+            }
+            Self::FindAddress(r, text) => codec::encode(&super::addresses::find(maps, &r, &text)?),
+            Self::Site((r,)) => codec::encode(&super::site::context(maps, &r)?),
+            Self::Connections(r, id) => {
+                codec::encode(&super::connections::candidates_for(maps, &r, &id)?)
             }
             Self::Export(r, format) => {
                 let mut bytes = Vec::new();

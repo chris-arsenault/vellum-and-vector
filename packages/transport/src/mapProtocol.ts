@@ -28,6 +28,9 @@ export interface MapArguments {
   asset: [MapRef, string];
   source: [MapRef, string];
   export: [MapRef, string];
+  findAddress: [MapRef, string];
+  site: [MapRef];
+  connections: [MapRef, string];
 }
 export type MapMethod = keyof MapArguments;
 export type MapCall = { [M in MapMethod]: { method: M; args: MapArguments[M] } }[MapMethod];
@@ -50,6 +53,9 @@ const arity: Record<MapMethod, number> = {
   asset: 2,
   source: 2,
   export: 2,
+  findAddress: 2,
+  site: 1,
+  connections: 2,
 };
 export function parseMapCall(value: unknown): MapCall {
   if (!value || typeof value !== "object") throw new Error("A map request is required.");

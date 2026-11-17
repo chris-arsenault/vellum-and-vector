@@ -16,9 +16,19 @@ export const markColours: Record<string, string> = {
   structure: "#9a7458",
   object: "#5e5446",
   cave: "#6e5d4b",
+  wall: "#3b3029",
+  rock: "#8d877c",
+};
+/** Single plants and stones draw in their own colours rather than the objects layer's. */
+const objectColours: Record<string, string> = {
+  tree: "#3f6b3a",
+  shrub: "#6d8a4a",
+  reeds: "#93a35c",
+  boulder: "#8a8580",
 };
 const kindMark: Record<string, string> = {
   caves: "cave",
+  caveWalls: "wall",
   caveEntrances: "cave",
   rivers: "water",
   lakes: "water",
@@ -52,28 +62,33 @@ function label(feature: PublishedFeature, resolution: number) {
   });
 }
 /** Ground class labels to the published surface legend's colours. */
+/** Colours of the map's published hex classes: ground classes by id, and cover classes by
+ * id under a `cover:` prefix, as the map's authoring choices state them. */
 export function groundColours(map: MapDescriptor): ReadonlyMap<string, string> {
-  const layer = map.layers.find((entry) => entry.id === "raster:finalSurface");
-  if (layer?.source.kind !== "raster") return new Map();
-  return new Map(
-    (layer.source.data.bands[0]?.categories ?? []).flatMap((category) =>
-      category.color ? [[category.label, category.color] as const] : []
-    )
-  );
+  const choices = map.realScale?.authoring;
+  const entries = [
+    ...(choices?.groundClasses ?? []).map((entry) => [entry.id, entry.color] as const),
+    ...(choices?.coverClasses ?? []).map((entry) => [`cover:${entry.id}`, entry.color] as const),
+  ];
+  return new Map(entries.flatMap(([id, color]) => (color ? [[id, color] as const] : [])));
 }
-/** In the fill view a hex takes the colour of what covers it, else of its ground class. */
+/** In the fill view a hex takes the colour of what covers it, else of its ground class, with
+ * its cover class as a tint over it. */
 function hexStyle(
   feature: PublishedFeature,
   view: RealScalePresentation,
   grounds: ReadonlyMap<string, string>
 ) {
-  const { fill: mark, ground } = feature.attributes;
+  const { fill: mark, ground, cover } = feature.attributes;
   const colour =
     (typeof mark === "string" && markColours[mark]) ||
     (typeof ground === "string" && grounds.get(ground)) ||
     undefined;
-  const fill = view.hexView === "fill" && colour ? new Fill({ color: colour }) : undefined;
-  return new Style({ fill, stroke: new Stroke({ color: "#3a3a3a55", width: 1 }) });
+  const filled = view.hexView === "fill";
+  const fill = filled && colour ? new Fill({ color: colour }) : undefined;
+  const outline = new Style({ fill, stroke: new Stroke({ color: "#3a3a3a55", width: 1 }) });
+  const tint = typeof cover === "string" ? grounds.get(`cover:${cover}`) : undefined;
+  return filled && tint ? [outline, new Style({ fill: new Fill({ color: tint }) })] : outline;
 }
 /** A point, such as a cave entrance, draws as a small ringed dot. */
 function pointStyle(
@@ -136,7 +151,10 @@ export function realScaleStyle(
     if (isHexLayer(domain.layerId)) return hexStyle(domain, view, grounds);
     if (view.hidden.includes(layer)) return [];
     const colour =
-      base.color && !kindMark[domain.layerId] ? base.color : markColours[kindMark[domain.layerId]];
+      (domain.layerId === "objects" ? objectColours[domain.kind] : undefined) ??
+      (base.color && !kindMark[domain.layerId]
+        ? base.color
+        : markColours[kindMark[domain.layerId]]);
     return groundStyles(domain, colour ?? "#777777", resolution, base);
   };
 }

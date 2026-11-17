@@ -1,19 +1,8 @@
-//! What each building is for, how many of each a place needs, and who lives in it.
+//! How many of each building a place needs and where the larger ones stand. The uses
+//! themselves, their sizes and occupants are shared with the town tools (`atlas_map::town`).
 use super::story::Size;
+pub use atlas_map::town::{household, Trade, Use};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Trade {
-    Baker,
-    Weaver,
-    Cooper,
-    Tanner,
-    Potter,
-    Carpenter,
-    Butcher,
-    Chandler,
-    Mason,
-    Brewer,
-}
 const TRADES: [Trade; 10] = [
     Trade::Baker,
     Trade::Weaver,
@@ -26,22 +15,6 @@ const TRADES: [Trade; 10] = [
     Trade::Mason,
     Trade::Tanner,
 ];
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Use {
-    House,
-    Barn,
-    Workshop(Trade),
-    Inn,
-    Tavern,
-    Smithy,
-    Temple,
-    Hall,
-    MarketHall,
-    Mill,
-    Warehouse,
-    Keep,
-    Barracks,
-}
 /// Where a building with a wide plot of its own prefers to stand.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Prefers {
@@ -54,105 +27,17 @@ pub enum Prefers {
     /// Backing onto water.
     Water,
 }
-impl Use {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::House => "house",
-            Self::Barn => "barn",
-            Self::Workshop(trade) => trade.as_str(),
-            Self::Inn => "inn",
-            Self::Tavern => "tavern",
-            Self::Smithy => "smithy",
-            Self::Temple => "temple",
-            Self::Hall => "hall",
-            Self::MarketHall => "marketHall",
-            Self::Mill => "mill",
-            Self::Warehouse => "warehouse",
-            Self::Keep => "keep",
-            Self::Barracks => "barracks",
-        }
-    }
-    /// The naming work term that names its household or business.
-    pub fn work(self) -> &'static str {
-        match self {
-            Self::House | Self::Barn => "household",
-            Self::Workshop(_) => "workshop",
-            other => other.as_str(),
-        }
-    }
-    /// Frontage and depth of the building in metres, before it is fitted to its plot.
-    pub fn footprint(self, size: Size) -> (f64, f64) {
-        let house = if size >= Size::Town { 9.0 } else { 7.0 };
-        match self {
-            Self::House | Self::Workshop(_) => (f64::INFINITY, house),
-            Self::Barn => (10.0, 14.0),
-            Self::Inn => (14.0, 12.0),
-            Self::Tavern | Self::Smithy => (10.0, 9.0),
-            Self::Temple => (12.0, 24.0),
-            Self::Hall => (16.0, 12.0),
-            Self::MarketHall => (20.0, 10.0),
-            Self::Mill => (10.0, 10.0),
-            Self::Warehouse => (16.0, 14.0),
-            Self::Keep => (22.0, 22.0),
-            Self::Barracks => (30.0, 12.0),
-        }
-    }
-    /// A building that needs a plot wider than a house's, and where it stands.
-    pub fn prefers(self) -> Option<Prefers> {
-        Some(match self {
-            Self::Temple | Self::Hall | Self::MarketHall | Self::Keep => Prefers::Centre,
-            Self::Inn => Prefers::MainAt(0.3),
-            Self::Smithy => Prefers::MainAt(0.75),
-            Self::Barracks => Prefers::MainAt(0.5),
-            Self::Tavern => Prefers::SideAt(0.5),
-            Self::Mill | Self::Warehouse => Prefers::Water,
-            Self::House | Self::Barn | Self::Workshop(_) => return None,
-        })
-    }
-    /// How many people live in it on average, and whether a household keeps it.
-    pub fn occupants(self, size: Size) -> f64 {
-        match self {
-            Self::House | Self::Workshop(_) => household(size),
-            Self::Inn | Self::Tavern | Self::Smithy | Self::Mill => 5.0,
-            Self::Temple | Self::Hall => 2.0,
-            Self::Keep => 20.0,
-            Self::Barracks => 40.0,
-            Self::Barn | Self::MarketHall | Self::Warehouse => 0.0,
-        }
-    }
-    pub fn storeys(self, size: Size) -> u32 {
-        match (self, size) {
-            (Self::Keep, _) => 3,
-            (Self::Barn | Self::Temple | Self::MarketHall | Self::Mill, _) => 1,
-            (_, Size::City) => 3,
-            (_, Size::Town) => 2,
-            _ => 1,
-        }
-    }
-}
-impl Trade {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Baker => "bakery",
-            Self::Weaver => "weaver",
-            Self::Cooper => "cooper",
-            Self::Tanner => "tannery",
-            Self::Potter => "pottery",
-            Self::Carpenter => "carpenter",
-            Self::Butcher => "butcher",
-            Self::Chandler => "chandler",
-            Self::Mason => "mason",
-            Self::Brewer => "brewery",
-        }
-    }
-}
-/// People to a household; city households crowd more into each house.
-pub fn household(size: Size) -> f64 {
-    if size == Size::City {
-        6.0
-    } else {
-        5.0
-    }
+/// A building that needs a plot wider than a house's, and where it stands.
+pub fn prefers(use_: Use) -> Option<Prefers> {
+    Some(match use_ {
+        Use::Temple | Use::Hall | Use::MarketHall | Use::Keep => Prefers::Centre,
+        Use::Inn => Prefers::MainAt(0.3),
+        Use::Smithy => Prefers::MainAt(0.75),
+        Use::Barracks => Prefers::MainAt(0.5),
+        Use::Tavern => Prefers::SideAt(0.5),
+        Use::Mill | Use::Warehouse => Prefers::Water,
+        Use::House | Use::Barn | Use::Workshop(_) => return None,
+    })
 }
 /// What a settlement's story asks of its ground.
 pub struct Needs {
@@ -263,7 +148,7 @@ mod tests {
             .count();
         assert_eq!(trades, 10);
         assert_eq!(ordinary(&needs(3.0), 0.0), vec![Use::House]);
-        assert_eq!(Use::Inn.prefers(), Some(Prefers::MainAt(0.3)));
-        assert_eq!(Use::House.prefers(), None);
+        assert_eq!(prefers(Use::Inn), Some(Prefers::MainAt(0.3)));
+        assert_eq!(prefers(Use::House), None);
     }
 }

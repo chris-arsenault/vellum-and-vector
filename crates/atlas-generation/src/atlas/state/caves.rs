@@ -87,6 +87,13 @@ impl State {
             opens: land && shared.scalar(Scalar::IceThickness).get(cell)? <= 0.0,
         })
     }
+    /// The map's frame `[west, south, east, north]`: its own triangles' extent.
+    fn cave_frame(&self) -> [f64; 4] {
+        let mesh = self.field().mesh();
+        let atlas_map::Bounds(w, s, e, n) = mesh.bounds();
+        let [ox, oy] = mesh.origin();
+        [w + ox, s + oy, e + ox, n + oy]
+    }
     /// Finds the caves beneath this real-scale map and records them with their entrances.
     pub fn publish_caves(&mut self) -> io::Result<()> {
         let field = self.field();
@@ -147,8 +154,13 @@ impl State {
             .map(|(at, passage)| self.passage_feature(&key, at, passage))
             .collect::<io::Result<Vec<_>>>()?;
         let mut parts = Vec::new();
+        let frame = self.cave_frame();
         for (at, chamber) in cave.chambers.iter().enumerate() {
-            let ring = chamber.outline.iter().map(|&[x, y]| Position::xy(x, y));
+            let outline = caves::shape::clip_ring(&chamber.outline, frame);
+            if outline.is_empty() {
+                continue;
+            }
+            let ring = outline.iter().map(|&[x, y]| Position::xy(x, y));
             let mut attributes = part(chamber.depth, cave);
             attributes.insert("nameStatus".into(), "label".into());
             let mut feature = self.cave_record(

@@ -14,7 +14,10 @@ import type { Geometry } from "geojson";
 export type DrawingGeography = ReadonlyMap<string, Geometry | null>;
 
 /** A symbol's layer vocabulary is independent of the asset's qualified catalogue identity. */
-export const vectorFamily = (id: string) => (id.startsWith("vector:") ? id.slice(7) : id);
+/** A layer's kind: its id without `vector:` and without the `@<level>` that a building's
+ * upper floors and cellars carry, so `vector:structures@-1` styles as structures. */
+export const vectorFamily = (id: string) =>
+  (id.startsWith("vector:") ? id.slice(7) : id).split("@")[0];
 export type PublishedFeature = Omit<MapFeature, "name"> & { name: string; mapLayerId: string };
 export function publishedFeature(feature: MapFeature): PublishedFeature {
   return {

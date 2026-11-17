@@ -16,7 +16,7 @@ names!(Kind {
     Peak => "peak", Pass => "pass", Ridge => "ridge", Escarpment => "escarpment", Valley => "valley", Gorge => "gorge", Plateau => "plateau",
     Volcano => "volcano", Caldera => "caldera", Crater => "crater", Dome => "dome", Cirque => "cirque", Moraine => "moraine", EjectaFan => "ejectaFan",
     BasaltFlat => "basaltFlat", SinkholeField => "sinkholeField", GlassFlat => "glassFlat", FrostPrism => "frostPrism", BasaltScar => "basaltScar",
-    Spring => "spring", Waterfall => "waterfall", Lake => "lake", RiverMouth => "riverMouth", Wetland => "wetland", Fjord => "fjord", Vent => "vent", Oasis => "oasis", MeltLine => "meltLine",
+    Spring => "spring", Waterfall => "waterfall", Lake => "lake", RiverMouth => "riverMouth", Wetland => "wetland", Fjord => "fjord", Vent => "vent", Oasis => "oasis", MeltLine => "meltLine", Pool => "pool",
     Headland => "headland", Bay => "bay", Strait => "strait", UpwellingFront => "upwellingFront", CrushZone => "crushZone", AncientWake => "ancientWake", RogueWaveImpact => "rogueWaveImpact", PressureLocus => "pressureLocus",
     ThermalVein => "thermalVein", Placer => "placer", SaltPan => "saltPan", SaltDust => "saltDust", KillingGround => "killingGround", Mine => "mine",
     Forest => "forest", Grassland => "grassland", Barren => "barren", ThawedHalo => "thawedHalo", WildZone => "wildZone", Clearance => "clearance", EmberGrove => "emberGrove", ThawMeadow => "thawMeadow", RimeForest => "rimeForest", GlowBarrens => "glowBarrens", FogHeath => "fogHeath", GreenwoodStand => "greenwoodStand", VerdantGround => "verdantGround", Deepwood => "deepwood", WendingFen => "wendingFen", WellMeadow => "wellMeadow", BarrowHeath => "barrowHeath",
@@ -30,9 +30,8 @@ impl Kind {
             Peak | Pass | Ridge | Escarpment | Valley | Gorge | Plateau | Volcano | Caldera
             | Crater | Dome | Cirque | Moraine | EjectaFan | BasaltFlat | SinkholeField
             | GlassFlat | FrostPrism | BasaltScar => Group::Relief,
-            Spring | Waterfall | Lake | RiverMouth | Wetland | Fjord | Vent | Oasis | MeltLine => {
-                Group::Water
-            }
+            Spring | Waterfall | Lake | RiverMouth | Wetland | Fjord | Vent | Oasis | MeltLine
+            | Pool => Group::Water,
             Headland | Bay | Strait | UpwellingFront | CrushZone | AncientWake
             | RogueWaveImpact | PressureLocus => Group::Sea,
             ThermalVein | Placer | SaltPan | SaltDust | KillingGround | Mine => Group::Ground,
