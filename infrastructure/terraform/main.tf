@@ -35,16 +35,6 @@ module "frontend" {
   response_headers_policy_id = aws_cloudfront_response_headers_policy.browser_runtime.id
   site_directory             = "${path.module}/../../frontend/dist"
   encrypt                    = false
-  vpc                        = module.ctx.vpc
-  og_artifact                = module.ctx.og_server
-  og_config = {
-    site_name = "Vellum & Vector"
-    defaults = {
-      title       = "Build your world's atlas"
-      description = "Generate and shape fictional worlds, from continents and cultures to cities and interiors."
-      image       = "/og-image.png"
-    }
-  }
 }
 
 resource "aws_cloudfront_response_headers_policy" "browser_runtime" {
