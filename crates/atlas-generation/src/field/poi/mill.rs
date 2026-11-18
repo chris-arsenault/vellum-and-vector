@@ -180,6 +180,7 @@ fn fields<S: State + 'static>() -> Fields<S> {
 }
 fn movement<S: State + 'static>() -> Movement<S> {
     Movement {
+        on_foot: None,
         statement: Must::Value(
             "Grain traffic wears a lane while the weir slows boats through its flash lock.".into(),
         ),
@@ -242,7 +243,7 @@ pub fn entry<S: CatalogueState<Schedule> + WorkState + 'static, Schedule: 'stati
         id: Kind::Mill, group: Group::Settlements, name: "Mill".into(),
         recognition: Recognition { distinct: Must::Value("A seated work uses falling channel water and returns it, unlike a storing dam or withdrawing irrigation work.".into()), is_a: Must::Value(Rc::new(|state, cell| places::holds_record(state, Kind::Mill, cell, || found(state)))), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Each living regional town sites a mill on the strongest falling channel within three cells.".into()), way: Must::Value(ExistenceWay::Sited), requires: Slot::Value(Rc::new(|state, cell| Ok(falling(state, cell)? && places::settlement_within(state, cell, state.field()?.scale.cells(3.0))?))), suitability: Slot::Value(Rc::new(|state, cell| { let power = power(state, cell)?; Ok(power / (power + measure(&state.field()?.scale, 1.5625e-20, 3, 1.0)?)) })), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Publish regional mills once after tracing ways.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(community_records::once_written)) }, across_maps: across(), event: None,
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish regional mills once after tracing ways.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(community_records::once_written)) }, across_maps: across(), event: None,
         roles: Roles {
             true_size: super::true_sizes::sited(&super::true_sizes::MILL), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Mill), fields: fields(), movement: movement(), others: others(),
             people: People { statement: Must::Value("Falling water supplies power and flour without a large impoundment hazard.".into()), offers: Slot::Value(Rc::new(|state, place| { let amount = magnitude(state, place)?; Ok([(Benefit::Power, amount), (Benefit::Food, amount / 2.0)].into_iter().collect()) })), threatens: Slot::NotApplicable("The small head supplies no resolved flood hazard.") },

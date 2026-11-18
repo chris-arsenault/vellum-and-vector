@@ -247,7 +247,7 @@ fn fields<S: State + 'static>() -> Fields<S> {
     }
 }
 fn movement<S: State + 'static>() -> Movement<S> {
-    Movement {
+    Movement { on_foot: None,
         statement: Must::Value("Estuaries pass boats cheaply, delta channels slow them and soft ground costs roads; drainage is drawn to the mouth.".into()),
         roads: Slot::Value(Rc::new(|state, place| fan(state, place)?.into_iter().map(|cell| Ok(Cost { cell, factor: 1.0 + 3.0 * delta(state, cell)? })).collect())),
         boats: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, if river_mouth_form(state, place.anchor)? == "delta" { 1.5 } else { 0.7 }, state.field()?.scale.cells(2.0)))),
@@ -332,7 +332,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
         id: Kind::RiverMouth, group: Group::Water, name: "River mouth".into(),
         recognition: Recognition { distinct: Must::Value("A drawn retained river's last land cell targets sea or ends beside it; lake inflow and frame exits are not mouths.".into()), is_a: Must::Value(Rc::new(is_a)), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("A river reaching sea forms a delta or estuary according to its sediment and receiving water.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Recognition reads river and shore."), suitability: Slot::NotApplicable("The ground determines the meeting."), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Publish the river-sea meeting with form and discharge.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(|state: &S, place: &Place| {
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish the river-sea meeting with form and discharge.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(|state: &S, place: &Place| {
             let mut attributes = crate::features::records::Attributes::new();
             attributes.insert("form".into(), river_mouth_form(state, place.anchor)?.into()); attributes.insert("discharge".into(), reads::discharge(state.field()?, place.anchor)?.into());
             map_records::site(state, place, "riverMouth", "geology", "River mouth", attributes)

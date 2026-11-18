@@ -21,5 +21,6 @@ pub mod registry;
 pub mod samples;
 pub mod sampling;
 pub mod terrain;
+pub mod town;
 pub mod upload;
 pub mod vectors;

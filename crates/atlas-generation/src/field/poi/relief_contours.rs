@@ -263,7 +263,7 @@ fn movement<S: ReliefState + 'static>(relief: Relief) -> Movement<S> {
         Relief::Pass => &[Carrier::Wind, Carrier::People],
         Relief::Plateau => &[],
     };
-    Movement { statement: Must::Value("Crests divide drainage, valleys draw it along their floors, and cols ease roads and carriers over ridges.".into()),
+    Movement { on_foot: None, statement: Must::Value("Crests divide drainage, valleys draw it along their floors, and cols ease roads and carriers over ridges.".into()),
         roads: if relief == Relief::Pass { Slot::Value(Rc::new(move |state: &S, place| carry_rules::cost_near(state, place, 1.0 - 0.5 * relief.magnitude(state, place)?, state.field()?.scale.cells(2.0)))) } else { Slot::NotApplicable("Ordinary road grade reads these slopes.") },
         boats: Slot::NotApplicable("Rivers supply any boat route through this ground."),
         drainage: Slot::Value(Rc::new(move |state, place| carry_rules::cost_near(state, place, match relief { Relief::Ridge => 3.0, Relief::Valley => 0.5, Relief::Plateau => 1.3, Relief::Pass => 1.5 }, 0.0))),
@@ -417,7 +417,7 @@ pub fn entry<S: ReliefState + CatalogueState<Schedule> + 'static, Schedule: 'sta
     Entry { id: relief.kind(), group: Group::Relief, name: relief.name().into(),
         recognition: Recognition { distinct: Must::Value("Ridges fall on both sides but less along the crest; valleys have flanks; plateaus are level high ground without flanks; passes are the actual key cols of peaks.".into()), is_a: Must::Value(Rc::new(move |state, cell| relief.is_a(state, cell))), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("The generated field determines the landform at every map scale.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Recognition reads the generated terrain."), suitability: Slot::NotApplicable("No siting process chooses this landform."), places: Must::Value(Rc::new(move |state| relief.found(state))) },
-        publication: Publication { statement: Must::Value("Connected landforms publish outlines; key cols publish points with their peak's rise.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(move |state: &S, place: &Place| {
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Connected landforms publish outlines; key cols publish points with their peak's rise.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(move |state: &S, place: &Place| {
             let mut attributes = crate::features::records::Attributes::new();
             if relief == Relief::Pass { attributes.insert("rise".into(), rise(state, place)?.into()); return map_records::site(state, place, "pass", "geology", "Pass", attributes); }
             if relief == Relief::Valley { attributes.insert("depth".into(), shape::section_at(state, place.anchor)?.trough.into()); }

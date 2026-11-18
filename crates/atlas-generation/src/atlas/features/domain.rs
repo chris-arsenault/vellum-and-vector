@@ -161,6 +161,33 @@ pub(super) fn features() -> Vec<Feature> {
         "marketTravel",
         "highways",
     ];
+    built
+        .slots
+        .extend(["town.initialize", "town.develop", "town.publish"]);
+    built.processes.extend(
+        [
+            "town.initialize",
+            "town.cultivation",
+            "real-scale.settlement",
+        ]
+        .map(str::to_owned),
+    );
+    built.processes.extend(
+        crate::processes::town::operation_ids()
+            .into_iter()
+            .map(str::to_owned),
+    );
+    built.contribute = Rc::new(|slot, _| match slot {
+        "town.initialize" => operations(&["town.initialize"]),
+        "town.develop" => {
+            let mut ids = vec!["town.cultivation"];
+            ids.extend(crate::processes::town::operation_ids());
+            operations(&ids)
+        }
+        "town.publish" => operations(&["town.cultivation", "real-scale.settlement"]),
+        "present.people" => operations(&["built.layout"]),
+        _ => vec![],
+    });
     vec![ecology, magic, local, cultures, politics, built]
 }
 fn flag(process: &str, key: &str, value: bool) -> SequenceNode<crate::recipe::Invocation, Values> {

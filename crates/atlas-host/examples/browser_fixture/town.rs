@@ -82,6 +82,7 @@ fn house(id: &str, x: f64, north: bool, number: u32, keeper: &str) -> [Value; 2]
     let mut attributes = address(number);
     for (key, value) in [
         ("use", json!("house")),
+        ("buildingFunction", json!("residential")),
         ("occupants", json!(5)),
         ("storeys", json!(1)),
         ("household", json!(keeper)),

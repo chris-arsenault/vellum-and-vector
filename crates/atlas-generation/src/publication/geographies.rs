@@ -153,6 +153,7 @@ const GROUPS: &[Group] = &[
     ("built.layout", "historicalEvents", &["societyEvent"], false),
     ("built.layout", "roads", &["road", "lane", "street"], true),
     ("built.layout", "roads", &["trail"], false),
+    ("built.layout", "objects", &["fountain", "statue"], false),
     (
         "ecology.living",
         "objects",
@@ -261,6 +262,8 @@ mod tests {
             ("objects", "shrub"),
             ("objects", "boulder"),
             ("objects", "reeds"),
+            ("objects", "fountain"),
+            ("objects", "statue"),
         ] {
             let product = bindings
                 .iter()

@@ -97,7 +97,7 @@ fn fields<S: State + 'static>() -> Fields<S> {
 fn movement<S: State + 'static>() -> Movement<S> {
     let ice: OnPlace<S, Vec<Cost>> =
         Rc::new(|state, place| carry_rules::cost_near(state, place, 1.5, 0.0));
-    Movement {
+    Movement { on_foot: None,
         statement: Must::Value("Rotten ice and slush hinder travel; drainage starts here and ice-carried charge is lost.".into()),
         roads: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 2.0, 0.0))), boats: Slot::NotApplicable("Water under and over ice has no boat reach."),
         drainage: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 0.8, 0.0))), magic: Slot::Value([(Carrier::Ice, ice)].into_iter().collect()),
@@ -177,7 +177,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
         id: Kind::MeltLine, group: Group::Water, name: "Melt line".into(),
         recognition: Recognition { distinct: Must::Value("Aurora's melt rule on charged thawing ice; ordinary uncharged glacial melt is not this place.".into()), is_a: Must::Value(Rc::new(is_a)), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Aurora's charged ice meets a thaw it cannot hold back.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Aurora's rule reads charge, ice and warmth."), suitability: Slot::NotApplicable("Thaw and charge decide its site."), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Publish as Aurora's melt class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(|state: &S, place: &Place| records::rule(state, place, "aurora", "melt"))) },
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish as Aurora's melt class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(|state: &S, place: &Place| records::rule(state, place, "aurora", "melt"))) },
         across_maps: across_maps(), event: None,
         roles: Roles { true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::MeltLine), fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(), naming: naming() },
     }

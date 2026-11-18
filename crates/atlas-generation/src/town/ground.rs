@@ -15,12 +15,15 @@ pub const WAY: u32 = 8;
 /// The first owner a street can take; street `i` owns `FIRST_STREET + i`.
 pub const FIRST_STREET: u32 = 9;
 
+#[derive(Clone)]
 pub struct Ground {
+    pub(super) walks: std::cell::OnceCell<std::rc::Rc<super::access::walking::Mesh>>,
     pub origin: Point,
     pub cell: f64,
     pub columns: usize,
     pub rows: usize,
     owners: Vec<u32>,
+    hillside: Vec<[f32; 2]>,
 }
 /// A shape laid on the ground: what it covers, its extent and the points the grid checks.
 pub trait Shape {
@@ -108,10 +111,12 @@ impl Ground {
         let rows = ((bounds[3] - bounds[1]) / cell).ceil().max(1.0) as usize;
         Self {
             origin: [bounds[0], bounds[1]],
+            walks: Default::default(),
             cell,
             columns,
             rows,
             owners: vec![FREE; columns * rows],
+            hillside: vec![[0.; 2]; columns * rows],
         }
     }
     pub fn index(&self, p: Point) -> Option<usize> {
@@ -135,9 +140,23 @@ impl Ground {
     pub fn owner_at(&self, index: usize) -> u32 {
         self.owners[index]
     }
+    pub fn set_hillside(&mut self, index: usize, gradient: Point) {
+        self.hillside[index] = gradient.map(|g| g as f32);
+    }
+    pub fn passes_hillside(&self, p: Point, direction: Point) -> bool {
+        self.index(p).is_some_and(|i| {
+            let gradient = self.hillside[i].map(f64::from);
+            gradient != [0.; 2]
+                && super::geometry::dot(gradient, direction).abs() <= super::settings::STEEP_SLOPE
+        })
+    }
     /// Marks ground the terrain withholds (water, steep, outside); later marks never clear it.
     pub fn withhold(&mut self, index: usize, mark: u32) {
-        if self.owners[index] == FREE || (mark == WATER && self.owners[index] != OUTSIDE) {
+        if self.owners[index] == FREE
+            || (mark == WATER && self.owners[index] != OUTSIDE)
+            || (self.owners[index] == STEEP && matches!(mark, WALL | PLOT | SQUARE))
+        {
+            self.walks.take();
             self.owners[index] = mark;
         }
     }
@@ -192,6 +211,36 @@ impl Ground {
     pub fn is_water(&self, p: Point) -> bool {
         self.owner(p) == WATER
     }
+    pub fn release_shape(
+        &mut self,
+        shape: &atlas_map::Geometry,
+        owner: u32,
+        spatial: &dyn crate::spatial::SpatialKernel,
+    ) -> std::io::Result<()> {
+        let atlas_map::Bounds(w, s, e, n) = spatial.bounds(shape).map_err(std::io::Error::other)?;
+        let cells = self.cells_within([w, s, e, n]);
+        let points: Vec<_> = cells
+            .iter()
+            .map(|&i| {
+                let p = self.centre(i);
+                atlas_map::Position::xy(p[0], p[1])
+            })
+            .collect();
+        let covered = spatial
+            .covers_points(shape, &points)
+            .map_err(std::io::Error::other)?;
+        for (cell, inside) in cells.into_iter().zip(covered) {
+            if inside && self.owners[cell] == owner {
+                self.walks.take();
+                self.owners[cell] = if self.hillside[cell] == [0.; 2] {
+                    FREE
+                } else {
+                    STEEP
+                };
+            }
+        }
+        Ok(())
+    }
     fn cells_in(&self, rectangle: &impl Shape) -> Vec<usize> {
         let [w, s, e, n] = rectangle.bounds();
         let column = |x: f64| ((x - self.origin[0]) / self.cell).floor().max(0.0) as usize;
@@ -211,6 +260,9 @@ impl Ground {
     /// the grid can see: at cell centres inside it and near its corners and middle.
     pub fn open(&self, rectangle: &impl Shape, street: u32) -> bool {
         let fits = |owner: u32| owner == FREE || owner == street;
+        self.open_with(rectangle, fits)
+    }
+    pub fn open_with(&self, rectangle: &impl Shape, fits: impl Fn(u32) -> bool) -> bool {
         let corners = rectangle
             .samples(self.cell)
             .into_iter()
@@ -235,6 +287,7 @@ impl Ground {
     }
     fn claim(&mut self, index: usize, owner: u32) {
         if self.owners[index] == FREE {
+            self.walks.take();
             self.owners[index] = owner;
         }
     }
@@ -242,6 +295,17 @@ impl Ground {
     /// each end, to `owner`. A street also takes the cells another street holds there, so a
     /// side street's mouth belongs to it and no plot of the street it leaves stands in it.
     pub fn take_line(&mut self, points: &[Point], width: f64, owner: u32) {
+        self.take_profile(points, |_| width, owner);
+    }
+    pub fn take_street(&mut self, street: &super::network::Street, owner: u32) {
+        let margin = self.cell;
+        self.take_profile(
+            &street.points,
+            |along| street.width_at(along) + margin,
+            owner,
+        );
+    }
+    fn take_profile(&mut self, points: &[Point], width: impl Fn(f64) -> f64, owner: u32) {
         let step = self.cell / 2.0;
         let total = line_length(points);
         let mut along = -step;
@@ -249,11 +313,15 @@ impl Ground {
             let on = along.clamp(0.0, total);
             if let Some((p, d)) = at(points, on) {
                 let p = add(p, scale(d, along - on));
+                let width = width(on);
                 let across = [-d[1], d[0]];
                 let mut side = -width / 2.0;
                 while side <= width / 2.0 {
                     if let Some(i) = self.index(add(p, scale(across, side))) {
-                        if owner >= FIRST_STREET && self.owners[i] >= FIRST_STREET {
+                        if owner >= FIRST_STREET
+                            && (self.owners[i] >= FIRST_STREET || self.owners[i] == STEEP)
+                        {
+                            self.walks.take();
                             self.owners[i] = owner;
                         }
                         self.claim(i, owner);

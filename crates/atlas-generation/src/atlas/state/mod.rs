@@ -252,6 +252,7 @@ impl Regional {
     }
 }
 pub struct State {
+    pub town: crate::town::fabric::Fabric,
     pub scope: Scope,
     pub physical: Physical,
     pub records: Records,
@@ -285,6 +286,7 @@ impl State {
         let catalogue = Rc::new(publication::catalogue(settlements::schedule())?);
         let place_effects = effects::Memory::new(physical.executor.state());
         Ok(Self {
+            town: crate::town::fabric::Fabric::default(),
             scope,
             physical,
             records,

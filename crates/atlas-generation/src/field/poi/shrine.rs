@@ -133,6 +133,7 @@ fn movement<S: State + 'static>() -> Movement<S> {
         )
     });
     Movement {
+        on_foot: Some(TrailRole::Destination),
         statement: Must::Value(
             "Pilgrims wear routes and carry seed, salt and cores along them.".into(),
         ),
@@ -164,7 +165,7 @@ pub fn entry<S: CommunityState + 'static, Schedule>() -> Entry<S, Schedule> {
         id: Kind::Shrine, group: Group::Settlements, name: "Shrine".into(),
         recognition: Recognition { distinct: Must::Value("People keep a shrine at holy ground; natural magical places and sanctuary towns are separate records.".into()), is_a: Must::Value(Rc::new(|state, cell| places::holds_record(state, Kind::Shrine, cell, || found(state)))), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Site shrines near keepers, choosing the holiest ground first and spacing their sites.".into()), way: Must::Value(ExistenceWay::Sited), requires: Slot::Value(Rc::new(requires)), suitability: Slot::Value(Rc::new(holiness)), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Publish a located practice on the holy ground.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(work_records::work_record)) }, across_maps: across(), event: None,
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish a located practice on the holy ground.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(work_records::work_record)) }, across_maps: across(), event: None,
         roles: Roles {
             true_size: super::true_sizes::sited(&super::true_sizes::SHRINE), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Shrine), fields: fields(), movement: movement(), others: others(),
             people: People { statement: Must::Value("Holy ground and warding supply sanctity while pilgrims bring trade.".into()), offers: Slot::Value(Rc::new(|state, place| { let holy = holiness(state, place.anchor)?; let ward = (reads::magic_value(state, "hallowed", Channel::Intensity, place.anchor)? / 1000.0).min(1.0); Ok([(Benefit::Sanctity, holy.max(ward)), (Benefit::Trade, holy / 3.0)].into_iter().collect()) })), threatens: Slot::NotApplicable("The marked ground's own entries supply its dangers.") },

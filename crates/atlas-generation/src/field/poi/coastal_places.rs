@@ -331,7 +331,7 @@ fn movement<S: State + 'static>(coast: Coast) -> Movement<S> {
         });
         Slot::Value([(Carrier::Current, cost)].into_iter().collect())
     };
-    Movement { statement: Must::Value("Shelter, exposed rounding and narrows set boat costs; land routes and drainage respond to the same coast.".into()), roads, boats: Slot::Value(boats), drainage, magic,
+    Movement { on_foot: None, statement: Must::Value("Shelter, exposed rounding and narrows set boat costs; land routes and drainage respond to the same coast.".into()), roads, boats: Slot::Value(boats), drainage, magic,
         links: Slot::NotApplicable("The coast joins no fixed pair of cells."), crosses: if coast == Coast::Strait { Slot::Value(Rc::new(|_, _| Ok(vec![Barrier::Strait]))) } else { Slot::NotApplicable("This coast opens no crossing.") }, }
 }
 fn relation<S: State + 'static>(kind: Kind, factor: f64) -> Relation<S> {
@@ -528,7 +528,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>(
     Entry { id: coast.kind(), group: Group::Sea, name: coast.name().into(),
         recognition: Recognition { distinct: Must::Value("The smallest resolved shoreline circle identifies one wrapped water opening, a connected land neck or two opposing shores with open water at both ends; fjords retain their own kind.".into()), is_a: Must::Value(Rc::new(move |state, cell| coast.is_a(state, cell))), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("The generated shoreline determines this form without a siting process.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Recognition reads the water mask."), suitability: Slot::NotApplicable("No process chooses the coastal form."), places: Must::Value(Rc::new(move |state| coast.found(state))) },
-        publication: Publication { statement: Must::Value("Bays publish weighted outlines; points and straits publish at their most wrapped cell.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(move |state: &S, place: &Place| {
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Bays publish weighted outlines; points and straits publish at their most wrapped cell.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(move |state: &S, place: &Place| {
             let mut attributes = crate::features::records::Attributes::new(); attributes.insert("wrap".into(), wrap(state, place.anchor)?.into());
             if coast == Coast::Bay { records::area(state, place, records::Shape { kind: "bay", name: "Bay", layer: "geology", attributes }, Some(&|cell| wrap(state, cell))) }
             else { map_records::site(state, place, coast.kind().as_str(), "geology", coast.name(), attributes) }

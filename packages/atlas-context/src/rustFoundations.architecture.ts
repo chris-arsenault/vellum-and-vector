@@ -26,6 +26,17 @@ function rustFiles(directory: string): string[] {
     return entry.isDirectory() ? rustFiles(path) : path.endsWith(".rs") ? [path] : [];
   });
 }
+// These adapters consume the field catalogue's declared roles. Raw kind decoding
+// and lookup of full entries belong to the field catalogue itself.
+function fieldIdentityReads(source: string): string[] {
+  const code = source.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, "");
+  return Array.from(
+    code.matchAll(
+      /\bkinds\s*::|\buse\s+[^;]+?\bkinds\b|\.\s*for_feature\s*\(|\bfeature\s*\.\s*kind\b|"(?:poi|placeKind)"/g
+    ),
+    ([read]) => read
+  );
+}
 function numericSubstitutes(path: string, text: string) {
   if (
     !numericOwners.some((owner) => path.includes(`/${owner}/`)) &&
@@ -42,6 +53,26 @@ function numericSubstitutes(path: string, text: string) {
 }
 
 describe("Rust foundation architecture", () => {
+  it("town and trail adapters consume field POI roles without decoding concrete field identities", () => {
+    const generation = join(root, "crates/atlas-generation/src");
+    const adapters = [
+      ...rustFiles(join(generation, "atlas/town")),
+      ...rustFiles(join(generation, "processes/town")),
+      join(generation, "atlas/state/real_scale_trails.rs"),
+    ];
+    expect(
+      adapters.flatMap((file) =>
+        fieldIdentityReads(readFileSync(file, "utf8")).map((read) => `${file}: ${read}`)
+      )
+    ).toEqual([]);
+    expect(
+      fieldIdentityReads('use field::poi::{kinds as k}; if feature.kind == "farm" {}')
+    ).toEqual(["use field::poi::{kinds", "feature.kind"]);
+    expect(fieldIdentityReads('attrs.get("poi").or_else(|| lookup.for_feature(f))')).toEqual([
+      '"poi"',
+      ".for_feature(",
+    ]);
+  });
   it("registers every human owner mutation through the opaque command boundary", () => {
     const human = join(root, "crates/atlas-generation/src/human");
     const offered = ["owner.rs", "loss.rs", "carry.rs"].flatMap((name) =>

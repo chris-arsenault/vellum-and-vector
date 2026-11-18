@@ -150,7 +150,7 @@ fn fields<S: State + 'static>() -> Fields<S> {
 fn movement<S: State + 'static>() -> Movement<S> {
     let roots: OnPlace<S, Vec<Cost>> =
         Rc::new(|state, place| carry_rules::cost_near(state, place, 0.8, 0.0));
-    Movement {
+    Movement { on_foot: None,
         statement: Must::Value("Carts need causeways, shallow boats move slowly, drainage loses its way and roots follow connected cover.".into()),
         roads: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 3.0, 0.0))), boats: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 2.0, 0.0))), drainage: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 1.5, 0.0))),
         magic: Slot::Value([(Carrier::Roots, roots)].into_iter().collect()), links: Slot::NotApplicable("A causeway is a road's own."), crosses: Slot::NotApplicable("The wetland is the barrier, not its crossing."),
@@ -263,7 +263,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
     Entry {
         id: Kind::Wetland, group: Group::Water, name: "Wetland".into(), recognition: Recognition { distinct: Must::Value("Land with wetland cover at the ecology threshold; peat, flood and canopy distinguish bog, marsh and swamp.".into()), is_a: Must::Value(Rc::new(is_a)), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Ecology establishes cover on flat, flooding or poorly drained ground, including thaw fens and delta marsh.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Cover carries the conditions it read."), suitability: Slot::NotApplicable("Ecology establishes it without a siting step."), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Publish its cover outline as a bog, marsh or swamp.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(record)) }, across_maps: across_maps(), event: None,
+        publication: Publication { delivery: Delivery::Ecology, statement: Must::Value("Publish its cover outline as a bog, marsh or swamp.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(record)) }, across_maps: across_maps(), event: None,
         roles: Roles { true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Wetland), fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(), naming: naming() },
     }
 }

@@ -25,7 +25,22 @@ const objectColours: Record<string, string> = {
   shrub: "#6d8a4a",
   reeds: "#93a35c",
   boulder: "#8a8580",
+  fountain: "#508eaa",
+  statue: "#686669",
 };
+const roofPalette = new Map([
+  ["residential", "#ab6e58"],
+  ["civic", "#587689"],
+  ["economic", "#bc883a"],
+]);
+const publicSurfaces = new Map<unknown, string>([
+  ["paving", "#d9cbaf"],
+  ["grass", "#95ad77"],
+]);
+// owner-direction(2026-11-18): colour house roofs by residential, civic and economic function.
+export function roofColour(buildingFunction: unknown): string | undefined {
+  return typeof buildingFunction === "string" ? roofPalette.get(buildingFunction) : undefined;
+}
 const kindMark: Record<string, string> = {
   caves: "cave",
   caveWalls: "wall",
@@ -109,7 +124,13 @@ function pointStyle(
     text: base.labels ? label(feature, resolution) : undefined,
   });
 }
-/** Lines that state their width draw the ground they cover, with their course on top. */
+function courseStroke(feature: PublishedFeature, colour: string) {
+  if (!feature.geometry.type.includes("Line")) return undefined;
+  // A constant screen-width centreline would obscure narrow lanes and passages at town scale.
+  if (feature.layerId === "roads" && feature.footprint) return undefined;
+  return new Stroke({ color: feature.footprint ? "#ffffff66" : colour, width: 2 });
+}
+/** A measured road draws the ground its carriageway covers. */
 function groundStyles(
   feature: PublishedFeature,
   colour: string,
@@ -127,17 +148,31 @@ function groundStyles(
       })
     );
   const line = feature.geometry.type.includes("Line");
+  const floors = feature.attributes.storeys;
+  if (feature.kind === "building" && typeof floors === "number" && floors > 1) {
+    const shadow = footprintGeometry(feature.geometry).clone();
+    shadow.translate(floors * 0.85, -floors * 0.85);
+    styles.push(
+      new Style({ geometry: shadow, fill: new Fill({ color: "#42362766" }), zIndex: -1 })
+    );
+  }
   styles.push(
     new Style({
-      stroke: line
-        ? new Stroke({ color: feature.footprint ? "#ffffff66" : colour, width: 2 })
-        : undefined,
+      stroke: courseStroke(feature, colour),
       fill: line ? undefined : new Fill({ color: colour }),
       text: base.labels ? label(feature, resolution) : undefined,
     })
   );
   if (!line) styles[styles.length - 1].setStroke(new Stroke({ color: "#2b2620", width: 1 }));
   return styles;
+}
+function featureColour(domain: PublishedFeature, base: LayerStyle) {
+  if (domain.layerId === "plots")
+    return publicSurfaces.get(domain.attributes.publicSurface) ?? markColours.plot;
+  if (domain.kind === "building" && domain.layerId === "structures")
+    return roofColour(domain.attributes.buildingFunction) ?? markColours.structure;
+  if (domain.layerId === "objects") return objectColours[domain.kind] ?? markColours.object;
+  return markColours[kindMark[domain.layerId]] ?? base.color ?? "#777777";
 }
 /** Real-scale presentation of one feature; hidden creator layers draw nothing. A feature that
  * names no creator layer belongs to the map's first one. */
@@ -153,11 +188,6 @@ export function realScaleStyle(
     const layer = typeof named === "string" ? named : firstLayer;
     if (isHexLayer(domain.layerId)) return hexStyle(domain, view, grounds);
     if (view.hidden.includes(layer)) return [];
-    const colour =
-      (domain.layerId === "objects" ? objectColours[domain.kind] : undefined) ??
-      (base.color && !kindMark[domain.layerId]
-        ? base.color
-        : markColours[kindMark[domain.layerId]]);
-    return groundStyles(domain, colour ?? "#777777", resolution, base);
+    return groundStyles(domain, featureColour(domain, base), resolution, base);
   };
 }

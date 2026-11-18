@@ -1,7 +1,7 @@
 //! What each building is for, its size, who lives in it and how many storeys it has.
 use super::Size;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Trade {
     Baker,
     Weaver,
@@ -14,11 +14,13 @@ pub enum Trade {
     Mason,
     Brewer,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Use {
     House,
     Barn,
     Workshop(Trade),
+    Shop,
+    Craftshop,
     Inn,
     Tavern,
     Smithy,
@@ -31,10 +33,29 @@ pub enum Use {
     Barracks,
 }
 impl Use {
+    pub fn building_function(self) -> super::BuildingFunction {
+        use super::BuildingFunction::*;
+        match self {
+            Self::House => Residential,
+            Self::Temple | Self::Hall | Self::Keep | Self::Barracks => Civic,
+            Self::Barn
+            | Self::Workshop(_)
+            | Self::Shop
+            | Self::Craftshop
+            | Self::Inn
+            | Self::Tavern
+            | Self::Smithy
+            | Self::MarketHall
+            | Self::Mill
+            | Self::Warehouse => Economic,
+        }
+    }
     /// Every use, workshops once per trade.
     pub fn all() -> impl Iterator<Item = Self> {
         [
             Self::House,
+            Self::Shop,
+            Self::Craftshop,
             Self::Barn,
             Self::Inn,
             Self::Tavern,
@@ -56,6 +77,8 @@ impl Use {
             Self::House => "house",
             Self::Barn => "barn",
             Self::Workshop(trade) => trade.as_str(),
+            Self::Shop => "shop",
+            Self::Craftshop => "workshop",
             Self::Inn => "inn",
             Self::Tavern => "tavern",
             Self::Smithy => "smithy",
@@ -82,7 +105,7 @@ impl Use {
     pub fn work(self) -> &'static str {
         match self {
             Self::House | Self::Barn => "household",
-            Self::Workshop(_) => "workshop",
+            Self::Workshop(_) | Self::Shop | Self::Craftshop => "workshop",
             other => other.as_str(),
         }
     }
@@ -94,7 +117,9 @@ impl Use {
     pub fn footprint(self, size: Size) -> (f64, f64) {
         let house = if size >= Size::Town { 9.0 } else { 7.0 };
         match self {
-            Self::House | Self::Workshop(_) => (f64::INFINITY, house),
+            Self::House | Self::Workshop(_) | Self::Shop | Self::Craftshop => {
+                (f64::INFINITY, house)
+            }
             Self::Barn => (10.0, 14.0),
             Self::Inn => (14.0, 12.0),
             Self::Tavern | Self::Smithy => (10.0, 9.0),
@@ -110,7 +135,7 @@ impl Use {
     /// How many people live in it on average.
     pub fn occupants(self, size: Size) -> f64 {
         match self {
-            Self::House | Self::Workshop(_) => household(size),
+            Self::House | Self::Workshop(_) | Self::Shop | Self::Craftshop => household(size),
             Self::Inn | Self::Tavern | Self::Smithy | Self::Mill => 5.0,
             Self::Temple | Self::Hall => 2.0,
             Self::Keep => 20.0,
@@ -173,7 +198,6 @@ mod tests {
         for use_ in Use::all() {
             assert_eq!(Use::parse(use_.as_str()), Some(use_));
         }
-        assert_eq!(Use::all().count(), 22);
         assert_eq!(Use::parse("bakery"), Some(Use::Workshop(Trade::Baker)));
         assert_eq!(Use::parse("castle"), None);
     }

@@ -17,6 +17,41 @@ import { realScaleDirections, type OwnerDirection } from "./ownerDirections.real
  */
 const directions: readonly OwnerDirection[] = [
   {
+    direction: "grow towns from an inhabited kernel across roughly 18 recurring iterations of comparable magnitude",
+    given: "2026-11-18",
+    marks: ["crates/atlas-generation/src/atlas/town.rs"],
+    test: "crates/atlas-generation/src/atlas/town.rs",
+  },
+  {
+    direction: "town development runs independently of regional development rounds",
+    given: "2026-11-18",
+    marks: ["crates/atlas-generation/src/atlas/town.rs"],
+    test: "crates/atlas-generation/src/atlas/town.rs",
+  },
+  {
+    direction: "support these kinds of effects in a generic extensible manner",
+    given: "2026-11-17",
+    marks: ["crates/atlas-generation/src/atlas/town/providers.rs"],
+    test: "crates/atlas-generation/src/atlas/town/providers.rs",
+  },
+  {
+    direction: "numerical lattice population density, terrain and magic all influence layout",
+    given: "2026-11-17",
+    marks: ["crates/atlas-generation/src/atlas/town/development.rs"],
+  },
+  {
+    direction:
+      "human-layer density is an approximate census, not a placement obligation; artistic composition takes priority over numerical accuracy",
+    given: "2026-11-17",
+    marks: ["crates/atlas-generation/src/processes/town/construction.rs"],
+  },
+  {
+    direction: "projects adapt shared existing fabric; they must not stamp finished neighbourhoods",
+    given: "2026-11-17",
+    marks: ["crates/atlas-generation/src/town/fabric.rs"],
+    test: "crates/atlas-host/tests/town_development.rs",
+  },
+  {
     direction: "temporary selections are independent of saved regions",
     given: "2026-11-17",
     marks: ["crates/atlas-map/src/regions/mod.rs"],
@@ -427,6 +462,52 @@ const directions: readonly OwnerDirection[] = [
     ],
   },
   ...realScaleDirections,
+  {
+    direction: "the town square is an open area surrounded by businesses",
+    given: "2026-11-18",
+    marks: ["crates/atlas-generation/src/town/catalogue/trade.rs"],
+    test: "crates/atlas-host/tests/town_development.rs",
+  },
+  {
+    direction: "town housing includes multi-storey, connected houses",
+    given: "2026-11-18",
+    marks: ["crates/atlas-generation/src/town/roofs.rs"],
+    test: "crates/atlas-host/tests/town_development.rs",
+  },
+  {
+    direction: "special rules for a POI belong in the POI",
+    given: "2026-11-18",
+    marks: ["crates/atlas-generation/src/town/catalogue.rs"],
+    test: [
+      "crates/atlas-generation/src/town/catalogue.rs",
+      "packages/atlas-context/src/rustFoundations.architecture.ts",
+      "packages/atlas-context/src/separation.architecture.ts",
+    ],
+  },
+  {
+    direction: "individual buildings can grow on land without a street",
+    given: "2026-11-18",
+    marks: ["crates/atlas-generation/src/town/plots.rs"],
+    test: "crates/atlas-host/tests/town_development.rs",
+  },
+  {
+    direction: "a cramped mountain town with small byways is a realistic goal",
+    given: "2026-11-18",
+    marks: ["crates/atlas-generation/src/town/byway.rs"],
+    test: "crates/atlas-generation/src/town/byway.rs",
+  },
+  {
+    direction: "major crossings of the main road lead out into the countryside",
+    given: "2026-11-18",
+    marks: ["crates/atlas-generation/src/processes/town/crossroads.rs"],
+    test: "crates/atlas-generation/src/processes/town/crossroads.rs",
+  },
+  {
+    direction: "colour house roofs by residential, civic and economic function",
+    given: "2026-11-18",
+    marks: ["frontend/src/realScaleStyles.ts"],
+    test: "frontend/src/realScale.test.ts",
+  },
   {
     direction:
       "the agreement clause is that major landmarks in a parent map must appear and roughly agree with a child map; that is it",

@@ -175,7 +175,7 @@ fn movement<S: State + 'static>(kind: MagicRelief) -> Movement<S> {
         MagicRelief::SinkholeField => &[Carrier::Crust],
         _ => &[],
     };
-    Movement { statement: Must::Value("Heat, ice, glass and broken ground change roads and drainage. Carriers read the associated cost without duplicate stock effects.".into()),
+    Movement { on_foot: None, statement: Must::Value("Heat, ice, glass and broken ground change roads and drainage. Carriers read the associated cost without duplicate stock effects.".into()),
         roads: Slot::Value(Rc::new(move |state, place| carry_rules::cost_near(state, place, match kind { MagicRelief::BasaltFlat => 1.4, MagicRelief::FrostPrism => 2.5, MagicRelief::SinkholeField => 1.8, _ => 0.8 }, 0.0))),
         boats: Slot::NotApplicable("This ground carries no navigable water."),
         drainage: if kind == MagicRelief::FrostPrism { Slot::NotApplicable("Drainage begins below the ice where it melts.") } else { Slot::Value(Rc::new(move |state, place| carry_rules::cost_near(state, place, match kind { MagicRelief::GlassFlat => 2.0, MagicRelief::SinkholeField => 0.6, _ => 1.3 }, 0.0))) },
@@ -379,7 +379,7 @@ pub fn entry<S: ReliefState + CatalogueState<Schedule> + 'static, Schedule: 'sta
     let (id, system, rule, name) = kind.identity();
     Entry { id, group: Group::Relief, name: name.into(), recognition: Recognition { distinct: Must::Value("The owning system's exact geographic rule identifies the feature from its current stock, source, seal and terrain.".into()), is_a: Must::Value(Rc::new(move |state, cell| kind.is_a(state, cell))), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("The system's processes leave these forms where their material meets the ground.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Recognition reads the complete owning rule."), suitability: Slot::NotApplicable("These are process outcomes, not chosen sites."), places: Must::Value(Rc::new(move |state| kind.found(state))) },
-        publication: Publication { statement: Must::Value("Connected rule cells publish through their owning magic class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(move |state: &S, place: &Place| records::rule(state, place, system, rule))) },
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Connected rule cells publish through their owning magic class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(move |state: &S, place: &Place| records::rule(state, place, system, rule))) },
         across_maps: across(kind), event: None,
         roles: Roles { true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(id), fields: fields(kind), movement: movement(kind), others: others(kind),
             people: People { statement: Must::Value("Material, trade, water or sanctity accompany the feature's specific heat, stillness, dryness or collapse hazard.".into()), offers: Slot::Value(Rc::new(move |state, place| offers(kind, state, place))), threatens: if kind == MagicRelief::BasaltScar { Slot::NotApplicable("Sealed rock is cold; its danger went with its Fire.") } else { Slot::Value(Rc::new(move |state, place| threatens(kind, state, place))) } },

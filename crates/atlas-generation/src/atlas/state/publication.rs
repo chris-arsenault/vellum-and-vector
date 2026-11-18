@@ -49,6 +49,8 @@ impl poi::publication::PublicationState<Schedule<Self>> for State {
     fn contracted(&self, feature: &str) -> bool {
         self.scope.contracted.contains(feature)
     }
+}
+impl poi::wild_history::WildHistory for State {
     fn latest_wild_observation(&self) -> &[poi::wild_history::Observation] {
         poi::wild_history::latest(&self.history, &self.causes)
     }

@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { roofColour } from "./realScaleStyles";
 import type { LayerStyle } from "./types";
 import type { MapDescriptor, MapSpace } from "@atlas/map";
 import {
@@ -18,6 +19,15 @@ const style = (layerId: string): LayerStyle => ({
   color: "#000000",
   labels: false,
   minScale: 0,
+});
+
+it("draws a distinct roof colour for each published building function", () => {
+  expect(["residential", "civic", "economic"].map(roofColour)).toEqual([
+    "#ab6e58",
+    "#587689",
+    "#bc883a",
+  ]);
+  expect(roofColour(undefined)).toBeUndefined();
 });
 
 it("draws real-scale kinds top first, from hexes down to water, and shows them", () => {

@@ -272,7 +272,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
         id: Kind::Clearance, group: Group::Cover, name: "Clearance".into(),
         recognition: Recognition { distinct: Must::Value("A clearance work and the land within its radius, never merely low tree cover.".into()), is_a: Must::Value(Rc::new(is_a)), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Recorded works persist; communities site additional clearances on the best suitable farming ground within working distance.".into()), way: Must::Value(ExistenceWay::Sited), requires: Slot::Value(Rc::new(requires)), suitability: Slot::Value(Rc::new(suitability)), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Keep a recorded work or publish a new land-use site with radius.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(|state: &S, place: &Place| {
+        publication: Publication { delivery: Delivery::Ecology, statement: Must::Value("Keep a recorded work or publish a new land-use site with radius.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(|state: &S, place: &Place| {
             if let Some(feature) = &place.feature { return Ok(Some(feature.clone())); }
             let mut attributes = crate::features::records::Attributes::new(); attributes.insert("radius".into(), radius(state, place)?.into());
             map_records::site(state, place, "clearance", "landUse", "Clearance", attributes)

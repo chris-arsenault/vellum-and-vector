@@ -2,7 +2,7 @@
 
 /// How big a place is; the town tools share it (`atlas_map::town`).
 pub use atlas_map::town::Size;
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum Layout {
     Organic,
     Grid,
@@ -33,7 +33,7 @@ impl Layout {
     }
 }
 /// What the settlement's record and its land say about how it grew.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Story {
     pub people: f64,
     /// A capital or regional capital holds the seat of a realm or province.

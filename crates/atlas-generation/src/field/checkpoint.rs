@@ -28,6 +28,7 @@ impl Field {
         self.ground.borrow_mut().checkpoint(archive)?;
         self.water.borrow_mut().checkpoint(archive)?;
         self.people.checkpoint(archive, self.coverage.get_mut())?;
+        self.town.checkpoint(archive, self.coverage.get_mut())?;
         self.ground_load.checkpoint(archive)?;
         self.sea_load.checkpoint(archive)?;
         archive.value("tectonics", &mut self.tectonics)?;

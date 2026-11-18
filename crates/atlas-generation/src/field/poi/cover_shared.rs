@@ -112,6 +112,7 @@ pub fn fields<S>(statement: &str) -> Fields<S> {
 }
 pub fn movement<S>(statement: &str) -> Movement<S> {
     Movement {
+        on_foot: None,
         statement: Must::Value(statement.into()),
         roads: Slot::NotApplicable("The router reads tree density."),
         boats: Slot::NotApplicable("Rivers carry boats under their own costs."),

@@ -57,6 +57,16 @@ pub struct Run<'a> {
     parents: Rc<RefCell<Vec<Vec<Cause>>>>,
 }
 impl<'a> Run<'a> {
+    pub(crate) fn town_preview(&self) -> Option<crate::atlas::preview::town::Stage> {
+        let previous = self
+            .stages
+            .get(self.next.checked_sub(1)?)?
+            .context
+            .path
+            .last()?;
+        let next = self.stages.get(self.next)?.context.path.last()?;
+        crate::atlas::preview::town::between(previous, next)
+    }
     pub fn new(
         configuration: &'a Configuration,
         registry: &'a Registry,

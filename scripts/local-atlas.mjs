@@ -2,12 +2,13 @@
 // frontend does: one kept verification world, real-scale maps opened from it, and a summary
 // of what each map contains. See docs/local-atlas.md.
 import { createRequire } from "node:module";
-import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { deflateSync } from "node:zlib";
+import { retainTownStage, retainedTownPictures } from "./town-preview.mjs";
 
 const require = createRequire(new URL("../packages/transport/package.json", import.meta.url));
 const { Encoder, Decoder } = require("cbor-x");
@@ -84,7 +85,7 @@ function png(width, height, pixel) {
  * Saves a job preview (each world epoch, and the start and each round of regional
  * development) as a shaded elevation picture, sea and lakes blue, scaled 4×.
  */
-async function savePreview(event, index) {
+async function savePreview(event, directory) {
   const { grid, ancestry } = JSON.parse(new TextDecoder().decode(new Uint8Array(event.map.bytes)));
   const label = (ancestry ?? []).map((epoch) => epoch.id).join(" ") || "final";
   const { width, height, channels, active } = grid;
@@ -101,10 +102,9 @@ async function savePreview(event, index) {
     const shade = Math.round((255 * (elevation[cell] - low)) / Math.max(high - low, 1e-9));
     return water && water[cell] > 0 ? [60, 110, 200 - shade / 4] : [shade, shade, shade];
   });
-  const name = `${String(index).padStart(2, "0")}-${label.replace(/[^\w]+/g, "-")}.png`;
-  await mkdir(join(reports, "previews"), { recursive: true });
-  await writeFile(join(reports, "previews", name), bytes);
-  return { file: name, label, lowest: low, highest: high };
+  const name = `${String(event.epoch).padStart(2, "0")}-${label.replace(/[^\w]+/g, "-")}.png`;
+  await writeFile(join(directory, name), bytes);
+  return { file: name, label, lowest: low, highest: high, townFabric: grid.townFabric };
 }
 
 /**
@@ -113,36 +113,58 @@ async function savePreview(event, index) {
  */
 async function follow(status, record, until) {
   const started = performance.now();
-  await writeJson(lastJobFile, { jobId: status.jobId, ...record });
-  await rm(join(reports, "previews"), { recursive: true, force: true });
-  const previews = [];
+  await writeJson(lastJobFile, { ...record, jobId: status.jobId });
+  const directory = join(reports, "previews", status.jobId);
+  await mkdir(directory, { recursive: true });
+  const index = join(directory, "previews.json");
+  const retained = await readJson(index).catch((error) => {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  });
+  const previews = new Map(retained.map((p) => [p.file, p]));
   const log = [];
   const print = (line) => (console.log(line), log.push(line));
   let after = 0;
   let step = "";
-  while (status.state === "running") {
+  for (;;) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     // A server busy publishing can be slow to answer; a dropped poll is retried.
     const page = await call("generation", {
       method: "observe",
       request: { job_id: status.jobId, after },
-    }).catch((error) => (print(`${clock(started)} poll failed, retrying: ${error}`), null));
+    }).catch((error) => {
+      // A restarted server retains job status but starts a new observation stream.
+      if (String(error).includes("Unknown generation event cursor")) after = 0;
+      print(`${clock(started)} poll failed, retrying: ${error}`);
+      return null;
+    });
     if (!page) continue;
+    const drained = after === page.next;
     after = page.next;
     status = page.status;
     if (status.step && status.step !== step) print(`${clock(started)} ${(step = status.step)}`);
     for (const event of page.events) {
       if (event.kind !== "preview") continue;
-      const preview = await savePreview(event, previews.length);
-      previews.push(preview);
-      print(`${clock(started)} picture ${join(reports, "previews", preview.file)}`);
+      const { townFabric, ...preview } = await savePreview(event, directory);
+      if (townFabric) await retainTownStage(directory, townFabric);
+      previews.set(preview.file, preview);
+      print(`${clock(started)} picture ${join(directory, preview.file)}`);
       if (until && preview.label.includes(until))
         status = await call("generation", { method: "cancel", request: { job_id: status.jobId } });
     }
+    if (status.state !== "running" && drained) break;
   }
   print(`${clock(started)} ${status.state} ${status.message ?? ""}`);
+  for (const { file, svg, label } of await retainedTownPictures(directory)) {
+    const path = join(directory, file);
+    await writeFile(path, svg);
+    previews.set(file, { file, label });
+    print(`${clock(started)} picture ${path}`);
+  }
   await writeFile(join(home, "last-job-steps.txt"), log.join("\n") + "\n");
-  await writeJson(join(home, "last-job-previews.json"), previews);
+  await writeFile(join(directory, "steps.txt"), log.join("\n") + "\n");
+  await writeJson(index + ".tmp", [...previews.values()]);
+  await rename(index + ".tmp", index);
   if (until && status.state === "cancelled") process.exit(0);
   if (status.state !== "completed") {
     console.log(`Fix the cause, then make local-up and make local-resume (job ${status.jobId}).`);
@@ -342,16 +364,17 @@ async function realScale(options) {
   const failures = developmentReview.diagnostics.filter((item) => item.severity === "error");
   if (failures.length) throw new Error(JSON.stringify(failures, null, 2));
   const running = await call("generation", { method: "regenerate", request: regeneration });
-  await finish(await follow(running, { kind: "real", name }, options.until), name);
+  await finish(await follow(running, { kind: "real", name }, options.until), name, running.jobId);
 }
-async function finish(result, name) {
+async function finish(result, name, jobId) {
   await save(result);
   const directory = join(reports, "maps", name.replace(/[^\w.-]+/g, "-"));
   await report(result, directory);
-  await writeFile(join(directory, "steps.txt"), await readFile(join(home, "last-job-steps.txt")));
-  const previews = await readJson(join(home, "last-job-previews.json")).catch(() => []);
+  const observed = join(reports, "previews", jobId);
+  await copyFile(join(observed, "steps.txt"), join(directory, "steps.txt"));
+  const previews = await readJson(join(observed, "previews.json"));
   for (const { file } of previews)
-    await copyFile(join(reports, "previews", file), join(directory, `preview-${basename(file)}`));
+    await copyFile(join(observed, file), join(directory, `preview-${basename(file)}`));
   await writeJson(join(directory, "previews.json"), previews);
 }
 
@@ -362,18 +385,16 @@ async function resume(jobId) {
   const current = await call("generation", { method: "status", request: { job_id: id } });
   // A job that completed while its driver was gone only needs its report.
   const status =
-    current.state === "completed"
+    current.state === "completed" || current.state === "running"
       ? current
       : await call("generation", { method: "resume", request: { job_id: id } });
-  const result =
-    status.state === "completed"
-      ? status.result
-      : await follow(status, last.jobId === id ? last : { kind: "real", name: id });
-  if (last.kind === "world") {
+  const record = last.jobId === id ? last : { kind: "real", name: id };
+  const result = await follow(status, record);
+  if (record.kind === "world") {
     await save(result);
     await writeJson(worldFile, { reference: result });
     await report(result, join(reports, "world"));
-  } else await finish(result, last.name ?? id);
+  } else await finish(result, record.name ?? id, id);
 }
 
 const { positionals, values } = parseArgs({
@@ -408,6 +429,14 @@ async function view(name) {
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } });
+    const previews = await readJson(join(directory, "previews.json")).catch(() => []);
+    for (const { file } of previews.filter(({ file }) => file.endsWith(".svg"))) {
+      const source = join(directory, `preview-${basename(file)}`);
+      await page.setContent(await readFile(source, "utf8"));
+      const path = source.replace(/\.svg$/, ".png");
+      await page.locator("body > svg").screenshot({ path });
+      console.log(path);
+    }
     page.on("pageerror", (error) => console.log("Page error:", error.message));
     await page.goto(`${origin}/`);
     await page.getByRole("button", { name: "Server maps", exact: true }).click();
@@ -529,6 +558,16 @@ else if (command === "region" && values.at && values.width) await realScale(valu
 else if (command === "resume") await resume(argument);
 else if (command === "places") await places();
 else if (command === "view" && argument) await view(argument);
+else if (command === "town-previews" && argument && values.name) {
+  const output = join(reports, "maps", values.name);
+  const index = join(output, "previews.json");
+  const previews = new Map((await readJson(index)).map((item) => [item.file, item]));
+  for (const { file, svg, label } of await retainedTownPictures(join(reports, "previews", argument))) {
+    await writeFile(join(output, `preview-${file}`), svg);
+    previews.set(file, { file, label });
+  }
+  await writeJson(index, [...previews.values()]);
+}
 else if (command === "history" && argument) await history(argument);
 else if (command === "raster" && argument && positionals[2])
   await raster(argument, positionals.slice(2));
@@ -545,6 +584,7 @@ else if (command === "summary" && argument) {
                                     [--detail draft|standard|fine] [--name name]
                                     [--until "<stage picture label, e.g. Initial regional detail>"]
   node scripts/local-atlas.mjs resume [jobId]
+  node scripts/local-atlas.mjs town-previews <jobId> --name <existing map folder>
   node scripts/local-atlas.mjs region --at Town --width metres --name name [--parent map-folder]
 real and region accept --parent to refine a previously generated map instead of the world.
 --at is in world metres; hex sizes: ${Object.keys(hexMetres).join(", ")}`);

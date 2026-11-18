@@ -204,7 +204,7 @@ fn roads(state: &impl State, place: &Place) -> io::Result<Vec<Cost>> {
         .collect()
 }
 fn movement<S: State + 'static>(kind: Historical) -> Movement<S> {
-    Movement {
+    Movement { on_foot: None,
         statement: Must::Value("Salted ground repels roads; disasters also leave wreck, avalanche blockage and broken ice.".into()),
         roads: Slot::Value(if kind == Historical::Battlefield { Rc::new(settled::avoided_ground) } else { Rc::new(roads) }),
         boats: Slot::NotApplicable("The event record adds no boat route."),
@@ -305,7 +305,7 @@ pub fn entry<S: HistoricalState + 'static, Schedule>(kind: Historical) -> Entry<
             suitability: if kind == Historical::Disaster { Slot::Value(Rc::new(|state: &S, cell| Ok((1.0 - (-exposure(state, cell)? * 1000.0).exp()).max(if state.confluence_strain(cell)? > 0.0 { 0.5 } else { 0.0 })))) } else { Slot::NotApplicable("Sieges fall on lost towns and frontier fields on ways crossing held borders.") },
             places: Must::Value(Rc::new(move |state| kind.found(state))),
         },
-        publication: Publication { statement: Must::Value("Publish the historical record once and retain captured records.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(community_records::once_written)) },
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish the historical record once and retain captured records.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(community_records::once_written)) },
         across_maps: across(),
         event: (kind == Historical::Disaster).then(|| EventCommand { accepts: Rc::new(disaster::accepts), changes: Rc::new(|state: &S, event| disaster::changes(event, &state.field()?.scale)) }),
         roles: Roles { true_size: super::true_sizes::sited(if kind == Historical::Battlefield { &super::true_sizes::BATTLEFIELD } else { &super::true_sizes::DISASTER }), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(kind.kind()), fields: fields(kind), movement: movement(kind), others: others(), people: people(kind), time: ThroughTime { statement: Must::Value("History persists; salted dead ground carries on as a killing ground.".into()), fate: Slot::Value(Rc::new(settled::event_fate)) }, visibility: visible(kind), naming: naming(kind) },

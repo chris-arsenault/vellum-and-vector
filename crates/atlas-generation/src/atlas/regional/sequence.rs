@@ -166,7 +166,11 @@ pub fn sequence(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequ
 /// A real-scale map (ADR 0016) develops its land with the same processes as a region: the
 /// development rounds cut its valleys and streams at the fine span from the captured
 /// surface. Real-scale steps (settlement layout and the like) follow the regional body.
-pub fn real_scale(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
+pub fn real_scale(
+    catalogue: &Catalogue,
+    context: &Context<'_>,
+    town: Sequence,
+) -> io::Result<Sequence> {
     let mut body = sequence(catalogue, context)?;
     // Once the map's rivers are drawn at their real width, pools form on them and bare rock
     // shows.
@@ -180,8 +184,7 @@ pub fn real_scale(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Se
     // Caves open in the map's own rock before the closing names step, so they are named.
     let names = body.len() - 1;
     body.insert(names, invoke("refinement.caves", Values::new()));
-    // Lays streets, plots and buildings from the settlements and ways the child recorded.
-    body.push(invoke("real-scale.settlement", Values::new()));
+    body.extend(town);
     // Trails join the places no way reaches to the ways, streets included; every way then
     // crosses water at a ford or bridge; plants and stones stand clear of all of it.
     for id in [

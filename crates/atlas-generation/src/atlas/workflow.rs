@@ -19,6 +19,7 @@ use std::future::Future;
 
 pub enum Boundary<'a> {
     Epoch(&'a [GenerationEpoch]),
+    Town(super::preview::town::Stage),
     Final,
 }
 /// Existing domain validation and publication belong to the application adapter. A completed
@@ -128,6 +129,9 @@ impl Generation {
         loop {
             control.cooperate().await.map_err(control_error)?;
             let event = run.advance(&mut self.runtime, &mut observer)?;
+            observer
+                .town_preview(&run, self.runtime.executor.state())
+                .await?;
             let point = run.checkpoint_point().filter(|point| {
                 *point != crate::checkpoint::Point::Publication || matches!(event, Event::Finished)
             });
@@ -226,6 +230,17 @@ struct Observations<'a, C, O> {
     control: &'a C,
     output: &'a mut O,
     ownership: &'a Ownership,
+}
+impl<C, O: Output> Observations<'_, C, O> {
+    async fn town_preview(&mut self, run: &Run<'_>, state: &State) -> ExecutionResult<()> {
+        if state.town.towns.is_empty() {
+            return Ok(());
+        }
+        if let Some(stage) = run.town_preview() {
+            self.output.completed(state, Boundary::Town(stage)).await?;
+        }
+        Ok(())
+    }
 }
 impl<C: GenerationControl, O: Output> Observer for Observations<'_, C, O> {
     fn validate(&mut self, state: &State) -> ExecutionResult<()> {

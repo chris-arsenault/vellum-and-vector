@@ -3,16 +3,24 @@
 //! storeys, plot sizes, and house numbering along a street. Generation lays towns with these
 //! rules and the town tools apply the same rules to what a creator adds.
 mod addresses;
+#[allow(
+    clippy::disallowed_types,
+    reason = "this module declares the published settlement identities"
+)]
+pub mod places;
 mod uses;
 
 pub use addresses::{
     address, numbers, numbers_around, same_street, AddressMatch, AddressQuery, Side,
 };
+pub use places::BuildingFunction;
 pub use uses::{household, Trade, Use};
 
 /// How big a place is, read from its people. Village, town and city are one kind at
 /// different density (ADR 0016).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum Size {
     Farmstead,
     Hamlet,
@@ -42,7 +50,7 @@ impl Size {
 }
 
 /// A street's class, published as its `roadClass`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum StreetClass {
     /// A way as it runs through the built place.
     Main,

@@ -42,6 +42,7 @@ impl State {
         }
         self.records.checkpoint(archive)?;
         archive.value("places", &mut *self.people.places.borrow_mut())?;
+        archive.value("town-fabric", &mut self.town)?;
         archive.value("ways", &mut *self.people.ways.borrow_mut())?;
         archive.value("events", &mut *self.people.events.borrow_mut())?;
         archive.value("works", &mut *self.people.works.borrow_mut())?;

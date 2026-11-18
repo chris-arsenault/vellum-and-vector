@@ -45,14 +45,15 @@ impl Run<'_> {
         let previous = self.stages.get(next.checked_sub(1)?)?;
         let stage = self.stages.get(next)?;
         let path = previous.context.path.first()?;
-        let (round, _) = path.strip_prefix("round-")?.split_once("/final-courses/")?;
+        let (round, rest) = path.strip_prefix("round-")?.split_once('/')?;
+        if !rest.starts_with("final-courses/") && !rest.starts_with("town-development/") {
+            return None;
+        }
         let round = round.parse().ok()?;
-        if stage
-            .context
-            .path
-            .first()
-            .is_some_and(|path| path.starts_with(&format!("round-{round}/final-courses/")))
-        {
+        if stage.context.path.first().is_some_and(|path| {
+            path.starts_with(&format!("round-{round}/final-courses/"))
+                || path.starts_with(&format!("round-{round}/town-development/"))
+        }) {
             return None;
         }
         Some(Point::RegionalRound { round })

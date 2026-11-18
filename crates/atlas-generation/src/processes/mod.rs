@@ -11,4 +11,5 @@ pub mod runner;
 pub mod slopes;
 pub mod solution;
 pub mod streams;
+pub mod town;
 pub mod weathering;

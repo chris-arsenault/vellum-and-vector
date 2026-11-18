@@ -305,6 +305,7 @@ fn fields<S: State + 'static>() -> Fields<S> {
 }
 fn movement<S: State + 'static>() -> Movement<S> {
     Movement {
+        on_foot: None,
         statement: Must::Value(
             "Boats cross cheaply; roads follow the level shore and drainage grows from the lake."
                 .into(),
@@ -427,7 +428,7 @@ pub fn entry<S: CatalogueState<Schedule> + LakeState + 'static, Schedule: 'stati
         id: Kind::Lake, group: Group::Water, name: "Lake".into(),
         recognition: Recognition { distinct: Must::Value("Lake-coded standing water owns its body and level; ocean and wet ground are separate kinds.".into()), is_a: Must::Value(Rc::new(is_a)), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Routing fills closed basins, craters and reservoirs where runoff sustains them.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Routing determines fill."), suitability: Slot::NotApplicable("No process sites it."), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Publish the traced shoreline with body and level for river-mouth clipping.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(record)) },
+        publication: Publication { delivery: Delivery::Lakes, statement: Must::Value("Publish the traced shoreline with body and level for river-mouth clipping.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(record)) },
         across_maps: AcrossMaps {
             statement: Must::Value("Captured depth and level seed the finer network; records follow a refined counterpart or go if no body remains.".into()), stands_on: Slot::Unwritten,
             carry: Slot::Value(Rc::new(carry_rules::where_it_lands)), realize: Slot::NotApplicable("The schedule reads captured water; routing holds it."),

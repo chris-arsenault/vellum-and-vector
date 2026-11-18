@@ -142,6 +142,7 @@ fn on_land(state: &impl State, place: &Place, factor: f64) -> io::Result<Vec<Cos
 fn movement<S: State + 'static>() -> Movement<S> {
     let river: OnPlace<S, Vec<Cost>> = Rc::new(|state, place| on_land(state, place, 0.8));
     Movement {
+        on_foot: None,
         statement: Must::Value(
             "Ditches obstruct roads while canals carry river stock over the watered land.".into(),
         ),
@@ -184,7 +185,7 @@ pub fn entry<S: CatalogueState<Schedule> + WorkState + 'static, Schedule: 'stati
         id: Kind::Irrigation, group: Group::Settlements, name: "Irrigation".into(),
         recognition: Recognition { distinct: Must::Value("An intake transfers channel water onto land, reducing downstream flow unlike a dam or mill.".into()), is_a: Must::Value(Rc::new(|state, cell| places::holds_record(state, Kind::Irrigation, cell, || found(state)))), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Site works on dry, level, soiled rivers within reach of at least 500 people.".into()), way: Must::Value(ExistenceWay::Sited), requires: Slot::Value(Rc::new(requires)), suitability: Slot::Value(Rc::new(suitable)), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Publish the located water work selected by this map's ground.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(work_records::work_record)) }, across_maps: across(), event: None,
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish the located water work selected by this map's ground.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(work_records::work_record)) }, across_maps: across(), event: None,
         roles: Roles {
             true_size: super::true_sizes::sited(&super::true_sizes::IRRIGATION), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Irrigation), fields: fields(), movement: movement(), others: others(),
             people: People { statement: Must::Value("Diverted water feeds dry-country harvests, but rising brine salts fields.".into()), offers: Slot::Value(Rc::new(|state, place| { let size = magnitude(state, place)?; Ok([(Benefit::Water, size), (Benefit::Food, size * dry(state, place.anchor)?)].into_iter().collect()) })), threatens: Slot::Value(Rc::new(|state, place| { let salt = reads::magic_value(state, "salt", Channel::Intensity, place.anchor)? / 1000.0; Ok(if salt > 0.0 { vec![Hazard { hazard: "salted fields".into(), reach: reach(state, place)?, severity: salt.min(1.0) }] } else { Vec::new() }) })) },

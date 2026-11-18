@@ -228,6 +228,10 @@ fn building_attributes(
 ) -> BTreeMap<String, Value> {
     let mut attributes = BTreeMap::from([
         ("use".to_string(), Value::from(use_.as_str())),
+        (
+            "buildingFunction".into(),
+            Value::from(use_.building_function().as_str()),
+        ),
         ("occupants".into(), occupants(use_, settlement.size).into()),
         ("storeys".into(), use_.storeys(settlement.size).into()),
         (

@@ -109,7 +109,7 @@ fn fields<S: State + 'static>() -> Fields<S> {
 fn movement<S: State + 'static>() -> Movement<S> {
     let roots: OnPlace<S, Vec<Cost>> =
         Rc::new(|state, place| carry_rules::cost_near(state, place, 0.7, around(state)? / 2.0));
-    Movement {
+    Movement { on_foot: None,
         statement: Must::Value("Caravans bend to its cheap going; groundwater and roots spread into bare ground; it floats no boats.".into()),
         roads: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, CARAVAN_SAVING, state.field()?.scale.cells(CARAVAN_REACH)))),
         boats: Slot::NotApplicable("Seeping water floats nothing."), drainage: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 0.8, 0.0))),
@@ -203,7 +203,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
         id: Kind::Oasis, group: Group::Water, name: "Oasis".into(),
         recognition: Recognition { distinct: Must::Value("Greenwood spring-origin water on land with low tree cover; its rule distinguishes the bare-ground oasis from a grove or natural spring.".into()), is_a: Must::Value(Rc::new(is_a)), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Greenwood aquifer water rises on open soluble rock before cover grows.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Greenwood's rule reads aquifer and cover."), suitability: Slot::NotApplicable("The aquifer rises where rock permits."), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Publish as Greenwood's oasis class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(|state: &S, place: &Place| records::rule(state, place, "greenwood", "oasis"))) },
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish as Greenwood's oasis class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(|state: &S, place: &Place| records::rule(state, place, "greenwood", "oasis"))) },
         across_maps: across_maps(), event: None,
         roles: Roles { true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Oasis), fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(), naming: naming() },
     }

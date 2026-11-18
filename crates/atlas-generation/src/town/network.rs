@@ -2,25 +2,27 @@
 //! between them, and a main street bridges narrow water and ends at wide water.
 use super::{
     geometry::{at, cut, distance, line_length, offset, resample, Point},
-    ground::{Ground, FIRST_STREET, OUTSIDE, PLOT, SQUARE, STEEP, WALL, WATER},
+    ground::{Ground, OUTSIDE, SQUARE, STEEP, WALL, WATER},
     story::Size,
 };
 
 /// Street classes and their widths, shared with the town tools.
 pub use atlas_map::town::StreetClass as Class;
 /// A way entering the settlement, from its centre outward, and the place it leads to.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Arm {
     pub points: Vec<Point>,
     pub destination: Option<String>,
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Street {
     /// Runs from the end nearest the settlement's centre, where numbering starts.
     pub points: Vec<Point>,
     pub widths: Vec<f64>,
     pub class: Class,
     pub destination: Option<String>,
+    /// The built street connects to its approach or continues beyond the map.
+    pub through_route: bool,
     /// Stretches over water, as metres along the street.
     pub bridges: Vec<(f64, f64)>,
 }
@@ -32,11 +34,45 @@ impl Street {
             widths,
             class,
             destination: None,
+            through_route: false,
             bridges: Vec::new(),
         }
     }
     pub fn width(&self) -> f64 {
         self.widths.iter().copied().fold(0.0, f64::max)
+    }
+    pub fn width_at(&self, mut along: f64) -> f64 {
+        for (leg, widths) in self.points.windows(2).zip(self.widths.windows(2)) {
+            let span = distance(leg[0], leg[1]);
+            if along <= span && span > 0. {
+                return widths[0] + (widths[1] - widths[0]) * (along / span).clamp(0., 1.);
+            }
+            along -= span;
+        }
+        self.widths.last().copied().unwrap_or(0.)
+    }
+    pub fn corridor(
+        &self,
+        verge: f64,
+        spatial: &dyn crate::spatial::SpatialKernel,
+    ) -> Result<Option<atlas_map::Geometry>, String> {
+        let Some(&width) = self.widths.first() else {
+            return Ok(None);
+        };
+        if self.widths.iter().all(|w| *w == width) {
+            return spatial.buffer(&super::edits::line(&self.points), width / 2. + verge);
+        }
+        let line: Vec<_> = self
+            .points
+            .iter()
+            .map(|[x, y]| atlas_map::Position::xy(*x, *y))
+            .collect();
+        let widths = self
+            .widths
+            .iter()
+            .map(|w| w + 2. * verge)
+            .collect::<Vec<_>>();
+        atlas_map::hexes::width_outline(&line, &widths, spatial)
     }
     pub fn length(&self) -> f64 {
         line_length(&self.points)
@@ -60,15 +96,17 @@ pub fn stops_lane(owner: u32) -> bool {
 /// and ending before water it cannot.
 pub fn main_street(arm: &Arm, reach: f64, size: Size, ground: &Ground) -> Option<Street> {
     let mut points = resample(&cut(&arm.points, reach), VERTEX_STEP);
-    let edge = ground.reach(&points, |owner| owner == OUTSIDE || owner == STEEP);
+    let edge = ground.reach(&points, |owner| matches!(owner, OUTSIDE | STEEP | WALL));
+    let mut through_route = at(&points, edge).is_some_and(|(p, _)| ground.owner(p) != STEEP);
     let mut bridges = Vec::new();
-    let mut end = edge.max(VERTEX_STEP);
+    let mut end = edge;
     for (start, stop) in ground.wet_runs(&points) {
         if start >= end {
             break;
         }
         if stop - start > bridge_span(size) || stop >= end {
             end = start;
+            through_route = false;
             break;
         }
         bridges.push((start, stop));
@@ -79,13 +117,9 @@ pub fn main_street(arm: &Arm, reach: f64, size: Size, ground: &Ground) -> Option
     }
     let mut street = Street::new(points, Class::Main, size);
     street.destination.clone_from(&arm.destination);
+    street.through_route = through_route;
     street.bridges = bridges;
     Some(street)
-}
-/// Whether ground stops a lane branching from street `parent`: what stops any lane, a plot,
-/// and any other street, so branches end in T-junctions and never run through a house.
-pub fn stops_branch(parent: u32) -> impl Fn(u32) -> bool {
-    move |owner| stops_lane(owner) || owner == PLOT || (owner >= FIRST_STREET && owner != parent)
 }
 /// A lane along `points` until ground `stops` its line or either of its edges; shorter than
 /// `least` metres, it is not laid.
@@ -170,6 +204,7 @@ mod tests {
         assert_eq!(street.bridges.len(), 1);
         assert!((street.length() - 250.0).abs() < 1.0);
         assert_eq!(street.destination.as_deref(), Some("Elder Ford"));
+        assert!(street.through_route);
         assert!(street
             .points
             .windows(2)
@@ -178,21 +213,10 @@ mod tests {
         let hamlet = main_street(&arm(), 250.0, Size::Hamlet, &ground).unwrap();
         assert!(hamlet.bridges.is_empty());
         assert!(hamlet.length() <= 100.0);
+        assert!(!hamlet.through_route);
     }
     #[test]
-    fn lanes_stop_at_other_streets_and_gates_pinch_widths() {
-        let mut ground = Ground::new([0.0, 0.0, 100.0, 100.0], 1.0);
-        ground.take_line(&[[0.0, 80.0], [100.0, 80.0]], 6.0, FIRST_STREET + 1);
-        let lane = lane(
-            &[[50.0, 0.0], [50.0, 100.0]],
-            Class::Lane,
-            Size::Village,
-            &ground,
-            stops_branch(FIRST_STREET),
-            10.0,
-        )
-        .unwrap();
-        assert!(lane.length() < 80.0 && lane.length() > 70.0);
+    fn gates_pinch_widths_where_the_street_meets_the_wall() {
         let mut street = Street::new(
             vec![[0.0, 0.0], [10.0, 0.0], [20.0, 0.0]],
             Class::Main,

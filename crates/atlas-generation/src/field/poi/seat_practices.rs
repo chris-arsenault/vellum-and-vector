@@ -212,7 +212,7 @@ fn movement<S: State + 'static>(kind: Practice) -> Movement<S> {
             measure(&state.field()?.scale, 0.0005, 1, 1.0)?,
         )
     });
-    Movement {
+    Movement { on_foot: Some(TrailRole::Destination),
         statement: Must::Value("Core traffic and readers wear roads; forges draw carried cores while archive crystals dissipate carried Pressure.".into()),
         roads: Slot::Value(Rc::new(move |state, place| carry_rules::cost_near(state, place, if kind == Practice::Forge { 0.8 } else { 0.9 }, measure(&state.field()?.scale, 0.0005, 1, 1.0)?))),
         boats: Slot::NotApplicable("The practice stands at its land seat."), drainage: Slot::NotApplicable("The practice adds no drainage cost."),
@@ -262,7 +262,7 @@ pub fn entry<S: CommunityState + 'static, Schedule>(kind: Practice) -> Entry<S, 
         id: kind.kind(), group: Group::Settlements, name: kind.name().into(),
         recognition: Recognition { distinct: Must::Value("A community's forge cracks Fire cores for heat; its archive reads Aurora memories in cold crystals. Natural system features are separate places.".into()), is_a: Must::Value(Rc::new(move |state, cell| places::holds_record(state, kind.kind(), cell, || kind.found(state)))), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Practices are sited near settlements with their system's necessary ground and material.".into()), way: Must::Value(ExistenceWay::Sited), requires: Slot::Value(Rc::new(move |state, cell| kind.requires(state, cell))), suitability: Slot::Value(Rc::new(move |state, cell| kind.suitable(state, cell))), places: Must::Value(Rc::new(move |state| kind.found(state))) },
-        publication: Publication { statement: Must::Value("Publish the generated located practice while retaining existing captured records.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(work_records::work_record)) }, across_maps: across(kind), event: None,
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish the generated located practice while retaining existing captured records.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(work_records::work_record)) }, across_maps: across(kind), event: None,
         roles: Roles { true_size: super::true_sizes::sited(match kind { Practice::Forge => &super::true_sizes::FORGE, Practice::Archive => &super::true_sizes::ARCHIVE }), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(kind.kind()), fields: fields(kind), movement: movement(kind), others: others(kind), people: people(kind), time: ThroughTime { statement: Must::Value("A kept forge persists, otherwise leaving a thawed halo or ruin. An archive ends when its ice or Aurora fails.".into()), fate: Slot::Value(Rc::new(move |state, place| kind.fate(state, place))) }, visibility: visible(kind), naming: naming(kind) },
     }
 }

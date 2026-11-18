@@ -552,6 +552,62 @@ triangular lattice at a span set by their hex size and detail
 process participates through the common contract, including at several profiles
 or several causal positions in one sequence.
 
+A real-scale settlement can begin with freestanding buildings on workable land.
+Each round offers sites around inhabited holdings as well as street frontage and
+sites beside a participating place. Entrances and building orientations belong to
+the physical site. A street address belongs to premises that actually front a
+street. A new holding on the outskirts can extend the area considered on the next
+pass while intervening land remains open.
+
+The town sequence repeats the same development processes over eighteen rounds.
+An incoming way gives a street a course to follow.
+Occupation near its built end can pay for an extension. New frontage can also open
+near an outlying workplace, and trips between occupied places can justify a
+connecting lane or a wider stretch of an existing street. Lattice population
+guides demand. Each round takes the preceding round's buildings, streets and
+working land as its starting geography.
+
+When ordinary street proposals cannot extend the network, movement looks for a
+byway toward an unmet destination. It can depart from another point along the
+street and bend around occupied ground. A hillside can carry a way along its
+contour when the grade along that course admits travel. The resulting connection
+uses the same land claims, investment and frontage as other streets.
+
+A town purpose names a site and the relationships it needs there. For example, a hall
+can accommodate exchange while its freight approach still needs improvement. Projects
+can establish premises, adapt existing holdings or improve access. The fabric owner
+fits parcels and routes against retained geography and keeps the identities of older
+holdings. The place catalogue describes who uses each place, what sites support it,
+and which uses can share premises. A connected project binds existing participants
+and fits missing premises together. The fabric owner declines the group if a
+required member cannot fit and can omit an optional member. Institutions can retain
+claims over other holdings.
+
+An occupied holding can work at one place, draw supplies from another and
+serve customers elsewhere. Each relationship identifies its destination and
+the access it needs. Movement combines journeys that use the same stretch of
+street. A public project can draw contributions from several premises at
+different sites. Premises already making a costly journey to a distant
+workplace can sponsor a small occupied centre there. Later street investment
+can connect the two built areas.
+
+Each POI owns its siting preferences, offered activities and establishment rules.
+Town processes ask those definitions which opportunities a household can reach,
+which premises can serve a purpose and what access the activity requires. Field
+POIs declare their contributions to nearby sites and their role in the walking
+network. Each building publishes its function so the viewer can colour a roof
+even when the premises accommodate several activities.
+
+Public spaces can offer plots along their perimeter. Businesses on those plots
+face the square and retain access to its street. Public greens and paved spaces
+publish their ground cover. Attached housing forms divide their street range
+into separate footprints with shared walls. Crowding can lead to rear development
+or an additional storey. The finished map carries the resulting floor count.
+
+Publication reads the resulting streets, parcels, buildings, working land and nearby
+occupations. The finished map carries geometry, uses, neighbourhood character, street
+addresses and access relationships into the GIS catalogue for inspection and export.
+
 ## Epochs and causal feedback
 
 ### Initial-world configuration

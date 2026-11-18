@@ -159,6 +159,7 @@ impl FieldSeed {
             human_land_seen: None,
             engineered_dams: None,
             settled_place_targets: std::array::from_fn(|_| None),
+            town: crate::town::signals::Signals::default(),
             scale,
             thrust_slip: Default::default(),
             coverage: RefCell::new(self.coverage),
@@ -196,12 +197,66 @@ pub struct Field {
     pub(super) human_land_seen: Option<super::people::history::Seen>,
     pub(super) engineered_dams: Option<Band<u8>>,
     pub(super) settled_place_targets: [Option<Band<f64>>; 5],
+    pub(super) town: crate::town::signals::Signals,
     pub(super) scale: MapScale,
     // hpc-exempt: fractional slip belongs to named thrust sheets, not terrain-cell storage.
     pub(super) thrust_slip: std::collections::BTreeMap<String, f64>,
     pub(super) coverage: RefCell<Coverage>,
 }
 impl Field {
+    pub fn town_clearance_operation() -> crate::execution::Command<Self, Vec<(usize, f64)>> {
+        crate::execution::Command::with_inputs(
+            "town.clear-waste",
+            crate::execution::CommandKind::Work,
+            vec![],
+            |scope, removals: &Vec<(usize, f64)>| {
+                let field: &mut Self = scope.state_mut();
+                let waste =
+                    field.town.waste.as_mut().ok_or_else(|| {
+                        io::Error::other("Town clearance requires initialized waste")
+                    })?;
+                for &(cell, amount) in removals {
+                    waste.set(cell, (waste.get(cell)? - amount.max(0.)).max(0.))?;
+                }
+                Ok(())
+            },
+        )
+    }
+    pub fn town_pressure_operation(
+        travel: crate::execution::Query<Self, crate::answers::AnswerBand>,
+    ) -> crate::execution::Command<Self, crate::town::signals::Inputs> {
+        crate::execution::Command::with_inputs(
+            "town.exchange-and-waste",
+            crate::execution::CommandKind::Work,
+            vec![travel.dependency()],
+            move |scope, sources: &crate::town::signals::Inputs| {
+                let friction = scope.values().get(&travel)?.values();
+                let field: &mut Self = scope.state_mut();
+                let elevation = field
+                    .ground
+                    .borrow()
+                    .view(crate::rock::ground::GroundField::Elevation);
+                field.town.advance(
+                    crate::town::signals::Transport {
+                        mesh: &field.mesh,
+                        friction,
+                        elevation,
+                    },
+                    field.coverage.get_mut(),
+                    sources,
+                    1.,
+                )?;
+                Ok(())
+            },
+        )
+    }
+    pub fn town_signals(&self) -> &crate::town::signals::Signals {
+        &self.town
+    }
+    pub fn town_signals_mut(&mut self) -> &mut crate::town::signals::Signals {
+        self.town.initialize(self.coverage.get_mut());
+        &mut self.town
+    }
     pub(crate) fn begin_process(&self) -> u64 {
         self.coverage.borrow().begin_process()
     }

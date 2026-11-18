@@ -5,10 +5,7 @@ use crate::field::{
     geographic_contours,
     landmarks::lifecycle::Operations,
     poi::{
-        self,
-        kinds::{Group, Kind},
-        publication::Publication,
-        realized::RealizationState,
+        self, contract::Delivery, publication::Publication, realized::RealizationState,
         values::Moment,
     },
 };
@@ -44,15 +41,12 @@ impl Default for Deliveries {
     }
 }
 impl Deliveries {
-    fn kind(self, kind: Kind) -> bool {
-        if kind.group() == Group::Cover || kind == Kind::Wetland {
-            self.ecology
-        } else if kind == Kind::Lake {
-            self.lakes
-        } else if matches!(kind, Kind::Volcano | Kind::Caldera) {
-            self.volcanism
-        } else {
-            self.landforms
+    fn includes(self, delivery: Delivery) -> bool {
+        match delivery {
+            Delivery::Ecology => self.ecology,
+            Delivery::Lakes => self.lakes,
+            Delivery::Volcanism => self.volcanism,
+            Delivery::Landforms => self.landforms,
         }
     }
 }
@@ -132,7 +126,7 @@ impl State {
         let catalogue = self.catalogue.clone();
         publication
             .kinds(self, &catalogue, Moment::Geography, |entry| {
-                deliveries.kind(entry.id)
+                deliveries.includes(entry.publication.delivery)
             })
             .map_err(|error| io::Error::other(format!("Geographic places: {error}")))?;
         progress(0.8, "Extracting river geography");

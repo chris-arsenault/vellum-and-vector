@@ -360,7 +360,10 @@ fn fate(country: Country, state: &impl State, place: &Place) -> io::Result<Fate>
         }
     })
 }
-pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>(
+pub fn entry<
+    S: CatalogueState<Schedule> + super::wild_history::WildHistory + 'static,
+    Schedule: 'static,
+>(
     country: Country,
 ) -> Entry<S, Schedule> {
     let (kind, system, rule, name) = country.identity();
@@ -368,7 +371,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>(
         id: kind, group: Group::Cover, name: name.into(),
         recognition: Recognition { distinct: Must::Value(format!("The {system}:{rule} rule defines this country independently of the biome beneath it.")), is_a: Must::Value(Rc::new(move |state, cell| reads::magic_rule(state, system, rule, cell))), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("The owning system's sources, propagation and feedback establish the rule's country.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("The owner rule supplies the requirements."), suitability: Slot::NotApplicable("No process chooses this rule's location."), places: Must::Value(Rc::new(move |state| country.found(state))) },
-        publication: Publication { statement: Must::Value("Publish the owning magic rule's coverage.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(move |state: &S, place: &Place| records::rule(state, place, system, rule))) },
+        publication: Publication { delivery: Delivery::Ecology, statement: Must::Value("Publish the owning magic rule's coverage.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(if country == Country::WildZone { Rc::new(super::wild_history::WildPublication) } else { Rc::new(move |state: &S, place: &Place| records::rule(state, place, system, rule)) }) },
         across_maps: shared::developed_country("Captured system fields develop on the child; the name follows the nearest rule country within two parent cells or goes.", Rc::new(move |state, cell| reads::magic_rule(state, system, rule, cell))), event: None,
         roles: Roles { true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(kind),
             fields: fields(country), movement: movement(country), others: others(country),

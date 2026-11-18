@@ -46,6 +46,55 @@ impl NativeGeos {
             .map(Some)
             .map_err(|e| e.to_string())
     }
+    pub(crate) fn overlay_result(&self, geometry: Native) -> SpatialResult<Option<Geometry>> {
+        // Re-enter GEOS at floating precision, as an exported fragment will on its next read.
+        // A fixed-precision overlay may retain a ring whose vertices snap onto one segment.
+        let bytes = geometry.to_wkb().map_err(|e| e.to_string())?;
+        let result = Native::new_from_wkb(&bytes)
+            .and_then(|fresh| fresh.set_precision(self.precision, Precision::ValidOutput))
+            .map_err(|e| e.to_string())?;
+        let Some(result) = Self::json(result)? else {
+            return Ok(None);
+        };
+        self.export_parts(result)
+    }
+    /// A caller may separate a clipped multipart parcel at its entrance. Each member
+    /// therefore has to survive the same precision reduction as an independent input.
+    fn export_parts(&self, value: Geometry) -> SpatialResult<Option<Geometry>> {
+        match value {
+            Geometry::MultiPolygon { coordinates } => {
+                let mut parts = Vec::new();
+                for polygon in coordinates {
+                    match self.export_parts(Geometry::Polygon {
+                        coordinates: polygon,
+                    })? {
+                        Some(Geometry::Polygon { coordinates }) => parts.push(coordinates),
+                        Some(Geometry::MultiPolygon { coordinates }) => parts.extend(coordinates),
+                        _ => {}
+                    }
+                }
+                Ok((!parts.is_empty()).then_some(Geometry::MultiPolygon { coordinates: parts }))
+            }
+            Geometry::GeometryCollection { geometries } => {
+                let mut parts = Vec::new();
+                for geometry in geometries {
+                    parts.extend(self.export_parts(geometry)?);
+                }
+                Ok((!parts.is_empty())
+                    .then_some(Geometry::GeometryCollection { geometries: parts }))
+            }
+            Geometry::Polygon { .. } => {
+                let snapped = coordinates::read(&value)
+                    .and_then(|part| part.set_precision(self.precision, Precision::ValidOutput))
+                    .map_err(|e| e.to_string())?;
+                if snapped.is_empty().map_err(|e| e.to_string())? {
+                    return Ok(None);
+                }
+                Ok(Some(value))
+            }
+            _ => Ok(Some(value)),
+        }
+    }
     fn point(position: Position) -> Geometry {
         Geometry::Point {
             coordinates: position,
@@ -145,7 +194,7 @@ impl SpatialKernel for NativeGeos {
             Overlay::Union => a.union_prec(&b, self.precision),
         }
         .map_err(|e| e.to_string())?;
-        Self::json(result)
+        self.overlay_result(result)
     }
     fn union_all(&self, values: &[Geometry]) -> SpatialResult<Option<Geometry>> {
         if values.is_empty() {
@@ -341,5 +390,20 @@ impl SpatialKernel for NativeGeos {
         includes: &mut dyn FnMut(Position) -> bool,
     ) -> SpatialResult<Option<Geometry>> {
         self.selected_area(boundaries, includes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clipped_fragment_is_reusable_at_the_map_precision() {
+        let kernel = NativeGeos::new(0.000001).unwrap();
+        let raw = Native::new_from_wkt("POLYGON ((756921.304337 64069.67997, 756921.381122 64071.16284, 756921.505213 64073.559261, 756921.304337 64069.67997))").unwrap();
+        let input = coordinates::write(&raw).unwrap();
+        assert!(kernel.read(&input).is_err());
+        let result = kernel.overlay_result(raw).unwrap();
+        assert!(result.is_none_or(|geometry| kernel.read(&geometry).is_ok()));
     }
 }

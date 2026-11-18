@@ -52,7 +52,7 @@ fn a_drawn_river_is_water_across_its_full_width_and_a_pool_by_its_outline() {
 }
 
 #[test]
-fn a_town_centre_uses_the_nearest_open_square_without_building_in_water_or_on_slopes() {
+fn a_captured_seat_in_water_uses_the_nearest_habitable_bank() {
     use atlas_generation::atlas::town::ground::STEEP;
     let spatial = NativeGeos::new(1e-9).unwrap();
     let mut ground = Ground::new([0.0, 0.0, 200.0, 200.0], 1.0);
@@ -70,13 +70,12 @@ fn a_town_centre_uses_the_nearest_open_square_without_building_in_water_or_on_sl
         [115.0, 100.0],
         [140.0, 100.0],
     ];
-    // The nearer candidates are steep, in the river, or too close to its bank for a square.
     assert_eq!(
-        town_centre([100.0, 100.0], 20.0, &candidates, &ground, &spatial).unwrap(),
-        [140.0, 100.0]
+        town_centre([100.0, 100.0], &candidates, &ground, &spatial).unwrap(),
+        [115.0, 100.0]
     );
     assert_eq!(
-        town_centre([140.0, 150.0], 20.0, &candidates, &ground, &spatial).unwrap(),
+        town_centre([140.0, 150.0], &candidates, &ground, &spatial).unwrap(),
         [140.0, 150.0]
     );
 }

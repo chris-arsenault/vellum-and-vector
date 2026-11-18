@@ -2,7 +2,8 @@
 //! Real-scale maps show things at their real size (ADR 0016), so lengths are true metres.
 //! The vocabulary the town tools share (street widths, plot sizes, building footprints and
 //! house numbering) is declared in `atlas_map::town`.
-use super::story::Size;
+/// Town development exposure after site preparation, independent of regional water rounds.
+pub const DEVELOPMENT_ROUNDS: usize = 18;
 
 // The plan's working grid.
 
@@ -17,24 +18,30 @@ pub const STEEP_SLOPE: f64 = 0.35;
 
 /// Vertex spacing of generated streets, so widths can vary along them.
 pub const VERTEX_STEP: f64 = 10.0;
-/// Half the side of a place's market square; hamlets and farmsteads have none.
-pub fn square_half(size: Size) -> f64 {
-    match size {
-        Size::City => 30.0,
-        Size::Town => 20.0,
-        Size::Village => 12.0,
-        Size::Hamlet | Size::Farmstead => 0.0,
-    }
-}
 /// A captured way drawn with no width is taken to be this wide.
 pub const UNSTATED_WAY_WIDTH: f64 = 3.0;
 /// Full thickness of a town wall, the width of its gates and the sides of its ring.
 pub const WALL_THICKNESS: f64 = 3.0;
 pub const GATE_WIDTH: f64 = 4.0;
 pub const WALL_SIDES: usize = 14;
-/// Lanes grown to house waiting people reach this many plot depths in the first round and
-/// one more each round after.
-pub const GROWN_LANE_DEPTHS: f64 = 4.0;
+/// Mean block width in plot depths, leaving back yards between opposing frontages.
+pub const BLOCK_DEPTHS: f64 = 3.0;
+/// Variation in the distance between successive junctions.
+pub const BLOCK_LENGTH_VARIATION: f64 = 0.22;
+/// First side street's distance beyond the square, as a share of a block width.
+pub const FIRST_BLOCK_SHARE: f64 = 0.6;
+/// Shorter connections leave too little room between neighbouring junctions.
+pub const MIN_CONNECTION_SHARE: f64 = 0.4;
+/// A new street's midpoint stays this far from other streets, in block widths.
+pub const STREET_CLEARANCE_SHARE: f64 = 0.25;
+/// Distance in metres within which intersecting street vertices share one junction.
+pub const JUNCTION_TOLERANCE: f64 = 0.01;
+/// A growing street joins an existing street within this share of a block width.
+pub const JOIN_SHARE: f64 = 0.45;
+/// Maximum change of heading per block (radians); variation follows a street's direction.
+pub const STREET_TURN: f64 = 0.16;
+/// Chance of a side street at each block junction.
+pub const BRANCH_CHANCE: f64 = 0.7;
 
 // Plots.
 

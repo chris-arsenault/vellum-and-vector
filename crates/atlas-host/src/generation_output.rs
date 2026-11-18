@@ -87,11 +87,22 @@ impl<S: Sink, C: GenerationControl, O: Observations> Output for Publication<'_, 
         self.observations.diagnostic(diagnostic)
     }
     async fn completed(&mut self, state: &State, boundary: Boundary<'_>) -> ExecutionResult<()> {
+        let town_epoch;
+        let mut preview = preview::capture(state)?;
         let ancestry = match boundary {
             Boundary::Epoch(ancestry) => Some(ancestry),
+            Boundary::Town(stage) => {
+                preview.town_fabric = Some(preview::town::capture(&state.town, stage));
+                town_epoch = [GenerationEpoch {
+                    id: format!("Town {} (round {})", stage.phase, stage.round),
+                    duration: 0.,
+                    parent_epoch: None,
+                    variables: Default::default(),
+                }];
+                Some(town_epoch.as_slice())
+            }
             Boundary::Final => None,
         };
-        let preview = preview::capture(state)?;
         if preview.channels.contains_key("Elevation") {
             self.observations.preview(&preview, ancestry).await?;
         }

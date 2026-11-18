@@ -14,7 +14,6 @@ pub trait PublicationState<Schedule>: super::realized::RealizationState + Sized 
     fn retained_name(&self, feature: &str) -> bool;
     fn name_feature(&self, feature: &Feature) -> io::Result<Option<Named>>;
     fn contracted(&self, feature: &str) -> bool;
-    fn latest_wild_observation(&self) -> &[super::wild_history::Observation];
 }
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Published {
@@ -81,36 +80,19 @@ impl Publication {
         wanted: impl Fn(&Place) -> bool,
     ) -> io::Result<()> {
         let mut records = Vec::new();
+        let Some(writer) = entry.publication.record.value() else {
+            return Ok(());
+        };
         for place in places_of(state, entry)?.iter() {
             if !wanted(place) {
                 continue;
             }
-            let feature = entry
-                .publication
-                .record
-                .value()
-                .map(|record| record.record(state, place))
-                .transpose()?
-                .flatten();
+            let feature = writer.record(state, place)?;
             if let Some(feature) = feature {
                 records.push((place.clone(), feature));
             }
         }
-        if entry.id == Kind::WildZone {
-            let current = records
-                .iter()
-                .map(|(_, f)| super::wild_history::Observation::from(f))
-                .collect::<Vec<_>>();
-            let linked = super::wild_history::link(
-                state.spatial(),
-                state.latest_wild_observation(),
-                &current,
-            )?;
-            for ((_, feature), observation) in records.iter_mut().zip(linked) {
-                feature.id = observation.id;
-                feature.name = observation.name;
-            }
-        }
+        writer.prepare_batch(state, &mut records)?;
         for (place, mut feature) in records {
             self.attributes(state, entry, &place, &mut feature)?;
             super::names::apply_term(state, entry, &place, &mut feature)?;
@@ -123,9 +105,7 @@ impl Publication {
                 });
             }
         }
-        if matches!(entry.id, Kind::Settlement | Kind::Ruin) {
-            state.held().forget("settlementRecords");
-        }
+        writer.published(state);
         Ok(())
     }
     fn attributes<S: super::state::State, Schedule>(

@@ -215,7 +215,7 @@ fn road_cost(kind: Crossing, state: &impl State, place: &Place) -> io::Result<Ve
     Ok(costs)
 }
 fn movement<S: State + 'static>(kind: Crossing) -> Movement<S> {
-    Movement {
+    Movement { on_foot: None,
         statement: Must::Value("Known crossings reduce road taxes; boats pay for shallows or piers, and bridge abutments hold the channel.".into()),
         roads: Slot::Value(Rc::new(move |state, place| road_cost(kind, state, place))),
         boats: Slot::Value(Rc::new(move |state, place| carry_rules::cost_near(state, place, if kind == Crossing::Ford { 2.0 } else { 1.25 }, 0.0))),
@@ -307,7 +307,7 @@ pub fn entry<S: CatalogueState<Schedule> + WorkState + 'static, Schedule: 'stati
         id: kind.kind(), group: Group::Settlements, name: kind.name().into(),
         recognition: Recognition { distinct: Must::Value("A way crosses a land channel; busy roads over sufficient discharge earn bridges and other crossings are fords.".into()), is_a: Must::Value(Rc::new(move |state, cell| places::holds_record(state, kind.kind(), cell, || kind.found(state)))), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Regional ways create crossings away from seat cells; world roads pay crossing costs without publishing sites.".into()), way: Must::Value(ExistenceWay::Sited), requires: Slot::Value(Rc::new(move |state, cell| Ok(crossable(state, cell)? && (kind == Crossing::Ford || reads::discharge(state.field()?, cell)? >= bridge_flow(state)?)))), suitability: Slot::Value(Rc::new(move |state, cell| kind.suitable(state, cell))), places: Must::Value(Rc::new(move |state| kind.found(state))) },
-        publication: Publication { statement: Must::Value("Publish each crossing once after tracing ways.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(community_records::once_written)) },
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish each crossing once after tracing ways.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(community_records::once_written)) },
         across_maps: across(kind), event: None,
         roles: Roles {
             true_size: super::true_sizes::crossing(kind == Crossing::Bridge), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::crossing_account(kind.kind()), fields: fields(kind), movement: movement(kind), others: others(kind),

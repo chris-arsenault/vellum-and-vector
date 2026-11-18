@@ -132,6 +132,7 @@ fn fields<S: CatalogueState<Schedule> + 'static, Schedule>() -> Fields<S> {
 }
 fn movement<S: CatalogueState<Schedule> + 'static, Schedule>() -> Movement<S> {
     Movement {
+        on_foot: Some(TrailRole::Destination),
         statement: Must::Value("Boats portage round a fall; roads read its river.".into()),
         roads: Slot::NotApplicable("Road crossing costs read the river."),
         boats: Slot::Value(Rc::new(|state, place| {
@@ -262,7 +263,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
             statement: Must::Value("The river profile supplies steps; rock, faults, hanging tributaries, cliffs, height, portage towns or captured identity claim falls, spaced apart.".into()),
             way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Recognition reads the river itself."), suitability: Slot::NotApplicable("Nothing chooses where a fall stands."), places: Must::Value(Rc::new(found)),
         },
-        publication: Publication { statement: Must::Value("Publish each fall's site, true size and discharge; town-named falls arrive after towns.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(record)) },
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish each fall's site, true size and discharge; town-named falls arrive after towns.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(record)) },
         across_maps: across_maps(), event: None, roles: roles(),
     }
 }

@@ -2,8 +2,8 @@
 //! walk over the map's triangles to the nearest way or settlement (`processes/ground/trails.rs`).
 use super::{real_scale_ground::metres, State};
 use crate::{
-    features::{line_profile::Piece, records::Attributes, Feature, Relation},
-    field::{poi::reads, shared::Scalar},
+    features::{line_profile::Piece, records::Attributes, Feature, FeatureSelection, Relation},
+    field::{poi::contract::TrailRole, shared::Scalar},
     processes::ground::{
         distance,
         settings::{
@@ -16,38 +16,36 @@ use crate::{
 use serde_json::json;
 use std::io;
 
-/// Kinds of place people walk to, by layer; any feature of the listed layers with no kinds.
-const VISITED: &[(&str, &[&str])] = &[
-    ("settlements", &["settlement"]),
-    ("caveEntrances", &[]),
-    ("geology", &["spring", "peak", "waterfall"]),
-    ("magicPractices", &[]),
-    ("landUse", &["mine"]),
-    ("structures", &["building"]),
-];
-fn point_of(feature: &Feature) -> Option<[f64; 2]> {
-    let [x, y, _] = reads::first_coordinate(&feature.geometry)?.coordinates();
-    Some([x, y])
-}
-/// Distance from a point to the nearest way.
-fn to_ways(point: [f64; 2], ways: &[(Feature, Vec<Piece>)]) -> f64 {
-    let mut nearest = f64::INFINITY;
-    for piece in ways.iter().flat_map(|(_, parts)| parts) {
-        for pair in piece.points.windows(2) {
-            let [a, b] = [pair[0], pair[1]];
-            let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
-            let run = dx * dx + dy * dy;
-            let t = if run > 0.0 {
-                (((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / run).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            nearest = nearest.min(distance(point, [a[0] + t * dx, a[1] + t * dy]));
-        }
-    }
-    nearest
-}
 impl State {
+    fn walking_places(&self) -> io::Result<Vec<(Feature, TrailRole)>> {
+        let mut places = Vec::new();
+        for feature in self.records.features.values(FeatureSelection {
+            area_id: Some(&self.scope.area),
+            ..Default::default()
+        })? {
+            let feature = feature?;
+            let role = self.catalogue.walking_role(&feature).or_else(|| {
+                (feature
+                    .attributes
+                    .get("walkingDestination")
+                    .and_then(|v| v.as_bool())
+                    == Some(true))
+                .then_some(TrailRole::Destination)
+            });
+            if let Some(role) = role {
+                places.push((feature, role));
+            }
+        }
+        Ok(places)
+    }
+    fn destination(&self, feature: &Feature) -> io::Result<[f64; 2]> {
+        let [x, y, _] = self
+            .spatial
+            .interior_position(&feature.geometry)
+            .map_err(io::Error::other)?
+            .coordinates();
+        Ok([x, y])
+    }
     /// Walking cost per metre through one triangle.
     fn walking_cost(&self, cell: usize) -> io::Result<f64> {
         let field = self.field();
@@ -71,7 +69,11 @@ impl State {
         Ok(cost)
     }
     /// Triangles a trail can end on: those the ways cross and those settlements stand on.
-    fn trail_ends(&self, ways: &[(Feature, Vec<Piece>)]) -> io::Result<Vec<bool>> {
+    fn trail_ends(
+        &self,
+        ways: &[(Feature, Vec<Piece>)],
+        places: &[(Feature, TrailRole)],
+    ) -> io::Result<Vec<bool>> {
         let mesh = self.field().mesh();
         let mut ends = vec![false; mesh.len()];
         let step = mesh.spacing() / 2.0;
@@ -90,31 +92,40 @@ impl State {
                 }
             }
         }
-        for settlement in self.layer_features("settlements")? {
-            if let Some(cell) = point_of(&settlement).and_then(|p| self.cell_under(p)) {
+        for (hub, _) in places
+            .iter()
+            .filter(|(_, role)| *role == TrailRole::Junction)
+        {
+            if let Some(cell) = self.cell_under(self.destination(hub)?) {
                 ends[cell] = true;
             }
         }
         Ok(ends)
     }
     /// Places people visit that no way reaches, nearest first so farther trails join them.
-    fn unreached(&self, ways: &[(Feature, Vec<Piece>)]) -> io::Result<Vec<(Feature, usize)>> {
+    fn unreached(
+        &self,
+        ways: &[(Feature, Vec<Piece>)],
+        destinations: Vec<(Feature, TrailRole)>,
+    ) -> io::Result<Vec<(Feature, usize)>> {
         let mut places = Vec::new();
-        for (layer, kinds) in VISITED {
-            for feature in self.layer_features(layer)? {
-                if !kinds.is_empty() && !kinds.contains(&feature.kind.as_str()) {
-                    continue;
-                }
-                let Some(point) = point_of(&feature) else {
-                    continue;
-                };
-                let away = to_ways(point, ways);
-                if away < REACHED_WITHIN {
-                    continue;
-                }
-                if let Some(cell) = self.cell_under(point) {
-                    places.push((away, feature, cell));
-                }
+        let paths: Vec<_> = ways.iter().map(|(f, _)| f.geometry.clone()).collect();
+        let index = self.spatial.index(&paths).map_err(io::Error::other)?;
+        for (feature, _) in destinations {
+            let point = self.destination(&feature)?;
+            let position = atlas_map::Position::xy(point[0], point[1]);
+            let away = match index.nearest(position).map_err(io::Error::other)? {
+                Some(i) => self
+                    .spatial
+                    .distance(&feature.geometry, &paths[i])
+                    .map_err(io::Error::other)?,
+                None => f64::INFINITY,
+            };
+            if away < REACHED_WITHIN {
+                continue;
+            }
+            if let Some(cell) = self.cell_under(point) {
+                places.push((away, feature, cell));
             }
         }
         // hpc-exempt: ordering a map's few hundred unreached places by distance.
@@ -124,11 +135,12 @@ impl State {
     /// Lays the map's trails and records them in the roads network.
     pub fn lay_trails(&mut self) -> io::Result<()> {
         let ways = self.way_lines()?;
-        let places = self.unreached(&ways)?;
+        let destinations = self.walking_places()?;
+        let ends = self.trail_ends(&ways, &destinations)?;
+        let places = self.unreached(&ways, destinations)?;
         if places.is_empty() {
             return Ok(());
         }
-        let ends = self.trail_ends(&ways)?;
         let mesh = self.field().mesh();
         let [ox, oy] = mesh.origin();
         let positions: Vec<[f64; 2]> = (0..mesh.len())

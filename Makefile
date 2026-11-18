@@ -17,11 +17,13 @@ typecheck: wasm-engine
 
 test: wasm-engine
 	pnpm --dir frontend run test
+	node --test scripts/*.test.mjs
 
 # Generation uses the typed-array structures and bands, not object, Map or comparator
 # substitutes; a finding names the site and its replacement.
 test-architecture:
 	pnpm exec vitest run -c vitest.architecture.config.ts
+	cargo clippy --workspace --lib -- -D clippy::disallowed_types
 	cargo test --workspace --doc
 
 contracts:

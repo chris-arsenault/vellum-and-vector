@@ -8,6 +8,33 @@ use atlas_map::Geometry;
 use std::io;
 
 pub use crate::atlas::history::GeographicObservation as Observation;
+pub trait WildHistory {
+    fn latest_wild_observation(&self) -> &[Observation];
+}
+pub(super) struct WildPublication;
+impl<S: super::map_records::MapState + WildHistory> super::contract::PublicationRecord<S>
+    for WildPublication
+{
+    fn record(&self, state: &mut S, place: &super::values::Place) -> io::Result<Option<Feature>> {
+        super::records::rule(state, place, "veil", "wild")
+    }
+    fn prepare_batch(
+        &self,
+        state: &S,
+        records: &mut [(super::values::Place, Feature)],
+    ) -> io::Result<()> {
+        let current = records
+            .iter()
+            .map(|(_, feature)| Observation::from(feature))
+            .collect::<Vec<_>>();
+        let linked = link(state.spatial(), state.latest_wild_observation(), &current)?;
+        for ((_, feature), observation) in records.iter_mut().zip(linked) {
+            feature.id = observation.id;
+            feature.name = observation.name;
+        }
+        Ok(())
+    }
+}
 impl From<&Feature> for Observation {
     fn from(feature: &Feature) -> Self {
         Self {

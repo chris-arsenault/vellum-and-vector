@@ -98,6 +98,27 @@ function consumerDependencies(file: string, seen = new Set<string>()): string[] 
   });
 }
 
+/** Published POI identities remain available to inspection; depiction consumes the
+ * catalogue's building function. Read the renderer's runtime import tree so moving a
+ * lookup into a helper preserves the same boundary. */
+function buildingIdentityReads(text: string): string[] {
+  const file = ts.createSourceFile("depiction.ts", text, ts.ScriptTarget.Latest, true);
+  const identities = new Set(["use", "placeKind", "secondaryKind", "secondaryUse", "placeLabel"]);
+  const reads = new Set<string>();
+  function visit(node: ts.Node) {
+    if (ts.isStringLiteralLike(node) && identities.has(node.text)) reads.add(node.text);
+    const key = ts.isPropertyAccessExpression(node)
+      ? node.name
+      : ts.isBindingElement(node)
+        ? (node.propertyName ?? node.name)
+        : undefined;
+    if (key && ts.isIdentifier(key) && identities.has(key.text)) reads.add(key.text);
+    ts.forEachChild(node, visit);
+  }
+  visit(file);
+  return [...reads];
+}
+
 function expectRustMapBoundary() {
   for (const directory of ["map_store", "postgres_maps", "map_protocol"]) {
     const store = join(root, "crates/atlas-gis/src", directory);
@@ -154,6 +175,28 @@ it("both application generation hosts use the Rust producer", () => {
     .map((path) => readFileSync(join(root, path), "utf8"))
     .join("\n");
   expect(hosts).not.toMatch(/rustNaming|BrowserNaming|callbacks\.name|call\("name"/);
+});
+describe("published building function", () => {
+  it("renders a building with its published function throughout the real-scale style tree", () => {
+    const files = new Set<string>();
+    consumerDependencies(join(root, "frontend/src/realScaleStyles.ts"), files);
+    expect(
+      [...files].flatMap((file) =>
+        buildingIdentityReads(readFileSync(file, "utf8")).map((key) => `${file}: ${key}`)
+      )
+    ).toEqual([]);
+  });
+  it("detects direct, destructured, aliased-key and fallback POI reads", () => {
+    expect(
+      buildingIdentityReads("roofColour(domain.attributes.use, domain.attributes.placeKind)")
+    ).toEqual(["use", "placeKind"]);
+    expect(
+      buildingIdentityReads(
+        'const {placeKind: kind} = f.attributes; const key = "secondaryKind"; return kind ?? f.attributes[key] ?? f.attributes.use;'
+      )
+    ).toEqual(["placeKind", "secondaryKind", "use"]);
+    expect(buildingIdentityReads("return palette[f.attributes.buildingFunction];")).toEqual([]);
+  });
 });
 describe("published map dependency boundary", () => {
   // owner-direction(2026-11-12): delete both old C# and TypeScript backends

@@ -34,13 +34,28 @@ pub struct Existence<S> {
     pub places: Must<Places<S>>,
 }
 pub struct Publication<S> {
+    pub delivery: Delivery,
     pub statement: Must<String>,
     pub moment: Must<Moment>,
     pub record: Must<Rc<dyn PublicationRecord<S>>>,
 }
+#[derive(Clone, Copy)]
+pub enum Delivery {
+    Ecology,
+    Lakes,
+    Volcanism,
+    Landforms,
+}
 /// Most entries construct records; community entries can update an existing subject's detail.
 pub trait PublicationRecord<S> {
     fn record(&self, state: &mut S, place: &Place) -> io::Result<Option<Feature>>;
+    fn publishes_subjects(&self) -> bool {
+        false
+    }
+    fn prepare_batch(&self, _state: &S, _records: &mut [(Place, Feature)]) -> io::Result<()> {
+        Ok(())
+    }
+    fn published(&self, _state: &S) {}
 }
 impl<S, F> PublicationRecord<S> for F
 where
@@ -78,6 +93,7 @@ pub struct AcrossMaps<S, Schedule> {
     pub schedule: Slot<Schedule>,
 }
 pub struct Movement<S> {
+    pub on_foot: Option<TrailRole>,
     pub statement: Must<String>,
     pub roads: Slot<OnPlace<S, Vec<Cost>>>,
     pub boats: Slot<OnPlace<S, Vec<Cost>>>,
@@ -86,6 +102,12 @@ pub struct Movement<S> {
     pub magic: Slot<CarrierCosts<S>>,
     pub links: Slot<OnPlace<S, Vec<Link>>>,
     pub crosses: Slot<OnPlace<S, Vec<Barrier>>>,
+}
+/// How the place participates in the local walking network.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrailRole {
+    Destination,
+    Junction,
 }
 pub struct Relation<S> {
     pub kind: Kind,

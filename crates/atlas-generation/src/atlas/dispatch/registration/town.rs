@@ -23,7 +23,51 @@ fn settings(input: &Input) -> ExecutionResult<Settings> {
             .and_then(Layout::parse),
     })
 }
-pub fn register(registry: &mut Registry) -> io::Result<()> {
+pub fn specifications() -> io::Result<Vec<Specification>> {
+    let mut result = vec![specification()?];
+    let mut initialize = specification()?;
+    initialize.contract.id = "town.initialize".into();
+    result.push(initialize);
+    result.extend(
+        crate::processes::town::STEPS
+            .iter()
+            .map(|s| Specification::new(s.id, "atlas:workspace", "", true)),
+    );
+    result.push(Specification::new(
+        "town.signals",
+        "atlas:workspace",
+        "",
+        true,
+    ));
+    result.push(Specification::new(
+        "town.cultivation",
+        "atlas:workspace",
+        "",
+        true,
+    ));
+    Ok(result)
+}
+pub fn register(
+    registry: &mut Registry,
+    operations: &town::development::Operations,
+) -> io::Result<()> {
+    registry.register(Process::unit(
+        Specification::new("town.cultivation", "atlas:workspace", "", true),
+        town::cultivation(),
+    ))?;
+    let mut initialize = specification()?;
+    initialize.contract.id = "town.initialize".into();
+    registry.register(Process::command(
+        initialize,
+        operations.initialize.clone(),
+        settings,
+    ))?;
+    for (id, operation) in &operations.steps {
+        registry.register(Process::unit(
+            Specification::new(id, "atlas:workspace", "", true),
+            operation.clone(),
+        ))?;
+    }
     registry.register(Process::command(
         specification()?,
         town::operation(),

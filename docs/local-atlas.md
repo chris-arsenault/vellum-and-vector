@@ -42,9 +42,16 @@ make local-down      # stop the server and database; the world stays
 west to east; `KIND` is `ground` or `structure`. Each run prints every step with the
 seconds since the job started.
 
+To diagnose street growth for one settlement, start the native server with
+`ATLAS_TRACE_TOWN=Evorno make local-up` and run the usual real-scale generation.
+The server log includes JSON events named `town.street-decision`. Each names
+the town and development round. Route decisions record the demand, proposed
+endpoints, and the first check that declined the route or the effort spent
+building it. Copy the log before the next server start replaces it.
+
 Each job saves a picture of the land, shaded by height with water in blue, after every
 world epoch and at the start and after each round of regional development, in
-`.artifacts/local-atlas/previews/`; the run prints each path. A change to the
+`.artifacts/local-atlas/previews/<job-id>/`; the run prints each path. A change to the
 land can be judged without a whole map:
 `node scripts/local-atlas.mjs real --at Ajarma --hex 100m --until "Initial regional detail"`
 stops the job after that picture (about half a minute), and `--until "round 1"` after the
@@ -65,7 +72,13 @@ A finished map is saved to the server library and reported in
 | `map.json`      | The map description                                             |
 | `steps.txt`     | Each step with its time                                         |
 | `preview-*.png` | The job's pictures of the land after each stage                 |
+| `preview-town-*.svg` | The same town at founding and after early, middle and mature development. Each view uses the same bounds and metre scale and shows fields, plots, roads, passages and building footprints. |
 | `*.png`         | Pictures from `node scripts/local-atlas.mjs view <name>`        |
+
+The town development SVG compares the stages in two rows at the same scale. The first
+shows only buildings, and the second includes streets and land use. To redraw the town
+previews from a retained job, run
+`node scripts/local-atlas.mjs town-previews <jobId> --name <map folder>`.
 
 `node scripts/local-atlas.mjs summary <name>` rewrites a map's report from the server,
 `history <name>` writes what each process recorded doing (`history.json`), and

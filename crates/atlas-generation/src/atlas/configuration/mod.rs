@@ -183,7 +183,11 @@ impl Resolved {
             .to_owned();
         let real_scale = frame.regional && frame.profile.real_scale();
         let sequence = if real_scale {
-            super::regional::sequence::real_scale(&catalogue, &context)?
+            super::regional::sequence::real_scale(
+                &catalogue,
+                &context,
+                super::town::sequence(&catalogue, &context)?,
+            )?
         } else if frame.regional {
             super::regional::sequence::sequence(&catalogue, &context)?
         } else {

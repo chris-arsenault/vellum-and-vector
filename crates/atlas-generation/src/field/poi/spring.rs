@@ -272,7 +272,7 @@ fn eased<S: State + 'static>(form: Form) -> OnPlace<S, Vec<Cost>> {
     })
 }
 fn movement<S: State + 'static>() -> Movement<S> {
-    Movement {
+    Movement { on_foot: Some(TrailRole::Destination),
         statement: Must::Value("Dry-country tracks bend to water; drainage and the spring's underground carrier run easily through its ground.".into()),
         roads: Slot::Value(Rc::new(|state, place| {
             let field = state.field()?;
@@ -368,7 +368,7 @@ pub fn entry<S: CatalogueState<Schedule> + RiverState + 'static, Schedule: 'stat
         id: Kind::Spring, group: Group::Water, name: "Spring".into(),
         recognition: Recognition { distinct: Must::Value("Fire or Greenwood spring rules, or an unfrozen natural channel head on permeable or fractured rock at a slope break; exclude frame inflow, meltwater and oases.".into()), is_a: Must::Value(Rc::new(is_a)), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Groundwater emerges where rock and drainage permit, or through Fire's conduit or Greenwood's aquifer.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Recognition reads rock, river and magic."), suitability: Slot::NotApplicable("No process chooses the rising."), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Each spring form publishes its own record kind.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(record)) },
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Each spring form publishes its own record kind.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(record)) },
         across_maps: AcrossMaps {
             statement: Must::Value("Captured water wets the finer channel head and follows the nearest spring counterpart, retaining its realized head when absent.".into()), stands_on: Slot::Value(AreaKind::River),
             carry: Slot::Value(Rc::new(carry_rules::where_it_lands)), realize: Slot::Value(Rc::new(|state, carried| watered(state, &[carried.cell]))),

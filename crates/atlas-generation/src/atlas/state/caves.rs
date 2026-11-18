@@ -236,6 +236,9 @@ impl State {
             point.clone(),
             attributes.clone(),
         )?;
+        feature
+            .attributes
+            .insert("walkingDestination".into(), true.into());
         if entrance.depth <= MOUTH_DEPTH {
             return Ok((feature, None));
         }

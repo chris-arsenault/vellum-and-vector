@@ -37,11 +37,47 @@ impl<S, Schedule> Catalogue<S, Schedule> {
     pub fn get(&self, kind: Kind) -> &Entry<S, Schedule> {
         &self.entries[self.index[kind as usize]]
     }
+    fn for_feature(&self, feature: &crate::features::Feature) -> Option<&Entry<S, Schedule>> {
+        let id = feature
+            .attributes
+            .get("poi")
+            .and_then(|value| value.as_str())
+            .unwrap_or(&feature.kind);
+        Kind::ALL
+            .iter()
+            .copied()
+            .find(|kind| kind.as_str() == id)
+            .map(|kind| self.get(kind))
+    }
     pub fn entries(&self) -> &[Entry<S, Schedule>] {
         &self.entries
     }
+    pub fn walking_role(
+        &self,
+        feature: &crate::features::Feature,
+    ) -> Option<super::contract::TrailRole> {
+        self.for_feature(feature)?.roles.movement.on_foot
+    }
+    pub fn offers_for<'a>(
+        &'a self,
+        feature: &'a crate::features::Feature,
+    ) -> Option<impl FnOnce(&S, usize) -> io::Result<super::contract::Benefits> + 'a> {
+        let entry = self.for_feature(feature)?;
+        let offers = entry.roles.people.offers.value()?;
+        Some(move |state: &S, cell: usize| {
+            let mut place = super::values::Place::at(entry.id, cell, vec![cell]);
+            place.id = feature.id.clone();
+            place.feature = Some(feature.clone());
+            offers(state, &place)
+        })
+    }
     pub fn publication_order(&self) -> impl Iterator<Item = &Entry<S, Schedule>> {
-        let first = |e: &&Entry<S, Schedule>| matches!(e.id, Kind::Settlement | Kind::Ruin);
+        let first = |e: &&Entry<S, Schedule>| {
+            e.publication
+                .record
+                .value()
+                .is_some_and(|r| r.publishes_subjects())
+        };
         self.entries
             .iter()
             .filter(first)

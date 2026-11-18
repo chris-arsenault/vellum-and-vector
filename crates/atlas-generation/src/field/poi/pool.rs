@@ -179,6 +179,7 @@ fn roles<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Roles<S>
             magic: Slot::NotApplicable("No magic acts through a pool."),
         },
         movement: Movement {
+            on_foot: None,
             statement: Must::Value(
                 "Deep water no one wades; crossings avoid it by the stream's own depth.".into(),
             ),
@@ -245,7 +246,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
             suitability: Slot::NotApplicable("The channel decides."),
             places: Must::Value(Rc::new(|state: &S| found(state))),
         },
-        publication: Publication {
+        publication: Publication { delivery: Delivery::Landforms,
             statement: Must::Value("Publish each pool's outline in the water layer once the ground's channels are drawn.".into()),
             moment: Must::Value(Moment::Ground),
             record: Must::Value(Rc::new(|_: &S, place: &Place| Ok(place.feature.clone()))),

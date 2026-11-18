@@ -32,7 +32,7 @@ test("@rendering a drawn real-scale sheet shows filled building footprints", asy
     const pixels = context.getImageData(0, 0, image.width, image.height).data;
     let roofs = 0;
     for (let at = 0; at < pixels.length; at += 4)
-      if (pixels[at] === 154 && pixels[at + 1] === 116 && pixels[at + 2] === 88) roofs++;
+      if (pixels[at] === 171 && pixels[at + 1] === 110 && pixels[at + 2] === 88) roofs++;
     return roofs;
   }, bytes.toString("base64"));
   expect(roofPixels).toBeGreaterThan(500);

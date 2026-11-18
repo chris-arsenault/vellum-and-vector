@@ -198,7 +198,7 @@ fn movement<S: State + 'static>() -> Movement<S> {
             factor: 2.0,
         }])
     });
-    Movement {
+    Movement { on_foot: None,
         statement: Must::Value("Quays ease land-sea interchange; the raised mole obstructs currents and Pressure rays.".into()), roads: Slot::Value(Rc::new(roads)), boats: Slot::Value(Rc::new(boats)), drainage: Slot::NotApplicable("The harbour stands below the drainage network."), magic: Slot::Value([(Carrier::Current, current)].into_iter().collect()), links: Slot::NotApplicable("Sea lanes supply the connection through the harbour."), crosses: Slot::Value(Rc::new(|_, _| Ok(vec![Barrier::Strait]))),
     }
 }
@@ -245,7 +245,7 @@ pub fn entry<S: CatalogueState<Schedule> + CommunityState + 'static, Schedule: '
 ) -> Entry<S, Schedule> {
     Entry {
         id: Kind::Harbour, group: Group::Settlements, name: "Harbour".into(), recognition: Recognition { distinct: Must::Value("A work in shore-adjacent sea joins routes and lanes; natural bays and mouths have no work record.".into()), is_a: Must::Value(Rc::new(|state, cell| places::holds_record(state, Kind::Harbour, cell, || found(state)))), landform: Slot::Unwritten },
-        existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Site spaced works at sheltered shores within reach of at least 1000 people.".into()), way: Must::Value(ExistenceWay::Sited), requires: Slot::Value(Rc::new(requires)), suitability: Slot::Value(Rc::new(|state, cell| Ok(waters(state, cell)?.min(1.0)))), places: Must::Value(Rc::new(found)) }, publication: Publication { statement: Must::Value("Publish a located harbour where the map supports its site.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(work_records::work_record)) }, across_maps: across(), event: None,
+        existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Site spaced works at sheltered shores within reach of at least 1000 people.".into()), way: Must::Value(ExistenceWay::Sited), requires: Slot::Value(Rc::new(requires)), suitability: Slot::Value(Rc::new(|state, cell| Ok(waters(state, cell)?.min(1.0)))), places: Must::Value(Rc::new(found)) }, publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish a located harbour where the map supports its site.".into()), moment: Must::Value(Moment::Society), record: Must::Value(Rc::new(work_records::work_record)) }, across_maps: across(), event: None,
         roles: Roles { true_size: super::true_sizes::sited(&super::true_sizes::HARBOUR), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Harbour), fields: fields(), movement: movement(), others: others(),
             people: People { statement: Must::Value("The harbour provides trade and fish while exposing people to tsunamis and Pressure surges.".into()), offers: Slot::Value(Rc::new(|state, place| { let size = magnitude(state, place)?; Ok([(Benefit::Trade, size), (Benefit::Food, size / 2.0)].into_iter().collect()) })), threatens: Slot::Value(Rc::new(threatens)) },
             time: ThroughTime { statement: Must::Value("The harbour lasts while kept in the sea; abandonment or retreat leaves a shore ruin.".into()), fate: Slot::Value(Rc::new(|state, place| Ok(if settled::kept(place) && sea(state, place.anchor)? { Fate::Persists } else { Fate::Ends { leaves: Some(Kind::Ruin) } }))) }, visibility: visible(),

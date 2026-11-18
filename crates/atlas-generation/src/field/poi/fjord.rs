@@ -140,7 +140,7 @@ fn fields<S: State + 'static>() -> Fields<S> {
 fn movement<S: State + 'static>() -> Movement<S> {
     let currents: OnPlace<S, Vec<Cost>> =
         Rc::new(|state, place| carry_rules::cost_near(state, place, 1.5, 0.0));
-    Movement {
+    Movement { on_foot: None,
         statement: Must::Value("Deep sheltered water carries boats inland; walkers round the head and narrows impede carried current stock.".into()),
         roads: Slot::NotApplicable("Roads already avoid sea and pay for flank grade."),
         boats: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 0.7, 0.0))),
@@ -219,7 +219,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
         id: Kind::Fjord, group: Group::Water, name: "Fjord".into(),
         recognition: Recognition { distinct: Must::Value("The landform process identifies drowned, glacially scoured water with opposite land flanks, distinct from open shelf and ordinary bays.".into()), is_a: Must::Value(Rc::new(is_a)), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("The sea enters an ice-cut trough below its present level.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("The landform reads ice and flanks."), suitability: Slot::NotApplicable("No process sites past glacial cutting."), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Publish its outline, length and depth.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(|state: &S, place: &Place| {
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish its outline, length and depth.".into()), moment: Must::Value(Moment::Geography), record: Must::Value(Rc::new(|state: &S, place: &Place| {
             let mut attributes = crate::features::records::Attributes::new();
             attributes.insert("length".into(), length(state, place)?.into()); attributes.insert("depth".into(), depth(state, place.anchor)?.into());
             records::area(state, place, records::Shape { kind: "fjord", layer: "geology", name: "Fjord", attributes }, None)

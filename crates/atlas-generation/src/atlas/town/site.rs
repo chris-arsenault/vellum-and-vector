@@ -1,10 +1,10 @@
 //! What the real-scale map holds for its settlements: the frame, the ground on its triangles,
 //! the captured settlement records and the ways that enter the frame.
 use super::{
-    geometry::{add, angle, at, cut, distance, left, line_length, rest, scale, sub, unit, Point},
-    ground::{Ground, Rectangle, FREE, OUTSIDE, STEEP, WATER},
+    geometry::{angle, at, cut, distance, line_length, rest, sub, Point},
+    ground::{Ground, FREE, OUTSIDE, STEEP, WATER},
     network::{Arm, VERTEX_STEP},
-    plan::Seat,
+    seat::Seat,
     story::Story,
 };
 use crate::{
@@ -19,9 +19,7 @@ use atlas_map::{Geometry, Position};
 use serde_json::Value;
 use std::io;
 
-use super::settings::{
-    square_half, FINEST_CELL, MOST_CELLS_ACROSS, STEEP_SLOPE, UNSTATED_WAY_WIDTH,
-};
+use super::settings::{FINEST_CELL, MOST_CELLS_ACROSS, STEEP_SLOPE, UNSTATED_WAY_WIDTH};
 
 pub struct Site {
     pub bounds: [f64; 4],
@@ -38,31 +36,107 @@ pub fn bounds(state: &State) -> io::Result<[f64; 4]> {
     Ok([w, s, e, n])
 }
 pub fn read(state: &State) -> io::Result<Site> {
+    read_from(
+        state,
+        state.records.features.as_ref(),
+        Some(&state.scope.area),
+    )
+}
+/// Captured context is available before refinement republishes the working GIS records.
+pub fn starting(state: &State) -> io::Result<Site> {
+    match state.records.source_features.as_deref() {
+        Some(source) => read_from(state, source, None),
+        None => read(state),
+    }
+}
+fn read_from(state: &State, features: &dyn FeatureReader, area: Option<&str>) -> io::Result<Site> {
     let bounds = bounds(state)?;
-    let mut ground = ground(state.field(), bounds)?;
-    let features = state.records.features.as_ref();
-    let water = drawn_water(features, &state.scope.area, state.spatial.as_ref())?;
-    ground.mark_shapes(&water, WATER, state.spatial.as_ref())?;
-    let roads = roads(features, &state.scope.area)?;
-    let seats = seats(state, bounds, &roads, &ground)?;
+    let ground = terrain(state, bounds)?;
+    let roads = roads(features, area)?;
+    let seats = seats(state, features, area, bounds, &roads, &ground)?;
     Ok(Site {
         bounds,
         ground,
         seats,
-        ways: ways(features, &state.scope.area)?,
+        ways: ways(features, area)?,
     })
+}
+fn terrain(state: &State, bounds: [f64; 4]) -> io::Result<Ground> {
+    let mut ground = ground(state.field(), bounds)?;
+    let current = state.records.features.as_ref();
+    let area = Some(state.scope.area.as_str());
+    let water = drawn_water(current, area, state.spatial.as_ref())?;
+    ground.mark_shapes(&water, WATER, state.spatial.as_ref())?;
+    fortifications(current, area, &mut ground, state.spatial.as_ref())?;
+    Ok(ground)
+}
+pub(super) fn walking_ground(state: &State) -> io::Result<Ground> {
+    let mut ground = terrain(state, bounds(state)?)?;
+    let buildings: Vec<_> = state
+        .town
+        .towns
+        .iter()
+        .flat_map(|t| t.holdings())
+        .flat_map(|h| h.buildings.iter().cloned())
+        .collect();
+    ground.mark_shapes(
+        &buildings,
+        crate::town::ground::PLOT,
+        state.spatial.as_ref(),
+    )?;
+    Ok(ground)
+}
+/// Built walls reserve land. Only a recorded gate opens the wall to a new way.
+fn fortifications(
+    features: &dyn FeatureReader,
+    area: Option<&str>,
+    ground: &mut Ground,
+    spatial: &dyn SpatialKernel,
+) -> io::Result<()> {
+    use super::{
+        ground::WALL,
+        settings::{GATE_WIDTH, WALL_THICKNESS},
+    };
+    for (kind, width) in [("wall", WALL_THICKNESS), ("gate", GATE_WIDTH)] {
+        for item in features.values(FeatureSelection {
+            area_id: area,
+            layer_id: Some("structures"),
+            kind: Some(kind),
+        })? {
+            let feature = item?;
+            let outline = match feature.footprint {
+                Some(shape) => shape,
+                None => match feature.geometry {
+                    shape @ (Geometry::Polygon { .. } | Geometry::MultiPolygon { .. }) => shape,
+                    shape => match spatial
+                        .buffer(&shape, width / 2.)
+                        .map_err(io::Error::other)?
+                    {
+                        Some(shape) => shape,
+                        None => continue,
+                    },
+                },
+            };
+            if kind == "wall" {
+                ground.mark_shapes(&[outline], WALL, spatial)?;
+            } else {
+                ground.release_shape(&outline, WALL, spatial)?;
+            }
+        }
+    }
+    Ok(())
 }
 /// The ground the map's drawn water covers: each channel at its full width at every vertex
 /// (written by `real-scale.channels`), and lakes and pools by their outlines.
 fn drawn_water(
     features: &dyn FeatureReader,
-    area: &str,
+    area: Option<&str>,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Vec<Geometry>> {
     let mut found = Vec::new();
     for layer in ["rivers", "lakes"] {
         for feature in features.values(FeatureSelection {
-            area_id: Some(area),
+            area_id: area,
             layer_id: Some(layer),
             kind: None,
         })? {
@@ -96,10 +170,10 @@ pub fn water_shapes(
     Ok(shapes)
 }
 /// Every line in the roads layer except sea lanes, with its widest stated width.
-fn ways(features: &dyn FeatureReader, area: &str) -> io::Result<Vec<(Vec<Point>, f64)>> {
+fn ways(features: &dyn FeatureReader, area: Option<&str>) -> io::Result<Vec<(Vec<Point>, f64)>> {
     let mut result = Vec::new();
     for feature in features.values(FeatureSelection {
-        area_id: Some(area),
+        area_id: area,
         layer_id: Some("roads"),
         kind: None,
     })? {
@@ -140,12 +214,27 @@ fn ground(field: &Field, bounds: [f64; 4]) -> io::Result<Ground> {
     let marks = marks(field)?;
     let mesh = field.mesh();
     let origin = mesh.origin();
+    let elevation = field.ground().view(GroundField::Elevation);
+    let gradients = marks
+        .iter()
+        .enumerate()
+        .map(|(cell, mark)| {
+            if *mark == STEEP {
+                mesh.gradient(cell, &|i| elevation.get(i))
+            } else {
+                Ok([0.; 2])
+            }
+        })
+        .collect::<io::Result<Vec<_>>>()?;
     for index in 0..ground.count() {
         let p = ground.centre(index);
         if p[0] > bounds[2] || p[1] > bounds[3] {
             ground.withhold(index, OUTSIDE);
         } else if let Some(cell) = cell_at(mesh, p) {
             ground.withhold(index, marks[cell]);
+            if marks[cell] == STEEP {
+                ground.set_hillside(index, gradients[cell]);
+            }
         }
     }
     for (cell, &mark) in marks.iter().enumerate() {
@@ -153,6 +242,9 @@ fn ground(field: &Field, bounds: [f64; 4]) -> io::Result<Ground> {
         if mark != 0 {
             if let Some(index) = ground.index([x + origin[0], y + origin[1]]) {
                 ground.withhold(index, mark);
+                if mark == STEEP {
+                    ground.set_hillside(index, gradients[cell]);
+                }
             }
         }
     }
@@ -181,11 +273,11 @@ fn lines(geometry: &Geometry) -> Vec<Vec<Point>> {
         _ => Vec::new(),
     }
 }
-fn roads(features: &dyn FeatureReader, area: &str) -> io::Result<Vec<Road>> {
+fn roads(features: &dyn FeatureReader, area: Option<&str>) -> io::Result<Vec<Road>> {
     let mut result = Vec::new();
     for kind in ["road", "trail"] {
         for feature in features.values(FeatureSelection {
-            area_id: Some(area),
+            area_id: area,
             layer_id: Some("roads"),
             kind: Some(kind),
         })? {
@@ -216,25 +308,14 @@ fn number(attributes: &crate::features::records::Attributes, key: &str) -> Optio
 fn text<'a>(feature: &'a Feature, key: &str) -> Option<&'a str> {
     feature.attributes.get(key).and_then(Value::as_str)
 }
-/// A coarse settlement point need not be a buildable street origin. Keep it when its
-/// square fits; otherwise use the nearest candidate whose square stays on open ground.
+/// Keep a habitable captured origin; if it is submerged or inaccessible, use its nearest dry candidate.
 pub fn town_centre(
     centre: Point,
-    half: f64,
     candidates: &[Point],
     ground: &Ground,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Point> {
-    let fits = |point: Point| {
-        let square = super::geometry::rectangle(
-            [point[0], point[1] - half],
-            [1.0, 0.0],
-            [0.0, 1.0],
-            half * 2.0,
-            half * 2.0,
-        );
-        ground.open(&Rectangle(&square), FREE)
-    };
+    let fits = |point| ground.owner(point) == FREE;
     if fits(centre) {
         return Ok(centre);
     }
@@ -263,6 +344,8 @@ pub fn town_centre(
 }
 fn seats(
     state: &State,
+    features: &dyn FeatureReader,
+    area: Option<&str>,
     bounds: [f64; 4],
     roads: &[Road],
     ground: &Ground,
@@ -276,8 +359,8 @@ fn seats(
             [p[0] + origin[0], p[1] + origin[1]]
         })
         .collect();
-    for feature in state.records.features.values(FeatureSelection {
-        area_id: Some(&state.scope.area),
+    for feature in features.values(FeatureSelection {
+        area_id: area,
         layer_id: Some("settlements"),
         kind: Some("settlement"),
     })? {
@@ -290,9 +373,8 @@ fn seats(
         if !inside || text(&feature, "status") == Some("abandoned") {
             continue;
         }
-        let half = square_half(story(&feature, 0, false).size()).max(ground.cell);
-        let centre = town_centre([x, y], half, &candidates, ground, state.spatial.as_ref())?;
-        seats.push(seat(state, &feature, centre, roads, ground, bounds)?);
+        let centre = town_centre([x, y], &candidates, ground, state.spatial.as_ref())?;
+        seats.push(seat(state, &feature, centre, roads, bounds)?);
     }
     // hpc-exempt: orders the frame's few settlements, largest first.
     seats.sort_by(|a, b| b.story.people.total_cmp(&a.story.people));
@@ -303,7 +385,6 @@ fn seat(
     feature: &Feature,
     centre: Point,
     roads: &[Road],
-    ground: &Ground,
     bounds: [f64; 4],
 ) -> io::Result<Seat> {
     let meeting = Meeting {
@@ -325,9 +406,6 @@ fn seat(
             )?;
         }
         guarded |= road.strategic && arms.len() > before;
-    }
-    if arms.is_empty() {
-        arms = contour_arms(state.field(), centre, ground, bounds)?;
     }
     let story = story(feature, arms.len(), guarded);
     Ok(Seat {
@@ -448,57 +526,32 @@ fn add_arm(arms: &mut Vec<Arm>, arm: Arm) {
         None => arms.push(arm),
     }
 }
-fn elevation(field: &Field, p: Point) -> io::Result<f64> {
-    let ground = field.ground();
-    let view = ground.view(GroundField::Elevation);
-    cell_at(field.mesh(), p).map_or(Ok(0.0), |cell| view.get(cell))
-}
-/// With no way in, a place strings out along the contour through its centre.
-fn contour_arms(
-    field: &Field,
-    centre: Point,
-    ground: &Ground,
-    bounds: [f64; 4],
-) -> io::Result<Vec<Arm>> {
-    let probe = 4.0 * ground.cell;
-    let dx =
-        elevation(field, add(centre, [probe, 0.0]))? - elevation(field, sub(centre, [probe, 0.0]))?;
-    let dy =
-        elevation(field, add(centre, [0.0, probe]))? - elevation(field, sub(centre, [0.0, probe]))?;
-    let along = if dx.hypot(dy) > 1e-9 {
-        left(unit([dx, dy]))
-    } else {
-        [1.0, 0.0]
-    };
-    let length = (bounds[2] - bounds[0]).hypot(bounds[3] - bounds[1]);
-    Ok([1.0, -1.0]
-        .into_iter()
-        .map(|sign| Arm {
-            points: vec![centre, add(centre, scale(along, sign * length))],
-            destination: None,
-        })
-        .collect())
-}
 /// The farmland and pasture shares of the triangle under a point.
 pub fn shares(field: &Field, p: Point) -> io::Result<(f64, f64)> {
     let Some(cell) = cell_at(field.mesh(), p) else {
         return Ok((0.0, 0.0));
     };
+    worked_shares(field, cell)
+}
+pub(super) fn worked_shares(field: &Field, cell: usize) -> io::Result<(f64, f64)> {
     let people = field.people();
+    let slope = field.shared().scalar(Scalar::Slope).get(cell)?;
+    let ice = field.shared().scalar(Scalar::IceThickness).get(cell)?;
+    let soil = field.ground().view(GroundField::SoilDepth).get(cell)?;
+    let workable = soil / (soil + 0.08) / (1. + ice) / (1. + slope / STEEP_SLOPE);
     Ok((
         people
             .view(HumanField::Layer(LayerId::Farmland))
-            .get(cell)?,
-        people.view(HumanField::Layer(LayerId::Pasture)).get(cell)?,
+            .get(cell)?
+            * workable,
+        people.view(HumanField::Layer(LayerId::Pasture)).get(cell)? / (1. + ice),
     ))
 }
 /// Square metres the map's people farm and graze, by their shares on its triangles.
 pub fn farmed(field: &Field) -> io::Result<f64> {
-    let people = field.people();
-    let farmland = people.view(HumanField::Layer(LayerId::Farmland));
-    let pasture = people.view(HumanField::Layer(LayerId::Pasture));
     (0..field.mesh().len()).try_fold(0.0, |sum, cell| {
-        Ok(sum + (farmland.get(cell)? + pasture.get(cell)?) * field.mesh().area(cell))
+        let (farmland, pasture) = worked_shares(field, cell)?;
+        Ok(sum + (farmland + pasture) * field.mesh().area(cell))
     })
 }
 

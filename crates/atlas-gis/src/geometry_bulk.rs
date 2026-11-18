@@ -47,7 +47,7 @@ impl NativeGeos {
                     Overlay::Union => input.union_prec(&mask, self.precision),
                 }
                 .map_err(|e| e.to_string())?;
-                Self::json(result)
+                self.overlay_result(result)
             })
             .collect()
     }
@@ -71,7 +71,15 @@ impl NativeGeos {
                 input
                     .intersection_prec(&mask, self.precision)
                     .and_then(|value| value.area())
-                    .map_err(|e| e.to_string())
+                    .map_err(|error| {
+                        format!(
+                            "Intersection area for {:?} at {:?} against {:?} at {:?}: {error}",
+                            input.geometry_type(),
+                            input.get_extent(),
+                            mask.geometry_type(),
+                            mask.get_extent()
+                        )
+                    })
             })
             .collect()
     }

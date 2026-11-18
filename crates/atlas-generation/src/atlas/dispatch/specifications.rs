@@ -58,7 +58,7 @@ impl Catalogue {
         result.extend(local_magic::specifications()?)?;
         if regional {
             result.extend(registration::regional::specifications(&native)?)?;
-            result.insert(registration::town::specification()?)?;
+            result.extend(registration::town::specifications()?)?;
             for specification in registration::ground::specifications() {
                 result.insert(specification)?;
             }

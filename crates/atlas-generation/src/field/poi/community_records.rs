@@ -136,9 +136,15 @@ pub fn community_record(
 type WriteCommunity<S> = std::rc::Rc<dyn Fn(&mut S, &Place) -> io::Result<Option<Feature>>>;
 /// The application supplies its scoped writer; the catalogue invokes it before ordinary publication.
 pub struct CommunityPublication<S>(pub WriteCommunity<S>);
-impl<S> super::contract::PublicationRecord<S> for CommunityPublication<S> {
+impl<S: super::state::State> super::contract::PublicationRecord<S> for CommunityPublication<S> {
     fn record(&self, state: &mut S, place: &Place) -> io::Result<Option<Feature>> {
         (self.0)(state, place)
+    }
+    fn publishes_subjects(&self) -> bool {
+        true
+    }
+    fn published(&self, state: &S) {
+        state.held().forget("settlementRecords");
     }
 }
 fn captured(state: &impl CommunityState, kind: Kind) -> io::Result<Vec<Place>> {

@@ -29,7 +29,7 @@ pub fn install(records: &mut impl FeatureWorkspace) -> io::Result<()> {
         "building",
         "The Rowan Inn",
         json!({"type":"Polygon","coordinates":[[[64,42],[69,42],[69,47],[64,47],[64,42]]]}),
-        json!({"use":"inn","storeys":2,"occupants":6,"business":"Ailsa Rowan",
+        json!({"use":"inn","buildingFunction":"economic","storeys":2,"occupants":6,"business":"Ailsa Rowan",
             "address":"1 Drovers' Trail","addressNumber":1,"street":"Drovers' trail",
             "streetId":"glen-trail","ward":"Glenfoot","settlement":"Glenhead","rotation":0}),
     );

@@ -74,7 +74,7 @@ pub fn install(records: &mut impl FeatureWorkspace) -> io::Result<()> {
         "building",
         "Shepherd's cottage",
         turned(63.0, 56.0, 6.0, 4.0, 30.0),
-        json!({"rotation":30}),
+        json!({"rotation":30,"use":"house","buildingFunction":"residential"}),
     );
     let field = record(
         "glen-field",

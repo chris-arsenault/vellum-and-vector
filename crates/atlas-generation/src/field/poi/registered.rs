@@ -46,6 +46,7 @@ pub fn catalogue<S, Schedule>(
 ) -> io::Result<Catalogue<S, Schedule>>
 where
     S: CatalogueState<Schedule>
+        + super::wild_history::WildHistory
         + LandscapeState
         + GorgeState
         + GroundState

@@ -158,7 +158,7 @@ fn fields<S: State + 'static>() -> Fields<S> {
 fn movement<S: State + 'static>() -> Movement<S> {
     let crust: OnPlace<S, Vec<Cost>> =
         Rc::new(|state, place| carry_rules::cost_near(state, place, 0.7, 0.0));
-    Movement {
+    Movement { on_foot: None,
         statement: Must::Value("Boats avoid shallow gassy water; Fire travels through the conduit; land and drainage do not reach it.".into()),
         roads: Slot::NotApplicable("Ways do not enter the sea floor."), boats: Slot::Value(Rc::new(|state, place| if shallow(state, place)? { carry_rules::cost_near(state, place, 2.0, state.field()?.scale.cells(1.0)) } else { Ok(Vec::new()) })),
         drainage: Slot::NotApplicable("Rivers end at the shore."), magic: Slot::Value([(Carrier::Crust, crust)].into_iter().collect()),
@@ -257,7 +257,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
         id: Kind::Vent, group: Group::Water, name: "Hydrothermal vent".into(),
         recognition: Recognition { distinct: Must::Value("Fire's vent rule: ocean water over Fire intensity or geothermal heat; the undersea opening distinguishes hot springs, cold upwelling and buried thermal veins.".into()), is_a: Must::Value(Rc::new(is_a)), landform: Slot::Unwritten },
         existence: Existence { origins: Slot::Unwritten, statement: Must::Value("Fire conduits, ridges or plumes bring heat to the sea floor; Fire's rule grows and keeps the vent.".into()), way: Must::Value(ExistenceWay::Emerges), requires: Slot::NotApplicable("Fire's rule reads sea and heat."), suitability: Slot::NotApplicable("Heat rises where crust permits."), places: Must::Value(Rc::new(found)) },
-        publication: Publication { statement: Must::Value("Publish as Fire's vent class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(|state: &S, place: &Place| records::rule(state, place, "fire", "vent"))) },
+        publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish as Fire's vent class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(|state: &S, place: &Place| records::rule(state, place, "fire", "vent"))) },
         across_maps: across_maps(), event: None,
         roles: Roles { true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(Kind::Vent), fields: fields(), movement: movement(), others: others(), people: people(), time: through_time(), visibility: visible(), naming: naming() },
     }

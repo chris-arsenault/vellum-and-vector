@@ -1,4 +1,5 @@
 //! The source generator's independent 128-sample display preview, sampled from live owners.
+pub mod town;
 use super::state::State;
 use crate::field::{projection::channels, schema::NumericBand};
 use atlas_map::Position;
@@ -16,6 +17,8 @@ pub struct Channel {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Preview {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub town_fabric: Option<town::Overview>,
     pub width: usize,
     pub height: usize,
     pub bounds: [f64; 4],
@@ -52,6 +55,7 @@ pub fn capture(state: &State) -> io::Result<Preview> {
         })
         .collect::<Vec<_>>();
     let mut result = Preview {
+        town_fabric: None,
         width,
         height,
         bounds,

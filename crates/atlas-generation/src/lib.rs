@@ -37,6 +37,7 @@ pub mod settlement;
 pub mod spatial;
 pub mod storage;
 pub mod tectonics;
+pub mod town;
 pub mod transport;
 pub mod water;
 
