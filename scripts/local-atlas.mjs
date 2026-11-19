@@ -194,6 +194,44 @@ async function save(reference) {
   });
 }
 
+/**
+ * Yields each feature of a GeoJSON FeatureCollection one at a time. A city's export can
+ * pass the longest string JavaScript can hold, so the whole document is never decoded.
+ */
+function* features(bytes) {
+  const text = new TextDecoder();
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  let opened = 0;
+  let key = "";
+  let listed = false;
+  let start = 0;
+  for (let i = 0; i < bytes.length; i++) {
+    const byte = bytes[i];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (byte === 0x5c) escaped = true;
+      else if (byte === 0x22) {
+        quoted = false;
+        if (depth === 1) key = text.decode(bytes.subarray(opened, i));
+      }
+    } else if (byte === 0x22) {
+      quoted = true;
+      opened = i + 1;
+    } else if (byte === 0x7b || byte === 0x5b) {
+      if (depth === 1 && byte === 0x5b && key === "features") listed = true;
+      if (listed && depth === 2 && byte === 0x7b) start = i;
+      depth++;
+    } else if (byte === 0x7d || byte === 0x5d) {
+      depth--;
+      if (listed && depth === 2 && byte === 0x7d)
+        yield JSON.parse(text.decode(bytes.subarray(start, i + 1)));
+      if (depth === 1) listed = false;
+    }
+  }
+}
+
 /** Writes the map's description, its GeoJSON export and a count of every published kind. */
 async function report(reference, directory) {
   await mkdir(directory, { recursive: true });
@@ -209,8 +247,7 @@ async function report(reference, directory) {
   // Counted from the exported features, so the summary shows what a reader actually gets.
   const counts = new Map();
   const towns = new Map();
-  for (const { properties } of JSON.parse(new TextDecoder().decode(new Uint8Array(exported.bytes)))
-    .features) {
+  for (const { properties } of features(new Uint8Array(exported.bytes))) {
     if (properties.kind === "building" && properties.settlement && properties.occupation > 0) {
       const town = towns.get(properties.settlement) ?? { buildings: 0, addressed: 0 };
       town.buildings++;
@@ -523,8 +560,8 @@ async function view(name) {
     await picture("hex-fill.png");
     await hexView("Grid over the map");
     await page.getByRole("button", { name: "Close panel", exact: true }).click();
-    const exported = await readJson(join(directory, "map.geojson"));
-    if (exported.features.some((feature) => feature.properties.kind === "building")) {
+    const exported = features(await readFile(join(directory, "map.geojson")));
+    if (exported.some((feature) => feature.properties.kind === "building")) {
       await page.getByRole("button", { name: "Fit map", exact: true }).click();
       const box = await canvas.boundingBox();
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
@@ -580,7 +617,9 @@ else if (command === "cancel" && argument)
 else if (command === "places") await places();
 else if (command === "census" && values["full-history"]) {
   const { reference } = await readJson(worldFile);
-  const action = await readJson(join(home, "generation-resources", ".jobs", reference.revision, "action.json"));
+  const action = await readJson(
+    join(home, "generation-resources", ".jobs", reference.revision, "action.json")
+  );
   if (action.method !== "create") throw new Error("Expected a saved world creation recipe");
   if (values.seed !== undefined) {
     const seed = Number(values.seed);
@@ -595,26 +634,50 @@ else if (command === "census" && values["full-history"]) {
   const config = join(directory, "action.json");
   await writeJson(config, action);
   console.log(`Full history for seed ${action.request.recipe.seed} in ${directory}`);
-  execFileSync("cargo", ["run", "--quiet", "--release", "-p", "atlas-host", "--example", "surface_capture",
-    "--", "history", directory, config], { cwd: checkout, stdio: "inherit" });
-}
-else if (command === "census") {
-  const args = ["run", "--quiet", "--release", "-p", "atlas-host", "--example", "local_census", "--", home];
+  execFileSync(
+    "cargo",
+    [
+      "run",
+      "--quiet",
+      "--release",
+      "-p",
+      "atlas-host",
+      "--example",
+      "surface_capture",
+      "--",
+      "history",
+      directory,
+      config,
+    ],
+    { cwd: checkout, stdio: "inherit" }
+  );
+} else if (command === "census") {
+  const args = [
+    "run",
+    "--quiet",
+    "--release",
+    "-p",
+    "atlas-host",
+    "--example",
+    "local_census",
+    "--",
+    home,
+  ];
   if (values["reference-width"]) args.push("--reference-width");
   execFileSync("cargo", args, { cwd: checkout, stdio: "inherit" });
-}
-else if (command === "view" && argument) await view(argument);
+} else if (command === "view" && argument) await view(argument);
 else if (command === "town-previews" && argument && values.name) {
   const output = join(reports, "maps", values.name);
   const index = join(output, "previews.json");
   const previews = indexPreviews(await readJson(index));
-  for (const { file, svg, label } of await retainedTownPictures(join(reports, "previews", argument))) {
+  for (const { file, svg, label } of await retainedTownPictures(
+    join(reports, "previews", argument)
+  )) {
     await writeFile(join(output, `preview-${file}`), svg);
     previews.set(file, { file, label });
   }
   await writeJson(index, [...previews.values()]);
-}
-else if (command === "history" && argument) await history(argument);
+} else if (command === "history" && argument) await history(argument);
 else if (command === "raster" && argument && positionals[2])
   await raster(argument, positionals.slice(2));
 else if (command === "summary" && argument) {
