@@ -117,7 +117,7 @@ fn samples_along(
     let Geometry::LineString { coordinates } = wall else {
         return Ok(Vec::new());
     };
-    let read = |point: Position| store.samples_at(&map.reference, &map.primary_space_id, point);
+    let read = |point: Position| store.samples_at(&map.reference, map.primary_space_id, point);
     let first = read(coordinates[0])?;
     let span = first
         .iter()

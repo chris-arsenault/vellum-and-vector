@@ -24,7 +24,7 @@ pub(super) fn check(scope: &Scope<'_>, draft: &Draft) -> io::Result<()> {
         let around = around(scope, draft, &feature.geometry)?;
         let checked = if is_building(feature) {
             let own = plot_under(feature, &around, scope.spatial).map_err(other)?;
-            building_clear(feature, &around, own.map(|p| p.id.as_str()), scope.spatial)
+            building_clear(feature, &around, own.map(|p| p.id), scope.spatial)
         } else {
             let span = bridge_span(size_of(scope, feature)?);
             street_clear(feature, &around, span, scope.spatial)

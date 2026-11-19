@@ -1,10 +1,10 @@
 //! The PostGIS side of authoring. A LAN map is retained as soon as it is edited: the edit
 //! rewrites the stored revision, which stays the map's head.
-use super::{from_json, to_json, PostgresMaps};
+use super::{from_json, to_json, uuid, PostgresMaps};
 use crate::authoring::{EditStore, EditWrite, StepWrite};
 use atlas_map::{
     authoring::{EditRecord, EditStep},
-    MapRef, PublicationBatch,
+    MapRef,
 };
 use std::io;
 
@@ -12,7 +12,7 @@ impl EditStore for PostgresMaps {
     fn edit_steps(&self, r: &MapRef) -> io::Result<Vec<EditStep>> {
         self.query(
             "SELECT sequence,label,undone FROM map.edits WHERE map_id=$1 AND revision=$2 ORDER BY sequence",
-            &[&r.map_id, &r.revision],
+            &[&uuid(r.map_id), &uuid(r.revision)],
         )?
         .iter()
         .map(|row| {
@@ -30,7 +30,7 @@ impl EditStore for PostgresMaps {
         let row = self
             .query(
                 "SELECT data FROM map.edits WHERE map_id=$1 AND revision=$2 AND sequence=$3",
-                &[&r.map_id, &r.revision, &sequence],
+                &[&uuid(r.map_id), &uuid(r.revision), &sequence],
             )?
             .into_iter()
             .next()
@@ -39,39 +39,28 @@ impl EditStore for PostgresMaps {
     }
     fn write_edit(&self, write: EditWrite<'_>) -> io::Result<()> {
         let r = &write.map.reference;
+        let (map_id, revision) = (uuid(r.map_id), uuid(r.revision));
         self.transaction(|| {
-            self.lock(&r.map_id)?;
-            self.execute(
-                "DELETE FROM map.features WHERE map_id=$1 AND revision=$2 AND id=ANY($3::text[])",
-                &[&r.map_id, &r.revision, &write.removed],
-            )?;
-            self.append_records(
-                &super::records::Open::new(write.map.clone()),
-                PublicationBatch {
-                    features: write.features,
-                    ..Default::default()
-                },
-            )?;
-            self.execute(
-                "UPDATE map.revisions SET descriptor=$3 WHERE map_id=$1 AND revision=$2",
-                &[&r.map_id, &r.revision, &crate::stored::MAP.write(write.map)?],
-            )?;
+            self.lock(r.map_id)?;
+            self.remove_features(r, &write.removed)?;
+            self.replace_description(write.map)?;
+            self.write_features(&super::records::Open::new(write.map.clone()), write.features)?;
             match write.step {
                 StepWrite::Append(record) => {
                     self.execute(
                         "DELETE FROM map.edits WHERE map_id=$1 AND revision=$2 AND undone",
-                        &[&r.map_id, &r.revision],
+                        &[&map_id, &revision],
                     )?;
                     self.execute(
                         "INSERT INTO map.edits SELECT $1,$2,coalesce(max(sequence),0)+1,$3,false,$4 FROM map.edits WHERE map_id=$1 AND revision=$2",
-                        &[&r.map_id, &r.revision, &record.label, &to_json(record)?],
+                        &[&map_id, &revision, &record.label, &to_json(record)?],
                     )?;
                 }
                 StepWrite::Mark { sequence, undone } => {
                     let sequence = i32::try_from(sequence).map_err(io::Error::other)?;
                     self.execute(
                         "UPDATE map.edits SET undone=$4 WHERE map_id=$1 AND revision=$2 AND sequence=$3",
-                        &[&r.map_id, &r.revision, &sequence, &undone],
+                        &[&map_id, &revision, &sequence, &undone],
                     )?;
                 }
             }

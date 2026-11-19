@@ -55,7 +55,7 @@ fn in_layers(
 pub fn candidates_for(
     maps: &dyn MapAccess,
     reference: &MapRef,
-    feature_id: &str,
+    feature_id: atlas_map::Id,
 ) -> io::Result<Vec<ConnectionCandidate>> {
     let map = maps.open(reference)?;
     let own = in_layers(maps, &map, |family| family == "structures", map.bounds)?;
@@ -65,7 +65,7 @@ pub fn candidates_for(
         .ok_or_else(|| io::Error::other("Choose a stair, ladder or trapdoor on this map"))?;
     let parent = match &map.parent {
         Some(parent) => {
-            let head = maps.find_head(&parent.map_id)?;
+            let head = maps.find_head(parent.map_id)?;
             Some(maps.open(head.as_ref().unwrap_or(parent))?)
         }
         None => None,

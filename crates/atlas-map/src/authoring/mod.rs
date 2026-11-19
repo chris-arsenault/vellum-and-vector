@@ -178,11 +178,11 @@ pub struct Transform {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct EditOutcome {
     pub map: MapDescriptor,
-    pub changed: Vec<String>,
+    pub changed: Vec<Id>,
     /// Features the edit made, in the order the command made them (a placed building, then
     /// its plot), so the editor can select what was made.
     #[serde(default)]
-    pub created: Vec<String>,
+    pub created: Vec<Id>,
     pub history: EditHistory,
 }
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]

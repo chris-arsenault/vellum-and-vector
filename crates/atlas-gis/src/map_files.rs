@@ -65,8 +65,8 @@ pub fn asset_path(reference: &MapRef, id: &str) -> String {
     };
     format!(
         "/api/maps/{}/{}/assets/{}",
-        encode(&reference.map_id),
-        encode(&reference.revision),
+        reference.map_id,
+        reference.revision,
         encode(id)
     )
 }

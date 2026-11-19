@@ -1,7 +1,7 @@
-use super::{reference_values, MapStore};
-use crate::sql::{column, transaction, Value};
+use super::{description::key, MapStore};
+use crate::sql::{column, transaction};
 use atlas_map::{
-    LayerSource, MapDescriptor, MapLayer, MapRef, PublicationBatch, PublicationState,
+    Id, LayerSource, MapDescriptor, MapLayer, MapRef, PublicationBatch, PublicationState,
     PublishedAsset, Publisher,
 };
 use std::io;
@@ -27,32 +27,31 @@ impl Publisher for MapStore {
         }
         // A progressive publication becomes the head at once, replacing any expected revision.
         // The producer decides which maps stream; a regeneration of generated geography does not.
+        self.open.replace(None);
         transaction(self.db.as_ref(), || {
-            if self.find_head(&map.reference.map_id)?.as_ref() != expected {
+            if self.find_head(map.reference.map_id)?.as_ref() != expected {
                 return Err(io::Error::other("The map revision changed"));
             }
             if let Some(expected) = expected {
                 crate::authoring::refuse_authored(&self.open(expected)?)?;
             }
-            let mut values = reference_values(&map.reference);
-            values.extend([
-                crate::stored::MAP.text(map)?.into(),
-                expected.map_or(Value::Null, |expected| expected.revision.clone().into()),
-            ]);
-            self.db.execute(
-                "INSERT INTO maps(map_id,revision,descriptor,expected_revision) VALUES(?,?,?,?)",
-                &values,
-            )?;
+            self.write_revision(map, expected.map(|r| r.revision))?;
             if progressive {
                 self.set_head(&map.reference)?;
             }
             Ok(())
-        })
+        })?;
+        self.open.replace(Some(map.clone()));
+        Ok(())
     }
     fn append(&mut self, reference: &MapRef, batch: PublicationBatch) -> io::Result<()> {
         transaction(self.db.as_ref(), || {
-            let map = self.pending(reference)?;
-            self.append_records(&map, batch)
+            self.hold(reference)?;
+            let open = self.open.borrow();
+            let map = open
+                .as_ref()
+                .ok_or_else(|| io::Error::other("Map publication is not open"))?;
+            self.append_records(map, batch)
         })
     }
     fn add_layers(
@@ -61,63 +60,48 @@ impl Publisher for MapStore {
         layers: &[MapLayer],
         asset: PublishedAsset,
     ) -> io::Result<()> {
+        for layer in layers {
+            layer.validate().map_err(io::Error::other)?;
+            let id = match &layer.source {
+                LayerSource::Raster(source) => &source.asset_id,
+                LayerSource::Vector(source) => &source.asset_id,
+                _ => return Err(io::Error::other("Attribute layer has no asset")),
+            };
+            if id != &asset.id {
+                return Err(io::Error::other("Layer and asset identities differ"));
+            }
+        }
         transaction(self.db.as_ref(), || {
-            let mut map = self.pending(reference)?;
+            self.hold(reference)?;
+            let first = self.next_layer(reference)?;
+            self.write_layers(reference, layers, first)?;
+            self.write_asset(reference, asset)
+        })?;
+        if let Some(map) = self.open.borrow_mut().as_mut() {
             map.layers.extend_from_slice(layers);
             map.validate().map_err(io::Error::other)?;
-            for layer in layers {
-                let id = match &layer.source {
-                    LayerSource::Raster(source) => &source.asset_id,
-                    LayerSource::Vector(source) => &source.asset_id,
-                    _ => return Err(io::Error::other("Attribute layer has no asset")),
-                };
-                if id != &asset.id {
-                    return Err(io::Error::other("Layer and asset identities differ"));
-                }
-            }
-            self.write_asset(reference, asset)?;
-            self.db.execute(
-                "UPDATE maps SET descriptor=? WHERE map_id=? AND revision=?",
-                &[
-                    vec![crate::stored::MAP.text(&map)?.into()],
-                    reference_values(reference),
-                ]
-                .concat(),
-            )?;
-            Ok(())
-        })
+        }
+        Ok(())
     }
     fn finish(&mut self, reference: &MapRef) -> io::Result<()> {
+        self.open.replace(None);
         transaction(self.db.as_ref(), || {
-            let mut map = self.pending(reference)?;
-            let expected = self.db.value(
-                "SELECT expected_revision FROM maps WHERE map_id=? AND revision=?",
-                &reference_values(reference),
-            )?;
-            let expected = expected
-                .filter(|v| *v != Value::Null)
-                .map(|v| v.text().map(String::from))
-                .transpose()?;
-            let head = self.find_head(&reference.map_id)?.map(|head| head.revision);
-            if head.as_deref() != Some(&reference.revision) && head != expected {
+            let (map, expected) = self.pending(reference)?;
+            let head = self.find_head(reference.map_id)?.map(|head| head.revision);
+            if head != Some(reference.revision) && head != expected {
                 return Err(io::Error::other("The map changed during publication"));
             }
             // An edit made while this regeneration ran keeps the revision but authors the map.
-            if let Some(revision) = &expected {
+            if let Some(revision) = expected {
                 crate::authoring::refuse_authored(&self.open(&MapRef {
-                    map_id: reference.map_id.clone(),
-                    revision: revision.clone(),
+                    map_id: reference.map_id,
+                    revision,
                 })?)?;
             }
             self.require_assets(&map)?;
-            map.state = PublicationState::Complete;
             self.db.execute(
-                "UPDATE maps SET complete=1,descriptor=? WHERE map_id=? AND revision=?",
-                &[
-                    vec![crate::stored::MAP.text(&map)?.into()],
-                    reference_values(reference),
-                ]
-                .concat(),
+                "UPDATE maps SET complete=1 WHERE map_id=? AND revision=?",
+                &key(reference),
             )?;
             self.set_head(reference)
         })
@@ -125,13 +109,10 @@ impl Publisher for MapStore {
     /// A new map keeps the output it streamed. Any other unfinished revision is removed, and a
     /// streamed one puts back the revision it replaced, so the map can be generated again.
     fn discard(&mut self, reference: &MapRef) -> io::Result<()> {
-        self.pending(reference)?;
-        let expected = self.db.value(
-            "SELECT expected_revision FROM maps WHERE map_id=? AND revision=?",
-            &reference_values(reference),
-        )?;
-        let streamed = self.find_head(&reference.map_id)?.as_ref() == Some(reference);
-        if streamed && expected.is_none_or(|value| value == Value::Null) {
+        self.open.replace(None);
+        let (_, expected) = self.pending(reference)?;
+        let streamed = self.find_head(reference.map_id)?.as_ref() == Some(reference);
+        if streamed && expected.is_none() {
             return Ok(());
         }
         self.restart_publication(reference)
@@ -140,40 +121,34 @@ impl Publisher for MapStore {
 impl MapStore {
     pub fn restart_publication(&self, reference: &MapRef) -> io::Result<()> {
         crate::sql::transaction(&self.db, || {
-            let values = [
-                reference.map_id.as_str().into(),
-                reference.revision.as_str().into(),
-            ];
-            let Some(complete) = self.db.value(
-                "SELECT complete FROM maps WHERE map_id=? AND revision=?",
-                &values,
-            )?
+            let values = key(reference);
+            let Some(row) = self
+                .db
+                .query(
+                    "SELECT complete,expected_revision FROM maps WHERE map_id=? AND revision=?",
+                    &values,
+                )?
+                .into_iter()
+                .next()
             else {
                 return Ok(());
             };
-            if complete.integer()? != 0 {
+            if column(&row, "complete")?.flag()? {
                 return Err(io::Error::other("Cannot restart a completed publication"));
             }
-            let expected = self.db.value(
-                "SELECT expected_revision FROM maps WHERE map_id=? AND revision=?",
-                &values,
-            )?;
-            let streamed = self.find_head(&reference.map_id)?.as_ref() == Some(reference);
-            self.db.execute(
-                "DELETE FROM map_saved WHERE map_id=? AND revision=?",
-                &values,
-            )?;
-            self.db.execute(
-                "DELETE FROM map_heads WHERE map_id=? AND revision=?",
-                &values,
-            )?;
-            self.db
-                .execute("DELETE FROM maps WHERE map_id=? AND revision=?", &values)?;
+            let expected = column(&row, "expected_revision")?.optional_id()?;
+            let streamed = self.find_head(reference.map_id)?.as_ref() == Some(reference);
+            for table in ["map_saved", "map_heads", "maps"] {
+                self.db.execute(
+                    &format!("DELETE FROM {table} WHERE map_id=? AND revision=?"),
+                    &values,
+                )?;
+            }
             // A streamed revision replaced the head it expected; restarting puts that head back
             // so the resumed job finds the revision it started from.
-            if let (true, Some(Value::Text(revision))) = (streamed, expected) {
+            if let (true, Some(revision)) = (streamed, expected) {
                 self.set_head(&MapRef {
-                    map_id: reference.map_id.clone(),
+                    map_id: reference.map_id,
                     revision,
                 })?;
             }
@@ -181,23 +156,46 @@ impl MapStore {
         })
     }
     pub(super) fn set_head(&self, reference: &MapRef) -> io::Result<()> {
-        self.db.execute("INSERT INTO map_heads VALUES(?,?) ON CONFLICT(map_id) DO UPDATE SET revision=excluded.revision", &reference_values(reference))?;
+        self.db.execute(
+            "INSERT INTO map_heads VALUES(?,?) ON CONFLICT(map_id) DO UPDATE SET revision=excluded.revision",
+            &key(reference),
+        )?;
         Ok(())
     }
-    fn pending(&self, reference: &MapRef) -> io::Result<MapDescriptor> {
-        let row = self
+    /// Checks the publication is still open and holds its description.
+    fn hold(&self, reference: &MapRef) -> io::Result<()> {
+        let held = self
+            .open
+            .borrow()
+            .as_ref()
+            .is_some_and(|map| map.reference == *reference);
+        if held {
+            let complete = self.db.value(
+                "SELECT complete FROM maps WHERE map_id=? AND revision=?",
+                &key(reference),
+            )?;
+            if complete.map(|v| v.flag()).transpose()? != Some(false) {
+                self.open.replace(None);
+                return Err(io::Error::other("Map publication is not open"));
+            }
+            return Ok(());
+        }
+        let (map, _) = self.pending(reference)?;
+        self.open.replace(Some(map));
+        Ok(())
+    }
+    fn pending(&self, reference: &MapRef) -> io::Result<(MapDescriptor, Option<Id>)> {
+        let complete = self
             .db
-            .query(
-                "SELECT descriptor,complete FROM maps WHERE map_id=? AND revision=?",
-                &reference_values(reference),
+            .value(
+                "SELECT complete FROM maps WHERE map_id=? AND revision=?",
+                &key(reference),
             )?
-            .into_iter()
-            .next()
             .ok_or_else(|| io::Error::other("Map publication is not open"))?;
-        if column(&row, "complete")?.integer()? != 0 {
+        if complete.flag()? {
             return Err(io::Error::other("Map publication is not open"));
         }
-        crate::stored::read_map(serde_json::from_str(column(&row, "descriptor")?.text()?)?)
+        self.read_description(reference)
     }
     pub(super) fn write_asset(&self, reference: &MapRef, asset: PublishedAsset) -> io::Result<()> {
         if asset.id.is_empty()
@@ -207,13 +205,13 @@ impl MapStore {
         {
             return Err(io::Error::other("Published assets need identity, location, media type and representable byte length"));
         }
-        let mut values = reference_values(reference);
+        let mut values = key(reference);
         values.extend([
             asset.id.into(),
             asset.media_type.into(),
             asset.location.into(),
             (asset.byte_length as i64).into(),
-            i64::from(asset.illustration).into(),
+            asset.illustration.into(),
         ]);
         self.db
             .execute("INSERT INTO map_assets VALUES(?,?,?,?,?,?,?)", &values)?;
@@ -229,7 +227,7 @@ impl MapStore {
                 _ => continue,
             };
             for id in ids {
-                let mut values = reference_values(&map.reference);
+                let mut values = key(&map.reference);
                 values.push(id.into());
                 if self
                     .db

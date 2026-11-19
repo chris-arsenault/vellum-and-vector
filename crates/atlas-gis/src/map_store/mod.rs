@@ -4,8 +4,10 @@
 mod access;
 pub mod codec;
 mod copy;
+mod description;
 mod edits;
 mod export;
+mod features;
 mod interactions;
 pub(crate) mod inventory;
 pub(crate) mod library;
@@ -20,9 +22,9 @@ mod registry_query;
 pub(crate) mod samples;
 mod settlements;
 use crate::native_map_geometry::NativeMapGeometry;
-use crate::sql::{column, Database, Value};
+use crate::sql::{column, Database};
 pub use access::MapAccess;
-use atlas_map::{Bounds, MapDescriptor, MapRef, MapSpace};
+use atlas_map::{Bounds, Id, MapDescriptor, MapRef, MapSpace};
 pub use interactions::{InspectionRequest, SelectionRequest};
 pub use inventory::MapEntry;
 pub use library::{RelatedMaps, SaveRequest, SavedMap, SavedMapDocument};
@@ -45,6 +47,9 @@ pub struct EncodedGeometry {
 pub struct MapStore {
     db: Rc<Database>,
     geometry: NativeMapGeometry,
+    /// The publication being written, held between appends so each batch is checked
+    /// against its layers without assembling the description again.
+    open: Rc<std::cell::RefCell<Option<MapDescriptor>>>,
 }
 impl MapStore {
     pub fn open_database(db: Rc<Database>) -> io::Result<Self> {
@@ -52,19 +57,13 @@ impl MapStore {
         Ok(Self {
             db,
             geometry: NativeMapGeometry,
+            open: Rc::default(),
         })
     }
     pub fn open(&self, reference: &MapRef) -> io::Result<MapDescriptor> {
-        let value = self
-            .db
-            .value(
-                "SELECT descriptor FROM maps WHERE map_id=? AND revision=?",
-                &reference_values(reference),
-            )?
-            .ok_or_else(|| io::Error::other("Map revision was not found"))?;
-        crate::stored::read_map(serde_json::from_str(value.text()?)?)
+        self.read_description(reference).map(|(map, _)| map)
     }
-    pub fn find_head(&self, map_id: &str) -> io::Result<Option<MapRef>> {
+    pub fn find_head(&self, map_id: Id) -> io::Result<Option<MapRef>> {
         self.db
             .value(
                 "SELECT revision FROM map_heads WHERE map_id=?",
@@ -72,27 +71,19 @@ impl MapStore {
             )?
             .map(|value| {
                 Ok(MapRef {
-                    map_id: map_id.into(),
-                    revision: value.text()?.into(),
+                    map_id,
+                    revision: value.id()?,
                 })
             })
             .transpose()
     }
 }
-fn reference_values(reference: &MapRef) -> Vec<Value> {
-    vec![
-        reference.map_id.clone().into(),
-        reference.revision.clone().into(),
-    ]
+fn reference_values(reference: &MapRef) -> Vec<crate::sql::Value> {
+    description::key(reference)
 }
-pub fn space<'a>(map: &'a MapDescriptor, id: &str) -> io::Result<&'a MapSpace> {
+pub fn space(map: &MapDescriptor, id: Id) -> io::Result<&MapSpace> {
     map.spaces
         .iter()
         .find(|space| space.id == id)
         .ok_or_else(|| io::Error::other("Coordinate space was not found in this map"))
-}
-fn json(value: &impl serde::Serialize) -> io::Result<Value> {
-    Ok(serde_json::to_string(value)
-        .map_err(io::Error::other)?
-        .into())
 }

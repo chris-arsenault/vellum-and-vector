@@ -1,14 +1,14 @@
 use crate::map_store::{space, MapAccess};
 use atlas_map::{
     spatial::{Overlay, Predicate, SpatialKernel, SpatialResult},
-    CoverageRequest, Geometry, GeometryQuery, GeometryResult, MapRef,
+    CoverageRequest, Geometry, GeometryQuery, GeometryResult, Id, MapRef,
 };
 use std::io;
 
 pub fn query(
     maps: &dyn MapAccess,
     reference: &MapRef,
-    space_id: &str,
+    space_id: Id,
     queries: &[GeometryQuery],
 ) -> io::Result<Vec<GeometryResult>> {
     let map = maps.open(reference)?;
@@ -51,7 +51,7 @@ pub fn coverage(
     let map = maps.open(reference)?;
     let spatial = maps
         .geometry()
-        .spatial(space(&map, &request.space_id)?.precision)?;
+        .spatial(space(&map, request.space_id)?.precision)?;
     request
         .polygons
         .iter()
@@ -66,7 +66,7 @@ pub fn coverage(
 pub fn areas(
     maps: &dyn MapAccess,
     reference: &MapRef,
-    space_id: &str,
+    space_id: Id,
     shapes: &[Geometry],
 ) -> io::Result<Vec<f64>> {
     let map = maps.open(reference)?;

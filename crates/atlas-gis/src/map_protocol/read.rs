@@ -4,7 +4,7 @@ use crate::{
         codec, FeatureQuery, InspectionRequest, MapAccess, RegistryRequest, SelectionRequest,
     },
 };
-use atlas_map::MapRef;
+use atlas_map::{Id, MapRef};
 use serde::{Deserialize, Serialize, Serializer};
 use std::io;
 #[derive(Deserialize)]
@@ -12,17 +12,17 @@ use std::io;
 pub enum ReadCall {
     Open((MapRef,)),
     Layers((MapRef,)),
-    Entities(MapRef, Vec<String>),
+    Entities(MapRef, Vec<Id>),
     Registry(MapRef, RegistryRequest),
-    Settlement(MapRef, String),
+    Settlement(MapRef, Id),
     Features(MapRef, FeatureQuery),
     Inspect(MapRef, InspectionRequest),
-    History(MapRef, Option<String>),
+    History(MapRef, Option<Id>),
     SelectRegion(MapRef, SelectionRequest),
     Illustration((MapRef,)),
-    Geometries(MapRef, String, Vec<atlas_map::GeometryQuery>),
+    Geometries(MapRef, Id, Vec<atlas_map::GeometryQuery>),
     Coverage(MapRef, atlas_map::CoverageRequest),
-    Areas(MapRef, String, Vec<atlas_map::Geometry>),
+    Areas(MapRef, Id, Vec<atlas_map::Geometry>),
     Asset(MapRef, String),
     Source(MapRef, String),
     Export(MapRef, String),
@@ -30,7 +30,7 @@ pub enum ReadCall {
     /// A structure map's outside context, read from its parent's published GIS.
     Site((MapRef,)),
     /// What a connection feature may lead to, by the Rust connection rule.
-    Connections(MapRef, String),
+    Connections(MapRef, Id),
 }
 impl ReadCall {
     pub fn reference(&self) -> &MapRef {
@@ -63,19 +63,17 @@ impl ReadCall {
             Self::Layers((r,)) => codec::encode(&maps.open(&r)?.layers),
             Self::Entities(r, ids) => codec::encode(&maps.entities(&r, &ids)?),
             Self::Registry(r, q) => codec::encode(&maps.registry(&r, &q)?),
-            Self::Settlement(r, id) => codec::encode(&maps.settlement(&r, &id)?),
+            Self::Settlement(r, id) => codec::encode(&maps.settlement(&r, id)?),
             Self::Features(r, q) => codec::encode(&maps.features(&r, &q)?),
             Self::Inspect(r, q) => codec::encode(&maps.inspect(&r, &q)?),
-            Self::History(r, c) => {
-                codec::encode(&maps.history(&r, c.as_deref().unwrap_or_default(), None)?)
-            }
+            Self::History(r, c) => codec::encode(&maps.history(&r, c, None)?),
             Self::SelectRegion(r, q) => codec::encode(&maps.select_region(&r, &q)?),
             Self::Geometries(r, space, queries) => {
-                codec::encode(&super::spatial::query(maps, &r, &space, &queries)?)
+                codec::encode(&super::spatial::query(maps, &r, space, &queries)?)
             }
             Self::Coverage(r, q) => codec::encode(&super::spatial::coverage(maps, &r, q)?),
             Self::Areas(r, space, shapes) => {
-                codec::encode(&super::spatial::areas(maps, &r, &space, &shapes)?)
+                codec::encode(&super::spatial::areas(maps, &r, space, &shapes)?)
             }
             Self::Illustration((r,)) => {
                 let assets = maps
@@ -107,7 +105,7 @@ impl ReadCall {
             Self::FindAddress(r, text) => codec::encode(&super::addresses::find(maps, &r, &text)?),
             Self::Site((r,)) => codec::encode(&super::site::context(maps, &r)?),
             Self::Connections(r, id) => {
-                codec::encode(&super::connections::candidates_for(maps, &r, &id)?)
+                codec::encode(&super::connections::candidates_for(maps, &r, id)?)
             }
             Self::Export(r, format) => {
                 let mut bytes = Vec::new();
@@ -131,7 +129,7 @@ fn binary<S: Serializer>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
     serializer.serialize_bytes(bytes)
 }
 pub(super) fn reference(r: &MapRef) -> io::Result<()> {
-    if r.map_id.is_empty() || r.revision.is_empty() {
+    if r.map_id == Id::NIL || r.revision == Id::NIL {
         return Err(io::Error::other("Choose a map revision"));
     }
     Ok(())

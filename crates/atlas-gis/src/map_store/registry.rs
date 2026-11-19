@@ -1,16 +1,20 @@
 use super::{
-    records::region_geometry,
-    reference_values,
+    description::{feature_type_row, key},
     registry_query::{path, where_query, RegistryQuery},
-    space, MapStore,
+    MapStore,
 };
 use crate::sql::{column, Value};
 use atlas_map::{
-    regions::rectangle, spatial::Predicate, Bounds, MapColumn, MapFeature, MapFeatureType, MapRef,
+    regions::{as_geometry, rectangle},
+    spatial::Predicate,
+    Bounds, MapColumn, MapFeature, MapFeatureType, MapRef,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io};
-const SELECTION: &str = "map_feature_catalog c JOIN map_features f USING(row_id) JOIN map_registry_visible v USING(row_id)";
+/// The visible features with their layer and feature type rows.
+const SELECTION: &str = "map_features f JOIN map_registry_visible v USING(row_id)
+ JOIN map_layers l ON l.map_id=f.map_id AND l.revision=f.revision AND l.id=f.layer_id
+ JOIN map_feature_types t ON t.map_id=f.map_id AND t.revision=f.revision AND t.layer=l.ordinal AND t.id=f.type_id";
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Scope {
@@ -99,20 +103,21 @@ impl MapStore {
                 .map_err(io::Error::other)?
                 .into(),
         ]);
-        let records = self.db.query(&format!("SELECT f.*,c.type,c.values_json FROM {SELECTION} WHERE {predicate} ORDER BY (json_extract(c.values_json,?) IS NULL OR json_extract(c.values_json,?)=''),json_extract(c.values_json,?) COLLATE NOCASE {direction},f.map_id,f.id LIMIT ? OFFSET ?"),&bind)?;
+        let records = self.db.query(&format!("SELECT f.*,t.layer AS type_layer,t.ordinal AS type_ordinal FROM {SELECTION} WHERE {predicate} ORDER BY (json_extract(f.catalog,?) IS NULL OR json_extract(f.catalog,?)=''),json_extract(f.catalog,?) COLLATE NOCASE {direction},f.map_id,f.id LIMIT ? OFFSET ?"),&bind)?;
+        let features = self.features_from(&records)?;
         let rows = records
             .iter()
-            .map(|row| {
+            .zip(features)
+            .map(|(row, feature)| {
+                let values = feature.catalog.values.clone();
                 Ok(RegistryRow {
                     reference: MapRef {
-                        map_id: column(row, "map_id")?.text()?.into(),
-                        revision: column(row, "revision")?.text()?.into(),
+                        map_id: column(row, "map_id")?.id()?,
+                        revision: column(row, "revision")?.id()?,
                     },
-                    feature: self.feature(row)?,
-                    kind: serde_json::from_str(column(row, "type")?.text()?)
-                        .map_err(io::Error::other)?,
-                    values: serde_json::from_str(column(row, "values_json")?.text()?)
-                        .map_err(io::Error::other)?,
+                    kind: self.feature_type_at(row)?,
+                    feature,
+                    values,
                 })
             })
             .collect::<io::Result<_>>()?;
@@ -125,14 +130,38 @@ impl MapStore {
             facets: self.registry_facets()?,
         })
     }
+    /// The feature type a selected row names by its map, revision, layer and ordinal.
+    fn feature_type_at(&self, row: &crate::sql::Row) -> io::Result<MapFeatureType> {
+        let found = self
+            .db
+            .query(
+                "SELECT * FROM map_feature_types WHERE map_id=? AND revision=? AND layer=? AND ordinal=?",
+                &[
+                    column(row, "map_id")?.clone(),
+                    column(row, "revision")?.clone(),
+                    column(row, "type_layer")?.clone(),
+                    column(row, "type_ordinal")?.clone(),
+                ],
+            )?
+            .into_iter()
+            .next()
+            .ok_or_else(|| io::Error::other("A feature's type is not on its layer"))?;
+        Ok(feature_type_row(&found)?.feature_type)
+    }
     fn registry_visible(&self, reference: &MapRef, request: &RegistryRequest) -> io::Result<()> {
-        let map = self.open(reference)?;
         self.db.batch("CREATE TEMP TABLE IF NOT EXISTS map_registry_visible(row_id INTEGER PRIMARY KEY); DELETE FROM map_registry_visible;")?;
         let mut scope = "(f.map_id=? AND f.revision=?)".to_owned();
-        let mut bind = reference_values(reference);
+        let mut bind = key(reference);
         if matches!(request.scope, Scope::World) {
-            scope.push_str(" OR (f.map_id<>? AND json_extract(m.descriptor,'$.worldId')=? AND EXISTS(SELECT 1 FROM map_heads h WHERE h.map_id=f.map_id AND h.revision=f.revision))");
-            bind.extend([reference.map_id.clone().into(), map.world_id.into()]);
+            let world = self
+                .db
+                .value(
+                    "SELECT world_id FROM maps WHERE map_id=? AND revision=?",
+                    &key(reference),
+                )?
+                .ok_or_else(|| io::Error::other("Map revision was not found"))?;
+            scope.push_str(" OR (f.map_id<>? AND m.world_id=? AND EXISTS(SELECT 1 FROM map_heads h WHERE h.map_id=f.map_id AND h.revision=f.revision))");
+            bind.extend([reference.map_id.into(), world]);
         }
         let Some(bounds) = request.bounds else {
             self.db.execute(&format!("INSERT INTO map_registry_visible SELECT f.row_id FROM map_features f JOIN maps m USING(map_id,revision) WHERE {scope}"),&bind)?;
@@ -140,43 +169,51 @@ impl MapStore {
         };
         bounds.validate_window().map_err(io::Error::other)?;
         let Bounds(w, s, e, n) = bounds;
-        bind.extend([e.into(), w.into(), n.into(), s.into()]);
-        let candidates = self.db.query(&format!("SELECT f.* FROM map_features f JOIN maps m USING(map_id,revision) JOIN map_catalog_bounds b USING(row_id) WHERE ({scope}) AND b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?"),&bind)?;
+        let window = [e.into(), w.into(), n.into(), s.into()];
+        let mut values = bind.clone();
+        values.extend(window.clone());
+        values.extend(bind);
+        values.extend(window);
+        let near = "b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?";
+        let candidates = self.db.query(
+            &format!("SELECT f.* FROM map_features f JOIN maps m USING(map_id,revision) JOIN map_feature_bounds b USING(row_id) WHERE ({scope}) AND {near}
+             UNION SELECT f.* FROM map_features f JOIN maps m USING(map_id,revision) JOIN map_footprint_bounds b USING(row_id) WHERE ({scope}) AND {near}"),
+            &values,
+        )?;
         let geometry = rectangle(bounds);
-        for row in candidates {
-            let feature = self.feature(&row)?;
-            let owner = self.open(&MapRef {
-                map_id: column(&row, "map_id")?.text()?.into(),
-                revision: column(&row, "revision")?.text()?.into(),
-            })?;
-            let kernel = self
-                .geometry
-                .spatial(space(&owner, &feature.space_id)?.precision)?;
+        let features = self.features_from(&candidates)?;
+        for (row, feature) in candidates.iter().zip(features) {
+            let owner = MapRef {
+                map_id: column(row, "map_id")?.id()?,
+                revision: column(row, "revision")?.id()?,
+            };
+            let precision = self.read_space(&owner, feature.space_id)?.precision;
+            let kernel = self.geometry.spatial(precision)?;
             let intersects = kernel
                 .relation(&feature.geometry, &geometry, Predicate::Intersects)
                 .map_err(io::Error::other)?
-                || match feature.footprint {
+                || match &feature.footprint {
                     Some(shape) => kernel
-                        .relation(&region_geometry(&shape), &geometry, Predicate::Intersects)
+                        .relation(&as_geometry(shape), &geometry, Predicate::Intersects)
                         .map_err(io::Error::other)?,
                     None => false,
                 };
             if intersects {
                 self.db.execute(
-                    "INSERT INTO map_registry_visible VALUES(?)",
-                    &[column(&row, "row_id")?.clone()],
+                    "INSERT OR IGNORE INTO map_registry_visible VALUES(?)",
+                    &[column(row, "row_id")?.clone()],
                 )?;
             }
         }
         Ok(())
     }
     fn registry_columns(&self) -> io::Result<Vec<MapColumn>> {
-        self.db.query(&format!("SELECT json_extract(j.value,'$.key') AS key,json_extract(j.value,'$.label') AS label,max(json_extract(j.value,'$.numeric')) AS numeric FROM {SELECTION},json_each(c.columns_json) j GROUP BY json_extract(j.value,'$.key') ORDER BY min(CAST(j.key AS INTEGER)),key"),&[])?.iter().map(|row| Ok(MapColumn {key:column(row,"key")?.text()?.into(),label:column(row,"label")?.text()?.into(),numeric:column(row,"numeric")?.integer()? != 0})).collect()
+        self.db.query(&format!("SELECT json_extract(j.value,'$.key') AS key,json_extract(j.value,'$.label') AS label,max(json_extract(j.value,'$.numeric')) AS numeric FROM {SELECTION},json_each(f.catalog,'$.columns') j GROUP BY json_extract(j.value,'$.key') ORDER BY min(CAST(j.key AS INTEGER)),key"),&[])?.iter().map(|row| Ok(MapColumn {key:column(row,"key")?.text()?.into(),label:column(row,"label")?.text()?.into(),numeric:column(row,"numeric")?.flag()?})).collect()
     }
     fn registry_facets(&self) -> io::Result<Facets> {
         let mut categories = BTreeMap::new();
         for key in ["status", "state", "profile", "space"] {
-            let rows = self.db.query(&format!("SELECT DISTINCT json_extract(c.values_json,?) AS value FROM {SELECTION} WHERE value IS NOT NULL AND value<>'' ORDER BY value"),&[path(key).into()])?;
+            let rows = self.db.query(&format!("SELECT DISTINCT json_extract(f.catalog,?) AS value FROM {SELECTION} WHERE value IS NOT NULL AND value<>'' ORDER BY value"),&[path(key).into()])?;
             categories.insert(
                 key.into(),
                 rows.iter()
@@ -184,15 +221,14 @@ impl MapStore {
                     .collect::<io::Result<_>>()?,
             );
         }
-        let types = self
+        let mut types = self
             .db
-            .query(
-                &format!("SELECT DISTINCT c.type FROM {SELECTION} ORDER BY c.type"),
-                &[],
-            )?
+            .query(&format!("SELECT DISTINCT t.* FROM {SELECTION}"), &[])?
             .iter()
-            .map(|row| serde_json::from_str(column(row, "type")?.text()?).map_err(io::Error::other))
-            .collect::<io::Result<_>>()?;
+            .map(|row| feature_type_row(row).map(|t| t.feature_type))
+            .collect::<io::Result<Vec<_>>>()?;
+        types.sort_by(|a, b| a.id.cmp(&b.id).then(a.path.cmp(&b.path)));
+        types.dedup();
         Ok(Facets { types, categories })
     }
 }

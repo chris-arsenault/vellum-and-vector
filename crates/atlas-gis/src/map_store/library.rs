@@ -1,6 +1,6 @@
 use super::{queries::PAGE_SIZE, reference_values, MapStore, Page};
 use crate::sql::{column, transaction};
-use atlas_map::{MapNavigationState, MapRef, PublicationState};
+use atlas_map::{Id, MapNavigationState, MapRef, PublicationState};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io};
 
@@ -37,10 +37,13 @@ pub struct RelatedMaps {
     pub children: Vec<MapRef>,
 }
 impl MapStore {
-    pub fn list_saved(&self, cursor: &str) -> io::Result<Page<SavedMap>> {
+    pub fn list_saved(&self, cursor: Option<Id>) -> io::Result<Page<SavedMap>> {
         let rows = self.db.query(
             "SELECT map_id,revision,data FROM map_saved WHERE map_id>? ORDER BY map_id LIMIT ?",
-            &[cursor.into(), ((PAGE_SIZE + 1) as i64).into()],
+            &[
+                cursor.unwrap_or(Id::NIL).into(),
+                ((PAGE_SIZE + 1) as i64).into(),
+            ],
         )?;
         let more = rows.len() > PAGE_SIZE;
         let items = rows
@@ -48,8 +51,8 @@ impl MapStore {
             .take(PAGE_SIZE)
             .map(|row| {
                 let reference = MapRef {
-                    map_id: column(row, "map_id")?.text()?.into(),
-                    revision: column(row, "revision")?.text()?.into(),
+                    map_id: column(row, "map_id")?.id()?,
+                    revision: column(row, "revision")?.id()?,
                 };
                 let raw = column(row, "data")?.text()?;
                 let result = crate::stored::VIEW
@@ -59,11 +62,11 @@ impl MapStore {
             })
             .collect::<io::Result<Vec<_>>>()?;
         let next = more
-            .then(|| items.last().map(|s| s.reference.map_id.clone()))
+            .then(|| items.last().map(|s| s.reference.map_id))
             .flatten();
         Ok(Page { items, next })
     }
-    pub fn find_saved(&self, map_id: &str) -> io::Result<Option<SavedMapDocument>> {
+    pub fn find_saved(&self, map_id: Id) -> io::Result<Option<SavedMapDocument>> {
         let data = self.db.value(
             "SELECT data FROM map_saved WHERE map_id=?",
             &[map_id.into()],
@@ -87,7 +90,7 @@ impl MapStore {
             .db
             .value(
                 "SELECT version FROM map_saved WHERE map_id=?",
-                &[request.reference.map_id.clone().into()],
+                &[request.reference.map_id.into()],
             )?
             .map(|v| {
                 v.integer()
@@ -109,21 +112,33 @@ impl MapStore {
         Ok(saved)
     }
     pub fn related(&self, reference: &MapRef) -> io::Result<RelatedMaps> {
-        let map = self.open(reference)?;
-        let rows = self.db.query("SELECT m.map_id,m.revision FROM maps m JOIN map_heads h USING(map_id,revision) WHERE json_extract(descriptor,'$.parent.mapId')=? AND json_extract(descriptor,'$.parent.revision')=? ORDER BY m.map_id", &reference_values(reference))?;
+        let row = self
+            .db
+            .query(
+                "SELECT parent_map_id,parent_revision FROM maps WHERE map_id=? AND revision=?",
+                &reference_values(reference),
+            )?
+            .into_iter()
+            .next()
+            .ok_or_else(|| io::Error::other("Map revision was not found"))?;
+        let parent = match (
+            column(&row, "parent_map_id")?.optional_id()?,
+            column(&row, "parent_revision")?.optional_id()?,
+        ) {
+            (Some(map_id), Some(revision)) => Some(MapRef { map_id, revision }),
+            _ => None,
+        };
+        let rows = self.db.query("SELECT m.map_id,m.revision FROM maps m JOIN map_heads h USING(map_id,revision) WHERE m.parent_map_id=? AND m.parent_revision=? ORDER BY m.map_id", &reference_values(reference))?;
         let children = rows
             .iter()
             .map(|row| {
                 Ok(MapRef {
-                    map_id: column(row, "map_id")?.text()?.into(),
-                    revision: column(row, "revision")?.text()?.into(),
+                    map_id: column(row, "map_id")?.id()?,
+                    revision: column(row, "revision")?.id()?,
                 })
             })
             .collect::<io::Result<_>>()?;
-        Ok(RelatedMaps {
-            parent: map.parent,
-            children,
-        })
+        Ok(RelatedMaps { parent, children })
     }
 }
 
@@ -162,7 +177,9 @@ impl SavedMap {
     pub(crate) fn unavailable(reference: MapRef, raw: &str, error: io::Error) -> Self {
         let value: serde_json::Value = serde_json::from_str(raw).unwrap_or_default();
         Self {
-            name: value["name"].as_str().unwrap_or(&reference.map_id).into(),
+            name: value["name"]
+                .as_str()
+                .map_or_else(|| reference.map_id.to_string(), String::from),
             saved_at: value["savedAt"].as_str().unwrap_or_default().into(),
             version: value["version"].as_u64().unwrap_or_default(),
             reference,

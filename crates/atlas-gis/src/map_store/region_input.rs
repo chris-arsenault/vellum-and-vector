@@ -1,12 +1,12 @@
 use super::{
     interactions::{as_region, collect},
-    records::region_geometry,
     samples::canonical_position,
     space, FeatureQuery, MapAccess,
 };
 use atlas_map::{
-    regions::RegionInput, Bounds, Geometry, MapRef, MapSpace, Position, PublishedAsset,
-    RegionCandidate, RegionDrawing, RegionQuery,
+    regions::{as_geometry as region_geometry, RegionInput},
+    Bounds, Geometry, Id, MapRef, MapSpace, Position, PublishedAsset, RegionCandidate,
+    RegionDrawing, RegionQuery,
 };
 use serde::Deserialize;
 use std::{collections::BTreeMap, future::Future, io};
@@ -22,7 +22,7 @@ impl dyn MapAccess + '_ {
     ) -> io::Result<RegionInput> {
         let map = self.open(reference)?;
         self.validate_navigation(reference, &navigation)?;
-        let space = space(&map, &query.space_id)?;
+        let space = space(&map, query.space_id)?;
         let parent = match &query.parent_id {
             None => &map.footprint,
             Some(id) => {
@@ -56,7 +56,7 @@ impl dyn MapAccess + '_ {
         let mut sources = BTreeMap::new();
         for bounds in windows {
             let mut request = FeatureQuery {
-                space_id: space.id.clone(),
+                space_id: space.id,
                 bounds: Some(bounds),
                 ..Default::default()
             };
@@ -64,11 +64,11 @@ impl dyn MapAccess + '_ {
                 request.cursor = cursor;
                 self.features(reference, &request)
             })? {
-                sources.insert(feature.id.clone(), feature);
+                sources.insert(feature.id, feature);
             }
         }
         let mut request = FeatureQuery {
-            space_id: space.id.clone(),
+            space_id: space.id,
             geometry: Some(region_geometry(parent)),
             layer_ids: Some(vec!["vector:settlements".into()]),
             ..Default::default()
@@ -127,7 +127,7 @@ struct IllustratedFeature {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct IllustratedProperties {
-    feature_id: Option<String>,
+    feature_id: Option<Id>,
 }
 fn chart_windows(space: &MapSpace, bounds: Bounds) -> io::Result<Vec<Bounds>> {
     let Some(width) = space.periodic_width else {

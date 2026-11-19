@@ -181,6 +181,40 @@ Acceptance: publishing writes no layer document and no GeoJSON; a layer, its fea
 their relations are queryable as rows; the map API returns the same information.
 Evidence: PostGIS integration test; source review of both stores.
 
+#### M2 expansion
+
+Revised decision: one `features` table per store, not one table per vector layer. Its
+common fields are typed columns, and declared layer properties are typed by
+`layer_properties` rows. A table per layer would put about 40 dynamic schemas in each store
+and make every query generic across them, with nothing gained for the registry and viewer
+queries this milestone serves.
+
+1. Shared row shapes (`atlas-gis/src/rows.rs`). These split a `MapDescriptor` into rows and
+   assemble it again:
+   - the revision row: identity, world, name, primary space, profile, state, parent,
+     region scale, bounds, footprint WKB, and real-scale settings as `jsonb`, since authoring
+     choices are open-ended;
+   - `spaces`, `layers` (source columns, attribution, catalog path, presets, examples,
+     geometries, default style as `jsonb`), `bands`, `categories`, `feature_types` and
+     `layer_properties`.
+
+   A feature row holds typed id, space, layer, type, kind, name, entity and map-only
+   columns, plus geometry and footprint WKB, causes, open `attributes` and the registry's
+   derived `catalog` values as `jsonb` (their columns vary by layer). Relations are rows.
+2. PostGIS: `uuid` keys; the tables above; geometry arrives as WKB that `NativeMapGeometry`
+   has already validated and reduced, inserted with `ST_GeomFromWKB` under the existing
+   validity check. `map.canonical_geometry` and GeoJSON reads go. Adding layers inserts
+   layer rows only; finishing updates the revision row; an edit replaces the revision's
+   settings and feature-type counts.
+3. SQLite: the same shape, with 16-byte blob ids and rtree bounds.
+4. Readers assemble the descriptor from rows. Feature, registry, settlement, inventory,
+   library and copy queries join `feature_types` and `relations` instead of descending into
+   the descriptor document.
+5. atlas-gis authoring, protocol, navigation and map files take `Id`.
+
+Evidence: a unit test of descriptor rows round-tripping; the PostGIS publication test in
+`tests/map_contract.rs` against the local atlas database; source review of both stores.
+
 ### M3 — Inspection from rasters [depends on M2]
 Scope: F4. Band values at a point are read from the published rasters through a Rust
 GeoTIFF tile reader; samples keep their footprint and inspection sections only.

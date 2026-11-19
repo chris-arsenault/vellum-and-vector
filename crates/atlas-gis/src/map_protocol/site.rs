@@ -7,7 +7,7 @@ use crate::map_store::{FeatureQuery, MapAccess, Page};
 use atlas_map::{
     authoring::family,
     structure::{site_context, SiteContext},
-    Bounds, Geometry, MapDescriptor, MapFeature, MapRef, MapSample, Position,
+    Bounds, Geometry, Id, MapDescriptor, MapFeature, MapRef, MapSample, Position,
 };
 use std::io;
 
@@ -28,13 +28,13 @@ pub fn context(maps: &dyn MapAccess, reference: &MapRef) -> io::Result<SiteConte
         .as_ref()
         .ok_or_else(|| io::Error::other("This building's floors map has no parent map"))?;
     let parent = current(maps, parent)?;
-    let space = map.primary_space_id.clone();
+    let space = map.primary_space_id;
     let building = all(
         maps,
         &parent,
         FeatureQuery {
-            space_id: space.clone(),
-            feature_ids: Some(vec![site.building_id.clone()]),
+            space_id: space,
+            feature_ids: Some(vec![site.building_id]),
             ..Default::default()
         },
     )?
@@ -48,15 +48,15 @@ pub fn context(maps: &dyn MapAccess, reference: &MapRef) -> io::Result<SiteConte
     let lineage = lineage(maps, parent)?;
     let mut samples = Vec::new();
     for ancestor in &lineage {
-        samples = samples_under(maps, ancestor, &space, &points)?;
+        samples = samples_under(maps, ancestor, space, &points)?;
         if !samples.is_empty() {
             break;
         }
     }
     let mut nearby = Vec::new();
     for ancestor in &lineage {
-        for feature in magic_near(maps, ancestor, &space, centre)? {
-            nearby.push((ancestor.reference.map_id.clone(), feature));
+        for feature in magic_near(maps, ancestor, space, centre)? {
+            nearby.push((ancestor.reference.map_id, feature));
         }
     }
     let [x, y, _] = centre.coordinates();
@@ -70,7 +70,7 @@ pub fn context(maps: &dyn MapAccess, reference: &MapRef) -> io::Result<SiteConte
 }
 /// The map's current revision where it has one; an edited parent keeps its revision.
 fn current(maps: &dyn MapAccess, reference: &MapRef) -> io::Result<MapDescriptor> {
-    let head = maps.find_head(&reference.map_id)?;
+    let head = maps.find_head(reference.map_id)?;
     maps.open(head.as_ref().unwrap_or(reference))
 }
 fn lineage(maps: &dyn MapAccess, parent: MapDescriptor) -> io::Result<Vec<MapDescriptor>> {
@@ -140,7 +140,7 @@ fn probes(outline: &Geometry) -> Vec<Position> {
 fn samples_under(
     maps: &dyn MapAccess,
     map: &MapDescriptor,
-    space: &str,
+    space: Id,
     points: &[Position],
 ) -> io::Result<Vec<MapSample>> {
     if !map.spaces.iter().any(|entry| entry.id == space) {
@@ -160,7 +160,7 @@ fn samples_under(
 fn magic_near(
     maps: &dyn MapAccess,
     map: &MapDescriptor,
-    space: &str,
+    space: Id,
     centre: Position,
 ) -> io::Result<Vec<MapFeature>> {
     let layers: Vec<String> = map
@@ -181,7 +181,7 @@ fn magic_near(
         maps,
         map,
         FeatureQuery {
-            space_id: space.into(),
+            space_id: space,
             bounds: Some(Bounds(x - reach, y - reach, x + reach, y + reach)),
             layer_ids: Some(layers),
             ..Default::default()

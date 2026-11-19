@@ -35,7 +35,69 @@ impl From<f64> for Value {
         Self::Real(value)
     }
 }
+/// An identity is stored as its 16 bytes.
+impl From<atlas_map::Id> for Value {
+    fn from(value: atlas_map::Id) -> Self {
+        Self::Blob(value.to_bytes().to_vec())
+    }
+}
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Self::Integer(i64::from(value))
+    }
+}
+impl From<Vec<u8>> for Value {
+    fn from(value: Vec<u8>) -> Self {
+        Self::Blob(value)
+    }
+}
+impl<T: Into<Value>> From<Option<T>> for Value {
+    fn from(value: Option<T>) -> Self {
+        value.map_or(Self::Null, Into::into)
+    }
+}
 impl Value {
+    pub fn id(&self) -> io::Result<atlas_map::Id> {
+        let bytes: [u8; 16] = self
+            .bytes()?
+            .try_into()
+            .map_err(|_| io::Error::other("An identity is 16 bytes"))?;
+        Ok(atlas_map::Id::from_bytes(bytes))
+    }
+    pub fn optional_id(&self) -> io::Result<Option<atlas_map::Id>> {
+        match self {
+            Self::Null => Ok(None),
+            value => value.id().map(Some),
+        }
+    }
+    pub fn real(&self) -> io::Result<f64> {
+        match self {
+            Self::Real(value) => Ok(*value),
+            Self::Integer(value) => Ok(*value as f64),
+            _ => Err(io::Error::other("Expected SQL real")),
+        }
+    }
+    pub fn optional_real(&self) -> io::Result<Option<f64>> {
+        match self {
+            Self::Null => Ok(None),
+            value => value.real().map(Some),
+        }
+    }
+    pub fn optional_text(&self) -> io::Result<Option<String>> {
+        match self {
+            Self::Null => Ok(None),
+            value => value.text().map(|t| Some(t.to_owned())),
+        }
+    }
+    pub fn optional_integer(&self) -> io::Result<Option<i64>> {
+        match self {
+            Self::Null => Ok(None),
+            value => value.integer().map(Some),
+        }
+    }
+    pub fn flag(&self) -> io::Result<bool> {
+        self.integer().map(|v| v != 0)
+    }
     pub fn text(&self) -> io::Result<&str> {
         if let Self::Text(value) = self {
             Ok(value)

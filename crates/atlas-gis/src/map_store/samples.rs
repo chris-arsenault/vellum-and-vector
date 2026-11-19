@@ -9,7 +9,7 @@ impl MapStore {
     pub fn samples_at(
         &self,
         reference: &MapRef,
-        space_id: &str,
+        space_id: atlas_map::Id,
         position: Position,
     ) -> io::Result<Vec<MapSample>> {
         let map = self.open(reference)?;

@@ -1,7 +1,7 @@
-use super::{codec, reference_values, space, MapStore};
+use super::{codec, description::key, MapStore};
 use crate::sql::{column, Row, Value};
 use atlas_map::{
-    spatial::Predicate, Bounds, Geometry, HistoryEntry, MapEntity, MapFeature, MapRef,
+    spatial::Predicate, Bounds, Geometry, HistoryEntry, Id, MapEntity, MapFeature, MapRef,
     PublishedAsset,
 };
 use serde::{Deserialize, Serialize};
@@ -12,13 +12,13 @@ pub(super) const WINDOW: &str = "b.max_x>=? AND b.min_x<=? AND b.max_y>=? AND b.
 #[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureQuery {
-    pub space_id: String,
+    pub space_id: Id,
     pub bounds: Option<Bounds>,
     pub geometry: Option<Geometry>,
-    pub feature_ids: Option<Vec<String>>,
+    pub feature_ids: Option<Vec<Id>>,
     pub layer_ids: Option<Vec<String>>,
     pub text: Option<String>,
-    pub cursor: Option<String>,
+    pub cursor: Option<Id>,
     /// Bounds meet a feature's footprint as well as its geometry, as hex marks do.
     #[serde(default)]
     pub footprints: bool,
@@ -26,11 +26,11 @@ pub struct FeatureQuery {
 #[derive(Serialize, Deserialize)]
 pub struct Page<T> {
     pub items: Vec<T>,
-    pub next: Option<String>,
+    pub next: Option<Id>,
 }
 impl MapStore {
     pub fn asset(&self, reference: &MapRef, id: &str) -> io::Result<PublishedAsset> {
-        let mut values = reference_values(reference);
+        let mut values = key(reference);
         values.push(id.into());
         let row = self
             .db
@@ -47,20 +47,25 @@ impl MapStore {
             location: column(&row, "location")?.text()?.into(),
             byte_length: u64::try_from(column(&row, "byte_length")?.integer()?)
                 .map_err(io::Error::other)?,
-            illustration: column(&row, "illustration")?.integer()? != 0,
+            illustration: column(&row, "illustration")?.flag()?,
         })
     }
     pub fn illustration_assets(&self, reference: &MapRef) -> io::Result<Vec<PublishedAsset>> {
-        self.open(reference)?;
-        self.db.query("SELECT id FROM map_assets WHERE map_id=? AND revision=? AND illustration=1 ORDER BY id", &reference_values(reference))?.iter().map(|row| self.asset(reference, column(row, "id")?.text()?)).collect()
+        self.db
+            .query(
+                "SELECT id FROM map_assets WHERE map_id=? AND revision=? AND illustration=1 ORDER BY id",
+                &key(reference),
+            )?
+            .iter()
+            .map(|row| self.asset(reference, column(row, "id")?.text()?))
+            .collect()
     }
     pub fn features(
         &self,
         reference: &MapRef,
         query: &FeatureQuery,
     ) -> io::Result<Page<MapFeature>> {
-        let map = self.open(reference)?;
-        let space = space(&map, &query.space_id)?;
+        let space = self.read_space(reference, query.space_id)?;
         let bounds = query.bounds.map(Ok).unwrap_or_else(|| {
             query.geometry.as_ref().map_or(Ok(space.bounds), |shape| {
                 self.geometry
@@ -71,19 +76,18 @@ impl MapStore {
         bounds.validate_window().map_err(io::Error::other)?;
         let rows = self.feature_rows(reference, query, bounds)?;
         let has_more = rows.len() > PAGE_SIZE;
-        let selected = rows.into_iter().take(PAGE_SIZE).collect::<Vec<_>>();
+        let selected = &rows[..rows.len().min(PAGE_SIZE)];
         let next = if has_more {
             selected
                 .last()
-                .map(|row| column(row, "id")?.text().map(String::from))
+                .map(|row| column(row, "id")?.id())
                 .transpose()?
         } else {
             None
         };
         let kernel = self.geometry.spatial(space.precision)?;
         let mut items = Vec::new();
-        for row in selected {
-            let feature = self.feature(&row)?;
+        for feature in self.features_from(selected)? {
             if let Some(shape) = &query.geometry {
                 if !kernel
                     .relation(&feature.geometry, shape, Predicate::Intersects)
@@ -102,49 +106,56 @@ impl MapStore {
         query: &FeatureQuery,
         Bounds(w, s, e, n): Bounds,
     ) -> io::Result<Vec<Row>> {
-        let mut values = reference_values(reference);
+        let mut values = key(reference);
         values.extend([
-            query.space_id.clone().into(),
-            query.cursor.clone().unwrap_or_default().into(),
-            w.into(),
-            e.into(),
-            s.into(),
-            n.into(),
+            query.space_id.into(),
+            query.cursor.unwrap_or(Id::NIL).into(),
         ]);
+        let window: [Value; 4] = [w.into(), e.into(), s.into(), n.into()];
+        // A feature meets the window by its geometry, or by its footprint when asked.
+        let within = if query.footprints {
+            values.extend(window.clone());
+            values.extend(window);
+            format!("f.row_id IN (SELECT row_id FROM map_feature_bounds b WHERE {WINDOW} UNION SELECT row_id FROM map_footprint_bounds b WHERE {WINDOW})")
+        } else {
+            values.extend(window);
+            format!("f.row_id IN (SELECT row_id FROM map_feature_bounds b WHERE {WINDOW})")
+        };
         let mut clauses = vec![format!(
-            "f.map_id=? AND f.revision=? AND f.space_id=? AND f.id>? AND {WINDOW}"
+            "f.map_id=? AND f.revision=? AND f.space_id=? AND f.id>? AND {within}"
         )];
-        for (column, ids) in [
-            ("f.layer_id", &query.layer_ids),
-            ("f.id", &query.feature_ids),
-        ] {
-            if let Some(ids) = ids {
-                if ids.is_empty() {
-                    return Ok(Vec::new());
-                }
-                clauses.push(format!("{column} IN ({})", placeholders(ids.len())));
-                values.extend(ids.iter().cloned().map(Value::Text));
+        if let Some(ids) = &query.layer_ids {
+            if ids.is_empty() {
+                return Ok(Vec::new());
             }
+            clauses.push(format!("f.layer_id IN ({})", placeholders(ids.len())));
+            values.extend(ids.iter().cloned().map(Value::Text));
+        }
+        if let Some(ids) = &query.feature_ids {
+            if ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            clauses.push(format!("f.id IN ({})", placeholders(ids.len())));
+            values.extend(ids.iter().copied().map(Value::from));
         }
         if let Some(text) = query.text.as_ref().filter(|text| !text.is_empty()) {
             clauses.push("instr(lower(coalesce(f.name,'')),lower(?))>0".into());
             values.push(text.clone().into());
         }
         values.push(((PAGE_SIZE + 1) as i64).into());
-        // Catalogue bounds hold a feature's geometry and footprint together.
-        let index = if query.footprints {
-            "map_catalog_bounds"
-        } else {
-            "map_feature_bounds"
-        };
-        self.db.query(&format!("SELECT f.* FROM map_features f JOIN {index} b ON b.row_id=f.row_id WHERE {} ORDER BY f.id LIMIT ?", clauses.join(" AND ")), &values)
+        self.db.query(
+            &format!(
+                "SELECT f.* FROM map_features f WHERE {} ORDER BY f.id LIMIT ?",
+                clauses.join(" AND ")
+            ),
+            &values,
+        )
     }
-    pub fn entities(&self, reference: &MapRef, ids: &[String]) -> io::Result<Vec<MapEntity>> {
-        self.open(reference)?;
+    pub fn entities(&self, reference: &MapRef, ids: &[Id]) -> io::Result<Vec<MapEntity>> {
         let mut items = Vec::new();
-        for id in ids.iter().collect::<BTreeSet<_>>() {
-            let mut values = reference_values(reference);
-            values.push(id.clone().into());
+        for &id in ids.iter().collect::<BTreeSet<_>>() {
+            let mut values = key(reference);
+            values.push(id.into());
             if let Some(bytes) = self.db.value(
                 "SELECT data FROM map_entities WHERE map_id=? AND revision=? AND id=?",
                 &values,
@@ -157,20 +168,19 @@ impl MapStore {
     pub fn history(
         &self,
         reference: &MapRef,
-        after: &str,
-        feature_ids: Option<&[String]>,
+        after: Option<Id>,
+        feature_ids: Option<&[Id]>,
     ) -> io::Result<Page<HistoryEntry>> {
-        self.open(reference)?;
         if feature_ids.is_some_and(|ids| ids.is_empty()) {
             return Ok(Page {
                 items: Vec::new(),
                 next: None,
             });
         }
-        let mut values = reference_values(reference);
-        values.push(after.into());
+        let mut values = key(reference);
+        values.push(after.unwrap_or(Id::NIL).into());
         let predicate = feature_ids.map_or_else(String::new, |ids| {
-            values.extend(ids.iter().cloned().map(Value::Text));
+            values.extend(ids.iter().copied().map(Value::from));
             format!(" AND EXISTS(SELECT 1 FROM map_history_features f WHERE f.map_id=h.map_id AND f.revision=h.revision AND f.history_id=h.id AND f.feature_id IN ({}))", placeholders(ids.len()))
         });
         values.push(((PAGE_SIZE + 1) as i64).into());
@@ -181,17 +191,8 @@ impl MapStore {
             .take(PAGE_SIZE)
             .map(|row| codec::decode(column(row, "data")?.bytes()?))
             .collect::<io::Result<_>>()?;
-        let next = more
-            .then(|| items.last().map(|item| item.id.clone()))
-            .flatten();
+        let next = more.then(|| items.last().map(|item| item.id)).flatten();
         Ok(Page { items, next })
-    }
-    pub(super) fn feature(&self, row: &Row) -> io::Result<MapFeature> {
-        let mut value: serde_json::Value = codec::decode(column(row, "data")?.bytes()?)?;
-        value["geometry"] =
-            serde_json::to_value(self.geometry.decode(column(row, "geometry")?.bytes()?)?)
-                .map_err(io::Error::other)?;
-        serde_json::from_value(value).map_err(io::Error::other)
     }
 }
 pub(super) fn placeholders(count: usize) -> String {

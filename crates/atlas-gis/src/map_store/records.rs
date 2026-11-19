@@ -1,10 +1,18 @@
-use super::{codec, json, reference_values, space, EncodedGeometry, MapStore};
+use super::{codec, description::key, description::pack, space, MapStore};
 use crate::sql::Value;
 use atlas_map::{
-    Bounds, Geometry, LayerSource, MapDescriptor, MapFeature, MapSample, PublicationBatch,
+    regions::as_geometry, Bounds, LayerSource, MapDescriptor, MapFeature, MapSample,
+    PublicationBatch,
 };
+use serde::Serialize;
 use std::{collections::BTreeSet, io};
 
+/// The registry's derived values and their columns, which differ by layer.
+#[derive(Serialize)]
+pub(super) struct Catalog<'a> {
+    pub values: &'a std::collections::BTreeMap<String, serde_json::Value>,
+    pub columns: &'a [atlas_map::MapColumn],
+}
 impl MapStore {
     pub(super) fn append_records(
         &self,
@@ -19,17 +27,14 @@ impl MapStore {
             self.write_sample(map, sample, &encoding)?;
         }
         for entity in batch.entities {
-            let mut values = reference_values(&map.reference);
-            values.extend([
-                entity.id.clone().into(),
-                Value::Blob(codec::encode(&entity)?),
-            ]);
+            let mut values = key(&map.reference);
+            values.extend([entity.id.into(), Value::Blob(codec::encode(&entity)?)]);
             self.db
                 .execute("INSERT INTO map_entities VALUES(?,?,?,?)", &values)?;
         }
         for entry in batch.history {
-            let mut values = reference_values(&map.reference);
-            values.push(entry.id.clone().into());
+            let mut values = key(&map.reference);
+            values.push(entry.id.into());
             let mut record = values.clone();
             record.push(Value::Blob(codec::encode(&entry)?));
             self.db
@@ -46,14 +51,6 @@ impl MapStore {
         }
         Ok(())
     }
-    fn encode_geometry(
-        &self,
-        map: &MapDescriptor,
-        space_id: &str,
-        shape: &Geometry,
-    ) -> io::Result<EncodedGeometry> {
-        self.geometry.encode(shape, space(map, space_id)?.precision)
-    }
     pub(super) fn write_feature(&self, map: &MapDescriptor, feature: MapFeature) -> io::Result<()> {
         feature.validate_people().map_err(io::Error::other)?;
         let layer = map
@@ -61,74 +58,69 @@ impl MapStore {
             .iter()
             .find(|layer| layer.id == feature.layer_id)
             .ok_or_else(|| io::Error::other("Feature must belong to a map layer"))?;
-        if !matches!(layer.source, LayerSource::Vector(_)) || layer.space_id != feature.space_id {
+        if !matches!(layer.source, LayerSource::Vector(_))
+            || layer.space_id != feature.space_id
+            || !layer
+                .catalog
+                .feature_types
+                .iter()
+                .any(|kind| kind.id == feature.type_id)
+        {
             return Err(io::Error::other(
-                "Feature must belong to a vector layer in its map space",
+                "Feature must belong to a published vector type in its map space",
             ));
         }
-        let kind = layer
-            .catalog
-            .feature_types
-            .iter()
-            .find(|kind| kind.id == feature.type_id)
-            .ok_or_else(|| io::Error::other("Feature has no catalogue type"))?;
-        let encoded = self.encode_geometry(map, &feature.space_id, &feature.geometry)?;
-        let mut record = serde_json::to_value(&feature).map_err(io::Error::other)?;
-        record.as_object_mut().unwrap().remove("geometry");
-        let mut values = reference_values(&map.reference);
+        let precision = space(map, feature.space_id)?.precision;
+        let encoded = self.geometry.encode(&feature.geometry, precision)?;
+        let footprint = feature
+            .footprint
+            .as_ref()
+            .map(|shape| self.geometry.encode(&as_geometry(shape), precision))
+            .transpose()?;
+        let mut values = key(&map.reference);
         values.extend([
-            feature.id.clone().into(),
-            feature.space_id.clone().into(),
+            feature.id.into(),
+            feature.space_id.into(),
             feature.layer_id.clone().into(),
-            feature.name.clone().map_or(Value::Null, Value::Text),
-            Value::Blob(encoded.bytes),
-            Value::Blob(codec::encode(&record)?),
+            feature.type_id.clone().into(),
+            feature.kind.clone().into(),
+            feature.name.clone().into(),
+            feature.entity_id.into(),
+            feature.catalog.origin.clone().into(),
+            feature.catalog.map_only.into(),
+            encoded.bytes.into(),
+            footprint.as_ref().map(|f| f.bytes.clone()).into(),
+            serde_json::to_string(&feature.attributes)?.into(),
+            serde_json::to_string(&Catalog {
+                values: &feature.catalog.values,
+                columns: &feature.catalog.columns,
+            })?
+            .into(),
+            pack(&feature.causes)?,
         ]);
-        self.db.execute("INSERT INTO map_features(map_id,revision,id,space_id,layer_id,name,geometry,data) VALUES(?,?,?,?,?,?,?,?)", &values)?;
-        let id = self.last_row()?;
-        self.write_bounds("feature", id, encoded.bounds)?;
-        let footprint_bounds = match &feature.footprint {
-            Some(shape) => {
-                self.encode_geometry(map, &feature.space_id, &region_geometry(shape))?
-                    .bounds
-            }
-            None => encoded.bounds,
-        };
         self.db.execute(
-            "INSERT INTO map_feature_catalog VALUES(?,?,?,?,?,?,?,?)",
-            &[
-                id.into(),
-                json(kind)?,
-                json(&feature.catalog.values)?,
-                json(&feature.catalog.columns)?,
-                json(&feature.attributes)?,
-                json(&feature.relations)?,
-                format!(
-                    "{} {}",
-                    feature.name.as_deref().unwrap_or_default(),
-                    kind.path.join(" ")
-                )
-                .into(),
-                i64::from(
-                    feature
-                        .attributes
-                        .get("nameStatus")
-                        .and_then(serde_json::Value::as_str)
-                        != Some("label"),
-                )
-                .into(),
-            ],
+            "INSERT INTO map_features(map_id,revision,id,space_id,layer_id,type_id,kind,name,entity_id,origin,map_only,geometry,footprint,attributes,catalog,causes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            &values,
         )?;
-        self.write_bounds(
-            "catalog",
-            id,
-            Bounds(
-                encoded.bounds.0.min(footprint_bounds.0),
-                encoded.bounds.1.min(footprint_bounds.1),
-                encoded.bounds.2.max(footprint_bounds.2),
-                encoded.bounds.3.max(footprint_bounds.3),
-            ),
-        )
+        let row = self.last_row()?;
+        self.write_bounds("feature", row, encoded.bounds)?;
+        if let Some(footprint) = footprint {
+            self.write_bounds("footprint", row, footprint.bounds)?;
+        }
+        for (ordinal, relation) in feature.relations.iter().enumerate() {
+            let mut values = key(&map.reference);
+            values.extend([
+                feature.id.into(),
+                (ordinal as i64).into(),
+                relation.kind.clone().into(),
+                relation.target_id.into(),
+                relation.target_map_id.into(),
+                relation.target_name.clone().into(),
+            ]);
+            self.db
+                .execute("INSERT INTO map_relations VALUES(?,?,?,?,?,?,?,?)", &values)?;
+        }
+        Ok(())
     }
     fn write_sample(
         &self,
@@ -148,10 +140,12 @@ impl MapStore {
                 "Map samples require identity, finite center and positive resolution",
             ));
         }
-        let encoded =
-            self.encode_geometry(map, &sample.space_id, &region_geometry(&sample.footprint))?;
+        let precision = space(map, sample.space_id)?.precision;
+        let encoded = self
+            .geometry
+            .encode(&as_geometry(&sample.footprint), precision)?;
         let data = encoding.encode(&sample)?;
-        let mut values = reference_values(&map.reference);
+        let mut values = key(&map.reference);
         values.extend([
             sample.id.into(),
             sample.space_id.into(),
@@ -173,15 +167,5 @@ impl MapStore {
             &[id.into(), w.into(), e.into(), s.into(), n.into()],
         )?;
         Ok(())
-    }
-}
-pub(super) fn region_geometry(shape: &atlas_map::RegionGeometry) -> Geometry {
-    match shape {
-        atlas_map::RegionGeometry::Polygon(coordinates) => Geometry::Polygon {
-            coordinates: coordinates.clone(),
-        },
-        atlas_map::RegionGeometry::MultiPolygon(coordinates) => Geometry::MultiPolygon {
-            coordinates: coordinates.clone(),
-        },
     }
 }

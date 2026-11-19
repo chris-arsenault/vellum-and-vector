@@ -22,12 +22,12 @@ pub(super) fn remarked(
     draft: &Draft,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Vec<MapFeature>> {
-    let spaces: BTreeSet<&str> = draft
+    let spaces: BTreeSet<atlas_map::Id> = draft
         .before
         .iter()
         .chain(&draft.after)
         .filter(|feature| mark_of(&feature.layer_id).is_some())
-        .map(|feature| feature.space_id.as_str())
+        .map(|feature| feature.space_id)
         .collect();
     // The layers as they stand after the change: a step that opens or closes a space (and
     // its replay by undo or redo) brings its own layout.
@@ -54,11 +54,10 @@ fn remarked_in(
     layer: &atlas_map::MapLayer,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Vec<MapFeature>> {
-    let space = layer.space_id.as_str();
+    let space = layer.space_id;
     let grid = editable(map).map_err(other)?.grid().map_err(other)?;
-    let removed = |id: &str| {
-        draft.before.iter().any(|f| f.id == id) && !draft.after.iter().any(|f| f.id == id)
-    };
+    let removed =
+        |id| draft.before.iter().any(|f| f.id == id) && !draft.after.iter().any(|f| f.id == id);
     let mut hexes = BTreeMap::new();
     for (shape, _) in draft
         .before
@@ -69,21 +68,21 @@ fn remarked_in(
     {
         let reach = spatial.bounds(&shape).map_err(other)?;
         let query = FeatureQuery {
-            space_id: space.into(),
+            space_id: space,
             bounds: Some(reach),
             layer_ids: Some(vec![layer.id.clone()]),
             ..Default::default()
         };
         for hex in store.all(map, query)? {
-            if !removed(&hex.id) {
-                hexes.insert(hex.id.clone(), hex);
+            if !removed(hex.id) {
+                hexes.insert(hex.id, hex);
             }
         }
         // Hexes the change creates, such as the grid of an underground space a first cave
         // wall opens, are not stored yet and are marked with the shapes drawn over them.
         for hex in draft.after.iter().filter(|hex| hex.layer_id == layer.id) {
             if overlaps(spatial.bounds(&hex.geometry).map_err(other)?, reach) {
-                hexes.insert(hex.id.clone(), hex.clone());
+                hexes.insert(hex.id, hex.clone());
             }
         }
     }
@@ -96,16 +95,16 @@ fn remarked_in(
         .map(address)
         .collect::<Option<Vec<_>>>()
         .ok_or_else(|| io::Error::other("A published hex has no address"))?;
-    let changed: BTreeSet<&str> = draft
+    let changed: BTreeSet<atlas_map::Id> = draft
         .before
         .iter()
         .chain(&draft.after)
-        .map(|feature| feature.id.as_str())
+        .map(|feature| feature.id)
         .collect();
     let around = store.all(
         map,
         FeatureQuery {
-            space_id: space.into(),
+            space_id: space,
             bounds: Some(area),
             layer_ids: Some(
                 layers
@@ -120,7 +119,7 @@ fn remarked_in(
     )?;
     let shapes: Vec<_> = around
         .iter()
-        .filter(|feature| !changed.contains(feature.id.as_str()))
+        .filter(|feature| !changed.contains(&feature.id))
         .chain(
             draft
                 .after

@@ -15,11 +15,11 @@ pub(super) fn release(
     map: &MapDescriptor,
     draft: &mut Draft,
 ) -> io::Result<()> {
-    let kept = |id: &str| draft.after.iter().any(|f| f.id == id);
+    let kept = |id| draft.after.iter().any(|f| f.id == id);
     let removed: Vec<MapFeature> = draft
         .before
         .iter()
-        .filter(|f| is_connection(&f.kind) && !kept(&f.id))
+        .filter(|f| is_connection(&f.kind) && !kept(f.id))
         .cloned()
         .collect();
     if removed.is_empty() {

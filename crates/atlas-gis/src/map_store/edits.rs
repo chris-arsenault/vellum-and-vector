@@ -41,7 +41,7 @@ impl EditStore for MapStore {
         transaction(self.db.as_ref(), || {
             for ids in write.removed.chunks(256) {
                 let mut values = reference_values(reference);
-                values.extend(ids.iter().cloned().map(Value::Text));
+                values.extend(ids.iter().copied().map(Value::from));
                 self.db.execute(
                     &format!(
                         "DELETE FROM map_features WHERE map_id=? AND revision=? AND id IN ({})",
@@ -50,15 +50,10 @@ impl EditStore for MapStore {
                     &values,
                 )?;
             }
+            self.replace_description(write.map)?;
             for feature in write.features {
                 self.write_feature(write.map, feature)?;
             }
-            let mut values = vec![crate::stored::MAP.text(write.map)?.into()];
-            values.extend(reference_values(reference));
-            self.db.execute(
-                "UPDATE maps SET descriptor=? WHERE map_id=? AND revision=?",
-                &values,
-            )?;
             self.write_step(reference, write.step)
         })
     }

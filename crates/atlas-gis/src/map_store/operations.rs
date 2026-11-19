@@ -2,7 +2,7 @@ use super::{
     FeatureQuery, InspectionRequest, MapAccess, RegistryRequest, SaveRequest, SelectionRequest,
 };
 use atlas_map::{
-    MapDescriptor, MapLayer, MapNavigationState, MapRef, NavigationChange, Position,
+    Id, MapDescriptor, MapLayer, MapNavigationState, MapRef, NavigationChange, Position,
     PublicationBatch, PublishedAsset,
 };
 use serde::Deserialize;
@@ -17,13 +17,13 @@ use std::io;
 )]
 pub enum Operation {
     Head {
-        map_id: String,
+        map_id: Id,
     },
     Open {
         reference: MapRef,
     },
     FindHead {
-        map_id: String,
+        map_id: Id,
     },
     Features {
         reference: MapRef,
@@ -31,12 +31,12 @@ pub enum Operation {
     },
     Entities {
         reference: MapRef,
-        ids: Vec<String>,
+        ids: Vec<Id>,
     },
     History {
         reference: MapRef,
-        cursor: Option<String>,
-        feature_ids: Option<Vec<String>>,
+        cursor: Option<Id>,
+        feature_ids: Option<Vec<Id>>,
     },
     Asset {
         reference: MapRef,
@@ -47,7 +47,7 @@ pub enum Operation {
     },
     SamplesAt {
         reference: MapRef,
-        space_id: String,
+        space_id: Id,
         position: Position,
     },
     Inspect {
@@ -64,16 +64,16 @@ pub enum Operation {
     },
     Settlement {
         reference: MapRef,
-        id: String,
+        id: Id,
     },
     ListSaved {
-        cursor: Option<String>,
+        cursor: Option<Id>,
     },
     OpenSaved {
-        map_id: String,
+        map_id: Id,
     },
     FindSaved {
-        map_id: String,
+        map_id: Id,
     },
     Save {
         request: SaveRequest,
@@ -116,38 +116,34 @@ impl dyn MapAccess + '_ {
         use Operation::*;
         match operation {
             Head { map_id } => encode(
-                self.find_head(&map_id)?
+                self.find_head(map_id)?
                     .ok_or_else(|| io::Error::other("Map was not found"))?,
             ),
             Open { reference } => encode(self.open(&reference)?),
-            FindHead { map_id } => encode(self.find_head(&map_id)?),
+            FindHead { map_id } => encode(self.find_head(map_id)?),
             Features { reference, query } => encode(self.features(&reference, &query)?),
             Entities { reference, ids } => encode(self.entities(&reference, &ids)?),
             History {
                 reference,
                 cursor,
                 feature_ids,
-            } => encode(self.history(
-                &reference,
-                cursor.as_deref().unwrap_or_default(),
-                feature_ids.as_deref(),
-            )?),
+            } => encode(self.history(&reference, cursor, feature_ids.as_deref())?),
             Asset { reference, id } => encode(self.asset(&reference, &id)?),
             IllustrationAssets { reference } => encode(self.illustration_assets(&reference)?),
             SamplesAt {
                 reference,
                 space_id,
                 position,
-            } => encode(self.samples_at(&reference, &space_id, position)?),
+            } => encode(self.samples_at(&reference, space_id, position)?),
             Inspect { reference, request } => encode(self.inspect(&reference, &request)?),
             SelectRegion { reference, request } => {
                 encode(self.select_region(&reference, &request)?)
             }
             Registry { reference, request } => encode(self.registry(&reference, &request)?),
-            Settlement { reference, id } => encode(self.settlement(&reference, &id)?),
-            ListSaved { cursor } => encode(self.list_saved(cursor.as_deref().unwrap_or_default())?),
-            OpenSaved { map_id } => encode(self.open_saved(&map_id)?),
-            FindSaved { map_id } => encode(self.find_saved(&map_id)?),
+            Settlement { reference, id } => encode(self.settlement(&reference, id)?),
+            ListSaved { cursor } => encode(self.list_saved(cursor)?),
+            OpenSaved { map_id } => encode(self.open_saved(map_id)?),
+            FindSaved { map_id } => encode(self.find_saved(map_id)?),
             Save { request, saved_at } => encode(self.save(request, saved_at)?),
             Related { reference } => encode(self.related(&reference)?),
             ReadNavigation { reference } => encode(self.read_navigation(&reference)?),

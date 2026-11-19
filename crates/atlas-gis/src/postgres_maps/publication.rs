@@ -1,7 +1,6 @@
-use super::{records::Open, PostgresMaps};
-use crate::stored::{read_map, MAP};
+use super::{id, records::Open, uuid, PostgresMaps};
 use atlas_map::{
-    LayerSource, MapDescriptor, MapLayer, MapRef, PublicationBatch, PublicationState,
+    Id, LayerSource, MapDescriptor, MapLayer, MapRef, PublicationBatch, PublicationState,
     PublishedAsset, Publisher,
 };
 use std::{collections::BTreeSet, io};
@@ -28,15 +27,21 @@ impl Publisher for PostgresMaps {
         // The producer decides which maps stream; a regeneration of generated geography does not.
         self.open.replace(None);
         self.transaction(|| {
-            self.lock(&map.reference.map_id)?;
-            if self.find_head(&map.reference.map_id)?.as_ref()!=expected {return Err(io::Error::other("The map revision changed"));}
+            self.lock(map.reference.map_id)?;
+            if self.find_head(map.reference.map_id)?.as_ref() != expected {
+                return Err(io::Error::other("The map revision changed"));
+            }
             if let Some(expected) = expected {
                 crate::authoring::refuse_authored(&self.open(expected)?)?;
             }
-            self.execute("INSERT INTO map.revisions(map_id,revision,descriptor,expected_revision) VALUES($1,$2,$3,$4)",&[&map.reference.map_id,&map.reference.revision,&MAP.write(map)?,&expected.map(|r|r.revision.as_str())])?;
-            if progressive {self.set_head(&map.reference)?;}
+            self.write_revision(map, expected.map(|r| r.revision))?;
+            if progressive {
+                self.set_head(&map.reference)?;
+            }
             Ok(())
-        })
+        })?;
+        self.open.replace(Some(Open::new(map.clone())));
+        Ok(())
     }
     fn append(&mut self, reference: &MapRef, batch: PublicationBatch) -> io::Result<()> {
         self.transaction(|| {
@@ -48,56 +53,58 @@ impl Publisher for PostgresMaps {
             self.append_records(open, batch)
         })
     }
+    /// Adds the layers' rows only. The held description gains them, so the appends that
+    /// follow check their features against them.
     fn add_layers(
         &mut self,
         reference: &MapRef,
         layers: &[MapLayer],
         asset: PublishedAsset,
     ) -> io::Result<()> {
-        // The stored description is read here rather than held, so an edit made while the map
-        // publishes is kept; the result is then held for the appends that follow.
-        self.open.replace(None);
+        for layer in layers {
+            layer.validate().map_err(io::Error::other)?;
+            let id = match &layer.source {
+                LayerSource::Vector(s) => &s.asset_id,
+                LayerSource::Raster(s) => &s.asset_id,
+                _ => return Err(io::Error::other("Layer and asset identities differ")),
+            };
+            if id != &asset.id {
+                return Err(io::Error::other("Layer and asset identities differ"));
+            }
+        }
         self.transaction(|| {
-            let (mut map, _) = self.pending(reference)?;
+            self.hold(reference)?;
+            let first = self.next_layer(reference)?;
+            self.write_layers(reference, layers, first)?;
+            self.write_asset(reference, asset)
+        })?;
+        let mut held = self.open.borrow_mut();
+        if let Some(open) = held.as_mut() {
+            let mut map = open.map.clone();
             map.layers.extend_from_slice(layers);
             map.validate().map_err(io::Error::other)?;
-            for layer in layers {
-                let id = match &layer.source {
-                    LayerSource::Vector(s) => &s.asset_id,
-                    LayerSource::Raster(s) => &s.asset_id,
-                    _ => return Err(io::Error::other("Layer and asset identities differ")),
-                };
-                if id != &asset.id {
-                    return Err(io::Error::other("Layer and asset identities differ"));
-                }
-            }
-            self.write_asset(reference, asset)?;
-            self.execute(
-                "UPDATE map.revisions SET descriptor=$3 WHERE map_id=$1 AND revision=$2",
-                &[&reference.map_id, &reference.revision, &MAP.write(&map)?],
-            )?;
-            Ok(map)
-        })
-        .map(|map| {
-            self.open.replace(Some(Open::new(map)));
-        })
+            *open = Open::new(map);
+        }
+        Ok(())
     }
     fn finish(&mut self, reference: &MapRef) -> io::Result<()> {
         self.open.replace(None);
         self.transaction(|| {
-            self.lock(&reference.map_id)?;
-            let (mut map,expected)=self.pending(reference)?;
-            let current=self.find_head(&reference.map_id)?.map(|r|r.revision);
-            if current.as_ref()!=Some(&reference.revision) && current!=expected {return Err(io::Error::other("The map changed during publication"));}
+            self.lock(reference.map_id)?;
+            let (map, expected) = self.pending(reference)?;
+            let current = self.find_head(reference.map_id)?.map(|r| r.revision);
+            if current != Some(reference.revision) && current != expected {
+                return Err(io::Error::other("The map changed during publication"));
+            }
             // An edit made while this regeneration ran keeps the revision but authors the map.
-            if let Some(revision) = &expected {
+            if let Some(revision) = expected {
                 crate::authoring::refuse_authored(&self.open(&MapRef {
-                    map_id: reference.map_id.clone(),
-                    revision: revision.clone(),
+                    map_id: reference.map_id,
+                    revision,
                 })?)?;
             }
-            self.require_assets(&map)?;map.state=PublicationState::Complete;
-            self.execute("UPDATE map.revisions SET complete=true,descriptor=$3 WHERE map_id=$1 AND revision=$2",&[&reference.map_id,&reference.revision,&MAP.write(&map)?])?;
+            self.require_assets(&map)?;
+            self.complete_revision(reference)?;
             self.set_head(reference)
         })
     }
@@ -105,13 +112,11 @@ impl Publisher for PostgresMaps {
     /// streamed one puts back the revision it replaced, so the map can be generated again.
     fn discard(&mut self, reference: &MapRef) -> io::Result<()> {
         self.open.replace(None);
-        let keep =
-            self.transaction(|| {
-                self.lock(&reference.map_id)?;
-                let (_, expected) = self.pending(reference)?;
-                Ok(expected.is_none()
-                    && self.find_head(&reference.map_id)?.as_ref() == Some(reference))
-            })?;
+        let keep = self.transaction(|| {
+            self.lock(reference.map_id)?;
+            let (_, expected) = self.pending(reference)?;
+            Ok(expected.is_none() && self.find_head(reference.map_id)?.as_ref() == Some(reference))
+        })?;
         if keep {
             return Ok(());
         }
@@ -122,12 +127,13 @@ impl PostgresMaps {
     /// A retry may replace its own incomplete publication. A streamed revision that replaced
     /// the head it expected puts that head back, so the resumed job finds its starting revision.
     pub fn restart_publication(&self, reference: &MapRef) -> io::Result<()> {
+        let (map_id, revision) = (uuid(reference.map_id), uuid(reference.revision));
         self.transaction(|| {
-            self.lock(&reference.map_id)?;
+            self.lock(reference.map_id)?;
             let Some(row) = self
                 .query(
                     "SELECT complete,expected_revision FROM map.revisions WHERE map_id=$1 AND revision=$2",
-                    &[&reference.map_id, &reference.revision],
+                    &[&map_id, &revision],
                 )?
                 .into_iter()
                 .next()
@@ -140,31 +146,25 @@ impl PostgresMaps {
             {
                 return Err(io::Error::other("Cannot restart a completed publication"));
             }
-            let expected: Option<String> = row
+            let expected: Option<uuid::Uuid> = row
                 .try_get("expected_revision")
                 .map_err(io::Error::other)?;
             let streamed = !self
                 .query(
                     "SELECT 1 FROM map.heads WHERE map_id=$1 AND revision=$2",
-                    &[&reference.map_id, &reference.revision],
+                    &[&map_id, &revision],
                 )?
                 .is_empty();
-            self.execute(
-                "DELETE FROM map.saved WHERE map_id=$1 AND revision=$2",
-                &[&reference.map_id, &reference.revision],
-            )?;
-            self.execute(
-                "DELETE FROM map.heads WHERE map_id=$1 AND revision=$2",
-                &[&reference.map_id, &reference.revision],
-            )?;
-            self.execute(
-                "DELETE FROM map.revisions WHERE map_id=$1 AND revision=$2",
-                &[&reference.map_id, &reference.revision],
-            )?;
-            if let (true, Some(revision)) = (streamed, expected) {
+            for table in ["map.saved", "map.heads", "map.revisions"] {
+                self.execute(
+                    &format!("DELETE FROM {table} WHERE map_id=$1 AND revision=$2"),
+                    &[&map_id, &revision],
+                )?;
+            }
+            if let (true, Some(previous)) = (streamed, expected) {
                 self.set_head(&MapRef {
-                    map_id: reference.map_id.clone(),
-                    revision,
+                    map_id: reference.map_id,
+                    revision: id(previous),
                 })?;
             }
             Ok(())
@@ -186,7 +186,7 @@ impl PostgresMaps {
         let complete = self
             .query(
                 "SELECT complete FROM map.revisions WHERE map_id=$1 AND revision=$2 FOR UPDATE",
-                &[&r.map_id, &r.revision],
+                &[&uuid(r.map_id), &uuid(r.revision)],
             )?
             .into_iter()
             .next()
@@ -199,27 +199,33 @@ impl PostgresMaps {
         }
         Ok(())
     }
-    fn pending(&self, r: &MapRef) -> io::Result<(MapDescriptor, Option<String>)> {
-        let row=self.query("SELECT descriptor,expected_revision,complete FROM map.revisions WHERE map_id=$1 AND revision=$2 FOR UPDATE",&[&r.map_id,&r.revision])?.into_iter().next().ok_or_else(||io::Error::other("Map publication is not open"))?;
-        if row
+    fn pending(&self, r: &MapRef) -> io::Result<(MapDescriptor, Option<Id>)> {
+        let complete = self
+            .query(
+                "SELECT complete FROM map.revisions WHERE map_id=$1 AND revision=$2 FOR UPDATE",
+                &[&uuid(r.map_id), &uuid(r.revision)],
+            )?
+            .into_iter()
+            .next()
+            .ok_or_else(|| io::Error::other("Map publication is not open"))?
             .try_get::<_, bool>("complete")
-            .map_err(io::Error::other)?
-        {
+            .map_err(io::Error::other)?;
+        if complete {
             return Err(io::Error::other("Map publication is not open"));
         }
-        Ok((
-            read_map(row.try_get("descriptor").map_err(io::Error::other)?)?,
-            row.try_get("expected_revision").map_err(io::Error::other)?,
-        ))
+        self.read_description(r)
     }
     fn set_head(&self, r: &MapRef) -> io::Result<()> {
-        self.execute("INSERT INTO map.heads VALUES($1,$2) ON CONFLICT(map_id) DO UPDATE SET revision=excluded.revision",&[&r.map_id,&r.revision])?;
+        self.execute(
+            "INSERT INTO map.heads VALUES($1,$2) ON CONFLICT(map_id) DO UPDATE SET revision=excluded.revision",
+            &[&uuid(r.map_id), &uuid(r.revision)],
+        )?;
         Ok(())
     }
     fn require_assets(&self, map: &MapDescriptor) -> io::Result<()> {
         let rows = self.query(
             "SELECT id FROM map.assets WHERE map_id=$1 AND revision=$2",
-            &[&map.reference.map_id, &map.reference.revision],
+            &[&uuid(map.reference.map_id), &uuid(map.reference.revision)],
         )?;
         let ids = rows
             .iter()

@@ -12,7 +12,7 @@ use atlas_map::{
     regions::point,
     spatial::Predicate,
     town::Use,
-    Bounds, Geometry, MapDescriptor, MapFeature, Position,
+    Bounds, Geometry, Id, MapDescriptor, MapFeature, Position,
 };
 use serde_json::Value;
 use std::{collections::BTreeSet, io};
@@ -42,7 +42,7 @@ pub(super) fn around(
     bounds: Bounds,
 ) -> io::Result<Vec<MapFeature>> {
     let surface = |layers: Vec<String>, bounds: Option<Bounds>| FeatureQuery {
-        space_id: map.primary_space_id.clone(),
+        space_id: map.primary_space_id,
         bounds,
         layer_ids: Some(layers),
         ..Default::default()
@@ -59,8 +59,8 @@ pub(super) fn around(
 }
 
 /// Give unnamed new streets and buildings a name; the step's label names it too.
-pub(super) fn name(draft: &mut Draft, map_id: &str, names: &dyn TownNames) -> io::Result<()> {
-    let existing: BTreeSet<String> = draft.before.iter().map(|f| f.id.clone()).collect();
+pub(super) fn name(draft: &mut Draft, map_id: Id, names: &dyn TownNames) -> io::Result<()> {
+    let existing: BTreeSet<Id> = draft.before.iter().map(|f| f.id).collect();
     let mut given = Vec::new();
     for feature in draft.after.iter_mut() {
         if existing.contains(&feature.id) {
@@ -117,7 +117,7 @@ pub(super) fn complete(scope: &Scope<'_>, mut draft: Draft) -> io::Result<Draft>
         }
     }
     for id in town.touched() {
-        if let Some(street) = town.current(&id)?.filter(is_street) {
+        if let Some(street) = town.current(id)?.filter(is_street) {
             town.renumber(&street)?;
         }
     }
@@ -128,15 +128,15 @@ struct Town<'a, 'd> {
     draft: &'d mut Draft,
 }
 impl Town<'_, '_> {
-    fn ids(&self) -> BTreeSet<String> {
+    fn ids(&self) -> BTreeSet<Id> {
         self.draft
             .before
             .iter()
             .chain(&self.draft.after)
-            .map(|f| f.id.clone())
+            .map(|f| f.id)
             .collect()
     }
-    fn removed(&self, id: &str) -> bool {
+    fn removed(&self, id: Id) -> bool {
         self.draft.before.iter().any(|f| f.id == id) && !self.draft.after.iter().any(|f| f.id == id)
     }
     /// A new address holder, or one whose shape changed or whose street went.
@@ -156,13 +156,13 @@ impl Town<'_, '_> {
             .draft
             .before
             .iter()
-            .filter(|f| is_street(f) && self.removed(&f.id))
+            .filter(|f| is_street(f) && self.removed(f.id))
             .cloned()
             .collect();
         for street in gone {
             let taken = self.ids();
             for holder in self.holders_near(&street.geometry)? {
-                if street_of(&holder) == Some(street.id.as_str()) && !taken.contains(&holder.id) {
+                if street_of(&holder) == Some(street.id) && !taken.contains(&holder.id) {
                     self.draft.before.push(holder.clone());
                     self.draft.after.push(holder);
                 }
@@ -185,12 +185,8 @@ impl Town<'_, '_> {
         // A plot the command made records the street it fronts; a building takes its plot's.
         let made = !self.draft.before.iter().any(|old| old.id == feature.id);
         let planned = made.then(|| street_of(&feature)).flatten();
-        let own = yard
-            .as_ref()
-            .and_then(street_of)
-            .or(planned)
-            .map(str::to_owned);
-        let street = match own.map(|id| self.current(&id)).transpose()?.flatten() {
+        let own = yard.as_ref().and_then(street_of).or(planned);
+        let street = match own.map(|id| self.current(id)).transpose()?.flatten() {
             Some(street) if is_street(&street) => Some(street),
             _ => self.nearest_street(centre)?,
         };
@@ -255,20 +251,20 @@ impl Town<'_, '_> {
         Ok(best.map(|(street, _)| street))
     }
     /// Streets the change drew, moved, renamed or removed, and those its holders front.
-    fn touched(&self) -> Vec<String> {
+    fn touched(&self) -> Vec<Id> {
         let mut ids = BTreeSet::new();
         for feature in self.draft.before.iter().chain(&self.draft.after) {
             if is_street(feature) {
-                ids.insert(feature.id.clone());
+                ids.insert(feature.id);
             }
             if let Some(street) = street_of(feature) {
-                ids.insert(street.to_owned());
+                ids.insert(street);
             }
         }
         ids.into_iter().collect()
     }
     /// A feature as it will stand: its changed version, else the stored one; none if removed.
-    fn current(&self, id: &str) -> io::Result<Option<MapFeature>> {
+    fn current(&self, id: Id) -> io::Result<Option<MapFeature>> {
         if let Some(feature) = self.draft.after.iter().find(|f| f.id == id) {
             return Ok(Some(feature.clone()));
         }
@@ -276,8 +272,8 @@ impl Town<'_, '_> {
             return Ok(None);
         }
         let query = FeatureQuery {
-            space_id: self.scope.map.primary_space_id.clone(),
-            feature_ids: Some(vec![id.into()]),
+            space_id: self.scope.map.primary_space_id,
+            feature_ids: Some(vec![id]),
             ..Default::default()
         };
         Ok(self.scope.store.all(self.scope.map, query)?.pop())
@@ -297,7 +293,7 @@ impl Town<'_, '_> {
                 .filter(|f| holds_address(f))
                 .cloned(),
         );
-        holders.retain(|f| street_of(f) == Some(street.id.as_str()));
+        holders.retain(|f| street_of(f) == Some(street.id));
         let (groups, anchors) = self.groups(&holders)?;
         // A plot on a locked layer keeps its number and the others are numbered around it.
         let mut fixed = vec![None; anchors.len()];
@@ -378,7 +374,7 @@ impl Town<'_, '_> {
             .map(|layer| layer.id.clone())
             .collect();
         let query = FeatureQuery {
-            space_id: self.scope.map.primary_space_id.clone(),
+            space_id: self.scope.map.primary_space_id,
             bounds: Some(bounds),
             layer_ids: Some(layers),
             ..Default::default()

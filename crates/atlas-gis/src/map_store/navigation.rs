@@ -25,7 +25,7 @@ impl dyn MapAccess + '_ {
     pub fn read_navigation(&self, reference: &MapRef) -> io::Result<MapNavigationState> {
         self.open(reference)?;
         Ok(self
-            .find_saved(&reference.map_id)?
+            .find_saved(reference.map_id)?
             .filter(|saved| saved.summary.reference == *reference)
             .map(|saved| saved.navigation)
             .unwrap_or_default())
@@ -38,7 +38,7 @@ impl dyn MapAccess + '_ {
         let map = self.open(reference)?;
         let kernel = self
             .geometry()
-            .spatial(space(&map, &map.primary_space_id)?.precision)?;
+            .spatial(space(&map, map.primary_space_id)?.precision)?;
         validate_navigation(&map, state, kernel.as_ref()).map_err(io::Error::other)?;
         for region in &state.regions {
             if let Some(child) = &region.child {
@@ -65,7 +65,7 @@ impl dyn MapAccess + '_ {
                 navigation,
             } => {
                 let map = self.open(&reference)?;
-                let space = space(&map, &query.space_id)?;
+                let space = space(&map, query.space_id)?;
                 query.position = query
                     .position
                     .map(|p| super::samples::canonical_position(space, p))
@@ -89,7 +89,7 @@ impl dyn MapAccess + '_ {
                     .await?;
                 let kernel = self
                     .geometry()
-                    .spatial(space(&input.map, &drawing.query.space_id)?.precision)?;
+                    .spatial(space(&input.map, drawing.query.space_id)?.precision)?;
                 serde_json::to_value(
                     draw_region(&input, &drawing, kernel.as_ref()).map_err(io::Error::other)?,
                 )
@@ -107,7 +107,7 @@ impl dyn MapAccess + '_ {
         self.validate_navigation(reference, state)?;
         let kernel = self
             .geometry()
-            .spatial(space(&map, &map.primary_space_id)?.precision)?;
+            .spatial(space(&map, map.primary_space_id)?.precision)?;
         let next =
             change_navigation(&map, state, change, kernel.as_ref()).map_err(io::Error::other)?;
         self.validate_navigation(reference, &next)?;

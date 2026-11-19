@@ -14,6 +14,7 @@ mod town;
 pub use town::{NoNames, TownNames};
 
 use crate::map_store::{space, FeatureQuery, MapAccess, Page};
+use atlas_map::Id;
 use atlas_map::{
     authoring::{
         editable, in_locked_layer, plan, Draft, EditCommand, EditHistory, EditOutcome, EditRecord,
@@ -27,7 +28,7 @@ use std::io;
 /// written; `map` replaces the stored descriptor.
 pub struct EditWrite<'a> {
     pub map: &'a MapDescriptor,
-    pub removed: &'a [String],
+    pub removed: &'a [atlas_map::Id],
     pub features: Vec<MapFeature>,
     pub step: StepWrite<'a>,
 }
@@ -58,13 +59,14 @@ impl dyn EditStore + '_ {
         let map = self.editable(reference)?;
         let spatial = self
             .geometry()
-            .spatial(space(&map, &map.primary_space_id)?.precision)?;
+            .spatial(space(&map, map.primary_space_id)?.precision)?;
         let before = atlas_map::authoring::SpaceLayout::of(&map);
         let (map, cave_hexes) = caves::opening(self, map, command)?;
         let targets = self.targets(&map, command)?;
-        let mut ids = || format!("authored-{}", uuid::Uuid::new_v4());
+        // An authored feature takes a fresh random identity.
+        let mut ids = || Id::from_bytes(*uuid::Uuid::new_v4().as_bytes());
         let mut draft = plan(&map, command, &targets, &mut ids, spatial.as_ref()).map_err(other)?;
-        town::name(&mut draft, &map.reference.map_id, names)?;
+        town::name(&mut draft, map.reference.map_id, names)?;
         let scope = change::Scope {
             store: self,
             map: &map,
@@ -77,7 +79,7 @@ impl dyn EditStore + '_ {
         caves::read_walls(self, &map, &mut draft, spatial.as_ref())?;
         // An underground space the change opened, with its layers and hexes, is part of the
         // step, so undoing the first cave wall closes it again.
-        let opened: Vec<String> = cave_hexes.iter().map(|hex| hex.id.clone()).collect();
+        let opened: Vec<Id> = cave_hexes.iter().map(|hex| hex.id).collect();
         if map.layers.len() != before.layers.len() {
             draft.spaces = Some(atlas_map::authoring::SpaceLayout::of(&map));
             draft.after.extend(cave_hexes);
@@ -154,7 +156,7 @@ impl dyn EditStore + '_ {
                 "Wait for the map to finish before editing it",
             ));
         }
-        if self.find_head(&reference.map_id)?.as_ref() != Some(reference) {
+        if self.find_head(reference.map_id)?.as_ref() != Some(reference) {
             return Err(io::Error::other(
                 "Edit this map's current revision; reopen the map first",
             ));
@@ -196,7 +198,7 @@ impl dyn EditStore + '_ {
         self.unlocked(&map, &draft)?;
         let spatial = self
             .geometry()
-            .spatial(space(&map, &map.primary_space_id)?.precision)?;
+            .spatial(space(&map, map.primary_space_id)?.precision)?;
         self.commit(
             map,
             draft,
@@ -214,26 +216,26 @@ impl dyn EditStore + '_ {
     ) -> io::Result<EditOutcome> {
         let hexes = marks::remarked(self, &map, &draft, spatial)?;
         let next = change::descriptor(map, &draft)?;
-        let mut removed: Vec<String> = draft
+        let mut removed: Vec<Id> = draft
             .before
             .iter()
             .chain(&draft.after)
             .chain(&hexes)
-            .map(|feature| feature.id.clone())
+            .map(|feature| feature.id)
             .collect();
         removed.sort();
         removed.dedup();
         let changed = removed
             .iter()
-            .filter(|id| !hexes.iter().any(|hex| &hex.id == *id))
-            .cloned()
+            .filter(|&&id| !hexes.iter().any(|hex| hex.id == id))
+            .copied()
             .collect();
         let created = draft
             .after
             .iter()
             .filter(|f| !draft.before.iter().any(|old| old.id == f.id))
             .filter(|f| !atlas_map::authoring::is_hex_layer(&f.layer_id))
-            .map(|f| f.id.clone())
+            .map(|f| f.id)
             .collect();
         // A hex the change carries and re-marks is written once, as re-marked.
         let mut features: Vec<MapFeature> = draft
@@ -292,7 +294,7 @@ impl dyn EditStore + '_ {
         found.extend(self.foreign_target(map, command)?);
         Ok(found)
     }
-    /// The feature on another map a connection names, under the combined id planning reads.
+    /// The feature on another map a connection names; planning finds it by its own id.
     fn foreign_target(
         &self,
         map: &MapDescriptor,
@@ -303,18 +305,14 @@ impl dyn EditStore + '_ {
             EditCommand::Disconnect { target, .. } => (target, false),
             _ => return Ok(None),
         };
-        let Some(map_id) = target
-            .map_id
-            .as_deref()
-            .filter(|id| *id != map.reference.map_id)
-        else {
+        let Some(map_id) = target.map_id.filter(|&id| id != map.reference.map_id) else {
             return Ok(None);
         };
         let found = match self.find_head(map_id)? {
             Some(head) => {
                 let other = self.open(&head)?;
                 let query = FeatureQuery {
-                    feature_ids: Some(vec![target.feature_id.clone()]),
+                    feature_ids: Some(vec![target.feature_id]),
                     ..Default::default()
                 };
                 self.all(&other, query)?.pop().ok_or(other.name)
@@ -322,10 +320,7 @@ impl dyn EditStore + '_ {
             None => Err("this catalogue".into()),
         };
         match found {
-            Ok(mut feature) => {
-                feature.id = atlas_map::structure::connection_target(map_id, &target.feature_id);
-                Ok(Some(feature))
-            }
+            Ok(feature) => Ok(Some(feature)),
             // A link to a map or feature that is gone can still be let go of.
             Err(_) if !connecting => Ok(None),
             Err(place) => Err(io::Error::other(format!("That feature is not on {place}"))),
@@ -346,7 +341,7 @@ impl dyn EditStore + '_ {
                     Ok(page) => page,
                     // A space this change opens (a first cave wall's underground) holds no
                     // stored features yet.
-                    Err(_) if !self.stored_space(map, &query.space_id)? => break,
+                    Err(_) if !self.stored_space(map, query.space_id)? => break,
                     Err(error) => return Err(error),
                 };
                 items.extend(page);
@@ -358,15 +353,15 @@ impl dyn EditStore + '_ {
         }
         Ok(items)
     }
-    fn stored_space(&self, map: &MapDescriptor, space: &str) -> io::Result<bool> {
+    fn stored_space(&self, map: &MapDescriptor, space: Id) -> io::Result<bool> {
         let stored = self.open(&map.reference)?;
         Ok(stored.spaces.iter().any(|entry| entry.id == space))
     }
 }
 /// The located spaces a query reads, in descriptor order.
-fn query_spaces(map: &MapDescriptor, query: &FeatureQuery) -> Vec<String> {
-    if !query.space_id.is_empty() {
-        return vec![query.space_id.clone()];
+fn query_spaces(map: &MapDescriptor, query: &FeatureQuery) -> Vec<Id> {
+    if query.space_id != Id::NIL {
+        return vec![query.space_id];
     }
     map.spaces
         .iter()
@@ -377,7 +372,7 @@ fn query_spaces(map: &MapDescriptor, query: &FeatureQuery) -> Vec<String> {
                     .any(|layer| layer.space_id == space.id && layers.contains(&layer.id))
             })
         })
-        .map(|space| space.id.clone())
+        .map(|space| space.id)
         .collect()
 }
 /// Generation never replaces an authored map: its published layers are the authority.

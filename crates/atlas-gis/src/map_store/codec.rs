@@ -24,7 +24,7 @@ pub struct Samples {
     remembered: std::cell::RefCell<Vec<usize>>,
 }
 struct Band {
-    space: String,
+    space: atlas_map::Id,
     band: RasterBand,
     /// The band's attribute without a value, its names shared by every sample.
     attribute: SampleAttribute,
@@ -39,7 +39,7 @@ enum Attribute<'a> {
 #[serde(rename_all = "camelCase")]
 struct StoredSample<'a> {
     id: &'a str,
-    space_id: &'a str,
+    space_id: atlas_map::Id,
     window: &'a SampleWindow,
     cell_span: f64,
     center: Position,
@@ -62,7 +62,7 @@ impl Samples {
             for band in items {
                 ordinals.insert((layer.id.clone(), band.id.clone()), bands.len());
                 bands.push(Band {
-                    space: layer.space_id.clone(),
+                    space: layer.space_id,
                     band: band.clone(),
                     attribute: SampleAttribute {
                         layer_id: layer_id.clone(),
@@ -118,7 +118,7 @@ impl Samples {
         }
         encode(&StoredSample {
             id: &sample.id,
-            space_id: &sample.space_id,
+            space_id: sample.space_id,
             window: &sample.window,
             cell_span: sample.cell_span,
             center: sample.center,

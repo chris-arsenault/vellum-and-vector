@@ -92,13 +92,13 @@ impl Scope<'_> {
             .collect();
         for line in lines {
             let query = FeatureQuery {
-                space_id: line.space_id.clone(),
+                space_id: line.space_id,
                 bounds: Some(self.near(&line.geometry, tolerance)?),
                 layer_ids: Some(super::authorable(self.map)),
                 ..Default::default()
             };
             for crossing in self.store.all(self.map, query)? {
-                if !crosses(&crossing) || ids(draft).contains(crossing.id.as_str()) {
+                if !crosses(&crossing) || ids(draft).contains(&crossing.id) {
                     continue;
                 }
                 let mut next = crossing.clone();
@@ -130,12 +130,12 @@ impl Scope<'_> {
             .relations
             .iter()
             .find(|relation| relation.target_id != old.id && is_junction(&relation.kind))
-            .map(|relation| self.current(draft, &relation.target_id))
+            .map(|relation| self.current(draft, relation.target_id))
             .transpose()?
             .flatten();
         let moved = follow(
             dependent,
-            &old.id,
+            old.id,
             &old.geometry,
             &new.geometry,
             partner.as_ref().map(|p| &p.geometry),
@@ -159,7 +159,7 @@ impl Scope<'_> {
         let around = self.store.all(
             self.map,
             FeatureQuery {
-                space_id: host.space_id.clone(),
+                space_id: host.space_id,
                 bounds: Some(self.near(&host.geometry, tolerance)?),
                 layer_ids: Some(super::authorable(self.map)),
                 footprints: true,
@@ -168,7 +168,7 @@ impl Scope<'_> {
         )?;
         Ok(around
             .into_iter()
-            .filter(|feature| !taken.contains(feature.id.as_str()))
+            .filter(|feature| !taken.contains(&feature.id))
             .filter(|feature| {
                 feature
                     .relations
@@ -193,7 +193,7 @@ impl Scope<'_> {
         let found = self.store.all(
             self.map,
             FeatureQuery {
-                space_id: feature.space_id.clone(),
+                space_id: feature.space_id,
                 bounds: Some(self.near(&feature.geometry, tolerance)?),
                 layer_ids: Some(layers.clone()),
                 ..Default::default()
@@ -202,7 +202,7 @@ impl Scope<'_> {
         let changed = ids(draft);
         let mut lines: Vec<MapFeature> = found
             .into_iter()
-            .filter(|line| !changed.contains(line.id.as_str()))
+            .filter(|line| !changed.contains(&line.id))
             .collect();
         lines.extend(
             draft
@@ -215,7 +215,7 @@ impl Scope<'_> {
         Ok(lines)
     }
     /// A feature as it will stand: its changed version, else the stored one.
-    fn current(&self, draft: &Draft, id: &str) -> io::Result<Option<MapFeature>> {
+    fn current(&self, draft: &Draft, id: atlas_map::Id) -> io::Result<Option<MapFeature>> {
         if let Some(feature) = draft.after.iter().find(|feature| feature.id == id) {
             return Ok(Some(feature.clone()));
         }
@@ -223,7 +223,7 @@ impl Scope<'_> {
             return Ok(None);
         }
         let query = FeatureQuery {
-            feature_ids: Some(vec![id.into()]),
+            feature_ids: Some(vec![id]),
             ..Default::default()
         };
         Ok(self.store.all(self.map, query)?.pop())
@@ -233,12 +233,12 @@ impl Scope<'_> {
         Ok(Bounds(w - by, s - by, e + by, n + by))
     }
 }
-fn ids(draft: &Draft) -> BTreeSet<&str> {
+fn ids(draft: &Draft) -> BTreeSet<atlas_map::Id> {
     draft
         .before
         .iter()
         .chain(&draft.after)
-        .map(|feature| feature.id.as_str())
+        .map(|feature| feature.id)
         .collect()
 }
 /// The descriptor after a change: one more edit, its creator layers and its kind counts.
@@ -254,9 +254,9 @@ pub(super) fn descriptor(mut map: MapDescriptor, draft: &Draft) -> io::Result<Ma
     if let Some(layout) = &draft.spaces {
         relayout(&mut map, layout);
     }
-    let kept = |list: &[MapFeature], id: &str| list.iter().any(|feature| feature.id == id);
-    let removed = draft.before.iter().filter(|f| !kept(&draft.after, &f.id));
-    let created = draft.after.iter().filter(|f| !kept(&draft.before, &f.id));
+    let kept = |list: &[MapFeature], id| list.iter().any(|feature| feature.id == id);
+    let removed = draft.before.iter().filter(|f| !kept(&draft.after, f.id));
+    let created = draft.after.iter().filter(|f| !kept(&draft.before, f.id));
     for (feature, delta) in removed.map(|f| (f, -1)).chain(created.map(|f| (f, 1))) {
         let entry = map
             .layers

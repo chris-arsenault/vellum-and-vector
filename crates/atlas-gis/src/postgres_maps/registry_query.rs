@@ -1,19 +1,21 @@
-use super::Params;
+use super::{uuid, Params};
 use crate::map_store::{AttributeFilter, RegistryQuery, RegistryRequest, Scope};
-use atlas_map::{Bounds, MapRef};
+use atlas_map::{Bounds, Id, MapRef};
 use std::io;
+/// The features a registry request reads, with their registry values as `v` and their
+/// feature type's row key and path.
 pub(super) fn scope(
     r: &MapRef,
-    world: &str,
+    world: Id,
     request: &RegistryRequest,
 ) -> io::Result<(String, Params)> {
     let mut params = Params::default();
-    params.bind(r.map_id.clone());
-    params.bind(r.revision.clone());
+    params.bind(uuid(r.map_id));
+    params.bind(uuid(r.revision));
     let mut predicate = "(f.map_id=$1 AND f.revision=$2)".to_owned();
     if matches!(request.scope, Scope::World) {
-        let world = params.bind(world.to_owned());
-        predicate=format!("({predicate} OR (f.map_id<>$1 AND m.descriptor->>'worldId'={world} AND EXISTS(SELECT 1 FROM map.heads h WHERE h.map_id=f.map_id AND h.revision=f.revision)))");
+        let world = params.bind(uuid(world));
+        predicate = format!("({predicate} OR (f.map_id<>$1 AND m.world_id={world} AND EXISTS(SELECT 1 FROM map.heads h WHERE h.map_id=f.map_id AND h.revision=f.revision)))");
     }
     if let Some(bounds) = request.bounds {
         bounds.validate_window().map_err(io::Error::other)?;
@@ -24,23 +26,37 @@ pub(super) fn scope(
             .collect::<Vec<_>>()
             .join(",");
         let rectangle = format!("ST_MakeEnvelope({args},0)");
-        predicate.push_str(&format!(" AND (ST_Intersects(f.geometry,{rectangle}) OR ST_Intersects(ST_SetSRID(ST_GeomFromGeoJSON(nullif(f.data->'footprint','null'::jsonb)),0),{rectangle}))"));
+        predicate.push_str(&format!(
+            " AND (ST_Intersects(f.geometry,{rectangle}) OR ST_Intersects(f.footprint,{rectangle}))"
+        ));
     }
-    Ok((format!("WITH scoped AS (SELECT f.*,f.data#>'{{catalog,values}}' AS v,(SELECT t.value FROM jsonb_array_elements(m.descriptor->'layers') l,jsonb_array_elements(l.value#>'{{catalog,featureTypes}}') t WHERE l.value->>'id'=f.layer_id AND t.value->>'id'=f.data->>'typeId') AS type FROM map.features f JOIN map.revisions m USING(map_id,revision) WHERE {predicate})"),params))
+    Ok((
+        format!(
+            "WITH scoped AS (SELECT f.*,f.catalog->'values' AS v,t.layer AS type_layer,t.path AS type_path
+             FROM map.features f JOIN map.revisions m USING(map_id,revision)
+             JOIN map.layers l ON l.map_id=f.map_id AND l.revision=f.revision AND l.id=f.layer_id
+             JOIN map.feature_types t ON t.map_id=f.map_id AND t.revision=f.revision AND t.layer=l.ordinal AND t.id=f.type_id
+             WHERE {predicate})"
+        ),
+        params,
+    ))
 }
 pub(super) fn filter(query: &RegistryQuery, params: &mut Params) -> io::Result<String> {
     let mut clauses = Vec::new();
     if query.named {
-        clauses.push("coalesce(data#>>'{attributes,nameStatus}','')<>'label'".into());
+        clauses.push("coalesce(attributes->>'nameStatus','')<>'label'".into());
     }
     if query.protected_only {
         clauses.push("v->'protected'='true'::jsonb".into());
     }
     if !query.kind.is_empty() {
-        clauses.push(format!("type->>'id'={}", params.bind(query.kind.clone())));
+        clauses.push(format!("type_id={}", params.bind(query.kind.clone())));
     }
     if !query.search.is_empty() {
-        clauses.push(format!("strpos(lower(coalesce(name,'')||' '||array_to_string(ARRAY(SELECT jsonb_array_elements_text(type->'path')),' ')),lower({}))>0",params.bind(query.search.clone())));
+        clauses.push(format!(
+            "strpos(lower(coalesce(name,'')||' '||array_to_string(type_path,' ')),lower({}))>0",
+            params.bind(query.search.clone())
+        ));
     }
     for (key, value) in [
         ("status", &query.status),

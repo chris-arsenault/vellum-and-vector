@@ -11,7 +11,11 @@ fn on_grid(value: f64, grid: f64) -> f64 {
     }
     let scale = 1. / grid;
     let whole = scale.round();
-    let scale = if (scale - whole).abs() < 1e-6 { whole } else { scale };
+    let scale = if (scale - whole).abs() < 1e-6 {
+        whole
+    } else {
+        scale
+    };
     round(value * scale) / scale
 }
 /// Horizontal coordinates are rounded to the grid when one is given, as GEOS rounds them.

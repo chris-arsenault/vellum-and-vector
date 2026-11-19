@@ -21,7 +21,7 @@ pub fn find(maps: &dyn MapAccess, reference: &MapRef, text: &str) -> io::Result<
     let map = maps.open(reference)?;
     let spatial = maps
         .geometry()
-        .spatial(space(&map, &map.primary_space_id)?.precision)?;
+        .spatial(space(&map, map.primary_space_id)?.precision)?;
     let mut streets: Vec<_> = features(maps, &map, &["roads"], None)?
         .into_iter()
         .filter(is_street)
@@ -47,7 +47,7 @@ pub fn find(maps: &dyn MapAccess, reference: &MapRef, text: &str) -> io::Result<
         let mut holders: Vec<MapFeature> =
             features(maps, &map, &["structures", "plots"], Some(near))?
                 .into_iter()
-                .filter(|f| street_of(f) == Some(street.id.as_str()))
+                .filter(|f| street_of(f) == Some(street.id))
                 .filter(|f| {
                     f.attributes.get("addressNumber").and_then(Value::as_u64)
                         == Some(u64::from(number))
@@ -73,7 +73,7 @@ fn text_of(feature: &MapFeature, key: &str) -> Option<String> {
 }
 fn matched(feature: &MapFeature, address: String, bounds: Bounds) -> AddressMatch {
     AddressMatch {
-        feature_id: feature.id.clone(),
+        feature_id: feature.id,
         layer_id: feature.layer_id.clone(),
         kind: feature.kind.clone(),
         name: feature.name.clone(),
@@ -96,7 +96,7 @@ fn features(
         .map(|layer| layer.id.clone())
         .collect();
     let mut query = FeatureQuery {
-        space_id: map.primary_space_id.clone(),
+        space_id: map.primary_space_id,
         bounds,
         layer_ids: Some(layers),
         ..Default::default()

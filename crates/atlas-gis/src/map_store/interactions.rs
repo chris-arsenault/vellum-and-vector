@@ -1,9 +1,7 @@
-use super::{
-    records::region_geometry, samples::canonical_position, space, FeatureQuery, MapAccess, Page,
-};
+use super::{samples::canonical_position, space, FeatureQuery, MapAccess, Page};
 use atlas_map::{
-    spatial::Predicate, Geometry, Inspection, MapFeature, MapRef, Position, RegionGeometry,
-    RegionSelection, SampleValue,
+    regions::as_geometry as region_geometry, spatial::Predicate, Geometry, Id, Inspection,
+    MapFeature, MapRef, Position, RegionGeometry, RegionSelection, SampleValue,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, io};
@@ -11,18 +9,18 @@ use std::{collections::BTreeSet, io};
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InspectionRequest {
-    pub space_id: String,
+    pub space_id: Id,
     pub position: Position,
     pub tolerance: Option<f64>,
     pub layer_ids: Option<Vec<String>>,
-    pub feature_ids: Option<Vec<String>>,
+    pub feature_ids: Option<Vec<Id>>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SelectionRequest {
-    pub space_id: String,
+    pub space_id: Id,
     pub geometry: Option<RegionGeometry>,
-    pub feature_ids: Option<Vec<String>>,
+    pub feature_ids: Option<Vec<Id>>,
 }
 impl dyn MapAccess + '_ {
     pub fn inspect(
@@ -31,9 +29,9 @@ impl dyn MapAccess + '_ {
         request: &InspectionRequest,
     ) -> io::Result<Inspection> {
         let map = self.open(reference)?;
-        let space = space(&map, &request.space_id)?;
+        let space = space(&map, request.space_id)?;
         let position = canonical_position(space, request.position)?;
-        let samples = self.samples_at(reference, &space.id, position)?;
+        let samples = self.samples_at(reference, space.id, position)?;
         let tolerance = request.tolerance.unwrap_or_else(|| {
             samples
                 .iter()
@@ -50,7 +48,7 @@ impl dyn MapAccess + '_ {
             coordinates: position,
         };
         let mut query = FeatureQuery {
-            space_id: space.id.clone(),
+            space_id: space.id,
             geometry: Some(picking(position, tolerance)),
             layer_ids: request.layer_ids.clone(),
             feature_ids: request.feature_ids.clone(),
@@ -91,10 +89,8 @@ impl dyn MapAccess + '_ {
                     .cmp(b.name.as_deref().unwrap_or_default())
             })
         });
-        let ids = features.iter().map(|f| f.id.clone()).collect::<Vec<_>>();
-        let causes = collect(|cursor| {
-            self.history(reference, cursor.as_deref().unwrap_or_default(), Some(&ids))
-        })?;
+        let ids = features.iter().map(|f| f.id).collect::<Vec<_>>();
+        let causes = collect(|cursor| self.history(reference, cursor, Some(&ids)))?;
         let values = samples
             .iter()
             .flat_map(|s| {
@@ -126,7 +122,7 @@ impl dyn MapAccess + '_ {
             .collect();
         Ok(Inspection {
             reference: reference.clone(),
-            space_id: space.id.clone(),
+            space_id: space.id,
             position,
             samples: values,
             features,
@@ -140,17 +136,17 @@ impl dyn MapAccess + '_ {
         request: &SelectionRequest,
     ) -> io::Result<RegionSelection> {
         let map = self.open(reference)?;
-        let space = space(&map, &request.space_id)?;
+        let space = space(&map, request.space_id)?;
         let mut seen = BTreeSet::new();
         let ids = request
             .feature_ids
             .iter()
             .flatten()
-            .filter(|id| seen.insert(id.as_str()))
-            .cloned()
+            .filter(|&&id| seen.insert(id))
+            .copied()
             .collect::<Vec<_>>();
         let mut query = FeatureQuery {
-            space_id: space.id.clone(),
+            space_id: space.id,
             feature_ids: Some(ids.clone()),
             ..Default::default()
         };
@@ -180,7 +176,7 @@ impl dyn MapAccess + '_ {
         let geometry = as_region(kernel.canonical(&shape).map_err(io::Error::other)?)?;
         Ok(RegionSelection {
             parent: reference.clone(),
-            space_id: space.id.clone(),
+            space_id: space.id,
             geometry,
             feature_ids: ids,
             region_path: Vec::new(),
@@ -195,7 +191,7 @@ pub(super) fn as_region(shape: Geometry) -> io::Result<RegionGeometry> {
     }
 }
 pub(super) fn collect<T>(
-    mut read: impl FnMut(Option<String>) -> io::Result<Page<T>>,
+    mut read: impl FnMut(Option<Id>) -> io::Result<Page<T>>,
 ) -> io::Result<Vec<T>> {
     let mut items = Vec::new();
     let mut cursor = None;

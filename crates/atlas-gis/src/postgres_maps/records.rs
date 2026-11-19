@@ -1,6 +1,12 @@
-use super::{to_json, PostgresMaps};
+use super::{to_json, uuid, PostgresMaps, Wkb};
 use crate::map_store::{codec, space};
-use atlas_map::{LayerSource, MapDescriptor, MapRef, PublicationBatch, PublishedAsset};
+use atlas_map::{
+    regions::as_geometry, MapDescriptor, MapLayer, MapRef, PublicationBatch, PublishedAsset,
+};
+use postgres::{
+    binary_copy::BinaryCopyInWriter,
+    types::{ToSql, Type},
+};
 use std::{
     collections::{BTreeSet, HashMap},
     io,
@@ -26,57 +32,62 @@ impl Open {
             map,
         }
     }
+    pub fn layer(&self, id: &str) -> Option<&MapLayer> {
+        self.layers.get(id).map(|&i| &self.map.layers[i])
+    }
 }
 impl PostgresMaps {
     pub(super) fn append_records(&self, open: &Open, batch: PublicationBatch) -> io::Result<()> {
-        let map = &open.map;
-        let r = &map.reference;
-        let mut features = Vec::with_capacity(batch.features.len());
-        for feature in batch.features {
-            feature.validate_people().map_err(io::Error::other)?;
-            let space = space(map, &feature.space_id)?;
-            let layer = open
-                .layers
-                .get(&feature.layer_id)
-                .map(|&i| &map.layers[i])
-                .ok_or_else(|| io::Error::other("Feature must belong to a map layer"))?;
-            if layer.space_id != feature.space_id
-                || !matches!(layer.source, LayerSource::Vector(_))
-                || !layer
-                    .catalog
-                    .feature_types
-                    .iter()
-                    .any(|t| t.id == feature.type_id)
-            {
-                return Err(io::Error::other(
-                    "Feature must belong to a published vector type in its map space",
-                ));
-            }
-            let geometry = serde_json::to_string(&feature.geometry)?;
-            let mut data = to_json(&feature)?;
-            data.as_object_mut().unwrap().remove("geometry");
-            features.push(serde_json::json!({
-                "id": feature.id, "space": space.id, "layer": feature.layer_id,
-                "name": feature.name, "geometry": geometry, "precision": space.precision,
-                "data": data,
-            }));
-        }
-        if !features.is_empty() {
+        let r = &open.map.reference;
+        self.write_features(open, batch.features)?;
+        self.write_samples(open, batch.samples)?;
+        for entity in batch.entities {
             self.execute(
-                "INSERT INTO map.features SELECT $1,$2,r.id,r.space,r.layer,r.name,
-                 map.canonical_geometry(r.geometry,r.precision),r.data
-                 FROM jsonb_to_recordset($3) AS r(id text,space text,layer text,name text,
-                 geometry text,precision double precision,data jsonb)",
-                &[&r.map_id, &r.revision, &serde_json::Value::Array(features)],
+                "INSERT INTO map.entities VALUES($1,$2,$3,$4)",
+                &[
+                    &uuid(r.map_id),
+                    &uuid(r.revision),
+                    &uuid(entity.id),
+                    &to_json(&entity)?,
+                ],
             )?;
         }
-        let encoding = &open.samples;
-        let mut ids = Vec::with_capacity(batch.samples.len());
-        let mut spaces = Vec::with_capacity(batch.samples.len());
-        let mut geometries = Vec::with_capacity(batch.samples.len());
-        let mut precisions = Vec::with_capacity(batch.samples.len());
-        let mut samples = Vec::with_capacity(batch.samples.len());
-        for sample in batch.samples {
+        for entry in batch.history {
+            self.execute(
+                "INSERT INTO map.history VALUES($1,$2,$3,$4)",
+                &[
+                    &uuid(r.map_id),
+                    &uuid(r.revision),
+                    &uuid(entry.id),
+                    &to_json(&entry)?,
+                ],
+            )?;
+            for feature in entry.feature_ids.iter().collect::<BTreeSet<_>>() {
+                self.execute(
+                    "INSERT INTO map.history_features VALUES($1,$2,$3,$4)",
+                    &[
+                        &uuid(r.map_id),
+                        &uuid(r.revision),
+                        &uuid(entry.id),
+                        &uuid(*feature),
+                    ],
+                )?;
+            }
+        }
+        for asset in batch.assets {
+            self.write_asset(r, asset)?;
+        }
+        Ok(())
+    }
+    fn write_samples(&self, open: &Open, samples: Vec<atlas_map::MapSample>) -> io::Result<()> {
+        if samples.is_empty() {
+            return Ok(());
+        }
+        let map = &open.map;
+        let (map_id, revision) = (uuid(map.reference.map_id), uuid(map.reference.revision));
+        let geometry = self.geometry_type()?;
+        let mut encoded = Vec::with_capacity(samples.len());
+        for sample in samples {
             sample.window.bounds.validate().map_err(io::Error::other)?;
             if sample.id.is_empty()
                 || !sample.cell_span.is_finite()
@@ -89,51 +100,37 @@ impl PostgresMaps {
                     "Map samples require identity, finite center and positive resolution",
                 ));
             }
-            let space = space(map, &sample.space_id)?;
-            samples.push(encoding.encode(&sample)?);
-            geometries.push(serde_json::to_string(&sample.footprint)?);
-            ids.push(sample.id);
-            spaces.push(space.id.clone());
-            precisions.push(space.precision);
+            let precision = space(map, sample.space_id)?.precision;
+            let shape = self
+                .geometry
+                .encode(&as_geometry(&sample.footprint), precision)?;
+            encoded.push((
+                open.samples.encode(&sample)?,
+                Wkb(shape.bytes),
+                uuid(sample.space_id),
+                sample.id,
+            ));
         }
-        if !samples.is_empty() {
-            self.execute(
-                "INSERT INTO map.samples SELECT $1,$2,r.id,r.space,
-                 map.canonical_geometry(r.geometry,r.precision),r.data
-                 FROM UNNEST($3::text[],$4::text[],$5::text[],$6::double precision[],
-                 $7::bytea[]) AS r(id,space,geometry,precision,data)",
-                &[
-                    &r.map_id,
-                    &r.revision,
-                    &ids,
-                    &spaces,
-                    &geometries,
-                    &precisions,
-                    &samples,
-                ],
-            )?;
+        let mut db = self.db.borrow_mut();
+        let sink = db
+            .copy_in(
+                "COPY map.samples(map_id,revision,id,space_id,geometry,data) FROM STDIN BINARY",
+            )
+            .map_err(super::database_error)?;
+        let types = [
+            Type::UUID,
+            Type::UUID,
+            Type::TEXT,
+            Type::UUID,
+            geometry,
+            Type::BYTEA,
+        ];
+        let mut writer = BinaryCopyInWriter::new(sink, &types);
+        for (data, shape, space, id) in &encoded {
+            let row: Vec<&(dyn ToSql + Sync)> = vec![&map_id, &revision, id, space, shape, data];
+            writer.write(&row).map_err(super::database_error)?;
         }
-        for entity in batch.entities {
-            self.execute(
-                "INSERT INTO map.entities VALUES($1,$2,$3,$4)",
-                &[&r.map_id, &r.revision, &entity.id, &to_json(&entity)?],
-            )?;
-        }
-        for entry in batch.history {
-            self.execute(
-                "INSERT INTO map.history VALUES($1,$2,$3,$4)",
-                &[&r.map_id, &r.revision, &entry.id, &to_json(&entry)?],
-            )?;
-            for id in entry.feature_ids.into_iter().collect::<BTreeSet<_>>() {
-                self.execute(
-                    "INSERT INTO map.history_features VALUES($1,$2,$3,$4)",
-                    &[&r.map_id, &r.revision, &entry.id, &id],
-                )?;
-            }
-        }
-        for asset in batch.assets {
-            self.write_asset(r, asset)?;
-        }
+        writer.finish().map_err(super::database_error)?;
         Ok(())
     }
     pub(super) fn write_asset(&self, r: &MapRef, asset: PublishedAsset) -> io::Result<()> {
@@ -147,8 +144,8 @@ impl PostgresMaps {
         self.execute(
             "INSERT INTO map.assets VALUES($1,$2,$3,$4,$5,$6,$7)",
             &[
-                &r.map_id,
-                &r.revision,
+                &uuid(r.map_id),
+                &uuid(r.revision),
                 &asset.id,
                 &asset.media_type,
                 &asset.location,
