@@ -46,8 +46,9 @@ pub struct Donors(
 /// donor is chosen. Finer maps see the contact's finer bends.
 const CONTACT_WARP: f64 = 0.4;
 const CONTACT_OCTAVES: usize = 6;
-/// More query points than any working lattice holds.
-const REMEMBERED_DONORS: usize = 1 << 20;
+/// More query points than any working lattice or published raster holds: every channel of a
+/// published raster asks for the donors of the same pixels.
+const REMEMBERED_DONORS: usize = 1 << 22;
 impl Grid {
     /// The donor a point takes its categorical values from. Every categorical import (rock
     /// beds, their cargo, cover, people, activity) uses this one lookup, so a child cell's
@@ -65,8 +66,7 @@ impl Grid {
         };
         let donor = self.nearest_index([point[0] + warp(0x7c01), point[1] + warp(0x7c02)])?;
         let mut donors = self.donors.0.borrow_mut();
-        // Raster publication asks once per pixel; those points never repeat, so the memo
-        // starts over rather than holding every pixel of a large raster.
+        // A memo that outgrows every lattice and raster starts over rather than growing on.
         if donors.len() >= REMEMBERED_DONORS {
             donors.clear();
         }

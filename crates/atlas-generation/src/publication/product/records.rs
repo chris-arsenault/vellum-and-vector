@@ -19,7 +19,9 @@ use std::{
     io::{self, Write},
 };
 
-const BATCH_SIZE: usize = 128;
+/// Records per append. Each append is one storage transaction, so a city's hundreds of
+/// thousands of records are written in batches large enough that commits do not dominate.
+const BATCH_SIZE: usize = 1024;
 /// The published surface class a real-scale hex reports as its ground.
 pub(super) const SURFACE: &str = "finalSurface";
 fn write_record(
