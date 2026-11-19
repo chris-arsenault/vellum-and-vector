@@ -61,16 +61,10 @@ struct Page {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum Event {
-    Preview {
-        epoch: usize,
-        map: Asset,
-    },
+    /// An epoch's preview was retained; its bytes are fetched by job and epoch.
+    Preview { epoch: usize },
     #[serde(other)]
     Other,
-}
-#[derive(Deserialize)]
-struct Asset {
-    bytes: Bytes,
 }
 #[derive(Deserialize)]
 struct Preview {
@@ -127,9 +121,30 @@ impl Run<'_> {
             &json!({"method": method, "request": {"job_id": self.job, "after": after}}),
         )
     }
+    /// An epoch's retained preview, or none when the job no longer keeps it.
+    fn fetch(&self, epoch: usize) -> io::Result<Option<Preview>> {
+        let reply: io::Result<Bytes> = self.harness.server.call(
+            "generation",
+            &json!({"method": "preview", "request": {"job_id": self.job, "epoch": epoch}}),
+        );
+        match reply {
+            Ok(bytes) => {
+                let mut preview: Preview =
+                    ciborium::from_reader(bytes.0.as_slice()).map_err(io::Error::other)?;
+                // CBOR keeps a missing value as NaN, where JSON wrote null.
+                for channel in preview.grid.channels.values_mut() {
+                    for value in &mut channel.values {
+                        *value = value.filter(|v| v.is_finite());
+                    }
+                }
+                Ok(Some(preview))
+            }
+            Err(error) if error.to_string().contains("no longer kept") => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
     /// Draws a stage picture and keeps its town observation; true when it is the `until` stage.
-    fn preview(&mut self, epoch: usize, bytes: &[u8], until: Option<&str>) -> io::Result<bool> {
-        let preview: Preview = serde_json::from_slice(bytes)?;
+    fn preview(&mut self, epoch: usize, preview: Preview, until: Option<&str>) -> io::Result<bool> {
         if let Some(fabric) = &preview.grid.town_fabric {
             town::retain(&self.directory, fabric)?;
         }
@@ -215,8 +230,12 @@ pub fn follow(
             run.print(&step);
         }
         for event in page.events {
-            if let Event::Preview { epoch, map } = event {
-                if run.preview(epoch, &map.bytes.0, until)? {
+            if let Event::Preview { epoch } = event {
+                let Some(preview) = run.fetch(epoch)? else {
+                    run.print(format_args!("preview {epoch} is no longer kept"));
+                    continue;
+                };
+                if run.preview(epoch, preview, until)? {
                     status = run.call("cancel", 0)?;
                 }
             }

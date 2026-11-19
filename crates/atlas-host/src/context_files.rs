@@ -183,5 +183,5 @@ pub fn retire_job_inputs(files: &JobFiles) -> io::Result<()> {
             _ => {}
         }
     }
-    Ok(())
+    files.remove_previews()
 }

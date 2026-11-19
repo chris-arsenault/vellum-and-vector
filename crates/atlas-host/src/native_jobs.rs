@@ -11,7 +11,7 @@ use atlas_generation::{
 use atlas_gis::map_files::MapFiles;
 use atlas_map::MapRef;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{
     collections::BTreeMap,
     io,
@@ -55,6 +55,11 @@ pub enum Call {
     Resume {
         job_id: String,
     },
+    /// A retained epoch preview's bytes.
+    Preview {
+        job_id: String,
+        epoch: usize,
+    },
     Observe {
         job_id: String,
         after: usize,
@@ -79,35 +84,45 @@ pub enum Event {
     Status {
         status: Box<GenerationStatus>,
     },
+    /// An epoch's preview was retained; `preview` with this job and epoch returns it while it
+    /// is among the newest the job keeps.
     Preview {
         #[serde(rename = "jobId")]
         job_id: String,
         epoch: usize,
-        map: PreviewAsset,
+        #[serde(rename = "mediaType")]
+        media_type: String,
     },
 }
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct PreviewAsset {
-    pub media_type: String,
-    /// One byte string: a mature city's preview is tens of megabytes.
-    #[serde(serialize_with = "byte_string")]
-    pub bytes: Vec<u8>,
+/// The media type of a retained preview: the preview grid and its epoch ancestry as CBOR.
+pub const PREVIEW_MEDIA_TYPE: &str = "application/vnd.atlas.preview+cbor";
+/// A configuration a creator can start from.
+#[derive(Serialize)]
+pub struct Template {
+    pub id: &'static str,
+    pub title: &'static str,
+    pub values: Configuration,
 }
-fn byte_string<S: serde::Serializer>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
-    serializer.serialize_bytes(bytes)
-}
-/// A generation call's reply. Observed events are sent as they are, so their preview bytes
-/// stay one byte string instead of becoming a list of numbers.
+/// A generation call's reply, serialized as the value it holds.
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum Reply {
-    Value(Value),
+    Status(Box<GenerationStatus>),
+    Statuses(Vec<GenerationStatus>),
+    Configuration(Box<Configuration>),
+    Templates(Vec<Template>),
+    /// Presentation and review documents, which the frontend reads as open documents.
+    Document(Value),
+    /// One byte string: a mature city's preview is tens of megabytes.
+    Preview(#[serde(serialize_with = "byte_string")] Vec<u8>),
     Observed {
         events: Vec<Event>,
         next: usize,
         status: Box<GenerationStatus>,
     },
+}
+fn byte_string<S: serde::Serializer>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_bytes(bytes)
 }
 pub(super) struct State {
     status: GenerationStatus,
@@ -193,50 +208,63 @@ impl Jobs {
                 status: Box::new(job.status()?),
             });
         }
-        self.answer(call).map(Reply::Value)
+        self.answer(call)
     }
-    fn answer(&self, call: Call) -> io::Result<Value> {
-        match call {
-            Call::Jobs => Ok(json!(self
-                .jobs
-                .lock()
-                .map_err(poisoned)?
-                .values()
-                .map(Job::status)
-                .collect::<io::Result<Vec<_>>>()?)),
-            Call::Configurations => Ok(
-                json!([{"id":"atlas","title":"Atlas","values":Configuration::default_configuration()?}]),
+    fn answer(&self, call: Call) -> io::Result<Reply> {
+        let status = |status| Reply::Status(Box::new(status));
+        let configuration = |configuration| Reply::Configuration(Box::new(configuration));
+        Ok(match call {
+            Call::Jobs => Reply::Statuses(
+                self.jobs
+                    .lock()
+                    .map_err(poisoned)?
+                    .values()
+                    .map(Job::status)
+                    .collect::<io::Result<Vec<_>>>()?,
             ),
-            Call::Validate(value) => Ok(json!(value.normalize()?)),
-            Call::Presentation => Ok(serde_json::from_str(
+            Call::Configurations => Reply::Templates(vec![Template {
+                id: "atlas",
+                title: "Atlas",
+                values: Configuration::default_configuration()?,
+            }]),
+            Call::Validate(value) => configuration(value.normalize()?),
+            Call::Presentation => Reply::Document(serde_json::from_str(
                 &crate::generation_application::generation_presentation(),
             )?),
-            Call::Choose(choice) => Ok(json!(choice.apply()?)),
-            Call::Configuration(reference) => review::configuration(&self.settings, &reference),
-            Call::Review(action) => review::review(&self.settings, action),
-            Call::Create(value) => Ok(json!(self.start(Action::Create(value.normalize()?))?)),
+            Call::Choose(choice) => configuration(choice.apply()?),
+            Call::Configuration(reference) => {
+                Reply::Document(review::configuration(&self.settings, &reference)?)
+            }
+            Call::Review(action) => Reply::Document(review::review(&self.settings, action)?),
+            Call::Create(value) => status(self.start(Action::Create(value.normalize()?))?),
             Call::Refine(mut request) => {
                 request.configuration = request.configuration.normalize()?;
-                Ok(json!(self.start(Action::Refine(request))?))
+                status(self.start(Action::Refine(request))?)
             }
             Call::Regenerate {
                 reference,
                 configuration,
-            } => Ok(json!(self.start(Action::Regenerate {
+            } => status(self.start(Action::Regenerate {
                 reference,
                 configuration: configuration.normalize()?,
-            })?)),
-            Call::Status { job_id } => Ok(json!(self.job(&job_id)?.status()?)),
-            Call::Resume { job_id } => Ok(json!(self.resume(&job_id)?)),
+            })?),
+            Call::Status { job_id } => status(self.job(&job_id)?.status()?),
+            Call::Resume { job_id } => status(self.resume(&job_id)?),
             Call::Cancel { job_id } => {
                 let job = self.job(&job_id)?;
                 if job.status()?.state == GenerationState::Running {
                     job.token.cancel();
                 }
-                Ok(json!(job.status()?))
+                status(job.status()?)
             }
-            Call::Observe { .. } => Err(io::Error::other("Observation replies are typed")),
-        }
+            Call::Preview { job_id, epoch } => Reply::Preview(
+                self.job(&job_id)?
+                    .files
+                    .preview(epoch)?
+                    .ok_or_else(|| io::Error::other("This preview is no longer kept"))?,
+            ),
+            Call::Observe { .. } => return Err(io::Error::other("Observation replies are typed")),
+        })
     }
     fn job(&self, id: &str) -> io::Result<Job> {
         self.jobs
@@ -320,15 +348,16 @@ fn poisoned<T>(_: std::sync::PoisonError<T>) -> io::Error {
 mod tests {
     use super::*;
     #[test]
-    fn an_observed_preview_is_sent_as_one_byte_string() {
+    fn a_preview_is_sent_as_one_byte_string_and_events_only_name_it() {
+        let mut encoded = Vec::new();
+        ciborium::into_writer(&Reply::Preview(b"{}".to_vec()), &mut encoded).unwrap();
+        let value: ciborium::Value = ciborium::from_reader(encoded.as_slice()).unwrap();
+        assert_eq!(value, ciborium::Value::Bytes(b"{}".to_vec()));
         let reply = Reply::Observed {
             events: vec![Event::Preview {
                 job_id: "job".into(),
                 epoch: 0,
-                map: PreviewAsset {
-                    media_type: "application/json".into(),
-                    bytes: b"{}".to_vec(),
-                },
+                media_type: PREVIEW_MEDIA_TYPE.into(),
             }],
             next: 1,
             status: Box::new(GenerationStatus {
@@ -354,8 +383,8 @@ mod tests {
         };
         let event = field(&value, "events").as_array().unwrap()[0].clone();
         assert_eq!(
-            field(&field(&event, "map"), "bytes"),
-            ciborium::Value::Bytes(b"{}".to_vec())
+            field(&event, "mediaType"),
+            ciborium::Value::Text(PREVIEW_MEDIA_TYPE.into())
         );
         assert_eq!(field(&value, "next"), ciborium::Value::Integer(1.into()));
     }

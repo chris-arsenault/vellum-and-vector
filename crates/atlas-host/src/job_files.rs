@@ -13,6 +13,11 @@ const FORMAT: atlas_gis::stored::Format = atlas_gis::stored::Format {
     revision: 1,
     semantics: "private-job-pinned-inputs",
 };
+/// How many of a job's newest epoch previews stay on disk.
+const KEPT_PREVIEWS: usize = 8;
+fn preview_name(epoch: usize) -> String {
+    format!("preview-{epoch}.cbor")
+}
 #[derive(Clone)]
 pub struct JobFiles {
     pub directory: PathBuf,
@@ -52,6 +57,43 @@ impl JobFiles {
             Ok(file) => FORMAT
                 .read(serde_json::from_reader(BufReader::new(file))?)
                 .map(Some),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+    /// Retain an epoch's preview as CBOR. A job keeps only its newest previews: an observer
+    /// reads each soon after its event, and a town's preview is tens of megabytes.
+    pub fn write_preview(&self, epoch: usize, value: &impl Serialize) -> io::Result<()> {
+        self.atomic(&preview_name(epoch), |writer| {
+            ciborium::into_writer(value, writer).map_err(io::Error::other)
+        })?;
+        if let Some(old) = epoch.checked_sub(KEPT_PREVIEWS) {
+            match fs::remove_file(self.directory.join(preview_name(old))) {
+                Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+    /// Remove every retained preview: when the job finishes, or when a resumed run starts
+    /// numbering its epochs again.
+    pub fn remove_previews(&self) -> io::Result<()> {
+        for entry in fs::read_dir(&self.directory)? {
+            let path = entry?.path();
+            let name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or_default();
+            if name.starts_with("preview-") && name.ends_with(".cbor") {
+                fs::remove_file(&path)?;
+            }
+        }
+        Ok(())
+    }
+    /// An epoch's retained preview bytes, while it is among the newest kept.
+    pub fn preview(&self, epoch: usize) -> io::Result<Option<Vec<u8>>> {
+        match fs::read(self.directory.join(preview_name(epoch))) {
+            Ok(bytes) => Ok(Some(bytes)),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(error) => Err(error),
         }
@@ -149,6 +191,21 @@ pub fn now() -> String {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
+    /// A job keeps its newest previews as CBOR files and drops older ones as it goes.
+    #[test]
+    fn only_the_newest_previews_are_kept() {
+        let root = std::env::temp_dir().join(format!("atlas-previews-{}", uuid::Uuid::new_v4()));
+        let files = JobFiles::new(&root, "job").unwrap();
+        for epoch in 0..KEPT_PREVIEWS + 3 {
+            files.write_preview(epoch, &vec![epoch as u32; 4]).unwrap();
+        }
+        assert!(files.preview(2).unwrap().is_none());
+        let newest = files.preview(KEPT_PREVIEWS + 2).unwrap().unwrap();
+        let decoded: Vec<u32> = ciborium::from_reader(newest.as_slice()).unwrap();
+        assert_eq!(decoded, vec![(KEPT_PREVIEWS + 2) as u32; 4]);
+        assert!(files.preview(3).unwrap().is_some());
+        fs::remove_dir_all(root).unwrap();
+    }
     #[test]
     fn failed_replacement_retains_one_committed_checkpoint() {
         let root = std::env::temp_dir().join(format!("atlas-checkpoint-{}", uuid::Uuid::new_v4()));

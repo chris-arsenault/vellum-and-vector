@@ -379,6 +379,28 @@ Acceptance: the job's event memory does not grow with town size; no JSON preview
 on the server's path.
 Evidence: server memory during a city run; harness town pictures still drawn.
 
+#### M7 expansion and result
+
+1. `native_jobs::Reply` holds typed values (statuses, configurations, templates, a preview
+   byte string, observed events); presentation and review stay open documents.
+2. An epoch's preview (grid and ancestry) is written by `JobFiles::write_preview` as CBOR to
+   the job's directory; the job keeps its newest eight. `Event::Preview` names the job,
+   epoch and media type `application/vnd.atlas.preview+cbor`, and `Call::Preview` returns
+   the bytes while they are kept.
+3. The harness fetches each preview by job and epoch and decodes CBOR, mapping non-finite
+   values to absent as JSON's null did.
+4. M10 moves the frontend's remote job viewer to fetch previews the same way; the browser
+   worker's own previews stay in memory, as they never cross a network.
+
+Evidence: `only_the_newest_previews_are_kept`, the reply encoding test in `native_jobs.rs`;
+server memory and harness pictures on the M11 city run.
+
+Review fixes: a finished job's previews are removed with its other inputs, and a resumed run
+clears the previews of the run before it. Broken until M10: the remote transport
+(`packages/transport/src/generation.ts` reads `event.map.bytes`, which now throws and ends
+observation of LAN jobs), `frontend/src/FinishedGeneration.tsx` and the
+`packages/atlas-context` event type; the viewer must accept a preview that is no longer kept.
+
 ### M8 — Town network and integer keys [depends on M1]
 Scope: F10, F11. The access network is held with the fabric and updated as holdings and
 streets change; occupied ground is updated rather than cloned; economy sources and

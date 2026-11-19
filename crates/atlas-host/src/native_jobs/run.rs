@@ -1,4 +1,4 @@
-use super::{poisoned, Action, Event, Job, PreviewAsset, Settings};
+use super::{poisoned, Action, Event, Job, Settings};
 use crate::{
     generation_output::Observations,
     generation_submission::Submission,
@@ -19,6 +19,12 @@ use atlas_gis::postgres_maps::PostgresMaps;
 use serde_json::json;
 use std::{io, rc::Rc};
 
+/// A retained epoch preview: the preview grid and, at an epoch's end, its ancestry.
+#[derive(serde::Serialize)]
+struct RetainedPreview<'a> {
+    grid: &'a Preview,
+    ancestry: Option<&'a [GenerationEpoch]>,
+}
 // owner-direction(2026-11-12): computation uses one Rust core for native and WASM
 pub(super) fn run(action: Action, settings: Settings, job: Job) {
     log(&job, "started");
@@ -73,6 +79,8 @@ fn execute(action: Action, settings: Settings, job: &Job) -> io::Result<atlas_ma
     let inputs = PrivateInputs::connect(&settings.generation_url)?;
     // A job's id is the identity text the service handed out; the map revision takes it.
     let operation = job.status()?.job_id.parse().map_err(io::Error::other)?;
+    // A run numbers its epochs from the start; previews of an earlier run do not carry over.
+    job.files.remove_previews()?;
     let request = match job.files.read::<NativeJob>("request.json")? {
         Some(request) => request,
         None => {
@@ -242,17 +250,21 @@ impl Observations for Observer {
                 json!({"event":"generation.epoch.completed","jobId":self.job.status()?.job_id,"epoch":name,"seconds":seconds})
             );
         }
-        let bytes = serde_json::to_vec(&json!({"grid":preview,"ancestry":ancestry}))
-            .map_err(io::Error::other)?;
+        // The preview goes to a retained file; the event only names it, so the job's event
+        // list does not grow with the town.
+        self.job.files.write_preview(
+            self.epoch,
+            &RetainedPreview {
+                grid: preview,
+                ancestry,
+            },
+        )?;
         let mut state = self.job.state.lock().map_err(poisoned)?;
         let job_id = state.status.job_id.clone();
         state.events.push(Event::Preview {
             job_id,
             epoch: self.epoch,
-            map: PreviewAsset {
-                media_type: "application/vnd.atlas.preview+json".into(),
-                bytes,
-            },
+            media_type: super::PREVIEW_MEDIA_TYPE.into(),
         });
         self.epoch += 1;
         Ok(())
