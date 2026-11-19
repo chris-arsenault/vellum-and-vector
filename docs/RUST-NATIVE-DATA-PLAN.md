@@ -93,6 +93,48 @@ milestone; the guard is in place.
 Evidence: review of the checklist against `schema.sql`, `map_store/schema.sql`,
 `features/records.rs`, `record_store`, `regional_capture`, `native_jobs`.
 
+#### M0 expansion
+
+Sulion: phase `7377ad2c`.
+
+1. Inventory below, reviewed against the cited sources.
+2. Guard test `crates/atlas-gis/tests/rewrite_guard.rs` fails until M11 removes it.
+
+#### Representation inventory
+
+Verdicts: **N** numeric value, **T** typed Rust value or typed columns, **G** GIS-native
+layer or row, **J** kept as JSON (reason given), **X** removed.
+
+| Site | Current | Verdict | Details the old code handles | Milestone |
+|------|---------|---------|------------------------------|-----------|
+| Map, revision, entity ids (all tables, APIs) | UUID text | N (uuid / 16 bytes) | Semantic ids are UUID v5 in the world's namespace; parent ids map to child ids in capture | M1 |
+| Feature ids | UUID v5 text from JSON `[kind, key]` | N | Stable across regeneration for the same kind and key; contracted ids keep protected features | M1 |
+| Feature kind, layer, area, actor, domain, causes (`features/records.rs`) | strings per record | T (catalogue ordinals, enums) | Catalogue in `publication/catalogue.json` names kinds and layers; causes reference POI ids | M1 |
+| `maps.descriptor` / `map.revisions.descriptor` | whole description as TEXT / jsonb | G (revision row + `layers`, `feature_types`, `bands`, `spaces` tables) | Descriptor validation (`MapDescriptor::validate`); expected-revision and authored checks at finish; edits rewrite it | M2 |
+| `map_feature_catalog.values_json/columns_json/attributes_json/relations_json` (SQLite) | JSON text | T (typed columns) + J for open attributes | JSON-path indexes for `fromPlace`, `toPlace`, `atPlace`; search text | M2 |
+| `map.features.data` (PostGIS) | jsonb with attributes, relations, catalog | T + J (open attributes only) | GIN on relations; JSON-path indexes on place attributes | M2 |
+| Feature relations | jsonb array per feature | G (`relations` rows) | Relation kinds: worked by, access from, fronts, operating ties | M2 |
+| Feature geometry write (PostGIS) | GeoJSON text → `map.canonical_geometry` PL/pgSQL | G (WKB from Rust's validated reduction) | Validity and non-collapse at precision; SRID 0 | M2, M4 |
+| `map.samples.data` / `map_samples.data` | CBOR with one attribute per raster band | X for band values (read rasters); T for sections | Category labels per value; display units; edited overlay patches | M3 |
+| Publication batches (`PublicationBatch`, `codec::Samples`) | per-record JSON / CBOR assembly | T (typed binary rows) | Batches with cooperative yields in the browser | M4 |
+| `map.history.data`, `map.entities.data`, `map.edits.data`, `map.saved.data` | jsonb / blobs | J (history detail, people entities, edit payloads, navigation are open-ended) | Edits hold features before and after | — (kept) |
+| `map.history_features` | text ids | N (uuid) | — | M1 |
+| `map.assets` | text ids, location | N for ids; location stays text (file path) | Illustration flag | M1 |
+| Generator record store (`record_store/features.rs`, `networks.rs`) | SQLite rows of whole-record JSON text | T (typed, indexed store) | Revisions counter per run; selection by area, layer, kind; network nodes and reaches | M5 |
+| `generation.records`, `generation.catalogs`, `generation.geography` (PostGIS) and SQLite mirrors | jsonb / JSON text | T for records; J for catalog document until M5 shows its fields are fixed | A child's capture reads its parent's retained records | M5, M6 |
+| Numerical resource descriptors in capture (`regional_capture/fields.rs`) | `serde_json::Value` edited by key | T (`numerical_resource::Descriptor`) | Array aliasing to parent resources; footprint rewrites | M6 |
+| Parent feature capture (`regional_capture/records.rs`) | per-feature clip, magic-source list scan, JSON store | T | Place ids, area ids, protected flags, network reaches | M6 |
+| Generation API replies (`native_jobs::Jobs::answer`) | `serde_json::Value` | T | Configuration documents are edited by the frontend and harness | M7 |
+| Observation events (`native_jobs` event list) | preview JSON bytes kept in memory | T + retained files | Resumed jobs restart their cursor | M7 |
+| Town observation (`preview::town::Overview`) | whole-town JSON | T (binary retained file) | Stage, phase, round labels for pictures | M7 |
+| Town access network (`town/access.rs`) | rebuilt per step | T (held, updated) | Walks, links, entrances, ground costs | M8 |
+| Economy source ids (`atlas/town/providers.rs`) | formatted strings, string-keyed maps | N (integer ids) | Alternatives sharing one identity compete per site | M8 |
+| Occupied ground (`atlas/town/development.rs`) | cloned per step | T (updated) | Premises and works grounds marked | M8 |
+| Band element access in kernels (`storage/band.rs`) | per-element `io::Result` | T (block and slice views) | Paged bands under the block cache's budget | M9 |
+| Rock cargo store (`rock/cargo.rs`) | hashing and allocation per access | T | Parcel identities and densities | M9 |
+| Checkpoint archive (`checkpoint.rs`) | bands binary, values CBOR | kept | — | — |
+| Map files and rasters (GeoTIFF assets) | binary | kept | — | — |
+
 ### M1 — Identities and catalogue ordinals [depends on M0]
 Scope: F5, F6. UUID values for map, revision, feature and entity ids; semantic ids
 computed from typed parts without JSON; feature kinds, layers, areas, actors, domains and
