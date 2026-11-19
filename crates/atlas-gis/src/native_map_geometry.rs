@@ -7,7 +7,7 @@ pub struct NativeMapGeometry;
 impl NativeMapGeometry {
     pub fn encode(&self, shape: &Geometry, precision: f64) -> io::Result<EncodedGeometry> {
         let kernel = NativeGeos::new(precision).map_err(io::Error::other)?;
-        let geometry = kernel.read(shape).map_err(io::Error::other)?;
+        let geometry = kernel.read_exact(shape).map_err(io::Error::other)?;
         let [w, s, e, n]: [f64; 4] = geometry
             .get_extent()
             .map_err(io::Error::other)?

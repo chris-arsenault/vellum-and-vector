@@ -14,8 +14,30 @@ impl NativeGeos {
         }
         Ok(Self { precision })
     }
+    /// The shape on the precision grid when rounding each coordinate leaves it valid and
+    /// not empty. GEOS's snap-rounding noder, which costs far more than the shape itself for
+    /// a building or plot, is needed only when rounding does not.
+    fn on_grid(&self, value: &Geometry) -> SpatialResult<Option<Native>> {
+        let rounded =
+            coordinates::read_on_grid(value, self.precision).map_err(|e| e.to_string())?;
+        let usable = !rounded.is_empty().map_err(|e| e.to_string())?
+            && rounded.is_valid().map_err(|e| e.to_string())?;
+        Ok(usable.then_some(rounded))
+    }
+    /// An operand for a measurement, test or overlay: valid and on the precision grid. A shape
+    /// that would collapse under GEOS's snap rounding may still be accepted here; geometry that
+    /// is published goes through `read_exact`, as PostGIS repeats that reduction.
     #[track_caller]
     pub(crate) fn read(&self, value: &Geometry) -> SpatialResult<Native> {
+        match self.on_grid(value)? {
+            Some(rounded) => Ok(rounded),
+            None => self.read_exact(value),
+        }
+    }
+    /// The shape reduced to the precision grid by GEOS's snap rounding, refused when invalid or
+    /// when it collapses.
+    #[track_caller]
+    pub(crate) fn read_exact(&self, value: &Geometry) -> SpatialResult<Native> {
         let geometry = coordinates::read(value).map_err(|e| e.to_string())?;
         if !geometry.is_valid().map_err(|e| e.to_string())? {
             let trace = std::backtrace::Backtrace::capture();
@@ -62,10 +84,21 @@ impl NativeGeos {
         // Re-enter GEOS at floating precision, as an exported fragment will on its next read.
         // A fixed-precision overlay may retain a ring whose vertices snap onto one segment.
         let bytes = geometry.to_wkb().map_err(|e| e.to_string())?;
-        let result = Native::new_from_wkb(&bytes)
-            .and_then(|fresh| fresh.set_precision(self.precision, Precision::ValidOutput))
-            .map_err(|e| e.to_string())?;
-        let Some(result) = Self::json(result)? else {
+        let fresh = Native::new_from_wkb(&bytes).map_err(|e| e.to_string())?;
+        let result = match Self::json(fresh)? {
+            Some(shape) => match self.on_grid(&shape)? {
+                Some(rounded) => Self::json(rounded)?,
+                None => Self::json(
+                    Native::new_from_wkb(&bytes)
+                        .and_then(|fresh| {
+                            fresh.set_precision(self.precision, Precision::ValidOutput)
+                        })
+                        .map_err(|e| e.to_string())?,
+                )?,
+            },
+            None => None,
+        };
+        let Some(result) = result else {
             return Ok(None);
         };
         self.export_parts(result)
@@ -165,7 +198,7 @@ impl NativeGeos {
 }
 impl SpatialKernel for NativeGeos {
     fn canonical(&self, value: &Geometry) -> SpatialResult<Geometry> {
-        Self::json(self.read(value)?)?
+        Self::json(self.read_exact(value)?)?
             .ok_or_else(|| "A canonical feature needs nonempty geometry".into())
     }
     fn area(&self, value: &Geometry) -> SpatialResult<f64> {
@@ -410,11 +443,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn an_operand_is_read_onto_the_precision_grid() {
+        let kernel = NativeGeos::new(0.5).unwrap();
+        let square = Geometry::Polygon {
+            coordinates: vec![[
+                [0.1, 0.2],
+                [10.1, 0.1],
+                [10.2, 9.9],
+                [0.2, 10.1],
+                [0.1, 0.2],
+            ]
+            .into_iter()
+            .map(|[x, y]| Position::xy(x, y))
+            .collect()],
+        };
+        let Geometry::Polygon { coordinates } =
+            coordinates::write(&kernel.read(&square).unwrap()).unwrap()
+        else {
+            panic!("A polygon reads as a polygon");
+        };
+        for point in coordinates.iter().flatten() {
+            let [x, y, _] = point.coordinates();
+            assert_eq!((x * 2.).fract(), 0.);
+            assert_eq!((y * 2.).fract(), 0.);
+        }
+        assert_eq!(kernel.area(&square).unwrap(), 100.);
+    }
+    #[test]
     fn clipped_fragment_is_reusable_at_the_map_precision() {
         let kernel = NativeGeos::new(0.000001).unwrap();
         let raw = Native::new_from_wkt("POLYGON ((756921.304337 64069.67997, 756921.381122 64071.16284, 756921.505213 64073.559261, 756921.304337 64069.67997))").unwrap();
         let input = coordinates::write(&raw).unwrap();
-        assert!(kernel.read(&input).is_err());
+        assert!(kernel.read_exact(&input).is_err());
+        // As an operand the sliver is valid once rounded; only publication refuses it.
+        assert!(kernel.read(&input).is_ok());
         let result = kernel.overlay_result(raw).unwrap();
         assert!(result.is_none_or(|geometry| kernel.read(&geometry).is_ok()));
     }
