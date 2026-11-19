@@ -222,23 +222,28 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
                 .filter(|h| h.kind.definition().roles.service != ServiceRole::None)
                 .collect();
             let origins: Vec<_> = providers.iter().map(|h| h.slot.front).collect();
-            let routes = if origins.is_empty() {
-                vec![]
-            } else {
+            if !origins.is_empty() {
                 crate::town::access::Access::for_town(town, state.spatial.as_ref())?
                     .on_ground(&requests.2)
-                    .travel_costs(&origins, points, state.spatial.as_ref())?
-            };
-            for (holding, costs) in providers.into_iter().zip(routes) {
-                let service = holding.kind.definition().roles.service;
-                for (condition, cost) in services.iter_mut().zip(costs) {
-                    let provision = holding.occupation * (0.2 + holding.means) / (1. + cost / 100.);
-                    match service {
-                        ServiceRole::Clearance => condition.clearance += provision,
-                        ServiceRole::Protection => condition.protection += provision,
-                        ServiceRole::None => {}
-                    }
-                }
+                    .reached_within(
+                        &origins,
+                        points,
+                        crate::town::settings::DAILY_REACH,
+                        state.spatial.as_ref(),
+                        |p, site, cost| {
+                            let holding = providers[p];
+                            let provision = holding.occupation
+                                * (0.2 + holding.means)
+                                * crate::town::influence::within_reach(cost)
+                                / (1. + cost / 100.);
+                            let condition = &mut services[site];
+                            match holding.kind.definition().roles.service {
+                                ServiceRole::Clearance => condition.clearance += provision,
+                                ServiceRole::Protection => condition.protection += provision,
+                                ServiceRole::None => {}
+                            }
+                        },
+                    )?;
             }
             let shapes: Vec<_> = town.holdings().iter().map(|h| h.outline.clone()).collect();
             let areas = shapes

@@ -337,6 +337,33 @@ impl<'a> Access<'a> {
             })
             .collect())
     }
+    /// Each `(source, target, cost)` journey on foot no dearer than `reach`; a pair it does
+    /// not name is out of reach. Each search stops at the reach.
+    pub fn reached_within(
+        &self,
+        sources: &[Point],
+        targets: &[Point],
+        reach: f64,
+        spatial: &dyn SpatialKernel,
+        mut visit: impl FnMut(usize, usize, f64),
+    ) -> io::Result<()> {
+        let locations: Vec<_> = sources
+            .iter()
+            .chain(targets)
+            .copied()
+            .map(Entrance::external)
+            .collect();
+        let graph = self.bind(&locations, AccessUse::Foot, spatial)?;
+        let mut queries = graph.distance_queries();
+        let destinations = queries.destinations((0..targets.len()).map(|t| (sources.len() + t, t)));
+        for source in 0..sources.len() {
+            queries.within(source, reach);
+            queries.reached(&destinations, reach, |target, cost| {
+                visit(source, target, cost)
+            });
+        }
+        Ok(())
+    }
     /// Attach all destinations in one pass. Adjacent named streets cannot steal a premises entrance.
     pub fn bind(
         &self,
@@ -633,6 +660,7 @@ impl BoundNetwork {
             offsets,
             arcs,
             costs: vec![f64::INFINITY; self.edges.len()],
+            touched: Vec::new(),
             heap: KeyedHeap::new([Direction::Ascending], Direction::Ascending),
         }
     }
@@ -742,15 +770,39 @@ pub struct DistanceQueries<'a> {
     offsets: Vec<usize>,
     arcs: Vec<(usize, f64)>,
     costs: Vec<f64>,
+    /// The nodes the last search labelled, so the next search clears only those.
+    touched: Vec<usize>,
     heap: KeyedHeap,
+}
+/// Destinations grouped by the network node their entrance joins, so a bounded search can
+/// name the destinations it reached without looking at the others.
+pub struct Destinations {
+    offsets: Vec<usize>,
+    entries: Vec<(usize, f64)>,
+}
+impl Destinations {
+    fn at(&self, node: usize) -> &[(usize, f64)] {
+        &self.entries[self.offsets[node]..self.offsets[node + 1]]
+    }
 }
 impl DistanceQueries<'_> {
     pub fn from(&mut self, origin: usize) {
-        self.costs.fill(f64::INFINITY);
+        self.within(origin, f64::INFINITY);
+    }
+    /// Costs from `origin` to every node no dearer than `reach`; dearer nodes stay unreached,
+    /// and the search never visits them.
+    pub fn within(&mut self, origin: usize, reach: f64) {
+        for node in self.touched.drain(..) {
+            self.costs[node] = f64::INFINITY;
+        }
         let Some((start, offset)) = self.entrances[origin] else {
             return;
         };
+        if offset > reach {
+            return;
+        }
         self.costs[start] = offset;
+        self.touched.push(start);
         self.heap.push(start as u32, [offset]);
         while let Some((node, [cost])) = self.heap.pop() {
             let node = node as usize;
@@ -759,7 +811,10 @@ impl DistanceQueries<'_> {
             }
             for &(next, length) in &self.arcs[self.offsets[node]..self.offsets[node + 1]] {
                 let candidate = cost + length;
-                if candidate < self.costs[next] {
+                if candidate <= reach && candidate < self.costs[next] {
+                    if self.costs[next] == f64::INFINITY {
+                        self.touched.push(next);
+                    }
                     self.costs[next] = candidate;
                     self.heap.push(next as u32, [candidate]);
                 }
@@ -769,6 +824,45 @@ impl DistanceQueries<'_> {
 
     pub fn cost(&self, target: usize) -> f64 {
         self.entrances[target].map_or(f64::INFINITY, |(node, offset)| self.costs[node] + offset)
+    }
+    /// Index `(place, destination)` pairs by the node each place's entrance joins.
+    pub fn destinations(&self, places: impl Iterator<Item = (usize, usize)>) -> Destinations {
+        let nodes = self.costs.len();
+        let joined: Vec<_> = places
+            .filter_map(|(place, destination)| {
+                self.entrances[place].map(|(node, offset)| (node, destination, offset))
+            })
+            .collect();
+        let mut offsets = vec![0; nodes + 1];
+        for &(node, ..) in &joined {
+            offsets[node + 1] += 1;
+        }
+        for node in 0..nodes {
+            offsets[node + 1] += offsets[node];
+        }
+        let mut next = offsets.clone();
+        let mut entries = vec![(0, 0.); joined.len()];
+        for (node, destination, offset) in joined {
+            entries[next[node]] = (destination, offset);
+            next[node] += 1;
+        }
+        Destinations { offsets, entries }
+    }
+    /// Each destination the last search reached within `reach`, with its travel cost.
+    pub fn reached(
+        &self,
+        destinations: &Destinations,
+        reach: f64,
+        mut visit: impl FnMut(usize, f64),
+    ) {
+        for &node in &self.touched {
+            let base = self.costs[node];
+            for &(destination, offset) in destinations.at(node) {
+                if base + offset <= reach {
+                    visit(destination, base + offset);
+                }
+            }
+        }
     }
 }
 pub struct Routes<'a> {
@@ -803,5 +897,53 @@ impl Routes<'_> {
         let mut points = vec![self.graph.points[node]];
         self.course(target, |_, _, b| points.push(b));
         Some(Approach { points, street })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    /// Four junctions 10 m apart in a line, a place at each, the last 5 m from its junction.
+    fn line() -> BoundNetwork {
+        let mut graph = BoundNetwork::default();
+        let nodes: Vec<_> = (0..4).map(|i| graph.vertex([i as f64 * 10., 0.])).collect();
+        for pair in nodes.windows(2) {
+            graph.connect(pair[0], pair[1], 10., Course::Walk);
+        }
+        graph.entrances = nodes.iter().map(|&n| Some((n, 0.))).collect();
+        graph.entrances[3] = Some((nodes[3], 5.));
+        graph
+    }
+    fn reached(
+        queries: &DistanceQueries<'_>,
+        destinations: &Destinations,
+        reach: f64,
+    ) -> Vec<(usize, f64)> {
+        let mut found = Vec::new();
+        queries.reached(destinations, reach, |d, cost| found.push((d, cost)));
+        found.sort_by_key(|&(d, _)| d);
+        found
+    }
+    #[test]
+    fn a_bounded_search_names_only_destinations_within_reach() {
+        let graph = line();
+        let mut queries = graph.distance_queries();
+        let destinations = queries.destinations((0..4).map(|place| (place, place)));
+        queries.within(0, 25.);
+        assert_eq!(
+            reached(&queries, &destinations, 25.),
+            [(0, 0.), (1, 10.), (2, 20.)]
+        );
+        assert_eq!(queries.cost(3), f64::INFINITY);
+        // A destination's own approach counts against the reach.
+        queries.within(0, 32.);
+        assert_eq!(reached(&queries, &destinations, 32.).len(), 3);
+        queries.from(0);
+        assert_eq!(queries.cost(3), 35.);
+        // A later, shorter search keeps nothing from the longer one before it.
+        // Leaving and arriving at the last place both walk its 5 m approach.
+        queries.within(3, 15.);
+        assert_eq!(reached(&queries, &destinations, 15.), [(2, 15.), (3, 10.)]);
+        assert_eq!(queries.cost(0), f64::INFINITY);
     }
 }

@@ -127,9 +127,14 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         .filter(|m| modes.iter().any(|needs| needs.contains(&Some(*m))))
         .map(|mode| Ok((mode, network.bind(&locations, mode, context.spatial)?)))
         .collect::<io::Result<Vec<_>>>()?;
+    let reach = crate::town::settings::DAILY_REACH;
     let mut queries: Vec<_> = graphs
         .iter()
-        .map(|(mode, graph)| (*mode, graph.distance_queries()))
+        .map(|(mode, graph)| {
+            let queries = graph.distance_queries();
+            let sources = queries.destinations((0..context.sources.len()).map(|j| (n + j, j)));
+            (*mode, queries, sources)
+        })
         .collect();
     let landlords = town
         .founding_sites
@@ -158,19 +163,22 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         };
         let mut ties = Vec::new();
         let mut opportunity = crate::town::influence::Support::default();
-        for (mode, routes) in queries
+        for (mode, routes, sources) in queries
             .iter_mut()
-            .filter(|(mode, _)| needs.contains(&Some(*mode)))
+            .filter(|(mode, ..)| needs.contains(&Some(*mode)))
         {
-            routes.from(i);
-            let paths: Vec<_> = context
-                .sources
-                .iter()
-                .enumerate()
-                .filter(|(_, s)| s.endpoint != own_source)
-                .map(|(j, source)| Reachable {
+            routes.within(i, reach);
+            let mut reached = Vec::new();
+            routes.reached(sources, reach, |j, cost| reached.push((j, cost)));
+            // hpc-exempt: reached sources in provider order, so equal offers resolve as listed.
+            reached.sort_unstable_by_key(|&(j, _)| j);
+            let paths: Vec<_> = reached
+                .into_iter()
+                .map(|(j, cost)| (&context.sources[j], cost))
+                .filter(|(s, _)| s.endpoint != own_source)
+                .map(|(source, cost)| Reachable {
                     source,
-                    cost: routes.cost(n + j),
+                    cost,
                     competitors: competitors[activity as usize]
                         + commitments.get(&source.endpoint).copied().unwrap_or(0.)
                             / (1. + source.demand + source.capability),

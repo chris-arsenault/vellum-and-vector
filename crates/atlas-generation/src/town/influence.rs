@@ -67,7 +67,7 @@ struct Totals<'a> {
 }
 impl<'a> Totals<'a> {
     fn add(&mut self, source: &'a OpportunitySource, cost: f64, competitors: f64) {
-        let reach = 1. / (1. + cost / 180.);
+        let reach = pull(cost);
         let demand = source.demand * reach / (1. + competitors);
         self.demand += demand;
         self.capability += source.capability * reach;
@@ -90,38 +90,22 @@ impl<'a> Totals<'a> {
     }
 }
 
+/// How strongly a source draws a site at this travel cost: half as much at 180 m as at the
+/// door, then fading to nothing at the daily reach.
+pub fn pull(cost: f64) -> f64 {
+    within_reach(cost) / (1. + cost / 180.)
+}
+/// The share of a daily journey's draw left at this travel cost: all of it within half the
+/// daily reach, none beyond it, and a smooth fade between.
+pub fn within_reach(cost: f64) -> f64 {
+    let reach = super::settings::DAILY_REACH;
+    let fade = ((cost / reach - 0.5) * 2.).clamp(0., 1.);
+    1. - fade * fade * (3. - 2. * fade)
+}
 struct Offer<'a> {
     origin: usize,
     source: &'a OpportunitySource,
     competitors: f64,
-}
-fn cheapest_offers<'a>(
-    activity: Activity,
-    offers: &[Offer<'a>],
-    rows: &[Vec<f64>],
-    mut visit: impl FnMut(usize, &Offer<'a>, f64),
-) {
-    let mut eligible = offers
-        .iter()
-        .zip(rows)
-        .filter(|(offer, _)| compatible(activity, offer.source.activity));
-    let Some(first) = eligible.next() else { return };
-    if eligible.clone().next().is_none() {
-        let (offer, costs) = first;
-        for (site, &cost) in costs.iter().enumerate().filter(|(_, c)| c.is_finite()) {
-            visit(site, offer, cost);
-        }
-        return;
-    }
-    for i in 0..first.1.len() {
-        let best = std::iter::once(first)
-            .chain(eligible.clone())
-            .filter(|(_, costs)| costs[i].is_finite())
-            .min_by(|(_, a), (_, b)| a[i].total_cmp(&b[i]));
-        if let Some((offer, costs)) = best {
-            visit(i, offer, costs[i]);
-        }
-    }
 }
 /// Read one source's distances across sites at a time. Alternatives with the same identity
 /// compete for each compatible activity, with equal-cost paths retaining provider order.
@@ -129,12 +113,14 @@ pub(crate) enum FrontageRead {
     HouseholdDemand,
     Construction,
 }
+/// `distances(source, visit)` names each site the source reaches and its travel cost;
+/// a site it does not name is out of reach.
 pub(crate) fn frontage_support(
     sources: &[OpportunitySource],
     competitors: impl Fn(&OpportunitySource) -> f64,
     read: FrontageRead,
     sites: &[Conditions],
-    distances: impl FnMut(usize, &mut [f64]),
+    distances: impl FnMut(usize, &mut dyn FnMut(usize, f64)),
 ) -> Vec<Opportunities> {
     match read {
         FrontageRead::HouseholdDemand => batch(
@@ -144,8 +130,7 @@ pub(crate) fn frontage_support(
             sites,
             distances,
             |total, offer, cost| {
-                total.demand +=
-                    offer.source.demand / ((1. + cost / 180.) * (1. + offer.competitors))
+                total.demand += offer.source.demand * pull(cost) / (1. + offer.competitors)
             },
         ),
         FrontageRead::Construction => batch(
@@ -163,7 +148,7 @@ fn batch<'a, const N: usize>(
     competitors: impl Fn(&OpportunitySource) -> f64,
     activities: &[Activity; N],
     sites: &[Conditions],
-    mut distances: impl FnMut(usize, &mut [f64]),
+    mut distances: impl FnMut(usize, &mut dyn FnMut(usize, f64)),
     accumulate: impl Fn(&mut Totals<'a>, &Offer<'a>, f64),
 ) -> Vec<Opportunities> {
     let mut order: Vec<_> = sources
@@ -179,18 +164,29 @@ fn batch<'a, const N: usize>(
     // hpc-exempt: group retained counterparty identities in stable provider order.
     order.sort_by(|a, b| a.source.id.cmp(&b.source.id));
     let mut totals = vec![[Totals::default(); N]; sites.len()];
-    let mut rows: Vec<Vec<f64>> = Vec::new();
+    // (site, offer within its identity's group, travel cost) for each site a group reaches.
+    let mut reached: Vec<(usize, usize, f64)> = Vec::new();
     for group in order.chunk_by(|a, b| a.source.id == b.source.id) {
-        if rows.len() < group.len() {
-            rows.resize_with(group.len(), || vec![0.; sites.len()]);
-        }
-        for (offer, row) in group.iter().zip(&mut rows) {
-            distances(offer.origin, row);
-        }
-        for (a, &activity) in activities.iter().enumerate() {
-            cheapest_offers(activity, group, &rows, |site, offer, cost| {
-                accumulate(&mut totals[site][a], offer, cost);
+        reached.clear();
+        for (member, offer) in group.iter().enumerate() {
+            distances(offer.origin, &mut |site, cost| {
+                if cost.is_finite() {
+                    reached.push((site, member, cost));
+                }
             });
+        }
+        // hpc-exempt: one identity's alternative paths meet per site; ties keep provider order.
+        reached.sort_unstable_by_key(|&(site, member, _)| (site, member));
+        for (a, &activity) in activities.iter().enumerate() {
+            for paths in reached.chunk_by(|x, y| x.0 == y.0) {
+                let cheapest = paths
+                    .iter()
+                    .filter(|&&(_, member, _)| compatible(activity, group[member].source.activity))
+                    .min_by(|x, y| x.2.total_cmp(&y.2));
+                if let Some(&(site, member, cost)) = cheapest {
+                    accumulate(&mut totals[site][a], &group[member], cost);
+                }
+            }
         }
     }
     totals
@@ -245,8 +241,8 @@ pub fn operating_tie(
         .iter()
         .filter(|p| p.cost.is_finite() && purpose.offered_by(p.source.activity))
         .map(|p| {
-            let strength = (p.source.demand + p.source.capability)
-                / ((1. + p.cost / 180.) * (1. + p.competitors));
+            let strength =
+                (p.source.demand + p.source.capability) * pull(p.cost) / (1. + p.competitors);
             let custom = old
                 .filter(|t| t.destination == p.source.endpoint)
                 .map_or(0., |t| t.strength);
@@ -454,6 +450,19 @@ mod tests {
         assert_eq!(result.burden, 1.2);
     }
     #[test]
+    fn a_draw_keeps_its_strength_near_by_and_ends_at_the_daily_reach() {
+        let reach = super::super::settings::DAILY_REACH;
+        assert_eq!(pull(0.), 1.);
+        assert_eq!(pull(180.), 0.5);
+        assert_eq!(within_reach(reach * 0.5), 1.);
+        assert_eq!(within_reach(reach), 0.);
+        assert_eq!(pull(f64::INFINITY), 0.);
+        let fading: Vec<_> = (0..=10)
+            .map(|i| within_reach(reach * (0.5 + 0.05 * f64::from(i))))
+            .collect();
+        assert!(fading.windows(2).all(|pair| pair[1] < pair[0]));
+    }
+    #[test]
     fn exposure_changes_a_support_trend_without_changing_condition() {
         assert_eq!(respond(0.2, 0.8, 0.), 0.2);
         assert!(respond(0.2, 0.8, 0.1) < respond(0.2, 0.8, 1.));
@@ -504,8 +513,13 @@ mod tests {
             |_| 0.,
             FrontageRead::Construction,
             &[Conditions::default(); 2],
-            |origin, costs| {
-                costs.copy_from_slice(&[[0., f64::INFINITY], [0., 0.], [0., 0.]][origin])
+            |origin, visit| {
+                for (site, &cost) in [[0., f64::INFINITY], [0., 0.], [0., 0.]][origin]
+                    .iter()
+                    .enumerate()
+                {
+                    visit(site, cost);
+                }
             },
         );
         // Equal costs keep the first compatible offer for the ID. A blocked first route
@@ -519,9 +533,9 @@ mod tests {
             |_| 0.,
             FrontageRead::HouseholdDemand,
             &[Conditions::default()],
-            |origin, costs| {
+            |origin, visit| {
                 origins.push(origin);
-                costs.fill(0.);
+                visit(0, 0.);
             },
         );
         assert_eq!(origins, [1, 2]);

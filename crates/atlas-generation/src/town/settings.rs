@@ -5,6 +5,11 @@
 /// Town development exposure after site preparation, independent of regional water rounds.
 pub const DEVELOPMENT_ROUNDS: usize = 18;
 
+/// The farthest walk, in travel-cost metres, that daily work, custom and town services
+/// draw across: about twenty minutes on foot. A draw fades over the second half of this
+/// distance and is gone at it, so a town's far side no longer pulls on every door.
+pub const DAILY_REACH: f64 = 1_600.0;
+
 // The plan's working grid.
 
 /// The finest grid cell, fine enough for town plots; a wide map uses coarser cells.

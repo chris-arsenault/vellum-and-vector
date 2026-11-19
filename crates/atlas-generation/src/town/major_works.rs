@@ -345,7 +345,10 @@ mod tests {
         assert_eq!(locate(WorkFamily::SoundingStation, &site), None);
         site.works.lake_shore = Some([35., 60.]);
         site.practice[2] = 0.5;
-        assert_eq!(locate(WorkFamily::LakeSanctuary, &site), site.works.lake_shore);
+        assert_eq!(
+            locate(WorkFamily::LakeSanctuary, &site),
+            site.works.lake_shore
+        );
         assert_eq!(locate(WorkFamily::SoundingStation, &site), site.shore);
     }
 }

@@ -103,11 +103,16 @@ fn frontage_candidates(
         .map(|(i, _)| conditions[*i])
         .collect::<Vec<_>>();
     let competitors = |s: &OpportunitySource| customers.get(&s.endpoint).copied().unwrap_or(0.);
-    let distances = |source, costs: &mut [f64]| {
-        queries.from(source);
-        for ((i, _), cost) in targets.iter().zip(costs) {
-            *cost = queries.cost(offset + i);
-        }
+    let reach = crate::town::settings::DAILY_REACH;
+    let sites = queries.destinations(
+        targets
+            .iter()
+            .enumerate()
+            .map(|(site, (i, _))| (offset + i, site)),
+    );
+    let distances = |source, visit: &mut dyn FnMut(usize, f64)| {
+        queries.within(source, reach);
+        queries.reached(&sites, reach, visit);
     };
     let read = if movement {
         FrontageRead::HouseholdDemand
