@@ -266,6 +266,9 @@ pub struct State {
     pub diagnostics: Vec<super::history::Diagnostic>,
     pub drainage: Option<crate::water::captured::DrainageNetwork>,
     pub retained_continental_domains: Cell<usize>,
+    /// Counts mutable field access through the map's field projection. With the physical
+    /// executor's revision it tells a reader whether the field may have changed.
+    pub field_writes: Cell<u64>,
     held: Held,
     varieties: Varieties,
     fall_sizes: Sizes,
@@ -300,6 +303,7 @@ impl State {
             diagnostics: Vec::new(),
             drainage: None,
             retained_continental_domains: Cell::new(0),
+            field_writes: Cell::new(0),
             held: Held::default(),
             varieties: Varieties::default(),
             fall_sizes: Sizes::default(),
@@ -308,6 +312,11 @@ impl State {
     }
     pub fn field(&self) -> &Field {
         self.physical.executor.state()
+    }
+    /// Changes whenever the field may have been written: through the physical executor
+    /// or through the map's field projection.
+    pub fn field_version(&self) -> (u64, u64) {
+        (self.physical.executor.revision(), self.field_writes.get())
     }
     pub fn clear_queries(&self) {
         self.held.release();

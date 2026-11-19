@@ -381,6 +381,28 @@ fn rooted_ground(field: &Field, cell: usize) -> io::Result<bool> {
     Ok(field.shared().scalar(Scalar::TreeCover).get(cell)? > 0.
         && field.shared().scalar(Scalar::Verdure).get(cell)? > 0.)
 }
+/// The environment answers read at a field version. Answer bands are retained, so they
+/// stay valid after the process that computed them releases its scratch.
+#[derive(Clone, Default)]
+struct HeldEnvironment(Rc<std::cell::RefCell<Option<VersionedEnvironment>>>);
+type VersionedEnvironment = ((u64, u64), Rc<EnvironmentAnswers>);
+impl HeldEnvironment {
+    fn read(
+        &self,
+        scope: &crate::execution::CommandContext<'_, State>,
+        query: &Query<State, EnvironmentAnswers>,
+    ) -> crate::execution::ExecutionResult<Rc<EnvironmentAnswers>> {
+        let version = scope.state().field_version();
+        if let Some((held, answers)) = self.0.borrow().as_ref() {
+            if *held == version {
+                return Ok(answers.clone());
+            }
+        }
+        let answers = scope.query(query)?;
+        *self.0.borrow_mut() = Some((version, answers.clone()));
+        Ok(answers)
+    }
+}
 fn environment(
     physical: &Physical,
     projection: &Projection<State, Field>,
@@ -580,12 +602,16 @@ impl Operations {
             },
         );
         let cleanup = Field::town_clearance_operation().projected(projection);
+        // Town steps change the town, not the field the environment is read from, so the
+        // environment is kept until the field may have changed.
+        let held_environment = HeldEnvironment::default();
         let mut steps: Vec<_> = processes::STEPS
             .iter()
             .map(|step| {
                 let sources = sources.clone();
                 let samples = samples.clone();
                 let environment = environment.clone();
+                let held_environment = held_environment.clone();
                 let run = step.run;
                 let reads = match run {
                     Mechanism::Movement(_) | Mechanism::Frontage(_) => processes::Reads::Frontage,
@@ -593,7 +619,7 @@ impl Operations {
                     _ => processes::Reads::Exposure,
                 };
                 let cleanup = cleanup.clone();
-                let mut dependencies = vec![environment.dependency()];
+                let mut dependencies = Vec::new();
                 if reads != processes::Reads::Exposure {
                     dependencies.push(sources.dependency());
                 }
@@ -607,7 +633,7 @@ impl Operations {
                         } else {
                             scope.query(&sources)?
                         };
-                        let environment = scope.query(&environment)?;
+                        let environment = held_environment.read(scope, &environment)?;
                         let walking_ground = Rc::new(site::walking_ground(scope.state())?);
                         let candidates: Vec<Vec<Slot>> = scope
                             .state()

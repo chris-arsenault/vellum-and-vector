@@ -37,7 +37,12 @@ impl Runtime {
     pub fn new(state: State) -> Self {
         let field = Projection::new(
             |state: &State| &state.physical.executor,
-            |state: &mut State| &mut state.physical.executor,
+            |state: &mut State| {
+                state
+                    .field_writes
+                    .set(state.field_writes.get().wrapping_add(1));
+                &mut state.physical.executor
+            },
         )
         .state();
         Self {
