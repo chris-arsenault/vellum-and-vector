@@ -49,17 +49,53 @@ impl Samples<'_> {
             spatial,
         )
         .map_err(io::Error::other)?;
+        let bands = self.bands()?;
         Ok((0..self.resource.active.len())
             .step_by(128)
-            .flat_map(move |start| match self.batch(start, &footprint, spatial) {
-                Ok(samples) => samples.into_iter().map(Ok).collect::<Vec<_>>(),
-                Err(error) => vec![Err(error)],
-            }))
+            .flat_map(
+                move |start| match self.batch(start, &footprint, &bands, spatial) {
+                    Ok(samples) => samples.into_iter().map(Ok).collect::<Vec<_>>(),
+                    Err(error) => vec![Err(error)],
+                },
+            ))
+    }
+    /// Each binding's channel and its attribute without a value, found once for all cells.
+    fn bands(&self) -> io::Result<Vec<Band<'_>>> {
+        self.bindings
+            .iter()
+            .map(|binding| {
+                let channel = self
+                    .resource
+                    .channels
+                    .get(binding.channel)
+                    .filter(|channel| channel.unit == binding.band.unit)
+                    .ok_or_else(|| {
+                        io::Error::other(format!(
+                            "Published sample {} requires its matching band and unit",
+                            binding.channel
+                        ))
+                    })?;
+                Ok(Band {
+                    values: &channel.values,
+                    categories: &binding.band.categories,
+                    attribute: SampleAttribute {
+                        layer_id: binding.layer_id.into(),
+                        band_id: binding.band.id.as_str().into(),
+                        value: None,
+                        unit: binding.band.unit.as_str().into(),
+                        label: binding.band.name.as_str().into(),
+                        display: binding.band.display.clone(),
+                        category: None,
+                    },
+                })
+            })
+            .collect()
     }
     fn batch(
         &self,
         start: usize,
         footprint: &Geometry,
+        bands: &[Band<'_>],
         spatial: &dyn SpatialKernel,
     ) -> io::Result<Vec<MapSample>> {
         let end = (start + 128).min(self.resource.active.len());
@@ -75,7 +111,7 @@ impl Samples<'_> {
         (start..end)
             .zip(shapes)
             .filter_map(|(index, shape)| {
-                shape.and_then(|shape| self.sample(index, shape, spatial).transpose())
+                shape.and_then(|shape| self.sample(index, shape, bands, spatial).transpose())
             })
             .collect()
     }
@@ -83,6 +119,7 @@ impl Samples<'_> {
         &self,
         index: usize,
         shape: Geometry,
+        bands: &[Band<'_>],
         spatial: &dyn SpatialKernel,
     ) -> io::Result<Option<MapSample>> {
         let grid = &self.resource.grid;
@@ -107,10 +144,9 @@ impl Samples<'_> {
             .as_ref()
             .map_or(center, |chart| chart.position(center));
         let id = format!("{}:cell:{index}", self.ordinal);
-        let attributes = self
-            .bindings
+        let attributes = bands
             .iter()
-            .map(|binding| self.attribute(index, binding))
+            .map(|band| band.attribute(index))
             .collect::<io::Result<_>>()?;
         let mut sections = self.sections(index)?;
         for section in &mut sections {
@@ -132,34 +168,6 @@ impl Samples<'_> {
             attributes,
             sections,
         }))
-    }
-    fn attribute(&self, index: usize, binding: &Binding<'_>) -> io::Result<SampleAttribute> {
-        let channel = self
-            .resource
-            .channels
-            .get(binding.channel)
-            .filter(|channel| channel.unit == binding.band.unit)
-            .ok_or_else(|| {
-                io::Error::other(format!(
-                    "Published sample {} requires its matching band and unit",
-                    binding.channel
-                ))
-            })?;
-        let value = channel.values.get(index)?;
-        Ok(SampleAttribute {
-            layer_id: binding.layer_id.into(),
-            band_id: binding.band.id.clone(),
-            value: value.is_finite().then(|| value.into()),
-            unit: binding.band.unit.clone(),
-            label: binding.band.name.clone(),
-            display: binding.band.display.clone(),
-            category: binding
-                .band
-                .categories
-                .iter()
-                .find(|c| f64::from(c.value) == value)
-                .map(|c| c.label.clone()),
-        })
     }
     fn sections(&self, index: usize) -> io::Result<Vec<atlas_map::InspectionSection>> {
         let read = |name: &str| {
@@ -187,6 +195,26 @@ impl Samples<'_> {
             measure: self.resource.grid.measures.get(index)?,
         }
         .sections()
+    }
+}
+/// One published band's values and its attribute without a value.
+struct Band<'a> {
+    values: &'a crate::field::schema::NumericBand,
+    categories: &'a [atlas_map::Category],
+    attribute: SampleAttribute,
+}
+impl Band<'_> {
+    fn attribute(&self, index: usize) -> io::Result<SampleAttribute> {
+        let value = self.values.get(index)?;
+        Ok(SampleAttribute {
+            value: value.is_finite().then(|| value.into()),
+            category: self
+                .categories
+                .iter()
+                .find(|c| f64::from(c.value) == value)
+                .map(|c| c.label.clone()),
+            ..self.attribute.clone()
+        })
     }
 }
 fn region(shape: Geometry) -> Option<RegionGeometry> {

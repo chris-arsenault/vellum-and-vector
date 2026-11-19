@@ -14,9 +14,19 @@ pub fn encode(value: &impl Serialize) -> io::Result<Vec<u8>> {
 pub fn decode<T: DeserializeOwned>(bytes: &[u8]) -> io::Result<T> {
     ciborium::from_reader(bytes).map_err(io::Error::other)
 }
+/// Stored samples name each band by its ordinal among the map's bands. Every sample of a map
+/// lists its bands in the same order, so the ordinal at each position is remembered from the
+/// sample before and only checked.
 pub struct Samples<'a> {
-    bands: Vec<(&'a str, &'a str, &'a RasterBand)>,
+    bands: Vec<Band<'a>>,
     ordinals: BTreeMap<(&'a str, &'a str), usize>,
+    remembered: std::cell::RefCell<Vec<usize>>,
+}
+struct Band<'a> {
+    space: &'a str,
+    band: &'a RasterBand,
+    /// The band's attribute without a value, its names shared by every sample.
+    attribute: SampleAttribute,
 }
 #[derive(Serialize)]
 #[serde(untagged)]
@@ -47,26 +57,59 @@ impl<'a> Samples<'a> {
                 LayerSource::Attributes(source) => &source.bands,
                 _ => continue,
             };
+            let layer_id: std::sync::Arc<str> = layer.id.as_str().into();
             for band in items {
                 ordinals.insert((layer.id.as_str(), band.id.as_str()), bands.len());
-                bands.push((layer.id.as_str(), layer.space_id.as_str(), band));
+                bands.push(Band {
+                    space: layer.space_id.as_str(),
+                    band,
+                    attribute: SampleAttribute {
+                        layer_id: layer_id.clone(),
+                        band_id: band.id.as_str().into(),
+                        value: None,
+                        unit: band.unit.as_str().into(),
+                        label: band.name.as_str().into(),
+                        display: band.display.clone(),
+                        category: None,
+                    },
+                });
             }
         }
-        Self { bands, ordinals }
+        Self {
+            bands,
+            ordinals,
+            remembered: Default::default(),
+        }
+    }
+    fn ordinal(&self, position: usize, value: &SampleAttribute) -> io::Result<usize> {
+        let mut remembered = self.remembered.borrow_mut();
+        let named = |ordinal: usize| {
+            let attribute = &self.bands[ordinal].attribute;
+            attribute.layer_id == value.layer_id && attribute.band_id == value.band_id
+        };
+        if let Some(&ordinal) = remembered.get(position).filter(|&&o| named(o)) {
+            return Ok(ordinal);
+        }
+        let ordinal = *self
+            .ordinals
+            .get(&(&*value.layer_id, &*value.band_id))
+            .ok_or_else(|| io::Error::other("Sample must identify a published band"))?;
+        if remembered.len() <= position {
+            remembered.resize(position + 1, ordinal);
+        }
+        remembered[position] = ordinal;
+        Ok(ordinal)
     }
     pub fn encode(&self, sample: &MapSample) -> io::Result<Vec<u8>> {
         let mut attributes = Vec::with_capacity(sample.attributes.len());
-        for value in &sample.attributes {
-            let ordinal = *self
-                .ordinals
-                .get(&(value.layer_id.as_str(), value.band_id.as_str()))
-                .ok_or_else(|| io::Error::other("Sample must identify a published band"))?;
-            let (_, space, band) = self.bands[ordinal];
-            if space != sample.space_id || band.unit != value.unit {
+        for (position, value) in sample.attributes.iter().enumerate() {
+            let ordinal = self.ordinal(position, value)?;
+            let Band { space, band, .. } = self.bands[ordinal];
+            if space != sample.space_id || *band.unit != *value.unit {
                 return Err(io::Error::other("Sample band space or unit differs"));
             }
             let category = category(band, value.value.as_ref());
-            attributes.push(if value.category == category {
+            attributes.push(if value.category.as_deref() == category {
                 Attribute::Value((ordinal, &value.value))
             } else {
                 Attribute::Category((ordinal, &value.value, &value.category))
@@ -95,7 +138,7 @@ impl<'a> Samples<'a> {
                 .as_u64()
                 .ok_or_else(|| io::Error::other("Invalid stored band ordinal"))?
                 as usize;
-            let &(layer, _, band) = self
+            let stored = self
                 .bands
                 .get(ordinal)
                 .ok_or_else(|| io::Error::other("Stored sample refers to absent band"))?;
@@ -103,16 +146,12 @@ impl<'a> Samples<'a> {
             let label = if attribute.as_array().is_some_and(|a| a.len() > 2) {
                 attribute[2].as_str().map(String::from)
             } else {
-                category(band, value.as_ref())
+                category(stored.band, value.as_ref()).map(String::from)
             };
             attributes.push(SampleAttribute {
-                layer_id: layer.into(),
-                band_id: band.id.clone(),
                 value,
-                unit: band.unit.clone(),
-                label: band.name.clone(),
-                display: band.display.clone(),
                 category: label,
+                ..stored.attribute.clone()
             });
         }
         record["attributes"] = serde_json::to_value(attributes).map_err(io::Error::other)?;
@@ -120,10 +159,10 @@ impl<'a> Samples<'a> {
         serde_json::from_value(record).map_err(io::Error::other)
     }
 }
-fn category(band: &RasterBand, value: Option<&Value>) -> Option<String> {
+fn category<'a>(band: &'a RasterBand, value: Option<&Value>) -> Option<&'a str> {
     let number = value.and_then(Value::as_f64)?;
     band.categories
         .iter()
         .find(|c| f64::from(c.value) == number)
-        .map(|c| c.label.clone())
+        .map(|c| c.label.as_str())
 }

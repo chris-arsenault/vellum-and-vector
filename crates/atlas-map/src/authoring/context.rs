@@ -81,7 +81,7 @@ fn number(attribute: &SampleAttribute) -> Option<f64> {
 /// A thickness in metres: published lengths carry the factor that shows them in metres.
 fn metres(attribute: &SampleAttribute) -> Option<f64> {
     let value = number(attribute)?;
-    Some(if attribute.display.unit == "m" {
+    Some(if &*attribute.display.unit == "m" {
         value * attribute.display.factor
     } else {
         value
@@ -223,7 +223,7 @@ mod tests {
         .unwrap();
         map.layers = vec![layer];
         let mut cell = sample(&[("value", 3.0)]);
-        cell.attributes[0].layer_id = format!("raster:{ROCK_BAND}");
+        cell.attributes[0].layer_id = format!("raster:{ROCK_BAND}").into();
         let context = wall_context(&map, &[cell], None);
         assert_eq!(context.rock, ["Limestone"]);
         assert_eq!(context.features, ["flowstone"]);

@@ -7,7 +7,8 @@ use ts_rs::TS;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DisplayUnit {
-    pub unit: String,
+    // Shared, since each published sample attribute carries its band's display unit.
+    pub unit: std::sync::Arc<str>,
     pub factor: f64,
 }
 

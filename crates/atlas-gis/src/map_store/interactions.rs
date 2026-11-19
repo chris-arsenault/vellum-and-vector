@@ -104,15 +104,15 @@ impl dyn MapAccess + '_ {
                         request
                             .layer_ids
                             .as_ref()
-                            .is_none_or(|ids| ids.contains(&v.layer_id))
+                            .is_none_or(|ids| ids.iter().any(|id| *id == *v.layer_id))
                     })
                     .map(|v| SampleValue {
                         sample_id: s.id.clone(),
-                        layer_id: v.layer_id.clone(),
-                        band_id: v.band_id.clone(),
+                        layer_id: v.layer_id.to_string(),
+                        band_id: v.band_id.to_string(),
                         value: v.value.clone(),
-                        unit: v.unit.clone(),
-                        label: v.label.clone(),
+                        unit: v.unit.to_string(),
+                        label: v.label.to_string(),
                         display: v.display.clone(),
                         category: v.category.clone(),
                         footprint: s.footprint.clone(),

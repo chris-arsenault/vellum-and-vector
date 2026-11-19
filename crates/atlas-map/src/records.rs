@@ -1,7 +1,7 @@
 use crate::{Bounds, DisplayUnit, Geometry, MapRef, Position, RegionGeometry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 use ts_rs::TS;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -89,14 +89,16 @@ pub struct SampleValue {
 }
 
 /// Attributes share one stored geographic sample footprint. No generation resource is referenced.
+/// A map publishes one attribute per band in every sample, so the band's names are shared
+/// rather than copied into each one.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SampleAttribute {
-    pub layer_id: String,
-    pub band_id: String,
+    pub layer_id: Arc<str>,
+    pub band_id: Arc<str>,
     pub value: Option<Value>,
-    pub unit: String,
-    pub label: String,
+    pub unit: Arc<str>,
+    pub label: Arc<str>,
     pub display: DisplayUnit,
     pub category: Option<String>,
 }
