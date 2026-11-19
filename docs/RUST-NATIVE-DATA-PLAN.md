@@ -285,6 +285,21 @@ groups to layer rows. The remaining per-record assembly and identity text:
 Evidence: the PostGIS test and the SQLite contract tests over registry columns; frontage
 unit tests over relations.
 
+M4 result: built. `PublicationBatch.columns` carries each layer's registry columns once;
+both stores keep them in a registry columns table, mark a column numeric when any batch
+does, and the registry joins them to the value keys its features hold
+(`registry_columns_are_rows_of_the_map`; the PostGIS test checks the same). `street_of`
+reads the `fronts`/`accessFrom` relation; plots placed by authoring carry it as generated
+plots already did (`a_holder_finds_its_street_by_relation`). The publication profile is
+taken on the M11 city run.
+Review fixes: re-saving an edited map clears its registry columns before copying them
+again; renumbering a holder reached from its street keeps its `accessFrom` tie. A column is
+numeric per map, not per selection. Left for M10: fixtures that still write
+`catalog.columns` or `streetId` (atlas-gis `authoring*.rs` and `town_tools.rs`, atlas-host
+`structure_maps.rs`, the browser fixture's town yards, which need `fronts` relations) and
+the regenerated TypeScript contract. The per-feature registry values and the town address
+attributes remain open JSON values, as decided.
+
 ### M5 — Typed generator record store [depends on M1]
 Scope: F7. Features held with UUID ids, catalogue ordinals, native geometry, a spatial
 index and typed plus open attributes; selections by layer, kind and area are index

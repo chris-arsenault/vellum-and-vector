@@ -121,7 +121,6 @@ impl Registry<'_> {
             values.insert(key.into(), value);
         }
         Ok(MapFeatureCatalog {
-            columns: columns::columns(&values, self.catalogue.layers),
             values,
             origin: if feature.actor == "generator" {
                 "Generated geography"
@@ -131,6 +130,10 @@ impl Registry<'_> {
             .into(),
             map_only: feature.map_only.unwrap_or(false),
         })
+    }
+    /// The registry columns a feature's catalogue values show, core columns first.
+    pub fn columns(&self, catalog: &MapFeatureCatalog) -> Vec<atlas_map::MapColumn> {
+        columns::columns(&catalog.values, self.catalogue.layers)
     }
     pub fn target_name(&self, id: atlas_map::Id) -> SpatialResult<String> {
         if let Some(entity) = self.entities.get(&id) {

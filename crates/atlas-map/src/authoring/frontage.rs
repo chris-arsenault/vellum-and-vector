@@ -13,8 +13,11 @@ use serde_json::Value;
 pub const FRONTAGE_REACH: f64 = 40.0;
 /// A building's relation to the street it fronts.
 pub const FRONTS: &str = "fronts";
-/// The attributes an address writes on the building and plot that hold it.
-pub const ADDRESS_KEYS: [&str; 4] = ["address", "addressNumber", "street", "streetId"];
+/// A holder reached from a street it does not stand on.
+pub const ACCESS_FROM: &str = "accessFrom";
+/// The attributes an address writes on the building and plot that hold it. The street
+/// itself is the holder's `fronts` or `accessFrom` relation.
+pub const ADDRESS_KEYS: [&str; 3] = ["address", "addressNumber", "street"];
 
 /// A way: a line in the roads layer (street, road, track or trail).
 pub fn is_way(feature: &MapFeature) -> bool {
@@ -34,13 +37,14 @@ pub fn is_yard(feature: &MapFeature) -> bool {
 pub fn holds_address(feature: &MapFeature) -> bool {
     is_building(feature) || is_yard(feature)
 }
-/// The street a building or plot is numbered on.
+/// The street a building or plot is numbered on: the target of its `fronts` relation, or of
+/// `accessFrom` when it is reached from a street it does not stand on.
 pub fn street_of(feature: &MapFeature) -> Option<crate::Id> {
     feature
-        .attributes
-        .get("streetId")
-        .and_then(Value::as_str)
-        .and_then(|id| id.parse().ok())
+        .relations
+        .iter()
+        .find(|relation| relation.kind == FRONTS || relation.kind == ACCESS_FROM)
+        .map(|relation| relation.target_id)
 }
 
 /// A point's place against a street: metres along it from its first point, which side it is
@@ -138,8 +142,16 @@ pub fn renumber(
 /// A building or plot with the address of `street` at `number`, or with no address when it
 /// fronts no street. A plot named by its address line is renamed with it.
 pub fn readdress(holder: &MapFeature, street: Option<(&MapFeature, u32)>) -> MapFeature {
+    // A holder reached from its street keeps that kind of tie to it when renumbered.
+    let reached = street.is_some_and(|(street, _)| {
+        holder
+            .relations
+            .iter()
+            .any(|r| r.kind == ACCESS_FROM && r.target_id == street.id)
+    });
     let mut next = holder.clone();
-    next.relations.retain(|relation| relation.kind != FRONTS);
+    next.relations
+        .retain(|relation| relation.kind != FRONTS && relation.kind != ACCESS_FROM);
     let Some((street, number)) = street else {
         for key in ADDRESS_KEYS {
             next.attributes.remove(key);
@@ -155,18 +167,15 @@ pub fn readdress(holder: &MapFeature, street: Option<(&MapFeature, u32)>) -> Map
         ("address", Value::from(line.clone())),
         ("addressNumber", number.into()),
         ("street", name.clone().into()),
-        ("streetId", street.id.into()),
     ] {
         next.attributes.insert(key.into(), value);
     }
-    if is_building(holder) {
-        next.relations.push(MapRelation {
-            target_id: street.id,
-            target_map_id: None,
-            target_name: name,
-            kind: FRONTS.into(),
-        });
-    }
+    next.relations.push(MapRelation {
+        target_id: street.id,
+        target_map_id: None,
+        target_name: name,
+        kind: if reached { ACCESS_FROM } else { FRONTS }.into(),
+    });
     let labelled = holder.attributes.get("nameStatus").and_then(Value::as_str) == Some("label");
     if is_yard(holder) && (labelled || holder.name.is_none()) {
         next.name = Some(line);
@@ -209,4 +218,53 @@ pub fn insert_junction(
         next.attributes.insert("widths".into(), widths.into());
     }
     Ok((next, at))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn feature(name: &str, layer: &str, kind: &str, geometry: Value) -> MapFeature {
+        serde_json::from_value(json!({
+            "id":crate::Id::from_name(name),"spaceId":crate::Id::from_name("glen"),
+            "entityId":null,"layerId":layer,"name":name,"kind":kind,"typeId":kind,
+            "catalog":{"values":{},"origin":"Authored","mapOnly":false},
+            "geometry":geometry,"footprint":null,"attributes":{},"relations":[],"causes":[]
+        }))
+        .unwrap()
+    }
+    /// A plot's street is its `fronts` relation; readdressing replaces it, and removing the
+    /// address removes the relation with the address text.
+    #[test]
+    fn a_holder_finds_its_street_by_relation() {
+        let line = |x: f64| json!({"type":"LineString","coordinates":[[x,0],[x,10]]});
+        let (high, mill) = (
+            feature("High Street", "vector:roads", "street", line(0.0)),
+            feature("Mill Lane", "vector:roads", "street", line(5.0)),
+        );
+        let plot = feature(
+            "plot",
+            "vector:plots",
+            "yard",
+            json!({"type":"Polygon","coordinates":[[[1,1],[2,1],[2,2],[1,1]]]}),
+        );
+        assert_eq!(street_of(&plot), None);
+        let numbered = readdress(&plot, Some((&high, 3)));
+        assert_eq!(street_of(&numbered), Some(high.id));
+        assert_eq!(numbered.attributes["address"], "3 High Street");
+        assert!(!numbered.attributes.contains_key("streetId"));
+        let moved = readdress(&numbered, Some((&mill, 1)));
+        assert_eq!(street_of(&moved), Some(mill.id));
+        assert_eq!(moved.relations.len(), 1);
+        let cleared = readdress(&moved, None);
+        assert_eq!(street_of(&cleared), None);
+        assert!(!cleared.attributes.contains_key("address"));
+        // A plot reached from its street keeps that tie when renumbered on it.
+        let mut reached = numbered.clone();
+        reached.relations[0].kind = ACCESS_FROM.into();
+        let renumbered = readdress(&reached, Some((&high, 5)));
+        assert_eq!(renumbered.relations[0].kind, ACCESS_FROM);
+        assert_eq!(street_of(&renumbered), Some(high.id));
+    }
 }

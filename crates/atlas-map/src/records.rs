@@ -35,11 +35,11 @@ pub struct MapRelation {
 }
 
 /// Resolved registry and origin facts; these are map descriptions, not generation records.
+/// The registry's column labels belong to the map, not to each feature.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MapFeatureCatalog {
     pub values: BTreeMap<String, Value>,
-    pub columns: Vec<MapColumn>,
     pub origin: String,
     pub map_only: bool,
 }

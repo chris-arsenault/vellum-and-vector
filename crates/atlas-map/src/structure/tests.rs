@@ -16,7 +16,7 @@ fn building(storeys: Option<i64>) -> MapFeature {
     serde_json::from_value(json!({
         "id":crate::Id::from_name("inn"),"spaceId":crate::Id::from_name("world"),"entityId":null,
         "layerId":"vector:structures","name":"The Rowan",
-        "kind":"building","typeId":"building","catalog":{"values":{},"columns":[],"origin":"Generated","mapOnly":false},
+        "kind":"building","typeId":"building","catalog":{"values":{},"origin":"Generated","mapOnly":false},
         "geometry":{"type":"Polygon","coordinates":[[[0,0],[10,0],[10,6],[0,6],[0,0]]]},
         "footprint":null,"attributes":attributes,"relations":[],"causes":[]
     }))

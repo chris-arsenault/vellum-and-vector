@@ -390,6 +390,89 @@ fn attribute_layers_publish_and_copied_maps_keep_their_samples() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
+/// The registry lists the columns of the values its features hold, from the map's column
+/// rows: a column first sent as text and later as a number is numeric.
+#[test]
+fn registry_columns_are_rows_of_the_map() {
+    use atlas_gis::{
+        map_store::{MapStore, RegistryRequest, Scope, Sort},
+        sql::Database,
+    };
+    use atlas_map::{MapColumn, PublicationState, Publisher};
+    let mut store =
+        MapStore::open_database(std::rc::Rc::new(Database::open(":memory:").unwrap())).unwrap();
+    let mut value = supplied_map();
+    value["layers"] = json!([{"id":"places","name":"Places","spaceId":id("surface"),
+        "bounds":[-30,40,70,140],"attribution":[],
+        "catalog":{"path":["Places"],"common":true,"featureTypes":[{"id":"place","kind":"place",
+            "label":"Places","path":["Places"],"magicDepiction":null,"count":0,"geometries":[],
+            "footprints":false}],"defaultStyle":null,"presets":[],"properties":{},"examples":[],
+            "geometries":[]},
+        "source":{"kind":"vector","data":{"assetId":"places","mediaType":"application/geo+json"}}}]);
+    let mut map: MapDescriptor = serde_json::from_value(value).unwrap();
+    map.state = PublicationState::Incomplete;
+    store.begin(&map, None, false).unwrap();
+    let feature = |name: &str, values: Value| {
+        json!({"id":id(name),"name":name,"spaceId":id("surface"),"layerId":"places",
+            "typeId":"place","kind":"place","entityId":null,
+            "geometry":{"type":"Point","coordinates":[0,60]},"footprint":null,"attributes":{},
+            "relations":[],"causes":[],
+            "catalog":{"values":values,"origin":"Generated geography","mapOnly":false}})
+    };
+    let column = |key: &str, label: &str, numeric: bool| MapColumn {
+        key: key.into(),
+        label: label.into(),
+        numeric,
+    };
+    let mut first: atlas_map::PublicationBatch = serde_json::from_value(json!({
+        "features":[feature("mill",json!({"name":"Mill","people":"few"}))]
+    }))
+    .unwrap();
+    first.columns = vec![
+        column("name", "Name", false),
+        column("people", "People", false),
+    ];
+    store.append(&map.reference, first).unwrap();
+    let mut second: atlas_map::PublicationBatch = serde_json::from_value(json!({
+        "features":[feature("forge",json!({"name":"Forge","people":12}))]
+    }))
+    .unwrap();
+    second.columns = vec![column("people", "People", true)];
+    store.append(&map.reference, second).unwrap();
+    store.append(&map.reference, assets_for("places")).unwrap();
+    store.finish(&map.reference).unwrap();
+    let page = store
+        .access()
+        .registry(
+            &map.reference,
+            &RegistryRequest {
+                scope: Scope::Map,
+                bounds: None,
+                query: Default::default(),
+                sort: Sort {
+                    key: "name".into(),
+                    descending: false,
+                },
+                page: 0,
+                limit: 10,
+            },
+        )
+        .unwrap();
+    assert_eq!(page.total, 2);
+    assert_eq!(
+        page.columns,
+        [
+            column("name", "Name", false),
+            column("people", "People", true)
+        ]
+    );
+}
+fn assets_for(id: &str) -> atlas_map::PublicationBatch {
+    serde_json::from_value(json!({"assets":[{"id":id,"location":"places.geojson",
+        "mediaType":"application/geo+json","byteLength":100,"illustration":false}]}))
+    .unwrap()
+}
+
 #[test]
 fn saved_gis_reads_and_spatial_queries_need_no_generator_or_private_store() {
     use atlas_gis::{

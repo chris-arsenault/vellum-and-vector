@@ -71,6 +71,12 @@ CREATE TABLE IF NOT EXISTS map_layer_properties (
   PRIMARY KEY(map_id,revision,layer,name),
   FOREIGN KEY(map_id,revision,layer) REFERENCES map_layers(map_id,revision,ordinal) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS map_registry_columns (
+  map_id BLOB NOT NULL, revision BLOB NOT NULL, key TEXT NOT NULL, label TEXT NOT NULL,
+  numeric INTEGER NOT NULL, ordinal INTEGER NOT NULL,
+  PRIMARY KEY(map_id,revision,key),
+  FOREIGN KEY(map_id,revision) REFERENCES maps(map_id,revision) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS map_features (
   row_id INTEGER PRIMARY KEY, map_id BLOB NOT NULL, revision BLOB NOT NULL, id BLOB NOT NULL,
   space_id BLOB NOT NULL, layer_id TEXT NOT NULL, type_id TEXT NOT NULL, kind TEXT NOT NULL,

@@ -327,7 +327,6 @@ fn shell_feature(
         type_id,
         catalog: MapFeatureCatalog {
             values: BTreeMap::new(),
-            columns: Vec::new(),
             origin: "Generated".into(),
             map_only: false,
         },

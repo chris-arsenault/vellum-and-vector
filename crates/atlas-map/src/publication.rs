@@ -25,6 +25,11 @@ pub struct PublicationBatch {
     pub history: Vec<HistoryEntry>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub assets: Vec<PublishedAsset>,
+    /// Registry columns first used by this batch's features, in the order they first appear.
+    /// A map stores each column once; a later batch naming it again changes nothing but may
+    /// mark it numeric.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub columns: Vec<crate::MapColumn>,
 }
 /// Owned by the selected execution host. Never made available to map presentation.
 pub trait Publisher {

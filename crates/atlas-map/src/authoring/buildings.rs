@@ -55,21 +55,23 @@ impl Planner<'_> {
             &attributes,
             creator,
         )?;
-        draft.after[0].relations.push(MapRelation {
+        let fronts = MapRelation {
             target_id: street.id,
             target_map_id: None,
             target_name: street.name.clone().unwrap_or_default(),
             kind: FRONTS.into(),
-        });
+        };
+        draft.after[0].relations.push(fronts.clone());
         if let Some(plot) = placed.plot {
-            let mut values = BTreeMap::from([
-                ("nameStatus".to_string(), Value::from("label")),
-                ("streetId".into(), street.id.into()),
-            ]);
+            let mut values = BTreeMap::from([("nameStatus".to_string(), Value::from("label"))]);
             town_attributes(&mut values, &settlement, None);
             let ground = self.clear_plot(plot)?;
             let plots = self.layer_of("plots")?;
-            let made = self.create(plot_id, &plots, "yard", None, &ground, &values, creator)?;
+            let mut made = self.create(plot_id, &plots, "yard", None, &ground, &values, creator)?;
+            // The new plot fronts the street its building does.
+            if let Some(yard) = made.after.first_mut() {
+                yard.relations.push(fronts);
+            }
             draft.after.extend(made.after);
         }
         draft.label = labelled(&format!("Place {}", use_.label()), name);

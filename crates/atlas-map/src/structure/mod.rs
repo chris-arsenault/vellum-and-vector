@@ -197,7 +197,6 @@ fn hex_feature(geometry: &Geometry, hex: Hex, layer: &MapLayer, type_id: &str) -
         type_id: type_id.into(),
         catalog: MapFeatureCatalog {
             values: BTreeMap::new(),
-            columns: Vec::new(),
             origin: "Generated".into(),
             map_only: false,
         },

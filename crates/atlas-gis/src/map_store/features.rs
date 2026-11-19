@@ -8,7 +8,6 @@ use std::{collections::BTreeMap, io};
 #[derive(Deserialize)]
 struct Catalog {
     values: BTreeMap<String, serde_json::Value>,
-    columns: Vec<atlas_map::MapColumn>,
 }
 impl MapStore {
     /// Features from `map_features` rows, with their relations.
@@ -65,7 +64,6 @@ impl MapStore {
             type_id: column(row, "type_id")?.text()?.into(),
             catalog: MapFeatureCatalog {
                 values: catalog.values,
-                columns: catalog.columns,
                 origin: column(row, "origin")?.text()?.into(),
                 map_only: column(row, "map_only")?.flag()?,
             },

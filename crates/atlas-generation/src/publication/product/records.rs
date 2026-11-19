@@ -154,10 +154,22 @@ impl Product<'_> {
         writer.write_all(b"{\"type\":\"FeatureCollection\",\"features\":[")?;
         let mut first = true;
         let mut batch = PublicationBatch::default();
+        // Each column is sent once per layer, as a numeric one when any feature's value is.
+        // hpc-exempt: registry column keys of one layer.
+        let mut sent = std::collections::BTreeMap::<String, bool>::new();
         for feature in features {
             let feature = feature?;
             if let Some(marks) = marks {
                 marks.extend(super::hexes::mark_shape(&feature));
+            }
+            for column in self.vectors.registry.columns(&feature.catalog) {
+                if sent
+                    .get(&column.key)
+                    .is_none_or(|numeric| !numeric && column.numeric)
+                {
+                    sent.insert(column.key.clone(), column.numeric);
+                    batch.columns.push(column);
+                }
             }
             write_record(&mut writer, &vector_record(&feature), &mut first)?;
             batch.features.push(feature);

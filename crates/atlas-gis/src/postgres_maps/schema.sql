@@ -147,8 +147,19 @@ CREATE TABLE IF NOT EXISTS map.layer_properties (
   PRIMARY KEY (map_id, revision, layer, name),
   FOREIGN KEY (map_id, revision, layer) REFERENCES map.layers ON DELETE CASCADE
 );
+-- The registry's columns: each derived value key a map's features hold, with its label.
+CREATE TABLE IF NOT EXISTS map.registry_columns (
+  map_id uuid NOT NULL,
+  revision uuid NOT NULL,
+  key text NOT NULL,
+  label text NOT NULL,
+  numeric boolean NOT NULL,
+  ordinal integer NOT NULL,
+  PRIMARY KEY (map_id, revision, key),
+  FOREIGN KEY (map_id, revision) REFERENCES map.revisions ON DELETE CASCADE
+);
 -- A feature's common facts are columns; its undeclared attributes and the registry's derived
--- values (whose columns differ by layer) are open values.
+-- values (whose keys differ by layer) are open values.
 CREATE TABLE IF NOT EXISTS map.features (
   map_id uuid NOT NULL,
   revision uuid NOT NULL,

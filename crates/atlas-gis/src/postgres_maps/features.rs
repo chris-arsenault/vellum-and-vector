@@ -13,11 +13,10 @@ use postgres::{
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io};
 
-/// The registry's derived values and their columns, which differ by layer.
+/// The registry's derived values. Their column labels are the map's registry column rows.
 #[derive(Serialize, Deserialize)]
 struct Catalog {
     values: BTreeMap<String, serde_json::Value>,
-    columns: Vec<atlas_map::MapColumn>,
 }
 pub(super) const FEATURE_COLUMNS: &str = "f.map_id,f.revision,f.id,f.space_id,f.layer_id,f.type_id,f.kind,f.name,f.entity_id,f.origin,f.map_only,ST_AsBinary(f.geometry) AS geometry_wkb,ST_AsBinary(f.footprint) AS footprint_wkb,f.attributes,f.catalog,f.causes";
 
@@ -66,7 +65,6 @@ impl PostgresMaps {
             let attributes = serde_json::to_value(&feature.attributes)?;
             let catalog = serde_json::to_value(Catalog {
                 values: feature.catalog.values,
-                columns: feature.catalog.columns,
             })?;
             let (id, space_id) = (uuid(feature.id), uuid(feature.space_id));
             let entity = feature.entity_id.map(uuid);
@@ -207,7 +205,6 @@ impl PostgresMaps {
             type_id: get(row, "type_id")?,
             catalog: MapFeatureCatalog {
                 values: catalog.values,
-                columns: catalog.columns,
                 origin: get(row, "origin")?,
                 map_only: get(row, "map_only")?,
             },

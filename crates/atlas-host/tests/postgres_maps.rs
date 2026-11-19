@@ -33,7 +33,7 @@ fn shape() -> Value {
     json!({"type":"Polygon","coordinates":[[[0,0],[10,0],[10,10],[0,10],[0,0]]]})
 }
 fn feature(name: &str, geometry: Value) -> Value {
-    json!({"id":id(name),"name":name,"spaceId":id("surface"),"layerId":"places","typeId":"place","kind":"place","entityId":null,"geometry":geometry,"footprint":null,"attributes":{},"relations":[],"causes":[],"catalog":{"values":{},"columns":[],"origin":"Generated geography","mapOnly":false}})
+    json!({"id":id(name),"name":name,"spaceId":id("surface"),"layerId":"places","typeId":"place","kind":"place","entityId":null,"geometry":geometry,"footprint":null,"attributes":{},"relations":[],"causes":[],"catalog":{"values":{"name":name},"origin":"Generated geography","mapOnly":false}})
 }
 fn assets() -> PublicationBatch {
     serde_json::from_value(json!({"assets":[{"id":"places","location":"places.geojson","mediaType":"application/geo+json","byteLength":100,"illustration":false}]})).unwrap()
@@ -275,8 +275,27 @@ fn scoped_queries(store: &mut PostgresMaps) -> io::Result<()> {
     features.push(feature("last", elevated));
     store.append(&map.reference, serde_json::from_value(json!({"features":features,
         "entities":[{"id":id("realm"),"name":"Coastal union","kind":"polity","people":1200,"places":3}],
-        "history":[{"id":id("uplift"),"title":"Uplift","description":"Raised ground","epoch":2,"featureIds":[id("last")],"attributes":{}}]
+        "history":[{"id":id("uplift"),"title":"Uplift","description":"Raised ground","epoch":2,"featureIds":[id("last")],"attributes":{}}],
+        "columns":[{"key":"name","label":"Name","numeric":false}]
     }))?)?;
+    // The registry's columns are the map's column rows for the values its features hold.
+    let registry = store.access().registry(
+        &map.reference,
+        &atlas_gis::map_store::RegistryRequest {
+            scope: atlas_gis::map_store::Scope::Map,
+            bounds: None,
+            query: Default::default(),
+            sort: atlas_gis::map_store::Sort {
+                key: "name".into(),
+                descending: false,
+            },
+            page: 0,
+            limit: 10,
+        },
+    )?;
+    assert_eq!(registry.total, 258);
+    assert_eq!(registry.columns.len(), 1);
+    assert_eq!(registry.columns[0].label, "Name");
     let query = FeatureQuery {
         space_id: id("surface"),
         geometry: Some(serde_json::from_value(

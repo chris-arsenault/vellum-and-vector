@@ -5,13 +5,14 @@ use atlas_map::{MapRef, RealScale};
 use std::{collections::BTreeSet, io};
 
 /// A map's description rows, copied as they are.
-const DESCRIPTION: [&str; 7] = [
+const DESCRIPTION: [&str; 8] = [
     "map_spaces",
     "map_layers",
     "map_bands",
     "map_categories",
     "map_feature_types",
     "map_layer_properties",
+    "map_registry_columns",
     "map_edits",
 ];
 
@@ -241,7 +242,13 @@ impl MapStore {
         if !real.is_some_and(|real| real.authored()) || !self.contains(reference)? {
             return Ok(());
         }
-        for table in ["map_features", "map_layers", "map_spaces", "map_edits"] {
+        for table in [
+            "map_features",
+            "map_layers",
+            "map_spaces",
+            "map_registry_columns",
+            "map_edits",
+        ] {
             self.db.execute(
                 &format!("DELETE FROM {table} WHERE map_id=? AND revision=?"),
                 &values,

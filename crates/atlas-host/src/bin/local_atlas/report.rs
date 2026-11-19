@@ -183,7 +183,7 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
                 let town = &mut towns[index].1;
                 town.buildings += 1;
                 if attribute("address").is_some_and(|a| !a.is_null())
-                    && attribute("streetId").is_some_and(|a| !a.is_null())
+                    && atlas_map::authoring::street_of(&feature).is_some()
                 {
                     town.addressed += 1;
                 }

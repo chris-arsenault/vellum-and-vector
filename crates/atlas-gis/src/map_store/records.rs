@@ -7,11 +7,10 @@ use atlas_map::{
 use serde::Serialize;
 use std::{collections::BTreeSet, io};
 
-/// The registry's derived values and their columns, which differ by layer.
+/// The registry's derived values. Their column labels are the map's registry column rows.
 #[derive(Serialize)]
 pub(super) struct Catalog<'a> {
     pub values: &'a std::collections::BTreeMap<String, serde_json::Value>,
-    pub columns: &'a [atlas_map::MapColumn],
 }
 impl MapStore {
     pub(super) fn append_records(
@@ -19,6 +18,21 @@ impl MapStore {
         map: &MapDescriptor,
         batch: PublicationBatch,
     ) -> io::Result<()> {
+        for column in batch.columns {
+            let mut values = key(&map.reference);
+            values.extend([
+                column.key.into(),
+                column.label.into(),
+                column.numeric.into(),
+            ]);
+            values.extend(key(&map.reference));
+            self.db.execute(
+                "INSERT INTO map_registry_columns VALUES(?,?,?,?,?,
+                 (SELECT count(*) FROM map_registry_columns WHERE map_id=? AND revision=?))
+                 ON CONFLICT(map_id,revision,key) DO UPDATE SET numeric=max(numeric,excluded.numeric)",
+                &values,
+            )?;
+        }
         for feature in batch.features {
             self.write_feature(map, feature)?;
         }
@@ -92,7 +106,6 @@ impl MapStore {
             serde_json::to_string(&feature.attributes)?.into(),
             serde_json::to_string(&Catalog {
                 values: &feature.catalog.values,
-                columns: &feature.catalog.columns,
             })?
             .into(),
             pack(&feature.causes)?,

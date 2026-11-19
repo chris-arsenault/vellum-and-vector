@@ -4,7 +4,6 @@ use crate::{
     features::records::Entity,
 };
 use atlas_map::{HistoryEntry, Id, MapEntity};
-use serde_json::json;
 use std::io;
 
 pub fn records(
@@ -30,9 +29,12 @@ pub fn records(
                         description: description.into(),
                         epoch: None,
                         feature_ids,
-                        attributes: serde_json::from_value(
-                            json!({"path":entry.path, "ancestry":entry.ancestry, "cause":cause}),
-                        )?,
+                        attributes: [
+                            ("path".to_owned(), serde_json::to_value(&entry.path)?),
+                            ("ancestry".into(), serde_json::to_value(&entry.ancestry)?),
+                            ("cause".into(), serde_json::to_value(cause)?),
+                        ]
+                        .into(),
                     })
                 })
         })

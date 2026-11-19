@@ -315,10 +315,10 @@ struct HouseAddress<'a> {
     label: String,
 }
 impl HouseAddress<'_> {
-    fn attributes(&self) -> [(String, Value); 5] {
+    /// The address a holder shows. Its street is its `fronts` or `accessFrom` relation.
+    fn attributes(&self) -> [(String, Value); 4] {
         [
             ("street".into(), json!(self.street)),
-            ("streetId".into(), json!(self.street_id)),
             ("address".into(), json!(self.label)),
             ("addressNumber".into(), json!(self.resolved.number)),
             ("addressJunction".into(), json!(self.resolved.junction)),

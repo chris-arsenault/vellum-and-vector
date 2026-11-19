@@ -327,7 +327,6 @@ impl Planner<'_> {
             type_id: kind_type.id.clone(),
             catalog: MapFeatureCatalog {
                 values: BTreeMap::new(),
-                columns: Vec::new(),
                 origin: "Authored".into(),
                 map_only: false,
             },

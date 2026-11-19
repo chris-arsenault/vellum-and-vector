@@ -36,6 +36,21 @@ impl Open {
 impl PostgresMaps {
     pub(super) fn append_records(&self, open: &Open, batch: PublicationBatch) -> io::Result<()> {
         let r = &open.map.reference;
+        for column in &batch.columns {
+            self.execute(
+                "INSERT INTO map.registry_columns VALUES($1,$2,$3,$4,$5,
+                 (SELECT count(*)::integer FROM map.registry_columns WHERE map_id=$1 AND revision=$2))
+                 ON CONFLICT(map_id,revision,key) DO UPDATE
+                 SET numeric=map.registry_columns.numeric OR excluded.numeric",
+                &[
+                    &uuid(r.map_id),
+                    &uuid(r.revision),
+                    &column.key,
+                    &column.label,
+                    &column.numeric,
+                ],
+            )?;
+        }
         self.write_features(open, batch.features)?;
         self.write_samples(open, batch.samples)?;
         for entity in batch.entities {

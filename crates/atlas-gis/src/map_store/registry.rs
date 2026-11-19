@@ -208,7 +208,24 @@ impl MapStore {
         Ok(())
     }
     fn registry_columns(&self) -> io::Result<Vec<MapColumn>> {
-        self.db.query(&format!("SELECT json_extract(j.value,'$.key') AS key,json_extract(j.value,'$.label') AS label,max(json_extract(j.value,'$.numeric')) AS numeric FROM {SELECTION},json_each(f.catalog,'$.columns') j GROUP BY json_extract(j.value,'$.key') ORDER BY min(CAST(j.key AS INTEGER)),key"),&[])?.iter().map(|row| Ok(MapColumn {key:column(row,"key")?.text()?.into(),label:column(row,"label")?.text()?.into(),numeric:column(row,"numeric")?.flag()?})).collect()
+        // The columns of the values the visible features hold, in their maps' column order.
+        let sql = format!(
+            "SELECT c.key,min(c.label) AS label,max(c.numeric) AS numeric
+             FROM {SELECTION},json_each(f.catalog,'$.values') j
+             JOIN map_registry_columns c ON c.map_id=f.map_id AND c.revision=f.revision AND c.key=j.key
+             GROUP BY c.key ORDER BY min(c.ordinal),c.key"
+        );
+        self.db
+            .query(&sql, &[])?
+            .iter()
+            .map(|row| {
+                Ok(MapColumn {
+                    key: column(row, "key")?.text()?.into(),
+                    label: column(row, "label")?.text()?.into(),
+                    numeric: column(row, "numeric")?.flag()?,
+                })
+            })
+            .collect()
     }
     fn registry_facets(&self) -> io::Result<Facets> {
         let mut categories = BTreeMap::new();

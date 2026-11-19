@@ -91,7 +91,13 @@ impl PostgresMaps {
     }
     fn registry_columns(&self, scope: &str, params: &Params) -> io::Result<Vec<MapColumn>> {
         self.query(
-            &format!("{scope} SELECT item->>'key' AS key,min(item->>'label') AS label,bool_or((item->>'numeric')::boolean) AS numeric FROM scoped,jsonb_array_elements(catalog->'columns') WITH ORDINALITY AS c(item,ordinal) GROUP BY item->>'key' ORDER BY min(ordinal),item->>'key'"),
+            // The columns of the values the scoped features hold, in their maps' column order.
+            &format!(
+                "{scope} SELECT c.key,min(c.label) AS label,bool_or(c.numeric) AS numeric
+                 FROM scoped s CROSS JOIN LATERAL jsonb_object_keys(s.catalog->'values') AS k(key)
+                 JOIN map.registry_columns c ON c.map_id=s.map_id AND c.revision=s.revision AND c.key=k.key
+                 GROUP BY c.key ORDER BY min(c.ordinal),c.key"
+            ),
             &params.values(),
         )?
         .iter()
