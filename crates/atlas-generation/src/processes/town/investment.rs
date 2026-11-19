@@ -140,6 +140,14 @@ fn extend_precincts(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
 }
 fn collective_needs(town: &mut Town, context: &Exposure<'_>) {
     for &kind in &crate::town::catalogue::PLACES {
+        // Sites already seeking this kind, gathered once rather than per holding.
+        let sought: Vec<_> = town
+            .purposes()
+            .iter()
+            .filter(|p| p.relationships.contains(&Relationship::Accommodation(kind)))
+            .map(|p| town.position(p.site))
+            .collect();
+        let reach = kind.definition().depth.high * 6.;
         let centre = town
             .holdings()
             .iter()
@@ -155,11 +163,9 @@ fn collective_needs(town: &mut Town, context: &Exposure<'_>) {
                     )
             })
             .filter(|(h, _)| {
-                !town.purposes().iter().any(|p| {
-                    p.relationships.contains(&Relationship::Accommodation(kind))
-                        && crate::town::geometry::distance(h.slot.front, town.position(p.site))
-                            <= kind.definition().depth.high * 6.
-                })
+                !sought
+                    .iter()
+                    .any(|&site| crate::town::geometry::distance(h.slot.front, site) <= reach)
             })
             .max_by(|(a, ca), (b, cb)| {
                 let intensity =
@@ -184,9 +190,20 @@ fn premises(
     vacant: bool,
 ) -> Option<(f64, crate::town::fabric::HoldingId)> {
     let site = town.position(purpose.site);
-    town.holdings()
-        .iter()
-        .zip(context.conditions)
+    // Accommodation admits fronts within six of its depths of the site; a holding's front
+    // lies on its outline, so the holdings index finds every candidate. Ids stay in
+    // order so ties resolve as a scan would.
+    let reach = kind.definition().depth.high * 6. + 5.;
+    let [x, y] = site;
+    let mut near = town
+        .nearby_holdings(
+            atlas_map::Bounds(x - reach, y - reach, x + reach, y + reach),
+            context.spatial,
+        )
+        .ok()?;
+    near.sort_unstable();
+    near.into_iter()
+        .filter_map(|i| Some((&town.holdings()[i], context.conditions.get(i)?)))
         .filter(|(h, conditions)| {
             if purpose.site == Anchor::Premises(h.id) {
                 return false;
