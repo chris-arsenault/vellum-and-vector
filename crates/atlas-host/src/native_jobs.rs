@@ -90,7 +90,24 @@ pub enum Event {
 #[serde(rename_all = "camelCase")]
 pub struct PreviewAsset {
     pub media_type: String,
+    /// One byte string: a mature city's preview is tens of megabytes.
+    #[serde(serialize_with = "byte_string")]
     pub bytes: Vec<u8>,
+}
+fn byte_string<S: serde::Serializer>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_bytes(bytes)
+}
+/// A generation call's reply. Observed events are sent as they are, so their preview bytes
+/// stay one byte string instead of becoming a list of numbers.
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum Reply {
+    Value(Value),
+    Observed {
+        events: Vec<Event>,
+        next: usize,
+        status: Box<GenerationStatus>,
+    },
 }
 pub(super) struct State {
     status: GenerationStatus,
@@ -160,7 +177,25 @@ impl Jobs {
             jobs: Mutex::new(jobs),
         })
     }
-    pub fn call(&self, call: Call) -> io::Result<Value> {
+    pub fn call(&self, call: Call) -> io::Result<Reply> {
+        if let Call::Observe { job_id, after } = call {
+            let job = self.job(&job_id)?;
+            let state = job.state.lock().map_err(poisoned)?;
+            if after > state.events.len() {
+                return Err(io::Error::other("Unknown generation event cursor"));
+            }
+            let events = state.events[after..].to_vec();
+            let next = state.events.len();
+            drop(state);
+            return Ok(Reply::Observed {
+                events,
+                next,
+                status: Box::new(job.status()?),
+            });
+        }
+        self.answer(call).map(Reply::Value)
+    }
+    fn answer(&self, call: Call) -> io::Result<Value> {
         match call {
             Call::Jobs => Ok(json!(self
                 .jobs
@@ -200,17 +235,7 @@ impl Jobs {
                 }
                 Ok(json!(job.status()?))
             }
-            Call::Observe { job_id, after } => {
-                let job = self.job(&job_id)?;
-                let state = job.state.lock().map_err(poisoned)?;
-                if after > state.events.len() {
-                    return Err(io::Error::other("Unknown generation event cursor"));
-                }
-                let events = state.events[after..].to_vec();
-                let next = state.events.len();
-                drop(state);
-                Ok(json!({"events":events,"next":next,"status":job.status()?}))
-            }
+            Call::Observe { .. } => Err(io::Error::other("Observation replies are typed")),
         }
     }
     fn job(&self, id: &str) -> io::Result<Job> {
@@ -289,4 +314,49 @@ impl Action {
 }
 fn poisoned<T>(_: std::sync::PoisonError<T>) -> io::Error {
     io::Error::other("Generation job state lock was poisoned")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn an_observed_preview_is_sent_as_one_byte_string() {
+        let reply = Reply::Observed {
+            events: vec![Event::Preview {
+                job_id: "job".into(),
+                epoch: 0,
+                map: PreviewAsset {
+                    media_type: "application/json".into(),
+                    bytes: b"{}".to_vec(),
+                },
+            }],
+            next: 1,
+            status: Box::new(GenerationStatus {
+                job_id: "job".into(),
+                state: GenerationState::Running,
+                step: String::new(),
+                progress: None,
+                result: None,
+                message: None,
+                details: None,
+                recovery: None,
+            }),
+        };
+        let mut encoded = Vec::new();
+        ciborium::into_writer(&reply, &mut encoded).unwrap();
+        let value: ciborium::Value = ciborium::from_reader(encoded.as_slice()).unwrap();
+        let field = |value: &ciborium::Value, name: &str| {
+            value
+                .as_map()
+                .and_then(|m| m.iter().find(|(k, _)| k.as_text() == Some(name)))
+                .map(|(_, v)| v.clone())
+                .unwrap()
+        };
+        let event = field(&value, "events").as_array().unwrap()[0].clone();
+        assert_eq!(
+            field(&field(&event, "map"), "bytes"),
+            ciborium::Value::Bytes(b"{}".to_vec())
+        );
+        assert_eq!(field(&value, "next"), ciborium::Value::Integer(1.into()));
+    }
 }
