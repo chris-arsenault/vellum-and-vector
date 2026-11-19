@@ -606,6 +606,15 @@ fn traffic(town: &mut Town, context: &Frontage<'_>) -> io::Result<Traffic> {
         access.add_link(a, b, cost, context.spatial)?;
     }
     let mut unmet = Vec::new();
+    // hpc-exempt: sources keyed by endpoint, in their original order, so each operating
+    // tie finds its counterparty without scanning every source.
+    let mut by_endpoint = std::collections::BTreeMap::<_, Vec<_>>::new();
+    for source in context.sources {
+        by_endpoint
+            .entry(&source.endpoint)
+            .or_default()
+            .push(source);
+    }
     let mut walks = super::walks::Walks::new(town, context.walking_ground);
     // hpc-exempt: named street stretches retain the loads of routed journeys.
     let mut use_ = std::collections::BTreeMap::<Stretch, f64>::new();
@@ -622,10 +631,11 @@ fn traffic(town: &mut Town, context: &Frontage<'_>) -> io::Result<Traffic> {
             .flat_map(|h| h.operating_shares().map(move |(t, s)| (h, t, s)))
             .filter(|(_, t, _)| t.access == mode)
         {
-            let Some(source) = context.sources.iter().find(|s| {
-                s.endpoint == tie.destination
-                    && tie.purpose.offered_by(s.activity)
-                    && s.demand + s.capability > 0.
+            let Some(source) = by_endpoint.get(&tie.destination).and_then(|sources| {
+                sources
+                    .iter()
+                    .copied()
+                    .find(|s| tie.purpose.offered_by(s.activity) && s.demand + s.capability > 0.)
             }) else {
                 continue;
             };
@@ -768,11 +778,13 @@ type TripOrigins = std::collections::BTreeMap<
 type Loads = std::collections::BTreeMap<Stretch, f64>;
 fn street_loads(town: &Town, context: &Frontage<'_>, use_: &Loads) -> io::Result<Vec<StreetLoad>> {
     let mut loads = Vec::new();
-    for (street, road) in town.streets().iter().enumerate() {
-        let stretches: Vec<_> = use_.iter().filter(|(s, _)| s.street == street).collect();
-        if stretches.is_empty() {
+    // Stretches order by street first, so each street's stretches are one run.
+    let used: Vec<_> = use_.iter().collect();
+    for stretches in used.chunk_by(|a, b| a.0.street == b.0.street) {
+        let street = stretches[0].0.street;
+        let Some(road) = town.streets().get(street) else {
             continue;
-        }
+        };
         let points: Vec<_> = stretches
             .iter()
             .flat_map(|(s, _)| [s.from.point(), s.to.point()])
@@ -783,12 +795,12 @@ fn street_loads(town: &Town, context: &Frontage<'_>, use_: &Loads) -> io::Result
             .line_fractions(&line(&road.points), &points)
             .map_err(io::Error::other)?;
         let length = road.length();
-        for ((_, value), m) in stretches.into_iter().zip(measures.as_chunks::<2>().0) {
+        for ((_, value), m) in stretches.iter().zip(measures.as_chunks::<2>().0) {
             loads.push(StreetLoad {
                 street,
                 start: m[0].min(m[1]) * length,
                 end: m[0].max(m[1]) * length,
-                value: *value,
+                value: **value,
             });
         }
     }

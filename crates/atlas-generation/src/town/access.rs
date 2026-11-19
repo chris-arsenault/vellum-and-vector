@@ -437,14 +437,17 @@ impl<'a> Access<'a> {
         {
             groups.entry(e.street).or_default().push(i);
         }
+        // Each named street's legs, gathered once; an unnamed entrance may use any leg.
+        let mut by_street =
+            vec![Vec::new(); self.legs.iter().map(|l| l.street + 1).max().unwrap_or(0)];
+        for (i, leg) in self.legs.iter().enumerate() {
+            by_street[leg.street].push(i);
+        }
         for (street, places) in groups {
-            let indices: Vec<_> = self
-                .legs
-                .iter()
-                .enumerate()
-                .filter(|(_, l)| street.is_none_or(|s| s == l.street))
-                .map(|(i, _)| i)
-                .collect();
+            let indices: Vec<usize> = match street {
+                Some(s) => by_street.get(s).cloned().unwrap_or_default(),
+                None => (0..self.legs.len()).collect(),
+            };
             if indices.is_empty() {
                 continue;
             }
@@ -586,36 +589,31 @@ impl BoundNetwork {
                 .into_iter()
                 .map(|(node, cost)| (node, cost, None)),
             false,
+            Labels::dense(self.edges.len()),
             |_| false,
         )
     }
     /// Only the requested journeys are observable. Stop after settling their destinations.
+    /// Such a search labels only the nodes it reaches, so its storage follows that reach
+    /// rather than the whole network.
     pub(crate) fn routes_to(
         &self,
         origin: usize,
         destinations: impl Iterator<Item = usize>,
     ) -> Routes<'_> {
-        let mut needed = vec![false; self.edges.len()];
-        let mut remaining = 0;
-        for destination in destinations {
-            if let Some((node, _)) = self.entrances[destination] {
-                if !needed[node] {
-                    needed[node] = true;
-                    remaining += 1;
-                }
-            }
-        }
+        // hpc-exempt: the few destination nodes one search still has to settle.
+        let mut needed: std::collections::HashSet<usize> = destinations
+            .filter_map(|destination| self.entrances[destination].map(|(node, _)| node))
+            .collect();
         self.search(
             self.entrances[origin]
                 .into_iter()
                 .map(|(node, cost)| (node, cost, None)),
             false,
+            Labels::Sparse(Default::default()),
             |node| {
-                if needed[node] {
-                    needed[node] = false;
-                    remaining -= 1;
-                }
-                remaining == 0
+                needed.remove(&node);
+                needed.is_empty()
             },
         )
     }
@@ -646,29 +644,31 @@ impl BoundNetwork {
                 _ => None,
             })
         });
-        self.search(roots, true, |_| false)
+        self.search(roots, true, Labels::dense(self.edges.len()), |_| false)
     }
     fn search(
         &self,
         roots: impl Iterator<Item = (usize, f64, Option<usize>)>,
         walk_only: bool,
+        mut labels: Labels,
         mut finished: impl FnMut(usize) -> bool,
     ) -> Routes<'_> {
-        let mut routes = Routes {
-            graph: self,
-            costs: vec![f64::INFINITY; self.edges.len()],
-            via: vec![None; self.edges.len()],
-            streets: vec![None; self.edges.len()],
-        };
         let mut heap = KeyedHeap::new([Direction::Ascending], Direction::Ascending);
         for (start, offset, street) in roots {
-            routes.costs[start] = offset;
-            routes.streets[start] = street;
+            labels.set(
+                start,
+                Label {
+                    cost: offset,
+                    via: None,
+                    street,
+                },
+            );
             heap.push(start as u32, [offset]);
         }
         while let Some((id, [cost])) = heap.pop() {
             let id = id as usize;
-            if cost > routes.costs[id] {
+            let here = labels.get(id);
+            if cost > here.cost {
                 continue;
             }
             if finished(id) {
@@ -679,15 +679,62 @@ impl BoundNetwork {
                     continue;
                 }
                 let next = cost + edge.cost;
-                if next < routes.costs[edge.to] {
-                    routes.costs[edge.to] = next;
-                    routes.via[edge.to] = Some((id, edge.course));
-                    routes.streets[edge.to] = routes.streets[id];
+                if next < labels.get(edge.to).cost {
+                    labels.set(
+                        edge.to,
+                        Label {
+                            cost: next,
+                            via: Some((id, edge.course)),
+                            street: here.street,
+                        },
+                    );
                     heap.push(edge.to as u32, [next]);
                 }
             }
         }
-        routes
+        Routes {
+            graph: self,
+            labels,
+        }
+    }
+}
+/// What a search knows about one node: its cost, the step it arrived by and the named
+/// way it walks from.
+#[derive(Clone, Copy)]
+struct Label {
+    cost: f64,
+    via: Option<(usize, Course)>,
+    street: Option<usize>,
+}
+const UNREACHED: Label = Label {
+    cost: f64::INFINITY,
+    via: None,
+    street: None,
+};
+/// A search over the whole network keeps a label per node; one that stops at a few
+/// destinations keeps only the nodes it labelled.
+enum Labels {
+    Dense(Vec<Label>),
+    // hpc-exempt: the nodes an early-stopping search reached, keyed by node.
+    Sparse(std::collections::HashMap<usize, Label>),
+}
+impl Labels {
+    fn dense(nodes: usize) -> Self {
+        Self::Dense(vec![UNREACHED; nodes])
+    }
+    fn get(&self, node: usize) -> Label {
+        match self {
+            Self::Dense(labels) => labels[node],
+            Self::Sparse(labels) => labels.get(&node).copied().unwrap_or(UNREACHED),
+        }
+    }
+    fn set(&mut self, node: usize, label: Label) {
+        match self {
+            Self::Dense(labels) => labels[node] = label,
+            Self::Sparse(labels) => {
+                labels.insert(node, label);
+            }
+        }
     }
 }
 pub struct DistanceQueries<'a> {
@@ -726,13 +773,13 @@ impl DistanceQueries<'_> {
 }
 pub struct Routes<'a> {
     graph: &'a BoundNetwork,
-    costs: Vec<f64>,
-    via: Vec<Option<(usize, Course)>>,
-    streets: Vec<Option<usize>>,
+    labels: Labels,
 }
 impl Routes<'_> {
     pub fn cost(&self, target: usize) -> f64 {
-        self.graph.entrances[target].map_or(f64::INFINITY, |(v, offset)| self.costs[v] + offset)
+        self.graph.entrances[target].map_or(f64::INFINITY, |(v, offset)| {
+            self.labels.get(v).cost + offset
+        })
     }
     pub fn visit(&self, target: usize, mut traversed: impl FnMut(Stretch)) {
         self.course(target, |kind, _, _| {
@@ -745,14 +792,14 @@ impl Routes<'_> {
         let Some((mut node, _)) = self.graph.entrances[target] else {
             return;
         };
-        while let Some((previous, kind)) = self.via[node] {
+        while let Some((previous, kind)) = self.labels.get(node).via {
             traversed(kind, self.graph.points[node], self.graph.points[previous]);
             node = previous;
         }
     }
     pub fn approach(&self, target: usize) -> Option<Approach> {
         let (node, _) = self.graph.entrances[target]?;
-        let street = self.streets[node]?;
+        let street = self.labels.get(node).street?;
         let mut points = vec![self.graph.points[node]];
         self.course(target, |_, _, b| points.push(b));
         Some(Approach { points, street })

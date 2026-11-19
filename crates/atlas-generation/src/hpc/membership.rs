@@ -92,19 +92,36 @@ impl<T: Clone + Default> EpochStamps<T> {
     }
 }
 
+/// Membership in insertion order. A few values are scanned directly; past that a hash
+/// index answers, so a set that grows (cells a walk visited) stays linear overall.
 #[derive(Default)]
 pub struct SmallIntSet {
     values: Vec<i32>,
+    // hpc-exempt: sparse membership of the values added, not per-cell lattice state.
+    index: std::collections::HashSet<i32>,
 }
+/// Up to this many values a linear scan is faster than hashing.
+const SCANNED: usize = 16;
 impl SmallIntSet {
     pub fn has(&self, value: i32) -> bool {
-        self.values.contains(&value)
+        if self.values.len() <= SCANNED {
+            self.values.contains(&value)
+        } else {
+            self.index.contains(&value)
+        }
     }
     pub fn add(&mut self, value: i32) -> bool {
-        if self.values.contains(&value) {
+        if self.has(value) {
             return false;
         }
         self.values.push(value);
+        if self.values.len() > SCANNED {
+            if self.index.is_empty() {
+                self.index.extend(self.values.iter().copied());
+            } else {
+                self.index.insert(value);
+            }
+        }
         true
     }
     pub fn items(&self) -> &[i32] {
@@ -112,6 +129,7 @@ impl SmallIntSet {
     }
     pub fn clear(&mut self) {
         self.values.clear();
+        self.index.clear();
     }
 }
 
@@ -172,5 +190,21 @@ mod tests {
         assert!(stamps.get(1).is_none());
         assert!(stamps.mark(0));
         assert!(!stamps.mark(0));
+    }
+
+    #[test]
+    fn small_int_sets_keep_membership_and_order_past_the_scanned_size() {
+        let mut set = super::SmallIntSet::default();
+        let values: Vec<i32> = (0..100).map(|i| (i * 37) % 101 - 50).collect();
+        for &value in &values {
+            assert!(set.add(value));
+            assert!(!set.add(value));
+        }
+        assert_eq!(set.items(), values.as_slice());
+        assert!(values.iter().all(|&value| set.has(value)));
+        assert!(!set.has(1000));
+        set.clear();
+        assert!(set.items().is_empty() && !set.has(values[50]));
+        assert!(set.add(values[50]));
     }
 }

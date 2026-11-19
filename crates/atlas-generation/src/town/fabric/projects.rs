@@ -24,12 +24,33 @@ impl Relationship {
         town: &Town,
         spatial: &dyn SpatialKernel,
     ) -> io::Result<bool> {
+        // A whole-town check reads only holdings near the site when the relationship has
+        // a fixed reach; a holding's front lies on its own outline.
+        if let Some(reach) = self.reach().filter(|_| first == 0) {
+            let [x, y] = town.position(site);
+            let pad = reach + 5.;
+            for i in town.nearby_holdings(Bounds(x - pad, y - pad, x + pad, y + pad), spatial)? {
+                if self.served_by(&town.holdings[i], site, town, spatial)? {
+                    return Ok(true);
+                }
+            }
+            return Ok(false);
+        }
         for holding in &town.holdings[first..] {
             if self.served_by(holding, site, town, spatial)? {
                 return Ok(true);
             }
         }
         Ok(false)
+    }
+    /// The furthest a serving front may lie from the site, when it does not depend on
+    /// the serving holding.
+    fn reach(self) -> Option<f64> {
+        match self {
+            Self::Accommodation(kind) => Some(6. * kind.definition().depth.high),
+            Self::GatheringSpace { for_use } => Some(3. * for_use.definition().depth.high),
+            Self::Protection { .. } | Self::Access { .. } => None,
+        }
     }
     fn served_by(
         self,
