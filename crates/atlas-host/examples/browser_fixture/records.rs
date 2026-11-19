@@ -19,7 +19,7 @@ pub fn install(document: &mut Document, records: &mut impl FeatureWorkspace) -> 
         "name":"River town","geometry":{"type":"Point","coordinates":[85,85]},
         "causes":["People gathered beside the river"],"attributes":{"population":200,"communityPopulation":1000,
         "ruralPopulation":800,"history":[{"era":"First era","townsfolk":100,"people":500},
-        {"era":"Second era","townsfolk":200,"people":1000}],"groups":[{"people":"residents","culture":null,
+        {"era":"Second era","townsfolk":200,"people":1000}],"groups":[{"people":id("residents"),"culture":null,
         "languages":[river,coast],"namingLanguage":river,"languageShares":{river.to_string():{"knowledge":1,"use":0.75},
         coast.to_string():{"knowledge":0.4,"use":0.25}},"religions":[],"practices":[],"count":1000}]}}),
     );

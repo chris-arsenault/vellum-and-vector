@@ -177,14 +177,18 @@ impl MapStore {
                 next: None,
             });
         }
+        // Entries come in published order; a page continues after the entry it ended on.
         let mut values = key(reference);
+        values.extend(key(reference));
         values.push(after.unwrap_or(Id::NIL).into());
         let predicate = feature_ids.map_or_else(String::new, |ids| {
             values.extend(ids.iter().copied().map(Value::from));
             format!(" AND EXISTS(SELECT 1 FROM map_history_features f WHERE f.map_id=h.map_id AND f.revision=h.revision AND f.history_id=h.id AND f.feature_id IN ({}))", placeholders(ids.len()))
         });
         values.push(((PAGE_SIZE + 1) as i64).into());
-        let rows = self.db.query(&format!("SELECT h.data FROM map_history h WHERE h.map_id=? AND h.revision=? AND h.id>?{predicate} ORDER BY h.id LIMIT ?"), &values)?;
+        let rows = self.db.query(&format!("SELECT h.data FROM map_history h WHERE h.map_id=? AND h.revision=?
+             AND h.ordinal>COALESCE((SELECT ordinal FROM map_history WHERE map_id=? AND revision=? AND id=?),-1){predicate}
+             ORDER BY h.ordinal LIMIT ?"), &values)?;
         let more = rows.len() > PAGE_SIZE;
         let items: Vec<HistoryEntry> = rows
             .iter()

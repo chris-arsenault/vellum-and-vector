@@ -1,4 +1,5 @@
 import { test, expect } from "./uiTest";
+import { fixtureId } from "./harness";
 import { readFile } from "node:fs/promises";
 
 test(
@@ -52,8 +53,8 @@ test(
     const selection = JSON.parse(
       await page.getByRole("region", { name: "Region selection" }).innerText()
     );
-    expect(selection.parent.revision).toBe("published");
-    expect(selection.featureIds).toEqual(["island"]);
+    expect(selection.parent.revision).toBe(fixtureId("published"));
+    expect(selection.featureIds).toEqual([fixtureId("island")]);
     expect(selection.geometry.type).toBe("Polygon");
     await expect(page.getByRole("region", { name: "Vector asset" })).toContainText(
       "FeatureCollection"

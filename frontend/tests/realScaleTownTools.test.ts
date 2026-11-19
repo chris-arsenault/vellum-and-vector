@@ -68,7 +68,8 @@ test("a lane drawn off a street, an inn placed and found by its address, then un
   await expect(history.getByRole("listitem")).toHaveCount(1);
   const laid: Exported = await exportMap(page);
   const lane = laid.features.find(
-    (entry) => entry.properties.roadClass === "lane" && !find(before, entry.id)
+    (entry) =>
+      entry.properties.roadClass === "lane" && !before.features.some((old) => old.id === entry.id)
   )!;
   expect(lane.properties.name).toBeTruthy();
   await expect(history).toContainText(`Draw ${lane.properties.name}`);

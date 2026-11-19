@@ -1,5 +1,6 @@
 import { dispatchMapRead, parseMapCall, dispatchMapNavigation } from "@atlas/transport";
 import type { MapReader, MapNavigation } from "@atlas/map";
+import { NIL, v5 } from "uuid";
 import { openFinishedAtlas } from "../src/finishedAtlasContext";
 import { installFixtureMap } from "./fixturePublication.worker";
 
@@ -36,7 +37,8 @@ self.onmessage = async ({ data }) => {
     });
     const selection = await maps.selectRegion(reference, {
       spaceId: map.primarySpaceId,
-      featureIds: ["island"],
+      // The fixture's island record, by the id its name makes (`Id::from_name`).
+      featureIds: [v5("island", NIL)],
     });
     const layer = map.layers.find((layer) => layer.id === "vector:geology")!;
     if (layer.source.kind !== "vector") throw new Error("Expected published geology.");

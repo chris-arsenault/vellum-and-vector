@@ -37,13 +37,13 @@ describe("structure maps", () => {
   it("reads landings and links to other maps from relations", () => {
     const feature = {
       relations: [
-        { targetId: "stair@1", targetName: "Landing", kind: "leadsTo" },
-        { targetId: "glen#passage", targetName: "Rowan passage", kind: "connectsTo" },
-        { targetId: "wall@0:1", targetName: "Front wall", kind: "in" },
+        { targetId: "stair", targetMapId: null, targetName: "Landing", kind: "leadsTo" },
+        { targetId: "passage", targetMapId: "glen", targetName: "Rowan passage", kind: "connectsTo" },
+        { targetId: "wall", targetMapId: null, targetName: "Front wall", kind: "in" },
       ],
     } as MapFeature;
     expect(heldConnections(feature).map(({ mapId, featureId }) => [mapId, featureId])).toEqual([
-      [undefined, "stair@1"],
+      [undefined, "stair"],
       ["glen", "passage"],
     ]);
   });

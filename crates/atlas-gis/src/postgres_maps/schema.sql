@@ -228,9 +228,12 @@ CREATE TABLE IF NOT EXISTS map.history (
   revision uuid NOT NULL,
   id uuid NOT NULL,
   data jsonb NOT NULL,
+  -- Entries keep the order they were published in; their ids carry no order.
+  ordinal bigint NOT NULL,
   PRIMARY KEY (map_id, revision, id),
   FOREIGN KEY (map_id, revision) REFERENCES map.revisions ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS map_history_order ON map.history(map_id, revision, ordinal);
 CREATE TABLE IF NOT EXISTS map.history_features (
   map_id uuid NOT NULL,
   revision uuid NOT NULL,

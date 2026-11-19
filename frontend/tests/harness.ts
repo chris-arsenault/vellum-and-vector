@@ -5,6 +5,9 @@ export { fixtureChild, openFixtureMap, openSavedFixture } from "./preparedMaps";
 /** A fixture record's identity from its name, as the Rust fixture makes it
  * (`atlas_map::Id::from_name`: UUID v5 of the name in the nil namespace). */
 export const fixtureId = (name: string) => v5(name, NIL);
+/** A ground map's underground space, named in its surface space as the Rust side makes it
+ * (`Id::v5(surface, b"underground")`). */
+export const undergroundSpace = (surface: string) => v5("underground", surface);
 export const canvas = (page: Page) => page.getByRole("application", { name: "World map canvas" });
 export function pageErrors(page: Page) {
   const errors: string[] = [];

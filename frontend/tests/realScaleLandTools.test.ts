@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./uiTest";
-import { canvas, exportMap, fixtureId, openFixtureMap } from "./harness";
+import { canvas, exportMap, fixtureId, openFixtureMap, undergroundSpace } from "./harness";
 
 type Point = [number, number];
 interface Exported {
@@ -264,6 +264,7 @@ test("a cave wall drawn from the surface lands in the caves and shows the rock i
   await expect(wall).toContainText("Flowstone (the rock dissolves)");
   const exported: Exported = await exportMap(page);
   const [drawn] = exported.features.filter((entry) => entry.properties.kind === "caveWall");
-  expect(drawn.properties.spaceId).toMatch(/:underground$/);
+  const surface = exported.features.find((entry) => entry.properties.kind !== "caveWall")!;
+  expect(drawn.properties.spaceId).toBe(undergroundSpace(surface.properties.spaceId as string));
   expect(drawn.properties.rock).toEqual(["Limestone"]);
 });

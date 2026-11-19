@@ -129,7 +129,13 @@ impl PostgresMaps {
             })
             .unwrap_or_default();
         let rows = self.query(
-            &format!("SELECT data FROM map.history h WHERE map_id=$1 AND revision=$2 AND id>$3{predicate} ORDER BY id LIMIT $4"),
+            // Entries come in published order; a page continues after the entry it ended on.
+            &format!(
+                "SELECT data FROM map.history h WHERE map_id=$1 AND revision=$2
+                 AND ordinal>COALESCE((SELECT ordinal FROM map.history
+                     WHERE map_id=$1 AND revision=$2 AND id=$3),-1){predicate}
+                 ORDER BY ordinal LIMIT $4"
+            ),
             &params.values(),
         )?;
         let items: Vec<HistoryEntry> = rows

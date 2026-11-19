@@ -66,7 +66,8 @@ impl PostgresMaps {
         }
         for entry in batch.history {
             self.execute(
-                "INSERT INTO map.history VALUES($1,$2,$3,$4)",
+                "INSERT INTO map.history VALUES($1,$2,$3,$4,
+                 (SELECT count(*) FROM map.history WHERE map_id=$1 AND revision=$2))",
                 &[
                     &uuid(r.map_id),
                     &uuid(r.revision),

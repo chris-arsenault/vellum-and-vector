@@ -390,6 +390,44 @@ fn attribute_layers_publish_and_copied_maps_keep_their_samples() {
     std::fs::remove_dir_all(directory).unwrap();
 }
 
+/// History reads back in the order it was published, across a page, whatever order its
+/// identities sort in.
+#[test]
+fn history_keeps_its_published_order_across_pages() {
+    use atlas_gis::{map_store::MapStore, sql::Database};
+    use atlas_map::{PublicationState, Publisher};
+    let mut store =
+        MapStore::open_database(std::rc::Rc::new(Database::open(":memory:").unwrap())).unwrap();
+    let mut map: MapDescriptor = serde_json::from_value(supplied_map()).unwrap();
+    map.layers.clear();
+    map.state = PublicationState::Incomplete;
+    store.begin(&map, None, false).unwrap();
+    let entries: Vec<Value> = (0..300)
+        .map(|i| {
+            json!({"id":id(&format!("entry {i}")),"title":format!("Entry {i}"),
+                "description":"","epoch":null,"featureIds":[],"attributes":{}})
+        })
+        .collect();
+    store
+        .append(
+            &map.reference,
+            serde_json::from_value(json!({ "history": entries })).unwrap(),
+        )
+        .unwrap();
+    store.finish(&map.reference).unwrap();
+    let first = store.history(&map.reference, None, None).unwrap();
+    let rest = store.history(&map.reference, first.next, None).unwrap();
+    let titles: Vec<String> = first
+        .items
+        .iter()
+        .chain(&rest.items)
+        .map(|entry| entry.title.clone())
+        .collect();
+    let published: Vec<String> = (0..300).map(|i| format!("Entry {i}")).collect();
+    assert_eq!(titles, published);
+    assert!(rest.next.is_none());
+}
+
 /// The registry lists the columns of the values its features hold, from the map's column
 /// rows: a column first sent as text and later as a number is numeric.
 #[test]

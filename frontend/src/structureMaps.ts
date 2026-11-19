@@ -60,16 +60,12 @@ export function heldConnections(feature: MapFeature): HeldConnection[] {
   return feature.relations.flatMap((relation) => {
     if (relation.kind === "leadsTo") return [{ relation, featureId: relation.targetId }];
     if (relation.kind !== "connectsTo") return [];
-    const cut = relation.targetId.indexOf("#");
-    return cut > 0
-      ? [
-          {
-            relation,
-            mapId: relation.targetId.slice(0, cut),
-            featureId: relation.targetId.slice(cut + 1),
-          },
-        ]
-      : [];
+    // A connection names the feature it reaches and, on another map, that map.
+    return [
+      relation.targetMapId
+        ? { relation, mapId: relation.targetMapId, featureId: relation.targetId }
+        : { relation, featureId: relation.targetId },
+    ];
   });
 }
 

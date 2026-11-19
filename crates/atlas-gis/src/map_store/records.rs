@@ -50,8 +50,12 @@ impl MapStore {
             values.push(entry.id.into());
             let mut record = values.clone();
             record.push(Value::Blob(codec::encode(&entry)?));
-            self.db
-                .execute("INSERT INTO map_history VALUES(?,?,?,?)", &record)?;
+            record.extend(key(&map.reference));
+            self.db.execute(
+                "INSERT INTO map_history VALUES(?,?,?,?,
+                 (SELECT count(*) FROM map_history WHERE map_id=? AND revision=?))",
+                &record,
+            )?;
             for id in entry.feature_ids.into_iter().collect::<BTreeSet<_>>() {
                 let mut binding = values.clone();
                 binding.push(id.into());

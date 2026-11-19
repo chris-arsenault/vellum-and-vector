@@ -120,6 +120,8 @@ CREATE TRIGGER IF NOT EXISTS map_sample_remove AFTER DELETE ON map_samples BEGIN
 END;
 CREATE TABLE IF NOT EXISTS map_history (
   map_id BLOB NOT NULL, revision BLOB NOT NULL, id BLOB NOT NULL, data BLOB NOT NULL,
+  -- Entries keep the order they were published in; their ids carry no order.
+  ordinal INTEGER NOT NULL,
   PRIMARY KEY(map_id,revision,id),
   FOREIGN KEY(map_id,revision) REFERENCES maps(map_id,revision) ON DELETE CASCADE
 );
