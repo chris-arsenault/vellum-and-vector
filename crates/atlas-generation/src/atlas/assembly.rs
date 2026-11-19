@@ -227,8 +227,11 @@ impl Operations {
                 .then(|| self.regional_magic.clone()),
         )?;
         registration::regional::register(&mut self.registry, &reads, &work, &self.physical.native)?;
-        let town =
-            super::town::development::Operations::new(&self.physical, runtime.field_projection());
+        let town = super::town::development::Operations::new(
+            &self.physical,
+            runtime.field_projection(),
+            runtime.town_signal_projection(),
+        );
         town.select(&mut runtime.executor);
         registration::town::register(&mut self.registry, &town)?;
         registration::ground::register(&mut self.registry)?;

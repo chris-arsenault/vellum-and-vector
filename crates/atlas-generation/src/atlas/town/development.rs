@@ -528,7 +528,13 @@ fn samples() -> Query<State, SiteConditions> {
     )
 }
 impl Operations {
-    pub fn new(physical: &Physical, projection: &Projection<State, Field>) -> Self {
+    /// `signals` reaches the field for writes confined to the town signals; see
+    /// `Runtime::town_signal_projection`.
+    pub fn new(
+        physical: &Physical,
+        projection: &Projection<State, Field>,
+        signals: &Projection<State, Field>,
+    ) -> Self {
         let providers = vec![
             super::providers::approaches(),
             super::providers::institutions(),
@@ -601,7 +607,7 @@ impl Operations {
                 Ok(())
             },
         );
-        let cleanup = Field::town_clearance_operation().projected(projection);
+        let cleanup = Field::town_clearance_operation().projected(signals);
         // Town steps change the town, not the field the environment is read from, so the
         // environment is kept until the field may have changed.
         let held_environment = HeldEnvironment::default();
@@ -849,13 +855,17 @@ impl Operations {
                 (step.id, command)
             })
             .collect();
-        let pressure =
-            Field::town_pressure_operation(physical.people.friction.clone()).projected(projection);
+        let pressure = Field::town_pressure_operation().projected(signals);
+        let signal_environment = environment.clone();
         let pressure: Command<State> = Command::with_inputs(
             "town.signals",
             CommandKind::Work,
             vec![],
             move |scope, _: &()| {
+                let friction = held_environment
+                    .read(scope, &signal_environment)?
+                    .travel
+                    .clone();
                 let field = scope.state().field();
                 let mut sources = Vec::new();
                 for town in &scope.state().town.towns {
@@ -879,7 +889,14 @@ impl Operations {
                     }
                 }
                 let links = super::providers::kept_links(scope.state())?;
-                scope.run(&pressure, &crate::town::signals::Inputs { sources, links })
+                scope.run(
+                    &pressure,
+                    &crate::town::signals::Inputs {
+                        sources,
+                        links,
+                        friction,
+                    },
+                )
             },
         );
         steps.insert(1, ("town.signals", pressure));

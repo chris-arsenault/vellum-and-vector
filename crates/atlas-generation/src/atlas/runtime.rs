@@ -17,6 +17,7 @@ use crate::{
 pub struct Runtime {
     pub executor: Executor<State>,
     field: Projection<State, Field>,
+    town_signals: Projection<State, Field>,
 }
 impl Runtime {
     // Arconis: docs/architecture/subsystems.arconis#item=m_carry — moves magic with the crust after each plate step.
@@ -45,13 +46,25 @@ impl Runtime {
             },
         )
         .state();
+        // Town pressure and clearance write only the town signals, which no field query
+        // reads, so their writes leave the field's version alone. A command that writes
+        // anything else must use the field projection.
+        let town_signals = Projection::new(
+            |state: &State| &state.physical.executor,
+            |state: &mut State| &mut state.physical.executor,
+        )
+        .state();
         Self {
             executor: Executor::new(state),
             field,
+            town_signals,
         }
     }
     pub fn field_projection(&self) -> &Projection<State, Field> {
         &self.field
+    }
+    pub fn town_signal_projection(&self) -> &Projection<State, Field> {
+        &self.town_signals
     }
     pub fn select_physical<'a>(
         &mut self,

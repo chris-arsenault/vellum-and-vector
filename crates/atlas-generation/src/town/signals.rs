@@ -12,6 +12,8 @@ pub struct Signals {
 pub struct Inputs {
     pub sources: Vec<(usize, f64, f64)>,
     pub links: Vec<crate::links::Link>,
+    /// People's travel friction, as the town's held environment read it this round.
+    pub friction: ReadBand<f64>,
 }
 pub struct Transport<'a> {
     pub mesh: &'a crate::lattice::TriangularLattice,

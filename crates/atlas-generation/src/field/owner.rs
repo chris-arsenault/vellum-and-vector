@@ -222,15 +222,16 @@ impl Field {
             },
         )
     }
-    pub fn town_pressure_operation(
-        travel: crate::execution::Query<Self, crate::answers::AnswerBand>,
-    ) -> crate::execution::Command<Self, crate::town::signals::Inputs> {
+    /// Town clearance and pressure write only the town signals, which no field query reads;
+    /// the map runs them through its town-signal projection.
+    pub fn town_pressure_operation() -> crate::execution::Command<Self, crate::town::signals::Inputs>
+    {
         crate::execution::Command::with_inputs(
             "town.exchange-and-waste",
             crate::execution::CommandKind::Work,
-            vec![travel.dependency()],
+            vec![],
             move |scope, sources: &crate::town::signals::Inputs| {
-                let friction = scope.values().get(&travel)?.values();
+                let friction = sources.friction.clone();
                 let field: &mut Self = scope.state_mut();
                 let elevation = field
                     .ground
