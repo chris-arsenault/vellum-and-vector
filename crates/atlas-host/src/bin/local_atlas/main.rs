@@ -1,0 +1,700 @@
+//! The local atlas harness (docs/local-atlas.md). It drives the native server's generation
+//! and map services the way the frontend does: one kept verification world, maps refined
+//! from it, and each map's report and pictures read from its published GIS storage.
+mod client;
+mod follow;
+mod picture;
+mod report;
+mod town;
+
+use atlas_generation::GenerationStatus;
+use atlas_map::MapRef;
+use client::Server;
+use follow::{Ended, LastJob, Picture};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json::{json, Value};
+use std::{
+    collections::BTreeMap,
+    env, fs, io,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+pub struct Harness {
+    pub server: Server,
+    /// The checkout that built this harness; reports and pictures go under it.
+    checkout: PathBuf,
+    /// The one atlas every worktree shares, in the main checkout.
+    pub home: PathBuf,
+    pub reports: PathBuf,
+}
+impl Harness {
+    fn new() -> io::Result<Self> {
+        let checkout = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()?;
+        let common = Command::new("git")
+            .arg("-C")
+            .arg(&checkout)
+            .args(["rev-parse", "--git-common-dir"])
+            .output()?;
+        let common = String::from_utf8_lossy(&common.stdout).trim().to_owned();
+        let main = checkout.join(common).join("..").canonicalize()?;
+        let home = env::var_os("ATLAS_LOCAL_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| main.join(".artifacts/local-atlas"));
+        let port = env::var("ATLAS_LOCAL_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(44138);
+        Ok(Self {
+            server: Server::new(port),
+            reports: checkout.join(".artifacts/local-atlas"),
+            checkout,
+            home,
+        })
+    }
+    fn world_file(&self) -> PathBuf {
+        self.home.join("world.json")
+    }
+    pub fn last_job_file(&self) -> PathBuf {
+        self.home.join("last-job.json")
+    }
+    fn map_folder(&self, name: &str) -> PathBuf {
+        self.reports.join("maps").join(slug(name, &['.', '-']))
+    }
+    fn generation<T: DeserializeOwned>(&self, method: &str, request: Value) -> io::Result<T> {
+        self.server
+            .call("generation", &json!({"method": method, "request": request}))
+    }
+    fn open(&self, reference: &MapRef) -> io::Result<Value> {
+        self.server
+            .call("maps/read", &json!({"method": "open", "args": [reference]}))
+    }
+}
+
+/// Text with each run of other characters replaced by one `-`; letters, digits, `_` and
+/// the `keep` characters stay.
+pub fn slug(text: &str, keep: &[char]) -> String {
+    let mut out = String::new();
+    let mut joined = false;
+    for c in text.chars() {
+        if c.is_ascii_alphanumeric() || c == '_' || keep.contains(&c) {
+            out.push(c);
+            joined = false;
+        } else if !joined {
+            out.push('-');
+            joined = true;
+        }
+    }
+    out
+}
+pub fn read_json<T: DeserializeOwned>(path: &Path) -> io::Result<T> {
+    serde_json::from_slice(&fs::read(path)?).map_err(io::Error::other)
+}
+pub fn write_json(path: &Path, value: &impl Serialize) -> io::Result<()> {
+    fs::write(path, serde_json::to_vec_pretty(value)?)
+}
+
+#[derive(Serialize, Deserialize)]
+struct Kept {
+    reference: MapRef,
+}
+
+/// Options after the command: `--name value` pairs and the flags that take no value.
+struct Options {
+    positionals: Vec<String>,
+    // hpc-exempt: command-line options by name.
+    values: BTreeMap<String, String>,
+}
+const FLAGS: [&str; 3] = ["fresh", "reference-width", "full-history"];
+impl Options {
+    fn parse(arguments: impl Iterator<Item = String>) -> io::Result<Self> {
+        let mut positionals = Vec::new();
+        let mut values = BTreeMap::new();
+        let mut arguments = arguments.peekable();
+        while let Some(argument) = arguments.next() {
+            match argument.strip_prefix("--") {
+                Some(flag) if FLAGS.contains(&flag) => {
+                    values.insert(flag.to_owned(), "true".to_owned());
+                }
+                Some(name) => {
+                    let value = arguments
+                        .next()
+                        .ok_or_else(|| io::Error::other(format!("--{name} needs a value")))?;
+                    values.insert(name.to_owned(), value);
+                }
+                None => positionals.push(argument),
+            }
+        }
+        Ok(Self {
+            positionals,
+            values,
+        })
+    }
+    fn get(&self, name: &str) -> Option<&str> {
+        self.values.get(name).map(String::as_str)
+    }
+    fn flag(&self, name: &str) -> bool {
+        self.values.contains_key(name)
+    }
+    fn positional(&self, index: usize) -> Option<&str> {
+        self.positionals.get(index).map(String::as_str)
+    }
+}
+
+const HEX_METRES: [(&str, f64); 6] = [
+    ("1.5m", 1.5),
+    ("3m", 3.),
+    ("10m", 10.),
+    ("30m", 30.),
+    ("100m", 100.),
+    ("300m", 300.),
+];
+
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("{error}");
+        std::process::exit(1);
+    }
+}
+fn run() -> io::Result<()> {
+    let options = Options::parse(env::args().skip(1))?;
+    let harness = Harness::new()?;
+    let argument = options.positional(1);
+    match (options.positional(0), argument) {
+        (Some("world"), _) => world(&harness, options.flag("fresh")),
+        (Some("real"), _) if options.get("at").is_some() => real_scale(&harness, &options),
+        (Some("region"), _) if options.get("at").is_some() && options.get("width").is_some() => {
+            real_scale(&harness, &options)
+        }
+        (Some("resume"), job) => resume(&harness, job, options.get("name")),
+        (Some("cancel"), Some(job)) => harness
+            .generation::<Value>("cancel", json!({"job_id": job}))
+            .map(drop),
+        (Some("places"), _) => places(&harness),
+        (Some("census"), _) => census(&harness, &options),
+        (Some("town-previews"), Some(job)) if options.get("name").is_some() => {
+            town_previews(&harness, job, options.get("name").unwrap_or_default())
+        }
+        (Some("history"), Some(name)) => history(&harness, name),
+        (Some("raster"), Some(name)) if options.positionals.len() > 2 => {
+            raster(&harness, name, &options.positionals[2..])
+        }
+        (Some("summary"), Some(name)) => {
+            let directory = harness.reports.join("maps").join(name);
+            let kept: Kept = read_json(&directory.join("map.json"))?;
+            report::report(&harness.server, &kept.reference, &directory)
+        }
+        _ => {
+            eprintln!("{}", usage(&harness));
+            std::process::exit(2);
+        }
+    }
+}
+fn usage(harness: &Harness) -> String {
+    let maps = harness.reports.join("maps");
+    format!(
+        "Usage: scripts/local-atlas.sh <command>
+  world [--fresh]
+  places
+  census [--reference-width] [--full-history [--seed <integer>]]
+  summary|history <map folder under {maps}>
+  raster <map folder> <layer id>...
+  real --at x,y|Settlement [--hex 100m] [--across 50] [--kind ground|structure]
+       [--detail draft|standard|fine] [--name name] [--parent map folder]
+       [--until \"<stage picture label, e.g. Initial regional detail>\"]
+  region --at x,y|Settlement --width metres --name name [--parent map folder]
+  cancel <jobId>
+  resume [jobId] [--name map folder]
+  town-previews <jobId> --name <existing map folder>
+Hex sizes: {sizes}",
+        maps = maps.display(),
+        sizes = HEX_METRES.map(|(name, _)| name).join(", ")
+    )
+}
+
+fn world(harness: &Harness, fresh: bool) -> io::Result<()> {
+    if !fresh {
+        if let Ok(kept) = read_json::<Kept>(&harness.world_file()) {
+            if let Ok(map) = harness.open(&kept.reference) {
+                println!(
+                    "Kept world: {} {}",
+                    map["name"].as_str().unwrap_or_default(),
+                    serde_json::to_string(&kept.reference)?
+                );
+                return Ok(());
+            }
+        }
+    }
+    let choices: Vec<Value> = harness.generation("configurations", Value::Null)?;
+    let choice = choices
+        .first()
+        .ok_or_else(|| io::Error::other("The server offers no world configuration"))?;
+    let mut request = choice["values"].clone();
+    request["name"] = json!("Local verification world");
+    request["worldId"] = json!(uuid::Uuid::new_v4().to_string());
+    request["width"] = json!(1_000_000);
+    request["height"] = json!(750_000);
+    request["recipe"]["quality"] = json!("draft");
+    request["recipe"]["seed"] = json!(42);
+    let configuration: Value = harness.generation("validate", request)?;
+    let status: GenerationStatus = harness.generation("create", configuration)?;
+    let record = LastJob {
+        kind: "world".into(),
+        name: None,
+        job_id: None,
+    };
+    if let Ended::Completed(reference) = follow::follow(harness, status, record, None)? {
+        keep_world(harness, &reference)?;
+    }
+    Ok(())
+}
+fn keep_world(harness: &Harness, reference: &MapRef) -> io::Result<()> {
+    save(harness, reference)?;
+    write_json(
+        &harness.world_file(),
+        &Kept {
+            reference: reference.clone(),
+        },
+    )?;
+    report::report(&harness.server, reference, &harness.reports.join("world"))
+}
+
+/// Keeps the map in the server library, as Save map does.
+fn save(harness: &Harness, reference: &MapRef) -> io::Result<()> {
+    let saved: Option<Value> = harness.server.call(
+        "maps/library",
+        &json!({"method": "find", "args": [reference.map_id]}),
+    )?;
+    let saved = saved.unwrap_or(Value::Null);
+    if saved["reference"]["revision"] == json!(reference.revision) {
+        return Ok(());
+    }
+    let or = |value: &Value, default: Value| {
+        if value.is_null() {
+            default
+        } else {
+            value.clone()
+        }
+    };
+    harness.server.call::<Value>(
+        "maps/library",
+        &json!({"method": "save", "args": [{
+            "reference": reference,
+            "expectedVersion": saved["version"],
+            "navigation": or(&saved["navigation"], json!({"version": 0, "regions": [], "views": []})),
+            "settings": or(&saved["settings"], json!({})),
+        }]}),
+    )?;
+    Ok(())
+}
+
+struct Place {
+    name: String,
+    position: [f64; 2],
+    population: f64,
+}
+/// The map's settlements, largest first, each with the point it is drawn at.
+fn settlements(harness: &Harness, reference: &MapRef) -> io::Result<Vec<Place>> {
+    let map = harness.open(reference)?;
+    let space = map["primarySpaceId"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    let mut places = Vec::new();
+    report::features(
+        &harness.server,
+        reference,
+        &space,
+        Some(&["vector:settlements"]),
+        |feature| {
+            if let atlas_map::Geometry::Point { coordinates } = feature.geometry {
+                let [x, y, _] = coordinates.coordinates();
+                places.push(Place {
+                    name: feature.name.unwrap_or_default(),
+                    position: [x, y],
+                    population: feature
+                        .attributes
+                        .get("population")
+                        .and_then(|p| p.as_f64().or_else(|| p.as_str()?.parse().ok()))
+                        .unwrap_or(0.),
+                });
+            }
+        },
+    )?;
+    places.sort_by(|a, b| b.population.total_cmp(&a.population));
+    Ok(places)
+}
+/// `x,y` in world metres, or the name of one of the map's settlements.
+fn point(harness: &Harness, reference: &MapRef, at: &str) -> io::Result<[f64; 2]> {
+    let numbers: Vec<f64> = at
+        .split(',')
+        .filter_map(|n| n.trim().parse().ok())
+        .collect();
+    if let [x, y] = numbers[..] {
+        if at.split(',').count() == 2 {
+            return Ok([x, y]);
+        }
+    }
+    settlements(harness, reference)?
+        .into_iter()
+        .find(|place| place.name == at)
+        .map(|place| place.position)
+        .ok_or_else(|| {
+            io::Error::other(format!(
+                "No settlement named {at}; run scripts/local-atlas.sh places"
+            ))
+        })
+}
+fn places(harness: &Harness) -> io::Result<()> {
+    let kept: Kept = read_json(&harness.world_file())?;
+    for place in settlements(harness, &kept.reference)? {
+        println!(
+            "{:<28} {},{} {}",
+            place.name,
+            place.position[0].round(),
+            place.position[1].round(),
+            place.population
+        );
+    }
+    Ok(())
+}
+
+fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
+    let parent_file = match options.get("parent") {
+        Some(parent) => harness.reports.join("maps").join(parent).join("map.json"),
+        None => harness.world_file(),
+    };
+    let reference = read_json::<Kept>(&parent_file)
+        .map_err(|_| io::Error::other("No kept world; run make local-world"))?
+        .reference;
+    let parent = harness.open(&reference)?;
+    let [x, y] = point(harness, &reference, options.get("at").unwrap_or_default())?;
+    let kind = options.get("kind").unwrap_or("ground");
+    let hex = options.get("hex").unwrap_or("100m");
+    let across: f64 = options
+        .get("across")
+        .unwrap_or("50")
+        .parse()
+        .map_err(io::Error::other)?;
+    let detail = options.get("detail").unwrap_or("draft");
+    let region: Option<f64> = options
+        .get("width")
+        .map(|w| w.parse().map_err(io::Error::other))
+        .transpose()?;
+    let metres = HEX_METRES
+        .iter()
+        .find(|(name, _)| *name == hex)
+        .map(|(_, m)| *m)
+        .ok_or_else(|| io::Error::other(format!("Unknown hex size {hex}")))?;
+    let width = region.unwrap_or(across * metres);
+    let name = options
+        .get("name")
+        .map_or_else(|| format!("{kind} {hex} {across}"), str::to_owned);
+    if harness.map_folder(&name).join("map.json").exists() {
+        return Err(io::Error::other(format!(
+            "A result named {name} already exists; choose a new --name"
+        )));
+    }
+    let mut configuration: Value = harness.generation("configuration", json!(reference))?;
+    configuration["name"] = json!(name);
+    configuration["width"] = json!(width);
+    configuration["height"] = json!(width * 0.75);
+    configuration["recipe"]["quality"] = json!(detail);
+    // A region is the rectangle itself; a real-scale map is centred on a tiny outline.
+    let (half_x, half_y) = match region {
+        Some(width) => (width / 2., width * 0.375),
+        None => (1e-3, 1e-3),
+    };
+    let ring = [
+        [x - half_x, y - half_y],
+        [x + half_x, y - half_y],
+        [x + half_x, y + half_y],
+        [x - half_x, y + half_y],
+        [x - half_x, y - half_y],
+    ];
+    let mut request = json!({
+        "selection": {
+            "parent": reference,
+            "spaceId": parent["primarySpaceId"],
+            "geometry": {"type": "Polygon", "coordinates": [ring]},
+            "featureIds": [],
+            "regionPath": [],
+        },
+        "configuration": configuration,
+    });
+    if region.is_none() {
+        request["realScale"] = json!({"kind": kind, "hexSize": hex, "hexesAcross": across});
+    }
+    let review: Value =
+        harness.generation("review", json!({"method": "refine", "request": request}))?;
+    refuse_errors(&review)?;
+    if !review["input"]["settings"].is_null() {
+        request["configuration"]["recipe"]["settings"] = review["input"]["settings"].clone();
+    }
+    let status: GenerationStatus = harness.generation("refine", request)?;
+    let record = LastJob {
+        kind: "real".into(),
+        name: Some(name.clone()),
+        job_id: None,
+    };
+    let Ended::Completed(captured) = follow::follow(harness, status, record.clone(), None)? else {
+        return Ok(());
+    };
+    save(harness, &captured)?;
+    let mut developed: Value = harness.generation("configuration", json!(captured))?;
+    developed["recipe"]["quality"] = json!(detail);
+    let regeneration = json!({"reference": captured, "configuration": developed});
+    let review: Value = harness.generation(
+        "review",
+        json!({"method": "regenerate", "request": regeneration}),
+    )?;
+    refuse_errors(&review)?;
+    let running: GenerationStatus = harness.generation("regenerate", regeneration)?;
+    let job = running.job_id.clone();
+    if let Ended::Completed(result) =
+        follow::follow(harness, running, record, options.get("until"))?
+    {
+        finish(harness, &result, &name, &job)?;
+    }
+    Ok(())
+}
+fn refuse_errors(review: &Value) -> io::Result<()> {
+    let errors: Vec<_> = review["diagnostics"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|item| item["severity"] == "error")
+        .collect();
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(io::Error::other(serde_json::to_string_pretty(&errors)?))
+    }
+}
+/// Saves a finished map and writes its report, steps and stage pictures beside it.
+fn finish(harness: &Harness, result: &MapRef, name: &str, job: &str) -> io::Result<()> {
+    save(harness, result)?;
+    let directory = harness.map_folder(name);
+    report::report(&harness.server, result, &directory)?;
+    let observed = harness.reports.join("previews").join(job);
+    fs::copy(observed.join("steps.txt"), directory.join("steps.txt"))?;
+    let pictures: Vec<Picture> = read_json(&observed.join("previews.json"))?;
+    for picture in &pictures {
+        fs::copy(
+            observed.join(&picture.file),
+            directory.join(format!("preview-{}", picture.file)),
+        )?;
+    }
+    write_json(&directory.join("previews.json"), &pictures)
+}
+fn resume(harness: &Harness, job: Option<&str>, name: Option<&str>) -> io::Result<()> {
+    let last: LastJob = read_json(&harness.last_job_file()).unwrap_or(LastJob {
+        kind: "real".into(),
+        name: None,
+        job_id: None,
+    });
+    let id = job
+        .map(str::to_owned)
+        .or_else(|| last.job_id.clone())
+        .ok_or_else(|| io::Error::other("No job to resume"))?;
+    let current: GenerationStatus = harness.generation("status", json!({"job_id": id}))?;
+    use atlas_generation::GenerationState::{Completed, Running};
+    // A job that completed while its driver was gone only needs its report.
+    let status = if matches!(current.state, Completed | Running) {
+        current
+    } else {
+        harness.generation("resume", json!({"job_id": id}))?
+    };
+    let mut record = if last.job_id.as_deref() == Some(id.as_str()) {
+        last
+    } else {
+        LastJob {
+            kind: "real".into(),
+            name: Some(id.clone()),
+            job_id: None,
+        }
+    };
+    if let Some(name) = name {
+        record.name = Some(name.to_owned());
+    }
+    let kind = record.kind.clone();
+    let folder = record.name.clone().unwrap_or_else(|| id.clone());
+    let Ended::Completed(result) = follow::follow(harness, status, record, None)? else {
+        return Ok(());
+    };
+    if kind == "world" {
+        keep_world(harness, &result)
+    } else {
+        finish(harness, &result, &folder, &id)
+    }
+}
+
+fn census(harness: &Harness, options: &Options) -> io::Result<()> {
+    let cargo = |arguments: Vec<String>| -> io::Result<()> {
+        let status = Command::new("cargo")
+            .args([
+                "run",
+                "--quiet",
+                "--release",
+                "-p",
+                "atlas-host",
+                "--example",
+            ])
+            .args(arguments)
+            .current_dir(&harness.checkout)
+            .status()?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(io::Error::other(format!("census exited with {status}")))
+        }
+    };
+    if !options.flag("full-history") {
+        let mut arguments = vec!["local_census".into(), "--".into()];
+        arguments.push(harness.home.display().to_string());
+        if options.flag("reference-width") {
+            arguments.push("--reference-width".into());
+        }
+        return cargo(arguments);
+    }
+    let kept: Kept = read_json(&harness.world_file())?;
+    let mut action: Value = read_json(
+        &harness
+            .home
+            .join("generation-resources/.jobs")
+            .join(&kept.reference.revision)
+            .join("action.json"),
+    )?;
+    if action["method"] != "create" {
+        return Err(io::Error::other("Expected a saved world creation recipe"));
+    }
+    if let Some(seed) = options.get("seed") {
+        let seed: i64 = seed
+            .parse()
+            .map_err(|_| io::Error::other("Expected an integer seed"))?;
+        action["request"]["recipe"]["seed"] = json!(seed);
+    }
+    if options.flag("reference-width") {
+        let width = action["request"]["width"].as_f64().unwrap_or(1.);
+        let height = action["request"]["height"].as_f64().unwrap_or(1.);
+        action["request"]["height"] = json!(height * 4_000_000. / width);
+        action["request"]["width"] = json!(4_000_000);
+    }
+    let directory = harness
+        .reports
+        .join(format!("history-census-{}", uuid::Uuid::new_v4().simple()));
+    fs::create_dir_all(&directory)?;
+    let config = directory.join("action.json");
+    write_json(&config, &action)?;
+    println!(
+        "Full history for seed {} in {}",
+        action["request"]["recipe"]["seed"],
+        directory.display()
+    );
+    cargo(vec![
+        "surface_capture".into(),
+        "--".into(),
+        "history".into(),
+        directory.display().to_string(),
+        config.display().to_string(),
+    ])
+}
+fn town_previews(harness: &Harness, job: &str, name: &str) -> io::Result<()> {
+    let output = harness.reports.join("maps").join(name);
+    let listing = output.join("previews.json");
+    let mut pictures: Vec<Picture> = read_json(&listing)?;
+    let observed = harness.reports.join("previews").join(job);
+    for (file, label) in town::pictures(&observed, &output, "preview-")? {
+        println!("{}", output.join(format!("preview-{file}")).display());
+        pictures.push(Picture {
+            file,
+            label,
+            lowest: None,
+            highest: None,
+        });
+    }
+    write_json(&listing, &follow::index(pictures))
+}
+/// Writes what each process recorded doing to a kept map, in run order.
+fn history(harness: &Harness, name: &str) -> io::Result<()> {
+    let directory = harness.reports.join("maps").join(name);
+    let kept: Kept = read_json(&directory.join("map.json"))?;
+    let entries: Value = harness.server.call(
+        "maps/read",
+        &json!({"method": "history", "args": [kept.reference, null]}),
+    )?;
+    write_json(&directory.join("history.json"), &entries)?;
+    println!("{}", directory.join("history.json").display());
+    Ok(())
+}
+/// Saves raster layers of a kept map as GeoTIFFs beside its report, e.g. raster:Elevation.
+fn raster(harness: &Harness, name: &str, layers: &[String]) -> io::Result<()> {
+    let directory = harness.reports.join("maps").join(name);
+    let map: Value = read_json(&directory.join("map.json"))?;
+    let kept: Kept = serde_json::from_value(json!({"reference": map["reference"]}))?;
+    for id in layers {
+        let layer = map["layers"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|layer| layer["id"] == json!(id) && layer["source"]["kind"] == "raster")
+            .ok_or_else(|| io::Error::other(format!("No raster layer {id}")))?;
+        let asset = layer["source"]["data"]["assetId"]
+            .as_str()
+            .unwrap_or_default();
+        let bytes = harness.server.get(&format!(
+            "/api/maps/{}/{}/assets/{asset}",
+            kept.reference.map_id, kept.reference.revision
+        ))?;
+        let file = directory.join(format!("{}.tif", slug(id, &['.', '-'])));
+        fs::write(&file, bytes)?;
+        println!("{}", file.display());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_slug_joins_each_run_of_other_characters() {
+        assert_eq!(slug("Kesworcester city", &['.', '-']), "Kesworcester-city");
+        assert_eq!(slug("ground 100m 50", &['.', '-']), "ground-100m-50");
+        assert_eq!(
+            slug("Initial regional detail · round 1", &[]),
+            "Initial-regional-detail-round-1"
+        );
+        assert_eq!(slug("a--b.c", &[]), "a-b-c");
+    }
+    #[test]
+    fn options_take_values_and_flags() {
+        let options = Options::parse(
+            ["real", "--at", "Kesworcester", "--fresh", "--hex", "30m"]
+                .into_iter()
+                .map(String::from),
+        )
+        .unwrap();
+        assert_eq!(options.positional(0), Some("real"));
+        assert_eq!(options.get("at"), Some("Kesworcester"));
+        assert_eq!(options.get("hex"), Some("30m"));
+        assert!(options.flag("fresh"));
+    }
+    #[test]
+    fn a_resumed_stream_keeps_the_latest_picture_of_each_stage() {
+        let picture = |file: &str, label: &str| Picture {
+            file: file.into(),
+            label: label.into(),
+            lowest: None,
+            highest: None,
+        };
+        let kept = follow::index(vec![
+            picture("03-round-1.png", "round 1"),
+            picture("town-A-01-early.png", "A early"),
+            picture("01-round-1.png", "round 1"),
+        ]);
+        let files: Vec<_> = kept.iter().map(|p| p.file.as_str()).collect();
+        assert_eq!(files, ["01-round-1.png", "town-A-01-early.png"]);
+    }
+}

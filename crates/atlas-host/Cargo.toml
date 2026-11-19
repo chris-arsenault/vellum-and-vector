@@ -16,6 +16,10 @@ name = "atlas_browser"
 [[bin]]
 name = "atlas_server"
 
+[[bin]]
+name = "local_atlas"
+path = "src/bin/local_atlas/main.rs"
+
 [dependencies]
 serde.workspace = true
 atlas-map.workspace = true
@@ -39,6 +43,8 @@ tiny_http = { version = "0.12", features = ["ssl-rustls"] }
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 futures = { version = "0.3", default-features = false, features = ["executor", "std"] }
 testcontainers = { version = "0.28", features = ["blocking"], optional = true }
+# The local atlas harness draws its map and town pictures.
+tiny-skia = "0.11"
 
 [lints]
 workspace = true

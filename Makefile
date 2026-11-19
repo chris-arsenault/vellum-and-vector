@@ -17,7 +17,6 @@ typecheck: wasm-engine
 
 test: wasm-engine
 	pnpm --dir frontend run test
-	node --test scripts/*.test.mjs
 
 # Generation uses the typed-array structures and bands, not object, Map or comparator
 # substitutes; a finding names the site and its replacement.
@@ -82,13 +81,13 @@ local-down:
 	scripts/local-atlas.sh down
 
 local-world:
-	node scripts/local-atlas.mjs world
+	scripts/local-atlas.sh world
 
 local-real:
-	node scripts/local-atlas.mjs real --at $(AT) --hex $(or $(HEX),100m) --across $(or $(ACROSS),50) --kind $(or $(KIND),ground)
+	scripts/local-atlas.sh real --at $(AT) --hex $(or $(HEX),100m) --across $(or $(ACROSS),50) --kind $(or $(KIND),ground)
 
 local-resume:
-	node scripts/local-atlas.mjs resume $(JOB)
+	scripts/local-atlas.sh resume $(JOB)
 
 local-profile:
 	scripts/local-atlas.sh profile $(or $(SECONDS),30)

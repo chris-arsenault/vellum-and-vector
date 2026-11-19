@@ -28,13 +28,13 @@ The database passwords are made locally on first start. No external credential i
 ```sh
 make local-up        # start the database, then build and (re)start the server
 make local-world     # reuse the kept world, or create it: 1,000 × 750 km Draft, seed 42
-node scripts/local-atlas.mjs places              # the world's settlements and positions
-node scripts/local-atlas.mjs census              # run human land processes on retained world layers
+scripts/local-atlas.sh places              # the world's settlements and positions
+scripts/local-atlas.sh census              # run human land processes on retained world layers
 make local-real AT=Ajarma HEX=100m ACROSS=50     # a real-scale map at a settlement
 make local-real AT=500000,375000 HEX=300m        # or at a point in world metres
-node scripts/local-atlas.mjs region --at Amadir --width 120000 --name Amadir-country
-node scripts/local-atlas.mjs region --parent Amadir-country --at Amadir --width 20000 --name Amadir-district
-node scripts/local-atlas.mjs real --parent Amadir-district --at Amadir --hex 30m --across 100 --name Amadir-town
+scripts/local-atlas.sh region --at Amadir --width 120000 --name Amadir-country
+scripts/local-atlas.sh region --parent Amadir-country --at Amadir --width 20000 --name Amadir-district
+scripts/local-atlas.sh real --parent Amadir-district --at Amadir --hex 30m --across 100 --name Amadir-town
 make local-resume    # after fixing a failed step: make local-up, then resume the job
 make local-down      # stop the server and database; the world stays
 ```
@@ -72,7 +72,7 @@ Each job saves a picture of the land, shaded by height with water in blue, after
 world epoch and at the start and after each round of regional development, in
 `.artifacts/local-atlas/previews/<job-id>/`; the run prints each path. A change to the
 land can be judged without a whole map:
-`node scripts/local-atlas.mjs real --at Ajarma --hex 100m --until "Initial regional detail"`
+`scripts/local-atlas.sh real --at Ajarma --hex 100m --until "Initial regional detail"`
 stops the job after that picture (about half a minute), and `--until "round 1"` after the
 first round of development.
 
@@ -84,23 +84,26 @@ Settlement names are resolved on that parent, so subsequent selections follow it
 A finished map is saved to the server library and reported in
 `.artifacts/local-atlas/maps/<name>/`:
 
-| File            | Contents                                                        |
-| --------------- | --------------------------------------------------------------- |
-| `summary.txt`   | The map's size, and every published feature kind with its count |
-| `map.geojson`   | The GIS export                                                  |
-| `map.json`      | The map description                                             |
-| `steps.txt`     | Each step with its time                                         |
-| `preview-*.png` | The job's pictures of the land after each stage                 |
-| `preview-town-*.svg` | The same town at founding and after early, middle and mature development. Each view uses the same bounds and metre scale and shows fields, plots, roads, passages and building footprints. |
-| `*.png`         | Pictures from `node scripts/local-atlas.mjs view <name>`        |
+| File                 | Contents                                                        |
+| -------------------- | --------------------------------------------------------------- |
+| `summary.txt`        | The map's size, and every published feature kind with its count |
+| `map.json`           | The map description                                             |
+| `steps.txt`          | Each step with its time                                         |
+| `map.png`            | The whole map: water, rivers, fields, plots, ways and buildings at their real size |
+| `town.png`           | The same drawing framed on the town with the most occupied buildings |
+| `town-centre.png`    | That town's centre, 1.5 km across, where single roofs and street widths show |
+| `preview-*.png`      | The job's pictures of the land after each stage                 |
+| `preview-town-*.png` | The same town at founding and after early, middle and mature development, in one frame and metre scale, with a close-up of its centre at the last stage |
 
-The town development SVG compares the stages in two rows at the same scale. The first
+The report reads the published map through the server's map service, page by page, as
+the frontend does. Buildings are coloured by function: residential, civic or economic.
+The town development picture compares the stages in two rows at the same scale. The first
 shows only buildings, and the second includes streets and land use. To redraw the town
 previews from a retained job, run
-`node scripts/local-atlas.mjs town-previews <jobId> --name <map folder>`.
+`scripts/local-atlas.sh town-previews <jobId> --name <map folder>`.
 
-`node scripts/local-atlas.mjs summary <name>` rewrites a map's report from the server,
-`history <name>` writes what each process recorded doing (`history.json`), and
+`scripts/local-atlas.sh summary <name>` rewrites a map's report and pictures from the
+server, `history <name>` writes what each process recorded doing (`history.json`), and
 `raster <name> <layer id>...` saves raster layers as GeoTIFFs, e.g. `terrain` (elevation
 and its companion bands) or `raster:finalSurface`.
 
@@ -108,12 +111,12 @@ A failed job keeps its progress. Fix the cause, run `make local-up` to rebuild a
 restart the server, and `make local-resume` continues the last job from its last
 completed round. A job that completed while its driver was gone only gets its report.
 To stop a trial after observing a problem, use
-`node scripts/local-atlas.mjs cancel <jobId>`. After rebuilding with `make local-up`,
-`node scripts/local-atlas.mjs resume <jobId> --name <map folder>` resumes that trial
+`scripts/local-atlas.sh cancel <jobId>`. After rebuilding with `make local-up`,
+`scripts/local-atlas.sh resume <jobId> --name <map folder>` resumes that trial
 from its latest checkpoint, including when another job ran more recently.
 
 When generation code changes what a world stores, the kept world may no longer open.
-`node scripts/local-atlas.mjs world --fresh` creates a new one, and
+`scripts/local-atlas.sh world --fresh` creates a new one, and
 `scripts/local-atlas.sh reset` deletes the volume and every stored file.
 
 ## Profiling
@@ -125,10 +128,3 @@ namespace, and finds the server by name. Each profile is written to
 `.artifacts/local-atlas/profiles/<time>/`: `perf.data` and `report.txt`, the share of
 samples per function. `CALL_GRAPH=dwarf` also records unwound call stacks for
 `perf report -i perf.data` inside the same image.
-
-## Looking at a map
-
-`node scripts/local-atlas.mjs view <name>` opens the map in the frontend the server hosts
-and writes pictures beside its report. Build that frontend once, and again after frontend
-changes, with `pnpm --dir frontend run build`. The default build talks to the server.
-Viewing generates nothing.

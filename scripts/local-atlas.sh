@@ -139,8 +139,12 @@ case "${1:-}" in
     docker volume rm "$volume" >/dev/null 2>&1 || true
     rm -rf "$home"
     ;;
+  "" | -h | --help)
+    echo "Usage: $0 up|down|reset|profile [seconds], or a harness command:" >&2
+    cd "$root" && cargo run --quiet --release -p atlas-host --bin local_atlas
+    ;;
+  # Every other command is the Rust harness: world, real, region, resume, summary, ...
   *)
-    echo "Usage: $0 up|down|reset|profile [seconds]" >&2
-    exit 2
+    cd "$root" && exec cargo run --quiet --release -p atlas-host --bin local_atlas -- "$@"
     ;;
 esac
