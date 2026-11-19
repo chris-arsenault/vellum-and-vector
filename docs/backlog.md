@@ -169,6 +169,18 @@ simulations.
       forcing.
 - [ ] **16. Regional climate.** Carry moisture downwind on the captured wind and
       form fog belts on Pressure coasts.
+- [ ] **33. Local climate on every map.** Regional maps alone adjust captured
+      temperature for slope aspect (sun exposure) and cold-air pooling, through the
+      regional media step. These are two chosen micro-climate effects; valley
+      inversions, lake effects, coastal fog and settlement heat have no counterpart.
+      Pooling compares a cell with its height blurred over half a parent cell, a
+      parent-relative length that has no physical meaning on a frame inside one
+      parent cell. Decide which local climate responses exist, run them as climate
+      processes at every map scale with physical lengths, and retire the
+      regional-only media terms.
+- [ ] **34. Cancel inside a step.** A cancelled job stops only between process
+      steps; a long step keeps the server busy until it finishes. Numerical loops
+      that run for minutes observe the job's cancellation.
 - [ ] **17. Regional ecology.** Form peat bogs behind moraines.
 - [ ] **18. Regional magic.** Resolve captured stocks onto their carriers, add a
       regional storm medium, crust dried basins as Salt beds, retrace Pressure rays

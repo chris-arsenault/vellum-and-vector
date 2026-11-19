@@ -95,7 +95,34 @@ server_up() {
   exit 1
 }
 
+# Samples the running server with perf for the given seconds and writes a flat report.
+# The host keeps perf_event_paranoid restrictive, so perf runs in a container with
+# CAP_PERFMON in the host PID namespace. CALL_GRAPH=dwarf records unwound stacks.
+profile() {
+  local seconds="${1:-30}" out
+  out="$home/profiles/$(date -u +%Y%m%dT%H%M%SZ)"
+  mkdir -p "$out"
+  docker build -q -t vellum-profile:local "$root/scripts/profile" >/dev/null
+  local graph=(-g)
+  [[ "${CALL_GRAPH:-}" == dwarf ]] && graph=(--call-graph dwarf,16384)
+  docker run --rm --pid=host --cap-add PERFMON --cap-add SYS_PTRACE \
+    -v "$root:$root:ro" -v "$out:/out" vellum-profile:local sh -c '
+      pid=$(for p in /proc/[0-9]*; do
+        [ "$(cat "$p/comm" 2>/dev/null)" = atlas_server ] && echo "${p#/proc/}"
+      done | head -1)
+      [ -n "$pid" ] || { echo "No running atlas_server" >&2; exit 1; }
+      perf record -F 199 "$@" -p "$pid" -o /out/perf.data -- sleep "$0" >/dev/null 2>&1
+      perf report -i /out/perf.data --stdio --no-children --sort symbol \
+        --percent-limit 0.5 -g none 2>/dev/null | grep -v "^#" | grep -v "^$" >/out/report.txt
+      chown -R '"$(id -u):$(id -g)"' /out' "$seconds" "${graph[@]}"
+  echo "$out/report.txt"
+  head -25 "$out/report.txt"
+}
+
 case "${1:-}" in
+  profile)
+    profile "${2:-30}"
+    ;;
   up)
     credentials
     database_up
@@ -113,7 +140,7 @@ case "${1:-}" in
     rm -rf "$home"
     ;;
   *)
-    echo "Usage: $0 up|down|reset" >&2
+    echo "Usage: $0 up|down|reset|profile [seconds]" >&2
     exit 2
     ;;
 esac

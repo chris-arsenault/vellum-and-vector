@@ -1,4 +1,4 @@
-.PHONY: ci lint format format-check typecheck test test-architecture test-perf test-browser terraform-fmt-check build dev rust-check test-rust contracts wasm-engine build-lan test-postgis local-up local-down local-world local-real local-resume
+.PHONY: ci lint format format-check typecheck test test-architecture test-perf test-browser terraform-fmt-check build dev rust-check test-rust contracts wasm-engine build-lan test-postgis local-up local-down local-world local-real local-resume local-profile
 
 ci: lint format-check typecheck test test-architecture rust-check terraform-fmt-check
 
@@ -89,3 +89,6 @@ local-real:
 
 local-resume:
 	node scripts/local-atlas.mjs resume $(JOB)
+
+local-profile:
+	scripts/local-atlas.sh profile $(or $(SECONDS),30)

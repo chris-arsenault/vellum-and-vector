@@ -116,6 +116,16 @@ When generation code changes what a world stores, the kept world may no longer o
 `node scripts/local-atlas.mjs world --fresh` creates a new one, and
 `scripts/local-atlas.sh reset` deletes the volume and every stored file.
 
+## Profiling
+
+`make local-profile SECONDS=30` samples the running server with perf for that many
+seconds while a job runs. The host's `perf_event_paranoid` stays restrictive; perf runs
+in a container built from `scripts/profile/` with `CAP_PERFMON` in the host PID
+namespace, and finds the server by name. Each profile is written to
+`.artifacts/local-atlas/profiles/<time>/`: `perf.data` and `report.txt`, the share of
+samples per function. `CALL_GRAPH=dwarf` also records unwound call stacks for
+`perf report -i perf.data` inside the same image.
+
 ## Looking at a map
 
 `node scripts/local-atlas.mjs view <name>` opens the map in the frontend the server hosts
