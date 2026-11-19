@@ -108,6 +108,17 @@ impl Level {
             let scratch = self.scratch.read_only();
             let scratch = scratch.read_values()?;
             let mut x = self.x.write_values()?;
+            // Damped Jacobi: resident bands update as slices, paged bands value by value.
+            if let (Some(r), Some(s), Some(d)) =
+                (rhs.as_slice(), scratch.as_slice(), diagonal.as_slice())
+            {
+                if let Some(x) = x.as_mut_slice() {
+                    for (i, x) in x.iter_mut().enumerate().take(n) {
+                        *x += (2.0 / 3.0) * (r[i] - s[i]) / d[i];
+                    }
+                    continue;
+                }
+            }
             for i in 0..n {
                 x.set(
                     i,
@@ -120,8 +131,13 @@ impl Level {
     fn cycle(&mut self) -> io::Result<()> {
         {
             let mut x = self.x.write_values()?;
-            for i in 0..self.matrix.count {
-                x.set(i, 0.0)?;
+            match x.as_mut_slice() {
+                Some(x) => x[..self.matrix.count].fill(0.0),
+                None => {
+                    for i in 0..self.matrix.count {
+                        x.set(i, 0.0)?;
+                    }
+                }
             }
         }
         match &self.solver {
@@ -129,6 +145,14 @@ impl Level {
                 let rhs = self.rhs.read_values()?;
                 let diagonal = self.matrix.diagonal.read_values()?;
                 let mut x = self.x.write_values()?;
+                if let (Some(r), Some(d)) = (rhs.as_slice(), diagonal.as_slice()) {
+                    if let Some(x) = x.as_mut_slice() {
+                        for (i, x) in x.iter_mut().enumerate().take(self.matrix.count) {
+                            *x = r[i] / d[i];
+                        }
+                        return Ok(());
+                    }
+                }
                 for i in 0..self.matrix.count {
                     x.set(i, rhs.get(i)? / diagonal.get(i)?)?;
                 }
@@ -149,23 +173,46 @@ impl Level {
             let mut coarse_rhs = level.rhs.write_values()?;
             let rhs = self.rhs.read_values()?;
             let scratch = self.scratch.read_values()?;
-            for i in 0..level.matrix.count {
-                coarse_rhs.set(i, 0.0)?;
-            }
-            for i in 0..count {
-                let group = groups.get(i)? as usize;
-                coarse_rhs.set(
-                    group,
-                    coarse_rhs.get(group)? + rhs.get(i)? - scratch.get(i)?,
-                )?;
+            // Restriction: each fine residual adds to its coarse group.
+            let resident = match (groups.as_slice(), rhs.as_slice(), scratch.as_slice()) {
+                (Some(g), Some(r), Some(s)) => coarse_rhs.as_mut_slice().map(|c| {
+                    c[..level.matrix.count].fill(0.0);
+                    for i in 0..count {
+                        c[g[i] as usize] += r[i] - s[i];
+                    }
+                }),
+                _ => None,
+            };
+            if resident.is_none() {
+                for i in 0..level.matrix.count {
+                    coarse_rhs.set(i, 0.0)?;
+                }
+                for i in 0..count {
+                    let group = groups.get(i)? as usize;
+                    coarse_rhs.set(
+                        group,
+                        coarse_rhs.get(group)? + rhs.get(i)? - scratch.get(i)?,
+                    )?;
+                }
             }
         }
         level.cycle()?;
         {
             let coarse_x = level.x.read_values()?;
             let mut x = self.x.write_values()?;
-            for i in 0..count {
-                x.set(i, x.get(i)? + coarse_x.get(groups.get(i)? as usize)?)?;
+            // Prolongation: each fine value takes its coarse group's correction.
+            let resident = match (groups.as_slice(), coarse_x.as_slice()) {
+                (Some(g), Some(c)) => x.as_mut_slice().map(|x| {
+                    for i in 0..count {
+                        x[i] += c[g[i] as usize];
+                    }
+                }),
+                _ => None,
+            };
+            if resident.is_none() {
+                for i in 0..count {
+                    x.set(i, x.get(i)? + coarse_x.get(groups.get(i)? as usize)?)?;
+                }
             }
         }
         drop(groups);

@@ -201,13 +201,28 @@ fn resident_product(
             "Metric vector shape does not match operator",
         ));
     }
-    for (i, output) in result.iter_mut().enumerate() {
+    let row = |i: usize| {
         let value = values[i];
         let mut sum = value * areas[i];
         for at in offsets[i] as usize..offsets[i + 1] as usize {
             sum += (value - values[neighbors[at] as usize]) * weights[at];
         }
-        *output = sum;
+        sum
+    };
+    // Each row reads only the input vector, so native rows run on every core; each row's
+    // sum is the same whichever thread computes it.
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use rayon::prelude::*;
+        result
+            .par_iter_mut()
+            .enumerate()
+            .with_min_len(4096)
+            .for_each(|(i, output)| *output = row(i));
+    }
+    #[cfg(target_arch = "wasm32")]
+    for (i, output) in result.iter_mut().enumerate() {
+        *output = row(i);
     }
     Ok(())
 }

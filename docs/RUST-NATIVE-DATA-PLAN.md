@@ -434,6 +434,11 @@ and parts, and the terrain key hashes attribute values without writing them as t
 `atlas-host/tests/town_development.rs` still builds text ids from M1 and is repaired with
 the M10 fixtures.
 
+### Owner authorizations (2026-11-19)
+
+- Drop the local atlas volume `vellum-local-atlas` and generate a new kept world for M11.
+- Find the WASM link failure by building earlier commits in a temporary worktree.
+
 ### M9 order (agent-derived, 2026-11-19)
 
 M9's evidence is a profile of the chain's regional rounds and its targets come from it
@@ -442,6 +447,23 @@ M9's evidence is a profile of the chain's regional rounds and its targets come f
 after M2–M5, so the profile is taken on the fresh world M11 creates: M10 runs first, then
 the M11 world and chain with a profile, then M9 on what the profile shows, then the M11
 timing run and close.
+
+Revised: profiles of the parent plan's city run were already kept in
+`.artifacts/local-atlas/profile-*.txt`, so M9 works from them and the M11 chain measures it.
+
+#### M9 result
+
+- Place effects (profile: `metric::operator::resident_product` 21%, multigrid `smooth`
+  10%, per-element band reads about 15%): the multigrid smoother, coarse restriction,
+  prolongation, zeroing and diagonal solve read and write resident bands as slices, with
+  the element path kept for paged bands; the CSR operator product runs its independent rows
+  on every core natively (identical sums per row).
+- Rock cargo: the store already holds parcels as linked arrays without per-cell hashing or
+  allocation; nothing to change.
+- Not changed, measured on the M11 chain: external coastal forcing (profile:
+  `CargoStore::get` 14% and about 16% allocation, from reading whole rock columns with
+  their cargo per cell in coastal erosion), water evolution and ancestral fluvial erosion,
+  which have no profile yet. Each needs its own change to how the rock column is read.
 
 ### M9 — Numeric hot paths in world and regional steps [depends on M0]
 Scope: F12. Kernels read and write bands through block or slice views rather than
