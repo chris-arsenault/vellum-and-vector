@@ -71,6 +71,50 @@ pub enum Geometry {
         geometries: Vec<Geometry>,
     },
 }
+impl Geometry {
+    /// A fingerprint of the shape: its kind and every coordinate's bits. Equal shapes share
+    /// it; a cache keyed by it sees any change to a coordinate.
+    pub fn fingerprint(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        fn points(hasher: &mut impl Hasher, positions: &[Position]) {
+            positions.len().hash(hasher);
+            for position in positions {
+                for value in position.coordinates() {
+                    value.to_bits().hash(hasher);
+                }
+            }
+        }
+        fn shape(hasher: &mut impl Hasher, geometry: &Geometry) {
+            std::mem::discriminant(geometry).hash(hasher);
+            match geometry {
+                Geometry::Point { coordinates } => {
+                    points(hasher, std::slice::from_ref(coordinates))
+                }
+                Geometry::MultiPoint { coordinates } | Geometry::LineString { coordinates } => {
+                    points(hasher, coordinates)
+                }
+                Geometry::MultiLineString { coordinates } | Geometry::Polygon { coordinates } => {
+                    coordinates.len().hash(hasher);
+                    coordinates.iter().for_each(|ring| points(hasher, ring))
+                }
+                Geometry::MultiPolygon { coordinates } => {
+                    coordinates.len().hash(hasher);
+                    for polygon in coordinates {
+                        polygon.len().hash(hasher);
+                        polygon.iter().for_each(|ring| points(hasher, ring));
+                    }
+                }
+                Geometry::GeometryCollection { geometries } => {
+                    geometries.len().hash(hasher);
+                    geometries.iter().for_each(|g| shape(hasher, g))
+                }
+            }
+        }
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        shape(&mut hasher, self);
+        hasher.finish()
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", content = "coordinates")]

@@ -134,15 +134,41 @@ impl Entrance {
         Self::external(position)
     }
 }
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Leg {
     street: usize,
     width: f64,
     ends: [Point; 2],
 }
-pub struct Access<'a> {
+/// A town's streets noded into legs between junctions: the costly part of an access network,
+/// which a town keeps until its streets change.
+#[derive(Debug, Default)]
+pub struct Noded {
     legs: Vec<Leg>,
     geometries: Vec<Geometry>,
+    /// Each named street's legs.
+    by_street: Vec<Vec<usize>>,
+}
+impl Noded {
+    /// A fingerprint of what noding reads: every street's points and widths.
+    pub fn key(streets: &[Street]) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        streets.len().hash(&mut hasher);
+        for street in streets {
+            street.points.len().hash(&mut hasher);
+            for [x, y] in &street.points {
+                (x.to_bits(), y.to_bits()).hash(&mut hasher);
+            }
+            for width in &street.widths {
+                width.to_bits().hash(&mut hasher);
+            }
+        }
+        hasher.finish()
+    }
+}
+pub struct Access<'a> {
+    noded: std::rc::Rc<Noded>,
     links: Vec<(Point, Point, f64)>,
     ground: Option<&'a super::ground::Ground>,
     paths: &'a [Footpath],
@@ -166,7 +192,7 @@ fn pos(point: Point) -> Position {
 }
 impl<'a> Access<'a> {
     pub fn for_town(town: &'a Town, spatial: &dyn SpatialKernel) -> io::Result<Self> {
-        let mut network = Self::new(town.streets(), spatial)?;
+        let mut network = Self::over(town.noded_streets(spatial)?);
         network.paths = town.footpaths();
         for transfer in town.kernel_links() {
             network.add_link(transfer.ends[0], transfer.ends[1], transfer.cost, spatial)?;
@@ -223,13 +249,23 @@ impl<'a> Access<'a> {
         self
     }
     pub fn new(streets: &[Street], spatial: &dyn SpatialKernel) -> io::Result<Self> {
-        let mut access = Self {
-            legs: vec![],
-            geometries: vec![],
+        Ok(Self::over(std::rc::Rc::new(Self::node(streets, spatial)?)))
+    }
+    /// The town's streets alone, without its footpaths and links, from its held noding.
+    pub fn over_town_streets(town: &Town, spatial: &dyn SpatialKernel) -> io::Result<Self> {
+        Ok(Self::over(town.noded_streets(spatial)?))
+    }
+    fn over(noded: std::rc::Rc<Noded>) -> Self {
+        Self {
+            noded,
             links: vec![],
             ground: None,
             paths: &[],
-        };
+        }
+    }
+    /// The streets noded at their crossings into legs, each kept with the street it is part of.
+    pub fn node(streets: &[Street], spatial: &dyn SpatialKernel) -> io::Result<Noded> {
+        let mut access = Noded::default();
         if streets.is_empty() {
             return Ok(access);
         }
@@ -290,6 +326,11 @@ impl<'a> Access<'a> {
                 ..parents[i].0
             });
             access.geometries.push(super::edits::line(&ends));
+        }
+        access.by_street =
+            vec![Vec::new(); access.legs.iter().map(|l| l.street + 1).max().unwrap_or(0)];
+        for (i, leg) in access.legs.iter().enumerate() {
+            access.by_street[leg.street].push(i);
         }
         Ok(access)
     }
@@ -449,7 +490,8 @@ impl<'a> Access<'a> {
     ) -> io::Result<Vec<Point>> {
         let mut junctions = Vec::new();
         graph.entrances.resize(entries.len(), None);
-        let mut cuts: Vec<Vec<(f64, Point)>> = self
+        let noded = self.noded.clone();
+        let mut cuts: Vec<Vec<(f64, Point)>> = noded
             .legs
             .iter()
             .map(|l| vec![(0., l.ends[0]), (distance(l.ends[0], l.ends[1]), l.ends[1])])
@@ -464,23 +506,18 @@ impl<'a> Access<'a> {
         {
             groups.entry(e.street).or_default().push(i);
         }
-        // Each named street's legs, gathered once; an unnamed entrance may use any leg.
-        let mut by_street =
-            vec![Vec::new(); self.legs.iter().map(|l| l.street + 1).max().unwrap_or(0)];
-        for (i, leg) in self.legs.iter().enumerate() {
-            by_street[leg.street].push(i);
-        }
+        // An entrance on a named street uses that street's legs; an unnamed one may use any.
         for (street, places) in groups {
             let indices: Vec<usize> = match street {
-                Some(s) => by_street.get(s).cloned().unwrap_or_default(),
-                None => (0..self.legs.len()).collect(),
+                Some(s) => noded.by_street.get(s).cloned().unwrap_or_default(),
+                None => (0..noded.legs.len()).collect(),
             };
             if indices.is_empty() {
                 continue;
             }
             let shapes: Vec<_> = indices
                 .iter()
-                .map(|&i| self.geometries[i].clone())
+                .map(|&i| noded.geometries[i].clone())
                 .collect();
             let points: Vec<_> = places.iter().map(|&i| pos(entries[i].point)).collect();
             let nearest = spatial
@@ -492,7 +529,7 @@ impl<'a> Access<'a> {
                 let Some(segment) = nearest.map(|i| indices[i]) else {
                     continue;
                 };
-                if !mode.permits_width(self.legs[segment].width) {
+                if !mode.permits_width(noded.legs[segment].width) {
                     continue;
                 }
                 let entrance = entries[i];
@@ -501,10 +538,10 @@ impl<'a> Access<'a> {
                         &Geometry::Point {
                             coordinates: pos(entrance.point),
                         },
-                        &self.geometries[segment],
+                        &noded.geometries[segment],
                     )
                     .map_err(io::Error::other)?[1]);
-                cuts[segment].push((distance(self.legs[segment].ends[0], projected), projected));
+                cuts[segment].push((distance(noded.legs[segment].ends[0], projected), projected));
                 graph.entrances[i] = self.door_connection(entrance, projected, mode, graph);
                 if off_street_walking && graph.entrances[i].is_none() {
                     junctions.push(projected);
@@ -520,7 +557,7 @@ impl<'a> Access<'a> {
         mode: AccessUse,
         graph: &mut BoundNetwork,
     ) {
-        for (leg, mut cuts) in self.legs.iter().zip(cuts) {
+        for (leg, mut cuts) in self.noded.legs.iter().zip(cuts) {
             if !mode.permits_width(leg.width) {
                 continue;
             }
@@ -923,6 +960,25 @@ mod tests {
         queries.reached(destinations, reach, |d, cost| found.push((d, cost)));
         found.sort_by_key(|&(d, _)| d);
         found
+    }
+    /// A town's noded streets are reused until a street's points or widths change.
+    #[test]
+    fn noded_streets_are_keyed_by_what_noding_reads() {
+        use super::super::{network::Class, story::Size};
+        let street = Street::new(vec![[0., 0.], [10., 0.]], Class::Lane, Size::Village);
+        let crossing = Street::new(vec![[5., -5.], [5., 5.]], Class::Lane, Size::Village);
+        let streets = vec![street.clone(), crossing.clone()];
+        let key = Noded::key(&streets);
+        assert_eq!(key, Noded::key(&streets.clone()));
+        let mut wider = streets.clone();
+        wider[0].widths[0] += 1.;
+        assert_ne!(key, Noded::key(&wider));
+        let mut moved = streets.clone();
+        moved[1].points[1] = [5., 6.];
+        assert_ne!(key, Noded::key(&moved));
+        let mut named = streets.clone();
+        named[0].destination = Some("Mill".into());
+        assert_eq!(key, Noded::key(&named));
     }
     #[test]
     fn a_bounded_search_names_only_destinations_within_reach() {

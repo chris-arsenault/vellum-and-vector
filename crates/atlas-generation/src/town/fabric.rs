@@ -21,8 +21,13 @@ pub enum Endpoint {
         town: atlas_map::Id,
         holding: HoldingId,
     },
-    Field(String),
-    Catchment(String),
+    /// A worked field, by its id among the town's fields.
+    Field(u32),
+    /// The country a town's approach along one of its arms reaches.
+    Catchment {
+        town: atlas_map::Id,
+        arm: u32,
+    },
     External(atlas_map::Id),
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -70,6 +75,9 @@ impl Holding {
 pub struct Town {
     #[serde(skip)]
     fitting: std::cell::RefCell<FittingIndex>,
+    /// The streets noded for access, with the fingerprint of the streets they were made from.
+    #[serde(skip)]
+    noded: std::cell::RefCell<Option<(u64, std::rc::Rc<super::access::Noded>)>>,
     pub seat: Seat,
     pub layout: Layout,
     pub template: super::templates::Selection,
@@ -293,6 +301,22 @@ impl Town {
     pub fn streets(&self) -> &[Street] {
         &self.streets
     }
+    /// The streets noded for access. They are noded again only after a street's points or
+    /// widths change, whichever process changed them.
+    pub fn noded_streets(
+        &self,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<std::rc::Rc<super::access::Noded>> {
+        let key = super::access::Noded::key(&self.streets);
+        if let Some((held, noded)) = &*self.noded.borrow() {
+            if *held == key {
+                return Ok(noded.clone());
+            }
+        }
+        let noded = std::rc::Rc::new(super::access::Access::node(&self.streets, spatial)?);
+        *self.noded.borrow_mut() = Some((key, noded.clone()));
+        Ok(noded)
+    }
     pub fn holdings(&self) -> &[Holding] {
         &self.holdings
     }
@@ -439,6 +463,7 @@ impl Town {
         let purposes = Purpose::for_seat(&seat);
         Self {
             fitting: Default::default(),
+            noded: Default::default(),
             template: super::templates::Selection::commons(seat.centre),
             founding_sites: Vec::new(),
             defences: Vec::new(),

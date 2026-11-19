@@ -123,7 +123,8 @@ impl Specification for Relationship {
                 let places: Vec<_> = std::iter::once(origin)
                     .chain(targets.iter().map(|h| Entrance::holding(town, h)))
                     .collect();
-                let graph = Access::new(&town.streets, spatial)?.bind(&places, use_, spatial)?;
+                let graph =
+                    Access::over_town_streets(town, spatial)?.bind(&places, use_, spatial)?;
                 let routes = graph.routes(0);
                 Ok(targets.into_iter().enumerate().any(|(i, holding)| {
                     let cost = routes.cost(i + 1);

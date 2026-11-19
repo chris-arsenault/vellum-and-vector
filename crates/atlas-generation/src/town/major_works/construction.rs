@@ -153,7 +153,7 @@ fn subscribe(
                 matches!(
                     tie.destination,
                     crate::town::fabric::Endpoint::External(_)
-                        | crate::town::fabric::Endpoint::Catchment(_)
+                        | crate::town::fabric::Endpoint::Catchment { .. }
                 )
             });
     if (sponsors.len() >= 2 || supported_from_outside) && town.works.consider(family, anchor) {

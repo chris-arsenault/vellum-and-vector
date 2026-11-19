@@ -190,8 +190,8 @@ fn distant_custom_can_fund_an_occupied_centre_before_a_connecting_road_exists() 
     let sponsor = town.establish(proposal(10.), &spatial).unwrap().unwrap();
     town.occupy(sponsor, 1., 1., 1., 0.);
     let source = OpportunitySource {
-        endpoint: Endpoint::Field("orchard".into()),
-        id: "orchard".into(),
+        endpoint: Endpoint::Field(1),
+        id: atlas_generation::town::influence::SourceId::Named(atlas_map::Id::from_name("orchard")),
         label: "Orchard".into(),
         position: [280., 0.],
         activity: Activity::Agriculture,

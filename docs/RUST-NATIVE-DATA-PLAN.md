@@ -409,6 +409,40 @@ Acceptance: no step rebuilds the whole town's network; no formatted ids or strin
 in the economy.
 Evidence: profile of a late town round; town round times on the city run.
 
+#### M8 expansion and result
+
+1. A town keeps its streets noded for access (`access::Noded`, legs grouped by street),
+   keyed by a fingerprint of every street's points and widths; `Access::for_town` reuses it
+   until a street changes, whichever process changed it.
+2. The walking and occupied grounds are held between the town steps of one development
+   (`atlas/town/held_ground.rs`). The walled terrain is read again only when the field
+   version, the map footprint, the drawn water, the recorded fortifications or a town's
+   walls change. Buildings, premises and works grounds are marked in layers by shape
+   fingerprint: a step marks what was added, and the ground is built again only when a
+   marked shape changed or went. Frontage steps still take their own copy, as they mark
+   streets and placements on it.
+3. Economy sources are keyed by `SourceId` (approach, external benefit, holding kind,
+   estate, named), an ordered value; catchment and field endpoints hold integers.
+4. `atlas_map::Geometry::fingerprint` gives the shape keys.
+
+Evidence: `noded_streets_are_keyed_by_what_noding_reads`,
+`grounds_are_marked_with_what_was_added_and_rebuilt_when_a_shape_goes`, the 202 generator
+unit tests; town round times on the M11 city run. Results may differ from the old order of
+marking where an added building overlaps an older works ground.
+Review fixes: project access checks use the held noding too, shape fingerprints count rings
+and parts, and the terrain key hashes attribute values without writing them as text.
+`atlas-host/tests/town_development.rs` still builds text ids from M1 and is repaired with
+the M10 fixtures.
+
+### M9 order (agent-derived, 2026-11-19)
+
+M9's evidence is a profile of the chain's regional rounds and its targets come from it
+(the city run's step log gives place effects about 160 s a round, water evolution about
+33 s a pass, ancestral fluvial erosion about 58 s). The kept world's stores no longer open
+after M2–M5, so the profile is taken on the fresh world M11 creates: M10 runs first, then
+the M11 world and chain with a profile, then M9 on what the profile shows, then the M11
+timing run and close.
+
 ### M9 — Numeric hot paths in world and regional steps [depends on M0]
 Scope: F12. Kernels read and write bands through block or slice views rather than
 per-element `io::Result` calls; rock cargo storage holds its parcels without per-cell

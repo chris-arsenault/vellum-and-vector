@@ -3,10 +3,29 @@ use super::{catalogue::Activity, geometry::Point};
 use crate::execution::QueryValue;
 use serde::{Deserialize, Serialize};
 
+/// A source's identity. Alternatives sharing one identity (one holding reached by different
+/// paths, one feature's benefit at several entrances) compete for each site as one source.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum SourceId {
+    /// A town's approach along one of its arms.
+    Approach { town: atlas_map::Id, arm: u32 },
+    /// One benefit of a feature outside the towns.
+    External { feature: atlas_map::Id, benefit: u8 },
+    /// One of a holding's kinds: its primary kind first, then its secondary one.
+    Holding {
+        town: atlas_map::Id,
+        holding: u32,
+        kind: u32,
+    },
+    /// A working estate's fields.
+    Estate(u32),
+    /// A source a process names itself.
+    Named(atlas_map::Id),
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OpportunitySource {
     pub endpoint: super::fabric::Endpoint,
-    pub id: String,
+    pub id: SourceId,
     pub label: String,
     pub position: Point,
     pub activity: Activity,
@@ -275,9 +294,9 @@ fn support_from<'a, 'b: 'a>(
     conditions: Conditions,
 ) -> Support {
     // hpc-exempt: sparse source identities select alternative geographic paths, not lattice values.
-    let mut seen = std::collections::BTreeMap::<&str, &Reachable<'_>>::new();
+    let mut seen = std::collections::BTreeMap::<SourceId, &Reachable<'_>>::new();
     for path in paths.filter(|p| p.cost.is_finite()) {
-        seen.entry(path.source.id.as_str())
+        seen.entry(path.source.id)
             .and_modify(|current| {
                 if path.cost < current.cost {
                     *current = path;
@@ -299,12 +318,15 @@ pub fn respond(previous: f64, desired: f64, exposure: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn named(name: &str) -> SourceId {
+        SourceId::Named(atlas_map::Id::from_name(name))
+    }
     #[test]
     fn lost_access_redirects_operating_work_to_a_reachable_counterparty() {
         use super::super::{catalogue::AccessUse, fabric::Endpoint};
         let first = OpportunitySource {
             endpoint: Endpoint::External(atlas_map::Id::from_name("port")),
-            id: "port".into(),
+            id: named("port"),
             label: "Port".into(),
             position: [0., 0.],
             activity: Activity::Trade,
@@ -312,8 +334,8 @@ mod tests {
             capability: 0.,
         };
         let other = OpportunitySource {
-            endpoint: Endpoint::Field("7".into()),
-            id: "fields".into(),
+            endpoint: Endpoint::Field(7),
+            id: named("fields"),
             label: "Fields".into(),
             demand: 4.,
             ..first.clone()
@@ -354,8 +376,8 @@ mod tests {
             fabric::Endpoint,
         };
         let fields = OpportunitySource {
-            endpoint: Endpoint::Field("8".into()),
-            id: "estate".into(),
+            endpoint: Endpoint::Field(8),
+            id: named("estate"),
             position: [0., 0.],
             label: "fields".into(),
             activity: Activity::Agriculture,
@@ -364,7 +386,7 @@ mod tests {
         };
         let healer = OpportunitySource {
             endpoint: Endpoint::External(atlas_map::Id::from_name("physic")),
-            id: "healer".into(),
+            id: named("healer"),
             activity: Activity::Service,
             ..fields.clone()
         };
@@ -392,7 +414,7 @@ mod tests {
             endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name(
                 "pilgrims",
             )),
-            id: "pilgrims".into(),
+            id: named("pilgrims"),
             label: "Pilgrims".into(),
             position: [0., 0.],
             activity: Activity::Hospitality,
@@ -417,7 +439,7 @@ mod tests {
     fn blocked_access_and_competition_have_distinct_effects() {
         let source = OpportunitySource {
             endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name("road")),
-            id: "road".into(),
+            id: named("road"),
             label: "Road traffic".into(),
             position: [0., 0.],
             activity: Activity::Trade,
@@ -473,7 +495,7 @@ mod tests {
     fn customers_and_livelihoods_are_different_activity_requests() {
         let home = OpportunitySource {
             endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name("home")),
-            id: "home".into(),
+            id: named("home"),
             label: "Households".into(),
             position: [0., 0.],
             activity: Activity::Household,
@@ -482,7 +504,7 @@ mod tests {
         };
         let shop = OpportunitySource {
             endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name("shop")),
-            id: "shop".into(),
+            id: named("shop"),
             label: "Trading workplaces".into(),
             position: [0., 0.],
             activity: Activity::Trade,
@@ -505,7 +527,7 @@ mod tests {
         assert_eq!(answers.for_activity(Activity::Household).demand, 2.);
         assert_eq!(answers.for_activity(Activity::Trade).demand, 14.);
         let alternate = OpportunitySource {
-            id: home.id.clone(),
+            id: home.id,
             label: "Warehouse".into(),
             ..shop.clone()
         };
@@ -540,6 +562,8 @@ mod tests {
                 visit(0, 0.);
             },
         );
+        // Sources are visited grouped by identity; which group comes first is not meaningful.
+        origins.sort_unstable();
         assert_eq!(origins, [1, 2]);
         assert_eq!(street[0].for_activity(Activity::Household).demand, 4.);
     }

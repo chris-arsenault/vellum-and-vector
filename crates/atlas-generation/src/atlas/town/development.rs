@@ -15,7 +15,7 @@ use crate::{
         catalogue::AccessUse,
         fabric::Town,
         geometry::Point,
-        ground::{FIRST_STREET, PLOT},
+        ground::FIRST_STREET,
         influence::{
             frontage_support, Conditions, FrontageRead, OpportunitySource, SiteConditions,
         },
@@ -29,37 +29,6 @@ struct FrontageTravel<'a> {
     spatial: &'a dyn crate::spatial::SpatialKernel,
     links: &'a [(Point, Point, f64)],
 }
-fn occupied_ground(
-    walking: &crate::town::ground::Ground,
-    towns: &[Town],
-    spatial: &dyn crate::spatial::SpatialKernel,
-) -> io::Result<crate::town::ground::Ground> {
-    let mut ground = walking.clone();
-    let premises = towns
-        .iter()
-        .flat_map(|t| t.holdings().iter())
-        .filter(|h| {
-            h.slot
-                .habitat
-                .shares_surface(crate::town::templates::Habitat::Ground)
-        })
-        .map(|h| h.outline.clone())
-        .collect::<Vec<_>>();
-    ground.mark_shapes(&premises, PLOT, spatial)?;
-    for grounds in towns
-        .iter()
-        .flat_map(|t| &t.works.commissions)
-        .filter_map(|w| w.grounds.as_ref())
-    {
-        ground.mark_shapes(
-            std::slice::from_ref(grounds),
-            crate::town::ground::SQUARE,
-            spatial,
-        )?;
-    }
-    Ok(ground)
-}
-
 fn frontage_candidates(
     town: &Town,
     travel: FrontageTravel<'_>,
@@ -617,6 +586,8 @@ impl Operations {
         // Town steps change the town, not the field the environment is read from, so the
         // environment is kept until the field may have changed.
         let held_environment = HeldEnvironment::default();
+        // The ground is marked with what each step added, not built again for every step.
+        let held_ground = super::held_ground::HeldGround::default();
         let mut steps: Vec<_> = processes::STEPS
             .iter()
             .map(|step| {
@@ -624,6 +595,7 @@ impl Operations {
                 let samples = samples.clone();
                 let environment = environment.clone();
                 let held_environment = held_environment.clone();
+                let held_ground = held_ground.clone();
                 let run = step.run;
                 let reads = match run {
                     Mechanism::Movement(_) | Mechanism::Frontage(_) => processes::Reads::Frontage,
@@ -646,7 +618,7 @@ impl Operations {
                             scope.query(&sources)?
                         };
                         let environment = held_environment.read(scope, &environment)?;
-                        let walking_ground = Rc::new(site::walking_ground(scope.state())?);
+                        let walking_ground = held_ground.walking(scope.state())?;
                         let candidates: Vec<Vec<Slot>> = scope
                             .state()
                             .town
@@ -763,14 +735,9 @@ impl Operations {
                                 )
                             })
                             .collect::<Vec<_>>();
+                        // The step takes streets and places holdings on its own copy.
                         let mut ground = (reads == processes::Reads::Frontage)
-                            .then(|| {
-                                occupied_ground(
-                                    &walking_ground,
-                                    &state.town.towns,
-                                    spatial.as_ref(),
-                                )
-                            })
+                            .then(|| held_ground.occupied(state).map(|g| (*g).clone()))
                             .transpose()?;
                         let mut removals = Vec::new();
                         for (index, town) in state.town.towns.iter_mut().enumerate() {

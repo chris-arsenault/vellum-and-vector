@@ -716,7 +716,7 @@ mod tests {
                 endpoint: crate::town::fabric::Endpoint::External(atlas_map::Id::from_name(
                     "source",
                 )),
-                id: "source".into(),
+                id: crate::town::influence::SourceId::Named(atlas_map::Id::from_name("source")),
                 label: "Occupied premises".into(),
                 position: [0., 0.],
                 activity,

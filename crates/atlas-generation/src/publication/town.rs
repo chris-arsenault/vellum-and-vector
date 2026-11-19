@@ -349,7 +349,7 @@ fn operating_partner(
         }
         Endpoint::Field(id) => state.feature_id(&format!("town:field:{id}")),
         Endpoint::External(id) => *id,
-        Endpoint::Catchment(_) => return Ok(None),
+        Endpoint::Catchment { .. } => return Ok(None),
     };
     Ok(state.feature(id)?.map(|feature| feature.id))
 }

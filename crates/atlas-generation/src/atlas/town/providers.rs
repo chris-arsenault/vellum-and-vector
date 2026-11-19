@@ -8,7 +8,7 @@ use crate::{
     field::{poi::values::Benefit, refinement::courses::cell_at},
     town::{
         catalogue::Activity,
-        influence::{OpportunitySource, Sources},
+        influence::{OpportunitySource, SourceId, Sources},
     },
 };
 use std::io;
@@ -19,8 +19,14 @@ pub fn approaches() -> Query<State, Sources> {
             for (i, arm) in town.seat.arms.iter().enumerate() {
                 if let Some(position) = arm.points.last() {
                     sources.push(OpportunitySource {
-                        endpoint: Endpoint::Catchment(format!("{}:approach:{i}", town.seat.key)),
-                        id: format!("{}:approach:{i}", town.seat.key),
+                        endpoint: Endpoint::Catchment {
+                            town: town.seat.key,
+                            arm: i as u32,
+                        },
+                        id: SourceId::Approach {
+                            town: town.seat.key,
+                            arm: i as u32,
+                        },
                         label: arm
                             .destination
                             .clone()
@@ -81,8 +87,11 @@ pub fn institutions() -> Query<State, Sources> {
                     Benefit::Defence | Benefit::Water => (Activity::Service, 0., value),
                 };
                 sources.push(OpportunitySource {
-                    endpoint: Endpoint::External(feature.id.clone()),
-                    id: format!("{}:{}", feature.id, benefit as u8),
+                    endpoint: Endpoint::External(feature.id),
+                    id: SourceId::External {
+                        feature: feature.id,
+                        benefit: benefit as u8,
+                    },
                     label: feature.name.clone(),
                     position: [x, y],
                     activity,
@@ -133,7 +142,11 @@ pub fn occupation() -> Query<State, Sources> {
                             town: town.seat.key.clone(),
                             holding: holding.id,
                         },
-                        id: format!("{}:holding:{}:{}", town.seat.key, holding.id.0, i),
+                        id: SourceId::Holding {
+                            town: town.seat.key,
+                            holding: holding.id.0,
+                            kind: i as u32,
+                        },
                         label: format!("{} on {}", definition.label, town.seat.name),
                         position: holding.slot.front,
                         activity: definition.activity,
@@ -169,8 +182,8 @@ pub fn agriculture() -> Query<State, Sources> {
                 .map_err(io::Error::other)?
                 .coordinates();
             sources.push(OpportunitySource {
-                endpoint: Endpoint::Field(fields[0].id.to_string()),
-                id: format!("estate:{estate}"),
+                endpoint: Endpoint::Field(fields[0].id),
+                id: SourceId::Estate(estate),
                 label: "Working fields and pasture".into(),
                 position: [point[0], point[1]],
                 activity: Activity::Agriculture,
@@ -308,7 +321,7 @@ mod tests {
             Query::new(name, vec![], move |state: &f64, _| {
                 Ok(Sources(vec![OpportunitySource {
                     endpoint: Endpoint::External(atlas_map::Id::from_name(name)),
-                    id: name.into(),
+                    id: SourceId::Named(atlas_map::Id::from_name(name)),
                     label: name.into(),
                     position: [0., 0.],
                     activity: Activity::Trade,

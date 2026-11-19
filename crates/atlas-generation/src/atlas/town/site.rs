@@ -70,12 +70,81 @@ fn terrain(state: &State, bounds: [f64; 4]) -> io::Result<Ground> {
     fortifications(current, area, &mut ground, state.spatial.as_ref())?;
     Ok(ground)
 }
-pub(super) fn walking_ground(state: &State) -> io::Result<Ground> {
+/// The map's terrain with the towns' walls taken: the base the town steps mark buildings on.
+pub(super) fn walled_terrain(state: &State) -> io::Result<Ground> {
     let mut ground = terrain(state, bounds(state)?)?;
     for wall in state.town.towns.iter().flat_map(|town| town.kernel_walls()) {
         ground.take_line(wall, 1., crate::town::ground::WALL);
     }
-    let buildings: Vec<_> = state
+    Ok(ground)
+}
+/// A fingerprint of what the walled terrain reads: the field's version, the map's footprint,
+/// the drawn water and recorded fortifications, and the towns' walls.
+pub(super) fn terrain_key(state: &State) -> io::Result<u64> {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    state.field_version().hash(&mut hasher);
+    state.scope.footprint.fingerprint().hash(&mut hasher);
+    let area = Some(state.scope.area);
+    let features = state.records.features.as_ref();
+    for (layer, kind) in [
+        ("rivers", None),
+        ("lakes", None),
+        ("structures", Some("wall")),
+        ("structures", Some("gate")),
+    ] {
+        for feature in features.values(FeatureSelection {
+            area_id: area,
+            layer_id: Some(layer),
+            kind,
+        })? {
+            let feature = feature?;
+            feature.id.hash(&mut hasher);
+            feature.geometry.fingerprint().hash(&mut hasher);
+            feature
+                .footprint
+                .as_ref()
+                .map(Geometry::fingerprint)
+                .hash(&mut hasher);
+            // Channel widths and lake levels shape the drawn water.
+            for (key, value) in &feature.attributes {
+                key.hash(&mut hasher);
+                hash_value(value, &mut hasher);
+            }
+        }
+    }
+    for wall in state.town.towns.iter().flat_map(|town| town.kernel_walls()) {
+        for [x, y] in wall {
+            (x.to_bits(), y.to_bits()).hash(&mut hasher);
+        }
+    }
+    Ok(hasher.finish())
+}
+/// An open attribute value hashed by its contents: numbers by their bits.
+fn hash_value(value: &Value, hasher: &mut impl std::hash::Hasher) {
+    use std::hash::Hash;
+    std::mem::discriminant(value).hash(hasher);
+    match value {
+        Value::Null => {}
+        Value::Bool(b) => b.hash(hasher),
+        Value::Number(n) => n.as_f64().map(f64::to_bits).hash(hasher),
+        Value::String(s) => s.hash(hasher),
+        Value::Array(items) => {
+            items.len().hash(hasher);
+            items.iter().for_each(|v| hash_value(v, hasher));
+        }
+        Value::Object(map) => {
+            map.len().hash(hasher);
+            for (key, v) in map {
+                key.hash(hasher);
+                hash_value(v, hasher);
+            }
+        }
+    }
+}
+/// Every town's buildings standing on the ground surface.
+pub(super) fn ground_buildings(state: &State) -> impl Iterator<Item = Geometry> + '_ {
+    state
         .town
         .towns
         .iter()
@@ -86,13 +155,6 @@ pub(super) fn walking_ground(state: &State) -> io::Result<Ground> {
                 .shares_surface(crate::town::templates::Habitat::Ground)
         })
         .flat_map(|h| h.buildings.iter().cloned())
-        .collect();
-    ground.mark_shapes(
-        &buildings,
-        crate::town::ground::PLOT,
-        state.spatial.as_ref(),
-    )?;
-    Ok(ground)
 }
 /// Built walls reserve land. Only a recorded gate opens the wall to a new way.
 fn fortifications(
