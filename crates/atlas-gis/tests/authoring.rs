@@ -1,16 +1,30 @@
 #![cfg(not(target_arch = "wasm32"))]
 //! Authoring commands, junction topology, undo and save on a small supplied real-scale map.
 use atlas_gis::{
+    map_files::MapFiles,
     map_store::{FeatureQuery, MapStore, SaveRequest},
     sql::Database,
 };
 use atlas_map::{
     authoring::{EditCommand, Transform},
-    hexes::HexGrid,
-    Geometry, MapDescriptor, MapFeature, MapNavigationState, MapRef, PublicationBatch, Publisher,
+    hexes::{Hex, HexGrid},
+    Geometry, Id, MapDescriptor, MapFeature, MapNavigationState, MapRef, PublicationBatch,
+    Publisher,
 };
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, io, path::PathBuf, rc::Rc};
+
+/// A fixture's identity from its name.
+fn id(name: &str) -> Id {
+    Id::from_name(name)
+}
+/// The fixture map has no rasters.
+fn files() -> MapFiles {
+    MapFiles::new(std::env::temp_dir())
+}
+fn hex_id(hex: Hex) -> Id {
+    hex.id(id("vector:hexes"))
+}
 
 const LAYERS: [(&str, &str, &[&str]); 5] = [
     ("rivers", "Rivers", &["stream"]),
@@ -25,33 +39,43 @@ fn layer(id: &str, name: &str, kinds: &[&str]) -> Value {
         .iter()
         .map(|kind| json!({"id":kind,"kind":kind,"label":kind,"path":[name],"magicDepiction":null,"count":0,"geometries":[],"footprints":false}))
         .collect();
-    json!({"id":format!("vector:{id}"),"name":name,"spaceId":"surface","bounds":[0,0,30,20],"attribution":[],
+    json!({"id":format!("vector:{id}"),"name":name,"spaceId":self::id("surface"),"bounds":[0,0,30,20],"attribution":[],
         "catalog":{"path":[name],"common":true,"featureTypes":types,"defaultStyle":null,"presets":[],"properties":{},"examples":[],"geometries":[]},
         "source":{"kind":"vector","data":{"assetId":id,"mediaType":"application/geo+json"}}})
 }
-fn descriptor(id: &str, real_scale: bool) -> MapDescriptor {
+fn descriptor(name: &str, real_scale: bool) -> MapDescriptor {
     let layers: Vec<Value> = LAYERS
         .iter()
         .map(|(id, name, kinds)| layer(id, name, kinds))
         .collect();
     let mut value = json!({
-        "reference":{"mapId":id,"revision":"published"},"worldId":"world","name":"Glen","parent":null,"state":"incomplete",
-        "profile":"local","primarySpaceId":"surface","bounds":[0,0,30,20],
+        "reference":{"mapId":id(name),"revision":id("published")},"worldId":id("world"),"name":"Glen","parent":null,"state":"incomplete",
+        "profile":"local","primarySpaceId":id("surface"),"bounds":[0,0,30,20],
         "footprint":{"type":"Polygon","coordinates":[[[0,0],[30,0],[30,20],[0,20],[0,0]]]},
         "regionScale":{"level":0,"nextArea":25,"subdivision":7,"minimumWidth":0.01,"enabled":!real_scale},
-        "spaces":[{"id":"surface","parentSpaceId":null,"bounds":[0,0,30,20],"metresPerUnit":1,"precision":0.000001,"periodicWidth":null,"frame":{"origin":[0,0,0],"rotation":0,"floor":null}}],
+        "spaces":[{"id":id("surface"),"parentSpaceId":null,"bounds":[0,0,30,20],"metresPerUnit":1,"precision":0.000001,"periodicWidth":null,"frame":{"origin":[0,0,0],"rotation":0,"floor":null}}],
         "layers":layers
     });
     if real_scale {
         value["realScale"] = json!({"kind":"ground","hexSize":"1.5m","acrossFlats":1.5,"feet":5,"origin":[15,10],
-            "trianglesPerEdge":2,"creatorLayers":[{"id":"base","name":"Base layer"}],"edits":0});
+            "trianglesPerEdge":2,"creatorLayers":[{"id":id("base"),"name":"Base layer"}],"edits":0});
     }
     serde_json::from_value(value).unwrap()
 }
-fn feature(id: &str, layer: &str, kind: &str, geometry: Value, attributes: Value) -> MapFeature {
-    serde_json::from_value(json!({"id":id,"name":id,"spaceId":"surface","layerId":format!("vector:{layer}"),"typeId":kind,"kind":kind,
+fn feature(name: &str, layer: &str, kind: &str, geometry: Value, attributes: Value) -> MapFeature {
+    feature_with(id(name), name, layer, kind, geometry, attributes)
+}
+fn feature_with(
+    identity: Id,
+    name: &str,
+    layer: &str,
+    kind: &str,
+    geometry: Value,
+    attributes: Value,
+) -> MapFeature {
+    serde_json::from_value(json!({"id":identity,"name":name,"spaceId":id("surface"),"layerId":format!("vector:{layer}"),"typeId":kind,"kind":kind,
         "entityId":null,"geometry":geometry,"footprint":null,"attributes":attributes,"relations":[],"causes":[],
-        "catalog":{"values":{},"columns":[],"origin":"Generated geography","mapOnly":false}}))
+        "catalog":{"values":{},"origin":"Generated geography","mapOnly":false}}))
     .unwrap()
 }
 fn line(points: &[[f64; 2]]) -> Value {
@@ -67,7 +91,7 @@ fn hexes() -> Vec<MapFeature> {
         .map(|hex| {
             let [x, y] = grid.centre(hex);
             let marks = if grid.hex_at([10.0, 10.5]) == hex { json!({"water":1.0}) } else { json!({}) };
-            let mut feature = feature(&format!("hex:{}:{}", hex.q, hex.r), "hexes", "hex",
+            let mut feature = feature_with(hex_id(hex), "hex", "hexes", "hex",
                 serde_json::to_value(grid.polygon(hex)).unwrap(),
                 json!({"q":hex.q,"r":hex.r,"marks":marks,"fill":null,"nameStatus":"label","centre":[x,y]}));
             feature.name = None;
@@ -123,10 +147,10 @@ fn publish_map(path: &PathBuf, map: MapDescriptor) -> io::Result<(MapStore, MapR
     store.finish(&map.reference)?;
     Ok((store, map.reference))
 }
-fn read(store: &MapStore, reference: &MapRef, id: &str) -> Option<MapFeature> {
+fn read(store: &MapStore, reference: &MapRef, feature: Id) -> Option<MapFeature> {
     let query = FeatureQuery {
-        space_id: "surface".into(),
-        feature_ids: Some(vec![id.into()]),
+        space_id: id("surface"),
+        feature_ids: Some(vec![feature]),
         ..Default::default()
     };
     store.features(reference, &query).unwrap().items.pop()
@@ -158,10 +182,10 @@ fn centre(feature: &MapFeature) -> [f64; 2] {
 fn hex_marks(store: &MapStore, reference: &MapRef, at: [f64; 2]) -> BTreeMap<String, f64> {
     let grid = HexGrid::from_across_flats(1.5, [15.0, 10.0]).unwrap();
     let hex = grid.hex_at(at);
-    let found = read(store, reference, &format!("hex:{}:{}", hex.q, hex.r)).unwrap();
+    let found = read(store, reference, hex_id(hex)).unwrap();
     serde_json::from_value(found.attributes["marks"].clone()).unwrap()
 }
-fn bridge(store: &MapStore, reference: &MapRef) -> String {
+fn bridge(store: &MapStore, reference: &MapRef) -> Id {
     let outcome = store
         .edits()
         .edit(
@@ -174,14 +198,11 @@ fn bridge(store: &MapStore, reference: &MapRef) -> String {
                 attributes: BTreeMap::new(),
                 creator_layer: None,
             },
+            &files(),
         )
         .unwrap();
-    outcome
-        .changed
-        .iter()
-        .find(|id| id.starts_with("authored-"))
-        .unwrap()
-        .clone()
+    assert!(outcome.changed.contains(&outcome.created[0]));
+    outcome.created[0]
 }
 
 fn drag_stream(
@@ -192,13 +213,14 @@ fn drag_stream(
     store.edits().edit(
         reference,
         &EditCommand::Reshape {
-            id: "stream".into(),
+            id: id("stream"),
             geometry: serde_json::from_value(moved).unwrap(),
         },
+        &files(),
     )
 }
-fn bridge_at(store: &MapStore, reference: &MapRef, id: &str, [ex, ey]: [f64; 2]) {
-    let [x, y] = centre(&read(store, reference, id).unwrap());
+fn bridge_at(store: &MapStore, reference: &MapRef, feature: Id, [ex, ey]: [f64; 2]) {
+    let [x, y] = centre(&read(store, reference, feature).unwrap());
     assert!(
         (x - ex).abs() < 1e-6 && (y - ey).abs() < 1e-6,
         "the bridge sits at {x}, {y}"
@@ -210,21 +232,21 @@ fn dragging_a_river_vertex_keeps_one_feature_its_widths_and_its_bridge() -> io::
     let path = temporary();
     let (store, reference) = publish(&path, "glen", true)?;
     let bridge_id = bridge(&store, &reference);
-    let created = read(&store, &reference, &bridge_id).unwrap();
+    let created = read(&store, &reference, bridge_id).unwrap();
     let mut kinds: Vec<_> = created
         .relations
         .iter()
-        .map(|r| (r.target_id.as_str(), r.kind.as_str()))
+        .map(|r| (r.kind.as_str(), r.target_id))
         .collect();
     kinds.sort();
-    assert_eq!(kinds, [("stream", "spans"), ("trail", "carries")]);
+    assert_eq!(kinds, [("carries", id("trail")), ("spans", id("stream"))]);
     let outcome = drag_stream(&store, &reference)?;
     assert!(outcome.map.real_scale.as_ref().unwrap().authored());
     assert_eq!(
         outcome.history.steps.last().unwrap().label,
         "Reshape stream"
     );
-    let stream = read(&store, &reference, "stream").unwrap();
+    let stream = read(&store, &reference, id("stream")).unwrap();
     assert_eq!(coordinates(&stream)[1], [10.0, 13.0]);
     assert_eq!(stream.attributes["widths"], json!([1.0, 1.5, 2.0, 1.0]));
     assert!(
@@ -232,7 +254,7 @@ fn dragging_a_river_vertex_keeps_one_feature_its_widths_and_its_bridge() -> io::
         "the widened line covers its ground"
     );
     // Where the moved burn now meets the trail.
-    bridge_at(&store, &reference, &bridge_id, [15.0, 12.5]);
+    bridge_at(&store, &reference, bridge_id, [15.0, 12.5]);
     assert!(hex_marks(&store, &reference, [10.0, 13.0]).contains_key("water"));
     assert!(!hex_marks(&store, &reference, [10.0, 10.5]).contains_key("water"));
     std::fs::remove_file(path)
@@ -245,14 +267,14 @@ fn undo_and_redo_write_each_side_of_a_step() -> io::Result<()> {
     let bridge_id = bridge(&store, &reference);
     drag_stream(&store, &reference)?;
     store.edits().undo(&reference)?;
-    let stream = read(&store, &reference, "stream").unwrap();
+    let stream = read(&store, &reference, id("stream")).unwrap();
     assert_eq!(coordinates(&stream)[1], [10.0, 10.5]);
-    bridge_at(&store, &reference, &bridge_id, [15.0, 10.0]);
+    bridge_at(&store, &reference, bridge_id, [15.0, 10.0]);
     let history = store.edits().edit_history(&reference)?;
     assert_eq!(history.steps.iter().filter(|s| s.undone).count(), 1);
     store.edits().redo(&reference)?;
     assert_eq!(
-        coordinates(&read(&store, &reference, "stream").unwrap())[1],
+        coordinates(&read(&store, &reference, id("stream")).unwrap())[1],
         [10.0, 13.0]
     );
     std::fs::remove_file(path)
@@ -265,7 +287,7 @@ fn an_inserted_vertex_takes_the_width_where_it_lies() -> io::Result<()> {
     store.edits().edit(
         &reference,
         &EditCommand::Reshape {
-            id: "stream".into(),
+            id: id("stream"),
             geometry: serde_json::from_value(line(&[
                 [0.0, 10.0],
                 [10.0, 10.5],
@@ -275,8 +297,9 @@ fn an_inserted_vertex_takes_the_width_where_it_lies() -> io::Result<()> {
             ]))
             .unwrap(),
         },
+        &files(),
     )?;
-    let widths = read(&store, &reference, "stream").unwrap().attributes["widths"].clone();
+    let widths = read(&store, &reference, id("stream")).unwrap().attributes["widths"].clone();
     assert_eq!(widths, json!([1.0, 1.5, 1.75, 2.0, 1.0]));
     std::fs::remove_file(path)
 }
@@ -295,20 +318,17 @@ fn a_line_snapped_onto_another_joins_it_and_follows_it() -> io::Result<()> {
             attributes: BTreeMap::from([("widths".into(), json!([1.0, 1.0]))]),
             creator_layer: None,
         },
+        &files(),
     )?;
-    let side = outcome
-        .changed
-        .iter()
-        .find(|id| id.starts_with("authored-"))
-        .unwrap()
-        .clone();
-    let joined = read(&store, &reference, &side).unwrap();
-    assert_eq!(joined.relations[0].target_id, "trail");
+    let side = outcome.created[0];
+    assert!(outcome.changed.contains(&side));
+    let joined = read(&store, &reference, side).unwrap();
+    assert_eq!(joined.relations[0].target_id, id("trail"));
     assert_eq!(joined.relations[0].kind, "joins");
     store.edits().edit(
         &reference,
         &EditCommand::Transform {
-            ids: vec!["trail".into()],
+            ids: vec![id("trail")],
             transform: Transform {
                 translate: [-2.0, 0.0],
                 rotate: 0.0,
@@ -316,9 +336,10 @@ fn a_line_snapped_onto_another_joins_it_and_follows_it() -> io::Result<()> {
                 about: [0.0, 0.0],
             },
         },
+        &files(),
     )?;
     assert_eq!(
-        coordinates(&read(&store, &reference, &side).unwrap())[0],
+        coordinates(&read(&store, &reference, side).unwrap())[0],
         [13.0, 5.0]
     );
     std::fs::remove_file(path)
@@ -331,10 +352,11 @@ fn edits_are_validated_and_world_maps_stay_read_only() -> io::Result<()> {
     let wrong = store.edits().edit(
         &reference,
         &EditCommand::SetAttributes {
-            ids: vec!["stream".into()],
+            ids: vec![id("stream")],
             name: None,
             attributes: BTreeMap::from([("widths".into(), json!([1.0]))]),
         },
+        &files(),
     );
     assert!(wrong
         .unwrap_err()
@@ -343,7 +365,7 @@ fn edits_are_validated_and_world_maps_stay_read_only() -> io::Result<()> {
     let outside = store.edits().edit(
         &reference,
         &EditCommand::Transform {
-            ids: vec!["log".into()],
+            ids: vec![id("log")],
             transform: Transform {
                 translate: [100.0, 0.0],
                 rotate: 0.0,
@@ -351,21 +373,24 @@ fn edits_are_validated_and_world_maps_stay_read_only() -> io::Result<()> {
                 about: [0.0, 0.0],
             },
         },
+        &files(),
     );
     assert!(outside.unwrap_err().to_string().contains("inside the map"));
     store.edits().edit(
         &reference,
         &EditCommand::SetAttributes {
-            ids: vec!["log".into()],
+            ids: vec![id("log")],
             name: None,
             attributes: BTreeMap::from([("locked".into(), json!(true))]),
         },
+        &files(),
     )?;
     let held = store.edits().edit(
         &reference,
         &EditCommand::Delete {
-            ids: vec!["log".into()],
+            ids: vec![id("log")],
         },
+        &files(),
     );
     assert!(held.unwrap_err().to_string().contains("locked"));
     let world_path = temporary();
@@ -373,8 +398,9 @@ fn edits_are_validated_and_world_maps_stay_read_only() -> io::Result<()> {
     let refused = world.edits().edit(
         &world_ref,
         &EditCommand::Delete {
-            ids: vec!["log".into()],
+            ids: vec![id("log")],
         },
+        &files(),
     );
     assert!(refused.unwrap_err().to_string().contains("read-only"));
     std::fs::remove_file(path)?;
@@ -388,11 +414,12 @@ fn an_authored_map_is_not_replaced_by_regeneration() -> io::Result<()> {
     store.edits().edit(
         &reference,
         &EditCommand::Delete {
-            ids: vec!["log".into()],
+            ids: vec![id("log")],
         },
+        &files(),
     )?;
     let mut next = descriptor("glen", true);
-    next.reference.revision = "regenerated".into();
+    next.reference.revision = id("regenerated");
     let refused = store.begin(&next, Some(&reference), false);
     assert!(refused.unwrap_err().to_string().contains("edited by hand"));
     std::fs::remove_file(path)
@@ -407,55 +434,63 @@ fn creator_layers_move_merge_and_delete_with_undo() -> io::Result<()> {
         &EditCommand::AddLayer {
             name: "GM secrets".into(),
         },
+        &files(),
     )?;
-    let secret = added.map.real_scale.unwrap().creator_layers[1].id.clone();
+    let secret = added.map.real_scale.unwrap().creator_layers[1].id;
     store.edits().edit(
         &reference,
         &EditCommand::MoveToLayer {
-            ids: vec!["log".into()],
-            layer: secret.clone(),
+            ids: vec![id("log")],
+            layer: secret,
         },
+        &files(),
     )?;
     assert_eq!(
-        read(&store, &reference, "log").unwrap().attributes["creatorLayer"],
+        read(&store, &reference, id("log")).unwrap().attributes["creatorLayer"],
         json!(secret)
     );
     store.edits().edit(
         &reference,
         &EditCommand::LockLayer {
-            id: secret.clone(),
+            id: secret,
             locked: true,
         },
+        &files(),
     )?;
     let held = store.edits().edit(
         &reference,
         &EditCommand::Delete {
-            ids: vec!["log".into()],
+            ids: vec![id("log")],
         },
+        &files(),
     );
     assert!(held.is_err(), "a locked layer refuses pointer edits");
     store.edits().edit(
         &reference,
         &EditCommand::LockLayer {
-            id: secret.clone(),
+            id: secret,
             locked: false,
         },
+        &files(),
     )?;
-    let deleted = store
-        .edits()
-        .edit(&reference, &EditCommand::DeleteLayer { id: secret.clone() })?;
+    let deleted = store.edits().edit(
+        &reference,
+        &EditCommand::DeleteLayer { id: secret },
+        &files(),
+    )?;
     assert_eq!(deleted.map.real_scale.unwrap().creator_layers.len(), 1);
-    assert!(read(&store, &reference, "log").is_none());
+    assert!(read(&store, &reference, id("log")).is_none());
     let restored = store.edits().undo(&reference)?;
     assert_eq!(restored.map.real_scale.unwrap().creator_layers.len(), 2);
-    assert!(read(&store, &reference, "log").is_some());
-    let merged = store
-        .edits()
-        .edit(&reference, &EditCommand::MergeDown { id: secret })?;
+    assert!(read(&store, &reference, id("log")).is_some());
+    let merged =
+        store
+            .edits()
+            .edit(&reference, &EditCommand::MergeDown { id: secret }, &files())?;
     assert_eq!(merged.map.real_scale.unwrap().creator_layers.len(), 1);
     assert_eq!(
-        read(&store, &reference, "log").unwrap().attributes["creatorLayer"],
-        json!("base")
+        read(&store, &reference, id("log")).unwrap().attributes["creatorLayer"],
+        json!(id("base"))
     );
     std::fs::remove_file(path)
 }
@@ -474,12 +509,12 @@ fn saving_an_authored_map_replaces_its_saved_copy() -> io::Result<()> {
     };
     let time = || "2026-11-16T00:00:00Z".to_string();
     saved.save_from(working.to_str().unwrap(), request(None), time())?;
-    let at = |store: &MapStore| coordinates(&read(store, &reference, "stream").unwrap())[1];
+    let at = |store: &MapStore| coordinates(&read(store, &reference, id("stream")).unwrap())[1];
     for (step, y) in [(1, 12.0), (2, 14.0)] {
         store.edits().edit(
             &reference,
             &EditCommand::Reshape {
-                id: "stream".into(),
+                id: id("stream"),
                 geometry: serde_json::from_value(line(&[
                     [0.0, 10.0],
                     [10.0, y],
@@ -488,6 +523,7 @@ fn saving_an_authored_map_replaces_its_saved_copy() -> io::Result<()> {
                 ]))
                 .unwrap(),
             },
+            &files(),
         )?;
         saved.save_from(working.to_str().unwrap(), request(Some(step)), time())?;
         assert_eq!(at(&saved), [10.0, y]);
@@ -505,9 +541,10 @@ fn drag_to(store: &MapStore, reference: &MapRef, y: f64) -> io::Result<()> {
     store.edits().edit(
         reference,
         &EditCommand::Reshape {
-            id: "stream".into(),
+            id: id("stream"),
             geometry: serde_json::from_value(geometry).unwrap(),
         },
+        &files(),
     )?;
     Ok(())
 }
@@ -537,11 +574,11 @@ fn saving_a_parent_replaces_its_saved_authored_child() -> io::Result<()> {
     save(&child, Default::default(), None)?;
     drag_to(&store, &child, 14.0)?;
     let navigation: MapNavigationState = serde_json::from_value(json!({"version":1,"views":[],
-        "regions":[{"id":"glen","name":"Glen","spaceId":"surface","parentId":null,"child":child,
+        "regions":[{"id":"glen","name":"Glen","spaceId":id("surface"),"parentId":null,"child":child,
             "geometry":{"type":"Polygon","coordinates":[[[0,0],[10,0],[10,10],[0,10],[0,0]]]}}]}))?;
     save(&world, navigation, None)?;
     assert_eq!(
-        coordinates(&read(&saved, &child, "stream").unwrap())[1],
+        coordinates(&read(&saved, &child, id("stream")).unwrap())[1],
         [10.0, 14.0]
     );
     std::fs::remove_file(working)?;
@@ -553,7 +590,7 @@ fn a_regeneration_begun_before_the_first_edit_cannot_finish_over_it() -> io::Res
     let path = temporary();
     let (mut store, reference) = publish(&path, "glen", true)?;
     let mut next = descriptor("glen", true);
-    next.reference.revision = "regenerated".into();
+    next.reference.revision = id("regenerated");
     store.begin(&next, Some(&reference), false)?;
     drag_to(&store, &reference, 12.0)?;
     let refused = store.finish(&next.reference);
@@ -569,16 +606,18 @@ fn hexes_and_locked_layers_refuse_edits() -> io::Result<()> {
         .features(
             &reference,
             &FeatureQuery {
-                space_id: "surface".into(),
+                space_id: id("surface"),
                 layer_ids: Some(vec!["vector:hexes".into()]),
                 ..Default::default()
             },
         )?
         .items
         .remove(0);
-    let refused = store
-        .edits()
-        .edit(&reference, &EditCommand::Delete { ids: vec![hex.id] });
+    let refused = store.edits().edit(
+        &reference,
+        &EditCommand::Delete { ids: vec![hex.id] },
+        &files(),
+    );
     assert!(
         refused.is_err(),
         "hexes are derived and never edited by hand"
@@ -588,51 +627,58 @@ fn hexes_and_locked_layers_refuse_edits() -> io::Result<()> {
         &EditCommand::AddLayer {
             name: "Secrets".into(),
         },
+        &files(),
     )?;
-    let secret = added.map.real_scale.unwrap().creator_layers[1].id.clone();
+    let secret = added.map.real_scale.unwrap().creator_layers[1].id;
     store.edits().edit(
         &reference,
         &EditCommand::LockLayer {
-            id: secret.clone(),
+            id: secret,
             locked: true,
         },
+        &files(),
     )?;
     let into = store.edits().edit(
         &reference,
         &EditCommand::MoveToLayer {
-            ids: vec!["log".into()],
-            layer: secret.clone(),
+            ids: vec![id("log")],
+            layer: secret,
         },
+        &files(),
     );
     assert!(into.unwrap_err().to_string().contains("Unlock"));
     store.edits().edit(
         &reference,
         &EditCommand::LockLayer {
-            id: secret.clone(),
+            id: secret,
             locked: false,
         },
+        &files(),
     )?;
     store.edits().edit(
         &reference,
         &EditCommand::MoveToLayer {
-            ids: vec!["log".into()],
-            layer: secret.clone(),
+            ids: vec![id("log")],
+            layer: secret,
         },
+        &files(),
     )?;
     store.edits().edit(
         &reference,
         &EditCommand::LockLayer {
-            id: secret.clone(),
+            id: secret,
             locked: true,
         },
+        &files(),
     )?;
     let renamed = store.edits().edit(
         &reference,
         &EditCommand::SetAttributes {
-            ids: vec!["log".into()],
+            ids: vec![id("log")],
             name: Some("Oak".into()),
             attributes: BTreeMap::new(),
         },
+        &files(),
     );
     assert!(renamed.unwrap_err().to_string().contains("locked layer"));
     std::fs::remove_file(path)
@@ -646,11 +692,12 @@ fn a_stream_drawn_under_a_bridge_is_spanned_by_it() -> io::Result<()> {
     store.edits().edit(
         &reference,
         &EditCommand::Delete {
-            ids: vec!["stream".into()],
+            ids: vec![id("stream")],
         },
+        &files(),
     )?;
     let kinds = |store: &MapStore| {
-        let found = read(store, &reference, &bridge_id).unwrap();
+        let found = read(store, &reference, bridge_id).unwrap();
         let mut pairs: Vec<_> = found.relations.iter().map(|r| r.kind.clone()).collect();
         pairs.sort();
         pairs
@@ -666,6 +713,7 @@ fn a_stream_drawn_under_a_bridge_is_spanned_by_it() -> io::Result<()> {
             attributes: BTreeMap::new(),
             creator_layer: None,
         },
+        &files(),
     )?;
     assert_eq!(kinds(&store), ["carries", "spans"]);
     std::fs::remove_file(path)

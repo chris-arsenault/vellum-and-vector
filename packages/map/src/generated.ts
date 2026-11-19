@@ -299,7 +299,7 @@ export type MapFeatureTypeStyle = {
 export type LayerSource =
   | { kind: "raster"; data: RasterSource }
   | { kind: "vector"; data: VectorSource }
-  | { kind: "attributes"; data: AttributeSource };
+  | { kind: "attributes"; data: RasterSource };
 
 export type RasterSource = {
   /**
@@ -329,8 +329,6 @@ export type RasterBand = {
 };
 
 export type VectorSource = { assetId: string; mediaType: string };
-
-export type AttributeSource = { bands: Array<RasterBand> };
 
 export type Category = {
   value: number;
@@ -370,7 +368,6 @@ export type MapFeature = {
 
 export type MapFeatureCatalog = {
   values: { [key in string]: JsonValue };
-  columns: Array<MapColumn>;
   origin: string;
   mapOnly: boolean;
 };
@@ -399,7 +396,15 @@ export type PopulationGroup = {
   count: number;
 };
 
-export type MapRelation = { targetId: string; targetName: string; kind: string };
+export type MapRelation = {
+  targetId: string;
+  /**
+   * The map the target lies on, when it is not this map (a `connectsTo` to a parent map).
+   */
+  targetMapId?: string;
+  targetName: string;
+  kind: string;
+};
 
 export type IllustrationGeometry = { featureId: string | null; geometry: Geometry | null };
 
@@ -407,36 +412,28 @@ export type Inspection = {
   reference: MapRef;
   spaceId: string;
   position: Position;
-  samples: Array<SampleValue>;
+  /**
+   * The cells under the position, with their structured descriptions.
+   */
+  samples: Array<MapSample>;
+  /**
+   * Every raster band's value at the position.
+   */
+  values: Array<BandValue>;
   features: Array<MapFeature>;
-  sections: Array<InspectionSection>;
   causes: Array<HistoryEntry>;
 };
 
-export type SampleValue = {
-  sampleId: string;
+export type BandValue = {
   layerId: string;
   bandId: string;
-  value: JsonValue | null;
+  value: number;
   unit: string;
   label: string;
   display: DisplayUnit;
-  category: string | null;
-  footprint: RegionGeometry;
-  bounds: Bounds;
-  cellSpan: number;
-  center: Position;
-  measure: number;
-  active: boolean;
-};
-
-export type SampleAttribute = {
-  layerId: string;
-  bandId: string;
-  value: JsonValue | null;
-  unit: string;
-  label: string;
-  display: DisplayUnit;
+  /**
+   * The label of the band's class this value names, for categorical bands.
+   */
   category: string | null;
 };
 
@@ -452,7 +449,6 @@ export type MapSample = {
    */
   measure: number;
   active: boolean;
-  attributes: Array<SampleAttribute>;
   sections: Array<InspectionSection>;
 };
 

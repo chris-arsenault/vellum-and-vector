@@ -201,9 +201,27 @@ fn assert_category_presence(
     spatial: &NativeGeos,
 ) {
     let footprint = rectangle(Bounds(0.0, 0.0, 100.0, 100.0));
+    // Every channel publishes as a raster layer whose value band carries the legend present
+    // inside the published footprint.
     let present = |resource: &Resource, shape: &atlas_map::Geometry| {
-        fields::inspection_band(fields, resource, "PhysicalMaterial", shape, spatial)
+        let source = Source {
+            field: resource,
+            channel: "PhysicalMaterial",
+            footprint: shape,
+            bounds: Bounds(0.0, 0.0, 100.0, 100.0),
+            wrap: None,
+            water: None,
+            ice: None,
+            surface: None,
+            colors: &[],
+            ocean: None,
+            lakes: &[],
+        };
+        fields::input(fields, &source, "raster:PhysicalMaterial".into(), spatial)
             .unwrap()
+            .planes
+            .remove(0)
+            .band
             .categories
             .into_iter()
             .filter(|c| c.present)
@@ -283,10 +301,10 @@ fn capture_layout_depends_on_footprint_not_map_profile() {
     for (shape, regular) in [(&rectangle, true), (&triangle, false)] {
         for profile in [Profile::World, Profile::Region] {
             let scope = Scope {
-                world: "world".into(),
-                area: "area".into(),
+                world: atlas_map::Id::from_name("world"),
+                area: atlas_map::Id::from_name("area"),
                 area_name: "Map".into(),
-                space: "space".into(),
+                space: atlas_map::Id::from_name("space"),
                 world_geography: profile == Profile::World,
                 owns_map_geography: true,
                 area_parents: Default::default(),

@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { expect, type Page } from "@playwright/test";
+import { NIL, v5 } from "uuid";
 export { fixtureChild, openFixtureMap, openSavedFixture } from "./preparedMaps";
+/** A fixture record's identity from its name, as the Rust fixture makes it
+ * (`atlas_map::Id::from_name`: UUID v5 of the name in the nil namespace). */
+export const fixtureId = (name: string) => v5(name, NIL);
 export const canvas = (page: Page) => page.getByRole("application", { name: "World map canvas" });
 export function pageErrors(page: Page) {
   const errors: string[] = [];

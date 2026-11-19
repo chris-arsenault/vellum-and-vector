@@ -4,9 +4,21 @@ import type {
   GenerationEvent,
   GenerationService,
   GenerationStatus,
+  GenerationWireEvent,
   RefinementSubmission,
 } from "@atlas/context";
 import type { MapRef, ReadOptions } from "@atlas/map";
+import { Decoder } from "cbor-x";
+import { cborOptions } from "./cbor";
+
+/** CBOR keeps a missing value as NaN, where JSON wrote null; previews read null. */
+function finite(value: unknown): unknown {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (Array.isArray(value)) return value.map(finite);
+  if (value && typeof value === "object" && !(value instanceof Uint8Array))
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, finite(item)]));
+  return value;
+}
 
 /** Only creator choices, map selections and presentation events cross the remote facade. */
 export interface GenerationCall {
@@ -19,6 +31,23 @@ export class RpcGeneration<Configuration> implements GenerationService<Configura
   constructor(private send: GenerationTransport) {}
   jobs(options?: ReadOptions) {
     return this.call<GenerationStatus[]>("jobs", undefined, options);
+  }
+  /** A preview's grid: sent with its event by the browser worker as JSON, or retained by the
+   * LAN server as CBOR and fetched by epoch. A preview the server no longer keeps is skipped. */
+  private async preview(
+    jobId: string,
+    event: Extract<GenerationWireEvent, { kind: "preview" }>,
+    options?: ReadOptions
+  ): Promise<unknown> {
+    if (event.map) return JSON.parse(new TextDecoder().decode(new Uint8Array(event.map.bytes)));
+    let bytes: Uint8Array;
+    try {
+      bytes = await this.call<Uint8Array>("preview", { job_id: jobId, epoch: event.epoch }, options);
+    } catch (error) {
+      if (String(error).includes("no longer kept")) return undefined;
+      throw error;
+    }
+    return finite(new Decoder(cborOptions).decode(new Uint8Array(bytes)));
   }
   private async call<T>(method: string, request?: unknown, options?: ReadOptions): Promise<T> {
     options?.signal?.throwIfAborted();
@@ -71,13 +100,18 @@ export class RpcGeneration<Configuration> implements GenerationService<Configura
     let after = 0;
     while (true) {
       const page = await this.call<{
-        events: GenerationEvent[];
+        events: GenerationWireEvent[];
         next: number;
         status: GenerationStatus;
       }>("observe", { job_id: jobId, after }, options);
       for (const event of page.events) {
-        if (event.kind === "preview") event.map.bytes = new Uint8Array(event.map.bytes);
-        yield event;
+        if (event.kind !== "preview") {
+          yield event;
+          continue;
+        }
+        const preview = await this.preview(jobId, event, options);
+        if (preview !== undefined)
+          yield { kind: "preview", jobId: event.jobId, epoch: event.epoch, preview };
       }
       after = page.next;
       if (page.status.state !== "running") {

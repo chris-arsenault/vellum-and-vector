@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./uiTest";
-import { canvas, exportMap, openFixtureMap } from "./harness";
+import { canvas, exportMap, fixtureId, openFixtureMap } from "./harness";
 
 type Point = [number, number];
 interface Exported {
@@ -211,7 +211,7 @@ test("a trail drawn onto a way joins it", async ({ page }) => {
   expect(path.properties.kind).toBe("trail");
   expect(path.properties.widths).toEqual([0.5, 0.5, 0.5]);
   expect(path.properties.relations).toContainEqual(
-    expect.objectContaining({ targetId: "glen-trail", kind: "joins" })
+    expect.objectContaining({ targetId: fixtureId("glen-trail"), kind: "joins" })
   );
 });
 

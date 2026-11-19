@@ -13,12 +13,12 @@ use atlas_generation::{
     },
 };
 use atlas_gis::geometry::NativeGeos;
-use atlas_map::{spatial::SpatialKernel, Bounds};
+use atlas_map::{spatial::SpatialKernel, Bounds, Id};
 
 fn settlement(population: f64) -> Town {
     Town::new(
         Seat {
-            key: "test".into(),
+            key: Id::from_name("test"),
             name: "Test".into(),
             centre: [0., 0.],
             story: Story {
@@ -99,7 +99,7 @@ fn each_inherited_work_builds_distinct_operating_premises_around_reserved_ground
         let capture = InheritedWork {
             family,
             design: None,
-            id: "kept".into(),
+            id: Id::from_name("kept"),
             anchor: [0., 0.],
         };
         commission(&mut town, 15, std::slice::from_ref(&capture));
@@ -134,7 +134,7 @@ fn assert_operating_premises(town: &Town, family: WorkFamily, spatial: &dyn Spat
         "{family:?} established {} components",
         work.members.len()
     );
-    assert_eq!(work.inherited_id.as_deref(), Some("kept"));
+    assert_eq!(work.inherited_id, Some(Id::from_name("kept")));
     assert!(work.operating(town));
     if family == WorkFamily::PortalHostel {
         let transfer = &town.holdings()[work.members[1].0 as usize];
@@ -238,7 +238,7 @@ fn captured_library_keeps_its_program_while_a_different_site_can_found_another()
         .unwrap();
     let inherited = InheritedWork {
         family: library.family,
-        id: "inherited-library".into(),
+        id: Id::from_name("inherited-library"),
         anchor: [800., 800.],
         design: Some(library.design.clone()),
     };
@@ -276,7 +276,7 @@ fn libraries_with_different_programs_build_different_premises_and_public_grounds
             seed,
             &[InheritedWork {
                 family: WorkFamily::Library,
-                id: "library".into(),
+                id: Id::from_name("library"),
                 anchor: [0., 0.],
                 design: None,
             }],

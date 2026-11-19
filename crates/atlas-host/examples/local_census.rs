@@ -95,7 +95,7 @@ fn run(home: &Path, reference_width: bool) -> ExecutionResult<()> {
     let root = home.join("generation-resources");
     let recipe = serde_json::from_slice::<Action>(&fs::read(
         root.join(".jobs")
-            .join(&reference.revision)
+            .join(reference.revision.to_string())
             .join("action.json"),
     )?)
     .map_err(io::Error::other)?

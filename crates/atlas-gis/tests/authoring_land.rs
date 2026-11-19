@@ -2,16 +2,19 @@
 //! Land and cave tools on a small supplied real-scale map: placing and scattering objects,
 //! a hex's ground and cover, and cave walls reading the published rock and magic they cut.
 use atlas_gis::{
+    map_files::MapFiles,
     map_store::{FeatureQuery, MapStore},
     sql::Database,
 };
 use atlas_map::{
     authoring::{EditCommand, Transform},
-    hexes::HexGrid,
-    Geometry, MapDescriptor, MapFeature, MapRef, MapSample, PublicationBatch, Publisher,
+    hexes::{Hex, HexGrid},
+    underground::cave_hex_id,
+    Geometry, Id, MapDescriptor, MapFeature, MapRef, PublicationBatch, Publisher,
 };
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, path::PathBuf, rc::Rc};
+use tiff::encoder::{colortype::Gray32Float, TiffEncoder};
 
 const LAYERS: [(&str, &[&str]); 4] = [
     ("rivers", &["stream"]),
@@ -19,8 +22,20 @@ const LAYERS: [(&str, &[&str]); 4] = [
     ("objects", &["log", "rubble", "boulder", "sign"]),
     ("hexes", &["hex"]),
 ];
-const SURFACE: &str = "surface";
-const UNDERGROUND: &str = "surface:underground";
+/// A fixture's identity from its name.
+fn id(name: &str) -> Id {
+    Id::from_name(name)
+}
+fn surface() -> Id {
+    id("surface")
+}
+/// The underground space the first cave wall opens beneath the surface.
+fn underground() -> Id {
+    Id::v5(surface(), b"underground")
+}
+fn hex_id(hex: Hex) -> Id {
+    hex.id(id("vector:hexes"))
+}
 
 /// The catalogue's true sizes the supplied object kinds publish: (typical, elongation, round).
 fn true_size(kind: &str) -> Value {
@@ -54,48 +69,85 @@ fn band(id: &str, categories: Value) -> Value {
     };
     json!({"id":id,"name":id,"unit":unit,"display":{"unit":unit,"factor":1},"nodata":null,"range":null,"categories":categories})
 }
-/// The published facts layer whose samples a cave wall reads: rock kind and magic coverage.
-fn facts() -> Value {
-    let rock = json!([
-        {"value":3,"label":"Limestone","color":null,"surface":null,"present":true,"soluble":true},
-        {"value":10,"label":"Granite","color":null,"surface":null,"present":true,"soluble":false}]);
-    let bands = [
-        band("RockLayerKind0", rock),
-        band("magic:fire:coverage:vein", json!([])),
-        band("magic:aurora:coverage", json!([])),
-    ];
-    json!({"id":"inspection","name":"Facts","spaceId":SURFACE,"bounds":[0,0,30,20],"attribution":[],
-        "source":{"kind":"attributes","data":{"bands":bands}},"catalog":catalog("Facts", &[])})
+/// The published rasters a cave wall reads, each a raster layer whose `value` band holds its
+/// channel: rock kind and magic coverage. West of x 15 limestone under no magic; east of it
+/// granite under a Fire vein and Aurora.
+const GROUND: [(&str, &str, [f32; 2]); 3] = [
+    ("RockLayerKind0", "rock", [3.0, 10.0]),
+    ("magic:fire:coverage:vein", "vein", [0.0, 0.5]),
+    ("magic:aurora:coverage", "aurora", [0.0, 0.3]),
+];
+/// Raster pixels across and down the map, each 5 m square.
+const PIXELS: (u32, u32) = (6, 4);
+fn raster_layer(channel: &str, asset: &str) -> Value {
+    let categories = if channel == "RockLayerKind0" {
+        json!([
+            {"value":3,"label":"Limestone","color":null,"surface":null,"present":true,"soluble":true},
+            {"value":10,"label":"Granite","color":null,"surface":null,"present":true,"soluble":false}])
+    } else {
+        json!([])
+    };
+    json!({"id":format!("raster:{channel}"),"name":channel,"spaceId":surface(),"bounds":[0,0,30,20],
+        "attribution":[],"catalog":catalog(channel, &[]),
+        "source":{"kind":"raster","data":{"assetId":asset,"mediaType":"image/tiff","width":PIXELS.0,
+            "height":PIXELS.1,"cellSpan":5,"overviews":[],"bandIndices":[1],"bands":[band("value", categories)]}}})
+}
+/// Write each ground raster as a one-band 32-bit float TIFF: its west value under x < 15,
+/// its east value beyond.
+fn write_rasters(files: &MapFiles) {
+    files.ensure_directory().unwrap();
+    for (_, asset, [west, east]) in GROUND {
+        let (width, height) = PIXELS;
+        let pixels: Vec<f32> = (0..width * height)
+            .map(|i| if i % width < width / 2 { west } else { east })
+            .collect();
+        let file = files.path(&format!("{asset}.tif")).unwrap();
+        let mut encoder = TiffEncoder::new(std::fs::File::create(file).unwrap()).unwrap();
+        encoder
+            .write_image::<Gray32Float>(width, height, &pixels)
+            .unwrap();
+    }
 }
 fn descriptor() -> MapDescriptor {
     let mut layers: Vec<Value> = LAYERS
         .iter()
         .map(|(id, kinds)| {
-            json!({"id":format!("vector:{id}"),"name":id,"spaceId":SURFACE,"bounds":[0,0,30,20],
+            json!({"id":format!("vector:{id}"),"name":id,"spaceId":surface(),"bounds":[0,0,30,20],
             "attribution":[],"catalog":catalog(id, kinds),
             "source":{"kind":"vector","data":{"assetId":id,"mediaType":"application/geo+json"}}})
         })
         .collect();
-    layers.push(facts());
+    layers.extend(
+        GROUND
+            .iter()
+            .map(|(channel, asset, _)| raster_layer(channel, asset)),
+    );
     serde_json::from_value(json!({
-        "reference":{"mapId":"glen","revision":"published"},"worldId":"world","name":"Glen","parent":null,
-        "state":"incomplete","profile":"local","primarySpaceId":SURFACE,"bounds":[0,0,30,20],
+        "reference":{"mapId":id("glen"),"revision":id("published")},"worldId":id("world"),"name":"Glen","parent":null,
+        "state":"incomplete","profile":"local","primarySpaceId":surface(),"bounds":[0,0,30,20],
         "footprint":{"type":"Polygon","coordinates":[[[0,0],[30,0],[30,20],[0,20],[0,0]]]},
         "regionScale":{"level":0,"nextArea":25,"subdivision":7,"minimumWidth":0.01,"enabled":false},
-        "spaces":[{"id":SURFACE,"parentSpaceId":null,"bounds":[0,0,30,20],"metresPerUnit":1,"precision":0.000001,
+        "spaces":[{"id":surface(),"parentSpaceId":null,"bounds":[0,0,30,20],"metresPerUnit":1,"precision":0.000001,
             "periodicWidth":null,"frame":{"origin":[0,0,0],"rotation":0,"floor":null}}],
         "layers":layers,
         "realScale":{"kind":"ground","hexSize":"1.5m","acrossFlats":1.5,"feet":5,"origin":[15,10],
-            "trianglesPerEdge":2,"creatorLayers":[{"id":"base","name":"Base layer"}],"edits":0,
+            "trianglesPerEdge":2,"creatorLayers":[{"id":id("base"),"name":"Base layer"}],"edits":0,
             "authoring":{"groundClasses":[{"id":"Grassland","label":"Grassland","color":"#9c3"},
                 {"id":"Bog","label":"Bog","color":"#563"}],"coverClasses":[],"latentLayers":[]}}
     }))
     .unwrap()
 }
-fn feature(id: &str, layer: &str, kind: &str, geometry: Value, attributes: Value) -> MapFeature {
-    serde_json::from_value(json!({"id":id,"name":id,"spaceId":SURFACE,"layerId":format!("vector:{layer}"),
+fn feature(
+    identity: Id,
+    name: &str,
+    layer: &str,
+    kind: &str,
+    geometry: Value,
+    attributes: Value,
+) -> MapFeature {
+    serde_json::from_value(json!({"id":identity,"name":name,"spaceId":surface(),"layerId":format!("vector:{layer}"),
         "typeId":kind,"kind":kind,"entityId":null,"geometry":geometry,"footprint":null,"attributes":attributes,
-        "relations":[],"causes":[],"catalog":{"values":{},"columns":[],"origin":"Generated","mapOnly":false}}))
+        "relations":[],"causes":[],"catalog":{"values":{},"origin":"Generated","mapOnly":false}}))
     .unwrap()
 }
 fn grid() -> HexGrid {
@@ -106,39 +158,13 @@ fn hexes() -> Vec<MapFeature> {
     grid.covering(atlas_map::Bounds(0.0, 0.0, 30.0, 20.0))
         .into_iter()
         .map(|hex| {
-            let mut hex = feature(&format!("hex:{}:{}", hex.q, hex.r), "hexes", "hex",
+            let mut hex = feature(hex_id(hex), "hex", "hexes", "hex",
                 serde_json::to_value(grid.polygon(hex)).unwrap(),
                 json!({"q":hex.q,"r":hex.r,"marks":{},"fill":null,"ground":"Grassland","nameStatus":"label"}));
             hex.name = None;
             hex
         })
         .collect()
-}
-/// West of x 15 limestone under no magic; east of it granite under a Fire vein and Aurora.
-fn samples() -> Vec<MapSample> {
-    let cell = |id: &str, w: f64, rock: f64, vein: f64, aurora: f64| {
-        let e = w + 15.0;
-        let attribute = |band: &str, value: f64| {
-            let unit = if band == "RockLayerKind0" {
-                "category"
-            } else {
-                "ratio"
-            };
-            json!({"layerId":"inspection","bandId":band,"value":value,
-                "unit":unit,"label":band,"display":{"unit":unit,"factor":1},"category":null})
-        };
-        serde_json::from_value(json!({"id":id,"spaceId":SURFACE,
-            "footprint":{"type":"Polygon","coordinates":[[[w,0],[e,0],[e,20],[w,20],[w,0]]]},
-            "window":{"bounds":[w,0,e,20],"closedEast":e == 30.0,"closedNorth":true},"cellSpan":15,
-            "center":[w + 7.5,10],"measure":300,"active":true,"sections":[],
-            "attributes":[attribute("RockLayerKind0", rock), attribute("magic:fire:coverage:vein", vein),
-                attribute("magic:aurora:coverage", aurora)]}))
-        .unwrap()
-    };
-    vec![
-        cell("west", 0.0, 3.0, 0.0, 0.0),
-        cell("east", 15.0, 10.0, 0.5, 0.3),
-    ]
 }
 fn line(points: &[[f64; 2]]) -> Geometry {
     serde_json::from_value(json!({"type":"LineString","coordinates":points})).unwrap()
@@ -149,13 +175,18 @@ fn outline(w: f64, s: f64, e: f64, n: f64) -> Geometry {
     )
     .unwrap()
 }
-fn publish() -> (MapStore, MapRef) {
-    let path: PathBuf =
-        std::env::temp_dir().join(format!("atlas-land-{}.sqlite", uuid::Uuid::new_v4()));
+/// The published map in its own directory, which holds its store and its raster files.
+fn publish() -> (MapStore, MapRef, MapFiles) {
+    let directory: PathBuf =
+        std::env::temp_dir().join(format!("atlas-land-{}", uuid::Uuid::new_v4()));
+    let files = MapFiles::new(&directory);
+    write_rasters(&files);
     let map = descriptor();
-    let mut store = MapStore::open_database(Rc::new(Database::open(path).unwrap())).unwrap();
+    let database = Database::open(directory.join("map.sqlite")).unwrap();
+    let mut store = MapStore::open_database(Rc::new(database)).unwrap();
     store.begin(&map, None, false).unwrap();
     let mut features = vec![feature(
+        id("stream"),
         "stream",
         "rivers",
         "stream",
@@ -163,31 +194,38 @@ fn publish() -> (MapStore, MapRef) {
         json!({"widths":[1.0,1.0]}),
     )];
     features.extend(hexes());
-    let assets = LAYERS
-        .iter()
-        .map(|(id, ..)| {
-            serde_json::from_value(json!({"id":id,"location":format!("{id}.geojson"),
-            "mediaType":"application/geo+json","byteLength":10,"illustration":false}))
+    let vectors = LAYERS.iter().map(|(id, ..)| {
+        json!({"id":id,"location":format!("{id}.geojson"),
+            "mediaType":"application/geo+json","byteLength":10,"illustration":false})
+    });
+    let rasters = GROUND.iter().map(|(_, asset, _)| {
+        let location = format!("{asset}.tif");
+        let bytes = std::fs::metadata(files.path(&location).unwrap())
             .unwrap()
-        })
+            .len();
+        json!({"id":asset,"location":location,"mediaType":"image/tiff",
+            "byteLength":bytes,"illustration":false})
+    });
+    let assets = vectors
+        .chain(rasters)
+        .map(|asset| serde_json::from_value(asset).unwrap())
         .collect();
     store
         .append(
             &map.reference,
             PublicationBatch {
                 features,
-                samples: samples(),
                 assets,
                 ..Default::default()
             },
         )
         .unwrap();
     store.finish(&map.reference).unwrap();
-    (store, map.reference)
+    (store, map.reference, files)
 }
-fn in_space(store: &MapStore, reference: &MapRef, space: &str, layer: &str) -> Vec<MapFeature> {
+fn in_space(store: &MapStore, reference: &MapRef, space: Id, layer: &str) -> Vec<MapFeature> {
     let mut query = FeatureQuery {
-        space_id: space.into(),
+        space_id: space,
         layer_ids: Some(vec![layer.into()]),
         ..Default::default()
     };
@@ -202,7 +240,7 @@ fn in_space(store: &MapStore, reference: &MapRef, space: &str, layer: &str) -> V
     }
 }
 fn objects(store: &MapStore, reference: &MapRef) -> Vec<MapFeature> {
-    in_space(store, reference, SURFACE, "vector:objects")
+    in_space(store, reference, surface(), "vector:objects")
 }
 fn centre(feature: &MapFeature) -> [f64; 2] {
     let Geometry::Polygon { coordinates } = &feature.geometry else {
@@ -228,7 +266,7 @@ fn scatter(seed: u32, spacing: f64) -> EditCommand {
 
 #[test]
 fn placing_sets_down_one_object_at_its_kinds_size_turned_and_scaled() {
-    let (store, reference) = publish();
+    let (store, reference, files) = publish();
     let outcome = store
         .edits()
         .edit(
@@ -242,6 +280,7 @@ fn placing_sets_down_one_object_at_its_kinds_size_turned_and_scaled() {
                 scale: 1.5,
                 creator_layer: None,
             },
+            &files,
         )
         .unwrap();
     assert_eq!(outcome.history.steps[0].label, "Place Fallen oak");
@@ -272,6 +311,7 @@ fn placing_sets_down_one_object_at_its_kinds_size_turned_and_scaled() {
             scale: 0.0,
             creator_layer: None,
         },
+        &files,
     );
     assert!(refused.is_err());
     // A kind the catalogue gives no true size is not placed at a made-up one.
@@ -284,13 +324,19 @@ fn placing_sets_down_one_object_at_its_kinds_size_turned_and_scaled() {
         scale: 1.0,
         creator_layer: None,
     };
-    let error = store.edits().edit(&reference, &no_size).unwrap_err();
+    let error = store
+        .edits()
+        .edit(&reference, &no_size, &files)
+        .unwrap_err();
     assert!(error.to_string().contains("no true size"), "{error}");
 }
 #[test]
 fn a_scatter_keeps_its_spacing_repeats_from_its_seed_and_undoes_as_one_step() {
-    let (store, reference) = publish();
-    let outcome = store.edits().edit(&reference, &scatter(4, 1.5)).unwrap();
+    let (store, reference, files) = publish();
+    let outcome = store
+        .edits()
+        .edit(&reference, &scatter(4, 1.5), &files)
+        .unwrap();
     let laid = objects(&store, &reference);
     assert!(laid.len() > 8, "{} objects", laid.len());
     assert_eq!(
@@ -307,18 +353,21 @@ fn a_scatter_keeps_its_spacing_repeats_from_its_seed_and_undoes_as_one_step() {
     }
     store.edits().undo(&reference).unwrap();
     assert!(objects(&store, &reference).is_empty());
-    store.edits().edit(&reference, &scatter(4, 1.5)).unwrap();
+    store
+        .edits()
+        .edit(&reference, &scatter(4, 1.5), &files)
+        .unwrap();
     let mut again: Vec<[f64; 2]> = objects(&store, &reference).iter().map(centre).collect();
     again.sort_by(|a, b| a.partial_cmp(b).unwrap());
     assert_eq!(again, centres);
-    let crowded = store.edits().edit(&reference, &scatter(4, 0.01));
+    let crowded = store.edits().edit(&reference, &scatter(4, 0.01), &files);
     assert!(crowded.unwrap_err().to_string().contains("wider spacing"));
 }
 fn hex_at(store: &MapStore, reference: &MapRef, at: [f64; 2]) -> MapFeature {
     let hex = grid().hex_at(at);
     let query = FeatureQuery {
-        space_id: SURFACE.into(),
-        feature_ids: Some(vec![format!("hex:{}:{}", hex.q, hex.r)]),
+        space_id: surface(),
+        feature_ids: Some(vec![hex_id(hex)]),
         ..Default::default()
     };
     store
@@ -328,7 +377,7 @@ fn hex_at(store: &MapStore, reference: &MapRef, at: [f64; 2]) -> MapFeature {
         .pop()
         .unwrap()
 }
-fn set_hexes(ids: Vec<String>, name: Option<&str>, attributes: Value) -> EditCommand {
+fn set_hexes(ids: Vec<Id>, name: Option<&str>, attributes: Value) -> EditCommand {
     EditCommand::SetAttributes {
         ids,
         name: name.map(Into::into),
@@ -337,13 +386,13 @@ fn set_hexes(ids: Vec<String>, name: Option<&str>, attributes: Value) -> EditCom
 }
 #[test]
 fn a_hex_takes_a_ground_and_cover_class_that_re_marking_keeps_and_undo_restores() {
-    let (store, reference) = publish();
+    let (store, reference, files) = publish();
     let ids = vec![
         hex_at(&store, &reference, [5.0, 5.0]).id,
         hex_at(&store, &reference, [5.0, 10.0]).id,
     ];
     let set = set_hexes(ids.clone(), None, json!({"ground":"Bog","cover":"heavy"}));
-    let outcome = store.edits().edit(&reference, &set).unwrap();
+    let outcome = store.edits().edit(&reference, &set, &files).unwrap();
     assert_eq!(
         outcome.history.steps[0].label,
         "Set cover and ground of 2 hexes"
@@ -353,10 +402,10 @@ fn a_hex_takes_a_ground_and_cover_class_that_re_marking_keeps_and_undo_restores(
     assert_eq!(marked.attributes["cover"], json!("heavy"));
     // Moving the stream off the hex re-marks it and keeps the authored classes.
     let moved = EditCommand::Reshape {
-        id: "stream".into(),
+        id: id("stream"),
         geometry: line(&[[0.0, 14.0], [30.0, 14.0]]),
     };
-    store.edits().edit(&reference, &moved).unwrap();
+    store.edits().edit(&reference, &moved, &files).unwrap();
     let remarked = hex_at(&store, &reference, [5.0, 10.0]);
     assert_eq!(remarked.attributes["ground"], json!("Bog"));
     assert!(remarked.attributes["marks"].get("water").is_none());
@@ -368,23 +417,17 @@ fn a_hex_takes_a_ground_and_cover_class_that_re_marking_keeps_and_undo_restores(
 }
 #[test]
 fn hexes_refuse_every_edit_but_their_ground_and_cover() {
-    let (store, reference) = publish();
+    let (store, reference, files) = publish();
     let hex = hex_at(&store, &reference, [5.0, 5.0]).id;
     let refused = [
-        set_hexes(vec![hex.clone()], None, json!({"fill":"water"})),
-        set_hexes(vec![hex.clone()], None, json!({"cover":"dense"})),
-        set_hexes(vec![hex.clone()], None, json!({"ground":"Moon dust"})),
-        set_hexes(vec![hex.clone()], Some("My hex"), json!({"ground":"Bog"})),
-        set_hexes(
-            vec![hex.clone(), "stream".into()],
-            None,
-            json!({"ground":"Bog"}),
-        ),
-        EditCommand::Delete {
-            ids: vec![hex.clone()],
-        },
+        set_hexes(vec![hex], None, json!({"fill":"water"})),
+        set_hexes(vec![hex], None, json!({"cover":"dense"})),
+        set_hexes(vec![hex], None, json!({"ground":"Moon dust"})),
+        set_hexes(vec![hex], Some("My hex"), json!({"ground":"Bog"})),
+        set_hexes(vec![hex, id("stream")], None, json!({"ground":"Bog"})),
+        EditCommand::Delete { ids: vec![hex] },
         EditCommand::Transform {
-            ids: vec![hex.clone()],
+            ids: vec![hex],
             transform: Transform {
                 translate: [1.0, 0.0],
                 rotate: 0.0,
@@ -395,7 +438,7 @@ fn hexes_refuse_every_edit_but_their_ground_and_cover() {
     ];
     for command in refused {
         assert!(
-            store.edits().edit(&reference, &command).is_err(),
+            store.edits().edit(&reference, &command, &files).is_err(),
             "{command:?}"
         );
     }
@@ -416,35 +459,40 @@ fn wall(points: &[[f64; 2]]) -> EditCommand {
         creator_layer: None,
     }
 }
-fn cave_wall(store: &MapStore, reference: &MapRef, id: &str) -> MapFeature {
-    in_space(store, reference, UNDERGROUND, "vector:caveWalls")
+fn cave_wall(store: &MapStore, reference: &MapRef, wall: Id) -> MapFeature {
+    in_space(store, reference, underground(), "vector:caveWalls")
         .into_iter()
-        .find(|wall| wall.id == id)
+        .find(|found| found.id == wall)
         .unwrap()
 }
 /// A wall's mark on the cave hex at a point, and none on the surface hex above it.
 fn wall_mark(store: &MapStore, reference: &MapRef, at: [f64; 2]) -> f64 {
     let hex = grid().hex_at(at);
-    let under = in_space(store, reference, UNDERGROUND, "vector:caveHexes")
+    let under = in_space(store, reference, underground(), "vector:caveHexes")
         .into_iter()
-        .find(|cave| cave.id == format!("cave-hex:{}:{}", hex.q, hex.r))
+        .find(|cave| cave.id == cave_hex_id(hex_id(hex)))
         .unwrap();
-    let surface = hex_at(store, reference, at);
-    assert!(surface.attributes["marks"].get("wall").is_none());
+    let above = hex_at(store, reference, at);
+    assert!(above.attributes["marks"].get("wall").is_none());
     under.attributes["marks"]["wall"].as_f64().unwrap_or(0.0)
 }
-fn draw_wall(store: &MapStore, reference: &MapRef, points: &[[f64; 2]]) -> MapFeature {
-    let outcome = store.edits().edit(reference, &wall(points)).unwrap();
-    let [id] = outcome.changed.try_into().unwrap();
-    cave_wall(store, reference, &id)
+fn draw_wall(
+    store: &MapStore,
+    reference: &MapRef,
+    files: &MapFiles,
+    points: &[[f64; 2]],
+) -> MapFeature {
+    let outcome = store.edits().edit(reference, &wall(points), files).unwrap();
+    let [drawn] = outcome.changed.try_into().unwrap();
+    cave_wall(store, reference, drawn)
 }
 #[test]
 fn the_first_cave_wall_opens_the_underground_and_reads_the_limestone_it_cuts() {
-    let (store, reference) = publish();
-    let limestone = draw_wall(&store, &reference, &[[3.0, 5.0], [12.0, 5.0]]);
+    let (store, reference, files) = publish();
+    let limestone = draw_wall(&store, &reference, &files, &[[3.0, 5.0], [12.0, 5.0]]);
     let map = store.open(&reference).unwrap();
-    assert!(map.spaces.iter().any(|space| space.id == UNDERGROUND));
-    let cave_hexes = in_space(&store, &reference, UNDERGROUND, "vector:caveHexes");
+    assert!(map.spaces.iter().any(|space| space.id == underground()));
+    let cave_hexes = in_space(&store, &reference, underground(), "vector:caveHexes");
     assert_eq!(cave_hexes.len(), hexes().len());
     assert_eq!(limestone.attributes["rock"], json!(["Limestone"]));
     assert_eq!(limestone.attributes["wallFeatures"], json!(["flowstone"]));
@@ -453,35 +501,35 @@ fn the_first_cave_wall_opens_the_underground_and_reads_the_limestone_it_cuts() {
 }
 #[test]
 fn a_wall_under_fire_and_aurora_shows_seams_and_rime_and_a_moved_wall_reads_again() {
-    let (store, reference) = publish();
-    let limestone = draw_wall(&store, &reference, &[[3.0, 5.0], [12.0, 5.0]]);
-    let granite = draw_wall(&store, &reference, &[[18.0, 15.0], [28.0, 15.0]]);
+    let (store, reference, files) = publish();
+    let limestone = draw_wall(&store, &reference, &files, &[[3.0, 5.0], [12.0, 5.0]]);
+    let granite = draw_wall(&store, &reference, &files, &[[18.0, 15.0], [28.0, 15.0]]);
     assert_eq!(granite.attributes["rock"], json!(["Granite"]));
     assert_eq!(granite.attributes["wallFeatures"], json!(["seams", "rime"]));
     assert!(wall_mark(&store, &reference, [23.0, 15.0]) > 0.1);
     let across = EditCommand::Reshape {
-        id: limestone.id.clone(),
+        id: limestone.id,
         geometry: line(&[[3.0, 5.0], [25.0, 5.0]]),
     };
-    store.edits().edit(&reference, &across).unwrap();
-    let moved = cave_wall(&store, &reference, &limestone.id);
+    store.edits().edit(&reference, &across, &files).unwrap();
+    let moved = cave_wall(&store, &reference, limestone.id);
     assert_eq!(moved.attributes["rock"], json!(["Limestone", "Granite"]));
     let features = json!(["flowstone", "seams", "rime"]);
     assert_eq!(moved.attributes["wallFeatures"], features);
 }
 #[test]
 fn undoing_the_first_cave_wall_closes_the_underground_and_redo_opens_it() {
-    let (store, reference) = publish();
+    let (store, reference, files) = publish();
     store
         .edits()
-        .edit(&reference, &wall(&[[3.0, 5.0], [12.0, 5.0]]))
+        .edit(&reference, &wall(&[[3.0, 5.0], [12.0, 5.0]]), &files)
         .unwrap();
     let undone = store.edits().undo(&reference).unwrap();
     assert!(!undone
         .map
         .spaces
         .iter()
-        .any(|space| space.id == UNDERGROUND));
+        .any(|space| space.id == underground()));
     assert!(!undone
         .map
         .layers
@@ -492,40 +540,31 @@ fn undoing_the_first_cave_wall_closes_the_underground_and_redo_opens_it() {
         .map
         .spaces
         .iter()
-        .any(|space| space.id == UNDERGROUND));
+        .any(|space| space.id == underground()));
     assert_eq!(
-        in_space(&store, &reference, UNDERGROUND, "vector:caveHexes").len(),
+        in_space(&store, &reference, underground(), "vector:caveHexes").len(),
         hexes().len()
     );
     // Redo marks the reopened grid with the wall again.
     assert!(wall_mark(&store, &reference, [7.0, 5.0]) > 0.1);
 }
-fn lock(store: &MapStore, reference: &MapRef, id: &str, locked: bool) {
-    let command = EditCommand::LockLayer {
-        id: id.into(),
-        locked,
-    };
-    store.edits().edit(reference, &command).unwrap();
+fn lock(store: &MapStore, reference: &MapRef, files: &MapFiles, layer: Id, locked: bool) {
+    let command = EditCommand::LockLayer { id: layer, locked };
+    store.edits().edit(reference, &command, files).unwrap();
 }
-fn add_layer(store: &MapStore, reference: &MapRef, name: &str) -> String {
+fn add_layer(store: &MapStore, reference: &MapRef, files: &MapFiles, name: &str) -> Id {
     let command = EditCommand::AddLayer { name: name.into() };
-    let map = store.edits().edit(reference, &command).unwrap().map;
-    map.real_scale
-        .unwrap()
-        .creator_layers
-        .last()
-        .unwrap()
-        .id
-        .clone()
+    let map = store.edits().edit(reference, &command, files).unwrap().map;
+    map.real_scale.unwrap().creator_layers.last().unwrap().id
 }
 /// A hex belongs to no creator layer: a locked layer neither holds a hex edit nor its undo.
 #[test]
 fn hex_edits_and_their_undo_ignore_creator_layer_locks() {
-    let (store, reference) = publish();
-    lock(&store, &reference, "base", true);
+    let (store, reference, files) = publish();
+    lock(&store, &reference, &files, id("base"), true);
     let hex = hex_at(&store, &reference, [5.0, 5.0]).id;
     let set = set_hexes(vec![hex], None, json!({"cover":"light"}));
-    store.edits().edit(&reference, &set).unwrap();
+    store.edits().edit(&reference, &set, &files).unwrap();
     store.edits().undo(&reference).unwrap();
     store.edits().redo(&reference).unwrap();
     assert_eq!(
@@ -538,22 +577,22 @@ fn hex_edits_and_their_undo_ignore_creator_layer_locks() {
 /// stay held by its lock.
 #[test]
 fn a_first_wall_in_an_open_layer_undoes_under_a_locked_base_whose_features_stay_held() {
-    let (store, reference) = publish();
-    let caves = add_layer(&store, &reference, "Caves");
-    lock(&store, &reference, "base", true);
+    let (store, reference, files) = publish();
+    let caves = add_layer(&store, &reference, &files, "Caves");
+    lock(&store, &reference, &files, id("base"), true);
     let mut drawn = wall(&[[3.0, 5.0], [12.0, 5.0]]);
     if let EditCommand::Create { creator_layer, .. } = &mut drawn {
         *creator_layer = Some(caves);
     }
-    store.edits().edit(&reference, &drawn).unwrap();
+    store.edits().edit(&reference, &drawn, &files).unwrap();
     let undone = store.edits().undo(&reference).unwrap();
-    assert!(!undone.map.spaces.iter().any(|s| s.id == UNDERGROUND));
+    assert!(!undone.map.spaces.iter().any(|s| s.id == underground()));
     store.edits().redo(&reference).unwrap();
     assert!(wall_mark(&store, &reference, [7.0, 5.0]) > 0.1);
-    let held = set_hexes(vec!["stream".into()], Some("Burn"), json!({}));
-    assert!(store.edits().edit(&reference, &held).is_err());
+    let held = set_hexes(vec![id("stream")], Some("Burn"), json!({}));
+    assert!(store.edits().edit(&reference, &held, &files).is_err());
     assert!(store
         .edits()
-        .edit(&reference, &wall(&[[3.0, 9.0], [9.0, 9.0]]))
+        .edit(&reference, &wall(&[[3.0, 9.0], [9.0, 9.0]]), &files)
         .is_err());
 }

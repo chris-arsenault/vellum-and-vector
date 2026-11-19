@@ -3,6 +3,7 @@
 //! (ADR 0016). No generation process runs.
 use super::real_scale::CHILD;
 use atlas_generation::features::FeatureWorkspace;
+use atlas_map::Id;
 use serde_json::{json, Value};
 use std::io;
 
@@ -17,9 +18,9 @@ fn record(
     geometry: Value,
     attributes: Value,
 ) -> Value {
-    json!({"id":id,"placeId":id,"areaId":CHILD,"layerId":layer,"kind":kind,"name":name,
-        "attributes":attributes,"relations":[],"detail":{},"state":"generated","protected":false,
-        "actor":"generator","generationId":"supplied","causes":[],"geometry":geometry})
+    json!({"id":Id::from_name(id),"placeId":Id::from_name(id),"areaId":CHILD,"layerId":layer,"kind":kind,
+        "name":name,"attributes":attributes,"relations":[],"detail":{},"state":"generated","protected":false,
+        "actor":"generator","generationId":Id::from_name("supplied"),"causes":[],"geometry":geometry})
 }
 pub fn install(records: &mut impl FeatureWorkspace) -> io::Result<()> {
     // Two storeys facing the drovers' trail to the west, under Aurora's coverage.
@@ -31,9 +32,9 @@ pub fn install(records: &mut impl FeatureWorkspace) -> io::Result<()> {
         json!({"type":"Polygon","coordinates":[[[64,42],[69,42],[69,47],[64,47],[64,42]]]}),
         json!({"use":"inn","buildingFunction":"economic","storeys":2,"occupants":6,"business":"Ailsa Rowan",
             "address":"1 Drovers' Trail","addressNumber":1,"street":"Drovers' trail",
-            "streetId":"glen-trail","ward":"Glenfoot","settlement":"Glenhead","rotation":0}),
+            "ward":"Glenfoot","settlement":"Glenhead","rotation":0}),
     );
-    inn["relations"] = json!([{"targetId":"glen-trail","kind":"fronts"}]);
+    inn["relations"] = json!([{"targetId":Id::from_name("glen-trail"),"kind":"fronts"}]);
     let passage = record(
         PASSAGE,
         "caves",

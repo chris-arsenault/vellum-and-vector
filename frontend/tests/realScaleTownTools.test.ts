@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./uiTest";
-import { canvas, exportMap, openFixtureMap } from "./harness";
+import { canvas, exportMap, fixtureId, openFixtureMap } from "./harness";
 
 type Point = [number, number];
 interface Exported {
@@ -47,7 +47,9 @@ async function pixelOf(page: Page, map: Exported) {
     y: box.height / 2 - (y - (s + n) / 2) / resolution,
   });
 }
-const find = (map: Exported, id: string) => map.features.find((entry) => entry.id === id);
+/** A fixture feature by the name its identity is made from. */
+const find = (map: Exported, name: string) =>
+  map.features.find((entry) => entry.id === fixtureId(name));
 
 test("a lane drawn off a street, an inn placed and found by its address, then undone", async ({
   page,

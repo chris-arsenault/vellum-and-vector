@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./uiTest";
-import { canvas, exportMap, openFixtureMap, openSavedFixture } from "./harness";
+import { canvas, exportMap, fixtureId, openFixtureMap, openSavedFixture } from "./harness";
 
 type Point = [number, number];
 interface Exported {
@@ -42,7 +42,9 @@ async function pixelOf(page: Page, map: Exported) {
     y: box.height / 2 - (y - (s + n) / 2) / resolution,
   });
 }
-const feature = (map: Exported, id: string) => map.features.find((entry) => entry.id === id)!;
+/** A fixture feature by the name its identity is made from. */
+const feature = (map: Exported, name: string) =>
+  map.features.find((entry) => entry.id === fixtureId(name))!;
 const line = (map: Exported, id: string) => feature(map, id).geometry.coordinates as Point[];
 function centre(map: Exported, id: string): Point {
   const ring = (feature(map, id).geometry.coordinates as Point[][])[0];

@@ -43,7 +43,7 @@ function fixture() {
     layerId: layer.id,
     kind: "river",
     typeId: "river",
-    catalog: { values: {}, columns: [], origin: "Generated geography", mapOnly: false },
+    catalog: { values: {}, origin: "Generated geography", mapOnly: false },
     geometry: {
       type: "LineString",
       coordinates: [

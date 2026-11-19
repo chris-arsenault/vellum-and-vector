@@ -4,22 +4,23 @@
 //! can go (ADR 0016). No generation process runs.
 use atlas_generation::features::FeatureWorkspace;
 use atlas_host::generation_document::Document;
-use atlas_map::{regions::rectangle, Bounds, MapRef};
+use atlas_map::{regions::rectangle, Bounds, Id, MapRef};
 use serde_json::{json, Value};
 use std::io;
 
 pub const VILLAGE: &str = "6d2c1e7a-3b84-4f5e-9a61-0c2b7e4d5f88";
 const FRAME: Bounds = Bounds(5.0, 15.0, 95.0, 82.5);
 const SETTLEMENT: &str = "Elder Cross";
+const HIGH_STREET: &str = "village-high-street";
 
 /// Turns a copy of the island's document into its real-scale village.
 pub fn child(document: &mut Document, parent: &MapRef) -> io::Result<()> {
-    let root = document.scope.located.area_id.clone();
-    let mut area = document.world["areas"][&root].clone();
+    let root = document.scope.located.area_id;
+    let mut area = document.world["areas"][&root.to_string()].clone();
     let footprint = json!(rectangle(FRAME));
     area["id"] = VILLAGE.into();
     area["name"] = "Supplied village".into();
-    area["parentId"] = root.clone().into();
+    area["parentId"] = root.into();
     area["profile"] = "local".into();
     area["footprint"] = footprint.clone();
     area["traits"] = json!([]);
@@ -30,7 +31,7 @@ pub fn child(document: &mut Document, parent: &MapRef) -> io::Result<()> {
         "refinementLevel":0,"extent":footprint,
         "realScale":{"kind":"ground","hexSize":"3m","hexesAcross":30,"trianglesPerEdge":2}});
     document.world["areas"][VILLAGE] = area;
-    document.scope.located.area_id = VILLAGE.into();
+    document.scope.located.area_id = crate::fixed(VILLAGE);
     document.scope.footprint = rectangle(FRAME);
     document.coverage.clear();
     Ok(())
@@ -43,9 +44,13 @@ fn record(
     geometry: Value,
     attributes: Value,
 ) -> Value {
-    json!({"id":id,"placeId":id,"areaId":VILLAGE,"layerId":layer,"kind":kind,"name":name,
-        "attributes":attributes,"relations":[],"detail":{},"state":"generated","protected":false,
-        "actor":"generator","generationId":"supplied","causes":[],"geometry":geometry})
+    json!({"id":Id::from_name(id),"placeId":Id::from_name(id),"areaId":VILLAGE,"layerId":layer,"kind":kind,
+        "name":name,"attributes":attributes,"relations":[],"detail":{},"state":"generated","protected":false,
+        "actor":"generator","generationId":Id::from_name("supplied"),"causes":[],"geometry":geometry})
+}
+/// The relation that numbers a plot or building on High Street.
+fn fronts_high_street() -> Value {
+    json!([{"targetId":Id::from_name(HIGH_STREET),"kind":"fronts"}])
 }
 fn street(id: &str, name: &str, class: &str, points: Value, width: f64) -> Value {
     let count = points.as_array().map_or(0, Vec::len);
@@ -60,7 +65,7 @@ fn street(id: &str, name: &str, class: &str, points: Value, width: f64) -> Value
 }
 fn address(number: u32) -> Value {
     json!({"address":format!("{number} High Street"),"addressNumber":number,"street":"High Street",
-        "streetId":"village-high-street","settlement":SETTLEMENT,"developedBy":"regional"})
+        "settlement":SETTLEMENT,"developedBy":"regional"})
 }
 /// A house on a 12 m plot of High Street, north (left) or south (right) of the street.
 fn house(id: &str, x: f64, north: bool, number: u32, keeper: &str) -> [Value; 2] {
@@ -71,7 +76,7 @@ fn house(id: &str, x: f64, north: bool, number: u32, keeper: &str) -> [Value; 2]
     };
     let mut yard = address(number);
     yard["nameStatus"] = "label".into();
-    let yard = record(
+    let mut yard = record(
         &format!("{id}-yard"),
         "plots",
         "yard",
@@ -79,6 +84,7 @@ fn house(id: &str, x: f64, north: bool, number: u32, keeper: &str) -> [Value; 2]
         json!(rectangle(Bounds(x - 6.0, plot_s, x + 6.0, plot_n))),
         yard,
     );
+    yard["relations"] = fronts_high_street();
     let mut attributes = address(number);
     for (key, value) in [
         ("use", json!("house")),
@@ -98,7 +104,7 @@ fn house(id: &str, x: f64, north: bool, number: u32, keeper: &str) -> [Value; 2]
         json!(rectangle(Bounds(x - 4.2, house_s, x + 4.2, house_n))),
         attributes,
     );
-    building["relations"] = json!([{"targetId":"village-high-street","kind":"fronts"}]);
+    building["relations"] = fronts_high_street();
     [yard, building]
 }
 pub fn install(records: &mut impl FeatureWorkspace) -> io::Result<()> {
@@ -113,7 +119,7 @@ pub fn install(records: &mut impl FeatureWorkspace) -> io::Result<()> {
     let mut all = vec![
         place,
         street(
-            "village-high-street",
+            HIGH_STREET,
             "High Street",
             "mainStreet",
             json!([[20, 45], [50, 45], [90, 45]]),

@@ -23,7 +23,7 @@ fn supplied_kind(identity: Kind) -> atlas_generation::town::catalogue::Kind {
 fn town() -> Town {
     Town::new(
         Seat {
-            key: "town".into(),
+            key: atlas_map::Id::from_name("town"),
             name: "Town".into(),
             centre: [0., 0.],
             story: Story {
@@ -963,7 +963,7 @@ fn working_land_retains_a_reachable_household_relationship() {
     assert_eq!(
         fabric.fields[0].worked_by,
         Some(land::Worker {
-            town: "town".into(),
+            town: atlas_map::Id::from_name("town"),
             holding: id
         })
     );
@@ -1070,19 +1070,24 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
         publication::town::{publish, TownWriter},
         town::fabric::{Fabric, FabricEdit, FabricOwner},
     };
+    use atlas_map::Id;
     use std::{collections::BTreeMap, io};
+    /// The identity the catalog gives the town record published under `rest`.
+    fn town_record(rest: &str) -> Id {
+        Id::from_name(&format!("town:{}:{rest}", Id::from_name("town")))
+    }
     struct Catalog {
         spatial: NativeGeos,
-        features: BTreeMap<String, Feature>,
+        features: BTreeMap<Id, Feature>,
     }
     impl TownWriter for Catalog {
         fn record(&mut self, r: Record<'_>) -> io::Result<Feature> {
             Ok(Feature {
-                id: r.key.into(),
+                id: self.feature_id(r.key),
                 name: r.name.into(),
                 kind: r.kind.into(),
                 layer_id: r.layer.into(),
-                area_id: "surface".into(),
+                area_id: Id::from_name("surface"),
                 geometry: r.geometry,
                 attributes: r.attributes,
                 state: State::Generated,
@@ -1099,20 +1104,20 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
             })
         }
         fn save(&mut self, feature: Feature) -> io::Result<()> {
-            self.features.insert(feature.id.clone(), feature);
+            self.features.insert(feature.id, feature);
             Ok(())
         }
         fn network(&mut self, feature: Feature) -> io::Result<()> {
             self.save(feature)
         }
-        fn feature(&self, id: &str) -> io::Result<Option<Feature>> {
-            Ok(self.features.get(id).cloned())
+        fn feature(&self, id: Id) -> io::Result<Option<Feature>> {
+            Ok(self.features.get(&id).cloned())
         }
-        fn feature_id(&self, key: &str) -> io::Result<String> {
-            Ok(key.into())
+        fn feature_id(&self, key: &str) -> Id {
+            Id::from_name(key)
         }
         fn part_name(&self, key: &str, work: &str, _: [f64; 2], _: &Town) -> io::Result<String> {
-            if key.starts_with("town:town:work:") {
+            if key.starts_with(&format!("town:{}:work:", Id::from_name("town"))) {
                 return Ok(format!("Local {work}"));
             }
             Ok(work.into())
@@ -1140,7 +1145,7 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
         17,
         &[InheritedWork {
             family: WorkFamily::Library,
-            id: "parent-archive".into(),
+            id: Id::from_name("parent-archive"),
             design: None,
             anchor: [0., 1.],
         }],
@@ -1209,7 +1214,7 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
         strength: 1.,
         entrance: t.holdings()[partner.0 as usize].slot.front,
         destination: Endpoint::Premises {
-            town: t.seat.key.clone(),
+            town: t.seat.key,
             holding: partner,
         },
     })
@@ -1222,7 +1227,7 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
     };
     publish(&mut catalog, &fabric).unwrap();
     let premises_id = |holding: atlas_generation::town::fabric::HoldingId| {
-        format!("town:town:holding:{}:yard", holding.0)
+        town_record(&format!("holding:{}:yard", holding.0))
     };
     let links = &catalog.features[&premises_id(id)].relations;
     fn check_published_design(work: &Feature) {
@@ -1242,38 +1247,36 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
         id: atlas_generation::town::fabric::HoldingId,
         links: &[atlas_generation::features::records::Relation],
     ) {
-        let work = &catalog.features["parent-archive"];
+        let work = &catalog.features[&Id::from_name("parent-archive")];
         check_published_design(work);
         assert!(work.footprint.is_some());
         assert_eq!(work.attributes["origin"], "inherited");
         use atlas_generation::features::records::Relation;
         assert!(links.contains(&Relation {
             kind: "partOf".into(),
-            target_id: work.id.clone()
+            target_id: work.id
         }));
         assert!(work.relations.contains(&Relation {
             kind: "contains".into(),
-            target_id: format!("town:town:holding:{}:yard", id.0)
+            target_id: town_record(&format!("holding:{}:yard", id.0))
         }));
+        let settlement = &catalog.features[&Id::from_name("town")];
+        assert_eq!(settlement.attributes["settlementTemplate"], "ferry-commons");
         assert_eq!(
-            catalog.features["town"].attributes["settlementTemplate"],
-            "ferry-commons"
-        );
-        assert_eq!(
-            catalog.features["town"].attributes["majorWorkCommissions"][0]["builtParts"],
+            settlement.attributes["majorWorkCommissions"][0]["builtParts"],
             1
         );
     }
     check_work(&catalog, id, links);
     let destinations: Vec<_> = links
         .iter()
-        .map(|r| (r.kind.as_str(), r.target_id.clone()))
+        .map(|r| (r.kind.as_str(), r.target_id))
         .collect();
     assert!(destinations.contains(&("suppliedBy", premises_id(supplier))));
     assert!(destinations.contains(&("servesCustomersAt", premises_id(customer))));
-    let roof = &catalog.features[&format!("town:town:holding:{}:building:0", id.0)];
+    let roof = &catalog.features[&town_record(&format!("holding:{}:building:0", id.0))];
     let cottage_feature =
-        &catalog.features[&format!("town:town:holding:{}:building:0", customer.0)];
+        &catalog.features[&town_record(&format!("holding:{}:building:0", customer.0))];
     fn check_cottage(
         catalog: &Catalog,
         cottage_feature: &Feature,
@@ -1319,24 +1322,24 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
     assert_eq!(roof.attributes["ward"], "ward");
     assert_eq!(roof.attributes["use"], "hall");
     assert_eq!(roof.attributes["buildingFunction"], "civic");
-    let street = &roof
+    let street = roof
         .relations
         .iter()
         .find(|r| r.kind == "fronts")
         .unwrap()
         .target_id;
-    assert_eq!(catalog.features[street].name, roof.attributes["street"]);
+    assert_eq!(catalog.features[&street].name, roof.attributes["street"]);
     fn check_address(
         catalog: &Catalog,
         distant: atlas_generation::town::fabric::HoldingId,
-        street: &str,
+        street: Id,
         route: &[[f64; 2]],
     ) {
         let connected_roof =
-            &catalog.features[&format!("town:town:holding:{}:building:0", distant.0)];
+            &catalog.features[&town_record(&format!("holding:{}:building:0", distant.0))];
         for f in [
             connected_roof,
-            &catalog.features[&format!("town:town:holding:{}:yard", distant.0)],
+            &catalog.features[&town_record(&format!("holding:{}:yard", distant.0))],
         ] {
             assert_eq!(f.attributes["address"], "2 High Street");
             assert_eq!(

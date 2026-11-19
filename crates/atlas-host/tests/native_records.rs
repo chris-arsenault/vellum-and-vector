@@ -4,11 +4,16 @@ use atlas_generation::features::{
     Feature, FeatureReader, FeatureSelection, FeatureWorkspace,
 };
 use atlas_host::record_store::Workspace;
+use atlas_map::Id;
 use serde_json::json;
 use std::{
     io,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+fn id(name: &str) -> Id {
+    Id::from_name(name)
+}
 
 fn workspace() -> io::Result<Workspace> {
     Workspace::create(std::env::temp_dir().join(format!(
@@ -20,10 +25,10 @@ fn workspace() -> io::Result<Workspace> {
                 .as_nanos()
         )))
 }
-fn feature(id: usize) -> Feature {
+fn feature(number: usize) -> Feature {
     serde_json::from_value(json!({
-        "id":id.to_string(),"name":"Forest","kind":"forest","layerId":"ecology",
-        "areaId":if id.is_multiple_of(2) {"map"}else{"child"},
+        "id":id(&number.to_string()),"name":"Forest","kind":"forest","layerId":"ecology",
+        "areaId":id(if number.is_multiple_of(2) {"map"}else{"child"}),
         "geometry":{"type":"Point","coordinates":[10.0000001,20]},"detail":{},"attributes":{},
         "relations":[],"state":"generated","protected":false,"actor":"generator",
         "generationId":null,"causes":[]
@@ -41,7 +46,7 @@ fn completed_input_copy_keeps_its_field_geography_and_records_private() -> io::R
     let source = LocalInputs::open(source_db.clone())?;
     let destination = LocalInputs::open(Rc::new(Database::open(":memory:")?))?;
     let mut document = CreateWorld {
-        id: uuid::Uuid::new_v4().to_string(),
+        id: atlas_host::generation_world::random_id(),
         name: "Input source".into(),
         seed: 1,
         width: 100.0,
@@ -51,8 +56,8 @@ fn completed_input_copy_keeps_its_field_geography_and_records_private() -> io::R
     }
     .create()?;
     let reference = MapRef {
-        map_id: document.scope.located.area_id.clone(),
-        revision: "one".into(),
+        map_id: document.scope.located.area_id,
+        revision: id("one"),
     };
     document.world["fields"] = json!([{"id":"height","areaId":reference.map_id}]);
     let records = workspace()?;
@@ -76,7 +81,7 @@ fn completed_input_copy_keeps_its_field_geography_and_records_private() -> io::R
     );
     let copied = workspace()?;
     destination.load_records(&reference, &mut copied.features(), &mut copied.networks())?;
-    assert!(copied.features().get("0")?.is_some());
+    assert!(copied.features().get(id("0"))?.is_some());
     assert!(source_db
         .query(
             "SELECT name FROM sqlite_schema WHERE name LIKE 'map_%'",
@@ -104,13 +109,13 @@ fn procedural_records_use_captured_sources_without_overwriting_drawings() -> io:
     };
     let original =
         procedural::initialize(source, &mut workspace.features(), &mut workspace.networks())?;
-    assert!(original.features.get("0")?.is_none());
-    assert!(workspace.features().get("0")?.is_none());
-    assert_eq!(workspace.source_features().get("0")?, Some(drawn));
-    let mut working = workspace.features().get("1")?.unwrap();
+    assert!(original.features.get(id("0"))?.is_none());
+    assert!(workspace.features().get(id("0"))?.is_none());
+    assert_eq!(workspace.source_features().get(id("0"))?, Some(drawn));
+    let mut working = workspace.features().get(id("1"))?.unwrap();
     working.name = "New geography".into();
     workspace.features().put(working)?;
-    assert_eq!(original.features.get("1")?.unwrap().name, "Forest");
+    assert_eq!(original.features.get(id("1"))?.unwrap().name, "Forest");
     Ok(())
 }
 // Existing TypeScript workspace cases: detached reads, live paging, source isolation and revisions.
@@ -119,74 +124,74 @@ fn records_remain_detached_and_iteration_reads_current_values() -> io::Result<()
     let workspace = workspace()?;
     let reader = workspace.features();
     let mut writer = workspace.features();
-    for id in 0..150 {
-        writer.put(feature(id))?;
+    for number in 0..150 {
+        writer.put(feature(number))?;
     }
     let mut rows = reader.values(FeatureSelection {
-        area_id: Some("map"),
+        area_id: Some(id("map")),
         ..Default::default()
     })?;
-    assert_eq!(rows.next().unwrap()?.id, "0");
-    let mut changed = writer.get("2")?.unwrap();
+    assert_eq!(rows.next().unwrap()?.id, id("0"));
+    let mut changed = writer.get(id("2"))?.unwrap();
     changed.name = "Changed after page selection".into();
-    assert_eq!(writer.get("2")?.unwrap().name, "Forest");
+    assert_eq!(writer.get(id("2"))?.unwrap().name, "Forest");
     writer.put(changed)?;
-    writer.remove("4")?;
+    writer.remove(id("4"))?;
     let remaining = rows.collect::<io::Result<Vec<_>>>()?;
     assert_eq!(remaining[0].name, "Changed after page selection");
     assert_eq!(remaining.len(), 73);
-    assert_eq!(remaining.last().unwrap().id, "148");
+    assert_eq!(remaining.last().unwrap().id, id("148"));
     let before = writer
         .revisions()?
         .collect::<io::Result<Vec<_>>>()?
         .into_iter()
-        .find(|(id, _)| id == "2")
+        .find(|(record, _)| *record == id("2"))
         .unwrap()
         .1;
-    writer.remove("2")?;
+    writer.remove(id("2"))?;
     writer.put(feature(2))?;
     let after = writer
         .revisions()?
         .collect::<io::Result<Vec<_>>>()?
         .into_iter()
-        .find(|(id, _)| id == "2")
+        .find(|(record, _)| *record == id("2"))
         .unwrap()
         .1;
     assert!(after > before);
-    assert!(workspace.source_features().get("2")?.is_none());
+    assert!(workspace.source_features().get(id("2"))?.is_none());
     Ok(())
 }
 #[test]
 fn network_endpoint_indexes_follow_explicit_writes() -> io::Result<()> {
     let workspace = workspace()?;
     let mut networks = workspace.networks();
-    for id in 0..140 {
+    for number in 0..140 {
         networks.put_reach(Reach {
-            id: format!("reach-{id}"),
-            feature_id: format!("feature-{}", id % 2),
-            start: format!("node-{id}"),
-            end: format!("node-{}", id + 1),
+            id: id(&format!("reach-{number}")),
+            feature_id: id(&format!("feature-{}", number % 2)),
+            start: id(&format!("node-{number}")),
+            end: id(&format!("node-{}", number + 1)),
             geometry: serde_json::from_value(
-                json!({"type":"LineString","coordinates":[[id,0],[id+1,0]]}),
+                json!({"type":"LineString","coordinates":[[number,0],[number+1,0]]}),
             )?,
-            flow: f64::from(id),
-            end_flow: Some(f64::from(id + 1)),
+            flow: f64::from(number),
+            end_flow: Some(f64::from(number + 1)),
         })?;
     }
     let selection = Selection {
-        node_id: Some("node-70"),
+        node_id: Some(id("node-70")),
         ..Default::default()
     };
     let connected = networks
         .reaches(selection)?
         .collect::<io::Result<Vec<_>>>()?;
     assert_eq!(
-        connected.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(),
-        ["reach-69", "reach-70"]
+        connected.iter().map(|r| r.id).collect::<Vec<_>>(),
+        [id("reach-69"), id("reach-70")]
     );
     let mut reach = connected[0].clone();
-    reach.end = "moved-junction".into();
-    assert_eq!(networks.reach(&reach.id)?.unwrap().end, "node-70");
+    reach.end = id("moved-junction");
+    assert_eq!(networks.reach(reach.id)?.unwrap().end, id("node-70"));
     networks.put_reach(reach)?;
     assert_eq!(
         networks
@@ -195,6 +200,6 @@ fn network_endpoint_indexes_follow_explicit_writes() -> io::Result<()> {
             .len(),
         1
     );
-    assert!(workspace.source_networks().reach("reach-69")?.is_none());
+    assert!(workspace.source_networks().reach(id("reach-69"))?.is_none());
     Ok(())
 }

@@ -61,6 +61,7 @@ pub fn sized_footprint(
 pub fn key_numbers(
     places: &[(atlas_map::Id, [f64; 2])],
     grid: &HexGrid,
+    // hpc-exempt: published place identities keyed to their key numbers, not cell data.
 ) -> BTreeMap<atlas_map::Id, u32> {
     let mut order: Vec<(i32, f64, atlas_map::Id)> = places
         .iter()
@@ -91,6 +92,7 @@ pub fn place_point(feature: &Feature) -> Option<[f64; 2]> {
 pub fn map_key(
     vectors: &Vectors<'_>,
     map: &MapDescriptor,
+    // hpc-exempt: published place identities keyed to their key numbers, not cell data.
 ) -> io::Result<BTreeMap<atlas_map::Id, u32>> {
     let Some(real) = &map.real_scale else {
         // hpc-exempt: an empty key for a map with no real scale.

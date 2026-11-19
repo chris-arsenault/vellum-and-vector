@@ -50,7 +50,7 @@ fn eligible_templates_can_realize_their_kernel_in_supplied_habitats() {
     for choice in &ranked.ranked {
         let mut town = Town::new(
             Seat {
-                key: "example".into(),
+                key: atlas_map::Id::from_name("example"),
                 name: "Example".into(),
                 centre: ranked.site.centre,
                 story: Story {

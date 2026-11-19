@@ -3,7 +3,7 @@
 use atlas_gis::geometry::NativeGeos;
 use atlas_map::{
     authoring::{carry_widths, follow, widths_at},
-    Geometry, MapFeature, Position,
+    Geometry, Id, MapFeature, Position,
 };
 use serde_json::json;
 
@@ -60,13 +60,19 @@ fn a_width_profile_reads_onto_another_line_by_fraction() {
 }
 
 fn bridge(geometry: Geometry) -> MapFeature {
-    serde_json::from_value(json!({"id":"bridge","name":"Bridge","spaceId":"surface",
+    serde_json::from_value(
+        json!({"id":id("bridge"),"name":"Bridge","spaceId":id("surface"),
         "layerId":"vector:structures","typeId":"bridge","kind":"bridge","entityId":null,
         "geometry":geometry,"footprint":null,"attributes":{"rotation":0},
-        "relations":[{"targetId":"way","targetName":"Way","kind":"carries"},
-            {"targetId":"water","targetName":"Water","kind":"spans"}],
-        "causes":[],"catalog":{"values":{},"columns":[],"origin":"Authored","mapOnly":false}}))
+        "relations":[{"targetId":id("way"),"targetName":"Way","kind":"carries"},
+            {"targetId":id("water"),"targetName":"Water","kind":"spans"}],
+        "causes":[],"catalog":{"values":{},"origin":"Authored","mapOnly":false}}),
+    )
     .unwrap()
+}
+/// A fixture's identity from its name.
+fn id(name: &str) -> Id {
+    Id::from_name(name)
 }
 fn centre(feature: &MapFeature) -> [f64; 2] {
     let Geometry::Polygon { coordinates } = &feature.geometry else {
@@ -94,7 +100,7 @@ fn a_bridge_turns_with_the_way_it_carries_and_records_its_rotation() {
     let new_way = line(&[[-5.0, -5.0], [5.0, 5.0]]);
     let moved = follow(
         &bridge(deck()),
-        "way",
+        id("way"),
         &old_way,
         &new_way,
         Some(&water),
@@ -118,7 +124,7 @@ fn a_bridge_follows_its_water_to_the_way_without_turning() {
     let new_water = line(&[[2.0, -5.0], [2.0, 5.0]]);
     let moved = follow(
         &bridge(deck()),
-        "water",
+        id("water"),
         &old_water,
         &new_water,
         Some(&way),

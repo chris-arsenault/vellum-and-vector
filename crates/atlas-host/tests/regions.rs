@@ -3,10 +3,14 @@ use atlas_gis::geometry::NativeGeos;
 use atlas_map::regions::{change_navigation, draw_region, region_choices, RegionInput};
 use atlas_map::spatial::{Overlay, Predicate, SpatialKernel};
 use atlas_map::{
-    Bounds, Geometry, MapNavigationState, MapRef, MapRegion, MapView, NavigationChange, Position,
-    RegionCandidate, RegionDrawing, RegionGeometry, RegionQuery,
+    Bounds, Geometry, Id, MapNavigationState, MapRef, MapRegion, MapView, NavigationChange,
+    Position, RegionCandidate, RegionDrawing, RegionGeometry, RegionQuery,
 };
 use serde_json::json;
+
+fn id(name: &str) -> Id {
+    Id::from_name(name)
+}
 
 fn rectangle(w: f64, s: f64, e: f64, n: f64) -> Geometry {
     Geometry::Polygon {
@@ -27,10 +31,11 @@ fn shape(region: &RegionGeometry) -> Geometry {
 }
 fn supplied() -> (RegionInput, RegionQuery, NativeGeos) {
     let map = serde_json::from_value(json!({
-        "reference":{"mapId":"island","revision":"one"},"worldId":"world","name":"Island","primarySpaceId":"surface","profile":"world",
+        "reference":{"mapId":id("island"),"revision":id("one")},"worldId":id("world"),"name":"Island",
+        "primarySpaceId":id("surface"),"profile":"world",
         "footprint":rectangle(0.0,0.0,100.0,100.0),"bounds":[0,0,100,100],"parent":null,"state":"complete","layers":[],
         "regionScale":{"level":0,"nextArea":400,"subdivision":7,"minimumWidth":0.1,"enabled":true},
-        "spaces":[{"id":"surface","parentSpaceId":null,"bounds":[0,0,100,100],"metresPerUnit":1,"precision":0.000001,"periodicWidth":null,
+        "spaces":[{"id":id("surface"),"parentSpaceId":null,"bounds":[0,0,100,100],"metresPerUnit":1,"precision":0.000001,"periodicWidth":null,
             "frame":{"origin":[0,0,0],"rotation":0,"floor":null}}]
     })).unwrap();
     (
@@ -45,7 +50,7 @@ fn supplied() -> (RegionInput, RegionQuery, NativeGeos) {
             ocean: None,
         },
         RegionQuery {
-            space_id: "surface".into(),
+            space_id: id("surface"),
             parent_id: None,
             editing_id: None,
             position: Some(Position::xy(20.0, 20.0)),
@@ -55,11 +60,11 @@ fn supplied() -> (RegionInput, RegionQuery, NativeGeos) {
         NativeGeos::new(1e-6).unwrap(),
     )
 }
-fn kept(id: &str, bounds: Bounds) -> MapRegion {
+fn kept(name: &str, bounds: Bounds) -> MapRegion {
     MapRegion {
-        id: id.into(),
-        name: id.into(),
-        space_id: "surface".into(),
+        id: name.into(),
+        name: name.into(),
+        space_id: id("surface"),
         parent_id: None,
         geometry: region(rectangle(bounds.0, bounds.1, bounds.2, bounds.3)),
         child: None,
@@ -222,16 +227,16 @@ fn saved_views_and_refined_children_retain_region_identity_and_outline() {
         NavigationChange::AttachChild {
             region_id: parent.id.clone(),
             child: MapRef {
-                map_id: "child".into(),
-                revision: "captured".into(),
+                map_id: id("child"),
+                revision: id("captured"),
             },
         },
         &kernel,
     )
     .unwrap();
     let refined = MapRef {
-        map_id: "child".into(),
-        revision: "refined".into(),
+        map_id: id("child"),
+        revision: id("refined"),
     };
     input.navigation = change_navigation(
         &input.map,
@@ -250,8 +255,8 @@ fn saved_views_and_refined_children_retain_region_identity_and_outline() {
         NavigationChange::AttachChild {
             region_id: parent.id.clone(),
             child: MapRef {
-                map_id: "other".into(),
-                revision: "captured".into(),
+                map_id: id("other"),
+                revision: id("captured"),
             },
         },
         &kernel,
@@ -334,13 +339,14 @@ fn surveyed_dry_land_can_be_divided_without_named_polygons() {
 #[test]
 fn regional_capture_preserves_selected_depth_and_leaves_room_for_coasts() {
     use atlas_host::{
+        generation_world::random_id,
         generation_world::CreateWorld,
-        numerical_resource::Scope,
+        numerical_resource::{Descriptor, Scope},
         regional_capture::{Selection, Source},
     };
     struct Empty;
     impl Source for Empty {
-        fn resource(&self, _: &str) -> std::io::Result<serde_json::Value> {
+        fn resource(&self, _: &str) -> std::io::Result<Descriptor> {
             unreachable!()
         }
         fn geography(&self, _: &Scope, _: &str) -> std::io::Result<serde_json::Value> {
@@ -348,9 +354,9 @@ fn regional_capture_preserves_selected_depth_and_leaves_room_for_coasts() {
         }
     }
     let (mut input, _, kernel) = supplied();
-    let world_id = uuid::Uuid::new_v4().to_string();
+    let world_id = random_id();
     let document = CreateWorld {
-        id: world_id.clone(),
+        id: world_id,
         name: "Parent".into(),
         seed: 1,
         width: 100.0,
@@ -360,14 +366,14 @@ fn regional_capture_preserves_selected_depth_and_leaves_room_for_coasts() {
     }
     .create()
     .unwrap();
-    input.map.reference.map_id = document.scope.located.area_id.clone();
-    input.map.world_id = world_id.clone();
-    input.map.primary_space_id = world_id.clone();
-    input.map.spaces[0].id = world_id.clone();
+    input.map.reference.map_id = document.scope.located.area_id;
+    input.map.world_id = world_id;
+    input.map.primary_space_id = world_id;
+    input.map.spaces[0].id = world_id;
     let mut parent = kept("district", Bounds(5.0, 5.0, 80.0, 80.0));
-    parent.space_id = world_id.clone();
+    parent.space_id = world_id;
     let mut child = kept("coast", Bounds(10.0, 10.0, 30.0, 30.0));
-    child.space_id = world_id.clone();
+    child.space_id = world_id;
     child.parent_id = Some(parent.id.clone());
     let selection = atlas_map::RegionSelection {
         parent: input.map.reference.clone(),
@@ -376,13 +382,13 @@ fn regional_capture_preserves_selected_depth_and_leaves_room_for_coasts() {
         feature_ids: vec![],
         region_path: vec![parent, child],
     };
-    let id = uuid::Uuid::new_v4().to_string();
+    let area_id = random_id();
     let captured = Selection {
         parent: &input.map,
         selection: &selection,
-        id: &id,
+        id: area_id,
         name: "Coast",
-        operation: "capture",
+        operation: id("capture"),
         real_scale: None,
     }
     .capture(
@@ -392,7 +398,7 @@ fn regional_capture_preserves_selected_depth_and_leaves_room_for_coasts() {
         &kernel,
     )
     .unwrap();
-    let area = &captured.document.world["areas"][&id];
+    let area = &captured.document.world["areas"][&area_id.to_string()];
     assert_eq!(area["map"]["refinementLevel"], 2);
     assert_eq!(area["traits"], json!([]));
     assert_eq!(
@@ -413,18 +419,18 @@ fn regional_capture_preserves_selected_depth_and_leaves_room_for_coasts() {
         region_path: vec![],
         ..selection
     };
-    let id = uuid::Uuid::new_v4().to_string();
+    let area_id = random_id();
     let captured = Selection {
         parent: &input.map,
         selection: &point,
-        id: &id,
+        id: area_id,
         name: "Glen",
-        operation: "real-scale",
+        operation: id("real-scale"),
         real_scale: Some(real),
     }
     .capture(document, vec![], &Empty, &kernel)
     .unwrap();
-    let area = &captured.document.world["areas"][&id];
+    let area = &captured.document.world["areas"][&area_id.to_string()];
     assert_eq!(area["profile"], "local");
     assert_eq!(area["map"]["refinementLevel"], 0);
     assert_eq!(area["map"]["realScale"]["hexSize"], "1.5m");

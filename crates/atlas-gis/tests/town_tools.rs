@@ -12,13 +12,18 @@ use atlas_gis::{
     sql::Database,
 };
 use atlas_map::{
-    authoring::{insert_junction, renumber, EditCommand, EditOutcome, Transform},
+    authoring::{insert_junction, renumber, street_of, EditCommand, EditOutcome, Transform},
     spatial::SpatialKernel,
     town::AddressMatch,
-    Geometry, MapDescriptor, MapFeature, MapRef, Position, PublicationBatch, Publisher,
+    Geometry, Id, MapDescriptor, MapFeature, MapRef, Position, PublicationBatch, Publisher,
 };
 use serde_json::{json, Value};
 use std::{io, path::PathBuf, rc::Rc};
+
+/// A fixture's identity from its name.
+fn id(name: &str) -> Id {
+    Id::from_name(name)
+}
 
 const LAYERS: [(&str, &str, &[&str]); 6] = [
     ("rivers", "Rivers", &["stream"]),
@@ -46,7 +51,7 @@ fn layer(id: &str, name: &str, kinds: &[&str]) -> Value {
         .iter()
         .map(|kind| json!({"id":kind,"kind":kind,"label":kind,"path":[name],"magicDepiction":null,"count":0,"geometries":[],"footprints":false}))
         .collect();
-    json!({"id":format!("vector:{id}"),"name":name,"spaceId":"surface","bounds":[0,0,100,80],"attribution":[],
+    json!({"id":format!("vector:{id}"),"name":name,"spaceId":self::id("surface"),"bounds":[0,0,100,80],"attribution":[],
         "catalog":{"path":[name],"common":true,"featureTypes":types,"defaultStyle":null,"presets":[],"properties":{},"examples":[],"geometries":[]},
         "source":{"kind":"vector","data":{"assetId":id,"mediaType":"application/geo+json"}}})
 }
@@ -56,33 +61,34 @@ fn descriptor() -> MapDescriptor {
         .map(|(id, name, kinds)| layer(id, name, kinds))
         .collect();
     serde_json::from_value(json!({
-        "reference":{"mapId":"village","revision":"published"},"worldId":"world","name":"Elder Cross","parent":null,
-        "state":"incomplete","profile":"local","primarySpaceId":"surface","bounds":[0,0,100,80],
+        "reference":{"mapId":id("village"),"revision":id("published")},"worldId":id("world"),"name":"Elder Cross","parent":null,
+        "state":"incomplete","profile":"local","primarySpaceId":id("surface"),"bounds":[0,0,100,80],
         "footprint":{"type":"Polygon","coordinates":[[[0,0],[100,0],[100,80],[0,80],[0,0]]]},
         "regionScale":{"level":0,"nextArea":25,"subdivision":7,"minimumWidth":0.01,"enabled":false},
-        "spaces":[{"id":"surface","parentSpaceId":null,"bounds":[0,0,100,80],"metresPerUnit":1,"precision":0.000001,"periodicWidth":null,"frame":{"origin":[0,0,0],"rotation":0,"floor":null}}],
+        "spaces":[{"id":id("surface"),"parentSpaceId":null,"bounds":[0,0,100,80],"metresPerUnit":1,"precision":0.000001,"periodicWidth":null,"frame":{"origin":[0,0,0],"rotation":0,"floor":null}}],
         "layers":layers,
         "realScale":{"kind":"ground","hexSize":"3m","acrossFlats":3,"feet":10,"origin":[50,40],
-            "trianglesPerEdge":2,"creatorLayers":[{"id":"base","name":"Base layer"}],"edits":0}
+            "trianglesPerEdge":2,"creatorLayers":[{"id":id("base"),"name":"Base layer"}],"edits":0}
     }))
     .unwrap()
 }
-fn feature(id: &str, layer: &str, kind: &str, geometry: Value, attributes: Value) -> MapFeature {
-    serde_json::from_value(json!({"id":id,"name":id,"spaceId":"surface","layerId":format!("vector:{layer}"),"typeId":kind,"kind":kind,
+fn feature(name: &str, layer: &str, kind: &str, geometry: Value, attributes: Value) -> MapFeature {
+    serde_json::from_value(json!({"id":id(name),"name":name,"spaceId":id("surface"),"layerId":format!("vector:{layer}"),"typeId":kind,"kind":kind,
         "entityId":null,"geometry":geometry,"footprint":null,"attributes":attributes,"relations":[],"causes":[],
-        "catalog":{"values":{},"columns":[],"origin":"Generated geography","mapOnly":false}}))
+        "catalog":{"values":{},"origin":"Generated geography","mapOnly":false}}))
     .unwrap()
 }
 fn rectangle(w: f64, s: f64, e: f64, n: f64) -> Value {
     json!({"type":"Polygon","coordinates":[[[w,s],[e,s],[e,n],[w,n],[w,s]]]})
 }
 fn address(number: u32, street: &str) -> Value {
-    let id = if street == "High Street" {
-        "high-street"
-    } else {
-        "mill-lane"
-    };
-    json!({"address":format!("{number} {street}"),"addressNumber":number,"street":street,"streetId":id,"settlement":"Elder Cross"})
+    json!({"address":format!("{number} {street}"),"addressNumber":number,"street":street,"settlement":"Elder Cross"})
+}
+/// The relation by which a building or plot fronts High Street.
+fn fronts_high_street() -> Vec<atlas_map::MapRelation> {
+    serde_json::from_value(json!([{"kind":"fronts","targetId":id("high-street"),
+        "targetMapId":null,"targetName":"High Street"}]))
+    .unwrap()
 }
 /// A house and its plot on High Street, 12 m of frontage, north or south of the street.
 fn house(id: &str, x: f64, north: bool, number: u32) -> Vec<MapFeature> {
@@ -97,6 +103,7 @@ fn house(id: &str, x: f64, north: bool, number: u32) -> Vec<MapFeature> {
     );
     yard.name = Some(format!("{number} High Street"));
     yard.attributes.insert("nameStatus".into(), "label".into());
+    yard.relations = fronts_high_street();
     let mut attributes = address(number, "High Street");
     attributes["use"] = "house".into();
     attributes["occupants"] = 5.into();
@@ -108,10 +115,7 @@ fn house(id: &str, x: f64, north: bool, number: u32) -> Vec<MapFeature> {
         rectangle(x - 4.0, inner.min(outer), x + 4.0, inner.max(outer)),
         attributes,
     );
-    building.relations = serde_json::from_value(
-        json!([{"targetId":"high-street","targetName":"High Street","kind":"fronts"}]),
-    )
-    .unwrap();
+    building.relations = fronts_high_street();
     vec![yard, building]
 }
 fn village() -> Vec<MapFeature> {
@@ -212,16 +216,17 @@ fn publish() -> io::Result<(MapStore, MapRef, PathBuf)> {
     store.finish(&map.reference)?;
     Ok((store, map.reference, path))
 }
-fn read(store: &MapStore, reference: &MapRef, id: &str) -> Option<MapFeature> {
+fn read(store: &MapStore, reference: &MapRef, feature: Id) -> Option<MapFeature> {
     let query = FeatureQuery {
-        space_id: "surface".into(),
-        feature_ids: Some(vec![id.into()]),
+        space_id: id("surface"),
+        feature_ids: Some(vec![feature]),
         ..Default::default()
     };
     store.features(reference, &query).unwrap().items.pop()
 }
-fn number(store: &MapStore, reference: &MapRef, id: &str) -> Option<u64> {
-    read(store, reference, id)?
+/// The address number of a fixture feature, by its name.
+fn number(store: &MapStore, reference: &MapRef, name: &str) -> Option<u64> {
+    read(store, reference, id(name))?
         .attributes
         .get("addressNumber")?
         .as_u64()
@@ -242,7 +247,11 @@ fn points(feature: &MapFeature) -> Vec<[f64; 2]> {
         .collect()
 }
 fn edit(store: &MapStore, reference: &MapRef, command: EditCommand) -> io::Result<EditOutcome> {
-    store.edits().edit_named(reference, &command, &Fixed)
+    // The village has no rasters.
+    let files = MapFiles::new(std::env::temp_dir());
+    store
+        .edits()
+        .edit_named(reference, &command, &files, &Fixed)
 }
 fn place(
     store: &MapStore,
@@ -333,7 +342,7 @@ fn lane_joins_high_street(lane: &MapFeature) {
     assert!(lane
         .relations
         .iter()
-        .any(|r| r.target_id == "high-street" && r.kind == "joins"));
+        .any(|r| r.target_id == id("high-street") && r.kind == "joins"));
 }
 fn an_inn_fronting_high_street(inn: &MapFeature) {
     assert_eq!(text(inn, "address"), "4 High Street");
@@ -351,7 +360,7 @@ fn an_inn_fronting_high_street(inn: &MapFeature) {
     assert!(inn
         .relations
         .iter()
-        .any(|r| r.target_id == "high-street" && r.kind == "fronts"));
+        .any(|r| r.target_id == id("high-street") && r.kind == "fronts"));
 }
 #[test]
 fn a_lane_drawn_off_a_street_joins_it_takes_its_class_width_and_a_name() -> io::Result<()> {
@@ -371,17 +380,17 @@ fn a_lane_drawn_off_a_street_joins_it_takes_its_class_width_and_a_name() -> io::
         outcome.history.steps.last().unwrap().label,
         "Draw Tanner Wynd"
     );
-    lane_joins_high_street(&read(&store, &reference, &outcome.created[0]).unwrap());
-    let high = read(&store, &reference, "high-street").unwrap();
+    lane_joins_high_street(&read(&store, &reference, outcome.created[0]).unwrap());
+    let high = read(&store, &reference, id("high-street")).unwrap();
     assert_eq!(
         points(&high),
         [[20.0, 40.0], [50.0, 40.0], [75.0, 40.0], [90.0, 40.0]]
     );
     assert_eq!(high.attributes["widths"], json!([6.0, 6.0, 6.0, 6.0]));
     store.edits().undo(&reference)?;
-    assert!(read(&store, &reference, &outcome.created[0]).is_none());
+    assert!(read(&store, &reference, outcome.created[0]).is_none());
     assert_eq!(
-        points(&read(&store, &reference, "high-street").unwrap()).len(),
+        points(&read(&store, &reference, id("high-street")).unwrap()).len(),
         3
     );
     Ok(())
@@ -399,9 +408,12 @@ fn an_inn_placed_on_an_empty_plot_takes_its_address_and_renumbers_its_side() -> 
         1,
         "the empty plot is used, not a new one"
     );
-    an_inn_fronting_high_street(&read(&store, &reference, &outcome.created[0]).unwrap());
+    an_inn_fronting_high_street(&read(&store, &reference, outcome.created[0]).unwrap());
     assert_eq!(
-        text(&read(&store, &reference, "inn-site").unwrap(), "address"),
+        text(
+            &read(&store, &reference, id("inn-site")).unwrap(),
+            "address"
+        ),
         "4 High Street"
     );
     assert_eq!(number(&store, &reference, "house-4"), Some(6));
@@ -409,7 +421,7 @@ fn an_inn_placed_on_an_empty_plot_takes_its_address_and_renumbers_its_side() -> 
     assert_eq!(number(&store, &reference, "house-2"), Some(2));
     store.edits().undo(&reference)?;
     assert_eq!(number(&store, &reference, "house-4"), Some(4));
-    assert!(read(&store, &reference, &outcome.created[0]).is_none());
+    assert!(read(&store, &reference, outcome.created[0]).is_none());
     Ok(())
 }
 #[test]
@@ -417,7 +429,7 @@ fn a_building_placed_beside_a_street_stands_turned_to_it_on_a_plot_of_its_own() 
     let (store, reference, _) = publish()?;
     let spatial = NativeGeos::new(1e-9).unwrap();
     let outcome = place(&store, &reference, "smithy", [12.0, 60.0])?;
-    let [building, plot] = [0, 1].map(|i| read(&store, &reference, &outcome.created[i]).unwrap());
+    let [building, plot] = [0, 1].map(|i| read(&store, &reference, outcome.created[i]).unwrap());
     assert_eq!(text(&building, "address"), "1 Mill Lane");
     assert_eq!(plot.name.as_deref(), Some("1 Mill Lane"));
     assert_eq!(building.attributes["rotation"], json!(90.0));
@@ -425,7 +437,7 @@ fn a_building_placed_beside_a_street_stands_turned_to_it_on_a_plot_of_its_own() 
     assert!((spatial.area(&building.geometry).unwrap() - 9.8 * 9.0).abs() < 1e-6);
     // The 30 m deep plot ends at the map's west edge, 17.75 m from the lane's verge.
     assert!((spatial.area(&plot.geometry).unwrap() - 14.0 * 17.75).abs() < 1e-6);
-    let lane = read(&store, &reference, "mill-lane").unwrap();
+    let lane = read(&store, &reference, id("mill-lane")).unwrap();
     let front = spatial
         .distance(&building.geometry, &lane.geometry)
         .unwrap();
@@ -444,7 +456,7 @@ fn moving_a_building_to_another_street_readdresses_it() -> io::Result<()> {
         &store,
         &reference,
         EditCommand::Transform {
-            ids: vec!["house-3".into()],
+            ids: vec![id("house-3")],
             transform: Transform {
                 translate: [-35.0, 15.0],
                 rotate: 0.0,
@@ -453,12 +465,12 @@ fn moving_a_building_to_another_street_readdresses_it() -> io::Result<()> {
             },
         },
     )?;
-    let moved = read(&store, &reference, "house-3").unwrap();
+    let moved = read(&store, &reference, id("house-3")).unwrap();
     assert_eq!(text(&moved, "address"), "1 Mill Lane");
     assert!(moved
         .relations
         .iter()
-        .any(|r| r.target_id == "mill-lane" && r.kind == "fronts"));
+        .any(|r| r.target_id == id("mill-lane") && r.kind == "fronts"));
     assert_eq!(
         number(&store, &reference, "house-3-yard"),
         Some(3),
@@ -473,12 +485,12 @@ fn deleting_a_plot_and_its_house_renumbers_the_houses_beyond_it() -> io::Result<
         &store,
         &reference,
         EditCommand::Delete {
-            ids: vec!["house-2".into(), "house-2-yard".into()],
+            ids: vec![id("house-2"), id("house-2-yard")],
         },
     )?;
     assert_eq!(number(&store, &reference, "house-4"), Some(2));
     assert_eq!(
-        read(&store, &reference, "house-4-yard")
+        read(&store, &reference, id("house-4-yard"))
             .unwrap()
             .name
             .as_deref(),
@@ -499,20 +511,14 @@ fn addresses_are_found_by_number_and_street_or_by_street_alone() -> io::Result<(
     };
     let found = find("4 high street");
     assert_eq!(
-        found
-            .iter()
-            .map(|m| m.feature_id.as_str())
-            .collect::<Vec<_>>(),
-        ["house-4"]
+        found.iter().map(|m| m.feature_id).collect::<Vec<_>>(),
+        [id("house-4")]
     );
     assert_eq!(found[0].address, "4 High Street");
     let street = find("Mill Lane");
-    assert_eq!(
-        (street.len(), street[0].feature_id.as_str()),
-        (1, "mill-lane")
-    );
+    assert_eq!((street.len(), street[0].feature_id), (1, id("mill-lane")));
     assert!(find("9 High Street").is_empty());
-    assert_eq!(find("High")[0].feature_id, "high-street");
+    assert_eq!(find("High")[0].feature_id, id("high-street"));
     Ok(())
 }
 #[test]
@@ -520,8 +526,8 @@ fn a_new_plot_records_the_street_it_fronts_and_its_building_is_addressed_there()
     let (store, reference, _) = publish()?;
     // The plot's middle lies nearer North Row behind it than High Street in front.
     let outcome = place(&store, &reference, "smithy", [70.0, 47.0])?;
-    let [building, plot] = [0, 1].map(|i| read(&store, &reference, &outcome.created[i]).unwrap());
-    assert_eq!(text(&plot, "streetId"), "high-street");
+    let [building, plot] = [0, 1].map(|i| read(&store, &reference, outcome.created[i]).unwrap());
+    assert_eq!(street_of(&plot), Some(id("high-street")));
     assert_eq!(text(&building, "address"), "5 High Street");
     assert_eq!(text(&plot, "address"), "5 High Street");
     Ok(())
@@ -531,11 +537,11 @@ fn a_building_on_an_existing_plot_is_fitted_to_that_plot() -> io::Result<()> {
     let (store, reference, _) = publish()?;
     let spatial = NativeGeos::new(1e-9).unwrap();
     let outcome = place(&store, &reference, "inn", [45.0, 25.0])?;
-    let inn = read(&store, &reference, &outcome.created[0]).unwrap();
+    let inn = read(&store, &reference, outcome.created[0]).unwrap();
     // A 12 m by 20 m plot: a village building fills 70% of its frontage and 80% of its depth.
     let area = spatial.area(&inn.geometry).unwrap();
     assert!((area - 12.0 * 0.7 * 12.0).abs() < 1e-6, "{area}");
-    let site = read(&store, &reference, "inn-site").unwrap();
+    let site = read(&store, &reference, id("inn-site")).unwrap();
     let inside = spatial
         .relation(
             &site.geometry,
@@ -551,13 +557,15 @@ fn buildings_keep_off_water_and_ways_when_placed_or_moved() -> io::Result<()> {
     let (store, reference, _) = publish()?;
     let wet = place(&store, &reference, "house", [86.0, 20.0]).unwrap_err();
     assert!(wet.to_string().contains("water of mill-burn"), "{wet}");
+    // 2.5 m onto the street while its centre stays in its own plot, so the way is the only
+    // ground it would stand on.
     let onto_the_street = edit(
         &store,
         &reference,
         EditCommand::Transform {
-            ids: vec!["house-1".into()],
+            ids: vec![id("house-1")],
             transform: Transform {
-                translate: [0.0, -8.0],
+                translate: [0.0, -5.0],
                 rotate: 0.0,
                 scale: 1.0,
                 about: [0.0, 0.0],
@@ -565,9 +573,12 @@ fn buildings_keep_off_water_and_ways_when_placed_or_moved() -> io::Result<()> {
         },
     )
     .unwrap_err();
-    assert!(onto_the_street
-        .to_string()
-        .contains("the way of High Street"));
+    assert!(
+        onto_the_street
+            .to_string()
+            .contains("the way of High Street"),
+        "{onto_the_street}"
+    );
     assert_eq!(number(&store, &reference, "house-1"), Some(1));
     Ok(())
 }
@@ -591,7 +602,7 @@ fn a_street_bridges_narrow_water_and_refuses_wide_water_and_buildings() -> io::R
     let bridge = outcome
         .created
         .iter()
-        .filter_map(|id| read(&store, &reference, id))
+        .filter_map(|&made| read(&store, &reference, made))
         .find(|f| f.kind == "bridge")
         .expect("a bridge over Mill burn");
     let mut kinds: Vec<_> = bridge.relations.iter().map(|r| r.kind.as_str()).collect();
@@ -616,13 +627,13 @@ fn renumbering_keeps_a_locked_plots_number_and_numbers_the_rest_around_it() -> i
             name: "Held".into(),
         },
     )?;
-    let layer = added.map.real_scale.unwrap().creator_layers[1].id.clone();
+    let layer = added.map.real_scale.unwrap().creator_layers[1].id;
     edit(
         &store,
         &reference,
         EditCommand::MoveToLayer {
-            ids: vec!["house-4".into(), "house-4-yard".into()],
-            layer: layer.clone(),
+            ids: vec![id("house-4"), id("house-4-yard")],
+            layer,
         },
     )?;
     edit(
@@ -634,7 +645,7 @@ fn renumbering_keeps_a_locked_plots_number_and_numbers_the_rest_around_it() -> i
         },
     )?;
     let outcome = place(&store, &reference, "inn", [45.0, 25.0])?;
-    let inn = read(&store, &reference, &outcome.created[0]).unwrap();
+    let inn = read(&store, &reference, outcome.created[0]).unwrap();
     assert_eq!(number(&store, &reference, "house-4"), Some(4));
     assert_eq!(text(&inn, "address"), "6 High Street");
     assert_eq!(number(&store, &reference, "house-2"), Some(2));

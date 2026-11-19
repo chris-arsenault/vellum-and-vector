@@ -58,10 +58,7 @@ function useJobObservation(props: Props) {
         signal: controller.signal,
       })) {
         if (event.kind === "preview")
-          setPreviews((previous) => [
-            ...previous,
-            JSON.parse(new TextDecoder().decode(event.map.bytes)) as Preview,
-          ]);
+          setPreviews((previous) => [...previous, event.preview as Preview]);
         else if (event.kind === "published") changed.current(event.reference);
         else {
           setStatus(event.status);

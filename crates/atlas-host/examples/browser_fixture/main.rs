@@ -27,9 +27,14 @@ use atlas_host::{
     numerical_resource::Store,
     record_store::{Features, Networks, Workspace},
 };
-use atlas_map::{regions::rectangle, Bounds, MapRef};
+use atlas_map::{regions::rectangle, Bounds, Id, MapRef};
 use serde_json::{json, Value};
 use std::{cell::RefCell, fs, io, path::Path, rc::Rc};
+
+/// A fixture map's fixed identity, written as UUID text so browser scenarios can name it.
+pub fn fixed(text: &str) -> Id {
+    text.parse().expect("Fixture map identities are UUID text")
+}
 
 pub struct Stores {
     maps: MapStore,
@@ -65,7 +70,7 @@ async fn publish(root: &Path) -> io::Result<()> {
         spatial: NativeGeos::new(1e-6).map_err(io::Error::other)?,
     };
     let mut document = CreateWorld {
-        id: "edfcf658-e7d1-42d9-b388-9ec1fdb055f1".into(),
+        id: fixed("edfcf658-e7d1-42d9-b388-9ec1fdb055f1"),
         name: "Published island".into(),
         seed: 1,
         width: 100.0,
@@ -78,8 +83,8 @@ async fn publish(root: &Path) -> io::Result<()> {
     records::install(&mut document, &mut records.features())?;
     samples::install(&mut document, root.join("generation")).await?;
     let reference = MapRef {
-        map_id: document.scope.located.area_id.clone(),
-        revision: "published".into(),
+        map_id: document.scope.located.area_id,
+        revision: Id::from_name("published"),
     };
     let geography = finished_map::FieldGeography {
         id: "supplied-map".into(),
@@ -118,8 +123,8 @@ async fn publish(root: &Path) -> io::Result<()> {
     real_scale::install(&mut child_records.features())?;
     structure::install(&mut child_records.features())?;
     let glen = MapRef {
-        map_id: real_scale::CHILD.into(),
-        revision: "published".into(),
+        map_id: fixed(real_scale::CHILD),
+        revision: Id::from_name("published"),
     };
     finished_map::Request::from_document(
         child_document,
@@ -146,8 +151,8 @@ async fn publish(root: &Path) -> io::Result<()> {
     let village_records = Workspace::create(root.join("village-records.sqlite"))?;
     town::install(&mut village_records.features())?;
     let village = MapRef {
-        map_id: town::VILLAGE.into(),
-        revision: "published".into(),
+        map_id: fixed(town::VILLAGE),
+        revision: Id::from_name("published"),
     };
     finished_map::Request::from_document(
         village_document,

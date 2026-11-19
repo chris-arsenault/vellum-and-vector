@@ -5,11 +5,11 @@ use atlas_generation::features::{network::NetworkWorkspace, FeatureWorkspace};
 use atlas_host::{
     local_inputs::LocalInputs,
     native_resources::NativeResources,
-    numerical_resource::Scope,
+    numerical_resource::{Descriptor, Scope, Store},
     record_store::{Features, Workspace},
     regional_capture::{self, Source},
 };
-use atlas_map::{MapRef, MapRegion, Position, RegionGeometry, RegionSelection};
+use atlas_map::{Id, MapRef, MapRegion, Position, RegionGeometry, RegionSelection};
 use serde_json::Value;
 use std::{io, path::Path};
 
@@ -36,14 +36,14 @@ pub async fn capture(
     let region = MapRegion {
         id: "coastal-reach".into(),
         name: "Coastal reach".into(),
-        space_id: map.primary_space_id.clone(),
+        space_id: map.primary_space_id,
         parent_id: None,
         geometry: geometry.clone(),
         child: None,
     };
     let selection = RegionSelection {
         parent: parent.clone(),
-        space_id: map.primary_space_id.clone(),
+        space_id: map.primary_space_id,
         geometry,
         feature_ids: Vec::new(),
         region_path: vec![region],
@@ -53,9 +53,9 @@ pub async fn capture(
         regional_capture::Selection {
             parent: &map,
             selection: &selection,
-            id: CHILD,
+            id: crate::fixed(CHILD),
             name: "Coastal reach",
-            operation: "captured",
+            operation: Id::from_name("captured"),
             real_scale: None,
         },
         stores.inputs.document(parent)?,
@@ -79,8 +79,8 @@ pub async fn capture(
         destination.source_networks().put_reach(reach)?;
     }
     let reference = MapRef {
-        map_id: CHILD.into(),
-        revision: "captured".into(),
+        map_id: crate::fixed(CHILD),
+        revision: Id::from_name("captured"),
     };
     let child = Published {
         document: captured.document,
@@ -98,10 +98,8 @@ struct Inputs<'a> {
     inputs: &'a LocalInputs,
 }
 impl Source for Inputs<'_> {
-    fn resource(&self, id: &str) -> io::Result<Value> {
-        Ok(serde_json::from_slice(&std::fs::read(
-            self.resources.directory(id)?.join("resource.json"),
-        )?)?)
+    fn resource(&self, id: &str) -> io::Result<Descriptor> {
+        self.resources.describe(id)
     }
     fn geography(&self, scope: &Scope, id: &str) -> io::Result<Value> {
         self.inputs.geography(scope, id)

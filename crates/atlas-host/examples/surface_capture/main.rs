@@ -93,11 +93,10 @@ async fn generate(root: &Path, width: f64, height: f64, action: Option<&Path>) -
         let action: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
         let config: atlas_host::generation_application::Configuration =
             serde_json::from_value(action["request"].clone())?;
-        let input = config.input("new")?;
+        let input = config.input(atlas_map::Id::NIL)?;
         let source = CreateWorld {
             id: config
                 .world_id
-                .clone()
                 .ok_or_else(|| io::Error::other("Missing saved world id"))?,
             name: config.name.clone(),
             width: config.width,
@@ -108,12 +107,12 @@ async fn generate(root: &Path, width: f64, height: f64, action: Option<&Path>) -
         }
         .create()?;
         Submission {
-            input: config.input(&source.scope.located.area_id)?,
+            input: config.input(source.scope.located.area_id)?,
             source,
         }
     } else {
         let source = CreateWorld {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: atlas_host::generation_world::random_id(),
             name: "Published surface verification".into(),
             seed: 104729,
             width,
@@ -125,7 +124,7 @@ async fn generate(root: &Path, width: f64, height: f64, action: Option<&Path>) -
         let mut defaults: serde_json::Value = serde_json::from_str(&generation_defaults())?;
         let recipe = &mut defaults["recipe"];
         recipe.as_object_mut().unwrap().remove("schemaVersion");
-        recipe["areaId"] = source.scope.located.area_id.clone().into();
+        recipe["areaId"] = source.scope.located.area_id.into();
         recipe["quality"] = "draft".into();
         Submission {
             source,

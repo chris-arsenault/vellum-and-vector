@@ -4,7 +4,7 @@ use atlas_generation::{
     water::{captured::*, inherit::RiverInheritance, reaches::ReachStore},
 };
 use atlas_gis::geometry::NativeGeos;
-use atlas_map::{Bounds, Position};
+use atlas_map::{Bounds, Id, Position};
 
 fn mesh() -> TriangularLattice {
     WorldLatticeOptions::default()
@@ -45,8 +45,8 @@ fn river(id: usize, course: Vec<Position>) -> RetainedRiver {
 }
 fn network(reaches: Vec<RetainedRiver>) -> DrainageNetwork {
     DrainageNetwork {
-        area_id: "child".into(),
-        space_id: "planar".into(),
+        area_id: Id::from_name("child"),
+        space_id: Id::from_name("planar"),
         reaches: Vec::new(),
         kept: Some(RetainedNetwork {
             next: reaches.iter().map(|r| r.id + 1).max().unwrap_or(1),
@@ -222,7 +222,7 @@ fn published_current_drainage_resolves_mean_profiles_and_feature_identity() {
         coordinates: vec![position(&mesh, source), position(&mesh, next)],
         discharges: vec![7.0, 9.0],
         catchment_areas: vec![70.0, 90.0],
-        feature_ids: vec!["visible-reach".into()],
+        feature_ids: vec![Id::from_name("visible-reach")],
     });
     let spatial = NativeGeos::new(0.001).unwrap();
     let mut store = ReachStore::default();
@@ -236,7 +236,7 @@ fn published_current_drainage_resolves_mean_profiles_and_feature_identity() {
                 bend: 0.0,
             },
             |id| {
-                assert_eq!(id, "visible-reach");
+                assert_eq!(id, Id::from_name("visible-reach"));
                 Some(RiverIdentity {
                     river: Some("whole-river".into()),
                     name: Some("Named".into()),

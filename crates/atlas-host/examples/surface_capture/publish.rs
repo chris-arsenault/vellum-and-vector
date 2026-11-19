@@ -23,10 +23,10 @@ pub async fn saved(root: &Path) -> io::Result<()> {
     let records = Workspace::open(Rc::new(Database::open(root.join("records.sqlite"))?))?;
     let mut maps = MapStore::open_database(Rc::new(Database::open(root.join("maps.sqlite"))?))?;
     let reference = MapRef {
-        map_id: saved.document.scope.located.area_id.clone(),
-        revision: uuid::Uuid::new_v4().to_string(),
+        map_id: saved.document.scope.located.area_id,
+        revision: atlas_host::generation_world::random_id(),
     };
-    let expected = maps.find_head(&reference.map_id)?;
+    let expected = maps.find_head(reference.map_id)?;
     let geography = saved
         .geography
         .into_iter()

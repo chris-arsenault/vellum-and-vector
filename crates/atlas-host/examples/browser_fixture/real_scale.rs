@@ -3,7 +3,7 @@
 //! turned house, a field, a tree and scattered logs (ADR 0016). No generation process runs.
 use atlas_generation::features::FeatureWorkspace;
 use atlas_host::generation_document::Document;
-use atlas_map::{regions::rectangle, Bounds, MapRef};
+use atlas_map::{regions::rectangle, Bounds, Id, MapRef};
 use serde_json::{json, Value};
 use std::io;
 
@@ -12,12 +12,12 @@ pub const FRAME: Bounds = Bounds(40.0, 40.0, 70.0, 62.5);
 
 /// Turns a copy of the island's document into its real-scale child.
 pub fn child(document: &mut Document, parent: &MapRef) -> io::Result<()> {
-    let root = document.scope.located.area_id.clone();
-    let mut area = document.world["areas"][&root].clone();
+    let root = document.scope.located.area_id;
+    let mut area = document.world["areas"][&root.to_string()].clone();
     let footprint = json!(rectangle(FRAME));
     area["id"] = CHILD.into();
     area["name"] = "Supplied glen".into();
-    area["parentId"] = root.clone().into();
+    area["parentId"] = root.into();
     area["profile"] = "local".into();
     area["footprint"] = footprint.clone();
     area["traits"] = json!([]);
@@ -28,7 +28,7 @@ pub fn child(document: &mut Document, parent: &MapRef) -> io::Result<()> {
         "refinementLevel":0,"extent":footprint,
         "realScale":{"kind":"ground","hexSize":"1.5m","hexesAcross":20,"trianglesPerEdge":2}});
     document.world["areas"][CHILD] = area;
-    document.scope.located.area_id = CHILD.into();
+    document.scope.located.area_id = crate::fixed(CHILD);
     document.scope.footprint = rectangle(FRAME);
     document.coverage.clear();
     Ok(())
@@ -41,9 +41,9 @@ fn record(
     geometry: Value,
     attributes: Value,
 ) -> Value {
-    json!({"id":id,"placeId":id,"areaId":CHILD,"layerId":layer,"kind":kind,"name":name,
-        "attributes":attributes,"relations":[],"detail":{},"state":"generated","protected":false,
-        "actor":"generator","generationId":"supplied","causes":[],"geometry":geometry})
+    json!({"id":Id::from_name(id),"placeId":Id::from_name(id),"areaId":CHILD,"layerId":layer,"kind":kind,
+        "name":name,"attributes":attributes,"relations":[],"detail":{},"state":"generated","protected":false,
+        "actor":"generator","generationId":Id::from_name("supplied"),"causes":[],"geometry":geometry})
 }
 fn turned(cx: f64, cy: f64, w: f64, h: f64, degrees: f64) -> Value {
     let (s, c) = degrees.to_radians().sin_cos();
@@ -101,8 +101,8 @@ pub fn install(records: &mut impl FeatureWorkspace) -> io::Result<()> {
         turned(55.68, 50.29, 1.8, 3.0, -3.2),
         json!({"rotation":-3.2}),
     );
-    bridge["relations"] = json!([{"targetId":"glen-stream","kind":"spans"},
-        {"targetId":"glen-trail","kind":"carries"}]);
+    bridge["relations"] = json!([{"targetId":Id::from_name("glen-stream"),"kind":"spans"},
+        {"targetId":Id::from_name("glen-trail"),"kind":"carries"}]);
     let mut all = vec![stream, trail, house, field, tree, bridge];
     for (i, (x, y, angle)) in [(60.0, 45.0, 20.0), (61.5, 46.2, 75.0), (62.4, 44.6, 140.0)]
         .into_iter()

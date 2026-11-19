@@ -458,6 +458,31 @@ harness report and pictures use the new APIs.
 Acceptance: the UI's browse, inspect and edit journeys work; the harness reports a map.
 Evidence: browser UI wiring suite; harness report on the city.
 
+#### M10 result
+
+- Contracts regenerated. The inspection panel shows the cells with their sections and one
+  table of the band values read at the point; the surface explanation reads its classes
+  from those values.
+- Job previews reach the viewer decoded (`GenerationEvent` preview carries `preview`); the
+  remote transport fetches a LAN job's retained CBOR preview by epoch and reads its NaN as
+  null, and takes a browser worker's JSON preview from its event (`GenerationWireEvent`).
+  `packages/transport/src/generation.test.ts` covers both and a preview no longer kept.
+- Frontend typecheck and lint are clean; the frontend unit suite passes apart from two
+  architecture checks that predate this plan (keyed containers in
+  `processes/town/movement.rs` and `walks.rs`, and `rstar` as an `atlas-map` dependency).
+- Rust test and example fixtures are moved to typed ids, relations for streets, raster
+  inspection and typed descriptors; atlas-gis authoring and town tool tests (38) and the
+  atlas-host tests (75) pass, and the browser fixture is regenerated. Browser tests find
+  fixture features by `fixtureId(name)`, the UUID v5 `Id::from_name` makes.
+- Blocked: the browser suite. The WASM engine no longer links: `wasm-bindgen` (CLI 0.2.108,
+  crate 0.2.130) fails "to prepare module for threading: failed to find `__heap_base`",
+  with both Emscripten SDKs on this machine and both nightly toolchains. The last engine
+  built on 2026-11-18; finding the cause needs builds of earlier commits, which waits on the
+  owner's choice of repair.
+- Not in scope, found by the fixture repair: `atlas-gis/src/authoring/clearance.rs` tests a
+  building against a street's centre line, not its width, so a building may stand up to
+  about half a street's width on it.
+
 ### M11 — Integration and measurement [depends on M1–M10]
 Scope: remove the guard, run the suites once and repair them, create a new kept world, run
 the Kesworcester chain, and record step times against the baseline. Durable content moves

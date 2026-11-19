@@ -1,4 +1,4 @@
-import type { MapDescriptor, MapSample, MapLayer } from "@atlas/map";
+import type { BandValue, MapDescriptor, MapSample, MapLayer } from "@atlas/map";
 
 export const rectangle: Extract<MapSample["footprint"], { type: "Polygon" }> = {
   type: "Polygon",
@@ -120,16 +120,17 @@ export const sample: MapSample = {
   center: [5, 5],
   measure: 100,
   active: true,
-  attributes: [
-    {
-      layerId: "height",
-      bandId: "height",
-      value: 25,
-      unit: "metre",
-      label: "Height",
-      display: { unit: "m", factor: 1 },
-      category: null,
-    },
-  ],
   sections: [{ id: "rock", title: "Rock", records: [{ name: "Basalt", thickness: 12 }] }],
 };
+/** The band values read from the map's rasters at the inspected position. */
+export const values: BandValue[] = [
+  {
+    layerId: "height",
+    bandId: "value",
+    value: 25,
+    unit: "metre",
+    label: "Height",
+    display: { unit: "m", factor: 1 },
+    category: null,
+  },
+];

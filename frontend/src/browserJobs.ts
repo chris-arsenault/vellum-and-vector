@@ -1,13 +1,13 @@
 import type { MainModule } from "@atlas/engine";
 import { v4 as uuid } from "uuid";
-import type { GenerationAction, GenerationEvent, GenerationStatus } from "@atlas/context";
+import type { GenerationAction, GenerationStatus, GenerationWireEvent } from "@atlas/context";
 import type { MapRef } from "@atlas/map";
 import type { GenerationCall } from "@atlas/transport";
 
 type Workspace = InstanceType<MainModule["BrowserWorkspace"]>;
 interface Job {
   status: GenerationStatus;
-  events: GenerationEvent[];
+  events: GenerationWireEvent[];
   controller: AbortController;
   done: Promise<void>;
 }
