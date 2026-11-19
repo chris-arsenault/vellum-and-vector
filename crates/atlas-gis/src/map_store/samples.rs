@@ -1,5 +1,5 @@
-use super::{codec, interactions::as_region, reference_values, space, MapStore};
-use crate::sql::column;
+use super::{interactions::as_region, reference_values, space, MapStore};
+use crate::{rows::SampleRow, sql::column};
 use atlas_map::{
     spatial::Predicate, Bounds, Geometry, MapRef, MapSample, MapSpace, Position, SampleWindow,
 };
@@ -18,9 +18,8 @@ impl MapStore {
         let [x, y, _] = position.coordinates();
         let mut values = reference_values(reference);
         values.extend([space_id.into(), x.into(), x.into(), y.into(), y.into()]);
-        let rows = self.db.query("SELECT s.data,s.geometry FROM map_samples s JOIN map_sample_bounds b ON b.row_id=s.row_id WHERE s.map_id=? AND s.revision=? AND s.space_id=? AND b.max_x>=? AND b.min_x<=? AND b.max_y>=? AND b.min_y<=? ORDER BY s.id", &values)?;
+        let rows = self.db.query("SELECT s.* FROM map_samples s JOIN map_sample_bounds b ON b.row_id=s.row_id WHERE s.map_id=? AND s.revision=? AND s.space_id=? AND b.max_x>=? AND b.min_x<=? AND b.max_y>=? AND b.min_y<=? ORDER BY s.id", &values)?;
         let kernel = self.geometry.spatial(space.precision)?;
-        let encoding = codec::Samples::new(&map);
         let point = Geometry::Point {
             coordinates: position,
         };
@@ -33,13 +32,37 @@ impl MapStore {
             {
                 continue;
             }
-            let sample = encoding.decode(column(&row, "data")?.bytes()?, as_region(shape)?)?;
+            let sample = sample_row(&row)?.sample(as_region(shape)?)?;
             if owns(&sample.window, space, position) {
                 samples.push(sample);
             }
         }
         Ok(samples)
     }
+}
+fn sample_row(row: &crate::sql::Row) -> io::Result<SampleRow> {
+    let real = |name: &str| column(row, name)?.real();
+    Ok(SampleRow {
+        id: column(row, "id")?.text()?.to_owned(),
+        space_id: column(row, "space_id")?.id()?,
+        window: Bounds(
+            real("window_west")?,
+            real("window_south")?,
+            real("window_east")?,
+            real("window_north")?,
+        ),
+        closed_east: column(row, "closed_east")?.flag()?,
+        closed_north: column(row, "closed_north")?.flag()?,
+        cell_span: real("cell_span")?,
+        center: [real("center_x")?, real("center_y")?],
+        center_z: column(row, "center_z")?.optional_real()?,
+        measure: real("measure")?,
+        active: column(row, "active")?.flag()?,
+        sections: column(row, "sections")?
+            .optional_text()?
+            .map(|text| serde_json::from_str(&text))
+            .transpose()?,
+    })
 }
 pub(crate) fn canonical_position(space: &MapSpace, position: Position) -> io::Result<Position> {
     let [mut x, y, z] = position.coordinates();

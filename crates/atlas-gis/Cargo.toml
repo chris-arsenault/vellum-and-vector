@@ -14,6 +14,7 @@ uuid = { version = "1", features = ["v4"] }
 rusqlite = { version = "0.37", features = ["bundled"] }
 geos = { version = "11", features = ["v3_11_0", "static"] }
 rstar = "0.14"
+tiff = { version = "0.11", default-features = false, features = ["deflate"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen.workspace = true

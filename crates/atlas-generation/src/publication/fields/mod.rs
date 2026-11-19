@@ -7,7 +7,7 @@ use crate::{
     scale::MapScale,
 };
 use atlas_map::{DisplayUnit, LayerCatalog};
-pub use metadata::{input, inspection_band, layer_id};
+pub use metadata::{input, layer_id};
 // hpc-exempt: entity names and published layer metadata, not numerical field storage.
 use std::collections::BTreeMap;
 

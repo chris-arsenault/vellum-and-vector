@@ -1,5 +1,5 @@
 use super::*;
-use crate::{MapSample, Position};
+use crate::{BandValue, Position};
 use serde_json::json;
 
 fn building(storeys: Option<i64>) -> MapFeature {
@@ -76,37 +76,38 @@ fn connections_are_the_passage_kinds() {
     assert!(is_connection("trapdoor") && is_connection("stair") && !is_connection("wall"));
 }
 
-fn sample(active: bool, values: &[(&str, f64)]) -> MapSample {
-    let attributes: Vec<Value> = values
+/// The band values read at one point: each channel's `value` band.
+fn reading(values: &[(&str, f64)]) -> Vec<BandValue> {
+    values
         .iter()
-        .map(|(band, value)| json!({"layerId":"inspection","bandId":band,"value":value,"unit":"ratio",
-            "label":format!("{band} label"),"display":{"unit":"ratio","factor":1.0},"category":null}))
-        .collect();
-    serde_json::from_value(json!({"id":"s","spaceId":crate::Id::from_name("world"),
-        "footprint":{"type":"Polygon","coordinates":[[[0,0],[10,0],[10,10],[0,0]]]},
-        "window":{"bounds":[0,0,10,10],"closedEast":true,"closedNorth":true},"cellSpan":10,"center":[5,5],
-        "measure":100,"active":active,"attributes":attributes,"sections":[]}))
-    .unwrap()
+        .map(|(channel, value)| BandValue {
+            layer_id: format!("raster:{channel}"),
+            band_id: "value".into(),
+            value: *value,
+            unit: "ratio".into(),
+            label: format!("{channel} label"),
+            display: crate::DisplayUnit {
+                unit: "ratio".into(),
+                factor: 1.0,
+            },
+            category: None,
+        })
+        .collect()
 }
 
 #[test]
 fn magic_prevalence_is_the_mean_published_coverage_under_the_site() {
     let samples = [
-        sample(
-            true,
-            &[
-                ("magic:aurora:coverage", 0.6),
-                ("magic:fire:coverage:vein", 1.0),
-            ],
-        ),
-        sample(
-            true,
-            &[
-                ("magic:aurora:coverage", 0.2),
-                ("magic:confluence:ember-frost:coverage", 0.5),
-            ],
-        ),
-        sample(false, &[("magic:aurora:coverage", 1.0)]),
+        reading(&[
+            ("magic:aurora:coverage", 0.6),
+            ("magic:fire:coverage:vein", 1.0),
+        ]),
+        reading(&[
+            ("magic:aurora:coverage", 0.2),
+            ("magic:confluence:ember-frost:coverage", 0.5),
+        ]),
+        // A point outside the published map.
+        Vec::new(),
     ];
     let site = StructureSite {
         building_id: crate::Id::from_name("inn"),
@@ -135,8 +136,7 @@ fn magic_prevalence_is_the_mean_published_coverage_under_the_site() {
 
 #[test]
 fn a_raster_layer_of_its_own_names_its_system() {
-    let mut raster = sample(true, &[("value", 0.6)]);
-    raster.attributes[0].layer_id = "raster:magic:aurora:coverage".into();
+    let raster = reading(&[("magic:aurora:coverage", 0.6)]);
     let site = StructureSite {
         building_id: crate::Id::from_name("inn"),
         name: None,

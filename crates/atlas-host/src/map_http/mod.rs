@@ -116,6 +116,7 @@ fn handle(request: &mut Request, services: &Services) -> io::Result<ResponseBox>
                 let call: EditingCall = serde_json::from_value(value).map_err(io::Error::other)?;
                 call.execute(
                     lock(&services.writer)?.edits(),
+                    &services.files,
                     &crate::town_names::AtlasNames,
                 )?
             }

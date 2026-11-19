@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeSet;
 
+/// A field geography's key: its world, area and geography identity.
+pub type GeographyKey = (atlas_map::Id, atlas_map::Id, String);
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Inventory {

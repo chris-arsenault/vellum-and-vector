@@ -13,7 +13,7 @@ use std::{collections::BTreeSet, fs, io, path::Path};
 #[derive(Default)]
 pub struct Retention {
     pub resources: BTreeSet<String>,
-    pub geography: BTreeSet<crate::private_inputs::GeographyKey>,
+    pub geography: BTreeSet<crate::context_inventory::GeographyKey>,
     pub problems: Vec<String>,
 }
 impl Retention {

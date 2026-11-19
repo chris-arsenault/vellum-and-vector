@@ -2,9 +2,9 @@
 //! types and declared layer properties. Both stores hold these rows and assemble the map
 //! description from them; neither stores the description as one document.
 use atlas_map::{
-    AttributeSource, Bounds, Category, DisplayUnit, GeometryType, Id, KindSize, LayerCatalog,
-    LayerSource, MagicDepiction, MapDescriptor, MapFeatureType, MapLayer, MapProperty, MapRef,
-    MapSpace, MapVectorStyle, PropertyType, PublicationState, RasterBand, RasterSource, RealScale,
+    Bounds, Category, DisplayUnit, GeometryType, Id, KindSize, LayerCatalog, LayerSource,
+    MagicDepiction, MapDescriptor, MapFeatureType, MapLayer, MapProperty, MapRef, MapSpace,
+    MapVectorStyle, PropertyType, PublicationState, RasterBand, RasterSource, RealScale,
     RegionGeometry, RegionScale, SurfaceAppearance, VectorSource,
 };
 use std::{collections::BTreeMap, io};
@@ -26,7 +26,7 @@ pub struct Revision {
     pub real_scale: Option<RealScale>,
 }
 
-/// What draws a layer. Attribute layers have no asset.
+/// What draws a layer. Attribute layers hold rasters the viewer does not draw.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SourceKind {
     Raster,
@@ -127,8 +127,12 @@ pub fn layer_rows(layers: &[MapLayer], first: i32) -> io::Result<LayerRows> {
         let ordinal = first + i32::try_from(at).map_err(io::Error::other)?;
         let (source, asset, media, size, cell_span, overviews, indices, bands) = match &layer.source
         {
-            LayerSource::Raster(s) => (
-                SourceKind::Raster,
+            LayerSource::Raster(s) | LayerSource::Attributes(s) => (
+                if matches!(layer.source, LayerSource::Raster(_)) {
+                    SourceKind::Raster
+                } else {
+                    SourceKind::Attributes
+                },
                 Some(s.asset_id.clone()),
                 Some(s.media_type.clone()),
                 Some((s.width, s.height)),
@@ -146,16 +150,6 @@ pub fn layer_rows(layers: &[MapLayer], first: i32) -> io::Result<LayerRows> {
                 Vec::new(),
                 Vec::new(),
                 &[][..],
-            ),
-            LayerSource::Attributes(s) => (
-                SourceKind::Attributes,
-                None,
-                None,
-                None,
-                None,
-                Vec::new(),
-                Vec::new(),
-                s.bands.as_slice(),
             ),
         };
         let catalog = &layer.catalog;
@@ -310,21 +304,27 @@ fn layer(
 ) -> io::Result<MapLayer> {
     let missing = || io::Error::other("A stored layer is missing its source");
     let source = match row.source {
-        SourceKind::Raster => LayerSource::Raster(RasterSource {
-            asset_id: row.asset_id.ok_or_else(missing)?,
-            media_type: row.media_type.ok_or_else(missing)?,
-            width: row.width.ok_or_else(missing)?,
-            height: row.height.ok_or_else(missing)?,
-            cell_span: row.cell_span.ok_or_else(missing)?,
-            bands,
-            overviews: row.overviews,
-            band_indices: row.band_indices,
-        }),
+        SourceKind::Raster | SourceKind::Attributes => {
+            let raster = RasterSource {
+                asset_id: row.asset_id.ok_or_else(missing)?,
+                media_type: row.media_type.ok_or_else(missing)?,
+                width: row.width.ok_or_else(missing)?,
+                height: row.height.ok_or_else(missing)?,
+                cell_span: row.cell_span.ok_or_else(missing)?,
+                bands,
+                overviews: row.overviews,
+                band_indices: row.band_indices,
+            };
+            if row.source == SourceKind::Raster {
+                LayerSource::Raster(raster)
+            } else {
+                LayerSource::Attributes(raster)
+            }
+        }
         SourceKind::Vector => LayerSource::Vector(VectorSource {
             asset_id: row.asset_id.ok_or_else(missing)?,
             media_type: row.media_type.ok_or_else(missing)?,
         }),
-        SourceKind::Attributes => LayerSource::Attributes(AttributeSource { bands }),
     };
     Ok(MapLayer {
         id: row.id,
@@ -388,6 +388,80 @@ impl Code for MagicDepiction {
     const ALL: &'static [Self] = &[Self::Site, Self::Course, Self::Area];
     fn code(self) -> i16 {
         self as i16
+    }
+}
+/// A published sample's typed columns beside its footprint geometry. Sections are open
+/// catalogue records and stay one open value, absent when the sample has none.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SampleRow {
+    pub id: String,
+    pub space_id: Id,
+    pub window: Bounds,
+    pub closed_east: bool,
+    pub closed_north: bool,
+    pub cell_span: f64,
+    pub center: [f64; 2],
+    pub center_z: Option<f64>,
+    pub measure: f64,
+    pub active: bool,
+    pub sections: Option<serde_json::Value>,
+}
+impl SampleRow {
+    pub fn of(sample: atlas_map::MapSample) -> io::Result<(Self, RegionGeometry)> {
+        sample.window.bounds.validate().map_err(io::Error::other)?;
+        if sample.id.is_empty()
+            || !sample.cell_span.is_finite()
+            || sample.cell_span <= 0.0
+            || !sample.center.coordinates().iter().all(|v| v.is_finite())
+            || !sample.measure.is_finite()
+            || sample.measure < 0.0
+        {
+            return Err(io::Error::other(
+                "Map samples require identity, finite center and positive resolution",
+            ));
+        }
+        let [x, y, z] = sample.center.coordinates();
+        let row = Self {
+            id: sample.id,
+            space_id: sample.space_id,
+            window: sample.window.bounds,
+            closed_east: sample.window.closed_east,
+            closed_north: sample.window.closed_north,
+            cell_span: sample.cell_span,
+            center: [x, y],
+            center_z: matches!(sample.center, atlas_map::Position::XYZ(_)).then_some(z),
+            measure: sample.measure,
+            active: sample.active,
+            sections: (!sample.sections.is_empty())
+                .then(|| serde_json::to_value(&sample.sections))
+                .transpose()?,
+        };
+        Ok((row, sample.footprint))
+    }
+    pub fn sample(self, footprint: RegionGeometry) -> io::Result<atlas_map::MapSample> {
+        let [x, y] = self.center;
+        Ok(atlas_map::MapSample {
+            id: self.id,
+            space_id: self.space_id,
+            footprint,
+            window: atlas_map::SampleWindow {
+                bounds: self.window,
+                closed_east: self.closed_east,
+                closed_north: self.closed_north,
+            },
+            cell_span: self.cell_span,
+            center: match self.center_z {
+                Some(z) => atlas_map::Position::XYZ([x, y, z]),
+                None => atlas_map::Position::xy(x, y),
+            },
+            measure: self.measure,
+            active: self.active,
+            sections: self
+                .sections
+                .map(serde_json::from_value)
+                .transpose()?
+                .unwrap_or_default(),
+        })
     }
 }
 pub fn codes<T: Code>(values: &[T]) -> Vec<i16> {

@@ -30,7 +30,7 @@ pub(super) fn review(settings: &Settings, mut action: Action) -> io::Result<Valu
     }
     let maps = PostgresMaps::connect(&settings.database_url)?;
     let inputs = PrivateInputs::connect(&settings.generation_url)?;
-    let operation = crate::private_inputs::random_id();
+    let operation = crate::generation_world::random_id();
     let mut job = super::run::prepare(action, &maps, &inputs, operation)?;
     let resources = NativeResources::new(settings.resources.clone());
     let spatial = NativeGeos::new(

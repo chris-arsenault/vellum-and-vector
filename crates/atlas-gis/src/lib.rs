@@ -15,6 +15,7 @@ pub mod map_store;
 pub mod native_map_geometry;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod postgres_maps;
+pub mod raster_values;
 pub mod rows;
 pub mod sql;
 pub mod stored;

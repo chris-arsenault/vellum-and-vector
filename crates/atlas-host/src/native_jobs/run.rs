@@ -135,7 +135,7 @@ pub(super) fn prepare(
             let document = CreateWorld {
                 id: configuration
                     .world_id
-                    .unwrap_or_else(crate::private_inputs::random_id),
+                    .unwrap_or_else(crate::generation_world::random_id),
                 name: configuration.name.clone(),
                 seed: input.seed,
                 width: configuration.width,
@@ -166,7 +166,7 @@ pub(super) fn prepare(
         Action::Refine(request) => {
             let parent = request.selection.parent.clone();
             let document = inputs.document(&parent)?;
-            let area = crate::private_inputs::random_id();
+            let area = crate::generation_world::random_id();
             let name = request.configuration.name.clone();
             (
                 request.configuration,

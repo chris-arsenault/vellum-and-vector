@@ -8,26 +8,26 @@ use crate::{
     numerical_resource::Scope,
     regional_capture::{self, Source},
 };
-use atlas_generation::{
-    features::{network::NetworkWorkspace, FeatureWorkspace},
-    identity::semantic_id,
-};
+use atlas_generation::features::{network::NetworkWorkspace, FeatureWorkspace};
 use atlas_gis::geometry::NativeGeos;
 use serde_json::Value;
 use std::io;
 use wasm_bindgen::prelude::*;
 
 impl BrowserJob {
-    pub(super) fn prepare(&self, action: Action, operation: &str) -> Result<Prepared, JsValue> {
+    pub(super) fn prepare(
+        &self,
+        action: Action,
+        operation: atlas_map::Id,
+    ) -> Result<Prepared, JsValue> {
         let (configuration, reference, expected, parent, selection, document, area) = match action {
             Action::Create(configuration) => {
                 let configuration = configuration.normalize().map_err(error)?;
-                let input = configuration.input("new").map_err(error)?;
+                let input = configuration.input(atlas_map::Id::NIL).map_err(error)?;
                 let document = CreateWorld {
                     id: configuration
                         .world_id
-                        .clone()
-                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                        .unwrap_or_else(crate::generation_world::random_id),
                     name: configuration.name.clone(),
                     seed: input.seed,
                     width: configuration.width,
@@ -37,7 +37,7 @@ impl BrowserJob {
                 }
                 .create()
                 .map_err(error)?;
-                let area = document.scope.located.area_id.clone();
+                let area = document.scope.located.area_id;
                 (configuration, None, None, None, None, document, area)
             }
             Action::Regenerate {
@@ -59,8 +59,7 @@ impl BrowserJob {
             Action::Refine(request) => {
                 let parent = request.selection.parent.clone();
                 let document = self.private.document(&parent).map_err(error)?;
-                let area = semantic_id(&document.scope.located.world_id, "map", operation)
-                    .map_err(error)?;
+                let area = crate::generation_world::random_id();
                 let name = request.configuration.name.clone();
                 (
                     request.configuration.normalize().map_err(error)?,
@@ -86,7 +85,7 @@ impl BrowserJob {
                 )
                 .map_err(error)?;
         }
-        let input = configuration.input(&area).map_err(error)?;
+        let input = configuration.input(area).map_err(error)?;
         let mut prepared = Prepared {
             submission: Submission {
                 source: document,
@@ -104,7 +103,11 @@ impl BrowserJob {
         }
         Ok(prepared)
     }
-    fn capture(&self, mut prepared: Prepared, operation: &str) -> Result<Prepared, JsValue> {
+    fn capture(
+        &self,
+        mut prepared: Prepared,
+        operation: atlas_map::Id,
+    ) -> Result<Prepared, JsValue> {
         let child = prepared.selection.take().unwrap();
         let (selection, name) = (&child.selection, &child.name);
         let map = self.maps.open(&selection.parent).map_err(error)?;
@@ -115,7 +118,7 @@ impl BrowserJob {
         let capture = regional_capture::Selection {
             parent: &map,
             selection,
-            id: &prepared.submission.input.area_id,
+            id: prepared.submission.input.area_id,
             name,
             operation,
             real_scale: child.real_scale(prepared.submission.input.quality),

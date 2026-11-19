@@ -13,6 +13,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use std::io;
 
+/// A fresh random identity for a new world, map or job.
+pub fn random_id() -> atlas_map::Id {
+    atlas_map::Id::from_bytes(*uuid::Uuid::new_v4().as_bytes())
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreateWorld {

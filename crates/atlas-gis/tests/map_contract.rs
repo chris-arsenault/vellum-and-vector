@@ -324,6 +324,72 @@ fn deleting_child_detaches_saved_selection_without_deleting_its_shape() {
     assert_eq!(saved.navigation.version, 2);
 }
 
+/// An undrawn raster layer is published with its asset, and a copied map keeps its samples.
+#[test]
+fn attribute_layers_publish_and_copied_maps_keep_their_samples() {
+    use atlas_gis::{map_store::MapStore, sql::Database};
+    use atlas_map::{LayerSource, PublicationState, PublishedAsset, Publisher};
+    use std::rc::Rc;
+    let directory = std::env::temp_dir().join(format!("atlas-copy-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let (source, target) = (
+        directory.join("source.sqlite"),
+        directory.join("target.sqlite"),
+    );
+    let mut map: MapDescriptor = serde_json::from_value(supplied_map()).unwrap();
+    let mut layer = map.layers.remove(0);
+    map.state = PublicationState::Incomplete;
+    let LayerSource::Raster(raster) = layer.source else {
+        unreachable!()
+    };
+    layer.id = "raster:magicApplied:aurora".into();
+    layer.source = LayerSource::Attributes(raster);
+    {
+        let mut store = MapStore::open_database(Rc::new(Database::open(&source).unwrap())).unwrap();
+        store.begin(&map, None, false).unwrap();
+        let asset = PublishedAsset {
+            id: "map-terrain".into(),
+            media_type: "image/tiff".into(),
+            location: "terrain.tif".into(),
+            byte_length: 10,
+            illustration: false,
+        };
+        store
+            .add_layers(&map.reference, std::slice::from_ref(&layer), asset)
+            .unwrap();
+        let sample = json!({"id":"0:cell:0","spaceId":id("surface"),"footprint":map.footprint,
+            "window":{"bounds":[-30,40,70,140],"closedEast":true,"closedNorth":true},
+            "cellSpan":100,"center":[20,90,0],"measure":10000,"active":true,"sections":[]});
+        store
+            .append(
+                &map.reference,
+                serde_json::from_value(json!({ "samples": [sample] })).unwrap(),
+            )
+            .unwrap();
+        store.finish(&map.reference).unwrap();
+    }
+    let store = MapStore::open_database(Rc::new(Database::open(&target).unwrap())).unwrap();
+    store
+        .copy_from(&source.to_string_lossy(), &map.reference)
+        .unwrap();
+    let copied = store.open(&map.reference).unwrap();
+    assert!(matches!(
+        copied.layers[0].source,
+        LayerSource::Attributes(_)
+    ));
+    let found = store
+        .samples_at(
+            &map.reference,
+            id("surface"),
+            atlas_map::Position::xy(20.0, 90.0),
+        )
+        .unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].center, atlas_map::Position::XYZ([20.0, 90.0, 0.0]));
+    drop(store);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
 #[test]
 fn saved_gis_reads_and_spatial_queries_need_no_generator_or_private_store() {
     use atlas_gis::{

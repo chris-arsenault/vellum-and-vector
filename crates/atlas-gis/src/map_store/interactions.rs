@@ -1,7 +1,8 @@
 use super::{samples::canonical_position, space, FeatureQuery, MapAccess, Page};
+use crate::{map_files::MapFiles, raster_values::MapRasters};
 use atlas_map::{
     regions::as_geometry as region_geometry, spatial::Predicate, Geometry, Id, Inspection,
-    MapFeature, MapRef, Position, RegionGeometry, RegionSelection, SampleValue,
+    MapFeature, MapRef, Position, RegionGeometry, RegionSelection,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, io};
@@ -23,10 +24,13 @@ pub struct SelectionRequest {
     pub feature_ids: Option<Vec<Id>>,
 }
 impl dyn MapAccess + '_ {
+    /// What is at a position: the cells and features there, their causes and every published
+    /// raster band's value, read from the map's files.
     pub fn inspect(
         &self,
         reference: &MapRef,
         request: &InspectionRequest,
+        files: &MapFiles,
     ) -> io::Result<Inspection> {
         let map = self.open(reference)?;
         let space = space(&map, request.space_id)?;
@@ -91,42 +95,20 @@ impl dyn MapAccess + '_ {
         });
         let ids = features.iter().map(|f| f.id).collect::<Vec<_>>();
         let causes = collect(|cursor| self.history(reference, cursor, Some(&ids)))?;
-        let values = samples
-            .iter()
-            .flat_map(|s| {
-                s.attributes
-                    .iter()
-                    .filter(|v| {
-                        request
-                            .layer_ids
-                            .as_ref()
-                            .is_none_or(|ids| ids.iter().any(|id| *id == *v.layer_id))
-                    })
-                    .map(|v| SampleValue {
-                        sample_id: s.id.clone(),
-                        layer_id: v.layer_id.to_string(),
-                        band_id: v.band_id.to_string(),
-                        value: v.value.clone(),
-                        unit: v.unit.to_string(),
-                        label: v.label.to_string(),
-                        display: v.display.clone(),
-                        category: v.category.clone(),
-                        footprint: s.footprint.clone(),
-                        bounds: s.window.bounds,
-                        cell_span: s.cell_span,
-                        center: s.center,
-                        measure: s.measure,
-                        active: s.active,
-                    })
-            })
-            .collect();
+        let wanted = |layer: &atlas_map::MapLayer| {
+            request
+                .layer_ids
+                .as_ref()
+                .is_none_or(|ids| ids.contains(&layer.id))
+        };
+        let values = MapRasters::new(files).values(self, &map, space.id, position, &wanted)?;
         Ok(Inspection {
             reference: reference.clone(),
             space_id: space.id,
             position,
-            samples: values,
+            samples,
+            values,
             features,
-            sections: samples.into_iter().flat_map(|s| s.sections).collect(),
             causes,
         })
     }

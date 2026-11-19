@@ -103,6 +103,7 @@ dependencies = [
 name = "atlas-generation"
 version = "0.1.0"
 dependencies = [
+ "atlas-gis",
  "atlas-map",
  "atlas-names",
  "bytemuck",
@@ -132,6 +133,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "tiff",
  "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",

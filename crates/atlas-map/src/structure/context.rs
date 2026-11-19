@@ -3,7 +3,7 @@
 //! over the samples under the footprint), the magic features near it and the parent's
 //! place record (settlement, ward, street, address).
 use super::StructureSite;
-use crate::{Geometry, MapFeature, MapSample};
+use crate::{BandValue, Geometry, MapFeature};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 // hpc-exempt: a few magic systems per site, keyed by system id.
@@ -61,17 +61,13 @@ fn coverage_system(band: &str) -> Option<String> {
         _ => None,
     }
 }
-/// A published channel is a band of an inspection layer, or a raster layer of its own
-/// (`raster:magic:aurora:coverage`, band `value`); either names the system.
-fn attribute_system(attribute: &crate::SampleAttribute) -> Option<String> {
-    coverage_system(&attribute.band_id).or_else(|| {
-        coverage_system(
-            attribute
-                .layer_id
-                .strip_prefix("raster:")
-                .unwrap_or(&attribute.layer_id),
-        )
-    })
+/// Every published channel is a raster layer of its own (`raster:magic:aurora:coverage`,
+/// band `value`), which names the system.
+fn value_system(value: &BandValue) -> Option<String> {
+    if value.band_id != "value" {
+        return None;
+    }
+    coverage_system(value.layer_id.strip_prefix("raster:")?)
 }
 /// "Aurora" for `aurora`, "Confluence ember-frost" for a meeting of systems.
 fn system_label(system: &str) -> String {
@@ -81,36 +77,36 @@ fn system_label(system: &str) -> String {
         first.to_uppercase().chain(chars).collect()
     })
 }
-/// The outside context of a building. `samples` lie under its footprint; `nearby` are the
-/// parent's magic features around it, with the map each was read from.
+/// The outside context of a building. `readings` are the band values at points under its
+/// footprint; `nearby` are the parent's magic features around it, with the map each was
+/// read from.
 pub fn site_context(
     site: &StructureSite,
     building: Option<&MapFeature>,
     centre: [f64; 2],
-    samples: &[MapSample],
+    readings: &[Vec<BandValue>],
     nearby: &[(crate::Id, MapFeature)],
 ) -> SiteContext {
     SiteContext {
-        magic: magic(samples),
+        magic: magic(readings),
         features: features(centre, nearby),
         place: place(site, building),
     }
 }
-fn magic(samples: &[MapSample]) -> Vec<MagicShare> {
-    let active: Vec<_> = samples.iter().filter(|sample| sample.active).collect();
-    // hpc-exempt: per-system totals over a handful of samples.
+/// A point outside the published map reads no values and does not count.
+fn magic(readings: &[Vec<BandValue>]) -> Vec<MagicShare> {
+    let active: Vec<_> = readings
+        .iter()
+        .filter(|reading| !reading.is_empty())
+        .collect();
+    // hpc-exempt: per-system totals over a handful of points.
     let mut totals: BTreeMap<String, f64> = BTreeMap::new();
-    for sample in &active {
-        for attribute in &sample.attributes {
-            let Some(system) = attribute_system(attribute) else {
+    for reading in &active {
+        for value in reading.iter() {
+            let Some(system) = value_system(value) else {
                 continue;
             };
-            let value = attribute
-                .value
-                .as_ref()
-                .and_then(Value::as_f64)
-                .unwrap_or(0.0);
-            *totals.entry(system).or_insert(0.0) += value.clamp(0.0, 1.0);
+            *totals.entry(system).or_insert(0.0) += value.value.clamp(0.0, 1.0);
         }
     }
     let mut shares: Vec<MagicShare> = totals

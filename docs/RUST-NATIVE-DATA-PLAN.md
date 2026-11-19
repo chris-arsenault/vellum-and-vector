@@ -222,12 +222,68 @@ Acceptance: inspecting a cell shows the same band values as before; sample stora
 longer grows with the number of bands.
 Evidence: inspection test on a fixture map; sample table size on the city map.
 
+#### M3 expansion
+
+1. Publication: every channel's values go to a raster layer `raster:<channel>` with a
+   `value` band. Channels the viewer does not draw (applied magic, cell indices) are
+   `LayerSource::Attributes(RasterSource)` layers, grouped into shared GeoTIFF assets like
+   the drawn ones. The single `inspection` attributes layer and `AttributeSource` are gone.
+   `MapSample` loses `attributes`.
+2. atlas-gis `raster_values`: a GeoTIFF point reader on the `tiff` crate (pure Rust, so it
+   also runs in WASM). It finds the pixel under a position from the layer bounds and size,
+   decodes only the tile holding it, keeps decoded tiles for later points, and returns each
+   layer's `value` where coverage is positive, with unit, display and class label.
+   `MapRasters` opens a map's assets through `MapFiles` in both hosts.
+3. Readers take `&MapFiles` and read raster values: `inspect` (`Inspection.values:
+   Vec<BandValue>` beside the cells), the structure site context (magic prevalence at the
+   probe points), and cave walls (rock and magic at points along the wall, in order). The
+   duplicate `Operation::Inspect` store call is removed; inspection goes through `ReadCall`.
+4. Samples are typed columns in both stores (window, closed edges, span, centre, measure,
+   `active`), with sections as one open value. The per-band sample codec is deleted.
+
+Evidence: a unit test that writes a GeoTIFF with the publication writer and reads values
+back across a tile edge, at an uncovered pixel and off the map; the wall and site context
+unit tests over band values; the PostGIS test reading typed sample columns; sample table
+size on the next city run (M11).
+
+M3 result: done. The test and example targets that still build text ids (atlas-gis
+`authoring*.rs` and `town_tools.rs`, the atlas-host examples and integration tests other
+than `postgres_maps.rs`, and `map_sampling.rs`, which used the removed inspection band) are
+repaired with the fixtures in M10. The frontend inspection panel moves to `values` in M10.
+Review fixes: both stores' `add_layers` and asset checks accept attribute layers, captured
+children crop attribute assets too, and the SQLite map copy names the typed sample columns
+(regression test `attribute_layers_publish_and_copied_maps_keep_their_samples`). Known
+limit: rasters hold f32, so a cell-index value above 2^24 reads back rounded; samples held
+f64 before.
+
 ### M4 — Publication writes typed rows [depends on M2]
 Scope: F1, F2 on the write path. Features, samples and history stream as typed binary rows
 in large batches; raster groups add layer rows; no per-record JSON assembly.
 Acceptance: publication builds no `serde_json::Value` per record and rewrites no layer
 document.
 Evidence: profile of the city's publication; PostGIS test.
+
+#### M4 expansion
+
+M2 already moved geometry to WKB, features, samples and relations to binary COPY, and raster
+groups to layer rows. The remaining per-record assembly and identity text:
+
+1. Registry columns are rows of the map, not a list on every feature. `MapFeatureCatalog`
+   loses `columns`; a `registry_columns` table (layer, key, label, numeric, ordinal) is
+   written once per layer as publication adds features, and the registry query reads the
+   columns of the layers in its selection. The catalogue values stay one open value per
+   feature: their keys are the registry's open columns.
+2. A holder's street is its `fronts` (or `accessFrom`) relation. Plots gain the relation
+   buildings already carry; `streetId` is no longer written or read, and `street_of`,
+   `readdress`, building placement and the harness report read the relation.
+3. Kept as text on purpose: `creatorLayer` (a layer id), and `fromPlace`, `toPlace` and
+   `atPlace` (POI place keys, the text keys M1 kept).
+4. History detail is written as typed fields where the publisher builds it with `json!`
+   (`publication/history.rs`): path, ancestry and cause become the entry's attributes map
+   directly, without a `from_value` round trip.
+
+Evidence: the PostGIS test and the SQLite contract tests over registry columns; frontage
+unit tests over relations.
 
 ### M5 — Typed generator record store [depends on M1]
 Scope: F7. Features held with UUID ids, catalogue ordinals, native geometry, a spatial
@@ -294,11 +350,11 @@ M7 `527472bf`, M8 `22fd5701`, M9 `df67b6d7`, M10 `0a302338`, M11 `b0570d3e`.
 2026-11-19:
 - M0 done (14d02fc).
 - M1 done (fb0013c).
-- M2 stores done (0b61b0b): atlas-gis builds, and its row round-trip tests pass.
-- In progress: typing ids through atlas-host so the PostGIS publication test
-  (`atlas-host/tests/postgres_maps.rs`) runs.
-- Still red: the atlas-gis integration tests (`authoring*.rs`, `map_contract.rs`,
-  `town_tools.rs`), which still build text ids.
+- M2 done (0b61b0b, 7116995, dbd94fd): both stores hold GIS rows; the PostGIS test and the
+  SQLite contract tests pass.
+- M3 done: inspection reads rasters; samples are typed columns. Native and WASM libraries
+  build.
+- Still red until M10: the test and example targets listed under the M3 result.
 - The local atlas database holds the old schema and the kept world. The new schema goes into
   a fresh database at M11; dropping the old one needs the owner's word.
 

@@ -89,8 +89,12 @@ impl BrowserWorkspace {
         }
         let call: EditingCall = serde_json::from_str(request).map_err(error)?;
         self.ensure(call.reference()).map_err(error)?;
-        call.execute(self.maps.edits(), &crate::town_names::AtlasNames)
-            .map_err(error)
+        call.execute(
+            self.maps.edits(),
+            &MapFiles::new(ASSETS),
+            &crate::town_names::AtlasNames,
+        )
+        .map_err(error)
     }
     pub fn library(&self, request: &str) -> Result<Vec<u8>, JsValue> {
         let call: LibraryCall = serde_json::from_str(request).map_err(error)?;
@@ -144,7 +148,7 @@ impl BrowserWorkspace {
                 codec::encode(&saved.save_from(&self.map_path, request, now())?)
             }
             LibraryCall::Open((id,)) => {
-                let document = saved.open_saved(&id)?;
+                let document = saved.open_saved(id)?;
                 self.maps
                     .copy_from(SAVED_MAPS, &document.summary.reference)?;
                 codec::encode(&document)

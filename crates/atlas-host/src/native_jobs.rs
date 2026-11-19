@@ -252,7 +252,7 @@ impl Jobs {
         if let Action::Create(configuration) = &mut action {
             configuration
                 .world_id
-                .get_or_insert_with(crate::private_inputs::random_id);
+                .get_or_insert_with(crate::generation_world::random_id);
         }
         let files = crate::job_files::JobFiles::new(&self.settings.resources.join(".jobs"), &id)?;
         files.write("action.json", &action)?;

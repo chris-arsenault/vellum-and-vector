@@ -99,7 +99,11 @@ CREATE TRIGGER IF NOT EXISTS map_feature_remove AFTER DELETE ON map_features BEG
 END;
 CREATE TABLE IF NOT EXISTS map_samples (
   row_id INTEGER PRIMARY KEY, map_id BLOB NOT NULL, revision BLOB NOT NULL,
-  id TEXT NOT NULL, space_id BLOB NOT NULL, geometry BLOB NOT NULL, data BLOB NOT NULL,
+  id TEXT NOT NULL, space_id BLOB NOT NULL, geometry BLOB NOT NULL,
+  window_west REAL NOT NULL, window_south REAL NOT NULL, window_east REAL NOT NULL,
+  window_north REAL NOT NULL, closed_east INTEGER NOT NULL, closed_north INTEGER NOT NULL,
+  cell_span REAL NOT NULL, center_x REAL NOT NULL, center_y REAL NOT NULL, center_z REAL,
+  measure REAL NOT NULL, active INTEGER NOT NULL, sections TEXT,
   UNIQUE(map_id,revision,id),
   FOREIGN KEY(map_id,revision) REFERENCES maps(map_id,revision) ON DELETE CASCADE
 );

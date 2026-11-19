@@ -139,6 +139,69 @@ fn tiled_geotiff_has_scoped_tiles_geography_transparency_and_overviews() {
     }
 }
 
+/// Inspection reads a published GeoTIFF where the map writes it: the pixel under a position,
+/// across a tile edge, and nothing where the pixel has no coverage.
+#[test]
+fn published_geotiff_values_read_back_at_a_position() {
+    use atlas_gis::raster_values::{layer_value, Raster};
+    use atlas_map::{LayerSource, MapLayer, Position, RasterSource};
+    let mut storage = storage();
+    let mut raster = pixels(257, 3, &mut storage);
+    for cell in 0..771 {
+        raster.coverage.set(cell, 1.0).unwrap();
+        raster.planes[0]
+            .values
+            .set(cell, (cell % 257) as f32 + 10.0)
+            .unwrap();
+    }
+    raster.coverage.set(0, 0.0).unwrap();
+    let mut output = Cursor::new(Vec::new());
+    ready(geotiff::write(
+        &mut output,
+        &raster,
+        &mut storage,
+        &Control(false),
+    ))
+    .unwrap();
+    output.set_position(0);
+    let (value, _) = plane("value", Resampling::Mean);
+    let (coverage, _) = plane("coverage", Resampling::Mean);
+    let layer: MapLayer = serde_json::from_value(serde_json::json!({
+        "id":"raster:height","name":"Height","spaceId":atlas_map::Id::from_name("surface"),
+        "bounds":[70.0,-30.0,584.0,-21.0],"attribution":[],
+        "source":{"kind":"raster","data":RasterSource{asset_id:"a".into(),
+            media_type:"image/tiff".into(),width:257,height:3,cell_span:3.0,
+            bands:vec![value,coverage],overviews:vec![],band_indices:vec![1,2]}},
+        "catalog":{"path":[],"common":false,"featureTypes":[],"defaultStyle":null,"presets":[],
+            "properties":{},"examples":[],"geometries":[]}
+    }))
+    .unwrap();
+    assert!(matches!(layer.source, LayerSource::Raster(_)));
+    let mut file = Raster::new(output).unwrap();
+    // Column 256 is the first pixel of the second tile; the middle row is row 1.
+    let read = layer_value(&mut file, &layer, Position::xy(583.0, -25.5))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (read.layer_id.as_str(), read.value),
+        ("raster:height", 266.0)
+    );
+    assert_eq!(
+        layer_value(&mut file, &layer, Position::xy(71.0, -28.5))
+            .unwrap()
+            .unwrap()
+            .value,
+        10.0
+    );
+    // The north-west pixel has no coverage; a position off the map reads nothing.
+    assert!(layer_value(&mut file, &layer, Position::xy(71.0, -21.5))
+        .unwrap()
+        .is_none());
+    assert!(layer_value(&mut file, &layer, Position::xy(0.0, 0.0))
+        .unwrap()
+        .is_none());
+}
+
 #[test]
 fn geotiff_metadata_retains_unicode_category_labels() {
     let mut storage = storage();

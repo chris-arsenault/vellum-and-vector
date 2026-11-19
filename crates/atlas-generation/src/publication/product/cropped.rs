@@ -33,7 +33,8 @@ impl Product<'_> {
                 .iter()
                 .filter(|layer| raster_asset(layer) == Some(asset_id.as_str()))
                 .collect();
-            let LayerSource::Raster(source) = &held[0].source else {
+            let (LayerSource::Raster(source) | LayerSource::Attributes(source)) = &held[0].source
+            else {
                 continue;
             };
             let grid = RasterGrid {
@@ -65,8 +66,8 @@ impl Product<'_> {
 }
 fn raster_asset(layer: &MapLayer) -> Option<&str> {
     match &layer.source {
-        LayerSource::Raster(source) => Some(&source.asset_id),
-        _ => None,
+        LayerSource::Raster(source) | LayerSource::Attributes(source) => Some(&source.asset_id),
+        LayerSource::Vector(_) => None,
     }
 }
 /// Distinct raster assets in the order the parent published them.
@@ -84,7 +85,7 @@ fn child_layer(layer: &MapLayer, map: &MapDescriptor, id: &str, window: &crop::W
     let mut layer = layer.clone();
     layer.space_id = map.primary_space_id.clone();
     layer.bounds = window.grid.bounds;
-    if let LayerSource::Raster(source) = &mut layer.source {
+    if let LayerSource::Raster(source) | LayerSource::Attributes(source) = &mut layer.source {
         source.asset_id = id.into();
         source.width = window.grid.width;
         source.height = window.grid.height;

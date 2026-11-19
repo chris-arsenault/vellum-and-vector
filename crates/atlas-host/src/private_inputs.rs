@@ -2,7 +2,6 @@
 mod documents;
 mod inventory;
 use atlas_map::{Id, MapRef};
-pub use inventory::GeographyKey;
 use postgres::{Client, NoTls};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, io};
@@ -105,10 +104,6 @@ impl PrivateInputs {
             .map_err(io::Error::other)?;
         Ok(())
     }
-}
-/// A fresh random identity for a new world, map or job.
-pub fn random_id() -> Id {
-    Id::from_bytes(*uuid::Uuid::new_v4().as_bytes())
 }
 /// An identity as PostgreSQL's `uuid`.
 pub(crate) fn uuid(value: Id) -> uuid::Uuid {

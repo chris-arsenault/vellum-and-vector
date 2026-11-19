@@ -3,11 +3,15 @@
 //! record on the parent map, the samples under its footprint and the magic features around
 //! it. When the parent publishes no samples there (an authored ground map may carry only
 //! shapes), the nearest ancestor in the same located space that does is read instead.
-use crate::map_store::{FeatureQuery, MapAccess, Page};
+use crate::{
+    map_files::MapFiles,
+    map_store::{FeatureQuery, MapAccess, Page},
+    raster_values::MapRasters,
+};
 use atlas_map::{
     authoring::family,
     structure::{site_context, SiteContext},
-    Bounds, Geometry, Id, MapDescriptor, MapFeature, MapRef, MapSample, Position,
+    BandValue, Bounds, Geometry, Id, MapDescriptor, MapFeature, MapLayer, MapRef, Position,
 };
 use std::io;
 
@@ -16,7 +20,11 @@ const NEAR: f64 = 150.0;
 /// How many ancestor maps are searched for published samples.
 const ANCESTORS: usize = 4;
 
-pub fn context(maps: &dyn MapAccess, reference: &MapRef) -> io::Result<SiteContext> {
+pub fn context(
+    maps: &dyn MapAccess,
+    files: &MapFiles,
+    reference: &MapRef,
+) -> io::Result<SiteContext> {
     let map = maps.open(reference)?;
     let site = map
         .real_scale
@@ -46,10 +54,10 @@ pub fn context(maps: &dyn MapAccess, reference: &MapRef) -> io::Result<SiteConte
     let points = probes(&outline);
     let centre = points[0];
     let lineage = lineage(maps, parent)?;
-    let mut samples = Vec::new();
+    let mut readings = Vec::new();
     for ancestor in &lineage {
-        samples = samples_under(maps, ancestor, space, &points)?;
-        if !samples.is_empty() {
+        readings = magic_under(maps, files, ancestor, space, &points)?;
+        if readings.iter().any(|reading| !reading.is_empty()) {
             break;
         }
     }
@@ -64,7 +72,7 @@ pub fn context(maps: &dyn MapAccess, reference: &MapRef) -> io::Result<SiteConte
         &site,
         building.as_ref(),
         [x, y],
-        &samples,
+        &readings,
         &nearby,
     ))
 }
@@ -137,24 +145,23 @@ fn probes(outline: &Geometry) -> Vec<Position> {
     );
     points
 }
-fn samples_under(
+/// The magic raster values at each probe point under the building.
+fn magic_under(
     maps: &dyn MapAccess,
+    files: &MapFiles,
     map: &MapDescriptor,
     space: Id,
     points: &[Position],
-) -> io::Result<Vec<MapSample>> {
+) -> io::Result<Vec<Vec<BandValue>>> {
     if !map.spaces.iter().any(|entry| entry.id == space) {
         return Ok(Vec::new());
     }
-    let mut samples: Vec<MapSample> = Vec::new();
-    for point in points {
-        for sample in maps.samples_at(&map.reference, space, *point)? {
-            if !samples.iter().any(|kept| kept.id == sample.id) {
-                samples.push(sample);
-            }
-        }
-    }
-    Ok(samples)
+    let magic = |layer: &MapLayer| layer.id.starts_with("raster:magic:");
+    let mut rasters = MapRasters::new(files);
+    points
+        .iter()
+        .map(|point| rasters.values(maps, map, space, *point, &magic))
+        .collect()
 }
 /// Features of the map's magic layers within reach of the building.
 fn magic_near(

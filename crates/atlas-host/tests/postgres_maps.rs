@@ -351,7 +351,7 @@ fn sample_batches(store: &mut PostgresMaps) -> io::Result<()> {
             "id":name,"spaceId":id("surface"),"footprint":footprint,
             "window":{"bounds":[0,0,10,10],"closedEast":true,"closedNorth":true},
             "cellSpan":10,"center":[5,5],"measure":100,"active":true,
-            "attributes":[],"sections":[]
+            "sections":[{"id":"rock","title":"Rock","records":[{"kind":"granite"}]}]
         })
     };
     store.append(
@@ -369,6 +369,10 @@ fn sample_batches(store: &mut PostgresMaps) -> io::Result<()> {
         found.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
         ["a", "b"]
     );
+    // Typed sample columns read back the window, centre and the open section records.
+    assert!(found[0].window.closed_east && found[0].cell_span == 10.0);
+    assert_eq!(found[0].center, atlas_map::Position::xy(5.0, 5.0));
+    assert_eq!(found[0].sections[0].records[0]["kind"], "granite");
     let invalid = json!({"type":"Polygon","coordinates":[[[0,0],[10,10],[10,0],[0,10],[0,0]]]});
     assert!(store
         .append(

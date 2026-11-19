@@ -118,7 +118,7 @@ impl BrowserWorkspace {
         let (configuration, parent) = match &mut action {
             Action::Create(c) => {
                 c.world_id
-                    .get_or_insert_with(|| uuid::Uuid::new_v4().to_string());
+                    .get_or_insert_with(crate::generation_world::random_id);
                 (c, None)
             }
             Action::Refine(r) => (&mut r.configuration, Some(r.selection.parent.clone())),

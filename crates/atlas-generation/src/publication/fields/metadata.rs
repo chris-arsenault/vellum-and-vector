@@ -107,32 +107,6 @@ pub fn input(
         planes,
     })
 }
-pub fn inspection_band(
-    fields: &Fields<'_>,
-    field: &Resource,
-    channel: &str,
-    footprint: &Geometry,
-    spatial: &dyn SpatialKernel,
-) -> io::Result<RasterBand> {
-    let unit = &field
-        .channels
-        .get(channel)
-        .ok_or_else(|| io::Error::other("Missing inspection channel"))?
-        .unit;
-    let mut categories = categories(fields, field, channel, footprint, spatial)?;
-    for category in &mut categories {
-        category.surface = None;
-    }
-    Ok(RasterBand {
-        id: channel.into(),
-        name: fields.label(channel),
-        unit: unit.clone(),
-        display: display(unit),
-        nodata: None,
-        range: None,
-        categories,
-    })
-}
 fn range(field: &Resource, channel: &str) -> io::Result<(f64, f64)> {
     fn include(field: &Resource, channel: &str, range: &mut (f64, f64)) -> io::Result<()> {
         if let Some(values) = field.channels.get(channel) {

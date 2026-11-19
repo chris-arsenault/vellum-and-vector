@@ -340,7 +340,9 @@ pub fn parent_rasters(
     let mut locations = std::collections::BTreeMap::new();
     let mut layers = Vec::new();
     for layer in descriptor.layers {
-        if let atlas_map::LayerSource::Raster(source) = &layer.source {
+        if let atlas_map::LayerSource::Raster(source) | atlas_map::LayerSource::Attributes(source) =
+            &layer.source
+        {
             let asset = maps.asset(parent, &source.asset_id)?;
             locations.insert(source.asset_id.clone(), files.path(&asset.location)?);
             layers.push(layer);
@@ -364,28 +366,29 @@ mod tests {
     use super::*;
     #[test]
     fn only_new_and_first_generated_maps_stream() {
+        let id = atlas_map::Id::from_name;
         let captured = MapRef {
-            map_id: "child".into(),
-            revision: "captured".into(),
+            map_id: id("child"),
+            revision: id("captured"),
         };
         let world = |runs: &[&str]| {
             serde_json::json!({"generations": runs.iter()
-                .map(|area| serde_json::json!({"areaId": area})).collect::<Vec<_>>()})
+                .map(|area| serde_json::json!({"areaId": id(area)})).collect::<Vec<_>>()})
         };
-        assert!(progressive(&world(&["world"]), "child", None));
+        assert!(progressive(&world(&["world"]), id("child"), None));
         assert!(progressive(
             &world(&["world", "child"]),
-            "child",
+            id("child"),
             Some(&captured)
         ));
         assert!(!progressive(
             &world(&["world", "child", "child"]),
-            "child",
+            id("child"),
             Some(&captured)
         ));
         assert!(!progressive(
             &world(&["world", "world"]),
-            "world",
+            id("world"),
             Some(&captured)
         ));
     }

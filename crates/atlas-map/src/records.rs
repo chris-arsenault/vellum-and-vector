@@ -1,7 +1,7 @@
 use crate::{Bounds, DisplayUnit, Geometry, Id, MapRef, Position, RegionGeometry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 use ts_rs::TS;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -72,41 +72,22 @@ pub struct IllustrationGeometry {
     pub geometry: Option<Geometry>,
 }
 
-/// Values retain stored sample geography independently of display interpolation.
+/// A published raster band's value at one position, read from the map's GeoTIFF pixel.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SampleValue {
-    pub sample_id: String,
+pub struct BandValue {
     pub layer_id: String,
     pub band_id: String,
-    pub value: Option<Value>,
+    pub value: f64,
     pub unit: String,
     pub label: String,
     pub display: DisplayUnit,
-    pub category: Option<String>,
-    pub footprint: RegionGeometry,
-    pub bounds: Bounds,
-    pub cell_span: f64,
-    pub center: Position,
-    pub measure: f64,
-    pub active: bool,
-}
-
-/// Attributes share one stored geographic sample footprint. No generation resource is referenced.
-/// A map publishes one attribute per band in every sample, so the band's names are shared
-/// rather than copied into each one.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct SampleAttribute {
-    pub layer_id: Arc<str>,
-    pub band_id: Arc<str>,
-    pub value: Option<Value>,
-    pub unit: Arc<str>,
-    pub label: Arc<str>,
-    pub display: DisplayUnit,
+    /// The label of the band's class this value names, for categorical bands.
     pub category: Option<String>,
 }
 
+/// A generation cell's published footprint and its structured descriptions. Band values
+/// live in the map's rasters, not here.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MapSample {
@@ -119,7 +100,6 @@ pub struct MapSample {
     /// Area represented by this sample, in square coordinate units.
     pub measure: f64,
     pub active: bool,
-    pub attributes: Vec<SampleAttribute>,
     pub sections: Vec<InspectionSection>,
 }
 
@@ -148,9 +128,11 @@ pub struct Inspection {
     pub reference: MapRef,
     pub space_id: Id,
     pub position: Position,
-    pub samples: Vec<SampleValue>,
+    /// The cells under the position, with their structured descriptions.
+    pub samples: Vec<MapSample>,
+    /// Every raster band's value at the position.
+    pub values: Vec<BandValue>,
     pub features: Vec<MapFeature>,
-    pub sections: Vec<InspectionSection>,
     pub causes: Vec<HistoryEntry>,
 }
 

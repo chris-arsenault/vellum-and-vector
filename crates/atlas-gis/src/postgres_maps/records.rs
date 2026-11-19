@@ -1,7 +1,7 @@
 use super::{to_json, uuid, PostgresMaps, Wkb};
-use crate::map_store::{codec, space};
+use crate::{map_store::space, rows::SampleRow};
 use atlas_map::{
-    regions::as_geometry, MapDescriptor, MapLayer, MapRef, PublicationBatch, PublishedAsset,
+    regions::as_geometry, Bounds, MapDescriptor, MapLayer, MapRef, PublicationBatch, PublishedAsset,
 };
 use postgres::{
     binary_copy::BinaryCopyInWriter,
@@ -11,13 +11,11 @@ use std::{
     collections::{BTreeSet, HashMap},
     io,
 };
-/// A map being written, with what each record batch is checked and encoded against: its
-/// layers by id and its sample encoding. Publication appends thousands of batches to one
-/// map, so these are built once rather than per batch.
+/// A map being written, with its layers by id, which each record batch is checked against.
+/// Publication appends thousands of batches to one map, so the index is built once.
 pub(super) struct Open {
     pub map: MapDescriptor,
     layers: HashMap<String, usize>,
-    samples: codec::Samples,
 }
 impl Open {
     pub fn new(map: MapDescriptor) -> Self {
@@ -28,7 +26,6 @@ impl Open {
                 .enumerate()
                 .map(|(i, layer)| (layer.id.clone(), i))
                 .collect(),
-            samples: codec::Samples::new(&map),
             map,
         }
     }
@@ -88,47 +85,65 @@ impl PostgresMaps {
         let geometry = self.geometry_type()?;
         let mut encoded = Vec::with_capacity(samples.len());
         for sample in samples {
-            sample.window.bounds.validate().map_err(io::Error::other)?;
-            if sample.id.is_empty()
-                || !sample.cell_span.is_finite()
-                || sample.cell_span <= 0.0
-                || !sample.center.coordinates().iter().all(|v| v.is_finite())
-                || !sample.measure.is_finite()
-                || sample.measure < 0.0
-            {
-                return Err(io::Error::other(
-                    "Map samples require identity, finite center and positive resolution",
-                ));
-            }
-            let precision = space(map, sample.space_id)?.precision;
-            let shape = self
-                .geometry
-                .encode(&as_geometry(&sample.footprint), precision)?;
-            encoded.push((
-                open.samples.encode(&sample)?,
-                Wkb(shape.bytes),
-                uuid(sample.space_id),
-                sample.id,
-            ));
+            let (row, footprint) = SampleRow::of(sample)?;
+            let precision = space(map, row.space_id)?.precision;
+            let shape = self.geometry.encode(&as_geometry(&footprint), precision)?;
+            encoded.push((row, Wkb(shape.bytes)));
         }
         let mut db = self.db.borrow_mut();
         let sink = db
             .copy_in(
-                "COPY map.samples(map_id,revision,id,space_id,geometry,data) FROM STDIN BINARY",
+                "COPY map.samples(map_id,revision,id,space_id,geometry,window_west,window_south,
+                 window_east,window_north,closed_east,closed_north,cell_span,center_x,center_y,
+                 center_z,measure,active,sections) FROM STDIN BINARY",
             )
             .map_err(super::database_error)?;
+        let real = Type::FLOAT8;
         let types = [
             Type::UUID,
             Type::UUID,
             Type::TEXT,
             Type::UUID,
             geometry,
-            Type::BYTEA,
+            real.clone(),
+            real.clone(),
+            real.clone(),
+            real.clone(),
+            Type::BOOL,
+            Type::BOOL,
+            real.clone(),
+            real.clone(),
+            real.clone(),
+            real.clone(),
+            real,
+            Type::BOOL,
+            Type::JSONB,
         ];
         let mut writer = BinaryCopyInWriter::new(sink, &types);
-        for (data, shape, space, id) in &encoded {
-            let row: Vec<&(dyn ToSql + Sync)> = vec![&map_id, &revision, id, space, shape, data];
-            writer.write(&row).map_err(super::database_error)?;
+        for (row, shape) in &encoded {
+            let space = uuid(row.space_id);
+            let Bounds(w, s, e, n) = row.window;
+            let values: Vec<&(dyn ToSql + Sync)> = vec![
+                &map_id,
+                &revision,
+                &row.id,
+                &space,
+                shape,
+                &w,
+                &s,
+                &e,
+                &n,
+                &row.closed_east,
+                &row.closed_north,
+                &row.cell_span,
+                &row.center[0],
+                &row.center[1],
+                &row.center_z,
+                &row.measure,
+                &row.active,
+                &row.sections,
+            ];
+            writer.write(&values).map_err(super::database_error)?;
         }
         writer.finish().map_err(super::database_error)?;
         Ok(())

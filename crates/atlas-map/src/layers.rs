@@ -19,14 +19,8 @@ pub struct MapLayer {
 pub enum LayerSource {
     Raster(RasterSource),
     Vector(VectorSource),
-    Attributes(AttributeSource),
-}
-
-/// Inspectable map values can exist without a drawable raster or vector asset.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AttributeSource {
-    pub bands: Vec<RasterBand>,
+    /// Inspectable values held in a raster the viewer does not draw.
+    Attributes(RasterSource),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -91,8 +85,8 @@ impl MapLayer {
     pub fn validate(&self) -> Result<(), MapError> {
         self.catalog.validate()?;
         match self.source {
-            LayerSource::Raster(_) => self.bounds.validate()?,
-            LayerSource::Vector(_) | LayerSource::Attributes(_) => self.bounds.validate_window()?,
+            LayerSource::Raster(_) | LayerSource::Attributes(_) => self.bounds.validate()?,
+            LayerSource::Vector(_) => self.bounds.validate_window()?,
         }
         if self.id.is_empty() || self.name.is_empty() {
             return Err(MapError::new(
@@ -101,8 +95,7 @@ impl MapLayer {
             ));
         }
         match &self.source {
-            LayerSource::Raster(source) => source.validate(),
-            LayerSource::Attributes(source) => validate_bands(&source.bands),
+            LayerSource::Raster(source) | LayerSource::Attributes(source) => source.validate(),
             LayerSource::Vector(source)
                 if source.asset_id.is_empty() || source.media_type.is_empty() =>
             {

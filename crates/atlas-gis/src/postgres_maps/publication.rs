@@ -65,8 +65,7 @@ impl Publisher for PostgresMaps {
             layer.validate().map_err(io::Error::other)?;
             let id = match &layer.source {
                 LayerSource::Vector(s) => &s.asset_id,
-                LayerSource::Raster(s) => &s.asset_id,
-                _ => return Err(io::Error::other("Layer and asset identities differ")),
+                LayerSource::Raster(s) | LayerSource::Attributes(s) => &s.asset_id,
             };
             if id != &asset.id {
                 return Err(io::Error::other("Layer and asset identities differ"));
@@ -234,10 +233,11 @@ impl PostgresMaps {
         for layer in &map.layers {
             let assets = match &layer.source {
                 LayerSource::Vector(s) => vec![s.asset_id.as_str()],
-                LayerSource::Raster(s) => std::iter::once(s.asset_id.as_str())
-                    .chain(s.overviews.iter().map(String::as_str))
-                    .collect(),
-                _ => continue,
+                LayerSource::Raster(s) | LayerSource::Attributes(s) => {
+                    std::iter::once(s.asset_id.as_str())
+                        .chain(s.overviews.iter().map(String::as_str))
+                        .collect()
+                }
             };
             for id in assets {
                 if !ids.contains(id) {

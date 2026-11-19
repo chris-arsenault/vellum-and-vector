@@ -13,7 +13,6 @@ use atlas_generation::{
         network::{Node, Reach},
         Feature,
     },
-    identity::semantic_id,
     spatial::{Overlay, SpatialKernel},
     RealScaleChoice,
 };

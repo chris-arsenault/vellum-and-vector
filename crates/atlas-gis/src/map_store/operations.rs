@@ -1,6 +1,4 @@
-use super::{
-    FeatureQuery, InspectionRequest, MapAccess, RegistryRequest, SaveRequest, SelectionRequest,
-};
+use super::{FeatureQuery, MapAccess, RegistryRequest, SaveRequest, SelectionRequest};
 use atlas_map::{
     Id, MapDescriptor, MapLayer, MapNavigationState, MapRef, NavigationChange, Position,
     PublicationBatch, PublishedAsset,
@@ -49,10 +47,6 @@ pub enum Operation {
         reference: MapRef,
         space_id: Id,
         position: Position,
-    },
-    Inspect {
-        reference: MapRef,
-        request: InspectionRequest,
     },
     SelectRegion {
         reference: MapRef,
@@ -135,7 +129,6 @@ impl dyn MapAccess + '_ {
                 space_id,
                 position,
             } => encode(self.samples_at(&reference, space_id, position)?),
-            Inspect { reference, request } => encode(self.inspect(&reference, &request)?),
             SelectRegion { reference, request } => {
                 encode(self.select_region(&reference, &request)?)
             }

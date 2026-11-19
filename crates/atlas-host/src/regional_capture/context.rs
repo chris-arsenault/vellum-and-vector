@@ -243,10 +243,10 @@ mod tests {
     fn a_collapsed_former_course_has_point_coverage_without_becoming_an_invalid_line() {
         let spatial = NativeGeos::new(1e-6).unwrap();
         let region = Region {
-            world: "world",
-            area: "child",
-            parent: "parent",
-            operation: "capture",
+            world: atlas_map::Id::from_name("world"),
+            area: atlas_map::Id::from_name("child"),
+            parent: atlas_map::Id::from_name("parent"),
+            operation: atlas_map::Id::from_name("capture"),
             footprint: rectangle(Bounds(0.0, 0.0, 100.0, 100.0)),
             version: 1,
             spatial: &spatial,

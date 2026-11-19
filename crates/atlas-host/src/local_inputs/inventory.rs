@@ -1,6 +1,5 @@
 use super::LocalInputs;
-use crate::context_inventory::InputEntry;
-use crate::private_inputs::GeographyKey;
+use crate::context_inventory::{GeographyKey, InputEntry};
 use atlas_gis::sql::{self, column};
 use atlas_map::{Id, MapRef};
 use std::io;

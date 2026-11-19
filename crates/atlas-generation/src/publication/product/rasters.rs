@@ -12,13 +12,15 @@ use crate::{
     spatial::Overlay,
     storage::Coverage,
 };
-use atlas_map::{
-    AttributeSource, LayerCatalog, LayerSource, MapDescriptor, MapLayer, MapSpace, Publisher,
-    VectorSource,
-};
+use atlas_map::{LayerSource, MapDescriptor, MapLayer, MapSpace, Publisher, VectorSource};
 // hpc-exempt: map-layer metadata and named lake geometries, not numerical field storage.
 use std::{cell::RefCell, collections::BTreeMap, io};
 
+/// Whether the viewer draws a channel. Applied magic and cell indices are published for
+/// inspection only, as attribute layers over the same rasters.
+fn drawn(channel: &str, field: &Field) -> bool {
+    !(channel.starts_with("magicApplied:") || field.resource.channels[channel].unit == "cell-index")
+}
 struct RasterPreparation<'a> {
     scratch: &'a RefCell<Coverage>,
     grids: Vec<(String, sampling::Prepared)>,
@@ -83,46 +85,6 @@ impl Product<'_> {
         }
         map.spaces.extend(underground);
         self.authoring_choices(&mut map, selected, latent);
-        let mut bands = Vec::new();
-        for (channel, field) in &selected.channels {
-            if channel.starts_with("magicApplied:")
-                || field.resource.channels[channel].unit == "cell-index"
-            {
-                bands.push(fields::inspection_band(
-                    &self.fields,
-                    &field.resource,
-                    channel,
-                    &self
-                        .descriptor
-                        .context
-                        .area(self.descriptor.area)
-                        .map_err(io::Error::other)?
-                        .footprint,
-                    spatial,
-                )?);
-            }
-        }
-        if !bands.is_empty() {
-            map.layers.push(MapLayer {
-                id: "inspection".into(),
-                name: "Stored map facts".into(),
-                space_id: map.primary_space_id.clone(),
-                bounds: map.bounds,
-                attribution: Vec::new(),
-                source: LayerSource::Attributes(AttributeSource { bands }),
-                catalog: LayerCatalog {
-                    path: vec!["Inspection".into()],
-                    common: false,
-                    feature_types: Vec::new(),
-                    default_style: None,
-                    presets: Vec::new(),
-                    // hpc-exempt: map-layer metadata and named lake geometries, not numerical field storage.
-                    properties: BTreeMap::new(),
-                    examples: Vec::new(),
-                    geometries: Vec::new(),
-                },
-            });
-        }
         Ok(map)
     }
     /// A real-scale map with caves publishes its underground space; a map without caves
@@ -166,17 +128,14 @@ impl Product<'_> {
     fn raster_groups<'a>(&self, selected: &Selected<'a>) -> Vec<Vec<(String, &'a Field)>> {
         let mut groups: Vec<Vec<(String, &'a Field)>> = Vec::new();
         for (channel, field) in &selected.channels {
-            if channel.starts_with("magicApplied:")
-                || field.resource.channels[channel].unit == "cell-index"
-            {
-                continue;
-            }
             let path = self.fields.catalog(channel).path;
+            let shown = drawn(channel, field);
             let index = groups.iter().position(|group| {
                 let (first, source) = &group[0];
                 channel != "Elevation"
                     && first != "Elevation"
                     && source.id == field.id
+                    && drawn(first, source) == shown
                     && self.fields.catalog(first).path == path
             });
             if let Some(index) = index {
@@ -287,7 +246,11 @@ impl Product<'_> {
                 bounds: grid.bounds,
                 attribution: Vec::new(),
                 catalog: self.fields.catalog(channel),
-                source: LayerSource::Raster(source),
+                source: if drawn(channel, field) {
+                    LayerSource::Raster(source)
+                } else {
+                    LayerSource::Attributes(source)
+                },
             });
         }
         let mut writer = target.assets.create(&id, "image/tiff")?;

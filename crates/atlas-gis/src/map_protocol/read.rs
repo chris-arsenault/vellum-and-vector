@@ -65,7 +65,7 @@ impl ReadCall {
             Self::Registry(r, q) => codec::encode(&maps.registry(&r, &q)?),
             Self::Settlement(r, id) => codec::encode(&maps.settlement(&r, id)?),
             Self::Features(r, q) => codec::encode(&maps.features(&r, &q)?),
-            Self::Inspect(r, q) => codec::encode(&maps.inspect(&r, &q)?),
+            Self::Inspect(r, q) => codec::encode(&maps.inspect(&r, &q, files)?),
             Self::History(r, c) => codec::encode(&maps.history(&r, c, None)?),
             Self::SelectRegion(r, q) => codec::encode(&maps.select_region(&r, &q)?),
             Self::Geometries(r, space, queries) => {
@@ -103,7 +103,7 @@ impl ReadCall {
                 )
             }
             Self::FindAddress(r, text) => codec::encode(&super::addresses::find(maps, &r, &text)?),
-            Self::Site((r,)) => codec::encode(&super::site::context(maps, &r)?),
+            Self::Site((r,)) => codec::encode(&super::site::context(maps, files, &r)?),
             Self::Connections(r, id) => {
                 codec::encode(&super::connections::candidates_for(maps, &r, id)?)
             }

@@ -1,10 +1,7 @@
 use super::{id, uuid, PrivateInputs};
-use crate::context_inventory::InputEntry;
+use crate::context_inventory::{GeographyKey, InputEntry};
 use atlas_map::{Id, MapRef};
 use std::io;
-
-/// A field geography's key: its world, area and geography identity.
-pub type GeographyKey = (Id, Id, String);
 
 impl PrivateInputs {
     pub fn inventory(&self) -> io::Result<Vec<InputEntry>> {

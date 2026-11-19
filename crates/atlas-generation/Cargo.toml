@@ -23,5 +23,6 @@ rayon = "1"
 workspace = true
 
 [dev-dependencies]
+atlas-gis.workspace = true
 bytemuck = { version = "1", features = ["derive"] }
 wasm-bindgen-test.workspace = true

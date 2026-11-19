@@ -192,7 +192,7 @@ mod tests {
         let configuration = Configuration::default_configuration()?.normalize()?;
         let input = configuration.input(atlas_map::Id::NIL)?;
         let source = crate::generation_world::CreateWorld {
-            id: "00000000-0000-0000-0000-000000000002".into(),
+            id: atlas_map::Id::from_name("review-world"),
             name: "Atlas".into(),
             seed: input.seed,
             width: configuration.width,
@@ -201,7 +201,7 @@ mod tests {
             boundary_mode: None,
         }
         .create()?;
-        let input = configuration.input(&source.scope.located.area_id)?;
+        let input = configuration.input(source.scope.located.area_id)?;
         let spatial = atlas_gis::geometry::NativeGeos::new(1e-6).map_err(io::Error::other)?;
         let resources = crate::native_resources::NativeResources::new(std::path::PathBuf::new());
         let review = crate::generation_submission::Submission { source, input }
@@ -266,7 +266,7 @@ mod tests {
         let configuration = Configuration::default_configuration()?.normalize()?;
         let input = configuration.input(atlas_map::Id::NIL)?;
         let world = crate::generation_world::CreateWorld {
-            id: "00000000-0000-0000-0000-000000000001".into(),
+            id: atlas_map::Id::from_name("default-world"),
             name: "Atlas".into(),
             seed: input.seed,
             width: configuration.width,

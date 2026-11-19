@@ -200,7 +200,12 @@ impl MapStore {
             self.db.execute(&format!("INSERT INTO {table} SELECT * FROM imported.{table} WHERE map_id=? AND revision=?"), &values)?;
         }
         self.db.execute(
-            "INSERT INTO map_samples(map_id,revision,id,space_id,geometry,data) SELECT map_id,revision,id,space_id,geometry,data FROM imported.map_samples WHERE map_id=? AND revision=?",
+            "INSERT INTO map_samples(map_id,revision,id,space_id,geometry,window_west,window_south,
+             window_east,window_north,closed_east,closed_north,cell_span,center_x,center_y,center_z,
+             measure,active,sections) SELECT map_id,revision,id,space_id,geometry,window_west,
+             window_south,window_east,window_north,closed_east,closed_north,cell_span,center_x,
+             center_y,center_z,measure,active,sections FROM imported.map_samples
+             WHERE map_id=? AND revision=?",
             &values,
         )?;
         self.db.execute("INSERT INTO map_sample_bounds SELECT d.row_id,b.min_x,b.max_x,b.min_y,b.max_y FROM imported.map_samples s JOIN map_samples d ON d.map_id=s.map_id AND d.revision=s.revision AND d.id=s.id JOIN imported.map_sample_bounds b ON b.row_id=s.row_id WHERE s.map_id=? AND s.revision=?", &values)?;

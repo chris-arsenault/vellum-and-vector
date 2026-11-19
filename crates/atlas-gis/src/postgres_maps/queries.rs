@@ -1,8 +1,10 @@
 use super::{features::FEATURE_COLUMNS, from_json, uuid, uuids, Params, PostgresMaps};
-use crate::map_store::{
-    codec,
-    samples::{canonical_position, owns},
-    space, FeatureQuery, Page,
+use crate::{
+    map_store::{
+        samples::{canonical_position, owns},
+        space, FeatureQuery, Page,
+    },
+    rows::SampleRow,
 };
 use atlas_map::{
     regions::as_region, Bounds, HistoryEntry, Id, MapEntity, MapFeature, MapRef, MapSample,
@@ -69,18 +71,38 @@ impl PostgresMaps {
         let position = canonical_position(space, position)?;
         let [x, y, _] = position.coordinates();
         let rows = self.query(
-            "SELECT data,ST_AsBinary(geometry) AS geometry FROM map.samples WHERE map_id=$1 AND revision=$2 AND space_id=$3 AND ST_Covers(geometry,ST_SetSRID(ST_MakePoint($4,$5),0)) ORDER BY id",
+            "SELECT id,space_id,ST_AsBinary(geometry) AS geometry,window_west,window_south,
+             window_east,window_north,closed_east,closed_north,cell_span,center_x,center_y,
+             center_z,measure,active,sections FROM map.samples
+             WHERE map_id=$1 AND revision=$2 AND space_id=$3
+             AND ST_Covers(geometry,ST_SetSRID(ST_MakePoint($4,$5),0)) ORDER BY id",
             &[&uuid(r.map_id), &uuid(r.revision), &uuid(space_id), &x, &y],
         )?;
-        let encoding = codec::Samples::new(&map);
         let mut samples = Vec::new();
         for row in rows {
+            let get = |name: &str| row.try_get::<_, f64>(name).map_err(io::Error::other);
+            let flag = |name: &str| row.try_get::<_, bool>(name).map_err(io::Error::other);
             let shape: Vec<u8> = row.try_get("geometry").map_err(io::Error::other)?;
             let footprint = as_region(self.geometry.decode(&shape)?).map_err(io::Error::other)?;
-            let sample = encoding.decode(
-                row.try_get::<_, &[u8]>("data").map_err(io::Error::other)?,
-                footprint,
-            )?;
+            let sample = SampleRow {
+                id: row.try_get("id").map_err(io::Error::other)?,
+                space_id: super::id(row.try_get("space_id").map_err(io::Error::other)?),
+                window: Bounds(
+                    get("window_west")?,
+                    get("window_south")?,
+                    get("window_east")?,
+                    get("window_north")?,
+                ),
+                closed_east: flag("closed_east")?,
+                closed_north: flag("closed_north")?,
+                cell_span: get("cell_span")?,
+                center: [get("center_x")?, get("center_y")?],
+                center_z: row.try_get("center_z").map_err(io::Error::other)?,
+                measure: get("measure")?,
+                active: flag("active")?,
+                sections: row.try_get("sections").map_err(io::Error::other)?,
+            }
+            .sample(footprint)?;
             if owns(&sample.window, space, position) {
                 samples.push(sample);
             }

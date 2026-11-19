@@ -13,6 +13,7 @@ mod marks;
 mod town;
 pub use town::{NoNames, TownNames};
 
+use crate::map_files::MapFiles;
 use crate::map_store::{space, FeatureQuery, MapAccess, Page};
 use atlas_map::Id;
 use atlas_map::{
@@ -46,14 +47,21 @@ pub trait EditStore: MapAccess {
 }
 
 impl dyn EditStore + '_ {
-    pub fn edit(&self, reference: &MapRef, command: &EditCommand) -> io::Result<EditOutcome> {
-        self.edit_named(reference, command, &NoNames)
+    pub fn edit(
+        &self,
+        reference: &MapRef,
+        command: &EditCommand,
+        files: &MapFiles,
+    ) -> io::Result<EditOutcome> {
+        self.edit_named(reference, command, files, &NoNames)
     }
     /// An edit whose new streets and buildings take a name from `names` when given none.
+    /// Cave walls read the rock they cut from the map's raster `files`.
     pub fn edit_named(
         &self,
         reference: &MapRef,
         command: &EditCommand,
+        files: &MapFiles,
         names: &dyn TownNames,
     ) -> io::Result<EditOutcome> {
         let map = self.editable(reference)?;
@@ -76,7 +84,7 @@ impl dyn EditStore + '_ {
         draft = town::complete(&scope, draft)?;
         clearance::check(&scope, &draft)?;
         links::release(self, &map, &mut draft)?;
-        caves::read_walls(self, &map, &mut draft, spatial.as_ref())?;
+        caves::read_walls(self, files, &map, &mut draft, spatial.as_ref())?;
         // An underground space the change opened, with its layers and hexes, is part of the
         // step, so undoing the first cave wall closes it again.
         let opened: Vec<Id> = cave_hexes.iter().map(|hex| hex.id).collect();

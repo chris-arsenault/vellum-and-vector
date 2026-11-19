@@ -118,7 +118,7 @@ impl BrowserWorkspace {
         } else {
             let selected = match &target {
                 Target::Map { id, descendants } => {
-                    context_inventory::selected_maps(&self.inventory()?.maps, id, *descendants)
+                    context_inventory::selected_maps(&self.inventory()?.maps, *id, *descendants)
                 }
                 _ => Default::default(),
             };
@@ -132,7 +132,7 @@ impl BrowserWorkspace {
             (files, cleanup)
         };
         self.require_unused(&cleanup.target, &cleanup.maps)?;
-        for id in &cleanup.maps {
+        for &id in &cleanup.maps {
             self.saved()?.delete_map(id)?;
             self.maps.delete_map(id)?;
             for inputs in self.input_stores()? {
@@ -153,10 +153,7 @@ impl BrowserWorkspace {
                     {
                         return Err(io::Error::other("These inputs belong to a retained map"));
                     }
-                    self.require_unused(
-                        &cleanup.target,
-                        &BTreeSet::from([reference.map_id.clone()]),
-                    )?;
+                    self.require_unused(&cleanup.target, &BTreeSet::from([reference.map_id]))?;
                     for inputs in self.input_stores()? {
                         inputs.unbind(reference)?;
                     }
@@ -167,7 +164,11 @@ impl BrowserWorkspace {
         self.cleanup_files()?;
         fs::remove_dir_all(files.directory)
     }
-    fn require_unused(&self, target: &Target, selected: &BTreeSet<String>) -> io::Result<()> {
+    fn require_unused(
+        &self,
+        target: &Target,
+        selected: &BTreeSet<atlas_map::Id>,
+    ) -> io::Result<()> {
         if let Target::Job { id } = target {
             if self.running.borrow().contains(id) {
                 return Err(io::Error::other(
@@ -185,11 +186,11 @@ impl BrowserWorkspace {
             }
             let parent = status.details.as_ref().and_then(|d| d.parent.as_ref());
             let action: Option<serde_json::Value> = files.read("action.json")?;
-            let world = action
+            let world: Option<atlas_map::Id> = action
                 .as_ref()
-                .and_then(|a| a["request"]["worldId"].as_str());
+                .and_then(|a| serde_json::from_value(a["request"]["worldId"].clone()).ok());
             if parent.is_some_and(|p| selected.contains(&p.map_id))
-                || world.is_some_and(|id| selected.contains(id))
+                || world.is_some_and(|id| selected.contains(&id))
             {
                 return Err(io::Error::other(format!(
                     "Job {} still uses this map; finish or delete that job first",

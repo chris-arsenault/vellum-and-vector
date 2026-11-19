@@ -63,9 +63,8 @@ impl Publisher for MapStore {
         for layer in layers {
             layer.validate().map_err(io::Error::other)?;
             let id = match &layer.source {
-                LayerSource::Raster(source) => &source.asset_id,
+                LayerSource::Raster(source) | LayerSource::Attributes(source) => &source.asset_id,
                 LayerSource::Vector(source) => &source.asset_id,
-                _ => return Err(io::Error::other("Attribute layer has no asset")),
             };
             if id != &asset.id {
                 return Err(io::Error::other("Layer and asset identities differ"));
@@ -221,10 +220,11 @@ impl MapStore {
         for layer in &map.layers {
             let ids = match &layer.source {
                 LayerSource::Vector(source) => vec![source.asset_id.as_str()],
-                LayerSource::Raster(source) => std::iter::once(source.asset_id.as_str())
-                    .chain(source.overviews.iter().map(String::as_str))
-                    .collect(),
-                _ => continue,
+                LayerSource::Raster(source) | LayerSource::Attributes(source) => {
+                    std::iter::once(source.asset_id.as_str())
+                        .chain(source.overviews.iter().map(String::as_str))
+                        .collect()
+                }
             };
             for id in ids {
                 let mut values = key(&map.reference);

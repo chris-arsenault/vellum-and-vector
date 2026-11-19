@@ -1,19 +1,19 @@
 //! Cave walls: drawing the first one opens the map's underground space, and every wall reads
-//! the rock and magic it cuts from the map's published samples (ADR 0016), never from private
+//! the rock and magic it cuts from the map's published rasters (ADR 0016), never from private
 //! generation resources.
 use super::{other, EditStore};
-use crate::map_store::FeatureQuery;
+use crate::{map_files::MapFiles, map_store::FeatureQuery, raster_values::MapRasters};
 use atlas_map::{
     authoring::{context::wall_context, Draft, EditCommand},
     spatial::SpatialKernel,
     underground::{opened, CAVE_WALLS},
-    Bounds, Geometry, MapDescriptor, MapFeature, MapSample, Position,
+    BandValue, Bounds, Geometry, LayerSource, MapDescriptor, MapFeature, MapLayer,
 };
 use serde_json::Value;
-use std::{collections::BTreeSet, io};
+use std::io;
 
 /// Readings along a wall stand at most this far apart, in metres; where the published
-/// samples are finer than that, at half a sample apart, so no sample along the wall is missed.
+/// rasters are finer than that, at half a pixel apart, so no pixel along the wall is missed.
 const READING_SPACING: f64 = 1.0;
 /// How far from a wall, in hexes, a generated cave lends the wall its depth.
 const CAVE_REACH_HEXES: f64 = 10.0;
@@ -42,6 +42,7 @@ pub(super) fn opening(
 /// and its special features.
 pub(super) fn read_walls(
     store: &dyn EditStore,
+    files: &MapFiles,
     map: &MapDescriptor,
     draft: &mut Draft,
     spatial: &dyn SpatialKernel,
@@ -60,8 +61,8 @@ pub(super) fn read_walls(
             continue;
         }
         let depth = wall_depth(store, map, wall, spatial)?;
-        let samples = samples_along(store, map, &wall.geometry, spatial)?;
-        let context = wall_context(map, &samples, depth);
+        let readings = values_along(store, files, map, &wall.geometry, spatial)?;
+        let context = wall_context(map, &readings, depth);
         let wall = &mut draft.after[index];
         wall.attributes.extend(context.attributes());
         wall.attributes.insert(
@@ -107,46 +108,49 @@ fn wall_depth(
     }
     Ok(nearest.map(|(_, depth)| depth))
 }
-/// The published samples under a wall, read at its vertices and at points along it.
-fn samples_along(
+/// The rock and magic raster values under a wall, read at points along it from its start to
+/// its end, so the rock it meets comes in order.
+fn values_along(
     store: &dyn EditStore,
+    files: &MapFiles,
     map: &MapDescriptor,
     wall: &Geometry,
     spatial: &dyn SpatialKernel,
-) -> io::Result<Vec<MapSample>> {
-    let Geometry::LineString { coordinates } = wall else {
+) -> io::Result<Vec<Vec<BandValue>>> {
+    let Geometry::LineString { .. } = wall else {
         return Ok(Vec::new());
     };
-    let read = |point: Position| store.samples_at(&map.reference, map.primary_space_id, point);
-    let first = read(coordinates[0])?;
-    let span = first
+    let space = map.primary_space_id;
+    let ground = |layer: &MapLayer| {
+        [
+            "raster:RockLayer",
+            "raster:LooseLayerDepth",
+            "raster:magic:",
+        ]
         .iter()
-        .map(|sample| sample.cell_span / 2.0)
+        .any(|prefix| layer.id.starts_with(prefix))
+    };
+    let span = map
+        .layers
+        .iter()
+        .filter(|layer| layer.space_id == space && ground(layer))
+        .filter_map(|layer| match &layer.source {
+            LayerSource::Raster(raster) | LayerSource::Attributes(raster) => {
+                Some(raster.cell_span / 2.0)
+            }
+            LayerSource::Vector(_) => None,
+        })
         .fold(READING_SPACING, f64::min)
         .max(1e-3);
     let length = spatial.length(wall).map_err(other)?;
     let count = (length / span).ceil().max(1.0) as usize;
-    let mut points = coordinates[1..].to_vec();
-    for k in 1..count {
-        points.push(
-            spatial
+    let mut rasters = MapRasters::new(files);
+    (0..=count)
+        .map(|k| {
+            let point = spatial
                 .line_at(wall, k as f64 / count as f64)
-                .map_err(other)?,
-        );
-    }
-    let mut seen = BTreeSet::new();
-    let mut samples = Vec::new();
-    for sample in first {
-        if seen.insert(sample.id.clone()) {
-            samples.push(sample);
-        }
-    }
-    for point in points {
-        for sample in read(point)? {
-            if seen.insert(sample.id.clone()) {
-                samples.push(sample);
-            }
-        }
-    }
-    Ok(samples)
+                .map_err(other)?;
+            rasters.values(store, map, space, point, &ground)
+        })
+        .collect()
 }

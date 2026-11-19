@@ -11,7 +11,7 @@ use crate::{
 use atlas_generation::storage::{BlockCache, BlockScratch};
 use atlas_generation::RefinementRequest;
 use atlas_gis::{geometry::NativeGeos, map_files::MapFiles, map_store::MapStore, sql::Database};
-use atlas_map::{MapRef, RegionSelection};
+use atlas_map::MapRef;
 use serde::Deserialize;
 use serde_json::Value;
 use std::rc::Rc;
@@ -32,7 +32,7 @@ pub enum Action {
 struct Run {
     action: Option<Action>,
     operation: String,
-    revision: String,
+    revision: atlas_map::Id,
     cache_bytes: usize,
 }
 #[derive(serde::Serialize, Deserialize)]
@@ -161,7 +161,7 @@ impl BrowserJob {
                 let action = action
                     .or(recovery.read("action.json").map_err(error)?)
                     .ok_or_else(|| error("Saved job request is missing"))?;
-                let prepared = self.prepare(action, &operation)?;
+                let prepared = self.prepare(action, parse_operation(&operation)?)?;
                 crate::regional_capture::write_resources(&prepared.resources, &mut self.output)
                     .await
                     .map_err(error)?;
@@ -175,12 +175,12 @@ impl BrowserJob {
             }
         };
         let intended = MapRef {
-            map_id: prepared.submission.input.area_id.clone(),
-            revision: revision.clone(),
+            map_id: prepared.submission.input.area_id,
+            revision,
         };
         if self
             .maps
-            .find_head(&intended.map_id)
+            .find_head(intended.map_id)
             .map_err(error)?
             .as_ref()
             == Some(&intended)
@@ -193,7 +193,7 @@ impl BrowserJob {
         self.maps.restart_publication(&intended).map_err(error)?;
         if self
             .maps
-            .find_head(&prepared.submission.input.area_id)
+            .find_head(prepared.submission.input.area_id)
             .map_err(error)?
             != prepared.expected
         {
@@ -244,7 +244,7 @@ impl BrowserJob {
         .await
         .map_err(error)?;
         let reference = MapRef {
-            map_id: finished.snapshot.scope.located.area_id.clone(),
+            map_id: finished.snapshot.scope.located.area_id,
             revision,
         };
         let mut geography = prepared.geography;
@@ -297,7 +297,7 @@ impl BrowserJob {
         if configuration.name.trim().is_empty() {
             configuration.name = "Untitled map".into();
         }
-        let prepared = self.prepare(action, operation)?;
+        let prepared = self.prepare(action, parse_operation(operation)?)?;
         let descriptors = crate::generation_review::Descriptors {
             captured: &prepared.resources,
             store: self.resources.as_ref(),
@@ -325,4 +325,8 @@ impl BrowserJob {
 }
 fn error(value: impl std::fmt::Display) -> JsValue {
     js_sys::Error::new(&value.to_string()).into()
+}
+/// A job's operation identity, carried by its job id.
+fn parse_operation(job: &str) -> Result<atlas_map::Id, JsValue> {
+    job.parse().map_err(error)
 }

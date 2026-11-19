@@ -203,30 +203,19 @@ impl Product<'_> {
         for (ordinal, (resource, footprint)) in selected.groups().into_iter().enumerate() {
             let mut bindings = Vec::new();
             for channel in resource.channels.keys() {
-                let raster = map
+                let layer = map
                     .layers
                     .iter()
                     .find(|layer| layer.id == fields::layer_id(channel));
-                let layer = raster
-                    .or_else(|| map.layers.iter().find(|layer| layer.id == "inspection"))
-                    .ok_or_else(|| {
-                        io::Error::other(format!("Missing map inspection layer for {channel}"))
-                    })?;
-                let band = match &layer.source {
-                    LayerSource::Raster(source) => {
+                let band = layer.and_then(|layer| match &layer.source {
+                    LayerSource::Raster(source) | LayerSource::Attributes(source) => {
                         source.bands.iter().find(|band| band.id == "value")
                     }
-                    LayerSource::Attributes(source) => {
-                        source.bands.iter().find(|band| band.id == *channel)
-                    }
-                    _ => None,
-                }
-                .ok_or_else(|| io::Error::other("Missing inspection band"))?;
-                bindings.push(Binding {
-                    channel,
-                    layer_id: &layer.id,
-                    band,
+                    LayerSource::Vector(_) => None,
                 });
+                if let Some(band) = band {
+                    bindings.push(Binding { channel, band });
+                }
             }
             let samples = Samples {
                 resource: &resource,

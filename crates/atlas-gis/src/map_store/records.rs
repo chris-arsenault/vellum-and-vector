@@ -1,5 +1,5 @@
 use super::{codec, description::key, description::pack, space, MapStore};
-use crate::sql::Value;
+use crate::{rows::SampleRow, sql::Value};
 use atlas_map::{
     regions::as_geometry, Bounds, LayerSource, MapDescriptor, MapFeature, MapSample,
     PublicationBatch,
@@ -22,9 +22,8 @@ impl MapStore {
         for feature in batch.features {
             self.write_feature(map, feature)?;
         }
-        let encoding = codec::Samples::new(map);
         for sample in batch.samples {
-            self.write_sample(map, sample, &encoding)?;
+            self.write_sample(map, sample)?;
         }
         for entity in batch.entities {
             let mut values = key(&map.reference);
@@ -122,37 +121,36 @@ impl MapStore {
         }
         Ok(())
     }
-    fn write_sample(
-        &self,
-        map: &MapDescriptor,
-        sample: MapSample,
-        encoding: &codec::Samples,
-    ) -> io::Result<()> {
-        sample.window.bounds.validate().map_err(io::Error::other)?;
-        if sample.id.is_empty()
-            || !sample.cell_span.is_finite()
-            || sample.cell_span <= 0.0
-            || !sample.center.coordinates().iter().all(|c| c.is_finite())
-            || !sample.measure.is_finite()
-            || sample.measure < 0.0
-        {
-            return Err(io::Error::other(
-                "Map samples require identity, finite center and positive resolution",
-            ));
-        }
-        let precision = space(map, sample.space_id)?.precision;
-        let encoded = self
-            .geometry
-            .encode(&as_geometry(&sample.footprint), precision)?;
-        let data = encoding.encode(&sample)?;
+    fn write_sample(&self, map: &MapDescriptor, sample: MapSample) -> io::Result<()> {
+        let (row, footprint) = SampleRow::of(sample)?;
+        let precision = space(map, row.space_id)?.precision;
+        let encoded = self.geometry.encode(&as_geometry(&footprint), precision)?;
+        let Bounds(w, s, e, n) = row.window;
         let mut values = key(&map.reference);
         values.extend([
-            sample.id.into(),
-            sample.space_id.into(),
+            row.id.into(),
+            row.space_id.into(),
             Value::Blob(encoded.bytes),
-            Value::Blob(data),
+            w.into(),
+            s.into(),
+            e.into(),
+            n.into(),
+            row.closed_east.into(),
+            row.closed_north.into(),
+            row.cell_span.into(),
+            row.center[0].into(),
+            row.center[1].into(),
+            row.center_z.into(),
+            row.measure.into(),
+            row.active.into(),
+            row.sections.map(|s| s.to_string()).into(),
         ]);
-        self.db.execute("INSERT INTO map_samples(map_id,revision,id,space_id,geometry,data) VALUES(?,?,?,?,?,?)", &values)?;
+        self.db.execute(
+            "INSERT INTO map_samples(map_id,revision,id,space_id,geometry,window_west,window_south,
+             window_east,window_north,closed_east,closed_north,cell_span,center_x,center_y,center_z,
+             measure,active,sections) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            &values,
+        )?;
         self.write_bounds("sample", self.last_row()?, encoded.bounds)
     }
     fn last_row(&self) -> io::Result<i64> {
