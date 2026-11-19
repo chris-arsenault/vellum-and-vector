@@ -1,21 +1,25 @@
 use atlas_gis::validate_map;
-use atlas_map::{MapDescriptor, MapErrorCode, MapRef, MapValidation};
+use atlas_map::{Id, MapDescriptor, MapErrorCode, MapRef, MapValidation};
 use serde_json::{json, Value};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
+/// A fixture's identity from its name.
+fn id(name: &str) -> Id {
+    Id::from_name(name)
+}
 fn supplied_map() -> Value {
     json!({
-        "reference": {"mapId":"islands", "revision":"published-1"},
-        "worldId":"world", "name":"Islands", "parent":null, "state":"complete",
-        "primarySpaceId":"surface",
+        "reference": {"mapId":id("islands"), "revision":id("published-1")},
+        "worldId":id("world"), "name":"Islands", "parent":null, "state":"complete",
+        "primarySpaceId":id("surface"),
         "profile":"world",
         "regionScale":{"level":0,"nextArea":2500,"subdivision":7,"minimumWidth":0.001,"enabled":true},
         "footprint":{"type":"Polygon","coordinates":[[[-30,40],[70,40],[70,140],[-30,140],[-30,40]]]},
         "bounds":[-30,40,70,140],
-        "spaces":[{"id":"surface", "parentSpaceId":null, "bounds":[-30,40,70,140], "metresPerUnit":1, "precision":0.000001, "periodicWidth":null,
+        "spaces":[{"id":id("surface"), "parentSpaceId":null, "bounds":[-30,40,70,140], "metresPerUnit":1, "precision":0.000001, "periodicWidth":null,
             "frame":{"origin":[0,0,0],"rotation":0,"floor":null}}],
-        "layers":[{"id":"terrain", "spaceId":"surface", "name":"Terrain", "bounds":[-30,40,70,140], "attribution":[],
+        "layers":[{"id":"terrain", "spaceId":id("surface"), "name":"Terrain", "bounds":[-30,40,70,140], "attribution":[],
             "catalog":{"path":["Terrain"],"common":true,"featureTypes":[],"defaultStyle":null,"presets":[],"properties":{},"examples":[],"geometries":[]},
             "source":{"kind":"raster", "data":{"assetId":"map-terrain", "mediaType":"image/tiff",
                 "width":2,"height":2,"cellSpan":50,"overviews":[],"bandIndices":[1],
@@ -70,11 +74,11 @@ fn incomplete_publication_cannot_be_saved_as_a_finished_map() {
 #[test]
 fn selections_do_not_silently_resolve_a_different_parent_revision() {
     let captured = MapRef {
-        map_id: "islands".into(),
-        revision: "published-1".into(),
+        map_id: id("islands"),
+        revision: id("published-1"),
     };
     let changed = MapRef {
-        revision: "published-2".into(),
+        revision: id("published-2"),
         ..captured.clone()
     };
     assert_eq!(
@@ -101,12 +105,12 @@ fn deleting_parent_keeps_independent_child_and_lists_incomplete_revisions() {
     store.begin(&parent, None, false).unwrap();
     store.finish(&parent.reference).unwrap();
     let mut child = parent.clone();
-    child.reference.map_id = "child".into();
+    child.reference.map_id = id("child");
     child.parent = Some(parent.reference.clone());
     store.begin(&child, None, false).unwrap();
     store.finish(&child.reference).unwrap();
     let mut incomplete = parent.clone();
-    incomplete.reference.map_id = "unfinished".into();
+    incomplete.reference.map_id = id("unfinished");
     store.begin(&incomplete, None, false).unwrap();
     assert_eq!(
         store
@@ -117,7 +121,7 @@ fn deleting_parent_keeps_independent_child_and_lists_incomplete_revisions() {
             .count(),
         1
     );
-    store.delete_map(&parent.reference.map_id).unwrap();
+    store.delete_map(parent.reference.map_id).unwrap();
     assert!(store
         .open(&child.reference)
         .unwrap()
@@ -127,16 +131,15 @@ fn deleting_parent_keeps_independent_child_and_lists_incomplete_revisions() {
         store.related(&child.reference).unwrap().parent,
         Some(parent.reference)
     );
-    store.delete_map("islands").unwrap(); // Metadata cleanup is safe to retry.
+    store.delete_map(id("islands")).unwrap(); // Metadata cleanup is safe to retry.
     assert_eq!(store.inventory().unwrap().len(), 2);
 }
 
 #[test]
-fn incompatible_saved_map_stays_listed_and_does_not_hide_other_maps() {
+fn unreadable_saved_map_stays_listed_and_does_not_hide_other_maps() {
     use atlas_gis::{
         map_store::{MapStore, SaveRequest},
         sql::Database,
-        stored,
     };
     use atlas_map::{PublicationState, Publisher};
     use std::rc::Rc;
@@ -158,22 +161,16 @@ fn incompatible_saved_map_stays_listed_and_does_not_hide_other_maps() {
             "today".into(),
         )
         .unwrap();
-    let mut old = stored::MAP
-        .write(&store.open(&map.reference).unwrap())
+    assert!(store.find_saved(id("islands")).unwrap().is_some());
+    // Settings no current reader understands make the map unreadable, not invisible.
+    db.execute("UPDATE maps SET real_scale=?", &["{\"kind\":3}".into()])
         .unwrap();
-    old["_atlasFormat"]["revision"] = json!(0);
-    db.execute("UPDATE maps SET descriptor=?", &[old.to_string().into()])
-        .unwrap();
-    assert!(store.find_saved("islands").unwrap().is_some());
-    old["spaces"][0]["metresPerUnit"] = json!(-1);
-    db.execute("UPDATE maps SET descriptor=?", &[old.to_string().into()])
-        .unwrap();
-    assert!(store.find_saved("islands").is_err());
-    let listed = store.list_saved("").unwrap();
+    assert!(store.find_saved(id("islands")).is_err());
+    let listed = store.list_saved(None).unwrap();
     assert_eq!(listed.items[0].reference, map.reference);
     assert!(listed.items[0].problem.is_some());
     assert!(db
-        .value("SELECT descriptor FROM maps", &[])
+        .value("SELECT real_scale FROM maps", &[])
         .unwrap()
         .is_some());
 }
@@ -212,22 +209,22 @@ fn discarding_a_stream_restores_the_replaced_head_and_a_new_map_keeps_its_output
     store.begin(&captured, None, true).unwrap();
     store.finish(&captured.reference).unwrap();
     let mut refined = captured.clone();
-    refined.reference.revision = "refined".into();
+    refined.reference.revision = id("refined");
     store
         .begin(&refined, Some(&captured.reference), true)
         .unwrap();
     store.discard(&refined.reference).unwrap();
     assert_eq!(
-        store.find_head(&captured.reference.map_id).unwrap(),
+        store.find_head(captured.reference.map_id).unwrap(),
         Some(captured.reference.clone())
     );
     assert!(store.open(&refined.reference).is_err());
     let mut fresh = captured.clone();
-    fresh.reference.map_id = "fresh".into();
+    fresh.reference.map_id = id("fresh");
     store.begin(&fresh, None, true).unwrap();
     store.discard(&fresh.reference).unwrap();
     assert_eq!(
-        store.find_head("fresh").unwrap(),
+        store.find_head(id("fresh")).unwrap(),
         Some(fresh.reference.clone())
     );
 }
@@ -244,18 +241,18 @@ fn progressive_revision_replaces_its_expected_head_and_atomic_waits_for_finish()
     store.begin(&captured, None, true).unwrap();
     store.finish(&captured.reference).unwrap();
     let mut refined = captured.clone();
-    refined.reference.revision = "refined".into();
+    refined.reference.revision = id("refined");
     store
         .begin(&refined, Some(&captured.reference), true)
         .unwrap();
     assert_eq!(
-        store.find_head(&captured.reference.map_id).unwrap(),
+        store.find_head(captured.reference.map_id).unwrap(),
         Some(refined.reference.clone())
     );
     // An interrupted stream restarts from the head it replaced.
     store.restart_publication(&refined.reference).unwrap();
     assert_eq!(
-        store.find_head(&captured.reference.map_id).unwrap(),
+        store.find_head(captured.reference.map_id).unwrap(),
         Some(captured.reference.clone())
     );
     store
@@ -263,17 +260,17 @@ fn progressive_revision_replaces_its_expected_head_and_atomic_waits_for_finish()
         .unwrap();
     store.finish(&refined.reference).unwrap();
     let mut regenerated = captured.clone();
-    regenerated.reference.revision = "regenerated".into();
+    regenerated.reference.revision = id("regenerated");
     store
         .begin(&regenerated, Some(&refined.reference), false)
         .unwrap();
     assert_eq!(
-        store.find_head(&captured.reference.map_id).unwrap(),
+        store.find_head(captured.reference.map_id).unwrap(),
         Some(refined.reference.clone())
     );
     store.finish(&regenerated.reference).unwrap();
     assert_eq!(
-        store.find_head(&captured.reference.map_id).unwrap(),
+        store.find_head(captured.reference.map_id).unwrap(),
         Some(regenerated.reference)
     );
 }
@@ -293,14 +290,14 @@ fn deleting_child_detaches_saved_selection_without_deleting_its_shape() {
     store.begin(&parent, None, false).unwrap();
     store.finish(&parent.reference).unwrap();
     let mut child = parent.clone();
-    child.reference.map_id = "child".into();
+    child.reference.map_id = id("child");
     child.parent = Some(parent.reference.clone());
     store.begin(&child, None, false).unwrap();
     store.finish(&child.reference).unwrap();
     let shape = json!({"type":"Polygon","coordinates":[[[0,60],[30,60],[30,90],[0,90],[0,60]]]});
     let navigation = serde_json::from_value(json!({
         "version":1, "regions":[{
-            "id":"selection", "name":"Child region", "spaceId":"surface",
+            "id":"selection", "name":"Child region", "spaceId":id("surface"),
             "parentId":null, "geometry":shape, "child":child.reference
         }], "views":[]
     }))
@@ -316,8 +313,8 @@ fn deleting_child_detaches_saved_selection_without_deleting_its_shape() {
             "today".into(),
         )
         .unwrap();
-    store.delete_map("child").unwrap();
-    let saved = store.find_saved("islands").unwrap().unwrap();
+    store.delete_map(id("child")).unwrap();
+    let saved = store.find_saved(id("islands")).unwrap().unwrap();
     assert_eq!(saved.navigation.regions.len(), 1);
     assert_eq!(
         saved.navigation.regions[0].geometry,
@@ -363,7 +360,7 @@ fn saved_gis_reads_and_spatial_queries_need_no_generator_or_private_store() {
             ],
         },
     ];
-    let bytes = ReadCall::Geometries(map.reference.clone(), "surface".into(), queries)
+    let bytes = ReadCall::Geometries(map.reference.clone(), id("surface"), queries)
         .execute(store.access(), &files)
         .unwrap();
     let result: Vec<GeometryResult> = ciborium::from_reader(bytes.as_slice()).unwrap();
