@@ -639,6 +639,22 @@ impl TriangularLattice {
         if radius.is_nan() || radius <= 0.0 || self.columns == 0 {
             return found;
         }
+        match self.coordinate_width().filter(|_| self.periodic.is_none()) {
+            // A frame in a cylindrical chart that does not wrap itself can still reach
+            // across the chart seam, where distances wrap.
+            Some(width) => {
+                for image in [x - width, x, x + width] {
+                    self.scan([image, y], [x, y], radius, &mut found);
+                }
+                found.sort_unstable();
+                found.dedup();
+            }
+            None => self.scan([x, y], [x, y], radius, &mut found),
+        }
+        found
+    }
+    /// Sites in the box around `image`, kept when within `radius` of `centre`.
+    fn scan(&self, [x, y]: [f64; 2], centre: [f64; 2], radius: f64, found: &mut Vec<usize>) {
         let row = ROOT_THREE * self.frame.spacing_y / 2.0;
         let row_of = |v: f64| (v - self.frame.offset[1]) / row;
         let first = (row_of(y - radius).ceil() as i64).max(i64::from(self.d_min));
@@ -655,13 +671,12 @@ impl TriangularLattice {
                         continue;
                     };
                     let [px, py] = self.position(cell);
-                    if self.delta_x(px - x).hypot(py - y) < radius {
+                    if self.delta_x(px - centre[0]).hypot(py - centre[1]) < radius {
                         found.push(cell);
                     }
                 }
             }
         }
-        found
     }
     /// Column indices of one row and parity whose site x lies within `x ± radius`.
     fn columns_within(
@@ -677,8 +692,9 @@ impl TriangularLattice {
         let low = column(x - radius).ceil() as i64;
         let high = column(x + radius).floor() as i64;
         if self.periodic.is_some() {
-            // Columns wrap; never visit one twice.
-            low..=high.min(low + self.columns as i64 - 1)
+            // Columns wrap; start within one turn and never visit a column twice.
+            let first = low.rem_euclid(self.columns as i64);
+            first..=first + high.saturating_sub(low).min(self.columns as i64 - 1)
         } else {
             low.max(0)..=high.min(self.columns as i64 - 1)
         }

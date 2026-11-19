@@ -48,4 +48,27 @@ mod tests {
         }
         assert!(lattice.cells_within([9000.0, 0.0], 100.0).is_empty());
     }
+
+    #[test]
+    fn cells_within_reach_across_a_chart_seam() {
+        let lattice = WorldLatticeOptions {
+            coordinate_width: Some(4100.0),
+            ..Default::default()
+        }
+        .build(Bounds(0.0, 0.0, 4000.0, 3000.0), 5000.0, 0.0, |_, _| true)
+        .unwrap();
+        let centre = [-1980.0, 0.0];
+        let mut walked = lattice.cells_within(centre, 250.0);
+        walked.sort_unstable();
+        let scanned: Vec<_> = (0..lattice.len())
+            .filter(|&cell| {
+                let [x, y] = lattice.position(cell);
+                lattice.delta_x(x - centre[0]).hypot(y - centre[1]) < 250.0
+            })
+            .collect();
+        assert!(scanned
+            .iter()
+            .any(|&cell| lattice.position(cell)[0] > 1800.0));
+        assert_eq!(walked, scanned);
+    }
 }
