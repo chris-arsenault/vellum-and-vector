@@ -8,7 +8,7 @@ use std::fmt::Write as FmtWrite;
 use std::io::{self, Seek, Write};
 use tiff::{
     encoder::{
-        compression::{CompressionAlgorithm, Deflate},
+        compression::{CompressionAlgorithm, Deflate, DeflateLevel},
         DirectoryEncoder, TiffEncoder, TiffKindBig,
     },
     tags::Tag,
@@ -236,7 +236,8 @@ fn compress_tile(
         &mut pixels,
     )?;
     let mut bytes = Vec::new();
-    Deflate::default().write_to(&mut bytes, bytemuck::cast_slice(&pixels))?;
+    // Every published band is compressed on each map; the fastest level reads the same.
+    Deflate::with_level(DeflateLevel::Fast).write_to(&mut bytes, bytemuck::cast_slice(&pixels))?;
     Ok(bytes)
 }
 fn tile(

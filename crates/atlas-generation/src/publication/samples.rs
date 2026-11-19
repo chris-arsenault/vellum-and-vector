@@ -76,7 +76,7 @@ impl Samples<'_> {
                         ))
                     })?;
                 Ok(Band {
-                    values: &channel.values,
+                    values: channel.values.read_values()?,
                     categories: &binding.band.categories,
                     attribute: SampleAttribute {
                         layer_id: binding.layer_id.into(),
@@ -199,7 +199,7 @@ impl Samples<'_> {
 }
 /// One published band's values and its attribute without a value.
 struct Band<'a> {
-    values: &'a crate::field::schema::NumericBand,
+    values: crate::field::schema::NumericValues<'a>,
     categories: &'a [atlas_map::Category],
     attribute: SampleAttribute,
 }
