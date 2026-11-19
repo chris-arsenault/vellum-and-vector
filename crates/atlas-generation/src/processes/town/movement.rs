@@ -81,7 +81,7 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
     } = traffic(town, context)?;
     projects.extend(backland(town));
     projects.extend(prospects(town, context));
-    projects.extend(occupied_ends(town, context));
+    projects.extend(occupied_ends(town, context)?);
     projects.extend(town.template.street_proposals(town));
     projects.extend(destinations(town, context)?);
     projects.extend(purpose_routes(town, context)?);
@@ -367,13 +367,21 @@ fn extend_approaches(
     use crate::town::network::{main_street, Arm};
     let size = town.seat.story.size();
     let depth = atlas_map::town::plot_size(size).1;
+    // How far along each street its holdings reach, gathered once; extending a street
+    // does not move holdings.
+    let mut occupied = vec![f64::NEG_INFINITY; town.streets().len()];
+    for h in town.holdings() {
+        if let Some(reach) = h.slot.street.and_then(|s| occupied.get_mut(s)) {
+            *reach = reach.max(h.slot.along + 2. * h.slot.depth);
+        }
+    }
     for (arm, street_id) in town.growing_ways().to_vec() {
         let street = &town.streets()[street_id];
         let length = street.length();
         let end = *street.points.last().unwrap();
-        let inhabited = town.holdings().iter().any(|h| {
-            h.slot.street == Some(street_id) && h.slot.along + 2. * h.slot.depth >= length
-        });
+        let inhabited = occupied
+            .get(street_id)
+            .is_some_and(|reach| *reach >= length);
         // A commissioned country crossing and an approach to a named destination
         // still serve travellers beyond the last inhabited plot.
         let serves_country = street.class == Class::Street || arm.destination.is_some();
@@ -437,7 +445,7 @@ fn extend_approaches(
 }
 /// A built-up street can still grow around a hillside when it has no plot
 /// left from which to propose a side lane. Compare the buildable banks ahead.
-fn occupied_ends(town: &Town, context: &Frontage<'_>) -> Vec<Project> {
+fn occupied_ends(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>> {
     use crate::town::{
         geometry::{angle, heading, rectangle},
         ground::{Rectangle, FREE},
@@ -450,12 +458,22 @@ fn occupied_ends(town: &Town, context: &Frontage<'_>) -> Vec<Project> {
         let Some(pair) = road.points.last_chunk::<2>() else {
             continue;
         };
-        if road.through_route
-            || !town
-                .holdings()
-                .iter()
-                .any(|h| h.slot.street == Some(id) && distance(h.slot.front, pair[1]) < depth * 2.)
-        {
+        if road.through_route {
+            continue;
+        }
+        // A holding's front lies on its outline, so the holdings index finds the fronts
+        // near the street's end.
+        let [x, y] = pair[1];
+        let near = depth * 2. + 5.;
+        let ends_occupied = town
+            .nearby_holdings(
+                atlas_map::Bounds(x - near, y - near, x + near, y + near),
+                context.spatial,
+            )?
+            .into_iter()
+            .map(|i| &town.holdings()[i])
+            .any(|h| h.slot.street == Some(id) && distance(h.slot.front, pair[1]) < depth * 2.);
+        if !ends_occupied {
             continue;
         }
         let direction = angle(sub(pair[1], pair[0]));
@@ -494,7 +512,7 @@ fn occupied_ends(town: &Town, context: &Frontage<'_>) -> Vec<Project> {
             .max_by(|a, b| a.benefit.total_cmp(&b.benefit));
         projects.extend(best);
     }
-    projects
+    Ok(projects)
 }
 fn prospects(town: &Town, context: &Frontage<'_>) -> Vec<Project> {
     let housed = town

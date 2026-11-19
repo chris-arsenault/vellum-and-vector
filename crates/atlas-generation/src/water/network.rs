@@ -223,7 +223,14 @@ impl<'a> RiverReader<'a> {
         let Some(reach) = course.or_else(|| self.at(cell)) else {
             return Ok(None);
         };
-        let Some(at) = reach.cells.iter().position(|member| *member == cell) else {
+        // The index gives the cell's place in its own reach; a supplied course may be
+        // another reach, which is searched.
+        let Some(at) = self
+            .index
+            .position(cell)
+            .filter(|&at| reach.cells.get(at) == Some(&cell))
+            .or_else(|| reach.cells.iter().position(|member| *member == cell))
+        else {
             return Ok(None);
         };
         if let Some(&next) = reach.cells.get(at + 1) {
