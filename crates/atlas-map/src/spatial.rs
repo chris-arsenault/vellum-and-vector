@@ -2,7 +2,58 @@
 use crate::{Bounds, Geometry, Position};
 use std::collections::BTreeSet;
 pub type SpatialResult<T> = Result<T, String>;
+/// Appendable spatial index for envelopes of evolving features. Exact predicates
+/// and overlays are still evaluated on the geometries returned by the query.
+#[derive(Clone, Debug, Default)]
+pub struct BoundsIndex {
+    tree: rstar::RTree<
+        rstar::primitives::GeomWithData<rstar::primitives::Rectangle<[f64; 2]>, usize>,
+    >,
+    envelopes: Vec<Bounds>,
+}
+impl BoundsIndex {
+    pub fn len(&self) -> usize {
+        self.tree.size()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.tree.size() == 0
+    }
+    pub fn push(&mut self, bounds: Bounds) {
+        let Bounds(w, s, e, n) = bounds;
+        self.tree.insert(rstar::primitives::GeomWithData::new(
+            rstar::primitives::Rectangle::from_corners([w, s], [e, n]),
+            self.tree.size(),
+        ));
+        self.envelopes.push(bounds);
+    }
+    pub fn replace(&mut self, id: usize, bounds: Bounds) {
+        let previous = self.envelopes[id];
+        if previous == bounds {
+            return;
+        }
+        let entry = |Bounds(w, s, e, n)| {
+            rstar::primitives::GeomWithData::new(
+                rstar::primitives::Rectangle::from_corners([w, s], [e, n]),
+                id,
+            )
+        };
+        self.tree.remove(&entry(previous));
+        self.tree.insert(entry(bounds));
+        self.envelopes[id] = bounds;
+    }
+    pub fn query(&self, Bounds(w, s, e, n): Bounds) -> Vec<usize> {
+        let envelope = rstar::AABB::from_corners([w, s], [e, n]);
+        let mut ids: Vec<_> = self
+            .tree
+            .locate_in_envelope_intersecting(envelope)
+            .map(|item| item.data)
+            .collect();
+        ids.sort_unstable();
+        ids
+    }
+}
 pub type PointCoverage<'a> = dyn Fn(Position) -> SpatialResult<bool> + 'a;
+
 #[derive(Clone, Copy)]
 pub enum Predicate {
     Covers,
@@ -18,7 +69,12 @@ pub enum Overlay {
 /// Owned native index; dropping it releases handles and never invalidates source GeoJSON.
 pub trait SpatialIndex {
     fn query(&self, bounds: Bounds) -> SpatialResult<Vec<usize>>;
-    fn nearest(&self, position: Position) -> SpatialResult<Option<usize>>;
+    /// Compute exact distances against the retained geometries in the requested envelope.
+    fn distances(&self, bounds: Bounds, position: Position) -> SpatialResult<Vec<(usize, f64)>>;
+    fn nearest_with_distance(&self, position: Position) -> SpatialResult<Option<(usize, f64)>>;
+    fn nearest(&self, position: Position) -> SpatialResult<Option<usize>> {
+        Ok(self.nearest_with_distance(position)?.map(|(i, _)| i))
+    }
     fn nearest_many(&self, positions: &[Position]) -> SpatialResult<Vec<Option<usize>>> {
         positions
             .iter()
@@ -158,5 +214,21 @@ fn positions(value: &Geometry, output: &mut Vec<Position>) {
                 positions(geometry, output);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod bounds_index_tests {
+    use super::*;
+    #[test]
+    fn moved_features_leave_the_old_envelope_and_keep_their_identity() {
+        let mut index = BoundsIndex::default();
+        let west = Bounds(0., 0., 10., 10.);
+        let east = Bounds(20., 5., 30., 10.);
+        index.push(west);
+        index.push(east);
+        index.replace(0, east);
+        assert!(index.query(west).is_empty());
+        assert_eq!(index.query(east), [0, 1]);
     }
 }

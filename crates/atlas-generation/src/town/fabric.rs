@@ -1,13 +1,14 @@
 //! One owner for holdings, occupation and persistent access; edits preserve existing identities.
 mod network;
 mod projects;
+pub(crate) mod walks;
 use super::{
     catalogue::Kind, geometry::Point, network::Street, plots::Slot, seat::Seat, story::Layout,
 };
 use crate::town::catalogue::PlaceRules;
 use atlas_map::{
-    spatial::{Overlay, SpatialKernel},
-    Geometry, Position,
+    spatial::{BoundsIndex, Overlay, SpatialKernel},
+    Bounds, Geometry, Position,
 };
 use serde::{Deserialize, Serialize};
 use std::io;
@@ -61,11 +62,15 @@ impl Holding {
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Town {
+    #[serde(skip)]
+    fitting: std::cell::RefCell<FittingIndex>,
     pub seat: Seat,
     pub layout: Layout,
     streets: Vec<Street>,
     growing_ways: Vec<(super::network::Arm, usize)>,
     passages: Vec<Geometry>,
+    footpaths: Vec<super::access::Footpath>,
+    approaches: Vec<Option<super::access::Approach>>,
     wear: Vec<f64>,
     traffic: Vec<super::access::StreetLoad>,
     holdings: Vec<Holding>,
@@ -73,6 +78,18 @@ pub struct Town {
     pub effort: f64,
     pub access_effort: f64,
     purposes: Vec<Purpose>,
+}
+#[derive(Debug, Default, Clone)]
+struct FittingIndex {
+    holdings: BoundsIndex,
+    roads: BoundsIndex,
+}
+fn road_bounds(road: &Street, spatial: &dyn SpatialKernel) -> io::Result<Bounds> {
+    let Bounds(w, s, e, n) = spatial
+        .bounds(&super::edits::line(&road.points))
+        .map_err(io::Error::other)?;
+    let half = road.width() / 2.;
+    Ok(Bounds(w - half, s - half, e + half, n + half))
 }
 impl Holding {
     pub fn mode_for(
@@ -225,6 +242,26 @@ pub fn polygon(points: &[Point]) -> Geometry {
     }
 }
 impl Town {
+    pub(crate) fn nearby_holdings(
+        &self,
+        bounds: Bounds,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<Vec<usize>> {
+        let mut fitting = self.fitting.borrow_mut();
+        for h in &self.holdings[fitting.holdings.len()..] {
+            fitting
+                .holdings
+                .push(spatial.bounds(&h.outline).map_err(io::Error::other)?);
+        }
+        Ok(fitting.holdings.query(bounds))
+    }
+    fn nearby_roads(&self, bounds: Bounds, spatial: &dyn SpatialKernel) -> io::Result<Vec<usize>> {
+        let mut fitting = self.fitting.borrow_mut();
+        for road in &self.streets[fitting.roads.len()..] {
+            fitting.roads.push(road_bounds(road, spatial)?);
+        }
+        Ok(fitting.roads.query(bounds))
+    }
     pub fn streets(&self) -> &[Street] {
         &self.streets
     }
@@ -233,6 +270,20 @@ impl Town {
     }
     pub fn passages(&self) -> &[Geometry] {
         &self.passages
+    }
+    pub fn footpaths(&self) -> &[super::access::Footpath] {
+        &self.footpaths
+    }
+    pub fn approach(&self, id: HoldingId) -> Option<&super::access::Approach> {
+        self.approaches.get(id.0 as usize)?.as_ref()
+    }
+    pub fn record_walks(
+        &mut self,
+        paths: Vec<super::access::Footpath>,
+        approaches: Vec<Option<super::access::Approach>>,
+    ) {
+        self.footpaths = paths;
+        self.approaches = approaches;
     }
     pub fn wear(&self) -> &[f64] {
         &self.wear
@@ -257,6 +308,7 @@ impl Town {
         self.purposes[index].investment += effort;
     }
     pub fn set_approaches(&mut self, streets: Vec<Street>) {
+        self.fitting.get_mut().roads = BoundsIndex::default();
         self.wear.resize(streets.len(), 0.);
         self.streets = streets;
     }
@@ -278,11 +330,15 @@ impl Town {
         self.holdings[id.0 as usize].ties = ties;
     }
     pub fn frontage_wear(&self, slot: &Slot) -> f64 {
-        self.traffic
+        let Some(street) = slot.street else { return 0. };
+        // register_traffic emits each street in order and each disjoint
+        // stretch in ascending measure. Two stretches can touch at the door.
+        let first = self
+            .traffic
+            .partition_point(|l| l.street < street || (l.street == street && l.end < slot.along));
+        self.traffic[first..]
             .iter()
-            .filter(|load| {
-                Some(load.street) == slot.street && (load.start..=load.end).contains(&slot.along)
-            })
+            .take_while(|l| l.street == street && l.start <= slot.along)
             .map(|load| load.value)
             .fold(0., f64::max)
     }
@@ -354,11 +410,14 @@ impl Town {
         let layout = super::story::layout(&seat.story, forced);
         let purposes = Purpose::for_seat(&seat);
         Self {
+            fitting: Default::default(),
             seat,
             layout,
             streets: vec![],
             growing_ways: vec![],
             passages: vec![],
+            footpaths: vec![],
+            approaches: vec![],
             wear: vec![],
             traffic: vec![],
             holdings: vec![],
@@ -402,13 +461,19 @@ impl Town {
             }
         }
         let mut outline = polygon(&proposal.slot.corners);
-        let existing: Vec<_> = self.holdings.iter().map(|h| h.outline.clone()).collect();
+        let bounds = spatial.bounds(&outline).map_err(io::Error::other)?;
+        let existing: Vec<_> = self
+            .nearby_holdings(bounds, spatial)?
+            .into_iter()
+            .map(|i| self.holdings[i].outline.clone())
+            .collect();
         let Some(free) = fit_around(outline, existing, spatial)? else {
             return Ok(None);
         };
         outline = free;
         let mut roads = Vec::new();
-        for street in &self.streets {
+        for i in self.nearby_roads(bounds, spatial)? {
+            let street = &self.streets[i];
             let gap = spatial
                 .distance(&outline, &super::edits::line(&street.points))
                 .map_err(io::Error::other)?;
@@ -509,6 +574,7 @@ impl Town {
         let Some(assignments) = assignments else {
             return Ok(false);
         };
+        self.fitting.get_mut().holdings = BoundsIndex::default();
         for (i, (part, indices)) in parts.iter().zip(assignments).enumerate() {
             let mut child = original.clone();
             child.outline = part.clone();

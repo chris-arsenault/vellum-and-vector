@@ -5,7 +5,10 @@ use super::{
     settings::{JOIN_SHARE, JUNCTION_TOLERANCE, MIN_CONNECTION_SHARE, STREET_CLEARANCE_SHARE},
 };
 use crate::spatial::SpatialKernel;
-use atlas_map::{spatial::Overlay, Bounds, Geometry, Position};
+use atlas_map::{
+    spatial::{Overlay, SpatialIndex},
+    Bounds, Geometry, Position,
+};
 use std::io;
 pub fn line(points: &[Point]) -> Geometry {
     Geometry::LineString {
@@ -98,17 +101,66 @@ pub fn constrain(
     spacing: f64,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Option<(Point, bool)>> {
-    local_constraint(proposal, network, spacing, spatial).map_err(io::Error::other)
+    StreetLines::new(&network.streets, spatial)?.constrain(proposal, spacing)
+}
+/// One indexed snapshot of the current centrelines for projection and intersection.
+pub(crate) struct StreetLines<'a> {
+    lines: Vec<Geometry>,
+    index: Box<dyn SpatialIndex + 'a>,
+    spatial: &'a dyn SpatialKernel,
+}
+impl<'a> StreetLines<'a> {
+    pub(crate) fn new(
+        streets: &[super::network::Street],
+        spatial: &'a dyn SpatialKernel,
+    ) -> io::Result<Self> {
+        let lines: Vec<_> = streets.iter().map(|s| line(&s.points)).collect();
+        let index = spatial.index(&lines).map_err(io::Error::other)?;
+        Ok(Self {
+            lines,
+            index,
+            spatial,
+        })
+    }
+    pub(crate) fn project(&self, at: Point) -> io::Result<Option<Point>> {
+        let p = Position::xy(at[0], at[1]);
+        let Some(i) = self.index.nearest(p).map_err(io::Error::other)? else {
+            return Ok(None);
+        };
+        let [on_road, _] = self
+            .spatial
+            .nearest_points(&self.lines[i], &point(at))
+            .map_err(io::Error::other)?;
+        Ok(Some(xy(on_road)))
+    }
+    pub(crate) fn constrain(
+        &self,
+        proposal: &[Point; 2],
+        spacing: f64,
+    ) -> io::Result<Option<(Point, bool)>> {
+        local_constraint(
+            proposal,
+            &self.lines,
+            self.index.as_ref(),
+            spacing,
+            self.spatial,
+        )
+        .map_err(io::Error::other)
+    }
 }
 fn local_constraint(
     &[start, end]: &[Point; 2],
-    network: &Network,
+    geometries: &[Geometry],
+    index: &dyn SpatialIndex,
     spacing: f64,
     spatial: &dyn SpatialKernel,
 ) -> Result<Option<(Point, bool)>, String> {
+    // Another investment may already have connected these endpoints by the
+    // time this proposal is reconsidered against today's network.
+    if distance(start, end) <= JUNCTION_TOLERANCE {
+        return Ok(None);
+    }
     let join = spacing * JOIN_SHARE;
-    let geometries: Vec<_> = network.streets.iter().map(|s| line(&s.points)).collect();
-    let index = spatial.index(&geometries)?;
     let nearby = index.query(Bounds(
         start[0].min(end[0]) - join,
         start[1].min(end[1]) - join,

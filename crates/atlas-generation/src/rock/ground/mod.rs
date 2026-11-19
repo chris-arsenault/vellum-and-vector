@@ -36,7 +36,7 @@ use crate::{
 pub use actions::GroundTaken;
 pub use collision::Accretion;
 pub use faces::{support_failure_depth, FaceQuery, FailureFace};
-pub use inventory_actions::{Charge, InventoryAccess, InventoryConstruction};
+pub use inventory_actions::{Charge, ChargeDose, InventoryAccess, InventoryConstruction};
 pub use placement::SectionLayer;
 use std::{io, rc::Rc};
 pub use storage::{GroundField, GroundStorage};

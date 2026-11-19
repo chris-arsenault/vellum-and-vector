@@ -16,8 +16,30 @@ use crate::{
     settlement::{removal::Facet, stage::Pool},
 };
 use std::{cell::Cell, io};
+pub enum ChargeDose {
+    Amount(f64),
+    Density(f64),
+}
+impl ChargeDose {
+    fn distribute(&self, volume: f64) -> io::Result<(f64, f64)> {
+        if volume <= 0.0 {
+            return Ok((0.0, 0.0));
+        }
+        let (amount, density) = match *self {
+            Self::Amount(amount) => (amount, amount / volume),
+            Self::Density(density) => (density * volume, density),
+        };
+        if !amount.is_finite() || !density.is_finite() {
+            return Err(io::Error::other(format!(
+                "Unrepresentable charge of {amount} in {volume} cubic metres"
+            )));
+        }
+        Ok((amount, density))
+    }
+}
+
 pub struct Charge<'a> {
-    pub amount: f64,
+    pub dose: ChargeDose,
     pub reach: f64,
     pub hosts: &'a [usize],
     pub from_rock: bool,
@@ -138,7 +160,8 @@ impl Ground {
             }
             Ok(())
         })?;
-        if volume <= 0.0 || action.amount <= 0.0 {
+        let (admitted, density) = action.dose.distribute(volume)?;
+        if admitted <= 0.0 {
             return Ok(0.0);
         }
         let transform = |layer: &MaterialLayer| {
@@ -147,7 +170,7 @@ impl Ground {
             }
             let mut cargo = CargoMixture::default();
             cargo.add(layer.cargo.as_ref(), 1.0);
-            cargo.add_entry(key.0, layer.kind as i32, action.amount / volume);
+            cargo.add_entry(key.0, layer.kind as i32, density);
             Some(MaterialLayer {
                 cargo: cargo.finish(1.0),
                 ..layer.clone()
@@ -164,7 +187,7 @@ impl Ground {
                 facet: None,
             },
         )?;
-        Ok(action.amount)
+        Ok(admitted)
     }
     /// The receiver gets material depth weighted by the source facet; its charge follows that parcel.
     pub fn inventory_extract(
@@ -230,5 +253,22 @@ impl Ground {
             },
         )?;
         Ok(amount - remaining.get())
+    }
+}
+
+#[cfg(test)]
+mod charge_tests {
+    use super::ChargeDose;
+    #[test]
+    fn mineralization_charges_only_the_available_host_volume() {
+        let dose = ChargeDose::Density(2.0);
+        assert_eq!(dose.distribute(0.0).unwrap(), (0.0, 0.0));
+        assert_eq!(dose.distribute(10.0).unwrap(), (20.0, 2.0));
+        let trace = f64::from_bits(1);
+        assert_eq!(dose.distribute(trace).unwrap(), (2.0 * trace, 2.0));
+        assert_eq!(
+            ChargeDose::Amount(20.0).distribute(5.0).unwrap(),
+            (20.0, 4.0)
+        );
     }
 }

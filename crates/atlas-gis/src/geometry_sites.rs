@@ -60,7 +60,19 @@ impl SpatialIndex for NativeIndex<'_> {
         hits.sort_unstable();
         Ok(hits)
     }
-    fn nearest(&self, position: Position) -> SpatialResult<Option<usize>> {
+    fn distances(&self, bounds: Bounds, position: Position) -> SpatialResult<Vec<(usize, f64)>> {
+        let point = self.spatial.native_point(position)?;
+        self.query(bounds)?
+            .into_iter()
+            .map(|i| {
+                let distance = self.geometries[i]
+                    .distance(&point)
+                    .map_err(|e| e.to_string())?;
+                Ok((i, distance))
+            })
+            .collect()
+    }
+    fn nearest_with_distance(&self, position: Position) -> SpatialResult<Option<(usize, f64)>> {
         let point = self.spatial.native_point(position)?;
         let xy = [
             point.get_x().map_err(|e| e.to_string())?,
@@ -81,7 +93,7 @@ impl SpatialIndex for NativeIndex<'_> {
                 distance = actual;
             }
         }
-        Ok(best)
+        Ok(best.map(|i| (i, distance)))
     }
 }
 

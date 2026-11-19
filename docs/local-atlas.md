@@ -29,6 +29,7 @@ The database passwords are made locally on first start. No external credential i
 make local-up        # start the database, then build and (re)start the server
 make local-world     # reuse the kept world, or create it: 1,000 × 750 km Draft, seed 42
 node scripts/local-atlas.mjs places              # the world's settlements and positions
+node scripts/local-atlas.mjs census              # run human land processes on retained world layers
 make local-real AT=Ajarma HEX=100m ACROSS=50     # a real-scale map at a settlement
 make local-real AT=500000,375000 HEX=300m        # or at a point in world metres
 node scripts/local-atlas.mjs region --at Amadir --width 120000 --name Amadir-country
@@ -42,12 +43,30 @@ make local-down      # stop the server and database; the world stays
 west to east; `KIND` is `ground` or `structure`. Each run prints every step with the
 seconds since the job started.
 
-To diagnose street growth for one settlement, start the native server with
+The census starts at the saved population and applies the present physical epoch's
+human eras. On a settled capture this extends its history. It prints the total
+population and the towns the ordinary settlement classifier finds after each era.
+`--reference-width` stretches the same terrain to the reference world width,
+keeping the demographic cell spacing and aspect ratio. This is a controlled
+extent comparison. Both modes leave the kept map untouched and omit political
+events, terrain generation and town development.
+
+For a coupled comparison, `census --full-history` runs the kept creation recipe
+from formation through final publication in an isolated local directory. Each
+epoch prints the live headcount, the last recorded settlement sizes and the
+current residents on the largest recorded settlement footprint. Settlement
+sizes are reassessed in human eras. In this mode `--reference-width` generates
+new terrain at the reference width, and `--seed` selects the world seed.
+
+To diagnose development for one settlement, start the native server with
 `ATLAS_TRACE_TOWN=Evorno make local-up` and run the usual real-scale generation.
-The server log includes JSON events named `town.street-decision`. Each names
-the town and development round. Route decisions record the demand, proposed
-endpoints, and the first check that declined the route or the effort spent
-building it. Copy the log before the next server start replaces it.
+The server log groups JSON events by town and development round. The
+`town.construction-start` event gives the candidate and holding counts.
+`town.construction-decision` records the proposed use, its location and the
+first check that declined it or its establishment. The `town.street-decision`
+events record route demand, proposed endpoints and the reason for rejection
+or the effort spent building a route. Copy the log before the next server
+start replaces it.
 
 Each job saves a picture of the land, shaded by height with water in blue, after every
 world epoch and at the start and after each round of regional development, in
@@ -88,6 +107,10 @@ and its companion bands) or `raster:finalSurface`.
 A failed job keeps its progress. Fix the cause, run `make local-up` to rebuild and
 restart the server, and `make local-resume` continues the last job from its last
 completed round. A job that completed while its driver was gone only gets its report.
+To stop a trial after observing a problem, use
+`node scripts/local-atlas.mjs cancel <jobId>`. After rebuilding with `make local-up`,
+`node scripts/local-atlas.mjs resume <jobId> --name <map folder>` resumes that trial
+from its latest checkpoint, including when another job ran more recently.
 
 When generation code changes what a world stores, the kept world may no longer open.
 `node scripts/local-atlas.mjs world --fresh` creates a new one, and

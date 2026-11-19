@@ -14,20 +14,32 @@ impl NativeGeos {
         }
         Ok(Self { precision })
     }
+    #[track_caller]
     pub(crate) fn read(&self, value: &Geometry) -> SpatialResult<Native> {
         let geometry = coordinates::read(value).map_err(|e| e.to_string())?;
         if !geometry.is_valid().map_err(|e| e.to_string())? {
-            return Err("Geometry must be valid".into());
+            let trace = std::backtrace::Backtrace::capture();
+            if trace.status() == std::backtrace::BacktraceStatus::Captured {
+                eprintln!("Invalid input to GEOS at {trace}");
+            }
+            return Err(format!(
+                "Geometry must be valid: {} ({:?}, bounds {:?}, read at {})",
+                geometry.is_valid_reason().map_err(|e| e.to_string())?,
+                geometry.geometry_type().map_err(|e| e.to_string())?,
+                geometry.get_extent().map_err(|e| e.to_string())?,
+                std::panic::Location::caller(),
+            ));
         }
         let snapped = geometry
             .set_precision(self.precision, Precision::ValidOutput)
             .map_err(|e| e.to_string())?;
         if snapped.is_empty().map_err(|e| e.to_string())? {
             return Err(format!(
-                "Geometry collapses at its declared precision {} ({:?}, bounds {:?})",
+                "Geometry collapses at its declared precision {} ({:?}, bounds {:?}, read at {})",
                 self.precision,
                 geometry.geometry_type().map_err(|e| e.to_string())?,
-                geometry.get_extent().map_err(|e| e.to_string())?
+                geometry.get_extent().map_err(|e| e.to_string())?,
+                std::panic::Location::caller()
             ));
         }
         Ok(snapped)

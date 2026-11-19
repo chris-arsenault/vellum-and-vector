@@ -6,6 +6,7 @@ pub mod economy;
 pub mod investment;
 pub mod movement;
 pub mod sanitation;
+mod walks;
 use crate::{
     spatial::SpatialKernel,
     town::{

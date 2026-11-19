@@ -291,8 +291,14 @@ records the years lived on the ground. Each step is one aggregate act sized by
 the years the pass stands for and reads what the step before left. Action at a
 distance uses one operator: what a cell can reach of an amount spread over the
 land, less with every costly step. A crowd's pull, a town's hunger and the
-country's spare food are all reaches, and spare food is divided among the
-hungers that reach it.
+country's spare food are all reaches. Productive farmland can support intensive
+cultivation where the growing season, soil, moisture and terrain coincide.
+Inhabited suppliers offer the food left after feeding their residents. Places
+denser than their surrounding country also seek provisions for incoming
+households. Markets compete for that harvest across the travel surface.
+Migration reads the room left after those deliveries and local growth.
+After the settled eras, the population, land use and identity layers captured
+for refinement are refreshed from the same living field as the census.
 
 The same pass runs with different facts. Inside every geological epoch the
 land's cumulative records are read after the epoch's geology and again at the
@@ -553,19 +559,37 @@ process participates through the common contract, including at several profiles
 or several causal positions in one sequence.
 
 A real-scale settlement can begin with freestanding buildings on workable land.
+Founding weighs proximity to the captured place against the extent of buildable
+ground connected on foot. Independent premises can turn to fit a shelf and use
+the smaller parcel dimensions that their use allows.
 Each round offers sites around inhabited holdings as well as street frontage and
 sites beside a participating place. Entrances and building orientations belong to
-the physical site. A street address belongs to premises that actually front a
-street. A new holding on the outskirts can extend the area considered on the next
-pass while intervening land remains open.
+the physical site. A new holding on the outskirts can extend the area considered
+on the next pass while intervening land remains open.
 
 The town sequence repeats the same development processes over eighteen rounds.
 An incoming way gives a street a course to follow.
 Occupation near its built end can pay for an extension. New frontage can also open
 near an outlying workplace, and trips between occupied places can justify a
-connecting lane or a wider stretch of an existing street. Lattice population
-guides demand. Each round takes the preceding round's buildings, streets and
-working land as its starting geography.
+connecting lane or a wider stretch of an existing street. Residents contribute
+labour to construction and road work each round. Builders weigh the living and
+working space already available, including premises built earlier in the same
+round. A household business shares ground-floor space with its residents.
+Road labour comes from residents housed in occupied living space, weighted by
+household means. Shared journeys can establish an alley or a working lane
+between neighbouring premises, including places outside the named street
+network. Branches, street junctions and changes of use divide worn paths into
+distinct proposals. Each round takes the preceding round's buildings, streets
+and working land as its starting geography.
+
+Walkers can reach other holdings or a street across open ground. Repeated journeys
+wear a path that later walkers can follow. Construction can displace it, and movement
+can invest in an established stretch to make it a street. An outlying holding can
+keep a long approach or share part of one with its neighbours. After construction
+the town checks approaches against the current roofs and finds a way around new
+obstructions where the ground permits. Each holding takes its address from the
+junction where its approach meets a named street. Both the approach and the
+street appear on the finished map at their developed widths.
 
 When ordinary street proposals cannot extend the network, movement looks for a
 byway toward an unmet destination. It can depart from another point along the

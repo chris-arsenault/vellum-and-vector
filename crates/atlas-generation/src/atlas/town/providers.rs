@@ -208,19 +208,10 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
                 .collect();
             let fields = state.spatial.index(&fields).map_err(io::Error::other)?;
             for (point, condition) in points.iter().zip(&mut services) {
-                if let Some(i) = fields
-                    .nearest(atlas_map::Position::xy(point[0], point[1]))
+                if let Some((i, distance)) = fields
+                    .nearest_with_distance(atlas_map::Position::xy(point[0], point[1]))
                     .map_err(io::Error::other)?
                 {
-                    let distance = state
-                        .spatial
-                        .distance(
-                            &atlas_map::Geometry::Point {
-                                coordinates: atlas_map::Position::xy(point[0], point[1]),
-                            },
-                            &state.town.fields[i].outline,
-                        )
-                        .map_err(io::Error::other)?;
                     condition.cultivated = state.town.fields[i].worked / (1. + distance / 60.);
                 }
             }
@@ -234,7 +225,7 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
             let routes = if origins.is_empty() {
                 vec![]
             } else {
-                crate::town::access::Access::new(town.streets(), state.spatial.as_ref())?
+                crate::town::access::Access::for_town(town, state.spatial.as_ref())?
                     .on_ground(&requests.2)
                     .travel_costs(&origins, points, state.spatial.as_ref())?
             };
@@ -257,23 +248,14 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
             let index = state.spatial.index(&shapes).map_err(io::Error::other)?;
             let mut conditions = Vec::new();
             for (p, mut condition) in points.iter().zip(services) {
-                let point = atlas_map::Geometry::Point {
-                    coordinates: atlas_map::Position::xy(p[0], p[1]),
-                };
-                for i in index
-                    .query(atlas_map::Bounds(
-                        p[0] - 100.,
-                        p[1] - 100.,
-                        p[0] + 100.,
-                        p[1] + 100.,
-                    ))
+                for (i, distance) in index
+                    .distances(
+                        atlas_map::Bounds(p[0] - 100., p[1] - 100., p[0] + 100., p[1] + 100.),
+                        atlas_map::Position::xy(p[0], p[1]),
+                    )
                     .map_err(io::Error::other)?
                 {
                     let holding = &town.holdings()[i];
-                    let distance = state
-                        .spatial
-                        .distance(&point, &shapes[i])
-                        .map_err(io::Error::other)?;
                     premises_effect(holding, areas[i], distance, &mut condition);
                 }
                 conditions.push(condition);

@@ -231,7 +231,7 @@ fn assign(fabric: &mut Fabric, ground: &Ground, spatial: &dyn SpatialKernel) -> 
         .collect();
     let mut best = vec![(0., None); fabric.fields.len()];
     for town in &fabric.towns {
-        let access = super::access::Access::new(town.streets(), spatial)?.on_ground(ground);
+        let access = super::access::Access::for_town(town, spatial)?.on_ground(ground);
         let farms: Vec<_> = town
             .holdings()
             .iter()

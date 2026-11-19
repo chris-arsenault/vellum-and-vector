@@ -29,10 +29,17 @@ pub fn base(
     terrain.respond(&mut book, number("SedimentCarry")?)?;
     ecology::groups::respond(&mut book)?;
     magic::responders::respond(&mut book, number("ChargedIceErosion")?)?;
-    people::yields::respond(&mut book, rivers.clone(), vec![])?;
-    people::travel::respond(&mut book, rivers, vec![])?;
-    people::questions::built_hold(&mut book, vec![])?;
-    people::questions::rules(&mut book)?;
-    people::crafts::breaks(&mut book, vec![])?;
+    register_people(&mut book, rivers)?;
     Ok(book)
+}
+
+pub fn register_people(
+    book: &mut QuestionBook<Field, &'static str>,
+    rivers: Query<Field, ReadBand<u32>>,
+) -> ExecutionResult<()> {
+    people::yields::respond(book, rivers.clone(), vec![])?;
+    people::travel::respond(book, rivers, vec![])?;
+    people::questions::built_hold(book, vec![])?;
+    people::questions::rules(book)?;
+    people::crafts::breaks(book, vec![])
 }

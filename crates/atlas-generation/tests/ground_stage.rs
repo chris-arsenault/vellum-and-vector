@@ -300,7 +300,7 @@ fn charging_basement_keeps_its_unbounded_marker_empty_and_spending_cannot_create
             stock,
             cell,
             &Charge {
-                amount: area * 8.0,
+                dose: ChargeDose::Amount(area * 8.0),
                 reach: MapScale::native(20.0),
                 hosts: &[4],
                 from_rock: false,

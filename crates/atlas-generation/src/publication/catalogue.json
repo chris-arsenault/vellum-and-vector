@@ -124,6 +124,7 @@
     ["template", "structures", "Templates", "Structures and interiors", "Structures"],
     ["stream", "rivers", "Streams and brooks", "Water and coasts", "Watercourses"],
     ["trail", "roads", "Trails and paths", "Transport and water infrastructure", "Routes"],
+    ["footpath", "roads", "Footpaths", "Transport and water infrastructure", "Routes"],
     ["field", "plots", "Fields", "Plots and fields", "Land use"],
     ["yard", "plots", "Yards and gardens", "Plots and fields", "Land use"],
     ["square", "plots", "Squares and markets", "Plots and fields", "Open spaces"],

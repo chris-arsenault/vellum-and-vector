@@ -159,6 +159,7 @@ pub fn sequence(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequ
     );
     if society {
         body.push(invoke("refinement.places", Values::new()));
+        body.push(invoke("human.population-present", Values::new()));
     }
     body.push(invoke("atlas.names", Values::new()));
     Ok(body)

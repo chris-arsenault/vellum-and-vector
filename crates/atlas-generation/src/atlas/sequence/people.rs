@@ -15,9 +15,21 @@ pub fn people(context: &Context<'_>, epochs: &[Epoch], eras: &[HumanEra]) -> io:
                 .is_none_or(|bound| !epochs[..earlier].iter().any(|epoch| epoch.id == bound.id))
         })
         .collect::<Vec<_>>();
-    let mut sequence = Vec::new();
+    let mut sequence = era_loop(context, &present, |_| None)?;
     if !present.is_empty() {
-        for era in &present {
+        sequence.extend(operations(&["human.water-present", "human.magic-present"]));
+    }
+    sequence.extend(operations(&["human.population-present"]));
+    Ok(sequence)
+}
+pub(super) fn era_loop(
+    context: &Context<'_>,
+    eras: &[&HumanEra],
+    parent: impl Fn(&HumanEra) -> Option<String>,
+) -> io::Result<Sequence> {
+    let mut sequence = Vec::new();
+    if !eras.is_empty() {
+        for era in eras {
             era.validate().map_err(io::Error::other)?;
         }
         let mut body = operations(&["human.land-era"]);
@@ -33,12 +45,12 @@ pub fn people(context: &Context<'_>, epochs: &[Epoch], eras: &[HumanEra]) -> io:
             id: "human-eras".into(),
             reset_facts: Vec::new(),
             body,
-            epochs: present
-                .into_iter()
+            epochs: eras
+                .iter()
                 .map(|era| LoopEpoch {
                     id: era.id.clone(),
                     duration: era.years,
-                    parent_epoch: None,
+                    parent_epoch: parent(era),
                     variables: Values::from_iter([
                         ("mobility".into(), era.mobility.into()),
                         ("politicalCapacity".into(), era.political_capacity.into()),
@@ -46,9 +58,7 @@ pub fn people(context: &Context<'_>, epochs: &[Epoch], eras: &[HumanEra]) -> io:
                 })
                 .collect(),
         });
-        sequence.extend(operations(&["human.water-present", "human.magic-present"]));
     }
-    sequence.extend(operations(&["human.population-present"]));
     Ok(sequence)
 }
 // Arconis: docs/architecture/subsystems.arconis#item=prep — prepares the map from settings, recipe and inputs.
@@ -60,7 +70,7 @@ pub fn configured(
     inherited: bool,
 ) -> io::Result<Sequence> {
     let mut body = operations(&["atlas.prepare"]);
-    body.extend(physical(catalogue, context, epochs, inherited)?);
+    body.extend(physical(catalogue, context, epochs, eras, inherited)?);
     for slot in ["present.products", "present.people", "present.after-people"] {
         if slot == "present.people"
             && ["human.cultures", "human.politics", "built.layout"]

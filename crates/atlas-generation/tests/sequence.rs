@@ -123,6 +123,86 @@ fn child_sequence_realizes_captured_ground_once_and_selects_local_exposure() {
     let body = sequence(&catalogue, &contribution_context(&selected)).unwrap();
     assert!(!stages(&body).unwrap().iter().any(|stage| matches!(stage.kind, StageKind::Process(p) if p.process == "atlas.crustal-relaxation")));
 }
+#[test]
+fn configured_world_runs_bound_human_history_before_the_next_physical_epoch() {
+    use atlas_generation::atlas::{configuration::defaults, sequence::configured};
+    let settings = defaults::settings().unwrap();
+    let catalogue = Catalogue::default();
+    let selected = selected_catalogue(&catalogue);
+    let context = Context {
+        policy: Policy::World,
+        refinement: false,
+        ..contribution_context(&selected)
+    };
+    let sequence = configured(
+        &catalogue,
+        &context,
+        &settings.epochs,
+        &settings.human_eras,
+        false,
+    )
+    .unwrap();
+    let stages = stages(&sequence).unwrap();
+    let mut events = Vec::new();
+    for stage in &stages {
+        if let StageKind::Process(op) = stage.kind {
+            if matches!(op.process.as_str(), "atlas.begin-epoch" | "human.land-era") {
+                events.push(
+                    stage
+                        .context
+                        .epochs
+                        .iter()
+                        .map(|e| e.id.as_str())
+                        .collect::<Vec<_>>(),
+                );
+            }
+        }
+    }
+    assert_eq!(
+        events,
+        [
+            vec!["Formation"],
+            vec!["Cold age"],
+            vec!["Cold age", "Ice age"],
+            vec!["Present"],
+            vec!["Hearthfall"],
+            vec!["Age of Crowns"],
+            vec!["Lantern Age"]
+        ]
+    );
+}
+#[test]
+fn regional_population_is_published_after_the_last_settlement_changes() {
+    let catalogue = Catalogue::default();
+    let mut selected = selected_catalogue(&catalogue);
+    for society in [true, false] {
+        for id in ["human.cultures", "human.politics", "built.layout"] {
+            selected.get_mut(id).unwrap().enabled = society;
+        }
+        let body = atlas_generation::atlas::regional::sequence::sequence(
+            &catalogue,
+            &contribution_context(&selected),
+        )
+        .unwrap();
+        let stages = stages(&body).unwrap();
+        let processes: Vec<_> = stages
+            .iter()
+            .filter_map(|stage| match stage.kind {
+                StageKind::Process(p) => Some(p.process.as_str()),
+                _ => None,
+            })
+            .collect();
+        let places = processes.iter().position(|&p| p == "refinement.places");
+        let population = processes
+            .iter()
+            .position(|&p| p == "human.population-present");
+        assert_eq!(places.is_some(), society);
+        assert_eq!(population.is_some(), society);
+        if let Some(places) = places {
+            assert!(places < population.unwrap());
+        }
+    }
+}
 fn check_child_exposure(catalogue: &Catalogue, selected: &Selection) {
     let body = atlas_generation::atlas::regional::sequence::sequence(
         catalogue,

@@ -167,6 +167,22 @@ impl Surface {
     pub fn samples(&self) -> crate::storage::ReadBand<i32> {
         self.interpolation.samples()
     }
+    /// Refresh the human layers selected for inheritance after the settled eras.
+    pub fn project_people(&mut self, field: &Field) -> io::Result<()> {
+        let bands = field.bands();
+        for channel in channels::humans() {
+            if self.channels.contains_key(&channel.name) {
+                let source = bands
+                    .iter()
+                    .find(|band| band.name == channel.name)
+                    .ok_or_else(|| {
+                        io::Error::other(format!("Missing human layer {}", channel.name))
+                    })?;
+                self.physical(field, &source.values, &channel)?;
+            }
+        }
+        Ok(())
+    }
     pub fn project(&mut self, field: &Field, selection: Selection<'_>) -> io::Result<()> {
         let bands = field.bands();
         for channel in selection.physical {

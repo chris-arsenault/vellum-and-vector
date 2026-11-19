@@ -29,6 +29,24 @@ Evorno retained its two founding buildings for all eighteen rounds. Treat that a
 unresolved growth failure. Connecting those two buildings would leave that failure
 intact. Use the existing harness to locate where further occupation stops.
 
+Execution plan `a9f733fb-c94c-45cf-8959-2266c602a95b`:
+
+1. Follow construction from candidate land through an accepted holding on the retained
+   Evorno site. Repair the decision responsible for the stall and keep the named-town
+   trace available in the local atlas.
+2. Retain courses used by walkers in the town fabric. Reuse shared segments on later
+   journeys, reroute around new occupation, and let repeated use support a first lane or
+   an improvement to the existing network during the ordinary movement process.
+3. Resolve indirect addresses at the junction reached by the approach. Publish the
+   access geometry and the address through the existing GIS and staged town previews.
+4. Compare Evorno and Amadir in the local atlas at their previous extents. Inspect
+   settlement growth, rural approaches and their connections to named ways.
+
+The growth and approach changes have been exercised on both mature towns. The
+remaining access question is the physical entrance to an occupied holding when
+its original parcel entrance is obstructed. Some unaddressed entrances fall
+inside a published roof. A street number requires a usable route.
+
 **The deliverable is a town that visibly grows from its inhabited kernel to its eventual extent over the development cycle.** At town overview scale, the occupied edge moves, density changes within the older settlement, and the street network takes shape as places are occupied and connected. The owner's finding on the current maps is that round one already establishes nearly the whole visible layout. A smaller initial stamp followed by the old development algorithm would reproduce that failure. The graph, connected projects and contracts below are means of changing what land gets built on in successive rounds.
 
 **The recurring decision is where and how to grow next.** At each pass, derive opportunities from the *present* occupied fabric: underused or crowded holdings, ends of built streets, reachable land beyond the inhabited edge, and outlying livelihoods worth connecting. Movement and construction must be able to produce new frontage as well as consume it. Compare developing an edge with filling or rebuilding an existing frontage and establishing a separate cluster. Fit the selected work to land, access and competing uses; carry its actual streets, buildings and remaining opportunities into the next pass. An inherited country road can cross the whole frame while its inhabited portion grows along it over many passes.

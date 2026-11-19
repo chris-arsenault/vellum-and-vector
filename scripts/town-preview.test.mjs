@@ -26,8 +26,9 @@ test("a resumed collector renders retained and later streets in the same town fr
           ],
         ],
         plots: [],
-        buildings: [],
+        buildings: [[{type: "Polygon", coordinates: [[[0,0],[1,0],[1,1],[0,0]]]}, "residential", "2 Salt & Elm Road"]],
         passages: [],
+        footpaths: [[[[0,2],[5,4]],0.7]],
       },
     ],
   });
@@ -38,6 +39,8 @@ test("a resumed collector renders retained and later streets in the same town fr
     await retainTownStage(directory, observation("mature", 18, 100));
     const [early, mature, comparison] = await retainedTownPictures(directory);
     assert.match(comparison.svg, /Buildings only/);
+    assert.match(early.svg, /stroke-width="0.7"/);
+    assert.match(early.svg, /<title>2 Salt &amp; Elm Road<\/title>/);
     const frame = ({ svg }) => svg.match(/viewBox="([^"]+)"/)[1];
     assert.equal(frame(early), frame(mature));
     assert.doesNotMatch(early.svg, /L100\.00/);

@@ -11,15 +11,90 @@ use crate::{
     },
     processes::town::{self as processes, Candidate, Mechanism},
     town::{
-        access::Access,
+        access::{Access, Entrance},
+        catalogue::AccessUse,
         fabric::Town,
         geometry::Point,
         ground::{FIRST_STREET, PLOT},
-        influence::{Conditions, Opportunities, Reachable, SiteConditions},
+        influence::{
+            frontage_support, Conditions, FrontageRead, OpportunitySource, SiteConditions,
+        },
         plots::{slots, Slot},
     },
 };
 use std::{io, rc::Rc};
+
+struct FrontageTravel<'a> {
+    ground: &'a crate::town::ground::Ground,
+    spatial: &'a dyn crate::spatial::SpatialKernel,
+    links: &'a [(Point, Point, f64)],
+}
+fn frontage_candidates(
+    town: &Town,
+    travel: FrontageTravel<'_>,
+    slots: &[Slot],
+    conditions: &[Conditions],
+    sources: &[OpportunitySource],
+    movement: bool,
+) -> io::Result<Vec<Candidate>> {
+    let targets: Vec<_> = slots
+        .iter()
+        .enumerate()
+        .filter(|(_, slot)| !movement || slot.street.is_some())
+        .collect();
+    if targets.is_empty() {
+        return Ok(vec![]);
+    }
+    // Every attachment can contribute traversable geometry, even when no score is read there.
+    let places = sources
+        .iter()
+        .map(|s| s.position)
+        .chain(town.holdings().iter().map(|h| h.slot.front))
+        .chain(slots.iter().map(|s| s.front))
+        .map(Entrance::external)
+        .collect::<Vec<_>>();
+    let mut access = Access::for_town(town, travel.spatial)?.on_ground(travel.ground);
+    for &(a, b, cost) in travel.links {
+        access.add_link(a, b, cost, travel.spatial)?;
+    }
+    let graph = access.bind(&places, AccessUse::Foot, travel.spatial)?;
+    let mut queries = graph.distance_queries();
+    // hpc-exempt: operating premises identify their counterparties by retained endpoint.
+    let mut customers = std::collections::BTreeMap::new();
+    for holding in town.holdings() {
+        for (tie, share) in holding.operating_shares() {
+            *customers.entry(&tie.destination).or_insert(0.) += holding.occupation * share;
+        }
+    }
+    let offset = sources.len() + town.holdings().len();
+    let conditions = targets
+        .iter()
+        .map(|(i, _)| conditions[*i])
+        .collect::<Vec<_>>();
+    let competitors = |s: &OpportunitySource| customers.get(&s.endpoint).copied().unwrap_or(0.);
+    let distances = |source, costs: &mut [f64]| {
+        queries.from(source);
+        for ((i, _), cost) in targets.iter().zip(costs) {
+            *cost = queries.cost(offset + i);
+        }
+    };
+    let read = if movement {
+        FrontageRead::HouseholdDemand
+    } else {
+        FrontageRead::Construction
+    };
+    let opportunities = frontage_support(sources, competitors, read, &conditions, distances);
+    Ok(targets
+        .into_iter()
+        .zip(conditions)
+        .zip(opportunities)
+        .map(|(((_, slot), conditions), opportunities)| Candidate {
+            slot: slot.clone(),
+            conditions,
+            opportunities,
+        })
+        .collect())
+}
 pub struct EnvironmentAnswers {
     travel: crate::storage::ReadBand<f64>,
     building: crate::storage::ReadBand<f64>,
@@ -90,10 +165,16 @@ fn inhabited_frontage(
 fn habitable_sites(
     state: &State,
     ground: &crate::town::ground::Ground,
-    origin: Point,
-) -> Vec<(usize, Point)> {
-    use crate::town::{geometry::distance, ground::FREE};
+    seat: &crate::town::seat::Seat,
+) -> Vec<Point> {
+    use crate::town::{
+        access::walking,
+        geometry::distance,
+        ground::{FREE, STEEP},
+    };
+    let origin = seat.centre;
     let mesh = state.field().mesh();
+    let original_cell = cell_at(mesh, origin);
     let offset = mesh.origin();
     let points: Vec<_> = (0..mesh.len())
         .map(|cell| {
@@ -101,40 +182,63 @@ fn habitable_sites(
             [p[0] + offset[0], p[1] + offset[1]]
         })
         .collect();
-    let mut available: Vec<_> = points.iter().map(|&p| ground.owner(p) == FREE).collect();
+    let mut available: Vec<_> = points
+        .iter()
+        .map(|&p| matches!(ground.owner(p), FREE | STEEP))
+        .collect();
+    let reach = crate::town::founding::reach(seat.story.size());
+    let required_span = seat.story.built_area.sqrt().max(reach);
     let mut ranked = Vec::new();
     for seed in 0..mesh.len() {
         if !available[seed] {
             continue;
         }
-        let mut component = vec![seed];
-        available[seed] = false;
-        let mut next = 0;
-        while next < component.len() {
-            let cell = component[next];
-            next += 1;
-            for other in (0..3).filter_map(|edge| mesh.neighbor(cell, edge)) {
-                let leg = [points[cell], points[other]];
-                if available[other]
-                    && ground.reach(&leg, |mark| mark != FREE) >= distance(leg[0], leg[1])
-                {
-                    component.push(other);
-                    available[other] = false;
-                }
-            }
-        }
-        let span = (component.len() as f64).sqrt();
+        let component = buildable_shelves(mesh, ground, &points, &mut available, seed);
+        let span = mesh.cell_span() * (component.len() as f64).sqrt();
         for cell in component {
-            ranked.push((
-                (ground.cell + distance(points[cell], origin)) / span,
-                cell,
-                points[cell],
-            ));
+            let p = if Some(cell) == original_cell
+                && ground.owner(origin) == FREE
+                && walking::clear(ground, points[cell], origin)
+            {
+                origin
+            } else {
+                points[cell]
+            };
+            // Once the district has room for this place, additional distant land
+            // offers diminishing benefit. Nearby usable ground keeps its advantage.
+            let cost = (1. + distance(p, origin) / reach) * (1. + required_span / span);
+            ranked.push((cost, p));
         }
     }
     // hpc-exempt: rank alternative locations for a captured named settlement.
     ranked.sort_by(|a, b| a.0.total_cmp(&b.0));
-    ranked.into_iter().map(|(_, cell, p)| (cell, p)).collect()
+    ranked.into_iter().map(|(_, p)| p).collect()
+}
+/// Follow walkable contours between shelves. Count only land which can hold a parcel.
+fn buildable_shelves(
+    mesh: &crate::lattice::TriangularLattice,
+    ground: &crate::town::ground::Ground,
+    points: &[Point],
+    available: &mut [bool],
+    seed: usize,
+) -> Vec<usize> {
+    let mut component = vec![seed];
+    available[seed] = false;
+    let mut next = 0;
+    while next < component.len() {
+        let cell = component[next];
+        next += 1;
+        for other in (0..3).filter_map(|edge| mesh.neighbor(cell, edge)) {
+            if available[other]
+                && crate::town::access::walking::clear(ground, points[cell], points[other])
+            {
+                component.push(other);
+                available[other] = false;
+            }
+        }
+    }
+    component.retain(|&cell| ground.owner(points[cell]) == crate::town::ground::FREE);
+    component
 }
 fn settle(
     state: &State,
@@ -143,13 +247,7 @@ fn settle(
     layout: Option<super::story::Layout>,
 ) -> io::Result<Town> {
     let mesh = state.field().mesh();
-    let first = cell_at(mesh, seat.centre)
-        .ok_or_else(|| io::Error::other("Founding site outside town ground"))?;
-    let fallback = std::iter::once_with(|| habitable_sites(state, ground, seat.centre)).flatten();
-    for (_, centre) in std::iter::once((first, seat.centre)).chain(fallback) {
-        if ground.owner(centre) != crate::town::ground::FREE {
-            continue;
-        }
+    for centre in habitable_sites(state, ground, &seat) {
         let mut candidate = seat.clone();
         candidate.centre = centre;
         for arm in &mut candidate.arms {
@@ -243,6 +341,9 @@ fn samples() -> Query<State, SiteConditions> {
             let field = state.field();
             let slope = field.shared().scalar(Scalar::Slope);
             let waste = field.town_signals().read().map(|(_, b)| b);
+            // Neighbouring doors and frontage proposals often sample the same lattice cell.
+            let mut cell_samples = vec![usize::MAX; field.mesh().len()];
+            let mut sampled = Vec::new();
             let mut result = Vec::new();
             for points in &request.0 {
                 let mut values = Vec::new();
@@ -250,7 +351,12 @@ fn samples() -> Query<State, SiteConditions> {
                     let cell = cell_at(field.mesh(), *point).ok_or_else(|| {
                         io::Error::other("Town site lies outside the map lattice")
                     })?;
-                    values.push(Conditions {
+                    let index = cell_samples[cell];
+                    if index != usize::MAX {
+                        values.push(sampled[index]);
+                        continue;
+                    }
+                    let conditions = Conditions {
                         bank: shore(field, cell, false)?,
                         flowing: shore(field, cell, true)?,
                         craft: crate::field::people::crafts::CRAFTS
@@ -292,7 +398,10 @@ fn samples() -> Query<State, SiteConditions> {
                         building: building.get(cell)?,
                         travel: travel.get(cell)?.max(0.01),
                         ..Conditions::default()
-                    });
+                    };
+                    cell_samples[cell] = sampled.len();
+                    sampled.push(conditions);
+                    values.push(conditions);
                 }
                 result.push(values)
             }
@@ -522,61 +631,19 @@ impl Operations {
                         };
                         let mut removals = Vec::new();
                         for (index, town) in state.town.towns.iter_mut().enumerate() {
-                            let costs = if reads != processes::Reads::Frontage {
-                                vec![]
-                            } else {
-                                let mut access = Access::new(town.streets(), spatial.as_ref())?
-                                    .on_ground(&walking_ground);
-                                for &(a, b, cost) in &links {
-                                    access.add_link(a, b, cost, spatial.as_ref())?;
-                                }
-                                let targets: Vec<_> = town
-                                    .holdings()
-                                    .iter()
-                                    .map(|h| h.slot.front)
-                                    .chain(candidates[index].iter().map(|s| s.front))
-                                    .collect();
-                                let origins: Vec<_> = source.0.iter().map(|s| s.position).collect();
-                                access.travel_costs(&origins, &targets, spatial.as_ref())?
-                            };
                             let n = town.holdings().len();
-                            // hpc-exempt: index the retained counterparties of actual operating premises.
-                            let mut customers = std::collections::BTreeMap::new();
-                            town.holdings()
-                                .iter()
-                                .flat_map(|h| {
-                                    h.operating_shares().map(move |(t, share)| {
-                                        (&t.destination, h.occupation * share)
-                                    })
-                                })
-                                .for_each(|(destination, occupation)| {
-                                    *customers.entry(destination).or_insert(0.) += occupation
-                                });
-                            let proposals = candidates[index]
-                                .iter()
-                                .enumerate()
-                                .map(|(i, slot)| {
-                                    let c = conditions.0[index][n + i];
-                                    let paths: Vec<_> = source
-                                        .0
-                                        .iter()
-                                        .enumerate()
-                                        .map(|(j, source)| Reachable {
-                                            source,
-                                            cost: costs[j][n + i],
-                                            competitors: customers
-                                                .get(&source.endpoint)
-                                                .copied()
-                                                .unwrap_or(0.),
-                                        })
-                                        .collect();
-                                    Candidate {
-                                        slot: slot.clone(),
-                                        conditions: c,
-                                        opportunities: Opportunities::new(&paths, c),
-                                    }
-                                })
-                                .collect::<Vec<_>>();
+                            let proposals = frontage_candidates(
+                                town,
+                                FrontageTravel {
+                                    ground: &walking_ground,
+                                    links: &links,
+                                    spatial: spatial.as_ref(),
+                                },
+                                &candidates[index],
+                                &conditions.0[index][n..],
+                                &source.0,
+                                matches!(run, Mechanism::Movement(_)),
+                            )?;
                             let observations = &conditions.0[index];
                             let outlying: Vec<_> = outlying[index]
                                 .iter()
@@ -632,6 +699,7 @@ impl Operations {
                                 Mechanism::Clearance(run) => removals.extend(run(town, &exposure)?),
                             }
                             if step.id == "town.maintenance" {
+                                town.resolve_approaches(&walking_ground, spatial.as_ref())?;
                                 town.round += 1;
                             }
                         }

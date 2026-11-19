@@ -19,7 +19,7 @@ use std::{
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 #[derive(Default)]
-struct MemoryFile(io::Cursor<Vec<u8>>);
+pub(super) struct MemoryFile(io::Cursor<Vec<u8>>);
 impl RandomAccessFile for MemoryFile {
     fn read(&mut self, into: &mut [u8], offset: u64) -> io::Result<usize> {
         self.0.seek(SeekFrom::Start(offset))?;
@@ -82,6 +82,52 @@ fn captured_grid_projects_categories_and_values_past_the_child_boundary() {
             .unwrap();
         assert!(values.iter().all(|value| (*value - 7.0).abs() < 1e-9));
     }
+}
+
+#[test]
+fn final_human_projection_replaces_earlier_capture_with_settled_land() {
+    use super::projection::Surface;
+    use crate::{
+        human::{catalogue::LayerId, HumanField},
+        reconstruction::{Grid, Layout},
+        storage::Coverage,
+    };
+
+    let mut seed = seed();
+    for cell in 0..seed.shared.scalar(Scalar::Temperature).len() {
+        for (layer, value) in [(LayerId::Population, 80.0), (LayerId::Farmland, 0.5)] {
+            seed.people
+                .initialize(HumanField::Layer(layer), cell, value)
+                .unwrap();
+        }
+    }
+    let field = seed.finish(Box::<GroundObservers>::default()).unwrap();
+    let cache = BlockCache::new(1_000_000, BlockScratch::new(MemoryFile::default()));
+    let grid = Grid {
+        bounds: [0.0, 0.0, 100.0, 100.0],
+        periodic_width: None,
+        layout: Layout::Raster {
+            width: 2,
+            height: 2,
+        },
+        measures: Coverage::samples(4, cache.clone())
+            .allocate(2_500.0)
+            .read_only(),
+    };
+    let mut surface = Surface::new(grid, &field, cache).unwrap();
+    surface
+        .sample_channel("Population", "people/square-kilometre", |_| Ok(1.0))
+        .unwrap();
+    surface
+        .sample_channel("Farmland", "ratio", |_| Ok(0.0))
+        .unwrap();
+    surface.project_people(&field).unwrap();
+    assert_eq!(
+        surface.channels()["Population"].values().get(0).unwrap(),
+        80.0
+    );
+    assert_eq!(surface.channels()["Farmland"].values().get(0).unwrap(), 0.5);
+    assert!(!surface.channels().contains_key("Pasture"));
 }
 
 #[test]

@@ -36,6 +36,8 @@ impl Layout {
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Story {
     pub people: f64,
+    /// Built land recorded at the parent scale, in square metres.
+    pub built_area: f64,
     /// A capital or regional capital holds the seat of a realm or province.
     pub seat: bool,
     /// The record calls it a fortress, or a way through it is strategic.

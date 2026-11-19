@@ -128,6 +128,17 @@ fn expand<'a, O, V>(
             } => {
                 validate_epochs(id, epochs, reset_facts)?;
                 for (index, epoch) in epochs.iter().enumerate() {
+                    if let (Some(physical), Some(bound)) = (
+                        context
+                            .epochs
+                            .iter()
+                            .find_map(|ancestor| ancestor.parent_epoch.as_ref()),
+                        epoch.parent_epoch.as_ref(),
+                    ) {
+                        if physical != bound {
+                            continue;
+                        }
+                    }
                     let mut epoch_context = next.clone();
                     epoch_context.epochs.push(epoch);
                     epoch_context.epoch_indices.push(index);

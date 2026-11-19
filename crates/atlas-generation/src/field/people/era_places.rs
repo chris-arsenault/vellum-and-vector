@@ -28,7 +28,7 @@ pub struct Setting {
     pub country: place_country::Setting,
 }
 /// People per km² averaged over the habitable country a traveller reaches from each cell.
-fn surrounding_density(
+pub fn surrounding_density(
     field: &Field,
     travel: &Travel<'_>,
     range: f64,

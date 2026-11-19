@@ -8,7 +8,7 @@ use crate::{
     rock::{
         cargo::CargoMixture,
         catalogue::material,
-        ground::{alteration::Alteration, Charge},
+        ground::{alteration::Alteration, Charge, ChargeDose},
         load::MaterialLoad,
         organic,
     },
@@ -96,7 +96,7 @@ pub fn bury_living_charge(
             key,
             cell,
             &Charge {
-                amount,
+                dose: ChargeDose::Amount(amount),
                 reach: depth,
                 hosts: &[20],
                 from_rock: false,

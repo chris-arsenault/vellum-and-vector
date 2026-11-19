@@ -241,20 +241,14 @@ impl Ground {
         }
         Ok(())
     }
-    fn cells_in(&self, rectangle: &impl Shape) -> Vec<usize> {
+    fn cells_in<'a>(&'a self, rectangle: &'a impl Shape) -> impl Iterator<Item = usize> + 'a {
         let [w, s, e, n] = rectangle.bounds();
         let column = |x: f64| ((x - self.origin[0]) / self.cell).floor().max(0.0) as usize;
         let row = |y: f64| ((y - self.origin[1]) / self.cell).floor().max(0.0) as usize;
-        let mut cells = Vec::new();
-        for y in row(s)..=row(n).min(self.rows.saturating_sub(1)) {
-            for x in column(w)..=column(e).min(self.columns.saturating_sub(1)) {
-                let index = y * self.columns + x;
-                if rectangle.contains(self.centre(index)) {
-                    cells.push(index);
-                }
-            }
-        }
-        cells
+        let columns = column(w)..=column(e).min(self.columns.saturating_sub(1));
+        let rows = row(s)..=row(n).min(self.rows.saturating_sub(1));
+        rows.flat_map(move |y| columns.clone().map(move |x| y * self.columns + x))
+            .filter(move |&i| rectangle.contains(self.centre(i)))
     }
     /// Whether a shape lies on free ground, or ground its own street holds, everywhere
     /// the grid can see: at cell centres inside it and near its corners and middle.
@@ -267,15 +261,11 @@ impl Ground {
             .samples(self.cell)
             .into_iter()
             .all(|p| fits(self.owner(p)));
-        corners
-            && self
-                .cells_in(rectangle)
-                .into_iter()
-                .all(|i| fits(self.owners[i]))
+        corners && self.cells_in(rectangle).all(|i| fits(self.owners[i]))
     }
     /// Gives the free cells of a shape to `owner`.
     pub fn take(&mut self, rectangle: &impl Shape, owner: u32) {
-        let cells = self.cells_in(rectangle);
+        let cells: Vec<_> = self.cells_in(rectangle).collect();
         for p in rectangle.samples(self.cell) {
             if let Some(i) = self.index(p) {
                 self.claim(i, owner);

@@ -2,7 +2,7 @@
 // frontend does: one kept verification world, real-scale maps opened from it, and a summary
 // of what each map contains. See docs/local-atlas.md.
 import { createRequire } from "node:module";
-import { copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rename, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -107,6 +107,11 @@ async function savePreview(event, directory) {
   return { file: name, label, lowest: low, highest: high, townFabric: grid.townFabric };
 }
 
+function indexPreviews(pictures) {
+  // A resumed observation stream restarts its epoch numbering. Keep the latest
+  // raster picture of a stage when the job passes that stage again.
+  return new Map(pictures.map((p) => [p.file.endsWith(".png") ? p.label : p.file, p]));
+}
 /**
  * Follows a job to its end, printing each step with the time since the job started. With
  * `until`, the job is cancelled once a preview whose label contains it is saved.
@@ -121,7 +126,7 @@ async function follow(status, record, until) {
     if (error.code === "ENOENT") return [];
     throw error;
   });
-  const previews = new Map(retained.map((p) => [p.file, p]));
+  const previews = indexPreviews(retained);
   const log = [];
   const print = (line) => (console.log(line), log.push(line));
   let after = 0;
@@ -147,7 +152,7 @@ async function follow(status, record, until) {
       if (event.kind !== "preview") continue;
       const { townFabric, ...preview } = await savePreview(event, directory);
       if (townFabric) await retainTownStage(directory, townFabric);
-      previews.set(preview.file, preview);
+      previews.set(preview.label, preview);
       print(`${clock(started)} picture ${join(directory, preview.file)}`);
       if (until && preview.label.includes(until))
         status = await call("generation", { method: "cancel", request: { job_id: status.jobId } });
@@ -203,12 +208,22 @@ async function report(reference, directory) {
   ];
   // Counted from the exported features, so the summary shows what a reader actually gets.
   const counts = new Map();
+  const towns = new Map();
   for (const { properties } of JSON.parse(new TextDecoder().decode(new Uint8Array(exported.bytes)))
     .features) {
+    if (properties.kind === "building" && properties.settlement && properties.occupation > 0) {
+      const town = towns.get(properties.settlement) ?? { buildings: 0, addressed: 0 };
+      town.buildings++;
+      if (properties.address && properties.streetId) town.addressed++;
+      towns.set(properties.settlement, town);
+    }
     const key = `${properties.spaceId}\t${properties.layerId}`;
     const kinds = counts.get(key) ?? new Map();
     kinds.set(properties.kind, (kinds.get(properties.kind) ?? 0) + 1);
     counts.set(key, kinds);
+  }
+  for (const [name, { buildings, addressed }] of towns) {
+    lines.push(`${name}: ${addressed} of ${buildings} occupied buildings have a street address`);
   }
   for (const space of map.spaces) {
     const layers = map.layers.filter((entry) => entry.spaceId === space.id);
@@ -378,7 +393,7 @@ async function finish(result, name, jobId) {
   await writeJson(join(directory, "previews.json"), previews);
 }
 
-async function resume(jobId) {
+async function resume(jobId, name) {
   const last = await readJson(lastJobFile).catch(() => ({}));
   const id = jobId ?? last.jobId;
   if (!id) throw new Error("No job to resume");
@@ -389,6 +404,7 @@ async function resume(jobId) {
       ? current
       : await call("generation", { method: "resume", request: { job_id: id } });
   const record = last.jobId === id ? last : { kind: "real", name: id };
+  if (name) record.name = name;
   const result = await follow(status, record);
   if (record.kind === "world") {
     await save(result);
@@ -401,6 +417,9 @@ const { positionals, values } = parseArgs({
   allowPositionals: true,
   options: {
     fresh: { type: "boolean", default: false },
+    "reference-width": { type: "boolean", default: false },
+    "full-history": { type: "boolean", default: false },
+    seed: { type: "string" },
     kind: { type: "string", default: "ground" },
     hex: { type: "string", default: "100m" },
     across: { type: "string", default: "50" },
@@ -555,13 +574,40 @@ const [command, argument] = positionals;
 if (command === "world") await world(values.fresh);
 else if (command === "real" && values.at && hexMetres[values.hex]) await realScale(values);
 else if (command === "region" && values.at && values.width) await realScale(values);
-else if (command === "resume") await resume(argument);
+else if (command === "resume") await resume(argument, values.name);
+else if (command === "cancel" && argument)
+  await call("generation", { method: "cancel", request: { job_id: argument } });
 else if (command === "places") await places();
+else if (command === "census" && values["full-history"]) {
+  const { reference } = await readJson(worldFile);
+  const action = await readJson(join(home, "generation-resources", ".jobs", reference.revision, "action.json"));
+  if (action.method !== "create") throw new Error("Expected a saved world creation recipe");
+  if (values.seed !== undefined) {
+    const seed = Number(values.seed);
+    if (!Number.isSafeInteger(seed)) throw new Error("Expected an integer seed");
+    action.request.recipe.seed = seed;
+  }
+  if (values["reference-width"]) {
+    action.request.height *= 4_000_000 / action.request.width;
+    action.request.width = 4_000_000;
+  }
+  const directory = await mkdtemp(join(reports, "history-census-"));
+  const config = join(directory, "action.json");
+  await writeJson(config, action);
+  console.log(`Full history for seed ${action.request.recipe.seed} in ${directory}`);
+  execFileSync("cargo", ["run", "--quiet", "--release", "-p", "atlas-host", "--example", "surface_capture",
+    "--", "history", directory, config], { cwd: checkout, stdio: "inherit" });
+}
+else if (command === "census") {
+  const args = ["run", "--quiet", "--release", "-p", "atlas-host", "--example", "local_census", "--", home];
+  if (values["reference-width"]) args.push("--reference-width");
+  execFileSync("cargo", args, { cwd: checkout, stdio: "inherit" });
+}
 else if (command === "view" && argument) await view(argument);
 else if (command === "town-previews" && argument && values.name) {
   const output = join(reports, "maps", values.name);
   const index = join(output, "previews.json");
-  const previews = new Map((await readJson(index)).map((item) => [item.file, item]));
+  const previews = indexPreviews(await readJson(index));
   for (const { file, svg, label } of await retainedTownPictures(join(reports, "previews", argument))) {
     await writeFile(join(output, `preview-${file}`), svg);
     previews.set(file, { file, label });
@@ -578,12 +624,14 @@ else if (command === "summary" && argument) {
   console.error(`Usage:
   node scripts/local-atlas.mjs world [--fresh]
   node scripts/local-atlas.mjs places
+  node scripts/local-atlas.mjs census [--reference-width] [--full-history [--seed <integer>]]
   node scripts/local-atlas.mjs summary|view <map folder under ${join(reports, "maps")}>`);
   console.error(`
   node scripts/local-atlas.mjs real --at x,y [--hex 100m] [--across 50] [--kind ground|structure]
                                     [--detail draft|standard|fine] [--name name]
                                     [--until "<stage picture label, e.g. Initial regional detail>"]
-  node scripts/local-atlas.mjs resume [jobId]
+  node scripts/local-atlas.mjs cancel <jobId>
+  node scripts/local-atlas.mjs resume [jobId] [--name map-folder]
   node scripts/local-atlas.mjs town-previews <jobId> --name <existing map folder>
   node scripts/local-atlas.mjs region --at Town --width metres --name name [--parent map-folder]
 real and region accept --parent to refine a previously generated map instead of the world.

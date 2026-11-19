@@ -15,6 +15,22 @@ impl Town {
     }
 }
 impl Relationship {
+    /// Construction already evaluated existing holdings when it opened bidding.
+    /// Check the premises established by intervening bids before funding another.
+    pub(crate) fn served_since(
+        self,
+        site: Anchor,
+        first: usize,
+        town: &Town,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<bool> {
+        for holding in &town.holdings[first..] {
+            if self.served_by(holding, site, town, spatial)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
     fn served_by(
         self,
         h: &Holding,
@@ -70,12 +86,7 @@ impl Specification for Relationship {
     ) -> io::Result<bool> {
         match *self {
             Self::Accommodation(_) | Self::GatheringSpace { .. } | Self::Protection { .. } => {
-                for holding in &town.holdings {
-                    if self.served_by(holding, site, town, spatial)? {
-                        return Ok(true);
-                    }
-                }
-                Ok(false)
+                self.served_since(site, 0, town, spatial)
             }
             Self::Access { from, to, use_ } => {
                 use crate::town::access::Entrance;
@@ -511,6 +522,7 @@ impl Town {
             return Ok(EditOutcome::Declined);
         };
         self.holdings[host.0 as usize].outline = remainder;
+        self.fitting.get_mut().holdings = BoundsIndex::default();
         self.holdings[premises.0 as usize].outline = expanded;
         self.holdings[premises.0 as usize].cause =
             "Occupied frontage extended into a neighbouring open holding".into();

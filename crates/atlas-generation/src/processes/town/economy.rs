@@ -7,12 +7,71 @@ use crate::town::{
     influence::{operating_tie, respond, support_for, Reachable},
 };
 use std::io;
-pub fn housing_pressure(people: f64, floor_area: f64) -> f64 {
-    people.max(0.) / (people.max(0.) + floor_area.max(0.) / 16. + 1.)
+const LIVING_AREA_PER_PERSON: f64 = 16.;
+// A third of the population working in dedicated premises, at 18 m² per worker.
+const WORKING_AREA_PER_PERSON: f64 = 6.;
+#[derive(Clone, Copy, Default)]
+pub(super) struct FloorSpace {
+    pub living: f64,
+    pub working: f64,
 }
-pub fn occupancy(home: bool, pressure: f64, support: f64, burden: f64) -> f64 {
+#[derive(Clone, Copy)]
+pub(super) struct UnmetDemand {
+    pub living: f64,
+    pub working: f64,
+}
+impl FloorSpace {
+    pub fn occupied_residents(self, occupation: f64) -> f64 {
+        self.living * occupation / LIVING_AREA_PER_PERSON
+    }
+    pub fn holding(
+        h: &crate::town::fabric::Holding,
+        spatial: &dyn crate::spatial::SpatialKernel,
+    ) -> io::Result<Self> {
+        let mut space = Self::default();
+        let definition = h.kind.definition();
+        for (i, (building, floors)) in h.buildings.iter().zip(&h.storeys).enumerate() {
+            let footprint = spatial.area(building).map_err(io::Error::other)?;
+            let area = footprint * f64::from(*floors);
+            if definition.building(i).roles.dwelling {
+                // A home business shares the entrance floor with its household.
+                let workshop = if i == 0 && h.secondary.is_some() {
+                    footprint * 0.5
+                } else {
+                    0.
+                };
+                space.living += area - workshop;
+                space.working += workshop;
+            } else {
+                space.working += area;
+            }
+        }
+        Ok(space)
+    }
+    pub fn add(&mut self, other: Self) {
+        self.living += other.living;
+        self.working += other.working;
+    }
+    pub fn need(self, people: f64) -> UnmetDemand {
+        UnmetDemand {
+            living: housing_pressure(people, self.living),
+            working: shortfall(people * WORKING_AREA_PER_PERSON, self.working),
+        }
+    }
+}
+fn shortfall(required: f64, supplied: f64) -> f64 {
+    if required > 0. {
+        (1. - supplied.max(0.) / required).max(0.)
+    } else {
+        0.
+    }
+}
+pub fn housing_pressure(people: f64, floor_area: f64) -> f64 {
+    shortfall(people * LIVING_AREA_PER_PERSON, floor_area)
+}
+pub fn occupancy(home: bool, residential_use: f64, support: f64, burden: f64) -> f64 {
     if home {
-        (0.55 + pressure * 0.6) / (1. + burden * 0.08)
+        residential_use / (1. + burden * 0.08)
     } else {
         support / (0.4 + support)
     }
@@ -36,30 +95,13 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
     let floor_areas = town
         .holdings()
         .iter()
-        .map(|h| {
-            h.buildings
-                .iter()
-                .zip(&h.storeys)
-                .map(|(b, storeys)| {
-                    context
-                        .spatial
-                        .area(b)
-                        .map(|area| area * f64::from(*storeys))
-                        .map_err(io::Error::other)
-                })
-                .sum::<io::Result<f64>>()
-        })
+        .map(|h| FloorSpace::holding(h, context.spatial))
         .collect::<io::Result<Vec<_>>>()?;
-    let area = town
-        .holdings()
-        .iter()
-        .zip(&floor_areas)
-        .filter(|(h, _)| h.kind.definition().roles.dwelling)
-        .map(|(_, area)| area)
-        .sum();
+    let area = floor_areas.iter().map(|a| a.living).sum();
     let pressure = housing_pressure(town.seat.story.people, area);
-    let mut network =
-        Access::new(town.streets(), context.spatial)?.on_ground(context.walking_ground);
+    let residential_use =
+        (town.seat.story.people * LIVING_AREA_PER_PERSON / area.max(1.)).clamp(0., 1.);
+    let mut network = Access::for_town(town, context.spatial)?.on_ground(context.walking_ground);
     for &(a, b, cost) in context.links {
         network.add_link(a, b, cost, context.spatial)?;
     }
@@ -85,6 +127,10 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         .filter(|m| modes.iter().any(|needs| needs.contains(&Some(*m))))
         .map(|mode| Ok((mode, network.bind(&locations, mode, context.spatial)?)))
         .collect::<io::Result<Vec<_>>>()?;
+    let mut queries: Vec<_> = graphs
+        .iter()
+        .map(|(mode, graph)| (*mode, graph.distance_queries()))
+        .collect();
     for (i, needs) in modes.iter().enumerate() {
         let holding = &town.holdings()[i];
         let conditions = context.conditions.get(i).copied().unwrap_or_default();
@@ -100,11 +146,11 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         };
         let mut ties = Vec::new();
         let mut opportunity = crate::town::influence::Support::default();
-        for (mode, graph) in graphs
-            .iter()
+        for (mode, routes) in queries
+            .iter_mut()
             .filter(|(mode, _)| needs.contains(&Some(*mode)))
         {
-            let routes = graph.routes(i);
+            routes.from(i);
             let paths: Vec<_> = context
                 .sources
                 .iter()
@@ -155,15 +201,20 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         {
             respond(
                 holding.occupation,
-                occupancy(place.roles.dwelling, pressure, support, opportunity.burden)
-                    .clamp(0., 1.),
+                occupancy(
+                    place.roles.dwelling,
+                    residential_use,
+                    support,
+                    opportunity.burden,
+                )
+                .clamp(0., 1.),
                 context.exposure * 1.6,
             )
         } else {
             holding.occupation
         };
         let crowding = if place.roles.dwelling {
-            let living_space = floor_areas[i];
+            let living_space = floor_areas[i].living;
             let neighbours = conditions.households / (1. + conditions.households);
             let local_pressure = neighbours * conditions.density / (1. + conditions.density);
             (pressure + local_pressure) * (1. - means) * occupation / (1. + living_space / 450.)
@@ -196,9 +247,38 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
 mod tests {
     use super::*;
     #[test]
+    fn only_occupied_living_space_contributes_residents() {
+        let home = FloorSpace {
+            living: 64.,
+            working: 24.,
+        };
+        let workshop = FloorSpace {
+            living: 0.,
+            working: 128.,
+        };
+        assert_eq!(home.occupied_residents(0.75), 3.);
+        assert_eq!(home.occupied_residents(0.), 0.);
+        assert_eq!(workshop.occupied_residents(1.), 0.);
+    }
+    #[test]
     fn homes_remain_in_demand_when_trade_fails() {
-        assert!(occupancy(true, 0.8, 0., 0.5) > 0.8);
+        assert!(occupancy(true, 1., 0., 0.5) > 0.8);
         assert_eq!(occupancy(false, 0.8, 0., 0.5), 0.);
         assert!(housing_pressure(5000., 1000.) > housing_pressure(5000., 50000.));
+    }
+    #[test]
+    fn housing_and_workplace_vacancies_answer_different_needs() {
+        let shops = FloorSpace {
+            living: 0.,
+            working: 600.,
+        }
+        .need(100.);
+        assert!(shops.living > 0. && shops.working == 0.);
+        let homes = FloorSpace {
+            living: 1600.,
+            working: 0.,
+        }
+        .need(100.);
+        assert!(homes.living == 0. && homes.working > 0.);
     }
 }

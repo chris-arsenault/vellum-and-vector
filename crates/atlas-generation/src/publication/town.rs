@@ -82,6 +82,7 @@ pub fn publish(state: &mut impl TownWriter, fabric: &Fabric) -> io::Result<()> {
         }
     }
     for town in &fabric.towns {
+        publish_footpaths(state, town)?;
         for (i, passage) in town.passages().iter().enumerate() {
             write(
                 state,
@@ -113,40 +114,78 @@ pub fn publish(state: &mut impl TownWriter, fabric: &Fabric) -> io::Result<()> {
                 },
             )?;
         }
-        if let Some(mut settlement) = state.feature(&town.seat.key)? {
-            settlement
-                .attributes
-                .insert("layout".into(), json!(town.layout.as_str()));
-            settlement
-                .attributes
-                .insert("developmentRounds".into(), json!(town.round));
-            settlement.attributes.insert(
-                "households".into(),
-                json!(town
-                    .holdings()
-                    .iter()
-                    .filter(|h| h.kind.definition().roles.household)
-                    .count()),
-            );
-            state.save(settlement)?;
-        }
+        publish_settlement(state, town)?;
     }
     Ok(())
+}
+
+fn publish_settlement(state: &mut impl TownWriter, town: &Town) -> io::Result<()> {
+    let Some(mut settlement) = state.feature(&town.seat.key)? else {
+        return Ok(());
+    };
+    if matches!(settlement.geometry, Geometry::Point { .. }) && !town.holdings().is_empty() {
+        let [x, y] = town.seat.centre;
+        settlement.geometry = Geometry::Point {
+            coordinates: Position::xy(x, y),
+        };
+    }
+    settlement
+        .attributes
+        .insert("layout".into(), json!(town.layout.as_str()));
+    settlement
+        .attributes
+        .insert("developmentRounds".into(), json!(town.round));
+    let households = town
+        .holdings()
+        .iter()
+        .filter(|h| h.kind.definition().roles.household)
+        .count();
+    settlement
+        .attributes
+        .insert("households".into(), json!(households));
+    state.save(settlement)
+}
+fn publish_footpaths(state: &mut impl TownWriter, town: &Town) -> io::Result<()> {
+    for path in town.footpaths() {
+        let [a, b] = crate::town::fabric::walks::path_key(path.points[0], path.points[1]);
+        write(
+            state,
+            &format!(
+                "town:{}:footpath:{},{}:{},{}",
+                town.seat.key, a.0, a.1, b.0, b.1
+            ),
+            "Footpath",
+            ("footpath", "roads"),
+            line(&path.points),
+            attrs([
+                ("roadClass", json!("path")),
+                ("widths", json!([path.width(), path.width()])),
+                ("wear", json!(path.wear)),
+                ("nameStatus", json!("label")),
+                ("settlement", json!(town.seat.name)),
+            ]),
+        )?;
+    }
+    Ok(())
+}
+pub(crate) fn street_name(state: &impl TownWriter, town: &Town, i: usize) -> io::Result<String> {
+    let street = &town.streets()[i];
+    match (&street.destination, i) {
+        (Some(place), _) => Ok(format!("{place} Road")),
+        (None, 0) => Ok("High Street".into()),
+        _ => state.part_name(
+            &format!("town:{}:street:{i}", town.seat.key),
+            street.class.work(),
+            street.points[street.points.len() / 2],
+            town,
+        ),
+    }
 }
 fn publish_streets(state: &mut impl TownWriter, town: &Town) -> io::Result<Vec<(String, String)>> {
     let mut streets = Vec::new();
     for (i, street) in town.streets().iter().enumerate() {
         let key = format!("town:{}:street:{i}", town.seat.key);
-        let name = match (&street.destination, i) {
-            (Some(place), _) => format!("{place} Road"),
-            (None, 0) => "High Street".into(),
-            _ => state.part_name(
-                &key,
-                street.class.work(),
-                street.points[street.points.len() / 2],
-                town,
-            )?,
-        };
+        let name = street_name(state, town, i)?;
         let feature = state.record(Record {
             key: &key,
             name: &name,
@@ -234,22 +273,28 @@ struct Neighbourhood<'a> {
 struct HouseAddress<'a> {
     street_id: &'a str,
     street: &'a str,
-    number: u32,
+    resolved: crate::town::addresses::Address,
     label: String,
 }
 impl HouseAddress<'_> {
-    fn attributes(&self) -> [(String, Value); 4] {
+    fn attributes(&self) -> [(String, Value); 5] {
         [
             ("street".into(), json!(self.street)),
             ("streetId".into(), json!(self.street_id)),
             ("address".into(), json!(self.label)),
-            ("addressNumber".into(), json!(self.number)),
+            ("addressNumber".into(), json!(self.resolved.number)),
+            ("addressJunction".into(), json!(self.resolved.junction)),
         ]
     }
     fn fronts(&self) -> crate::features::records::Relation {
         crate::features::records::Relation {
             target_id: self.street_id.into(),
-            kind: "fronts".into(),
+            kind: if self.resolved.indirect {
+                "accessFrom"
+            } else {
+                "fronts"
+            }
+            .into(),
         }
     }
 }
@@ -276,25 +321,23 @@ fn holding_records(
     town: &Town,
     holding: &Holding,
     streets: &[(String, String)],
-    number: Option<u32>,
+    resolved: Option<crate::town::addresses::Address>,
     neighbourhood: Neighbourhood<'_>,
 ) -> io::Result<()> {
     let definition = holding.kind.definition();
     let key = format!("town:{}:holding:{}", town.seat.key, holding.id.0);
-    let address = holding
-        .slot
-        .street
-        .and_then(|i| streets.get(i))
-        .zip(number)
-        .map(|((street_id, street), number)| HouseAddress {
+    let address = resolved
+        .and_then(|a| Some((streets.get(a.street)?, a)))
+        .map(|((street_id, street), resolved)| HouseAddress {
             street_id,
             street,
-            number,
-            label: format!("{number} {street}"),
+            resolved,
+            label: crate::town::addresses::address(resolved.number, street),
         });
     let common = || {
         let mut values = attrs([
             ("settlement", json!(town.seat.name)),
+            ("entrance", json!(holding.slot.front)),
             ("use", json!(definition.legacy_use.as_str())),
             ("placeKind", json!(holding.kind)),
             ("secondaryKind", json!(holding.secondary)),
@@ -324,6 +367,11 @@ fn holding_records(
             ("townProcess", json!("town.construction")),
         ]);
         values.extend(address.iter().flat_map(HouseAddress::attributes));
+        if let Some(route) = town.approach(holding.id).filter(|route| {
+            route.points.len() > 1 && address.as_ref().is_some_and(|a| a.resolved.indirect)
+        }) {
+            values.insert("accessRoute".into(), json!(line(&route.points)));
+        }
         values
     };
     let mut yard_attributes = common();
@@ -374,6 +422,8 @@ fn holding_records(
             kind: tie.purpose.relation().into(),
         });
     }
+    yard.relations
+        .extend(address.iter().map(HouseAddress::fronts));
     if !yard.relations.is_empty() {
         state.save(yard)?;
     }

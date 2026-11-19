@@ -323,6 +323,11 @@ fn journeys_follow_only_the_used_stretches_through_junctions_and_doors() {
     let routes = graph.routes(0);
     assert_eq!(routes.cost(1), 50.);
     assert!(routes.cost(2).is_infinite());
+    let mut distances = graph.distance_queries();
+    distances.from(0);
+    assert_eq!(distances.cost(1), 50.);
+    distances.from(2);
+    assert!(distances.cost(1).is_infinite());
     let mut lengths = [0.; 3];
     routes.visit(1, |leg| lengths[leg.street] += leg.length());
     assert_eq!(lengths, [25., 25., 0.]);
@@ -586,6 +591,30 @@ fn independent_foot_journeys_need_passable_land_but_no_street() {
     }
     let around = cost(&ground, AccessUse::Foot);
     assert!(around.is_finite() && around > open);
+    let lanes = [Street::new(
+        vec![[15.5, 2.5], [15.5, 8.5]],
+        Class::Lane,
+        atlas_map::town::Size::Town,
+    )];
+    let network = Access::new(&lanes, &spatial)
+        .unwrap()
+        .on_ground(&ground)
+        .bind(&doors, AccessUse::Foot, &spatial)
+        .unwrap();
+    let approach = network.to_streets().approach(0).unwrap();
+    assert_eq!(approach.street, 0);
+    assert_eq!(approach.points[0], [2.5, 4.5]);
+    assert_eq!(approach.points.last().unwrap()[0], 15.5);
+    for leg in approach.points.windows(2) {
+        for i in 0..=100 {
+            let t = i as f64 / 100.;
+            let p = [
+                leg[0][0] * (1. - t) + leg[1][0] * t,
+                leg[0][1] * (1. - t) + leg[1][1] * t,
+            ];
+            assert_ne!(ground.owner(p), WALL, "walk crosses wall at {p:?}");
+        }
+    }
     for y in 13..20 {
         ground.withhold(y * 20 + 8, WALL);
     }
@@ -603,9 +632,112 @@ fn premises_are_numbered_along_the_street_they_front() {
         atlas_map::town::Size::Town,
     )]);
     assert_eq!(
-        atlas_generation::town::addresses::assign(&town, &spatial).unwrap(),
+        atlas_generation::town::addresses::assign(&town, &spatial)
+            .unwrap()
+            .into_iter()
+            .map(|a| a.map(|a| a.number))
+            .collect::<Vec<_>>(),
         vec![Some(3), Some(1)]
     );
+}
+
+#[test]
+fn a_newly_built_door_can_reach_a_named_street_around_an_exact_roof() {
+    use atlas_generation::town::{
+        access::{Approach, Footpath},
+        ground::{Ground, PLOT},
+    };
+    let spatial = NativeGeos::new(0.001).unwrap();
+    let mut town = town();
+    town.set_approaches(vec![Street::new(
+        vec![[-30., -14.], [30., -14.]],
+        Class::Lane,
+        atlas_map::town::Size::Town,
+    )]);
+    let mut home = proposal(0.);
+    home.slot.street = None;
+    let entrance = home.slot.front;
+    let resident = town.establish(home, &spatial).unwrap().unwrap();
+    let own_roof = polygon(&rectangle([0., 0.6], [1., 0.], [0., 1.], 8., 6.));
+    town.fit_building(resident, own_roof, &spatial).unwrap();
+    let mut other = proposal(0.);
+    other.slot.street = None;
+    other.slot.front = [0., -8.];
+    other.slot.depth = 7.;
+    other.slot.frontage = 20.;
+    other.slot.corners = rectangle(other.slot.front, [1., 0.], [0., 1.], 20., 7.);
+    let id = town.establish(other, &spatial).unwrap().unwrap();
+    let obstacle = polygon(&rectangle([0., -6.], [1., 0.], [0., 1.], 5., 0.2));
+    assert!(town.fit_building(id, obstacle.clone(), &spatial).unwrap());
+    let mouth = [0., -14.];
+    town.record_walks(
+        vec![Footpath {
+            points: [entrance, mouth],
+            wear: 4.,
+        }],
+        vec![Some(Approach {
+            points: vec![entrance, mouth],
+            street: 0,
+        })],
+    );
+    let mut ground = Ground::new([-40., -30., 40., 30.], 1.5);
+    let cell = ground.index(entrance).unwrap();
+    ground.withhold(cell, PLOT);
+    town.resolve_approaches(&ground, &spatial).unwrap();
+    let route = town.approach(resident).unwrap();
+    assert_eq!(route.points.first(), Some(&entrance));
+    assert_eq!(route.points.last().unwrap()[1], -14.);
+    for segment in route.points.windows(2) {
+        let trace = atlas_generation::town::edits::line(segment);
+        assert!(!spatial
+            .relation(&trace, &obstacle, atlas_map::spatial::Predicate::Intersects)
+            .unwrap());
+    }
+    assert!(
+        atlas_generation::town::addresses::assign(&town, &spatial).unwrap()[resident.0 as usize]
+            .is_some()
+    );
+}
+#[test]
+fn shared_approaches_number_the_street_they_reach_on_the_side_they_join() {
+    use atlas_generation::town::{access::Approach, addresses::assign};
+    let spatial = NativeGeos::new(0.001).unwrap();
+    let mut town = town();
+    town.set_approaches(
+        [-5., -90.]
+            .map(|y| {
+                Street::new(
+                    vec![[-50., y], [150., y]],
+                    Class::Lane,
+                    atlas_map::town::Size::Town,
+                )
+            })
+            .to_vec(),
+    );
+    let mut courses = Vec::new();
+    for x in [10., 40., 70.] {
+        let mut home = proposal(x);
+        home.slot.street = None;
+        town.establish(home, &spatial).unwrap().unwrap();
+        courses.push(Some(Approach {
+            street: 1,
+            points: vec![[x, 0.], [0., -120.], [0., -90.]],
+        }));
+    }
+    courses[2] = Some(Approach {
+        street: 1,
+        points: vec![[70., 0.]],
+    });
+    town.record_walks(vec![], courses);
+    let addresses = assign(&town, &spatial).unwrap();
+    for (a, n) in addresses[..2].iter().zip([2, 4]) {
+        let a = a.unwrap();
+        assert_eq!(
+            (a.street, a.number, a.junction, a.indirect),
+            (1, n, [0., -90.], true)
+        );
+    }
+    assert!(addresses[2].is_none());
 }
 #[test]
 fn working_land_retains_a_reachable_household_relationship() {
@@ -841,6 +973,30 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
     let mut farm = proposal(80.);
     farm.kind = supplied_kind(Kind::Farmstead);
     let supplier = t.establish(farm, &catalog.spatial).unwrap().unwrap();
+    use atlas_generation::town::access::{Approach, Footpath};
+    let mut distant = proposal(110.);
+    distant.slot.street = None;
+    let distant = t.establish(distant, &catalog.spatial).unwrap().unwrap();
+    t.fit_building(
+        distant,
+        polygon(&rectangle([110., 1.], [1., 0.], [0., 1.], 8., 6.)),
+        &catalog.spatial,
+    )
+    .unwrap();
+    let route = vec![[110., 0.], [110., -25.], [10., -25.], [10., -5.]];
+    let paths = route
+        .windows(2)
+        .map(|p| Footpath {
+            points: [p[0], p[1]],
+            wear: 1.,
+        })
+        .collect();
+    let mut approaches = vec![None; t.holdings().len()];
+    approaches[distant.0 as usize] = Some(Approach {
+        street: 0,
+        points: route.clone(),
+    });
+    t.record_walks(paths, approaches);
     let ties = [
         (Operation::Supply, supplier, AccessUse::Freight),
         (Operation::Customers, customer, AccessUse::Foot),
@@ -916,6 +1072,32 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
         .unwrap()
         .target_id;
     assert_eq!(catalog.features[street].name, roof.attributes["street"]);
+    let connected_roof = &catalog.features[&format!("town:town:holding:{}:building:0", distant.0)];
+    for f in [connected_roof, &catalog.features[&premises_id(distant)]] {
+        assert_eq!(f.attributes["address"], "2 High Street");
+        assert_eq!(
+            f.attributes["addressJunction"],
+            serde_json::json!([10., -5.])
+        );
+        assert_eq!(f.attributes["entrance"], serde_json::json!([110., 0.]));
+        assert_eq!(
+            f.attributes["accessRoute"]["coordinates"],
+            serde_json::json!(route)
+        );
+        assert!(f
+            .relations
+            .iter()
+            .any(|r| r.kind == "accessFrom" && &r.target_id == street));
+    }
+    let paths: Vec<_> = catalog
+        .features
+        .values()
+        .filter(|f| f.kind == "footpath")
+        .collect();
+    assert_eq!(paths.len(), 3);
+    assert!(paths
+        .iter()
+        .all(|f| f.layer_id == "roads" && f.attributes["widths"] == serde_json::json!([0.7, 0.7])));
     assert!(catalog
         .features
         .values()

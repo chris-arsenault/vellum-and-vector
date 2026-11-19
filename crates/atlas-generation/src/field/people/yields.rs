@@ -11,6 +11,22 @@ use crate::{
 };
 use std::io;
 
+/// Residents fed per cultivated square kilometre. Intensive farming needs
+/// the soil, water, season and workable terrain to coincide on the same land.
+// owner-direction(2026-11-19): use exaggerated realism for population bands, with 300-500k capitals and exceptional cities around 2 million.
+pub(super) fn cultivated_yield(suitability: f64) -> f64 {
+    const EXTENSIVE: f64 = 35.0;
+    const INTENSIVE: f64 = 420.0;
+    suitability * (EXTENSIVE + INTENSIVE * suitability)
+}
+
+/// Occupied farmland produces a harvest only over the area its households can work.
+/// The demographic model assigns two hectares of field work per rural resident.
+fn worked_farmland(farmland: f64, residents_per_km2: f64) -> f64 {
+    const FARM_KM2_PER_RESIDENT: f64 = 0.02;
+    farmland.min(residents_per_km2 * FARM_KM2_PER_RESIDENT)
+}
+
 fn read(field: &Field, name: S, cell: usize) -> io::Result<f64> {
     field.shared.scalar(name).get(cell)
 }
@@ -93,13 +109,12 @@ pub fn respond(
                     )?)
                     .max(filled)
                     .min(1.0);
-                Ok(35.0
-                    * answers.ask("season")?
+                let suitability = answers.ask("season")?
                     * soil_depth
                     * wet
                     * (-12.0 * read(field, S::Slope, cell)?).exp()
-                    * (1.0 - 0.8 * read(field, S::TreeCover, cell)?)
-                    * quickened(field, cell, 0.8)?)
+                    * (1.0 - 0.8 * read(field, S::TreeCover, cell)?);
+                Ok(cultivated_yield(suitability) * quickened(field, cell, 0.8)?)
             })),
         },
     )?;
@@ -159,10 +174,23 @@ pub fn respond(
                     .people
                     .view(HumanField::Layer(LayerId::BuiltUp))
                     .get(cell)?;
-                Ok(crop * answers.ask("cropYield")?
+                let worked = worked_farmland(crop, field.people.people(cell)?);
+                Ok(worked * answers.ask("cropYield")?
                     + herd * answers.ask("herdYield")?
                     + (1.0 - crop - herd - built).max(0.0) * answers.ask("wildYield")?)
             })),
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::worked_farmland;
+
+    #[test]
+    fn abandoned_fields_cannot_provision_a_city() {
+        assert_eq!(worked_farmland(0.8, 0.0), 0.0);
+        assert_eq!(worked_farmland(0.8, 10.0), 0.2);
+        assert_eq!(worked_farmland(0.8, 100.0), 0.8);
+    }
 }

@@ -156,6 +156,7 @@ dependencies = [
 name = "atlas-map"
 version = "0.1.0"
 dependencies = [
+ "rstar",
  "serde",
  "serde_json",
  "ts-rs",

@@ -11,7 +11,7 @@ use crate::{
     noise::hash_unit,
     rock::{
         catalogue::kind_of_code,
-        ground::{alteration::Alteration, Charge},
+        ground::{alteration::Alteration, Charge, ChargeDose},
         material::MaterialLayer,
     },
     scale::{MapScale, RelativeMeasure},
@@ -268,6 +268,9 @@ pub fn supply(
             continue;
         };
         let depth = MapScale::native(vein_depth * source.strength / 1000.0);
+        if depth <= 0.0 {
+            continue;
+        }
         let epoch = env.ground.completed_epochs();
         env.ground.alter(
             cell,
@@ -284,7 +287,11 @@ pub fn supply(
             key,
             cell,
             &Charge {
-                amount: source.strength * env.mesh.area(cell),
+                // A full vein receives the source's areal supply. A partial vein
+                // mineralizes at the same concentration over its actual volume.
+                dose: ChargeDose::Density(
+                    source.strength / MapScale::metres(depth, crate::scale::LengthUnit::Native),
+                ),
                 reach: depth,
                 hosts: &[14],
                 from_rock: true,

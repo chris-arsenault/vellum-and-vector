@@ -57,6 +57,153 @@ pub struct Reachable<'a> {
     pub competitors: f64,
 }
 pub struct Opportunities([Support; 7]);
+#[derive(Clone, Copy, Default)]
+struct Totals<'a> {
+    demand: f64,
+    capability: f64,
+    strongest: f64,
+    label: Option<&'a str>,
+}
+impl<'a> Totals<'a> {
+    fn add(&mut self, source: &'a OpportunitySource, cost: f64, competitors: f64) {
+        let reach = 1. / (1. + cost / 180.);
+        let demand = source.demand * reach / (1. + competitors);
+        self.demand += demand;
+        self.capability += source.capability * reach;
+        if demand > self.strongest {
+            self.strongest = demand;
+            self.label = Some(&source.label);
+        }
+    }
+    fn finish(self, conditions: Conditions) -> Support {
+        Support {
+            demand: self.demand,
+            capability: self.capability,
+            source: self.label.map(str::to_owned),
+            burden: conditions.waste
+                + conditions.nuisance
+                + conditions.flood
+                + conditions.slope * 0.5
+                + 0.2 / (1. + conditions.protection),
+        }
+    }
+}
+
+struct Offer<'a> {
+    origin: usize,
+    source: &'a OpportunitySource,
+    competitors: f64,
+}
+fn cheapest_offers<'a>(
+    activity: Activity,
+    offers: &[Offer<'a>],
+    rows: &[Vec<f64>],
+    mut visit: impl FnMut(usize, &Offer<'a>, f64),
+) {
+    let mut eligible = offers
+        .iter()
+        .zip(rows)
+        .filter(|(offer, _)| compatible(activity, offer.source.activity));
+    let Some(first) = eligible.next() else { return };
+    if eligible.clone().next().is_none() {
+        let (offer, costs) = first;
+        for (site, &cost) in costs.iter().enumerate().filter(|(_, c)| c.is_finite()) {
+            visit(site, offer, cost);
+        }
+        return;
+    }
+    for i in 0..first.1.len() {
+        let best = std::iter::once(first)
+            .chain(eligible.clone())
+            .filter(|(_, costs)| costs[i].is_finite())
+            .min_by(|(_, a), (_, b)| a[i].total_cmp(&b[i]));
+        if let Some((offer, costs)) = best {
+            visit(i, offer, costs[i]);
+        }
+    }
+}
+/// Read one source's distances across sites at a time. Alternatives with the same identity
+/// compete for each compatible activity, with equal-cost paths retaining provider order.
+pub(crate) enum FrontageRead {
+    HouseholdDemand,
+    Construction,
+}
+pub(crate) fn frontage_support(
+    sources: &[OpportunitySource],
+    competitors: impl Fn(&OpportunitySource) -> f64,
+    read: FrontageRead,
+    sites: &[Conditions],
+    distances: impl FnMut(usize, &mut [f64]),
+) -> Vec<Opportunities> {
+    match read {
+        FrontageRead::HouseholdDemand => batch(
+            sources,
+            competitors,
+            &[Activity::Household],
+            sites,
+            distances,
+            |total, offer, cost| {
+                total.demand +=
+                    offer.source.demand / ((1. + cost / 180.) * (1. + offer.competitors))
+            },
+        ),
+        FrontageRead::Construction => batch(
+            sources,
+            competitors,
+            &Activity::ALL,
+            sites,
+            distances,
+            |total, offer, cost| total.add(offer.source, cost, offer.competitors),
+        ),
+    }
+}
+fn batch<'a, const N: usize>(
+    sources: &'a [OpportunitySource],
+    competitors: impl Fn(&OpportunitySource) -> f64,
+    activities: &[Activity; N],
+    sites: &[Conditions],
+    mut distances: impl FnMut(usize, &mut [f64]),
+    accumulate: impl Fn(&mut Totals<'a>, &Offer<'a>, f64),
+) -> Vec<Opportunities> {
+    let mut order: Vec<_> = sources
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| activities.iter().any(|&a| compatible(a, s.activity)))
+        .map(|(origin, source)| Offer {
+            origin,
+            source,
+            competitors: competitors(source),
+        })
+        .collect();
+    // hpc-exempt: group retained counterparty identities in stable provider order.
+    order.sort_by(|a, b| a.source.id.cmp(&b.source.id));
+    let mut totals = vec![[Totals::default(); N]; sites.len()];
+    let mut rows: Vec<Vec<f64>> = Vec::new();
+    for group in order.chunk_by(|a, b| a.source.id == b.source.id) {
+        if rows.len() < group.len() {
+            rows.resize_with(group.len(), || vec![0.; sites.len()]);
+        }
+        for (offer, row) in group.iter().zip(&mut rows) {
+            distances(offer.origin, row);
+        }
+        for (a, &activity) in activities.iter().enumerate() {
+            cheapest_offers(activity, group, &rows, |site, offer, cost| {
+                accumulate(&mut totals[site][a], offer, cost);
+            });
+        }
+    }
+    totals
+        .into_iter()
+        .zip(sites)
+        .map(|(t, &cond)| {
+            let mut answers = Opportunities(Default::default());
+            for (&activity, total) in activities.iter().zip(t) {
+                answers.0[activity as usize] = total.finish(cond);
+            }
+            answers
+        })
+        .collect()
+}
 impl Opportunities {
     pub fn new(paths: &[Reachable<'_>], conditions: Conditions) -> Self {
         Self(std::array::from_fn(|i| {
@@ -76,16 +223,12 @@ pub fn compatible(consumer: Activity, source: Activity) -> bool {
     }
 }
 pub fn support_for(activity: Activity, paths: &[Reachable<'_>], conditions: Conditions) -> Support {
-    let paths = paths
-        .iter()
-        .filter(|p| compatible(activity, p.source.activity))
-        .map(|p| Reachable {
-            source: p.source,
-            cost: p.cost,
-            competitors: p.competitors,
-        })
-        .collect::<Vec<_>>();
-    support(&paths, conditions)
+    support_from(
+        paths
+            .iter()
+            .filter(|p| compatible(activity, p.source.activity)),
+        conditions,
+    )
 }
 /// Bind a counterparty for an actual use. Retained custom favours an operating
 /// relationship while an unavailable destination gradually loses its strength.
@@ -128,9 +271,15 @@ pub fn operating_tie(
     (tie.strength > 0.01).then_some(tie)
 }
 pub fn support(paths: &[Reachable<'_>], conditions: Conditions) -> Support {
+    support_from(paths.iter(), conditions)
+}
+fn support_from<'a, 'b: 'a>(
+    paths: impl Iterator<Item = &'a Reachable<'b>>,
+    conditions: Conditions,
+) -> Support {
     // hpc-exempt: sparse source identities select alternative geographic paths, not lattice values.
     let mut seen = std::collections::BTreeMap::<&str, &Reachable<'_>>::new();
-    for path in paths.iter().filter(|p| p.cost.is_finite()) {
+    for path in paths.filter(|p| p.cost.is_finite()) {
         seen.entry(path.source.id.as_str())
             .and_modify(|current| {
                 if path.cost < current.cost {
@@ -139,24 +288,11 @@ pub fn support(paths: &[Reachable<'_>], conditions: Conditions) -> Support {
             })
             .or_insert(path);
     }
-    let mut result = Support::default();
-    let mut strongest = 0.;
+    let mut result = Totals::default();
     for path in seen.into_values() {
-        let reach = 1.0 / (1.0 + path.cost / 180.0);
-        let demand = path.source.demand * reach / (1.0 + path.competitors);
-        result.demand += demand;
-        if demand > strongest {
-            strongest = demand;
-            result.source = Some(path.source.label.clone());
-        }
-        result.capability += path.source.capability * reach;
+        result.add(path.source, path.cost, path.competitors);
     }
-    result.burden = conditions.waste
-        + conditions.nuisance
-        + conditions.flood
-        + conditions.slope * 0.5
-        + 0.2 / (1. + conditions.protection);
-    result
+    result.finish(conditions)
 }
 /// A bounded share of an adjustment, not an economic conservation or accuracy constraint.
 pub fn respond(previous: f64, desired: f64, exposure: f64) -> f64 {
@@ -356,5 +492,38 @@ mod tests {
         let answers = Opportunities::new(&paths, Conditions::default());
         assert_eq!(answers.for_activity(Activity::Household).demand, 2.);
         assert_eq!(answers.for_activity(Activity::Trade).demand, 14.);
+        let alternate = OpportunitySource {
+            id: home.id.clone(),
+            label: "Warehouse".into(),
+            ..shop.clone()
+        };
+        let sources = [home, alternate, shop];
+        let sites = frontage_support(
+            &sources,
+            |_| 0.,
+            FrontageRead::Construction,
+            &[Conditions::default(); 2],
+            |origin, costs| {
+                costs.copy_from_slice(&[[0., f64::INFINITY], [0., 0.], [0., 0.]][origin])
+            },
+        );
+        // Equal costs keep the first compatible offer for the ID. A blocked first route
+        // allows the second offer, and an incompatible offer never displaces a livelihood.
+        assert_eq!(sites[0].for_activity(Activity::Trade).demand, 14.);
+        assert_eq!(sites[0].for_activity(Activity::Household).demand, 4.);
+        assert_eq!(sites[1].for_activity(Activity::Trade).demand, 4.);
+        let mut origins = Vec::new();
+        let street = frontage_support(
+            &sources,
+            |_| 0.,
+            FrontageRead::HouseholdDemand,
+            &[Conditions::default()],
+            |origin, costs| {
+                origins.push(origin);
+                costs.fill(0.);
+            },
+        );
+        assert_eq!(origins, [1, 2]);
+        assert_eq!(street[0].for_activity(Activity::Household).demand, 4.);
     }
 }

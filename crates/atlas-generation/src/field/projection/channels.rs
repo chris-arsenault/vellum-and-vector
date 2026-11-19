@@ -300,7 +300,7 @@ pub fn physical() -> Vec<Channel> {
         }
     }
     c.extend(material());
-    humans(&mut c);
+    c.extend(humans());
     c
 }
 fn ecology(c: &mut Vec<Channel>) {
@@ -560,8 +560,9 @@ fn material_slots(c: &mut Vec<Channel>, name: impl Fn(&str) -> String, load: boo
         c.push(channel);
     }
 }
-fn humans(c: &mut Vec<Channel>) {
-    let start = c.len();
+pub(super) fn humans() -> Vec<Channel> {
+    let mut channels = Vec::new();
+    let c = &mut channels;
     group(
         c,
         HUMANS,
@@ -603,7 +604,7 @@ fn humans(c: &mut Vec<Channel>) {
             ));
         }
     }
-    for channel in &mut c[start..] {
+    for channel in c {
         channel.discrete = true;
         if channel.quantity != Quantity::Category {
             channel.minimum = Some(0.0);
@@ -612,4 +613,5 @@ fn humans(c: &mut Vec<Channel>) {
             channel.maximum = Some(1.0);
         }
     }
+    channels
 }

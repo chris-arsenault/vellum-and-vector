@@ -9,7 +9,7 @@ use crate::{
         state::{Budget, MagicField},
         stocks::run::{self, Carriage},
     },
-    rock::ground::Charge,
+    rock::ground::{Charge, ChargeDose},
     scale::MapScale,
 };
 use std::io;
@@ -132,7 +132,7 @@ fn retain_ground(
             key,
             cell,
             &Charge {
-                amount: (stored - retained).max(0.0) * env.mesh.area(cell),
+                dose: ChargeDose::Amount((stored - retained).max(0.0) * env.mesh.area(cell)),
                 reach: MapScale::native(field.definition.parameters.bury_depth),
                 hosts: hosts(&field.definition.id, "ground").unwrap_or(&[]),
                 from_rock: false,

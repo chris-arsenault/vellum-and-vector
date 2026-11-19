@@ -1,9 +1,11 @@
 //! Detached street and footprint geometry at completed town development boundaries.
+use crate::publication::town::{street_name, TownWriter};
 use crate::town::{
     catalogue::PlaceRules, fabric::Fabric, geometry::Point, settings::DEVELOPMENT_ROUNDS,
 };
 use atlas_map::{town::BuildingFunction, Geometry};
 use serde::Serialize;
+use std::io;
 
 #[derive(Clone, Copy, Serialize)]
 pub struct Stage {
@@ -55,41 +57,59 @@ pub struct Settlement {
     centre: Point,
     streets: Vec<(Vec<Point>, Vec<f64>, bool)>,
     passages: Vec<Geometry>,
+    footpaths: Vec<([Point; 2], f64)>,
     plots: Vec<Geometry>,
-    buildings: Vec<(Geometry, BuildingFunction)>,
+    buildings: Vec<(Geometry, BuildingFunction, Option<String>)>,
 }
-pub fn capture(fabric: &Fabric, stage: Stage) -> Overview {
+pub fn capture(fabric: &Fabric, stage: Stage, site: &impl TownWriter) -> io::Result<Overview> {
     let settlements = fabric
         .towns
         .iter()
-        .map(|town| Settlement {
-            key: town.seat.key.clone(),
-            name: town.seat.name.clone(),
-            centre: town.seat.centre,
-            streets: town
-                .streets()
-                .iter()
-                .map(|s| (s.points.clone(), s.widths.clone(), s.through_route))
-                .collect(),
-            passages: town.passages().to_vec(),
-            plots: town.holdings().iter().map(|h| h.outline.clone()).collect(),
-            buildings: town
-                .holdings()
-                .iter()
-                .flat_map(|h| {
-                    let definition = h.kind.definition();
-                    h.buildings.iter().enumerate().map(move |(i, geometry)| {
-                        (geometry.clone(), definition.building(i).function)
+        .map(|town| {
+            let resolved = crate::town::addresses::assign(town, site.spatial())?;
+            let names = (0..town.streets().len())
+                .map(|i| street_name(site, town, i))
+                .collect::<io::Result<Vec<_>>>()?;
+            Ok(Settlement {
+                key: town.seat.key.clone(),
+                name: town.seat.name.clone(),
+                centre: town.seat.centre,
+                streets: town
+                    .streets()
+                    .iter()
+                    .map(|s| (s.points.clone(), s.widths.clone(), s.through_route))
+                    .collect(),
+                passages: town.passages().to_vec(),
+                footpaths: town
+                    .footpaths()
+                    .iter()
+                    .map(|f| (f.points, f.width()))
+                    .collect(),
+                plots: town.holdings().iter().map(|h| h.outline.clone()).collect(),
+                buildings: town
+                    .holdings()
+                    .iter()
+                    .flat_map(|h| {
+                        let definition = h.kind.definition();
+                        let address = resolved[h.id.0 as usize]
+                            .map(|a| crate::town::addresses::address(a.number, &names[a.street]));
+                        h.buildings.iter().enumerate().map(move |(i, geometry)| {
+                            (
+                                geometry.clone(),
+                                definition.building(i).function,
+                                address.clone(),
+                            )
+                        })
                     })
-                })
-                .collect(),
+                    .collect(),
+            })
         })
-        .collect();
-    Overview {
+        .collect::<io::Result<_>>()?;
+    Ok(Overview {
         stage,
         settlements,
         fields: fabric.fields.iter().map(|f| f.outline.clone()).collect(),
-    }
+    })
 }
 
 #[cfg(test)]

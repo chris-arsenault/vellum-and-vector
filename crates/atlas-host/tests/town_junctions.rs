@@ -75,6 +75,9 @@ fn nearby_endpoint_is_extended_into_a_real_junction() {
 fn close_parallel_departure_is_rejected() {
     let spatial = NativeGeos::new(0.001).unwrap();
     let roads = network(&[&[[0.0, 0.0], [150.0, 0.0]]]);
+    assert!(constrain(&[[12., 0.], [12., 0.]], &roads, 80., &spatial)
+        .unwrap()
+        .is_none());
     assert!(
         constrain(&[[0.0, 0.0], [80.0, 0.0]], &roads, 80.0, &spatial)
             .unwrap()

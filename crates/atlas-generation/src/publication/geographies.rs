@@ -151,7 +151,12 @@ const GROUPS: &[Group] = &[
         false,
     ),
     ("built.layout", "historicalEvents", &["societyEvent"], false),
-    ("built.layout", "roads", &["road", "lane", "street"], true),
+    (
+        "built.layout",
+        "roads",
+        &["road", "lane", "street", "footpath"],
+        true,
+    ),
     ("built.layout", "roads", &["trail"], false),
     ("built.layout", "objects", &["fountain", "statue"], false),
     (
@@ -253,6 +258,10 @@ mod tests {
             inherited: &BTreeSet::new(),
         };
         let bindings = bindings(&input, &[]);
+        assert!(bindings.iter().any(|b| b.layer == "roads"
+            && b.publish
+            && b.network
+            && b.kinds.iter().any(|k| k == "footpath")));
         for (layer, kind) in [
             ("lakes", "pool"),
             ("geology", "outcrop"),

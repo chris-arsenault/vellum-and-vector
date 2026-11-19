@@ -15,6 +15,15 @@ struct Stretch {
     members: Vec<usize>,
     drawing: Drawing,
 }
+fn has_drawable_length(line: &[Position], precision: f64) -> bool {
+    let grid = |p: &Position| {
+        let [x, y, _] = p.coordinates();
+        [(x / precision + 0.5).floor(), (y / precision + 0.5).floor()]
+    };
+    line.first()
+        .is_some_and(|first| line.iter().skip(1).any(|p| grid(p) != grid(first)))
+}
+
 fn line_parts(shape: Geometry, output: &mut Vec<Vec<Position>>) {
     match shape {
         Geometry::LineString { coordinates } => output.push(coordinates),
@@ -151,24 +160,26 @@ pub(super) fn publish_course(
     basin_discharge: f64,
     river: &str,
 ) -> io::Result<(Vec<String>, Option<String>)> {
-    let stretches = parts
-        .iter()
-        .filter(|members| members.len() >= 2)
-        .map(|members| {
-            let valley = paths.draw(state.field(), members, state.spatial.as_ref())?;
-            let moved = river_drawing::meander(
-                state.field(),
-                paths,
-                &valley,
-                members[0],
-                state.spatial.as_ref(),
-            )?;
-            Ok(Stretch {
-                members: members.clone(),
-                drawing: moved.map_or(valley, |m| m.drawing),
-            })
-        })
-        .collect::<io::Result<Vec<_>>>()?;
+    let mut stretches = Vec::new();
+    for members in parts.iter().filter(|members| members.len() >= 2) {
+        let valley = paths.draw(state.field(), members, state.spatial.as_ref())?;
+        // Clipping a course where it enters a lake may leave only its
+        // mouth. The hydrologic reach still exists on the physical field.
+        if !has_drawable_length(&valley.coordinates, state.scope.precision) {
+            continue;
+        }
+        let moved = river_drawing::meander(
+            state.field(),
+            paths,
+            &valley,
+            members[0],
+            state.spatial.as_ref(),
+        )?;
+        stretches.push(Stretch {
+            members: members.clone(),
+            drawing: moved.map_or(valley, |m| m.drawing),
+        });
+    }
     if stretches.is_empty() {
         return Ok((Vec::new(), None));
     }
@@ -236,4 +247,19 @@ pub(super) fn publish_course(
         state.write_network(feature)?;
     }
     Ok((ids, first))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_clipped_river_mouth_needs_two_distinct_map_positions() {
+        let shore = Position::xy(320987.65432098764, 1756600.1196398141);
+        let clipped = Position::xy(320987.65432135225, 1756600.1196398337);
+        assert!(!has_drawable_length(&[shore, clipped], 1e-6));
+        assert!(has_drawable_length(
+            &[shore, Position::xy(320987.654322, 1756600.11964)],
+            1e-6
+        ));
+    }
 }

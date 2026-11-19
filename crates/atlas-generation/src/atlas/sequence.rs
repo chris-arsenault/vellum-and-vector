@@ -122,6 +122,7 @@ pub fn physical(
     catalogue: &Catalogue,
     context: &Context<'_>,
     epochs: &[Epoch],
+    eras: &[super::context::HumanEra],
     inherited: bool,
 ) -> io::Result<Sequence> {
     let context = Context {
@@ -145,6 +146,23 @@ pub fn physical(
         body.extend(c.geology(true)?);
     }
     body.extend(c.contribute("initialize.ecology")?);
+    let mut epoch_body = c.epoch(inherited)?;
+    if ["human.cultures", "human.politics", "built.layout"]
+        .iter()
+        .any(|id| context.enabled(id))
+    {
+        let early = eras
+            .iter()
+            .filter(|era| {
+                era.bound_epoch(epochs)
+                    .is_some_and(|bound| epochs.last().is_some_and(|last| last.id != bound.id))
+            })
+            .collect::<Vec<_>>();
+        // owner-direction(2026-11-19): the final geologic era happens in the middle of human history.
+        epoch_body.extend(people::era_loop(&context, &early, |era| {
+            era.bound_epoch(epochs).map(|e| e.id.clone())
+        })?);
+    }
     body.push(SequenceNode::Epochs {
         id: "physical-history".into(),
         reset_facts: Vec::new(),
@@ -161,7 +179,7 @@ pub fn physical(
                 ]),
             })
             .collect(),
-        body: c.epoch(inherited)?,
+        body: epoch_body,
     });
     body.extend(c.climate("present.climate", false)?);
     body.extend(c.contribute("present.climate-forcing")?);

@@ -17,6 +17,18 @@ import { realScaleDirections, type OwnerDirection } from "./ownerDirections.real
  */
 const directions: readonly OwnerDirection[] = [
   {
+    direction: "the final geologic era happens in the middle of human history",
+    given: "2026-11-19",
+    marks: ["crates/atlas-generation/src/atlas/sequence.rs"],
+    test: "crates/atlas-generation/tests/sequence.rs",
+  },
+  {
+    direction: "use exaggerated realism for population bands, with 300-500k capitals and exceptional cities around 2 million",
+    given: "2026-11-19",
+    marks: ["crates/atlas-generation/src/field/people/yields.rs"],
+    test: "crates/atlas-generation/src/field/people/feed.rs",
+  },
+  {
     direction: "grow towns from an inhabited kernel across roughly 18 recurring iterations of comparable magnitude",
     given: "2026-11-18",
     marks: ["crates/atlas-generation/src/atlas/town.rs"],
@@ -483,6 +495,12 @@ const directions: readonly OwnerDirection[] = [
       "packages/atlas-context/src/rustFoundations.architecture.ts",
       "packages/atlas-context/src/separation.architecture.ts",
     ],
+  },
+  {
+    direction: "we do want nearly everything to have a street address",
+    given: "2026-11-18",
+    marks: ["crates/atlas-generation/src/town/addresses.rs"],
+    test: "crates/atlas-host/tests/town_development.rs",
   },
   {
     direction: "individual buildings can grow on land without a street",

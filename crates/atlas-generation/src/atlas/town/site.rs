@@ -429,6 +429,7 @@ fn story(feature: &Feature, ways: usize, guarded: bool) -> Story {
         people: number(attributes, "settlementPopulation")
             .or_else(|| number(attributes, "population"))
             .unwrap_or(0.0),
+        built_area: number(attributes, "builtKm2").unwrap_or_default() * 1_000_000.,
         seat: matches!(
             text(feature, "settlementRole"),
             Some("capital" | "regionalCapital")

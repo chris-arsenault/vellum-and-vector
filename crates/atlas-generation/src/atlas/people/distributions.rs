@@ -22,6 +22,7 @@ pub(super) fn population(
             let fed = scope.with_context(Rc::new(era.physical), |scope| scope.query(&support))?;
             let physical = &mut scope.state_mut().physical;
             let field = physical.executor.state();
+            physical.surface.project_people(field)?;
             physical.surface.sample_channel(
                 "populationDensity",
                 "people/square-kilometre",

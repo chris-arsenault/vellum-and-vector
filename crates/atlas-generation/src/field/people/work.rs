@@ -17,7 +17,6 @@ pub struct Work {
     pub going: Passage,
     pub land: Band<f64>,
     pub imports: Band<f64>,
-    pub market: Band<f64>,
 }
 pub fn habitable(field: &Field, cell: usize) -> io::Result<bool> {
     Ok(field.water.borrow().kind_at(cell)? == 0)
@@ -69,7 +68,6 @@ impl Work {
             going,
             land,
             imports: working(field),
-            market: working(field),
         })
     }
     pub fn reach(

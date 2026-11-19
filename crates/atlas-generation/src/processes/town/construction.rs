@@ -1,4 +1,5 @@
 //! Purposeful interventions compete over frontage; later occupation can change their fate.
+use super::economy::{FloorSpace, UnmetDemand};
 use super::Frontage;
 use crate::town::catalogue::PlaceRules;
 use crate::town::{
@@ -13,16 +14,28 @@ use crate::town::{
 };
 use std::io;
 type PurposeSite = (crate::town::fabric::Anchor, Relationship);
+struct FittedProject {
+    purpose: PurposeSite,
+    plot: crate::town::plots::Slot,
+    initial_holdings: usize,
+}
+struct Demand {
+    space: UnmetDemand,
+    families: [f64; PLACES.len()],
+    housing: Vec<(Kind, HousingOffer)>,
+}
 enum Offer<'a> {
-    Premises(&'a super::Candidate, f64, Kind, Option<PurposeSite>),
+    Premises(&'a super::Candidate, f64, Kind, Option<Box<FittedProject>>),
     Partners {
         existing: Vec<FabricEdit>,
-        additions: Vec<FabricEdit>,
+        additions: Vec<(Kind, FabricEdit)>,
     },
 }
 pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
+    let trace = std::env::var("ATLAS_TRACE_TOWN").is_ok_and(|name| name == town.seat.name);
     // owner-direction(2026-11-17): human-layer density is an approximate census, not a placement obligation; artistic composition takes priority over numerical accuracy.
-    town.effort += (town.seat.story.people.max(5.).sqrt() * context.exposure * 0.9)
+    // A share of residents contributes labour to premises during each development pass.
+    town.effort += (town.seat.story.people.max(0.) * context.exposure * 0.018)
         * (1.
             + town
                 .holdings()
@@ -30,8 +43,28 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
                 .map(|h| h.means * h.occupation)
                 .sum::<f64>()
                 / (1. + town.holdings().len() as f64));
+    let log = |event: &str, town: &Town, details: &dyn Fn() -> serde_json::Value| {
+        if trace {
+            eprintln!(
+                "{}",
+                serde_json::json!({
+                    "event":event, "town":town.seat.name, "round":town.round+1, "decision":details()
+                })
+            );
+        }
+    };
+    log("town.construction-start", town, &|| {
+        serde_json::json!({
+            "candidates": context.candidates.len(), "holdings": town.holdings().len(),
+            "effort": town.effort
+        })
+    });
     let needs = unmet(town, context.spatial)?;
-    let housing = housing_offers();
+    let initial_holdings = town.holdings().len();
+    let mut space = FloorSpace::default();
+    for holding in town.holdings() {
+        space.add(FloorSpace::holding(holding, context.spatial)?);
+    }
     let supplied = PLACES.map(|kind| {
         town.holdings()
             .iter()
@@ -41,11 +74,16 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
             .map(|h| h.occupation + 0.25)
             .sum::<f64>()
     });
+    let demand = Demand {
+        space: space.need(town.seat.story.people),
+        families: supplied,
+        housing: housing_offers(),
+    };
     let mut ranked: Vec<_> = context
         .candidates
         .iter()
         .filter(|candidate| candidate.slot.participant.is_none())
-        .map(|candidate| {
+        .filter_map(|candidate| {
             let sample = crate::noise::hash_unit(
                 town.round as i32,
                 candidate.slot.front[0],
@@ -73,44 +111,84 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
                 })
                 .filter(|need| {
                     let pull = project_pull(need, candidate.slot.front);
+                    // A proposed public investment can only displace other uses of
+                    // this land if its own premises fit the ground offered here.
                     public_draw * (1. + pull) < pull
+                })
+                .and_then(|need| {
+                    fitted_slot(candidate, need.0.definition(), sample, context.ground)
+                        .map(|slot| (need, slot))
                 });
-            let kind = project.map_or_else(
-                || choose(town, candidate, sample, &supplied, &housing, &[]),
-                |p| p.0,
-            );
+            let kind = project
+                .as_ref()
+                .map(|(p, _)| p.0)
+                .or_else(|| choose(town, candidate, sample, &demand, &[]))?;
             let support = candidate
                 .opportunities
                 .for_activity(kind.definition().activity);
             let fit = location(town, candidate).attraction(kind.definition());
             let score = frontage_priority(support, candidate.conditions, fit, sample)
-                + project.map_or(0., |p| project_pull(p, candidate.slot.front));
+                + project
+                    .as_ref()
+                    .map_or(0., |(p, _)| project_pull(p, candidate.slot.front));
             let order = weighted_order(score, site_draw(town, candidate, 0x47cc));
-            (
+            Some((
                 order,
-                Offer::Premises(candidate, sample, kind, project.map(|p| (p.3, p.4))),
-            )
+                Offer::Premises(
+                    candidate,
+                    sample,
+                    kind,
+                    project.map(|(p, plot)| {
+                        Box::new(FittedProject {
+                            purpose: (p.3, p.4),
+                            plot,
+                            initial_holdings,
+                        })
+                    }),
+                ),
+            ))
         })
         .collect();
-    ranked.extend(participant_offers(town, context, &supplied, &housing)?);
+    ranked.extend(participant_offers(town, context, &demand)?);
     // hpc-exempt: ranks exact geometric development proposals, not numerical lattice cells.
     ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
     for (order, offer) in ranked {
         if town.effort < 1. || order == 0. {
             break;
         }
+        let before = town.holdings().len();
         match offer {
             Offer::Premises(candidate, sample, kind, project) => {
-                develop_site(town, context, candidate, sample, kind, project)?
+                if project.is_none() && !space.need(town.seat.story.people).supports(kind) {
+                    continue;
+                }
+                let result = develop_site(town, context, candidate, sample, kind, project)?;
+                log("town.construction-decision", town, &|| {
+                    serde_json::json!({
+                        "at": candidate.slot.front, "place": kind.definition().label,
+                        "building": candidate.conditions.building, "slope": candidate.conditions.slope,
+                        "result": result
+                    })
+                });
             }
             Offer::Partners {
                 mut existing,
                 additions,
             } => {
                 let budget = (town.effort / 2.).floor() as usize;
-                existing.extend(additions.into_iter().take(budget));
+                let remaining = space.need(town.seat.story.people);
+                existing.extend(
+                    additions
+                        .into_iter()
+                        .filter(|(kind, _)| remaining.supports(*kind))
+                        .take(budget)
+                        .map(|(_, edit)| edit),
+                );
                 commit_participants(town, context, existing)?;
             }
+        }
+        for holding in &town.holdings()[before..] {
+            space.add(FloorSpace::holding(holding, context.spatial)?);
         }
     }
     Ok(())
@@ -121,27 +199,30 @@ fn develop_site(
     candidate: &super::Candidate,
     sample: f64,
     kind: Kind,
-    project: Option<PurposeSite>,
-) -> io::Result<()> {
-    if let Some((site, relation)) = project {
-        if relation.satisfied(site, town, context.spatial)? {
-            return Ok(());
+    project: Option<Box<FittedProject>>,
+) -> io::Result<&'static str> {
+    if let Some(p) = &project {
+        let (site, relation) = p.purpose;
+        if relation.served_since(site, p.initial_holdings, town, context.spatial)? {
+            return Ok("satisfied");
         }
     }
+    let (project, fitted) = project.map(|p| (p.purpose, p.plot)).unzip();
     let definition = kind.definition();
     let means = resources(candidate);
-    let Some(edit) = proposal(candidate, kind, sample, project, context) else {
-        return Ok(());
+    let edit = match proposal(candidate, kind, sample, project, fitted, context) {
+        Ok(edit) => edit,
+        Err(reason) => return Ok(reason),
     };
     let Some(edit) = (if project.is_some() {
         super::investment::finance(town, edit)
     } else {
         Some(edit)
     }) else {
-        return Ok(());
+        return Ok("finance");
     };
     let EditOutcome::Premises(id) = town.apply(edit, context.spatial)? else {
-        return Ok(());
+        return Ok("fabric");
     };
     context.ground.mark_shapes(
         std::slice::from_ref(&town.holdings()[id.0 as usize].outline),
@@ -149,16 +230,20 @@ fn develop_site(
         context.spatial,
     )?;
     town.effort -= (1. + definition.prominence) * (1. + means);
-    Ok(())
+    Ok("built")
 }
 fn participant_offers<'a>(
     town: &Town,
     context: &Frontage<'a>,
-    supplied: &[f64; PLACES.len()],
-    housing: &[(Kind, HousingOffer)],
+    demand: &Demand,
 ) -> io::Result<Vec<(f64, Offer<'a>)>> {
     let mut offers = Vec::new();
     let mut groups = vec![Vec::new(); town.holdings().len()];
+    let widest_frontage = town
+        .holdings()
+        .iter()
+        .map(|h| h.slot.frontage)
+        .fold(0., f64::max);
     for candidate in context.candidates {
         if let Some(id) = candidate.slot.participant {
             groups[id.0 as usize].push(candidate);
@@ -175,7 +260,7 @@ fn participant_offers<'a>(
         if activities.is_empty() || host.condition <= 0.2 {
             continue;
         }
-        let existing = existing_partners(town, host, activities, context.spatial)?;
+        let existing = existing_partners(town, host, activities, widest_frontage, context.spatial)?;
         let mut choices = Vec::new();
         for candidate in candidates {
             let sample = crate::noise::hash_unit(
@@ -183,10 +268,9 @@ fn participant_offers<'a>(
                 candidate.slot.front[0],
                 candidate.slot.front[1],
             );
-            let kind = choose(town, candidate, sample, supplied, housing, activities);
-            if !activities.contains(&kind.definition().activity) {
+            let Some(kind) = choose(town, candidate, sample, demand, activities) else {
                 continue;
-            }
+            };
             let support = candidate
                 .opportunities
                 .for_activity(kind.definition().activity);
@@ -196,9 +280,10 @@ fn participant_offers<'a>(
                 location(town, candidate).attraction(kind.definition()),
                 sample,
             );
-            if let Some(edit) = proposal(candidate, kind, sample, None, context) {
+            if let Ok(edit) = proposal(candidate, kind, sample, None, None, context) {
                 choices.push((
                     weighted_order(score, site_draw(town, candidate, 0x47cc)),
+                    kind,
                     edit,
                 ));
             }
@@ -208,11 +293,14 @@ fn participant_offers<'a>(
         let order = choices.first().map_or(host.occupation, |choice| choice.0);
         let additions = choices
             .into_iter()
-            .map(|(_, placement)| {
-                FabricEdit::Optional(Box::new(FabricEdit::Join {
-                    partner,
-                    placement: Box::new(placement),
-                }))
+            .map(|(_, kind, placement)| {
+                (
+                    kind,
+                    FabricEdit::Optional(Box::new(FabricEdit::Join {
+                        partner,
+                        placement: Box::new(placement),
+                    })),
+                )
             })
             .collect();
         offers.push((
@@ -266,10 +354,16 @@ fn existing_partners(
     town: &Town,
     host: &crate::town::fabric::Holding,
     activities: &[Activity],
+    widest: f64,
     spatial: &dyn crate::spatial::SpatialKernel,
 ) -> io::Result<Vec<FabricEdit>> {
     let mut members = Vec::new();
-    for h in town.holdings().iter().filter(|h| {
+    let atlas_map::Bounds(w, s, e, n) = spatial.bounds(&host.outline).map_err(io::Error::other)?;
+    let nearby = town.nearby_holdings(
+        atlas_map::Bounds(w - widest, s - widest, e + widest, n + widest),
+        spatial,
+    )?;
+    for h in nearby.into_iter().map(|i| &town.holdings()[i]).filter(|h| {
         h.id != host.id
             && !h.ties.iter().any(|tie|matches!(&tie.destination,crate::town::fabric::Endpoint::Premises{town:key,holding} if key==&town.seat.key && *holding==host.id))
             && h.condition > 0.35
@@ -293,31 +387,22 @@ fn proposal(
     kind: Kind,
     sample: f64,
     purpose: Option<(crate::town::fabric::Anchor, Relationship)>,
+    fitted: Option<crate::town::plots::Slot>,
     context: &Frontage<'_>,
-) -> Option<FabricEdit> {
+) -> Result<FabricEdit, &'static str> {
     let definition = kind.definition();
-    let mut slot = candidate.slot.clone();
-    let building = crate::noise::hash_unit(0x233a, slot.front[0], slot.front[1]);
+    let front = candidate.slot.front;
+    let building = crate::noise::hash_unit(0x233a, front[0], front[1]);
     if !kind.open() && building > candidate.conditions.building {
-        return None;
+        return Err("building policy");
     }
-    let width = definition.frontage.sample(sample);
-    let width = if slot.street.is_some() || slot.participant.is_some() {
-        width.min(slot.frontage.max(definition.frontage.low))
-    } else {
-        width
-    };
-    let depth = definition.depth.sample(1. - sample);
-    slot.frontage = width;
-    slot.depth = depth;
-    slot.corners = rectangle(slot.front, slot.direction, slot.inward, width, depth);
-    if !available(&slot, context) {
-        return None;
-    }
+    let slot = fitted
+        .or_else(|| fitted_slot(candidate, definition, sample, context.ground))
+        .ok_or("parcel terrain")?;
     let means = resources(candidate);
     let outdoor = kind.open();
     let buildings = crate::town::roofs::components(&slot, kind, means, sample);
-    Some(FabricEdit::Establish {
+    Ok(FabricEdit::Establish {
         conditions: candidate.conditions,
         purpose,
         buildings,
@@ -379,14 +464,44 @@ fn frontage_priority(support: &Support, land: Conditions, fit: f64, sample: f64)
         + fit.ln_1p()
         + sample * 0.2
 }
-fn available(slot: &crate::town::plots::Slot, context: &Frontage<'_>) -> bool {
-    context
-        .ground
-        .open_with(&Rectangle(&slot.corners), |owner| {
-            owner == crate::town::ground::FREE
-                || owner == PLOT
-                || owner >= crate::town::ground::FIRST_STREET
-        })
+fn fitted_slot(
+    candidate: &super::Candidate,
+    definition: crate::town::catalogue::Definition,
+    sample: f64,
+    ground: &crate::town::ground::Ground,
+) -> Option<crate::town::plots::Slot> {
+    use crate::town::{
+        geometry::left,
+        ground::{FIRST_STREET, FREE},
+    };
+    let mut slot = candidate.slot.clone();
+    let attached = slot.street.is_some() || slot.participant.is_some();
+    let mut width = definition.frontage.sample(sample);
+    if attached {
+        width = width.min(slot.frontage.max(definition.frontage.low));
+    }
+    let desired = (width, definition.depth.sample(1. - sample));
+    let smallest = (definition.frontage.low, definition.depth.low);
+    // Independent plots can face any side of the same entrance. On a street
+    // or an existing court its frontage fixes its orientation.
+    for (w, d) in [desired, smallest] {
+        for _ in 0..if attached { 1 } else { 4 } {
+            slot.frontage = w;
+            slot.depth = d;
+            slot.corners = rectangle(slot.front, slot.direction, slot.inward, w, d);
+            if ground.open_with(&Rectangle(&slot.corners), |mark| {
+                mark == FREE || mark == PLOT || mark >= FIRST_STREET
+            }) {
+                return Some(slot);
+            }
+            slot.direction = left(slot.direction);
+            slot.inward = left(slot.inward);
+        }
+        // The next footprint starts in the original frame.
+        slot.direction = candidate.slot.direction;
+        slot.inward = candidate.slot.inward;
+    }
+    None
 }
 pub(super) use crate::town::siting::feasible as eligible;
 fn resources(candidate: &super::Candidate) -> f64 {
@@ -405,10 +520,9 @@ fn choose(
     town: &Town,
     candidate: &super::Candidate,
     sample: f64,
-    supplied: &[f64; PLACES.len()],
-    housing: &[(Kind, HousingOffer)],
+    demand: &Demand,
     activities: &[Activity],
-) -> Kind {
+) -> Option<Kind> {
     let activity = candidate.opportunities.for_activity(Activity::Trade).demand;
     let local = candidate.conditions;
     let means = resources(candidate);
@@ -419,6 +533,8 @@ fn choose(
     for (i, kind) in PLACES.iter().copied().enumerate() {
         let definition = kind.definition();
         if kind.open()
+            || definition.roles.household
+            || demand.space.working <= 0.
             || !eligible(kind, local, candidate.slot.street)
             || (!activities.is_empty() && !activities.contains(&definition.activity))
         {
@@ -428,8 +544,9 @@ fn choose(
         let audience =
             (support.demand + support.capability) / (1. + definition.demand + support.burden);
         let fit = location.attraction(definition);
-        let cost = (1. + (definition.typical_means - means).max(0.) * 3.) * (1. + supplied[i]);
-        let weight = audience * fit / cost;
+        let cost =
+            (1. + (definition.typical_means - means).max(0.) * 3.) * (1. + demand.families[i]);
+        let weight = audience * fit * demand.space.working / cost;
         if weight <= 0. {
             continue;
         }
@@ -442,13 +559,14 @@ fn choose(
     }
     if let Some((_, kind)) = best {
         let work = candidate.opportunities.for_activity(Activity::Household);
-        let residential = (1. + work.demand + work.capability) / (1. + local.density + work.burden);
+        let residential = demand.space.living * (1. + work.demand + work.capability)
+            / (1. + local.density + work.burden);
         // The number of named businesses in the catalogue does not multiply local demand.
         let business = opportunity / competing_uses;
         if (!activities.is_empty() && !activities.contains(&Activity::Household))
             || site_draw(town, candidate, 0x40a6) * (business + residential) < business
         {
-            return crate::town::catalogue::palette(kind, sample);
+            return Some(crate::town::catalogue::palette(kind, sample));
         }
     }
     let distance = crate::town::geometry::distance(candidate.slot.front, town.seat.centre);
@@ -457,7 +575,7 @@ fn choose(
         candidate.slot.front[0],
         candidate.slot.front[1],
     );
-    household(
+    let kind = household(
         &HousingSite {
             conditions: local,
             distance_from_seat: distance,
@@ -466,8 +584,20 @@ fn choose(
             form_sample: sample,
             livelihood_sample: farming,
         },
-        housing,
-    )
+        &demand.housing,
+    );
+    (demand.space.living > 0.
+        && (activities.is_empty() || activities.contains(&kind.definition().activity)))
+    .then_some(kind)
+}
+impl UnmetDemand {
+    fn supports(self, kind: Kind) -> bool {
+        if kind.definition().roles.household {
+            self.living > 0.
+        } else {
+            self.working > 0.
+        }
+    }
 }
 pub fn maintain(town: &mut Town, context: &super::Exposure<'_>) -> io::Result<()> {
     for i in 0..town.holdings().len() {

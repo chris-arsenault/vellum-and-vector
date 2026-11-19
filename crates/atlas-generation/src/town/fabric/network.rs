@@ -89,10 +89,11 @@ impl Town {
         let area = Geometry::GeometryCollection {
             geometries: shoulders,
         };
-        let roofs: Vec<_> = self
-            .holdings
+        let nearby =
+            self.nearby_holdings(spatial.bounds(&area).map_err(io::Error::other)?, spatial)?;
+        let roofs: Vec<_> = nearby
             .iter()
-            .flat_map(|h| h.buildings.iter().cloned())
+            .flat_map(|&i| self.holdings[i].buildings.iter().cloned())
             .collect();
         if spatial
             .intersection_areas(&area, &roofs)
@@ -102,14 +103,17 @@ impl Town {
         {
             return Ok(false);
         }
-        let claims: Vec<_> = self.holdings.iter().map(|h| h.outline.clone()).collect();
+        let claims: Vec<_> = nearby
+            .iter()
+            .map(|&i| self.holdings[i].outline.clone())
+            .collect();
         let overlaps = spatial
             .intersection_areas(&area, &claims)
             .map_err(io::Error::other)?;
         let mut revisions = Vec::new();
-        for (i, _) in overlaps
+        for (i, _) in nearby
             .into_iter()
-            .enumerate()
+            .zip(overlaps)
             .filter(|(_, area)| *area > 0.0001)
         {
             let holding = &self.holdings[i];
@@ -142,12 +146,19 @@ impl Town {
                 (p, width_at(s) + extra * taper)
             })
             .unzip();
+        let mut widened = road.clone();
+        widened.points = points;
+        widened.widths = widths;
+        let envelope = (load.street < self.fitting.borrow().roads.len())
+            .then(|| super::road_bounds(&widened, spatial))
+            .transpose()?;
         let owner = FIRST_STREET + load.street as u32;
         ground.release_shape(&area, PLOT, spatial)?;
         ground.mark_shapes(&[area], owner, spatial)?;
-        let street = &mut self.streets[load.street];
-        street.points = points;
-        street.widths = widths;
+        self.streets[load.street] = widened;
+        if let Some(bounds) = envelope {
+            self.fitting.get_mut().roads.replace(load.street, bounds);
+        }
         for (i, shape) in revisions {
             self.holdings[i].outline = shape;
         }
@@ -167,6 +178,7 @@ impl Town {
             return Ok(false);
         }
         let extension = self.streets.pop().expect("accepted street");
+        self.fitting.get_mut().roads = Default::default();
         self.wear.pop();
         let street = &mut self.streets[id];
         let offset = street.length();
@@ -191,10 +203,11 @@ impl Town {
         let Some(corridor) = street.corridor(0., spatial).map_err(io::Error::other)? else {
             return Ok(false);
         };
-        let buildings: Vec<_> = self
-            .holdings
+        let bounds = spatial.bounds(&corridor).map_err(io::Error::other)?;
+        let nearby = self.nearby_holdings(bounds, spatial)?;
+        let buildings: Vec<_> = nearby
             .iter()
-            .flat_map(|h| h.buildings.iter().cloned())
+            .flat_map(|&i| self.holdings[i].buildings.iter().cloned())
             .collect();
         if spatial
             .intersection_areas(&corridor, &buildings)
@@ -205,7 +218,8 @@ impl Town {
             return Ok(false);
         }
         let mut changed = Vec::new();
-        for (i, holding) in self.holdings.iter().enumerate() {
+        for i in nearby {
+            let holding = &self.holdings[i];
             if holding.public {
                 continue;
             }
@@ -228,7 +242,18 @@ impl Town {
             changed.push((i, outline));
         }
         let mut joins = vec![street.points[0], *street.points.last().unwrap()];
-        for road in &self.streets {
+        let tol = crate::town::settings::JUNCTION_TOLERANCE;
+        let road_ids = self.nearby_roads(
+            atlas_map::Bounds(
+                bounds.0 - tol,
+                bounds.1 - tol,
+                bounds.2 + tol,
+                bounds.3 + tol,
+            ),
+            spatial,
+        )?;
+        for &i in &road_ids {
+            let road = &self.streets[i];
             if let Some(crossing) = spatial
                 .overlay(&trace, &line(&road.points), Overlay::Intersection)
                 .map_err(io::Error::other)?
@@ -240,13 +265,26 @@ impl Town {
             }
         }
         let mut network = crate::town::lanes::Network {
-            streets: self.streets.clone(),
+            streets: road_ids
+                .iter()
+                .map(|&id| self.streets[id].clone())
+                .collect(),
         };
         network.streets.push(street);
         for join in joins {
             crate::town::growth::connect(join, &mut network, spatial)?;
         }
-        self.streets = network.streets;
+        let new_road = network.streets.pop().expect("new road is staged last");
+        let envelopes = network
+            .streets
+            .iter()
+            .map(|road| super::road_bounds(road, spatial))
+            .collect::<io::Result<Vec<_>>>()?;
+        for ((id, road), envelope) in road_ids.into_iter().zip(network.streets).zip(envelopes) {
+            self.fitting.get_mut().roads.replace(id, envelope);
+            self.streets[id] = road;
+        }
+        self.streets.push(new_road);
         self.wear.resize(self.streets.len(), 0.);
         for (i, outline) in changed {
             self.holdings[i].outline = outline;

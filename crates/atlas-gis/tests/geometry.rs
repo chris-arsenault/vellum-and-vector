@@ -194,6 +194,16 @@ fn indexed_queries_preserve_input_order_and_use_geometry_distance_not_envelope_d
     assert_eq!(index.nearest(Position::xy(0.0, 0.0)).unwrap(), Some(1));
     assert_eq!(
         index
+            .distances(Bounds(-5., -5., 5., 5.), Position::xy(0., 0.))
+            .unwrap(),
+        [(0, 4.), (1, 1.)]
+    );
+    assert_eq!(
+        index.nearest_with_distance(Position::xy(0., 0.)).unwrap(),
+        Some((1, 1.))
+    );
+    assert_eq!(
+        index
             .nearest_many(&[Position::xy(0.0, 0.0), Position::xy(0.0, 4.0)])
             .unwrap(),
         [Some(1), Some(0)]

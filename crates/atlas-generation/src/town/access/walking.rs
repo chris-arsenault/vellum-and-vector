@@ -1,7 +1,7 @@
 //! Walking to an independent entrance uses open land. Neighbouring entrances share
 //! visible paths; when those paths meet an obstacle, all queries share the same
 //! decomposition of the traversable ground into adjoining rectangles.
-use super::{pos, BoundNetwork, Entrance, JunctionId, Point};
+use super::{pos, BoundNetwork, Course, Entrance, JunctionId, Point};
 use crate::{
     spatial::SpatialKernel,
     town::{
@@ -11,11 +11,11 @@ use crate::{
 };
 use std::{collections::BTreeMap, io};
 
-pub(super) const EFFORT: f64 = 1.6;
+pub(crate) const EFFORT: f64 = 1.6;
 fn open(owner: u32) -> bool {
     !matches!(owner, WATER | WALL | OUTSIDE | STEEP | PLOT)
 }
-pub(super) fn clear(ground: &Ground, a: Point, b: Point) -> bool {
+pub(crate) fn clear(ground: &Ground, a: Point, b: Point) -> bool {
     let direction = unit(sub(b, a));
     let permitted = |p| {
         open(ground.owner(p)) || (ground.owner(p) == STEEP && ground.passes_hillside(p, direction))
@@ -49,7 +49,7 @@ pub(super) fn connect(
             continue;
         };
         if attached != vertex {
-            graph.connect(vertex, attached, walk - entrance.walk, None);
+            graph.connect(vertex, attached, walk - entrance.walk, Course::Walk);
         }
         doors.insert(JunctionId::at(entrance.point), (entrance.point, vertex));
     }
@@ -68,7 +68,7 @@ pub(super) fn connect(
         let (p, start) = doors[a];
         let (q, end) = doors[b];
         if clear(ground, p, q) {
-            graph.connect(start, end, distance(p, q) * EFFORT, None);
+            graph.connect(start, end, distance(p, q) * EFFORT, Course::Walk);
         } else {
             obstructed = true;
         }
@@ -117,8 +117,20 @@ fn detours(ground: &Ground, doors: &[(Point, usize)], graph: &mut BoundNetwork) 
         .walks
         .get_or_init(|| std::rc::Rc::new(Mesh::build(ground)));
     let vertices: Vec<_> = mesh.centres.iter().map(|&p| graph.vertex(p)).collect();
-    for &(a, b, cost) in &mesh.crossings {
-        graph.connect(vertices[a], vertices[b], cost, None);
+    for &(a, b, via) in &mesh.crossings {
+        let portal = graph.vertex(via);
+        graph.connect(
+            vertices[a],
+            portal,
+            distance(mesh.centres[a], via) * EFFORT,
+            Course::Walk,
+        );
+        graph.connect(
+            portal,
+            vertices[b],
+            distance(via, mesh.centres[b]) * EFFORT,
+            Course::Walk,
+        );
     }
     for &(point, vertex) in doors {
         let Some(cell) = ground.index(point) else {
@@ -134,7 +146,7 @@ fn detours(ground: &Ground, doors: &[(Point, usize)], graph: &mut BoundNetwork) 
                 vertices[span.region],
                 vertex,
                 distance(mesh.centres[span.region], point) * EFFORT,
-                None,
+                Course::Walk,
             );
         }
     }
@@ -142,7 +154,7 @@ fn detours(ground: &Ground, doors: &[(Point, usize)], graph: &mut BoundNetwork) 
 pub(crate) struct Mesh {
     rows: Vec<Vec<Span>>,
     centres: Vec<Point>,
-    crossings: Vec<(usize, usize, f64)>,
+    crossings: Vec<(usize, usize, Point)>,
 }
 impl Mesh {
     fn build(ground: &Ground) -> Self {
@@ -193,16 +205,6 @@ impl Mesh {
                     ground.origin[0] + (r.start + r.end) as f64 * ground.cell / 2.,
                     ground.origin[1] + (r.first + r.last + 1) as f64 * ground.cell / 2.,
                 ]
-            })
-            .collect();
-        let crossings = crossings
-            .into_iter()
-            .map(|(a, b, via)| {
-                (
-                    a,
-                    b,
-                    (distance(centres[a], via) + distance(via, centres[b])) * EFFORT,
-                )
             })
             .collect();
         Self {

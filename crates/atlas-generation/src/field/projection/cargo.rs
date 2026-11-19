@@ -116,9 +116,9 @@ fn append(entries: &mut Vec<f64>, slot: usize, cargo: Option<&MaterialCargo>) ->
     if let Some(cargo) = cargo {
         for (key, host, density) in cargo.entries() {
             if key <= 0 || host < 0 || !density.is_finite() || density <= 0.0 {
-                return Err(io::Error::other(
-                    "Cargo requires a named reservoir, constituent and positive density",
-                ));
+                return Err(io::Error::other(format!(
+                    "Invalid cargo in material slot {slot}: reservoir {key}, constituent {host}, density {density}"
+                )));
             }
             entries.extend([slot as f64, f64::from(key), f64::from(host), density]);
         }

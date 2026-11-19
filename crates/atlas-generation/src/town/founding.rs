@@ -15,6 +15,11 @@ use super::{
 use crate::spatial::SpatialKernel;
 use std::io;
 
+/// Distance from the captured place within which its first occupants seek parcels.
+pub(crate) fn reach(size: atlas_map::town::Size) -> f64 {
+    atlas_map::town::plot_size(size).1 * 3.
+}
+
 pub fn establish(
     town: &mut Town,
     ground: &Ground,
@@ -36,7 +41,7 @@ pub fn establish(
             town.seed_approach(way, street);
         }
     }
-    let mut plots = super::land_sites::around([town.seat.centre], depth * 3., 10., depth, 0);
+    let mut plots = super::land_sites::around([town.seat.centre], reach(size), 10., depth, 0);
     plots.extend(
         town.streets()
             .iter()
@@ -161,8 +166,7 @@ impl OutlyingSite {
         };
         let work = founding_work(conditions[0]);
         let definition = work.definition();
-        let network =
-            super::access::Access::new(town.streets(), spatial)?.on_ground(walking_ground);
+        let network = super::access::Access::for_town(town, spatial)?.on_ground(walking_ground);
         let endpoints = [
             super::access::Entrance::slot(town, &self.plots[0]),
             super::access::Entrance::source(town, &self.source.endpoint, self.source.position),

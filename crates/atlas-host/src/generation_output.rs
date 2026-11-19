@@ -64,6 +64,13 @@ pub struct Completed {
 }
 /// UI observations carry progress and previews; domain validation stays in the Rust runtime.
 pub trait Observations {
+    fn completed_state(
+        &mut self,
+        _state: &State,
+        _ancestry: Option<&[GenerationEpoch]>,
+    ) -> ExecutionResult<()> {
+        Ok(())
+    }
     fn diagnostic(&mut self, diagnostic: &Diagnostic) -> ExecutionResult<()>;
     fn preview(
         &mut self,
@@ -92,7 +99,7 @@ impl<S: Sink, C: GenerationControl, O: Observations> Output for Publication<'_, 
         let ancestry = match boundary {
             Boundary::Epoch(ancestry) => Some(ancestry),
             Boundary::Town(stage) => {
-                preview.town_fabric = Some(preview::town::capture(&state.town, stage));
+                preview.town_fabric = Some(preview::town::capture(&state.town, stage, state)?);
                 town_epoch = [GenerationEpoch {
                     id: format!("Town {} (round {})", stage.phase, stage.round),
                     duration: 0.,
@@ -103,6 +110,7 @@ impl<S: Sink, C: GenerationControl, O: Observations> Output for Publication<'_, 
             }
             Boundary::Final => None,
         };
+        self.observations.completed_state(state, ancestry)?;
         if preview.channels.contains_key("Elevation") {
             self.observations.preview(&preview, ancestry).await?;
         }

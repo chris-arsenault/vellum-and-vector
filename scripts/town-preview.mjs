@@ -35,6 +35,7 @@ function extent(series) {
     include(town.centre);
     for (const plot of town.plots) for (const ring of parts(plot)) ring.forEach(include);
     for (const [points, , through] of town.streets) if (!through) points.forEach(include);
+    for (const [points] of town.footpaths ?? []) points.forEach(include);
   }
   const width = Math.max(40, east - west, ((north - south) * 4) / 3) * 1.16;
   const height = (width * 3) / 4;
@@ -50,6 +51,9 @@ const escape = (value) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const roof = { residential: "#ab6e58", civic: "#587689", economic: "#bc883a" };
 function svg({ town, fields, stage }, frame, buildingsOnly = false) {
+  const walks = (town.footpaths ?? []).map(([[start,end],width]) =>
+    `<path d="M${point(start)}L${point(end)}" stroke-width="${width}"/>`
+  );
   const roads = town.streets.flatMap(([points, widths]) =>
     points
       .slice(1)
@@ -64,8 +68,9 @@ function svg({ town, fields, stage }, frame, buildingsOnly = false) {
 ${buildingsOnly ? "" : `<g fill="#d4c9a5" stroke="#b3a682" stroke-width=".6" fill-rule="evenodd">${fields.map((f) => shape(f)).join("")}</g>
 <g fill="#e7ddbf" stroke="#ae9f81" stroke-width=".6" fill-rule="evenodd">${town.plots.map((p) => shape(p)).join("")}</g>
 <g fill="none" stroke="#82796b" stroke-linecap="round">${roads.join("")}</g>
+<g fill="none" stroke="#866e53" stroke-linecap="round">${walks.join("")}</g>
 <g fill="none" stroke="#9e9182" stroke-width="1.5">${town.passages.map((p) => shape(p, false)).join("")}</g>`}
-<g stroke="#65584f" stroke-width=".6" fill-rule="evenodd">${town.buildings.map(([g, f]) => `<g fill="${roof[f]}">${shape(g)}</g>`).join("")}</g>
+<g stroke="#65584f" stroke-width=".6" fill-rule="evenodd">${town.buildings.map(([g, f,address]) => `<g fill="${roof[f]}">${address ? `<title>${escape(address)}</title>` : ""}${shape(g)}</g>`).join("")}</g>
 </svg>`;
 }
 
