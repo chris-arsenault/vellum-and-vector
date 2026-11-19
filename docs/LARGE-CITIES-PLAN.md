@@ -1,172 +1,177 @@
-# Large cities across several maps
+# Large cities: a city map refined into district maps
 
-Working copy of a proposed plan (owner request 2026-11-19). Nothing here is built. The
+Working copy of a proposed plan (owner direction 2026-11-19). Nothing here is built. The
 last milestone moves its durable content into an ADR and the backlog and deletes this file.
 
 ## Outcome
 
-A city too large for one real-scale map is made as a city and its parts: a city layer that
-decides everything that must be the same everywhere in the city, and part maps (wards,
-boroughs, districts) that grow streets, plots and buildings inside it. Opening two
-neighbouring parts shows one city: the arterials, rivers, walls and district edges meet at
-the shared edge, and each part's fabric reads as belonging to its part of the city.
+A large city is made the way every other layer is made: refined from larger to smaller.
+First a city map is generated completely. It covers the whole city, coarser than streets
+and buildings, and shows:
+- the city's land and water;
+- its walls, gates and main roads;
+- its major landmarks;
+- six or seven districts, each with its own population, density, wealth, specializations
+  and occupations.
+
+Then any district can be refined into its own map, where streets, plots and buildings grow
+from the district's character. This follows the city maps of Baldur's Gate and Neverwinter
+Nights: one map of the city and its districts, each district a map of its own. District
+outlines follow the city: rivers, walls, roads, ridges and the edges of older growth, not
+rectangles.
 
 ## User requirements (owner, 2026-11-19)
 
-1. Cities that need to spread over multiple maps need an intermediary layer between the
-   city and its detailed maps, as New York has boroughs and Tokyo its wards.
-2. Lattice sizes follow the scale contract: a child of about a seventh of its parent's area
+1. Cities refine like every other layer, larger to smaller, then subdivide.
+2. A city map comes first, generated completely, with its own features and major
+   landmarks. It is not as fine-grained as streets and buildings. It holds districts with
+   their density, specializations and occupations.
+3. After the city map is complete, individual districts (wards) are refined as their own
+   maps.
+4. Districts are not forced to be rectangular. They follow arbitrary, organic boundaries.
+   Generation areas stop being rectangles.
+5. Lattice sizes follow the scale contract: a child of about a seventh of its parent's area
    has about the parent's triangle count (Draft about 15k, Standard about 60k).
 
-Standing direction this plan inherits: towns grow through processes, never stamped
-layouts ([TOWN-DEVELOPMENT-PLAN](TOWN-DEVELOPMENT-PLAN.md)); real-scale maps capture their
-parent's context and owe it only landmark agreement ([ADR 0016](adr/0016-real-scale-maps.md));
-regions are indexed polygons; refinement writes the child, never the parent.
+Standing direction: towns grow through processes, never stamped layouts; a child captures
+its parent's context and writes only itself; parent and child owe each other landmark
+agreement; regions are indexed polygons.
 
-## Findings
+## How the research informs generation
 
-Research report (sources opened by the research pass, 2026-11-19):
+The research pass of 2026-11-19, from the sources it opened:
 
-- **Real cities nest three to five levels between the city and the block.**
-  - New York: 5 boroughs, 59 community districts of 3.6–59 km², then neighbourhoods.
-  - Tokyo: 23 wards of 10–60 km², then machi, chōme and blocks.
-  - Paris: 20 arrondissements of 2.2–16 km², then 80 quartiers of about 1.3 km².
-  - London: 32 boroughs of 12–150 km², then wards.
-  - Istanbul: 39 districts, then mahalle.
-  - Rome and Constantinople had 14 regiones each, bounded by their walls.
+- **Real cities nest in parts of a few to tens of square kilometres.** Paris's 20
+  arrondissements run 2–16 km², New York's community districts 4–59 km², Tokyo's wards
+  10–60 km². Each level splits into 4 to 18 parts, so six or seven districts per city map
+  fits real cities and the scale contract.
+- **City-wide decisions belong to the city map.** Hillier's space syntax describes a
+  foreground network of main roads linking centres and other towns, set in a background of
+  residential streets. Main roads, centres and their ranking, landmarks and district
+  identity are therefore decided once, on the city map, and inherited by districts.
+- **District edges form on rivers, walls and main roads.** Conzen and Whitehand's fringe
+  belts form against walls and in building slumps, and survive inside the grown city. The
+  city map draws district outlines along those features, which makes them organic and puts
+  seams where streets change anyway.
+- **Large cities absorb villages that keep their identity.** London and Paris both grew
+  this way. On the city map, an absorbed village becomes a district with its own older
+  centre.
+- **Coarse to fine is the established pattern.** Parish and Müller go from highways to
+  streets, lots and buildings. Chen et al. trace major roads first, then fill the regions
+  between and seed their streets from the major roads' ends.
 
-  Each level splits into 4 to 18 parts, so the scale contract's sevenths fit.
-- **Large cities grow by absorbing villages, which keep their identity.** London absorbed
-  hundreds of towns and villages; Paris's arrondissements come from annexed communes
-  (1860). Beneš et al. 2014 grow several settlements where inter-city roads cross and
-  merge them into a conurbation.
-- **Some decisions are city-wide and break if made per tile.**
-  - Hillier's space syntax describes a foreground network of linked centres at every
-    scale, set in a background of residential streets; the foreground also carries the
-    links to other towns.
-  - Tiled map rendering shows that rules depending on far-away facts fail at tile edges:
-    labels, priority, merging (imagico; OSM metatiles).
-- **District edges form on arterials, rivers and walls.** Conzen and Whitehand's fringe
-  belts form against walls and in building slumps. They are large, green, institutional and
-  thin in radial roads, and they persist inside the grown city. Chen et al. 2008 let street
-  patterns change across major roads and seed one region's streets from another's road
-  ends.
-- **Coarse-to-fine generation is the established pattern.** Parish and Müller generate
-  highways, then streets, lots and buildings, driven by population and coast maps. Chen et
-  al. trace major roads first and then fill the regions between.
+## Proposed design
 
-How this codebase differs from the research's sizing:
-- Streets, plots and buildings are free vector shapes. Only the ground is on the lattice.
-- A part map's limit is therefore the cost of the town processes over its holdings, and the
-  ground's resolution, not hex count.
-- A real-scale map at 100 m hexes, 50 across, holds about the Draft triangle count over
-  about 20 km². That is the size of a Paris arrondissement, a New York community district
-  or a small Tokyo ward.
+Agent-derived and revisable; owner decisions are marked.
 
-## Decisions
+**Scale ladder.** Using the real-scale hex ladder, each step from city to district is a
+third of the hex size, about a ninth of the area: close to the scale contract's seventh.
 
-Agent-derived, revisable with evidence; the ones marked **owner** need the owner's word:
+| Map | Hex | Area at ~15k Draft triangles | Real-world match |
+|---|---|---|---|
+| City map | 300 m | ~16 × 12 km, ~200 km² | A historic capital, or Paris inside its walls |
+| District map | 100 m | ~5 × 4 km, ~20–30 km² | A Paris arrondissement, a New York district |
 
-1. **The city layer is a regional map at the city's level, with a metropolitan stage.**
-   - A city of 600–1,500 km² is about one level-4 region (about 48 × 36 km at about 15k
-     Draft triangles). That lattice resolves a few hundred metres: enough for arterials,
-     centres, land use and density, not for streets.
-   - Its new metropolitan stage runs after regional development:
-     - It grows the foreground network: arterials, the links to other towns, river
-       crossings.
-     - It places centre seeds and their hierarchy, walls with gates as fixation lines, and
-       fringe belts.
-     - It places absorbed villages as their own nuclei, in the order they were reached, and
-       builds density, land-use and building-period fields.
-     - It cuts parts along arterials, rivers, walls and fringe belts.
-   - It publishes the skeleton as vector features, and each part as a region polygon with
-     its census, character and period.
-   - It reuses regional maps, the scale contract and region selection, and adds no new map
-     kind. The alternative is a real-scale map at the 300 m hex: rejected, because at the
-     largest hex a city of this area holds several times the triangle count.
-2. **A part is a real-scale ground map opened from its region polygon.**
-   - It captures the city layer's skeleton inside and around its outline as fixed context.
-   - Its town development is constrained by that context: arterials, centres and walls fixed
-     in place, its census as the population it realizes, its period and character as the
-     starting conditions of its rounds.
-   - The existing town processes grow everything below the arterials.
-   - A part larger than one map's area is cut again, one level down, by the same rules.
-3. **Seams lie on skeleton features, so parts agree without seeing each other.**
-   - A part's outline follows an arterial centreline, a river or a wall.
-   - The city layer fixes the seam feature's geometry, width and gates.
-   - A part grows its plots up to its side of the seam street, and minor streets start from
-     the arterial's frontage, as Chen seeds one region from another's road ends.
-   - Parts can be generated in any order and still meet.
-   - **Owner:** this adds an across-map rule for parts of one city: their shared skeleton
-     features agree exactly. Today parent and child owe only landmark agreement, so this
-     needs the owner's word.
-4. **City-wide facts are decided once, at the city layer.** These are the centre hierarchy,
-   landmark priority, arterial names and classes, and part names. Addresses within a part
-   follow the part's own streets.
-5. **Trigger.** A settlement whose census footprint exceeds one real-scale map's area at the
-   chosen hex opens as a city layer. A smaller settlement opens as one real-scale map, as
-   today. **Owner:** confirm the threshold's measure (footprint area or census population).
+A metropolis larger than one city map (New York, Tokyo) needs one more level: its city
+map's districts are themselves cities with district maps. **Owner:** confirm the ladder
+and the step.
+
+**City map.**
+- A ground map opened at a settlement from its region, sized to the settlement's
+  footprint.
+- Its generation runs the land at city scale, then a city stage:
+  - main roads continuing the region's ways, river crossings and the harbour;
+  - walls and gates;
+  - centres and their ranking, major landmarks and absorbed villages;
+  - six or seven districts, cut along rivers, walls, main roads and fringe belts;
+  - each district's population, density, wealth, specializations (docks, markets,
+    temples, crafts, noble quarter) and occupations, drawn from the city's census and
+    position.
+- It publishes:
+  - the main roads, walls and landmarks as features;
+  - density and land-use as rasters;
+  - each district as a named region polygon with its character.
+- It shows no buildings.
+
+**District map.**
+- Opened from a district polygon on a complete city map.
+- Generated over the district's own outline, not a rectangle.
+- It captures:
+  - the city map's land;
+  - the main roads, walls, gates and landmarks inside and along its outline, as fixed
+    features;
+  - its character, as the census and conditions its town rounds start from.
+- The existing town processes grow its streets, plots, buildings and occupations, with
+  minor streets starting from the main roads.
+
+**Neighbouring districts.**
+- Outlines run along main roads, rivers and walls that the city map has already fixed, so
+  two districts meet on the same feature, generated in either order.
+- **Owner:** this is a new agreement between maps: sibling districts share their boundary
+  features exactly. Until now maps owe each other only landmark agreement.
+
+**Non-rectangular generation.**
+- Today a refined child's lattice is built over the bounding rectangle of the selected
+  outline plus a margin (`atlas-host/src/generation_frame.rs`, `regional_frame`).
+- The change:
+  - Build the frame over the outline itself, with a band of context outside it.
+  - Grow and publish only inside the outline.
+  - Publish rasters and features clipped to the outline.
+- This applies to every refinement, not only districts. A region can then follow a coast,
+  a valley or a border.
 
 ## Milestones
 
-### M1 — Metropolitan stage on a city-level regional map
-Scope: a regional map at the city's level runs a metropolitan stage after regional
-development. It publishes arterials (including links to other towns), river crossings,
-centre seeds, walls with gates, fringe belts and density and land-use fields.
-Acceptance: a large settlement in the reference chain shows a readable city skeleton whose
-arterials continue its parent's roads and whose centres sit where the census and roads say.
-Evidence: unit tests of each process on small fields; one reference-chain city map.
+### M1 — Generation over arbitrary outlines
+Scope: refinement and real-scale generation build their frame, capture, processes and
+publication over the selected outline instead of its bounding rectangle, keeping a context
+band outside it.
+Acceptance: a region selected as an organic outline (a valley, a coast) is generated and
+published inside that outline, with no rectangular edge.
+Evidence: frame and capture unit tests on supplied polygons; one organic region in the
+reference chain.
 
-### M2 — Parts as region polygons [depends on M1]
-Scope: the metropolitan stage cuts the city into parts along skeleton features, with each
-part's census, character, period and name, published as region polygons a creator can
-select.
-Acceptance: parts tile the city without gaps or overlaps, their edges run on arterials,
-rivers, walls or fringe belts, and each part's census sums to about the city's.
-Evidence: geometry unit tests; the reference city's parts drawn on its map.
+### M2 — The city map [depends on M1]
+Scope: a city map kind opened at a settlement. A city stage generates main roads,
+crossings, walls and gates, centres, landmarks and absorbed villages, then cuts six or
+seven organic districts with their population, density, wealth, specializations and
+occupations, published as region polygons.
+Acceptance: the reference chain's largest city shows a readable city with districts that
+follow its rivers, walls and roads, each with a distinct character.
+Evidence: unit tests of each city-stage process on small fields; one city map.
 
-### M3 — A part grows inside the skeleton [depends on M2]
-Scope: opening a part captures the skeleton inside and around it. Town development treats
-arterials, centres and walls as fixed and realizes the part's census and character.
-Acceptance: a part's streets meet the arterials it was given, and its density and
-character follow its census and period.
-Evidence: town development unit tests with a supplied skeleton; one part map.
+### M3 — District maps [depends on M1, M2]
+Scope: a district opens from its polygon as a district map over its own outline. It
+captures the city map's land, main roads, walls and landmarks as fixed, and grows its
+fabric from its character.
+Acceptance: a dock district and a temple district of the same city look like those
+districts, and their main roads are the city map's.
+Evidence: town development unit tests with supplied city context; two district maps.
 
-### M4 — Neighbouring parts meet [depends on M3]
-Scope: seam features agree exactly between parts generated in either order; plots stop at
-their side of the seam.
-Acceptance: two neighbouring parts, opened side by side, continue each other's arterials,
-river and wall without a step or gap.
-Evidence: a seam test over two small supplied parts; two neighbouring part maps from the
-reference city.
+### M4 — Neighbouring districts meet [depends on M3]
+Scope: districts generated in either order agree exactly on their shared roads, rivers
+and walls; plots stop at their side of the shared street.
+Acceptance: two neighbouring districts, opened side by side, continue each other without
+a step or gap.
+Evidence: a seam test over two supplied districts; two neighbouring district maps.
 
-### M5 — Absorbed villages and growth history [depends on M2]
-Scope: villages the city reached keep their nuclei, names and older street patterns, and
-fringe belts mark where the city stopped growing for a time.
-Acceptance: an inner part shows a distinct older core from an absorbed village, separated
-from later growth by a fringe belt.
-Evidence: metropolitan-stage unit tests; the reference city.
-
-### M6 — Navigating the city [depends on M3]
-Scope: the viewer moves between the city layer, its parts and neighbouring parts; search
-and addresses find a street or building in any part from the city layer.
-Acceptance: a creator can go from the city to a part, across a seam to its neighbour and
-back, and find an address from the city.
+### M5 — Navigating the city [depends on M3]
+Scope: the viewer goes from the region to the city map, from the city map into a district,
+across to a neighbouring district and back; the city map finds a district's streets and
+addresses.
+Acceptance: the Baldur's Gate pattern in the viewer: city overview, then districts.
 Evidence: browser UI wiring tests on fixture maps.
 
-### M7 — Integrate and record [depends on M1–M6]
-Scope: an ADR for cities across maps; backlog entries; this file deleted.
+### M6 — Integrate and record [depends on M1–M5]
+Scope: an ADR for cities and organic outlines; backlog entries; this file deleted.
 
 ## Assumptions to check
 
-- A level-4 regional lattice resolves arterials and fringe belts well enough. If not, the
-  metropolitan stage may need a level-5 city layer for the largest cities.
-- Current town processes accept fixed arterials and supplied centres as starting
-  conditions without a second network authority. The town plan's network ownership decides
-  this.
-- One 100 m-hex part map's town rounds stay within the run times of today's single-map
-  towns at the part's census.
+- The 300 m hex resolves walls, main roads and district edges well enough for a city map.
+- Town processes accept fixed main roads and a supplied character as starting conditions
+  without a second road network authority. The town plan's network ownership decides this.
+- A district's town rounds stay within today's single-map town run times at its census.
 
 ## Sulion mapping
 
-To be published when work starts, as a root plan with M1–M7 as phases.
+To be published when work starts, as a root plan with M1–M6 as phases.
