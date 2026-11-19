@@ -35,6 +35,7 @@ fn categorical_contacts_bend_instead_of_following_donor_cell_edges() {
             height: 2,
         },
         measures: measures.read_only(),
+        donors: Default::default(),
     };
     let mut sampler = Interpolator::new(&grid, true, &mut coverage);
     let west = |cell: usize| Ok(if cell.is_multiple_of(2) { 1.0 } else { 0.0 });

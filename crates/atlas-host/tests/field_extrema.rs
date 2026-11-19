@@ -40,6 +40,7 @@ fn range(
             height: 2,
         },
         measures: coverage.allocate(2500.0).read_only(),
+        donors: Default::default(),
     };
     let field = Field {
         grid: &grid,

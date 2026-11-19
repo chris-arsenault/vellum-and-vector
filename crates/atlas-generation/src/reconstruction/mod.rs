@@ -30,25 +30,48 @@ pub struct Grid {
     pub periodic_width: Option<f64>,
     pub layout: Layout,
     pub measures: ReadBand<f64>,
+    /// Donors already chosen for exact query points, shared by every clone of the grid.
+    pub donors: Donors,
 }
+/// Every categorical import of a child cell asks for the same warped donor; the warp is
+/// a pure function of the point, so each point's donor is computed once.
+#[derive(Clone, Default)]
+pub struct Donors(
+    // hpc-exempt: sparse memo of query points already resolved, not per-cell lattice state.
+    std::rc::Rc<std::cell::RefCell<std::collections::HashMap<[u64; 2], usize>>>,
+);
 /// Categorical donors (rock kinds, cover classes) meet along irregular contacts, as real
 /// contacts do, instead of along the donor grid's straight cell edges: a sample moves by a
 /// deterministic warp of up to this share of the local donor spacing before the nearest
 /// donor is chosen. Finer maps see the contact's finer bends.
 const CONTACT_WARP: f64 = 0.4;
 const CONTACT_OCTAVES: usize = 6;
+/// More query points than any working lattice holds.
+const REMEMBERED_DONORS: usize = 1 << 20;
 impl Grid {
     /// The donor a point takes its categorical values from. Every categorical import (rock
     /// beds, their cargo, cover, people, activity) uses this one lookup, so a child cell's
     /// categorical facts always come from one donor.
     pub fn sample_index(&self, point: [f64; 2]) -> io::Result<usize> {
+        let key = [point[0].to_bits(), point[1].to_bits()];
+        if let Some(&donor) = self.donors.0.borrow().get(&key) {
+            return Ok(donor);
+        }
         let spacing = self.donor_spacing(self.nearest_index(point)?)?;
         let warp = |salt| {
             CONTACT_WARP
                 * spacing
                 * crate::noise::fractal_noise(point[0], point[1], salt, spacing, CONTACT_OCTAVES)
         };
-        self.nearest_index([point[0] + warp(0x7c01), point[1] + warp(0x7c02)])
+        let donor = self.nearest_index([point[0] + warp(0x7c01), point[1] + warp(0x7c02)])?;
+        let mut donors = self.donors.0.borrow_mut();
+        // Raster publication asks once per pixel; those points never repeat, so the memo
+        // starts over rather than holding every pixel of a large raster.
+        if donors.len() >= REMEMBERED_DONORS {
+            donors.clear();
+        }
+        donors.insert(key, donor);
+        Ok(donor)
     }
     fn donor_spacing(&self, cell: usize) -> io::Result<f64> {
         Ok(match &self.layout {

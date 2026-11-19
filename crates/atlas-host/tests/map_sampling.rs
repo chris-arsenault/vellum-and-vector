@@ -54,6 +54,7 @@ fn publishes_physical_shores_display_height_and_gradients() {
                 height: 5,
             },
             measures: storage.allocate(625.0).read_only(),
+            donors: Default::default(),
         }),
         storage.allocate(1u8).read_only(),
         BTreeMap::from([

@@ -113,6 +113,7 @@ fn final_human_projection_replaces_earlier_capture_with_settled_land() {
         measures: Coverage::samples(4, cache.clone())
             .allocate(2_500.0)
             .read_only(),
+        donors: Default::default(),
     };
     let mut surface = Surface::new(grid, &field, cache).unwrap();
     surface

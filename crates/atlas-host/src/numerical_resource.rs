@@ -232,6 +232,7 @@ impl WorkingSet {
             periodic_width: resource.periodic_width,
             layout,
             measures,
+            donors: Default::default(),
         });
         let mut channels = BTreeMap::new();
         for name in names {

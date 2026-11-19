@@ -57,6 +57,7 @@ pub fn create(
         periodic_width,
         layout,
         measures: measures.read_only(),
+        donors: Default::default(),
     };
     let rectangle_bounds = if adaptive { extent } else { box_bounds(bounds) };
     let rectangular = spatial
