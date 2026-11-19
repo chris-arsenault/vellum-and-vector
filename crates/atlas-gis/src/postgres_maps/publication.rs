@@ -1,4 +1,4 @@
-use super::PostgresMaps;
+use super::{records::Open, PostgresMaps};
 use crate::stored::{read_map, MAP};
 use atlas_map::{
     LayerSource, MapDescriptor, MapLayer, MapRef, PublicationBatch, PublicationState,
@@ -26,6 +26,7 @@ impl Publisher for PostgresMaps {
         }
         // A progressive publication becomes the head at once, replacing any expected revision.
         // The producer decides which maps stream; a regeneration of generated geography does not.
+        self.open.replace(None);
         self.transaction(|| {
             self.lock(&map.reference.map_id)?;
             if self.find_head(&map.reference.map_id)?.as_ref()!=expected {return Err(io::Error::other("The map revision changed"));}
@@ -39,8 +40,12 @@ impl Publisher for PostgresMaps {
     }
     fn append(&mut self, reference: &MapRef, batch: PublicationBatch) -> io::Result<()> {
         self.transaction(|| {
-            let (map, _) = self.pending(reference)?;
-            self.append_records(&map, batch)
+            self.hold(reference)?;
+            let open = self.open.borrow();
+            let open = open
+                .as_ref()
+                .ok_or_else(|| io::Error::other("Map publication is not open"))?;
+            self.append_records(open, batch)
         })
     }
     fn add_layers(
@@ -49,6 +54,9 @@ impl Publisher for PostgresMaps {
         layers: &[MapLayer],
         asset: PublishedAsset,
     ) -> io::Result<()> {
+        // The stored description is read here rather than held, so an edit made while the map
+        // publishes is kept; the result is then held for the appends that follow.
+        self.open.replace(None);
         self.transaction(|| {
             let (mut map, _) = self.pending(reference)?;
             map.layers.extend_from_slice(layers);
@@ -68,10 +76,14 @@ impl Publisher for PostgresMaps {
                 "UPDATE map.revisions SET descriptor=$3 WHERE map_id=$1 AND revision=$2",
                 &[&reference.map_id, &reference.revision, &MAP.write(&map)?],
             )?;
-            Ok(())
+            Ok(map)
+        })
+        .map(|map| {
+            self.open.replace(Some(Open::new(map)));
         })
     }
     fn finish(&mut self, reference: &MapRef) -> io::Result<()> {
+        self.open.replace(None);
         self.transaction(|| {
             self.lock(&reference.map_id)?;
             let (mut map,expected)=self.pending(reference)?;
@@ -92,6 +104,7 @@ impl Publisher for PostgresMaps {
     /// A new map keeps the output it streamed. Any other unfinished revision is removed, and a
     /// streamed one puts back the revision it replaced, so the map can be generated again.
     fn discard(&mut self, reference: &MapRef) -> io::Result<()> {
+        self.open.replace(None);
         let keep =
             self.transaction(|| {
                 self.lock(&reference.map_id)?;
@@ -156,6 +169,35 @@ impl PostgresMaps {
             }
             Ok(())
         })
+    }
+    /// Locks the publication's row and checks it is still open. The description is read and
+    /// held only when this connection does not hold it already.
+    fn hold(&self, r: &MapRef) -> io::Result<()> {
+        let held = self
+            .open
+            .borrow()
+            .as_ref()
+            .is_some_and(|open| open.map.reference == *r);
+        if !held {
+            let (map, _) = self.pending(r)?;
+            self.open.replace(Some(Open::new(map)));
+            return Ok(());
+        }
+        let complete = self
+            .query(
+                "SELECT complete FROM map.revisions WHERE map_id=$1 AND revision=$2 FOR UPDATE",
+                &[&r.map_id, &r.revision],
+            )?
+            .into_iter()
+            .next()
+            .map(|row| row.try_get::<_, bool>("complete"))
+            .transpose()
+            .map_err(io::Error::other)?;
+        if complete != Some(false) {
+            self.open.replace(None);
+            return Err(io::Error::other("Map publication is not open"));
+        }
+        Ok(())
     }
     fn pending(&self, r: &MapRef) -> io::Result<(MapDescriptor, Option<String>)> {
         let row=self.query("SELECT descriptor,expected_revision,complete FROM map.revisions WHERE map_id=$1 AND revision=$2 FOR UPDATE",&[&r.map_id,&r.revision])?.into_iter().next().ok_or_else(||io::Error::other("Map publication is not open"))?;

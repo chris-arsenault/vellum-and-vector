@@ -1,22 +1,44 @@
 use super::{to_json, PostgresMaps};
 use crate::map_store::{codec, space};
 use atlas_map::{LayerSource, MapDescriptor, MapRef, PublicationBatch, PublishedAsset};
-use std::{collections::BTreeSet, io};
+use std::{
+    collections::{BTreeSet, HashMap},
+    io,
+};
+/// A map being written, with what each record batch is checked and encoded against: its
+/// layers by id and its sample encoding. Publication appends thousands of batches to one
+/// map, so these are built once rather than per batch.
+pub(super) struct Open {
+    pub map: MapDescriptor,
+    layers: HashMap<String, usize>,
+    samples: codec::Samples,
+}
+impl Open {
+    pub fn new(map: MapDescriptor) -> Self {
+        Self {
+            layers: map
+                .layers
+                .iter()
+                .enumerate()
+                .map(|(i, layer)| (layer.id.clone(), i))
+                .collect(),
+            samples: codec::Samples::new(&map),
+            map,
+        }
+    }
+}
 impl PostgresMaps {
-    pub(super) fn append_records(
-        &self,
-        map: &MapDescriptor,
-        batch: PublicationBatch,
-    ) -> io::Result<()> {
+    pub(super) fn append_records(&self, open: &Open, batch: PublicationBatch) -> io::Result<()> {
+        let map = &open.map;
         let r = &map.reference;
         let mut features = Vec::with_capacity(batch.features.len());
         for feature in batch.features {
             feature.validate_people().map_err(io::Error::other)?;
             let space = space(map, &feature.space_id)?;
-            let layer = map
+            let layer = open
                 .layers
-                .iter()
-                .find(|l| l.id == feature.layer_id)
+                .get(&feature.layer_id)
+                .map(|&i| &map.layers[i])
                 .ok_or_else(|| io::Error::other("Feature must belong to a map layer"))?;
             if layer.space_id != feature.space_id
                 || !matches!(layer.source, LayerSource::Vector(_))
@@ -48,7 +70,7 @@ impl PostgresMaps {
                 &[&r.map_id, &r.revision, &serde_json::Value::Array(features)],
             )?;
         }
-        let encoding = codec::Samples::new(map);
+        let encoding = &open.samples;
         let mut ids = Vec::with_capacity(batch.samples.len());
         let mut spaces = Vec::with_capacity(batch.samples.len());
         let mut geometries = Vec::with_capacity(batch.samples.len());

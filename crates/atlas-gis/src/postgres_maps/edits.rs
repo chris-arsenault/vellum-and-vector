@@ -46,7 +46,7 @@ impl EditStore for PostgresMaps {
                 &[&r.map_id, &r.revision, &write.removed],
             )?;
             self.append_records(
-                write.map,
+                &super::records::Open::new(write.map.clone()),
                 PublicationBatch {
                     features: write.features,
                     ..Default::default()

@@ -18,12 +18,15 @@ use std::{cell::RefCell, io};
 pub struct PostgresMaps {
     db: RefCell<Client>,
     geometry: NativeMapGeometry,
+    /// The publication this connection is writing, held between appends.
+    open: RefCell<Option<records::Open>>,
 }
 impl PostgresMaps {
     pub fn connect(url: &str) -> io::Result<Self> {
         Ok(Self {
             db: RefCell::new(Client::connect(url, NoTls).map_err(io::Error::other)?),
             geometry: NativeMapGeometry,
+            open: RefCell::new(None),
         })
     }
     pub fn initialize(&self) -> io::Result<()> {

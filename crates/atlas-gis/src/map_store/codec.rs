@@ -16,15 +16,16 @@ pub fn decode<T: DeserializeOwned>(bytes: &[u8]) -> io::Result<T> {
 }
 /// Stored samples name each band by its ordinal among the map's bands. Every sample of a map
 /// lists its bands in the same order, so the ordinal at each position is remembered from the
-/// sample before and only checked.
-pub struct Samples<'a> {
-    bands: Vec<Band<'a>>,
-    ordinals: BTreeMap<(&'a str, &'a str), usize>,
+/// sample before and only checked. It owns what it reads from the map, so a publisher can
+/// keep one for the whole publication.
+pub struct Samples {
+    bands: Vec<Band>,
+    ordinals: BTreeMap<(String, String), usize>,
     remembered: std::cell::RefCell<Vec<usize>>,
 }
-struct Band<'a> {
-    space: &'a str,
-    band: &'a RasterBand,
+struct Band {
+    space: String,
+    band: RasterBand,
     /// The band's attribute without a value, its names shared by every sample.
     attribute: SampleAttribute,
 }
@@ -47,8 +48,8 @@ struct StoredSample<'a> {
     attributes: Vec<Attribute<'a>>,
     sections: &'a [InspectionSection],
 }
-impl<'a> Samples<'a> {
-    pub fn new(map: &'a MapDescriptor) -> Self {
+impl Samples {
+    pub fn new(map: &MapDescriptor) -> Self {
         let mut bands = Vec::new();
         let mut ordinals = BTreeMap::new();
         for layer in &map.layers {
@@ -59,10 +60,10 @@ impl<'a> Samples<'a> {
             };
             let layer_id: std::sync::Arc<str> = layer.id.as_str().into();
             for band in items {
-                ordinals.insert((layer.id.as_str(), band.id.as_str()), bands.len());
+                ordinals.insert((layer.id.clone(), band.id.clone()), bands.len());
                 bands.push(Band {
-                    space: layer.space_id.as_str(),
-                    band,
+                    space: layer.space_id.clone(),
+                    band: band.clone(),
                     attribute: SampleAttribute {
                         layer_id: layer_id.clone(),
                         band_id: band.id.as_str().into(),
@@ -92,7 +93,7 @@ impl<'a> Samples<'a> {
         }
         let ordinal = *self
             .ordinals
-            .get(&(&*value.layer_id, &*value.band_id))
+            .get(&(value.layer_id.to_string(), value.band_id.to_string()))
             .ok_or_else(|| io::Error::other("Sample must identify a published band"))?;
         if remembered.len() <= position {
             remembered.resize(position + 1, ordinal);
@@ -104,8 +105,8 @@ impl<'a> Samples<'a> {
         let mut attributes = Vec::with_capacity(sample.attributes.len());
         for (position, value) in sample.attributes.iter().enumerate() {
             let ordinal = self.ordinal(position, value)?;
-            let Band { space, band, .. } = self.bands[ordinal];
-            if space != sample.space_id || *band.unit != *value.unit {
+            let Band { space, band, .. } = &self.bands[ordinal];
+            if *space != sample.space_id || *band.unit != *value.unit {
                 return Err(io::Error::other("Sample band space or unit differs"));
             }
             let category = category(band, value.value.as_ref());
@@ -146,7 +147,7 @@ impl<'a> Samples<'a> {
             let label = if attribute.as_array().is_some_and(|a| a.len() > 2) {
                 attribute[2].as_str().map(String::from)
             } else {
-                category(stored.band, value.as_ref()).map(String::from)
+                category(&stored.band, value.as_ref()).map(String::from)
             };
             attributes.push(SampleAttribute {
                 value,

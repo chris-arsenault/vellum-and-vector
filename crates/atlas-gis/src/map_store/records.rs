@@ -134,7 +134,7 @@ impl MapStore {
         &self,
         map: &MapDescriptor,
         sample: MapSample,
-        encoding: &codec::Samples<'_>,
+        encoding: &codec::Samples,
     ) -> io::Result<()> {
         sample.window.bounds.validate().map_err(io::Error::other)?;
         if sample.id.is_empty()
