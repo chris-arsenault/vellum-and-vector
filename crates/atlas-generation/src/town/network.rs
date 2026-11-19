@@ -8,6 +8,14 @@ use super::{
 
 /// Street classes and their widths, shared with the town tools.
 pub use atlas_map::town::StreetClass as Class;
+
+/// A proposed corridor, evaluated alongside other demands for street investment.
+pub struct StreetProposal {
+    pub demand: &'static str,
+    pub points: Vec<Point>,
+    pub benefit: f64,
+    pub class: Class,
+}
 /// A way entering the settlement, from its centre outward, and the place it leads to.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Arm {

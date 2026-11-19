@@ -26,6 +26,8 @@ test("a resumed collector renders retained and later streets in the same town fr
           ],
         ],
         plots: [],
+        crossings: [["Upper & lower", [[0,0],[1,1]]]],
+        works: [["Charter & archive", [{type:"Polygon",coordinates:[[[0,0],[2,0],[2,2],[0,0]]]}]]],
         buildings: [[{type: "Polygon", coordinates: [[[0,0],[1,0],[1,1],[0,0]]]}, "residential", "2 Salt & Elm Road"]],
         passages: [],
         footpaths: [[[[0,2],[5,4]],0.7]],
@@ -40,6 +42,8 @@ test("a resumed collector renders retained and later streets in the same town fr
     const [early, mature, comparison] = await retainedTownPictures(directory);
     assert.match(comparison.svg, /Buildings only/);
     assert.match(early.svg, /stroke-width="0.7"/);
+    assert.match(early.svg, /<title>Upper &amp; lower<\/title>/);
+    assert.match(early.svg, /<title>Charter &amp; archive<\/title>/);
     assert.match(early.svg, /<title>2 Salt &amp; Elm Road<\/title>/);
     const frame = ({ svg }) => svg.match(/viewBox="([^"]+)"/)[1];
     assert.equal(frame(early), frame(mature));

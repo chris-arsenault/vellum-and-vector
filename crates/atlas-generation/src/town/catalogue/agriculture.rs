@@ -72,6 +72,25 @@ pub(super) fn farmstead() -> Definition {
     }
 }
 
+pub(super) fn grove() -> Definition {
+    let common = common();
+    Definition {
+        label: "tenders' grove",
+        naming_work: "grove",
+        premises: Premises {
+            site: Site::RootedGround,
+            access: AccessUse::Foot,
+            shares_with: &[Activity::Agriculture, Activity::Institution],
+        },
+        roles: Roles {
+            gathering_space: true,
+            ground_cover: Some("woodland"),
+            ..Roles::default()
+        },
+        ..common
+    }
+}
+
 fn farm_access(kind: Kind, seat: &Seat) -> Option<Purpose> {
     let from = purposes::approach(seat);
     Some(purposes::access(kind, from, from))

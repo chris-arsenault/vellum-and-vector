@@ -113,6 +113,8 @@
     ["control", "control", "Effective control", "Politics", "Territories"],
     ["societyEvent", "historicalEvents", "Events and disasters", "History", "Events"],
     ["building", "structures", "Buildings", "Structures and interiors", "Structures"],
+    ["majorWork", "structures", "Major works", "Structures and interiors", "Structures"],
+    ["settlementCrossing", "structures", "Settlement crossings", "Structures and interiors", "Connections"],
     ["room", "structures", "Rooms", "Structures and interiors", "Spaces"],
     ["wall", "structures", "Walls", "Structures and interiors", "Components"],
     ["door", "structures", "Doors", "Structures and interiors", "Connections"],

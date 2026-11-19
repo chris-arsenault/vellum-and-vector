@@ -59,6 +59,8 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
             "effort": town.effort
         })
     });
+    reberth(town, context)?;
+    crate::town::major_works::advance(town, context)?;
     let needs = unmet(town, context.spatial)?;
     let initial_holdings = town.holdings().len();
     let mut space = FloorSpace::default();
@@ -82,7 +84,10 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
     let mut ranked: Vec<_> = context
         .candidates
         .iter()
-        .filter(|candidate| candidate.slot.participant.is_none())
+        .filter(|candidate| {
+            candidate.slot.participant.is_none()
+                && candidate.slot.tenure != crate::town::templates::Tenure::Institutional
+        })
         .filter_map(|candidate| {
             let sample = crate::noise::hash_unit(
                 town.round as i32,
@@ -131,7 +136,8 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
                 + project
                     .as_ref()
                     .map_or(0., |(p, _)| project_pull(p, candidate.slot.front));
-            let order = weighted_order(score, site_draw(town, candidate, 0x47cc));
+            let affinity = site_affinity(town, candidate, kind);
+            let order = weighted_order(score * affinity, site_draw(town, candidate, 0x47cc));
             Some((
                 order,
                 Offer::Premises(
@@ -207,14 +213,15 @@ fn develop_site(
             return Ok("satisfied");
         }
     }
-    let (project, fitted) = project.map(|p| (p.purpose, p.plot)).unzip();
+    let project = project.map(|p| (p.purpose, p.plot));
+    let financed = project.is_some();
     let definition = kind.definition();
     let means = resources(candidate);
-    let edit = match proposal(candidate, kind, sample, project, fitted, context) {
+    let edit = match proposal(town, candidate, kind, sample, project, context) {
         Ok(edit) => edit,
         Err(reason) => return Ok(reason),
     };
-    let Some(edit) = (if project.is_some() {
+    let Some(edit) = (if financed {
         super::investment::finance(town, edit)
     } else {
         Some(edit)
@@ -280,7 +287,7 @@ fn participant_offers<'a>(
                 location(town, candidate).attraction(kind.definition()),
                 sample,
             );
-            if let Ok(edit) = proposal(candidate, kind, sample, None, None, context) {
+            if let Ok(edit) = proposal(town, candidate, kind, sample, None, context) {
                 choices.push((
                     weighted_order(score, site_draw(town, candidate, 0x47cc)),
                     kind,
@@ -312,6 +319,44 @@ fn participant_offers<'a>(
         ));
     }
     Ok(offers)
+}
+fn reberth(town: &mut Town, context: &Frontage<'_>) -> io::Result<()> {
+    use crate::town::templates::Habitat;
+    if !town
+        .founding_sites
+        .iter()
+        .any(|&(_, id)| town.holdings()[id.0 as usize].slot.habitat == Habitat::Floating)
+    {
+        return Ok(());
+    }
+    let mut available = town
+        .holdings()
+        .iter()
+        .filter(|h| {
+            h.slot.habitat == Habitat::Floating
+                && h.occupation < 0.2
+                && h.condition > 0.4
+                && h.ties.is_empty()
+        })
+        .map(|h| h.id)
+        .collect::<Vec<_>>();
+    if available.is_empty() {
+        return Ok(());
+    }
+    for c in context.candidates {
+        let Some(&id) = available.last() else {
+            break;
+        };
+        let h = &town.holdings()[id.0 as usize];
+        let need = c.opportunities.for_activity(h.kind.definition().activity);
+        if c.conditions.bank
+            && need.capability + need.demand > h.support
+            && town.berth(id, &c.slot, context.ground, context.spatial)?
+        {
+            available.pop();
+        }
+    }
+    Ok(())
 }
 fn site_draw(town: &Town, candidate: &super::Candidate, salt: i32) -> f64 {
     crate::noise::hash_unit(
@@ -383,22 +428,29 @@ fn existing_partners(
     Ok(members)
 }
 fn proposal(
+    town: &Town,
     candidate: &super::Candidate,
     kind: Kind,
     sample: f64,
-    purpose: Option<(crate::town::fabric::Anchor, Relationship)>,
-    fitted: Option<crate::town::plots::Slot>,
+    project: Option<(PurposeSite, crate::town::plots::Slot)>,
     context: &Frontage<'_>,
 ) -> Result<FabricEdit, &'static str> {
+    let (purpose, fitted) = project.unzip();
     let definition = kind.definition();
     let front = candidate.slot.front;
     let building = crate::noise::hash_unit(0x233a, front[0], front[1]);
     if !kind.open() && building > candidate.conditions.building {
         return Err("building policy");
     }
-    let slot = fitted
+    if site_affinity(town, candidate, kind) <= 0. {
+        return Err("reserved land");
+    }
+    let mut slot = fitted
         .or_else(|| fitted_slot(candidate, definition, sample, context.ground))
         .ok_or("parcel terrain")?;
+    slot.tenure = town
+        .template
+        .tenure(definition.activity, slot.front, charter_unit(town));
     let means = resources(candidate);
     let outdoor = kind.open();
     let buildings = crate::town::roofs::components(&slot, kind, means, sample);
@@ -490,7 +542,8 @@ fn fitted_slot(
             slot.depth = d;
             slot.corners = rectangle(slot.front, slot.direction, slot.inward, w, d);
             if ground.open_with(&Rectangle(&slot.corners), |mark| {
-                mark == FREE || mark == PLOT || mark >= FIRST_STREET
+                slot.habitat
+                    .fits(mark, |m| m == FREE || m == PLOT || m >= FIRST_STREET)
             }) {
                 return Some(slot);
             }
@@ -504,6 +557,16 @@ fn fitted_slot(
     None
 }
 pub(super) use crate::town::siting::feasible as eligible;
+fn charter_unit(town: &Town) -> f64 {
+    atlas_map::town::plot_size(town.seat.story.size()).1
+}
+fn site_affinity(town: &Town, candidate: &super::Candidate, kind: Kind) -> f64 {
+    town.template.affinity(
+        kind.definition().activity,
+        candidate.slot.front,
+        charter_unit(town),
+    )
+}
 fn resources(candidate: &super::Candidate) -> f64 {
     let support = candidate.opportunities.for_activity(Activity::Household);
     let income = (support.demand + support.capability) / (1. + support.burden);
@@ -546,7 +609,8 @@ fn choose(
         let fit = location.attraction(definition);
         let cost =
             (1. + (definition.typical_means - means).max(0.) * 3.) * (1. + demand.families[i]);
-        let weight = audience * fit * demand.space.working / cost;
+        let weight =
+            audience * fit * demand.space.working / cost * site_affinity(town, candidate, kind);
         if weight <= 0. {
             continue;
         }

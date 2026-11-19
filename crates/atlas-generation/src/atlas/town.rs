@@ -2,6 +2,7 @@ pub use crate::town::{
     addresses, geometry, ground, growth, lanes, network, plots, seat, settings, story, wards,
 };
 pub mod development;
+mod founding_site;
 mod providers;
 pub mod site;
 use super::state::State;
@@ -12,6 +13,7 @@ use story::Layout;
 /// story choose.
 pub struct Settings {
     pub layout: Option<Layout>,
+    pub seed: i32,
 }
 /// The layout setting's choices; `story` lets each settlement's own story decide.
 pub const LAYOUTS: [&str; 6] = ["story", "organic", "grid", "radial", "linear", "walled"];

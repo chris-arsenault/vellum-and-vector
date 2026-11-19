@@ -51,6 +51,13 @@ const escape = (value) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const roof = { residential: "#ab6e58", civic: "#587689", economic: "#bc883a" };
 function svg({ town, fields, stage }, frame, buildingsOnly = false) {
+  const crossing = (town.crossings ?? []).map(([name, ends]) =>
+    `<path d="M${ends.map(point).join("L")}"><title>${escape(name)}</title></path>`
+  );
+  const walls = (town.walls ?? []).map((points) => shape({type: "LineString", coordinates: points}, false));
+  const works = (town.works ?? []).map(([name, components]) =>
+    `<g><title>${escape(name)}</title>${components.map((g) => shape(g)).join("")}</g>`
+  );
   const walks = (town.footpaths ?? []).map(([[start,end],width]) =>
     `<path d="M${point(start)}L${point(end)}" stroke-width="${width}"/>`
   );
@@ -69,7 +76,10 @@ ${buildingsOnly ? "" : `<g fill="#d4c9a5" stroke="#b3a682" stroke-width=".6" fil
 <g fill="#e7ddbf" stroke="#ae9f81" stroke-width=".6" fill-rule="evenodd">${town.plots.map((p) => shape(p)).join("")}</g>
 <g fill="none" stroke="#82796b" stroke-linecap="round">${roads.join("")}</g>
 <g fill="none" stroke="#866e53" stroke-linecap="round">${walks.join("")}</g>
-<g fill="none" stroke="#9e9182" stroke-width="1.5">${town.passages.map((p) => shape(p, false)).join("")}</g>`}
+<g fill="none" stroke="#9e9182" stroke-width="1.5">${town.passages.map((p) => shape(p, false)).join("")}</g>
+<g fill="none" stroke="#594d38" stroke-width="2.5">${walls.join("")}</g>
+<g fill="none" stroke="#426a75" stroke-dasharray="3 2" stroke-width="1.5">${crossing.join("")}</g>
+<g fill="none" stroke="#81672b" stroke-width="1.8">${works.join("")}</g>`}
 <g stroke="#65584f" stroke-width=".6" fill-rule="evenodd">${town.buildings.map(([g, f,address]) => `<g fill="${roof[f]}">${address ? `<title>${escape(address)}</title>` : ""}${shape(g)}</g>`).join("")}</g>
 </svg>`;
 }

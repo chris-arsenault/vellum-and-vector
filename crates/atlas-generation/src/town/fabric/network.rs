@@ -90,7 +90,7 @@ impl Town {
             geometries: shoulders,
         };
         let nearby =
-            self.nearby_holdings(spatial.bounds(&area).map_err(io::Error::other)?, spatial)?;
+            self.surface_holdings(spatial.bounds(&area).map_err(io::Error::other)?, spatial)?;
         let roofs: Vec<_> = nearby
             .iter()
             .flat_map(|&i| self.holdings[i].buildings.iter().cloned())
@@ -204,7 +204,7 @@ impl Town {
             return Ok(false);
         };
         let bounds = spatial.bounds(&corridor).map_err(io::Error::other)?;
-        let nearby = self.nearby_holdings(bounds, spatial)?;
+        let nearby = self.surface_holdings(bounds, spatial)?;
         let buildings: Vec<_> = nearby
             .iter()
             .flat_map(|&i| self.holdings[i].buildings.iter().cloned())

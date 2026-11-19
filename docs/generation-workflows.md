@@ -567,6 +567,25 @@ sites beside a participating place. Entrances and building orientations belong t
 the physical site. A new holding on the outskirts can extend the area considered
 on the next pass while intervening land remains open.
 
+Founding surveys the surrounding ground, incoming ways, institutions and practiced magic.
+The site supplies a weighted choice of physical and cultural settlement templates. A
+template establishes a small group of occupied places and carries rules into later rounds.
+A ferry town connects two actual banks. In a town governed from a walled compound,
+land tenure affects which households can fund construction and who receives their rent.
+Later development uses the same holdings, crossings and institutions that founding placed.
+Each template owns its founding group and policies for tenure, access, siting and street
+proposals. Movement funds and fits proposed streets using the ordinary road process.
+
+Major works have an independent catalogue. A city can commission a work at founding,
+inherit a named landmark from the parent map, or develop one when local sponsors
+subscribe during growth. A work type supplies viable sites, custodians and a choice
+of programs. The commission retains its chosen purpose, constituent premises,
+their arrangement and the ground they need. Construction draws on local labour
+and fits those parts around existing uses. The settlement's naming culture supplies
+the individual landmark name. The finished map records that name, its extent, its component
+holdings and their sponsors. The settlement retains the ranked founding choices and
+records progress on commissions still awaiting construction.
+
 The town sequence repeats the same development processes over eighteen rounds.
 An incoming way gives a street a course to follow.
 Occupation near its built end can pay for an extension. New frontage can also open

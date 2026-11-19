@@ -37,6 +37,18 @@ function fieldIdentityReads(source: string): string[] {
     ([read]) => read
   );
 }
+// This check flags keyed containers and comparator sorts in numerical code so a person
+// looks at each one. It is a prompt for critical thought, not a ban. Per-cell state over
+// a whole lattice belongs in dense cell-indexed storage. Sparse data (the cells a walk has
+// visited, a few sources, records keyed by identity) belongs in the structure that fits
+// it, a set, map or sort included, with an `hpc-exempt:` reason. Replacing a correct
+// sparse structure with a map-sized array or a linear scan turns local work into
+// whole-map work, which is a performance defect, not compliance.
+const numericGuidance =
+  "Each listed line uses a keyed container or comparator sort in numerical code. Decide " +
+  "what the data is: per-cell state over the lattice belongs in dense cell-indexed storage; " +
+  "sparse or identity-keyed data keeps its set, map or sort with an `hpc-exempt:` reason. " +
+  "Do not swap a correct sparse structure for a map-sized array or a linear scan.";
 function numericSubstitutes(path: string, text: string) {
   if (
     !numericOwners.some((owner) => path.includes(`/${owner}/`)) &&
@@ -53,6 +65,14 @@ function numericSubstitutes(path: string, text: string) {
 }
 
 describe("Rust foundation architecture", () => {
+  it("recurring town processes ask for policies without reading the settlement identity", () => {
+    const files = rustFiles(join(root, "crates/atlas-generation/src/processes/town"));
+    for (const file of files) {
+      const source = readFileSync(file, "utf8").split("#[cfg(test)]")[0];
+      const code = source.replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, "");
+      expect(code, file).not.toMatch(/\bTemplate\b|\.\s*template\s*\.\s*selected\b/);
+    }
+  });
   it("town and trail adapters consume field POI roles without decoding concrete field identities", () => {
     const generation = join(root, "crates/atlas-generation/src");
     const adapters = [
@@ -94,9 +114,10 @@ describe("Rust foundation architecture", () => {
       ...numericFiles.map((file) => join(root, "crates/atlas-generation/src", file)),
     ];
     expect(files.length).toBeGreaterThan(0);
-    expect(files.flatMap((path) => numericSubstitutes(path, readFileSync(path, "utf8")))).toEqual(
-      []
-    );
+    expect(
+      files.flatMap((path) => numericSubstitutes(path, readFileSync(path, "utf8"))),
+      numericGuidance
+    ).toEqual([]);
   });
   it("rejects numerical substitutes while allowing query and cache metadata", () => {
     expect(numericSubstitutes("/hpc/index.rs", "use std::collections::HashMap;")).toHaveLength(1);

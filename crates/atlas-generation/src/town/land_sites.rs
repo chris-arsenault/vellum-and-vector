@@ -35,6 +35,8 @@ pub fn around(
                     let direction = heading(sample(617) * std::f64::consts::TAU);
                     let inward = left(direction);
                     Slot {
+                        habitat: super::templates::Habitat::Ground,
+                        tenure: super::templates::Tenure::Household,
                         street: None,
                         participant: None,
                         side: Side::Left,

@@ -22,6 +22,7 @@ pub fn feasible(kind: Kind, land: Conditions, street: Option<usize>) -> bool {
 pub(super) fn suitable_ground(kind: Kind, land: Conditions) -> bool {
     match kind.definition().premises.site {
         Site::WorkingLand => land.cultivated > 0.,
+        Site::RootedGround => land.rooted,
         Site::FlowingWater => land.flowing,
         Site::Waterfront => land.bank,
         Site::PractisedGround => land.craft.is_some(),

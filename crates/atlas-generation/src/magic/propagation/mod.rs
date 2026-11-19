@@ -46,7 +46,8 @@ pub fn radial(
         } else {
             minimum.max(p.source_spacing)
         };
-        for cell in 0..env.mesh.len() {
+        // Only cells within the radius gain intensity.
+        for cell in env.mesh.cells_within([source.x, source.y], radius) {
             let [x, y] = env.mesh.position(cell);
             let distance = (x - source.x).hypot(y - source.y);
             let before = field.channels.band(C::Intensity).get(cell)?;

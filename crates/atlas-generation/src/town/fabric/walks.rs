@@ -32,6 +32,11 @@ impl<'a> Roofs<'a> {
         let shapes: Vec<_> = town
             .holdings()
             .iter()
+            .filter(|h| {
+                h.slot
+                    .habitat
+                    .shares_surface(crate::town::templates::Habitat::Ground)
+            })
             .flat_map(|h| h.buildings.iter().cloned())
             .collect();
         Ok(Self {

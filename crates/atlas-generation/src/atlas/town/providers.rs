@@ -94,7 +94,7 @@ pub fn institutions() -> Query<State, Sources> {
         Ok(Sources(sources))
     })
 }
-fn contextual_features(state: &State) -> io::Result<Vec<crate::features::Feature>> {
+pub(super) fn contextual_features(state: &State) -> io::Result<Vec<crate::features::Feature>> {
     // hpc-exempt: captured place identities, not a numerical field indexed by cell.
     let mut records = std::collections::BTreeMap::new();
     if let Some(source) = state.records.source_features.as_deref() {

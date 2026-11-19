@@ -131,13 +131,29 @@ function courseStroke(feature: PublishedFeature, colour: string) {
   return new Stroke({ color: feature.footprint ? "#ffffff66" : colour, width: 2 });
 }
 /** A measured road draws the ground its carriageway covers. */
+function pointStyles(
+  feature: PublishedFeature,
+  colour: string,
+  resolution: number,
+  base: LayerStyle
+) {
+  const marker = pointStyle(feature, colour, resolution, base);
+  if (feature.kind !== "majorWork" || !feature.footprint) return [marker];
+  return [
+    new Style({
+      geometry: footprintGeometry(feature.footprint),
+      stroke: new Stroke({ color: "#81672b", width: 2 }),
+    }),
+    marker,
+  ];
+}
 function groundStyles(
   feature: PublishedFeature,
   colour: string,
   resolution: number,
   base: LayerStyle
 ) {
-  if (feature.geometry.type === "Point") return [pointStyle(feature, colour, resolution, base)];
+  if (feature.geometry.type === "Point") return pointStyles(feature, colour, resolution, base);
   const styles: Style[] = [];
   if (feature.footprint)
     styles.push(

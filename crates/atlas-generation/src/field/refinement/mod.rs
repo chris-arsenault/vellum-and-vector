@@ -9,6 +9,7 @@ pub mod courses;
 pub mod divides;
 pub mod evidence;
 pub mod evolution;
+mod gaussian;
 pub mod grading;
 pub mod influence;
 pub mod initialization;

@@ -1,5 +1,5 @@
 //! Detached street and footprint geometry at completed town development boundaries.
-use crate::publication::town::{street_name, TownWriter};
+use crate::publication::town::{street_name, work_name, TownWriter};
 use crate::town::{
     catalogue::PlaceRules, fabric::Fabric, geometry::Point, settings::DEVELOPMENT_ROUNDS,
 };
@@ -55,6 +55,10 @@ pub struct Settlement {
     key: String,
     name: String,
     centre: Point,
+    template: &'static str,
+    walls: Vec<Vec<Point>>,
+    crossings: Vec<(&'static str, [Point; 2])>,
+    works: Vec<(String, Vec<Geometry>)>,
     streets: Vec<(Vec<Point>, Vec<f64>, bool)>,
     passages: Vec<Geometry>,
     footpaths: Vec<([Point; 2], f64)>,
@@ -74,6 +78,30 @@ pub fn capture(fabric: &Fabric, stage: Stage, site: &impl TownWriter) -> io::Res
                 key: town.seat.key.clone(),
                 name: town.seat.name.clone(),
                 centre: town.seat.centre,
+                template: town.template.selected.name(),
+                walls: town.kernel_walls().to_vec(),
+                crossings: town
+                    .kernel_links()
+                    .into_iter()
+                    .map(|c| (c.kind, c.ends))
+                    .collect(),
+                works: town
+                    .works
+                    .commissions
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, w)| !w.members.is_empty())
+                    .map(|(index, w)| {
+                        Ok((
+                            work_name(site, town, index, w)?,
+                            w.members
+                                .iter()
+                                .map(|id| town.holdings()[id.0 as usize].outline.clone())
+                                .chain(w.grounds.iter().cloned())
+                                .collect(),
+                        ))
+                    })
+                    .collect::<io::Result<_>>()?,
                 streets: town
                     .streets()
                     .iter()

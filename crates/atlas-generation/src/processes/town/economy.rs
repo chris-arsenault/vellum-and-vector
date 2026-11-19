@@ -131,6 +131,18 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         .iter()
         .map(|(mode, graph)| (*mode, graph.distance_queries()))
         .collect();
+    let landlords = town
+        .founding_sites
+        .iter()
+        .map(|&(_, id)| id)
+        .filter(|id| {
+            let h = &town.holdings()[id.0 as usize];
+            h.slot.tenure == crate::town::templates::Tenure::Institutional
+                && h.condition > 0.2
+                && h.occupation > 0.
+        })
+        .collect::<Vec<_>>();
+    let mut dues = 0.;
     for (i, needs) in modes.iter().enumerate() {
         let holding = &town.holdings()[i];
         let conditions = context.conditions.get(i).copied().unwrap_or_default();
@@ -193,7 +205,13 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         let returns = support / (1. + support);
         let costs = conditions.density + opportunity.burden;
         let sheltered = holding.means * conditions.protection / (1. + conditions.protection);
-        let income = returns / (1. + costs * (1. - sheltered));
+        let mut income = returns / (1. + costs * (1. - sheltered));
+        if holding.slot.tenure == crate::town::templates::Tenure::Dependent && !landlords.is_empty()
+        {
+            let rent = income * 0.5;
+            income -= rent;
+            dues += rent * holding.occupation;
+        }
         // Household means are retained resources; loss of a trading opportunity does not erase them in one round.
         let means = respond(holding.means, income, context.exposure * 0.035);
         let occupation = if holding.established < town.round
@@ -241,7 +259,30 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
             )?;
         }
     }
+    distribute_rents(town, &landlords, dues, context.exposure);
     Ok(())
+}
+
+fn distribute_rents(
+    town: &mut Town,
+    landlords: &[crate::town::fabric::HoldingId],
+    dues: f64,
+    exposure: f64,
+) {
+    if dues > 0. {
+        let share = dues / landlords.len() as f64;
+        for &id in landlords {
+            let h = &town.holdings()[id.0 as usize];
+            let claim_income = respond(h.means, h.means + share, exposure * 0.035);
+            town.occupy(
+                id,
+                h.support,
+                claim_income.clamp(0., 1.),
+                h.occupation,
+                h.crowding,
+            );
+        }
+    }
 }
 #[cfg(test)]
 mod tests {

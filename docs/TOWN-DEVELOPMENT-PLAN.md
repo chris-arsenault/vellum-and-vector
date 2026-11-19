@@ -5,6 +5,45 @@ Sulion root: `d693174d-8188-4995-bd52-b1b498b74ade`.
 At close-out, move durable mechanisms into the generation guide, product contract or
 an ADR as appropriate, then delete this document and its references.
 
+## High-fantasy settlement templates
+
+Sulion subplan `5f49411a-ca00-4a2a-8eb2-3c44f5c99874`. Design this and the sibling feedback plan before the first capital-scale trial. A founding template determines what kind of settlement can take root here. The shared development cycle determines how this particular settlement grows.
+
+1. **Design physical and cultural templates.** Aim for 10–15 eventual templates spanning ordinary and exceptional settlements suitable for high-fantasy play. For each, describe the inhabited founding kernel, its persistent rules, the geography those rules can produce, and which decisions remain open. A town split across two levels raises a question of access. A compass-oriented town asks how later builders inherit an alignment. For a town organized around fervent religious observance, ask who can direct labor and what obligations shape the use of land. For a town of enslaved households dominated by a walled highborn compound, ask who controls land, movement and construction on each side of the wall. Cultural rules should continue to shape decisions as the town grows. Survey other possibilities and identify any spatial or social capability the current fabric would need.
+2. **Ground suitability in the founding site.** Select roughly 5–10 axes from numerical fields and features already available when the site is chosen. Trace each to its producer, spatial extent, and meaning. Relief across the site, the presence of particular POIs, and evidence of a particular magical system are possible inputs. Work out which evidence makes a template plausible and which physical conditions it actually requires. A strong signal from one magical system should retain that system's meaning.
+3. **Specify selection and the handoff to growth.** Work through contrasting supplied sites to show their ranked alternatives and why the order changes. Draw a template at random with greater weight toward the top, preserving multiple plausible outcomes where conditions permit. The same ranked choices should later support explicit creator selection. Describe what founding passes to recurring development so the template's rules survive expansion, redevelopment and changes of use across roughly 18 rounds. Leave the creator UI for later.
+4. **Design major works as an independent choice.** The same founding template can produce settlements with different works or none at all. Population scale influences how many works a settlement is likely to have. Its site, institutions and practices can influence which works make sense there. Design for wonders distinctive enough to give adventurers a reason to visit. A great library, a royal palace, an extraordinary prison or a colossal head carved into a mountain illustrate the range of purposes and scales.
+
+   | Settlement scale | Typical major works over its development |
+   | --- | --- |
+   | Small settlement | Most have none. An exceptional small settlement can have one. |
+   | Mid-sized city | Roughly half have one. |
+   | Capital | Usually two or three. |
+   | City of a million or more | Usually five or six. |
+
+   Treat these as expectations for the combined result of two routes. During template selection, larger cities can preselect some individual works so their siting and development can shape the city as it grows. During recurring development, circumstances can also give rise to a work with low probability, including in a small settlement. Describe how a preselected work enters development and how an organically initiated work uses the same work-specific siting and development rules. Keep those rules with the work's POI definition. Compare two cities with the same template but different major works, and trace one small settlement that grows around an exceptional work. Exact probabilities and population cutoffs remain open.
+
+The design is ready when a reader can follow one site into two plausible, materially different settlements and explain why another site favors a different ranking. The kernel and rules must leave the eventual layout open.
+
+The [founding design](settlement-template-design.md), [major works catalogue](settlement-major-works.md), [reference research](settlement-reference-research.md) and [lore research](settlement-lore-research.md) record the design and its sources. Implementation subplan `c001bc62-bf39-43cd-86d4-8de06eba67f8` connects founding-site evidence, weighted selection, inhabited kernels and continuing development rules to the shared Rust town sequence. Major works enter construction through inheritance, a founding commission or a later subscription. The settlement GIS record carries its selection and commissions. Built members and their reserved ground publish as named, related map features.
+
+The owner's correction to this implementation is recorded in Sulion plan
+`55828535-9cac-4e8d-a1de-01a562b944aa`. A settlement template owns the policies
+that recurring processes consult, including any street geometry the template proposes.
+A major work is a generated instance of a type. Its program, occupied premises, open
+ground and local name belong to that instance. The named examples in the research
+describe possible places.
+
+## Feedback among settlement processes
+
+Sulion subplan `b4b77d1a-e3ef-4e90-b60c-eba5878b419e`. Design how the recurring processes should influence one another before measuring their effects. This work applies across templates. A template can constrain a placement or change a rule while the participating processes retain ownership of the interaction.
+
+1. **Design the loops in domain terms.** Start from the existing process and POI catalogs. Explain which actions by households, livelihoods, institutions and practitioners change a later choice by another participant. For each consequential loop, describe where it acts, what persists between rounds, what reinforces it and what can weaken or reverse it. For example, shared journeys can support a crossing, access can attract livelihoods, and new occupations can sustain more journeys. The design must explain what happens if those occupations leave. Cover ordinary economic and civic activity alongside the distinct practices of the seven magic systems.
+2. **Express the intended economy and interactions outside the code.** Use the geology and society design as the reference. For each chain, identify the state owner, the small set of typed messages, keys or questions crossing ownership boundaries, and the decision each consumer makes differently. Use stocks for things that accumulate or are spent. Represent access, obligations and spatial relationships according to what they do. Keep POI-specific behavior with its POI and craft-specific responses with the relevant system. A process has meaningful representation when it can influence a consequential choice under the conditions where it matters.
+3. **Compare implementation to the design.** Trace the proposed chains through current producers, owners and consumers. Prioritize breaks that cut off a whole class of decisions. For a disputed link, specify a small constructed case that changes one causal input and exercises the downstream decision. Reserve a capital run for interactions whose combined spatial effect genuinely needs a full town. Equal process representation carries no frequency, feature-count or map-area quota.
+
+The deliverable is a causal design and a prioritized account of what existing contracts can express and what needs to change. The catalog and feedback design can proceed independently and meet at the rules ordinary development reads after founding.
+
 ## Independent building sites
 
 The owner's four spacing references show individual buildings at irregular distances and orientations. Early settlements and mature outskirts can be diffuse. Open ground between buildings can remain unused. Shared courts, gathering places and connected projects require their own reasons to occur.

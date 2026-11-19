@@ -40,6 +40,8 @@ fn proposal(x: f64) -> Proposal {
     let front = [x, 0.];
     Proposal {
         slot: Slot {
+            habitat: atlas_generation::town::templates::Habitat::Ground,
+            tenure: atlas_generation::town::templates::Tenure::Household,
             participant: None,
             street: Some(0),
             side: Side::Left,
@@ -56,6 +58,117 @@ fn proposal(x: f64) -> Proposal {
         priority: 1.,
         cause: "opportunity".into(),
     }
+}
+
+#[test]
+fn a_chartered_street_needs_an_occupied_frontage_and_proposes_only_its_sector() {
+    use atlas_generation::town::{geometry::distance, templates::Template};
+    let spatial = NativeGeos::new(0.001).unwrap();
+    let mut town = town();
+    let home = town.establish(proposal(48.), &spatial).unwrap().unwrap();
+    town.occupy(home, 0.5, 0.5, 0.7, 0.);
+    assert!(town.template.street_proposals(&town).is_empty());
+    town.template.selected = Template::Ring;
+    let routes = town.template.street_proposals(&town);
+    let [route] = routes.as_slice() else {
+        panic!("one occupied survey sector")
+    };
+    let radius = distance(town.seat.centre, route.points[0]);
+    assert!(route
+        .points
+        .iter()
+        .all(|p| p[0] > 0. && (distance(town.seat.centre, *p) - radius).abs() < 0.01));
+    town.occupy(home, 0.5, 0.5, 0., 0.);
+    assert!(town.template.street_proposals(&town).is_empty());
+}
+
+#[test]
+fn a_founded_flotilla_has_wet_homes_and_a_working_transfer_to_shore() {
+    use atlas_generation::town::{
+        access::{Access, Entrance},
+        catalogue::AccessUse,
+        founding,
+        ground::{Ground, WATER},
+        influence::Conditions,
+        templates::{Habitat, Selection, Template},
+    };
+    let spatial = NativeGeos::new(0.001).unwrap();
+    let mut t = town();
+    let mut selection = Selection::commons([0., 0.]);
+    selection.selected = Template::Moorings;
+    selection.site.afloat = Some([40., 0.]);
+    selection.site.shore = Some([-12., 0.]);
+    t.template = selection;
+    fn waterfront() -> Ground {
+        let mut ground = Ground::new([-250., -250., 250., 250.], 2.);
+        for i in 0..ground.count() {
+            if ground.centre(i)[0] > 0. {
+                ground.withhold(i, WATER);
+            }
+        }
+        ground
+    }
+    let ground = waterfront();
+    assert!(
+        founding::establish(&mut t, &ground, &spatial, |_| Ok(Some(Conditions {
+            bank: true,
+            ..Default::default()
+        })))
+        .unwrap()
+    );
+    let wet = t
+        .holdings()
+        .iter()
+        .find(|h| h.slot.habitat == Habitat::Floating)
+        .unwrap();
+    assert!(ground.is_water(wet.slot.front));
+    let link = &t.kernel_links()[0];
+    assert_ne!(ground.is_water(link.ends[0]), ground.is_water(link.ends[1]));
+    let access = Access::for_town(&t, &spatial).unwrap().on_ground(&ground);
+    let terminals = link.ends.map(Entrance::external);
+    assert!(access
+        .bind(&terminals, AccessUse::Foot, &spatial)
+        .unwrap()
+        .routes(0)
+        .cost(1)
+        .is_finite());
+    assert!(!wet.buildings.is_empty());
+    let (id, decks) = (wet.id, wet.buildings.len());
+    let mut berth = wet.slot.clone();
+    berth.front = [175., 150.];
+    assert!(t.berth(id, &berth, &ground, &spatial).unwrap());
+    let relocated = &t.holdings()[id.0 as usize];
+    assert_eq!(relocated.slot.front, berth.front);
+    assert_eq!(relocated.buildings.len(), decks);
+}
+
+#[test]
+fn dependent_households_remain_outside_the_founding_compound() {
+    use atlas_generation::town::{
+        founding,
+        geometry::distance,
+        ground::Ground,
+        influence::Conditions,
+        templates::{Selection, Template, Tenure},
+    };
+    let spatial = NativeGeos::new(0.001).unwrap();
+    let mut t = town();
+    t.template = Selection::commons([0., 0.]);
+    t.template.selected = Template::Compound;
+    let ground = Ground::new([-200., -200., 200., 200.], 2.);
+    assert!(founding::establish(&mut t, &ground, &spatial, |_| Ok(Some(
+        Conditions::default()
+    )))
+    .unwrap());
+    let unit = atlas_map::town::plot_size(t.seat.story.size()).1;
+    assert!(t
+        .holdings()
+        .iter()
+        .any(|h| h.slot.tenure == Tenure::Dependent
+            && distance(h.slot.front, t.seat.centre) >= 3. * unit));
+    let walls = t.kernel_walls();
+    assert_eq!(walls.len(), 1);
+    assert_ne!(walls[0].first(), walls[0].last());
 }
 #[test]
 fn distant_custom_can_fund_an_occupied_centre_before_a_connecting_road_exists() {
@@ -125,19 +238,26 @@ fn distant_custom_can_fund_an_occupied_centre_before_a_connecting_road_exists() 
     assert!(site
         .settle(&mut town, &mut ground, &walking, &spatial, [local; 2])
         .unwrap());
-    let [_, work, home] = town.holdings() else {
-        panic!("expected a workplace and a neighbouring home")
-    };
+    let [_, work, home]: &[_; 3] = town
+        .holdings()
+        .try_into()
+        .expect("expected a workplace and a neighbouring home");
     assert_eq!(town.streets().len(), 1);
-    assert!(work.slot.street.is_none() && home.slot.street.is_none());
+    assert_eq!((work.slot.street, home.slot.street), (None, None));
     assert_occupied(work);
     assert_occupied(home);
     assert_eq!(work.sponsors, vec![sponsor]);
-    assert!(work.ties.iter().any(|t| t.destination == source.endpoint));
-    assert!(home
-        .ties
-        .iter()
-        .any(|t| matches!(t.destination, Endpoint::Premises {holding,..} if holding == work.id)));
+    fn check_partners(
+        work: &atlas_generation::town::fabric::Holding,
+        home: &atlas_generation::town::fabric::Holding,
+        source: &OpportunitySource,
+    ) {
+        assert!(work.ties.iter().any(|t| t.destination == source.endpoint));
+        assert!(home.ties.iter().any(
+            |t| matches!(t.destination, Endpoint::Premises {holding,..} if holding == work.id)
+        ));
+    }
+    check_partners(work, home, &source);
     assert!(outlying_sites(&town, &[source], &walking, &spatial)
         .unwrap()
         .is_empty());
@@ -201,6 +321,41 @@ fn conflicting_claims_preserve_the_existing_holding() {
     assert!(town.establish(proposal(3.), &spatial).unwrap().is_none());
     assert_eq!(town.holdings().len(), 1);
     assert_eq!(town.holdings()[0].id, id);
+}
+
+#[test]
+fn a_powerful_neighbor_can_annex_a_private_frontage_but_the_occupied_commons_holds_its_title() {
+    use atlas_generation::town::{
+        fabric::{EditOutcome, FabricEdit, FabricOwner},
+        templates::Tenure,
+    };
+    let spatial = NativeGeos::new(0.001).unwrap();
+    for (title, can_annex) in [(Tenure::Household, true), (Tenure::Common, false)] {
+        let mut town = town();
+        let mut hall = proposal(10.);
+        hall.kind = supplied_kind(Kind::GuildHall);
+        hall.slot.tenure = Tenure::Institutional;
+        let institution = town.establish(hall, &spatial).unwrap().unwrap();
+        town.maintain(institution, 1., 1., 1.);
+        let mut home = proposal(22.);
+        home.slot.tenure = title;
+        let premises = town.establish(home, &spatial).unwrap().unwrap();
+        town.maintain(premises, 1., 0.2, 1.);
+        let decision = town
+            .apply(
+                FabricEdit::Enclose {
+                    institution,
+                    premises,
+                },
+                &spatial,
+            )
+            .unwrap();
+        assert_eq!(matches!(decision, EditOutcome::Premises(_)), can_annex);
+        assert_eq!(
+            town.holdings()[premises.0 as usize].institution.is_some(),
+            can_annex
+        );
+    }
 }
 
 #[test]
@@ -467,6 +622,34 @@ fn route_project_can_take_a_vacant_yard_but_cannot_cut_a_building() {
     assert!(!town.connect_route(crossing(15.), 5., &spatial).unwrap());
 }
 #[test]
+fn a_surface_crossing_and_a_submerged_chamber_can_be_built_in_either_order() {
+    use atlas_generation::town::templates::Habitat;
+    let spatial = NativeGeos::new(0.001).unwrap();
+    let crossing = || {
+        Street::new(
+            vec![[-20., 5.], [20., 5.]],
+            Class::Lane,
+            atlas_map::town::Size::Town,
+        )
+    };
+    let roof = polygon(&rectangle([0., 4.], [1., 0.], [0., 1.], 4., 3.));
+    for road_first in [false, true] {
+        let mut town = town();
+        let mut chamber = proposal(0.);
+        chamber.slot.habitat = Habitat::Submerged;
+        chamber.slot.street = None;
+        if road_first {
+            assert!(town.connect_route(crossing(), 5., &spatial).unwrap());
+        }
+        let id = town.establish(chamber, &spatial).unwrap().unwrap();
+        assert!(town.fit_building(id, roof.clone(), &spatial).unwrap());
+        if !road_first {
+            assert!(town.connect_route(crossing(), 5., &spatial).unwrap());
+        }
+        assert_eq!(town.holdings()[id.0 as usize].buildings.len(), 1);
+    }
+}
+#[test]
 fn working_plot_keeps_its_identity_while_built_claims_take_land() {
     use atlas_generation::town::{fabric::Fabric, ground::Ground, land};
     let spatial = NativeGeos::new(0.001).unwrap();
@@ -605,16 +788,19 @@ fn independent_foot_journeys_need_passable_land_but_no_street() {
     assert_eq!(approach.street, 0);
     assert_eq!(approach.points[0], [2.5, 4.5]);
     assert_eq!(approach.points.last().unwrap()[0], 15.5);
-    for leg in approach.points.windows(2) {
-        for i in 0..=100 {
-            let t = i as f64 / 100.;
-            let p = [
-                leg[0][0] * (1. - t) + leg[1][0] * t,
-                leg[0][1] * (1. - t) + leg[1][1] * t,
-            ];
-            assert_ne!(ground.owner(p), WALL, "walk crosses wall at {p:?}");
+    fn assert_path_clear(points: &[[f64; 2]], ground: &Ground) {
+        for leg in points.windows(2) {
+            for i in 0..=100 {
+                let t = i as f64 / 100.;
+                let p = [
+                    leg[0][0] * (1. - t) + leg[1][0] * t,
+                    leg[0][1] * (1. - t) + leg[1][1] * t,
+                ];
+                assert_ne!(ground.owner(p), WALL, "walk crosses wall at {p:?}");
+            }
         }
     }
+    assert_path_clear(&approach.points, &ground);
     for y in 13..20 {
         ground.withhold(y * 20 + 8, WALL);
     }
@@ -925,7 +1111,10 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
         fn feature_id(&self, key: &str) -> io::Result<String> {
             Ok(key.into())
         }
-        fn part_name(&self, _: &str, work: &str, _: [f64; 2], _: &Town) -> io::Result<String> {
+        fn part_name(&self, key: &str, work: &str, _: [f64; 2], _: &Town) -> io::Result<String> {
+            if key.starts_with("town:town:work:") {
+                return Ok(format!("Local {work}"));
+            }
             Ok(work.into())
         }
         fn spatial(&self) -> &dyn SpatialKernel {
@@ -945,6 +1134,18 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
     let mut hall = proposal(0.);
     hall.kind = supplied_kind(Kind::GuildHall);
     let id = t.establish(hall, &catalog.spatial).unwrap().unwrap();
+    use atlas_generation::town::major_works::{commission, InheritedWork, WorkFamily};
+    commission(
+        &mut t,
+        17,
+        &[InheritedWork {
+            family: WorkFamily::Library,
+            id: "parent-archive".into(),
+            design: None,
+            anchor: [0., 1.],
+        }],
+    );
+    t.works.commissions[0].members.push(id);
     t.fit_building(
         id,
         polygon(&rectangle([0., 1.], [1., 0.], [0., 1.], 8., 6.)),
@@ -1024,6 +1225,46 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
         format!("town:town:holding:{}:yard", holding.0)
     };
     let links = &catalog.features[&premises_id(id)].relations;
+    fn check_published_design(work: &Feature) {
+        assert_eq!(work.kind, "majorWork");
+        assert_eq!(
+            work.name,
+            format!(
+                "Local {}",
+                atlas_generation::town::major_works::WorkFamily::Library.label()
+            )
+        );
+        assert!(work.attributes["workProgram"].is_string());
+        assert!(work.attributes["workDesign"].is_object());
+    }
+    fn check_work(
+        catalog: &Catalog,
+        id: atlas_generation::town::fabric::HoldingId,
+        links: &[atlas_generation::features::records::Relation],
+    ) {
+        let work = &catalog.features["parent-archive"];
+        check_published_design(work);
+        assert!(work.footprint.is_some());
+        assert_eq!(work.attributes["origin"], "inherited");
+        use atlas_generation::features::records::Relation;
+        assert!(links.contains(&Relation {
+            kind: "partOf".into(),
+            target_id: work.id.clone()
+        }));
+        assert!(work.relations.contains(&Relation {
+            kind: "contains".into(),
+            target_id: format!("town:town:holding:{}:yard", id.0)
+        }));
+        assert_eq!(
+            catalog.features["town"].attributes["settlementTemplate"],
+            "ferry-commons"
+        );
+        assert_eq!(
+            catalog.features["town"].attributes["majorWorkCommissions"][0]["builtParts"],
+            1
+        );
+    }
+    check_work(&catalog, id, links);
     let destinations: Vec<_> = links
         .iter()
         .map(|r| (r.kind.as_str(), r.target_id.clone()))
@@ -1033,27 +1274,40 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
     let roof = &catalog.features[&format!("town:town:holding:{}:building:0", id.0)];
     let cottage_feature =
         &catalog.features[&format!("town:town:holding:{}:building:0", customer.0)];
-    use atlas_map::spatial::Predicate::Covers;
-    let published = &cottage_feature.geometry;
-    assert!(catalog
-        .spatial
-        .relation(published, &cottage, Covers)
-        .unwrap());
-    assert!(catalog
-        .spatial
-        .relation(&cottage, published, Covers)
-        .unwrap());
-    assert!(!cottage_feature.name.trim().is_empty());
-    assert_eq!(
-        cottage_feature.attributes["buildingFunction"],
-        "residential"
-    );
-    for feature in [cottage_feature, &catalog.features[&premises_id(customer)]] {
-        for key in ["address", "addressNumber", "street", "streetId"] {
-            assert!(!feature.attributes.contains_key(key));
+    fn check_cottage(
+        catalog: &Catalog,
+        cottage_feature: &Feature,
+        yard: &Feature,
+        cottage: &atlas_map::Geometry,
+    ) {
+        use atlas_map::spatial::Predicate::Covers;
+        let published = &cottage_feature.geometry;
+        assert!(catalog
+            .spatial
+            .relation(published, cottage, Covers)
+            .unwrap());
+        assert!(catalog
+            .spatial
+            .relation(cottage, published, Covers)
+            .unwrap());
+        assert!(!cottage_feature.name.trim().is_empty());
+        assert_eq!(
+            cottage_feature.attributes["buildingFunction"],
+            "residential"
+        );
+        for feature in [cottage_feature, yard] {
+            for key in ["address", "addressNumber", "street", "streetId"] {
+                assert!(!feature.attributes.contains_key(key));
+            }
+            assert!(!feature.relations.iter().any(|r| r.kind == "fronts"));
         }
-        assert!(!feature.relations.iter().any(|r| r.kind == "fronts"));
     }
+    check_cottage(
+        &catalog,
+        cottage_feature,
+        &catalog.features[&premises_id(customer)],
+        &cottage,
+    );
     assert_eq!(
         roof.attributes["placeKind"],
         serde_json::json!(Kind::GuildHall)
@@ -1072,36 +1326,52 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
         .unwrap()
         .target_id;
     assert_eq!(catalog.features[street].name, roof.attributes["street"]);
-    let connected_roof = &catalog.features[&format!("town:town:holding:{}:building:0", distant.0)];
-    for f in [connected_roof, &catalog.features[&premises_id(distant)]] {
-        assert_eq!(f.attributes["address"], "2 High Street");
-        assert_eq!(
-            f.attributes["addressJunction"],
-            serde_json::json!([10., -5.])
-        );
-        assert_eq!(f.attributes["entrance"], serde_json::json!([110., 0.]));
-        assert_eq!(
-            f.attributes["accessRoute"]["coordinates"],
-            serde_json::json!(route)
-        );
-        assert!(f
-            .relations
-            .iter()
-            .any(|r| r.kind == "accessFrom" && &r.target_id == street));
+    fn check_address(
+        catalog: &Catalog,
+        distant: atlas_generation::town::fabric::HoldingId,
+        street: &str,
+        route: &[[f64; 2]],
+    ) {
+        let connected_roof =
+            &catalog.features[&format!("town:town:holding:{}:building:0", distant.0)];
+        for f in [
+            connected_roof,
+            &catalog.features[&format!("town:town:holding:{}:yard", distant.0)],
+        ] {
+            assert_eq!(f.attributes["address"], "2 High Street");
+            assert_eq!(
+                f.attributes["addressJunction"],
+                serde_json::json!([10., -5.])
+            );
+            assert_eq!(f.attributes["entrance"], serde_json::json!([110., 0.]));
+            assert_eq!(
+                f.attributes["accessRoute"]["coordinates"],
+                serde_json::json!(route)
+            );
+            assert!(f
+                .relations
+                .iter()
+                .any(|r| r.kind == "accessFrom" && r.target_id == street));
+        }
     }
-    let paths: Vec<_> = catalog
-        .features
-        .values()
-        .filter(|f| f.kind == "footpath")
-        .collect();
-    assert_eq!(paths.len(), 3);
-    assert!(paths
-        .iter()
-        .all(|f| f.layer_id == "roads" && f.attributes["widths"] == serde_json::json!([0.7, 0.7])));
-    assert!(catalog
-        .features
-        .values()
-        .any(|f| f.kind == "ward" && f.name == "ward"));
+    check_address(&catalog, distant, street, &route);
+    check_paths_and_ward(&catalog);
+    fn check_paths_and_ward(catalog: &Catalog) {
+        let paths: Vec<_> = catalog
+            .features
+            .values()
+            .filter(|f| f.kind == "footpath")
+            .collect();
+        assert_eq!(paths.len(), 3);
+        assert!(paths
+            .iter()
+            .all(|f| f.layer_id == "roads"
+                && f.attributes["widths"] == serde_json::json!([0.7, 0.7])));
+        assert!(catalog
+            .features
+            .values()
+            .any(|f| f.kind == "ward" && f.name == "ward"));
+    }
 }
 
 #[test]

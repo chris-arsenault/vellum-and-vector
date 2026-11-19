@@ -350,6 +350,10 @@ impl FabricOwner for Town {
                 if institution == premises
                     || subject.public
                     || subject.institution.is_some()
+                    || !subject
+                        .slot
+                        .tenure
+                        .permits_neighbor_claim(subject.occupation, subject.condition)
                     || sponsor.kind.definition().activity
                         != super::super::catalogue::Activity::Institution
                     || sponsor.claim <= subject.claim
@@ -405,6 +409,8 @@ impl FabricOwner for Town {
                 child.sponsors.clear();
                 child.access_via = Some(premises);
                 child.slot = slot;
+                child.slot.tenure = original.slot.tenure;
+                child.slot.habitat = original.slot.habitat;
                 child.established = self.round;
                 child.occupation = 0.;
                 child.crowding = 0.;
@@ -487,6 +493,10 @@ impl Town {
         };
         if h.slot.participant != Some(host)
             || !space.public
+            || !space
+                .slot
+                .tenure
+                .permits_neighbor_claim(space.occupation, space.condition)
             || h.claim * h.occupation <= space.claim * (1. + space.occupation)
             || h.public
         {
@@ -538,5 +548,105 @@ impl Town {
             after(self, id, conditions);
         }
         EditOutcome::Premises(id)
+    }
+}
+/// Reuse a sound hull at another berth. Its premises, fittings and history
+/// keep their identity; local access is resolved from the new entrance.
+impl Town {
+    pub fn berth(
+        &mut self,
+        id: HoldingId,
+        site: &super::super::plots::Slot,
+        ground: &super::super::ground::Ground,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<bool> {
+        use super::super::{
+            geometry::{add, distance, sub},
+            ground::{Rectangle, FREE},
+            templates::Habitat,
+        };
+        use atlas_map::authoring::{transform_geometry, Transform};
+        let i = id.0 as usize;
+        let Some(h) = self.holdings.get(i) else {
+            return Ok(false);
+        };
+        if h.slot.habitat != Habitat::Floating
+            || site.participant.is_some()
+            || h.access_via.is_some()
+            || !matches!(site.habitat, Habitat::Floating | Habitat::Ground)
+        {
+            return Ok(false);
+        }
+        let shift = sub(site.front, h.slot.front);
+        let sailed = distance(site.front, h.slot.front);
+        if sailed < h.slot.depth {
+            return Ok(false);
+        }
+        let passage = ground.wet_runs(&[h.slot.front, site.front]);
+        if !matches!(passage.as_slice(), [(start,end)] if *start<=ground.cell && *end+site.depth+ground.cell>=sailed)
+        {
+            return Ok(false);
+        }
+        let old_front = h.slot.front;
+        let mut slot = h.slot.clone();
+        slot.front = site.front;
+        slot.street = site.street;
+        slot.along = site.along;
+        slot.habitat = site.habitat;
+        for p in &mut slot.corners {
+            *p = add(*p, shift);
+        }
+        if !ground.open_with(&Rectangle(&slot.corners), |mark| {
+            slot.habitat.fits(mark, |mark| mark == FREE)
+        }) {
+            return Ok(false);
+        }
+        let shift = Transform {
+            translate: shift,
+            rotate: 0.,
+            scale: 1.,
+            about: [0., 0.],
+        };
+        let outline = transform_geometry(&h.outline, &shift);
+        let bounds = spatial.bounds(&outline).map_err(io::Error::other)?;
+        let near = self.nearby_holdings(bounds, spatial)?;
+        let obstacles: Vec<_> = near
+            .into_iter()
+            .filter(|&j| j != i && self.holdings[j].slot.habitat.shares_surface(slot.habitat))
+            .map(|j| self.holdings[j].outline.clone())
+            .collect();
+        if spatial
+            .intersection_areas(&outline, &obstacles)
+            .map_err(io::Error::other)?
+            .iter()
+            .any(|&a| a > 0.)
+        {
+            return Ok(false);
+        }
+        if !self.nearby_roads(bounds, spatial)?.is_empty() {
+            return Ok(false);
+        }
+        let h = &mut self.holdings[i];
+        h.slot = slot;
+        h.outline = outline;
+        h.cause = if h.slot.habitat == Habitat::Ground {
+            "An old hull was drawn onto the working bank"
+        } else {
+            "An inhabited hull moved to a working berth"
+        }
+        .into();
+        for b in &mut h.buildings {
+            *b = transform_geometry(b, &shift);
+        }
+        self.fitting.get_mut().holdings.replace(i, bounds);
+        if let Some(approach) = self.approaches.get_mut(i) {
+            *approach = None;
+        }
+        self.footpaths.retain(|path| {
+            path.points
+                .iter()
+                .all(|p| distance(*p, old_front) > ground.cell)
+        });
+        Ok(true)
     }
 }

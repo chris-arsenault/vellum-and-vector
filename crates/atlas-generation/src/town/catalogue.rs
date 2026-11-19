@@ -9,6 +9,7 @@ pub use atlas_map::town::places::Activity;
 use atlas_map::town::places::{FineCraft, Kind as Identity, Residence, Retail};
 use atlas_map::town::{BuildingFunction, Trade as CraftTrade, Use};
 mod agriculture;
+pub(crate) mod founding_places;
 pub mod development;
 mod hospitality;
 mod household;
@@ -17,6 +18,7 @@ mod production;
 mod purposes;
 mod service;
 mod trade;
+pub(crate) mod works;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Form {
     Frontage,
@@ -97,6 +99,7 @@ pub enum Site {
     RequireStreet,
     OpenGround,
     WorkingLand,
+    RootedGround,
     Waterfront,
     FlowingWater,
     PractisedGround,
@@ -304,6 +307,7 @@ register_places! {
     Sanitation => service::sanitation,
     Common => agriculture::common,
     Garden => household::garden,
+    Grove => agriculture::grove,
     Park => household::park,
     Fairground => trade::fairground,
     Entertainment => hospitality::entertainment,

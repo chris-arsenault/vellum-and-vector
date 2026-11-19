@@ -8,18 +8,12 @@ use crate::town::{
     geometry::{add, distance, dot, left, scale, sub, unit, Point},
     ground::{FIRST_STREET, PLOT},
     growth::StreetLines,
-    network::Class,
+    network::{Class, StreetProposal as Project},
     story::Layout,
 };
 use atlas_map::{Geometry, Position};
 use std::io;
 
-struct Project {
-    demand: &'static str,
-    points: Vec<Point>,
-    benefit: f64,
-    class: Class,
-}
 enum Investment {
     Route(Project),
     Widen(StreetLoad),
@@ -88,6 +82,7 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
     projects.extend(backland(town));
     projects.extend(prospects(town, context));
     projects.extend(occupied_ends(town, context));
+    projects.extend(town.template.street_proposals(town));
     projects.extend(destinations(town, context)?);
     projects.extend(purpose_routes(town, context)?);
     projects.extend(shortcuts(town, context)?);

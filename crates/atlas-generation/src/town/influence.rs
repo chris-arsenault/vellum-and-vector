@@ -31,6 +31,7 @@ pub struct Conditions {
     pub exchange: f64,
     pub population: f64,
     pub cultivated: f64,
+    pub rooted: bool,
     pub rural_service: f64,
     pub density: f64,
     pub slope: f64,

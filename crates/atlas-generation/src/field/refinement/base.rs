@@ -7,6 +7,9 @@ use crate::{
 };
 use std::io;
 
+/// Smoothing lengths up to this many lattice steps diffuse sweep by sweep.
+const SWEPT_STEPS: f64 = 4.0;
+
 pub struct Adjacency {
     offsets: Vec<usize>,
     neighbors: Vec<usize>,
@@ -15,6 +18,8 @@ pub struct Adjacency {
     step: f64,
     /// The frame's longer side: diffusion this far has spread across the whole frame.
     extent: f64,
+    positions: Vec<[f64; 2]>,
+    periodic: bool,
 }
 impl Adjacency {
     pub fn new(mesh: &TriangularLattice) -> Self {
@@ -29,6 +34,8 @@ impl Adjacency {
             rate: vec![0.0; mesh.len()],
             step,
             extent: (e - w).max(n - s),
+            positions: (0..mesh.len()).map(|cell| mesh.position(cell)).collect(),
+            periodic: mesh.periodic_width().is_some(),
         };
         for cell in 0..mesh.len() {
             result.offsets.push(result.neighbors.len());
@@ -64,6 +71,24 @@ impl Adjacency {
         // instead of stepping (sigma / step)^2 passes across a parent-span distance.
         if within.is_none() && sigma >= self.extent {
             self.level(values);
+            return;
+        }
+        // Each sweep advances diffusion by about step² / 8, so the sweeps below reach
+        // time σ² / 2: a Gaussian of standard deviation σ with a closed frame edge. Past
+        // a few steps that Gaussian is evaluated directly, at a cost independent of σ.
+        if sigma > SWEPT_STEPS * self.step && !self.periodic {
+            let weights: Vec<f64> = (0..values.len())
+                .map(|cell| {
+                    let diffusing =
+                        self.rate[cell] > 0.0 && within.is_none_or(|mask| mask[cell] != 0);
+                    if diffusing {
+                        1.0 / self.rate[cell]
+                    } else {
+                        0.0
+                    }
+                })
+                .collect();
+            super::gaussian::blur(&self.positions, &weights, values, sigma);
             return;
         }
         let passes = (4.0 * sigma * sigma / (self.step * self.step))

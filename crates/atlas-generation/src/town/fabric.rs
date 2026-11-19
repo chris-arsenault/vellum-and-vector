@@ -57,6 +57,9 @@ pub struct Holding {
 }
 impl Holding {
     pub(crate) fn pledge(&self) -> f64 {
+        if self.slot.tenure == super::templates::Tenure::Dependent {
+            return 0.;
+        }
         self.means * self.occupation.clamp(0., 1.) * self.condition.clamp(0., 1.) * 0.4
     }
 }
@@ -66,6 +69,10 @@ pub struct Town {
     fitting: std::cell::RefCell<FittingIndex>,
     pub seat: Seat,
     pub layout: Layout,
+    pub template: super::templates::Selection,
+    pub founding_sites: Vec<(super::templates::AnchorRole, HoldingId)>,
+    pub(crate) defences: Vec<Vec<Point>>,
+    pub works: super::major_works::MajorWorks,
     streets: Vec<Street>,
     growing_ways: Vec<(super::network::Arm, usize)>,
     passages: Vec<Geometry>,
@@ -255,12 +262,30 @@ impl Town {
         }
         Ok(fitting.holdings.query(bounds))
     }
-    fn nearby_roads(&self, bounds: Bounds, spatial: &dyn SpatialKernel) -> io::Result<Vec<usize>> {
+    pub(crate) fn nearby_roads(
+        &self,
+        bounds: Bounds,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<Vec<usize>> {
         let mut fitting = self.fitting.borrow_mut();
         for road in &self.streets[fitting.roads.len()..] {
             fitting.roads.push(road_bounds(road, spatial)?);
         }
         Ok(fitting.roads.query(bounds))
+    }
+    fn surface_holdings(
+        &self,
+        bounds: Bounds,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<Vec<usize>> {
+        let mut holdings = self.nearby_holdings(bounds, spatial)?;
+        holdings.retain(|&i| {
+            self.holdings[i]
+                .slot
+                .habitat
+                .shares_surface(super::templates::Habitat::Ground)
+        });
+        Ok(holdings)
     }
     pub fn streets(&self) -> &[Street] {
         &self.streets
@@ -411,6 +436,10 @@ impl Town {
         let purposes = Purpose::for_seat(&seat);
         Self {
             fitting: Default::default(),
+            template: super::templates::Selection::commons(seat.centre),
+            founding_sites: Vec::new(),
+            defences: Vec::new(),
+            works: Default::default(),
             seat,
             layout,
             streets: vec![],
@@ -433,6 +462,15 @@ impl Town {
         proposal: Proposal,
         spatial: &dyn SpatialKernel,
     ) -> io::Result<Option<HoldingId>> {
+        if self.round > 0
+            && self.template.affinity(
+                proposal.kind.definition().activity,
+                proposal.slot.front,
+                atlas_map::town::plot_size(self.seat.story.size()).1,
+            ) <= 0.
+        {
+            return Ok(None);
+        }
         if let Some(id) = proposal.slot.participant {
             let Some(host) = self.holdings.get(id.0 as usize) else {
                 return Ok(None);
@@ -460,19 +498,35 @@ impl Town {
                 return Ok(None);
             }
         }
-        let mut outline = polygon(&proposal.slot.corners);
+        let mut outline = proposal.slot.occupied_shape();
         let bounds = spatial.bounds(&outline).map_err(io::Error::other)?;
         let existing: Vec<_> = self
             .nearby_holdings(bounds, spatial)?
             .into_iter()
+            .filter(|&i| {
+                proposal
+                    .slot
+                    .habitat
+                    .shares_surface(self.holdings[i].slot.habitat)
+            })
             .map(|i| self.holdings[i].outline.clone())
+            .chain(self.works.obstructions(bounds).cloned())
             .collect();
         let Some(free) = fit_around(outline, existing, spatial)? else {
             return Ok(None);
         };
         outline = free;
         let mut roads = Vec::new();
-        for i in self.nearby_roads(bounds, spatial)? {
+        let surface_roads = if proposal
+            .slot
+            .habitat
+            .shares_surface(super::templates::Habitat::Ground)
+        {
+            self.nearby_roads(bounds, spatial)?
+        } else {
+            vec![]
+        };
+        for i in surface_roads {
             let street = &self.streets[i];
             let gap = spatial
                 .distance(&outline, &super::edits::line(&street.points))

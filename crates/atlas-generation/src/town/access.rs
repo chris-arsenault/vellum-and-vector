@@ -168,7 +168,55 @@ impl<'a> Access<'a> {
     pub fn for_town(town: &'a Town, spatial: &dyn SpatialKernel) -> io::Result<Self> {
         let mut network = Self::new(town.streets(), spatial)?;
         network.paths = town.footpaths();
+        for transfer in town.kernel_links() {
+            network.add_link(transfer.ends[0], transfer.ends[1], transfer.cost, spatial)?;
+        }
+        network.link_wet_holdings(town, spatial)?;
         Ok(network)
+    }
+    /// Adjacent occupied hulls share a gangway. Submerged dwellings use short
+    /// passages within their own stratum and reach land through the transfer.
+    fn link_wet_holdings(&mut self, town: &Town, spatial: &dyn SpatialKernel) -> io::Result<()> {
+        use super::templates::Habitat;
+        if !town
+            .founding_sites
+            .iter()
+            .any(|&(_, id)| town.holdings()[id.0 as usize].slot.habitat.wet())
+        {
+            return Ok(());
+        }
+        for habitat in [Habitat::Floating, Habitat::Submerged] {
+            let holdings: Vec<_> = town
+                .holdings()
+                .iter()
+                .filter(|h| h.slot.habitat == habitat && h.condition > 0.2)
+                .collect();
+            if holdings.len() < 2 {
+                continue;
+            }
+            let points: Vec<_> = holdings.iter().map(|h| pos(h.slot.front)).collect();
+            let mut edges = spatial.delaunay_edges(&points).map_err(io::Error::other)?;
+            if edges.is_empty() {
+                let mut ordered: Vec<_> = (0..points.len()).collect();
+                // hpc-exempt: order a line of actual hull entrances when no triangulation exists.
+                ordered.sort_by(|&a, &b| {
+                    holdings[a]
+                        .slot
+                        .front
+                        .partial_cmp(&holdings[b].slot.front)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+                edges.extend(ordered.windows(2).map(|pair| [pair[0], pair[1]]));
+            }
+            for [a, b] in edges {
+                let (first, second) = (&holdings[a].slot, &holdings[b].slot);
+                let span = distance(first.front, second.front);
+                if span <= first.depth + second.depth {
+                    self.add_link(first.front, second.front, span, spatial)?;
+                }
+            }
+        }
+        Ok(())
     }
     pub fn on_ground(mut self, ground: &'a super::ground::Ground) -> Self {
         self.ground = Some(ground);
@@ -331,13 +379,7 @@ impl<'a> Access<'a> {
         {
             walking::connect(ground, &entries, &mut graph, spatial)?;
         }
-        for (i, (_, _, cost)) in self.links.iter().enumerate() {
-            let end = places.len() + 2 * i;
-            if let (Some((a, da)), Some((b, db))) = (graph.entrances[end], graph.entrances[end + 1])
-            {
-                graph.connect(a, b, cost + da + db, Course::Link);
-            }
-        }
+        self.connect_links(places, &mut graph);
         for path in retained {
             let [a, b] = path.points;
             let start = graph.vertex(a);
@@ -346,6 +388,30 @@ impl<'a> Access<'a> {
             graph.connect(start, end, distance(a, b) * effort, Course::Walk);
         }
         Ok(graph)
+    }
+    fn connect_links(&self, places: &[Entrance], graph: &mut BoundNetwork) {
+        // Link landings are genuine entrance vertices even on water or where
+        // no ordinary street is present. Only an exact landing can board.
+        let mut landings = BTreeMap::new();
+        for (i, (start, finish, cost)) in self.links.iter().enumerate() {
+            let end = places.len() + 2 * i;
+            let a = graph.vertex(*start);
+            let b = graph.vertex(*finish);
+            for (offset, p, node) in [(0, *start, a), (1, *finish, b)] {
+                landings.insert(JunctionId::at(p), node);
+                if let Some((attached, walk)) = graph.entrances[end + offset] {
+                    if attached != node {
+                        graph.connect(attached, node, walk, Course::Walk);
+                    }
+                }
+            }
+            graph.connect(a, b, *cost, Course::Link);
+        }
+        for (i, place) in places.iter().enumerate() {
+            if let Some(&node) = landings.get(&JunctionId::at(place.point)) {
+                graph.entrances[i] = Some((node, place.walk));
+            }
+        }
     }
     fn attach(
         &self,

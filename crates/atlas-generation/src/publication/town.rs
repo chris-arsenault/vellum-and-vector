@@ -12,6 +12,8 @@ use crate::{
 use atlas_map::{Geometry, Position};
 use serde_json::{json, Value};
 use std::io;
+mod landmarks;
+pub(crate) use landmarks::work_name;
 fn attrs(pairs: impl IntoIterator<Item = (&'static str, Value)>) -> Attributes {
     let mut values: Attributes = pairs.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
     values.insert("developedBy".into(), json!("regional"));
@@ -50,6 +52,9 @@ pub trait TownWriter {
     fn save(&mut self, feature: Feature) -> io::Result<()>;
     fn network(&mut self, feature: Feature) -> io::Result<()>;
     fn feature(&self, id: &str) -> io::Result<Option<Feature>>;
+    fn inherited(&self, id: &str) -> io::Result<Option<Feature>> {
+        self.feature(id)
+    }
     fn feature_id(&self, key: &str) -> io::Result<String>;
     fn part_name(&self, key: &str, work: &str, position: Point, town: &Town) -> io::Result<String>;
     fn spatial(&self) -> &dyn crate::spatial::SpatialKernel;
@@ -82,6 +87,7 @@ pub fn publish(state: &mut impl TownWriter, fabric: &Fabric) -> io::Result<()> {
         }
     }
     for town in &fabric.towns {
+        landmarks::publish(state, town)?;
         publish_footpaths(state, town)?;
         for (i, passage) in town.passages().iter().enumerate() {
             write(
@@ -120,8 +126,23 @@ pub fn publish(state: &mut impl TownWriter, fabric: &Fabric) -> io::Result<()> {
 }
 
 fn publish_settlement(state: &mut impl TownWriter, town: &Town) -> io::Result<()> {
-    let Some(mut settlement) = state.feature(&town.seat.key)? else {
-        return Ok(());
+    let mut settlement = match state.feature(&town.seat.key)? {
+        Some(feature) => feature,
+        None => {
+            let [x, y] = town.seat.centre;
+            let mut feature = state.record(Record {
+                key: &town.seat.key,
+                name: &town.seat.name,
+                kind: "settlement",
+                layer: "settlements",
+                geometry: Geometry::Point {
+                    coordinates: Position::xy(x, y),
+                },
+                attributes: attrs([("population", json!(town.seat.story.people))]),
+            })?;
+            feature.id.clone_from(&town.seat.key);
+            feature
+        }
     };
     if matches!(settlement.geometry, Geometry::Point { .. }) && !town.holdings().is_empty() {
         let [x, y] = town.seat.centre;
@@ -132,6 +153,22 @@ fn publish_settlement(state: &mut impl TownWriter, town: &Town) -> io::Result<()
     settlement
         .attributes
         .insert("layout".into(), json!(town.layout.as_str()));
+    settlement.attributes.insert(
+        "settlementTemplate".into(),
+        json!(town.template.selected.name()),
+    );
+    settlement.attributes.insert(
+        "templateChoices".into(),
+        json!(town
+            .template
+            .ranked
+            .iter()
+            .map(|c| json!({"template":c.template.name(),"weight":c.weight,"reasons":c.reasons}))
+            .collect::<Vec<_>>()),
+    );
+    settlement.attributes.insert("majorWorkCommissions".into(), json!(town.works.commissions.iter().map(|work|
+        json!({"family":work.family.key(),"program":work.design.program(),"origin":work.origin.as_str(),"builtParts":work.members.len(),"totalParts":work.design.component_count()})
+    ).collect::<Vec<_>>()));
     settlement
         .attributes
         .insert("developmentRounds".into(), json!(town.round));
@@ -316,6 +353,43 @@ fn operating_partner(
     Ok(state.feature(&id)?.map(|feature| feature.id))
 }
 
+fn operating_relations(
+    state: &impl TownWriter,
+    town: &Town,
+    holding: &Holding,
+    yard: &mut Feature,
+) -> io::Result<()> {
+    for (id, relation) in [
+        (holding.institution, "inPrecinct"),
+        (holding.access_via, "accessVia"),
+        (holding.slot.participant, "frontsOnto"),
+    ]
+    .into_iter()
+    .filter_map(|(id, relation)| id.map(|id| (id, relation)))
+    .chain(
+        holding
+            .sponsors
+            .iter()
+            .copied()
+            .map(|id| (id, "sponsoredBy")),
+    ) {
+        yard.relations.push(crate::features::records::Relation {
+            target_id: state
+                .feature_id(&format!("town:{}:holding:{}:yard", town.seat.key, id.0))?,
+            kind: relation.into(),
+        });
+    }
+    for tie in &holding.ties {
+        let Some(target_id) = operating_partner(state, &tie.destination)? else {
+            continue;
+        };
+        yard.relations.push(crate::features::records::Relation {
+            target_id,
+            kind: tie.purpose.relation().into(),
+        });
+    }
+    Ok(())
+}
 fn holding_records(
     state: &mut impl TownWriter,
     town: &Town,
@@ -340,6 +414,8 @@ fn holding_records(
             ("entrance", json!(holding.slot.front)),
             ("use", json!(definition.legacy_use.as_str())),
             ("placeKind", json!(holding.kind)),
+            ("habitat", json!(holding.slot.habitat)),
+            ("tenure", json!(holding.slot.tenure)),
             ("secondaryKind", json!(holding.secondary)),
             (
                 "craft",
@@ -375,6 +451,9 @@ fn holding_records(
         values
     };
     let mut yard_attributes = common();
+    if let Some((role, _)) = town.founding_sites.iter().find(|(_, id)| *id == holding.id) {
+        yard_attributes.insert("foundingRole".into(), json!(role));
+    }
     if let Some(cover) = definition.roles.ground_cover {
         yard_attributes.insert("publicSurface".into(), json!(cover));
     }
@@ -393,35 +472,8 @@ fn holding_records(
         holding.outline.clone(),
         yard_attributes,
     )?;
-    for (id, relation) in [
-        (holding.institution, "inPrecinct"),
-        (holding.access_via, "accessVia"),
-        (holding.slot.participant, "frontsOnto"),
-    ]
-    .into_iter()
-    .filter_map(|(id, relation)| id.map(|id| (id, relation)))
-    .chain(
-        holding
-            .sponsors
-            .iter()
-            .copied()
-            .map(|id| (id, "sponsoredBy")),
-    ) {
-        yard.relations.push(crate::features::records::Relation {
-            target_id: state
-                .feature_id(&format!("town:{}:holding:{}:yard", town.seat.key, id.0))?,
-            kind: relation.into(),
-        });
-    }
-    for tie in &holding.ties {
-        let Some(target_id) = operating_partner(state, &tie.destination)? else {
-            continue;
-        };
-        yard.relations.push(crate::features::records::Relation {
-            target_id,
-            kind: tie.purpose.relation().into(),
-        });
-    }
+    landmarks::relate_component(state, town, holding.id, &mut yard)?;
+    operating_relations(state, town, holding, &mut yard)?;
     yard.relations
         .extend(address.iter().map(HouseAddress::fronts));
     if !yard.relations.is_empty() {
@@ -512,6 +564,12 @@ impl TownWriter for State {
     }
     fn feature(&self, id: &str) -> io::Result<Option<Feature>> {
         self.records.features.get(id)
+    }
+    fn inherited(&self, id: &str) -> io::Result<Option<Feature>> {
+        match self.records.source_features.as_deref() {
+            Some(reader) => reader.get(id),
+            None => self.feature(id),
+        }
     }
     fn feature_id(&self, key: &str) -> io::Result<String> {
         crate::identity::semantic_id(

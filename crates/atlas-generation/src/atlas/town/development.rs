@@ -29,6 +29,37 @@ struct FrontageTravel<'a> {
     spatial: &'a dyn crate::spatial::SpatialKernel,
     links: &'a [(Point, Point, f64)],
 }
+fn occupied_ground(
+    walking: &crate::town::ground::Ground,
+    towns: &[Town],
+    spatial: &dyn crate::spatial::SpatialKernel,
+) -> io::Result<crate::town::ground::Ground> {
+    let mut ground = walking.clone();
+    let premises = towns
+        .iter()
+        .flat_map(|t| t.holdings().iter())
+        .filter(|h| {
+            h.slot
+                .habitat
+                .shares_surface(crate::town::templates::Habitat::Ground)
+        })
+        .map(|h| h.outline.clone())
+        .collect::<Vec<_>>();
+    ground.mark_shapes(&premises, PLOT, spatial)?;
+    for grounds in towns
+        .iter()
+        .flat_map(|t| &t.works.commissions)
+        .filter_map(|w| w.grounds.as_ref())
+    {
+        ground.mark_shapes(
+            std::slice::from_ref(grounds),
+            crate::town::ground::SQUARE,
+            spatial,
+        )?;
+    }
+    Ok(ground)
+}
+
 fn frontage_candidates(
     town: &Town,
     travel: FrontageTravel<'_>,
@@ -129,6 +160,7 @@ fn inhabited_frontage(
         .map(|h| h.outline.clone())
         .collect();
     anchors.push(point(town.seat.centre));
+    anchors.extend(town.works.active_sites().map(point));
     anchors.extend(
         sources
             .iter()
@@ -147,8 +179,45 @@ fn inhabited_frontage(
         .map(|s| Position::xy(s.front[0], s.front[1]))
         .collect();
     let nearest = index.nearest_many(&fronts).map_err(io::Error::other)?;
+    // A hull needs a gangway and a caisson needs a passage. A nearby shore
+    // garden, isolated road or external POI cannot support either on its own.
+    let mut unsupported = vec![false; candidates.len()];
+    for habitat in [
+        crate::town::templates::Habitat::Floating,
+        crate::town::templates::Habitat::Submerged,
+    ] {
+        let wet: Vec<_> = candidates
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.habitat == habitat)
+            .collect();
+        if wet.is_empty() {
+            continue;
+        }
+        let occupied: Vec<_> = town
+            .holdings()
+            .iter()
+            .filter(|h| h.slot.habitat == habitat && h.condition > 0.2 && h.occupation > 0.)
+            .collect();
+        let geometry: Vec<_> = occupied.iter().map(|h| point(h.slot.front)).collect();
+        let locations: Vec<_> = wet.iter().map(|(i, _)| fronts[*i]).collect();
+        let near = spatial
+            .index(&geometry)
+            .map_err(io::Error::other)?
+            .nearest_many(&locations)
+            .map_err(io::Error::other)?;
+        for ((i, s), n) in wet.into_iter().zip(near) {
+            unsupported[i] = n.is_none_or(|n| {
+                crate::town::geometry::distance(s.front, occupied[n].slot.front)
+                    > s.depth + occupied[n].slot.depth
+            });
+        }
+    }
     let mut available = Vec::new();
-    for (slot, anchor) in candidates.into_iter().zip(nearest) {
+    for ((slot, anchor), unsupported) in candidates.into_iter().zip(nearest).zip(unsupported) {
+        if unsupported {
+            continue;
+        }
         if let Some(i) = anchor {
             let gap = spatial
                 .distance(&point(slot.front), &anchors[i])
@@ -244,9 +313,12 @@ fn settle(
     state: &State,
     seat: crate::town::seat::Seat,
     ground: &crate::town::ground::Ground,
-    layout: Option<super::story::Layout>,
+    settings: &Settings,
+    context: &super::founding_site::Context<'_>,
+    seat_index: usize,
 ) -> io::Result<Town> {
     let mesh = state.field().mesh();
+    let draw = crate::field::poi::true_sizes::roll(&seat.key, settings.seed as u64);
     for centre in habitable_sites(state, ground, &seat) {
         let mut candidate = seat.clone();
         candidate.centre = centre;
@@ -259,14 +331,35 @@ fn settle(
             };
             Ok(Some(Conditions {
                 cultivated: site::worked_shares(state.field(), cell)?.0,
+                rooted: rooted_ground(state.field(), cell)?,
                 bank: shore(state.field(), cell, false)?,
                 flowing: shore(state.field(), cell, true)?,
+                craft: strongest_craft(state.field(), cell)?,
+                slope: state.field().shared().scalar(Scalar::Slope).get(cell)?,
                 ..Conditions::default()
             }))
         };
-        let mut town = Town::new(candidate, layout);
-        if crate::town::founding::establish(&mut town, ground, state.spatial.as_ref(), local)? {
-            return Ok(town);
+        let (site, inherited) = context.survey(state, &candidate, seat_index, ground)?;
+        let selection = crate::town::templates::Selection::choose(site, draw);
+        let mut excluded = Vec::new();
+        let mut next = Some(selection.selected);
+        while let Some(template) = next {
+            let mut town = Town::new(candidate.clone(), settings.layout);
+            town.template = selection.clone();
+            town.template.selected = template;
+            if crate::town::founding::establish(&mut town, ground, state.spatial.as_ref(), local)? {
+                town.template
+                    .ranked
+                    .retain(|c| !excluded.contains(&c.template));
+                crate::town::major_works::commission(&mut town, settings.seed, &inherited);
+                return Ok(town);
+            }
+            excluded.push(template);
+            let retry = crate::field::poi::true_sizes::roll(
+                &seat.key,
+                (settings.seed as u64).wrapping_add(excluded.len() as u64),
+            );
+            next = selection.draw_remaining(retry, &excluded);
         }
     }
     Err(io::Error::other(format!(
@@ -283,6 +376,10 @@ pub struct Operations {
     exposure: Query<State, SiteConditions>,
     base: Query<State, SiteConditions>,
     environment: Query<State, EnvironmentAnswers>,
+}
+fn rooted_ground(field: &Field, cell: usize) -> io::Result<bool> {
+    Ok(field.shared().scalar(Scalar::TreeCover).get(cell)? > 0.
+        && field.shared().scalar(Scalar::Verdure).get(cell)? > 0.)
 }
 fn environment(
     physical: &Physical,
@@ -316,7 +413,17 @@ fn environment(
         },
     )
 }
-fn shore(field: &Field, cell: usize, running: bool) -> io::Result<bool> {
+fn strongest_craft(field: &Field, cell: usize) -> io::Result<Option<i32>> {
+    let mut best = (0., None);
+    for craft in crate::field::people::crafts::CRAFTS {
+        let share = crate::field::people::crafts::practised(field, craft, cell)?;
+        if share > best.0 {
+            best = (share, Some(craft.code));
+        }
+    }
+    Ok(best.1)
+}
+pub(super) fn shore(field: &Field, cell: usize, running: bool) -> io::Result<bool> {
     let water = field.water();
     for c in std::iter::once(cell).chain((0..3).filter_map(|e| field.mesh().neighbor(cell, e))) {
         if water.channels.width.get(c)? > 0. && water.channels.depth.get(c)? > 0. {
@@ -359,19 +466,7 @@ fn samples() -> Query<State, SiteConditions> {
                     let conditions = Conditions {
                         bank: shore(field, cell, false)?,
                         flowing: shore(field, cell, true)?,
-                        craft: crate::field::people::crafts::CRAFTS
-                            .iter()
-                            .map(|&craft| {
-                                Ok((
-                                    craft.code,
-                                    crate::field::people::crafts::practised(field, craft, cell)?,
-                                ))
-                            })
-                            .collect::<io::Result<Vec<_>>>()?
-                            .into_iter()
-                            .filter(|(_, share)| *share > 0.)
-                            .max_by(|a, b| a.1.total_cmp(&b.1))
-                            .map(|(code, _)| code),
+                        craft: strongest_craft(field, cell)?,
                         clearance: 0.,
                         exchange: field
                             .town_signals()
@@ -384,6 +479,7 @@ fn samples() -> Query<State, SiteConditions> {
                         forgetting: request.1.forgetting.get(cell)?,
                         presence: request.1.presence.get(cell)?,
                         cultivated: site::worked_shares(field, cell)?.0,
+                        rooted: rooted_ground(field, cell)?,
                         rural_service: 0.,
                         density: 0.,
                         slope: slope.get(cell)?,
@@ -471,11 +567,15 @@ impl Operations {
                     return Ok(());
                 }
                 let site = site::starting(state)?;
-                state.town.towns = site
+                let context = super::founding_site::Context::new(state, &site.seats)?;
+                let towns = site
                     .seats
                     .into_iter()
-                    .map(|seat| settle(state, seat, &site.ground, settings.layout))
+                    .enumerate()
+                    .map(|(i, seat)| settle(state, seat, &site.ground, settings, &context, i))
                     .collect::<io::Result<Vec<_>>>()?;
+                drop(context);
+                state.town.towns = towns;
                 Ok(())
             },
         );
@@ -524,12 +624,14 @@ impl Operations {
                                     .enumerate()
                                     .flat_map(|(i, street)| slots(i, street, 9., 25.))
                                     .chain(crate::town::land_sites::around(
-                                        std::iter::once(town.seat.centre).chain(
-                                            town.holdings()
-                                                .iter()
-                                                .filter(|h| h.condition > 0.2)
-                                                .map(|h| h.slot.front),
-                                        ),
+                                        std::iter::once(town.seat.centre)
+                                            .chain(
+                                                town.holdings()
+                                                    .iter()
+                                                    .filter(|h| h.condition > 0.2)
+                                                    .map(|h| h.slot.front),
+                                            )
+                                            .chain(town.works.active_sites()),
                                         50.,
                                         9.,
                                         25.,
@@ -540,21 +642,28 @@ impl Operations {
                                             .iter()
                                             .flat_map(crate::town::plots::participant_slots),
                                     )
+                                    .filter_map(|s| {
+                                        crate::town::founding::survey_slot(town, &walking_ground, s)
+                                    })
                                     .filter(|s| {
-                                        (s.street.is_some()
-                                            || s.participant.is_some()
-                                            || walking_ground.owner(s.front)
-                                                == crate::town::ground::FREE)
-                                            && cell_at(scope.state().field().mesh(), s.front)
-                                                .is_some()
+                                        cell_at(scope.state().field().mesh(), s.front).is_some()
                                     })
                                     .collect::<Vec<_>>();
-                                inhabited_frontage(
+                                let mut sites = inhabited_frontage(
                                     town,
                                     sites,
                                     &source.0,
                                     scope.state().spatial.as_ref(),
-                                )
+                                )?;
+                                sites.extend(
+                                    town.works
+                                        .water_sites(&walking_ground, town.round)
+                                        .into_iter()
+                                        .filter(|s| {
+                                            cell_at(scope.state().field().mesh(), s.front).is_some()
+                                        }),
+                                );
+                                Ok::<_, io::Error>(sites)
                             })
                             .collect::<io::Result<_>>()?;
                         let outlying = scope
@@ -616,19 +725,15 @@ impl Operations {
                                 )
                             })
                             .collect::<Vec<_>>();
-                        let mut ground = if reads == processes::Reads::Frontage {
-                            let mut ground = (*walking_ground).clone();
-                            let masks: Vec<_> = state
-                                .town
-                                .towns
-                                .iter()
-                                .flat_map(|t| t.holdings().iter().map(|h| h.outline.clone()))
-                                .collect();
-                            ground.mark_shapes(&masks, PLOT, spatial.as_ref())?;
-                            Some(ground)
-                        } else {
-                            None
-                        };
+                        let mut ground = (reads == processes::Reads::Frontage)
+                            .then(|| {
+                                occupied_ground(
+                                    &walking_ground,
+                                    &state.town.towns,
+                                    spatial.as_ref(),
+                                )
+                            })
+                            .transpose()?;
                         let mut removals = Vec::new();
                         for (index, town) in state.town.towns.iter_mut().enumerate() {
                             let n = town.holdings().len();

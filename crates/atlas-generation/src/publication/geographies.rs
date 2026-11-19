@@ -170,6 +170,8 @@ const GROUPS: &[Group] = &[
         "structures",
         &[
             "building",
+            "majorWork",
+            "settlementCrossing",
             "room",
             "door",
             "furniture",

@@ -631,6 +631,58 @@ impl TriangularLattice {
         self.boundary_cell(x, y)
             .filter(|&cell| self.distance(cell, x, y) <= reach * reach)
     }
+    /// The map cells whose centres lie within `radius` of a lattice-local point. Frame sites
+    /// are read row by row across the point's bounding box, so the cost follows the box,
+    /// not the map. The point itself may lie off the map.
+    pub fn cells_within(&self, [x, y]: [f64; 2], radius: f64) -> Vec<usize> {
+        let mut found = Vec::new();
+        if radius.is_nan() || radius <= 0.0 || self.columns == 0 {
+            return found;
+        }
+        let row = ROOT_THREE * self.frame.spacing_y / 2.0;
+        let row_of = |v: f64| (v - self.frame.offset[1]) / row;
+        let first = (row_of(y - radius).ceil() as i64).max(i64::from(self.d_min));
+        let last =
+            (row_of(y + radius).floor() as i64).min(i64::from(self.d_min) + self.rows as i64 - 1);
+        for d in first..=last {
+            let d = d as i32;
+            for inverted in 0..2 {
+                for k in self.columns_within(d, inverted, x, radius) {
+                    let a = self.a_start[inverted * 2 + (d & 1) as usize] + 2 * k as i32;
+                    let Some(Slot::Cell(cell)) =
+                        self.site_index(a, d, inverted).map(|site| self.slot(site))
+                    else {
+                        continue;
+                    };
+                    let [px, py] = self.position(cell);
+                    if self.delta_x(px - x).hypot(py - y) < radius {
+                        found.push(cell);
+                    }
+                }
+            }
+        }
+        found
+    }
+    /// Column indices of one row and parity whose site x lies within `x ± radius`.
+    fn columns_within(
+        &self,
+        d: i32,
+        inverted: usize,
+        x: f64,
+        radius: f64,
+    ) -> std::ops::RangeInclusive<i64> {
+        let start = f64::from(self.a_start[inverted * 2 + (d & 1) as usize]);
+        let shift = (1 + inverted) as f64 * self.frame.spacing + self.frame.offset[0];
+        let column = |v: f64| ((v - shift) / (1.5 * self.frame.spacing) - start) / 2.0;
+        let low = column(x - radius).ceil() as i64;
+        let high = column(x + radius).floor() as i64;
+        if self.periodic.is_some() {
+            // Columns wrap; never visit one twice.
+            low..=high.min(low + self.columns as i64 - 1)
+        } else {
+            low.max(0)..=high.min(self.columns as i64 - 1)
+        }
+    }
     /// Boundary support: the map cell a point's value clamps to. A point on the map gives its
     /// own cell; a point beyond it gives the edge cell owning the nearest frame position.
     pub fn edge_cell(&self, x: f64, y: f64) -> Option<usize> {

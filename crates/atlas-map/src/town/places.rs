@@ -80,6 +80,7 @@ pub enum Kind {
     Sanitation,
     Common,
     Garden,
+    Grove,
     Park,
     Fairground,
     Entertainment,

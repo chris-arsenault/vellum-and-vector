@@ -103,10 +103,12 @@ pub fn propagate(
         field.channels.band_mut(C::Intensity).set(cell, value)?;
     }
     for seat in &field.located {
-        for cell in 0..env.mesh.len() {
+        let radius = seat.radius.max(minimum);
+        // A ward reaches only the cells within its radius.
+        for cell in env.mesh.cells_within([seat.x, seat.y], radius) {
             let [x, y] = env.mesh.position(cell);
             let distance = env.mesh.delta_x(x - seat.x).hypot(y - seat.y);
-            let force = seat.strength * (1.0 - distance / seat.radius.max(minimum)).max(0.0);
+            let force = seat.strength * (1.0 - distance / radius).max(0.0);
             let before = field.channels.band(C::Intensity).get(cell)?;
             field
                 .channels

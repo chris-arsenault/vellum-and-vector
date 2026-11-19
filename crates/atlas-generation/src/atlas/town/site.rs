@@ -72,11 +72,19 @@ fn terrain(state: &State, bounds: [f64; 4]) -> io::Result<Ground> {
 }
 pub(super) fn walking_ground(state: &State) -> io::Result<Ground> {
     let mut ground = terrain(state, bounds(state)?)?;
+    for wall in state.town.towns.iter().flat_map(|town| town.kernel_walls()) {
+        ground.take_line(wall, 1., crate::town::ground::WALL);
+    }
     let buildings: Vec<_> = state
         .town
         .towns
         .iter()
         .flat_map(|t| t.holdings())
+        .filter(|h| {
+            h.slot
+                .habitat
+                .shares_surface(crate::town::templates::Habitat::Ground)
+        })
         .flat_map(|h| h.buildings.iter().cloned())
         .collect();
     ground.mark_shapes(

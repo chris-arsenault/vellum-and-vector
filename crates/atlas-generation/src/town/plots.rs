@@ -9,6 +9,8 @@ use atlas_map::town::VERGE;
 /// A physical site with an entrance and a local frame for laying out buildings.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Slot {
+    pub habitat: super::templates::Habitat,
+    pub tenure: super::templates::Tenure,
     pub participant: Option<super::fabric::HoldingId>,
     // owner-direction(2026-11-18): individual buildings can grow on land without a street
     pub street: Option<usize>,
@@ -23,6 +25,47 @@ pub struct Slot {
     pub depth: f64,
 }
 use super::settings::{DEPTH_VARIATION, FRONTAGE_VARIATION, PITCH_FILL};
+impl Slot {
+    /// The rectangle bounds a berth or chamber. Its built hull occupies a
+    /// tapered deck; a submerged chamber closes around a rounded pressure wall.
+    pub fn occupied_shape(&self) -> atlas_map::Geometry {
+        use super::templates::Habitat;
+        let outline = match self.habitat {
+            Habitat::Floating => vec![
+                [-0.28, 0.],
+                [0.28, 0.],
+                [0.5, 0.18],
+                [0.46, 0.78],
+                [0., 1.],
+                [-0.46, 0.78],
+                [-0.5, 0.18],
+                [-0.28, 0.],
+            ],
+            Habitat::Submerged => (0..=16)
+                .map(|i| {
+                    let angle = i as f64 * std::f64::consts::TAU / 16.;
+                    [0.5 * angle.sin(), 0.5 - 0.5 * angle.cos()]
+                })
+                .collect(),
+            _ => return super::fabric::polygon(&self.corners),
+        };
+        let mut corners: Vec<_> = outline
+            .iter()
+            .map(|&[x, y]| {
+                add(
+                    self.front,
+                    add(
+                        scale(self.direction, x * self.frontage),
+                        scale(self.inward, y * self.depth),
+                    ),
+                )
+            })
+            .collect();
+        let first = corners[0];
+        *corners.last_mut().unwrap() = first;
+        super::fabric::polygon(&corners)
+    }
+}
 /// Every plot place along both sides of a street, from its start.
 pub fn slots(index: usize, street: &Street, frontage: f64, depth: f64) -> Vec<Slot> {
     let length = street.length();
@@ -49,6 +92,8 @@ pub fn slots(index: usize, street: &Street, frontage: f64, depth: f64) -> Vec<Sl
                 let inward = scale(left(d), sign);
                 let front = add(p, scale(inward, street.width_at(along) / 2.0 + VERGE));
                 result.push(Slot {
+                    habitat: super::templates::Habitat::Ground,
+                    tenure: super::templates::Tenure::Household,
                     participant: None,
                     street: Some(index),
                     side,

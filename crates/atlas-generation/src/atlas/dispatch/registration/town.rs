@@ -16,6 +16,7 @@ pub fn specification() -> io::Result<Specification> {
 }
 fn settings(input: &Input) -> ExecutionResult<Settings> {
     Ok(Settings {
+        seed: (input.random.borrow_mut().sample(true) * f64::from(i32::MAX)) as i32,
         layout: input
             .parameters
             .get("layout")

@@ -28,6 +28,82 @@ pub fn establish(
 ) -> io::Result<bool> {
     let size = town.seat.story.size();
     let depth = atlas_map::town::plot_size(size).1;
+    seed_roads(town, ground, depth);
+    use super::templates::FounderUse;
+    let street_sites = town
+        .streets()
+        .iter()
+        .enumerate()
+        .flat_map(|(i, s)| slots(i, s, 10., depth))
+        .collect::<Vec<_>>();
+    for (i, founder) in town.template.kernel().iter().enumerate() {
+        let Some(anchor) = town
+            .template
+            .site
+            .founding_point(founder.anchor, reach(size))
+        else {
+            return Ok(false);
+        };
+        let seed = 1301_i32.wrapping_add(i as i32 * 677);
+        let mut plots = super::land_sites::around([anchor], reach(size) * 1.5, 10., depth, 0);
+        plots.extend(
+            street_sites
+                .iter()
+                .filter(|s| distance(anchor, s.front) <= reach(size))
+                .cloned(),
+        );
+        let score = |s: &Slot| {
+            crate::noise::hash_unit(seed, s.front[0], s.front[1])
+                / (1. + distance(anchor, s.front) / depth)
+        };
+        // hpc-exempt: rank the land choices of one founding occupation.
+        plots.sort_by(|a, b| score(b).total_cmp(&score(a)));
+        let mut occupied = false;
+        for mut plot in plots {
+            let Some(local) = conditions(plot.front)? else {
+                continue;
+            };
+            plot.habitat = founder.habitat;
+            plot.tenure = founder.tenure;
+            align(&mut plot, &town.template);
+            let kind = match founder.use_ {
+                FounderUse::Household => founding_household(
+                    local,
+                    plot.front,
+                    distance(town.seat.centre, plot.front),
+                    0.,
+                ),
+                FounderUse::Livelihood => founding_work(local),
+                FounderUse::Place(kind) => kind,
+            };
+            if matches!(founder.use_, FounderUse::Household | FounderUse::Livelihood)
+                && town
+                    .template
+                    .affinity(kind.definition().activity, plot.front, depth)
+                    <= 0.
+            {
+                continue;
+            }
+            let Some(edit) = placement(&plot, kind, local, ground) else {
+                continue;
+            };
+            if let EditOutcome::Premises(id) = town.apply(edit, spatial)? {
+                town.occupy(id, 0.5, 0.45, 0.75, 0.);
+                town.founding_sites.push((founder.anchor, id));
+                occupied = true;
+                break;
+            }
+        }
+        if !occupied {
+            return Ok(false);
+        }
+    }
+    town.defences = enclosure(town, ground);
+    Ok(!town.founding_sites.is_empty())
+}
+
+fn seed_roads(town: &mut Town, ground: &Ground, depth: f64) {
+    let size = town.seat.story.size();
     for way in town.seat.arms.clone() {
         if let Some(mut street) = main_street(&way, depth * 1.6, size, ground) {
             if town
@@ -41,47 +117,134 @@ pub fn establish(
             town.seed_approach(way, street);
         }
     }
-    let mut plots = super::land_sites::around([town.seat.centre], reach(size), 10., depth, 0);
-    plots.extend(
-        town.streets()
-            .iter()
-            .enumerate()
-            .flat_map(|(i, s)| slots(i, s, 10., depth)),
-    );
-    // Each settler considers sites independently; one feasible occupation can start the settlement.
-    let mut founded = false;
-    for (seed, household) in [(1301, true), (677, false)] {
-        let score = |s: &Slot| {
-            crate::noise::hash_unit(seed, s.front[0], s.front[1])
-                / (1. + distance(town.seat.centre, s.front) / (depth * 2.))
-        };
-        // hpc-exempt: rank the land choices of one founding occupation.
-        plots.sort_by(|a, b| score(b).total_cmp(&score(a)));
-        for plot in &plots {
-            let Some(local) = conditions(plot.front)? else {
-                continue;
-            };
-            let kind = if household {
-                founding_household(
-                    local,
-                    plot.front,
-                    distance(town.seat.centre, plot.front),
-                    0.,
+}
+
+/// Trace a defensible precinct around its actual ground. The route from
+/// outside ends at the gap in the line, even when an escarpment shortens it.
+fn enclosure(town: &Town, ground: &Ground) -> Vec<Vec<Point>> {
+    use super::geometry::{add, angle, heading, scale, sub};
+    let Some(anchor) = town.template.enclosed_seat() else {
+        return vec![];
+    };
+    let unit = atlas_map::town::plot_size(town.seat.story.size()).1;
+    let Some(radius) = town.template.enclosure_radius(unit) else {
+        return vec![];
+    };
+    let Some(centre) = town.template.site.point(anchor) else {
+        return vec![];
+    };
+    let entry = town
+        .template
+        .site
+        .lower
+        .or_else(|| town.template.site.approaches.first().copied())
+        .unwrap_or(add(centre, [0., -radius]));
+    let bearing = angle(sub(entry, centre));
+    let gate = (4. / radius.max(5.)).min(0.4);
+    let boundary: Vec<_> = (0..=24)
+        .map(|i| {
+            let d = heading(bearing + gate + (std::f64::consts::TAU - 2. * gate) * i as f64 / 24.);
+            let reach = ground.reach(&[centre, add(centre, scale(d, radius))], |m| {
+                matches!(
+                    m,
+                    super::ground::STEEP | super::ground::WATER | super::ground::OUTSIDE
                 )
-            } else {
-                founding_work(local)
-            };
-            let Some(edit) = placement(plot, kind, local, ground) else {
-                continue;
-            };
-            if let EditOutcome::Premises(id) = town.apply(edit, spatial)? {
-                town.occupy(id, 0.5, 0.45, 0.75, 0.);
-                founded = true;
-                break;
-            }
+            });
+            add(centre, scale(d, (reach - ground.cell * 0.5).max(0.)))
+        })
+        .collect();
+    if line_length(&boundary) > unit {
+        vec![boundary]
+    } else {
+        vec![]
+    }
+}
+
+fn align(slot: &mut Slot, selection: &super::templates::Selection) {
+    if slot.street.is_none() && slot.participant.is_none() {
+        if let Some(direction) = selection.align(slot.front) {
+            slot.direction = direction;
+            slot.inward = super::geometry::left(direction);
+            slot.corners = rectangle(
+                slot.front,
+                direction,
+                slot.inward,
+                slot.frontage,
+                slot.depth,
+            );
         }
     }
-    Ok(founded)
+}
+
+pub(crate) fn survey_slot(town: &Town, ground: &Ground, mut slot: Slot) -> Option<Slot> {
+    let mark = ground.owner(slot.front);
+    if slot.participant.is_none() {
+        slot.habitat = town
+            .template
+            .habitat(slot.front, mark == super::ground::WATER);
+    }
+    if !slot.habitat.fits(mark, |owner| {
+        owner == FREE || slot.street.is_some() || slot.participant.is_some()
+    }) {
+        return None;
+    }
+    align(&mut slot, &town.template);
+    Some(slot)
+}
+
+impl super::templates::Habitat {
+    pub fn wet(self) -> bool {
+        matches!(self, Self::Floating | Self::Submerged)
+    }
+    pub fn shares_surface(self, other: Self) -> bool {
+        !matches!(
+            (self, other),
+            (Self::Upper, Self::Lower) | (Self::Lower, Self::Upper)
+        ) && (self == Self::Submerged) == (other == Self::Submerged)
+    }
+    pub(crate) fn fits(self, owner: u32, dry: impl FnOnce(u32) -> bool) -> bool {
+        if self.wet() {
+            owner == super::ground::WATER
+        } else {
+            dry(owner)
+        }
+    }
+}
+
+/// A public transfer only operates while the two founding landings remain inhabited.
+pub struct KernelLink {
+    pub kind: &'static str,
+    pub ends: [Point; 2],
+    pub cost: f64,
+}
+impl Town {
+    /// The compound's entrance remains a physical gap in its defended boundary.
+    pub fn kernel_walls(&self) -> &[Vec<Point>] {
+        &self.defences
+    }
+    pub fn kernel_links(&self) -> Vec<KernelLink> {
+        let Some((a, b, kind)) = self.template.connector() else {
+            return vec![];
+        };
+        let landing = |role| {
+            self.founding_sites.iter().find_map(|&(anchor, id)| {
+                let h = &self.holdings()[id.0 as usize];
+                (role == anchor
+                    && anchor.supports(h.slot.habitat)
+                    && h.condition > 0.2
+                    && h.occupation > 0.)
+                    .then_some(h.slot.front)
+            })
+        };
+        match (landing(a), landing(b)) {
+            (Some(a), Some(b)) if distance(a, b) > 0. => vec![KernelLink {
+                kind,
+                ends: [a, b],
+                cost: distance(a, b) + 6.,
+            }],
+            _ => vec![],
+        }
+    }
 }
 
 fn founding_household(
@@ -120,13 +283,14 @@ fn placement(
         slot.depth,
     );
     (super::siting::feasible(kind, local, slot.street)
-        && ground.open(
-            &Rectangle(&slot.corners),
-            slot.street.map_or(FREE, |i| FIRST_STREET + i as u32),
-        ))
+        && ground.open_with(&Rectangle(&slot.corners), |owner| {
+            slot.habitat.fits(owner, |mark| {
+                mark == FREE || Some(mark) == slot.street.map(|i| FIRST_STREET + i as u32)
+            })
+        }))
     .then(|| FabricEdit::Establish {
         conditions: local,
-        outdoor: false,
+        outdoor: kind.open(),
         purpose: None,
         buildings: roofs::components(&slot, kind, 0.45, 0.5),
         proposal: Proposal {
@@ -203,7 +367,22 @@ impl OutlyingSite {
             distance(self.plots[1].front, town.seat.centre),
             self.source.demand,
         );
-        let Some(job) = placement(&self.plots[0], work, conditions[0], ground) else {
+        let develop = |index: usize, kind: super::catalogue::Kind| {
+            let mut slot = survey_slot(town, walking_ground, self.plots[index].clone())?;
+            let unit = atlas_map::town::plot_size(town.seat.story.size()).1;
+            if town
+                .template
+                .affinity(kind.definition().activity, slot.front, unit)
+                <= 0.
+            {
+                return None;
+            }
+            slot.tenure = town
+                .template
+                .tenure(kind.definition().activity, slot.front, unit);
+            placement(&slot, kind, conditions[index], ground)
+        };
+        let Some(job) = develop(0, work) else {
             return Ok(false);
         };
         let job_id = HoldingId(town.holdings().len() as u32);
@@ -211,7 +390,7 @@ impl OutlyingSite {
             contributors: self.sponsors.clone(),
             placement: Box::new(job),
         }];
-        if let Some(home) = placement(&self.plots[1], home, conditions[1], ground) {
+        if let Some(home) = develop(1, home) {
             edits.push(FabricEdit::Optional(Box::new(FabricEdit::Join {
                 partner: job_id,
                 placement: Box::new(home),
